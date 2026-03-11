@@ -43,6 +43,7 @@ export const MOTION_PORT_SCHEMA: NodePortSchema = {
   inputs:  [
     { id: 'in-objects',  type: 'objects',  label: 'Objects' },
     { id: 'in-duration', type: 'duration', label: 'Duration' },
+    { id: 'in-signal',   type: 'signal',   label: 'Falloff' },
   ],
   outputs: [
     { id: 'out-trajectory', type: 'trajectory', label: 'Trajectory' },

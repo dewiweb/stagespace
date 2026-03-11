@@ -1,6 +1,7 @@
 import { Node } from 'reactflow'
 import { getNodeDescriptor, ParamDef } from './nodes/nodeRegistry'
 import { PORT_COLORS, PortType } from './nodes/portTypes'
+import { useGraphStore } from '../store/graphStore'
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
@@ -55,6 +56,104 @@ function PropSlider({ p, value, accent, onChange }: {
           onChange={(e) => onChange(p.type === 'int' ? parseInt(e.target.value) : parseFloat(e.target.value))}
           style={{ position: 'absolute', inset: 0, width: '100%', opacity: 0, cursor: 'ew-resize', height: '100%' }}
         />
+      </div>
+    </div>
+  )
+}
+
+// ─── ObjectsTrackSelector ──────────────────────────────────────────────────────
+
+function ObjectsTrackSelector({
+  count, trackIds, onChange,
+}: {
+  count: number
+  trackIds: number[] | undefined
+  onChange: (ids: number[]) => void
+}) {
+  const holProject = useGraphStore((s) => s.holProject)
+
+  if (!holProject || holProject.tracks.length === 0) {
+    // No .hol loaded — show plain info
+    const ids = trackIds ?? Array.from({ length: count }, (_, i) => i + 1)
+    return (
+      <div style={{ fontSize: 9, color: '#444', marginTop: 4, fontFamily: 'monospace' }}>
+        OSC IDs: {ids.join(', ')}
+        <div style={{ color: '#333', marginTop: 2 }}>Import a .hol to assign real track IDs</div>
+      </div>
+    )
+  }
+
+  const selected = new Set<number>(trackIds ?? holProject.tracks.map(t => t.id))
+
+  const toggle = (id: number) => {
+    const next = new Set(selected)
+    next.has(id) ? next.delete(id) : next.add(id)
+    onChange(Array.from(next).sort((a, b) => a - b))
+  }
+
+  const selectAll  = () => onChange(holProject.tracks.map(t => t.id))
+  const selectNone = () => onChange([])
+
+  return (
+    <div style={{ marginTop: 6 }}>
+      <div style={{
+        fontSize: 9, fontWeight: 700, color: '#555', letterSpacing: '0.1em',
+        textTransform: 'uppercase', marginBottom: 6,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <span>Tracks ({selected.size}/{holProject.tracks.length})</span>
+        <span style={{ display: 'flex', gap: 6 }}>
+          <span
+            onClick={selectAll}
+            style={{ cursor: 'pointer', color: '#555', fontSize: 8 }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#aaa')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#555')}
+          >all</span>
+          <span
+            onClick={selectNone}
+            style={{ cursor: 'pointer', color: '#555', fontSize: 8 }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#aaa')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#555')}
+          >none</span>
+        </span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 160, overflowY: 'auto' }}>
+        {holProject.tracks.map(t => {
+          const on = selected.has(t.id)
+          const [r, g, b] = t.color
+          const hex = `rgb(${Math.round(r*255)},${Math.round(g*255)},${Math.round(b*255)})`
+          return (
+            <div
+              key={t.id}
+              onClick={() => toggle(t.id)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '3px 6px', borderRadius: 3, cursor: 'pointer',
+                background: on ? '#1e1e2e' : 'transparent',
+                opacity: on ? 1 : 0.4,
+                transition: 'background 0.1s, opacity 0.1s',
+              }}
+            >
+              <div style={{
+                width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                background: hex,
+                boxShadow: on ? `0 0 4px ${hex}` : 'none',
+              }} />
+              <span style={{ fontSize: 9, color: '#aaa', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {t.name}
+              </span>
+              <span style={{ fontSize: 8, color: '#444', fontFamily: 'monospace', flexShrink: 0 }}>
+                {t.id}
+              </span>
+              {(t.azim !== undefined || t.dist !== undefined) && (
+                <span style={{ fontSize: 7, color: '#333', fontFamily: 'monospace', flexShrink: 0, marginLeft: 2 }}>
+                  {t.azim !== undefined ? `${t.azim.toFixed(0)}°` : ''}
+                  {t.dist !== undefined ? ` ${t.dist.toFixed(1)}m` : ''}
+                </span>
+              )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )
@@ -187,6 +286,47 @@ export default function NodeProperties({ node, onChange }: NodePropertiesProps) 
             )
           })}
 
+              {/* Falloff signal target — only for nodes with in-signal port */}
+          {desc.schema.inputs.some(p => p.id === 'in-signal') && (
+            <div style={{ marginBottom: 8, paddingTop: 6, borderTop: '1px solid #2a2a2a' }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6 }}>
+                Falloff Target
+              </div>
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ fontSize: 10, color: '#999', marginBottom: 3 }}>Modulate parameter</div>
+                <select
+                  value={get('signalTarget', '') as string}
+                  onChange={(e) => set('signalTarget', e.target.value)}
+                  style={{
+                    width: '100%', background: '#2a2a2a', border: '1px solid #3a3a3a',
+                    borderRadius: 3, color: '#ccc', fontSize: 10, padding: '3px 6px', cursor: 'pointer',
+                  }}
+                >
+                  <option value="">— none —</option>
+                  {desc.params.filter(p => p.type === 'float' || p.type === 'int').map(p => (
+                    <option key={p.key} value={p.key}>{p.label}</option>
+                  ))}
+                </select>
+              </div>
+              {get('signalTarget', '') !== '' && (
+                <>
+                  <PropSlider
+                    p={{ key: 'signalMin', label: 'Range min', type: 'float', min: -20, max: 20, step: 0.01, default: 0 }}
+                    value={get('signalMin', 0) as number}
+                    accent="#8b5cf6"
+                    onChange={(v) => set('signalMin', v)}
+                  />
+                  <PropSlider
+                    p={{ key: 'signalMax', label: 'Range max', type: 'float', min: -20, max: 20, step: 0.01, default: 1 }}
+                    value={get('signalMax', 1) as number}
+                    accent="#8b5cf6"
+                    onChange={(v) => set('signalMax', v)}
+                  />
+                </>
+              )}
+            </div>
+          )}
+
           {/* Duration presets */}
           {type === 'duration' && (
             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6 }}>
@@ -204,11 +344,16 @@ export default function NodeProperties({ node, onChange }: NodePropertiesProps) 
             </div>
           )}
 
-          {/* Objects hint */}
+          {/* Objects — track assignment from .hol */}
           {type === 'objects' && (
-            <div style={{ fontSize: 9, color: '#444', marginTop: 4 }}>
-              IDs: 1 – {get('count', 4) as number}
-            </div>
+            <ObjectsTrackSelector
+              count={get('count', 4) as number}
+              trackIds={get('trackIds', undefined) as number[] | undefined}
+              onChange={(ids) => {
+                set('trackIds', ids)
+                set('count', ids.length)
+              }}
+            />
           )}
         </>
       )}

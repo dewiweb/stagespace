@@ -315,7 +315,7 @@ export default function NodeEditor({ onStatus }: { onStatus?: StatusCallback }) 
           onDragOver={onDragOver}
           nodeTypes={nodeTypes}
           fitView
-          deleteKeyCode="Delete"
+          deleteKeyCode={['Delete', 'Backspace']}
           style={{ background: '#161616' }}
           connectionLineStyle={{ stroke: '#888', strokeWidth: 1.5, strokeDasharray: '4 2' }}
           defaultEdgeOptions={{ style: { strokeWidth: 1.5 } }}
