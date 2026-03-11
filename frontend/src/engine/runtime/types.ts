@@ -7,8 +7,18 @@ export interface TrackConfig {
   objectIndex: number // index within the engine (0-based)
 }
 
+export interface OscOutMessage {
+  address: string
+  args: number[]
+}
+
 export interface OSCProfile {
   name: string
+  // Returns one or more OSC messages for a given XYZ position
+  xyzMessages: (trackId: number, x: number, y: number, z: number) => OscOutMessage[]
+  // Returns one or more OSC messages for a given AED position
+  aedMessages: (trackId: number, a: number, e: number, d: number) => OscOutMessage[]
+  // Legacy single-address helpers (still used for display/routing purposes)
   xyzAddress: (trackId: number) => string
   aedAddress: (trackId: number) => string
 }
@@ -39,3 +49,9 @@ export interface PositionFrame {
 }
 
 export type EngineCompiledFn = (t: number, objectIndex: number, objectCount: number, duration: number) => Vector3
+
+export interface EngineSlot {
+  fn: EngineCompiledFn
+  tracks: TrackConfig[]
+  duration: number
+}

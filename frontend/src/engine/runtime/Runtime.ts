@@ -1,5 +1,6 @@
-import type { RuntimeConfig, RuntimeState, TrackConfig, EngineCompiledFn, PositionFrame } from './types'
+import type { RuntimeConfig, RuntimeState, TrackConfig, EngineCompiledFn, PositionFrame, EngineSlot } from './types'
 import type { Vector3 } from '../types'
+import { getProfile } from './oscProfiles'
 
 const DEFAULT_CONFIG: RuntimeConfig = {
   fps: 60,
@@ -11,11 +12,7 @@ const DEFAULT_CONFIG: RuntimeConfig = {
   macroSpeed: 1,
   macroScale: { x: 1, y: 1, z: 1 },
   macroShift: { x: 0, y: 0, z: 0 },
-  profile: {
-    name: 'Holophonix',
-    xyzAddress: (id) => `/track/${id}/xyz`,
-    aedAddress: (id) => `/track/${id}/aed`,
-  },
+  profile: getProfile('holophonix'),
 }
 
 export type OSCSendFn = (address: string, args: number[]) => void
@@ -24,8 +21,7 @@ export type FrameCallback = (frames: PositionFrame[], t: number) => void
 export class Runtime {
   private config: RuntimeConfig
   private state: RuntimeState
-  private tracks: TrackConfig[] = []
-  private engineFn: EngineCompiledFn | null = null
+  private slots: EngineSlot[] = []
   private sendOSC: OSCSendFn | null = null
   private onFrame: FrameCallback | null = null
   private rafId: ReturnType<typeof setInterval> | null = null
@@ -42,9 +38,14 @@ export class Runtime {
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
+  /** Set multiple independent engine slots (multi-output support) */
+  setSlots(slots: EngineSlot[]): void {
+    this.slots = slots
+  }
+
+  /** Backward-compat: single engine/tracks → slot[0] */
   setEngine(fn: EngineCompiledFn, tracks: TrackConfig[]): void {
-    this.engineFn = fn
-    this.tracks = tracks
+    this.slots = [{ fn, tracks, duration: this.config.duration }]
   }
 
   setOSCSender(fn: OSCSendFn): void {
@@ -104,31 +105,34 @@ export class Runtime {
     const dt = (now - this.state.lastTickMs) / 1000
     this.state.lastTickMs = now
 
-    // Advance time with macroSpeed, wrap within duration
-    this.state.t = (this.state.t + dt * this.config.macroSpeed) % this.config.duration
+    // Advance time with macroSpeed
+    this.state.t += dt * this.config.macroSpeed
     this.state.ticks++
 
-    if (!this.engineFn || this.tracks.length === 0) return
+    if (this.slots.length === 0) return
 
     const frames: PositionFrame[] = []
-    const n = this.tracks.length
-    const { duration, coordSystem, macroScale, macroShift, profile } = this.config
+    const { coordSystem, macroScale, macroShift, profile } = this.config
 
-    for (const track of this.tracks) {
-      const raw = this.engineFn(this.state.t, track.objectIndex, n, duration)
-      const pos: Vector3 = {
-        x: raw.x * macroScale.x + macroShift.x,
-        y: raw.y * macroScale.y + macroShift.y,
-        z: raw.z * macroScale.z + macroShift.z,
-      }
-      frames.push({ trackId: track.id, position: pos })
-
-      if (this.sendOSC) {
-        if (coordSystem === 'xyz') {
-          this.sendOSC(profile.xyzAddress(track.id), [pos.x, pos.y, pos.z])
-        } else {
-          const aed = xyzToAed(pos)
-          this.sendOSC(profile.aedAddress(track.id), [aed.a, aed.e, aed.d])
+    for (const slot of this.slots) {
+      const tWrapped = this.state.t % slot.duration
+      for (const track of slot.tracks) {
+        const raw = slot.fn(tWrapped, track.objectIndex, slot.tracks.length, slot.duration)
+        const pos: Vector3 = {
+          x: raw.x * macroScale.x + macroShift.x,
+          y: raw.y * macroScale.y + macroShift.y,
+          z: raw.z * macroScale.z + macroShift.z,
+        }
+        frames.push({ trackId: track.id, position: pos })
+        if (this.sendOSC) {
+          if (coordSystem === 'xyz') {
+            for (const m of profile.xyzMessages(track.id, pos.x, pos.y, pos.z))
+              this.sendOSC(m.address, m.args)
+          } else {
+            const aed = xyzToAed(pos)
+            for (const m of profile.aedMessages(track.id, aed.a, aed.e, aed.d))
+              this.sendOSC(m.address, m.args)
+          }
         }
       }
     }
@@ -140,34 +144,37 @@ export class Runtime {
 
   /** For testing — execute a single tick manually without the scheduler. */
   tickOnce(dtSeconds = 1 / 60): PositionFrame[] {
-    if (!this.engineFn || this.tracks.length === 0) return []
-    this.state.t = (this.state.t + dtSeconds * this.config.macroSpeed) % this.config.duration
+    if (this.slots.length === 0) return []
+    this.state.t += dtSeconds * this.config.macroSpeed
     this.state.ticks++
     return this._computeAndDispatch()
   }
 
   private _computeAndDispatch(): PositionFrame[] {
-    if (!this.engineFn || this.tracks.length === 0) return []
+    if (this.slots.length === 0) return []
 
     const frames: PositionFrame[] = []
-    const n = this.tracks.length
-    const { duration, coordSystem, macroScale, macroShift, profile } = this.config
+    const { coordSystem, macroScale, macroShift, profile } = this.config
 
-    for (const track of this.tracks) {
-      const raw = this.engineFn(this.state.t, track.objectIndex, n, duration)
-      const pos: Vector3 = {
-        x: raw.x * macroScale.x + macroShift.x,
-        y: raw.y * macroScale.y + macroShift.y,
-        z: raw.z * macroScale.z + macroShift.z,
-      }
-      frames.push({ trackId: track.id, position: pos })
-
-      if (this.sendOSC) {
-        if (coordSystem === 'xyz') {
-          this.sendOSC(profile.xyzAddress(track.id), [pos.x, pos.y, pos.z])
-        } else {
-          const aed = xyzToAed(pos)
-          this.sendOSC(profile.aedAddress(track.id), [aed.a, aed.e, aed.d])
+    for (const slot of this.slots) {
+      const tWrapped = this.state.t % slot.duration
+      for (const track of slot.tracks) {
+        const raw = slot.fn(tWrapped, track.objectIndex, slot.tracks.length, slot.duration)
+        const pos: Vector3 = {
+          x: raw.x * macroScale.x + macroShift.x,
+          y: raw.y * macroScale.y + macroShift.y,
+          z: raw.z * macroScale.z + macroShift.z,
+        }
+        frames.push({ trackId: track.id, position: pos })
+        if (this.sendOSC) {
+          if (coordSystem === 'xyz') {
+            for (const m of profile.xyzMessages(track.id, pos.x, pos.y, pos.z))
+              this.sendOSC(m.address, m.args)
+          } else {
+            const aed = xyzToAed(pos)
+            for (const m of profile.aedMessages(track.id, aed.a, aed.e, aed.d))
+              this.sendOSC(m.address, m.args)
+          }
         }
       }
     }
