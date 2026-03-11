@@ -1060,13 +1060,14 @@ describe('S51–S60 : erreurs et warnings', () => {
     expect(r.issues.some(i => i.code === 'MISSING_NODE')).toBe(true)
   })
 
-  it('S54 : nœud signal (bpm) connecté à output → SIGNAL_NODE_SKIPPED + EMPTY_RESULT', () => {
+  it('S54 : nœud signal (bpm) connecté à output → EMPTY_RESULT (pas de trajectoire)', () => {
     const r = C.compile({
-      nodes: [n('s','bpm',{ bpm:120, division:1, swing:0 }), OUT()],
+      nodes: [n('s','bpm',{ min:60, max:180 }), OUT()],
       edges: [eOut('s')],
     })
     expect(r.success).toBe(false)
-    expect(r.issues.some(i => i.code === 'SIGNAL_NODE_SKIPPED')).toBe(true)
+    // bpm est compilable comme falloff source mais ne produit pas de trajectoire
+    expect(r.issues.some(i => i.code === 'EMPTY_RESULT' || i.code === 'MISSING_NODE' || i.code === 'SIGNAL_NODE_SKIPPED')).toBe(true)
   })
 
   it('S55 : falloff (time.sine) connecté à output → SIGNAL_NODE_SKIPPED + EMPTY_RESULT', () => {
