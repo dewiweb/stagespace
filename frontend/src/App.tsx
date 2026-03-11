@@ -1,8 +1,11 @@
-import { useState, useCallback } from 'react'
-import { Play, Pause, RotateCcw, Settings, GitBranch, FileInput } from 'lucide-react'
+import { useState, useCallback, useRef } from 'react'
+import { Play, Pause, RotateCcw, Settings, GitBranch, FileInput, Radio, Mic, Save, FolderOpen } from 'lucide-react'
 import HolImport from './components/HolImport'
 import TrajectoryVisualizer from './components/TrajectoryVisualizer'
 import MacroControls from './components/MacroControls'
+import OscPanel from './components/OscPanel'
+import AudioPanel from './components/AudioPanel'
+import CuePanel from './components/CuePanel'
 import NodeEditor, { NodeEditorStatus } from './components/NodeEditor'
 import { useGraphStore } from './store/graphStore'
 
@@ -11,15 +14,25 @@ const HDR = 30   // header height px
 function App() {
   const [viewportH,  setViewportH]  = useState(35)   // % of workspace height
   const [showMacro,  setShowMacro]  = useState(false)
+  const [showOsc,    setShowOsc]    = useState(false)
+  const [showAudio,  setShowAudio]  = useState(false)
+  const [showCue,    setShowCue]    = useState(false)
   const [showHol,    setShowHol]    = useState(false)
   const [compStatus, setCompStatus] = useState<NodeEditorStatus>({
     status: 'idle', info: '', error: '', issues: [],
   })
 
-  const isRunning       = useGraphStore((s) => s.isRunning)
-  const toggleRuntime   = useGraphStore((s) => s.toggleRuntime)
-  const stopRuntime     = useGraphStore((s) => s.stopRuntime)
-  const compileResult   = useGraphStore((s) => s.compileResult)
+  const isRunning        = useGraphStore((s) => s.isRunning)
+  const toggleRuntime    = useGraphStore((s) => s.toggleRuntime)
+  const stopRuntime      = useGraphStore((s) => s.stopRuntime)
+  const compileResult    = useGraphStore((s) => s.compileResult)
+  const bridgeConnected  = useGraphStore((s) => s.bridgeConnected)
+  const audioRunning     = useGraphStore((s) => s.audioRunning)
+  const cueCount         = useGraphStore((s) => s.cueList.length)
+  const saveGraph        = useGraphStore((s) => s.saveGraph)
+  const loadGraph        = useGraphStore((s) => s.loadGraph)
+
+  const loadFileRef = useRef<HTMLInputElement>(null)
 
   const handleStatus = useCallback((s: NodeEditorStatus) => setCompStatus(s), [])
 
@@ -80,8 +93,67 @@ function App() {
         <HBtn onClick={() => setShowMacro(v => !v)} title="Macro Controls"
           icon={<Settings size={11} />} active={showMacro} />
 
+        <HBtn onClick={() => setShowOsc(v => !v)} title="OSC Settings"
+          icon={
+            <span style={{ position: 'relative', display: 'inline-flex' }}>
+              <Radio size={11} />
+              {/* bridge status dot */}
+              <span style={{
+                position: 'absolute', top: -2, right: -2,
+                width: 5, height: 5, borderRadius: '50%',
+                background: bridgeConnected ? '#4ade80' : '#f87171',
+              }} />
+            </span>
+          }
+          active={showOsc} />
+
         <HBtn onClick={() => setShowHol(true)} title="Import .hol project"
           icon={<FileInput size={11} />} active={false} />
+
+        <HBtn onClick={saveGraph} title="Save graph"
+          icon={<Save size={11} />} active={false} />
+
+        <HBtn onClick={() => loadFileRef.current?.click()} title="Load graph"
+          icon={<FolderOpen size={11} />} active={false} />
+        <input
+          ref={loadFileRef}
+          type="file"
+          accept=".json"
+          style={{ display: 'none' }}
+          onChange={async (e) => {
+            const f = e.target.files?.[0]
+            if (!f) return
+            await loadGraph(f)
+            e.target.value = ''
+          }}
+        />
+
+        <HBtn onClick={() => setShowCue(v => !v)} title="Cue List"
+          icon={
+            <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+              <span style={{ fontSize: 10 }}>◈</span>
+              {cueCount > 0 && (
+                <span style={{ fontSize: 7, color: '#aaa', fontFamily: 'monospace' }}>{cueCount}</span>
+              )}
+            </span>
+          }
+          active={showCue} />
+
+        <HBtn onClick={() => setShowAudio(v => !v)} title="Audio IN"
+          icon={
+            <span style={{ position: 'relative', display: 'inline-flex' }}>
+              <Mic size={11} />
+              {audioRunning && (
+                <span style={{
+                  position: 'absolute', top: -2, right: -2,
+                  width: 5, height: 5, borderRadius: '50%',
+                  background: '#22c55e',
+                  boxShadow: '0 0 4px #22c55e',
+                }} />
+              )}
+            </span>
+          }
+          active={showAudio} />
 
         <div style={{ flex: 1 }} />
 
@@ -104,17 +176,41 @@ function App() {
       </div>
 
       {/* ── Workspace ── */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'row', minHeight: 0 }}>
 
-        {/* 3D Visualizer (top) */}
-        <div style={{ height: `${viewportH}%`, minHeight: 80, flexShrink: 0, position: 'relative', borderBottom: '2px solid #2a2a2a' }}>
-          <TrajectoryVisualizer />
+        {/* Main area (3D + Node Editor stacked) */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
+
+          {/* 3D Visualizer (top) */}
+          <div style={{ height: `${viewportH}%`, minHeight: 80, flexShrink: 0, position: 'relative', borderBottom: '2px solid #2a2a2a' }}>
+            <TrajectoryVisualizer />
+          </div>
+
+          {/* Node Editor (bottom, fills remaining space) */}
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <NodeEditor onStatus={handleStatus} />
+          </div>
         </div>
 
-        {/* Node Editor (bottom, fills remaining space) */}
-        <div style={{ flex: 1, minHeight: 0 }}>
-          <NodeEditor onStatus={handleStatus} />
-        </div>
+        {/* OSC Panel (right sidebar) */}
+        {showOsc && (
+          <div style={{
+            width: 260, flexShrink: 0,
+            borderLeft: '1px solid #2a2a2a',
+          }}>
+            <OscPanel />
+          </div>
+        )}
+
+        {/* Audio Panel (right sidebar) */}
+        {showAudio && (
+          <AudioPanel onClose={() => setShowAudio(false)} />
+        )}
+
+        {/* Cue Panel (right sidebar) */}
+        {showCue && (
+          <CuePanel onClose={() => setShowCue(false)} />
+        )}
       </div>
 
       {/* ── Macro Controls bottom panel ── */}
