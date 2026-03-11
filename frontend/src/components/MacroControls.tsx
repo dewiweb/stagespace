@@ -1,8 +1,15 @@
 import { RotateCcw } from 'lucide-react'
-import { useTrajectoryStore } from '../store/trajectoryStore'
+import { useGraphStore } from '../store/graphStore'
 
 export default function MacroControls() {
-  const { macroControls, updateMacroControl, resetMacroControls } = useTrajectoryStore()
+  const macros       = useGraphStore((s) => s.macros)
+  const setMacros    = useGraphStore((s) => s.setMacros)
+  const resetMacros  = () => setMacros({ speed: 1, scaleX: 1, scaleY: 1, scaleZ: 1, shiftX: 0, shiftY: 0, shiftZ: 0 })
+  const macroControls = { tSpeed: macros.speed, scaleX: macros.scaleX, scaleY: macros.scaleY, scaleZ: macros.scaleZ, shiftX: macros.shiftX, shiftY: macros.shiftY, shiftZ: macros.shiftZ }
+  const updateMacroControl = (key: keyof typeof macroControls, value: number) => {
+    const keyMap: Record<string, string> = { tSpeed: 'speed', scaleX: 'scaleX', scaleY: 'scaleY', scaleZ: 'scaleZ', shiftX: 'shiftX', shiftY: 'shiftY', shiftZ: 'shiftZ' }
+    setMacros({ [keyMap[key]]: value })
+  }
 
   const controls = [
     {
@@ -78,7 +85,7 @@ export default function MacroControls() {
           <p className="text-sm text-gray-400">Real-time trajectory manipulation</p>
         </div>
         <button
-          onClick={resetMacroControls}
+          onClick={resetMacros}
           className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm transition-colors"
         >
           <RotateCcw className="w-4 h-4" />

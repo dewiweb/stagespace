@@ -1,13 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import ReactFlow, {
   Node,
-  Edge,
   Controls,
   Background,
   MiniMap,
-  useNodesState,
-  useEdgesState,
-  addEdge,
   Connection,
   BackgroundVariant,
   ReactFlowInstance,
@@ -15,106 +11,95 @@ import ReactFlow, {
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { Loader2, Radio } from 'lucide-react'
-import { useTrajectoryStore } from '../store/trajectoryStore'
-import ObjectsNode from './nodes/ObjectsNode'
-import DurationNode from './nodes/DurationNode'
-import OutputNode from './nodes/OutputNode'
-import GroupNode from './nodes/GroupNode'
-import SequenceNode from './nodes/SequenceNode'
-import MixNode from './nodes/MixNode'
-import MotionNode, { ENGINES_CONFIG } from './nodes/MotionNode'
+import { useGraphStore } from '../store/graphStore'
+import NodeCard from './nodes/NodeCard'
 import NodeProperties from './NodeProperties'
 import { portsCompatible } from './nodes/portTypes'
+import { ALL_NODES, ENGINES_CONFIG, FALLOFFS_CONFIG, SPLINES_CONFIG } from './nodes/nodeRegistry'
 
 // ─── Node types ───────────────────────────────────────────────────────────────
+// Single NodeCard handles every type. All types come from the registry.
 
-const makeMotionNode = (engineType: string) =>
-  (props: { id: string; selected?: boolean; data: Record<string, unknown> & { onChange: (id: string, d: Record<string, unknown>) => void } }) =>
-    <MotionNode {...props} data={{ ...props.data, engineType }} />
-
-const nodeTypes: Record<string, React.FC<any>> = {
-  objects:  ObjectsNode,
-  duration: DurationNode,
-  output:   OutputNode,
-  group:    GroupNode,
-  sequence: SequenceNode,
-  mix:      MixNode,
-  ...Object.fromEntries(Object.keys(ENGINES_CONFIG).map((k) => [k, makeMotionNode(k)])),
-}
+const nodeTypes: Record<string, React.FC<any>> = Object.fromEntries(
+  Object.keys(ALL_NODES).map((t) => [t, NodeCard])
+)
 
 // ─── Palette config ───────────────────────────────────────────────────────────
-
-const MATH_COLOR    = '#4b7fbf'
-const PHYSICS_COLOR = '#c16a28'
-const NODE_COLOR    = '#6b6b6b'
 
 const PALETTE_GROUPS = [
   {
     label: 'Node',
-    color: NODE_COLOR,
-    items: [
-      { type: 'objects',  icon: '◉', label: 'Objects',  defaults: { count: 4 } },
-      { type: 'duration', icon: '⏱', label: 'Duration', defaults: { seconds: 10 } },
-      { type: 'output',   icon: '⊳', label: 'Output',   defaults: {} },
-      { type: 'mix',      icon: '⇌', label: 'Mix',      defaults: { blend: 0.5 } },
-      { type: 'group',    icon: '⊕', label: 'Group',    defaults: {} },
-      { type: 'sequence', icon: '▶▶', label: 'Sequence', defaults: {} },
-    ],
+    color: '#6b6b6b',
+    items: ['objects', 'duration', 'output', 'mix', 'group', 'sequence']
+      .map((t) => ({ type: t, icon: ALL_NODES[t].icon, label: ALL_NODES[t].label, color: ALL_NODES[t].color,
+        defaults: Object.fromEntries(ALL_NODES[t].params.map(p => [p.key, p.default])) })),
+  },
+  {
+    label: 'Modifier',
+    color: '#fb923c',
+    items: ['scale', 'rotate', 'offset', 'phaseShift', 'barycentricGroup']
+      .map((t) => ({ type: t, icon: ALL_NODES[t].icon, label: ALL_NODES[t].label, color: ALL_NODES[t].color,
+        defaults: Object.fromEntries(ALL_NODES[t].params.map(p => [p.key, p.default])) })),
   },
   {
     label: 'Math',
-    color: MATH_COLOR,
+    color: '#4b7fbf',
     items: Object.entries(ENGINES_CONFIG)
       .filter(([, c]) => c.category === 'math')
-      .map(([t, c]) => ({ type: t, icon: c.icon, label: c.label, defaults: {} })),
+      .map(([t, c]) => ({ type: t, icon: c.icon, label: c.label, color: c.color,
+        defaults: Object.fromEntries(c.params.map(p => [p.key, p.default])) })),
   },
   {
     label: 'Physics',
-    color: PHYSICS_COLOR,
+    color: '#c16a28',
     items: Object.entries(ENGINES_CONFIG)
       .filter(([, c]) => c.category === 'physics')
-      .map(([t, c]) => ({ type: t, icon: c.icon, label: c.label, defaults: {} })),
+      .map(([t, c]) => ({ type: t, icon: c.icon, label: c.label, color: c.color,
+        defaults: Object.fromEntries(c.params.map(p => [p.key, p.default])) })),
   },
-]
-
-// ─── Default graph ────────────────────────────────────────────────────────────
-
-const buildInitialNodes = (onChange: (id: string, d: Record<string, unknown>) => void): Node[] => [
-  { id: 'n-obj', type: 'objects',  position: { x: 60,  y: 180 }, data: { count: 4, onChange } },
-  { id: 'n-dur', type: 'duration', position: { x: 60,  y: 290 }, data: { seconds: 10, onChange } },
-  { id: 'n-mov', type: 'circular', position: { x: 310, y: 160 }, data: { onChange } },
-  { id: 'n-out', type: 'output',   position: { x: 560, y: 200 }, data: { onChange } },
-]
-
-const INITIAL_EDGES: Edge[] = [
-  { id: 'e1', source: 'n-obj', sourceHandle: 'out-objects',    target: 'n-mov', targetHandle: 'in-objects',    style: { stroke: '#9b5cf6', strokeWidth: 1.5 } },
-  { id: 'e2', source: 'n-dur', sourceHandle: 'out-duration',   target: 'n-mov', targetHandle: 'in-duration',   style: { stroke: '#d4a017', strokeWidth: 1.5 } },
-  { id: 'e3', source: 'n-mov', sourceHandle: 'out-trajectory', target: 'n-out', targetHandle: 'in-trajectory', style: { stroke: '#22c55e', strokeWidth: 1.5 } },
+  {
+    label: 'Signal',
+    color: '#10b981',
+    items: ['bpm', 'audioAmplitude', 'audioSpectrum', 'oscInput']
+      .map((t) => ({ type: t, icon: ALL_NODES[t].icon, label: ALL_NODES[t].label, color: ALL_NODES[t].color,
+        defaults: Object.fromEntries(ALL_NODES[t].params.map(p => [p.key, p.default])) })),
+  },
+  {
+    label: 'Spline',
+    color: '#0ea5e9',
+    items: Object.values(SPLINES_CONFIG)
+      .map(c => ({ type: c.type, icon: c.icon, label: c.label, color: c.color,
+        defaults: Object.fromEntries(c.params.map(p => [p.key, p.default])) })),
+  },
+  {
+    label: 'Falloff · Time',
+    color: '#8b5cf6',
+    items: Object.values(FALLOFFS_CONFIG)
+      .filter(c => c.type.startsWith('time.'))
+      .map(c => ({ type: c.type, icon: c.icon, label: c.label, color: c.color,
+        defaults: Object.fromEntries(c.params.map(p => [p.key, p.default])) })),
+  },
+  {
+    label: 'Falloff · Spatial',
+    color: '#8b5cf6',
+    items: Object.values(FALLOFFS_CONFIG)
+      .filter(c => c.type.startsWith('spatial.'))
+      .map(c => ({ type: c.type, icon: c.icon, label: c.label, color: c.color,
+        defaults: Object.fromEntries(c.params.map(p => [p.key, p.default])) })),
+  },
+  {
+    label: 'Falloff · Math',
+    color: '#8b5cf6',
+    items: Object.values(FALLOFFS_CONFIG)
+      .filter(c => c.type.startsWith('math.'))
+      .map(c => ({ type: c.type, icon: c.icon, label: c.label, color: c.color,
+        defaults: Object.fromEntries(c.params.map(p => [p.key, p.default])) })),
+  },
 ]
 
 let nodeIdCounter = 100
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function serializeGraph(nodes: Node[], edges: Edge[]) {
-  return {
-    nodes: nodes.map((n) => ({
-      id:   n.id,
-      type: n.type ?? 'default',
-      data: Object.fromEntries(
-        Object.entries(n.data).filter(([k]) => k !== 'onChange' && k !== 'onGenerate')
-      ),
-    })),
-    edges: edges.map((e) => ({
-      source:       e.source,
-      target:       e.target,
-      sourceHandle: e.sourceHandle ?? null,
-      targetHandle: e.targetHandle ?? null,
-    })),
-  }
-}
-
-// ─── Component ────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface GraphIssue {
   level:    'error' | 'warning' | 'info'
@@ -132,124 +117,123 @@ export interface NodeEditorStatus {
 
 type StatusCallback = (s: NodeEditorStatus) => void
 
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function NodeEditor({ onStatus }: { onStatus?: StatusCallback }) {
   const [status, setStatus] = useState<'idle' | 'compiling' | 'ok' | 'error'>('idle')
   const [info, setInfo]     = useState('')
   const [error, setError]   = useState('')
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
 
-  const debounceRef   = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const rfInstanceRef = useRef<ReactFlowInstance | null>(null)
-  const setNodesRef   = useRef<((fn: (nds: Node[]) => Node[]) => void) | null>(null)
-  const isFirstRender = useRef(true)
+  const rfInstanceRef  = useRef<ReactFlowInstance | null>(null)
+  const debounceRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isFirstRender  = useRef(true)
 
-  const setTrajectory = useTrajectoryStore((s) => s.setTrajectory)
+  // ── Store — single source of truth ──────────────────────────────────────────
+  const nodes          = useGraphStore((s) => s.nodes)
+  const edges          = useGraphStore((s) => s.edges)
+  const onNodesChange  = useGraphStore((s) => s.onNodesChange)
+  const onEdgesChange  = useGraphStore((s) => s.onEdgesChange)
+  const storeOnConnect = useGraphStore((s) => s.onConnect)
+  const storeCompile   = useGraphStore((s) => s.compile)
+  const compileResult  = useGraphStore((s) => s.compileResult)
 
-  const onNodeDataChange = useCallback((id: string, patch: Record<string, unknown>) => {
-    setNodesRef.current?.((nds) =>
-      nds.map((n) => n.id === id ? { ...n, data: { ...n.data, ...patch } } : n)
-    )
-  }, [])
-
-  const [nodes, setNodes, onNodesChange] = useNodesState(buildInitialNodes(onNodeDataChange))
-  setNodesRef.current = setNodes
-  const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES)
-
-  // ── Live compile ─────────────────────────────────────────────────────────────
-  const compile = useCallback(async (ns: Node[], es: Edge[]) => {
+  // ── Live compile — triggered by store graph changes ──────────────────────────
+  const compile = useCallback(() => {
     setStatus('compiling')
     setError('')
     onStatus?.({ status: 'compiling', info: '', error: '', issues: [] })
-    try {
-      const res = await fetch('/api/compile-graph', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(serializeGraph(ns, es)),
-      })
-      if (!res.ok) {
-        const e = await res.json()
-        throw new Error(e.detail ?? `HTTP ${res.status}`)
-      }
-      const data = await res.json()
-      const issues: GraphIssue[] = data.issues ?? []
 
-      if (!data.success) {
-        const errors = issues.filter((i) => i.level === 'error')
-        const msg = errors.length > 0
-          ? errors.map((i) => i.message).join(' · ')
-          : 'Compilation failed'
-        setError(msg)
-        setStatus('error')
-        onStatus?.({ status: 'error', info: '', error: msg, issues })
-        return
-      }
+    storeCompile()
 
-      setTrajectory(data.trajectory)
-      const nObj = data.trajectory?.objects?.length ?? 0
-      const ms   = (data.compile_ms ?? 0).toFixed(0)
-      const warns = issues.filter((i) => i.level === 'warning')
-      const warnSuffix = warns.length > 0 ? `  ⚠ ${warns.length}` : ''
-      const msg  = `${data.engine}  ${ms}ms  ${nObj} obj${warnSuffix}`
-      setInfo(msg)
-      setStatus('ok')
-      onStatus?.({ status: 'ok', info: msg, error: '', issues })
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'error'
+    // Read result immediately after synchronous compile
+    const result = useGraphStore.getState().compileResult
+    if (!result) return
+
+    const issues: GraphIssue[] = result.issues.map(i => ({
+      level: i.level, code: i.code, message: i.message, node_id: i.nodeId,
+    }))
+
+    if (!result.success) {
+      const errors = issues.filter((i) => i.level === 'error')
+      const msg = errors.length > 0
+        ? errors.map((i) => i.message).join(' · ')
+        : 'Compilation failed'
       setError(msg)
       setStatus('error')
-      onStatus?.({ status: 'error', info: '', error: msg, issues: [] })
+      onStatus?.({ status: 'error', info: '', error: msg, issues })
+      return
     }
-  }, [setTrajectory, onStatus])
 
-  // Signature: ignore node positions, only data + edges
+    const nObj = result.objectCount
+    const ms   = result.compileMs.toFixed(1)
+    const warns = issues.filter((i) => i.level === 'warning')
+    const warnSuffix = warns.length > 0 ? `  ⚠ ${warns.length}` : ''
+    const msg = `compiled  ${ms}ms  ${nObj} obj${warnSuffix}`
+    setInfo(msg)
+    setStatus('ok')
+    onStatus?.({ status: 'ok', info: msg, error: '', issues })
+  }, [storeCompile, onStatus])
+
+  // Debounced recompile when graph topology/data changes
   const graphSignature = JSON.stringify([
-    nodes.map((n) => ({ id: n.id, type: n.type, data: Object.fromEntries(Object.entries(n.data).filter(([k]) => k !== 'onChange')) })),
-    edges.map((e) => ({ s: e.source, t: e.target })),
+    nodes.map((n) => ({ id: n.id, type: n.type, data: n.data })),
+    edges.map((e) => ({ s: e.source, t: e.target, sh: e.sourceHandle, th: e.targetHandle })),
   ])
 
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false
-      // Initial compile after mount
-      compile(nodes, edges)
+      compile()
       return
     }
     if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => compile(nodes, edges), 420)
+    debounceRef.current = setTimeout(compile, 300)
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graphSignature])
 
-  // ── Selection ──────────────────────────────────────────────────────────────────
+  // Reflect external compile result changes (e.g. after importHol)
+  useEffect(() => {
+    if (!compileResult) return
+    const issues: GraphIssue[] = compileResult.issues.map(i => ({
+      level: i.level, code: i.code, message: i.message, node_id: i.nodeId,
+    }))
+    if (compileResult.success) {
+      const warns = issues.filter(i => i.level === 'warning')
+      const msg = `compiled  ${compileResult.compileMs.toFixed(1)}ms  ${compileResult.objectCount} obj${warns.length ? `  ⚠ ${warns.length}` : ''}`
+      setInfo(msg)
+      setStatus('ok')
+      onStatus?.({ status: 'ok', info: msg, error: '', issues })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [compileResult])
+
+  // ── Selection ────────────────────────────────────────────────────────────────
   const onSelectionChange = useCallback(({ nodes: sel }: { nodes: Node[] }) => {
     setSelectedNode(sel.length === 1 ? sel[0] : null)
-    // Keep selected node data in sync
   }, [])
 
-  // Keep selectedNode data in sync with the latest node state
   const syncedSelected: Node | null = selectedNode
     ? (nodes.find((n) => n.id === selectedNode.id) ?? null)
     : null
 
-  // ── Interactions ──────────────────────────────────────────────────────────────
-  const onConnect = useCallback(
-    (p: Connection) => {
-      // Color edge by port type
-      const portType = p.sourceHandle?.split('-')[1] ?? ''
-      const colors: Record<string, string> = {
-        objects: '#9b5cf6', duration: '#d4a017', trajectory: '#22c55e',
-      }
-      const stroke = colors[portType] ?? '#555'
-      setEdges((eds) => addEdge({ ...p, style: { stroke, strokeWidth: 1.5 } }, eds))
-    },
-    [setEdges]
-  )
+  // ── Node data change → store ─────────────────────────────────────────────────
+  const onNodeDataChange = useCallback((id: string, patch: Record<string, unknown>) => {
+    useGraphStore.getState().updateNodeData(id, patch)
+  }, [])
+
+  // ── Connections ───────────────────────────────────────────────────────────────
+  const onConnect = useCallback((p: Connection) => {
+    storeOnConnect(p)
+  }, [storeOnConnect])
 
   const isValidConnection = useCallback(
     (conn: Connection) => portsCompatible(conn.sourceHandle, conn.targetHandle),
     []
   )
 
+  // ── Drag & drop from palette ──────────────────────────────────────────────────
   const onDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
@@ -262,8 +246,8 @@ export default function NodeEditor({ onStatus }: { onStatus?: StatusCallback }) 
     if (!type || !rfInstanceRef.current) return
     const position = rfInstanceRef.current.screenToFlowPosition({ x: e.clientX, y: e.clientY })
     const id = `n-${type}-${nodeIdCounter++}`
-    setNodes((nds) => [...nds, { id, type, position, data: { ...defaults, onChange: onNodeDataChange } }])
-  }, [onNodeDataChange, setNodes])
+    useGraphStore.getState().addNode({ id, type, position, data: { ...defaults } })
+  }, [])
 
   return (
     <div style={{ height: '100%', display: 'flex', background: '#161616' }}>
@@ -340,12 +324,7 @@ export default function NodeEditor({ onStatus }: { onStatus?: StatusCallback }) 
           <Controls style={{ background: '#1d1d1d', border: '1px solid #333', borderRadius: 4 }} />
           <MiniMap
             style={{ background: '#1a1a1a', border: '1px solid #333' }}
-            nodeColor={(n) => {
-              if (n.type && ENGINES_CONFIG[n.type])
-                return ENGINES_CONFIG[n.type].category === 'math' ? MATH_COLOR : PHYSICS_COLOR
-              if (n.type === 'output') return '#22c55e'
-              return '#555'
-            }}
+            nodeColor={(n) => ALL_NODES[n.type ?? '']?.color ?? '#555'}
             maskColor="#16161688"
           />
           <Background variant={BackgroundVariant.Dots} gap={20} size={0.8} color="#252525" />

@@ -1,20 +1,25 @@
 import { useState, useCallback } from 'react'
-import { Play, Pause, RotateCcw, Settings, GitBranch } from 'lucide-react'
+import { Play, Pause, RotateCcw, Settings, GitBranch, FileInput } from 'lucide-react'
+import HolImport from './components/HolImport'
 import TrajectoryVisualizer from './components/TrajectoryVisualizer'
 import MacroControls from './components/MacroControls'
 import NodeEditor, { NodeEditorStatus } from './components/NodeEditor'
-import { useTrajectoryStore } from './store/trajectoryStore'
+import { useGraphStore } from './store/graphStore'
 
 const HDR = 30   // header height px
 
 function App() {
   const [viewportH,  setViewportH]  = useState(35)   // % of workspace height
   const [showMacro,  setShowMacro]  = useState(false)
+  const [showHol,    setShowHol]    = useState(false)
   const [compStatus, setCompStatus] = useState<NodeEditorStatus>({
     status: 'idle', info: '', error: '', issues: [],
   })
 
-  const { isPlaying, togglePlayback, reset, currentTrajectory } = useTrajectoryStore()
+  const isRunning       = useGraphStore((s) => s.isRunning)
+  const toggleRuntime   = useGraphStore((s) => s.toggleRuntime)
+  const stopRuntime     = useGraphStore((s) => s.stopRuntime)
+  const compileResult   = useGraphStore((s) => s.compileResult)
 
   const handleStatus = useCallback((s: NodeEditorStatus) => setCompStatus(s), [])
 
@@ -64,16 +69,19 @@ function App() {
 
         {/* Playback */}
         <div style={{ display: 'flex', gap: 3 }}>
-          <HBtn onClick={reset}           title="Reset"  icon={<RotateCcw size={11} />} active={false} />
-          <HBtn onClick={togglePlayback}  title={isPlaying ? 'Pause' : 'Play'}
-            icon={isPlaying ? <Pause size={11} /> : <Play size={11} />}
-            active={isPlaying} accent />
+          <HBtn onClick={() => { stopRuntime() }} title="Stop" icon={<RotateCcw size={11} />} active={false} />
+          <HBtn onClick={toggleRuntime} title={isRunning ? 'Pause' : 'Play'}
+            icon={isRunning ? <Pause size={11} /> : <Play size={11} />}
+            active={isRunning} accent />
         </div>
 
         <Sep />
 
         <HBtn onClick={() => setShowMacro(v => !v)} title="Macro Controls"
           icon={<Settings size={11} />} active={showMacro} />
+
+        <HBtn onClick={() => setShowHol(true)} title="Import .hol project"
+          icon={<FileInput size={11} />} active={false} />
 
         <div style={{ flex: 1 }} />
 
@@ -82,11 +90,9 @@ function App() {
           {compStatus.status === 'compiling' && (
             <span style={{ color: '#aaa' }}>● compiling…</span>
           )}
-          {compStatus.status === 'ok' && currentTrajectory && (
+          {compStatus.status === 'ok' && compileResult?.success && (
             <span style={{ color: '#5a9' }}>
-              ● {currentTrajectory._metadata?.engine ?? ''}
-              &nbsp;· {currentTrajectory.objects.length} obj
-              &nbsp;· {currentTrajectory.duration}s
+              ● {compStatus.info}
             </span>
           )}
           {compStatus.status === 'error' && (
@@ -117,6 +123,8 @@ function App() {
           <MacroControls />
         </div>
       )}
+      {/* .hol import modal */}
+      {showHol && <HolImport onClose={() => setShowHol(false)} />}
     </div>
   )
 }

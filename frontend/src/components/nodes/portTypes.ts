@@ -1,19 +1,23 @@
 // ─── Port type system ─────────────────────────────────────────────────────────
 
-export type PortType = 'objects' | 'duration' | 'trajectory' | 'params' | 'any'
+export type PortType = 'objects' | 'duration' | 'trajectory' | 'spline' | 'signal' | 'params' | 'any'
 
 export const PORT_COLORS: Record<PortType, string> = {
   objects:    '#9b5cf6',  // violet
   duration:   '#d4a017',  // gold
   trajectory: '#22c55e',  // green
+  spline:     '#0ea5e9',  // sky blue
+  signal:     '#f97316',  // orange — scalar 0–1 signal
   params:     '#4b7fbf',  // blue
-  any:        '#888888',  // grey
+  any:        '#888888',  // grey (reserved, do not use in new nodes)
 }
 
 export const PORT_LABELS: Record<PortType, string> = {
   objects:    'Objects',
   duration:   'Duration',
   trajectory: 'Trajectory',
+  spline:     'Spline',
+  signal:     'Signal',
   params:     'Params',
   any:        'Any',
 }
@@ -66,16 +70,6 @@ export const OUTPUT_PORT_SCHEMA: NodePortSchema = {
   outputs: [],
 }
 
-export const MERGE_PORT_SCHEMA: NodePortSchema = {
-  inputs:  [
-    { id: 'in-trajectory-0', type: 'trajectory', label: 'A' },
-    { id: 'in-trajectory-1', type: 'trajectory', label: 'B' },
-    { id: 'in-duration',     type: 'duration',   label: 'Duration' },
-  ],
-  outputs: [
-    { id: 'out-trajectory', type: 'trajectory', label: 'Trajectory' },
-  ],
-}
 
 export const MIX_PORT_SCHEMA: NodePortSchema = {
   inputs:  [
@@ -134,6 +128,8 @@ export function portsCompatible(
   const st = getPortType(sourceHandle)
   const tt = getPortType(targetHandle)
   if (!st || !tt) return false
-  if (st === 'any' || tt === 'any') return true
+  // 'signal' ports only connect to other 'signal' ports
+  // 'any' is reserved — only connects to 'any' (legacy fallback)
+  // trajectory/objects/duration/spline are strictly typed
   return st === tt
 }

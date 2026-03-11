@@ -2,7 +2,7 @@ import { useRef, useEffect, useState } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls, Grid, Sphere, Line } from '@react-three/drei'
 import * as THREE from 'three'
-import { useTrajectoryStore } from '../store/trajectoryStore'
+import { useGraphStore } from '../store/graphStore'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,55 +31,22 @@ function TrajectoryPath({ points, color }: { points: THREE.Vector3[]; color: str
 // ─── Scene ────────────────────────────────────────────────────────────────────
 
 function Scene() {
-  const { currentTrajectory, isPlaying, currentTime, setCurrentTime, macroControls } = useTrajectoryStore()
-  const [positions, setPositions] = useState<Map<number, XYZ>>(new Map())
-  const [trails, setTrails]       = useState<Map<number, THREE.Vector3[]>>(new Map())
+  const frames        = useGraphStore((s) => s.frames)
+  const [trails, setTrails] = useState<Map<number, THREE.Vector3[]>>(new Map())
 
-  // Playback timer
   useEffect(() => {
-    if (!currentTrajectory || !isPlaying) return
-    const fps = currentTrajectory.fps ?? 60
-    const id = setInterval(() => {
-      setCurrentTime((prev: number) => {
-        const next = prev + 1 / fps
-        return next >= currentTrajectory.duration ? 0 : next
-      })
-    }, 1000 / fps)
-    return () => clearInterval(id)
-  }, [currentTrajectory, isPlaying, setCurrentTime])
-
-  // Position lookup — nouveau format: frames[objIdx][frameIdx][x,y,z]
-  useEffect(() => {
-    if (!currentTrajectory?.frames) return
-
-    const fps      = currentTrajectory.fps ?? 60
-    const frameIdx = Math.min(
-      Math.floor(currentTime * fps),
-      (currentTrajectory.frames[0]?.length ?? 1) - 1
-    )
-
-    const newPos   = new Map<number, XYZ>()
-    const newTrails = new Map<number, THREE.Vector3[]>()
-
-    currentTrajectory.objects.forEach((objId: number, i: number) => {
-      const raw = currentTrajectory.frames[i]?.[frameIdx]
-      if (!raw) return
-
-      const x = raw[0] * macroControls.scaleX + macroControls.shiftX
-      const y = raw[1] * macroControls.scaleY + macroControls.shiftY
-      const z = raw[2] * macroControls.scaleZ + macroControls.shiftZ
-
-      newPos.set(objId, [x, y, z])
-
-      const prev = trails.get(objId) ?? []
-      const trail = [...prev, new THREE.Vector3(x, y, z)]
-      if (trail.length > 120) trail.shift()
-      newTrails.set(objId, trail)
+    if (frames.length === 0) return
+    setTrails(prev => {
+      const next = new Map(prev)
+      for (const f of frames) {
+        const { x, y, z } = f.position
+        const trail = [...(next.get(f.trackId) ?? []), new THREE.Vector3(x, y, z)]
+        if (trail.length > 120) trail.shift()
+        next.set(f.trackId, trail)
+      }
+      return next
     })
-
-    setPositions(newPos)
-    setTrails(newTrails)
-  }, [currentTrajectory, currentTime, macroControls, trails])
+  }, [frames])
 
   return (
     <>
@@ -100,13 +67,17 @@ function Scene() {
         followCamera={false}
       />
 
-      {Array.from(positions.entries()).map(([objId, pos]) => (
-        <AudioObject key={objId} position={pos} index={objId} />
+      {frames.map((f) => (
+        <AudioObject
+          key={f.trackId}
+          position={[f.position.x, f.position.y, f.position.z]}
+          index={f.trackId}
+        />
       ))}
 
-      {Array.from(trails.entries()).map(([objId, pts]) => {
-        const col = new THREE.Color().setHSL((objId * 0.17) % 1, 0.85, 0.6)
-        return <TrajectoryPath key={`t-${objId}`} points={pts} color={`#${col.getHexString()}`} />
+      {Array.from(trails.entries()).map(([trackId, pts]) => {
+        const col = new THREE.Color().setHSL((trackId * 0.17) % 1, 0.85, 0.6)
+        return <TrajectoryPath key={`t-${trackId}`} points={pts} color={`#${col.getHexString()}`} />
       })}
 
       <OrbitControls makeDefault />
@@ -117,15 +88,23 @@ function Scene() {
 // ─── Info overlay ─────────────────────────────────────────────────────────────
 
 function InfoOverlay() {
-  const { currentTrajectory, currentTime } = useTrajectoryStore()
-  if (!currentTrajectory) return null
-  const meta = currentTrajectory._metadata
+  const currentT      = useGraphStore((s) => s.currentT)
+  const compileResult = useGraphStore((s) => s.compileResult)
+  const isRunning     = useGraphStore((s) => s.isRunning)
+  if (!compileResult?.success) return null
   return (
-    <div className="absolute top-3 left-3 bg-black/60 rounded-lg px-3 py-2 text-xs text-gray-300 space-y-0.5 pointer-events-none">
-      <div className="font-semibold text-white">{meta?.engine ?? '—'}</div>
-      <div>{meta?.n_objects ?? 0} objects · {currentTrajectory.duration}s · {meta?.n_frames ?? 0} frames</div>
-      <div className="text-gray-400">{currentTrajectory.description}</div>
-      <div className="text-primary-400 font-mono">{currentTime.toFixed(2)}s</div>
+    <div style={{
+      position: 'absolute', top: 10, left: 10,
+      background: 'rgba(0,0,0,0.6)', borderRadius: 6,
+      padding: '6px 10px', fontSize: 10, color: '#ccc',
+      pointerEvents: 'none', fontFamily: 'monospace',
+      lineHeight: 1.6,
+    }}>
+      <div style={{ fontWeight: 700, color: '#fff', marginBottom: 2 }}>
+        {isRunning ? '● LIVE' : '○ paused'}
+      </div>
+      <div>{compileResult.objectCount} obj · {compileResult.duration}s</div>
+      <div style={{ color: '#6af' }}>{currentT.toFixed(3)}s</div>
     </div>
   )
 }
@@ -133,11 +112,12 @@ function InfoOverlay() {
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 export default function TrajectoryVisualizer() {
-  const { currentTrajectory } = useTrajectoryStore()
+  const compileResult = useGraphStore((s) => s.compileResult)
+  const hasTrajectory = compileResult?.success === true
 
   return (
-    <div className="w-full h-full bg-gray-950 relative">
-      {currentTrajectory?.frames ? (
+    <div style={{ width: '100%', height: '100%', background: '#0a0a0a', position: 'relative' }}>
+      {hasTrajectory ? (
         <>
           <Canvas camera={{ position: [2, 2, 2], fov: 60 }}>
             <Scene />
@@ -145,13 +125,10 @@ export default function TrajectoryVisualizer() {
           <InfoOverlay />
         </>
       ) : (
-        <div className="flex items-center justify-center h-full">
-          <div className="text-center text-gray-600">
-            <div className="text-5xl mb-3">🔊</div>
-            <div className="text-base font-medium text-gray-400">No trajectory loaded</div>
-            <div className="text-sm mt-1 text-gray-600">
-              Build a graph and click Generate
-            </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+          <div style={{ textAlign: 'center', color: '#555' }}>
+            <div style={{ fontSize: 36, marginBottom: 8 }}>◎</div>
+            <div style={{ fontSize: 12, color: '#666' }}>Build a graph to start</div>
           </div>
         </div>
       )}
