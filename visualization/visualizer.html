@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OSCAI - Trajectory Visualizer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+            overflow: hidden;
+        }
+        
+        #container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+        }
+        
+        #canvas-container {
+            flex: 1;
+            position: relative;
+        }
+        
+        #controls {
+            width: 350px;
+            background: #1a1a1a;
+            padding: 20px;
+            overflow-y: auto;
+            border-left: 1px solid #333;
+        }
+        
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: #00ff88;
+        }
+        
+        h2 {
+            font-size: 16px;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            color: #00ccff;
+        }
+        
+        .input-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 12px;
+            color: #aaa;
+        }
+        
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 8px;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 14px;
+        }
+        
+        textarea {
+            resize: vertical;
+            min-height: 60px;
+            font-family: monospace;
+        }
+        
+        button {
+            width: 100%;
+            padding: 10px;
+            background: #00ff88;
+            border: none;
+            border-radius: 4px;
+            color: #000;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        
+        button:hover {
+            background: #00dd77;
+        }
+        
+        button:disabled {
+            background: #444;
+            color: #888;
+            cursor: not-allowed;
+        }
+        
+        .info {
+            background: #2a2a2a;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+        
+        .info-label {
+            color: #aaa;
+        }
+        
+        .info-value {
+            color: #00ff88;
+            font-weight: bold;
+        }
+        
+        .error {
+            background: #ff3333;
+            color: #fff;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-size: 12px;
+        }
+        
+        .success {
+            background: #00ff88;
+            color: #000;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-size: 12px;
+        }
+        
+        #playback-controls {
+            margin-top: 20px;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            margin: 10px 0;
+        }
+        
+        .preset-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+        
+        .preset-buttons button {
+            font-size: 11px;
+            padding: 6px;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="canvas-container"></div>
+        <div id="controls">
+            <h1>🎵 OSCAI Visualizer</h1>
+            
+            <div class="input-group">
+                <label>Trajectory Data (JSON)</label>
+                <textarea id="trajectory-input" placeholder='{"duration": 8.0, "objects": [1,2,3], "coordinate_system": "cartesian", "equations": {"x": "0.7*sin(2*pi*t/8)", "y": "0.7*cos(2*pi*t/8)", "z": "0.0"}}'></textarea>
+            </div>
+            
+            <button id="load-btn">Load Trajectory</button>
+            
+            <div class="preset-buttons">
+                <button onclick="loadPreset('circle')">Circle</button>
+                <button onclick="loadPreset('spiral')">Spiral</button>
+                <button onclick="loadPreset('swarm')">Swarm</button>
+                <button onclick="loadPreset('wave')">Wave</button>
+            </div>
+            
+            <div id="status"></div>
+            
+            <div id="info-panel"></div>
+            
+            <div id="playback-controls" style="display: none;">
+                <h2>Playback</h2>
+                <button id="play-btn">▶ Play</button>
+                <button id="reset-btn">⏮ Reset</button>
+                
+                <label>Time: <span id="time-display">0.00s</span></label>
+                <input type="range" id="time-slider" min="0" max="100" value="0">
+                
+                <label>Speed: <span id="speed-display">1.0x</span></label>
+                <input type="range" id="speed-slider" min="0.1" max="3" step="0.1" value="1">
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        let scene, camera, renderer, objects = [];
+        let trajectoryEngine = null;
+        let isPlaying = false;
+        let currentTime = 0;
+        let animationId = null;
+        let lastFrameTime = 0;
+        let playbackSpeed = 1.0;
+
+        function init() {
+            const container = document.getElementById('canvas-container');
+            
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0a0a);
+            
+            camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+            camera.position.set(2, 2, 2);
+            camera.lookAt(0, 0, 0);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            container.appendChild(renderer.domElement);
+            
+            const gridHelper = new THREE.GridHelper(4, 20, 0x444444, 0x222222);
+            scene.add(gridHelper);
+            
+            const axesHelper = new THREE.AxesHelper(1.5);
+            scene.add(axesHelper);
+            
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+            
+            const pointLight = new THREE.PointLight(0xffffff, 0.8);
+            pointLight.position.set(2, 3, 2);
+            scene.add(pointLight);
+            
+            window.addEventListener('resize', onWindowResize);
+            
+            animate();
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('canvas-container');
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            if (isPlaying && trajectoryEngine) {
+                const now = performance.now();
+                const deltaTime = (now - lastFrameTime) / 1000 * playbackSpeed;
+                lastFrameTime = now;
+                
+                currentTime += deltaTime;
+                
+                if (currentTime >= trajectoryEngine.duration) {
+                    currentTime = trajectoryEngine.duration;
+                    pause();
+                }
+                
+                updatePositions(currentTime);
+                updateTimeDisplay();
+            }
+            
+            camera.position.x = 2 * Math.cos(Date.now() * 0.0001);
+            camera.position.z = 2 * Math.sin(Date.now() * 0.0001);
+            camera.lookAt(0, 0, 0);
+            
+            renderer.render(scene, camera);
+        }
+
+        function clearObjects() {
+            objects.forEach(obj => scene.remove(obj));
+            objects = [];
+        }
+
+        function createObjects(numObjects) {
+            clearObjects();
+            
+            const colors = [0xff0088, 0x00ff88, 0x0088ff, 0xffff00, 0xff00ff, 0x00ffff];
+            
+            for (let i = 0; i < numObjects; i++) {
+                const geometry = new THREE.SphereGeometry(0.05, 16, 16);
+                const material = new THREE.MeshPhongMaterial({ 
+                    color: colors[i % colors.length],
+                    emissive: colors[i % colors.length],
+                    emissiveIntensity: 0.3
+                });
+                const sphere = new THREE.Mesh(geometry, material);
+                
+                const trailGeometry = new THREE.BufferGeometry();
+                const trailMaterial = new THREE.LineBasicMaterial({ 
+                    color: colors[i % colors.length],
+                    opacity: 0.3,
+                    transparent: true
+                });
+                const trail = new THREE.Line(trailGeometry, trailMaterial);
+                
+                sphere.userData.trail = trail;
+                sphere.userData.trailPoints = [];
+                
+                scene.add(sphere);
+                scene.add(trail);
+                objects.push(sphere);
+            }
+        }
+
+        function updatePositions(time) {
+            if (!trajectoryEngine) return;
+            
+            objects.forEach((obj, idx) => {
+                const objectIndex = trajectoryEngine.objects[idx];
+                const pos = trajectoryEngine.calculatePosition(time, objectIndex);
+                
+                obj.position.set(pos.x, pos.z, -pos.y);
+                
+                obj.userData.trailPoints.push(new THREE.Vector3(pos.x, pos.z, -pos.y));
+                if (obj.userData.trailPoints.length > 100) {
+                    obj.userData.trailPoints.shift();
+                }
+                
+                obj.userData.trail.geometry.setFromPoints(obj.userData.trailPoints);
+            });
+        }
+
+        function updateTimeDisplay() {
+            document.getElementById('time-display').textContent = currentTime.toFixed(2) + 's';
+            if (trajectoryEngine) {
+                const progress = (currentTime / trajectoryEngine.duration) * 100;
+                document.getElementById('time-slider').value = progress;
+            }
+        }
+
+        function play() {
+            if (!trajectoryEngine) return;
+            isPlaying = true;
+            lastFrameTime = performance.now();
+            document.getElementById('play-btn').textContent = '⏸ Pause';
+        }
+
+        function pause() {
+            isPlaying = false;
+            document.getElementById('play-btn').textContent = '▶ Play';
+        }
+
+        function reset() {
+            pause();
+            currentTime = 0;
+            objects.forEach(obj => {
+                obj.userData.trailPoints = [];
+                obj.userData.trail.geometry.setFromPoints([]);
+            });
+            updatePositions(0);
+            updateTimeDisplay();
+        }
+
+        class TrajectoryEngine {
+            constructor(data) {
+                this.duration = data.duration;
+                this.objects = data.objects;
+                this.equations = data.equations;
+                this.coordinateSystem = data.coordinate_system;
+            }
+            
+            calculatePosition(t, objectIndex) {
+                const context = {
+                    t: t,
+                    objectIndex: objectIndex,
+                    pi: Math.PI,
+                    sin: Math.sin,
+                    cos: Math.cos,
+                    tan: Math.tan,
+                    sqrt: Math.sqrt,
+                    abs: Math.abs,
+                    min: Math.min,
+                    max: Math.max
+                };
+                
+                const pos = {};
+                
+                try {
+                    for (let axis in this.equations) {
+                        const expr = this.equations[axis];
+                        pos[axis] = eval(expr.replace(/\b(\w+)\b/g, (match) => {
+                            return context.hasOwnProperty(match) ? `context.${match}` : match;
+                        }));
+                    }
+                } catch (e) {
+                    console.error('Evaluation error:', e);
+                    return { x: 0, y: 0, z: 0 };
+                }
+                
+                return pos;
+            }
+        }
+
+        document.getElementById('load-btn').addEventListener('click', () => {
+            const input = document.getElementById('trajectory-input').value;
+            const status = document.getElementById('status');
+            
+            try {
+                const data = JSON.parse(input);
+                
+                trajectoryEngine = new TrajectoryEngine(data);
+                createObjects(data.objects.length);
+                reset();
+                
+                document.getElementById('playback-controls').style.display = 'block';
+                
+                status.innerHTML = '<div class="success">✅ Trajectory loaded successfully!</div>';
+                
+                const info = `
+                    <div class="info">
+                        <div class="info-row">
+                            <span class="info-label">Duration:</span>
+                            <span class="info-value">${data.duration}s</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Objects:</span>
+                            <span class="info-value">${data.objects.length}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">System:</span>
+                            <span class="info-value">${data.coordinate_system}</span>
+                        </div>
+                    </div>
+                `;
+                document.getElementById('info-panel').innerHTML = info;
+                
+            } catch (e) {
+                status.innerHTML = `<div class="error">❌ Error: ${e.message}</div>`;
+            }
+        });
+
+        document.getElementById('play-btn').addEventListener('click', () => {
+            if (isPlaying) {
+                pause();
+            } else {
+                play();
+            }
+        });
+
+        document.getElementById('reset-btn').addEventListener('click', reset);
+
+        document.getElementById('time-slider').addEventListener('input', (e) => {
+            if (!trajectoryEngine) return;
+            pause();
+            currentTime = (e.target.value / 100) * trajectoryEngine.duration;
+            updatePositions(currentTime);
+            updateTimeDisplay();
+        });
+
+        document.getElementById('speed-slider').addEventListener('input', (e) => {
+            playbackSpeed = parseFloat(e.target.value);
+            document.getElementById('speed-display').textContent = playbackSpeed.toFixed(1) + 'x';
+        });
+
+        function loadPreset(name) {
+            const presets = {
+                circle: {
+                    duration: 8.0,
+                    objects: [1, 2, 3],
+                    coordinate_system: "cartesian",
+                    equations: {
+                        x: "0.7 * sin(2*pi*t/8 + objectIndex*2*pi/3)",
+                        y: "0.7 * cos(2*pi*t/8 + objectIndex*2*pi/3)",
+                        z: "0.0"
+                    }
+                },
+                spiral: {
+                    duration: 12.0,
+                    objects: [1, 2, 3, 4, 5, 6, 7, 8],
+                    coordinate_system: "cartesian",
+                    equations: {
+                        x: "0.6 * sin(2*pi*t/4 + objectIndex*0.3) * (t/12)",
+                        y: "0.6 * cos(2*pi*t/4 + objectIndex*0.3) * (t/12)",
+                        z: "-0.5 + (t/12)"
+                    }
+                },
+                swarm: {
+                    duration: 10.0,
+                    objects: [1, 2, 3, 4, 5, 6, 7, 8],
+                    coordinate_system: "cartesian",
+                    equations: {
+                        x: "(0.8 * cos(objectIndex * pi/4)) * (1 - t/10)",
+                        y: "(0.8 * sin(objectIndex * pi/4)) * (1 - t/10)",
+                        z: "0.2 * sin(2*pi*t/10) * (1 - t/10)"
+                    }
+                },
+                wave: {
+                    duration: 8.0,
+                    objects: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                    coordinate_system: "cartesian",
+                    equations: {
+                        x: "-0.9 + (objectIndex-1) * 0.2",
+                        y: "0.0",
+                        z: "0.3 * sin(2*pi*t/8 - objectIndex*0.5)"
+                    }
+                }
+            };
+            
+            document.getElementById('trajectory-input').value = JSON.stringify(presets[name], null, 2);
+        }
+
+        init();
+    </script>
+</body>
+</html>
