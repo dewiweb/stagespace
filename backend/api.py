@@ -6,7 +6,7 @@ import time
 import json
 from datetime import datetime
 
-from graph_compiler import GraphCompiler
+from orchestrator import orchestrate
 from validator import TrajectoryValidator
 import math_engine
 import physics_engine
@@ -20,8 +20,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-graph_compiler = GraphCompiler()
 
 trajectory_cache: Dict[str, Dict[str, Any]] = {}
 
@@ -52,36 +50,29 @@ async def root():
 
 @app.post("/api/compile-graph")
 async def compile_graph(request: GraphRequest):
-    """Compile un graph de nœuds en trajectoire via math_engine ou physics_engine."""
-    t0 = time.perf_counter()
-    try:
-        graph = {"nodes": request.nodes, "edges": request.edges}
-        result = graph_compiler.compile(graph)
-        trajectory = result["trajectory"]
-        latency = time.perf_counter() - t0
+    """Compile un graph via l'orchestrateur (validation + compilation).
 
-        trajectory_id = f"traj_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
-        entry = {
-            "id": trajectory_id,
-            "trajectory": trajectory,
-            "engine": result["engine"],
-            "latency": latency,
+    Always returns HTTP 200.  Clients check the 'success' field:
+      { success: true,  trajectory: {...}, engine: "...", issues: [], compile_ms: n }
+      { success: false, issues: [{level,code,message},...], compile_ms: 0 }
+    """
+    graph  = {"nodes": request.nodes, "edges": request.edges}
+    result = orchestrate(graph)
+
+    payload = result.to_dict()
+
+    if result.success:
+        traj_id = f"traj_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
+        trajectory_cache[traj_id] = {
+            "id":        traj_id,
+            "trajectory": result.trajectory,
+            "engine":    result.engine,
+            "latency":   result.compile_ms / 1000,
             "timestamp": datetime.now().isoformat(),
         }
-        trajectory_cache[trajectory_id] = entry
+        payload["id"] = traj_id
 
-        return {
-            "id": trajectory_id,
-            "engine": result["engine"],
-            "trajectory": trajectory,
-            "latency": latency,
-            "timestamp": entry["timestamp"],
-        }
-
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return payload
 
 
 @app.post("/api/generate-direct")

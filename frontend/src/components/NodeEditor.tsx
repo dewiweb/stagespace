@@ -116,10 +116,18 @@ function serializeGraph(nodes: Node[], edges: Edge[]) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+export interface GraphIssue {
+  level:    'error' | 'warning' | 'info'
+  code:     string
+  message:  string
+  node_id?: string
+}
+
 export interface NodeEditorStatus {
-  status: 'idle' | 'compiling' | 'ok' | 'error'
-  info:   string
-  error:  string
+  status:   'idle' | 'compiling' | 'ok' | 'error'
+  info:     string
+  error:    string
+  issues:   GraphIssue[]
 }
 
 type StatusCallback = (s: NodeEditorStatus) => void
@@ -151,7 +159,7 @@ export default function NodeEditor({ onStatus }: { onStatus?: StatusCallback }) 
   const compile = useCallback(async (ns: Node[], es: Edge[]) => {
     setStatus('compiling')
     setError('')
-    onStatus?.({ status: 'compiling', info: '', error: '' })
+    onStatus?.({ status: 'compiling', info: '', error: '', issues: [] })
     try {
       const res = await fetch('/api/compile-graph', {
         method: 'POST',
@@ -163,17 +171,33 @@ export default function NodeEditor({ onStatus }: { onStatus?: StatusCallback }) 
         throw new Error(e.detail ?? `HTTP ${res.status}`)
       }
       const data = await res.json()
+      const issues: GraphIssue[] = data.issues ?? []
+
+      if (!data.success) {
+        const errors = issues.filter((i) => i.level === 'error')
+        const msg = errors.length > 0
+          ? errors.map((i) => i.message).join(' · ')
+          : 'Compilation failed'
+        setError(msg)
+        setStatus('error')
+        onStatus?.({ status: 'error', info: '', error: msg, issues })
+        return
+      }
+
       setTrajectory(data.trajectory)
-      const ms   = ((data.latency ?? 0) * 1000).toFixed(0)
-      const msg  = `${data.engine}  ${ms}ms  ${data.trajectory?.objects?.length ?? 0} obj`
+      const nObj = data.trajectory?.objects?.length ?? 0
+      const ms   = (data.compile_ms ?? 0).toFixed(0)
+      const warns = issues.filter((i) => i.level === 'warning')
+      const warnSuffix = warns.length > 0 ? `  ⚠ ${warns.length}` : ''
+      const msg  = `${data.engine}  ${ms}ms  ${nObj} obj${warnSuffix}`
       setInfo(msg)
       setStatus('ok')
-      onStatus?.({ status: 'ok', info: msg, error: '' })
+      onStatus?.({ status: 'ok', info: msg, error: '', issues })
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'error'
       setError(msg)
       setStatus('error')
-      onStatus?.({ status: 'error', info: '', error: msg })
+      onStatus?.({ status: 'error', info: '', error: msg, issues: [] })
     }
   }, [setTrajectory, onStatus])
 

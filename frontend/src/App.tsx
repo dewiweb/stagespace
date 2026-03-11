@@ -11,7 +11,7 @@ function App() {
   const [viewportH,  setViewportH]  = useState(35)   // % of workspace height
   const [showMacro,  setShowMacro]  = useState(false)
   const [compStatus, setCompStatus] = useState<NodeEditorStatus>({
-    status: 'idle', info: '', error: '',
+    status: 'idle', info: '', error: '', issues: [],
   })
 
   const { isPlaying, togglePlayback, reset, currentTrajectory } = useTrajectoryStore()

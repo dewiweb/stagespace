@@ -193,21 +193,16 @@ def _exec_mix(pg: PortGraph, node_id: str, cache: Dict) -> Dict[str, Any]:
             "Use Group instead to combine objects from two different sources."
         )
 
+    import numpy as np
+
     blend    = float(pg.node_data(node_id).get("blend", 0.5))
-    inv_b    = 1.0 - blend
     n_frames = min(len(frames_a[0]), len(frames_b[0]))
 
-    mixed = []
-    for obj_i in range(n_obj_a):
-        obj_frames = []
-        fa = frames_a[obj_i]
-        fb = frames_b[obj_i]
-        for f in range(n_frames):
-            x = inv_b * fa[f][0] + blend * fb[f][0]
-            y = inv_b * fa[f][1] + blend * fb[f][1]
-            z = inv_b * fa[f][2] + blend * fb[f][2]
-            obj_frames.append([x, y, z])
-        mixed.append(obj_frames)
+    # Vectorized lerp: shape (n_obj, n_frames, 3)
+    arr_a = np.array([fa[:n_frames] for fa in frames_a], dtype=float)
+    arr_b = np.array([fb[:n_frames] for fb in frames_b], dtype=float)
+    arr_m = arr_a * (1.0 - blend) + arr_b * blend
+    mixed = arr_m.tolist()
 
     fps      = traj_a.get("fps", 30)
     duration = n_frames / fps
@@ -327,8 +322,9 @@ def _exec_sequence(pg: PortGraph, node_id: str, cache: Dict) -> Dict[str, Any]:
             f"Then has {n_obj_then}. Both must match."
         )
 
-    # Concatenate frames for each object
-    combined = [frames_first[i] + frames_then[i] for i in range(n_obj_first)]
+    # Concatenate frames for each object (list() guards against numpy arrays,
+    # where + means element-wise addition instead of concatenation)
+    combined = [list(frames_first[i]) + list(frames_then[i]) for i in range(n_obj_first)]
 
     n_frames = len(combined[0])
     fps      = traj_first.get("fps", 30)
