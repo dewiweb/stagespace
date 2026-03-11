@@ -1,6 +1,6 @@
 // ── AudioPanel — Audio IN monitoring (mic → BPM + amplitude) ─────────────────
 
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useCallback } from 'react'
 import { useGraphStore } from '../store/graphStore'
 
 // ── VU-metre canvas ───────────────────────────────────────────────────────────
@@ -102,15 +102,26 @@ interface AudioPanelProps {
 }
 
 export default function AudioPanel({ onClose }: AudioPanelProps) {
-  const audioFrame   = useGraphStore((s) => s.audioFrame)
-  const audioRunning = useGraphStore((s) => s.audioRunning)
-  const startAudio   = useGraphStore((s) => s.startAudio)
-  const stopAudio    = useGraphStore((s) => s.stopAudio)
+  const audioFrame            = useGraphStore((s) => s.audioFrame)
+  const audioRunning          = useGraphStore((s) => s.audioRunning)
+  const audioDevices          = useGraphStore((s) => s.audioDevices)
+  const selectedAudioDevice   = useGraphStore((s) => s.selectedAudioDevice)
+  const startAudio            = useGraphStore((s) => s.startAudio)
+  const stopAudio             = useGraphStore((s) => s.stopAudio)
+  const enumerateAudioDevices = useGraphStore((s) => s.enumerateAudioDevices)
+  const setAudioDevice        = useGraphStore((s) => s.setAudioDevice)
+
+  // Auto-enumerate on mount
+  useEffect(() => { enumerateAudioDevices() }, [enumerateAudioDevices])
 
   const handleToggle = async () => {
     if (audioRunning) stopAudio()
     else await startAudio()
   }
+
+  const handleDeviceChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    setAudioDevice(e.target.value)
+  }, [setAudioDevice])
 
   const { amplitude, peak, bpm, beat, spectrum } = audioFrame
 
@@ -153,6 +164,49 @@ export default function AudioPanel({ onClose }: AudioPanelProps) {
 
       {/* Body */}
       <div style={{ padding: '10px 12px', flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+        {/* Device selector */}
+        <div>
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            marginBottom: 4,
+          }}>
+            <span style={{ color: '#555', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              Interface
+            </span>
+            <span
+              onClick={enumerateAudioDevices}
+              style={{ color: '#444', cursor: 'pointer', fontSize: 9, userSelect: 'none' }}
+              onMouseEnter={e => (e.currentTarget.style.color = '#aaa')}
+              onMouseLeave={e => (e.currentTarget.style.color = '#444')}
+              title="Refresh device list"
+            >↺ refresh</span>
+          </div>
+          <select
+            value={selectedAudioDevice}
+            onChange={handleDeviceChange}
+            disabled={audioRunning}
+            style={{
+              width: '100%', background: '#1a1a1a', color: audioRunning ? '#444' : '#ccc',
+              border: '1px solid #2a2a2a', borderRadius: 4,
+              fontFamily: 'monospace', fontSize: 9, padding: '4px 6px',
+              cursor: audioRunning ? 'not-allowed' : 'pointer',
+              outline: 'none',
+            }}
+          >
+            <option value=''>— Default —</option>
+            {audioDevices.map(d => (
+              <option key={d.deviceId} value={d.deviceId}>
+                {d.label || `Input ${d.deviceId.slice(0, 8)}…`}
+              </option>
+            ))}
+          </select>
+          {audioRunning && (
+            <div style={{ color: '#555', fontSize: 8, marginTop: 3, textAlign: 'center' }}>
+              stop to change device
+            </div>
+          )}
+        </div>
 
         {/* Start/Stop */}
         <button

@@ -103,11 +103,14 @@ export class AudioAnalyser {
   get isRunning(): boolean { return this._running }
   get lastFrame(): AudioFrame { return this._lastFrame }
 
-  async start(): Promise<void> {
+  async start(deviceId?: string): Promise<void> {
     if (this._running) return
 
     this.ctx = new AudioContext()
-    this.stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+    const audioConstraints: boolean | MediaTrackConstraints = deviceId
+      ? { deviceId: { exact: deviceId } }
+      : true
+    this.stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints, video: false })
     this.source = this.ctx.createMediaStreamSource(this.stream)
 
     this.analyser = this.ctx.createAnalyser()

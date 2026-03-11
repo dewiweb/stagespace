@@ -116,6 +116,8 @@ interface GraphState {
   macros: MacroControls
   audioFrame: AudioFrame
   audioRunning: boolean
+  audioDevices: MediaDeviceInfo[]
+  selectedAudioDevice: string  // deviceId or '' for default
   cueList: Cue[]
   recentOscIn: import('../engine/osc/types').OscMessage[]
 
@@ -137,6 +139,8 @@ interface GraphState {
 
   startAudio: () => Promise<void>
   stopAudio: () => void
+  enumerateAudioDevices: () => Promise<void>
+  setAudioDevice: (deviceId: string) => void
 
   recordCue: (name?: string) => Cue
   goCue: (id: string) => void
@@ -207,12 +211,15 @@ export const useGraphStore = create<GraphState>((set, get) => {
     macros: { speed: 1, scaleX: 1, scaleY: 1, scaleZ: 1, shiftX: 0, shiftY: 0, shiftZ: 0 },
     audioFrame: { amplitude: 0, peak: 0, bpm: 0, beat: false, spectrum: new Float32Array(1024) },
     audioRunning: false,
+    audioDevices: [],
+    selectedAudioDevice: '',
     cueList: [],
     recentOscIn: [],
 
     startAudio: async () => {
       if (audioAnalyser.isRunning) return
-      await audioAnalyser.start()
+      const { selectedAudioDevice } = get()
+      await audioAnalyser.start(selectedAudioDevice || undefined)
       set({ audioRunning: true })
       // Poll audio frame at ~30fps via setInterval (RAF not reliable outside canvas)
       const id = window.setInterval(() => {
@@ -226,6 +233,24 @@ export const useGraphStore = create<GraphState>((set, get) => {
     stopAudio: () => {
       audioAnalyser.stop()
       set({ audioRunning: false, audioFrame: { amplitude: 0, peak: 0, bpm: 0, beat: false, spectrum: new Float32Array(1024) } })
+    },
+
+    enumerateAudioDevices: async () => {
+      try {
+        // Request permission first (required on some browsers before deviceId is exposed)
+        await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+          .then(s => s.getTracks().forEach(t => t.stop()))
+          .catch(() => {})
+        const devices = await navigator.mediaDevices.enumerateDevices()
+        const audioIn = devices.filter(d => d.kind === 'audioinput')
+        set({ audioDevices: audioIn })
+      } catch {
+        set({ audioDevices: [] })
+      }
+    },
+
+    setAudioDevice: (deviceId: string) => {
+      set({ selectedAudioDevice: deviceId })
     },
 
     recordCue: (name?: string) => {
