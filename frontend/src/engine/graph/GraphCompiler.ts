@@ -1,9 +1,12 @@
-import type { Graph, GraphNode, GraphEdge, CompileResult, CompileIssue } from './types'
+import type { Graph, GraphNode, GraphEdge, CompileResult, CompileIssue, TrajSlot } from './types'
 import type { EngineCompiledFn } from '../runtime/types'
 import type { Vector3, EngineContext } from '../types'
 import { getEngine } from '../registry'
 import { buildSplineLUT, evaluateSpline } from '../spline/catmullRom'
 import type { Spline, SplinePoint } from '../spline/types'
+import { getFalloff } from '../falloff/registry'
+import type { FalloffContext } from '../falloff/types'
+import { sharedAudioFrame } from '../audio/audioContext'
 
 // ── Port graph helper ─────────────────────────────────────────────────────────
 // inputs[nodeId][portName] = [sourceNodeId, sourcePortName]
@@ -53,54 +56,59 @@ export class GraphCompiler {
     const nodeMap = new Map<string, GraphNode>(graph.nodes.map(n => [n.id, n]))
     const inputs = buildInputMap(graph.edges, issues)
 
-    // ── 1. Find output node ──────────────────────────────────────────────────
+    const FAIL = (code: string, msg: string): CompileResult =>
+      ({ success: false, objectCount: 0, duration: 0, slots: [], issues, compileMs: elapsed(t0),
+         ...(issues.push({ level: 'error', code, message: msg }) && {}) })
+
+    // ── 1. Find all output nodes ──────────────────────────────────────────────
     const outputNodes = graph.nodes.filter(n => n.type === 'output')
-    if (outputNodes.length === 0) {
-      issues.push({ level: 'error', code: 'NO_OUTPUT', message: 'No Output node found.' })
-      return { success: false, objectCount: 0, duration: 0, issues, compileMs: elapsed(t0) }
-    }
-    if (outputNodes.length > 1) {
-      issues.push({ level: 'warning', code: 'MULTI_OUTPUT', message: `${outputNodes.length} Output nodes found — using first.`, nodeId: outputNodes[0].id })
-    }
-    const outputNode = outputNodes[0]
+    if (outputNodes.length === 0) return FAIL('NO_OUTPUT', 'No Output node found.')
 
-    // ── 2. Cycle detection (DFS) ─────────────────────────────────────────────
-    const cyclePath = detectCycle(outputNode.id, inputs, nodeMap)
-    if (cyclePath.length > 0) {
-      issues.push({ level: 'error', code: 'CYCLE', message: `Cycle detected: ${cyclePath.join(' → ')}` })
-      return { success: false, objectCount: 0, duration: 0, issues, compileMs: elapsed(t0) }
+    // ── 2. Cycle detection across all outputs ─────────────────────────────────
+    const allOutputIds = outputNodes.map(n => n.id)
+    for (const outId of allOutputIds) {
+      const cyclePath = detectCycle(outId, inputs, nodeMap)
+      if (cyclePath.length > 0) return FAIL('CYCLE', `Cycle detected: ${cyclePath.join(' → ')}`)
     }
 
-    // ── 2b. Warn about orphan nodes (not reachable from output) ────────────────
-    warnOrphans(outputNode.id, inputs, nodeMap, issues)
+    // ── 2b. Warn about orphan nodes (not reachable from any output) ────────────
+    warnOrphansMulti(allOutputIds, inputs, nodeMap, issues)
 
-    // ── 3. Compile recursively from output ───────────────────────────────────
+    // ── 3. Compile each output node independently ────────────────────────────
     const cache = new Map<string, TrajNode | null>()
     const splineCache: SplineCache = new Map()
-    let traj: TrajNode | null
-    try {
-      traj = compileNode(outputNode.id, nodeMap, inputs, cache, splineCache, issues)
-    } catch (err) {
-      issues.push({ level: 'error', code: 'COMPILE_ERROR', message: String(err) })
-      return { success: false, objectCount: 0, duration: 0, issues, compileMs: elapsed(t0) }
+    const slots: TrajSlot[] = []
+
+    for (const outputNode of outputNodes) {
+      let traj: TrajNode | null
+      try {
+        traj = compileNode(outputNode.id, nodeMap, inputs, cache, splineCache, issues)
+      } catch (err) {
+        issues.push({ level: 'error', code: 'COMPILE_ERROR', message: `Output '${outputNode.id}': ${String(err)}`, nodeId: outputNode.id })
+        continue
+      }
+      if (!traj) {
+        issues.push({ level: 'error', code: 'EMPTY_RESULT', message: `Output '${outputNode.id}' produced no trajectory.`, nodeId: outputNode.id })
+        continue
+      }
+      const { fn, objectCount, duration } = traj
+      const compiledFn: EngineCompiledFn = (t, objectIndex, _n, _dur) =>
+        fn(t, objectIndex, objectCount, duration)
+      slots.push({ fn: compiledFn, objectCount, duration, outputNodeId: outputNode.id })
     }
 
-
-    if (!traj) {
-      issues.push({ level: 'error', code: 'EMPTY_RESULT', message: 'Output node produced no trajectory.' })
-      return { success: false, objectCount: 0, duration: 0, issues, compileMs: elapsed(t0) }
+    if (slots.length === 0) {
+      issues.push({ level: 'error', code: 'EMPTY_RESULT', message: 'No output produced a valid trajectory.' })
+      return { success: false, objectCount: 0, duration: 0, slots: [], issues, compileMs: elapsed(t0) }
     }
 
-    // ── 4. Wrap as EngineCompiledFn ──────────────────────────────────────────
-    const { fn, objectCount, duration } = traj
-    const compiledFn: EngineCompiledFn = (t, objectIndex, _n, _dur) =>
-      fn(t, objectIndex, objectCount, duration)
-
+    // ── 4. Return — backward-compat fields from slot[0] ──────────────────────
     return {
       success: true,
-      fn: compiledFn,
-      objectCount,
-      duration,
+      fn: slots[0].fn,
+      objectCount: slots[0].objectCount,
+      duration: slots[0].duration,
+      slots,
       issues,
       compileMs: elapsed(t0),
     }
@@ -241,6 +249,44 @@ function compileNode(
   return result
 }
 
+// ── Compile a falloff node → returns a bound fn(ctx) → number or null ────────
+
+type BoundFalloff = (ctx: FalloffContext) => number
+
+function compileFalloffNode(
+  nodeId: string,
+  nodeMap: Map<string, GraphNode>,
+  issues: CompileIssue[],
+): BoundFalloff | null {
+  const node = nodeMap.get(nodeId)
+  if (!node) return null
+
+  // ── Audio signal sources ─────────────────────────────────────────────────
+  if (node.type === 'audioAmplitude') {
+    // Returns RMS amplitude 0–1, optionally scaled
+    const gain = typeof node.data.gain === 'number' ? node.data.gain : 1
+    return () => Math.min(1, sharedAudioFrame.amplitude * gain)
+  }
+  if (node.type === 'bpm') {
+    // Returns BPM normalized to 0–1 over a configurable range
+    const min = typeof node.data.min === 'number' ? node.data.min : 60
+    const max = typeof node.data.max === 'number' ? node.data.max : 180
+    return () => Math.max(0, Math.min(1, (sharedAudioFrame.bpm - min) / (max - min)))
+  }
+
+  // ── Standard falloff nodes ───────────────────────────────────────────────
+  const descriptor = getFalloff(node.type)
+  if (!descriptor) {
+    issues.push({ level: 'warning', code: 'UNKNOWN_FALLOFF', message: `Unknown falloff type '${node.type}'`, nodeId })
+    return null
+  }
+  const params: Record<string, number> = { ...descriptor.defaultParams }
+  for (const [k, v] of Object.entries(node.data)) {
+    if (typeof v === 'number') params[k] = v
+  }
+  return (ctx: FalloffContext) => descriptor.fn(ctx, params)
+}
+
 // ── Compile a motion engine node ─────────────────────────────────────────────
 
 function compileEngineNode(
@@ -254,22 +300,26 @@ function compileEngineNode(
   const engine = getEngine(node.type)
   if (!engine) {
     // Unknown signal/falloff nodes — skip gracefully with info
-    const signalTypes = ['bpm','audioAmplitude','audioSpectrum','oscInput']
+    const signalTypes = ['audioSpectrum','oscInput']
     const isFalloff = node.type.includes('.')
     if (signalTypes.includes(node.type) || isFalloff) {
-      issues.push({ level: 'info', code: 'SIGNAL_NODE_SKIPPED', message: `'${node.type}' is a signal/falloff node — not yet compilable as trajectory source.`, nodeId: node.id })
+      issues.push({ level: 'info', code: 'SIGNAL_NODE_SKIPPED', message: `'${node.type}' is a signal/falloff source — connect to a motion engine's Falloff port.`, nodeId: node.id })
       return null
     }
     return compileModifierNode(node, nodeMap, inputs, cache, splineCache, issues)
   }
 
-  // Resolve objectCount from connected Objects node or node data
+  // Resolve objectCount + initialPositions from connected Objects node or node data
   let objectCount = num(node.data.count ?? node.data.n_objects, 4)
+  let initialPositions: Vector3[] | undefined
   const objSrc = getInput(inputs, node.id, 'in-objects')
   if (objSrc) {
     const objNode = nodeMap.get(objSrc[0])
     if (objNode?.type === 'objects') {
       objectCount = num(objNode.data.count, 4)
+      if (Array.isArray(objNode.data.initialPositions)) {
+        initialPositions = objNode.data.initialPositions as Vector3[]
+      }
     } else {
       issues.push({ level: 'warning', code: 'WRONG_PORT_TYPE', message: `${node.type}: 'in-objects' connected to '${objNode?.type}' instead of 'objects' node — count ignored.`, nodeId: node.id })
     }
@@ -297,7 +347,28 @@ function compileEngineNode(
     if (typeof v === 'number') params[k] = v
   }
 
+  // ── Optional falloff on in-signal port ───────────────────────────────────
+  const signalSrc = getInput(inputs, node.id, 'in-signal')
+  let falloffFn: BoundFalloff | null = null
+  const signalTarget = typeof node.data.signalTarget === 'string' ? node.data.signalTarget : null
+  const signalMin    = num(node.data.signalMin, params[signalTarget ?? ''] ?? 0)
+  const signalMax    = num(node.data.signalMax, (params[signalTarget ?? ''] ?? 0) * 2 || 1)
+
+  if (signalSrc && signalTarget) {
+    const falloffNodeId = signalSrc[0]
+    const compiled = compileFalloffNode(falloffNodeId, nodeMap, issues)
+    if (compiled) {
+      falloffFn = compiled
+    } else {
+      issues.push({ level: 'warning', code: 'FALLOFF_COMPILE_FAILED', message: `Could not compile falloff for '${node.type}' — '${signalTarget}' will use static value.`, nodeId: node.id })
+    }
+  } else if (signalSrc && !signalTarget) {
+    issues.push({ level: 'info', code: 'NO_SIGNAL_TARGET', message: `${node.type}: Falloff connected but no Signal Target set in properties.`, nodeId: node.id })
+  }
+
   const engineFn = engine.fn
+  const baseParams = params
+  const capturedInitialPositions = initialPositions
   return {
     fn: (t, objectIndex, objectCount_, duration_) => {
       const ctx: EngineContext = {
@@ -306,8 +377,21 @@ function compileEngineNode(
         objectIndex,
         objectCount: objectCount_,
         phase: duration_ > 0 ? (t % duration_) / duration_ : 0,
+        initialPosition: capturedInitialPositions?.[objectIndex],
       }
-      return engineFn(ctx, params)
+      // Apply falloff modulation to target parameter
+      let p = baseParams
+      if (falloffFn && signalTarget) {
+        const fallCtx: FalloffContext = {
+          t, duration: duration_, phase: ctx.phase,
+          objectIndex, objectCount: objectCount_,
+          position: { x: 0, y: 0, z: 0 }, // position not available pre-evaluation
+        }
+        const signal = Math.max(0, Math.min(1, falloffFn(fallCtx)))
+        const modulated = signalMin + signal * (signalMax - signalMin)
+        p = { ...baseParams, [signalTarget]: modulated }
+      }
+      return engineFn(ctx, p)
     },
     objectCount,
     duration,
@@ -441,8 +525,40 @@ function compileModifierNode(
     }
     case 'offset': {
       const ox = num(node.data.x, 0), oy = num(node.data.y, 0), oz = num(node.data.z, 0)
+      // If useHolPosition: resolve initialPositions from upstream Objects node
+      let holPositions: Vector3[] | undefined
+      if (node.data.useHolPosition) {
+        // Walk up: find the Objects node reachable via the upstream trajectory chain
+        const findObjNode = (nodeId: string, depth = 0): GraphNode | undefined => {
+          if (depth > 8) return undefined
+          const n = nodeMap.get(nodeId)
+          if (!n) return undefined
+          if (n.type === 'objects') return n
+          const portMap = inputs.get(nodeId)
+          if (!portMap) return undefined
+          for (const [srcId] of portMap.values()) {
+            const candidate = nodeMap.get(srcId)
+            if (candidate?.type === 'objects') return candidate
+            const found = findObjNode(srcId, depth + 1)
+            if (found) return found
+          }
+          return undefined
+        }
+        const objNode = findObjNode(src[0])
+        if (objNode && Array.isArray(objNode.data.initialPositions)) {
+          holPositions = objNode.data.initialPositions as Vector3[]
+        }
+      }
       return {
-        fn: (t, i, n, d) => { const p = upstream.fn(t, i, n, d); return { x: p.x + ox, y: p.y + oy, z: p.z + oz } },
+        fn: (t, i, n, d) => {
+          const p = upstream.fn(t, i, n, d)
+          const ip = holPositions?.[i]
+          return {
+            x: p.x + ox + (ip?.x ?? 0),
+            y: p.y + oy + (ip?.y ?? 0),
+            z: p.z + oz + (ip?.z ?? 0),
+          }
+        },
         objectCount: upstream.objectCount,
         duration: upstream.duration,
       }
@@ -521,8 +637,8 @@ function compileModifierNode(
 // ── Orphan detection ──────────────────────────────────────────────────────────
 // Warns about nodes that exist in the graph but are not reachable from output
 
-function warnOrphans(
-  outputId: string,
+function warnOrphansMulti(
+  outputIds: string[],
   inputs: InputMap,
   nodeMap: Map<string, GraphNode>,
   issues: CompileIssue[],
@@ -535,12 +651,12 @@ function warnOrphans(
       if (nodeMap.has(srcId)) visit(srcId)
     }
   }
-  visit(outputId)
+  for (const outId of outputIds) visit(outId)
   for (const [id, node] of nodeMap) {
     if (!reachable.has(id)) {
       // drawSpline nodes linked to evaluateSpline are reachable via in-spline, not trajectory
       // — they won't appear in inputs map traversal, skip them
-      const skipTypes = ['objects', 'duration', 'drawSpline']
+      const skipTypes = ['objects', 'duration', 'drawSpline', 'output']
       if (!skipTypes.includes(node.type)) {
         issues.push({ level: 'info', code: 'ORPHAN_NODE', message: `Node '${node.type}' (id: ${id}) is not connected to the Output.`, nodeId: id })
       }

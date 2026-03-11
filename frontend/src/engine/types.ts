@@ -10,6 +10,7 @@ export interface EngineContext {
   objectIndex: number
   objectCount: number
   phase: number      // t / duration normalisé [0,1]
+  initialPosition?: Vector3  // position importée du .hol pour cet objet (XYZ cartésien)
 }
 
 export type EngineFunction = (ctx: EngineContext, params: Record<string, number>) => Vector3

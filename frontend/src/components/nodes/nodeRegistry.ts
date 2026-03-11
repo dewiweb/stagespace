@@ -118,6 +118,7 @@ const offset: NodeDescriptor = {
     { key: 'x', label: 'Δ X', type: 'float', min: -10, max: 10, step: 0.01, default: 0 },
     { key: 'y', label: 'Δ Y', type: 'float', min: -10, max: 10, step: 0.01, default: 0 },
     { key: 'z', label: 'Δ Z', type: 'float', min: -10, max: 10, step: 0.01, default: 0 },
+    { key: 'useHolPosition', label: 'Use .hol position', type: 'int', min: 0, max: 1, step: 1, default: 0 },
   ],
 }
 
@@ -382,9 +383,8 @@ const bpm: NodeDescriptor = {
   type: 'bpm', label: 'BPM', icon: '♩', color: '#10b981',
   badge: 'signal', category: 'source', schema: SIGNAL_PORT_SCHEMA,
   params: [
-    { key: 'bpm',      label: 'BPM',       type: 'float', min: 20,  max: 300, step: 0.5, default: 120 },
-    { key: 'division', label: 'Division',  type: 'float', min: 0.25, max: 4,  step: 0.25, default: 1 },
-    { key: 'swing',    label: 'Swing',     type: 'float', min: 0,   max: 0.5, step: 0.01, default: 0 },
+    { key: 'min', label: 'BPM min', type: 'float', min: 20,  max: 300, step: 1, default: 60 },
+    { key: 'max', label: 'BPM max', type: 'float', min: 20,  max: 300, step: 1, default: 180 },
   ],
 }
 

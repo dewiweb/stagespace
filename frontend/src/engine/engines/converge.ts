@@ -20,13 +20,20 @@ export const converge: EngineDescriptor = {
     pingpong:     { min: 0,    max: 1,  step: 1,    label: 'Ping-Pong' },
   },
   fn(ctx, p) {
-    // Each object starts on a sphere and converges to target
-    const goldenAngle = Math.PI * (3 - Math.sqrt(5))
-    const theta = goldenAngle * ctx.objectIndex
-    const phi = Math.acos(1 - (2 * (ctx.objectIndex + 0.5)) / ctx.objectCount)
-    const ox = Math.sin(phi) * Math.cos(theta) * p.spreadRadius
-    const oy = Math.sin(phi) * Math.sin(theta) * p.spreadRadius
-    const oz = Math.cos(phi) * p.spreadRadius
+    // Use initialPosition from .hol as spread origin if available, else golden-sphere distribution
+    let ox: number, oy: number, oz: number
+    if (ctx.initialPosition) {
+      ox = ctx.initialPosition.x
+      oy = ctx.initialPosition.y
+      oz = ctx.initialPosition.z
+    } else {
+      const goldenAngle = Math.PI * (3 - Math.sqrt(5))
+      const theta = goldenAngle * ctx.objectIndex
+      const phi = Math.acos(1 - (2 * (ctx.objectIndex + 0.5)) / ctx.objectCount)
+      ox = Math.sin(phi) * Math.cos(theta) * p.spreadRadius
+      oy = Math.sin(phi) * Math.sin(theta) * p.spreadRadius
+      oz = Math.cos(phi) * p.spreadRadius
+    }
 
     let ph = (ctx.phase * p.speed) % 1
     if (p.pingpong >= 0.5) {

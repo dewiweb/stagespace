@@ -46,11 +46,19 @@ export interface CompileIssue {
   nodeId?: string
 }
 
-export interface CompileResult {
-  success: boolean
-  fn?: EngineCompiledFn
+export interface TrajSlot {
+  fn: EngineCompiledFn
   objectCount: number
   duration: number
+  outputNodeId: string
+}
+
+export interface CompileResult {
+  success: boolean
+  fn?: EngineCompiledFn          // = slots[0].fn (backward compat)
+  objectCount: number            // = slots[0].objectCount (backward compat)
+  duration: number               // = slots[0].duration (backward compat)
+  slots: TrajSlot[]              // all compiled output slots
   issues: CompileIssue[]
   compileMs: number
 }
