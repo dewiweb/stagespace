@@ -369,6 +369,170 @@ describe('GraphCompiler — warnings', () => {
   })
 })
 
+describe('GraphCompiler — trackMap node', () => {
+  it('trackMap with string trackIds overrides default sequential IDs in slot', () => {
+    const g: Graph = {
+      nodes: [
+        { id: 'obj', type: 'objects',  data: { count: 3 } },
+        { id: 'dur', type: 'duration', data: { seconds: 10 } },
+        { id: 'mov', type: 'circular', data: { radius: 1 } },
+        { id: 'tm',  type: 'trackMap', data: { trackIds: '5, 7, 3' } },
+        { id: 'out', type: 'output',   data: {} },
+      ],
+      edges: [
+        { source: 'obj', sourceHandle: 'out-objects',    target: 'mov', targetHandle: 'in-objects' },
+        { source: 'dur', sourceHandle: 'out-duration',   target: 'mov', targetHandle: 'in-duration' },
+        { source: 'mov', sourceHandle: 'out-trajectory', target: 'tm',  targetHandle: 'in-trajectory' },
+        { source: 'tm',  sourceHandle: 'out-trajectory', target: 'out', targetHandle: 'in-trajectory' },
+      ],
+    }
+    const r = compiler.compile(g)
+    expect(r.success).toBe(true)
+    expect(r.slots[0].trackIds).toEqual([5, 7, 3])
+  })
+
+  it('trackMap with array trackIds works identically', () => {
+    const g: Graph = {
+      nodes: [
+        { id: 'obj', type: 'objects',  data: { count: 2 } },
+        { id: 'dur', type: 'duration', data: { seconds: 10 } },
+        { id: 'mov', type: 'circular', data: { radius: 1 } },
+        { id: 'tm',  type: 'trackMap', data: { trackIds: [10, 20] } },
+        { id: 'out', type: 'output',   data: {} },
+      ],
+      edges: [
+        { source: 'obj', sourceHandle: 'out-objects',    target: 'mov', targetHandle: 'in-objects' },
+        { source: 'dur', sourceHandle: 'out-duration',   target: 'mov', targetHandle: 'in-duration' },
+        { source: 'mov', sourceHandle: 'out-trajectory', target: 'tm',  targetHandle: 'in-trajectory' },
+        { source: 'tm',  sourceHandle: 'out-trajectory', target: 'out', targetHandle: 'in-trajectory' },
+      ],
+    }
+    const r = compiler.compile(g)
+    expect(r.success).toBe(true)
+    expect(r.slots[0].trackIds).toEqual([10, 20])
+  })
+
+  it('trackMap count mismatch emits TRACK_COUNT_MISMATCH warning', () => {
+    const g: Graph = {
+      nodes: [
+        { id: 'obj', type: 'objects',  data: { count: 4 } },
+        { id: 'dur', type: 'duration', data: { seconds: 10 } },
+        { id: 'mov', type: 'circular', data: { radius: 1 } },
+        { id: 'tm',  type: 'trackMap', data: { trackIds: '1, 2' } },
+        { id: 'out', type: 'output',   data: {} },
+      ],
+      edges: [
+        { source: 'obj', sourceHandle: 'out-objects',    target: 'mov', targetHandle: 'in-objects' },
+        { source: 'dur', sourceHandle: 'out-duration',   target: 'mov', targetHandle: 'in-duration' },
+        { source: 'mov', sourceHandle: 'out-trajectory', target: 'tm',  targetHandle: 'in-trajectory' },
+        { source: 'tm',  sourceHandle: 'out-trajectory', target: 'out', targetHandle: 'in-trajectory' },
+      ],
+    }
+    const r = compiler.compile(g)
+    expect(r.success).toBe(true)
+    expect(r.issues.some(i => i.code === 'TRACK_COUNT_MISMATCH')).toBe(true)
+  })
+
+  it('trackMap without input emits MISSING_PORT error', () => {
+    const g: Graph = {
+      nodes: [
+        { id: 'tm',  type: 'trackMap', data: { trackIds: '1, 2' } },
+        { id: 'out', type: 'output',   data: {} },
+      ],
+      edges: [
+        { source: 'tm', sourceHandle: 'out-trajectory', target: 'out', targetHandle: 'in-trajectory' },
+      ],
+    }
+    const r = compiler.compile(g)
+    expect(r.success).toBe(false)
+    expect(r.issues.some(i => i.code === 'MISSING_PORT')).toBe(true)
+  })
+})
+
+describe('GraphCompiler — useHolPositions on Objects node', () => {
+  it('initialPositions propagated to slot when useHolPositions=true', () => {
+    const initialPositions = [
+      { x: 1, y: 2, z: 3 },
+      { x: 4, y: 5, z: 6 },
+    ]
+    const g: Graph = {
+      nodes: [
+        { id: 'obj', type: 'objects',  data: { count: 2, useHolPositions: true, initialPositions } },
+        { id: 'dur', type: 'duration', data: { seconds: 10 } },
+        { id: 'mov', type: 'circular', data: { radius: 1 } },
+        { id: 'out', type: 'output',   data: {} },
+      ],
+      edges: [
+        { source: 'obj', sourceHandle: 'out-objects',    target: 'mov', targetHandle: 'in-objects' },
+        { source: 'dur', sourceHandle: 'out-duration',   target: 'mov', targetHandle: 'in-duration' },
+        { source: 'mov', sourceHandle: 'out-trajectory', target: 'out', targetHandle: 'in-trajectory' },
+      ],
+    }
+    const r = compiler.compile(g)
+    expect(r.success).toBe(true)
+    expect(r.slots[0].initialPositions).toEqual(initialPositions)
+  })
+
+  it('initialPositions NOT propagated when useHolPositions=false', () => {
+    const g: Graph = {
+      nodes: [
+        { id: 'obj', type: 'objects',  data: { count: 2, useHolPositions: false, initialPositions: [{ x: 1, y: 0, z: 0 }] } },
+        { id: 'dur', type: 'duration', data: { seconds: 10 } },
+        { id: 'mov', type: 'circular', data: { radius: 1 } },
+        { id: 'out', type: 'output',   data: {} },
+      ],
+      edges: [
+        { source: 'obj', sourceHandle: 'out-objects',    target: 'mov', targetHandle: 'in-objects' },
+        { source: 'dur', sourceHandle: 'out-duration',   target: 'mov', targetHandle: 'in-duration' },
+        { source: 'mov', sourceHandle: 'out-trajectory', target: 'out', targetHandle: 'in-trajectory' },
+      ],
+    }
+    const r = compiler.compile(g)
+    expect(r.success).toBe(true)
+    expect(r.slots[0].initialPositions).toBeUndefined()
+  })
+
+  it('Objects.trackIds propagated to slot when no trackMap present', () => {
+    const g: Graph = {
+      nodes: [
+        { id: 'obj', type: 'objects',  data: { count: 3, trackIds: [10, 20, 30] } },
+        { id: 'dur', type: 'duration', data: { seconds: 10 } },
+        { id: 'mov', type: 'circular', data: { radius: 1 } },
+        { id: 'out', type: 'output',   data: {} },
+      ],
+      edges: [
+        { source: 'obj', sourceHandle: 'out-objects',    target: 'mov', targetHandle: 'in-objects' },
+        { source: 'dur', sourceHandle: 'out-duration',   target: 'mov', targetHandle: 'in-duration' },
+        { source: 'mov', sourceHandle: 'out-trajectory', target: 'out', targetHandle: 'in-trajectory' },
+      ],
+    }
+    const r = compiler.compile(g)
+    expect(r.success).toBe(true)
+    expect(r.slots[0].trackIds).toEqual([10, 20, 30])
+  })
+
+  it('trackMap.trackIds takes priority over Objects.trackIds', () => {
+    const g: Graph = {
+      nodes: [
+        { id: 'obj', type: 'objects',  data: { count: 2, trackIds: [1, 2] } },
+        { id: 'dur', type: 'duration', data: { seconds: 10 } },
+        { id: 'mov', type: 'circular', data: { radius: 1 } },
+        { id: 'tm',  type: 'trackMap', data: { trackIds: '99, 88' } },
+        { id: 'out', type: 'output',   data: {} },
+      ],
+      edges: [
+        { source: 'obj', sourceHandle: 'out-objects',    target: 'mov', targetHandle: 'in-objects' },
+        { source: 'dur', sourceHandle: 'out-duration',   target: 'mov', targetHandle: 'in-duration' },
+        { source: 'mov', sourceHandle: 'out-trajectory', target: 'tm',  targetHandle: 'in-trajectory' },
+        { source: 'tm',  sourceHandle: 'out-trajectory', target: 'out', targetHandle: 'in-trajectory' },
+      ],
+    }
+    const r = compiler.compile(g)
+    expect(r.success).toBe(true)
+    expect(r.slots[0].trackIds).toEqual([99, 88])
+  })
+})
+
 describe('GraphCompiler — falloff integration', () => {
   it('compiles engine with time.linear falloff modulating radius', () => {
     const g: Graph = {

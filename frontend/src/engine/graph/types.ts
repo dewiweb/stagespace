@@ -6,6 +6,7 @@ export type NodeType =
   | 'objects'
   | 'duration'
   | 'output'
+  | 'trackMap'
   | 'mix'
   | 'group'
   | 'sequence'
@@ -51,6 +52,8 @@ export interface TrajSlot {
   objectCount: number
   duration: number
   outputNodeId: string
+  trackIds?: number[]        // from trackMap node or Objects.trackIds (if set)
+  initialPositions?: import('../types').Vector3[]  // from Objects.initialPositions (if useHolPositions)
 }
 
 export interface CompileResult {

@@ -12,6 +12,7 @@ import {
   GROUP_PORT_SCHEMA,
   SEQUENCE_PORT_SCHEMA,
   TRANSFORM_PORT_SCHEMA,
+  TRACK_MAP_PORT_SCHEMA,
   MOTION_PORT_SCHEMA,
 } from './portTypes'
 
@@ -48,6 +49,7 @@ const objects: NodeDescriptor = {
   badge: 'source', category: 'source', schema: OBJECTS_PORT_SCHEMA,
   params: [
     { key: 'count', label: 'Count', type: 'int', min: 1, max: 64, default: 4 },
+    { key: 'useHolPositions', label: 'Start from .hol positions', type: 'bool', default: false },
   ],
 }
 
@@ -65,6 +67,15 @@ const output: NodeDescriptor = {
   type: 'output', label: 'Output', icon: '⊳', color: '#22c55e',
   badge: 'sink', category: 'sink', schema: OUTPUT_PORT_SCHEMA,
   params: [],
+}
+
+const trackMap: NodeDescriptor = {
+  type: 'trackMap', label: 'Track Map', icon: '⇥', color: '#f59e0b',
+  badge: 'remap', category: 'sink', schema: TRACK_MAP_PORT_SCHEMA,
+  params: [
+    { key: 'trackIds', label: 'Track IDs (comma-separated)', type: 'select', default: '',
+      options: [] },
+  ],
 }
 
 // ── Control nodes ─────────────────────────────────────────────────────────────
@@ -641,7 +652,7 @@ export const FALLOFFS_CONFIG: Record<string, NodeDescriptor> = {
 // ── Static node registry ──────────────────────────────────────────────────────
 
 export const STATIC_NODES: Record<string, NodeDescriptor> = {
-  objects, duration, output, mix, group, sequence,
+  objects, duration, output, trackMap, mix, group, sequence,
   scale, rotate, offset, phaseShift, barycentricGroup,
   bpm, audioAmplitude, audioSpectrum, oscInput,
 }

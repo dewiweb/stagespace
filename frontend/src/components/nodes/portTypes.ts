@@ -111,6 +111,15 @@ export const TRANSFORM_PORT_SCHEMA: NodePortSchema = {
   ],
 }
 
+export const TRACK_MAP_PORT_SCHEMA: NodePortSchema = {
+  inputs:  [
+    { id: 'in-trajectory', type: 'trajectory', label: 'Trajectory' },
+  ],
+  outputs: [
+    { id: 'out-trajectory', type: 'trajectory', label: 'Trajectory' },
+  ],
+}
+
 // ─── Connection validation ─────────────────────────────────────────────────────
 
 export function getPortType(handleId: string | null | undefined): PortType | null {

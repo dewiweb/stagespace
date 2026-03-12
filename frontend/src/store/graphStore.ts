@@ -332,18 +332,14 @@ export const useGraphStore = create<GraphState>((set, get) => {
       set({ compileResult: result })
 
       if (result.success && result.slots.length > 0) {
-        const { nodes: currentNodes } = get()
-        // Build one EngineSlot per TrajSlot — resolve trackIds from Objects node
-        // For simplicity: all slots share the same Objects node (single Objects node model)
-        // Future: each output could have its own Objects node chain
-        const objNode = currentNodes.find(n => n.type === 'objects')
-        const trackIds = objNode?.data?.trackIds as number[] | undefined
-
+        // Build one EngineSlot per TrajSlot
+        // Priority for trackIds: slot.trackIds (from trackMap node) > slot.trackIds (from Objects node propagation) > sequential
         let objectIndexOffset = 0
         const engineSlots = result.slots.map(slot => {
+          const resolvedIds = slot.trackIds
           const tracks = Array.from({ length: slot.objectCount }, (_, i) => ({
-            id: trackIds && trackIds.length >= objectIndexOffset + i + 1
-              ? trackIds[objectIndexOffset + i]
+            id: resolvedIds && resolvedIds.length > i
+              ? resolvedIds[i]
               : objectIndexOffset + i + 1,
             objectIndex: i,
           }))

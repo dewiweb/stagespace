@@ -40,6 +40,8 @@ interface TrajNode {
   fn: TrajFn
   objectCount: number
   duration: number
+  trackIds?: number[]        // propagated from trackMap or Objects node
+  initialPositions?: Vector3[] // propagated from Objects node when useHolPositions=true
 }
 
 // ── Spline cache ──────────────────────────────────────────────────────────────
@@ -91,10 +93,10 @@ export class GraphCompiler {
         issues.push({ level: 'error', code: 'EMPTY_RESULT', message: `Output '${outputNode.id}' produced no trajectory.`, nodeId: outputNode.id })
         continue
       }
-      const { fn, objectCount, duration } = traj
+      const { fn, objectCount, duration, trackIds, initialPositions } = traj
       const compiledFn: EngineCompiledFn = (t, objectIndex, _n, _dur) =>
         fn(t, objectIndex, objectCount, duration)
-      slots.push({ fn: compiledFn, objectCount, duration, outputNodeId: outputNode.id })
+      slots.push({ fn: compiledFn, objectCount, duration, outputNodeId: outputNode.id, trackIds, initialPositions })
     }
 
     if (slots.length === 0) {
@@ -147,6 +149,29 @@ function compileNode(
         break
       }
       result = compileNode(src[0], nodeMap, inputs, cache, splineCache, issues)
+      break
+    }
+
+    case 'trackMap': {
+      const src = getInput(inputs, nodeId, 'in-trajectory')
+      if (!src) {
+        issues.push({ level: 'error', code: 'MISSING_PORT', message: 'TrackMap node has no trajectory input.', nodeId })
+        break
+      }
+      const upstream = compileNode(src[0], nodeMap, inputs, cache, splineCache, issues)
+      if (!upstream) break
+      // Parse trackIds from node data: comma-separated string or number[]
+      const rawIds = node.data.trackIds
+      let trackIds: number[] | undefined
+      if (typeof rawIds === 'string' && rawIds.trim()) {
+        trackIds = rawIds.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n))
+      } else if (Array.isArray(rawIds)) {
+        trackIds = (rawIds as unknown[]).map(Number).filter(n => !isNaN(n))
+      }
+      if (trackIds && trackIds.length > 0 && trackIds.length !== upstream.objectCount) {
+        issues.push({ level: 'warning', code: 'TRACK_COUNT_MISMATCH', message: `TrackMap: ${trackIds.length} track IDs but upstream has ${upstream.objectCount} objects — IDs truncated/padded.`, nodeId })
+      }
+      result = { ...upstream, trackIds }
       break
     }
 
@@ -309,16 +334,22 @@ function compileEngineNode(
     return compileModifierNode(node, nodeMap, inputs, cache, splineCache, issues)
   }
 
-  // Resolve objectCount + initialPositions from connected Objects node or node data
+  // Resolve objectCount + initialPositions + trackIds from connected Objects node or node data
   let objectCount = num(node.data.count ?? node.data.n_objects, 4)
   let initialPositions: Vector3[] | undefined
+  let objTrackIds: number[] | undefined
   const objSrc = getInput(inputs, node.id, 'in-objects')
   if (objSrc) {
     const objNode = nodeMap.get(objSrc[0])
     if (objNode?.type === 'objects') {
       objectCount = num(objNode.data.count, 4)
-      if (Array.isArray(objNode.data.initialPositions)) {
+      // useHolPositions: inject .hol initial positions into engine context
+      if (objNode.data.useHolPositions && Array.isArray(objNode.data.initialPositions)) {
         initialPositions = objNode.data.initialPositions as Vector3[]
+      }
+      // Propagate trackIds for slot assignment
+      if (Array.isArray(objNode.data.trackIds)) {
+        objTrackIds = objNode.data.trackIds as number[]
       }
     } else {
       issues.push({ level: 'warning', code: 'WRONG_PORT_TYPE', message: `${node.type}: 'in-objects' connected to '${objNode?.type}' instead of 'objects' node — count ignored.`, nodeId: node.id })
@@ -395,6 +426,8 @@ function compileEngineNode(
     },
     objectCount,
     duration,
+    trackIds: objTrackIds,
+    initialPositions,
   }
 }
 

@@ -159,6 +159,95 @@ function ObjectsTrackSelector({
   )
 }
 
+// ─── TrackMapSelector ──────────────────────────────────────────────────────────
+
+function TrackMapSelector({
+  value, onChange, accent,
+}: {
+  value: string
+  onChange: (v: string) => void
+  accent: string
+}) {
+  const holProject = useGraphStore((s) => s.holProject)
+
+  const toggle = (id: number) => {
+    const current = value.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n))
+    const set = new Set(current)
+    set.has(id) ? set.delete(id) : set.add(id)
+    onChange(Array.from(set).sort((a, b) => a - b).join(', '))
+  }
+
+  const selected = new Set(
+    value.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n))
+  )
+
+  return (
+    <div style={{ marginTop: 6 }}>
+      <div style={{ fontSize: 9, fontWeight: 700, color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6 }}>
+        Track Remap
+      </div>
+      <div style={{ fontSize: 9, color: '#555', marginBottom: 4 }}>
+        Track IDs to drive (comma-separated, in objectIndex order)
+      </div>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="e.g. 3, 7, 2, 5"
+        style={{
+          width: '100%', boxSizing: 'border-box',
+          background: '#1a1a1a', border: `1px solid ${value ? accent + '66' : '#2a2a2a'}`,
+          borderRadius: 4, color: '#ccc', fontSize: 10,
+          padding: '4px 8px', fontFamily: 'monospace', outline: 'none',
+        }}
+      />
+      {holProject && holProject.tracks.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <div style={{ fontSize: 9, color: '#444', marginBottom: 4 }}>
+            Pick from .hol tracks (order = objectIndex 0, 1, 2…):
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 140, overflowY: 'auto' }}>
+            {holProject.tracks.map(t => {
+              const on = selected.has(t.id)
+              const [r, g, b] = t.color
+              const hex = `rgb(${Math.round(r*255)},${Math.round(g*255)},${Math.round(b*255)})`
+              return (
+                <div
+                  key={t.id}
+                  onClick={() => toggle(t.id)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '3px 6px', borderRadius: 3, cursor: 'pointer',
+                    background: on ? '#1e1e2e' : 'transparent',
+                    opacity: on ? 1 : 0.4,
+                    transition: 'background 0.1s, opacity 0.1s',
+                  }}
+                >
+                  <div style={{
+                    width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                    background: hex, boxShadow: on ? `0 0 4px ${hex}` : 'none',
+                  }} />
+                  <span style={{ fontSize: 9, color: '#aaa', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {t.name}
+                  </span>
+                  <span style={{ fontSize: 8, color: accent, fontFamily: 'monospace', flexShrink: 0 }}>
+                    {t.id}
+                  </span>
+                  {on && (
+                    <span style={{ fontSize: 7, color: '#555', fontFamily: 'monospace', flexShrink: 0 }}>
+                      #{Array.from(selected).indexOf(t.id)}
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Main component ────────────────────────────────────────────────────────────
 
 interface NodePropertiesProps {
@@ -234,7 +323,7 @@ export default function NodeProperties({ node, onChange }: NodePropertiesProps) 
       {desc.params.length > 0 && (
         <>
           <SectionHead label="Parameters" />
-          {desc.params.map((p) => {
+          {desc.params.filter(p => !(type === 'trackMap' && p.key === 'trackIds')).map((p) => {
             if (p.type === 'select') {
               return (
                 <div key={p.key} style={{ marginBottom: 8 }}>
@@ -353,6 +442,15 @@ export default function NodeProperties({ node, onChange }: NodePropertiesProps) 
                 set('trackIds', ids)
                 set('count', ids.length)
               }}
+            />
+          )}
+
+          {/* TrackMap — track remap via text input or .hol picker */}
+          {type === 'trackMap' && (
+            <TrackMapSelector
+              value={get('trackIds', '') as string}
+              onChange={(v) => set('trackIds', v)}
+              accent={accent}
             />
           )}
         </>
