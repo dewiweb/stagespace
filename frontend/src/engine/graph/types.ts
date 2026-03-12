@@ -54,6 +54,7 @@ export interface TrajSlot {
   outputNodeId: string
   trackIds?: number[]        // from trackMap node or Objects.trackIds (if set)
   initialPositions?: import('../types').Vector3[]  // from Objects.initialPositions (if useHolPositions)
+  playerNodeId?: string      // ID du node player dans la chaîne (si présent)
 }
 
 export interface CompileResult {

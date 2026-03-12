@@ -38,6 +38,30 @@ const INLINE_PARAM: Record<string, string> = {
   evaluateSpline: 'speed', trimSpline: 'start', offsetSpline: 'x',
 }
 
+// ── PlayerControls ───────────────────────────────────────────────────────────
+
+function PlayerControls({ nodeId }: { nodeId: string }) {
+  const state = useGraphStore((s) => s.slotPlayerStates[nodeId] ?? 'playing')
+  const setSlotPlayerState = useGraphStore((s) => s.setSlotPlayerState)
+  const btn = (active: boolean, color: string) => ({
+    flex: 1 as const, border: 'none', borderRadius: 3, cursor: 'pointer' as const,
+    background: active ? color : '#252525',
+    color: active ? '#fff' : '#555',
+    fontSize: 13, padding: '4px 0',
+    transition: 'background 0.1s, color 0.1s',
+  })
+  return (
+    <div className="nodrag" style={{
+      padding: '5px 8px', background: '#161616', borderBottom: '1px solid #2a2a2a',
+      display: 'flex', gap: 4,
+    }}>
+      <button style={btn(state === 'playing', '#3b82f6')} onClick={() => setSlotPlayerState(nodeId, 'playing')} title="Play">▶</button>
+      <button style={btn(state === 'paused',  '#f59e0b')} onClick={() => setSlotPlayerState(nodeId, 'paused')}  title="Pause">⏸</button>
+      <button style={btn(state === 'stopped', '#ef4444')} onClick={() => setSlotPlayerState(nodeId, 'stopped')} title="Stop">⏹</button>
+    </div>
+  )
+}
+
 export default function NodeCard({ id, type, data, selected }: NodeProps) {
   const deleteNode = useGraphStore((s) => s.deleteNode)
   // ── DrawSpline gets its own bespoke card with embedded canvas ──────────────
@@ -105,6 +129,9 @@ export default function NodeCard({ id, type, data, selected }: NodeProps) {
           >×</div>
         )}
       </div>
+
+      {/* ── Player controls ── */}
+      {type === 'player' && <PlayerControls nodeId={id} />}
 
       {/* ── Inline key param ── */}
       {INLINE_PARAM[type ?? ''] && (() => {

@@ -50,8 +50,13 @@ export interface PositionFrame {
 
 export type EngineCompiledFn = (t: number, objectIndex: number, objectCount: number, duration: number) => Vector3
 
+export type SlotPlayerState = 'playing' | 'paused' | 'stopped'
+
 export interface EngineSlot {
   fn: EngineCompiledFn
   tracks: TrackConfig[]
   duration: number
+  playerNodeId?: string      // ID du node player associé (si présent)
+  playerState?: SlotPlayerState  // 'playing' par défaut si absent
+  localT?: number            // temps local du slot (indépendant du t global)
 }

@@ -42,6 +42,7 @@ interface TrajNode {
   duration: number
   trackIds?: number[]        // propagated from trackMap or Objects node
   initialPositions?: Vector3[] // propagated from Objects node when useHolPositions=true
+  playerNodeId?: string      // propagated from player node in chain
 }
 
 // ── Spline cache ──────────────────────────────────────────────────────────────
@@ -93,10 +94,10 @@ export class GraphCompiler {
         issues.push({ level: 'error', code: 'EMPTY_RESULT', message: `Output '${outputNode.id}' produced no trajectory.`, nodeId: outputNode.id })
         continue
       }
-      const { fn, objectCount, duration, trackIds, initialPositions } = traj
+      const { fn, objectCount, duration, trackIds, initialPositions, playerNodeId } = traj
       const compiledFn: EngineCompiledFn = (t, objectIndex, _n, _dur) =>
         fn(t, objectIndex, objectCount, duration)
-      slots.push({ fn: compiledFn, objectCount, duration, outputNodeId: outputNode.id, trackIds, initialPositions })
+      slots.push({ fn: compiledFn, objectCount, duration, outputNodeId: outputNode.id, trackIds, initialPositions, playerNodeId })
     }
 
     if (slots.length === 0) {
@@ -149,6 +150,19 @@ function compileNode(
         break
       }
       result = compileNode(src[0], nodeMap, inputs, cache, splineCache, issues)
+      break
+    }
+
+    case 'player': {
+      const src = getInput(inputs, nodeId, 'in-trajectory')
+      if (!src) {
+        issues.push({ level: 'error', code: 'MISSING_PORT', message: 'Player node has no trajectory input.', nodeId })
+        break
+      }
+      const upstream = compileNode(src[0], nodeMap, inputs, cache, splineCache, issues)
+      if (!upstream) break
+      // player is transparent to the trajectory — just tags the slot with its nodeId
+      result = { ...upstream, playerNodeId: nodeId }
       break
     }
 

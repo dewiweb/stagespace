@@ -13,6 +13,7 @@ import {
   SEQUENCE_PORT_SCHEMA,
   TRANSFORM_PORT_SCHEMA,
   TRACK_MAP_PORT_SCHEMA,
+  PLAYER_PORT_SCHEMA,
   MOTION_PORT_SCHEMA,
 } from './portTypes'
 
@@ -76,6 +77,12 @@ const trackMap: NodeDescriptor = {
     { key: 'trackIds', label: 'Track IDs (comma-separated)', type: 'select', default: '',
       options: [] },
   ],
+}
+
+const player: NodeDescriptor = {
+  type: 'player', label: 'Player', icon: '▶', color: '#3b82f6',
+  badge: 'control', category: 'control', schema: PLAYER_PORT_SCHEMA,
+  params: [],
 }
 
 // ── Control nodes ─────────────────────────────────────────────────────────────
@@ -652,7 +659,7 @@ export const FALLOFFS_CONFIG: Record<string, NodeDescriptor> = {
 // ── Static node registry ──────────────────────────────────────────────────────
 
 export const STATIC_NODES: Record<string, NodeDescriptor> = {
-  objects, duration, output, trackMap, mix, group, sequence,
+  objects, duration, output, trackMap, player, mix, group, sequence,
   scale, rotate, offset, phaseShift, barycentricGroup,
   bpm, audioAmplitude, audioSpectrum, oscInput,
 }

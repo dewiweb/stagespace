@@ -571,3 +571,100 @@ describe('OSC IN — OscRouter bindings appliqués sur Runtime', () => {
     expect(rt.getState().t).toBeCloseTo(4, 5)
   })
 })
+
+describe('Runtime — player per-slot state machine', () => {
+  it('slot without playerNodeId uses global t (default behavior unchanged)', () => {
+    const rt = new Runtime({ duration: 10 })
+    rt.setSlots([{ fn: circularFn, tracks: [{ id: 1, objectIndex: 0 }], duration: 10 }])
+    const f1 = rt.tickOnce(1.0)
+    const f2 = rt.tickOnce(1.0)
+    expect(f1.length).toBe(1)
+    expect(f2.length).toBe(1)
+    expect(rt.getState().t).toBeCloseTo(2, 5)
+  })
+
+  it('slot with playerNodeId + playing advances localT independently', () => {
+    const rt = new Runtime({ duration: 10 })
+    rt.setSlots([{
+      fn: circularFn, tracks: [{ id: 1, objectIndex: 0 }], duration: 10,
+      playerNodeId: 'player-1', playerState: 'playing', localT: 0,
+    }])
+    rt.tickOnce(2.0)
+    const slots = (rt as unknown as { slots: { localT: number }[] }).slots
+    expect(slots[0].localT).toBeCloseTo(2, 5)
+  })
+
+  it('paused slot does not advance localT', () => {
+    const rt = new Runtime({ duration: 10 })
+    rt.setSlots([{
+      fn: circularFn, tracks: [{ id: 1, objectIndex: 0 }], duration: 10,
+      playerNodeId: 'player-1', playerState: 'paused', localT: 3,
+    }])
+    rt.tickOnce(1.0)
+    const slots = (rt as unknown as { slots: { localT: number }[] }).slots
+    expect(slots[0].localT).toBeCloseTo(3, 5)
+  })
+
+  it('paused slot still dispatches frames (freeze at current position)', () => {
+    const rt = new Runtime({ duration: 10 })
+    rt.setSlots([{
+      fn: circularFn, tracks: [{ id: 1, objectIndex: 0 }], duration: 10,
+      playerNodeId: 'player-1', playerState: 'paused', localT: 2,
+    }])
+    const frames = rt.tickOnce(1.0)
+    expect(frames.length).toBe(1)
+  })
+
+  it('stopped slot resets localT to 0 and dispatches no frames', () => {
+    const rt = new Runtime({ duration: 10 })
+    rt.setSlots([{
+      fn: circularFn, tracks: [{ id: 1, objectIndex: 0 }], duration: 10,
+      playerNodeId: 'player-1', playerState: 'stopped', localT: 5,
+    }])
+    const frames = rt.tickOnce(1.0)
+    expect(frames.length).toBe(0)
+  })
+
+  it('setSlotPlayerState play → pause → stopped → play cycle', () => {
+    const rt = new Runtime({ duration: 10 })
+    rt.setSlots([{
+      fn: circularFn, tracks: [{ id: 1, objectIndex: 0 }], duration: 10,
+      playerNodeId: 'p1', playerState: 'playing', localT: 0,
+    }])
+
+    rt.tickOnce(2.0) // localT = 2
+    rt.setSlotPlayerState('p1', 'paused')
+    rt.tickOnce(1.0) // localT stays 2
+    const slots = (rt as unknown as { slots: { localT: number; playerState: string }[] }).slots
+    expect(slots[0].localT).toBeCloseTo(2, 5)
+    expect(slots[0].playerState).toBe('paused')
+
+    rt.setSlotPlayerState('p1', 'stopped')
+    expect(slots[0].localT).toBe(0)
+    expect(slots[0].playerState).toBe('stopped')
+
+    rt.setSlotPlayerState('p1', 'playing')
+    rt.tickOnce(1.0)
+    expect(slots[0].localT).toBeCloseTo(1, 5)
+    expect(slots[0].playerState).toBe('playing')
+  })
+
+  it('setSlots preserves existing localT and playerState for same playerNodeId', () => {
+    const rt = new Runtime({ duration: 10 })
+    rt.setSlots([{
+      fn: circularFn, tracks: [{ id: 1, objectIndex: 0 }], duration: 10,
+      playerNodeId: 'p1', playerState: 'playing', localT: 0,
+    }])
+    rt.tickOnce(3.0) // localT = 3
+
+    // Recompile — setSlots called again with same playerNodeId
+    rt.setSlots([{
+      fn: circularFn, tracks: [{ id: 1, objectIndex: 0 }], duration: 20,
+      playerNodeId: 'p1',
+    }])
+    const slots = (rt as unknown as { slots: { localT: number; playerState: string; duration: number }[] }).slots
+    expect(slots[0].localT).toBeCloseTo(3, 5)    // preserved
+    expect(slots[0].playerState).toBe('playing')  // preserved
+    expect(slots[0].duration).toBe(20)            // updated
+  })
+})

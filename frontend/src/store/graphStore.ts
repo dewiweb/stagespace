@@ -118,6 +118,7 @@ interface GraphState {
   audioRunning: boolean
   audioDevices: MediaDeviceInfo[]
   selectedAudioDevice: string  // deviceId or '' for default
+  slotPlayerStates: Record<string, import('../engine/runtime/types').SlotPlayerState>  // playerNodeId → state
   cueList: Cue[]
   recentOscIn: import('../engine/osc/types').OscMessage[]
 
@@ -136,6 +137,7 @@ interface GraphState {
 
   setOSCConfig: (config: Partial<OSCConfig>) => void
   setMacros: (macros: Partial<MacroControls>) => void
+  setSlotPlayerState: (playerNodeId: string, state: import('../engine/runtime/types').SlotPlayerState) => void
 
   startAudio: () => Promise<void>
   stopAudio: () => void
@@ -213,6 +215,7 @@ export const useGraphStore = create<GraphState>((set, get) => {
     audioRunning: false,
     audioDevices: [],
     selectedAudioDevice: '',
+    slotPlayerStates: {},
     cueList: [],
     recentOscIn: [],
 
@@ -344,7 +347,7 @@ export const useGraphStore = create<GraphState>((set, get) => {
             objectIndex: i,
           }))
           objectIndexOffset += slot.objectCount
-          return { fn: slot.fn, tracks, duration: slot.duration }
+          return { fn: slot.fn, tracks, duration: slot.duration, playerNodeId: slot.playerNodeId }
         })
         runtime.updateConfig({ duration: result.slots[0].duration })
         runtime.setSlots(engineSlots)
@@ -382,16 +385,27 @@ export const useGraphStore = create<GraphState>((set, get) => {
       })
     },
 
-    setMacros: (m) => {
-      set(s => {
-        const next = { ...s.macros, ...m }
-        runtime.updateConfig({
-          macroSpeed: next.speed,
-          macroScale: { x: next.scaleX, y: next.scaleY, z: next.scaleZ },
-          macroShift: { x: next.shiftX, y: next.shiftY, z: next.shiftZ },
-        })
-        return { macros: next }
+    setMacros: (macros) => {
+      set(s => ({ macros: { ...s.macros, ...macros } }))
+      const cfg = runtime.getConfig()
+      runtime.updateConfig({
+        macroSpeed: macros.speed ?? cfg.macroSpeed,
+        macroScale: {
+          x: macros.scaleX ?? cfg.macroScale.x,
+          y: macros.scaleY ?? cfg.macroScale.y,
+          z: macros.scaleZ ?? cfg.macroScale.z,
+        },
+        macroShift: {
+          x: macros.shiftX ?? cfg.macroShift.x,
+          y: macros.shiftY ?? cfg.macroShift.y,
+          z: macros.shiftZ ?? cfg.macroShift.z,
+        },
       })
+    },
+
+    setSlotPlayerState: (playerNodeId, state) => {
+      runtime.setSlotPlayerState(playerNodeId, state)
+      set(s => ({ slotPlayerStates: { ...s.slotPlayerStates, [playerNodeId]: state } }))
     },
 
     holProject: null,

@@ -1,4 +1,4 @@
-import type { RuntimeConfig, RuntimeState, TrackConfig, EngineCompiledFn, PositionFrame, EngineSlot } from './types'
+import type { RuntimeConfig, RuntimeState, TrackConfig, EngineCompiledFn, PositionFrame, EngineSlot, SlotPlayerState } from './types'
 import type { Vector3 } from '../types'
 import { getProfile } from './oscProfiles'
 
@@ -40,12 +40,36 @@ export class Runtime {
 
   /** Set multiple independent engine slots (multi-output support) */
   setSlots(slots: EngineSlot[]): void {
-    this.slots = slots
+    // Preserve localT and playerState for slots that already exist (same playerNodeId)
+    const prev = new Map(this.slots.map(s => [s.playerNodeId ?? s.tracks.map(t=>t.id).join(','), s]))
+    this.slots = slots.map(s => {
+      const key = s.playerNodeId ?? s.tracks.map(t=>t.id).join(',')
+      const existing = prev.get(key)
+      return {
+        ...s,
+        localT: existing?.localT ?? s.localT ?? 0,
+        playerState: existing?.playerState ?? s.playerState ?? 'playing',
+      }
+    })
+  }
+
+  /** Set player state for a specific slot by playerNodeId */
+  setSlotPlayerState(playerNodeId: string, state: SlotPlayerState): void {
+    const slot = this.slots.find(s => s.playerNodeId === playerNodeId)
+    if (!slot) return
+    if (state === 'stopped') slot.localT = 0
+    slot.playerState = state
+  }
+
+  /** Reset localT for a slot to 0 (rewind) */
+  resetSlot(playerNodeId: string): void {
+    const slot = this.slots.find(s => s.playerNodeId === playerNodeId)
+    if (slot) slot.localT = 0
   }
 
   /** Backward-compat: single engine/tracks → slot[0] */
   setEngine(fn: EngineCompiledFn, tracks: TrackConfig[]): void {
-    this.slots = [{ fn, tracks, duration: this.config.duration }]
+    this.slots = [{ fn, tracks, duration: this.config.duration, playerState: 'playing', localT: 0 }]
   }
 
   setOSCSender(fn: OSCSendFn): void {
@@ -105,7 +129,7 @@ export class Runtime {
     const dt = (now - this.state.lastTickMs) / 1000
     this.state.lastTickMs = now
 
-    // Advance time with macroSpeed
+    // Advance global time (always — used as fallback for slots without player)
     this.state.t += dt * this.config.macroSpeed
     this.state.ticks++
 
@@ -115,7 +139,16 @@ export class Runtime {
     const { coordSystem, macroScale, macroShift, profile } = this.config
 
     for (const slot of this.slots) {
-      const tWrapped = this.state.t % slot.duration
+      // Per-slot time: use localT if slot has a player, else global t
+      const hasPlayer = !!slot.playerNodeId
+      const state = slot.playerState ?? 'playing'
+      if (hasPlayer && state === 'playing') {
+        slot.localT = (slot.localT ?? 0) + dt * this.config.macroSpeed
+      }
+      const tBase = hasPlayer ? (slot.localT ?? 0) : this.state.t
+      // stopped slots: skip OSC dispatch entirely
+      if (hasPlayer && state === 'stopped') continue
+      const tWrapped = tBase % slot.duration
       for (const track of slot.tracks) {
         const raw = slot.fn(tWrapped, track.objectIndex, slot.tracks.length, slot.duration)
         const pos: Vector3 = {
@@ -145,8 +178,15 @@ export class Runtime {
   /** For testing — execute a single tick manually without the scheduler. */
   tickOnce(dtSeconds = 1 / 60): PositionFrame[] {
     if (this.slots.length === 0) return []
-    this.state.t += dtSeconds * this.config.macroSpeed
+    const dt = dtSeconds * this.config.macroSpeed
+    this.state.t += dt
     this.state.ticks++
+    // Advance localT for player slots that are playing
+    for (const slot of this.slots) {
+      if (slot.playerNodeId && (slot.playerState ?? 'playing') === 'playing') {
+        slot.localT = (slot.localT ?? 0) + dt
+      }
+    }
     return this._computeAndDispatch()
   }
 
@@ -157,7 +197,11 @@ export class Runtime {
     const { coordSystem, macroScale, macroShift, profile } = this.config
 
     for (const slot of this.slots) {
-      const tWrapped = this.state.t % slot.duration
+      const hasPlayer = !!slot.playerNodeId
+      const state = slot.playerState ?? 'playing'
+      if (hasPlayer && state === 'stopped') continue
+      const tBase = hasPlayer ? (slot.localT ?? 0) : this.state.t
+      const tWrapped = tBase % slot.duration
       for (const track of slot.tracks) {
         const raw = slot.fn(tWrapped, track.objectIndex, slot.tracks.length, slot.duration)
         const pos: Vector3 = {
