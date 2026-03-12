@@ -533,6 +533,97 @@ describe('GraphCompiler — useHolPositions on Objects node', () => {
   })
 })
 
+describe('GraphCompiler — player node', () => {
+  it('player node propagates playerNodeId to slot', () => {
+    const g: Graph = {
+      nodes: [
+        { id: 'obj', type: 'objects',  data: { count: 2 } },
+        { id: 'dur', type: 'duration', data: { seconds: 10 } },
+        { id: 'mov', type: 'circular', data: { radius: 1 } },
+        { id: 'pl',  type: 'player',   data: {} },
+        { id: 'out', type: 'output',   data: {} },
+      ],
+      edges: [
+        { source: 'obj', sourceHandle: 'out-objects',    target: 'mov', targetHandle: 'in-objects' },
+        { source: 'dur', sourceHandle: 'out-duration',   target: 'mov', targetHandle: 'in-duration' },
+        { source: 'mov', sourceHandle: 'out-trajectory', target: 'pl',  targetHandle: 'in-trajectory' },
+        { source: 'pl',  sourceHandle: 'out-trajectory', target: 'out', targetHandle: 'in-trajectory' },
+      ],
+    }
+    const r = compiler.compile(g)
+    expect(r.success).toBe(true)
+    expect(r.slots[0].playerNodeId).toBe('pl')
+  })
+
+  it('player is transparent — objectCount and duration unchanged', () => {
+    const g: Graph = {
+      nodes: [
+        { id: 'obj', type: 'objects',  data: { count: 5 } },
+        { id: 'dur', type: 'duration', data: { seconds: 20 } },
+        { id: 'mov', type: 'circular', data: { radius: 1 } },
+        { id: 'pl',  type: 'player',   data: {} },
+        { id: 'out', type: 'output',   data: {} },
+      ],
+      edges: [
+        { source: 'obj', sourceHandle: 'out-objects',    target: 'mov', targetHandle: 'in-objects' },
+        { source: 'dur', sourceHandle: 'out-duration',   target: 'mov', targetHandle: 'in-duration' },
+        { source: 'mov', sourceHandle: 'out-trajectory', target: 'pl',  targetHandle: 'in-trajectory' },
+        { source: 'pl',  sourceHandle: 'out-trajectory', target: 'out', targetHandle: 'in-trajectory' },
+      ],
+    }
+    const r = compiler.compile(g)
+    expect(r.success).toBe(true)
+    expect(r.slots[0].objectCount).toBe(5)
+    expect(r.slots[0].duration).toBe(20)
+  })
+
+  it('player without input emits MISSING_PORT error', () => {
+    const g: Graph = {
+      nodes: [
+        { id: 'pl',  type: 'player', data: {} },
+        { id: 'out', type: 'output', data: {} },
+      ],
+      edges: [
+        { source: 'pl', sourceHandle: 'out-trajectory', target: 'out', targetHandle: 'in-trajectory' },
+      ],
+    }
+    const r = compiler.compile(g)
+    expect(r.success).toBe(false)
+    expect(r.issues.some(i => i.code === 'MISSING_PORT')).toBe(true)
+  })
+
+  it('player chained after trackMap preserves both playerNodeId and trackIds', () => {
+    const g: Graph = {
+      nodes: [
+        { id: 'obj', type: 'objects',  data: { count: 2 } },
+        { id: 'dur', type: 'duration', data: { seconds: 10 } },
+        { id: 'mov', type: 'circular', data: { radius: 1 } },
+        { id: 'tm',  type: 'trackMap', data: { trackIds: '4, 8' } },
+        { id: 'pl',  type: 'player',   data: {} },
+        { id: 'out', type: 'output',   data: {} },
+      ],
+      edges: [
+        { source: 'obj', sourceHandle: 'out-objects',    target: 'mov', targetHandle: 'in-objects' },
+        { source: 'dur', sourceHandle: 'out-duration',   target: 'mov', targetHandle: 'in-duration' },
+        { source: 'mov', sourceHandle: 'out-trajectory', target: 'tm',  targetHandle: 'in-trajectory' },
+        { source: 'tm',  sourceHandle: 'out-trajectory', target: 'pl',  targetHandle: 'in-trajectory' },
+        { source: 'pl',  sourceHandle: 'out-trajectory', target: 'out', targetHandle: 'in-trajectory' },
+      ],
+    }
+    const r = compiler.compile(g)
+    expect(r.success).toBe(true)
+    expect(r.slots[0].trackIds).toEqual([4, 8])
+    expect(r.slots[0].playerNodeId).toBe('pl')
+  })
+
+  it('slot without player has no playerNodeId', () => {
+    const g = simpleGraph('circular')
+    const r = compiler.compile(g)
+    expect(r.success).toBe(true)
+    expect(r.slots[0].playerNodeId).toBeUndefined()
+  })
+})
+
 describe('GraphCompiler — falloff integration', () => {
   it('compiles engine with time.linear falloff modulating radius', () => {
     const g: Graph = {
