@@ -12,7 +12,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Play, Square, Sliders, Zap, Save, FolderOpen, Music, Users, Layers } from 'lucide-react'
-import TrajectoryVisualizer from './TrajectoryVisualizer'
+import LiveVisualizer from './LiveVisualizer'
 
 const API = 'http://localhost:8080'
 
@@ -270,7 +270,7 @@ export default function LiveSimple() {
             overflow: 'hidden',
             position: 'relative',
           }}>
-            <TrajectoryVisualizer />
+            <LiveVisualizer />
           </div>
 
           {/* Engine Selection */}
