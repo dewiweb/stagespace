@@ -58,6 +58,12 @@ export default function LiveSimple() {
   const [selectedObjects, setSelectedObjects] = useState<number[]>([])
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null)
   const [showPatchPanel, setShowPatchPanel] = useState(false)
+  const [showCreateObject, setShowCreateObject] = useState(false)
+  const [showCreateGroup, setShowCreateGroup] = useState(false)
+  const [newObjectName, setNewObjectName] = useState('')
+  const [newObjectColor, setNewObjectColor] = useState('#ffffff')
+  const [newGroupName, setNewGroupName] = useState('')
+  const [newGroupEngine, setNewGroupEngine] = useState('circular')
 
   const handlePlay = useCallback(async () => {
     if (playing) {
@@ -127,6 +133,47 @@ export default function LiveSimple() {
       console.error('Failed to play group:', e)
     }
   }, [playing])
+
+  // Create object
+  const handleCreateObject = useCallback(async () => {
+    if (!newObjectName.trim()) return
+    try {
+      const oscId = objects.length > 0 ? Math.max(...objects.map((o: any) => o.osc_id)) + 1 : 1
+      await api('PUT', `/api/patch/objects/${oscId}`, {
+        name: newObjectName.trim(),
+        color: newObjectColor,
+        notes: '',
+      })
+      setNewObjectName('')
+      setNewObjectColor('#ffffff')
+      setShowCreateObject(false)
+      await loadPatch()
+    } catch (e) {
+      console.error('Failed to create object:', e)
+    }
+  }, [newObjectName, newObjectColor, objects, loadPatch])
+
+  // Create group
+  const handleCreateGroup = useCallback(async () => {
+    if (!newGroupName.trim() || selectedObjects.length === 0) return
+    try {
+      await api('PUT', `/api/patch/groups/${newGroupName.trim()}`, {
+        object_ids: selectedObjects,
+        engine: newGroupEngine,
+        params: {},
+        profile: currentProfile,
+        color: '#4b7fbf',
+        anchor: { x: 0, y: 0, z: 0 },
+      })
+      setNewGroupName('')
+      setNewGroupEngine('circular')
+      setSelectedObjects([])
+      setShowCreateGroup(false)
+      await loadPatch()
+    } catch (e) {
+      console.error('Failed to create group:', e)
+    }
+  }, [newGroupName, selectedObjects, newGroupEngine, currentProfile, loadPatch])
 
   return (
     <div style={{
@@ -355,12 +402,26 @@ export default function LiveSimple() {
               gap: 12,
               overflow: 'auto',
             }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 Groups
+                <button
+                  onClick={() => setShowCreateGroup(true)}
+                  style={{
+                    padding: '4 8',
+                    background: '#1a1a1a',
+                    color: '#4b7fbf',
+                    border: '1px solid #333',
+                    borderRadius: 4,
+                    fontSize: 10,
+                    cursor: 'pointer',
+                  }}
+                >
+                  + New
+                </button>
               </div>
               {Object.keys(groups).length === 0 ? (
                 <div style={{ fontSize: 11, color: '#666', fontStyle: 'italic' }}>
-                  No groups defined. Create groups in the backend API.
+                  No groups defined. Select objects and create a group.
                 </div>
               ) : (
                 Object.entries(groups).map(([name, group]: [string, any]) => (
@@ -388,17 +449,38 @@ export default function LiveSimple() {
                 ))
               )}
 
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', marginTop: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
                 Objects
+                <button
+                  onClick={() => setShowCreateObject(true)}
+                  style={{
+                    padding: '4 8',
+                    background: '#1a1a1a',
+                    color: '#4b7fbf',
+                    border: '1px solid #333',
+                    borderRadius: 4,
+                    fontSize: 10,
+                    cursor: 'pointer',
+                  }}
+                >
+                  + New
+                </button>
               </div>
               {objects.length === 0 ? (
                 <div style={{ fontSize: 11, color: '#666', fontStyle: 'italic' }}>
-                  No objects defined. Import from OSC receiver or create manually.
+                  No objects defined. Create objects manually or import from OSC.
                 </div>
               ) : (
                 objects.map((obj: any) => (
                   <div
                     key={obj.osc_id}
+                    onClick={() => {
+                      if (selectedObjects.includes(obj.osc_id)) {
+                        setSelectedObjects(selectedObjects.filter(id => id !== obj.osc_id))
+                      } else {
+                        setSelectedObjects([...selectedObjects, obj.osc_id])
+                      }
+                    }}
                     style={{
                       padding: 8,
                       background: selectedObjects.includes(obj.osc_id) ? '#1a1a1a' : 'transparent',
@@ -406,6 +488,7 @@ export default function LiveSimple() {
                       borderRadius: 4,
                       fontSize: 11,
                       color: '#888',
+                      cursor: 'pointer',
                     }}
                   >
                     <div style={{ fontWeight: 500 }}>{obj.name || `Object ${obj.osc_id}`}</div>
@@ -417,6 +500,208 @@ export default function LiveSimple() {
           )}
         </div>
       </div>
+
+      {/* Create Object Modal */}
+      {showCreateObject && (
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.8)',
+          backdropFilter: 'blur(4px)',
+          zIndex: 30,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+          <div style={{
+            background: '#111',
+            border: '1px solid #333',
+            borderRadius: 8,
+            padding: 24,
+            width: 320,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 16,
+          }}>
+            <div style={{ fontSize: 16, fontWeight: 600, color: '#fff' }}>Create Object</div>
+            <div>
+              <label style={{ fontSize: 12, color: '#888', marginBottom: 4, display: 'block' }}>Name</label>
+              <input
+                type="text"
+                value={newObjectName}
+                onChange={(e) => setNewObjectName(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: 8,
+                  background: '#1a1a1a',
+                  border: '1px solid #333',
+                  borderRadius: 4,
+                  color: '#ccc',
+                  fontSize: 13,
+                }}
+                placeholder="Object name"
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, color: '#888', marginBottom: 4, display: 'block' }}>Color</label>
+              <input
+                type="color"
+                value={newObjectColor}
+                onChange={(e) => setNewObjectColor(e.target.value)}
+                style={{
+                  width: '100%',
+                  height: 40,
+                  background: '#1a1a1a',
+                  border: '1px solid #333',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <button
+                onClick={() => setShowCreateObject(false)}
+                style={{
+                  flex: 1,
+                  padding: 10,
+                  background: '#1a1a1a',
+                  color: '#888',
+                  border: '1px solid #333',
+                  borderRadius: 4,
+                  fontSize: 13,
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateObject}
+                style={{
+                  flex: 1,
+                  padding: 10,
+                  background: '#4b7fbf',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 4,
+                  fontSize: 13,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+              >
+                Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Group Modal */}
+      {showCreateGroup && (
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.8)',
+          backdropFilter: 'blur(4px)',
+          zIndex: 30,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+          <div style={{
+            background: '#111',
+            border: '1px solid #333',
+            borderRadius: 8,
+            padding: 24,
+            width: 320,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 16,
+          }}>
+            <div style={{ fontSize: 16, fontWeight: 600, color: '#fff' }}>Create Group</div>
+            <div>
+              <label style={{ fontSize: 12, color: '#888', marginBottom: 4, display: 'block' }}>Name</label>
+              <input
+                type="text"
+                value={newGroupName}
+                onChange={(e) => setNewGroupName(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: 8,
+                  background: '#1a1a1a',
+                  border: '1px solid #333',
+                  borderRadius: 4,
+                  color: '#ccc',
+                  fontSize: 13,
+                }}
+                placeholder="Group name"
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, color: '#888', marginBottom: 4, display: 'block' }}>Engine</label>
+              <select
+                value={newGroupEngine}
+                onChange={(e) => setNewGroupEngine(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: 8,
+                  background: '#1a1a1a',
+                  border: '1px solid #333',
+                  borderRadius: 4,
+                  color: '#ccc',
+                  fontSize: 13,
+                }}
+              >
+                {ENGINES.map(eng => (
+                  <option key={eng.id} value={eng.id}>{eng.label}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ fontSize: 11, color: '#666' }}>
+              Selected objects: {selectedObjects.length}
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <button
+                onClick={() => setShowCreateGroup(false)}
+                style={{
+                  flex: 1,
+                  padding: 10,
+                  background: '#1a1a1a',
+                  color: '#888',
+                  border: '1px solid #333',
+                  borderRadius: 4,
+                  fontSize: 13,
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateGroup}
+                disabled={selectedObjects.length === 0}
+                style={{
+                  flex: 1,
+                  padding: 10,
+                  background: selectedObjects.length > 0 ? '#4b7fbf' : '#333',
+                  color: selectedObjects.length > 0 ? '#fff' : '#666',
+                  border: 'none',
+                  borderRadius: 4,
+                  fontSize: 13,
+                  fontWeight: 500,
+                  cursor: selectedObjects.length > 0 ? 'pointer' : 'not-allowed',
+                }}
+              >
+                Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Status Bar */}
       <div style={{
