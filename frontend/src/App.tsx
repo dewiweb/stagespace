@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef } from 'react'
-import LivePanel from './components/LivePanel'
 import LiveSimple from './components/LiveSimple'
 import { Play, Pause, RotateCcw, Settings, GitBranch, FileInput, Radio, Mic, Save, FolderOpen } from 'lucide-react'
 import HolImport from './components/HolImport'
@@ -21,7 +20,6 @@ function App() {
   const [showCue,    setShowCue]    = useState(false)
   const [showHol,    setShowHol]    = useState(false)
   const [mode,        setMode]        = useState<'editor' | 'live'>('live')
-  const [simpleMode, setSimpleMode]  = useState(true)
   const [compStatus, setCompStatus] = useState<NodeEditorStatus>({
     status: 'idle', info: '', error: '', issues: [],
   })
@@ -64,9 +62,8 @@ function App() {
 
         {/* Area labels */}
         <div style={{ display: 'flex', gap: 2, fontSize: 10 }}>
-          <AreaTab label="Éditeur" active={mode === 'editor'} onClick={() => setMode('editor')} />
+          <AreaTab label="Node Editor" active={mode === 'editor'} onClick={() => setMode('editor')} />
           <AreaTab label="Live" active={mode === 'live'} onClick={() => setMode('live')} accent />
-          <AreaTab label="Simple" active={simpleMode} onClick={() => setSimpleMode(!simpleMode)} />
         </div>
 
         <Sep />
@@ -186,7 +183,7 @@ function App() {
         {/* Live Mode */}
         {mode === 'live' && (
           <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: 'hidden' }}>
-            {simpleMode ? <LiveSimple /> : <LivePanel />}
+            <LiveSimple />
           </div>
         )}
 
