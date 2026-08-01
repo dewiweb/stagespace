@@ -5,12 +5,14 @@
  * - Un seul écran, pas de mode Editor/Live
  * - Sélection moteur en 1 clic (grille de boutons)
  * - Play/Stop global + sliders macro
- * - Presets rapides (clic)
+ * - Visualisation 3D des objets
+ * - Gestion de patch (objets + groupes)
  * - Feedback visuel immédiat
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import { Play, Square, Sliders, Zap, Save, FolderOpen, Music } from 'lucide-react'
+import { Play, Square, Sliders, Zap, Save, FolderOpen, Music, Users, Layers } from 'lucide-react'
+import TrajectoryVisualizer from './TrajectoryVisualizer'
 
 const API = 'http://localhost:8080'
 
@@ -49,6 +51,13 @@ export default function LiveSimple() {
   const [turbulence, setTurbulence] = useState(0.0)
   const [scale, setScale] = useState(1.0)
   const [sessionId, setSessionId] = useState<string | null>(null)
+  
+  // Patch state
+  const [objects, setObjects] = useState<any[]>([])
+  const [groups, setGroups] = useState<any[]>({})
+  const [selectedObjects, setSelectedObjects] = useState<number[]>([])
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null)
+  const [showPatchPanel, setShowPatchPanel] = useState(false)
 
   const handlePlay = useCallback(async () => {
     if (playing) {
@@ -82,6 +91,43 @@ export default function LiveSimple() {
     await api('POST', `/api/macros/${sessionId}`, { [macro]: value })
   }, [sessionId])
 
+  // Load patch from backend
+  const loadPatch = useCallback(async () => {
+    try {
+      const patch = await api('GET', '/api/patch')
+      setObjects(patch.objects || [])
+      setGroups(patch.groups || {})
+    } catch (e) {
+      console.error('Failed to load patch:', e)
+    }
+  }, [])
+
+  // Load patch on mount
+  useEffect(() => {
+    loadPatch()
+  }, [loadPatch])
+
+  // Play selected group
+  const handlePlayGroup = useCallback(async (groupName: string) => {
+    if (playing) {
+      await api('POST', '/api/stop')
+      setPlaying(false)
+      setSessionId(null)
+    }
+    try {
+      const res = await api('POST', `/api/patch/groups/${groupName}/play`, {
+        host: '127.0.0.1',
+        port: 7788,
+        fps: 60,
+      })
+      setSessionId(res.session_id)
+      setPlaying(true)
+      setSelectedGroup(groupName)
+    } catch (e) {
+      console.error('Failed to play group:', e)
+    }
+  }, [playing])
+
   return (
     <div style={{
       height: '100vh',
@@ -114,6 +160,28 @@ export default function LiveSimple() {
 
         <div style={{ display: 'flex', gap: 8 }}>
           <button
+            onClick={() => setShowPatchPanel(v => !v)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '12 16',
+              background: showPatchPanel ? '#4b7fbf' : '#1a1a1a',
+              color: showPatchPanel ? '#fff' : '#888',
+              border: 'none',
+              borderRadius: 6,
+              fontSize: 12,
+              fontWeight: 500,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+            title="Patch (objets + groupes)"
+          >
+            <Users size={18} />
+            <span>Patch</span>
+          </button>
+
+          <button
             onClick={handlePlay}
             style={{
               display: 'flex',
@@ -138,112 +206,215 @@ export default function LiveSimple() {
 
       {/* Main Content */}
       <div style={{ flex: 1, display: 'flex', gap: 20, minHeight: 0 }}>
-        {/* Engine Selection */}
+        {/* Left Panel - Engine Selection + 3D */}
         <div style={{
-          flex: 1,
-          background: '#111',
-          borderRadius: 8,
-          border: '1px solid #222',
-          padding: 16,
-          display: 'flex',
-          flexDirection: 'column',
-        }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#888', marginBottom: 12, textTransform: 'uppercase' }}>
-            Engine
-          </div>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
-            gap: 8,
-            flex: 1,
-          }}>
-            {ENGINES.map((eng) => (
-              <button
-                key={eng.id}
-                onClick={() => handleEngineChange(eng.id)}
-                style={{
-                  padding: 16,
-                  background: currentEngine === eng.id ? eng.color : '#1a1a1a',
-                  color: currentEngine === eng.id ? '#fff' : '#888',
-                  border: currentEngine === eng.id ? 'none' : '1px solid #333',
-                  borderRadius: 6,
-                  fontSize: 12,
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                }}
-              >
-                {eng.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Macro Controls */}
-        <div style={{
-          width: 280,
-          background: '#111',
-          borderRadius: 8,
-          border: '1px solid #222',
-          padding: 16,
+          flex: 2,
           display: 'flex',
           flexDirection: 'column',
           gap: 20,
+          minHeight: 0,
         }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase' }}>
-            Macro
+          {/* 3D Visualizer */}
+          <div style={{
+            flex: 1,
+            background: '#111',
+            borderRadius: 8,
+            border: '1px solid #222',
+            overflow: 'hidden',
+            position: 'relative',
+          }}>
+            <TrajectoryVisualizer />
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Sliders size={16} style={{ color: '#666' }} />
-            <span style={{ fontSize: 11, color: '#666' }}>Speed</span>
+          {/* Engine Selection */}
+          <div style={{
+            height: 200,
+            background: '#111',
+            borderRadius: 8,
+            border: '1px solid #222',
+            padding: 16,
+            display: 'flex',
+            flexDirection: 'column',
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#888', marginBottom: 12, textTransform: 'uppercase' }}>
+              Engine
+            </div>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
+              gap: 8,
+              flex: 1,
+            }}>
+              {ENGINES.map((eng) => (
+                <button
+                  key={eng.id}
+                  onClick={() => handleEngineChange(eng.id)}
+                  style={{
+                    padding: 12,
+                    background: currentEngine === eng.id ? eng.color : '#1a1a1a',
+                    color: currentEngine === eng.id ? '#fff' : '#888',
+                    border: currentEngine === eng.id ? 'none' : '1px solid #333',
+                    borderRadius: 6,
+                    fontSize: 11,
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  {eng.label}
+                </button>
+              ))}
+            </div>
           </div>
-          <input
-            type="range"
-            min={0.1}
-            max={3.0}
-            step={0.1}
-            value={speed}
-            onChange={(e) => { setSpeed(parseFloat(e.target.value)); handleMacro('speed', parseFloat(e.target.value)) }}
-            style={{ width: '100%', accentColor: '#4b7fbf' }}
-          />
-          <div style={{ fontSize: 11, color: '#4b7fbf', textAlign: 'right', fontFamily: 'monospace' }}>
-            {speed.toFixed(1)}x
+        </div>
+
+        {/* Right Panel - Macro + Patch */}
+        <div style={{
+          width: 320,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 20,
+          minHeight: 0,
+        }}>
+          {/* Macro Controls */}
+          <div style={{
+            background: '#111',
+            borderRadius: 8,
+            border: '1px solid #222',
+            padding: 16,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 20,
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase' }}>
+              Macro
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Sliders size={16} style={{ color: '#666' }} />
+              <span style={{ fontSize: 11, color: '#666' }}>Speed</span>
+            </div>
+            <input
+              type="range"
+              min={0.1}
+              max={3.0}
+              step={0.1}
+              value={speed}
+              onChange={(e) => { setSpeed(parseFloat(e.target.value)); handleMacro('speed', parseFloat(e.target.value)) }}
+              style={{ width: '100%', accentColor: '#4b7fbf' }}
+            />
+            <div style={{ fontSize: 11, color: '#4b7fbf', textAlign: 'right', fontFamily: 'monospace' }}>
+              {speed.toFixed(1)}x
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Zap size={16} style={{ color: '#666' }} />
+              <span style={{ fontSize: 11, color: '#666' }}>Turbulence</span>
+            </div>
+            <input
+              type="range"
+              min={0.0}
+              max={1.0}
+              step={0.05}
+              value={turbulence}
+              onChange={(e) => { setTurbulence(parseFloat(e.target.value)); handleMacro('turbulence', parseFloat(e.target.value)) }}
+              style={{ width: '100%', accentColor: '#bf4b4b' }}
+            />
+            <div style={{ fontSize: 11, color: '#bf4b4b', textAlign: 'right', fontFamily: 'monospace' }}>
+              {(turbulence * 100).toFixed(0)}%
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Music size={16} style={{ color: '#666' }} />
+              <span style={{ fontSize: 11, color: '#666' }}>Scale</span>
+            </div>
+            <input
+              type="range"
+              min={0.1}
+              max={2.0}
+              step={0.1}
+              value={scale}
+              onChange={(e) => { setScale(parseFloat(e.target.value)); handleMacro('scale', parseFloat(e.target.value)) }}
+              style={{ width: '100%', accentColor: '#4bbf7b' }}
+            />
+            <div style={{ fontSize: 11, color: '#4bbf7b', textAlign: 'right', fontFamily: 'monospace' }}>
+              {scale.toFixed(1)}x
+            </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Zap size={16} style={{ color: '#666' }} />
-            <span style={{ fontSize: 11, color: '#666' }}>Turbulence</span>
-          </div>
-          <input
-            type="range"
-            min={0.0}
-            max={1.0}
-            step={0.05}
-            value={turbulence}
-            onChange={(e) => { setTurbulence(parseFloat(e.target.value)); handleMacro('turbulence', parseFloat(e.target.value)) }}
-            style={{ width: '100%', accentColor: '#bf4b4b' }}
-          />
-          <div style={{ fontSize: 11, color: '#bf4b4b', textAlign: 'right', fontFamily: 'monospace' }}>
-            {(turbulence * 100).toFixed(0)}%
-          </div>
+          {/* Patch Panel (collapsible) */}
+          {showPatchPanel && (
+            <div style={{
+              flex: 1,
+              background: '#111',
+              borderRadius: 8,
+              border: '1px solid #222',
+              padding: 16,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+              overflow: 'auto',
+            }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase' }}>
+                Groups
+              </div>
+              {Object.keys(groups).length === 0 ? (
+                <div style={{ fontSize: 11, color: '#666', fontStyle: 'italic' }}>
+                  No groups defined. Create groups in the backend API.
+                </div>
+              ) : (
+                Object.entries(groups).map(([name, group]: [string, any]) => (
+                  <button
+                    key={name}
+                    onClick={() => handlePlayGroup(name)}
+                    style={{
+                      padding: 12,
+                      background: selectedGroup === name ? '#4b7fbf' : '#1a1a1a',
+                      color: selectedGroup === name ? '#fff' : '#888',
+                      border: selectedGroup === name ? 'none' : '1px solid #333',
+                      borderRadius: 6,
+                      fontSize: 11,
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <div style={{ fontWeight: 600 }}>{name}</div>
+                    <div style={{ fontSize: 10, color: '#666', marginTop: 2 }}>
+                      {group.object_ids?.length || 0} objects • {group.engine}
+                    </div>
+                  </button>
+                ))
+              )}
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Music size={16} style={{ color: '#666' }} />
-            <span style={{ fontSize: 11, color: '#666' }}>Scale</span>
-          </div>
-          <input
-            type="range"
-            min={0.1}
-            max={2.0}
-            step={0.1}
-            value={scale}
-            onChange={(e) => { setScale(parseFloat(e.target.value)); handleMacro('scale', parseFloat(e.target.value)) }}
-            style={{ width: '100%', accentColor: '#4bbf7b' }}
-          />
-          <div style={{ fontSize: 11, color: '#4bbf7b', textAlign: 'right', fontFamily: 'monospace' }}>
-            {scale.toFixed(1)}x
-          </div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', marginTop: 8 }}>
+                Objects
+              </div>
+              {objects.length === 0 ? (
+                <div style={{ fontSize: 11, color: '#666', fontStyle: 'italic' }}>
+                  No objects defined. Import from OSC receiver or create manually.
+                </div>
+              ) : (
+                objects.map((obj: any) => (
+                  <div
+                    key={obj.osc_id}
+                    style={{
+                      padding: 8,
+                      background: selectedObjects.includes(obj.osc_id) ? '#1a1a1a' : 'transparent',
+                      border: selectedObjects.includes(obj.osc_id) ? '1px solid #4b7fbf' : '1px solid #333',
+                      borderRadius: 4,
+                      fontSize: 11,
+                      color: '#888',
+                    }}
+                  >
+                    <div style={{ fontWeight: 500 }}>{obj.name || `Object ${obj.osc_id}`}</div>
+                    <div style={{ fontSize: 10, color: '#666' }}>ID: {obj.osc_id}</div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
         </div>
       </div>
 
