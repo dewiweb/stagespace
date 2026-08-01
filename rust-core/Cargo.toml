@@ -1,0 +1,24 @@
+[package]
+name = "holoflow-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.35", features = ["full"] }
+rosc = "0.10"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+log = "0.4"
+env_logger = "0.10"
+async-trait = "0.1"
+lazy_static = "1.4"
+rand = "0.8"
+
+[lib]
+name = "holoflow_core"
+path = "src/lib.rs"
+
+[[bin]]
+name = "holoflow-server"
+path = "src/main.rs"
