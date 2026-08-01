@@ -136,6 +136,7 @@ impl Graph {
 /// 
 /// The compiled function evaluates each node in topological order and
 /// produces the final OSC output for a given time `t`.
+#[derive(Clone)]
 pub struct CompiledGraph {
     /// Evaluation order of node IDs
     order: Vec<NodeId>,

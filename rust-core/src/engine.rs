@@ -5,6 +5,7 @@
 
 use crate::osc::OscSender;
 use crate::error::{HoloflowError, Result};
+use crate::graph::CompiledGraph;
 use std::time::{Duration, Instant};
 use std::sync::Arc;
 use std::collections::HashMap;
@@ -204,30 +205,110 @@ pub fn linear_trajectory(t: f32, obj_index: usize, params: &EngineParams) -> (f3
     (x + params.shift_x, y + params.shift_y, z + params.shift_z)
 }
 
+/// Unified source for playback: either a single trajectory function or a compiled graph
+#[derive(Clone)]
+pub enum PlaybackSource {
+    Trajectory(TrajectoryFn),
+    Graph(CompiledGraph),
+}
+
+impl PlaybackSource {
+    /// Evaluate the source at time `t` with given params, returning OSC messages to send
+    pub fn evaluate(&self, t: f32, params: &EngineParams) -> Vec<OscMessage> {
+        match self {
+            PlaybackSource::Trajectory(trajectory) => {
+                (0..params.n_objects)
+                    .map(|obj_idx| {
+                        let (mut x, mut y, mut z) = trajectory(t, obj_idx, params);
+                        
+                        // Apply turbulence
+                        if params.turbulence > 0.0 {
+                            (x, y, z) = Self::apply_turbulence_static(x, y, z, params.turbulence, t, obj_idx);
+                        }
+                        
+                        // Default address template for trajectory mode: /track/{}/xyz
+                        let address = format!("/track/{}/xyz", obj_idx + 1);
+                        OscMessage { address, x, y, z }
+                    })
+                    .collect()
+            }
+            PlaybackSource::Graph(compiled) => {
+                compiled.evaluate(t)
+                    .into_iter()
+                    .map(|output| {
+                        OscMessage {
+                            address: output.address,
+                            x: output.value.x,
+                            y: output.value.y,
+                            z: output.value.z,
+                        }
+                    })
+                    .collect()
+            }
+        }
+    }
+    
+    fn apply_turbulence_static(x: f32, y: f32, z: f32, amount: f32, t: f32, obj_idx: usize) -> (f32, f32, f32) {
+        let offset = (obj_idx as f32) * 100.0;
+        let noise_x = (t * 3.7 + offset).sin() * 0.1 + (t * 7.3 + offset).cos() * 0.05;
+        let noise_y = (t * 4.1 + offset).cos() * 0.1 + (t * 5.9 + offset).sin() * 0.05;
+        let noise_z = (t * 2.9 + offset).sin() * 0.1 + (t * 8.1 + offset).cos() * 0.05;
+        
+        let scale = amount * 0.3;
+        (
+            x + noise_x * scale,
+            y + noise_y * scale,
+            z + noise_z * scale,
+        )
+    }
+}
+
+/// A single OSC message ready to be sent
+#[derive(Debug, Clone)]
+pub struct OscMessage {
+    pub address: String,
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+
 /// Main playback engine
 pub struct PlaybackEngine {
     osc_sender: Arc<OscSender>,
-    trajectory: TrajectoryFn,
+    source: PlaybackSource,
     params: Arc<Mutex<EngineParams>>,
     running: Arc<Mutex<bool>>,
-    osc_address_template: String,
     target_fps: f32,
 }
 
 impl PlaybackEngine {
-    /// Create a new playback engine
+    /// Create a new playback engine from a trajectory function
     pub fn new(
         osc_sender: OscSender,
         trajectory: TrajectoryFn,
-        osc_address_template: &str,
+        _osc_address_template: &str,
         target_fps: f32,
     ) -> Self {
         PlaybackEngine {
             osc_sender: Arc::new(osc_sender),
-            trajectory,
+            source: PlaybackSource::Trajectory(trajectory),
             params: Arc::new(Mutex::new(EngineParams::default())),
             running: Arc::new(Mutex::new(false)),
-            osc_address_template: osc_address_template.to_string(),
+            target_fps,
+        }
+    }
+    
+    /// Create a new playback engine from a compiled graph
+    pub fn from_graph(
+        osc_sender: OscSender,
+        graph: CompiledGraph,
+        target_fps: f32,
+    ) -> Self {
+        PlaybackEngine {
+            osc_sender: Arc::new(osc_sender),
+            source: PlaybackSource::Graph(graph),
+            params: Arc::new(Mutex::new(EngineParams::default())),
+            running: Arc::new(Mutex::new(false)),
             target_fps,
         }
     }
@@ -254,10 +335,9 @@ impl PlaybackEngine {
         drop(running);
         
         let osc_sender = self.osc_sender.clone();
-        let trajectory = self.trajectory;
+        let source = self.source.clone();
         let params = self.params.clone();
         let running_flag = self.running.clone();
-        let osc_template = self.osc_address_template.clone();
         let frame_duration = Duration::from_secs_f32(1.0 / self.target_fps);
         
         tokio::spawn(async move {
@@ -285,22 +365,10 @@ impl PlaybackEngine {
                 // Update time
                 t += delta * current_params.speed;
                 
-                // Generate and send positions for all objects
-                for obj_idx in 0..current_params.n_objects {
-                    let (x, y, z) = trajectory(t, obj_idx, &current_params);
-                    
-                    // Apply turbulence if enabled
-                    let (x, y, z) = if current_params.turbulence > 0.0 {
-                        Self::apply_turbulence(x, y, z, current_params.turbulence, t, obj_idx)
-                    } else {
-                        (x, y, z)
-                    };
-                    
-                    // Format OSC address (e.g., "/track/1/xyz")
-                    let address = osc_template.replace("{}", &format!("{}", obj_idx + 1));
-                    
-                    // Send OSC message
-                    if let Err(e) = osc_sender.send_floats(&address, vec![x, y, z]) {
+                // Evaluate source and send OSC messages
+                let messages = source.evaluate(t, &current_params);
+                for msg in messages {
+                    if let Err(e) = osc_sender.send_floats(&msg.address, vec![msg.x, msg.y, msg.z]) {
                         eprintln!("OSC send error: {}", e);
                     }
                 }
@@ -327,22 +395,6 @@ impl PlaybackEngine {
         let running = self.running.lock().await;
         *running
     }
-    
-    /// Apply coherent turbulence to position
-    fn apply_turbulence(x: f32, y: f32, z: f32, amount: f32, t: f32, obj_idx: usize) -> (f32, f32, f32) {
-        // Simple coherent noise using sine waves at different frequencies
-        let offset = (obj_idx as f32) * 100.0;
-        let noise_x = (t * 3.7 + offset).sin() * 0.1 + (t * 7.3 + offset).cos() * 0.05;
-        let noise_y = (t * 4.1 + offset).cos() * 0.1 + (t * 5.9 + offset).sin() * 0.05;
-        let noise_z = (t * 2.9 + offset).sin() * 0.1 + (t * 8.1 + offset).cos() * 0.05;
-        
-        let scale = amount * 0.3; // Scale turbulence amount
-        (
-            x + noise_x * scale,
-            y + noise_y * scale,
-            z + noise_z * scale,
-        )
-    }
 }
 
 #[cfg(test)]
@@ -365,5 +417,42 @@ mod tests {
         assert_eq!(params.speed, 1.0);
         assert_eq!(params.scale_x, 1.0);
         assert_eq!(params.turbulence, 0.0);
+    }
+    
+    #[test]
+    fn test_playback_source_graph() {
+        use crate::graph::*;
+        
+        let mut graph = Graph::new();
+        graph.add_node(Node {
+            id: "engine".to_string(),
+            node_type: NodeType::Engine { engine_type: "circular".to_string() },
+            params: {
+                let mut p = EngineParams::default();
+                p.custom.insert("radius".to_string(), 1.0);
+                p
+            },
+            n_objects: 1,
+        });
+        graph.add_node(Node {
+            id: "out".to_string(),
+            node_type: NodeType::Output { address_template: "/track/{}/xyz".to_string() },
+            params: EngineParams::default(),
+            n_objects: 1,
+        });
+        graph.add_edge(Edge {
+            from: "engine".to_string(),
+            to: "out".to_string(),
+            to_input: "in".to_string(),
+        });
+        
+        let compiled = CompiledGraph::compile(graph).unwrap();
+        let source = PlaybackSource::Graph(compiled);
+        let params = EngineParams::default();
+        let messages = source.evaluate(0.0, &params);
+        
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].address, "/track/1/xyz");
+        assert!((messages[0].x - 1.0).abs() < 0.01);
     }
 }
