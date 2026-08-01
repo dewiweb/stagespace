@@ -205,6 +205,365 @@ pub fn linear_trajectory(t: f32, obj_index: usize, params: &EngineParams) -> (f3
     (x + params.shift_x, y + params.shift_y, z + params.shift_z)
 }
 
+/// Elliptical trajectory
+pub fn elliptical_trajectory(t: f32, obj_index: usize, params: &EngineParams) -> (f32, f32, f32) {
+    let a = params.get("a", 0.8); // semi-major axis
+    let b = params.get("b", 0.4); // semi-minor axis
+    let plane = params.get_int("plane", 0); // 0=xy, 1=xz, 2=yz
+    let phase_offset = params.get_bool("phase_offset", true);
+    let phase = if phase_offset { 2.0 * std::f32::consts::PI * (obj_index as f32) / (params.n_objects as f32).max(1.0) } else { 0.0 };
+    let angle = 2.0 * std::f32::consts::PI * params.speed * params.loop_time(t) + phase;
+    
+    let x = a * angle.cos();
+    let y = b * angle.sin();
+    
+    match plane {
+        1 => (x + params.shift_x, params.shift_y, y + params.shift_z),
+        2 => (params.shift_x, x + params.shift_y, y + params.shift_z),
+        _ => (x + params.shift_x, y + params.shift_y, params.shift_z),
+    }
+}
+
+/// Oscillation on a single axis
+pub fn oscillation_trajectory(t: f32, obj_index: usize, params: &EngineParams) -> (f32, f32, f32) {
+    let axis = params.get_int("axis", 2); // 0=x, 1=y, 2=z
+    let amplitude = params.get("amplitude", 0.7);
+    let frequency = params.get("frequency", 2.0);
+    let damping = params.get("damping", 0.0);
+    let phase_offset = params.get_bool("phase_offset", true);
+    let po = if phase_offset { 2.0 * std::f32::consts::PI * (obj_index as f32) / (params.n_objects as f32).max(1.0) } else { 0.0 };
+    
+    let tn = params.loop_time(t);
+    let omega = 2.0 * std::f32::consts::PI * frequency;
+    let env = (-damping * tn).exp();
+    let value = amplitude * env * (omega * tn * params.speed + po).sin();
+    
+    let mut x = params.shift_x;
+    let mut y = params.shift_y;
+    let mut z = params.shift_z;
+    
+    match axis {
+        0 => x += value,
+        1 => y += value,
+        _ => z += value,
+    }
+    
+    (x, y, z)
+}
+
+/// Convergence / divergence from a start radius to an end radius
+pub fn converge_trajectory(t: f32, obj_index: usize, params: &EngineParams) -> (f32, f32, f32) {
+    let start_radius = params.get("start_radius", 0.9);
+    let end_radius = params.get("end_radius", 0.0);
+    let easing = params.get_int("easing", 0); // 0=linear, 1=ease_in, 2=ease_out, 3=smooth
+    let base_angle = 2.0 * std::f32::consts::PI * (obj_index as f32) / (params.n_objects as f32).max(1.0);
+    
+    let mut tn = params.loop_time(t);
+    match easing {
+        1 => tn = tn * tn,
+        2 => tn = 1.0 - (1.0 - tn) * (1.0 - tn),
+        3 => tn = 3.0 * tn * tn - 2.0 * tn * tn * tn,
+        _ => {}
+    }
+    
+    let r = start_radius + (end_radius - start_radius) * tn;
+    let x = r * base_angle.cos();
+    let y = r * base_angle.sin();
+    
+    (x + params.shift_x, y + params.shift_y, params.shift_z)
+}
+
+/// Formation of objects (circle, sphere, grid, line)
+pub fn formation_trajectory(t: f32, obj_index: usize, params: &EngineParams) -> (f32, f32, f32) {
+    let shape = params.get_int("shape", 0); // 0=circle, 1=sphere, 2=grid, 3=line
+    let radius = params.get("radius", 0.7);
+    let rotate = params.get("rotate", 0.0); // rotations per loop
+    let elevation = params.get("elevation", 0.0);
+    let n = params.n_objects.max(1) as f32;
+    let i = obj_index as f32;
+    let theta = 2.0 * std::f32::consts::PI * params.loop_time(t) * params.speed * rotate;
+    
+    let (x, y, z) = match shape {
+        1 => { // sphere (Fibonacci)
+            let y_norm = 1.0 - (2.0 * i / n.max(1.0));
+            let r = (1.0 - y_norm * y_norm).sqrt().max(0.0) * radius;
+            let golden = std::f32::consts::PI * (3.0 - 5.0f32.sqrt());
+            let phi = golden * i;
+            let (sin_phi, cos_phi) = (phi + theta).sin_cos();
+            (r * cos_phi, r * sin_phi, y_norm * radius)
+        }
+        2 => { // grid
+            let side = n.sqrt().ceil() as f32;
+            let row = (i / side).floor();
+            let col = i % side;
+            let x0 = (col / side.max(1.0) - 0.5) * 2.0 * radius;
+            let y0 = (row / side.max(1.0) - 0.5) * 2.0 * radius;
+            let (cos_t, sin_t) = theta.sin_cos();
+            (x0 * cos_t - y0 * sin_t, x0 * sin_t + y0 * cos_t, elevation)
+        }
+        3 => { // line
+            let x0 = (i / n.max(1.0) - 0.5) * 2.0 * radius;
+            let (cos_t, sin_t) = theta.sin_cos();
+            (x0 * cos_t, x0 * sin_t, elevation)
+        }
+        _ => { // circle
+            let angle = 2.0 * std::f32::consts::PI * i / n.max(1.0) + theta;
+            (radius * angle.cos(), radius * angle.sin(), elevation)
+        }
+    };
+    
+    (x + params.shift_x, y + params.shift_y, z + params.shift_z)
+}
+
+/// Pendulum simulation (approximated by damped harmonic oscillator)
+pub fn pendulum_trajectory(t: f32, obj_index: usize, params: &EngineParams) -> (f32, f32, f32) {
+    let length = params.get("length", 0.8);
+    let gravity = params.get("gravity", 9.81);
+    let initial_angle = params.get("initial_angle", 0.5);
+    let damping = params.get("damping", 0.05);
+    let phase_offset = params.get_bool("phase_offset", true);
+    let po = if phase_offset { std::f32::consts::PI * (obj_index as f32) / (params.n_objects as f32).max(1.0) } else { 0.0 };
+    
+    // Small-angle approximation: theta(t) = theta0 * exp(-damp*t) * cos(omega*t + po)
+    let omega = (gravity / (length * 10.0)).sqrt();
+    let elapsed = t - (t / params.duration.max(0.001)).floor() * params.duration; // restart each loop
+    let theta = (initial_angle + po * 0.1) * (-damping * elapsed).exp() * (omega * elapsed).cos();
+    
+    let x = (length * theta.sin()).clamp(-1.0, 1.0);
+    let z = (-length * theta.cos() + length * 0.5).clamp(-1.0, 1.0);
+    
+    (x + params.shift_x, params.shift_y, z + params.shift_z)
+}
+
+/// Rose curve trajectory (rhodonea)
+pub fn rose_curve_trajectory(t: f32, obj_index: usize, params: &EngineParams) -> (f32, f32, f32) {
+    let radius = params.get("radius", 0.8);
+    let n_petals = params.get("n_petals", 4.0); // k value
+    let plane = params.get_int("plane", 0); // 0=xy, 1=xz, 2=yz
+    let phase_offset = params.get_bool("phase_offset", true);
+    let po = if phase_offset { 2.0 * std::f32::consts::PI * (obj_index as f32) / (params.n_objects as f32).max(1.0) } else { 0.0 };
+    
+    let theta = 2.0 * std::f32::consts::PI * params.speed * params.loop_time(t) + po;
+    let r = radius * (n_petals * theta).cos();
+    let x = r * theta.cos();
+    let y = r * theta.sin();
+    
+    match plane {
+        1 => (x + params.shift_x, params.shift_y, y + params.shift_z),
+        2 => (params.shift_x, x + params.shift_y, y + params.shift_z),
+        _ => (x + params.shift_x, y + params.shift_y, params.shift_z),
+    }
+}
+
+/// Helix trajectory
+pub fn helix_trajectory(t: f32, obj_index: usize, params: &EngineParams) -> (f32, f32, f32) {
+    let radius = params.get("radius", 0.7);
+    let height = params.get("height", 1.6);
+    let turns = params.get("turns", 3.0);
+    let phase_offset = params.get_bool("phase_offset", true);
+    let po = if phase_offset { 2.0 * std::f32::consts::PI * (obj_index as f32) / (params.n_objects as f32).max(1.0) } else { 0.0 };
+    
+    let tn = params.loop_time(t);
+    let angle = 2.0 * std::f32::consts::PI * turns * tn + po;
+    let z = height * (tn - 0.5); // centered around 0
+    
+    let x = radius * angle.cos();
+    let y = radius * angle.sin();
+    
+    (x + params.shift_x, y + params.shift_y, z + params.shift_z)
+}
+
+/// Bouncing objects in a container (simplified f(t) approximation)
+pub fn bouncing_trajectory(t: f32, obj_index: usize, params: &EngineParams) -> (f32, f32, f32) {
+    let container = params.get_int("container", 0); // 0=sphere, 1=box, 2=cylinder
+    let container_size = params.get("container_size", 0.9);
+    let gravity = params.get("gravity", 0.0);
+    let seed = params.get_int("seed", 42) as f32;
+    
+    // Deterministic pseudo-random position based on time and object index
+    let seed_val = seed + obj_index as f32 * 100.0;
+    let tn = params.loop_time(t);
+    
+    // Base oscillation with gravity effect
+    let freq = 2.0 + (seed_val * 0.1).sin() * 0.5;
+    let phase = seed_val * 2.3;
+    
+    let mut x = (freq * tn * std::f32::consts::PI * 2.0 + phase).sin() * container_size * 0.5;
+    let mut y = (freq * tn * std::f32::consts::PI * 2.0 + phase + 1.0).sin() * container_size * 0.5;
+    let mut z = (freq * tn * std::f32::consts::PI * 2.0 + phase + 2.0).sin() * container_size * 0.5;
+    
+    // Apply gravity effect (bias toward negative Z)
+    z -= gravity * tn * 0.1;
+    
+    // Clamp to container
+    match container {
+        1 => { // box
+            x = x.clamp(-container_size, container_size);
+            y = y.clamp(-container_size, container_size);
+            z = z.clamp(-container_size, container_size);
+        }
+        2 => { // cylinder (clamp XY to circle, Z to box)
+            let r_xy = (x * x + y * y).sqrt();
+            if r_xy > container_size {
+                let scale = container_size / r_xy;
+                x *= scale;
+                y *= scale;
+            }
+            z = z.clamp(-container_size, container_size);
+        }
+        _ => { // sphere
+            let r = (x * x + y * y + z * z).sqrt();
+            if r > container_size {
+                let scale = container_size / r;
+                x *= scale;
+                y *= scale;
+                z *= scale;
+            }
+        }
+    }
+    
+    (x + params.shift_x, y + params.shift_y, z + params.shift_z)
+}
+
+/// Mutual avoidance (simplified f(t) approximation)
+pub fn avoidance_trajectory(t: f32, obj_index: usize, params: &EngineParams) -> (f32, f32, f32) {
+    let repulsion_radius = params.get("repulsion_radius", 0.4);
+    let container_size = params.get("container_size", 0.9);
+    let seed = params.get_int("seed", 42) as f32;
+    let n = params.n_objects.max(1) as f32;
+    let i = obj_index as f32;
+    
+    let tn = params.loop_time(t);
+    let seed_val = seed + i * 100.0;
+    
+    // Base circular arrangement with perturbation
+    let base_angle = 2.0 * std::f32::consts::PI * i / n;
+    let radius = 0.6 + repulsion_radius * 0.2 * (tn * 3.0 + seed_val).sin();
+    
+    let x = radius * (base_angle + tn).cos();
+    let y = radius * (base_angle + tn).sin();
+    let z = (tn * 2.0 + seed_val).sin() * 0.1;
+    
+    // Clamp to container
+    let x = x.clamp(-container_size, container_size);
+    let y = y.clamp(-container_size, container_size);
+    let z = z.clamp(-container_size, container_size);
+    
+    (x + params.shift_x, y + params.shift_y, z + params.shift_z)
+}
+
+/// Spring motion (damped harmonic oscillator)
+pub fn spring_trajectory(t: f32, obj_index: usize, params: &EngineParams) -> (f32, f32, f32) {
+    let spring_k = params.get("spring_k", 2.0); // spring constant
+    let damping = params.get("damping", 0.1);
+    let amplitude = params.get("amplitude", 0.5);
+    let seed = params.get_int("seed", 42) as f32;
+    
+    let tn = params.loop_time(t);
+    let seed_val = seed + obj_index as f32 * 100.0;
+    
+    // Damped oscillation: A * exp(-damp*t) * cos(omega*t)
+    let omega = spring_k.sqrt();
+    let decay = (-damping * tn).exp();
+    let value = amplitude * decay * (omega * tn * std::f32::consts::PI * 2.0 + seed_val).cos();
+    
+    // Apply to different axes with phase offsets
+    let x = value * (seed_val).cos();
+    let y = value * (seed_val + 1.0).sin();
+    let z = value * (seed_val + 2.0).cos();
+    
+    (x + params.shift_x, y + params.shift_y, z + params.shift_z)
+}
+
+/// Follow leader (objects follow the first one)
+pub fn follow_trajectory(t: f32, obj_index: usize, params: &EngineParams) -> (f32, f32, f32) {
+    let follow_distance = params.get("follow_distance", 0.3);
+    let speed = params.get("speed", 1.0);
+    let seed = params.get_int("seed", 42) as f32;
+    
+    let tn = params.loop_time(t);
+    let seed_val = seed + obj_index as f32 * 100.0;
+    
+    // Leader (obj_index 0) moves in a circle
+    let leader_angle = 2.0 * std::f32::consts::PI * tn * speed;
+    let leader_x = 0.7 * leader_angle.cos();
+    let leader_y = 0.7 * leader_angle.sin();
+    
+    if obj_index == 0 {
+        (leader_x + params.shift_x, leader_y + params.shift_y, params.shift_z)
+    } else {
+        // Followers trail behind with delay
+        let delay = obj_index as f32 * follow_distance;
+        let follower_angle = 2.0 * std::f32::consts::PI * (tn - delay).max(0.0) * speed;
+        let x = 0.7 * follower_angle.cos();
+        let y = 0.7 * follower_angle.sin();
+        let z = (seed_val * tn).sin() * 0.1;
+        
+        (x + params.shift_x, y + params.shift_y, z + params.shift_z)
+    }
+}
+
+/// Swarm / Boids-like behavior (simplified f(t) approximation)
+pub fn swarm_trajectory(t: f32, obj_index: usize, params: &EngineParams) -> (f32, f32, f32) {
+    let cohesion = params.get("cohesion", 0.5);
+    let separation = params.get("separation", 0.3);
+    let seed = params.get_int("seed", 42) as f32;
+    let n = params.n_objects.max(1) as f32;
+    let i = obj_index as f32;
+    
+    let tn = params.loop_time(t);
+    let seed_val = seed + i * 100.0;
+    
+    // Base circular motion with swarm-like perturbations
+    let base_angle = 2.0 * std::f32::consts::PI * i / n;
+    let swarm_radius = 0.5 + cohesion * 0.2 * (tn * 2.0 + seed_val).sin();
+    
+    // Separation effect: offset based on object index
+    let sep_offset = separation * (i / n - 0.5) * 2.0;
+    
+    let angle = base_angle + tn + sep_offset;
+    let x = swarm_radius * angle.cos();
+    let y = swarm_radius * angle.sin();
+    let z = (tn * 3.0 + seed_val).sin() * 0.15;
+    
+    (x + params.shift_x, y + params.shift_y, z + params.shift_z)
+}
+
+/// Perlin-like noise (harmonic superposition)
+pub fn perlin_noise_trajectory(t: f32, obj_index: usize, params: &EngineParams) -> (f32, f32, f32) {
+    let intensity = params.get("intensity", 0.5);
+    let smoothness = params.get("smoothness", 0.5);
+    let seed = params.get_int("seed", 42) as f32;
+    
+    let tn = params.loop_time(t);
+    let seed_val = seed + obj_index as f32 * 100.0;
+    
+    // Number of harmonics based on smoothness
+    let n_harmonics = (3.0 + (1.0 - smoothness) * 9.0) as i32;
+    
+    let mut x = 0.0;
+    let mut y = 0.0;
+    let mut z = 0.0;
+    
+    for h in 1..=n_harmonics {
+        let freq = (h as f32) * (1.0 + (seed_val * 0.2).sin());
+        let amp = intensity / (h as f32).powf(0.5 + smoothness);
+        let phase = seed_val * (h as f32) * 0.5;
+        
+        x += amp * (freq * tn * std::f32::consts::PI * 2.0 + phase).sin();
+        y += amp * (freq * tn * std::f32::consts::PI * 2.0 + phase + 1.0).sin();
+        z += amp * (freq * tn * std::f32::consts::PI * 2.0 + phase + 2.0).sin();
+    }
+    
+    // Normalize and clamp
+    let max_val = intensity * (n_harmonics as f32);
+    x = (x / max_val).clamp(-1.0, 1.0);
+    y = (y / max_val).clamp(-1.0, 1.0);
+    z = (z / max_val).clamp(-1.0, 1.0);
+    
+    (x + params.shift_x, y + params.shift_y, z + params.shift_z)
+}
+
 /// Unified source for playback: either a single trajectory function or a compiled graph
 #[derive(Clone)]
 pub enum PlaybackSource {

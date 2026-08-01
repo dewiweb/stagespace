@@ -21,12 +21,31 @@ Mis à jour à chaque session de travail.
 | API intégration | `backend/api.py` | ✅ `POST /api/play` avec `use_rust=true` retourne session Rust |
 | End-to-end | `tests/` + `curl` | ✅ `/api/play` → Rust core → OSC UDP:7788 validé |
 
-### Moteurs f(t) supportés par le Rust core (Phase 2)
+### Moteurs f(t) supportés par le Rust core (Phase 2 + 3.3)
+
+#### Math engines (12)
 - `circular` ✅ (testé vs `math_engine.circular`)
 - `spiral`
 - `lissajous` ✅ (testé via `/api/play`)
 - `figure8`
 - `linear`
+- `elliptical`
+- `oscillation`
+- `converge`
+- `formation`
+- `pendulum`
+- `rose_curve`
+- `helix`
+
+#### Physics engines (5)
+- `bouncing`
+- `avoidance`
+- `spring`
+- `follow`
+- `swarm`
+
+#### Noise (1)
+- `perlin_noise`
 
 ### Profils OSC supportés par le Rust core
 - `holophonix` → `/track/{}/xyz`

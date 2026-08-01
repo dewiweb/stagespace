@@ -741,7 +741,12 @@ async def play(req: PlayRequest):
     _check_conflicts(requested)
 
     # ── Rust core fast path ───────────────────────────────────────────────────────
-    rust_supported_engines = {"circular", "spiral", "lissajous", "figure8", "linear"}
+    rust_supported_engines = {
+        "circular", "spiral", "lissajous", "figure8", "linear",
+        "elliptical", "oscillation", "converge", "formation",
+        "pendulum", "rose_curve", "helix",
+        "bouncing", "avoidance", "spring", "follow", "swarm", "perlin_noise",
+    }
     logger.debug("play request: engine=%s use_rust=%s rust_client=%s", req.engine, req.use_rust, _rust_client is not None)
     if req.use_rust and _rust_client is not None and req.engine in rust_supported_engines:
         logger.info("Using Rust core for session")
