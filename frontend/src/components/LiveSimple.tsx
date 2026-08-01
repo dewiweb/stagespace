@@ -126,9 +126,14 @@ export default function LiveSimple() {
         port: 7788,
         fps: 60,
       })
-      setSessionId(res.session_id)
-      setPlaying(true)
-      setSelectedGroup(groupName)
+      console.log('Play group response:', res)
+      if (res.session_id) {
+        setSessionId(res.session_id)
+        setPlaying(true)
+        setSelectedGroup(groupName)
+      } else {
+        console.error('No session_id in response')
+      }
     } catch (e) {
       console.error('Failed to play group:', e)
     }

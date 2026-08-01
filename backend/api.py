@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, HTTPException
+from fastapi import FastAPI, WebSocket, HTTPException, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
@@ -27,6 +27,15 @@ import rust_core_client as rust_core
 _rust_client: Optional[rust_core.RustCoreClient] = None
 
 app = FastAPI(title="StageSPACE API", version="1.0.0")
+
+# ── CORS ─────────────────────────────────────────────────────────────────────────────
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ── Active playback sessions ──────────────────────────────────────────────────
 # session_id -> { sender, task, engine, fps }
@@ -1327,23 +1336,37 @@ async def websocket_positions(websocket: WebSocket):
         while True:
             # Send current positions for all active sessions
             positions = {}
-            for sid, s in _sessions.items():
-                sender = s.get("sender")
-                if sender and hasattr(sender, 'current_frame'):
-                    frame = sender.current_frame
-                    if frame:
-                        positions[sid] = {
-                            "label": s.get("label", ""),
-                            "objects": frame
-                        }
+            try:
+                for sid, s in _sessions.items():
+                    sender = s.get("sender")
+                    if sender and hasattr(sender, 'current_frame'):
+                        frame = sender.current_frame
+                        if frame:
+                            positions[sid] = {
+                                "label": s.get("label", ""),
+                                "objects": frame
+                            }
+            except Exception as e:
+                logger.error(f"Error getting positions: {e}")
             
-            await websocket.send_json({"positions": positions})
+            try:
+                await websocket.send_json({"positions": positions, "active_sessions": len(_sessions)})
+            except Exception as e:
+                logger.error(f"Failed to send WebSocket message: {e}")
+                break
+            
             await asyncio.sleep(1/60)  # 60 FPS
+    except WebSocketDisconnect:
+        logger.info("WebSocket disconnected")
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
     finally:
         if websocket in _ws_clients:
             _ws_clients.remove(websocket)
+        try:
+            await websocket.close()
+        except:
+            pass
 
 
 if __name__ == "__main__":

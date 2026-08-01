@@ -118,6 +118,9 @@ class PatchManager:
                 'object_offset': 0,
                 'label': name,
             },
+            'object_offset': 0,
+            'label': name,
+            'shift': group.get('anchor', {'x': 0.0, 'y': 0.0, 'z': 0.0}),
         }
 
     def clear(self) -> None:

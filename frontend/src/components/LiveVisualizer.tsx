@@ -83,24 +83,37 @@ export default function LiveVisualizer() {
     const ws = new WebSocket('ws://localhost:8080/ws/positions')
     wsRef.current = ws
 
+    ws.onopen = () => {
+      console.log('WebSocket connected')
+    }
+
     ws.onmessage = (event) => {
-      const data = JSON.parse(event.data)
-      if (data.positions) {
-        const posMap = new Map<number, XYZ>()
-        for (const [sessionId, sessionData]: any of Object.entries(data.positions)) {
-          const sessionObjects = sessionData.objects
-          if (sessionObjects) {
-            for (const [oscId, pos]: any of Object.entries(sessionObjects)) {
-              posMap.set(parseInt(oscId), [pos.x, pos.y, pos.z])
+      try {
+        const data = JSON.parse(event.data)
+        console.log('WebSocket message:', data)
+        if (data.positions) {
+          const posMap = new Map<number, XYZ>()
+          for (const [sessionId, sessionData]: any of Object.entries(data.positions)) {
+            const sessionObjects = sessionData.objects
+            if (sessionObjects) {
+              for (const [oscId, pos]: any of Object.entries(sessionObjects)) {
+                posMap.set(parseInt(oscId), [pos.x, pos.y, pos.z])
+              }
             }
           }
+          setPositions(posMap)
         }
-        setPositions(posMap)
+      } catch (e) {
+        console.error('Failed to parse WebSocket message:', e)
       }
     }
 
     ws.onerror = (err) => {
       console.error('WebSocket error:', err)
+    }
+
+    ws.onclose = (event) => {
+      console.log('WebSocket closed:', event.code, event.reason)
     }
 
     return () => {
