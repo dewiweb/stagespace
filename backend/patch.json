@@ -1,0 +1,215 @@
+{
+  "objects": {
+    "1": {
+      "name": "kick",
+      "color": "#60a5fa",
+      "notes": ""
+    },
+    "2": {
+      "name": "snare",
+      "color": "#34d399",
+      "notes": ""
+    },
+    "3": {
+      "name": "hat",
+      "color": "#f87171",
+      "notes": ""
+    },
+    "4": {
+      "name": "bass",
+      "color": "#fbbf24",
+      "notes": ""
+    },
+    "5": {
+      "name": "fx_l",
+      "color": "#a78bfa",
+      "notes": ""
+    },
+    "6": {
+      "name": "fx_r",
+      "color": "#f472b6",
+      "notes": ""
+    },
+    "7": {
+      "name": "vocals",
+      "color": "#38bdf8",
+      "notes": ""
+    },
+    "8": {
+      "name": "ambi",
+      "color": "#4ade80",
+      "notes": ""
+    },
+    "9": {
+      "name": "test_obj",
+      "color": "#ff0000",
+      "notes": "test"
+    }
+  },
+  "groups": {
+    "drums": {
+      "object_ids": [
+        1,
+        2,
+        3
+      ],
+      "n_objects": 3,
+      "object_offset": 0,
+      "engine": "figure8",
+      "params": {
+        "duration": 4,
+        "n_objects": 3
+      },
+      "profile": "holophonix",
+      "color": "#4ade80",
+      "anchor": {
+        "x": 1.2,
+        "y": 0.0,
+        "z": 0.0
+      }
+    },
+    "fx": {
+      "object_ids": [
+        5,
+        6
+      ],
+      "n_objects": 2,
+      "object_offset": 4,
+      "engine": "circular",
+      "params": {
+        "duration": 2.0,
+        "n_objects": 2,
+        "radius": 0.5
+      },
+      "profile": "generic_cartesian",
+      "color": "#34d399"
+    },
+    "A": {
+      "object_ids": [
+        1
+      ],
+      "n_objects": 1,
+      "object_offset": 0,
+      "engine": "circular",
+      "params": {
+        "duration": 4,
+        "n_objects": 1
+      },
+      "profile": "generic_cartesian",
+      "color": "#f472b6"
+    },
+    "B": {
+      "object_ids": [
+        5
+      ],
+      "n_objects": 1,
+      "object_offset": 4,
+      "engine": "circular",
+      "params": {
+        "duration": 4,
+        "n_objects": 1
+      },
+      "profile": "generic_cartesian",
+      "color": "#4ade80",
+      "anchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      }
+    },
+    "C": {
+      "object_ids": [
+        1,
+        2
+      ],
+      "n_objects": 2,
+      "object_offset": 0,
+      "engine": "circular",
+      "params": {
+        "duration": 4,
+        "n_objects": 2
+      },
+      "profile": "generic_cartesian",
+      "color": "#f472b6"
+    },
+    "anchored": {
+      "object_ids": [
+        1
+      ],
+      "n_objects": 1,
+      "object_offset": 0,
+      "engine": "circular",
+      "params": {
+        "duration": 2.0,
+        "n_objects": 1,
+        "radius": 0.3
+      },
+      "profile": "generic_cartesian",
+      "color": "#38bdf8",
+      "anchor": {
+        "x": 0.5,
+        "y": 2.0,
+        "z": 0.0
+      }
+    },
+    "test": {
+      "object_ids": [
+        1
+      ],
+      "n_objects": 1,
+      "object_offset": 0,
+      "engine": "circular",
+      "params": {
+        "duration": 4.0,
+        "n_objects": 1
+      },
+      "profile": "generic_cartesian",
+      "color": "#4ade80",
+      "anchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      }
+    },
+    "strings": {
+      "object_ids": [
+        1,
+        2
+      ],
+      "n_objects": 2,
+      "object_offset": 0,
+      "engine": "circular",
+      "params": {
+        "duration": 4.0,
+        "n_objects": 2
+      },
+      "profile": "generic_cartesian",
+      "color": "#34d399",
+      "anchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      }
+    },
+    "pad": {
+      "object_ids": [
+        3,
+        4
+      ],
+      "n_objects": 2,
+      "object_offset": 2,
+      "engine": "lissajous",
+      "params": {
+        "duration": 6.0,
+        "n_objects": 2
+      },
+      "profile": "generic_cartesian",
+      "color": "#34d399",
+      "anchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      }
+    }
+  }
+}
