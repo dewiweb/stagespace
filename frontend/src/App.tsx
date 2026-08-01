@@ -1,4 +1,6 @@
 import { useState, useCallback, useRef } from 'react'
+import LivePanel from './components/LivePanel'
+import LiveSimple from './components/LiveSimple'
 import { Play, Pause, RotateCcw, Settings, GitBranch, FileInput, Radio, Mic, Save, FolderOpen } from 'lucide-react'
 import HolImport from './components/HolImport'
 import TrajectoryVisualizer from './components/TrajectoryVisualizer'
@@ -18,6 +20,8 @@ function App() {
   const [showAudio,  setShowAudio]  = useState(false)
   const [showCue,    setShowCue]    = useState(false)
   const [showHol,    setShowHol]    = useState(false)
+  const [mode,        setMode]        = useState<'editor' | 'live'>('live')
+  const [simpleMode, setSimpleMode]  = useState(true)
   const [compStatus, setCompStatus] = useState<NodeEditorStatus>({
     status: 'idle', info: '', error: '', issues: [],
   })
@@ -60,8 +64,9 @@ function App() {
 
         {/* Area labels */}
         <div style={{ display: 'flex', gap: 2, fontSize: 10 }}>
-          <AreaTab label="3D Viewport" active={false} />
-          <AreaTab label="Node Editor" active={true} />
+          <AreaTab label="Node Editor" active={mode === 'editor'} onClick={() => setMode('editor')} />
+          <AreaTab label="Live" active={mode === 'live'} onClick={() => setMode('live')} accent />
+          <AreaTab label="Simple" active={simpleMode} onClick={() => setSimpleMode(!simpleMode)} />
         </div>
 
         <Sep />
@@ -178,6 +183,16 @@ function App() {
       {/* ── Workspace ── */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'row', minHeight: 0 }}>
 
+        {/* Live Mode */}
+        {mode === 'live' && (
+          <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: 'hidden' }}>
+            {simpleMode ? <LiveSimple /> : <LivePanel />}
+          </div>
+        )}
+
+        {/* Editor Mode */}
+        {mode === 'editor' && (<>
+
         {/* Main area (3D + Node Editor stacked) */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
 
@@ -211,6 +226,7 @@ function App() {
         {showCue && (
           <CuePanel onClose={() => setShowCue(false)} />
         )}
+        </>)}
       </div>
 
       {/* ── Macro Controls bottom panel ── */}
@@ -231,13 +247,16 @@ function Sep() {
   return <div style={{ width: 1, height: 14, background: '#333', flexShrink: 0 }} />
 }
 
-function AreaTab({ label, active }: { label: string; active: boolean }) {
+function AreaTab({ label, active, onClick, accent }: {
+  label: string; active: boolean; onClick?: () => void; accent?: boolean
+}) {
   return (
-    <div style={{
+    <div onClick={onClick} style={{
       padding: '2px 9px', borderRadius: 3, fontSize: 10,
-      background: active ? '#2e2e2e' : 'transparent',
-      color: active ? '#ccc' : '#555',
-      cursor: 'default',
+      background: active ? (accent ? '#1e3a5f' : '#2e2e2e') : 'transparent',
+      color: active ? (accent ? '#60a5fa' : '#ccc') : '#555',
+      cursor: onClick ? 'pointer' : 'default',
+      border: active && accent ? '1px solid #2a5a8a' : '1px solid transparent',
     }}>{label}</div>
   )
 }
