@@ -38,6 +38,7 @@ _osc_receiver: OscReceiver = OscReceiver(port=8001, sessions=_sessions,
                                           bpm_tracker=_bpm, audio_reactor=_audio)
 _presets: PresetManager = PresetManager()
 _cuelist: CuelistManager = CuelistManager()
+_ws_clients: List[WebSocket] = []
 
 
 @app.on_event("startup")
@@ -1313,6 +1314,36 @@ async def cuelist_reset():
     _cuelist._current = None
     _cuelist._save_to_disk()
     return {"status": "reset", "next": _cuelist.next_cue()}
+
+
+# ── WebSocket for real-time positions ────────────────────────────────────────────
+
+@app.websocket("/ws/positions")
+async def websocket_positions(websocket: WebSocket):
+    """WebSocket endpoint for real-time object positions."""
+    await websocket.accept()
+    _ws_clients.append(websocket)
+    try:
+        while True:
+            # Send current positions for all active sessions
+            positions = {}
+            for sid, s in _sessions.items():
+                sender = s.get("sender")
+                if sender and hasattr(sender, 'current_frame'):
+                    frame = sender.current_frame
+                    if frame:
+                        positions[sid] = {
+                            "label": s.get("label", ""),
+                            "objects": frame
+                        }
+            
+            await websocket.send_json({"positions": positions})
+            await asyncio.sleep(1/60)  # 60 FPS
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+    finally:
+        if websocket in _ws_clients:
+            _ws_clients.remove(websocket)
 
 
 if __name__ == "__main__":

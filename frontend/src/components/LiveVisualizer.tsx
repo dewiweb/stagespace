@@ -26,18 +26,26 @@ function AudioObject({ position, color, size, name }: { position: XYZ; color: st
   )
 }
 
-function Scene({ objects }: { objects: any[] }) {
+function Scene({ objects, positions }: { objects: any[]; positions: Map<number, XYZ> }) {
   return (
     <>
       <Grid args={[10, 10]} cellSize={1} cellThickness={0.5} cellColor="#333" sectionSize={5} sectionThickness={1} sectionColor="#444" />
       <ambientLight intensity={0.5} />
       <pointLight position={[10, 10, 10]} intensity={1} />
       {objects.map((obj, index) => {
-        // Positions en cercle pour l'instant
-        const angle = (index / objects.length) * Math.PI * 2
-        const radius = 2
-        const x = Math.cos(angle) * radius
-        const z = Math.sin(angle) * radius
+        // Utiliser les positions du WebSocket si disponibles, sinon cercle statique
+        const pos = positions.get(obj.osc_id)
+        let x, z
+        if (pos) {
+          x = pos[0]
+          z = pos[2]
+        } else {
+          // Positions en cercle par défaut
+          const angle = (index / objects.length) * Math.PI * 2
+          const radius = 2
+          x = Math.cos(angle) * radius
+          z = Math.sin(angle) * radius
+        }
         return (
           <AudioObject
             key={obj.osc_id}
@@ -55,6 +63,7 @@ function Scene({ objects }: { objects: any[] }) {
 export default function LiveVisualizer() {
   const [objects, setObjects] = useState<any[]>([])
   const [positions, setPositions] = useState<Map<number, XYZ>>(new Map())
+  const wsRef = useRef<WebSocket | null>(null)
 
   useEffect(() => {
     // Charger les objets depuis le backend
@@ -70,20 +79,42 @@ export default function LiveVisualizer() {
 
     loadPatch()
 
-    // Polling pour les positions (simplifié)
-    const interval = setInterval(async () => {
-      // Pour l'instant, positions statiques
-      // TODO: ajouter endpoint WebSocket pour positions temps réel
-    }, 1000)
+    // Connecter au WebSocket pour les positions temps réel
+    const ws = new WebSocket('ws://localhost:8080/ws/positions')
+    wsRef.current = ws
 
-    return () => clearInterval(interval)
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data)
+      if (data.positions) {
+        const posMap = new Map<number, XYZ>()
+        for (const [sessionId, sessionData]: any of Object.entries(data.positions)) {
+          const sessionObjects = sessionData.objects
+          if (sessionObjects) {
+            for (const [oscId, pos]: any of Object.entries(sessionObjects)) {
+              posMap.set(parseInt(oscId), [pos.x, pos.y, pos.z])
+            }
+          }
+        }
+        setPositions(posMap)
+      }
+    }
+
+    ws.onerror = (err) => {
+      console.error('WebSocket error:', err)
+    }
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close()
+      }
+    }
   }, [])
 
   return (
     <div style={{ width: '100%', height: '100%' }}>
       <Canvas camera={{ position: [0, 5, 5], fov: 50 }}>
         <OrbitControls />
-        <Scene objects={objects} />
+        <Scene objects={objects} positions={positions} />
       </Canvas>
     </div>
   )
