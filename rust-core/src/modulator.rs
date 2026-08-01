@@ -6,6 +6,7 @@
 use crate::engine::EngineParams;
 use crate::error::{HoloflowError, Result};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use serde::{Deserialize, Serialize};
 
@@ -213,8 +214,6 @@ impl Modulator {
         *running
     }
 }
-
-use std::time::{Duration, Instant};
 
 #[cfg(test)]
 mod tests {

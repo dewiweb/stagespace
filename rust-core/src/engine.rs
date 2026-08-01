@@ -6,6 +6,7 @@
 use crate::osc::OscSender;
 use crate::error::{HoloflowError, Result};
 use crate::graph::CompiledGraph;
+use crate::modulator::Modulator;
 use std::time::{Duration, Instant};
 use std::sync::Arc;
 use std::collections::HashMap;
@@ -638,6 +639,7 @@ pub struct PlaybackEngine {
     params: Arc<Mutex<EngineParams>>,
     running: Arc<Mutex<bool>>,
     target_fps: f32,
+    modulator: Option<Arc<Modulator>>,
 }
 
 impl PlaybackEngine {
@@ -654,6 +656,7 @@ impl PlaybackEngine {
             params: Arc::new(Mutex::new(EngineParams::default())),
             running: Arc::new(Mutex::new(false)),
             target_fps,
+            modulator: None,
         }
     }
     
@@ -669,7 +672,14 @@ impl PlaybackEngine {
             params: Arc::new(Mutex::new(EngineParams::default())),
             running: Arc::new(Mutex::new(false)),
             target_fps,
+            modulator: None,
         }
+    }
+    
+    /// Attach a modulator to this engine
+    pub fn with_modulator(mut self, modulator: Modulator) -> Self {
+        self.modulator = Some(Arc::new(modulator));
+        self
     }
     
     /// Update engine parameters (thread-safe)
@@ -692,6 +702,11 @@ impl PlaybackEngine {
         }
         *running = true;
         drop(running);
+        
+        // Start modulator if present
+        if let Some(modulator) = &self.modulator {
+            modulator.start().await?;
+        }
         
         let osc_sender = self.osc_sender.clone();
         let source = self.source.clone();
@@ -747,6 +762,11 @@ impl PlaybackEngine {
     pub async fn stop(&self) {
         let mut running = self.running.lock().await;
         *running = false;
+        
+        // Stop modulator if present
+        if let Some(modulator) = &self.modulator {
+            modulator.stop().await;
+        }
     }
     
     /// Check if engine is running
