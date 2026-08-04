@@ -711,12 +711,20 @@ fn inject_audio_values(map: &mut serde_json::Map<String, serde_json::Value>, aud
     }
 }
 
-/// Injecte les overrides de paramètres audio (radius, height, turns, offset, rotation)
+/// Injecte les overrides de paramètres audio (radius, height, turns, etc.)
 /// dans les params extra d'un engine. Ces overrides sont calculés par le runtime
 /// à partir des audio_mods de l'AnimationState.
+///
+/// NOTE: "speed" et "scale" ne sont PAS injectés ici car le runtime les gère
+/// au niveau macro (time scaling et position scaling). Les injecter dans
+/// params.extra causerait une double application.
 fn inject_overrides(map: &mut serde_json::Map<String, serde_json::Value>, overrides_arc: &AudioParamOverrides) {
     let overrides = overrides_arc.lock().unwrap_or_else(|e| e.into_inner());
     for (key, value) in overrides.iter() {
+        // Skip speed et scale — gérés par le runtime au niveau macro
+        if key == "speed" || key == "scale" {
+            continue;
+        }
         map.insert(key.clone(), serde_json::json!(value));
     }
 }

@@ -264,6 +264,26 @@ impl Runtime {
                 let effective_speed = audio_param_overrides.get("speed").copied().unwrap_or(speed);
                 let effective_scale = audio_param_overrides.get("scale").copied().unwrap_or(scale);
 
+                // Audio mods pour offset et rotation — additionnés aux macros
+                // (les macros sont la base, les audio mods sont un delta par-dessus)
+                let audio_shift_x = audio_param_overrides.get("offset_x").copied().unwrap_or(0.0);
+                let audio_shift_y = audio_param_overrides.get("offset_y").copied().unwrap_or(0.0);
+                let audio_shift_z = audio_param_overrides.get("offset_z").copied().unwrap_or(0.0);
+                let audio_yaw = audio_param_overrides.get("yaw").copied().unwrap_or(0.0);
+                let audio_pitch = audio_param_overrides.get("pitch").copied().unwrap_or(0.0);
+                let audio_roll = audio_param_overrides.get("roll").copied().unwrap_or(0.0);
+
+                // Shift effectif = macro shift + audio offset
+                let eff_shift = nalgebra::Vector3::new(
+                    shift.x + audio_shift_x,
+                    shift.y + audio_shift_y,
+                    shift.z + audio_shift_z,
+                );
+                // Rotation effective = macro rotation + audio rotation
+                let eff_yaw = yaw + audio_yaw;
+                let eff_pitch = pitch + audio_pitch;
+                let eff_roll = roll + audio_roll;
+
                 // Recalculer le temps virtuel avec le speed effectif (audio-modulé)
                 let t_virtual_eff = t_real * effective_speed;
                 let t_eff = if loop_is_on && duration > 0.0 {
@@ -335,12 +355,12 @@ impl Runtime {
                 let sender = osc_sender_arc.lock().unwrap_or_else(|e| e.into_inner());
 
                 // Précalculer la matrice de rotation si rotation non-nulle
-                let has_rotation = yaw != 0.0 || pitch != 0.0 || roll != 0.0;
+                let has_rotation = eff_yaw != 0.0 || eff_pitch != 0.0 || eff_roll != 0.0;
                 let rot_matrix = if has_rotation {
                     use nalgebra::Rotation3;
-                    let ry = Rotation3::from_axis_angle(&nalgebra::Vector3::y_axis(), yaw.to_radians());
-                    let rx = Rotation3::from_axis_angle(&nalgebra::Vector3::x_axis(), pitch.to_radians());
-                    let rz = Rotation3::from_axis_angle(&nalgebra::Vector3::z_axis(), roll.to_radians());
+                    let ry = Rotation3::from_axis_angle(&nalgebra::Vector3::y_axis(), eff_yaw.to_radians());
+                    let rx = Rotation3::from_axis_angle(&nalgebra::Vector3::x_axis(), eff_pitch.to_radians());
+                    let rz = Rotation3::from_axis_angle(&nalgebra::Vector3::z_axis(), eff_roll.to_radians());
                     Some(rz * rx * ry)
                 } else {
                     None
@@ -362,7 +382,7 @@ impl Runtime {
                         } else {
                             pos_scaled
                         };
-                        let pos_final = pos_rotated + origin + shift;
+                        let pos_final = pos_rotated + origin + eff_shift;
                         let (addr, values) = sender.format_position(osc_id, pos_final);
                         let args: Vec<OscType> = values
                             .iter()
@@ -393,7 +413,7 @@ impl Runtime {
                             .map(|(idx, pos)| {
                                 let ps = pos * effective_scale;
                                 let pr = if let Some(ref rot) = rot_matrix { rot * ps } else { ps };
-                                (*idx, pr + origin + shift)
+                                (*idx, pr + origin + eff_shift)
                             })
                             .collect();
                         callback(t, transformed);
