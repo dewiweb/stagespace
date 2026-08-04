@@ -432,31 +432,31 @@ function makeApplyFn(rt: Runtime) {
 
 describe('OSC IN — OscRouter bindings appliqués sur Runtime', () => {
 
-  it('binding macroSpeed : /holoflow/speed → updateConfig macroSpeed', () => {
+  it('binding macroSpeed : /stagespace/speed → updateConfig macroSpeed', () => {
     const rt = new Runtime({ macroSpeed: 1 })
     const router = new OscRouter()
     router.setApplyFn(makeApplyFn(rt))
-    router.addBinding({ id: 'b1', pattern: '/holoflow/speed', target: { kind: 'macroSpeed' } })
-    router.dispatch(msg('/holoflow/speed', 2.5))
+    router.addBinding({ id: 'b1', pattern: '/stagespace/speed', target: { kind: 'macroSpeed' } })
+    router.dispatch(msg('/stagespace/speed', 2.5))
     expect(rt.getConfig().macroSpeed).toBeCloseTo(2.5, 5)
   })
 
-  it('binding macroScale X : /holoflow/scale/x', () => {
+  it('binding macroScale X : /stagespace/scale/x', () => {
     const rt = new Runtime()
     const router = new OscRouter()
     router.setApplyFn(makeApplyFn(rt))
-    router.addBinding({ id: 'sx', pattern: '/holoflow/scale/x', target: { kind: 'macroScale', axis: 'x' } })
-    router.dispatch(msg('/holoflow/scale/x', 3))
+    router.addBinding({ id: 'sx', pattern: '/stagespace/scale/x', target: { kind: 'macroScale', axis: 'x' } })
+    router.dispatch(msg('/stagespace/scale/x', 3))
     expect(rt.getConfig().macroScale.x).toBeCloseTo(3, 5)
     expect(rt.getConfig().macroScale.y).toBeCloseTo(1, 5) // y inchangé
   })
 
-  it('binding macroShift Z : /holoflow/shift/z', () => {
+  it('binding macroShift Z : /stagespace/shift/z', () => {
     const rt = new Runtime()
     const router = new OscRouter()
     router.setApplyFn(makeApplyFn(rt))
-    router.addBinding({ id: 'sz', pattern: '/holoflow/shift/z', target: { kind: 'macroShift', axis: 'z' } })
-    router.dispatch(msg('/holoflow/shift/z', -2))
+    router.addBinding({ id: 'sz', pattern: '/stagespace/shift/z', target: { kind: 'macroShift', axis: 'z' } })
+    router.dispatch(msg('/stagespace/shift/z', -2))
     expect(rt.getConfig().macroShift.z).toBeCloseTo(-2, 5)
   })
 
@@ -470,8 +470,8 @@ describe('OSC IN — OscRouter bindings appliqués sur Runtime', () => {
     expect(received).toEqual([1.0, 0.5, 2.0])
   })
 
-  it('binding normalize : /holoflow/speed min=0 max=2, valeur=1 → norm=0.5', () => {
-    const b: OscBinding = { id: 'b', pattern: '/holoflow/speed', target: { kind: 'macroSpeed' }, min: 0, max: 2 }
+  it('binding normalize : /stagespace/speed min=0 max=2, valeur=1 → norm=0.5', () => {
+    const b: OscBinding = { id: 'b', pattern: '/stagespace/speed', target: { kind: 'macroSpeed' }, min: 0, max: 2 }
     expect(OscRouter.normalize([1], b)).toBeCloseTo(0.5, 5)
     expect(OscRouter.normalize([0], b)).toBeCloseTo(0, 5)
     expect(OscRouter.normalize([2], b)).toBeCloseTo(1, 5)
@@ -545,13 +545,13 @@ describe('OSC IN — OscRouter bindings appliqués sur Runtime', () => {
     const triggered: string[] = []
     router.addBinding({
       id: 'cg1',
-      pattern: '/holoflow/cue/go',
+      pattern: '/stagespace/cue/go',
       target: { kind: 'cueGo', cueId: 'cue-1' },
     })
     router.setApplyFn((binding) => {
       if (binding.target.kind === 'cueGo') triggered.push(binding.target.cueId)
     })
-    router.dispatch(msg('/holoflow/cue/go', 1))
+    router.dispatch(msg('/stagespace/cue/go', 1))
     expect(triggered).toEqual(['cue-1'])
   })
 

@@ -109,7 +109,7 @@ export default function CuePanel({ onClose }: CuePanelProps) {
         padding: '6px 10px', borderTop: '1px solid #1e1e1e',
         color: '#333', lineHeight: 1.5, fontSize: 9,
       }}>
-        OSC: <span style={{ color: '#444' }}>/holoflow/cue/go [index]</span>
+        OSC: <span style={{ color: '#444' }}>/stagespace/cue/go [index]</span>
       </div>
     </div>
   )

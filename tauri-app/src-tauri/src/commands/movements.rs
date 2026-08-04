@@ -248,25 +248,6 @@ pub async fn update_movement_graph(
     Ok(format!("Movement '{}' graph hot-swapped", movement_id))
 }
 
-/// Set loop mode pour un movement individuel
-#[tauri::command]
-pub async fn set_movement_loop_mode(
-    movement_id: String,
-    mode: String,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
-    let movements = lock_or_recover(&state.movements);
-    let movement = movements.get(&movement_id)
-        .ok_or_else(|| format!("Movement '{}' not found", movement_id))?;
-    let loop_mode = match mode.as_str() {
-        "loop" => LoopMode::Loop,
-        "oneshot" => LoopMode::OneShot,
-        _ => return Err(format!("Invalid loop mode: {}", mode)),
-    };
-    movement.runtime.set_loop_mode(loop_mode);
-    Ok(())
-}
-
 /// Stop un movement avec fade out (au lieu de stop instantané)
 #[tauri::command]
 pub async fn stop_movement_with_fade(

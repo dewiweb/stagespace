@@ -30,18 +30,3 @@ pub async fn get_audio_state(state: State<'_, AppState>) -> Result<AudioState, S
     let audio_state = lock_or_recover(&state.audio_state);
     Ok(audio_state.clone())
 }
-
-#[tauri::command]
-pub async fn start_audio(source: String, path: Option<String>, _state: State<'_, AppState>) -> Result<(), String> {
-    // TODO: Implement audio capture using Web Audio API via Tauri
-    // For now, this is a placeholder
-    eprintln!("Audio start requested: source={}, path={:?}", source, path);
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn stop_audio(_state: State<'_, AppState>) -> Result<(), String> {
-    // TODO: Implement audio stop
-    eprintln!("Audio stop requested");
-    Ok(())
-}

@@ -1,8 +1,8 @@
-# OSCAI — Spatial Audio Trajectory Generator
+# STAGESPACE — Spatial Trajectory Engine
 
-Générateur de trajectoires audio spatiales 3D via un système de nœuds graphiques,
-un moteur mathématique (Lissajous, Perlin, spirales…) et un moteur physique (swarm, rebonds, ressorts…).
-**Aucune dépendance LLM.** Génération instantanée, 100% déterministe.
+Moteur de trajectoires spatiales temps réel piloté par un graphe de nœuds,
+compilé en fonctions continues `f(t)` pour un contrôle OSC multi-profil.
+**100% Rust + Tauri + React.** Performance temps réel, 60 FPS.
 
 ---
 
@@ -11,11 +11,11 @@ un moteur mathématique (Lissajous, Perlin, spirales…) et un moteur physique (
 ```
 ┌──────────────────────────────────────────────────┐
 │            Node Editor  (React Flow)              │
-│  Objects → Motion Node → Duration → Generate     │
+│  Objects → Motion Node → Duration → Output     │
 └───────────────────┬──────────────────────────────┘
-                    │ POST /api/compile-graph
+                    │ Tauri IPC
           ┌─────────▼──────────┐
-          │   Graph Compiler   │   ← extrait params, identifie moteur
+          │   Graph Compiler   │   ← Rust: nœuds → fonction composite
           └────┬──────────┬────┘
                │          │
     ┌──────────▼───┐  ┌───▼──────────┐
@@ -30,12 +30,16 @@ un moteur mathématique (Lissajous, Perlin, spirales…) et un moteur physique (
     │ figure8      │
     │ linear       │
     │ oscillation  │
+    │ BPM          │  ← Audio IN
+    │ AudioAmp     │  ← Audio IN
+    │ TimeFalloff  │  ← Falloffs
+    │ PointDist    │  ← Falloffs
     └──────────────┘
                     │
          ┌──────────▼──────────┐
-         │  Trajectory frames  │   frames[obj][frame][x,y,z]
-         │  3D Visualizer      │
-         │  OSC Output         │   → IEM / Holophonix / IRCAM Spat
+         │  Runtime 60 FPS    │   ← f(t) appelé à chaque tick
+         │  OSC Out (rosc)     │   → 6 profils (Holophonix, IEM, IRCAM, ADM, Generic)
+         │  3D Preview        │   ← Three.js temps réel
          └─────────────────────┘
 ```
 
@@ -43,86 +47,127 @@ un moteur mathématique (Lissajous, Perlin, spirales…) et un moteur physique (
 
 ## Moteurs disponibles
 
-### Math Engine (< 2ms)
+### Math Engine
 | Moteur | Description |
 |--------|-------------|
 | `circular` | Orbite circulaire uniforme |
 | `spiral` | Hélicoïde montante/descendante |
 | `lissajous` | Courbes de Lissajous 3D |
 | `figure8` | Lemniscate de Bernoulli |
-| `linear` | Pan linéaire A→B, option ping-pong |
-| `oscillation` | Oscillation sinusoïdale avec amortissement |
-| `perlin_noise` | Mouvement organique (superposition harmonique) |
-| `formation` | Formation géométrique (cercle, grille, sphère) |
-| `converge` | Convergence/divergence avec easing |
-| `pendulum` | Simulation pendule (intégration RK4) |
+| `linear` | Pan linéaire A→B |
+| `oscillation` | Oscillation sinusoïdale |
+| `perlin_noise` | Mouvement organique |
+| `formation` | Formation géométrique |
+| `converge` | Convergence/divergence |
+| `pendulum` | Simulation pendule |
 
-### Physics Engine (< 150ms)
+### Physics Engine
 | Moteur | Description |
 |--------|-------------|
-| `bouncing` | Rebonds dans sphère/boîte/cylindre |
-| `avoidance` | Répulsion mutuelle entre objets |
-| `spring` | Attraction vers cible (masse-ressort) |
-| `follow` | File indienne avec délai configurable |
-| `swarm` | Essaim de Boids (cohésion, séparation, alignement) |
+| `bouncing` | Rebonds dans conteneur |
+| `avoidance` | Répulsion mutuelle |
+| `spring` | Attraction vers cible |
+| `follow` | File indienne |
+| `swarm` | Essaim de Boids |
+
+### Audio Sources
+| Moteur | Description |
+|--------|-------------|
+| `BPM` | Synchronisation sur BPM audio |
+| `AudioAmplitude` | Modulation par amplitude audio |
+
+### Falloffs
+| Moteur | Description |
+|--------|-------------|
+| `TimeFalloff` | Influence temporelle avec easing |
+| `PointDistanceFalloff` | Influence spatiale par distance |
 
 ---
 
 ## Installation
 
 ```bash
-# Backend
-pip install -r requirements.txt
+# Rust engines
+cd rust-engines
+cargo build --release
 
-# Frontend
-cd frontend && npm install
+# Tauri app
+cd tauri-app
+npm install
+npm run tauri dev
 ```
+
+---
 
 ## Démarrage
 
 ```bash
-# Backend API (port 8080)
-cd backend && uvicorn api:app --port 8080 --reload
-
-# Frontend (port 3000)
-cd frontend && npm run dev
+cd tauri-app
+npm run tauri dev
 ```
 
-## API Endpoints
+L'application s'ouvre dans une fenêtre native.
 
-| Méthode | Route | Description |
-|---------|-------|-------------|
-| `GET` | `/` | Status + liste des moteurs |
-| `GET` | `/api/engines` | Moteurs + paramètres détaillés |
-| `POST` | `/api/compile-graph` | Compiler un graph de nœuds |
-| `POST` | `/api/generate-direct` | Génération directe par nom de moteur |
-| `GET` | `/api/trajectories` | Historique de session |
-| `WS` | `/ws/compile` | Compilation en temps réel |
+---
 
-## Exemple API
+## Fonctionnalités
 
-```bash
-# Génération directe — swarm 12 objets, 10s
-curl -X POST "http://localhost:8080/api/generate-direct?engine=swarm&n_objects=12&duration=10"
+- **Node Editor** : éditeur de graphe React Flow avec nœuds custom éditables
+- **Compilation** : validation et compilation en fonctions composites
+- **Playback** : lecture temps réel à 60 FPS avec OSC out
+- **3D Preview** : visualisation Three.js connectée au runtime
+- **Audio IN** : capture microphone avec BPM et amplitude
+- **Cue System** : snapshots de graphes avec rappel
+- **OSC IN** : mapping configurable pour contrôles externes
+- **Save/Load** : persistance localStorage des graphes
 
-# Compilation d'un graph
-curl -X POST http://localhost:8080/api/compile-graph \
-  -H "Content-Type: application/json" \
-  -d '{
-    "nodes": [
-      {"id":"a","type":"objects",  "data":{"count":8}},
-      {"id":"b","type":"lissajous","data":{"freqX":3,"freqY":2}},
-      {"id":"c","type":"duration", "data":{"seconds":12}}
-    ],
-    "edges": [
-      {"source":"a","target":"b"},
-      {"source":"b","target":"c"}
-    ]
-  }'
-```
+---
+
+## Profils OSC
+
+- **Holophonix** : `/holophonix/track/{id}/xyz`
+- **IEM MultiEncoder** : `/iem/azimuth/{id}`, `/iem/elevation/{id}`, `/iem/distance/{id}`
+- **IRCAM Spat** : `/spat/source/{id}/xyz`
+- **ADM-OSC** : `/adm/source/{id}/aed`
+- **Generic Cartesian** : `/xyz/{id}/x`, `/xyz/{id}/y`, `/xyz/{id}/z`
+- **Generic Polar** : `/polar/{id}/azimuth`, `/polar/{id}/elevation`, `/polar/{id}/distance`
+
+---
 
 ## Stack technique
 
-- **Backend** : Python 3.12, FastAPI, NumPy (pas d'Ollama)
-- **Frontend** : React 18, TypeScript, React Flow, Three.js, TailwindCSS
-- **OSC** : IEM MultiEncoder, Holophonix, IRCAM Spat, Generic
+- **Shell** : Tauri (Rust)
+- **UI** : React 18 + TypeScript
+- **Node editor** : React Flow
+- **3D Preview** : Three.js
+- **State** : Zustand
+- **Styles** : TailwindCSS
+- **OSC** : `rosc` (Rust)
+- **Audio IN** : Web Audio API (via Tauri IPC)
+- **Moteurs** : Rust pur (performance temps réel)
+
+---
+
+## Documentation
+
+- [LOGGING.md](rust-engines/LOGGING.md) - Guide du système de logging
+- [ERROR_HANDLING.md](rust-engines/ERROR_HANDLING.md) - Guide de la gestion d'erreurs
+- [CONFIG.md](rust-engines/CONFIG.md) - Guide de la configuration
+- [TESTING.md](rust-engines/TESTING.md) - Guide des tests
+- [BENCHMARKS.md](rust-engines/BENCHMARKS.md) - Guide des benchmarks
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Guide pour contribuer
+
+## Tests
+
+```bash
+cd rust-engines
+cargo test --lib
+```
+
+99 tests passent.
+
+---
+
+## License
+
+MIT

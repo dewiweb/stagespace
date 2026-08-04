@@ -1,5 +1,4 @@
-use stagespace_engines::{OscMapping, OscSender, OscProfile};
-use std::str::FromStr;
+use stagespace_engines::OscMapping;
 use tauri::State;
 use crate::AppState;
 use std::sync::{Mutex, MutexGuard};
@@ -48,17 +47,6 @@ pub async fn osc_get_all_values(state: State<'_, AppState>) -> Result<serde_json
     let receiver = lock_or_recover(&state.osc_receiver);
     let values = receiver.get_all_values();
     Ok(serde_json::to_value(values).map_err(|e| e.to_string())?)
-}
-
-// OSC Sender Commands
-#[tauri::command]
-pub async fn osc_set_profile(profile: String, host: String, port: u16, state: State<'_, AppState>) -> Result<(), String> {
-    let osc_profile = OscProfile::from_str(&profile)
-        .map_err(|e| format!("Invalid OSC profile: {}", e))?;
-
-    let mut sender = lock_or_recover(&state.osc_sender);
-    *sender = OscSender::new(osc_profile, host, port);
-    Ok(())
 }
 
 /// Envoie une position OSC unique à un track (utilisé par le Panic button)

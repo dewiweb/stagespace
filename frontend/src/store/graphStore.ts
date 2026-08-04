@@ -462,7 +462,7 @@ export const useGraphStore = create<GraphState>((set, get) => {
       const url  = URL.createObjectURL(blob)
       const a    = document.createElement('a')
       a.href = url
-      a.download = 'holoflow-graph.json'
+      a.download = 'stagespace-graph.json'
       a.click()
       URL.revokeObjectURL(url)
     },

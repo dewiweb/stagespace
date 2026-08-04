@@ -36,27 +36,6 @@ pub async fn set_object_override(
     Ok(())
 }
 
-/// Supprime l'override d'un objet — il reprend la trajectoire calculée
-#[tauri::command]
-pub async fn clear_object_override(
-    obj_index: usize,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
-    let movements = lock_or_recover(&state.movements);
-    let count = movements.len();
-    for movement in movements.values() {
-        movement.runtime.clear_override(obj_index);
-    }
-    drop(movements);
-    if count == 0 {
-        let state_guard = lock_or_recover(&state.runtime);
-        if let Some(runtime) = state_guard.as_ref() {
-            runtime.clear_override(obj_index);
-        }
-    }
-    Ok(())
-}
-
 /// Supprime tous les overrides
 #[tauri::command]
 pub async fn clear_all_overrides(state: State<'_, AppState>) -> Result<(), String> {

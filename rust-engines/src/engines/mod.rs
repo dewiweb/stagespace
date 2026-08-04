@@ -1,0 +1,313 @@
+pub mod circular;
+pub mod elliptical;
+pub mod spiral;
+pub mod lissajous;
+pub mod figure8;
+pub mod linear;
+pub mod oscillation;
+pub mod formation;
+pub mod perlin_noise;
+pub mod converge;
+pub mod pendulum;
+pub mod rose_curve;
+pub mod helix;
+pub mod bouncing;
+pub mod avoidance;
+pub mod spring;
+pub mod follow;
+pub mod swarm;
+pub mod custom_trajectory;
+pub mod wave;
+pub mod bpm;
+pub mod audio_amplitude;
+pub mod audio_spectrum;
+pub mod osc_input;
+pub mod time_falloff;
+pub mod point_distance_falloff;
+pub mod directional_falloff;
+pub mod audio_amplitude_falloff;
+pub mod spline;
+pub mod modifiers;
+
+use nalgebra::Vector3;
+use serde::{Deserialize, Serialize};
+
+/// Borne haute du nombre d'objets simulables.
+///
+/// Les moteurs à interaction (swarm, avoidance) sont en O(n²) par pas de temps et
+/// allouent des vecteurs de taille `n_objects` : sans borne, une valeur venue du
+/// frontend ou d'un fichier de patch peut épuiser la mémoire ou geler le runtime.
+pub const MAX_OBJECTS: usize = 1024;
+
+/// Paramètres communs pour tous les moteurs
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EngineParams {
+    pub n_objects: usize,
+    pub duration: f64,
+    pub fps: f64,
+    // Paramètres spécifiques au moteur
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Interface commune pour tous les moteurs
+pub trait Engine {
+    /// Calcule la position d'un objet à un instant t
+    fn position(&self, t: f64, object_index: usize, params: &EngineParams) -> Vector3<f64>;
+    
+    /// Nom du moteur
+    fn name(&self) -> &str;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn create_params(n_objects: usize, duration: f64, extra: serde_json::Value) -> EngineParams {
+        EngineParams {
+            n_objects,
+            duration,
+            fps: 60.0,
+            extra,
+        }
+    }
+
+    #[test]
+    fn test_circular() {
+        let engine = circular::Circular;
+        let params = create_params(
+            9,
+            4.0,
+            json!({
+                "radius": 1.5,
+                "speed": 1.0,
+                "plane": "xz",
+                "phase_offset": true
+            }),
+        );
+
+        let pos = engine.position(0.0, 0, &params);
+        assert!((pos.x - 1.5).abs() < 0.01);
+        assert!((pos.y - 0.0).abs() < 0.01);
+        assert!((pos.z - 0.0).abs() < 0.01);
+
+        let pos = engine.position(1.0, 0, &params);
+        // Après 1s (25% de 4s), angle = PI/2
+        assert!((pos.x - 0.0).abs() < 0.1);
+        assert!((pos.z - 1.5).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_spiral() {
+        let engine = spiral::Spiral;
+        let params = create_params(
+            9,
+            4.0,
+            json!({
+                "radius": 0.5,
+                "expansion": 1.0,
+                "plane": "xz"
+            }),
+        );
+
+        let pos = engine.position(0.0, 0, &params);
+        assert!((pos.x - 0.5).abs() < 0.01);
+
+        let pos = engine.position(2.0, 0, &params);
+        // Après 2s (50% de 4s), radius = 0.5 + 0.5 = 1.0
+        let radius = (pos.x.powi(2) + pos.z.powi(2)).sqrt();
+        assert!((radius - 1.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_formation_circle() {
+        let engine = formation::Formation;
+        let params = create_params(
+            9,
+            4.0,
+            json!({
+                "shape": "circle",
+                "radius": 0.7
+            }),
+        );
+
+        let pos0 = engine.position(0.0, 0, &params);
+        let pos1 = engine.position(0.0, 1, &params);
+
+        // Les objets devraient être répartis sur un cercle
+        let radius0 = (pos0.x.powi(2) + pos0.y.powi(2)).sqrt();
+        let radius1 = (pos1.x.powi(2) + pos1.y.powi(2)).sqrt();
+        assert!((radius0 - radius1).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_perlin_noise() {
+        let engine = perlin_noise::PerlinNoise;
+        let params = create_params(
+            1,
+            4.0,
+            json!({
+                "intensity": 0.5,
+                "smoothness": 0.5,
+                "seed": 42
+            }),
+        );
+
+        let pos = engine.position(0.0, 0, &params);
+        // Should be within [-1, 1]
+        assert!(pos.x >= -1.0 && pos.x <= 1.0);
+        assert!(pos.y >= -1.0 && pos.y <= 1.0);
+        assert!(pos.z >= -1.0 && pos.z <= 1.0);
+    }
+
+    #[test]
+    fn test_converge() {
+        let engine = converge::Converge;
+        let params = create_params(
+            4,
+            4.0,
+            json!({
+                "start_radius": 0.9,
+                "end_radius": 0.0,
+                "easing": "linear"
+            }),
+        );
+
+        let pos_start = engine.position(0.0, 0, &params);
+        let pos_end = engine.position(4.0, 0, &params);
+        
+        // Start should be at radius 0.9
+        let r_start = (pos_start.x.powi(2) + pos_start.y.powi(2)).sqrt();
+        assert!((r_start - 0.9).abs() < 0.1);
+        
+        // End should be at radius 0.0
+        let r_end = (pos_end.x.powi(2) + pos_end.y.powi(2)).sqrt();
+        assert!(r_end < 0.1);
+    }
+
+    #[test]
+    fn test_pendulum() {
+        let engine = pendulum::Pendulum;
+        let params = create_params(
+            1,
+            4.0,
+            json!({
+                "length": 0.8,
+                "gravity": 9.81,
+                "initial_angle": 0.5
+            }),
+        );
+
+        let pos = engine.position(0.0, 0, &params);
+        // Should start at initial angle
+        assert!(pos.x.abs() > 0.0);
+    }
+
+    #[test]
+    fn test_avoidance() {
+        let engine = avoidance::Avoidance;
+        let params = create_params(
+            4,
+            4.0,
+            json!({
+                "repulsion_radius": 0.4,
+                "repulsion_strength": 2.0
+            }),
+        );
+
+        let pos = engine.position(0.0, 0, &params);
+        // Should be within bounds
+        assert!(pos.norm() < 1.0);
+    }
+
+    #[test]
+    fn test_bouncing() {
+        let engine = bouncing::Bouncing;
+        let params = create_params(
+            1,
+            4.0,
+            json!({
+                "container": "sphere",
+                "container_size": 0.9
+            }),
+        );
+
+        let pos = engine.position(0.0, 0, &params);
+        // Should be within container
+        assert!(pos.norm() <= 1.0);
+    }
+
+    #[test]
+    fn test_spring() {
+        let engine = spring::Spring;
+        let params = create_params(
+            1,
+            4.0,
+            json!({
+                "stiffness": 3.0,
+                "damping_coef": 0.5
+            }),
+        );
+
+        let pos = engine.position(0.0, 0, &params);
+        // Should be within bounds
+        assert!(pos.x >= -1.0 && pos.x <= 1.0);
+    }
+
+    #[test]
+    fn test_follow() {
+        let engine = follow::Follow;
+        let params = create_params(
+            1,
+            4.0,
+            json!({
+                "speed": 0.5,
+                "distance": 0.3
+            }),
+        );
+
+        let pos = engine.position(0.0, 0, &params);
+        // Should start somewhere
+        assert!(pos.norm() < 1.0);
+    }
+
+    #[test]
+    fn test_swarm() {
+        let engine = swarm::Swarm;
+        let params = create_params(
+            4,
+            4.0,
+            json!({
+                "separation": 0.3,
+                "alignment": 0.5,
+                "cohesion": 0.3
+            }),
+        );
+
+        let pos = engine.position(0.0, 0, &params);
+        // Should be within bounds
+        assert!(pos.norm() < 1.0);
+    }
+
+    #[test]
+    fn test_custom_trajectory() {
+        let engine = custom_trajectory::CustomTrajectory;
+        let params = create_params(
+            1,
+            4.0,
+            json!({
+                "coordinate_system": "cartesian",
+                "equations": {
+                    "x": "0.5",
+                    "y": "0.3",
+                    "z": "0.0"
+                }
+            }),
+        );
+
+        let pos = engine.position(0.0, 0, &params);
+        // Parser simplifié: on vérifie juste que ça compile et retourne quelque chose
+        assert!(pos.x.abs() < 10.0); // Valeur quelconque mais bornée
+    }
+}

@@ -1,28 +1,16 @@
-import { useRef, useEffect, useState } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { useEffect, useState, useRef } from 'react'
+import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Grid, Sphere } from '@react-three/drei'
-import * as THREE from 'three'
 
 const API = 'http://localhost:8080'
 
 type XYZ = [number, number, number]
 
-function AudioObject({ position, color, size, name }: { position: XYZ; color: string; size: number; name: string }) {
-  const meshRef = useRef<THREE.Mesh>(null)
-  useFrame(() => {
-    if (meshRef.current) meshRef.current.rotation.y += 0.01
-  })
+function AudioObject({ position, color, size }: { position: XYZ; color: string; size: number }) {
   return (
-    <group position={position}>
-      <Sphere ref={meshRef} args={[size, 16, 16]}>
-        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.5} />
-      </Sphere>
-      {/* Label */}
-      <mesh position={[0, size + 0.1, 0]}>
-        <planeGeometry args={[0.5, 0.15]} />
-        <meshBasicMaterial color="#fff" transparent opacity={0.8} />
-      </mesh>
-    </group>
+    <Sphere args={[size, 16, 16]} position={position}>
+      <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.5} />
+    </Sphere>
   )
 }
 
@@ -35,21 +23,23 @@ function Scene({ objects, positions }: { objects: any[]; positions: Map<number, 
       {objects.map((obj, index) => {
         // Utiliser les positions du WebSocket si disponibles, sinon cercle statique
         const pos = positions.get(obj.osc_id)
-        let x, z
+        let x, y, z
         if (pos) {
           x = pos[0]
+          y = pos[1]
           z = pos[2]
         } else {
           // Positions en cercle par défaut
           const angle = (index / objects.length) * Math.PI * 2
           const radius = 2
           x = Math.cos(angle) * radius
+          y = 0
           z = Math.sin(angle) * radius
         }
         return (
           <AudioObject
             key={obj.osc_id}
-            position={[x, 0, z]}
+            position={[x, y, z]}
             color={obj.color}
             size={0.15}
             name={obj.name}
@@ -63,7 +53,6 @@ function Scene({ objects, positions }: { objects: any[]; positions: Map<number, 
 export default function LiveVisualizer() {
   const [objects, setObjects] = useState<any[]>([])
   const [positions, setPositions] = useState<Map<number, XYZ>>(new Map())
-  const wsRef = useRef<WebSocket | null>(null)
 
   useEffect(() => {
     // Charger les objets depuis le backend
@@ -79,48 +68,29 @@ export default function LiveVisualizer() {
 
     loadPatch()
 
-    // Connecter au WebSocket pour les positions temps réel
-    const ws = new WebSocket('ws://localhost:8080/ws/positions')
-    wsRef.current = ws
-
-    ws.onopen = () => {
-      console.log('WebSocket connected')
-    }
-
-    ws.onmessage = (event) => {
+    // Polling pour les positions via REST
+    const interval = setInterval(async () => {
       try {
-        const data = JSON.parse(event.data)
-        console.log('WebSocket message:', data)
-        if (data.positions) {
-          const posMap = new Map<number, XYZ>()
-          for (const [sessionId, sessionData]: any of Object.entries(data.positions)) {
-            const sessionObjects = sessionData.objects
-            if (sessionObjects) {
-              for (const [oscId, pos]: any of Object.entries(sessionObjects)) {
-                posMap.set(parseInt(oscId), [pos.x, pos.y, pos.z])
-              }
+        const res = await fetch(`${API}/api/sessions`)
+        const data = await res.json()
+        if (data.sessions && data.sessions.length > 0) {
+          const session = data.sessions[0]
+          const res2 = await fetch(`${API}/api/sessions/${session.id}/frame`)
+          const posData = await res2.json()
+          if (posData.objects) {
+            const posMap = new Map<number, XYZ>()
+            for (const [oscId, pos]: any of Object.entries(posData.objects)) {
+              posMap.set(parseInt(oscId), [pos.x, pos.y, pos.z])
             }
+            setPositions(posMap)
           }
-          setPositions(posMap)
         }
-      } catch (e) {
-        console.error('Failed to parse WebSocket message:', e)
+      } catch (err) {
+        // Silent fail si pas de session active
       }
-    }
+    }, 50)  // 20 FPS
 
-    ws.onerror = (err) => {
-      console.error('WebSocket error:', err)
-    }
-
-    ws.onclose = (event) => {
-      console.log('WebSocket closed:', event.code, event.reason)
-    }
-
-    return () => {
-      if (wsRef.current) {
-        wsRef.current.close()
-      }
-    }
+    return () => clearInterval(interval)
   }, [])
 
   return (

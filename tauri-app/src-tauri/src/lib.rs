@@ -2,9 +2,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use stagespace_engines::{Runtime, AudioState,
-    BpmTracker, AudioReactor, OscReceiver, OscSender,
-    CuelistManager, PresetManager, Modulator, PatchManager,
-    PositionFn,
+    OscReceiver, OscSender,
+    PresetManager,
     init_logging};
 use serde::Serialize;
 use std::collections::HashMap;
@@ -16,43 +15,26 @@ mod graph;
 use graph::parser::build_graph_from_json;
 use commands::file_io::{import_hol_project, save_graph_to_file, load_graph_from_file};
 use commands::network::discover_osc_targets;
-use commands::bpm::{bpm_tap, bpm_set, bpm_get, bpm_reset};
-use commands::audio::{update_audio_state, get_audio_state, start_audio, stop_audio};
-use commands::audio_reactor::{audio_bind, audio_unbind, audio_clear};
-use commands::osc::{osc_add_mapping, osc_remove_mapping, osc_list_mappings, osc_get_value, osc_get_all_values, osc_set_profile, send_osc_position};
-use commands::cuelist::{cuelist_add, cuelist_remove, cuelist_list, cuelist_clear};
+use commands::audio::{update_audio_state, get_audio_state};
+use commands::osc::{osc_add_mapping, osc_remove_mapping, osc_list_mappings, osc_get_value, osc_get_all_values, send_osc_position};
 use commands::presets::{preset_save, preset_load, preset_delete, preset_list};
-use commands::modulator::{modulator_add_slot, modulator_remove_slot, modulator_list};
-use commands::patch::{patch_set_object, patch_remove_object, patch_list_objects, patch_set_group, patch_remove_group, patch_list_groups};
-use commands::playback::{play, stop, play_graph, stop_graph, preview_graph, update_graph,
+use commands::playback::{play_graph, stop_graph, preview_graph, update_graph,
     set_macro, set_loop_mode};
 use commands::movements::{play_movement, stop_movement, stop_all_movements, list_movements,
-    set_movement_macro, update_movement_graph, set_movement_loop_mode, stop_movement_with_fade};
-use commands::overrides::{set_object_override, clear_object_override, clear_all_overrides};
+    set_movement_macro, update_movement_graph, stop_movement_with_fade};
+use commands::overrides::{set_object_override, clear_all_overrides};
 use commands::sampling::{get_perf_stats, sample_trajectory, sample_movement_trajectory};
-use commands::cue_recall::{store_cue, recall_cue, set_setlist, get_setlist, go_to_next_cue};
 use commands::animation::{launch_animation, update_animation_state};
 
 // État global de l'application
 pub struct AppState {
     pub runtime: Mutex<Option<Runtime>>,
     pub audio_state: Arc<Mutex<AudioState>>,
-    pub bpm_tracker: Arc<Mutex<BpmTracker>>,
-    pub audio_reactor: Arc<Mutex<AudioReactor>>,
     pub osc_receiver: Arc<Mutex<OscReceiver>>,
     pub osc_sender: Arc<Mutex<OscSender>>,
-    pub cuelist: Arc<Mutex<CuelistManager>>,
-    /// Cues pré-compilées pour recall instantané en live
-    pub compiled_cues: Mutex<HashMap<String, PositionFn>>,
-    /// Osc IDs actuels (pour recall)
+    /// Osc IDs actuels (pour hot-swap)
     pub current_osc_ids: Mutex<Vec<u32>>,
-    /// Setlist : ordre des cue IDs pour le spectacle
-    pub setlist: Mutex<Vec<String>>,
-    /// Index du cue courant dans la setlist (-1 = aucun)
-    pub current_cue_index: Mutex<i32>,
     pub presets: Arc<Mutex<PresetManager>>,
-    pub modulator: Arc<Mutex<Modulator>>,
-    pub patch: Arc<Mutex<PatchManager>>,
     pub app_handle: Mutex<Option<AppHandle>>,
     /// Multi-movement: plusieurs runtimes parallèles indépendants
     pub movements: Mutex<HashMap<String, Movement>>,
@@ -108,18 +90,10 @@ pub fn run() {
         .manage(AppState {
             runtime: Mutex::new(None),
             audio_state: Arc::new(Mutex::new(AudioState::new())),
-            bpm_tracker: Arc::new(Mutex::new(BpmTracker::new())),
-            audio_reactor: Arc::new(Mutex::new(AudioReactor::new())),
             osc_receiver: Arc::new(Mutex::new(OscReceiver::new(8001))),
             osc_sender: Arc::new(Mutex::new(OscSender::default())),
-            cuelist: Arc::new(Mutex::new(CuelistManager::new())),
-            compiled_cues: Mutex::new(HashMap::new()),
             current_osc_ids: Mutex::new(Vec::new()),
-            setlist: Mutex::new(Vec::new()),
-            current_cue_index: Mutex::new(-1),
             presets: Arc::new(Mutex::new(PresetManager::new())),
-            modulator: Arc::new(Mutex::new(Modulator::new())),
-            patch: Arc::new(Mutex::new(PatchManager::new())),
             app_handle: Mutex::new(None),
             movements: Mutex::new(HashMap::new()),
         })
@@ -175,26 +149,18 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            play, stop, import_hol_project, update_audio_state, get_audio_state,
-            start_audio, stop_audio,
-            bpm_tap, bpm_set, bpm_get, bpm_reset,
-            audio_bind, audio_unbind, audio_clear,
+            import_hol_project, update_audio_state, get_audio_state,
             osc_add_mapping, osc_remove_mapping, osc_list_mappings,
-            osc_get_value, osc_get_all_values, osc_set_profile,
-            cuelist_add, cuelist_remove, cuelist_list, cuelist_clear,
+            osc_get_value, osc_get_all_values,
             preset_save, preset_load, preset_delete, preset_list,
-            modulator_add_slot, modulator_remove_slot, modulator_list,
-            patch_set_object, patch_remove_object, patch_list_objects,
-            patch_set_group, patch_remove_group, patch_list_groups,
             compile_graph, play_graph, stop_graph, update_graph, preview_graph,
-            set_macro, set_loop_mode, store_cue, recall_cue,
+            set_macro, set_loop_mode,
             save_graph_to_file, load_graph_from_file,
             send_osc_position, get_perf_stats,
-            set_object_override, clear_object_override, clear_all_overrides,
+            set_object_override, clear_all_overrides,
             discover_osc_targets, sample_trajectory, sample_movement_trajectory,
             play_movement, stop_movement, stop_all_movements, list_movements,
-            set_movement_macro, update_movement_graph, set_movement_loop_mode,
-            set_setlist, get_setlist, go_to_next_cue, stop_movement_with_fade,
+            set_movement_macro, update_movement_graph, stop_movement_with_fade,
             launch_animation, update_animation_state
         ])
         .run(tauri::generate_context!())
@@ -209,7 +175,7 @@ pub fn run() {
 mod tests {
     use super::*;
     use stagespace_engines::{TrackAssignment, AudioMod, Animation,
-        AnimationState, EngineParams, OscProfile};
+        AnimationState, EngineParams, OscProfile, PositionFn};
 
     /// Construit un graphe JSON circulaire simple pour les tests
     fn make_circular_graph_json(n_objects: usize, radius: f64, duration: f64) -> serde_json::Value {

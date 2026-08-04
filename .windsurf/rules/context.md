@@ -1,11 +1,11 @@
 ---
 trigger: always_on
 ---
-# Contexte du projet HOLOFLOW
+# Contexte du projet STAGESPACE
 
 ## Résumé
 
-**HOLOFLOW** est un moteur de trajectoires spatiales temps réel, piloté par un graphe de nœuds,
+**STAGESPACE** est un moteur de trajectoires spatiales temps réel, piloté par un graphe de nœuds,
 compilé en fonctions continues `f(t)` — destiné au contrôle OSC de sources audio spatialisées
 (Holophonix, SPAT Revolution, IEM, tout récepteur OSC).
 
@@ -22,11 +22,12 @@ compilé en fonctions continues `f(t)` — destiné au contrôle OSC de sources 
   - Fade-in/out comme subanimation (→ remplacé par TimeFalloff)
   - Cue system (→ simplifié en V1 : snapshot de graphe + interpolation par track)
   - OSC bidirectionnel, batching, systèmes XYZ et AED
-  - Moteur Electron main-process non throttlé (60 FPS)
+  - Moteur non throttlé (60 FPS)
 - **Erreurs à ne pas reproduire** :
   - Documenter/architecturer avant d'implémenter (39 docs, fichiers .ts vides)
   - Surcomplexité prématurée (timeline DAW, 8×8 cues en V1)
   - Restructurations en cascade sans livrable fonctionnel
+  - **Shell Electron trop lourd** → remplacé par Tauri
 
 ### `nodes-trajectories` / OSCAI (`C:\Users\Administrateur\Documents\GitHub\nodes-trajectories`)
 - **Stack** : Python FastAPI + React Flow + Three.js + NumPy
@@ -41,11 +42,12 @@ compilé en fonctions continues `f(t)` — destiné au contrôle OSC de sources 
 - **Erreur à ne pas reproduire** :
   - Génération de tableaux statiques de frames au lieu de fonctions continues f(t)
   - Pas de vrai runtime temps réel
+  - **Backend Python hybride** → remplacé par Rust pur
 
 ### `trajectoires-modern` (https://github.com/dewiweb/trajectoires-modern)
 - **Stack** : Node.js + React + WebSocket
 - **Apports retenus** :
-  - Dessin libre → trajectoire (→ nœud DrawSpline dans HOLOFLOW)
+  - Dessin libre → trajectoire (→ nœud DrawSpline dans STAGESPACE)
   - Streaming OSC immédiat
   - Déploiement minimaliste comme référence de simplicité
 - **Limite** : 8 sources fixes, pas extensible
@@ -72,7 +74,7 @@ compilé en fonctions continues `f(t)` — destiné au contrôle OSC de sources 
 ### `animation_nodes` (`C:\Users\Administrateur\AppData\Roaming\Blender Foundation\Blender\5.0\scripts\addons\animation_nodes`)
 - **Stack** : Python + Cython + Blender
 - **Apports retenus** :
-  - **Compilation du graphe en code natif** (pas d'interprétation nœud par nœud à chaque frame) → principe fondateur du runtime HOLOFLOW
+  - **Compilation du graphe en code natif** (pas d'interprétation nœud par nœud à chaque frame) → principe fondateur du runtime STAGESPACE
   - **Falloffs** : enveloppes d'influence spatiale/temporelle/audio applicables à tout paramètre
   - Splines comme trajectoires (SplineFromPoints, EvaluateSpline, avancement uniforme)
   - Loop nodes : itérateurs paramétriques dans le graphe
@@ -85,18 +87,18 @@ compilé en fonctions continues `f(t)` — destiné au contrôle OSC de sources 
 ### `NodeOSC` (`C:\Users\Administrateur\AppData\Roaming\Blender Foundation\Blender\5.0\scripts\addons\NodeOSC`)
 - **Stack** : Python + Blender
 - **Apports retenus** :
-  - Mapping OSC → n'importe quel paramètre (modèle pour OSC IN dans HOLOFLOW)
+  - Mapping OSC → n'importe quel paramètre (modèle pour OSC IN dans STAGESPACE)
   - Filtrage adresse + arguments
   - Protocoles multiples (oscpy + python-osc)
 
 ---
 
-## Principes fondateurs de HOLOFLOW
+## Principes fondateurs de STAGESPACE
 
 ### 1. f(t) au lieu de frames[]
 Chaque moteur expose une fonction pure :
-```typescript
-position(t: number, objectIndex: number, params: EngineParams): Vector3
+```rust
+fn position(t: f64, object_index: usize, params: &EngineParams) -> Vec3
 ```
 Pas de tableau précalculé. Le runtime appelle ça à chaque tick. Paramètres modifiables en temps réel sans recompilation de la trajectoire.
 
@@ -152,15 +154,16 @@ L'app lit les fichiers projet Holophonix (.hol) pour découvrir les tracks : IDs
 
 | Couche | Choix |
 |--------|-------|
-| Shell | Electron |
+| Shell | Tauri (Rust) |
 | UI | React 18 + TypeScript |
 | Node editor | React Flow |
 | 3D Preview | Three.js |
 | State | Zustand |
 | Styles | TailwindCSS |
-| OSC | `osc` npm (UDP) |
-| Audio IN | Web Audio API |
-| Moteurs | TypeScript pur (pas de dépendance Python) |
+| OSC | `rosc` (Rust) |
+| Audio IN | Web Audio API (via Tauri IPC) |
+| Moteurs | Rust pur (performance temps réel) |
+| Communication | Tauri IPC (natif) |
 
 ---
 
@@ -172,20 +175,23 @@ L'app lit les fichiers projet Holophonix (.hol) pour découvrir les tracks : IDs
 - ❌ Grille cue 8×8 → V2 (cue list linéaire en V1)
 - ❌ Packaging multi-plateforme → V2
 - ❌ Intégration Blender (l'addon reste séparé, lit l'OSC out)
+- ❌ Backend Python (remplacé par Rust pur)
+- ❌ Electron (remplacé par Tauri)
 
 ---
 
 ## Ordre de build — règle absolue : moteur d'abord, UI ensuite
 
 ```
-S1  → Moteurs f(t) TypeScript pur + tests unitaires
-S2  → Runtime Electron main-process (clock + OSC out)
-S3  → Graph compiler (nœuds → fonction composite)
-S4  → Node editor UI React Flow minimal
-S5  → 3D Preview Three.js + import .hol
-S6  → Falloffs (Time + PointDistance)
-S7  → Audio IN (BPM + Amplitude)
-S8  → OSC IN + Cue system minimal + polissage
+S1  → Moteurs f(t) Rust pur + tests unitaires
+S2  → Runtime Rust (clock + OSC out via rosc)
+S3  → Graph compiler Rust (nœuds → fonction composite)
+S4  → Setup Tauri (IPC Rust ↔ React)
+S5  → Node editor UI React Flow minimal
+S6  → 3D Preview Three.js + import .hol
+S7  → Falloffs (Time + PointDistance)
+S8  → Audio IN (BPM + Amplitude via IPC)
+S9  → OSC IN + Cue system minimal + polissage
 ```
 
 **Rien n'est documenté tant que ça ne tourne pas.**

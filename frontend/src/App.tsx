@@ -55,7 +55,7 @@ function App() {
         {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <GitBranch size={13} style={{ color: '#4b7fbf' }} />
-          <span style={{ fontSize: 12, fontWeight: 700, color: '#ddd', letterSpacing: '0.06em' }}>HOLOFLOW</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#ddd', letterSpacing: '0.06em' }}>STAGESPACE</span>
         </div>
 
         <Sep />

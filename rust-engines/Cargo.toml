@@ -1,0 +1,31 @@
+[package]
+name = "stagespace-engines"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Math
+nalgebra = { version = "0.33", features = ["serde-serialize", "serde-serialize-no-std"] }
+# OSC
+rosc = "0.10"
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# UUID
+uuid = { version = "1.0", features = ["v4", "serde"] }
+# Time
+chrono = "0.4"
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# Error handling
+thiserror = "1.0"
+# Precise sleep for live timing
+spin_sleep = "0.3"
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "engines_bench"
+harness = false

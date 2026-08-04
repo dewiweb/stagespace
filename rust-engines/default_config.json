@@ -1,0 +1,23 @@
+{
+  "runtime": {
+    "default_fps": 60.0,
+    "default_duration": 4.0,
+    "max_objects": 1024
+  },
+  "osc": {
+    "default_address": "127.0.0.1",
+    "default_port": 9000,
+    "default_profile": "generic",
+    "default_object_offset": 0
+  },
+  "audio": {
+    "default_source": "microphone",
+    "sample_rate": 44100,
+    "fft_size": 1024
+  },
+  "graph": {
+    "max_nodes": 1000,
+    "max_edges": 5000,
+    "auto_validate": true
+  }
+}

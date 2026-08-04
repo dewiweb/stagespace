@@ -1,0 +1,56 @@
+{
+  "rfrf": {
+    "name": "rfrf",
+    "engine": "figure8",
+    "params": {
+      "duration": 4,
+      "n_objects": 3
+    },
+    "profile": "adm_osc",
+    "host": "127.0.0.1",
+    "port": 9000,
+    "fps": 60,
+    "loop": true,
+    "macros": {
+      "speed": 2.4,
+      "scale": {
+        "x": 1.0,
+        "y": 1.0,
+        "z": 1.0
+      },
+      "shift": {
+        "x": 1.2,
+        "y": 0.0,
+        "z": 0.0
+      }
+    },
+    "osc_mappings": []
+  },
+  "zseds": {
+    "name": "zseds",
+    "engine": "figure8",
+    "params": {
+      "duration": 4,
+      "n_objects": 3
+    },
+    "profile": "adm_osc",
+    "host": "127.0.0.1",
+    "port": 9000,
+    "fps": 60,
+    "loop": true,
+    "macros": {
+      "speed": 2.4,
+      "scale": {
+        "x": 1.0,
+        "y": 1.0,
+        "z": 1.0
+      },
+      "shift": {
+        "x": 1.2,
+        "y": 0.0,
+        "z": 0.0
+      }
+    },
+    "osc_mappings": []
+  }
+}

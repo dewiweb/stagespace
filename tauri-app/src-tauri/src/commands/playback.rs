@@ -1,6 +1,6 @@
-use stagespace_engines::{Graph, Node, NodeType, Edge, Runtime, EngineParams,
+use stagespace_engines::{Runtime, EngineParams,
     OscSender, OscProfile, LoopMode};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::str::FromStr;
 use std::sync::{Mutex, MutexGuard};
 use tauri::{State, Emitter};
@@ -14,118 +14,6 @@ fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
         eprintln!("[WARN] Mutex was poisoned, recovering inner data: {}", e);
         e.into_inner()
     })
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PlayRequest {
-    engine: String,
-    params: serde_json::Value,
-    osc_address: String,
-    osc_port: u16,
-    osc_ids: Vec<u32>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PlayResponse {
-    session_id: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct StopRequest {
-    session_id: String,
-}
-
-#[tauri::command]
-pub async fn play(
-    request: PlayRequest,
-    state: State<'_, AppState>,
-) -> Result<PlayResponse, String> {
-    let session_id = uuid::Uuid::new_v4().to_string();
-
-    // Créer le graphe simple
-    let mut graph = Graph::new();
-    let objects = Node::with_params(NodeType::Objects, request.params.clone());
-    let duration = Node::with_params(NodeType::Duration, serde_json::json!({"duration": 4.0}));
-
-    let engine_type = match request.engine.as_str() {
-        "circular" => NodeType::Circular,
-        "spiral" => NodeType::Spiral,
-        "lissajous" => NodeType::Lissajous,
-        "figure8" => NodeType::Figure8,
-        "linear" => NodeType::Linear,
-        "oscillation" => NodeType::Oscillation,
-        "formation" => NodeType::Formation,
-        _ => return Err(format!("Unknown engine: {}", request.engine)),
-    };
-
-    let engine = Node::with_params(engine_type, request.params.clone());
-    let output = Node::new(NodeType::Output);
-
-    let id_objects = objects.id;
-    let id_duration = duration.id;
-    let id_engine = engine.id;
-    let id_output = output.id;
-
-    graph.add_node(objects);
-    graph.add_node(duration);
-    graph.add_node(engine);
-    graph.add_node(output);
-
-    graph.add_edge(Edge {
-        from: id_objects,
-        to: id_engine,
-        from_port: "output".to_string(),
-        to_port: "input".to_string(),
-    });
-    graph.add_edge(Edge {
-        from: id_duration,
-        to: id_engine,
-        from_port: "output".to_string(),
-        to_port: "duration".to_string(),
-    });
-    graph.add_edge(Edge {
-        from: id_engine,
-        to: id_output,
-        from_port: "output".to_string(),
-        to_port: "input".to_string(),
-    });
-
-    // Compiler le graphe
-    let compiled = compile_graph_inner(&graph)?;
-
-    // Créer le runtime avec sender par défaut
-    let osc_sender = OscSender::new(OscProfile::GenericCartesian, request.osc_address.clone(), request.osc_port);
-    let runtime = Runtime::new(request.osc_address, request.osc_port, osc_sender)
-        .map_err(|e| format!("Failed to create runtime: {}", e))?;
-
-    // Lancer le playback
-    runtime
-        .play_compiled(
-            compiled,
-            EngineParams {
-                n_objects: request.osc_ids.len(),
-                duration: 4.0,
-                fps: 60.0,
-                extra: request.params,
-            },
-            request.osc_ids,
-        )
-        .map_err(|e| format!("Failed to start playback: {}", e))?;
-
-    // Stocker le runtime
-    let mut state_guard = lock_or_recover(&state.runtime);
-    *state_guard = Some(runtime);
-
-    Ok(PlayResponse { session_id })
-}
-
-#[tauri::command]
-pub fn stop(_session_id: String, state: State<'_, AppState>) -> Result<(), String> {
-    let mut state_guard = lock_or_recover(&state.runtime);
-    if let Some(runtime) = state_guard.take() {
-        runtime.stop();
-    }
-    Ok(())
 }
 
 #[derive(Deserialize)]

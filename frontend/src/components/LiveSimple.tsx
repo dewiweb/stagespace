@@ -66,23 +66,34 @@ export default function LiveSimple() {
   const [newGroupEngine, setNewGroupEngine] = useState('circular')
 
   const handlePlay = useCallback(async () => {
-    if (playing) {
+    // Toujours arrêter toutes les sessions avant de lancer
+    try {
       await api('POST', '/api/stop')
-      setPlaying(false)
-      setSessionId(null)
-    } else {
+    } catch (e) {
+      console.error('Failed to stop all:', e)
+    }
+    setPlaying(false)
+    setSessionId(null)
+    
+    // Attendre un peu avant de relancer
+    await new Promise(resolve => setTimeout(resolve, 200))
+    
+    try {
       const res = await api('POST', '/api/play', {
         engine: currentEngine,
         profile: currentProfile,
         host: '127.0.0.1',
         port: 7788,
         fps: 60,
-        params: { n_objects: 1 },
+        params: { n_objects: 9, duration: 4 },
+        shift: { x: 0, y: 0, z: 0 },
       })
       setSessionId(res.session_id)
       setPlaying(true)
+    } catch (e) {
+      console.error('Failed to play:', e)
     }
-  }, [playing, currentEngine, currentProfile])
+  }, [currentEngine, currentProfile])
 
   const handleEngineChange = useCallback(async (engine: string) => {
     if (playing) {
@@ -93,9 +104,10 @@ export default function LiveSimple() {
   }, [playing])
 
   const handleMacro = useCallback(async (macro: string, value: number) => {
-    if (!sessionId) return
-    await api('POST', `/api/macros/${sessionId}`, { [macro]: value })
-  }, [sessionId])
+    // Désactivé temporairement pour se concentrer sur le mouvement de base
+    console.log(`Macro ${macro} disabled temporarily`)
+    return
+  }, [])
 
   // Load patch from backend
   const loadPatch = useCallback(async () => {
@@ -115,12 +127,15 @@ export default function LiveSimple() {
 
   // Play selected group
   const handlePlayGroup = useCallback(async (groupName: string) => {
+    console.log('handlePlayGroup called with:', groupName)
     if (playing) {
+      console.log('Stopping current playback')
       await api('POST', '/api/stop')
       setPlaying(false)
       setSessionId(null)
     }
     try {
+      console.log('Starting playback for group:', groupName)
       const res = await api('POST', `/api/patch/groups/${groupName}/play`, {
         host: '127.0.0.1',
         port: 7788,
@@ -132,10 +147,11 @@ export default function LiveSimple() {
         setPlaying(true)
         setSelectedGroup(groupName)
       } else {
-        console.error('No session_id in response')
+        console.error('No session_id in response:', res)
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to play group:', e)
+      console.error('Error details:', e.message, e.stack)
     }
   }, [playing])
 
@@ -205,7 +221,7 @@ export default function LiveSimple() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <Zap size={24} style={{ color: '#4b7fbf' }} />
           <div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#fff' }}>HOLOFLOW</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#fff' }}>STAGESPACE</div>
             <div style={{ fontSize: 11, color: '#666' }}>Live Performance</div>
           </div>
         </div>
