@@ -78,7 +78,6 @@ interface AnimationStore {
   selectedMovementId: string | null;
   setSelectedMovementId: (id: string | null) => void;
   launchFlash: number; // timestamp du dernier launch (pour feedback visuel)
-  needsRelaunch: boolean; // true si shape_params ont changé depuis le dernier launch
   // Mode Expert (node editor) — partagé pour que MovesPanel puisse l'activer via [edit]
   showExpert: boolean;
   setShowExpert: (show: boolean) => void;
@@ -178,7 +177,6 @@ export const useAnimationStore = create<AnimationStore>((set, get) => ({
   selectedMovementId: null,
   setSelectedMovementId: (id) => set({ selectedMovementId: id }),
   launchFlash: 0,
-  needsRelaunch: false,
   showExpert: false,
   setShowExpert: (show) => set({ showExpert: show }),
 
@@ -188,11 +186,9 @@ export const useAnimationStore = create<AnimationStore>((set, get) => ({
     set((s) => ({ current: { ...s.current, ...patch } }));
     const { activeMovementIds } = get();
     if (activeMovementIds.length > 0) {
-      // graph_json est géré par useGraphStore.updateGraphLive() — pas besoin de needsRelaunch
+      // graph_json est géré par useGraphStore.updateGraphLive()
       // Les autres params (speed, scale, offset, etc.) sont mis à jour en live
-      if ('graph_json' in patch) {
-        set({ needsRelaunch: true });
-      } else {
+      if (!('graph_json' in patch)) {
         get().updateLiveAnimation();
       }
     }
@@ -333,7 +329,6 @@ export const useAnimationStore = create<AnimationStore>((set, get) => ({
         activeMovementIds: [...s.activeMovementIds, movementId],
         selectedMovementId: movementId,
         launchFlash: Date.now(),
-        needsRelaunch: false,
       }));
       return movementId;
     } catch (e) {
@@ -397,7 +392,6 @@ listen('movements-update', () => {
       : (activeIds.length === 1 ? activeIds[0] : null); // auto-select si 1 seul
     useAnimationStore.setState({
       activeMovementIds: activeIds,
-      needsRelaunch: false,
       selectedMovementId: newSelected,
     });
   }).catch(() => {});

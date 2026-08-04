@@ -50,7 +50,7 @@ export default function Inspector() {
     updateAssignment, addAudioMod, removeAudioMod,
     computeCentroid,
     activeMovementIds, selectedMovementId, setSelectedMovementId,
-    launchFlash, needsRelaunch,
+    launchFlash,
   } = useAnimationStore();
 
   const { holProject, selectedTrackIds, toggleTrackSelection, selectAllTracks, deselectAllTracks,
@@ -114,10 +114,39 @@ export default function Inspector() {
 
   // ── Macros debounce ──
   const macroDebounce = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Sync bidirectionnelle : Macros (Expert) → Animation state (Simple)
+  // Map: speed→speed, scale→scale, shiftX→offset_x, shiftY→offset_y, shiftZ→offset_z,
+  //      yaw→yaw, pitch→pitch, roll→roll
   const handleMacro = (key: string, value: number) => {
     setMacros({ [key]: value } as any);
+    // Sync vers Animation state
+    const animKeyMap: Record<string, string> = {
+      speed: 'speed', scale: 'scale',
+      shiftX: 'offset_x', shiftY: 'offset_y', shiftZ: 'offset_z',
+      yaw: 'yaw', pitch: 'pitch', roll: 'roll',
+    };
+    const animKey = animKeyMap[key];
+    if (animKey) {
+      updateCurrent({ [animKey]: value } as any);
+    }
     if (macroDebounce.current) clearTimeout(macroDebounce.current);
     macroDebounce.current = setTimeout(() => { pushMacrosToRuntime(); }, 100);
+  };
+
+  // Sync bidirectionnelle : Transform (Simple) → Graph store macros (Expert)
+  // Met à jour les macros du Graph store quand on change les Transform de l'Animation
+  const handleTransform = (key: string, value: number) => {
+    updateCurrent({ [key]: value } as any);
+    // Sync vers Graph store macros
+    const macroKeyMap: Record<string, string> = {
+      scale: 'scale', offset_x: 'shiftX', offset_y: 'shiftY', offset_z: 'shiftZ',
+      yaw: 'yaw', pitch: 'pitch', roll: 'roll',
+    };
+    const macroKey = macroKeyMap[key];
+    if (macroKey) {
+      setMacros({ [macroKey]: value } as any);
+    }
   };
 
   const handleNodeParamChange = (key: string, value: any) => {
@@ -268,9 +297,7 @@ export default function Inspector() {
 
           <>
             {/* PARAMS — params du node engine principal du graphe (template choisi à gauche) */}
-            <Section title="Params" icon={mainEngineType ? '◆' : '◇'}
-              badge={needsRelaunch ? '⟳ relancer' : undefined}
-              badgeColor={needsRelaunch ? 'orange' : 'gray'}>
+            <Section title="Params" icon={mainEngineType ? '◆' : '◇'}>
               <div className="flex items-center gap-2 pb-2">
                 <span className="text-blue-400 text-[11px] font-semibold">
                   {mainEngineType ?? 'Aucun engine'}
@@ -317,15 +344,15 @@ export default function Inspector() {
               <Slider label="Fondu out" value={current.fade_out} min={0} max={5} step={0.1} onChange={(v) => updateCurrent({ fade_out: v })} unit="s" />
             </Section>
 
-            {/* TRANSFORM — scale, rotation, offset */}
+            {/* TRANSFORM — scale, rotation, offset (sync bidirectionnelle avec Macros Expert) */}
             <Section title="Transform" icon="⟲">
-              <Slider label="Échelle" value={current.scale} min={0} max={4} step={0.05} onChange={(v) => updateCurrent({ scale: v })} color="green" />
-              <Slider label="Pos X" value={current.offset_x} min={-5} max={5} step={0.1} onChange={(v) => updateCurrent({ offset_x: v })} color="green" />
-              <Slider label="Pos Y" value={current.offset_y} min={-5} max={5} step={0.1} onChange={(v) => updateCurrent({ offset_y: v })} color="green" />
-              <Slider label="Pos Z" value={current.offset_z} min={-5} max={5} step={0.1} onChange={(v) => updateCurrent({ offset_z: v })} color="green" />
-              <Slider label="Yaw" value={current.yaw} min={-180} max={180} step={1} onChange={(v) => updateCurrent({ yaw: v })} unit="°" color="green" />
-              <Slider label="Pitch" value={current.pitch} min={-90} max={90} step={1} onChange={(v) => updateCurrent({ pitch: v })} unit="°" color="green" />
-              <Slider label="Roll" value={current.roll} min={-180} max={180} step={1} onChange={(v) => updateCurrent({ roll: v })} unit="°" color="green" />
+              <Slider label="Échelle" value={current.scale} min={0} max={4} step={0.05} onChange={(v) => handleTransform('scale', v)} color="green" />
+              <Slider label="Pos X" value={current.offset_x} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_x', v)} color="green" />
+              <Slider label="Pos Y" value={current.offset_y} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_y', v)} color="green" />
+              <Slider label="Pos Z" value={current.offset_z} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_z', v)} color="green" />
+              <Slider label="Yaw" value={current.yaw} min={-180} max={180} step={1} onChange={(v) => handleTransform('yaw', v)} unit="°" color="green" />
+              <Slider label="Pitch" value={current.pitch} min={-90} max={90} step={1} onChange={(v) => handleTransform('pitch', v)} unit="°" color="green" />
+              <Slider label="Roll" value={current.roll} min={-180} max={180} step={1} onChange={(v) => handleTransform('roll', v)} unit="°" color="green" />
             </Section>
 
             {/* AUDIO — mods audio-reactifs */}
