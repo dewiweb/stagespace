@@ -7,7 +7,7 @@ use tauri::{State, Emitter};
 use crate::AppState;
 use crate::{Movement, MovementInfo, MAX_MOVEMENTS};
 use crate::graph::parser::build_graph_from_json;
-use crate::graph::compilation::compile_graph as compile_graph_inner;
+use crate::graph::compilation::compile_graph_with_audio;
 use crate::commands::playback::SetMacroRequest;
 
 /// Récupère le contenu d'un Mutex même s'il est empoisonné (poison recovery).
@@ -52,7 +52,7 @@ pub async fn play_movement(
     let graph = build_graph_from_json(&request.graph_json, &audio_state)?;
     drop(audio_state);
 
-    let compiled = compile_graph_inner(&graph)?;
+    let compiled = compile_graph_with_audio(&graph, state.audio_state.clone())?;
 
     let osc_profile = OscProfile::from_str(&request.osc_profile)
         .map_err(|e| format!("Invalid OSC profile: {}", e))?;
@@ -240,7 +240,7 @@ pub async fn update_movement_graph(
     let graph = build_graph_from_json(&graph_json, &audio_state)?;
     drop(audio_state);
 
-    let compiled = compile_graph_inner(&graph)?;
+    let compiled = compile_graph_with_audio(&graph, state.audio_state.clone())?;
 
     let fade = fade_duration.unwrap_or(0.3);
     movement.runtime.recall_cue(compiled, fade);

@@ -32,6 +32,14 @@ function App() {
     if (oscInPort !== 8001) {
       useGraphStore.getState().setOscInPort(oscInPort);
     }
+
+    // Safety: si le graphe est vide au démarrage (état corrompu ou race condition),
+    // charger le preset Circle par défaut
+    const state = useGraphStore.getState();
+    if (state.nodes.length === 0) {
+      console.warn('[App] Graph is empty at startup — loading default Circle preset');
+      state.applyShapePreset('circle', 8);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

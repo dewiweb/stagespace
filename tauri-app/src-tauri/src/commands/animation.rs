@@ -7,7 +7,7 @@ use tauri::{State, Emitter};
 use crate::AppState;
 use crate::Movement;
 use crate::graph::parser::build_graph_from_json;
-use crate::graph::compilation::compile_graph as compile_graph_inner;
+use crate::graph::compilation::compile_graph_with_audio;
 
 /// Récupère le contenu d'un Mutex même s'il est empoisonné (poison recovery).
 fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -45,7 +45,7 @@ pub async fn launch_animation(
     let audio_state = lock_or_recover(&state.audio_state);
     let graph = build_graph_from_json(&graph_json, &audio_state)?;
     drop(audio_state);
-    let compiled = compile_graph_inner(&graph)?;
+    let compiled = compile_graph_with_audio(&graph, state.audio_state.clone())?;
 
     // 3. Créer le runtime
     let osc_profile_enum = OscProfile::from_str(&osc_profile)

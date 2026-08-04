@@ -124,7 +124,7 @@ export const useGraphStore = create<GraphState>()((...a) => {
   ...createMoveSlotsSlice(...a),
   ...createOscConfigSlice(...a),
 
-  // Graphe par défaut — preset Circle pour que l'Expert ne démarre jamais vide
+  // Graphe par défaut — preset Circle pour que l'app ne démarre jamais vide
   ...(() => {
     const preset = SHAPE_PRESETS[0]; // Circle
     return preset.build(8);

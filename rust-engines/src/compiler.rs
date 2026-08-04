@@ -2,7 +2,9 @@ use crate::engines::{Engine, EngineParams, MAX_OBJECTS};
 use crate::graph::{Graph, Node, NodeId, NodeType};
 use crate::validator::Validator;
 use crate::logging::{log_graph_compilation, log_compilation_success, log_compilation_error};
+use crate::audio::AudioState;
 use nalgebra::Vector3;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 /// Erreur de compilation
@@ -31,6 +33,23 @@ pub struct Compiler;
 impl Compiler {
     /// Compile un graphe en une fonction composite
     pub fn compile(graph: &Graph) -> Result<CompiledFunction, CompilationError> {
+        Self::compile_inner(graph, None)
+    }
+
+    /// Compile un graphe avec accès à l'audio state temps réel
+    /// Les engines audio (BPM, AudioAmplitude, AudioAmplitudeFalloff) liront
+    /// les valeurs audio live au lieu des paramètres statiques
+    pub fn compile_with_audio(
+        graph: &Graph,
+        audio_state: Arc<Mutex<AudioState>>,
+    ) -> Result<CompiledFunction, CompilationError> {
+        Self::compile_inner(graph, Some(audio_state))
+    }
+
+    fn compile_inner(
+        graph: &Graph,
+        audio_state: Option<Arc<Mutex<AudioState>>>,
+    ) -> Result<CompiledFunction, CompilationError> {
         let start = Instant::now();
         log_graph_compilation(graph.nodes.len(), graph.edges.len());
 
@@ -62,7 +81,7 @@ impl Compiler {
             let inputs = graph.get_inputs(output_node.id);
             let node_id = inputs.first().ok_or(CompilationError::OutputNotConnected)?;
             let node = Self::node_ref(graph, *node_id)?;
-            let result = Self::compile_node(graph, node);
+            let result = Self::compile_node(graph, node, &audio_state);
             if result.is_ok() {
                 let duration_ms = start.elapsed().as_millis() as u128;
                 log_compilation_success(duration_ms);
@@ -78,7 +97,7 @@ impl Compiler {
             let inputs = graph.get_inputs(output_node.id);
             let node_id = inputs.first().ok_or(CompilationError::OutputNotConnected)?;
             let node = Self::node_ref(graph, *node_id)?;
-            let compiled = Self::compile_node(graph, node)?;
+            let compiled = Self::compile_node(graph, node, &audio_state)?;
 
             // Parser track_range : "0-11" ou "12-22"
             let track_range = output_node
@@ -129,12 +148,16 @@ impl Compiler {
     }
 
     /// Compile un nœud (moteur, composite, modifier ou spline) en fonction
-    fn compile_node(graph: &Graph, node: &Node) -> Result<CompiledFunction, CompilationError> {
+    fn compile_node(
+        graph: &Graph,
+        node: &Node,
+        audio: &Option<Arc<Mutex<AudioState>>>,
+    ) -> Result<CompiledFunction, CompilationError> {
         match node.node_type {
-            NodeType::Mix => Self::compile_mix(graph, node),
-            NodeType::Group => Self::compile_group(graph, node),
-            NodeType::Sequence => Self::compile_sequence(graph, node),
-            NodeType::Crossfade => Self::compile_crossfade(graph, node),
+            NodeType::Mix => Self::compile_mix(graph, node, audio),
+            NodeType::Group => Self::compile_group(graph, node, audio),
+            NodeType::Sequence => Self::compile_sequence(graph, node, audio),
+            NodeType::Crossfade => Self::compile_crossfade(graph, node, audio),
             NodeType::Scale
             | NodeType::Rotate
             | NodeType::Offset
@@ -143,13 +166,17 @@ impl Compiler {
             | NodeType::Mirror
             | NodeType::Clamp
             | NodeType::LFO
-            | NodeType::Jitter => Self::compile_modifier(graph, node),
-            _ => Self::compile_engine(graph, node),
+            | NodeType::Jitter => Self::compile_modifier(graph, node, audio),
+            _ => Self::compile_engine(graph, node, audio),
         }
     }
 
     /// Compile un nœud modificateur : wrap une trajectoire upstream
-    fn compile_modifier(graph: &Graph, node: &Node) -> Result<CompiledFunction, CompilationError> {
+    fn compile_modifier(
+        graph: &Graph,
+        node: &Node,
+        audio: &Option<Arc<Mutex<AudioState>>>,
+    ) -> Result<CompiledFunction, CompilationError> {
         let inputs = graph.get_inputs(node.id);
         let upstream_id = inputs.first().ok_or_else(|| {
             CompilationError::MissingParameter(format!(
@@ -159,7 +186,7 @@ impl Compiler {
             ))
         })?;
         let upstream_node = Self::node_ref(graph, *upstream_id)?;
-        let upstream_fn = Self::compile_node(graph, upstream_node)?;
+        let upstream_fn = Self::compile_node(graph, upstream_node, audio)?;
         let node_type = node.node_type.clone();
 
         match node_type {
@@ -298,7 +325,11 @@ impl Compiler {
     }
 
     /// Compile un nœud Mix : interpolation linéaire entre deux trajectoires
-    fn compile_mix(graph: &Graph, node: &Node) -> Result<CompiledFunction, CompilationError> {
+    fn compile_mix(
+        graph: &Graph,
+        node: &Node,
+        audio: &Option<Arc<Mutex<AudioState>>>,
+    ) -> Result<CompiledFunction, CompilationError> {
         let (node_a, node_b) = Self::binary_inputs(graph, node, "Mix")?;
 
         let blend = node
@@ -308,8 +339,8 @@ impl Compiler {
             .unwrap_or(0.5)
             .clamp(0.0, 1.0);
 
-        let func_a = Self::compile_node(graph, node_a)?;
-        let func_b = Self::compile_node(graph, node_b)?;
+        let func_a = Self::compile_node(graph, node_a, audio)?;
+        let func_b = Self::compile_node(graph, node_b, audio)?;
 
         Ok(Box::new(move |t: f64, object_index: usize| {
             let pos_a = func_a(t, object_index);
@@ -319,14 +350,18 @@ impl Compiler {
     }
 
     /// Compile un nœud Group : combine deux trajectoires (objets 0..n_a suivent A, n_a..n_a+n_b suivent B)
-    fn compile_group(graph: &Graph, node: &Node) -> Result<CompiledFunction, CompilationError> {
+    fn compile_group(
+        graph: &Graph,
+        node: &Node,
+        audio: &Option<Arc<Mutex<AudioState>>>,
+    ) -> Result<CompiledFunction, CompilationError> {
         let (node_a, node_b) = Self::binary_inputs(graph, node, "Group")?;
 
         // n_objects de la branche A détermine la frontière entre les deux groupes
         let n_objects_a = Self::resolve_n_objects(graph, node_a)?;
 
-        let func_a = Self::compile_node(graph, node_a)?;
-        let func_b = Self::compile_node(graph, node_b)?;
+        let func_a = Self::compile_node(graph, node_a, audio)?;
+        let func_b = Self::compile_node(graph, node_b, audio)?;
 
         Ok(Box::new(move |t: f64, object_index: usize| {
             if object_index < n_objects_a {
@@ -338,7 +373,11 @@ impl Compiler {
     }
 
     /// Compile un nœud Sequence : enchaîne deux trajectoires temporellement
-    fn compile_sequence(graph: &Graph, node: &Node) -> Result<CompiledFunction, CompilationError> {
+    fn compile_sequence(
+        graph: &Graph,
+        node: &Node,
+        audio: &Option<Arc<Mutex<AudioState>>>,
+    ) -> Result<CompiledFunction, CompilationError> {
         let (node_a, node_b) = Self::binary_inputs(graph, node, "Sequence")?;
 
         // La bascule A→B se fait à la fin de A : durée propre du nœud, sinon celle
@@ -350,8 +389,8 @@ impl Compiler {
             )));
         }
 
-        let func_a = Self::compile_node(graph, node_a)?;
-        let func_b = Self::compile_node(graph, node_b)?;
+        let func_a = Self::compile_node(graph, node_a, audio)?;
+        let func_b = Self::compile_node(graph, node_b, audio)?;
 
         Ok(Box::new(move |t: f64, object_index: usize| {
             if t < duration_a {
@@ -364,7 +403,11 @@ impl Compiler {
 
     /// Compile un nœud Crossfade : enchaîne A → B avec une période de crossfade
     /// Pendant le crossfade, les deux trajectoires sont blendées linéairement
-    fn compile_crossfade(graph: &Graph, node: &Node) -> Result<CompiledFunction, CompilationError> {
+    fn compile_crossfade(
+        graph: &Graph,
+        node: &Node,
+        audio: &Option<Arc<Mutex<AudioState>>>,
+    ) -> Result<CompiledFunction, CompilationError> {
         let (node_a, node_b) = Self::binary_inputs(graph, node, "Crossfade")?;
 
         let duration_a = Self::resolve_duration(graph, node_a);
@@ -379,8 +422,8 @@ impl Compiler {
             .unwrap_or(1.0)
             .min(duration_a * 0.5); // Le fade ne peut pas dépasser la moitié de A
 
-        let func_a = Self::compile_node(graph, node_a)?;
-        let func_b = Self::compile_node(graph, node_b)?;
+        let func_a = Self::compile_node(graph, node_a, audio)?;
+        let func_b = Self::compile_node(graph, node_b, audio)?;
 
         Ok(Box::new(move |t: f64, object_index: usize| {
             let fade_start = duration_a - fade_duration;
@@ -460,9 +503,21 @@ impl Compiler {
     }
 
     /// Compile un nœud moteur en fonction
-    fn compile_engine(graph: &Graph, node: &Node) -> Result<CompiledFunction, CompilationError> {
+    fn compile_engine(
+        graph: &Graph,
+        node: &Node,
+        audio: &Option<Arc<Mutex<AudioState>>>,
+    ) -> Result<CompiledFunction, CompilationError> {
         let node_type = node.node_type.clone();
         let params = Self::extract_params(graph, node)?;
+
+        // Déterminer si ce moteur est un moteur audio qui nécessite l'injection
+        // des valeurs audio temps réel dans params.extra
+        let is_audio_engine = matches!(
+            node_type,
+            NodeType::BPM | NodeType::AudioAmplitude
+            | NodeType::AudioSpectrum | NodeType::AudioAmplitudeFalloff
+        );
 
         let engine: Box<dyn Engine + Send + Sync> = match node_type {
             NodeType::Circular => Box::new(crate::engines::circular::Circular),
@@ -500,9 +555,55 @@ impl Compiler {
             _ => return Err(CompilationError::InvalidNodeType(node_type)),
         };
 
-        Ok(Box::new(move |t: f64, object_index: usize| {
-            engine.position(t, object_index, &params)
-        }))
+        // Pour les moteurs audio : capturer l'Arc<Mutex<AudioState>> et injecter
+        // les valeurs live dans params.extra à chaque appel
+        if is_audio_engine {
+            if let Some(audio_arc) = audio {
+                let audio_arc = audio_arc.clone();
+                Ok(Box::new(move |t: f64, object_index: usize| {
+                    // Cloner les params et injecter les valeurs audio live
+                    let mut live_params = params.clone();
+                    if let Some(map) = live_params.extra.as_object_mut() {
+                        let audio = audio_arc.lock().unwrap_or_else(|e| e.into_inner());
+                        // Injecter BPM
+                        if let Some(bpm_data) = &audio.bpm {
+                            map.insert("bpm".to_string(), serde_json::json!(bpm_data.bpm));
+                            map.insert("bpm_confidence".to_string(), serde_json::json!(bpm_data.confidence));
+                            map.insert("last_beat_time".to_string(), serde_json::json!(bpm_data.last_beat_time));
+                        }
+                        // Injecter amplitude par bande
+                        if let Some(amp) = &audio.amplitude {
+                            map.insert("amplitude".to_string(), serde_json::json!(amp.rms));
+                            map.insert("amplitude_rms".to_string(), serde_json::json!(amp.rms));
+                            map.insert("amplitude_bass".to_string(), serde_json::json!(amp.bass));
+                            map.insert("amplitude_mid".to_string(), serde_json::json!(amp.mid));
+                            map.insert("amplitude_high".to_string(), serde_json::json!(amp.high));
+                        }
+                        // Injecter spectre (premiers bins pour AudioSpectrum)
+                        if let Some(spec) = &audio.spectrum {
+                            // Injecter les 8 premiers bins comme amplitude_spectrum_0..7
+                            for (i, val) in spec.spectrum.iter().take(8).enumerate() {
+                                map.insert(
+                                    format!("amplitude_spectrum_{}", i),
+                                    serde_json::json!(val),
+                                );
+                            }
+                        }
+                    }
+                    engine.position(t, object_index, &live_params)
+                }))
+            } else {
+                // Pas d'audio_state disponible — utiliser les params statiques
+                Ok(Box::new(move |t: f64, object_index: usize| {
+                    engine.position(t, object_index, &params)
+                }))
+            }
+        } else {
+            // Moteur non-audio — closure simple
+            Ok(Box::new(move |t: f64, object_index: usize| {
+                engine.position(t, object_index, &params)
+            }))
+        }
     }
 
     /// Extrait les paramètres du graphe pour un nœud

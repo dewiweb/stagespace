@@ -6,7 +6,7 @@ use std::sync::{Mutex, MutexGuard};
 use tauri::{State, Emitter};
 use crate::AppState;
 use crate::graph::parser::build_graph_from_json;
-use crate::graph::compilation::compile_graph as compile_graph_inner;
+use crate::graph::compilation::compile_graph_with_audio;
 
 /// Récupère le contenu d'un Mutex même s'il est empoisonné (poison recovery).
 fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -36,7 +36,7 @@ pub async fn play_graph(request: PlayGraphRequest, state: State<'_, AppState>) -
     let graph = build_graph_from_json(&request.graph_json, &audio_state)?;
     drop(audio_state);
 
-    let compiled = compile_graph_inner(&graph)?;
+    let compiled = compile_graph_with_audio(&graph, state.audio_state.clone())?;
 
     let osc_profile = OscProfile::from_str(&request.oscProfile)
         .map_err(|e| format!("Invalid OSC profile '{}': {}", request.oscProfile, e))?;
@@ -102,7 +102,7 @@ pub async fn preview_graph(
     let graph = build_graph_from_json(&request.graph_json, &audio_state)?;
     drop(audio_state);
 
-    let compiled = compile_graph_inner(&graph)?;
+    let compiled = compile_graph_with_audio(&graph, state.audio_state.clone())?;
 
     // Utiliser un OscSender "dummy" — pas d'envoi réel
     let osc_sender = OscSender::new(OscProfile::Holophonix, "127.0.0.1".to_string(), 9999);
@@ -160,7 +160,7 @@ pub async fn update_graph(
     let graph = build_graph_from_json(&graph_json, &audio_state)?;
     drop(audio_state);
 
-    let compiled = compile_graph_inner(&graph)?;
+    let compiled = compile_graph_with_audio(&graph, state.audio_state.clone())?;
 
     // Crossfade smooth (défaut 0.5s) pour éviter les sauts
     let fade = fade_duration.unwrap_or(0.5);
