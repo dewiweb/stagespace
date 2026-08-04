@@ -1,0 +1,171 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: dark;
+  color: #e5e7eb;
+  background-color: #0a0a0f;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: #0a0a0f;
+  overflow: hidden;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #374151;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4b5563;
+}
+
+/* React Flow overrides for dark theme */
+.react-flow__node {
+  font-family: inherit;
+}
+
+.react-flow__edge-path {
+  stroke: #4b5563;
+  stroke-width: 2;
+}
+
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge:focus .react-flow__edge-path {
+  stroke: #3b82f6;
+}
+
+.react-flow__controls {
+  background: #1e1e2e;
+  border: 1px solid #2e2e3e;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.react-flow__controls-button {
+  background: transparent;
+  border-bottom: 1px solid #2e2e3e;
+  color: #9ca3af;
+  fill: #9ca3af;
+}
+
+.react-flow__controls-button:hover {
+  background: #2e2e3e;
+  color: #fff;
+  fill: #fff;
+}
+
+.react-flow__minimap {
+  background: #12121a;
+  border: 1px solid #1e1e2e;
+  border-radius: 6px;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out;
+}
+
+/* ─── Node Editor — connection guidance ─── */
+/* Quand on drag une connexion, griser les nodes qui ne sont pas des cibles valides */
+.rf-node-invalid-target {
+  opacity: 0.35;
+  filter: grayscale(0.6);
+  transition: opacity 0.15s, filter 0.15s;
+}
+
+/* Les cibles valides restent nettes et légèrement mises en valeur */
+.react-flow__node:not(.rf-node-invalid-target) {
+  transition: opacity 0.15s, filter 0.15s;
+}
+
+/* Le handle source pendant le drag est mis en évidence */
+.react-flow__handle.connecting {
+  background: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+}
+
+/* Les handles cibles valides deviennent verts pendant le drag */
+.react-flow__handle.valid {
+  background: #22c55e !important;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.3);
+}
+
+/* ─── Live Mode — UI agrandie pour conditions de spectacle ─── */
+.live-mode {
+  font-size: 14px;
+}
+
+/* En Live Mode, les boutons et textes sont plus grands */
+.live-mode button {
+  font-size: 13px;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+.live-mode .text-\[10px\] {
+  font-size: 12px !important;
+}
+
+.live-mode .text-\[11px\] {
+  font-size: 13px !important;
+}
+
+.live-mode .text-xs {
+  font-size: 14px !important;
+}
+
+/* Les boutons de transport sont encore plus grands en Live Mode */
+.live-mode .px-3 {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
