@@ -349,12 +349,6 @@ export default function Inspector() {
                       mods[i] = { ...mod, amount: v };
                       updateCurrent({ audio_mods: mods });
                     }} color="cyan" />
-                  <Slider label="Base" value={mod.base_value} min={0} max={10} step={0.1}
-                    onChange={(v) => {
-                      const mods = [...current.audio_mods];
-                      mods[i] = { ...mod, base_value: v };
-                      updateCurrent({ audio_mods: mods });
-                    }} color="cyan" />
                   <Slider label="Lissage" value={mod.smoothing} min={0} max={0.95} step={0.05}
                     onChange={(v) => {
                       const mods = [...current.audio_mods];
@@ -501,16 +495,20 @@ function audioSourceLabel(s: AudioModSource): string {
 }
 
 function audioTargetLabel(t: AudioModTarget): string {
-  if (typeof t === 'string') return t;
-  return t.custom;
+  const map: Record<string, string> = {
+    speed: 'Speed', scale: 'Scale', radius_scale: 'Radius',
+    height_offset: 'Height', offset_x: 'Offset X', offset_y: 'Offset Y',
+    offset_z: 'Offset Z', yaw: 'Yaw', pitch: 'Pitch', roll: 'Roll',
+  };
+  if (typeof t === 'string') return map[t] ?? t;
+  return String(t);
 }
 
 // ── Composant pour ajouter un audio mod ──
 function AudioModAdder({ onAdd, onCancel }: { onAdd: (mod: AudioMod) => void; onCancel: () => void }) {
   const [source, setSource] = React.useState<AudioModSource>('amplitude_bass');
-  const [target, setTarget] = React.useState<AudioModTarget>('radius');
+  const [target, setTarget] = React.useState<AudioModTarget>('radius_scale');
   const [amount, setAmount] = React.useState(0.5);
-  const [baseValue, setBaseValue] = React.useState(2.0);
 
   return (
     <div className="bg-gray-800/80 rounded p-2 space-y-2 border border-cyan-900/40">
@@ -527,14 +525,20 @@ function AudioModAdder({ onAdd, onCancel }: { onAdd: (mod: AudioMod) => void; on
         </select>
       </div>
       <div>
-        <div className="text-gray-400 text-[9px] mb-0.5">Target</div>
-        <select value={typeof target === 'string' ? target : 'custom'}
+        <div className="text-gray-400 text-[9px] mb-0.5">Target (macro)</div>
+        <select value={typeof target === 'string' ? target : 'radius_scale'}
           onChange={(e) => setTarget(e.target.value as AudioModTarget)}
           className="w-full bg-gray-900 text-white text-[10px] rounded px-1.5 py-1 border border-gray-700">
-          <option value="radius">Radius</option>
+          <option value="radius_scale">Radius Scale</option>
+          <option value="height_offset">Height Offset</option>
           <option value="speed">Speed</option>
           <option value="scale">Scale</option>
-          <option value="elevation">Elevation</option>
+          <option value="offset_x">Offset X</option>
+          <option value="offset_y">Offset Y</option>
+          <option value="offset_z">Offset Z</option>
+          <option value="yaw">Yaw</option>
+          <option value="pitch">Pitch</option>
+          <option value="roll">Roll</option>
         </select>
       </div>
       <div className="flex items-center gap-2">
@@ -544,15 +548,8 @@ function AudioModAdder({ onAdd, onCancel }: { onAdd: (mod: AudioMod) => void; on
           className="flex-1 accent-cyan-500" />
         <span className="text-white text-[10px] font-mono w-8 text-right">{amount.toFixed(2)}</span>
       </div>
-      <div className="flex items-center gap-2">
-        <span className="text-gray-400 text-[10px] w-16">Base</span>
-        <input type="range" min={0} max={10} step={0.1} value={baseValue}
-          onChange={(e) => setBaseValue(parseFloat(e.target.value))}
-          className="flex-1 accent-cyan-500" />
-        <span className="text-white text-[10px] font-mono w-8 text-right">{baseValue.toFixed(1)}</span>
-      </div>
       <div className="flex gap-1.5">
-        <button onClick={() => onAdd({ source, target, amount, base_value: baseValue, smoothing: 0.3 })}
+        <button onClick={() => onAdd({ source, target, amount, base_value: 0, smoothing: 0.3 })}
           className="flex-1 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-[10px] rounded font-medium">
           Ajouter
         </button>

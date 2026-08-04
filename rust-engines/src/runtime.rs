@@ -211,11 +211,13 @@ impl Runtime {
                 let elapsed = start.elapsed();
                 let t_real = elapsed.as_secs_f64();
 
-                // Lire les macros temps réel
+                // Lire les macros temps réel (base)
                 let speed = macros.get_speed();
                 let scale = macros.get_scale();
                 let shift = macros.get_shift();
                 let (yaw, pitch, roll) = macros.get_rotation();
+                let radius_scale = macros.get_radius_scale();
+                let height_offset = macros.get_height_offset();
 
                 // Appliquer speed: temps virtuel
                 let t_virtual = t_real * speed;
@@ -254,35 +256,28 @@ impl Runtime {
                     }
                 };
 
-                // Mettre à jour les audio param overrides pour que la closure compilée les lise
+                // Mettre à jour les audio param overrides (pour la closure compilée)
+                // NOTE: les audio mods ne vont plus dans params.extra — ils agissent sur les macros
                 {
                     let mut ovr = audio_param_overrides_arc.lock().unwrap_or_else(|e| e.into_inner());
                     *ovr = audio_param_overrides.clone();
                 }
 
-                // Appliquer les audio mods au speed et scale effectifs
-                let effective_speed = audio_param_overrides.get("speed").copied().unwrap_or(speed);
-                let effective_scale = audio_param_overrides.get("scale").copied().unwrap_or(scale);
+                // ── Système unifié : audio mods = deltas sur les macros ──
+                // macro_effective = macro_base + audio_delta
+                let effective_speed = speed + audio_param_overrides.get("speed").copied().unwrap_or(0.0);
+                let effective_scale = scale + audio_param_overrides.get("scale").copied().unwrap_or(0.0);
+                let effective_radius_scale = radius_scale + audio_param_overrides.get("radius_scale").copied().unwrap_or(0.0);
+                let effective_height_offset = height_offset + audio_param_overrides.get("height_offset").copied().unwrap_or(0.0);
 
-                // Audio mods pour offset et rotation — additionnés aux macros
-                // (les macros sont la base, les audio mods sont un delta par-dessus)
-                let audio_shift_x = audio_param_overrides.get("offset_x").copied().unwrap_or(0.0);
-                let audio_shift_y = audio_param_overrides.get("offset_y").copied().unwrap_or(0.0);
-                let audio_shift_z = audio_param_overrides.get("offset_z").copied().unwrap_or(0.0);
-                let audio_yaw = audio_param_overrides.get("yaw").copied().unwrap_or(0.0);
-                let audio_pitch = audio_param_overrides.get("pitch").copied().unwrap_or(0.0);
-                let audio_roll = audio_param_overrides.get("roll").copied().unwrap_or(0.0);
-
-                // Shift effectif = macro shift + audio offset
                 let eff_shift = nalgebra::Vector3::new(
-                    shift.x + audio_shift_x,
-                    shift.y + audio_shift_y,
-                    shift.z + audio_shift_z,
+                    shift.x + audio_param_overrides.get("offset_x").copied().unwrap_or(0.0),
+                    shift.y + audio_param_overrides.get("offset_y").copied().unwrap_or(0.0),
+                    shift.z + audio_param_overrides.get("offset_z").copied().unwrap_or(0.0),
                 );
-                // Rotation effective = macro rotation + audio rotation
-                let eff_yaw = yaw + audio_yaw;
-                let eff_pitch = pitch + audio_pitch;
-                let eff_roll = roll + audio_roll;
+                let eff_yaw = yaw + audio_param_overrides.get("yaw").copied().unwrap_or(0.0);
+                let eff_pitch = pitch + audio_param_overrides.get("pitch").copied().unwrap_or(0.0);
+                let eff_roll = roll + audio_param_overrides.get("roll").copied().unwrap_or(0.0);
 
                 // Recalculer le temps virtuel avec le speed effectif (audio-modulé)
                 let t_virtual_eff = t_real * effective_speed;
@@ -343,9 +338,28 @@ impl Runtime {
                             fn_ref(t_looped, obj_idx)
                         };
 
+                        // Appliquer radius_scale : scaling radial par rapport à l'origin
+                        // (multiplie la distance à l'origin, pas la position absolue)
+                        let pos_scaled_radius = if (effective_radius_scale - 1.0).abs() > 1e-10 {
+                            origin_local + (raw_pos - origin_local) * effective_radius_scale
+                        } else {
+                            raw_pos
+                        };
+
+                        // Appliquer height_offset : translation Y post-engine
+                        let pos_with_height = if effective_height_offset.abs() > 1e-10 {
+                            nalgebra::Vector3::new(
+                                pos_scaled_radius.x,
+                                pos_scaled_radius.y + effective_height_offset,
+                                pos_scaled_radius.z,
+                            )
+                        } else {
+                            pos_scaled_radius
+                        };
+
                         // Appliquer le depth : interpoler entre origin et raw_pos, multiplié par le fade
                         let depth = track_depths.get(obj_idx).copied().unwrap_or(1.0) * fade_factor;
-                        let pos_with_depth = origin_local + (raw_pos - origin_local) * depth;
+                        let pos_with_depth = origin_local + (pos_with_height - origin_local) * depth;
 
                         (obj_idx, pos_with_depth)
                     }).collect()

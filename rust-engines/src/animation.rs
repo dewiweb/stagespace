@@ -62,22 +62,21 @@ pub enum AudioModSource {
     SpectrumBand(usize), // index de bande FFT
 }
 
-/// Cible d'un AudioMod — quel paramètre est modulé
+/// Cible d'un AudioMod — quel macro est modulé
+/// Tous les targets sont des macros (appliqués par le runtime en post-engine)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum AudioModTarget {
     Speed,
     Scale,
-    Radius,
-    Height,
-    Turns,
+    RadiusScale,
+    HeightOffset,
     OffsetX,
     OffsetY,
     OffsetZ,
     Yaw,
     Pitch,
     Roll,
-    Custom(String), // n'importe quel param du shape_params
 }
 
 /// Un mod audio = "la musique modifie ce paramètre"
@@ -282,8 +281,16 @@ impl AnimationState {
         }
     }
 
-    /// Calcule les paramètres effectifs à un instant donné, en appliquant les audio mods
-    /// Retourne un HashMap des paramètres modifiés par l'audio
+    /// Calcule les deltas audio pour chaque macro à un instant donné.
+    ///
+    /// Philosophie : les audio mods produisent un DELTA (un ajout) qui s'additionne
+    /// à la macro de base. Le runtime fait : macro_effective = macro_base + audio_delta.
+    ///
+    /// Pour radius_scale et scale (qui sont multiplicatifs), le delta est additif
+    /// sur le multiplicateur : scale_effective = scale_base + audio_delta
+    /// (ex: scale_base=1.0, audio_delta=0.3 → scale_effective=1.3)
+    ///
+    /// Retourne un HashMap<macro_key, delta_value>
     pub fn compute_audio_modulated_params(
         &mut self,
         audio: &crate::audio::AudioState,
@@ -300,24 +307,24 @@ impl AnimationState {
 
             let smoothed = self.smoothed_values[i];
 
-            // La valeur effective = base + amount * audio_value
-            let effective = mod_.base_value + mod_.amount * smoothed;
+            // Le delta = amount * audio_value (la base est la macro elle-même)
+            let delta = mod_.amount * smoothed;
 
             let key = match &mod_.target {
                 AudioModTarget::Speed => "speed",
                 AudioModTarget::Scale => "scale",
-                AudioModTarget::Radius => "radius",
-                AudioModTarget::Height => "height",
-                AudioModTarget::Turns => "turns",
+                AudioModTarget::RadiusScale => "radius_scale",
+                AudioModTarget::HeightOffset => "height_offset",
                 AudioModTarget::OffsetX => "offset_x",
                 AudioModTarget::OffsetY => "offset_y",
                 AudioModTarget::OffsetZ => "offset_z",
                 AudioModTarget::Yaw => "yaw",
                 AudioModTarget::Pitch => "pitch",
                 AudioModTarget::Roll => "roll",
-                AudioModTarget::Custom(s) => s.as_str(),
             };
-            result.insert(key.to_string(), effective);
+            // Accumuler les deltas si plusieurs mods ciblent la même macro
+            let entry = result.entry(key.to_string()).or_insert(0.0);
+            *entry += delta;
         }
 
         result

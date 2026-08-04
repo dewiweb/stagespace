@@ -254,7 +254,7 @@ mod tests {
         anim.assignments.push(TrackAssignment { track_id: 2, depth: 0.5, phase_offset: 90.0 });
         anim.audio_mods.push(AudioMod {
             source: stagespace_engines::AudioModSource::AmplitudeBass,
-            target: stagespace_engines::AudioModTarget::Radius,
+            target: stagespace_engines::AudioModTarget::RadiusScale,
             amount: 0.8,
             base_value: 2.0,
             smoothing: 0.3,

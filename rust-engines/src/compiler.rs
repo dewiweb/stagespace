@@ -40,7 +40,7 @@ pub struct Compiler;
 impl Compiler {
     /// Compile un graphe en une fonction composite
     pub fn compile(graph: &Graph) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(graph, None, None)
+        Self::compile_inner(graph, None)
     }
 
     /// Compile un graphe avec accès à l'audio state temps réel
@@ -50,24 +50,24 @@ impl Compiler {
         graph: &Graph,
         audio_state: Arc<Mutex<AudioState>>,
     ) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(graph, Some(audio_state), None)
+        Self::compile_inner(graph, Some(audio_state))
     }
 
     /// Compile un graphe avec audio state + overrides de paramètres audio
-    /// Les overrides (radius, height, turns, offset, rotation) sont mis à jour
-    /// par le runtime à chaque frame et injectés dans tous les engines.
+    /// NOTE: les overrides ne sont plus injectés dans params.extra — les audio mods
+    /// agissent maintenant sur les macros (système unifié). L'argument overrides est
+    /// gardé pour compatibilité API mais ignoré.
     pub fn compile_with_audio_and_overrides(
         graph: &Graph,
         audio_state: Arc<Mutex<AudioState>>,
-        overrides: AudioParamOverrides,
+        _overrides: AudioParamOverrides,
     ) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(graph, Some(audio_state), Some(overrides))
+        Self::compile_inner(graph, Some(audio_state))
     }
 
     fn compile_inner(
         graph: &Graph,
         audio_state: Option<Arc<Mutex<AudioState>>>,
-        overrides: Option<AudioParamOverrides>,
     ) -> Result<CompiledFunction, CompilationError> {
         let start = Instant::now();
         log_graph_compilation(graph.nodes.len(), graph.edges.len());
@@ -100,7 +100,7 @@ impl Compiler {
             let inputs = graph.get_inputs(output_node.id);
             let node_id = inputs.first().ok_or(CompilationError::OutputNotConnected)?;
             let node = Self::node_ref(graph, *node_id)?;
-            let result = Self::compile_node(graph, node, &audio_state, &overrides);
+            let result = Self::compile_node(graph, node, &audio_state);
             if result.is_ok() {
                 let duration_ms = start.elapsed().as_millis() as u128;
                 log_compilation_success(duration_ms);
@@ -116,7 +116,7 @@ impl Compiler {
             let inputs = graph.get_inputs(output_node.id);
             let node_id = inputs.first().ok_or(CompilationError::OutputNotConnected)?;
             let node = Self::node_ref(graph, *node_id)?;
-            let compiled = Self::compile_node(graph, node, &audio_state, &overrides)?;
+            let compiled = Self::compile_node(graph, node, &audio_state)?;
 
             // Parser track_range : "0-11" ou "12-22"
             let track_range = output_node
@@ -171,13 +171,12 @@ impl Compiler {
         graph: &Graph,
         node: &Node,
         audio: &Option<Arc<Mutex<AudioState>>>,
-        overrides: &Option<AudioParamOverrides>,
     ) -> Result<CompiledFunction, CompilationError> {
         match node.node_type {
-            NodeType::Mix => Self::compile_mix(graph, node, audio, overrides),
-            NodeType::Group => Self::compile_group(graph, node, audio, overrides),
-            NodeType::Sequence => Self::compile_sequence(graph, node, audio, overrides),
-            NodeType::Crossfade => Self::compile_crossfade(graph, node, audio, overrides),
+            NodeType::Mix => Self::compile_mix(graph, node, audio),
+            NodeType::Group => Self::compile_group(graph, node, audio),
+            NodeType::Sequence => Self::compile_sequence(graph, node, audio),
+            NodeType::Crossfade => Self::compile_crossfade(graph, node, audio),
             NodeType::Scale
             | NodeType::Rotate
             | NodeType::Offset
@@ -186,8 +185,8 @@ impl Compiler {
             | NodeType::Mirror
             | NodeType::Clamp
             | NodeType::LFO
-            | NodeType::Jitter => Self::compile_modifier(graph, node, audio, overrides),
-            _ => Self::compile_engine(graph, node, audio, overrides),
+            | NodeType::Jitter => Self::compile_modifier(graph, node, audio),
+            _ => Self::compile_engine(graph, node, audio),
         }
     }
 
@@ -196,7 +195,6 @@ impl Compiler {
         graph: &Graph,
         node: &Node,
         audio: &Option<Arc<Mutex<AudioState>>>,
-        overrides: &Option<AudioParamOverrides>,
     ) -> Result<CompiledFunction, CompilationError> {
         let inputs = graph.get_inputs(node.id);
         let upstream_id = inputs.first().ok_or_else(|| {
@@ -207,7 +205,7 @@ impl Compiler {
             ))
         })?;
         let upstream_node = Self::node_ref(graph, *upstream_id)?;
-        let upstream_fn = Self::compile_node(graph, upstream_node, audio, overrides)?;
+        let upstream_fn = Self::compile_node(graph, upstream_node, audio)?;
         let node_type = node.node_type.clone();
 
         match node_type {
@@ -350,7 +348,6 @@ impl Compiler {
         graph: &Graph,
         node: &Node,
         audio: &Option<Arc<Mutex<AudioState>>>,
-        overrides: &Option<AudioParamOverrides>,
     ) -> Result<CompiledFunction, CompilationError> {
         let (node_a, node_b) = Self::binary_inputs(graph, node, "Mix")?;
 
@@ -361,8 +358,8 @@ impl Compiler {
             .unwrap_or(0.5)
             .clamp(0.0, 1.0);
 
-        let func_a = Self::compile_node(graph, node_a, audio, overrides)?;
-        let func_b = Self::compile_node(graph, node_b, audio, overrides)?;
+        let func_a = Self::compile_node(graph, node_a, audio)?;
+        let func_b = Self::compile_node(graph, node_b, audio)?;
 
         Ok(Box::new(move |t: f64, object_index: usize| {
             let pos_a = func_a(t, object_index);
@@ -376,15 +373,14 @@ impl Compiler {
         graph: &Graph,
         node: &Node,
         audio: &Option<Arc<Mutex<AudioState>>>,
-        overrides: &Option<AudioParamOverrides>,
     ) -> Result<CompiledFunction, CompilationError> {
         let (node_a, node_b) = Self::binary_inputs(graph, node, "Group")?;
 
         // n_objects de la branche A détermine la frontière entre les deux groupes
         let n_objects_a = Self::resolve_n_objects(graph, node_a)?;
 
-        let func_a = Self::compile_node(graph, node_a, audio, overrides)?;
-        let func_b = Self::compile_node(graph, node_b, audio, overrides)?;
+        let func_a = Self::compile_node(graph, node_a, audio)?;
+        let func_b = Self::compile_node(graph, node_b, audio)?;
 
         Ok(Box::new(move |t: f64, object_index: usize| {
             if object_index < n_objects_a {
@@ -400,7 +396,6 @@ impl Compiler {
         graph: &Graph,
         node: &Node,
         audio: &Option<Arc<Mutex<AudioState>>>,
-        overrides: &Option<AudioParamOverrides>,
     ) -> Result<CompiledFunction, CompilationError> {
         let (node_a, node_b) = Self::binary_inputs(graph, node, "Sequence")?;
 
@@ -413,8 +408,8 @@ impl Compiler {
             )));
         }
 
-        let func_a = Self::compile_node(graph, node_a, audio, overrides)?;
-        let func_b = Self::compile_node(graph, node_b, audio, overrides)?;
+        let func_a = Self::compile_node(graph, node_a, audio)?;
+        let func_b = Self::compile_node(graph, node_b, audio)?;
 
         Ok(Box::new(move |t: f64, object_index: usize| {
             if t < duration_a {
@@ -431,7 +426,6 @@ impl Compiler {
         graph: &Graph,
         node: &Node,
         audio: &Option<Arc<Mutex<AudioState>>>,
-        overrides: &Option<AudioParamOverrides>,
     ) -> Result<CompiledFunction, CompilationError> {
         let (node_a, node_b) = Self::binary_inputs(graph, node, "Crossfade")?;
 
@@ -447,8 +441,8 @@ impl Compiler {
             .unwrap_or(1.0)
             .min(duration_a * 0.5); // Le fade ne peut pas dépasser la moitié de A
 
-        let func_a = Self::compile_node(graph, node_a, audio, overrides)?;
-        let func_b = Self::compile_node(graph, node_b, audio, overrides)?;
+        let func_a = Self::compile_node(graph, node_a, audio)?;
+        let func_b = Self::compile_node(graph, node_b, audio)?;
 
         Ok(Box::new(move |t: f64, object_index: usize| {
             let fade_start = duration_a - fade_duration;
@@ -532,7 +526,6 @@ impl Compiler {
         graph: &Graph,
         node: &Node,
         audio: &Option<Arc<Mutex<AudioState>>>,
-        overrides: &Option<AudioParamOverrides>,
     ) -> Result<CompiledFunction, CompilationError> {
         let node_type = node.node_type.clone();
         let params = Self::extract_params(graph, node)?;
@@ -581,52 +574,24 @@ impl Compiler {
             _ => return Err(CompilationError::InvalidNodeType(node_type)),
         };
 
-        // Construire la closure selon le type d'engine et les données disponibles
+        // Construire la closure selon le type d'engine
         let has_audio = audio.is_some() && is_audio_engine;
-        let has_overrides = overrides.is_some();
 
-        match (has_audio, has_overrides) {
-            (true, true) => {
-                // Engine audio + overrides — injecte les valeurs audio live ET les overrides
-                let audio_arc = audio.as_ref().unwrap().clone();
-                let overrides_arc = overrides.as_ref().unwrap().clone();
-                Ok(Box::new(move |t: f64, object_index: usize| {
-                    let mut live_params = params.clone();
-                    if let Some(map) = live_params.extra.as_object_mut() {
-                        inject_audio_values(map, &audio_arc);
-                        inject_overrides(map, &overrides_arc);
-                    }
-                    engine.position(t, object_index, &live_params)
-                }))
-            }
-            (true, false) => {
-                // Engine audio sans overrides
-                let audio_arc = audio.as_ref().unwrap().clone();
-                Ok(Box::new(move |t: f64, object_index: usize| {
-                    let mut live_params = params.clone();
-                    if let Some(map) = live_params.extra.as_object_mut() {
-                        inject_audio_values(map, &audio_arc);
-                    }
-                    engine.position(t, object_index, &live_params)
-                }))
-            }
-            (false, true) => {
-                // Engine non-audio avec overrides — injecte les overrides (radius, height, etc.)
-                let overrides_arc = overrides.as_ref().unwrap().clone();
-                Ok(Box::new(move |t: f64, object_index: usize| {
-                    let mut live_params = params.clone();
-                    if let Some(map) = live_params.extra.as_object_mut() {
-                        inject_overrides(map, &overrides_arc);
-                    }
-                    engine.position(t, object_index, &live_params)
-                }))
-            }
-            (false, false) => {
-                // Engine simple — pas d'injection
-                Ok(Box::new(move |t: f64, object_index: usize| {
-                    engine.position(t, object_index, &params)
-                }))
-            }
+        if has_audio {
+            // Engine audio — injecte les valeurs audio live dans params.extra
+            let audio_arc = audio.as_ref().unwrap().clone();
+            Ok(Box::new(move |t: f64, object_index: usize| {
+                let mut live_params = params.clone();
+                if let Some(map) = live_params.extra.as_object_mut() {
+                    inject_audio_values(map, &audio_arc);
+                }
+                engine.position(t, object_index, &live_params)
+            }))
+        } else {
+            // Engine non-audio — closure simple
+            Ok(Box::new(move |t: f64, object_index: usize| {
+                engine.position(t, object_index, &params)
+            }))
         }
     }
 
@@ -708,23 +673,5 @@ fn inject_audio_values(map: &mut serde_json::Map<String, serde_json::Value>, aud
         for (i, val) in bands.iter().enumerate() {
             map.insert(format!("spectrum_band_{}", i), serde_json::json!(val));
         }
-    }
-}
-
-/// Injecte les overrides de paramètres audio (radius, height, turns, etc.)
-/// dans les params extra d'un engine. Ces overrides sont calculés par le runtime
-/// à partir des audio_mods de l'AnimationState.
-///
-/// NOTE: "speed" et "scale" ne sont PAS injectés ici car le runtime les gère
-/// au niveau macro (time scaling et position scaling). Les injecter dans
-/// params.extra causerait une double application.
-fn inject_overrides(map: &mut serde_json::Map<String, serde_json::Value>, overrides_arc: &AudioParamOverrides) {
-    let overrides = overrides_arc.lock().unwrap_or_else(|e| e.into_inner());
-    for (key, value) in overrides.iter() {
-        // Skip speed et scale — gérés par le runtime au niveau macro
-        if key == "speed" || key == "scale" {
-            continue;
-        }
-        map.insert(key.clone(), serde_json::json!(value));
     }
 }

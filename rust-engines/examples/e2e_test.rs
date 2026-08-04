@@ -185,7 +185,7 @@ fn main() {
     anim2.duration = 4.0;
     anim2.audio_mods.push(stagespace_engines::AudioMod {
         source: stagespace_engines::AudioModSource::AmplitudeBass,
-        target: stagespace_engines::AudioModTarget::Radius,
+        target: stagespace_engines::AudioModTarget::RadiusScale,
         amount: 1.0,
         base_value: 2.0,
         smoothing: 0.0,

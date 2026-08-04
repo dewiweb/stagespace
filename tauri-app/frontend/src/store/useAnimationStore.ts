@@ -18,10 +18,9 @@ export type AudioModSource =
   | { spectrum_band: number };
 
 export type AudioModTarget =
-  | 'speed' | 'scale' | 'radius' | 'height' | 'turns'
+  | 'speed' | 'scale' | 'radius_scale' | 'height_offset'
   | 'offset_x' | 'offset_y' | 'offset_z'
-  | 'yaw' | 'pitch' | 'roll'
-  | { custom: string };
+  | 'yaw' | 'pitch' | 'roll';
 
 export interface AudioMod {
   source: AudioModSource;
