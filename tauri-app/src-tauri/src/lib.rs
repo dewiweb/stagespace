@@ -16,7 +16,7 @@ use graph::parser::build_graph_from_json;
 use commands::file_io::{import_hol_project, save_graph_to_file, load_graph_from_file};
 use commands::network::discover_osc_targets;
 use commands::audio::{update_audio_state, get_audio_state};
-use commands::osc::{osc_add_mapping, osc_remove_mapping, osc_list_mappings, osc_get_value, osc_get_all_values, send_osc_position};
+use commands::osc::{osc_add_mapping, osc_remove_mapping, osc_list_mappings, osc_get_value, osc_get_all_values, send_osc_position, set_osc_receiver_port, get_osc_receiver_port};
 use commands::presets::{preset_save, preset_load, preset_delete, preset_list};
 use commands::playback::{play_graph, stop_graph, preview_graph, update_graph,
     set_macro, set_loop_mode};
@@ -164,7 +164,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             import_hol_project, update_audio_state, get_audio_state,
             osc_add_mapping, osc_remove_mapping, osc_list_mappings,
-            osc_get_value, osc_get_all_values,
+            osc_get_value, osc_get_all_values, set_osc_receiver_port, get_osc_receiver_port,
             preset_save, preset_load, preset_delete, preset_list,
             compile_graph, play_graph, stop_graph, update_graph, preview_graph,
             set_macro, set_loop_mode,

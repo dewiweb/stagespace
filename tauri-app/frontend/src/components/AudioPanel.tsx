@@ -5,8 +5,10 @@ import { useGraphStore, type AudioState } from '../store/useGraphStore';
 export default function AudioPanel() {
   const audioState = useGraphStore((s) => s.audioState);
   const setAudioState = useGraphStore((s) => s.setAudioState);
+  const selectedAudioDeviceId = useGraphStore((s) => s.selectedAudioDeviceId);
   const [isListening, setIsListening] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [audioDevices, setAudioDevices] = React.useState<MediaDeviceInfo[]>([]);
 
   const audioCtxRef = React.useRef<AudioContext | null>(null);
   const analyserRef = React.useRef<AnalyserNode | null>(null);
@@ -42,11 +44,18 @@ export default function AudioPanel() {
         );
       }
 
+      // Énumérer les devices audio si pas déjà fait
+      if (audioDevices.length === 0) {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        setAudioDevices(devices.filter((d) => d.kind === 'audioinput'));
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: false,
           noiseSuppression: false,
           autoGainControl: false,
+          deviceId: selectedAudioDeviceId ? { exact: selectedAudioDeviceId } : undefined,
         },
       });
       streamRef.current = stream;
@@ -113,7 +122,7 @@ export default function AudioPanel() {
       setError(e?.message ?? 'Failed to access microphone');
       setIsListening(false);
     }
-  }, [audioState.bpm, setAudioState]);
+  }, [audioState.bpm, setAudioState, selectedAudioDeviceId, audioDevices.length]);
 
   React.useEffect(() => {
     return () => { void stopListening(); };

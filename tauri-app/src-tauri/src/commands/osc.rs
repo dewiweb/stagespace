@@ -1,4 +1,4 @@
-use stagespace_engines::OscMapping;
+use stagespace_engines::{OscMapping, OscReceiver};
 use tauri::State;
 use crate::AppState;
 use std::sync::{Mutex, MutexGuard};
@@ -47,6 +47,30 @@ pub async fn osc_get_all_values(state: State<'_, AppState>) -> Result<serde_json
     let receiver = lock_or_recover(&state.osc_receiver);
     let values = receiver.get_all_values();
     Ok(serde_json::to_value(values).map_err(|e| e.to_string())?)
+}
+
+/// Change le port du receiver OSC — stop l'ancien, crée un nouveau, démarre
+#[tauri::command]
+pub async fn set_osc_receiver_port(
+    port: u16,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let mut receiver = lock_or_recover(&state.osc_receiver);
+    // Stopper l'ancien receiver
+    receiver.stop();
+    // Créer un nouveau receiver sur le nouveau port
+    *receiver = OscReceiver::new(port);
+    // Démarrer le nouveau receiver
+    receiver.start().map_err(|e| format!("Failed to start OSC receiver on port {}: {}", port, e))?;
+    eprintln!("[INFO] OSC receiver now listening on port {}", port);
+    Ok(())
+}
+
+/// Récupère le port actuel du receiver OSC
+#[tauri::command]
+pub async fn get_osc_receiver_port(state: State<'_, AppState>) -> Result<u16, String> {
+    let receiver = lock_or_recover(&state.osc_receiver);
+    Ok(receiver.port)
 }
 
 /// Envoie une position OSC unique à un track (utilisé par le Panic button)

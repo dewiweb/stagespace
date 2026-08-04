@@ -3,6 +3,7 @@ import { useGraphStore } from '../store/useGraphStore';
 import { useAnimationStore } from '../store/useAnimationStore';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { open, save } from '@tauri-apps/plugin-dialog';
+import { SettingsModal } from './SettingsModal';
 
 const OSC_PROFILES = [
   { value: 'holophonix', label: 'Holophonix' },
@@ -24,6 +25,7 @@ export const Toolbar: React.FC = () => {
 
   const [oscIds, setOscIds] = React.useState(manualOscIds.join(','));
   const [showOsc, setShowOsc] = React.useState(false);
+  const [showSettings, setShowSettings] = React.useState(false);
   const [discovering, setDiscovering] = React.useState(false);
   const [discoveredTargets, setDiscoveredTargets] = React.useState<Array<{ name: string; host: string; port: number; profile: string; source: string }>>([]);
 
@@ -179,7 +181,7 @@ export const Toolbar: React.FC = () => {
 
         <div className="w-px h-5 bg-stagespace-border mx-1" />
 
-        {/* OSC settings toggle */}
+        {/* OSC quick toggle (inline panel) */}
         <button
           onClick={() => setShowOsc(!showOsc)}
           className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${
@@ -189,6 +191,16 @@ export const Toolbar: React.FC = () => {
           <span className="text-[10px]">⚙</span> OSC
           <span className="text-gray-500 font-mono text-[10px]">{oscAddress}:{oscPort}</span>
         </button>
+
+        {/* Settings (modal) */}
+        <button
+          onClick={() => setShowSettings(true)}
+          className="px-2.5 py-1.5 text-xs font-medium rounded bg-gray-800 text-gray-400 hover:text-white transition-colors flex items-center gap-1.5"
+          title="Settings — OSC, audio, tracks"
+        >
+          <span className="text-[10px]">☰</span> Settings
+        </button>
+        {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
 
         <div className="w-px h-5 bg-stagespace-border mx-1" />
 

@@ -16,6 +16,7 @@ function App() {
   const activeMovementIds = useAnimationStore((s) => s.activeMovementIds);
   const showExpert = useAnimationStore((s) => s.showExpert);
   const setShowExpert = useAnimationStore((s) => s.setShowExpert);
+  const oscInPort = useGraphStore((s) => s.oscInPort);
   const [leftCollapsed, setLeftCollapsed] = React.useState(false);
   const [rightCollapsed, setRightCollapsed] = React.useState(false);
   // Sections collapsibles du panneau gauche
@@ -24,6 +25,15 @@ function App() {
 
   // Listen to movement positions (multi-runtime)
   useMovementPositionsListener();
+
+  // Au démarrage : si le port OSC IN sauvegardé diffère du défaut (8001),
+  // appliquer le port sauvegardé côté backend
+  React.useEffect(() => {
+    if (oscInPort !== 8001) {
+      useGraphStore.getState().setOscInPort(oscInPort);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Onglet secondaire (en bas du panneau gauche) — Moves unifié (absorbe les Cues)
   const secondaryTabs = [
