@@ -115,6 +115,8 @@ pub fn run() {
                 if let Some(runtime) = state.runtime.lock().unwrap_or_else(|e| e.into_inner()).take() {
                     runtime.stop();
                 }
+                // Stopper le receiver OSC
+                state.osc_receiver.lock().unwrap_or_else(|e| e.into_inner()).stop();
                 eprintln!("[INFO] All movements stopped on window close");
             }
         })
@@ -129,6 +131,17 @@ pub fn run() {
                 e.into_inner()
             });
             *handle_guard = Some(app_handle);
+
+            // Démarrer le receiver OSC (port 8001 par défaut)
+            // Non-fatal : si le port est pris, on log l'erreur mais l'app continue
+            {
+                let mut receiver = state.osc_receiver.lock().unwrap_or_else(|e| e.into_inner());
+                if let Err(e) = receiver.start() {
+                    eprintln!("[WARN] OSC receiver failed to start on port {}: {}", receiver.port, e);
+                } else {
+                    eprintln!("[INFO] OSC receiver listening on port {}", receiver.port);
+                }
+            }
 
             // Sur Linux WebKitGTK : autoriser getUserMedia (microphone)
             #[cfg(target_os = "linux")]

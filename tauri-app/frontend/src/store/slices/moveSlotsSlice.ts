@@ -484,13 +484,11 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
     if (!nextSlot) return `Move "${nextSlotId}" introuvable`;
 
     // 1. Stopper tous les moves actifs avec fade
+    //    Le backend attend la fin du fade avant de résoudre la promesse
     const activeSlots = moveSlots.filter((s) => s.movementId);
     if (activeSlots.length > 0) {
       const fadeDur = nextSlot.fadeDuration ?? 2.0;
       await Promise.all(activeSlots.map((s) => get().stopSlotWithFade(s.id, fadeDur)));
-      // Laisser le fade se terminer avant de lancer le suivant
-      // (court car le backend gère le fade de façon asynchrone)
-      await new Promise((r) => setTimeout(r, 300));
     }
 
     // 2. Lancer le prochain move

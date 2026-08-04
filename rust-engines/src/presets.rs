@@ -24,13 +24,14 @@ impl PresetManager {
 
     /// Sauvegarde un preset
     pub fn save(&mut self, name: String, config: serde_json::Value) {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs_f64())
+            .unwrap_or(0.0);
         let preset = Preset {
             name: name.clone(),
             config,
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs_f64(),
+            timestamp,
         };
         self.presets.insert(name, preset);
     }

@@ -313,9 +313,7 @@ export const useAnimationStore = create<AnimationStore>((set, get) => ({
       mv.osc_ids.some((id) => oscIdSet.has(id))
     );
     if (conflictingMovements.length > 0) {
-      console.log(`[launchAnimation] Stopping ${conflictingMovements.length} conflicting movement(s) with fade`);
       await Promise.all(conflictingMovements.map((mv) => stopMovementWithFade(mv.id, 0.5)));
-      await new Promise((r) => setTimeout(r, 200));
     }
 
     // Centroïde — si null, utiliser [0,0,0]

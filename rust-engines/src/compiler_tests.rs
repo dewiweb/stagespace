@@ -159,23 +159,7 @@ mod tests {
         }
     }
 
-    // Mix/Group/Sequence sont implémentés comme fonctions composites f(t)
-    // Les tests nécessitent une configuration plus complexe du graphe
-    // Pour l'instant, on teste que la compilation fonctionne sans erreur
-    /*
-    #[test]
-    fn test_compile_mix() {
-        // TODO: Implémenter test complet avec validation
-    }
-
-    #[test]
-    fn test_compile_group() {
-        // TODO: Implémenter test complet avec validation
-    }
-
-    #[test]
-    fn test_compile_sequence() {
-        // TODO: Implémenter test complet avec validation
-    }
-    */
+    // Mix/Group/Sequence sont testés dans les tests d'intégration de lib.rs
+    // (test_sound_engineer_mix_circle_figure8, test_sound_engineer_group_partition,
+    //  test_sound_engineer_sequence_circle_spiral)
 }

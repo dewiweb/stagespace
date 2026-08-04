@@ -264,7 +264,9 @@ pub async fn stop_movement_with_fade(
         // Crossfade vers une fonction nulle (fade out)
         let zero_fn: PositionFn = Box::new(|_t, _i| nalgebra::Vector3::zeros());
         movement.runtime.recall_cue(zero_fn, fade_duration);
-        // Attendre la fin du fade puis stop
+        // Laisser le thread de playback exécuter le crossfade jusqu'au bout,
+        // puis stopper le runtime et join le thread
+        std::thread::sleep(std::time::Duration::from_secs_f64(fade_duration));
         movement.runtime.stop();
         if let Some(handle) = movement.thread_handle.take() {
             let _ = handle.join();
