@@ -8,6 +8,7 @@ use rosc::{OscMessage, OscPacket, OscType};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 mod types;
@@ -39,6 +40,9 @@ pub struct Runtime {
     animation_state: Arc<Mutex<Option<AnimationState>>>,
     /// Audio state — partagé avec l'app, lu à chaque frame pour les audio mods
     audio_state: Arc<Mutex<AudioState>>,
+    /// Audio param overrides — calculés à chaque frame à partir des audio_mods,
+    /// lus par la closure compilée pour injecter radius/height/turns/offset/rotation
+    audio_param_overrides: Arc<Mutex<HashMap<String, f64>>>,
 }
 
 impl Runtime {
@@ -62,6 +66,7 @@ impl Runtime {
             origin: Arc::new(Mutex::new(nalgebra::Vector3::zeros())),
             animation_state: Arc::new(Mutex::new(None)),
             audio_state: Arc::new(Mutex::new(AudioState::new())),
+            audio_param_overrides: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -93,6 +98,11 @@ impl Runtime {
     pub fn set_audio_state(&self, audio: AudioState) {
         let mut s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());
         *s = audio;
+    }
+
+    /// Récupère l'Arc des audio param overrides — à passer à compile_with_audio_and_overrides
+    pub fn audio_param_overrides(&self) -> Arc<Mutex<HashMap<String, f64>>> {
+        self.audio_param_overrides.clone()
     }
 
     /// Définit le sender OSC
@@ -182,6 +192,7 @@ impl Runtime {
         let origin_arc = self.origin.clone();
         let anim_state_arc = self.animation_state.clone();
         let audio_state_arc = self.audio_state.clone();
+        let audio_param_overrides_arc = self.audio_param_overrides.clone();
 
         let handle = std::thread::spawn(move || {
             let start = Instant::now();
@@ -237,6 +248,12 @@ impl Runtime {
                         (Vec::new(), Vec::new(), std::collections::HashMap::new())
                     }
                 };
+
+                // Mettre à jour les audio param overrides pour que la closure compilée les lise
+                {
+                    let mut ovr = audio_param_overrides_arc.lock().unwrap_or_else(|e| e.into_inner());
+                    *ovr = audio_param_overrides.clone();
+                }
 
                 // Appliquer les audio mods au speed et scale effectifs
                 let effective_speed = audio_param_overrides.get("speed").copied().unwrap_or(speed);

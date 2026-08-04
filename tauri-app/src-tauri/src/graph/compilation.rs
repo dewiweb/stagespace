@@ -1,4 +1,4 @@
-use stagespace_engines::{Compiler, Graph, PositionFn, AudioState};
+use stagespace_engines::{Compiler, Graph, PositionFn, AudioState, AudioParamOverrides};
 use std::sync::{Arc, Mutex};
 
 /// Compile un Graph en PositionFn — wrapper autour de Compiler::compile
@@ -16,5 +16,17 @@ pub fn compile_graph_with_audio(
     audio_state: Arc<Mutex<AudioState>>,
 ) -> Result<PositionFn, String> {
     Compiler::compile_with_audio(graph, audio_state)
+        .map_err(|e| format!("Compilation failed: {:?}", e))
+}
+
+/// Compile un Graph avec audio state + overrides de paramètres audio
+/// Les overrides (radius, height, turns, offset, rotation) sont mis à jour
+/// par le runtime à chaque frame et injectés dans tous les engines.
+pub fn compile_graph_with_audio_and_overrides(
+    graph: &Graph,
+    audio_state: Arc<Mutex<AudioState>>,
+    overrides: AudioParamOverrides,
+) -> Result<PositionFn, String> {
+    Compiler::compile_with_audio_and_overrides(graph, audio_state, overrides)
         .map_err(|e| format!("Compilation failed: {:?}", e))
 }

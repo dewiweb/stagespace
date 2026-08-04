@@ -42,7 +42,7 @@ pub use rng::SimpleRng;
 pub use runtime::{Runtime, PositionFn, MacroState, LoopMode, PlayDirection, PerfStats};
 pub use graph::{Graph, Node, NodeId, NodeType, Edge};
 pub use validator::{Validator, ValidationError, ValidationResult};
-pub use compiler::{Compiler, CompiledFunction, CompilationError};
+pub use compiler::{Compiler, CompiledFunction, CompilationError, AudioParamOverrides};
 pub use falloffs::{Falloff, FalloffContext, TimeFalloff, PointDistanceFalloff, DirectionalFalloff, AudioAmplitudeFalloff, FalloffCurve};
 pub use audio::{AudioState, AmplitudeData, SpectrumData, AudioSource, AudioReactor, AudioBinding, AudioFrame, BPMData};
 pub use bpm::BpmTracker;

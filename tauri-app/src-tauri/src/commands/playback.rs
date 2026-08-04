@@ -6,7 +6,7 @@ use std::sync::{Mutex, MutexGuard};
 use tauri::{State, Emitter};
 use crate::AppState;
 use crate::graph::parser::build_graph_from_json;
-use crate::graph::compilation::compile_graph_with_audio;
+use crate::graph::compilation::{compile_graph_with_audio, compile_graph_with_audio_and_overrides};
 
 /// Récupère le contenu d'un Mutex même s'il est empoisonné (poison recovery).
 fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -160,7 +160,8 @@ pub async fn update_graph(
     let graph = build_graph_from_json(&graph_json, &audio_state)?;
     drop(audio_state);
 
-    let compiled = compile_graph_with_audio(&graph, state.audio_state.clone())?;
+    let overrides = runtime.audio_param_overrides();
+    let compiled = compile_graph_with_audio_and_overrides(&graph, state.audio_state.clone(), overrides)?;
 
     // Crossfade smooth (défaut 0.5s) pour éviter les sauts
     let fade = fade_duration.unwrap_or(0.5);

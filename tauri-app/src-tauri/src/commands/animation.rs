@@ -7,7 +7,7 @@ use tauri::{State, Emitter};
 use crate::AppState;
 use crate::Movement;
 use crate::graph::parser::build_graph_from_json;
-use crate::graph::compilation::compile_graph_with_audio;
+use crate::graph::compilation::compile_graph_with_audio_and_overrides;
 
 /// Récupère le contenu d'un Mutex même s'il est empoisonné (poison recovery).
 fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -45,14 +45,17 @@ pub async fn launch_animation(
     let audio_state = lock_or_recover(&state.audio_state);
     let graph = build_graph_from_json(&graph_json, &audio_state)?;
     drop(audio_state);
-    let compiled = compile_graph_with_audio(&graph, state.audio_state.clone())?;
 
-    // 3. Créer le runtime
+    // 3. Créer le runtime d'abord — pour récupérer l'Arc des audio_param_overrides
     let osc_profile_enum = OscProfile::from_str(&osc_profile)
         .map_err(|e| format!("Invalid OSC profile: {}", e))?;
     let osc_sender = OscSender::new(osc_profile_enum, osc_address.clone(), osc_port);
     let runtime = Runtime::new(osc_address, osc_port, osc_sender)
         .map_err(|e| format!("Failed to create runtime: {}", e))?;
+
+    // 4. Compiler avec audio + overrides (pour que les audio_mods affectent radius, height, etc.)
+    let overrides = runtime.audio_param_overrides();
+    let compiled = compile_graph_with_audio_and_overrides(&graph, state.audio_state.clone(), overrides)?;
 
     // Mode preview
     runtime.set_preview_mode(is_preview);
