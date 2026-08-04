@@ -115,39 +115,39 @@ export default function Inspector() {
   // ── Macros debounce ──
   const macroDebounce = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Sync bidirectionnelle : Macros (Expert) → Animation state (Simple)
-  // Map: speed→speed, scale→scale, shiftX→offset_x, shiftY→offset_y, shiftZ→offset_z,
-  //      yaw→yaw, pitch→pitch, roll→roll
-  const handleMacro = (key: string, value: number) => {
-    setMacros({ [key]: value } as any);
-    // Sync vers Animation state
-    const animKeyMap: Record<string, string> = {
-      speed: 'speed', scale: 'scale',
-      shiftX: 'offset_x', shiftY: 'offset_y', shiftZ: 'offset_z',
-      yaw: 'yaw', pitch: 'pitch', roll: 'roll',
-    };
-    const animKey = animKeyMap[key];
-    if (animKey) {
-      updateCurrent({ [animKey]: value } as any);
+  // Mapping bidirectionnel entre les noms Simple (Animation state) et Expert (Graph store macros)
+  // Simple: scale, offset_x, offset_y, offset_z, yaw, pitch, roll, speed
+  // Expert: scale, shiftX,    shiftY,    shiftZ,    yaw, pitch, roll, speed
+  const SIMPLE_TO_MACRO: Record<string, string> = {
+    scale: 'scale', offset_x: 'shiftX', offset_y: 'shiftY', offset_z: 'shiftZ',
+    yaw: 'yaw', pitch: 'pitch', roll: 'roll', speed: 'speed',
+  };
+  const MACRO_TO_SIMPLE: Record<string, string> = {
+    scale: 'scale', shiftX: 'offset_x', shiftY: 'offset_y', shiftZ: 'offset_z',
+    yaw: 'yaw', pitch: 'pitch', roll: 'roll', speed: 'speed',
+  };
+
+  // Handler unifié : met à jour les deux stores (Animation + Graph macros) + pousse vers le runtime
+  // Utilisé à la fois par les sliders Transform (Simple) et Macros (Expert)
+  const handleUnified = (key: string, value: number, source: 'simple' | 'expert') => {
+    if (source === 'simple') {
+      // key est un nom Simple (offset_x, scale, yaw, ...)
+      updateCurrent({ [key]: value } as any);
+      const macroKey = SIMPLE_TO_MACRO[key];
+      if (macroKey) setMacros({ [macroKey]: value } as any);
+    } else {
+      // key est un nom Expert (shiftX, scale, yaw, ...)
+      setMacros({ [key]: value } as any);
+      const animKey = MACRO_TO_SIMPLE[key];
+      if (animKey) updateCurrent({ [animKey]: value } as any);
     }
+    // Toujours pousser vers le runtime (debounced) — c'était manquant pour le mode Simple
     if (macroDebounce.current) clearTimeout(macroDebounce.current);
     macroDebounce.current = setTimeout(() => { pushMacrosToRuntime(); }, 100);
   };
 
-  // Sync bidirectionnelle : Transform (Simple) → Graph store macros (Expert)
-  // Met à jour les macros du Graph store quand on change les Transform de l'Animation
-  const handleTransform = (key: string, value: number) => {
-    updateCurrent({ [key]: value } as any);
-    // Sync vers Graph store macros
-    const macroKeyMap: Record<string, string> = {
-      scale: 'scale', offset_x: 'shiftX', offset_y: 'shiftY', offset_z: 'shiftZ',
-      yaw: 'yaw', pitch: 'pitch', roll: 'roll',
-    };
-    const macroKey = macroKeyMap[key];
-    if (macroKey) {
-      setMacros({ [macroKey]: value } as any);
-    }
-  };
+  const handleMacro = (key: string, value: number) => handleUnified(key, value, 'expert');
+  const handleTransform = (key: string, value: number) => handleUnified(key, value, 'simple');
 
   const handleNodeParamChange = (key: string, value: any) => {
     if (!selectedNode) return;
@@ -320,9 +320,8 @@ export default function Inspector() {
               )}
             </Section>
 
-            {/* PERFORM — speed, duration, direction, loop */}
+            {/* PERFORM — duration, direction, loop, fade */}
             <Section title="Perform" icon="▶">
-              <Slider label="Vitesse" value={current.speed} min={0.1} max={4} step={0.05} onChange={(v) => updateCurrent({ speed: v })} unit="x" />
               <Slider label="Durée" value={current.duration} min={0.5} max={30} step={0.5} onChange={(v) => updateCurrent({ duration: v })} unit="s" />
               <div className="flex gap-1 pt-1">
                 {(['forward', 'backward', 'ping_pong'] as const).map((d) => (
@@ -344,60 +343,61 @@ export default function Inspector() {
               <Slider label="Fondu out" value={current.fade_out} min={0} max={5} step={0.1} onChange={(v) => updateCurrent({ fade_out: v })} unit="s" />
             </Section>
 
-            {/* TRANSFORM — scale, rotation, offset (sync bidirectionnelle avec Macros Expert) */}
-            <Section title="Transform" icon="⟲">
-              <Slider label="Échelle" value={current.scale} min={0} max={4} step={0.05} onChange={(v) => handleTransform('scale', v)} color="green" />
-              <Slider label="Pos X" value={current.offset_x} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_x', v)} color="green" />
-              <Slider label="Pos Y" value={current.offset_y} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_y', v)} color="green" />
-              <Slider label="Pos Z" value={current.offset_z} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_z', v)} color="green" />
-              <Slider label="Yaw" value={current.yaw} min={-180} max={180} step={1} onChange={(v) => handleTransform('yaw', v)} unit="°" color="green" />
-              <Slider label="Pitch" value={current.pitch} min={-90} max={90} step={1} onChange={(v) => handleTransform('pitch', v)} unit="°" color="green" />
-              <Slider label="Roll" value={current.roll} min={-180} max={180} step={1} onChange={(v) => handleTransform('roll', v)} unit="°" color="green" />
-            </Section>
-
-            {/* AUDIO — mods audio-reactifs */}
-            <Section title="Audio" icon="♪" defaultOpen={false} badge={current.audio_mods.length > 0 ? `${current.audio_mods.length}` : undefined}>
-              {current.audio_mods.length === 0 && !showAudioAdd && (
-                <div className="text-gray-600 text-[10px] py-1">
-                  Aucun mod audio. Cliquez « + Ajouter » pour créer un mapping audio.
-                </div>
-              )}
-              {current.audio_mods.map((mod, i) => (
-                <div key={i} className="bg-gray-800/60 rounded p-2 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-cyan-400 text-[10px] font-mono">
-                      {audioSourceLabel(mod.source)} → {audioTargetLabel(mod.target)}
-                    </span>
-                    <button onClick={() => removeAudioMod(i)} className="text-red-400 text-[10px]">✕</button>
-                  </div>
-                  <Slider label="Intensité" value={mod.amount} min={0} max={2} step={0.05}
-                    onChange={(v) => {
-                      const mods = [...current.audio_mods];
-                      mods[i] = { ...mod, amount: v };
-                      updateCurrent({ audio_mods: mods });
-                    }} color="cyan" />
-                  <Slider label="Lissage" value={mod.smoothing} min={0} max={0.95} step={0.05}
-                    onChange={(v) => {
-                      const mods = [...current.audio_mods];
-                      mods[i] = { ...mod, smoothing: v };
-                      updateCurrent({ audio_mods: mods });
-                    }} color="cyan" />
-                </div>
-              ))}
-              {showAudioAdd && (
-                <AudioModAdder onAdd={(mod) => { addAudioMod(mod); setShowAudioAdd(false); }} onCancel={() => setShowAudioAdd(false)} />
-              )}
-              {!showAudioAdd && (
-                <button onClick={() => setShowAudioAdd(true)}
-                  className="w-full py-1.5 bg-cyan-900/40 hover:bg-cyan-800/60 text-cyan-300 text-[10px] rounded font-medium">
-                  + Ajouter un mod audio
-                </button>
-              )}
+            {/* MACROS — speed, scale, shift, rotation (unifié avec Expert) */}
+            <Section title="Macros" icon="⚡">
+              <Slider label="Vitesse" value={current.speed} min={0} max={4} step={0.05} onChange={(v) => handleTransform('speed', v)} unit="x" color="purple" />
+              <Slider label="Échelle" value={current.scale} min={0} max={4} step={0.05} onChange={(v) => handleTransform('scale', v)} color="purple" />
+              <Slider label="Shift X" value={current.offset_x} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_x', v)} color="purple" />
+              <Slider label="Shift Y" value={current.offset_y} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_y', v)} color="purple" />
+              <Slider label="Shift Z" value={current.offset_z} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_z', v)} color="purple" />
+              <Slider label="Yaw" value={current.yaw} min={-180} max={180} step={1} onChange={(v) => handleTransform('yaw', v)} unit="°" color="purple" />
+              <Slider label="Pitch" value={current.pitch} min={-90} max={90} step={1} onChange={(v) => handleTransform('pitch', v)} unit="°" color="purple" />
+              <Slider label="Roll" value={current.roll} min={-180} max={180} step={1} onChange={(v) => handleTransform('roll', v)} unit="°" color="purple" />
             </Section>
           </>
         )}
 
         {/* ═══════════════ COMMUN (Simple + Expert) ═══════════════ */}
+
+        {/* AUDIO — mods audio-reactifs (commun aux deux modes) */}
+        <Section title="Audio" icon="♪" defaultOpen={false} badge={current.audio_mods.length > 0 ? `${current.audio_mods.length}` : undefined}>
+          {current.audio_mods.length === 0 && !showAudioAdd && (
+            <div className="text-gray-600 text-[10px] py-1">
+              Aucun mod audio. Cliquez « + Ajouter » pour créer un mapping audio.
+            </div>
+          )}
+          {current.audio_mods.map((mod, i) => (
+            <div key={i} className="bg-gray-800/60 rounded p-2 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-cyan-400 text-[10px] font-mono">
+                  {audioSourceLabel(mod.source)} → {audioTargetLabel(mod.target)}
+                </span>
+                <button onClick={() => removeAudioMod(i)} className="text-red-400 text-[10px]">✕</button>
+              </div>
+              <Slider label="Intensité" value={mod.amount} min={0} max={2} step={0.05}
+                onChange={(v) => {
+                  const mods = [...current.audio_mods];
+                  mods[i] = { ...mod, amount: v };
+                  updateCurrent({ audio_mods: mods });
+                }} color="cyan" />
+              <Slider label="Lissage" value={mod.smoothing} min={0} max={0.95} step={0.05}
+                onChange={(v) => {
+                  const mods = [...current.audio_mods];
+                  mods[i] = { ...mod, smoothing: v };
+                  updateCurrent({ audio_mods: mods });
+                }} color="cyan" />
+            </div>
+          ))}
+          {showAudioAdd && (
+            <AudioModAdder onAdd={(mod) => { addAudioMod(mod); setShowAudioAdd(false); }} onCancel={() => setShowAudioAdd(false)} />
+          )}
+          {!showAudioAdd && (
+            <button onClick={() => setShowAudioAdd(true)}
+              className="w-full py-1.5 bg-cyan-900/40 hover:bg-cyan-800/60 text-cyan-300 text-[10px] rounded font-medium">
+              + Ajouter un mod audio
+            </button>
+          )}
+        </Section>
 
         {/* TRACKS — sélection + depth + phase spread */}
         <Section title="Tracks" icon="◉" badge={selectedCount > 0 ? `${selectedCount}/${totalTracks}` : `${totalTracks}`}>
