@@ -26,13 +26,17 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
   const inputPorts = getInputPorts(data.type);
 
   // Audio live indicator — pour les nodes audio, afficher les valeurs live
+  // Optimisation: seuls les nodes audio se re-subscribe à audioState (60fps)
+  // Les autres nodes retournent null → pas de re-render
   const isAudioNode = AUDIO_NODE_TYPES.has(data.type);
-  const audioState = useGraphStore((s) => s.audioState);
-  const audioBpm = audioState.bpm?.bpm ?? null;
-  const audioRms = audioState.amplitude?.rms ?? null;
-  const audioBass = audioState.amplitude?.bass ?? null;
-  const audioMid = audioState.amplitude?.mid ?? null;
-  const audioHigh = audioState.amplitude?.high ?? null;
+  const audioState = useGraphStore((s) =>
+    isAudioNode ? s.audioState : null
+  );
+  const audioBpm = audioState?.bpm?.bpm ?? null;
+  const audioRms = audioState?.amplitude?.rms ?? null;
+  const audioBass = audioState?.amplitude?.bass ?? null;
+  const audioMid = audioState?.amplitude?.mid ?? null;
+  const audioHigh = audioState?.amplitude?.high ?? null;
 
   const handleChange = useCallback((key: string, value: any) => {
     updateNodeData(id, { params: { ...data.params, [key]: value } });
@@ -217,7 +221,7 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
               <MiniBar label="High" value={audioHigh ?? 0} color="bg-yellow-500" />
             </>
           )}
-          {data.type === 'AudioSpectrum' && audioState.spectrum && (
+          {data.type === 'AudioSpectrum' && audioState?.spectrum && (
             <div className="flex items-end gap-0.5 h-6">
               {audioState.spectrum.spectrum.slice(0, 16).map((v, i) => (
                 <div

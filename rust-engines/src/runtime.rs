@@ -105,6 +105,11 @@ impl Runtime {
         self.audio_param_overrides.clone()
     }
 
+    /// Récupère l'Arc de l'audio state — permet de mettre à jour sans locker state.movements
+    pub fn audio_state_arc(&self) -> Arc<Mutex<AudioState>> {
+        self.audio_state.clone()
+    }
+
     /// Définit le sender OSC
     pub fn set_osc_sender(&self, osc_sender: OscSender) {
         let mut sender = self.osc_sender.lock().unwrap_or_else(|e| e.into_inner());
