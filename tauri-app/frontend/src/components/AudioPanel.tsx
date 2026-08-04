@@ -1,6 +1,7 @@
 import React from 'react';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { useGraphStore, type AudioState } from '../store/useGraphStore';
+import { createBpmDetector, detectBeat, type BpmDetector } from '../utils/bpmDetector';
 
 export default function AudioPanel() {
   const audioState = useGraphStore((s) => s.audioState);
@@ -15,6 +16,7 @@ export default function AudioPanel() {
   const streamRef = React.useRef<MediaStream | null>(null);
   const rafRef = React.useRef<number | null>(null);
   const lastPushRef = React.useRef(0);
+  const bpmDetectorRef = React.useRef<BpmDetector>(createBpmDetector());
 
   const stopListening = React.useCallback(async () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -28,6 +30,7 @@ export default function AudioPanel() {
       audioCtxRef.current = null;
     }
     analyserRef.current = null;
+    bpmDetectorRef.current = createBpmDetector();
     setIsListening(false);
     setAudioState({ bpm: null, amplitude: null, spectrum: null });
   }, [setAudioState]);
@@ -100,8 +103,18 @@ export default function AudioPanel() {
         const mid = midSum / ((midEnd - bassEnd) * 255);
         const high = highSum / ((bins - midEnd) * 255);
 
+        // Beat detection — update BPM from low-frequency energy
+        const ctx = audioCtxRef.current;
+        const detector = detectBeat(
+          bpmDetectorRef.current, freqData, analyser.fftSize,
+          performance.now(), ctx?.sampleRate,
+        );
+        const bpm = detector.bpm !== null
+          ? { bpm: detector.bpm, confidence: detector.confidence, last_beat_time: detector.lastBeatTime / 1000 }
+          : null;
+
         const newAudioState: AudioState = {
-          bpm: audioState.bpm,
+          bpm,
           amplitude: { rms, bass, mid, high },
           spectrum: { spectrum: Array.from(freqData).map((v) => v / 255), fft_size: analyser.fftSize },
         };
@@ -122,7 +135,7 @@ export default function AudioPanel() {
       setError(e?.message ?? 'Failed to access microphone');
       setIsListening(false);
     }
-  }, [audioState.bpm, setAudioState, selectedAudioDeviceId, audioDevices.length]);
+  }, [setAudioState, selectedAudioDeviceId, audioDevices.length]);
 
   React.useEffect(() => {
     return () => { void stopListening(); };
