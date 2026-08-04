@@ -4,6 +4,8 @@ import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { PARAM_SCHEMA, getCategoryColor, type ParamDef } from './nodeParamSchema';
 import { isSourceNode, isTerminalNode, isBinaryComposite, getInputPorts } from '../utils/connectionRules';
 
+const AUDIO_NODE_TYPES = new Set(['BPM', 'AudioAmplitude', 'AudioSpectrum', 'AudioAmplitudeFalloff']);
+
 interface CustomNodeData {
   label: string;
   type: NodeType;
@@ -22,6 +24,15 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
   const hasOutput = !isTerminalNode(data.type);
   const isBinary = isBinaryComposite(data.type);
   const inputPorts = getInputPorts(data.type);
+
+  // Audio live indicator — pour les nodes audio, afficher les valeurs live
+  const isAudioNode = AUDIO_NODE_TYPES.has(data.type);
+  const audioState = useGraphStore((s) => s.audioState);
+  const audioBpm = audioState.bpm?.bpm ?? null;
+  const audioRms = audioState.amplitude?.rms ?? null;
+  const audioBass = audioState.amplitude?.bass ?? null;
+  const audioMid = audioState.amplitude?.mid ?? null;
+  const audioHigh = audioState.amplitude?.high ?? null;
 
   const handleChange = useCallback((key: string, value: any) => {
     updateNodeData(id, { params: { ...data.params, [key]: value } });
@@ -169,7 +180,15 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
 
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-gray-700" style={{ background: color + '20' }}>
-        <span className="text-white text-sm font-semibold truncate">{data.label}</span>
+        <div className="flex items-center gap-1.5 min-w-0">
+          {isAudioNode && audioRms !== null && (
+            <span className="flex items-center gap-1 flex-shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+              <span className="text-red-400 text-[8px] font-bold tracking-wider">LIVE</span>
+            </span>
+          )}
+          <span className="text-white text-sm font-semibold truncate">{data.label}</span>
+        </div>
         {schema.length > 0 && (
           <button
             onClick={() => setExpanded(!expanded)}
@@ -180,6 +199,40 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
           </button>
         )}
       </div>
+
+      {/* Audio live values — affiché sous le header pour les nodes audio actifs */}
+      {isAudioNode && audioRms !== null && (
+        <div className="px-3 py-1.5 bg-gray-900/60 border-b border-gray-700/50 space-y-1">
+          {data.type === 'BPM' && audioBpm !== null && (
+            <div className="flex items-center justify-between text-[10px]">
+              <span className="text-gray-500">BPM live</span>
+              <span className="text-cyan-400 font-mono font-bold">{audioBpm.toFixed(0)}</span>
+            </div>
+          )}
+          {data.type === 'AudioAmplitude' && (
+            <>
+              <MiniBar label="RMS" value={audioRms ?? 0} color="bg-blue-500" />
+              <MiniBar label="Bass" value={audioBass ?? 0} color="bg-red-500" />
+              <MiniBar label="Mid" value={audioMid ?? 0} color="bg-green-500" />
+              <MiniBar label="High" value={audioHigh ?? 0} color="bg-yellow-500" />
+            </>
+          )}
+          {data.type === 'AudioSpectrum' && audioState.spectrum && (
+            <div className="flex items-end gap-0.5 h-6">
+              {audioState.spectrum.spectrum.slice(0, 16).map((v, i) => (
+                <div
+                  key={i}
+                  className="flex-1 bg-gradient-to-t from-cyan-600 to-cyan-400 rounded-sm transition-all duration-75"
+                  style={{ height: `${Math.max(2, Math.min(100, v * 100))}%` }}
+                />
+              ))}
+            </div>
+          )}
+          {data.type === 'AudioAmplitudeFalloff' && (
+            <MiniBar label="RMS" value={audioRms ?? 0} color="bg-orange-500" />
+          )}
+        </div>
+      )}
 
       {/* Binary composite labels for A/B inputs */}
       {isBinary && hasInput && (
@@ -296,5 +349,18 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
     </div>
   );
 };
+
+const MiniBar: React.FC<{ label: string; value: number; color: string }> = ({ label, value, color }) => (
+  <div className="flex items-center gap-1.5">
+    <span className="text-gray-500 text-[9px] w-7">{label}</span>
+    <div className="flex-1 h-1.5 bg-gray-950 rounded-full overflow-hidden">
+      <div
+        className={`h-full ${color} transition-all duration-75 rounded-full`}
+        style={{ width: `${Math.min(100, value * 100)}%` }}
+      />
+    </div>
+    <span className="text-gray-600 text-[8px] font-mono w-6 text-right">{(value * 100).toFixed(0)}</span>
+  </div>
+);
 
 export default CustomNode;

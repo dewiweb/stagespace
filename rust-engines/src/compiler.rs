@@ -579,12 +579,24 @@ impl Compiler {
                             map.insert("amplitude_mid".to_string(), serde_json::json!(amp.mid));
                             map.insert("amplitude_high".to_string(), serde_json::json!(amp.high));
                         }
-                        // Injecter spectre (premiers bins pour AudioSpectrum)
+                        // Injecter spectre — deux formats pour compatibilité:
+                        // 1. "spectrum" (array) — lu par AudioSpectrum engine
+                        // 2. "spectrum_band_0..N" — lu par AudioSpectrum engine (fallback)
                         if let Some(spec) = &audio.spectrum {
-                            // Injecter les 8 premiers bins comme amplitude_spectrum_0..7
-                            for (i, val) in spec.spectrum.iter().take(8).enumerate() {
+                            // Prendre les 16 premiers bins, groupés en 8 bandes par paire
+                            let n_bands = 8;
+                            let bins_per_band = (spec.spectrum.len() / n_bands).max(1);
+                            let bands: Vec<f64> = (0..n_bands).map(|i| {
+                                let start = i * bins_per_band;
+                                let end = ((i + 1) * bins_per_band).min(spec.spectrum.len());
+                                if start >= end { return 0.0; }
+                                let sum: f64 = spec.spectrum[start..end].iter().sum();
+                                sum / (end - start) as f64
+                            }).collect();
+                            map.insert("spectrum".to_string(), serde_json::json!(bands));
+                            for (i, val) in bands.iter().enumerate() {
                                 map.insert(
-                                    format!("amplitude_spectrum_{}", i),
+                                    format!("spectrum_band_{}", i),
                                     serde_json::json!(val),
                                 );
                             }
