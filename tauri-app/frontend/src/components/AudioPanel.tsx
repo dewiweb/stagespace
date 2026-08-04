@@ -144,7 +144,7 @@ export default function AudioPanel() {
   const amp = audioState.amplitude;
 
   return (
-    <div className="p-3 h-full flex flex-col gap-3">
+    <div className="p-3 flex flex-col gap-2">
       <div className="flex items-center gap-2">
         <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
           <span className="text-white text-xs">MIC</span>

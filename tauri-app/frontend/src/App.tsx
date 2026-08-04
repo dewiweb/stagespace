@@ -4,6 +4,7 @@ import Scene3D from './components/Scene3D';
 import MovesTable from './components/MovesTable';
 import AnimationList from './components/AnimationList';
 import Inspector from './components/Inspector';
+import AudioPanel from './components/AudioPanel';
 import TabPanel from './components/TabPanel';
 import Toolbar from './components/Toolbar';
 import { prepareGraphForSave } from './components/nodeParamSchema';
@@ -221,7 +222,7 @@ function App() {
             <span className="text-gray-600 text-[9px] mt-2" style={{ writingMode: 'vertical-rl' }}>Inspector</span>
           </button>
         ) : (
-          <div className="w-72 border-l border-stagespace-border flex-shrink-0 relative">
+          <div className="w-72 border-l border-stagespace-border flex-shrink-0 relative flex flex-col">
             <button
               onClick={() => setRightCollapsed(true)}
               className="absolute -left-3 top-2 z-20 w-6 h-6 bg-stagespace-panel border border-stagespace-border rounded-full flex items-center justify-center text-gray-500 hover:text-white hover:bg-gray-800 transition-colors text-xs"
@@ -229,7 +230,14 @@ function App() {
             >
               ▸
             </button>
-            <Inspector />
+            {/* Audio Panel — compact, en haut */}
+            <div className="flex-shrink-0 max-h-[40%] overflow-y-auto border-b border-stagespace-border">
+              <AudioPanel />
+            </div>
+            {/* Inspector — prend le reste de l'espace */}
+            <div className="flex-1 overflow-y-auto">
+              <Inspector />
+            </div>
           </div>
         )}
       </div>
