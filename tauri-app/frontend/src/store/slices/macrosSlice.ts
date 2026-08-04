@@ -11,6 +11,8 @@ export type MacrosState = {
   yaw: number;
   pitch: number;
   roll: number;
+  radius_scale: number;
+  height_offset: number;
 };
 
 export interface MacrosSlice {
@@ -27,7 +29,7 @@ type MacrosStore = MacrosSlice & {
 };
 
 export const createMacrosSlice: StateCreator<MacrosStore, [], [], MacrosSlice> = (set, get) => ({
-  macros: { speed: 1.0, scale: 1.0, shiftX: 0, shiftY: 0, shiftZ: 0, yaw: 0, pitch: 0, roll: 0 },
+  macros: { speed: 1.0, scale: 1.0, shiftX: 0, shiftY: 0, shiftZ: 0, yaw: 0, pitch: 0, roll: 0, radius_scale: 1.0, height_offset: 0 },
   setMacros: (partial) => set((s) => ({ macros: { ...s.macros, ...partial } })),
 
   pushMacrosToRuntime: async () => {
@@ -41,6 +43,8 @@ export const createMacrosSlice: StateCreator<MacrosStore, [], [], MacrosSlice> =
       yaw: macros.yaw,
       pitch: macros.pitch,
       roll: macros.roll,
+      radius_scale: macros.radius_scale,
+      height_offset: macros.height_offset,
     };
     try {
       if (movements.length > 0) {

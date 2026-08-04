@@ -221,6 +221,8 @@ pub async fn set_movement_macro(
         request.pitch.unwrap_or(cp),
         request.roll.unwrap_or(cr),
     );
+    if let Some(v) = request.radius_scale { macros.set_radius_scale(v); }
+    if let Some(v) = request.height_offset { macros.set_height_offset(v); }
     Ok(())
 }
 

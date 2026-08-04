@@ -27,7 +27,7 @@ export const TrajectoryVisualization: React.FC<TrajectoryVisualizationProps> = (
   const movements = useGraphStore((s) => s.movements);
   const currentAnim = useAnimationStore((s) => s.current);
 
-  const macrosKey = `${macros.speed},${macros.scale},${macros.shiftX},${macros.shiftY},${macros.shiftZ},${macros.yaw},${macros.pitch},${macros.roll}`;
+  const macrosKey = `${macros.speed},${macros.scale},${macros.shiftX},${macros.shiftY},${macros.shiftZ},${macros.yaw},${macros.pitch},${macros.roll},${macros.radius_scale},${macros.height_offset}`;
   const movementIdsKey = movements.map((m) => m.id).join(',');
   // animKey capture tous les params qui affectent la forme du path (live ou non)
   const animKey = [

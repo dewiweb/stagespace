@@ -183,6 +183,8 @@ pub struct SetMacroRequest {
     pub yaw: Option<f64>,
     pub pitch: Option<f64>,
     pub roll: Option<f64>,
+    pub radius_scale: Option<f64>,
+    pub height_offset: Option<f64>,
 }
 
 #[tauri::command]
@@ -206,6 +208,9 @@ pub async fn set_macro(request: SetMacroRequest, state: State<'_, AppState>) -> 
             request.pitch.unwrap_or(cp),
             request.roll.unwrap_or(cr),
         );
+        // radius_scale + height_offset
+        if let Some(v) = request.radius_scale { macros.set_radius_scale(v); }
+        if let Some(v) = request.height_offset { macros.set_height_offset(v); }
         Ok(())
     } else {
         Err("No active runtime".to_string())

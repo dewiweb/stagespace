@@ -15,6 +15,8 @@ type MacrosValue = {
   yaw: number;
   pitch: number;
   roll: number;
+  radius_scale: number;
+  height_offset: number;
 };
 type DrawnPointsValue = Array<[number, number, number]>;
 

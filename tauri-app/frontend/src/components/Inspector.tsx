@@ -121,10 +121,12 @@ export default function Inspector() {
   const SIMPLE_TO_MACRO: Record<string, string> = {
     scale: 'scale', offset_x: 'shiftX', offset_y: 'shiftY', offset_z: 'shiftZ',
     yaw: 'yaw', pitch: 'pitch', roll: 'roll', speed: 'speed',
+    radius_scale: 'radius_scale', height_offset: 'height_offset',
   };
   const MACRO_TO_SIMPLE: Record<string, string> = {
     scale: 'scale', shiftX: 'offset_x', shiftY: 'offset_y', shiftZ: 'offset_z',
     yaw: 'yaw', pitch: 'pitch', roll: 'roll', speed: 'speed',
+    radius_scale: 'radius_scale', height_offset: 'height_offset',
   };
 
   // Handler unifié : met à jour les deux stores (Animation + Graph macros) + pousse vers le runtime
@@ -289,6 +291,10 @@ export default function Inspector() {
                 onChange={(v) => handleMacro('pitch', v)} unit="°" color="purple" />
               <Slider label="Roll" value={macros.roll} min={-180} max={180} step={1}
                 onChange={(v) => handleMacro('roll', v)} unit="°" color="purple" />
+              <Slider label="Radius" value={macros.radius_scale} min={0} max={4} step={0.05}
+                onChange={(v) => handleMacro('radius_scale', v)} unit="x" color="purple" />
+              <Slider label="Height" value={macros.height_offset} min={-5} max={5} step={0.1}
+                onChange={(v) => handleMacro('height_offset', v)} unit="m" color="purple" />
               <div className="text-gray-600 text-[9px] pt-1">Macros = transformations runtime appliquées à tous les moves actifs</div>
             </Section>
           </>
@@ -353,6 +359,8 @@ export default function Inspector() {
               <Slider label="Yaw" value={current.yaw} min={-180} max={180} step={1} onChange={(v) => handleTransform('yaw', v)} unit="°" color="purple" />
               <Slider label="Pitch" value={current.pitch} min={-90} max={90} step={1} onChange={(v) => handleTransform('pitch', v)} unit="°" color="purple" />
               <Slider label="Roll" value={current.roll} min={-180} max={180} step={1} onChange={(v) => handleTransform('roll', v)} unit="°" color="purple" />
+              <Slider label="Radius" value={macros.radius_scale} min={0} max={4} step={0.05} onChange={(v) => handleMacro('radius_scale', v)} unit="x" color="purple" />
+              <Slider label="Height" value={macros.height_offset} min={-5} max={5} step={0.1} onChange={(v) => handleMacro('height_offset', v)} unit="m" color="purple" />
             </Section>
           </>
         )}
