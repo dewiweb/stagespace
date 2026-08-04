@@ -77,8 +77,8 @@ export const createHolProjectSlice: StateCreator<HolProjectStore, [], [], HolPro
   },
   clearHol: () => set({ holProject: null, selectedTrackIds: new Set() }),
 
-  // Track selection
-  selectedTrackIds: new Set<number>(),
+  // Track selection — tous sélectionnés par défaut (cohérent avec getSelectedOscIds)
+  selectedTrackIds: new Set<number>([1, 2, 3, 4, 5, 6, 7, 8, 9]),
   manualOscIds: [1, 2, 3, 4, 5, 6, 7, 8, 9],
   setManualOscIds: (ids) => set({ manualOscIds: ids }),
 
@@ -110,20 +110,16 @@ export const createHolProjectSlice: StateCreator<HolProjectStore, [], [], HolPro
   },
   getSelectedOscIds: () => {
     const s = get();
-    if (s.selectedTrackIds.size > 0) {
-      return Array.from(s.selectedTrackIds).sort((a, b) => a - b);
-    }
-    // Fallback: tous les tracks du .hol
-    if (s.holProject) {
-      return s.holProject.tracks.map((t) => t.id).sort((a, b) => a - b);
-    }
-    // Fallback final: manualOscIds (tracks virtuels sans .hol)
-    return s.manualOscIds;
+    // Retourne les tracks sélectionnés, ou empty array si aucun
+    // (plus de fallback — selectedTrackIds est initialisé avec tous les tracks par défaut)
+    return Array.from(s.selectedTrackIds).sort((a, b) => a - b);
   },
   syncObjectsNode: () => {
     const s = get();
     const ids = s.getSelectedOscIds();
-    if (ids.length === 0) return;
+    // Même si ids est vide, on met à jour (pour montrer 0 objets si l'utilisateur désélectionne tout)
+    // Mais on ne crée pas de node Objects si la liste est vide et qu'il n'y a pas de node existant
+    if (ids.length === 0 && !s.nodes.find((n) => (n.data as any)?.type === 'Objects')) return;
 
     // Trouver le node Objects et mettre à jour n_objects
     const objectsNode = s.nodes.find((n) => (n.data as any)?.type === 'Objects');

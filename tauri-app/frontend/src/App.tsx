@@ -153,62 +153,61 @@ function App() {
 
         {/* Colonne centre : 3D Canvas + Expert (split view quand Expert activé) */}
         <div className="flex-1 flex flex-col bg-stagespace-panel min-w-[300px]">
+          {/* Barre du haut — change selon le mode */}
           {showExpert ? (
-            <>
-              {/* Barre du haut — Expert */}
-              <div className="h-9 border-b border-stagespace-border flex items-center px-3 flex-shrink-0 gap-2">
-                <span className="text-gray-300 text-xs font-medium">Expert — Node Editor</span>
-                <div className="flex-1" />
-                <span className="text-gray-500 text-[10px]">Lancer via MovesTable ▶</span>
-                <button
-                  onClick={() => {
-                    const { nodes, edges } = useGraphStore.getState();
-                    const graphJson = prepareGraphForSave(nodes, edges);
-                    useAnimationStore.getState().updateCurrent({
-                      graph_json: graphJson,
-                    });
-                    useAnimationStore.getState().saveAnimation();
-                    setShowExpert(false);
-                  }}
-                  className="px-2 py-0.5 text-[10px] bg-purple-700 hover:bg-purple-600 text-white rounded font-medium"
-                  title="Sauvegarder le graphe comme animation Custom"
-                >
-                  ★ Save
-                </button>
-              </div>
-              {/* Split view: Node editor (gauche) + 3D preview (droite) */}
-              <div className="flex-1 flex min-h-0">
-                <div className="flex-1 min-w-0 border-r border-stagespace-border">
-                  <NodeEditor />
-                </div>
-                <div className="w-1/2 min-w-[200px] flex flex-col">
-                  <div className="h-7 border-b border-stagespace-border flex items-center px-2 bg-stagespace-panel flex-shrink-0">
-                    <span className="text-gray-400 text-[10px] font-medium">3D Preview</span>
-                    <span className="text-gray-600 text-[9px] ml-2">orbit: drag · zoom: scroll</span>
-                  </div>
-                  <div className="flex-1 min-h-0">
-                    <Scene3D width="100%" height="100%" />
-                  </div>
-                </div>
-              </div>
-            </>
+            <div className="h-9 border-b border-stagespace-border flex items-center px-3 flex-shrink-0 gap-2">
+              <span className="text-gray-300 text-xs font-medium">Expert — Node Editor</span>
+              <div className="flex-1" />
+              <span className="text-gray-500 text-[10px]">Lancer via MovesTable ▶</span>
+              <button
+                onClick={() => {
+                  const { nodes, edges } = useGraphStore.getState();
+                  const graphJson = prepareGraphForSave(nodes, edges);
+                  useAnimationStore.getState().updateCurrent({
+                    graph_json: graphJson,
+                  });
+                  useAnimationStore.getState().saveAnimation();
+                  setShowExpert(false);
+                }}
+                className="px-2 py-0.5 text-[10px] bg-purple-700 hover:bg-purple-600 text-white rounded font-medium"
+                title="Sauvegarder le graphe comme animation Custom"
+              >
+                ★ Save
+              </button>
+            </div>
           ) : (
-            <>
-              <div className="h-9 border-b border-stagespace-border flex items-center px-3 bg-stagespace-panel flex-shrink-0">
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 rounded bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                    <span className="text-white text-[8px] font-bold">3D</span>
-                  </div>
-                  <span className="text-gray-300 text-xs font-medium">Canvas</span>
+            <div className="h-9 border-b border-stagespace-border flex items-center px-3 bg-stagespace-panel flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                  <span className="text-white text-[8px] font-bold">3D</span>
                 </div>
-                <div className="flex-1" />
-                <span className="text-gray-600 text-[10px]">orbit: drag · zoom: scroll</span>
+                <span className="text-gray-300 text-xs font-medium">Canvas</span>
               </div>
-              <div className="flex-1">
+              <div className="flex-1" />
+              <span className="text-gray-600 text-[10px]">orbit: drag · zoom: scroll</span>
+            </div>
+          )}
+
+          {/* Contenu : NodeEditor (Expert only) + Scene3D (toujours monté, même position) */}
+          <div className="flex-1 flex min-h-0">
+            {showExpert && (
+              <div className="flex-1 min-w-0 border-r border-stagespace-border">
+                <NodeEditor />
+              </div>
+            )}
+            {/* Scene3D toujours rendu au même endroit — pas de unmount/remount */}
+            <div className={showExpert ? "w-1/2 min-w-[200px] flex flex-col" : "flex-1 flex flex-col"}>
+              {showExpert && (
+                <div className="h-7 border-b border-stagespace-border flex items-center px-2 bg-stagespace-panel flex-shrink-0">
+                  <span className="text-gray-400 text-[10px] font-medium">3D Preview</span>
+                  <span className="text-gray-600 text-[9px] ml-2">orbit: drag · zoom: scroll</span>
+                </div>
+              )}
+              <div className="flex-1 min-h-0">
                 <Scene3D width="100%" height="100%" />
               </div>
-            </>
-          )}
+            </div>
+          </div>
         </div>
 
         {/* Colonne droite : Inspector (collapsible) */}

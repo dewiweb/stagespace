@@ -106,11 +106,17 @@ export function useRenderLoop({
   drawnPointsRef.current = drawnPoints;
   manualPositionsRef.current = manualPositions;
 
-  // Init scene — se re-déclenche quand les dimensions arrivent (au remontage)
-  // Le guard `sceneRef.current` évite la double initialisation
+  // Init scene — ne se déclenche qu'une seule fois (deps = [])
+  // Les dimensions initiales sont lues directement depuis le container
+  // Le ResizeObserver (dans Scene3D) gère les resize ultérieurs sans recréer la scène
   useEffect(() => {
-    if (!containerRef.current || dimensions.width === 0) return;
+    if (!containerRef.current) return;
     if (sceneRef.current) return; // déjà initialisé
+
+    // Lire la taille réelle du container au moment de l'init
+    const rect = containerRef.current.getBoundingClientRect();
+    const initW = Math.max(rect.width, 100);
+    const initH = Math.max(rect.height, 100);
 
     try {
     const scene = new THREE.Scene();
@@ -118,7 +124,7 @@ export function useRenderLoop({
     scene.fog = new THREE.Fog(0x0a0a0f, 15, 40);
     sceneRef.current = scene;
 
-    const camera = new THREE.PerspectiveCamera(60, dimensions.width / dimensions.height, 0.1, 100);
+    const camera = new THREE.PerspectiveCamera(60, initW / initH, 0.1, 100);
     camera.position.set(6, 5, 8);
     camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
@@ -131,7 +137,7 @@ export function useRenderLoop({
       setWebglFailed(true);
       return;
     }
-    renderer.setSize(dimensions.width, dimensions.height);
+    renderer.setSize(initW, initH);
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.domElement.style.position = 'absolute';
     renderer.domElement.style.top = '0';
@@ -143,7 +149,7 @@ export function useRenderLoop({
 
     // CSS2D renderer for labels
     const labelRenderer = new CSS2DRenderer();
-    labelRenderer.setSize(dimensions.width, dimensions.height);
+    labelRenderer.setSize(initW, initH);
     labelRenderer.domElement.style.position = 'absolute';
     labelRenderer.domElement.style.top = '0';
     labelRenderer.domElement.style.pointerEvents = 'none';
@@ -442,5 +448,6 @@ export function useRenderLoop({
       console.error('Scene3D init failed:', e);
       setWebglFailed(true);
     }
-  }, [dimensions.width, dimensions.height]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ← deps vide : la scène n'est créée qu'une fois. Le ResizeObserver gère les resize.
 }
