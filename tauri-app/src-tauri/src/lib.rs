@@ -957,4 +957,229 @@ mod tests {
         let n_obj = engine.params.get("n_objects").and_then(|v| v.as_u64());
         assert_eq!(n_obj, Some(8), "Parser should force n_objects=8 from Objects node");
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // TESTS Phase 2-3 : Global graph, MergeRuntime, Cue system
+    // ═══════════════════════════════════════════════════════════════
+
+    /// Construit un graph global JSON (Input → RadiusScale → Output)
+    fn make_global_graph_json(radius_scale: f64) -> serde_json::Value {
+        serde_json::json!({
+            "nodes": [
+                {"id": "input-1", "type": "custom", "position": {"x": 50, "y": 200}, "data": {"label": "Input", "type": "Input", "params": {}}},
+                {"id": "rs-1", "type": "custom", "position": {"x": 300, "y": 200}, "data": {"label": "RadiusScale", "type": "RadiusScale", "params": {"radius_scale": radius_scale}}},
+                {"id": "output-1", "type": "custom", "position": {"x": 550, "y": 200}, "data": {"label": "Output", "type": "Output", "params": {}}}
+            ],
+            "edges": [
+                {"id": "e1", "source": "input-1", "target": "rs-1", "sourceHandle": "output", "targetHandle": "input"},
+                {"id": "e2", "source": "rs-1", "target": "output-1", "sourceHandle": "output", "targetHandle": "input"}
+            ]
+        })
+    }
+
+    /// Test: le graph global se construit et se compile correctement
+    #[test]
+    fn test_global_graph_builds_and_compiles() {
+        let global_json = make_global_graph_json(2.0);
+        let audio_state = AudioState::new();
+        let graph = build_graph_from_json(&global_json, &audio_state);
+        assert!(graph.is_ok(), "Global graph build failed: {:?}", graph.err());
+
+        let graph = graph.unwrap();
+        // Vérifier qu'on a bien les 3 nodes
+        assert_eq!(graph.nodes.len(), 3);
+        // Vérifier qu'on a un node Input
+        assert!(graph.nodes.values().any(|n| n.node_type == stagespace_engines::NodeType::Input));
+        // Vérifier qu'on a un node RadiusScale
+        assert!(graph.nodes.values().any(|n| n.node_type == stagespace_engines::NodeType::RadiusScale));
+    }
+
+    /// Test: le graph global se compile en post_process_fn
+    #[test]
+    fn test_global_graph_compiles_to_post_process() {
+        let global_json = make_global_graph_json(2.0);
+        let audio_state = AudioState::new();
+        let graph = build_graph_from_json(&global_json, &audio_state).unwrap();
+
+        let macros = std::sync::Arc::new(stagespace_engines::MacroState::new());
+        let compile_params = stagespace_engines::PostProcessCompileParams {
+            graph,
+            macros,
+        };
+        let result = stagespace_engines::compile_post_process(compile_params);
+        assert!(result.is_ok(), "Post-process compilation failed: {:?}", result.err());
+    }
+
+    /// Test: le MergeRuntime peut hot-swap un post_process_fn
+    #[test]
+    fn test_merge_runtime_hot_swap_post_process() {
+        let global_json = make_global_graph_json(2.0);
+        let audio_state = AudioState::new();
+        let graph = build_graph_from_json(&global_json, &audio_state).unwrap();
+
+        let macros = std::sync::Arc::new(stagespace_engines::MacroState::new());
+        let compile_params = stagespace_engines::PostProcessCompileParams {
+            graph,
+            macros: macros.clone(),
+        };
+        let post_process_fn = stagespace_engines::compile_post_process(compile_params).unwrap();
+
+        // Créer un MergeRuntime
+        let osc_sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7788);
+        let merge_rt = stagespace_engines::MergeRuntime::new("127.0.0.1".to_string(), 7788, osc_sender, 60.0).unwrap();
+
+        // Hot-swap le post_process_fn
+        merge_rt.swap_post_process_fn(post_process_fn);
+
+        // Vérifier que le swap a réussi (pas de panic)
+        // Le MergeRuntime devrait maintenant appliquer le RadiusScale
+    }
+
+    /// Test: le graph global avec MoveRef se construit (MoveRef est une source valide)
+    #[test]
+    fn test_global_graph_with_moveref_builds() {
+        let global_json = serde_json::json!({
+            "nodes": [
+                {"id": "moveref-1", "type": "custom", "position": {"x": 50, "y": 200}, "data": {"label": "MoveRef", "type": "MoveRef", "params": {"move_id": "move-a"}}},
+                {"id": "output-1", "type": "custom", "position": {"x": 550, "y": 200}, "data": {"label": "Output", "type": "Output", "params": {}}}
+            ],
+            "edges": [
+                {"id": "e1", "source": "moveref-1", "target": "output-1", "sourceHandle": "output", "targetHandle": "input"}
+            ]
+        });
+        let audio_state = AudioState::new();
+        let graph = build_graph_from_json(&global_json, &audio_state);
+        assert!(graph.is_ok(), "Global graph with MoveRef build failed: {:?}", graph.err());
+
+        let graph = graph.unwrap();
+        assert!(graph.nodes.values().any(|n| n.node_type == stagespace_engines::NodeType::MoveRef));
+    }
+
+    /// Test: le graph global avec Merge node se construit
+    #[test]
+    fn test_global_graph_with_merge_builds() {
+        let global_json = serde_json::json!({
+            "nodes": [
+                {"id": "merge-1", "type": "custom", "position": {"x": 50, "y": 200}, "data": {"label": "Merge", "type": "Merge", "params": {"strategy": "override", "fade_duration": 0.5}}},
+                {"id": "rs-1", "type": "custom", "position": {"x": 300, "y": 200}, "data": {"label": "RadiusScale", "type": "RadiusScale", "params": {"radius_scale": 1.5}}},
+                {"id": "output-1", "type": "custom", "position": {"x": 550, "y": 200}, "data": {"label": "Output", "type": "Output", "params": {}}}
+            ],
+            "edges": [
+                {"id": "e1", "source": "merge-1", "target": "rs-1", "sourceHandle": "output", "targetHandle": "input"},
+                {"id": "e2", "source": "rs-1", "target": "output-1", "sourceHandle": "output", "targetHandle": "input"}
+            ]
+        });
+        let audio_state = AudioState::new();
+        let graph = build_graph_from_json(&global_json, &audio_state);
+        assert!(graph.is_ok(), "Global graph with Merge build failed: {:?}", graph.err());
+
+        let graph = graph.unwrap();
+        assert!(graph.nodes.values().any(|n| n.node_type == stagespace_engines::NodeType::Merge));
+    }
+
+    /// Test: le cue étendu se sérialise/désérialise avec tous les champs Phase 3
+    #[test]
+    fn test_cue_extended_roundtrip() {
+        use std::collections::HashMap;
+        use stagespace_engines::{Cue, MacroSnapshot, SpatialMacroSnapshot};
+
+        let mut manual_pos = HashMap::new();
+        manual_pos.insert(0, [1.0, 2.0, 3.0]);
+        manual_pos.insert(1, [-1.0, 0.0, 0.5]);
+
+        let cue = Cue {
+            id: "test-cue".to_string(),
+            name: "Test Cue".to_string(),
+            description: "Phase 3 test".to_string(),
+            graph: serde_json::json!({"nodes": []}),
+            timestamp: 100.0,
+            macros: Some(MacroSnapshot {
+                speed: 1.5, scale: 2.0,
+                shift_x: 0.1, shift_y: 0.2, shift_z: 0.3,
+                yaw: 45.0, pitch: 0.0, roll: 0.0,
+            }),
+            track_indices: vec![0, 1, 2],
+            fade_duration: 1.0,
+            cue_number: Some("2.1".to_string()),
+            global_graph: Some(make_global_graph_json(1.5)),
+            active_move_ids: vec!["move-a".to_string(), "move-b".to_string()],
+            per_track_depths: vec![0.5, 1.0, 1.5],
+            manual_positions: manual_pos,
+            spatial_macros: Some(SpatialMacroSnapshot {
+                radius_scale: 1.2,
+                height_offset: -0.3,
+            }),
+        };
+
+        // Sérialiser (comme Tauri fait pour IPC)
+        let json = serde_json::to_string(&cue).unwrap();
+        // Désérialiser
+        let decoded: Cue = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(decoded.id, "test-cue");
+        assert_eq!(decoded.active_move_ids, vec!["move-a", "move-b"]);
+        assert_eq!(decoded.per_track_depths, vec![0.5, 1.0, 1.5]);
+        assert_eq!(decoded.manual_positions.get(&0), Some(&[1.0, 2.0, 3.0]));
+        assert!(decoded.global_graph.is_some());
+        assert!(decoded.spatial_macros.is_some());
+        assert_eq!(decoded.spatial_macros.unwrap().radius_scale, 1.2);
+    }
+
+    /// Test: le cue backward compatibility — un cue ancien format (sans champs Phase 3)
+    /// peut être désérialisé avec des valeurs par défaut
+    #[test]
+    fn test_cue_backward_compat_tauri() {
+        use stagespace_engines::Cue;
+
+        let old_json = r#"{
+            "id": "old-cue",
+            "name": "Old",
+            "description": "Pre-Phase-3",
+            "graph": {},
+            "timestamp": 50.0,
+            "macros": null,
+            "track_indices": [],
+            "fade_duration": 0.5,
+            "cue_number": null
+        }"#;
+
+        let cue: Cue = serde_json::from_str(old_json).unwrap();
+        assert_eq!(cue.id, "old-cue");
+        assert!(cue.global_graph.is_none());
+        assert!(cue.active_move_ids.is_empty());
+        assert!(cue.per_track_depths.is_empty());
+        assert!(cue.manual_positions.is_empty());
+        assert!(cue.spatial_macros.is_none());
+    }
+
+    /// Test: le workflow complet — sub-graph compile + global graph compile + MergeRuntime
+    #[test]
+    fn test_full_workflow_subgraph_and_global() {
+        // 1. Sub-graph (move) : Objects → Duration → Circular → Output
+        let sub_graph_json = make_circular_graph_json(4, 2.0, 8.0);
+        let audio_state = AudioState::new();
+        let sub_graph = build_graph_from_json(&sub_graph_json, &audio_state).unwrap();
+        let sub_compiled = graph::compilation::compile_graph(&sub_graph);
+        assert!(sub_compiled.is_ok(), "Sub-graph compilation failed");
+
+        // 2. Global graph : Input → RadiusScale → Output
+        let global_json = make_global_graph_json(1.5);
+        let global_graph = build_graph_from_json(&global_json, &audio_state).unwrap();
+
+        let macros = std::sync::Arc::new(stagespace_engines::MacroState::new());
+        let compile_params = stagespace_engines::PostProcessCompileParams {
+            graph: global_graph,
+            macros,
+        };
+        let post_process_fn = stagespace_engines::compile_post_process(compile_params);
+        assert!(post_process_fn.is_ok(), "Global graph compilation failed");
+
+        // 3. MergeRuntime avec le post_process_fn
+        let osc_sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7788);
+        let merge_rt = stagespace_engines::MergeRuntime::new("127.0.0.1".to_string(), 7788, osc_sender, 60.0).unwrap();
+        merge_rt.swap_post_process_fn(post_process_fn.unwrap());
+
+        // 4. Le workflow complet : sub-graph → worker → buffer → MergeRuntime → post_process → OSC
+        // (On ne teste pas l'OSC réel, juste que ça ne panic pas)
+    }
 }
