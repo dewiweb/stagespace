@@ -22,19 +22,18 @@ const { chromium } = require('playwright');
         console.log(`[INVOKE] launch_animation: shape=${args.animation?.shape} oscIds=${JSON.stringify(args.oscIds)} isPreview=${args.isPreview}`);
         return `mock-movement-${Date.now()}`;
       }
-      if (cmd === 'list_movements') return [];
+      if (cmd === 'list_active_moves') return [];
       if (cmd === 'update_animation_state') return null;
-      if (cmd === 'stop_all_movements') return 'ok';
+      if (cmd === 'deactivate_all_moves') return 'ok';
       if (cmd === 'get_audio_state') return { bpm: null, amplitude: null, spectrum: null };
       if (cmd === 'start_audio') return null;
       if (cmd === 'stop_audio') return null;
       if (cmd === 'get_audio_input_devices') return [];
-      // Cuelist / setlist
-      if (cmd === 'cuelist_list') return []; // empty cuelist
-      if (cmd === 'get_setlist') return { id: 'default', name: 'Default', cue_ids: [] };
-      if (cmd === 'cuelist_get') return { id: 'default', name: 'Default', cues: [] };
-      if (cmd === 'cuelist_save') return null;
-      if (cmd === 'save_setlist') return null;
+      // Cue commands (Phase 3)
+      if (cmd === 'store_cue') return { id: 'mock-cue', name: 'Mock', timestamp: 0 };
+      if (cmd === 'recall_cue') return null;
+      if (cmd === 'list_cues') return [];
+      if (cmd === 'delete_cue') return null;
       // Presets
       if (cmd === 'list_presets') return [];
       // Patch
@@ -45,12 +44,11 @@ const { chromium } = require('playwright');
       // Config
       if (cmd === 'get_config') return { osc: { address: '127.0.0.1', port: 7788, profile: 'holophonix' } };
       if (cmd === 'save_config') return null;
-      // Movements
-      if (cmd === 'stop_movement') return null;
-      if (cmd === 'stop_movement_with_fade') return null;
+      // Merge commands
+      if (cmd === 'deactivate_move') return null;
       if (cmd === 'set_macro') return null;
-      if (cmd === 'set_movement_macro') return null;
-      if (cmd === 'play_movement') return null;
+      if (cmd === 'set_global_macro') return null;
+      if (cmd === 'activate_move') return 'mock-move-id';
       if (cmd === 'play_graph') return null;
       if (cmd === 'compile_graph') return 'ok';
       if (cmd === 'import_hol_project') return null;

@@ -21,8 +21,6 @@ use commands::osc::{osc_add_mapping, osc_remove_mapping, osc_list_mappings, osc_
 use commands::presets::{preset_save, preset_load, preset_delete, preset_list};
 use commands::playback::{play_graph, stop_graph, preview_graph, update_graph,
     set_macro, set_loop_mode};
-use commands::movements::{play_movement, stop_movement, stop_all_movements, list_movements,
-    set_movement_macro, update_movement_graph, stop_movement_with_fade};
 use commands::overrides::{set_object_override, clear_all_overrides};
 use commands::sampling::{get_perf_stats, sample_trajectory, sample_movement_trajectory};
 use commands::animation::{launch_animation, update_animation_state};
@@ -32,7 +30,10 @@ use commands::merge_commands::{
     set_track_depths, set_global_origin, set_global_osc_ids,
     update_move_graph_merged,
     get_merge_perf_stats, list_active_moves,
+    update_global_graph, set_track_positions,
+    set_manual_position, clear_manual_position, clear_all_manual_positions,
 };
+use commands::cue_commands::{store_cue, recall_cue, list_cues, delete_cue};
 
 // État global de l'application
 pub struct AppState {
@@ -195,8 +196,6 @@ pub fn run() {
             send_osc_position, get_perf_stats,
             set_object_override, clear_all_overrides,
             discover_osc_targets, sample_trajectory, sample_movement_trajectory,
-            play_movement, stop_movement, stop_all_movements, list_movements,
-            set_movement_macro, update_movement_graph, stop_movement_with_fade,
             launch_animation, update_animation_state,
             // Merge commands (Phase 1 — architecture hybride)
             activate_move, deactivate_move, deactivate_all_moves,
@@ -204,6 +203,11 @@ pub fn run() {
             set_track_depths, set_global_origin, set_global_osc_ids,
             update_move_graph_merged,
             get_merge_perf_stats, list_active_moves,
+            // Global graph commands (Phase 2 — post-processing)
+            update_global_graph, set_track_positions,
+            set_manual_position, clear_manual_position, clear_all_manual_positions,
+            // Cue commands (Phase 3 — cue system étendu)
+            store_cue, recall_cue, list_cues, delete_cue,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -122,10 +122,15 @@ impl Validator {
 
             // Modificateurs
             NodeType::Scale | NodeType::Rotate | NodeType::Offset | NodeType::PhaseShift
-            | NodeType::BarycentricGroup | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter => {
+            | NodeType::BarycentricGroup | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
+            // Post-processing nodes (graph global)
+            | NodeType::RadiusScale | NodeType::HeightOffset | NodeType::PerTrackDepth
+            | NodeType::Barycenter | NodeType::AudioFalloff | NodeType::ManualPosition => {
                 matches!(to_type, NodeType::Output | NodeType::Mix | NodeType::Group | NodeType::Crossfade
                     | NodeType::Scale | NodeType::Rotate | NodeType::Offset | NodeType::PhaseShift
-                    | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter)
+                    | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
+                    | NodeType::RadiusScale | NodeType::HeightOffset | NodeType::PerTrackDepth
+                    | NodeType::Barycenter | NodeType::AudioFalloff | NodeType::ManualPosition)
             }
 
             // Sources
@@ -150,9 +155,41 @@ impl Validator {
                     | NodeType::Pendulum | NodeType::RoseCurve | NodeType::Helix
                     | NodeType::CustomTrajectory | NodeType::Wave
                     | NodeType::BPM | NodeType::AudioAmplitude
+                    | NodeType::Bouncing | NodeType::Spring | NodeType::Follow | NodeType::Swarm | NodeType::Avoidance
                     | NodeType::DrawSpline | NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline)
             }
             NodeType::Output => false, // Output n'a pas de sortie
+            // Input (graph global) : peut connecter vers n'importe quel post-process node
+            NodeType::Input => {
+                matches!(to_type,
+                    NodeType::Scale | NodeType::Rotate | NodeType::Offset | NodeType::PhaseShift
+                    | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
+                    | NodeType::RadiusScale | NodeType::HeightOffset | NodeType::PerTrackDepth
+                    | NodeType::Barycenter | NodeType::AudioFalloff | NodeType::ManualPosition
+                    | NodeType::Output
+                )
+            }
+            // MoveRef : source qui produit des positions (comme un engine).
+            // Peut connecter vers les post-process nodes, Output, et composites.
+            NodeType::MoveRef => {
+                matches!(to_type,
+                    NodeType::Scale | NodeType::Rotate | NodeType::Offset | NodeType::PhaseShift
+                    | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
+                    | NodeType::RadiusScale | NodeType::HeightOffset | NodeType::PerTrackDepth
+                    | NodeType::Barycenter | NodeType::AudioFalloff | NodeType::ManualPosition
+                    | NodeType::Output | NodeType::Mix | NodeType::Group | NodeType::Crossfade
+                )
+            }
+            // Merge : équivalent à Input (représente le MergeRuntime).
+            NodeType::Merge => {
+                matches!(to_type,
+                    NodeType::Scale | NodeType::Rotate | NodeType::Offset | NodeType::PhaseShift
+                    | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
+                    | NodeType::RadiusScale | NodeType::HeightOffset | NodeType::PerTrackDepth
+                    | NodeType::Barycenter | NodeType::AudioFalloff | NodeType::ManualPosition
+                    | NodeType::Output
+                )
+            }
             NodeType::Mix | NodeType::Group | NodeType::Sequence | NodeType::Crossfade => {
                 // Composites peuvent connecter à Output ou à d'autres composites
                 matches!(to_type, NodeType::Output | NodeType::Mix | NodeType::Group | NodeType::Sequence | NodeType::Crossfade)
@@ -215,7 +252,7 @@ impl Validator {
             // Sources / terminaux : aucune entrée
             NodeType::Objects | NodeType::Duration
             | NodeType::AudioSpectrum | NodeType::OSCInput
-            | NodeType::DrawSpline => &[],
+            | NodeType::DrawSpline | NodeType::Input | NodeType::MoveRef | NodeType::Merge => &[],
 
             // Moteurs : entrée générale + durée depuis un nœud Duration
             NodeType::Circular | NodeType::Elliptical | NodeType::Spiral | NodeType::Lissajous | NodeType::Figure8
@@ -231,6 +268,8 @@ impl Validator {
             NodeType::Scale | NodeType::Rotate | NodeType::Offset | NodeType::PhaseShift | NodeType::BarycentricGroup
             | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
             | NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline
+            | NodeType::RadiusScale | NodeType::HeightOffset | NodeType::PerTrackDepth
+            | NodeType::Barycenter | NodeType::AudioFalloff | NodeType::ManualPosition
             | NodeType::Output => &["input"],
 
             // Composites binaires : acceptent input, input_a, input_b

@@ -19,6 +19,7 @@ pub mod config;
 pub mod animation;
 pub mod position_buffer;
 pub mod merge_runtime;
+pub mod post_process_compiler;
 
 #[cfg(test)]
 mod bench;
@@ -41,7 +42,7 @@ mod animation_tests;
 
 pub use engines::{Engine, EngineParams, MAX_OBJECTS};
 pub use rng::SimpleRng;
-pub use runtime::{Runtime, PositionFn, MacroState, LoopMode, PlayDirection, PerfStats};
+pub use runtime::{Runtime, PositionFn, PostProcessFn, PostProcessContext, MacroState, LoopMode, PlayDirection, PerfStats};
 pub use graph::{Graph, Node, NodeId, NodeType, Edge};
 pub use validator::{Validator, ValidationError, ValidationResult};
 pub use compiler::{Compiler, CompiledFunction, CompilationError, AudioParamOverrides};
@@ -50,7 +51,7 @@ pub use audio::{AudioState, AmplitudeData, SpectrumData, AudioSource, AudioReact
 pub use bpm::BpmTracker;
 pub use osc_receiver::{OscReceiver, OscMapping};
 pub use osc_sender::{OscSender, OscProfile};
-pub use cuelist::{CuelistManager, Cue};
+pub use cuelist::{CuelistManager, Cue, MacroSnapshot, SpatialMacroSnapshot};
 pub use presets::{PresetManager, Preset};
 pub use modulator::{Modulator, ModulationSlot, Waveform};
 pub use animation::{Animation, AnimationState, TrackAssignment, AudioMod, AudioModSource, AudioModTarget, ShapeType, Direction, AnimationLoopMode};
@@ -62,3 +63,4 @@ pub use error::{StagespaceError, Result};
 pub use config::{Config, RuntimeConfig, OscConfig, AudioConfig, GraphConfig};
 pub use position_buffer::{PositionBuffer, IndexedPosition};
 pub use merge_runtime::{MergeRuntime, MergeStrategy, MoveState};
+pub use post_process_compiler::{compile_post_process, PostProcessCompileParams, PostProcessCompileError};

@@ -15,7 +15,7 @@ const OSC_PROFILES = [
 ];
 
 export const Toolbar: React.FC = () => {
-  const { compile, playMovement, stopAllMovements, movements, status, compileError, playError, clearCompileError, clearPlayError, nodes,
+  const { compile, stopAllMovements, movements, status, compileError, playError, clearCompileError, clearPlayError, nodes,
     saveGraphToFile, loadGraphFromFile, importHol, holProject,
     selectedTrackIds, getSelectedOscIds, drawMode, setDrawMode,
     undo, redo, canUndo, canRedo, panic, perfStats, setPerfStats,

@@ -293,42 +293,37 @@ export function useRenderLoop({
 
       // Mise à jour du handle + trajectory line en manipulate mode
       if (handleRef.current && trajectoryLineRef.current) {
-        // Utiliser les movement positions si des movements sont actifs, sinon legacy
+        // Utiliser les positions mergées (global) si des movements sont actifs, sinon legacy
         let pos: Array<{ index: number; x: number; y: number; z: number }> = [];
         if (mvts.length > 0) {
-          // Fusionner les positions de tous les movements
-          const allPos: Array<{ index: number; x: number; y: number; z: number }> = [];
-          for (const mv of mvts) {
-            const mvPos = mvPosMap[mv.id];
-            if (mvPos) allPos.push(...mvPos);
-          }
-          pos = allPos;
+          // Architecture hybride : les positions sont mergées sous 'global'
+          pos = mvPosMap['global'] ?? [];
         } else {
           pos = positionsRef.current;
         }
         if (pos.length > 0) {
+          // Les positions 'global' sont déjà transformées par le MergeRuntime (macros appliquées).
+          // Les positions legacy ne le sont pas — appliquer les macros manuellement.
+          const isMerged = mvts.length > 0;
+          const transform = (p: { x: number; y: number; z: number }) =>
+            isMerged
+              ? new THREE.Vector3(p.x, p.y, p.z)
+              : new THREE.Vector3(p.x * mc.scale + mc.shiftX, p.y * mc.scale + mc.shiftY, p.z * mc.scale + mc.shiftZ);
+
           const cx = pos.reduce((s, p) => s + p.x, 0) / pos.length;
           const cy = pos.reduce((s, p) => s + p.y, 0) / pos.length;
           const cz = pos.reduce((s, p) => s + p.z, 0) / pos.length;
-          handleRef.current.position.set(
-            cx * mc.scale + mc.shiftX,
-            cy * mc.scale + mc.shiftY,
-            cz * mc.scale + mc.shiftZ,
-          );
+          if (isMerged) {
+            handleRef.current.position.set(cx, cy, cz);
+          } else {
+            handleRef.current.position.set(cx * mc.scale + mc.shiftX, cy * mc.scale + mc.shiftY, cz * mc.scale + mc.shiftZ);
+          }
 
           // Mise à jour de la trajectory line — seulement si les positions ont changé
-          const posKey = pos.length + ':' + pos[0]?.x + ',' + pos[0]?.y + ',' + pos[0]?.z
-            + ':' + mc.scale + ',' + mc.shiftX + ',' + mc.shiftY + ',' + mc.shiftZ;
+          const posKey = pos.length + ':' + pos[0]?.x + ',' + pos[0]?.y + ',' + pos[0]?.z;
           if (lastLineKeyRef.current !== posKey) {
             lastLineKeyRef.current = posKey;
-            const linePoints = pos.map(
-              (p) =>
-                new THREE.Vector3(
-                  p.x * mc.scale + mc.shiftX,
-                  p.y * mc.scale + mc.shiftY,
-                  p.z * mc.scale + mc.shiftZ,
-                ),
-            );
+            const linePoints = pos.map(transform);
             if (linePoints.length > 2) linePoints.push(linePoints[0].clone());
             const line = trajectoryLineRef.current;
             line.geometry.dispose();

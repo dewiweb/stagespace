@@ -215,13 +215,11 @@ export function useManipulateMode({
           mesh?.position.y ?? 0,
           intersection.z,
         ]);
-        // Envoyer l'override au runtime si en lecture (legacy ou movements)
+        // Envoyer l'override au runtime (MergeRuntime — set_manual_position)
         if (isPlaying || movementsRef.current.length > 0) {
-          invoke('set_object_override', {
-            objIndex: draggingObject,
-            x: intersection.x,
-            y: mesh?.position.y ?? 0,
-            z: intersection.z,
+          invoke('set_manual_position', {
+            objectIndex: draggingObject,
+            position: [intersection.x, mesh?.position.y ?? 0, intersection.z],
           }).catch(console.error);
         }
       }

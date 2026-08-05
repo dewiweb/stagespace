@@ -16,12 +16,14 @@ export default function MovesTable() {
   const {
     moveSlots, addMoveSlot, removeMoveSlot, renameMoveSlot,
     setSlotTemplate, setSlotTracks, setSlotMacros, setSlotFadeDuration,
+    toggleSlotPreview,
     playSlot, stopSlot, stopSlotWithFade,
     goAllSlots, stopAllSlots,
     editSlotGraph, saveEditorToSlot, syncSlotMovements,
     setlistOrder, currentSetlistIndex,
     addToSetlist, removeFromSetlist, moveSetlistItem, goToNextMove,
     holProject, manualOscIds, movements, refreshMovements,
+    editingSlotId, selectSlotForEditing,
   } = useGraphStore();
 
   const showExpert = useAnimationStore((s) => s.showExpert);
@@ -211,6 +213,7 @@ export default function MovesTable() {
                 const mv = movements.find((m) => m.id === slot.movementId);
                 const preset = SHAPE_PRESETS.find((p) => p.id === slot.templateId);
                 const isSelected = editingTemplateFor === slot.id;
+                const isEditing = editingSlotId === slot.id;
                 const setlistIdx = setlistOrder.indexOf(slot.id);
                 const isInSetlist = setlistIdx >= 0;
                 const isCurrentSetlist = setlistIdx === currentSetlistIndex;
@@ -218,19 +221,23 @@ export default function MovesTable() {
                 return (
                   <tr
                     key={slot.id}
-                    className={`border-b border-gray-800/40 transition-colors ${
+                    className={`border-b border-gray-800/40 transition-colors cursor-pointer ${
+                      isEditing ? 'bg-indigo-900/30 ring-1 ring-inset ring-indigo-700/50' :
                       isPlaying ? 'bg-green-900/10' : 'hover:bg-gray-800/20'
                     }`}
                   >
-                    {/* # */}
-                    <td className="px-2 py-1.5">
+                    {/* # — clic pour sélectionner/désélectionner */}
+                    <td className="px-2 py-1.5 cursor-pointer"
+                        onClick={() => selectSlotForEditing(editingSlotId === slot.id ? null : slot.id)}>
                       <span className={`text-[9px] font-mono w-5 h-5 rounded flex items-center justify-center ${
-                        isPlaying ? 'bg-green-800 text-green-300' : 'bg-gray-800 text-gray-500'
+                        isPlaying
+                          ? (slot.isPreview ? 'bg-cyan-800 text-cyan-300' : 'bg-green-800 text-green-300')
+                          : 'bg-gray-800 text-gray-500'
                       }`}>{idx + 1}</span>
                     </td>
 
                     {/* Nom (éditable) */}
-                    <td className="px-2 py-1.5">
+                    <td className="px-2 py-1.5" onClick={() => selectSlotForEditing(slot.id)}>
                       {renamingId === slot.id ? (
                         <input
                           autoFocus
@@ -263,12 +270,12 @@ export default function MovesTable() {
                     </td>
 
                     {/* Template (dropdown) */}
-                    <td className="px-2 py-1.5">
+                    <td className="px-2 py-1.5" onClick={() => selectSlotForEditing(slot.id)}>
                       {isSelected ? (
                         <select
                           autoFocus
                           value={slot.templateId}
-                          onChange={(e) => { setSlotTemplate(slot.id, e.target.value); setEditingTemplateFor(null); }}
+                          onChange={(e) => { selectSlotForEditing(slot.id); setSlotTemplate(slot.id, e.target.value); setEditingTemplateFor(null); }}
                           onBlur={() => setEditingTemplateFor(null)}
                           className="bg-gray-900 text-white text-[9px] px-1 py-0.5 rounded border border-indigo-700 w-full"
                         >
@@ -278,7 +285,7 @@ export default function MovesTable() {
                         </select>
                       ) : (
                         <button
-                          onClick={() => setEditingTemplateFor(slot.id)}
+                          onClick={() => { selectSlotForEditing(slot.id); setEditingTemplateFor(slot.id); }}
                           className="text-indigo-300 hover:text-indigo-200 text-[10px] font-mono px-1 py-0.5 rounded hover:bg-indigo-900/30 transition-colors"
                           title="Changer de template"
                         >
@@ -288,9 +295,9 @@ export default function MovesTable() {
                     </td>
 
                     {/* Tracks (picker) */}
-                    <td className="px-2 py-1.5">
+                    <td className="px-2 py-1.5" onClick={() => selectSlotForEditing(slot.id)}>
                       <button
-                        onClick={() => openTrackPicker(slot.id, slot.trackIds)}
+                        onClick={() => { selectSlotForEditing(slot.id); openTrackPicker(slot.id, slot.trackIds); }}
                         className="text-cyan-300 hover:text-cyan-200 text-[10px] font-mono px-1 py-0.5 rounded hover:bg-cyan-900/30 transition-colors"
                         title="Choisir les tracks"
                       >
@@ -303,7 +310,7 @@ export default function MovesTable() {
                     </td>
 
                     {/* Setlist (★ add/remove + ordre) */}
-                    <td className="px-1 py-1.5 text-center">
+                    <td className="px-1 py-1.5 text-center" onClick={() => selectSlotForEditing(slot.id)}>
                       {isInSetlist ? (
                         <div className="flex items-center gap-0.5 justify-center">
                           <button
@@ -339,8 +346,18 @@ export default function MovesTable() {
                     </td>
 
                     {/* Actions */}
-                    <td className="px-1 py-1.5">
+                    <td className="px-1 py-1.5" onClick={() => selectSlotForEditing(slot.id)}>
                       <div className="flex items-center gap-0.5 justify-center">
+                        {/* Preview/Live toggle */}
+                        <button
+                          onClick={() => toggleSlotPreview(slot.id)}
+                          className={`text-[9px] px-1 rounded transition-colors ${
+                            slot.isPreview
+                              ? 'bg-cyan-900/50 text-cyan-300 hover:bg-cyan-800/60'
+                              : 'text-gray-600 hover:text-gray-400 hover:bg-gray-800/30'
+                          }`}
+                          title={slot.isPreview ? 'Mode Preview (pas d\'OSC out) — cliquer pour passer en Live' : 'Mode Live (OSC out) — cliquer pour passer en Preview'}
+                        >◉</button>
                         {isPlaying ? (
                           <>
                             <button
@@ -357,8 +374,10 @@ export default function MovesTable() {
                         ) : (
                           <button
                             onClick={() => playSlot(slot.id)}
-                            className="text-green-400 hover:text-green-300 text-[10px] px-1.5 rounded hover:bg-green-900/30 font-bold"
-                            title="Lancer ce move"
+                            className={`text-[10px] px-1.5 rounded hover:bg-green-900/30 font-bold ${
+                              slot.isPreview ? 'text-cyan-400 hover:text-cyan-300' : 'text-green-400 hover:text-green-300'
+                            }`}
+                            title={slot.isPreview ? 'Lancer en preview (pas d\'OSC out)' : 'Lancer en live (OSC out)'}
                           >▶</button>
                         )}
                         <button
@@ -366,11 +385,11 @@ export default function MovesTable() {
                             editSlotGraph(slot.id);
                             if (!showExpert) setShowExpert(true);
                           }}
-                          className="text-purple-400 hover:text-purple-300 text-[9px] px-1 rounded hover:bg-purple-900/30"
+                          className={`text-purple-400 hover:text-purple-300 text-[9px] px-1 rounded hover:bg-purple-900/30 ${editingSlotId === slot.id ? 'font-bold ring-1 ring-purple-600/50' : ''}`}
                           title="Éditer le graphe dans le node editor"
                         >✎</button>
                         <button
-                          onClick={() => setEditingMacrosFor(slot.id)}
+                          onClick={() => { selectSlotForEditing(slot.id); setEditingMacrosFor(slot.id); }}
                           className="text-gray-400 hover:text-gray-200 text-[9px] px-1 rounded hover:bg-gray-700/30"
                           title="Macros (speed, scale, shift, rotation)"
                         >⚙</button>

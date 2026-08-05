@@ -14,6 +14,8 @@ export interface HolProjectSlice {
   toggleTrackSelection: (trackId: number) => void;
   selectAllTracks: () => void;
   deselectAllTracks: () => void;
+  /// Définit directement la sélection de tracks (utilisé par selectSlotForEditing)
+  setSelectedTrackIds: (ids: Set<number>) => void;
   getSelectedOscIds: () => number[];
   syncObjectsNode: () => void;
 
@@ -38,6 +40,9 @@ type HolProjectStore = HolProjectSlice & {
   isPlaying: boolean;
   movements: MovementInfo[];
   updateGraphLive: (fadeDuration?: number) => Promise<void>;
+  // Pour sync inverse : mettre à jour le slot édité quand selectedTrackIds change
+  editingSlotId: string | null;
+  setSlotTracks: (id: string, trackIds: number[]) => void;
 };
 
 // Génère des positions en cercle pour n objets (radius adaptatif)
@@ -55,6 +60,18 @@ function defaultCirclePositions(n: number): Record<number, [number, number, numb
   return positions;
 }
 
+/// Sync inverse : quand selectedTrackIds change (via Inspector/TrackGrid),
+/// mettre à jour les tracks du slot édité pour garder l'UI synchronisée.
+function syncEditingSlotTracks(
+  get: () => HolProjectStore,
+  _set: (partial: Partial<HolProjectStore>) => void,
+) {
+  const { editingSlotId, selectedTrackIds, setSlotTracks } = get();
+  if (!editingSlotId || !setSlotTracks) return;
+  const trackIds = Array.from(selectedTrackIds).sort((a, b) => a - b);
+  setSlotTracks(editingSlotId, trackIds);
+}
+
 export const createHolProjectSlice: StateCreator<HolProjectStore, [], [], HolProjectSlice> = (set, get) => ({
   holProject: null,
   importHol: async (filePath) => {
@@ -70,12 +87,26 @@ export const createHolProjectSlice: StateCreator<HolProjectStore, [], [], HolPro
       set({ holProject: project, selectedTrackIds: allIds, manualPositions: positions });
       // Sync le node Objects avec les tracks
       get().syncObjectsNode();
+      // Pousser les positions des tracks au backend (pour Barycenter node)
+      const trackPositions: Record<number, [number, number, number]> = {};
+      project.tracks.forEach((track) => {
+        trackPositions[track.id] = track.position;
+      });
+      try {
+        await invoke('set_track_positions', { positions: trackPositions });
+      } catch (e) {
+        console.error('[importHol] Failed to push track positions:', e);
+      }
     } catch (error: any) {
       console.error('Failed to import .hol project:', error);
       throw error;
     }
   },
-  clearHol: () => set({ holProject: null, selectedTrackIds: new Set() }),
+  clearHol: () => {
+    set({ holProject: null, selectedTrackIds: new Set() });
+    // Clear track positions au backend (pas de .hol → origin = [0,0,0])
+    invoke('set_track_positions', { positions: {} }).catch(() => {});
+  },
 
   // Track selection — tous sélectionnés par défaut (cohérent avec getSelectedOscIds)
   selectedTrackIds: new Set<number>([1, 2, 3, 4, 5, 6, 7, 8, 9]),
@@ -97,16 +128,26 @@ export const createHolProjectSlice: StateCreator<HolProjectStore, [], [], HolPro
     set({ selectedTrackIds: next });
     // Sync Objects node + hot-swap si en lecture
     get().syncObjectsNode();
+    // Sync inverse : mettre à jour le slot édité
+    syncEditingSlotTracks(get, set);
   },
   selectAllTracks: () => {
     set((s) => ({
       selectedTrackIds: new Set(s.holProject?.tracks.map((t) => t.id) ?? []),
     }));
     get().syncObjectsNode();
+    syncEditingSlotTracks(get, set);
   },
   deselectAllTracks: () => {
     set({ selectedTrackIds: new Set() });
     get().syncObjectsNode();
+    syncEditingSlotTracks(get, set);
+  },
+  setSelectedTrackIds: (ids) => {
+    set({ selectedTrackIds: new Set(ids) });
+    get().syncObjectsNode();
+    // Pas de sync inverse ici — cette fonction est appelée par selectSlotForEditing
+    // qui a déjà défini les tracks du slot
   },
   getSelectedOscIds: () => {
     const s = get();
@@ -120,6 +161,16 @@ export const createHolProjectSlice: StateCreator<HolProjectStore, [], [], HolPro
     // Même si ids est vide, on met à jour (pour montrer 0 objets si l'utilisateur désélectionne tout)
     // Mais on ne crée pas de node Objects si la liste est vide et qu'il n'y a pas de node existant
     if (ids.length === 0 && !s.nodes.find((n) => (n.data as any)?.type === 'Objects')) return;
+
+    // Types de nodes qui ont un paramètre n_objects à sync avec le node Objects
+    const ENGINE_TYPES = new Set([
+      'Circular', 'Elliptical', 'Spiral', 'Lissajous', 'Figure8',
+      'Linear', 'Oscillation', 'Formation', 'PerlinNoise', 'Converge', 'Pendulum',
+      'RoseCurve', 'Helix', 'Wave', 'CustomTrajectory',
+      'Bouncing', 'Avoidance', 'Spring', 'Follow', 'Swarm',
+      'DrawSpline', 'EvaluateSpline', 'TrimSpline', 'OffsetSpline',
+      'Mix', 'Group', 'Sequence', 'Crossfade',
+    ]);
 
     // Trouver le node Objects et mettre à jour n_objects
     const objectsNode = s.nodes.find((n) => (n.data as any)?.type === 'Objects');
@@ -136,6 +187,19 @@ export const createHolProjectSlice: StateCreator<HolProjectStore, [], [], HolPro
         data: { label: 'Objects', type: 'Objects', params: { n_objects: ids.length, track_ids: ids } },
       });
     }
+
+    // Sync n_objects sur tous les nodes engines (évite CountMismatch)
+    // Le node Objects vient d'être mis à jour, on relit les nodes courants
+    const currentNodes = get().nodes;
+    currentNodes.forEach((node) => {
+      const nodeType = (node.data as any)?.type as string;
+      if (ENGINE_TYPES.has(nodeType)) {
+        const params = (node.data as any)?.params ?? {};
+        if (params.n_objects !== ids.length) {
+          get().updateNodeData(node.id, { params: { ...params, n_objects: ids.length } });
+        }
+      }
+    });
 
     // Hot-swap si en lecture (runtime legacy ou movements)
     if (s.isPlaying || s.movements.length > 0) {

@@ -62,27 +62,34 @@ export const TrajectoryVisualization: React.FC<TrajectoryVisualizationProps> = (
           const nObjs = objectsRef.current.length;
           const nSamples = 128;
 
-          // Mode movement (système Animation) : échantillonner depuis le movement actif
+          // Mode movement (système multi-move) : échantillonner depuis TOUS les movements actifs
           if (hasMovements && movements.length > 0) {
-            const movement = movements[0]; // premier movement actif
-            const duration = movement.track_count > 0 ? currentAnim.duration : 4.0;
-            for (let i = 0; i < Math.min(nObjs, 9); i++) {
-              if (cancelled) return;
-              const samples = await invoke<Array<[number, number, number, number]>>('sample_movement_trajectory', {
-                movementId: movement.id, objectIndex: i, nSamples, duration,
-              });
-              if (cancelled || samples.length < 2) continue;
+            const durationNode = useGraphStore.getState().nodes.find((n) => (n.data as any)?.type === 'Duration');
+            const duration = (durationNode?.data as any)?.params?.duration ?? 4.0;
+            // Échantillonner chaque movement actif
+            for (const movement of movements) {
+              for (let i = 0; i < Math.min(nObjs, 9); i++) {
+                if (cancelled) return;
+                try {
+                  const samples = await invoke<Array<[number, number, number, number]>>('sample_movement_trajectory', {
+                    movementId: movement.id, objectIndex: i, nSamples, duration,
+                  });
+                  if (cancelled || samples.length < 2) continue;
 
-              const points = samples.map((s) => new THREE.Vector3(s[1], s[2], s[3]));
-              const geo = new THREE.BufferGeometry().setFromPoints(points);
-              const hue = i / nObjs;
-              const mat = new THREE.LineBasicMaterial({
-                color: new THREE.Color().setHSL(hue, 0.7, 0.5),
-                transparent: true, opacity: 0.35,
-              });
-              const line = new THREE.Line(geo, mat);
-              scene.add(line);
-              pathLinesRef.current.push(line);
+                  const points = samples.map((s) => new THREE.Vector3(s[1], s[2], s[3]));
+                  const geo = new THREE.BufferGeometry().setFromPoints(points);
+                  const hue = i / nObjs;
+                  const mat = new THREE.LineBasicMaterial({
+                    color: new THREE.Color().setHSL(hue, 0.7, 0.5),
+                    transparent: true, opacity: movement.is_preview ? 0.2 : 0.35,
+                  });
+                  const line = new THREE.Line(geo, mat);
+                  scene.add(line);
+                  pathLinesRef.current.push(line);
+                } catch {
+                  // Un movement peut ne pas avoir de runtime — silencieux
+                }
+              }
             }
             return;
           }

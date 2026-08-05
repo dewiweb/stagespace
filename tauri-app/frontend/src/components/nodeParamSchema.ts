@@ -288,10 +288,35 @@ export const PARAM_SCHEMA: Partial<Record<NodeType, ParamDef[]>> = {
     { key: 'address', label: 'OSC Address', type: 'text' },
     { key: 'radius', label: 'Radius', type: 'number', step: 0.1 },
   ],
+
+  // Global (Post-process) nodes
+  Input: [],
+  RadiusScale: [
+    { key: 'radius_scale', label: 'Radius Scale', type: 'number', step: 0.1, min: 0 },
+  ],
+  HeightOffset: [
+    { key: 'height_offset', label: 'Height Offset', type: 'number', step: 0.1 },
+  ],
+  PerTrackDepth: [
+    { key: 'depths', label: 'Depths (JSON array)', type: 'text' },
+  ],
+  Barycenter: [],
+  AudioFalloff: [
+    { key: 'amount', label: 'Amount', type: 'number', step: 0.1, min: 0 },
+    { key: 'target', label: 'Target', type: 'enum', options: ['scale', 'height'] },
+  ],
+  ManualPosition: [],
+  MoveRef: [
+    { key: 'move_id', label: 'Move ID', type: 'text' },
+  ],
+  Merge: [
+    { key: 'strategy', label: 'Strategy', type: 'enum', options: ['override', 'crossfade', 'blend', 'priority'] },
+    { key: 'fade_duration', label: 'Fade (s)', type: 'number', step: 0.1, min: 0 },
+  ],
 };
 
 export const NODE_CATEGORIES: { label: string; color: string; types: NodeType[] }[] = [
-  { label: 'Structural', color: 'gray', types: ['Objects', 'Duration', 'Output'] },
+  { label: 'Structural', color: 'gray', types: ['Objects', 'Duration', 'Output', 'Input'] },
   {
     label: 'Math Engines',
     color: 'blue',
@@ -305,6 +330,7 @@ export const NODE_CATEGORIES: { label: string; color: string; types: NodeType[] 
   { label: 'Splines', color: 'cyan', types: ['DrawSpline', 'EvaluateSpline', 'TrimSpline', 'OffsetSpline'] },
   { label: 'Falloffs', color: 'orange', types: ['TimeFalloff', 'PointDistanceFalloff', 'DirectionalFalloff', 'AudioAmplitudeFalloff'] },
   { label: 'Modifiers', color: 'pink', types: ['Scale', 'Rotate', 'Offset', 'PhaseShift', 'BarycentricGroup', 'Mirror', 'Clamp', 'LFO', 'Jitter'] },
+  { label: 'Global (Post-process)', color: 'cyan', types: ['RadiusScale', 'HeightOffset', 'PerTrackDepth', 'Barycenter', 'AudioFalloff', 'ManualPosition', 'MoveRef', 'Merge'] },
   { label: 'Composite', color: 'purple', types: ['Mix', 'Group', 'Sequence', 'Crossfade'] },
   { label: 'Sources', color: 'yellow', types: ['BPM', 'AudioAmplitude', 'AudioSpectrum', 'OSCInput'] },
 ];
@@ -401,6 +427,16 @@ export function getDefaultParams(type: NodeType): Record<string, any> {
     Clamp: { min_x: -5, max_x: 5, min_y: -5, max_y: 5, min_z: -5, max_z: 5 },
     LFO: { waveform: 'sine', frequency: 0.5, amplitude: 0.3, axis: 'y', phase: 0 },
     Jitter: { intensity: 0.2, frequency: 2.0, seed: 42 },
+    // Global (Post-process) nodes
+    Input: {},
+    RadiusScale: { radius_scale: 1.0 },
+    HeightOffset: { height_offset: 0.0 },
+    PerTrackDepth: { depths: [] },
+    Barycenter: {},
+    AudioFalloff: { amount: 1.0, target: 'scale' },
+    ManualPosition: {},
+    MoveRef: { move_id: '' },
+    Merge: { strategy: 'override', fade_duration: 0.5 },
   };
   return { ...params, ...(defaults[type] ?? {}) };
 }
@@ -464,6 +500,16 @@ export const NODE_DESCRIPTIONS: Partial<Record<NodeType, string>> = {
   AudioAmplitude: "Amplitude audio module le radius d'un cercle",
   AudioSpectrum: "Bande FFT du spectre audio → position",
   OSCInput: "Reçoit une valeur OSC (scalar→angle, array→XYZ) et la convertit en position",
+  // Global (Post-process)
+  Input: "Point d'entrée du graph global — représente les positions mergées de tous les moves",
+  RadiusScale: "Scaling radial par rapport à l'origin (radius_scale). Global — appliqué après merge",
+  HeightOffset: "Offset vertical post-merge (height_offset). Pour ajuster la hauteur globale",
+  PerTrackDepth: "Profondeur par track — interpoler entre origin et position. Pour depth mapping",
+  Barycenter: "Calcule l'origin depuis les positions des tracks .hol. Centre du groupe",
+  AudioFalloff: "Module un paramètre (scale/height) par l'amplitude audio. Pour réactivité musicale",
+  ManualPosition: "Override manuel de positions — lit les drag 3D. Pour positionnement à la main",
+  MoveRef: "Référence un sub-graph (move) par ID. Source — produit les positions du move référencé. Double-clic pour éditer le sub-graph",
+  Merge: "Node Merge — représente le MergeRuntime. Produit les positions mergées de tous les moves actifs. Strategy: override/crossfade/blend/priority",
 };
 
 /**

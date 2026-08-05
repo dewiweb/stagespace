@@ -49,6 +49,8 @@ export interface MoveSlotsSlice {
   setlistOrder: string[];
   /// Index du move courant dans la setlist (-1 = aucun)
   currentSetlistIndex: number;
+  /// ID du slot actuellement sélectionné pour édition (source de vérité pour l'UI)
+  editingSlotId: string | null;
 
   // ─── CRUD moves ───
   addMoveSlot: () => void;
@@ -58,6 +60,10 @@ export interface MoveSlotsSlice {
   setSlotTracks: (id: string, trackIds: number[]) => void;
   setSlotMacros: (id: string, macros: Partial<MoveMacros>) => void;
   setSlotFadeDuration: (id: string, fade: number) => void;
+  /// Bascule le mode preview (pas d'OSC out) / live (OSC out)
+  toggleSlotPreview: (id: string) => void;
+  /// Sélectionne un slot pour édition — sync selectedTrackIds + charge le graphe dans l'éditeur
+  selectSlotForEditing: (id: string | null) => void;
 
   // ─── Live (lancer/arrêter) ───
   playSlot: (id: string) => Promise<void>;
@@ -98,10 +104,23 @@ type MoveSlotsStore = MoveSlotsSlice & {
   oscAddress: string;
   oscPort: number;
   oscProfile: string;
+  // Pour sync selectedTrackIds quand on sélectionne un slot
+  setSelectedTrackIds: (ids: Set<number>) => void;
+  selectedTrackIds: Set<number>;
 };
 
 const SLOTS_STORAGE_KEY = 'stagespace-move-slots';
 const SETLIST_STORAGE_KEY = 'stagespace-move-setlist';
+
+/// Types de nodes qui ont un paramètre n_objects à sync avec le node Objects
+const ENGINE_TYPES_WITH_N_OBJECTS = new Set([
+  'Circular', 'Elliptical', 'Spiral', 'Lissajous', 'Figure8',
+  'Linear', 'Oscillation', 'Formation', 'PerlinNoise', 'Converge', 'Pendulum',
+  'RoseCurve', 'Helix', 'Wave', 'CustomTrajectory',
+  'Bouncing', 'Avoidance', 'Spring', 'Follow', 'Swarm',
+  'DrawSpline', 'EvaluateSpline', 'TrimSpline', 'OffsetSpline',
+  'Mix', 'Group', 'Sequence', 'Crossfade',
+]);
 
 function loadSlotsFromStorage(): MoveSlot[] {
   try {
@@ -145,6 +164,22 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
   moveSlots: loadSlotsFromStorage(),
   setlistOrder: loadSetlistFromStorage(),
   currentSetlistIndex: -1,
+  editingSlotId: null,
+
+  selectSlotForEditing: (id) => {
+    set({ editingSlotId: id });
+    if (!id) return;
+    const slot = get().moveSlots.find((s) => s.id === id);
+    if (!slot) return;
+    // Charger le graphe du slot dans l'éditeur AVANT de sync les tracks,
+    // pour que syncObjectsNode mette à jour le BON Objects node + hot-swap avec le bon graphe
+    if (slot.graphJson) {
+      get().setNodes(JSON.parse(JSON.stringify(slot.graphJson.nodes)));
+      get().setEdges(JSON.parse(JSON.stringify(slot.graphJson.edges)));
+    }
+    // Sync selectedTrackIds avec les tracks du slot (syncObjectsNode utilisera le nouveau graphe)
+    get().setSelectedTrackIds(new Set(slot.trackIds));
+  },
 
   addMoveSlot: () => {
     const { holProject, manualOscIds, moveSlots } = get();
@@ -153,9 +188,10 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
       ? holProject.tracks.map((t) => t.id)
       : manualOscIds;
     const idx = moveSlots.length + 1;
+    const newSlotId = `slot-${Date.now()}`;
     set((s) => {
       const newSlots = [...s.moveSlots, {
-        id: `slot-${Date.now()}`,
+        id: newSlotId,
         name: `Move ${idx}`,
         graphJson: null, // Sera construit au play depuis le template
         templateId: 'circle',
@@ -168,6 +204,8 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
       saveSlotsToStorage(newSlots);
       return { moveSlots: newSlots };
     });
+    // Sélectionner automatiquement le nouveau slot pour édition
+    get().selectSlotForEditing(newSlotId);
   },
 
   removeMoveSlot: (id) => {
@@ -183,7 +221,9 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
       saveSetlistToStorage(newSetlist);
       // Ajuster l'index courant si nécessaire
       const newIdx = s.currentSetlistIndex >= newSetlist.length ? -1 : s.currentSetlistIndex;
-      return { moveSlots: newSlots, setlistOrder: newSetlist, currentSetlistIndex: newIdx };
+      // Désélectionner si on supprime le slot édité
+      const newEditingSlotId = s.editingSlotId === id ? null : s.editingSlotId;
+      return { moveSlots: newSlots, setlistOrder: newSetlist, currentSetlistIndex: newIdx, editingSlotId: newEditingSlotId };
     });
   },
 
@@ -210,11 +250,16 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
         saveSlotsToStorage(newSlots);
         return { moveSlots: newSlots };
       });
+      // Si le slot est le slot édité, mettre à jour le node editor
+      if (get().editingSlotId === id) {
+        get().setNodes(JSON.parse(JSON.stringify(nodes)));
+        get().setEdges(JSON.parse(JSON.stringify(edges)));
+      }
       // Si le slot est en cours de lecture, hot-swap
       if (slot.movementId) {
         import('../../components/nodeParamSchema').then(({ prepareGraphForSave }) => {
           const graphData = prepareGraphForSave(nodes, edges);
-          invoke('update_movement_graph', {
+          invoke('update_move_graph_merged', {
             movementId: slot.movementId,
             graphJson: graphData,
             fadeDuration: 0.5,
@@ -225,13 +270,63 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
   },
 
   setSlotTracks: (id, trackIds) => {
+    const sortedIds = [...trackIds].sort((a, b) => a - b);
+    // Mettre à jour le graphJson du slot : sync n_objects sur tous les nodes
+    // pour éviter CountMismatch quand les tracks changent
     set((s) => {
-      const newSlots = s.moveSlots.map((sl) =>
-        sl.id === id ? { ...sl, trackIds: [...trackIds].sort((a, b) => a - b) } : sl
-      );
+      const newSlots = s.moveSlots.map((sl) => {
+        if (sl.id !== id) return sl;
+        let graphJson = sl.graphJson;
+        if (graphJson) {
+          graphJson = {
+            nodes: graphJson.nodes.map((n) => {
+              const nodeType = (n.data as any)?.type as string;
+              const params = (n.data as any)?.params ?? {};
+              if (nodeType === 'Objects' || ENGINE_TYPES_WITH_N_OBJECTS.has(nodeType)) {
+                return {
+                  ...n,
+                  data: { ...n.data, params: { ...params, n_objects: sortedIds.length } },
+                };
+              }
+              return n;
+            }),
+            edges: graphJson.edges,
+          };
+        }
+        return { ...sl, trackIds: sortedIds, graphJson };
+      });
       saveSlotsToStorage(newSlots);
       return { moveSlots: newSlots };
     });
+    // Sync selectedTrackIds si c'est le slot édité ET si les tracks sont différentes
+    // (évite le cycle : toggleTrackSelection → setSlotTracks → setSelectedTrackIds → ...)
+    if (get().editingSlotId === id) {
+      const currentSelected = get().selectedTrackIds;
+      const newSet = new Set(sortedIds);
+      // Comparaison rapide : même taille + mêmes éléments
+      let same = currentSelected.size === newSet.size;
+      if (same) {
+        for (const t of newSet) {
+          if (!currentSelected.has(t)) { same = false; break; }
+        }
+      }
+      if (!same) {
+        get().setSelectedTrackIds(newSet);
+      }
+    } else {
+      // Slot non-édité mais en lecture : hot-swap avec le graphe mis à jour
+      const slot = get().moveSlots.find((s) => s.id === id);
+      if (slot?.movementId && slot?.graphJson) {
+        import('../../components/nodeParamSchema').then(({ prepareGraphForSave }) => {
+          const graphData = prepareGraphForSave(slot.graphJson!.nodes, slot.graphJson!.edges);
+          invoke('update_move_graph_merged', {
+            movementId: slot.movementId,
+            graphJson: graphData,
+            fadeDuration: 0.3,
+          }).catch(console.error);
+        });
+      }
+    }
   },
 
   playSlot: async (id) => {
@@ -359,11 +454,8 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
   },
 
   editSlotGraph: (id) => {
-    const slot = get().moveSlots.find((s) => s.id === id);
-    if (!slot?.graphJson) return;
-    // Charger le graphe du slot dans l'éditeur
-    get().setNodes(JSON.parse(JSON.stringify(slot.graphJson.nodes)));
-    get().setEdges(JSON.parse(JSON.stringify(slot.graphJson.edges)));
+    // Sélectionner le slot pour édition (sync tracks + graphe)
+    get().selectSlotForEditing(id);
   },
 
   saveEditorToSlot: (id) => {
@@ -380,7 +472,7 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
     if (slot?.movementId) {
       import('../../components/nodeParamSchema').then(({ prepareGraphForSave }) => {
         const graphData = prepareGraphForSave(nodes, edges);
-        invoke('update_movement_graph', {
+        invoke('update_move_graph_merged', {
           movementId: slot.movementId,
           graphJson: graphData,
           fadeDuration: 0.3,
@@ -400,31 +492,30 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
     // Appliquer en live si le slot est en lecture
     const slot = get().moveSlots.find((s) => s.id === id);
     if (slot?.movementId) {
-      try {
-        // Speed = per-move (worker)
-        invoke('set_move_speed', {
-          movementId: slot.movementId,
-          speed: slot.macros.speed ?? 1.0,
-        }).catch((e) => console.warn('[setSlotMacros] set_move_speed failed:', e));
-        // Macros spatiales = globales (MergeRuntime)
-        invoke('set_global_macro', {
-          request: {
-            scale: slot.macros.scale,
-            shiftX: slot.macros.shiftX,
-            shiftY: slot.macros.shiftY,
-            shiftZ: slot.macros.shiftZ,
-            yaw: slot.macros.yaw,
-            pitch: slot.macros.pitch,
-            roll: slot.macros.roll,
-          },
-        }).catch((e) => console.warn('[setSlotMacros] set_global_macro failed:', e));
-      } catch {}
+      // Speed = per-move (worker) — pousser au backend
+      invoke('set_move_speed', {
+        movementId: slot.movementId,
+        speed: slot.macros.speed ?? 1.0,
+      }).catch((e) => console.warn('[setSlotMacros] set_move_speed failed:', e));
+      // Note: les macros spatiales (scale, shift, rotation) sont globales (MergeRuntime).
+      // Elles ne sont PAS poussées ici — utiliser les macros globales de l'Inspector pour ça.
+      // Les macros spatiales du slot sont appliquées au lancement (playSlot) via set_global_macro.
     }
   },
 
   setSlotFadeDuration: (id, fade) => {
     set((s) => {
       const newSlots = s.moveSlots.map((sl) => sl.id === id ? { ...sl, fadeDuration: fade } : sl);
+      saveSlotsToStorage(newSlots);
+      return { moveSlots: newSlots };
+    });
+  },
+
+  toggleSlotPreview: (id) => {
+    set((s) => {
+      const newSlots = s.moveSlots.map((sl) =>
+        sl.id === id ? { ...sl, isPreview: !sl.isPreview } : sl
+      );
       saveSlotsToStorage(newSlots);
       return { moveSlots: newSlots };
     });

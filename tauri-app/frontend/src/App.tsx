@@ -2,6 +2,7 @@ import React from 'react';
 import NodeEditor from './components/NodeEditor';
 import Scene3D from './components/Scene3D';
 import MovesTable from './components/MovesTable';
+import CuelistPanel from './components/CuelistPanel';
 import AnimationList from './components/AnimationList';
 import Inspector from './components/Inspector';
 import AudioPanel from './components/AudioPanel';
@@ -41,12 +42,24 @@ function App() {
       console.warn('[App] Graph is empty at startup — loading default Circle preset');
       state.applyShapePreset('circle', 8);
     }
+
+    // Récupérer la liste des moves actifs côté backend (survit à un refresh UI)
+    // puis sync les slots (nettoyer les movementIds stale)
+    state.refreshMovements().then(() => {
+      useGraphStore.getState().syncSlotMovements();
+    });
+
+    // Pousser le graph global au backend (post-processing)
+    import('./store/useGlobalGraphStore').then(({ useGlobalGraphStore }) => {
+      useGlobalGraphStore.getState().pushGlobalGraph();
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Onglet secondaire (en bas du panneau gauche) — Moves unifié (absorbe les Cues)
+  // Onglet secondaire (en bas du panneau gauche) — Moves + Cues
   const secondaryTabs = [
     { id: 'moves', label: 'Moves', content: <MovesTable /> },
+    { id: 'cues', label: 'Cues', content: <CuelistPanel /> },
   ];
 
   const activeCount = movements.length;

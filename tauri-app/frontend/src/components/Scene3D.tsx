@@ -29,6 +29,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [webglFailed, setWebglFailed] = useState(false);
+  const [sceneReady, setSceneReady] = useState(false);
 
   const positions = useGraphStore((s) => s.positions);
   const isPlaying = useGraphStore((s) => s.isPlaying);
@@ -59,7 +60,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
 
   // ── Hooks extraits (création des objets 3D, marqueurs, handle, modes) ──
   const { holMarkersRef } = useHolMarkers({ sceneRef, cameraRef, holProject });
-  const { objectsRef } = useObjects3D({ sceneRef, nObjects });
+  const { objectsRef } = useObjects3D({ sceneRef, nObjects, sceneReady });
   const { handleRef, trajectoryLineRef } = useManipulateHandle({ sceneRef, manipulateMode });
   useInteractionModes({ controlsRef, rendererRef, drawMode, manipulateMode, assignMode });
 
@@ -134,6 +135,21 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
     setWebglFailed,
     dimensions,
   });
+
+  // Détecter quand la scène est initialisée (useRenderLoop mutate sceneRef.current)
+  // pour déclencher la création des objets dans useObjects3D
+  useEffect(() => {
+    if (sceneReady) return;
+    if (sceneRef.current) {
+      setSceneReady(true);
+      return;
+    }
+    // La scène n'est pas encore prête — re-vérifier au prochain tick
+    const id = setTimeout(() => {
+      if (sceneRef.current) setSceneReady(true);
+    }, 0);
+    return () => clearTimeout(id);
+  }, [sceneReady]);
 
   // Render loop (scène + animate 60fps) → useRenderLoop hook ci-dessus
   // Handle resize → fusionné dans le ResizeObserver ci-dessus

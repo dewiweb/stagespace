@@ -32,6 +32,8 @@ const FALLOFF_LIMITED_TYPES: NodeType[] = ['DirectionalFalloff', 'AudioAmplitude
 const MODIFIER_TYPES: NodeType[] = [
   'Scale', 'Rotate', 'Offset', 'PhaseShift', 'BarycentricGroup',
   'Mirror', 'Clamp', 'LFO', 'Jitter',
+  // Post-process nodes (graph global)
+  'RadiusScale', 'HeightOffset', 'PerTrackDepth', 'Barycenter', 'AudioFalloff', 'ManualPosition',
 ];
 
 // Modifiers qui peuvent recevoir des falloffs limités (DirectionalFalloff, AudioAmplitudeFalloff)
@@ -60,6 +62,21 @@ const isSource = (t: NodeType) => SOURCE_TYPES.includes(t);
 export function isValidConnection(from: NodeType, to: NodeType): boolean {
   // Output n'a pas de sortie
   if (from === 'Output') return false;
+
+  // Input (graph global) → post-process nodes + Output
+  if (from === 'Input') {
+    return isModifier(to) || to === 'Output';
+  }
+
+  // MoveRef : source qui produit des positions. Peut connecter vers post-process, Output, composites.
+  if (from === 'MoveRef') {
+    return isModifier(to) || to === 'Output' || isComposite(to);
+  }
+
+  // Merge : équivalent à Input (représente le MergeRuntime).
+  if (from === 'Merge') {
+    return isModifier(to) || to === 'Output';
+  }
 
   // Objects → engines + physics + splines (pas DrawSpline qui est une source)
   if (from === 'Objects') {
@@ -121,6 +138,9 @@ export function getInputPorts(type: NodeType): string[] {
     case 'AudioSpectrum':
     case 'OSCInput':
     case 'DrawSpline':
+    case 'Input':
+    case 'MoveRef':
+    case 'Merge':
       return [];
 
     // Engines + physics + falloffs + BPM/AudioAmplitude : input + duration
@@ -136,6 +156,8 @@ export function getInputPorts(type: NodeType): string[] {
     case 'Scale': case 'Rotate': case 'Offset': case 'PhaseShift': case 'BarycentricGroup':
     case 'Mirror': case 'Clamp': case 'LFO': case 'Jitter':
     case 'EvaluateSpline': case 'TrimSpline': case 'OffsetSpline':
+    case 'RadiusScale': case 'HeightOffset': case 'PerTrackDepth':
+    case 'Barycenter': case 'AudioFalloff': case 'ManualPosition':
     case 'Output':
       return ['input'];
 

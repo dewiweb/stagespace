@@ -406,3 +406,82 @@ pub async fn list_active_moves(
         })
     }).collect())
 }
+
+/// Compile et hot-swap le graph global (post-processing)
+/// Le graph global est appliqué par le MergeRuntime après le merge des positions.
+#[tauri::command]
+pub async fn update_global_graph(
+    graph_json: serde_json::Value,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    // Récupérer l'audio state partagé
+    let audio_state = {
+        let merge_rt = lock_or_recover(&state.merge_runtime);
+        merge_rt.audio_state_arc().lock().unwrap_or_else(|e| e.into_inner()).clone()
+    };
+
+    // Parser le graph JSON en Graph
+    let graph = build_graph_from_json(&graph_json, &audio_state)
+        .map_err(|e| format!("Failed to parse global graph: {}", e))?;
+
+    // Compiler le graph en PostProcessFn
+    let merge_rt = lock_or_recover(&state.merge_runtime);
+    let macros = merge_rt.macros();
+
+    let compile_params = stagespace_engines::PostProcessCompileParams {
+        graph,
+        macros,
+    };
+
+    let post_process_fn = stagespace_engines::compile_post_process(compile_params)
+        .map_err(|e| format!("Failed to compile global graph: {:?}", e))?;
+
+    // Hot-swap la fonction dans le MergeRuntime
+    merge_rt.swap_post_process_fn(post_process_fn);
+
+    Ok(())
+}
+
+/// Définit les positions des tracks .hol (pour Barycenter)
+#[tauri::command]
+pub async fn set_track_positions(
+    positions: std::collections::HashMap<u32, [f64; 3]>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let merge_rt = lock_or_recover(&state.merge_runtime);
+    merge_rt.set_track_positions(positions);
+    Ok(())
+}
+
+/// Définit une position manuelle pour un objet (pour ManualPosition / drag 3D)
+#[tauri::command]
+pub async fn set_manual_position(
+    object_index: usize,
+    position: [f64; 3],
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let merge_rt = lock_or_recover(&state.merge_runtime);
+    merge_rt.set_manual_position(object_index, position);
+    Ok(())
+}
+
+/// Efface la position manuelle pour un objet
+#[tauri::command]
+pub async fn clear_manual_position(
+    object_index: usize,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let merge_rt = lock_or_recover(&state.merge_runtime);
+    merge_rt.clear_manual_position(object_index);
+    Ok(())
+}
+
+/// Efface toutes les positions manuelles
+#[tauri::command]
+pub async fn clear_all_manual_positions(
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let merge_rt = lock_or_recover(&state.merge_runtime);
+    merge_rt.clear_all_manual_positions();
+    Ok(())
+}

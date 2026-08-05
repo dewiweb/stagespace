@@ -1,5 +1,5 @@
 export type NodeType =
-  | 'Objects' | 'Duration' | 'Output'
+  | 'Objects' | 'Duration' | 'Output' | 'Input'
   | 'Circular' | 'Elliptical' | 'Spiral' | 'Lissajous' | 'Figure8' | 'Linear' | 'Oscillation'
   | 'Formation' | 'PerlinNoise' | 'Converge' | 'Pendulum'
   | 'RoseCurve' | 'Helix' | 'Wave'
@@ -9,6 +9,8 @@ export type NodeType =
   | 'TimeFalloff' | 'PointDistanceFalloff' | 'DirectionalFalloff' | 'AudioAmplitudeFalloff'
   | 'Scale' | 'Rotate' | 'Offset' | 'PhaseShift' | 'BarycentricGroup'
   | 'Mirror' | 'Clamp' | 'LFO' | 'Jitter'
+  | 'RadiusScale' | 'HeightOffset' | 'PerTrackDepth' | 'Barycenter' | 'AudioFalloff' | 'ManualPosition'
+  | 'MoveRef' | 'Merge'
   | 'BPM' | 'AudioAmplitude' | 'AudioSpectrum' | 'OSCInput'
   | 'Mix' | 'Group' | 'Sequence' | 'Crossfade';
 

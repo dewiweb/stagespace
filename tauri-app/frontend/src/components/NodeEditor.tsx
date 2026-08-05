@@ -1,18 +1,21 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import ReactFlow, {
   Background,
   Controls,
   MiniMap,
   NodeTypes,
+  applyNodeChanges,
+  applyEdgeChanges,
+  MarkerType,
   type Node,
   type Connection,
   type Edge,
   type IsValidConnection,
   type OnConnectStartParams,
-  type OnConnectEndParams,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
+import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import CustomNode from './CustomNode';
 import { NODE_CATEGORIES, NODE_COLORS, NODE_DESCRIPTIONS, getCategoryColor, getDefaultParams, getValidTargetTypes } from './nodeParamSchema';
 import { isValidConnection } from '../utils/connectionRules';
@@ -37,20 +40,75 @@ export const NodeEditor: React.FC = () => {
   const [connectingFrom, setConnectingFrom] = useState<NodeType | null>(null);
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set());
 
+  // Tab: "sub" = graph du slot édité, "global" = graph global (post-processing)
+  const [activeTab, setActiveTab] = useState<'sub' | 'global'>('sub');
+
+  // Nom du slot édité (pour l'afficher dans le tab sub-graph)
+  const editingSlotId = useGraphStore((s) => s.editingSlotId);
+  const moveSlots = useGraphStore((s) => s.moveSlots);
+  const editingSlotName = editingSlotId
+    ? moveSlots.find((s) => s.id === editingSlotId)?.name ?? null
+    : null;
+
+  // Global graph store
+  const globalNodes = useGlobalGraphStore((s) => s.nodes);
+  const globalEdges = useGlobalGraphStore((s) => s.edges);
+  const setGlobalNodes = useGlobalGraphStore((s) => s.setNodes);
+  const setGlobalEdges = useGlobalGraphStore((s) => s.setEdges);
+  const pushGlobalGraph = useGlobalGraphStore((s) => s.pushGlobalGraph);
+  const resetToDefault = useGlobalGraphStore((s) => s.resetToDefault);
+
+  // Moves actifs (pour highlight les MoveRef dont le move est actif)
+  const movements = useGraphStore((s) => s.movements);
+  const activeMoveIds = new Set(movements.map((m) => m.id));
+
+  // Les nodes/edges affichés dépendent du tab actif
+  const displayNodes = activeTab === 'global' ? globalNodes : nodes;
+  const displayEdges = activeTab === 'global' ? globalEdges : edges;
+
+  // Pour le tab global, on utilise des handlers locaux (pas le store global)
+  const handleGlobalNodesChange = useCallback((changes: any[]) => {
+    // Appliquer les changes sur les globalNodes
+    const updated = applyNodeChanges(changes, globalNodes);
+    setGlobalNodes(updated);
+  }, [globalNodes, setGlobalNodes]);
+
+  const handleGlobalEdgesChange = useCallback((changes: any[]) => {
+    const updated = applyEdgeChanges(changes, globalEdges);
+    setGlobalEdges(updated);
+  }, [globalEdges, setGlobalEdges]);
+
+  const handleGlobalConnect = useCallback((connection: Connection) => {
+    const newEdge = { ...connection, id: `${connection.source}-${connection.target}`, markerEnd: { type: MarkerType.ArrowClosed } };
+    setGlobalEdges([...globalEdges, newEdge as Edge]);
+  }, [globalEdges, setGlobalEdges]);
+
+  // Auto-push du graph global quand il change (debounce)
+  useEffect(() => {
+    if (activeTab !== 'global') return;
+    const timer = setTimeout(() => pushGlobalGraph(), 300);
+    return () => clearTimeout(timer);
+  }, [globalNodes, globalEdges, activeTab, pushGlobalGraph]);
+
   const addNodeByType = useCallback(
     (type: NodeType) => {
-      const offset = nodes.length * 30;
-      addNode(createNode(type, { x: 250 + offset, y: 150 + offset }));
+      const offset = displayNodes.length * 30;
+      const newNode = createNode(type, { x: 250 + offset, y: 150 + offset });
+      if (activeTab === 'global') {
+        setGlobalNodes([...globalNodes, newNode]);
+      } else {
+        addNode(newNode);
+      }
     },
-    [addNode, nodes.length],
+    [addNode, displayNodes.length, activeTab, globalNodes, setGlobalNodes],
   );
 
   // Validation visuelle des connexions — empêche de connecter des nodes incompatibles
   // Tient compte des ports (input, input_a, input_b, duration, output)
   const checkValidConnection: IsValidConnection = useCallback(
     (connection: Connection | Edge) => {
-      const sourceNode = nodes.find((n) => n.id === connection.source);
-      const targetNode = nodes.find((n) => n.id === connection.target);
+      const sourceNode = displayNodes.find((n) => n.id === connection.source);
+      const targetNode = displayNodes.find((n) => n.id === connection.target);
       if (!sourceNode || !targetNode) return false;
       const fromType = (sourceNode.data as any)?.type as NodeType;
       const toType = (targetNode.data as any)?.type as NodeType;
@@ -60,29 +118,42 @@ export const NodeEditor: React.FC = () => {
       if (!isValidConnection(fromType, toType)) return false;
 
       // Vérifier la compatibilité des ports
-      // Duration → port "duration" uniquement
-      // Objects → port "input" uniquement
-      // Autres → port "input", "input_a", ou "input_b"
       const targetPort = connection.targetHandle;
       if (fromType === 'Duration' && targetPort !== 'duration') return false;
       if (fromType === 'Objects' && targetPort !== 'input' && targetPort !== 'input_a' && targetPort !== 'input_b') return false;
 
       return true;
     },
-    [nodes],
+    [displayNodes],
   );
 
   // Track le type du node source quand on commence une connexion
-  const onConnectStart = useCallback((_: React.MouseEvent, params: OnConnectStartParams) => {
-    const sourceNode = nodes.find((n) => n.id === params.nodeId);
+  const onConnectStart = useCallback((_: any, params: OnConnectStartParams) => {
+    const sourceNode = displayNodes.find((n) => n.id === params.nodeId);
     if (sourceNode) {
       const fromType = (sourceNode.data as any)?.type as NodeType;
       setConnectingFrom(fromType);
     }
-  }, [nodes]);
+  }, [displayNodes]);
 
-  const onConnectEnd = useCallback((_: React.MouseEvent, _params: OnConnectEndParams) => {
+  const onConnectEnd = useCallback(() => {
     setConnectingFrom(null);
+  }, []);
+
+  // Double-clic sur un node MoveRef → sélectionner le move et switcher vers le tab sub-graph
+  const onNodeDoubleClick = useCallback((_: any, node: Node) => {
+    const nodeType = (node.data as any)?.type as NodeType;
+    if (nodeType !== 'MoveRef') return;
+    const moveId = (node.data as any)?.params?.move_id as string;
+    if (!moveId) return;
+    // Sélectionner le slot qui correspond à ce move
+    const { moveSlots, selectSlotForEditing } = useGraphStore.getState();
+    const slot = moveSlots.find((s) => s.movementId === moveId);
+    if (slot) {
+      selectSlotForEditing(slot.id);
+    }
+    // Switcher vers le tab sub-graph
+    setActiveTab('sub');
   }, []);
 
   // Détermine si un node du canvas est une cible valide (pour le highlight)
@@ -101,7 +172,52 @@ export const NodeEditor: React.FC = () => {
   };
 
   return (
-    <div className="w-full h-full flex">
+    <div className="w-full h-full flex flex-col">
+      {/* Tabs: Sub-graph (slot édité) vs Global (post-processing) */}
+      <div className="h-8 border-b border-stagespace-border flex items-center px-2 gap-1 flex-shrink-0 bg-stagespace-panel">
+        <button
+          onClick={() => setActiveTab('sub')}
+          className={`px-2 py-0.5 text-[10px] rounded font-medium transition-colors ${
+            activeTab === 'sub' ? 'bg-purple-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+          }`}
+        >
+          Sub-graph
+        </button>
+        {activeTab === 'sub' && editingSlotName && (
+          <span className="text-gray-400 text-[10px] truncate max-w-[120px]">
+            › {editingSlotName}
+          </span>
+        )}
+        <button
+          onClick={() => setActiveTab('global')}
+          className={`px-2 py-0.5 text-[10px] rounded font-medium transition-colors ${
+            activeTab === 'global' ? 'bg-cyan-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+          }`}
+        >
+          Global
+        </button>
+        {activeTab === 'global' && (
+          <>
+            <div className="flex-1" />
+            <button
+              onClick={() => resetToDefault()}
+              className="px-2 py-0.5 text-[10px] bg-gray-800 hover:bg-gray-700 text-gray-300 rounded"
+              title="Reset au graph global par défaut"
+            >
+              ↺ Reset
+            </button>
+            <button
+              onClick={() => pushGlobalGraph()}
+              className="px-2 py-0.5 text-[10px] bg-cyan-800 hover:bg-cyan-700 text-cyan-200 rounded"
+              title="Compiler et pousser au backend"
+            >
+              ↑ Push
+            </button>
+          </>
+        )}
+      </div>
+
+      <div className="flex-1 flex min-h-0">
       {/* Node Palette */}
       <div className="w-60 bg-stagespace-panel border-r border-stagespace-border overflow-y-auto flex-shrink-0">
         <div className="px-3 py-3 border-b border-stagespace-border sticky top-0 bg-stagespace-panel z-10">
@@ -199,16 +315,27 @@ export const NodeEditor: React.FC = () => {
       {/* Canvas */}
       <div className="flex-1 bg-stagespace-bg relative">
         <ReactFlow
-          nodes={nodes.map((n) => ({
-            ...n,
-            className: connectingFrom && !isValidTarget((n.data as any)?.type) ? 'rf-node-invalid-target' : '',
-          }))}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
+          nodes={displayNodes.map((n) => {
+            const nodeType = (n.data as any)?.type as NodeType;
+            const isMoveRef = nodeType === 'MoveRef';
+            const moveId = (n.data as any)?.params?.move_id as string;
+            const isMoveActive = isMoveRef && moveId && activeMoveIds.has(moveId);
+            return {
+              ...n,
+              className: [
+                connectingFrom && !isValidTarget(nodeType) ? 'rf-node-invalid-target' : '',
+                isMoveActive ? 'rf-node-moveref-active' : '',
+              ].filter(Boolean).join(' '),
+              style: isMoveActive ? { ...n.style, boxShadow: '0 0 8px 2px rgba(34, 197, 94, 0.6)' } : n.style,
+            };
+          })}
+          edges={displayEdges}
+          onNodesChange={activeTab === 'global' ? handleGlobalNodesChange : onNodesChange}
+          onEdgesChange={activeTab === 'global' ? handleGlobalEdgesChange : onEdgesChange}
+          onConnect={activeTab === 'global' ? handleGlobalConnect : onConnect}
           onConnectStart={onConnectStart}
           onConnectEnd={onConnectEnd}
+          onNodeDoubleClick={onNodeDoubleClick}
           isValidConnection={checkValidConnection}
           nodeTypes={nodeTypes}
           fitView
@@ -223,12 +350,20 @@ export const NodeEditor: React.FC = () => {
           />
         </ReactFlow>
 
-        {nodes.length === 0 && (
+        {displayNodes.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="text-center">
               <div className="text-gray-600 text-sm mb-1">Empty graph</div>
-              <div className="text-gray-700 text-xs">Click nodes in the palette to add them</div>
-              <div className="text-gray-700 text-[10px] mt-2">Start with: Objects → Duration → Circular → Output</div>
+              <div className="text-gray-700 text-xs">
+                {activeTab === 'global'
+                  ? 'Click nodes in the palette to add them'
+                  : 'Click nodes in the palette to add them'}
+              </div>
+              {activeTab === 'global' ? (
+                <div className="text-gray-700 text-[10px] mt-2">Start with: Input → Scale → Rotate → Offset → Output</div>
+              ) : (
+                <div className="text-gray-700 text-[10px] mt-2">Start with: Objects → Duration → Circular → Output</div>
+              )}
             </div>
           </div>
         )}
@@ -239,6 +374,7 @@ export const NodeEditor: React.FC = () => {
             Connecting from <span className="text-white font-bold">{connectingFrom}</span> — drag to a valid target
           </div>
         )}
+      </div>
       </div>
     </div>
   );

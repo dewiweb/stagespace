@@ -22,7 +22,7 @@
 
 use crate::osc_sender::OscSender;
 use crate::position_buffer::PositionBuffer;
-use crate::runtime::{MacroState, PerfMonitor, PerfStats, PositionCallback};
+use crate::runtime::{MacroState, PerfMonitor, PerfStats, PositionCallback, PostProcessFn, PostProcessContext};
 use crate::audio::AudioState;
 use rosc::{OscMessage, OscPacket, OscType};
 use std::collections::HashMap;
@@ -157,6 +157,12 @@ pub struct MergeRuntime {
     socket: UdpSocket,
     /// FPS cible
     fps: f64,
+    /// Fonction de post-processing (graph global) — hot-swappable
+    post_process_fn: Arc<RwLock<PostProcessFn>>,
+    /// Positions des tracks .hol (pour Barycenter) — track_id → [x, y, z]
+    track_positions: Arc<RwLock<HashMap<u32, [f64; 3]>>>,
+    /// Positions manuelles (pour ManualPosition) — object_index → [x, y, z]
+    manual_positions: Arc<RwLock<HashMap<usize, [f64; 3]>>>,
 }
 
 impl MergeRuntime {
@@ -181,6 +187,9 @@ impl MergeRuntime {
             osc_sender: Arc::new(Mutex::new(osc_sender)),
             socket,
             fps,
+            post_process_fn: Arc::new(RwLock::new(default_post_process_fn())),
+            track_positions: Arc::new(RwLock::new(HashMap::new())),
+            manual_positions: Arc::new(RwLock::new(HashMap::new())),
         })
     }
 
@@ -208,6 +217,31 @@ impl MergeRuntime {
     /// Définit la stratégie de merge
     pub fn set_merge_strategy(&self, strategy: MergeStrategy) {
         *self.merge_strategy.write().unwrap_or_else(|e| e.into_inner()) = strategy;
+    }
+
+    /// Hot-swap la fonction de post-processing (graph global)
+    pub fn swap_post_process_fn(&self, new_fn: PostProcessFn) {
+        *self.post_process_fn.write().unwrap_or_else(|e| e.into_inner()) = new_fn;
+    }
+
+    /// Définit les positions des tracks .hol (pour Barycenter)
+    pub fn set_track_positions(&self, positions: HashMap<u32, [f64; 3]>) {
+        *self.track_positions.write().unwrap_or_else(|e| e.into_inner()) = positions;
+    }
+
+    /// Définit une position manuelle pour un objet (pour ManualPosition)
+    pub fn set_manual_position(&self, obj_index: usize, pos: [f64; 3]) {
+        self.manual_positions.write().unwrap_or_else(|e| e.into_inner()).insert(obj_index, pos);
+    }
+
+    /// Efface la position manuelle pour un objet
+    pub fn clear_manual_position(&self, obj_index: usize) {
+        self.manual_positions.write().unwrap_or_else(|e| e.into_inner()).remove(&obj_index);
+    }
+
+    /// Efface toutes les positions manuelles
+    pub fn clear_all_manual_positions(&self) {
+        self.manual_positions.write().unwrap_or_else(|e| e.into_inner()).clear();
     }
 
     /// Récupère les macros (pour modification temps réel — fast path atomic)
@@ -269,7 +303,7 @@ impl MergeRuntime {
         let move_buffers = self.move_buffers.clone();
         let active_moves = self.active_moves.clone();
         let macros = self.macros.clone();
-        let _audio_state_arc = self.audio_state.clone();  // TODO: audio mods sur macros spatiales (Phase 2)
+        let audio_state_arc = self.audio_state.clone();
         let origin_arc = self.origin.clone();
         let osc_ids_arc = self.osc_ids.clone();
         let track_depths_arc = self.track_depths.clone();
@@ -278,6 +312,9 @@ impl MergeRuntime {
         let position_callback = self.position_callback.clone();
         let osc_sender_arc = self.osc_sender.clone();
         let fps = self.fps;
+        let post_process_fn_arc = self.post_process_fn.clone();
+        let track_positions_arc = self.track_positions.clone();
+        let manual_positions_arc = self.manual_positions.clone();
 
         let handle = std::thread::spawn(move || {
             let start = Instant::now();
@@ -339,65 +376,27 @@ impl MergeRuntime {
                 let strategy = *merge_strategy_arc.read().unwrap_or_else(|e| e.into_inner());
                 let merged = merge_positions(&move_positions, &osc_ids, strategy);
 
-                // 4. Post-processing : macros spatiales + depth + origin
-                let scale = macros.get_scale();
-                let shift = macros.get_shift();
-                let (yaw, pitch, roll) = macros.get_rotation();
-                let radius_scale = macros.get_radius_scale();
-                let height_offset = macros.get_height_offset();
+                // 4. Post-processing via le graph global compilé (PostProcessFn)
                 let origin = *origin_arc.lock().unwrap_or_else(|e| e.into_inner());
                 let track_depths = track_depths_arc.read().unwrap_or_else(|e| e.into_inner()).clone();
+                let track_positions = track_positions_arc.read().unwrap_or_else(|e| e.into_inner()).clone();
+                let manual_positions = manual_positions_arc.read().unwrap_or_else(|e| e.into_inner()).clone();
+                let audio_state = audio_state_arc.lock().unwrap_or_else(|e| e.into_inner()).clone();
 
-                // Précalculer la matrice de rotation
-                let has_rotation = yaw != 0.0 || pitch != 0.0 || roll != 0.0;
-                let rot_matrix = if has_rotation {
-                    use nalgebra::Rotation3;
-                    let ry = Rotation3::from_axis_angle(&nalgebra::Vector3::y_axis(), yaw.to_radians());
-                    let rx = Rotation3::from_axis_angle(&nalgebra::Vector3::x_axis(), pitch.to_radians());
-                    let rz = Rotation3::from_axis_angle(&nalgebra::Vector3::z_axis(), roll.to_radians());
-                    Some(rz * rx * ry)
-                } else {
-                    None
+                let ctx = PostProcessContext {
+                    t: t_real,
+                    macros: &macros,
+                    audio_state: &audio_state,
+                    track_positions: &track_positions,
+                    manual_positions: &manual_positions,
+                    origin,
+                    track_depths: &track_depths,
                 };
 
-                // Appliquer les transformations à chaque objet
-                let transformed: Vec<(usize, nalgebra::Vector3<f64>)> = merged
-                    .iter()
-                    .map(|(obj_idx, pos)| {
-                        // radius_scale : scaling radial par rapport à l'origin
-                        let pos_scaled_radius = if (radius_scale - 1.0).abs() > 1e-10 {
-                            origin + (*pos - origin) * radius_scale
-                        } else {
-                            *pos
-                        };
-
-                        // height_offset : translation Y post-engine
-                        let pos_with_height = if height_offset.abs() > 1e-10 {
-                            nalgebra::Vector3::new(
-                                pos_scaled_radius.x,
-                                pos_scaled_radius.y + height_offset,
-                                pos_scaled_radius.z,
-                            )
-                        } else {
-                            pos_scaled_radius
-                        };
-
-                        // depth : interpoler entre origin et pos
-                        let depth = track_depths.get(*obj_idx).copied().unwrap_or(1.0);
-                        let pos_with_depth = origin + (pos_with_height - origin) * depth;
-
-                        // scale → rotation → origin + shift
-                        let pos_scaled = pos_with_depth * scale;
-                        let pos_rotated = if let Some(ref rot) = rot_matrix {
-                            rot * pos_scaled
-                        } else {
-                            pos_scaled
-                        };
-                        let pos_final = pos_rotated + origin + shift;
-
-                        (*obj_idx, pos_final)
-                    })
-                    .collect();
+                let transformed: Vec<(usize, nalgebra::Vector3<f64>)> = {
+                    let pp_fn = post_process_fn_arc.read().unwrap_or_else(|e| e.into_inner());
+                    pp_fn(&ctx, merged)
+                };
 
                 // 5. OSC output (une seule socket)
                 // Séparer display (tout) de OSC (exclut les moves en preview)
@@ -537,6 +536,83 @@ fn merge_positions(
             (obj_idx, pos)
         })
         .collect()
+}
+
+/// PostProcessFn par défaut — reproduit le comportement hardcodé d'avant la Phase 2.
+///
+/// Ordre d'application :
+/// 1. radius_scale (radial scaling par rapport à l'origin)
+/// 2. height_offset (translation Y)
+/// 3. depth (interpolation origin ↔ pos)
+/// 4. scale (uniform scaling)
+/// 5. rotation (yaw → pitch → roll)
+/// 6. origin + shift (translation finale)
+fn default_post_process_fn() -> PostProcessFn {
+    Box::new(|ctx: &PostProcessContext, positions| {
+        let scale = ctx.macros.get_scale();
+        let shift = ctx.macros.get_shift();
+        let (yaw, pitch, roll) = ctx.macros.get_rotation();
+        let radius_scale = ctx.macros.get_radius_scale();
+        let height_offset = ctx.macros.get_height_offset();
+        let origin = ctx.origin;
+
+        // Précalculer la matrice de rotation
+        let has_rotation = yaw != 0.0 || pitch != 0.0 || roll != 0.0;
+        let rot_matrix = if has_rotation {
+            use nalgebra::Rotation3;
+            let ry = Rotation3::from_axis_angle(&nalgebra::Vector3::y_axis(), yaw.to_radians());
+            let rx = Rotation3::from_axis_angle(&nalgebra::Vector3::x_axis(), pitch.to_radians());
+            let rz = Rotation3::from_axis_angle(&nalgebra::Vector3::z_axis(), roll.to_radians());
+            Some(rz * rx * ry)
+        } else {
+            None
+        };
+
+        positions
+            .iter()
+            .map(|(obj_idx, pos)| {
+                // ManualPosition : si une position manuelle existe, l'utiliser
+                let pos = if let Some(manual) = ctx.manual_positions.get(obj_idx) {
+                    nalgebra::Vector3::new(manual[0], manual[1], manual[2])
+                } else {
+                    *pos
+                };
+
+                // radius_scale : scaling radial par rapport à l'origin
+                let pos_scaled_radius = if (radius_scale - 1.0).abs() > 1e-10 {
+                    origin + (pos - origin) * radius_scale
+                } else {
+                    pos
+                };
+
+                // height_offset : translation Y post-engine
+                let pos_with_height = if height_offset.abs() > 1e-10 {
+                    nalgebra::Vector3::new(
+                        pos_scaled_radius.x,
+                        pos_scaled_radius.y + height_offset,
+                        pos_scaled_radius.z,
+                    )
+                } else {
+                    pos_scaled_radius
+                };
+
+                // depth : interpoler entre origin et pos
+                let depth = ctx.track_depths.get(*obj_idx).copied().unwrap_or(1.0);
+                let pos_with_depth = origin + (pos_with_height - origin) * depth;
+
+                // scale → rotation → origin + shift
+                let pos_scaled = pos_with_depth * scale;
+                let pos_rotated = if let Some(ref rot) = rot_matrix {
+                    rot * pos_scaled
+                } else {
+                    pos_scaled
+                };
+                let pos_final = pos_rotated + origin + shift;
+
+                (*obj_idx, pos_final)
+            })
+            .collect()
+    })
 }
 
 #[cfg(test)]

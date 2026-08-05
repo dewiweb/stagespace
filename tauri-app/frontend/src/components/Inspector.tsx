@@ -56,7 +56,9 @@ export default function Inspector() {
   const { holProject, selectedTrackIds, toggleTrackSelection, selectAllTracks, deselectAllTracks,
     manualOscIds, panic, stopAllMovements, stopMovement, stopMovementWithFade,
     movements, savedGraphs, nodes, updateNodeData, updateGraphLive,
-    macros, setMacros, pushMacrosToRuntime } = useGraphStore();
+    macros, setMacros, pushMacrosToRuntime,
+    editingSlotId,
+  } = useGraphStore();
 
   // Flash effect on launch
   const [flashClass, setFlashClass] = React.useState('');
@@ -72,6 +74,7 @@ export default function Inspector() {
   const selectedCount = selectedTrackIds.size;
   const totalTracks = tracks.length || manualOscIds.length;
   const centroid = computeCentroid();
+  const hasEditingSlot = editingSlotId !== null;
 
   // ── Simple mode: trouver le node engine principal du graphe (toujours) ──
   const mainEngineNode = React.useMemo(() => {
@@ -226,18 +229,93 @@ export default function Inspector() {
     <div className="h-full flex flex-col overflow-hidden bg-stagespace-panel">
       {/* Header */}
       <div className="px-3 py-2 border-b border-gray-700/50 flex-shrink-0">
-        <input
-          type="text"
-          value={current.name}
-          onChange={(e) => updateCurrent({ name: e.target.value, id: current.id })}
-          className="w-full bg-transparent text-white text-sm font-semibold focus:outline-none focus:text-blue-400"
-        />
+        {hasEditingSlot ? (
+          <input
+            type="text"
+            value={current.name}
+            onChange={(e) => updateCurrent({ name: e.target.value, id: current.id })}
+            className="w-full bg-transparent text-white text-sm font-semibold focus:outline-none focus:text-blue-400"
+          />
+        ) : (
+          <div className="w-full text-gray-500 text-sm font-semibold flex items-center gap-2">
+            <span className="text-gray-600">Global</span>
+            <span className="text-[9px] text-gray-700 font-normal">— sélectionnez un move pour l'éditer</span>
+          </div>
+        )}
       </div>
 
       {/* Sections scrollables */}
       <div className="flex-1 overflow-y-auto">
 
-        {showExpert ? (
+        {!hasEditingSlot ? (
+          /* ═══════════════ MODE GLOBAL (aucun slot sélectionné) ═══════════════ */
+          /* Only show global-affecting sections: Macros + Audio + movements list */
+          <>
+            {/* MACROS — runtime controls globaux (affectent tous les moves) */}
+            <Section title="Macros" icon="⚡" defaultOpen={true}
+              badge={activeMovementIds.length > 0 ? `${activeMovementIds.length} live` : undefined}>
+              <Slider label="Échelle" value={macros.scale} min={0} max={4} step={0.05}
+                onChange={(v) => handleMacro('scale', v)} color="purple" />
+              <Slider label="Shift X" value={macros.shiftX} min={-5} max={5} step={0.1}
+                onChange={(v) => handleMacro('shiftX', v)} color="purple" />
+              <Slider label="Shift Y" value={macros.shiftY} min={-5} max={5} step={0.1}
+                onChange={(v) => handleMacro('shiftY', v)} color="purple" />
+              <Slider label="Shift Z" value={macros.shiftZ} min={-5} max={5} step={0.1}
+                onChange={(v) => handleMacro('shiftZ', v)} color="purple" />
+              <Slider label="Yaw" value={macros.yaw} min={-180} max={180} step={1}
+                onChange={(v) => handleMacro('yaw', v)} unit="°" color="purple" />
+              <Slider label="Pitch" value={macros.pitch} min={-90} max={90} step={1}
+                onChange={(v) => handleMacro('pitch', v)} unit="°" color="purple" />
+              <Slider label="Roll" value={macros.roll} min={-180} max={180} step={1}
+                onChange={(v) => handleMacro('roll', v)} unit="°" color="purple" />
+              <Slider label="Radius" value={macros.radius_scale} min={0} max={4} step={0.05}
+                onChange={(v) => handleMacro('radius_scale', v)} unit="x" color="purple" />
+              <Slider label="Height" value={macros.height_offset} min={-5} max={5} step={0.1}
+                onChange={(v) => handleMacro('height_offset', v)} unit="m" color="purple" />
+              <div className="text-gray-600 text-[9px] pt-1">Macros globales — appliquées à tous les moves actifs</div>
+            </Section>
+
+            {/* AUDIO — mods audio-reactifs globaux */}
+            <Section title="Audio" icon="♪" defaultOpen={false} badge={current.audio_mods.length > 0 ? `${current.audio_mods.length}` : undefined}>
+              {current.audio_mods.length === 0 && !showAudioAdd && (
+                <div className="text-gray-600 text-[10px] py-1">
+                  Aucun mod audio. Cliquez « + Ajouter » pour créer un mapping audio.
+                </div>
+              )}
+              {current.audio_mods.map((mod, i) => (
+                <div key={i} className="bg-gray-800/60 rounded p-2 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-cyan-400 text-[10px] font-mono">
+                      {audioSourceLabel(mod.source)} → {audioTargetLabel(mod.target)}
+                    </span>
+                    <button onClick={() => removeAudioMod(i)} className="text-red-400 text-[10px]">✕</button>
+                  </div>
+                  <Slider label="Intensité" value={mod.amount} min={0} max={2} step={0.05}
+                    onChange={(v) => {
+                      const mods = [...current.audio_mods];
+                      mods[i] = { ...mod, amount: v };
+                      updateCurrent({ audio_mods: mods });
+                    }} color="cyan" />
+                  <Slider label="Lissage" value={mod.smoothing} min={0} max={0.95} step={0.05}
+                    onChange={(v) => {
+                      const mods = [...current.audio_mods];
+                      mods[i] = { ...mod, smoothing: v };
+                      updateCurrent({ audio_mods: mods });
+                    }} color="cyan" />
+                </div>
+              ))}
+              {showAudioAdd && (
+                <AudioModAdder onAdd={(mod) => { addAudioMod(mod); setShowAudioAdd(false); }} onCancel={() => setShowAudioAdd(false)} />
+              )}
+              {!showAudioAdd && (
+                <button onClick={() => setShowAudioAdd(true)}
+                  className="w-full py-1.5 bg-cyan-900/40 hover:bg-cyan-800/60 text-cyan-300 text-[10px] rounded font-medium">
+                  + Ajouter un mod audio
+                </button>
+              )}
+            </Section>
+          </>
+        ) : showExpert ? (
           /* ═══════════════ MODE EXPERT ═══════════════ */
 
           <>
@@ -365,9 +443,10 @@ export default function Inspector() {
           </>
         )}
 
-        {/* ═══════════════ COMMUN (Simple + Expert) ═══════════════ */}
+        {/* ═══════════════ COMMUN (Simple + Expert — seulement si slot édité) ═══════════════ */}
 
         {/* AUDIO — mods audio-reactifs (commun aux deux modes) */}
+        {hasEditingSlot && (
         <Section title="Audio" icon="♪" defaultOpen={false} badge={current.audio_mods.length > 0 ? `${current.audio_mods.length}` : undefined}>
           {current.audio_mods.length === 0 && !showAudioAdd && (
             <div className="text-gray-600 text-[10px] py-1">
@@ -406,8 +485,10 @@ export default function Inspector() {
             </button>
           )}
         </Section>
+        )}
 
-        {/* TRACKS — sélection + depth + phase spread */}
+        {/* TRACKS — sélection + depth + phase spread (seulement si slot édité) */}
+        {hasEditingSlot && (
         <Section title="Tracks" icon="◉" badge={selectedCount > 0 ? `${selectedCount}/${totalTracks}` : `${totalTracks}`}>
           {tracks.length > 0 ? (
             <TrackGrid
@@ -452,6 +533,7 @@ export default function Inspector() {
             </div>
           )}
         </Section>
+        )}
 
       </div>
 

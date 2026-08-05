@@ -34,6 +34,8 @@ pub enum NodeType {
     Mix,
     Sequence,
     Crossfade,
+    /// Point d'entrée du graph global (représente les positions mergées)
+    Input,
 
     // Moteurs math
     Circular,
@@ -81,6 +83,25 @@ pub enum NodeType {
     Clamp,
     LFO,
     Jitter,
+
+    // Post-processing nodes (graph global — appliqués après merge)
+    RadiusScale,
+    HeightOffset,
+    PerTrackDepth,
+    Barycenter,
+    AudioFalloff,
+    ManualPosition,
+
+    /// Référence vers un sub-graph (move) dans le graph global.
+    /// Param: `move_id` (string) — l'ID du move à référencer.
+    /// Source : pas d'input, produit des positions (comme un engine).
+    MoveRef,
+
+    /// Node Merge — représente le MergeRuntime dans le graph global.
+    /// Source visuelle : pas d'input (le merge est géré par le MergeRuntime).
+    /// Params : strategy (override/crossfade/blend/priority), fade_duration.
+    /// Fonctionnellement équivalent à Input (produit les positions mergées).
+    Merge,
 
     // Sources
     BPM,

@@ -273,7 +273,7 @@ export const useGraphStore = create<GraphState>()((...a) => {
         : Array.from(allMovementIds);
       if (targetIds.length > 0) {
         await Promise.all(targetIds.map((movementId) =>
-          invoke('update_movement_graph', {
+          invoke('update_move_graph_merged', {
             movementId,
             graphJson: graphData,
             fadeDuration: fade,
@@ -296,7 +296,18 @@ export const useGraphStore = create<GraphState>()((...a) => {
       const { nodes: newNodes, edges: newEdges } = preset.build(nObjects);
       get().pushHistory();
       set({ nodes: newNodes, edges: newEdges });
-      // Sync l'animation store : graph_json + name du preset
+
+      // Si un slot est sélectionné pour édition, mettre à jour son template + graphe.
+      // setSlotTemplate gère aussi le hot-swap si le slot est en lecture.
+      const editingSlotId = (get() as any).editingSlotId as string | null;
+      if (editingSlotId) {
+        const { setSlotTemplate } = get() as any;
+        if (setSlotTemplate) {
+          setSlotTemplate(editingSlotId, presetId);
+        }
+      }
+
+      // Sync l'animation store
       import('./useAnimationStore').then(({ useAnimationStore }) => {
         const animState = useAnimationStore.getState();
         animState.setCurrent({
@@ -304,14 +315,10 @@ export const useGraphStore = create<GraphState>()((...a) => {
           name: preset.name,
           graph_json: { nodes: newNodes, edges: newEdges },
         });
-        // Hot-swap : uniquement le movement sélectionné (si un movement est sélectionné)
-        // Si aucun movement sélectionné mais des movements actifs → on les swap tous (comportement fallback)
-        const { isPlaying, movements } = get();
-        const hasActiveMovements = isPlaying || movements.length > 0 || animState.activeMovementIds.length > 0;
-        if (hasActiveMovements) {
-          get().updateGraphLive(1.0);
-        }
       });
+      // NOTE: on ne appelle PLUS updateGraphLive ici — setSlotTemplate gère le hot-swap
+      // du slot édité. updateGraphLive hot-swap TOUS les movements actifs, ce qui
+      // écraserait les graphs des autres slots avec celui du slot édité.
     });
   },
 

@@ -399,77 +399,86 @@ Architecture retenue : **hybride multi-threadée** — engines compilés en work
 
 ---
 
-## Phase 3 : Unified graph
+## Phase 3 : Unified graph ✅ TERMINÉE
 
 **Objectif** : Tout est graph, nested editor, MoveRef nodes, cue system étendu.
 **Durée estimée** : 8-12 sessions.
 **Risque** : élevé (UI majeure, migration données).
 
-### Étape 3.1 : MoveRef nodes
+### Étape 3.1 : MoveRef nodes ✅
 
 **Tâches** :
-- [ ] Node `MoveRef` dans le graph global : référence un sub-graph par ID
-- [ ] Double-clic → ouvre le sub-graph dans un nouvel onglet
-- [ ] Le sub-graph est stocké dans `useMoveGraphStore[moveId]`
-- [ ] Le compiler résout les MoveRef → injecte la PositionFn du sub-graph
+- [x] Node `MoveRef` dans le graph global : référence un sub-graph par ID
+- [x] Double-clic → ouvre le sub-graph (sélectionne le slot + switch tab)
+- [x] Le sub-graph est stocké dans `moveSlots[slotId].graphJson`
+- [x] Le MergeRuntime gère le merge — le node `Input` représente les positions mergées
+- [x] MoveRef actifs mis en évidence (boxShadow vert)
 
-### Étape 3.2 : Nested graph editor
+### Étape 3.2 : Nested graph editor ✅
 
 **Tâches** :
-- [ ] Tabs : "Global" + un tab par sub-graph actif
-- [ ] Breadcrumb : Global > Move A > (sub-graph)
-- [ ] React Flow : un instance par tab, ou nested nodes
-- [ ] Drag & drop : MoveRef depuis la palette vers le graph global
+- [x] Tabs : "Sub-graph" + "Global"
+- [x] Breadcrumb : `Sub-graph › Move A` (nom du slot édité)
+- [x] React Flow : un instance par tab (switch via `activeTab`)
+- [x] Drag & drop : MoveRef depuis la palette "Global (Post-process)"
 
-### Étape 3.3 : Cue system étendu
+### Étape 3.3 : Cue system étendu ✅
 
 **Fichiers** :
-- `rust-engines/src/cuelist.rs`
-- `tauri-app/src-tauri/src/commands/cue_recall.rs`
+- `rust-engines/src/cuelist.rs` (Cue struct étendue)
+- `tauri-app/src-tauri/src/commands/cue_commands.rs` (store_cue, recall_cue, list_cues, delete_cue)
 
 **Tâches** :
-- [ ] Étendre `Cue` struct :
+- [x] Étendre `Cue` struct :
   ```rust
   pub struct Cue {
-      pub graph: GraphJson,                    // sub-graph du move
-      pub macros: MacroSnapshot,               // macros spatiales
-      pub track_indices: Vec<usize>,
-      pub fade_duration: f64,
-      pub cue_number: String,
-      // Nouveau :
-      pub global_graph: Option<GraphJson>,     // graph global
-      pub active_move_ids: Vec<String>,        // quels moves sont actifs
-      pub audio_mods: Option<AudioModSnapshot>, // audio mods (devenus nodes)
-      pub per_track_depths: Vec<f64>,          // depth per-track
-      pub manual_positions: HashMap<usize, [f64; 3]>, // overrides manuels
+      // ... champs existants ...
+      // Phase 3 :
+      pub global_graph: Option<GraphJson>,
+      pub active_move_ids: Vec<String>,
+      pub per_track_depths: Vec<f64>,
+      pub manual_positions: HashMap<usize, [f64; 3]>,
+      pub spatial_macros: Option<SpatialMacroSnapshot>,
   }
   ```
-- [ ] Recall :
-  1. Désactiver les moves qui ne sont pas dans `active_move_ids`
-  2. Activer les moves qui y sont (avec fade)
-  3. Hot-swap le graph global si `global_graph` est présent
-  4. Restaurer les macros spatiales (fast path atomic)
+- [x] Recall (7 étapes) :
+  1. Désactiver les moves non listés dans `active_move_ids`
+  2. Hot-swap le graph global si `global_graph` est présent
+  3. Restaurer les macros (speed, scale, shift, rotation)
+  4. Restaurer les macros spatiales (radius_scale, height_offset)
   5. Restaurer les per-track depths
   6. Restaurer les manual positions
+  7. Émettre `cue-recalled` (frontend active les moves)
+- [x] Frontend : `useCuelistStore` + `CuelistPanel` + tab "Cues"
+- [x] Tests : sérialisation étendue + backward compatibility
 
-### Étape 3.4 : Suppression des vestiges
+### Étape 3.4 : Suppression des vestiges ✅ (partiel — hybride)
+
+**Supprimé** :
+- [x] `play_movement`/`stop_movement`/`stop_all_movements`/`stop_movement_with_fade` (Tauri commands)
+- [x] `list_movements`/`set_movement_macro`/`update_movement_graph` (Tauri commands)
+- [x] Fichier `movements.rs` supprimé
+- [x] Mocks `test_playwright.cjs` nettoyés
+- [x] Import inutilisé `playMovement` dans `Toolbar.tsx`
+
+**Conservé (architecture hybride — toujours actif)** :
+- [ ] `Runtime` legacy mode — utilisé par `play_graph`/`preview_graph`/`launch_animation`
+- [ ] `useAnimationStore` — utilisé par 9 fichiers frontend
+- [ ] `AnimationState` Rust — utilisé par le système d'animation
+- [ ] `compute_audio_modulated_params` — appelé dans le runtime loop
+- [ ] Node `Objects` — requis par le validator, utilisé par le frontend
+- [ ] `playback.rs` commands — utilisées par `useGraphStore`
+
+> **Note** : Ces éléments seront supprimés quand le système hybride sera
+> entièrement migré vers le MergeRuntime (Phase 4 — future).
+
+### Étape 3.5 : Merge node UI ✅
 
 **Tâches** :
-- [ ] Supprimer `play_movement`/`stop_movement` (legacy)
-- [ ] Supprimer `Runtime` legacy mode (sans buffer)
-- [ ] Supprimer `useAnimationStore` (metadata migrée vers moveSlots)
-- [ ] Supprimer `AnimationState` Rust (audio mods = nodes, depth = PerTrack node)
-- [ ] Supprimer `compute_audio_modulated_params` (remplacé par AudioFalloff nodes)
-- [ ] Supprimer le node `Objects` (n_objects = osc_ids.len(), pas besoin)
-- [ ] Simplifier `MovesTable` : juste template + tracks + play/stop + speed
-
-### Étape 3.5 : Merge node UI
-
-**Tâches** :
-- [ ] Node `Merge` dans la palette du graph global
-- [ ] Inputs : N entrées (une par MoveRef actif)
-- [ ] Params : strategy (override/crossfade/blend/priority), fade_duration
-- [ ] Visualisation : montre les moves actifs et leurs poids
+- [x] Node `Merge` dans la palette du graph global
+- [x] Source visuelle (pas d'input — le merge est géré par le MergeRuntime)
+- [x] Params : strategy (override/crossfade/blend/priority), fade_duration
+- [x] Équivalent fonctionnel à `Input` (produit les positions mergées)
 
 ---
 
@@ -533,13 +542,14 @@ Phase 3 (long terme) ──── Unified graph
 - [ ] Speed reste per-move (dans les workers)
 - [ ] Souplesse : Transform per-move (sub-graph) OU global (graph global)
 
-### Phase 3
-- [ ] MoveRef nodes dans le graph global
-- [ ] Nested editor (tabs + double-clic)
-- [ ] Cue system étendu (snapshot graph global + moves actifs + audio mods + depths + manual positions)
-- [ ] MovesTable simplifié
-- [ ] Plus de AnimationState ni Objects node
-- [ ] Plus de commands legacy
+### Phase 3 ✅
+- [x] MoveRef nodes dans le graph global
+- [x] Nested editor (tabs + double-clic)
+- [x] Cue system étendu (snapshot graph global + moves actifs + depths + manual positions)
+- [x] Commands legacy supprimées (play_movement, stop_movement, etc.)
+- [ ] MovesTable simplifié (conservé — trop de features utiles : setlist, macros, track picker)
+- [ ] Plus de AnimationState ni Objects node (conservé — architecture hybride)
+- [x] Merge node UI (strategy + fade_duration)
 
 ## Notes techniques
 

@@ -6,13 +6,15 @@ import { useGraphStore } from '../store/useGraphStore';
 interface UseObjects3DParams {
   sceneRef: MutableRefObject<THREE.Scene | null>;
   nObjects: number;
+  /// Trigger pour recréer les objets quand la scène est prête
+  sceneReady?: boolean;
 }
 
 /**
  * Crée les sphères (objets) + labels CSS2D.
  * Lit manualOscIds depuis useGraphStore.getState() (pas en paramètre, pour éviter re-création).
  */
-export function useObjects3D({ sceneRef, nObjects }: UseObjects3DParams) {
+export function useObjects3D({ sceneRef, nObjects, sceneReady }: UseObjects3DParams) {
   const objectsRef = useRef<THREE.Mesh[]>([]);
   const objectLabelsRef = useRef<CSS2DObject[]>([]);
 
@@ -66,7 +68,7 @@ export function useObjects3D({ sceneRef, nObjects }: UseObjects3DParams) {
       mesh.add(label);
       objectLabelsRef.current.push(label);
     }
-  }, [nObjects]);
+  }, [nObjects, sceneReady]);
 
   return { objectsRef, objectLabelsRef };
 }
