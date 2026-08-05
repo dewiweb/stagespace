@@ -301,10 +301,15 @@ impl MergeRuntime {
         }
     }
 
-    /// Retire un move du merge (sans fade)
+    /// Retire un move du merge (sans fade).
+    ///
+    /// Reconstruit automatiquement les osc_ids globaux pour éviter l'accumulation
+    /// d'ids obsolètes (avant, l'appelant devait penser à appeler `rebuild_osc_ids`
+    /// manuellement — oubli = bug silencieux).
     pub fn unregister_move(&self, move_id: &str) {
         self.active_moves.write().unwrap_or_else(|e| e.into_inner()).remove(move_id);
         self.move_buffers.write().unwrap_or_else(|e| e.into_inner()).remove(move_id);
+        self.rebuild_osc_ids();
     }
 
     /// Vérifie si le merge runtime est en cours d'exécution
@@ -354,8 +359,9 @@ impl MergeRuntime {
                 let buffers = move_buffers.read().unwrap_or_else(|e| e.into_inner()).clone();
                 let mut moves_guard = active_moves.write().unwrap_or_else(|e| e.into_inner());
 
-                // 2. Collecter les positions par move, avec fade
-                let mut move_positions: Vec<(String, f64, Vec<(usize, nalgebra::Vector3<f64>)>)> = Vec::new();
+                // 2. Collecter les positions par move, avec fade et priorité
+                // Tuple : (move_id, fade, priority, positions_globales)
+                let mut move_positions: Vec<(String, f64, u32, Vec<(usize, nalgebra::Vector3<f64>)>)> = Vec::new();
                 let mut moves_to_remove: Vec<String> = Vec::new();
 
                 for (move_id, state) in moves_guard.iter_mut() {
@@ -375,16 +381,30 @@ impl MergeRuntime {
                         if !positions.is_empty() {
                             // Remapper les positions locales (0..N du move) vers les indices globaux
                             // en utilisant track_indices du MoveState.
-                            // Sans track_indices, on garde les indices locaux (compat).
+                            //
+                            // Cas légitimes :
+                            //   - track_indices vide → compat ascendante, on garde les indices locaux
+                            //   - track_indices.len() == positions.len() → remap normal
+                            //
+                            // Cas illégitime (longueurs mismatch avec track_indices non vide) :
+                            //   c'est un bug d'invariant — on log et on SKIP le move plutôt que de
+                            //   réutiliser des indices locaux comme s'ils étaient globaux (ce qui
+                            //   ferait exactement la classe de bug qu'on a chassée en Phase 3).
                             let global_positions: Vec<(usize, nalgebra::Vector3<f64>)> =
-                                if state.track_indices.len() == positions.len() {
+                                if state.track_indices.is_empty() {
+                                    positions.clone()
+                                } else if state.track_indices.len() == positions.len() {
                                     positions.iter().enumerate().map(|(local_idx, (_, pos))| {
                                         (state.track_indices[local_idx], *pos)
                                     }).collect()
                                 } else {
-                                    positions.clone()
+                                    crate::logging::log_osc_error(&format!(
+                                        "MergeRuntime: move {} skipped — track_indices.len()={} != positions.len()={} (invariant violé)",
+                                        move_id, state.track_indices.len(), positions.len()
+                                    ));
+                                    continue;
                                 };
-                            move_positions.push((move_id.clone(), fade, global_positions));
+                            move_positions.push((move_id.clone(), fade, state.priority, global_positions));
                         }
                     }
                 }
@@ -460,7 +480,10 @@ impl MergeRuntime {
                 }
 
                 // 6. Callback pour le 3D preview (display positions = tout, y compris preview)
-                if let Ok(cb) = position_callback.lock() {
+                // On récupère le lock même si empoisonné (un panic dans un thread voisin
+                // ne doit pas couper silencieusement l'émission de positions au frontend).
+                {
+                    let cb = position_callback.lock().unwrap_or_else(|e| e.into_inner());
                     if let Some(ref callback) = *cb {
                         callback(t_real, transformed.clone());
                     }
@@ -509,8 +532,10 @@ impl MergeRuntime {
 /// Merge les positions de plusieurs moves en un seul vecteur de positions par track.
 ///
 /// Pour chaque track (object_index), résoudre les positions multiples selon la stratégie.
+///
+/// Tuple d'entrée : `(move_id, fade, priority, positions)`.
 fn merge_positions(
-    move_positions: &[(String, f64, Vec<(usize, nalgebra::Vector3<f64>)>)],
+    move_positions: &[(String, f64, u32, Vec<(usize, nalgebra::Vector3<f64>)>)],
     osc_ids: &[u32],
     strategy: MergeStrategy,
 ) -> Vec<(usize, nalgebra::Vector3<f64>)> {
@@ -523,14 +548,14 @@ fn merge_positions(
 
     // Si un seul move, pas de merge nécessaire
     if move_positions.len() == 1 {
-        return move_positions[0].2.clone();
+        return move_positions[0].3.clone();
     }
 
-    // Collecter toutes les positions par object_index
-    let mut positions_by_index: HashMap<usize, Vec<(f64, nalgebra::Vector3<f64>)>> = HashMap::new();
-    for (_, fade, positions) in move_positions {
+    // Collecter toutes les positions par object_index, avec (fade, priority, pos)
+    let mut positions_by_index: HashMap<usize, Vec<(f64, u32, nalgebra::Vector3<f64>)>> = HashMap::new();
+    for (_, fade, priority, positions) in move_positions {
         for (idx, pos) in positions {
-            positions_by_index.entry(*idx).or_default().push((*fade, *pos));
+            positions_by_index.entry(*idx).or_default().push((*fade, *priority, *pos));
         }
     }
 
@@ -545,23 +570,28 @@ fn merge_positions(
                 // Override : prendre la position avec le fade le plus élevé
                 (MergeStrategy::Override, Some(c)) => {
                     c.iter().max_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
-                        .map(|(_, pos)| *pos)
+                        .map(|(_, _, pos)| *pos)
                         .unwrap_or(nalgebra::Vector3::zeros())
                 }
                 // Crossfade / Blend : moyenne pondérée par fade
                 (MergeStrategy::Crossfade, Some(c)) | (MergeStrategy::Blend, Some(c)) => {
-                    let total_weight: f64 = c.iter().map(|(f, _)| f.abs()).sum();
+                    let total_weight: f64 = c.iter().map(|(f, _, _)| f.abs()).sum();
                     if total_weight > 1e-10 {
-                        c.iter().map(|(f, pos)| pos * (*f / total_weight)).sum()
+                        c.iter().map(|(f, _, pos)| pos * (*f / total_weight)).sum()
                     } else {
-                        c[0].1
+                        c[0].2
                     }
                 }
-                // Priority : pour l'instant, même chose que Override
-                // (TODO: ajouter un champ priority à MoveState)
+                // Priority : le move avec la priorité la plus élevée gagne.
+                // En cas d'égalité de priorité, on départage par fade le plus élevé
+                // (pour que le fade out d'un move cède la place à un move de même priorité).
                 (MergeStrategy::Priority, Some(c)) => {
-                    c.iter().max_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
-                        .map(|(_, pos)| *pos)
+                    c.iter()
+                        .max_by(|a, b| {
+                            a.1.cmp(&b.1)
+                                .then_with(|| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
+                        })
+                        .map(|(_, _, pos)| *pos)
                         .unwrap_or(nalgebra::Vector3::zeros())
                 }
             };
@@ -654,11 +684,11 @@ mod tests {
 
     #[test]
     fn test_merge_override() {
-        let move_a = ("a".to_string(), 1.0, vec![
+        let move_a = ("a".to_string(), 1.0, 0, vec![
             (0, nalgebra::Vector3::new(1.0, 0.0, 0.0)),
             (1, nalgebra::Vector3::new(2.0, 0.0, 0.0)),
         ]);
-        let move_b = ("b".to_string(), 0.5, vec![
+        let move_b = ("b".to_string(), 0.5, 0, vec![
             (0, nalgebra::Vector3::new(10.0, 0.0, 0.0)),
             (1, nalgebra::Vector3::new(20.0, 0.0, 0.0)),
         ]);
@@ -671,10 +701,10 @@ mod tests {
 
     #[test]
     fn test_merge_crossfade() {
-        let move_a = ("a".to_string(), 1.0, vec![
+        let move_a = ("a".to_string(), 1.0, 0, vec![
             (0, nalgebra::Vector3::new(0.0, 0.0, 0.0)),
         ]);
-        let move_b = ("b".to_string(), 1.0, vec![
+        let move_b = ("b".to_string(), 1.0, 0, vec![
             (0, nalgebra::Vector3::new(10.0, 0.0, 0.0)),
         ]);
         let osc_ids = vec![1];
@@ -685,7 +715,7 @@ mod tests {
 
     #[test]
     fn test_merge_single_move() {
-        let move_a = ("a".to_string(), 1.0, vec![
+        let move_a = ("a".to_string(), 1.0, 0, vec![
             (0, nalgebra::Vector3::new(1.0, 2.0, 3.0)),
         ]);
         let osc_ids = vec![1];
@@ -708,13 +738,13 @@ mod tests {
         // Move A contrôle tracks [0, 1, 2] (positions locales 0,1,2)
         // Move B contrôle tracks [3, 4, 5] (positions locales 0,1,2 → remappées en 3,4,5)
         // Après remapping, le merge ne doit pas écraser les positions de A avec celles de B
-        let move_a = ("a".to_string(), 1.0, vec![
+        let move_a = ("a".to_string(), 1.0, 0, vec![
             (0, nalgebra::Vector3::new(1.0, 0.0, 0.0)),
             (1, nalgebra::Vector3::new(2.0, 0.0, 0.0)),
             (2, nalgebra::Vector3::new(3.0, 0.0, 0.0)),
         ]);
         // Move B avec indices déjà remappés (3,4,5)
-        let move_b = ("b".to_string(), 1.0, vec![
+        let move_b = ("b".to_string(), 1.0, 0, vec![
             (3, nalgebra::Vector3::new(10.0, 0.0, 0.0)),
             (4, nalgebra::Vector3::new(20.0, 0.0, 0.0)),
             (5, nalgebra::Vector3::new(30.0, 0.0, 0.0)),
@@ -730,6 +760,38 @@ mod tests {
         assert!((merged[3].1.x - 10.0).abs() < 1e-10);
         assert!((merged[4].1.x - 20.0).abs() < 1e-10);
         assert!((merged[5].1.x - 30.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_merge_priority() {
+        // Move A : priority 1, position x=1
+        // Move B : priority 5, position x=99
+        // → B doit gagner malgré un fade plus faible
+        let move_a = ("a".to_string(), 1.0, 1, vec![
+            (0, nalgebra::Vector3::new(1.0, 0.0, 0.0)),
+        ]);
+        let move_b = ("b".to_string(), 0.1, 5, vec![
+            (0, nalgebra::Vector3::new(99.0, 0.0, 0.0)),
+        ]);
+        let osc_ids = vec![1];
+        let merged = merge_positions(&[move_a, move_b], &osc_ids, MergeStrategy::Priority);
+        // Priority : B (priority 5) gagne sur A (priority 1) même si fade de B est plus faible
+        assert!((merged[0].1.x - 99.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_merge_priority_tiebreak_by_fade() {
+        // Deux moves même priorité : le fade le plus élevé gagne
+        let move_a = ("a".to_string(), 1.0, 5, vec![
+            (0, nalgebra::Vector3::new(1.0, 0.0, 0.0)),
+        ]);
+        let move_b = ("b".to_string(), 0.5, 5, vec![
+            (0, nalgebra::Vector3::new(99.0, 0.0, 0.0)),
+        ]);
+        let osc_ids = vec![1];
+        let merged = merge_positions(&[move_a, move_b], &osc_ids, MergeStrategy::Priority);
+        // Même priorité → tiebreak par fade → A (fade 1.0) gagne
+        assert!((merged[0].1.x - 1.0).abs() < 1e-10);
     }
 
     #[test]
