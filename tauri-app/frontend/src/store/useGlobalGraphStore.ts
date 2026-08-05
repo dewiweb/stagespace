@@ -93,9 +93,13 @@ function saveToStorage(nodes: Node[], edges: Edge[]) {
   } catch {}
 }
 
+// Initialiser une seule fois pour que les IDs des nodes et edges correspondent
+const _defaultGraph = buildDefaultGlobalGraph();
+const _stored = loadFromStorage();
+
 export const useGlobalGraphStore = create<GlobalGraphState>((set, get) => ({
-  nodes: loadFromStorage()?.nodes ?? buildDefaultGlobalGraph().nodes,
-  edges: loadFromStorage()?.edges ?? buildDefaultGlobalGraph().edges,
+  nodes: _stored?.nodes ?? _defaultGraph.nodes,
+  edges: _stored?.edges ?? _defaultGraph.edges,
   isGlobalGraphEnabled: true,
 
   setNodes: (nodes) => {

@@ -352,7 +352,18 @@ impl MergeRuntime {
                     if let Some(buffer) = buffers.get(move_id) {
                         let positions = buffer.read();
                         if !positions.is_empty() {
-                            move_positions.push((move_id.clone(), fade, positions));
+                            // Remapper les positions locales (0..N du move) vers les indices globaux
+                            // en utilisant track_indices du MoveState.
+                            // Sans track_indices, on garde les indices locaux (compat).
+                            let global_positions: Vec<(usize, nalgebra::Vector3<f64>)> =
+                                if state.track_indices.len() == positions.len() {
+                                    positions.iter().enumerate().map(|(local_idx, (_, pos))| {
+                                        (state.track_indices[local_idx], *pos)
+                                    }).collect()
+                                } else {
+                                    positions.clone()
+                                };
+                            move_positions.push((move_id.clone(), fade, global_positions));
                         }
                     }
                 }
@@ -668,6 +679,36 @@ mod tests {
         let merged = merge_positions(&[], &osc_ids, MergeStrategy::Override);
         assert_eq!(merged.len(), 2);
         assert!(merged[0].1.x.abs() < 1e-10);
+        assert!(merged[1].1.x.abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_merge_disjoint_tracks() {
+        // Move A contrôle tracks [0, 1, 2] (positions locales 0,1,2)
+        // Move B contrôle tracks [3, 4, 5] (positions locales 0,1,2 → remappées en 3,4,5)
+        // Après remapping, le merge ne doit pas écraser les positions de A avec celles de B
+        let move_a = ("a".to_string(), 1.0, vec![
+            (0, nalgebra::Vector3::new(1.0, 0.0, 0.0)),
+            (1, nalgebra::Vector3::new(2.0, 0.0, 0.0)),
+            (2, nalgebra::Vector3::new(3.0, 0.0, 0.0)),
+        ]);
+        // Move B avec indices déjà remappés (3,4,5)
+        let move_b = ("b".to_string(), 1.0, vec![
+            (3, nalgebra::Vector3::new(10.0, 0.0, 0.0)),
+            (4, nalgebra::Vector3::new(20.0, 0.0, 0.0)),
+            (5, nalgebra::Vector3::new(30.0, 0.0, 0.0)),
+        ]);
+        let osc_ids = vec![1, 2, 3, 4, 5, 6];
+        let merged = merge_positions(&[move_a, move_b], &osc_ids, MergeStrategy::Override);
+        assert_eq!(merged.len(), 6);
+        // Tracks 0-2 : move A
+        assert!((merged[0].1.x - 1.0).abs() < 1e-10);
+        assert!((merged[1].1.x - 2.0).abs() < 1e-10);
+        assert!((merged[2].1.x - 3.0).abs() < 1e-10);
+        // Tracks 3-5 : move B
+        assert!((merged[3].1.x - 10.0).abs() < 1e-10);
+        assert!((merged[4].1.x - 20.0).abs() < 1e-10);
+        assert!((merged[5].1.x - 30.0).abs() < 1e-10);
     }
 
     #[test]
