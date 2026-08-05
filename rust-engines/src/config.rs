@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 /// Configuration de STAGESPACE
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
     /// Configuration du runtime
     pub runtime: RuntimeConfig,
@@ -12,17 +12,6 @@ pub struct Config {
     pub audio: AudioConfig,
     /// Configuration du graphe
     pub graph: GraphConfig,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            runtime: RuntimeConfig::default(),
-            osc: OscConfig::default(),
-            audio: AudioConfig::default(),
-            graph: GraphConfig::default(),
-        }
-    }
 }
 
 /// Configuration du runtime

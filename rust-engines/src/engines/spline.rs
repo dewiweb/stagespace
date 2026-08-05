@@ -130,7 +130,11 @@ pub fn build_spline_lut(spline: &Spline) -> SplineLUT {
 /// Evaluate spline at arc-length-uniform t ∈ [0,1]
 pub fn evaluate_spline(lut: &SplineLUT, t: f64) -> Vector3<f64> {
     if lut.positions.len() <= 1 {
-        return lut.positions.get(0).copied().unwrap_or_else(Vector3::zeros);
+        return lut
+            .positions
+            .first()
+            .copied()
+            .unwrap_or_else(Vector3::zeros);
     }
 
     let t = t.clamp(0.0, 1.0);
@@ -151,7 +155,11 @@ pub fn evaluate_spline(lut: &SplineLUT, t: f64) -> Vector3<f64> {
     let len_lo = lut.arc_lengths[lo];
     let len_hi = lut.arc_lengths[hi];
     let span = len_hi - len_lo;
-    let blend = if span < 1e-10 { 0.0 } else { (target - len_lo) / span };
+    let blend = if span < 1e-10 {
+        0.0
+    } else {
+        (target - len_lo) / span
+    };
 
     let a = lut.positions[lo];
     let b = lut.positions[hi];
@@ -194,8 +202,16 @@ fn parse_spline(params: &EngineParams) -> Option<Spline> {
         return None;
     }
 
-    let closed = params.extra.get("closed").and_then(|v| v.as_bool()).unwrap_or(false);
-    let tension = params.extra.get("tension").and_then(|v| v.as_f64()).unwrap_or(0.5);
+    let closed = params
+        .extra
+        .get("closed")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let tension = params
+        .extra
+        .get("tension")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.5);
 
     Some(Spline {
         points,
@@ -212,15 +228,31 @@ impl Engine for DrawSpline {
     fn position(&self, t: f64, object_index: usize, params: &EngineParams) -> Vector3<f64> {
         let spline = parse_spline(params).unwrap_or(Spline {
             points: vec![
-                SplinePoint { x: -0.5, y: 0.0, z: 0.0 },
-                SplinePoint { x: 0.5, y: 0.0, z: 0.0 },
+                SplinePoint {
+                    x: -0.5,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                SplinePoint {
+                    x: 0.5,
+                    y: 0.0,
+                    z: 0.0,
+                },
             ],
             closed: false,
             tension: 0.5,
         });
         let lut = build_spline_lut(&spline);
-        let speed = params.extra.get("speed").and_then(|v| v.as_f64()).unwrap_or(1.0);
-        let phase_offset = params.extra.get("phase_offset").and_then(|v| v.as_bool()).unwrap_or(true);
+        let speed = params
+            .extra
+            .get("speed")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0);
+        let phase_offset = params
+            .extra
+            .get("phase_offset")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
 
         let phase = if phase_offset {
             object_index as f64 / params.n_objects as f64
@@ -245,15 +277,31 @@ impl Engine for EvaluateSpline {
     fn position(&self, t: f64, object_index: usize, params: &EngineParams) -> Vector3<f64> {
         let spline = parse_spline(params).unwrap_or(Spline {
             points: vec![
-                SplinePoint { x: -0.5, y: 0.0, z: 0.0 },
-                SplinePoint { x: 0.5, y: 0.0, z: 0.0 },
+                SplinePoint {
+                    x: -0.5,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                SplinePoint {
+                    x: 0.5,
+                    y: 0.0,
+                    z: 0.0,
+                },
             ],
             closed: false,
             tension: 0.5,
         });
         let lut = build_spline_lut(&spline);
-        let speed = params.extra.get("speed").and_then(|v| v.as_f64()).unwrap_or(1.0);
-        let phase_offset = params.extra.get("phase_offset").and_then(|v| v.as_bool()).unwrap_or(true);
+        let speed = params
+            .extra
+            .get("speed")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0);
+        let phase_offset = params
+            .extra
+            .get("phase_offset")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
 
         let phase = if phase_offset {
             object_index as f64 / params.n_objects as f64
@@ -278,17 +326,41 @@ impl Engine for TrimSpline {
     fn position(&self, t: f64, object_index: usize, params: &EngineParams) -> Vector3<f64> {
         let spline = parse_spline(params).unwrap_or(Spline {
             points: vec![
-                SplinePoint { x: -0.5, y: 0.0, z: 0.0 },
-                SplinePoint { x: 0.5, y: 0.0, z: 0.0 },
+                SplinePoint {
+                    x: -0.5,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                SplinePoint {
+                    x: 0.5,
+                    y: 0.0,
+                    z: 0.0,
+                },
             ],
             closed: false,
             tension: 0.5,
         });
         let lut = build_spline_lut(&spline);
-        let speed = params.extra.get("speed").and_then(|v| v.as_f64()).unwrap_or(1.0);
-        let phase_offset = params.extra.get("phase_offset").and_then(|v| v.as_bool()).unwrap_or(true);
-        let trim_start = params.extra.get("trim_start").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        let trim_end = params.extra.get("trim_end").and_then(|v| v.as_f64()).unwrap_or(1.0);
+        let speed = params
+            .extra
+            .get("speed")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0);
+        let phase_offset = params
+            .extra
+            .get("phase_offset")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+        let trim_start = params
+            .extra
+            .get("trim_start")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        let trim_end = params
+            .extra
+            .get("trim_end")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0);
 
         let phase = if phase_offset {
             object_index as f64 / params.n_objects as f64
@@ -314,18 +386,46 @@ impl Engine for OffsetSpline {
     fn position(&self, t: f64, object_index: usize, params: &EngineParams) -> Vector3<f64> {
         let spline = parse_spline(params).unwrap_or(Spline {
             points: vec![
-                SplinePoint { x: -0.5, y: 0.0, z: 0.0 },
-                SplinePoint { x: 0.5, y: 0.0, z: 0.0 },
+                SplinePoint {
+                    x: -0.5,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                SplinePoint {
+                    x: 0.5,
+                    y: 0.0,
+                    z: 0.0,
+                },
             ],
             closed: false,
             tension: 0.5,
         });
         let lut = build_spline_lut(&spline);
-        let speed = params.extra.get("speed").and_then(|v| v.as_f64()).unwrap_or(1.0);
-        let phase_offset = params.extra.get("phase_offset").and_then(|v| v.as_bool()).unwrap_or(true);
-        let offset_x = params.extra.get("offset_x").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        let offset_y = params.extra.get("offset_y").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        let offset_z = params.extra.get("offset_z").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let speed = params
+            .extra
+            .get("speed")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0);
+        let phase_offset = params
+            .extra
+            .get("phase_offset")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+        let offset_x = params
+            .extra
+            .get("offset_x")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        let offset_y = params
+            .extra
+            .get("offset_y")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        let offset_z = params
+            .extra
+            .get("offset_z")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
 
         let phase = if phase_offset {
             object_index as f64 / params.n_objects as f64
@@ -364,10 +464,26 @@ mod tests {
     fn test_catmull_rom_basic() {
         let spline = Spline {
             points: vec![
-                SplinePoint { x: 0.0, y: 0.0, z: 0.0 },
-                SplinePoint { x: 1.0, y: 0.0, z: 0.0 },
-                SplinePoint { x: 1.0, y: 1.0, z: 0.0 },
-                SplinePoint { x: 0.0, y: 1.0, z: 0.0 },
+                SplinePoint {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                SplinePoint {
+                    x: 1.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                SplinePoint {
+                    x: 1.0,
+                    y: 1.0,
+                    z: 0.0,
+                },
+                SplinePoint {
+                    x: 0.0,
+                    y: 1.0,
+                    z: 0.0,
+                },
             ],
             closed: false,
             tension: 0.5,
@@ -413,6 +529,10 @@ mod tests {
             }),
         );
         let pos = engine.position(0.0, 0, &params);
-        assert!(pos.x.abs() < 0.2, "pos.x should be near 0 at t=0, got {}", pos.x);
+        assert!(
+            pos.x.abs() < 0.2,
+            "pos.x should be near 0 at t=0, got {}",
+            pos.x
+        );
     }
 }

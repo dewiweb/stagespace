@@ -6,11 +6,31 @@ pub struct Elliptical;
 
 impl Engine for Elliptical {
     fn position(&self, t: f64, object_index: usize, params: &EngineParams) -> Vector3<f64> {
-        let a = params.extra.get("a").and_then(|v| v.as_f64()).unwrap_or(0.8);
-        let b = params.extra.get("b").and_then(|v| v.as_f64()).unwrap_or(0.4);
-        let plane = params.extra.get("plane").and_then(|v| v.as_str()).unwrap_or("xy");
-        let speed = params.extra.get("speed").and_then(|v| v.as_f64()).unwrap_or(1.0);
-        let phase_offset = params.extra.get("phase_offset").and_then(|v| v.as_bool()).unwrap_or(true);
+        let a = params
+            .extra
+            .get("a")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.8);
+        let b = params
+            .extra
+            .get("b")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.4);
+        let plane = params
+            .extra
+            .get("plane")
+            .and_then(|v| v.as_str())
+            .unwrap_or("xy");
+        let speed = params
+            .extra
+            .get("speed")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0);
+        let phase_offset = params
+            .extra
+            .get("phase_offset")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
 
         let phase = if phase_offset {
             2.0 * PI * object_index as f64 / params.n_objects as f64

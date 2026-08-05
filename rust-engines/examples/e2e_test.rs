@@ -1,15 +1,14 @@
 //! Test end-to-end : lance une animation et vérifie que les messages OSC partent.
 //! Usage: cargo run --example e2e_test
 use stagespace_engines::{
-    Animation, AnimationState, TrackAssignment, ShapeType,
-    Compiler, Runtime, EngineParams, OscSender, OscProfile,
-    AudioState,
+    Animation, AnimationState, AudioState, Compiler, EngineParams, OscProfile, OscSender, Runtime,
+    ShapeType, TrackAssignment,
 };
 use std::net::UdpSocket;
 use std::time::Duration;
 
 fn build_graph_from_shape(anim: &Animation, n_objects: usize) -> stagespace_engines::Graph {
-    use stagespace_engines::{Graph, Node, NodeId, NodeType, Edge};
+    use stagespace_engines::{Edge, Graph, Node, NodeId, NodeType};
     let mut graph = Graph::new();
 
     let objects_id = NodeId::new();
@@ -20,12 +19,14 @@ fn build_graph_from_shape(anim: &Animation, n_objects: usize) -> stagespace_engi
     let n_objs = n_objects.max(1);
 
     graph.add_node(Node {
-        id: objects_id, node_type: NodeType::Objects,
+        id: objects_id,
+        node_type: NodeType::Objects,
         params: serde_json::json!({ "n_objects": n_objs }),
         position: (50.0, 200.0),
     });
     graph.add_node(Node {
-        id: duration_id, node_type: NodeType::Duration,
+        id: duration_id,
+        node_type: NodeType::Duration,
         params: serde_json::json!({ "duration": anim.duration }),
         position: (50.0, 50.0),
     });
@@ -46,19 +47,36 @@ fn build_graph_from_shape(anim: &Animation, n_objects: usize) -> stagespace_engi
     engine_params.insert("n_objects".to_string(), serde_json::json!(n_objs));
 
     graph.add_node(Node {
-        id: engine_id, node_type: engine_type,
+        id: engine_id,
+        node_type: engine_type,
         params: serde_json::json!(engine_params),
         position: (300.0, 150.0),
     });
     graph.add_node(Node {
-        id: output_id, node_type: NodeType::Output,
+        id: output_id,
+        node_type: NodeType::Output,
         params: serde_json::json!({}),
         position: (550.0, 150.0),
     });
 
-    graph.add_edge(Edge { from: objects_id, to: engine_id, from_port: "output".to_string(), to_port: "input".to_string() });
-    graph.add_edge(Edge { from: duration_id, to: engine_id, from_port: "output".to_string(), to_port: "duration".to_string() });
-    graph.add_edge(Edge { from: engine_id, to: output_id, from_port: "output".to_string(), to_port: "input".to_string() });
+    graph.add_edge(Edge {
+        from: objects_id,
+        to: engine_id,
+        from_port: "output".to_string(),
+        to_port: "input".to_string(),
+    });
+    graph.add_edge(Edge {
+        from: duration_id,
+        to: engine_id,
+        from_port: "output".to_string(),
+        to_port: "duration".to_string(),
+    });
+    graph.add_edge(Edge {
+        from: engine_id,
+        to: output_id,
+        from_port: "output".to_string(),
+        to_port: "input".to_string(),
+    });
 
     graph
 }
@@ -70,10 +88,12 @@ fn main() {
     let listener = UdpSocket::bind("127.0.0.1:0").expect("bind listener");
     let listener_addr = listener.local_addr().unwrap();
     let listener_port = listener_addr.port();
-    println!("[1] UDP listener sur 127.0.0.1:{}", listener_port);
+    println!("[1] UDP listener sur 127.0.0.1:{listener_port}");
 
     // Timeout court pour ne pas bloquer
-    listener.set_read_timeout(Some(Duration::from_millis(500))).unwrap();
+    listener
+        .set_read_timeout(Some(Duration::from_millis(500)))
+        .unwrap();
 
     // 2. Créer une animation Circle
     let mut anim = Animation::default();
@@ -83,25 +103,47 @@ fn main() {
     anim.duration = 4.0;
     anim.speed = 1.0;
     anim.assignments = vec![
-        TrackAssignment { track_id: 1, depth: 1.0, phase_offset: 0.0 },
-        TrackAssignment { track_id: 2, depth: 0.5, phase_offset: 180.0 },
+        TrackAssignment {
+            track_id: 1,
+            depth: 1.0,
+            phase_offset: 0.0,
+        },
+        TrackAssignment {
+            track_id: 2,
+            depth: 0.5,
+            phase_offset: 180.0,
+        },
     ];
-    println!("[2] Animation: {:?} radius={} duration={}s tracks={}",
-        anim.shape, anim.shape_params.get("radius").unwrap_or(&0.0), anim.duration, anim.assignments.len());
+    println!(
+        "[2] Animation: {:?} radius={} duration={}s tracks={}",
+        anim.shape,
+        anim.shape_params.get("radius").unwrap_or(&0.0),
+        anim.duration,
+        anim.assignments.len()
+    );
 
     let osc_ids = vec![1u32, 2u32];
 
     // 3. Construire le graphe
     let graph = build_graph_from_shape(&anim, osc_ids.len());
-    println!("[3] Graphe construit: {} nodes, {} edges", graph.nodes.len(), graph.edges.len());
+    println!(
+        "[3] Graphe construit: {} nodes, {} edges",
+        graph.nodes.len(),
+        graph.edges.len()
+    );
 
     // 4. Compiler
     let compiled = Compiler::compile(&graph).expect("compile");
     println!("[4] Compilation OK");
 
     // 5. Créer le runtime qui envoie OSC au listener
-    let osc_sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), listener_port);
-    let runtime = Runtime::new("127.0.0.1".to_string(), listener_port, osc_sender).expect("runtime");
+    let osc_sender = OscSender::new(
+        OscProfile::GenericCartesian,
+        "127.0.0.1".to_string(),
+        listener_port,
+    );
+    let runtime =
+        Runtime::new("127.0.0.1".to_string(), listener_port, osc_sender).expect("runtime");
     println!("[5] Runtime créé");
 
     // 6. Set animation state (depth + phase_offset)
@@ -110,9 +152,11 @@ fn main() {
     runtime.macros().set_speed(anim.speed);
     runtime.macros().set_scale(anim.scale);
     runtime.set_origin(nalgebra::Vector3::zeros());
-    println!("[6] Animation state set: depths={:?} phases={:?}",
+    println!(
+        "[6] Animation state set: depths={:?} phases={:?}",
         AnimationState::from_animation(&anim, &osc_ids).track_depths,
-        AnimationState::from_animation(&anim, &osc_ids).track_phase_offsets);
+        AnimationState::from_animation(&anim, &osc_ids).track_phase_offsets
+    );
 
     // 7. Lancer le playback
     let params = EngineParams {
@@ -121,7 +165,9 @@ fn main() {
         fps: 60.0,
         extra: serde_json::json!({}),
     };
-    let handle = runtime.play_compiled(compiled, params, osc_ids).expect("play");
+    let handle = runtime
+        .play_compiled(compiled, params, osc_ids)
+        .expect("play");
     println!("[7] Playback lancé ! En attente de messages OSC...");
 
     // 8. Écouter les messages OSC pendant 1 seconde
@@ -138,9 +184,11 @@ fn main() {
                     // Parser le message OSC
                     if let Ok((_, packet)) = rosc::decoder::decode_udp(&buf[..n]) {
                         if let rosc::OscPacket::Message(msg) = packet {
-                            let args_str: Vec<String> = msg.args.iter()
+                            let args_str: Vec<String> = msg
+                                .args
+                                .iter()
                                 .map(|a| match a {
-                                    rosc::OscType::Float(f) => format!("{:.2}", f),
+                                    rosc::OscType::Float(f) => format!("{f:.2}"),
                                     rosc::OscType::Int(i) => i.to_string(),
                                     _ => "?".to_string(),
                                 })
@@ -161,11 +209,11 @@ fn main() {
 
     // 10. Résultats
     println!("\n=== RÉSULTATS ===");
-    println!("Messages OSC reçus: {}", messages_received);
+    println!("Messages OSC reçus: {messages_received}");
     if messages_received > 0 {
         println!("Premiers messages:");
         for msg in &first_messages {
-            println!("{}", msg);
+            println!("{msg}");
         }
         println!("\n✅ SUCCÈS — L'animation envoie bien des messages OSC !");
     } else {
@@ -177,7 +225,9 @@ fn main() {
 
     let listener2 = UdpSocket::bind("127.0.0.1:0").expect("bind listener2");
     let port2 = listener2.local_addr().unwrap().port();
-    listener2.set_read_timeout(Some(Duration::from_millis(500))).unwrap();
+    listener2
+        .set_read_timeout(Some(Duration::from_millis(500)))
+        .unwrap();
 
     let mut anim2 = Animation::default();
     anim2.shape = ShapeType::Circle;
@@ -205,13 +255,23 @@ fn main() {
 
     // Pousser un audio state avec bass=0.8
     let mut audio = AudioState::new();
-    audio.amplitude = Some(stagespace_engines::AmplitudeData { rms: 0.5, bass: 0.8, mid: 0.3, high: 0.1 });
+    audio.amplitude = Some(stagespace_engines::AmplitudeData {
+        rms: 0.5,
+        bass: 0.8,
+        mid: 0.3,
+        high: 0.1,
+    });
     runtime2.set_audio_state(audio);
 
     let params2 = EngineParams {
-        n_objects: osc_ids2.len(), duration: anim2.duration, fps: 60.0, extra: serde_json::json!({}),
+        n_objects: osc_ids2.len(),
+        duration: anim2.duration,
+        fps: 60.0,
+        extra: serde_json::json!({}),
     };
-    let handle2 = runtime2.play_compiled(compiled2, params2, osc_ids2).expect("play2");
+    let handle2 = runtime2
+        .play_compiled(compiled2, params2, osc_ids2)
+        .expect("play2");
     println!("Playback avec audio mod (bass=0.8 → radius) lancé...");
 
     let mut msg_count2 = 0;
@@ -223,9 +283,11 @@ fn main() {
             if msg_count2 <= 3 {
                 if let Ok((_, packet)) = rosc::decoder::decode_udp(&buf[..n]) {
                     if let rosc::OscPacket::Message(msg) = packet {
-                        let args_str: Vec<String> = msg.args.iter()
+                        let args_str: Vec<String> = msg
+                            .args
+                            .iter()
                             .map(|a| match a {
-                                rosc::OscType::Float(f) => format!("{:.2}", f),
+                                rosc::OscType::Float(f) => format!("{f:.2}"),
                                 _ => "?".to_string(),
                             })
                             .collect();
@@ -240,7 +302,7 @@ fn main() {
     let _ = handle2.join();
 
     if msg_count2 > 0 {
-        println!("✅ Audio mod test: {} messages OSC reçus avec Holophonix profile", msg_count2);
+        println!("✅ Audio mod test: {msg_count2} messages OSC reçus avec Holophonix profile");
     } else {
         println!("❌ Audio mod test: aucun message");
     }

@@ -1,17 +1,16 @@
-use stagespace_engines::{Runtime, EngineParams,
-    OscSender, OscProfile, LoopMode};
+use crate::graph::compilation::{compile_graph_with_audio, compile_graph_with_audio_and_overrides};
+use crate::graph::parser::build_graph_from_json;
+use crate::AppState;
 use serde::Deserialize;
+use stagespace_engines::{EngineParams, LoopMode, OscProfile, OscSender, Runtime};
 use std::str::FromStr;
 use std::sync::{Mutex, MutexGuard};
-use tauri::{State, Emitter};
-use crate::AppState;
-use crate::graph::parser::build_graph_from_json;
-use crate::graph::compilation::{compile_graph_with_audio, compile_graph_with_audio_and_overrides};
+use tauri::{Emitter, State};
 
 /// Récupère le contenu d'un Mutex même s'il est empoisonné (poison recovery).
 fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(|e| {
-        eprintln!("[WARN] Mutex was poisoned, recovering inner data: {}", e);
+        eprintln!("[WARN] Mutex was poisoned, recovering inner data: {e}");
         e.into_inner()
     })
 }
@@ -31,7 +30,10 @@ pub struct PlayGraphRequest {
 }
 
 #[tauri::command]
-pub async fn play_graph(request: PlayGraphRequest, state: State<'_, AppState>) -> Result<String, String> {
+pub async fn play_graph(
+    request: PlayGraphRequest,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
     let audio_state = lock_or_recover(&state.audio_state);
     let graph = build_graph_from_json(&request.graph_json, &audio_state)?;
     drop(audio_state);
@@ -43,35 +45,46 @@ pub async fn play_graph(request: PlayGraphRequest, state: State<'_, AppState>) -
 
     let osc_sender = OscSender::new(osc_profile, request.oscAddress.clone(), request.oscPort);
     let runtime = Runtime::new(request.oscAddress, request.oscPort, osc_sender)
-        .map_err(|e| format!("Failed to create runtime: {}", e))?;
+        .map_err(|e| format!("Failed to create runtime: {e}"))?;
 
     // Callback position pour le frontend (preview 3D)
     let app_handle = lock_or_recover(&state.app_handle)
-        .as_ref().ok_or("App handle not available")?.clone();
+        .as_ref()
+        .ok_or("App handle not available")?
+        .clone();
     let osc_ids_for_callback = request.oscIds.clone();
     let osc_ids_for_playback = request.oscIds.clone();
 
-    runtime.set_position_callback(Box::new(move |t: f64, positions: Vec<(usize, nalgebra::Vector3<f64>)>| {
-        let positions_data: Vec<(usize, [f64; 3])> = positions
-            .into_iter().map(|(idx, pos)| (idx, [pos.x, pos.y, pos.z])).collect();
-        let _ = app_handle.emit("positions-update", serde_json::json!({
-            "time": t, "positions": positions_data, "osc_ids": osc_ids_for_callback,
-        }));
-    }));
+    runtime.set_position_callback(Box::new(
+        move |t: f64, positions: Vec<(usize, nalgebra::Vector3<f64>)>| {
+            let positions_data: Vec<(usize, [f64; 3])> = positions
+                .into_iter()
+                .map(|(idx, pos)| (idx, [pos.x, pos.y, pos.z]))
+                .collect();
+            let _ = app_handle.emit(
+                "positions-update",
+                serde_json::json!({
+                    "time": t, "positions": positions_data, "osc_ids": osc_ids_for_callback,
+                }),
+            );
+        },
+    ));
 
     // Loop infinie par défaut (live)
     runtime.set_loop_mode(LoopMode::Loop);
 
-    runtime.play_compiled(
-        compiled,
-        EngineParams {
-            n_objects: osc_ids_for_playback.len(),
-            duration: 4.0,
-            fps: 60.0,
-            extra: serde_json::json!({}),
-        },
-        osc_ids_for_playback.clone(),
-    ).map_err(|e| format!("Failed to start playback: {}", e))?;
+    runtime
+        .play_compiled(
+            compiled,
+            EngineParams {
+                n_objects: osc_ids_for_playback.len(),
+                duration: 4.0,
+                fps: 60.0,
+                extra: serde_json::json!({}),
+            },
+            osc_ids_for_playback.clone(),
+        )
+        .map_err(|e| format!("Failed to start playback: {e}"))?;
 
     // Stocker le runtime + osc_ids
     let mut state_guard = lock_or_recover(&state.runtime);
@@ -107,36 +120,47 @@ pub async fn preview_graph(
     // Utiliser un OscSender "dummy" — pas d'envoi réel
     let osc_sender = OscSender::new(OscProfile::Holophonix, "127.0.0.1".to_string(), 9999);
     let runtime = Runtime::new("127.0.0.1".to_string(), 9999, osc_sender)
-        .map_err(|e| format!("Failed to create runtime: {}", e))?;
+        .map_err(|e| format!("Failed to create runtime: {e}"))?;
 
     // Activer le mode preview
     runtime.set_preview_mode(true);
 
     // Callback position pour le frontend (preview 3D)
     let app_handle = lock_or_recover(&state.app_handle)
-        .as_ref().ok_or("App handle not available")?.clone();
+        .as_ref()
+        .ok_or("App handle not available")?
+        .clone();
     let osc_ids_for_callback = request.oscIds.clone();
 
-    runtime.set_position_callback(Box::new(move |t: f64, positions: Vec<(usize, nalgebra::Vector3<f64>)>| {
-        let positions_data: Vec<(usize, [f64; 3])> = positions
-            .into_iter().map(|(idx, pos)| (idx, [pos.x, pos.y, pos.z])).collect();
-        let _ = app_handle.emit("positions-update", serde_json::json!({
-            "time": t, "positions": positions_data, "osc_ids": osc_ids_for_callback,
-        }));
-    }));
+    runtime.set_position_callback(Box::new(
+        move |t: f64, positions: Vec<(usize, nalgebra::Vector3<f64>)>| {
+            let positions_data: Vec<(usize, [f64; 3])> = positions
+                .into_iter()
+                .map(|(idx, pos)| (idx, [pos.x, pos.y, pos.z]))
+                .collect();
+            let _ = app_handle.emit(
+                "positions-update",
+                serde_json::json!({
+                    "time": t, "positions": positions_data, "osc_ids": osc_ids_for_callback,
+                }),
+            );
+        },
+    ));
 
     runtime.set_loop_mode(LoopMode::Loop);
 
-    runtime.play_compiled(
-        compiled,
-        EngineParams {
-            n_objects: request.oscIds.len(),
-            duration: 4.0,
-            fps: 60.0,
-            extra: serde_json::json!({}),
-        },
-        request.oscIds,
-    ).map_err(|e| format!("Playback failed: {}", e))?;
+    runtime
+        .play_compiled(
+            compiled,
+            EngineParams {
+                n_objects: request.oscIds.len(),
+                duration: 4.0,
+                fps: 60.0,
+                extra: serde_json::json!({}),
+            },
+            request.oscIds,
+        )
+        .map_err(|e| format!("Playback failed: {e}"))?;
 
     // Stocker le runtime
     let mut state_guard = lock_or_recover(&state.runtime);
@@ -154,14 +178,17 @@ pub async fn update_graph(
     state: State<'_, AppState>,
 ) -> Result<String, String> {
     let state_guard = lock_or_recover(&state.runtime);
-    let runtime = state_guard.as_ref().ok_or("No runtime active — call play_graph first")?;
+    let runtime = state_guard
+        .as_ref()
+        .ok_or("No runtime active — call play_graph first")?;
 
     let audio_state = lock_or_recover(&state.audio_state);
     let graph = build_graph_from_json(&graph_json, &audio_state)?;
     drop(audio_state);
 
     let overrides = runtime.audio_param_overrides();
-    let compiled = compile_graph_with_audio_and_overrides(&graph, state.audio_state.clone(), overrides)?;
+    let compiled =
+        compile_graph_with_audio_and_overrides(&graph, state.audio_state.clone(), overrides)?;
 
     // Crossfade smooth (défaut 0.5s) pour éviter les sauts
     let fade = fade_duration.unwrap_or(0.5);
@@ -192,8 +219,12 @@ pub async fn set_macro(request: SetMacroRequest, state: State<'_, AppState>) -> 
     let state_guard = lock_or_recover(&state.runtime);
     if let Some(runtime) = &*state_guard {
         let macros = runtime.macros();
-        if let Some(s) = request.speed { macros.set_speed(s); }
-        if let Some(s) = request.scale { macros.set_scale(s); }
+        if let Some(s) = request.speed {
+            macros.set_speed(s);
+        }
+        if let Some(s) = request.scale {
+            macros.set_scale(s);
+        }
         // Shift: partial update
         let current_shift = macros.get_shift();
         macros.set_shift(
@@ -209,8 +240,12 @@ pub async fn set_macro(request: SetMacroRequest, state: State<'_, AppState>) -> 
             request.roll.unwrap_or(cr),
         );
         // radius_scale + height_offset
-        if let Some(v) = request.radius_scale { macros.set_radius_scale(v); }
-        if let Some(v) = request.height_offset { macros.set_height_offset(v); }
+        if let Some(v) = request.radius_scale {
+            macros.set_radius_scale(v);
+        }
+        if let Some(v) = request.height_offset {
+            macros.set_height_offset(v);
+        }
         Ok(())
     } else {
         Err("No active runtime".to_string())
@@ -224,7 +259,7 @@ pub async fn set_loop_mode(mode: String, state: State<'_, AppState>) -> Result<(
         let loop_mode = match mode.as_str() {
             "loop" => LoopMode::Loop,
             "oneshot" => LoopMode::OneShot,
-            _ => return Err(format!("Unknown loop mode: {}", mode)),
+            _ => return Err(format!("Unknown loop mode: {mode}")),
         };
         runtime.set_loop_mode(loop_mode);
         Ok(())

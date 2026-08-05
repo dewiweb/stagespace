@@ -1,4 +1,4 @@
-use crate::audio::{AudioReactor, AudioBinding, AudioSource, AudioFrame};
+use crate::audio::{AudioBinding, AudioFrame, AudioReactor, AudioSource};
 
 #[test]
 fn test_audio_reactor_new() {
@@ -61,7 +61,7 @@ fn test_get_binding_value() {
         smooth: 0.7,
     };
     reactor.add_binding(binding);
-    
+
     let frame = AudioFrame {
         rms: 0.5,
         bass: 0.3,
@@ -70,7 +70,7 @@ fn test_get_binding_value() {
         spectrum: vec![0.1, 0.2, 0.3],
     };
     reactor.update(frame);
-    
+
     let value = reactor.get_binding_value("speed");
     assert!(value.is_some());
     assert!((value.unwrap() - 0.5).abs() < 0.01);

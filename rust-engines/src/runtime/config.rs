@@ -1,13 +1,19 @@
-use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering};
 use super::types::{LoopMode, PlayDirection};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 
 /// Configuration du runtime — loop mode, direction, fade, preview
 pub struct RuntimeConfig {
-    loop_mode: AtomicU8,   // 0 = Loop, 1 = OneShot
-    direction: AtomicU8,   // 0 = Forward, 1 = Backward, 2 = PingPong
-    fade_in: AtomicU64,    // stocké en ms (u64) pour être atomic
+    loop_mode: AtomicU8, // 0 = Loop, 1 = OneShot
+    direction: AtomicU8, // 0 = Forward, 1 = Backward, 2 = PingPong
+    fade_in: AtomicU64,  // stocké en ms (u64) pour être atomic
     fade_out: AtomicU64,
     preview_mode: AtomicBool,
+}
+
+impl Default for RuntimeConfig {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl RuntimeConfig {
@@ -22,23 +28,31 @@ impl RuntimeConfig {
     }
 
     pub fn set_loop_mode(&self, mode: LoopMode) {
-        self.loop_mode.store(match mode {
-            LoopMode::Loop => 0,
-            LoopMode::OneShot => 1,
-        }, Ordering::Relaxed);
+        self.loop_mode.store(
+            match mode {
+                LoopMode::Loop => 0,
+                LoopMode::OneShot => 1,
+            },
+            Ordering::Relaxed,
+        );
     }
 
     pub fn set_direction(&self, dir: PlayDirection) {
-        self.direction.store(match dir {
-            PlayDirection::Forward => 0,
-            PlayDirection::Backward => 1,
-            PlayDirection::PingPong => 2,
-        }, Ordering::Relaxed);
+        self.direction.store(
+            match dir {
+                PlayDirection::Forward => 0,
+                PlayDirection::Backward => 1,
+                PlayDirection::PingPong => 2,
+            },
+            Ordering::Relaxed,
+        );
     }
 
     pub fn set_fade(&self, fade_in: f64, fade_out: f64) {
-        self.fade_in.store((fade_in * 1000.0) as u64, Ordering::Relaxed);
-        self.fade_out.store((fade_out * 1000.0) as u64, Ordering::Relaxed);
+        self.fade_in
+            .store((fade_in * 1000.0) as u64, Ordering::Relaxed);
+        self.fade_out
+            .store((fade_out * 1000.0) as u64, Ordering::Relaxed);
     }
 
     pub fn set_preview_mode(&self, enabled: bool) {

@@ -83,7 +83,7 @@ impl OscReceiver {
 
         socket
             .set_read_timeout(Some(Duration::from_millis(100)))
-            .map_err(|e| format!("Failed to set socket timeout: {}", e))?;
+            .map_err(|e| format!("Failed to set socket timeout: {e}"))?;
 
         let port = self.port;
         let mappings = self.mappings.clone();
@@ -138,7 +138,10 @@ impl OscReceiver {
                                                     .collect();
 
                                                 if let Ok(mut lv) = last_values.lock() {
-                                                    lv.insert(mapping.handler.clone(), values.clone());
+                                                    lv.insert(
+                                                        mapping.handler.clone(),
+                                                        values.clone(),
+                                                    );
                                                 }
 
                                                 eprintln!(
@@ -152,8 +155,9 @@ impl OscReceiver {
                             }
                         }
                     }
-                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock
-                        || e.kind() == std::io::ErrorKind::TimedOut =>
+                    Err(ref e)
+                        if e.kind() == std::io::ErrorKind::WouldBlock
+                            || e.kind() == std::io::ErrorKind::TimedOut =>
                     {
                         // Timeout de 100ms atteint, on relit le drapeau d'arrêt
                         continue;
@@ -163,7 +167,7 @@ impl OscReceiver {
             }
             // Fermeture implicite du socket quand la closure est relâchée
             drop(socket);
-            eprintln!("OSC receiver thread stopped on port {}", port);
+            eprintln!("OSC receiver thread stopped on port {port}");
         });
 
         self.handle = Some(handle);
@@ -188,7 +192,10 @@ impl OscReceiver {
 
     /// Retourne toutes les dernières valeurs
     pub fn get_all_values(&self) -> HashMap<String, Vec<f64>> {
-        self.last_values.lock().map(|lv| lv.clone()).unwrap_or_default()
+        self.last_values
+            .lock()
+            .map(|lv| lv.clone())
+            .unwrap_or_default()
     }
 }
 
@@ -212,22 +219,14 @@ mod tests {
     #[test]
     fn test_add_mapping() {
         let mut receiver = OscReceiver::new(8001);
-        receiver.add_mapping(
-            "/midi/clock".to_string(),
-            "bpm_clock".to_string(),
-            None,
-        );
+        receiver.add_mapping("/midi/clock".to_string(), "bpm_clock".to_string(), None);
         assert_eq!(receiver.mappings.len(), 1);
     }
 
     #[test]
     fn test_remove_mapping() {
         let mut receiver = OscReceiver::new(8001);
-        receiver.add_mapping(
-            "/midi/clock".to_string(),
-            "bpm_clock".to_string(),
-            None,
-        );
+        receiver.add_mapping("/midi/clock".to_string(), "bpm_clock".to_string(), None);
         receiver.remove_mapping("/midi/clock");
         assert_eq!(receiver.mappings.len(), 0);
     }
@@ -235,11 +234,7 @@ mod tests {
     #[test]
     fn test_get_handler() {
         let mut receiver = OscReceiver::new(8001);
-        receiver.add_mapping(
-            "/midi/clock".to_string(),
-            "bpm_clock".to_string(),
-            None,
-        );
+        receiver.add_mapping("/midi/clock".to_string(), "bpm_clock".to_string(), None);
         let handler = receiver.get_handler("/midi/clock");
         assert!(handler.is_some());
         assert_eq!(handler.unwrap().handler, "bpm_clock");
@@ -248,16 +243,8 @@ mod tests {
     #[test]
     fn test_list_mappings() {
         let mut receiver = OscReceiver::new(8001);
-        receiver.add_mapping(
-            "/midi/clock".to_string(),
-            "bpm_clock".to_string(),
-            None,
-        );
-        receiver.add_mapping(
-            "/stagespace/bpm".to_string(),
-            "bpm_set".to_string(),
-            None,
-        );
+        receiver.add_mapping("/midi/clock".to_string(), "bpm_clock".to_string(), None);
+        receiver.add_mapping("/stagespace/bpm".to_string(), "bpm_set".to_string(), None);
         let mappings = receiver.list_mappings();
         assert_eq!(mappings.len(), 2);
     }
@@ -265,11 +252,7 @@ mod tests {
     #[test]
     fn test_clear_mappings() {
         let mut receiver = OscReceiver::new(8001);
-        receiver.add_mapping(
-            "/midi/clock".to_string(),
-            "bpm_clock".to_string(),
-            None,
-        );
+        receiver.add_mapping("/midi/clock".to_string(), "bpm_clock".to_string(), None);
         receiver.clear_mappings();
         assert_eq!(receiver.mappings.len(), 0);
     }

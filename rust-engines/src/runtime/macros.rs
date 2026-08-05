@@ -16,17 +16,23 @@ use std::sync::atomic::{AtomicU64, Ordering};
 /// - height_offset : ajoute à Y après l'engine
 #[derive(Debug)]
 pub struct MacroState {
-    pub speed: std::sync::atomic::AtomicU64,  // bits of f64
+    pub speed: std::sync::atomic::AtomicU64, // bits of f64
     pub scale: std::sync::atomic::AtomicU64,
     pub shift_x: std::sync::atomic::AtomicU64,
     pub shift_y: std::sync::atomic::AtomicU64,
     pub shift_z: std::sync::atomic::AtomicU64,
-    pub yaw: std::sync::atomic::AtomicU64,    // rotation autour de Y (degrés)
-    pub pitch: std::sync::atomic::AtomicU64,  // rotation autour de X (degrés)
-    pub roll: std::sync::atomic::AtomicU64,   // rotation autour de Z (degrés)
+    pub yaw: std::sync::atomic::AtomicU64, // rotation autour de Y (degrés)
+    pub pitch: std::sync::atomic::AtomicU64, // rotation autour de X (degrés)
+    pub roll: std::sync::atomic::AtomicU64, // rotation autour de Z (degrés)
     // Nouvelles macros
-    pub radius_scale: std::sync::atomic::AtomicU64,  // multiplicateur de rayon (1.0 = neutre)
+    pub radius_scale: std::sync::atomic::AtomicU64, // multiplicateur de rayon (1.0 = neutre)
     pub height_offset: std::sync::atomic::AtomicU64, // offset vertical post-engine
+}
+
+impl Default for MacroState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MacroState {
@@ -45,8 +51,12 @@ impl MacroState {
         }
     }
 
-    pub fn get_speed(&self) -> f64 { f64::from_bits(self.speed.load(Ordering::Relaxed)) }
-    pub fn get_scale(&self) -> f64 { f64::from_bits(self.scale.load(Ordering::Relaxed)) }
+    pub fn get_speed(&self) -> f64 {
+        f64::from_bits(self.speed.load(Ordering::Relaxed))
+    }
+    pub fn get_scale(&self) -> f64 {
+        f64::from_bits(self.scale.load(Ordering::Relaxed))
+    }
     pub fn get_shift(&self) -> nalgebra::Vector3<f64> {
         nalgebra::Vector3::new(
             f64::from_bits(self.shift_x.load(Ordering::Relaxed)),
@@ -61,11 +71,19 @@ impl MacroState {
             f64::from_bits(self.roll.load(Ordering::Relaxed)),
         )
     }
-    pub fn get_radius_scale(&self) -> f64 { f64::from_bits(self.radius_scale.load(Ordering::Relaxed)) }
-    pub fn get_height_offset(&self) -> f64 { f64::from_bits(self.height_offset.load(Ordering::Relaxed)) }
+    pub fn get_radius_scale(&self) -> f64 {
+        f64::from_bits(self.radius_scale.load(Ordering::Relaxed))
+    }
+    pub fn get_height_offset(&self) -> f64 {
+        f64::from_bits(self.height_offset.load(Ordering::Relaxed))
+    }
 
-    pub fn set_speed(&self, v: f64) { self.speed.store(v.to_bits(), Ordering::Relaxed); }
-    pub fn set_scale(&self, v: f64) { self.scale.store(v.to_bits(), Ordering::Relaxed); }
+    pub fn set_speed(&self, v: f64) {
+        self.speed.store(v.to_bits(), Ordering::Relaxed);
+    }
+    pub fn set_scale(&self, v: f64) {
+        self.scale.store(v.to_bits(), Ordering::Relaxed);
+    }
     pub fn set_shift(&self, x: f64, y: f64, z: f64) {
         self.shift_x.store(x.to_bits(), Ordering::Relaxed);
         self.shift_y.store(y.to_bits(), Ordering::Relaxed);
@@ -76,8 +94,12 @@ impl MacroState {
         self.pitch.store(pitch.to_bits(), Ordering::Relaxed);
         self.roll.store(roll.to_bits(), Ordering::Relaxed);
     }
-    pub fn set_radius_scale(&self, v: f64) { self.radius_scale.store(v.to_bits(), Ordering::Relaxed); }
-    pub fn set_height_offset(&self, v: f64) { self.height_offset.store(v.to_bits(), Ordering::Relaxed); }
+    pub fn set_radius_scale(&self, v: f64) {
+        self.radius_scale.store(v.to_bits(), Ordering::Relaxed);
+    }
+    pub fn set_height_offset(&self, v: f64) {
+        self.height_offset.store(v.to_bits(), Ordering::Relaxed);
+    }
 }
 
 impl Clone for MacroState {

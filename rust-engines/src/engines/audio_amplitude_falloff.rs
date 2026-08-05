@@ -9,17 +9,45 @@ pub struct AudioAmplitudeFalloffEngine;
 
 impl Engine for AudioAmplitudeFalloffEngine {
     fn position(&self, t: f64, _object_index: usize, params: &EngineParams) -> Vector3<f64> {
-        let band = params.extra.get("band").and_then(|v| v.as_str()).unwrap_or("rms");
-        let min_val = params.extra.get("min_val").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        let max_val = params.extra.get("max_val").and_then(|v| v.as_f64()).unwrap_or(1.0);
-        let curve_str = params.extra.get("curve").and_then(|v| v.as_str()).unwrap_or("Linear");
-        let base_radius = params.extra.get("radius").and_then(|v| v.as_f64()).unwrap_or(1.0);
-        let plane = params.extra.get("plane").and_then(|v| v.as_str()).unwrap_or("xz");
+        let band = params
+            .extra
+            .get("band")
+            .and_then(|v| v.as_str())
+            .unwrap_or("rms");
+        let min_val = params
+            .extra
+            .get("min_val")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        let max_val = params
+            .extra
+            .get("max_val")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0);
+        let curve_str = params
+            .extra
+            .get("curve")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Linear");
+        let base_radius = params
+            .extra
+            .get("radius")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0);
+        let plane = params
+            .extra
+            .get("plane")
+            .and_then(|v| v.as_str())
+            .unwrap_or("xz");
 
         // Récupérer l'amplitude depuis les paramètres extra
         // Le runtime injecte l'amplitude via extra["amplitude_<band>"]
-        let amplitude_key = format!("amplitude_{}", band);
-        let amplitude = params.extra.get(&amplitude_key).and_then(|v| v.as_f64()).unwrap_or(0.5);
+        let amplitude_key = format!("amplitude_{band}");
+        let amplitude = params
+            .extra
+            .get(&amplitude_key)
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.5);
 
         let curve = match curve_str {
             "EaseIn" => FalloffCurve::EaseIn,
@@ -42,10 +70,26 @@ impl Engine for AudioAmplitudeFalloffEngine {
         let modulated_radius = base_radius * (0.3 + 0.7 * influence); // minimum 30% du rayon
 
         match plane {
-            "xy" => Vector3::new(modulated_radius * angle.cos(), modulated_radius * angle.sin(), 0.0),
-            "xz" => Vector3::new(modulated_radius * angle.cos(), 0.0, modulated_radius * angle.sin()),
-            "yz" => Vector3::new(0.0, modulated_radius * angle.cos(), modulated_radius * angle.sin()),
-            _ => Vector3::new(modulated_radius * angle.cos(), 0.0, modulated_radius * angle.sin()),
+            "xy" => Vector3::new(
+                modulated_radius * angle.cos(),
+                modulated_radius * angle.sin(),
+                0.0,
+            ),
+            "xz" => Vector3::new(
+                modulated_radius * angle.cos(),
+                0.0,
+                modulated_radius * angle.sin(),
+            ),
+            "yz" => Vector3::new(
+                0.0,
+                modulated_radius * angle.cos(),
+                modulated_radius * angle.sin(),
+            ),
+            _ => Vector3::new(
+                modulated_radius * angle.cos(),
+                0.0,
+                modulated_radius * angle.sin(),
+            ),
         }
     }
 

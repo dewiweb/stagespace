@@ -24,7 +24,6 @@ pub struct Cue {
     pub cue_number: Option<String>,
 
     // ─── Phase 3 : champs étendus ───
-
     /// Graph global (post-processing) au moment du store.
     /// Si présent, sera hot-swappé lors du recall.
     #[serde(default)]
@@ -68,7 +67,9 @@ pub struct MacroSnapshot {
     pub roll: f64,
 }
 
-fn default_fade() -> f64 { 0.5 }
+fn default_fade() -> f64 {
+    0.5
+}
 
 /// Cue List Manager - gestion des cues (snapshots de playback)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -78,9 +79,7 @@ pub struct CuelistManager {
 
 impl CuelistManager {
     pub fn new() -> Self {
-        CuelistManager {
-            cues: Vec::new(),
-        }
+        CuelistManager { cues: Vec::new() }
     }
 
     /// Ajoute un cue
@@ -94,7 +93,7 @@ impl CuelistManager {
             self.cues.remove(index);
             Ok(())
         } else {
-            Err(format!("Index {} out of bounds", index))
+            Err(format!("Index {index} out of bounds"))
         }
     }
 
@@ -104,7 +103,7 @@ impl CuelistManager {
             self.cues.remove(pos);
             Ok(())
         } else {
-            Err(format!("Cue with id {} not found", id))
+            Err(format!("Cue with id {id} not found"))
         }
     }
 
@@ -114,7 +113,7 @@ impl CuelistManager {
             self.cues[index] = cue;
             Ok(())
         } else {
-            Err(format!("Index {} out of bounds", index))
+            Err(format!("Index {index} out of bounds"))
         }
     }
 
@@ -174,9 +173,16 @@ mod tests {
             name: "Test Cue".to_string(),
             description: "Test".to_string(),
             graph: serde_json::json!({}),
-            timestamp: 0.0, macros: None, track_indices: vec![], fade_duration: 0.5, cue_number: None,
-            global_graph: None, active_move_ids: vec![], per_track_depths: vec![],
-            manual_positions: HashMap::new(), spatial_macros: None,
+            timestamp: 0.0,
+            macros: None,
+            track_indices: vec![],
+            fade_duration: 0.5,
+            cue_number: None,
+            global_graph: None,
+            active_move_ids: vec![],
+            per_track_depths: vec![],
+            manual_positions: HashMap::new(),
+            spatial_macros: None,
         };
         manager.add(cue);
         assert_eq!(manager.len(), 1);
@@ -190,9 +196,16 @@ mod tests {
             name: "Test Cue".to_string(),
             description: "Test".to_string(),
             graph: serde_json::json!({}),
-            timestamp: 0.0, macros: None, track_indices: vec![], fade_duration: 0.5, cue_number: None,
-            global_graph: None, active_move_ids: vec![], per_track_depths: vec![],
-            manual_positions: HashMap::new(), spatial_macros: None,
+            timestamp: 0.0,
+            macros: None,
+            track_indices: vec![],
+            fade_duration: 0.5,
+            cue_number: None,
+            global_graph: None,
+            active_move_ids: vec![],
+            per_track_depths: vec![],
+            manual_positions: HashMap::new(),
+            spatial_macros: None,
         };
         manager.add(cue);
         manager.remove(0).unwrap();
@@ -212,9 +225,14 @@ mod tests {
             graph: serde_json::json!({"nodes": []}),
             timestamp: 12345.0,
             macros: Some(MacroSnapshot {
-                speed: 1.5, scale: 2.0,
-                shift_x: 0.1, shift_y: 0.2, shift_z: 0.3,
-                yaw: 0.0, pitch: 0.0, roll: 0.0,
+                speed: 1.5,
+                scale: 2.0,
+                shift_x: 0.1,
+                shift_y: 0.2,
+                shift_z: 0.3,
+                yaw: 0.0,
+                pitch: 0.0,
+                roll: 0.0,
             }),
             track_indices: vec![0, 1, 2],
             fade_duration: 1.0,
@@ -280,9 +298,16 @@ mod tests {
             name: "Test Cue".to_string(),
             description: "Test".to_string(),
             graph: serde_json::json!({}),
-            timestamp: 0.0, macros: None, track_indices: vec![], fade_duration: 0.5, cue_number: None,
-            global_graph: None, active_move_ids: vec![], per_track_depths: vec![],
-            manual_positions: HashMap::new(), spatial_macros: None,
+            timestamp: 0.0,
+            macros: None,
+            track_indices: vec![],
+            fade_duration: 0.5,
+            cue_number: None,
+            global_graph: None,
+            active_move_ids: vec![],
+            per_track_depths: vec![],
+            manual_positions: HashMap::new(),
+            spatial_macros: None,
         };
         manager.add(cue);
         manager.remove_by_id("cue1").unwrap();
@@ -297,9 +322,16 @@ mod tests {
             name: "Test Cue".to_string(),
             description: "Test".to_string(),
             graph: serde_json::json!({}),
-            timestamp: 0.0, macros: None, track_indices: vec![], fade_duration: 0.5, cue_number: None,
-            global_graph: None, active_move_ids: vec![], per_track_depths: vec![],
-            manual_positions: HashMap::new(), spatial_macros: None,
+            timestamp: 0.0,
+            macros: None,
+            track_indices: vec![],
+            fade_duration: 0.5,
+            cue_number: None,
+            global_graph: None,
+            active_move_ids: vec![],
+            per_track_depths: vec![],
+            manual_positions: HashMap::new(),
+            spatial_macros: None,
         };
         manager.add(cue.clone());
         let retrieved = manager.get(0);
@@ -315,9 +347,16 @@ mod tests {
             name: "Test Cue".to_string(),
             description: "Test".to_string(),
             graph: serde_json::json!({}),
-            timestamp: 0.0, macros: None, track_indices: vec![], fade_duration: 0.5, cue_number: None,
-            global_graph: None, active_move_ids: vec![], per_track_depths: vec![],
-            manual_positions: HashMap::new(), spatial_macros: None,
+            timestamp: 0.0,
+            macros: None,
+            track_indices: vec![],
+            fade_duration: 0.5,
+            cue_number: None,
+            global_graph: None,
+            active_move_ids: vec![],
+            per_track_depths: vec![],
+            manual_positions: HashMap::new(),
+            spatial_macros: None,
         };
         manager.add(cue);
         let retrieved = manager.get_by_id("cue1");
@@ -332,23 +371,37 @@ mod tests {
             name: "Test Cue".to_string(),
             description: "Test".to_string(),
             graph: serde_json::json!({}),
-            timestamp: 0.0, macros: None, track_indices: vec![], fade_duration: 0.5, cue_number: None,
-            global_graph: None, active_move_ids: vec![], per_track_depths: vec![],
-            manual_positions: HashMap::new(), spatial_macros: None,
+            timestamp: 0.0,
+            macros: None,
+            track_indices: vec![],
+            fade_duration: 0.5,
+            cue_number: None,
+            global_graph: None,
+            active_move_ids: vec![],
+            per_track_depths: vec![],
+            manual_positions: HashMap::new(),
+            spatial_macros: None,
         };
         manager.add(cue);
-        
+
         let updated = Cue {
             id: "cue1".to_string(),
             name: "Updated Cue".to_string(),
             description: "Updated".to_string(),
             graph: serde_json::json!({}),
-            timestamp: 1.0, macros: None, track_indices: vec![], fade_duration: 0.5, cue_number: None,
-            global_graph: None, active_move_ids: vec![], per_track_depths: vec![],
-            manual_positions: HashMap::new(), spatial_macros: None,
+            timestamp: 1.0,
+            macros: None,
+            track_indices: vec![],
+            fade_duration: 0.5,
+            cue_number: None,
+            global_graph: None,
+            active_move_ids: vec![],
+            per_track_depths: vec![],
+            manual_positions: HashMap::new(),
+            spatial_macros: None,
         };
         manager.update(0, updated).unwrap();
-        
+
         let retrieved = manager.get(0).unwrap();
         assert_eq!(retrieved.name, "Updated Cue");
     }
@@ -361,9 +414,16 @@ mod tests {
             name: "Test Cue".to_string(),
             description: "Test".to_string(),
             graph: serde_json::json!({}),
-            timestamp: 0.0, macros: None, track_indices: vec![], fade_duration: 0.5, cue_number: None,
-            global_graph: None, active_move_ids: vec![], per_track_depths: vec![],
-            manual_positions: HashMap::new(), spatial_macros: None,
+            timestamp: 0.0,
+            macros: None,
+            track_indices: vec![],
+            fade_duration: 0.5,
+            cue_number: None,
+            global_graph: None,
+            active_move_ids: vec![],
+            per_track_depths: vec![],
+            manual_positions: HashMap::new(),
+            spatial_macros: None,
         };
         manager.add(cue);
         manager.clear();

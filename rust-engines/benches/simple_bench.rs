@@ -1,5 +1,5 @@
-use stagespace_engines::engines::{circular, spiral, Engine, EngineParams};
 use serde_json::json;
+use stagespace_engines::engines::{circular, Engine, EngineParams};
 use std::time::Instant;
 
 fn main() {
@@ -18,7 +18,7 @@ fn main() {
 
     // Benchmark: 60 FPS * 4 secondes = 240 frames * 9 objects = 2160 calls
     let iterations = 2160;
-    
+
     let start = Instant::now();
     for frame in 0..240 {
         for obj_idx in 0..9 {
@@ -27,8 +27,11 @@ fn main() {
         }
     }
     let duration = start.elapsed();
-    
-    println!("Circular engine: {} calls in {:?}", iterations, duration);
+
+    println!("Circular engine: {iterations} calls in {duration:?}");
     println!("Average per call: {:?}", duration / iterations as u32);
-    println!("FPS equivalent: {:.0}", iterations as f64 / duration.as_secs_f64());
+    println!(
+        "FPS equivalent: {:.0}",
+        iterations as f64 / duration.as_secs_f64()
+    );
 }

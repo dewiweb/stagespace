@@ -1,15 +1,18 @@
 #[cfg(test)]
 mod tests {
-    use crate::graph::{Graph, Node, NodeType, Edge};
-    use crate::compiler::{Compiler, CompilationError};
+    use crate::compiler::{CompilationError, Compiler};
+    use crate::graph::{Edge, Graph, Node, NodeType};
 
     #[test]
     fn test_compile_valid_graph() {
         let mut graph = Graph::new();
-        
+
         let objects = Node::with_params(NodeType::Objects, serde_json::json!({"n_objects": 9}));
         let duration = Node::with_params(NodeType::Duration, serde_json::json!({"duration": 4.0}));
-        let circular = Node::with_params(NodeType::Circular, serde_json::json!({"n_objects": 9, "radius": 1.5}));
+        let circular = Node::with_params(
+            NodeType::Circular,
+            serde_json::json!({"n_objects": 9, "radius": 1.5}),
+        );
         let output = Node::new(NodeType::Output);
 
         let id_objects = objects.id;
@@ -52,7 +55,7 @@ mod tests {
     #[test]
     fn test_compile_invalid_graph_cycle() {
         let mut graph = Graph::new();
-        
+
         let node1 = Node::new(NodeType::Circular);
         let node2 = Node::new(NodeType::Duration);
         let node3 = Node::new(NodeType::Output);
@@ -96,7 +99,7 @@ mod tests {
     #[test]
     fn test_compile_missing_output() {
         let mut graph = Graph::new();
-        
+
         let objects = Node::new(NodeType::Objects);
         let circular = Node::new(NodeType::Circular);
         // Missing Output
@@ -119,9 +122,10 @@ mod tests {
 
         for (node_type, _name) in engines {
             let mut graph = Graph::new();
-            
+
             let objects = Node::with_params(NodeType::Objects, serde_json::json!({"n_objects": 3}));
-            let duration = Node::with_params(NodeType::Duration, serde_json::json!({"duration": 4.0}));
+            let duration =
+                Node::with_params(NodeType::Duration, serde_json::json!({"duration": 4.0}));
             let engine = Node::with_params(node_type.clone(), serde_json::json!({"n_objects": 3}));
             let output = Node::new(NodeType::Output);
 
@@ -155,7 +159,7 @@ mod tests {
             });
 
             let result = Compiler::compile(&graph);
-            assert!(result.is_ok(), "Failed to compile {:?}", node_type);
+            assert!(result.is_ok(), "Failed to compile {node_type:?}");
         }
     }
 

@@ -1,69 +1,82 @@
-use nalgebra::Vector3;
 use crate::engines::{Engine, EngineParams};
+use nalgebra::Vector3;
 
 pub struct CustomTrajectory;
 
 impl Engine for CustomTrajectory {
     fn position(&self, t: f64, object_index: usize, params: &EngineParams) -> Vector3<f64> {
-        let equations = params.extra.get("equations")
+        let equations = params
+            .extra
+            .get("equations")
             .and_then(|v| v.as_object())
             .cloned()
-            .unwrap_or_else(|| serde_json::Map::new());
-        
-        let coordinate_system = params.extra.get("coordinate_system")
+            .unwrap_or_else(serde_json::Map::new);
+
+        let coordinate_system = params
+            .extra
+            .get("coordinate_system")
             .and_then(|v| v.as_str())
             .unwrap_or("cartesian");
-        
+
         let x = Self::evaluate_simple(
             equations.get("x").and_then(|v| v.as_str()).unwrap_or("0"),
             t,
             object_index,
             params.duration,
         );
-        
+
         let y = Self::evaluate_simple(
             equations.get("y").and_then(|v| v.as_str()).unwrap_or("0"),
             t,
             object_index,
             params.duration,
         );
-        
+
         let z = Self::evaluate_simple(
             equations.get("z").and_then(|v| v.as_str()).unwrap_or("0"),
             t,
             object_index,
             params.duration,
         );
-        
+
         match coordinate_system {
             "cartesian" => Vector3::new(x, y, z),
             "polar" => {
                 let azimuth = Self::evaluate_simple(
-                    equations.get("azimuth").and_then(|v| v.as_str()).unwrap_or("0"),
+                    equations
+                        .get("azimuth")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("0"),
                     t,
                     object_index,
                     params.duration,
                 );
                 let elevation = Self::evaluate_simple(
-                    equations.get("elevation").and_then(|v| v.as_str()).unwrap_or("0"),
+                    equations
+                        .get("elevation")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("0"),
                     t,
                     object_index,
                     params.duration,
                 );
                 let distance = Self::evaluate_simple(
-                    equations.get("distance").and_then(|v| v.as_str()).unwrap_or("1"),
+                    equations
+                        .get("distance")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("1"),
                     t,
                     object_index,
                     params.duration,
                 );
-                
+
                 let azim_rad = azimuth.to_radians();
                 let elev_rad = elevation.to_radians();
-                
+
                 let px = distance * elev_rad.cos() * azim_rad.cos();
                 let py = distance * elev_rad.cos() * azim_rad.sin();
                 let pz = distance * elev_rad.sin();
-                
+
                 Vector3::new(px, py, pz)
             }
             _ => Vector3::new(0.0, 0.0, 0.0),
@@ -83,7 +96,7 @@ impl CustomTrajectory {
             .replace("t", &t.to_string())
             .replace("pi", &std::f64::consts::PI.to_string())
             .replace("e", &std::f64::consts::E.to_string());
-        
+
         // Évaluation simplifiée avec eval-like
         if expr.contains("sin(") {
             let start = expr.find("sin(").unwrap_or(0) + 4;

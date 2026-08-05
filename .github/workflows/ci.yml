@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+
+jobs:
+  # ─── Rust engines (core library) ───
+  rust-engines:
+    name: Rust Engines
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: rust-engines
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust-engines/target
+          key: rust-engines-${{ runner.os }}-${{ hashFiles('rust-engines/Cargo.lock') }}
+
+      - name: Check formatting
+        run: cargo fmt -- --check
+
+      - name: Clippy (deny warnings)
+        run: cargo clippy --lib -- -D warnings
+
+      - name: Tests
+        run: cargo test --lib
+
+  # ─── Tauri app (Rust backend + commands) ───
+  tauri-backend:
+    name: Tauri Backend
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: tauri-app/src-tauri
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Install system dependencies (Tauri)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            tauri-app/src-tauri/target
+            rust-engines/target
+          key: tauri-backend-${{ runner.os }}-${{ hashFiles('tauri-app/src-tauri/Cargo.lock', 'rust-engines/Cargo.lock') }}
+
+      - name: Clippy (deny warnings)
+        run: cargo clippy --lib -- -D warnings
+
+      - name: Tests
+        run: cargo test --lib
+
+  # ─── Frontend (React + TypeScript + Vitest) ───
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: tauri-app/frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: tauri-app/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Tests
+        run: npm test
+
+      - name: Build
+        run: npm run build

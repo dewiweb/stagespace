@@ -55,7 +55,7 @@ impl BpmTracker {
     /// Enregistre un tap pour calculer le BPM
     pub fn tap(&mut self, current_time: f64) -> Option<f64> {
         self.tap_times.push(current_time);
-        
+
         // Garder seulement les 10 derniers taps
         if self.tap_times.len() > 10 {
             self.tap_times.remove(0);
@@ -67,7 +67,7 @@ impl BpmTracker {
             for i in 1..self.tap_times.len() {
                 intervals.push(self.tap_times[i] - self.tap_times[i - 1]);
             }
-            
+
             let avg_interval: f64 = intervals.iter().sum::<f64>() / intervals.len() as f64;
             let bpm = 60.0 / avg_interval;
             self.bpm = Some(bpm);

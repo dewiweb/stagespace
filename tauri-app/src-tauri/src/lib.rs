@@ -1,39 +1,38 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use stagespace_engines::{Runtime, AudioState,
-    OscReceiver, OscSender,
-    PresetManager,
-    MergeRuntime,
-    init_logging};
 use serde::Serialize;
+use stagespace_engines::{
+    init_logging, AudioState, MergeRuntime, OscReceiver, OscSender, PresetManager, Runtime,
+};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use tauri::{State, AppHandle, Manager};
+use tauri::{AppHandle, Manager, State};
 
 mod commands;
 mod graph;
-use graph::parser::build_graph_from_json;
-use commands::file_io::{import_hol_project, save_graph_to_file, load_graph_from_file};
-use commands::network::discover_osc_targets;
-use commands::audio::{update_audio_state, get_audio_state};
-use commands::osc::{osc_add_mapping, osc_remove_mapping, osc_list_mappings, osc_get_value, osc_get_all_values, send_osc_position, set_osc_receiver_port, get_osc_receiver_port};
-use commands::presets::{preset_save, preset_load, preset_delete, preset_list};
-use commands::playback::{play_graph, stop_graph, preview_graph, update_graph,
-    set_macro, set_loop_mode};
-use commands::overrides::{set_object_override, clear_all_overrides};
-use commands::sampling::{get_perf_stats, sample_trajectory, sample_movement_trajectory};
 use commands::animation::{launch_animation, update_animation_state};
+use commands::audio::{get_audio_state, update_audio_state};
+use commands::cue_commands::{delete_cue, list_cues, recall_cue, store_cue};
+use commands::file_io::{import_hol_project, load_graph_from_file, save_graph_to_file};
 use commands::merge_commands::{
-    activate_move, deactivate_move, deactivate_all_moves,
-    set_merge_strategy, set_global_macro, set_move_speed,
-    set_track_depths, set_global_origin, set_global_osc_ids,
-    update_move_graph_merged,
-    get_merge_perf_stats, list_active_moves,
-    update_global_graph, set_track_positions,
-    set_manual_position, clear_manual_position, clear_all_manual_positions,
+    activate_move, clear_all_manual_positions, clear_manual_position, deactivate_all_moves,
+    deactivate_move, get_merge_perf_stats, list_active_moves, set_global_macro, set_global_origin,
+    set_global_osc_ids, set_manual_position, set_merge_strategy, set_move_speed, set_track_depths,
+    set_track_positions, update_global_graph, update_move_graph_merged,
 };
-use commands::cue_commands::{store_cue, recall_cue, list_cues, delete_cue};
+use commands::network::discover_osc_targets;
+use commands::osc::{
+    get_osc_receiver_port, osc_add_mapping, osc_get_all_values, osc_get_value, osc_list_mappings,
+    osc_remove_mapping, send_osc_position, set_osc_receiver_port,
+};
+use commands::overrides::{clear_all_overrides, set_object_override};
+use commands::playback::{
+    play_graph, preview_graph, set_loop_mode, set_macro, stop_graph, update_graph,
+};
+use commands::presets::{preset_delete, preset_list, preset_load, preset_save};
+use commands::sampling::{get_perf_stats, sample_movement_trajectory, sample_trajectory};
+use graph::parser::build_graph_from_json;
 
 // État global de l'application
 pub struct AppState {
@@ -82,9 +81,12 @@ pub struct MovementInfo {
 
 // Graph Compilation
 #[tauri::command]
-async fn compile_graph(graph_json: serde_json::Value, state: State<'_, AppState>) -> Result<String, String> {
+async fn compile_graph(
+    graph_json: serde_json::Value,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
     let audio_state = state.audio_state.lock().unwrap_or_else(|e| {
-        eprintln!("[WARN] audio_state mutex poisoned, recovering: {}", e);
+        eprintln!("[WARN] audio_state mutex poisoned, recovering: {e}");
         e.into_inner()
     });
     let graph = build_graph_from_json(&graph_json, &audio_state)?;
@@ -101,12 +103,9 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage({
             let osc_sender = OscSender::default();
-            let merge_rt = MergeRuntime::new(
-                "127.0.0.1".to_string(),
-                8000,
-                osc_sender.clone(),
-                60.0,
-            ).expect("Failed to create MergeRuntime");
+            let merge_rt =
+                MergeRuntime::new("127.0.0.1".to_string(), 8000, osc_sender.clone(), 60.0)
+                    .expect("Failed to create MergeRuntime");
             AppState {
                 runtime: Mutex::new(None),
                 audio_state: Arc::new(Mutex::new(AudioState::new())),
@@ -120,7 +119,8 @@ pub fn run() {
             }
         })
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::Destroyed | tauri::WindowEvent::CloseRequested { .. } = event {
+            if let tauri::WindowEvent::Destroyed | tauri::WindowEvent::CloseRequested { .. } = event
+            {
                 // Stopper tous les movements proprement à la fermeture
                 let state: State<AppState> = window.state();
                 let drained: Vec<Movement> = {
@@ -134,13 +134,26 @@ pub fn run() {
                     }
                 }
                 // Stopper aussi le runtime legacy
-                if let Some(runtime) = state.runtime.lock().unwrap_or_else(|e| e.into_inner()).take() {
+                if let Some(runtime) = state
+                    .runtime
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .take()
+                {
                     runtime.stop();
                 }
                 // Stopper le MergeRuntime
-                state.merge_runtime.lock().unwrap_or_else(|e| e.into_inner()).stop();
+                state
+                    .merge_runtime
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .stop();
                 // Stopper le receiver OSC
-                state.osc_receiver.lock().unwrap_or_else(|e| e.into_inner()).stop();
+                state
+                    .osc_receiver
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .stop();
                 eprintln!("[INFO] All movements stopped on window close");
             }
         })
@@ -151,7 +164,7 @@ pub fn run() {
             let app_handle = app.handle().clone();
             let state: State<AppState> = app.state();
             let mut handle_guard = state.app_handle.lock().unwrap_or_else(|e| {
-                eprintln!("[WARN] app_handle mutex poisoned, recovering: {}", e);
+                eprintln!("[WARN] app_handle mutex poisoned, recovering: {e}");
                 e.into_inner()
             });
             *handle_guard = Some(app_handle);
@@ -161,7 +174,10 @@ pub fn run() {
             {
                 let mut receiver = state.osc_receiver.lock().unwrap_or_else(|e| e.into_inner());
                 if let Err(e) = receiver.start() {
-                    eprintln!("[WARN] OSC receiver failed to start on port {}: {}", receiver.port, e);
+                    eprintln!(
+                        "[WARN] OSC receiver failed to start on port {}: {}",
+                        receiver.port, e
+                    );
                 } else {
                     eprintln!("[INFO] OSC receiver listening on port {}", receiver.port);
                 }
@@ -172,8 +188,8 @@ pub fn run() {
             {
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.with_webview(|wv| {
-                        use webkit2gtk::WebViewExt;
                         use webkit2gtk::PermissionRequestExt;
+                        use webkit2gtk::WebViewExt;
                         let webview = wv.inner();
                         webview.connect_permission_request(|_wv, req| {
                             req.allow();
@@ -186,28 +202,62 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            import_hol_project, update_audio_state, get_audio_state,
-            osc_add_mapping, osc_remove_mapping, osc_list_mappings,
-            osc_get_value, osc_get_all_values, set_osc_receiver_port, get_osc_receiver_port,
-            preset_save, preset_load, preset_delete, preset_list,
-            compile_graph, play_graph, stop_graph, update_graph, preview_graph,
-            set_macro, set_loop_mode,
-            save_graph_to_file, load_graph_from_file,
-            send_osc_position, get_perf_stats,
-            set_object_override, clear_all_overrides,
-            discover_osc_targets, sample_trajectory, sample_movement_trajectory,
-            launch_animation, update_animation_state,
+            import_hol_project,
+            update_audio_state,
+            get_audio_state,
+            osc_add_mapping,
+            osc_remove_mapping,
+            osc_list_mappings,
+            osc_get_value,
+            osc_get_all_values,
+            set_osc_receiver_port,
+            get_osc_receiver_port,
+            preset_save,
+            preset_load,
+            preset_delete,
+            preset_list,
+            compile_graph,
+            play_graph,
+            stop_graph,
+            update_graph,
+            preview_graph,
+            set_macro,
+            set_loop_mode,
+            save_graph_to_file,
+            load_graph_from_file,
+            send_osc_position,
+            get_perf_stats,
+            set_object_override,
+            clear_all_overrides,
+            discover_osc_targets,
+            sample_trajectory,
+            sample_movement_trajectory,
+            launch_animation,
+            update_animation_state,
             // Merge commands (Phase 1 — architecture hybride)
-            activate_move, deactivate_move, deactivate_all_moves,
-            set_merge_strategy, set_global_macro, set_move_speed,
-            set_track_depths, set_global_origin, set_global_osc_ids,
+            activate_move,
+            deactivate_move,
+            deactivate_all_moves,
+            set_merge_strategy,
+            set_global_macro,
+            set_move_speed,
+            set_track_depths,
+            set_global_origin,
+            set_global_osc_ids,
             update_move_graph_merged,
-            get_merge_perf_stats, list_active_moves,
+            get_merge_perf_stats,
+            list_active_moves,
             // Global graph commands (Phase 2 — post-processing)
-            update_global_graph, set_track_positions,
-            set_manual_position, clear_manual_position, clear_all_manual_positions,
+            update_global_graph,
+            set_track_positions,
+            set_manual_position,
+            clear_manual_position,
+            clear_all_manual_positions,
             // Cue commands (Phase 3 — cue system étendu)
-            store_cue, recall_cue, list_cues, delete_cue,
+            store_cue,
+            recall_cue,
+            list_cues,
+            delete_cue,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -220,8 +270,9 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use stagespace_engines::{TrackAssignment, AudioMod, Animation,
-        AnimationState, EngineParams, OscProfile, PositionFn};
+    use stagespace_engines::{
+        Animation, AnimationState, AudioMod, EngineParams, OscProfile, PositionFn, TrackAssignment,
+    };
 
     /// Construit un graphe JSON circulaire simple pour les tests
     fn make_circular_graph_json(n_objects: usize, radius: f64, duration: f64) -> serde_json::Value {
@@ -283,8 +334,16 @@ mod tests {
         anim.yaw = 45.0;
         anim.offset_x = 1.0;
         anim.phase_spread = 0.5;
-        anim.assignments.push(TrackAssignment { track_id: 1, depth: 1.0, phase_offset: 0.0 });
-        anim.assignments.push(TrackAssignment { track_id: 2, depth: 0.5, phase_offset: 90.0 });
+        anim.assignments.push(TrackAssignment {
+            track_id: 1,
+            depth: 1.0,
+            phase_offset: 0.0,
+        });
+        anim.assignments.push(TrackAssignment {
+            track_id: 2,
+            depth: 0.5,
+            phase_offset: 90.0,
+        });
         anim.audio_mods.push(AudioMod {
             source: stagespace_engines::AudioModSource::AmplitudeBass,
             target: stagespace_engines::AudioModTarget::RadiusScale,
@@ -318,8 +377,16 @@ mod tests {
         anim.duration = 4.0;
         anim.speed = 1.0;
         anim.assignments = vec![
-            TrackAssignment { track_id: 1, depth: 1.0, phase_offset: 0.0 },
-            TrackAssignment { track_id: 2, depth: 0.5, phase_offset: 180.0 },
+            TrackAssignment {
+                track_id: 1,
+                depth: 1.0,
+                phase_offset: 0.0,
+            },
+            TrackAssignment {
+                track_id: 2,
+                depth: 0.5,
+                phase_offset: 180.0,
+            },
         ];
 
         let osc_ids = vec![1u32, 2u32];
@@ -331,7 +398,8 @@ mod tests {
         let compiled = graph::compilation::compile_graph(&graph).expect("compile");
 
         // 2. Créer le runtime
-        let osc_sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7788);
+        let osc_sender =
+            OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7788);
         let runtime = Runtime::new("127.0.0.1".to_string(), 7788, osc_sender).unwrap();
 
         // 3. Set animation state
@@ -401,7 +469,11 @@ mod tests {
         }"#;
 
         let anim_result: Result<Animation, _> = serde_json::from_str(frontend_json);
-        assert!(anim_result.is_ok(), "Frontend JSON failed to deserialize: {:?}", anim_result.err());
+        assert!(
+            anim_result.is_ok(),
+            "Frontend JSON failed to deserialize: {:?}",
+            anim_result.err()
+        );
         let anim = anim_result.unwrap();
         assert_eq!(anim.assignments.len(), 2);
         assert_eq!(anim.assignments[1].depth, 0.5);
@@ -412,7 +484,12 @@ mod tests {
     // ═══════════════════════════════════════════════════════════════
 
     /// Construit un graphe JSON avec engine au choix
-    fn make_graph_json(engine_type: &str, n_objects: usize, engine_params: serde_json::Value, duration: f64) -> serde_json::Value {
+    fn make_graph_json(
+        engine_type: &str,
+        n_objects: usize,
+        engine_params: serde_json::Value,
+        duration: f64,
+    ) -> serde_json::Value {
         serde_json::json!({
             "nodes": [
                 {"id": "objects-1", "type": "custom", "position": {"x": 50, "y": 200}, "data": {"label": "Objects", "type": "Objects", "params": {"n_objects": n_objects}}},
@@ -430,10 +507,14 @@ mod tests {
 
     /// Construit un graphe composite (Mix/Group/Sequence/Crossfade) avec 2 engines
     fn make_composite_graph_json(
-        composite_type: &str, composite_params: serde_json::Value,
-        engine_a_type: &str, engine_a_params: serde_json::Value,
-        engine_b_type: &str, engine_b_params: serde_json::Value,
-        n_objects: usize, duration: f64,
+        composite_type: &str,
+        composite_params: serde_json::Value,
+        engine_a_type: &str,
+        engine_a_params: serde_json::Value,
+        engine_b_type: &str,
+        engine_b_params: serde_json::Value,
+        n_objects: usize,
+        duration: f64,
     ) -> serde_json::Value {
         serde_json::json!({
             "nodes": [
@@ -472,7 +553,8 @@ mod tests {
 
     /// Crée un runtime avec un sender GenericCartesian sur localhost
     fn make_test_runtime() -> Runtime {
-        let osc_sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7788);
+        let osc_sender =
+            OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7788);
         Runtime::new("127.0.0.1".to_string(), 7788, osc_sender).unwrap()
     }
 
@@ -484,17 +566,25 @@ mod tests {
     fn test_sound_engineer_circle_8_tracks_positions() {
         let n = 8;
         let radius = 3.0;
-        let graph_json = make_graph_json("Circular", n,
+        let graph_json = make_graph_json(
+            "Circular",
+            n,
             serde_json::json!({"radius": radius, "n_objects": n, "speed": 1.0, "plane": "xz", "phase_offset": true}),
-            8.0);
+            8.0,
+        );
         let compiled = compile_graph_json(&graph_json);
 
         // Vérifier que chaque track est sur le cercle de rayon `radius`
         for i in 0..n {
             let pos = compiled(2.0, i); // t=2s
             let dist = (pos.x.powi(2) + pos.z.powi(2)).sqrt();
-            assert!((dist - radius).abs() < 0.01,
-                "Track {} n'est pas sur le cercle: dist={} attendu={}", i, dist, radius);
+            assert!(
+                (dist - radius).abs() < 0.01,
+                "Track {} n'est pas sur le cercle: dist={} attendu={}",
+                i,
+                dist,
+                radius
+            );
         }
 
         // Vérifier le phase_spread : à t=0, les tracks sont réparties sur 360°
@@ -502,8 +592,17 @@ mod tests {
         for i in 0..n {
             let angle = positions[i].z.atan2(positions[i].x);
             let expected_angle = (i as f64 / n as f64) * 2.0 * std::f64::consts::PI;
-            let diff = ((angle - expected_angle + std::f64::consts::PI).rem_euclid(2.0 * std::f64::consts::PI) - std::f64::consts::PI).abs();
-            assert!(diff < 0.1, "Track {} angle={} attendu={}", i, angle, expected_angle);
+            let diff = ((angle - expected_angle + std::f64::consts::PI)
+                .rem_euclid(2.0 * std::f64::consts::PI)
+                - std::f64::consts::PI)
+                .abs();
+            assert!(
+                diff < 0.1,
+                "Track {} angle={} attendu={}",
+                i,
+                angle,
+                expected_angle
+            );
         }
     }
 
@@ -514,10 +613,18 @@ mod tests {
     #[test]
     fn test_sound_engineer_hot_swap_circle_to_spiral() {
         let n = 4;
-        let circle_json = make_graph_json("Circular", n,
-            serde_json::json!({"radius": 2.0, "n_objects": n, "speed": 1.0, "plane": "xz", "phase_offset": true}), 4.0);
-        let spiral_json = make_graph_json("Spiral", n,
-            serde_json::json!({"radius": 1.0, "n_objects": n, "speed": 1.0, "expansion": 1.0, "plane": "xz", "phase_offset": true}), 4.0);
+        let circle_json = make_graph_json(
+            "Circular",
+            n,
+            serde_json::json!({"radius": 2.0, "n_objects": n, "speed": 1.0, "plane": "xz", "phase_offset": true}),
+            4.0,
+        );
+        let spiral_json = make_graph_json(
+            "Spiral",
+            n,
+            serde_json::json!({"radius": 1.0, "n_objects": n, "speed": 1.0, "expansion": 1.0, "plane": "xz", "phase_offset": true}),
+            4.0,
+        );
 
         let circle_fn = compile_graph_json(&circle_json);
         let spiral_fn = compile_graph_json(&spiral_json);
@@ -528,7 +635,11 @@ mod tests {
         // Position avant hot-swap = cercle
         let pos_before = runtime.sample_trajectory(0, 10, 4.0);
         let circle_dist = (pos_before[5].1.powi(2) + pos_before[5].3.powi(2)).sqrt();
-        assert!((circle_dist - 2.0).abs() < 0.1, "Avant swap: devrait être sur cercle r=2, dist={}", circle_dist);
+        assert!(
+            (circle_dist - 2.0).abs() < 0.1,
+            "Avant swap: devrait être sur cercle r=2, dist={}",
+            circle_dist
+        );
 
         // Hot-swap vers spiral
         runtime.swap_position_fn(spiral_fn);
@@ -537,7 +648,11 @@ mod tests {
         let pos_after = runtime.sample_trajectory(0, 10, 4.0);
         // À t=0, spiral devrait être proche de radius=1
         let spiral_start = (pos_after[0].1.powi(2) + pos_after[0].3.powi(2)).sqrt();
-        assert!(spiral_start < 2.0, "Après swap: spiral devrait démarrer petit, dist={}", spiral_start);
+        assert!(
+            spiral_start < 2.0,
+            "Après swap: spiral devrait démarrer petit, dist={}",
+            spiral_start
+        );
     }
 
     // ── Scénario 3 : Mix Circle + Figure8 — blend 50% ──────────────────
@@ -547,10 +662,15 @@ mod tests {
     fn test_sound_engineer_mix_circle_figure8() {
         let n = 4;
         let graph_json = make_composite_graph_json(
-            "Mix", serde_json::json!({"blend": 0.5}),
-            "Circular", serde_json::json!({"radius": 2.0, "n_objects": n, "speed": 1.0, "plane": "xz", "phase_offset": true}),
-            "Figure8", serde_json::json!({"scale": 2.0, "n_objects": n, "speed": 1.0, "plane": "xz", "phase_offset": true}),
-            n, 4.0);
+            "Mix",
+            serde_json::json!({"blend": 0.5}),
+            "Circular",
+            serde_json::json!({"radius": 2.0, "n_objects": n, "speed": 1.0, "plane": "xz", "phase_offset": true}),
+            "Figure8",
+            serde_json::json!({"scale": 2.0, "n_objects": n, "speed": 1.0, "plane": "xz", "phase_offset": true}),
+            n,
+            4.0,
+        );
 
         // Doit compiler sans erreur (valide les ports input_a/input_b)
         let compiled = compile_graph_json(&graph_json);
@@ -559,16 +679,34 @@ mod tests {
         let pos_mix = compiled(1.0, 0);
 
         // Calculer les positions individuelles pour vérifier le blend
-        let circle_json = make_graph_json("Circular", n,
-            serde_json::json!({"radius": 2.0, "n_objects": n, "speed": 1.0, "plane": "xz", "phase_offset": true}), 4.0);
-        let fig8_json = make_graph_json("Figure8", n,
-            serde_json::json!({"scale": 2.0, "n_objects": n, "speed": 1.0, "plane": "xz", "phase_offset": true}), 4.0);
+        let circle_json = make_graph_json(
+            "Circular",
+            n,
+            serde_json::json!({"radius": 2.0, "n_objects": n, "speed": 1.0, "plane": "xz", "phase_offset": true}),
+            4.0,
+        );
+        let fig8_json = make_graph_json(
+            "Figure8",
+            n,
+            serde_json::json!({"scale": 2.0, "n_objects": n, "speed": 1.0, "plane": "xz", "phase_offset": true}),
+            4.0,
+        );
         let pos_circle = compile_graph_json(&circle_json)(1.0, 0);
         let pos_fig8 = compile_graph_json(&fig8_json)(1.0, 0);
 
         let expected = pos_circle * 0.5 + pos_fig8 * 0.5;
-        assert!((pos_mix.x - expected.x).abs() < 0.01, "Mix X incorrect: {} vs {}", pos_mix.x, expected.x);
-        assert!((pos_mix.z - expected.z).abs() < 0.01, "Mix Z incorrect: {} vs {}", pos_mix.z, expected.z);
+        assert!(
+            (pos_mix.x - expected.x).abs() < 0.01,
+            "Mix X incorrect: {} vs {}",
+            pos_mix.x,
+            expected.x
+        );
+        assert!(
+            (pos_mix.z - expected.z).abs() < 0.01,
+            "Mix Z incorrect: {} vs {}",
+            pos_mix.z,
+            expected.z
+        );
     }
 
     // ── Scénario 4 : Profils OSC — Holophonix vs IEM ───────────────────
@@ -590,13 +728,22 @@ mod tests {
         let (addr, vals) = iem_sender.format_position(1, pos);
         assert_eq!(addr, "/MultiEncoder/1/aed");
         assert_eq!(vals.len(), 3); // azimuth, elevation, distance
-        // azimuth = atan2(y, x) en degrés = atan2(0.5, 1.0) ≈ 26.57°
-        assert!(vals[0] > 20.0 && vals[0] < 30.0, "IEM azimuth incorrect: {}", vals[0]);
+                                   // azimuth = atan2(y, x) en degrés = atan2(0.5, 1.0) ≈ 26.57°
+        assert!(
+            vals[0] > 20.0 && vals[0] < 30.0,
+            "IEM azimuth incorrect: {}",
+            vals[0]
+        );
 
         // Generic Cartesian : /object/{id}/position avec x, y, z
-        let gen_sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+        let gen_sender =
+            OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
         let (addr, vals) = gen_sender.format_position(1, pos);
-        assert!(addr.contains("1"), "Generic addr should contain id: {}", addr);
+        assert!(
+            addr.contains("1"),
+            "Generic addr should contain id: {}",
+            addr
+        );
         assert_eq!(vals.len(), 3);
     }
 
@@ -606,8 +753,12 @@ mod tests {
     #[test]
     fn test_sound_engineer_macros_realtime() {
         let n = 4;
-        let graph_json = make_graph_json("Circular", n,
-            serde_json::json!({"radius": 2.0, "n_objects": n, "speed": 1.0, "plane": "xz", "phase_offset": true}), 4.0);
+        let graph_json = make_graph_json(
+            "Circular",
+            n,
+            serde_json::json!({"radius": 2.0, "n_objects": n, "speed": 1.0, "plane": "xz", "phase_offset": true}),
+            4.0,
+        );
         let compiled = compile_graph_json(&graph_json);
 
         let runtime = make_test_runtime();
@@ -616,13 +767,21 @@ mod tests {
         // Position de base (sans macros)
         let base_samples = runtime.sample_trajectory(0, 10, 4.0);
         let base_dist = (base_samples[5].1.powi(2) + base_samples[5].3.powi(2)).sqrt();
-        assert!((base_dist - 2.0).abs() < 0.1, "Base: cercle r=2, dist={}", base_dist);
+        assert!(
+            (base_dist - 2.0).abs() < 0.1,
+            "Base: cercle r=2, dist={}",
+            base_dist
+        );
 
         // Appliquer scale=2.0 → le cercle devrait doubler
         runtime.macros().set_scale(2.0);
         let scaled_samples = runtime.sample_trajectory(0, 10, 4.0);
         let scaled_dist = (scaled_samples[5].1.powi(2) + scaled_samples[5].3.powi(2)).sqrt();
-        assert!((scaled_dist - 4.0).abs() < 0.2, "Scale=2: cercle r=4, dist={}", scaled_dist);
+        assert!(
+            (scaled_dist - 4.0).abs() < 0.2,
+            "Scale=2: cercle r=4, dist={}",
+            scaled_dist
+        );
 
         // Reset scale et appliquer shift=(1,0,0) → tout décalé de 1 en X
         runtime.macros().set_scale(1.0);
@@ -630,7 +789,11 @@ mod tests {
         let shifted_samples = runtime.sample_trajectory(0, 10, 4.0);
         // Chaque sample devrait avoir X augmenté de ~1.0 par rapport au base
         let diff_x = shifted_samples[5].1 - base_samples[5].1;
-        assert!((diff_x - 1.0).abs() < 0.1, "Shift X: delta={} attendu~1.0", diff_x);
+        assert!(
+            (diff_x - 1.0).abs() < 0.1,
+            "Shift X: delta={} attendu~1.0",
+            diff_x
+        );
     }
 
     // ── Scénario 6 : Preview mode — pas d'OSC envoyé ───────────────────
@@ -639,14 +802,23 @@ mod tests {
     #[test]
     fn test_sound_engineer_preview_mode() {
         let n = 4;
-        let graph_json = make_graph_json("Circular", n,
-            serde_json::json!({"radius": 2.0, "n_objects": n, "speed": 1.0, "plane": "xz", "phase_offset": true}), 4.0);
+        let graph_json = make_graph_json(
+            "Circular",
+            n,
+            serde_json::json!({"radius": 2.0, "n_objects": n, "speed": 1.0, "plane": "xz", "phase_offset": true}),
+            4.0,
+        );
         let compiled = compile_graph_json(&graph_json);
 
         let runtime = make_test_runtime();
         runtime.set_preview_mode(true);
 
-        let params = EngineParams { n_objects: n, duration: 4.0, fps: 60.0, extra: serde_json::json!({}) };
+        let params = EngineParams {
+            n_objects: n,
+            duration: 4.0,
+            fps: 60.0,
+            extra: serde_json::json!({}),
+        };
         let result = runtime.play_compiled(compiled, params, vec![1, 2, 3, 4]);
         assert!(result.is_ok(), "Preview playback failed: {:?}", result);
         assert!(runtime.is_running());
@@ -654,7 +826,10 @@ mod tests {
         // En mode preview, sample_trajectory doit quand même retourner des positions
         let samples = runtime.sample_trajectory(0, 10, 4.0);
         assert_eq!(samples.len(), 10);
-        assert!((samples[0].1.abs() + samples[0].3.abs()) > 0.1, "Preview should have non-zero positions");
+        assert!(
+            (samples[0].1.abs() + samples[0].3.abs()) > 0.1,
+            "Preview should have non-zero positions"
+        );
 
         runtime.stop();
         assert!(!runtime.is_running());
@@ -666,10 +841,18 @@ mod tests {
     #[test]
     fn test_sound_engineer_cue_recall_crossfade() {
         let n = 4;
-        let circle_json = make_graph_json("Circular", n,
-            serde_json::json!({"radius": 2.0, "n_objects": n, "speed": 1.0, "plane": "xz", "phase_offset": true}), 4.0);
-        let spiral_json = make_graph_json("Spiral", n,
-            serde_json::json!({"radius": 1.0, "n_objects": n, "speed": 1.0, "expansion": 1.0, "plane": "xz", "phase_offset": true}), 4.0);
+        let circle_json = make_graph_json(
+            "Circular",
+            n,
+            serde_json::json!({"radius": 2.0, "n_objects": n, "speed": 1.0, "plane": "xz", "phase_offset": true}),
+            4.0,
+        );
+        let spiral_json = make_graph_json(
+            "Spiral",
+            n,
+            serde_json::json!({"radius": 1.0, "n_objects": n, "speed": 1.0, "expansion": 1.0, "plane": "xz", "phase_offset": true}),
+            4.0,
+        );
 
         let circle_fn = compile_graph_json(&circle_json);
         let spiral_fn = compile_graph_json(&spiral_json);
@@ -699,10 +882,18 @@ mod tests {
     #[test]
     fn test_sound_engineer_parallel_movements() {
         let n = 4;
-        let circle_json = make_graph_json("Circular", n,
-            serde_json::json!({"radius": 2.0, "n_objects": n, "speed": 1.0, "plane": "xz", "phase_offset": true}), 4.0);
-        let spiral_json = make_graph_json("Spiral", n,
-            serde_json::json!({"radius": 1.0, "n_objects": n, "speed": 1.0, "expansion": 1.0, "plane": "xz", "phase_offset": true}), 4.0);
+        let circle_json = make_graph_json(
+            "Circular",
+            n,
+            serde_json::json!({"radius": 2.0, "n_objects": n, "speed": 1.0, "plane": "xz", "phase_offset": true}),
+            4.0,
+        );
+        let spiral_json = make_graph_json(
+            "Spiral",
+            n,
+            serde_json::json!({"radius": 1.0, "n_objects": n, "speed": 1.0, "expansion": 1.0, "plane": "xz", "phase_offset": true}),
+            4.0,
+        );
 
         let circle_fn = compile_graph_json(&circle_json);
         let spiral_fn = compile_graph_json(&spiral_json);
@@ -710,7 +901,12 @@ mod tests {
         let runtime1 = make_test_runtime();
         let runtime2 = make_test_runtime();
 
-        let params = EngineParams { n_objects: n, duration: 4.0, fps: 60.0, extra: serde_json::json!({}) };
+        let params = EngineParams {
+            n_objects: n,
+            duration: 4.0,
+            fps: 60.0,
+            extra: serde_json::json!({}),
+        };
 
         let r1 = runtime1.play_compiled(circle_fn, params.clone(), vec![1, 2, 3, 4]);
         let r2 = runtime2.play_compiled(spiral_fn, params, vec![5, 6, 7, 8]);
@@ -737,8 +933,12 @@ mod tests {
     #[test]
     fn test_sound_engineer_phase_spread() {
         let n = 4;
-        let graph_json = make_graph_json("Circular", n,
-            serde_json::json!({"radius": 2.0, "n_objects": n, "speed": 1.0, "plane": "xz", "phase_offset": true}), 4.0);
+        let graph_json = make_graph_json(
+            "Circular",
+            n,
+            serde_json::json!({"radius": 2.0, "n_objects": n, "speed": 1.0, "plane": "xz", "phase_offset": true}),
+            4.0,
+        );
 
         // Compiler 2 fois : une pour le runtime, une pour les raw samples
         let compiled_for_runtime = compile_graph_json(&graph_json);
@@ -754,9 +954,13 @@ mod tests {
         let mut anim = Animation::default();
         anim.graph_json = graph_json.clone();
         anim.phase_spread = 1.0;
-        anim.assignments = (0..n).map(|i| TrackAssignment {
-            track_id: i as u32, depth: 1.0, phase_offset: 0.0,
-        }).collect();
+        anim.assignments = (0..n)
+            .map(|i| TrackAssignment {
+                track_id: i as u32,
+                depth: 1.0,
+                phase_offset: 0.0,
+            })
+            .collect();
 
         let osc_ids: Vec<u32> = (0..n).map(|i| i as u32).collect();
         let anim_state = AnimationState::from_animation(&anim, &osc_ids);
@@ -766,12 +970,17 @@ mod tests {
         // (le spread décale chaque track dans le temps)
         let spread_samples = runtime.sample_trajectory(0, 10, 4.0);
         // Au moins une position devrait être différente de la raw
-        let has_diff = spread_samples.iter().zip(raw_samples.iter())
+        let has_diff = spread_samples
+            .iter()
+            .zip(raw_samples.iter())
             .any(|((_, sx, _, sz), raw)| (sx - raw.x).abs() > 0.01 || (sz - raw.z).abs() > 0.01);
         // Note: sample_trajectory appelle la fn compilée, pas l'animation_state
         // L'animation_state est appliquée dans le playback loop, pas dans sample_trajectory
         // Donc on vérifie juste que l'animation state ne crash pas
-        assert!(has_diff || !has_diff, "Phase spread test: animation state set without crash");
+        assert!(
+            has_diff || !has_diff,
+            "Phase spread test: animation state set without crash"
+        );
     }
 
     // ── Scénario 10 : Graphe avec modifier Scale ───────────────────────
@@ -798,18 +1007,30 @@ mod tests {
         let compiled = compile_graph_json(&graph_json);
 
         // Sans modifier : cercle r=1
-        let plain_json = make_graph_json("Circular", n,
-            serde_json::json!({"radius": 1.0, "n_objects": n, "speed": 1.0, "plane": "xz", "phase_offset": true}), 4.0);
+        let plain_json = make_graph_json(
+            "Circular",
+            n,
+            serde_json::json!({"radius": 1.0, "n_objects": n, "speed": 1.0, "plane": "xz", "phase_offset": true}),
+            4.0,
+        );
         let plain_fn = compile_graph_json(&plain_json);
 
         let pos_plain = plain_fn(1.0, 0);
         let pos_scaled = compiled(1.0, 0);
 
         // Le Scale x2 devrait doubler les coordonnées
-        assert!((pos_scaled.x.abs() - pos_plain.x.abs() * 2.0).abs() < 0.01,
-            "Scale X: {} vs {}*2", pos_scaled.x, pos_plain.x);
-        assert!((pos_scaled.z.abs() - pos_plain.z.abs() * 2.0).abs() < 0.01,
-            "Scale Z: {} vs {}*2", pos_scaled.z, pos_plain.z);
+        assert!(
+            (pos_scaled.x.abs() - pos_plain.x.abs() * 2.0).abs() < 0.01,
+            "Scale X: {} vs {}*2",
+            pos_scaled.x,
+            pos_plain.x
+        );
+        assert!(
+            (pos_scaled.z.abs() - pos_plain.z.abs() * 2.0).abs() < 0.01,
+            "Scale Z: {} vs {}*2",
+            pos_scaled.z,
+            pos_plain.z
+        );
     }
 
     // ── Scénario 11 : Sequence Circle → Spiral (changement temporel) ───
@@ -818,23 +1039,35 @@ mod tests {
     fn test_sound_engineer_sequence_circle_spiral() {
         let n = 4;
         let graph_json = make_composite_graph_json(
-            "Sequence", serde_json::json!({}),
-            "Circular", serde_json::json!({"radius": 2.0, "n_objects": n, "speed": 1.0, "plane": "xz", "phase_offset": true}),
-            "Spiral", serde_json::json!({"radius": 1.0, "n_objects": n, "speed": 1.0, "expansion": 1.0, "plane": "xz", "phase_offset": true}),
-            n, 4.0);
+            "Sequence",
+            serde_json::json!({}),
+            "Circular",
+            serde_json::json!({"radius": 2.0, "n_objects": n, "speed": 1.0, "plane": "xz", "phase_offset": true}),
+            "Spiral",
+            serde_json::json!({"radius": 1.0, "n_objects": n, "speed": 1.0, "expansion": 1.0, "plane": "xz", "phase_offset": true}),
+            n,
+            4.0,
+        );
 
         let compiled = compile_graph_json(&graph_json);
 
         // À t=0.5 (pendant la phase cercle), la position devrait être sur le cercle
         let pos_early = compiled(0.5, 0);
         let dist_early = (pos_early.x.powi(2) + pos_early.z.powi(2)).sqrt();
-        assert!((dist_early - 2.0).abs() < 0.2, "Sequence phase A (cercle): dist={} attendu~2.0", dist_early);
+        assert!(
+            (dist_early - 2.0).abs() < 0.2,
+            "Sequence phase A (cercle): dist={} attendu~2.0",
+            dist_early
+        );
 
         // À t=3.5 (pendant la phase spiral), la position devrait être différente
         let pos_late = compiled(3.5, 0);
         let dist_late = (pos_late.x.powi(2) + pos_late.z.powi(2)).sqrt();
         // La spiral expande, donc la distance devrait être différente du cercle fixe
-        assert!(dist_late > 0.0, "Sequence phase B (spiral): position non-nulle");
+        assert!(
+            dist_late > 0.0,
+            "Sequence phase B (spiral): position non-nulle"
+        );
     }
 
     // ── Scénario 12 : Group — partition des tracks ─────────────────────
@@ -848,10 +1081,15 @@ mod tests {
     fn test_sound_engineer_group_partition() {
         let n = 4;
         let graph_json = make_composite_graph_json(
-            "Group", serde_json::json!({}),
-            "Circular", serde_json::json!({"n_objects": 2, "radius": 2.0, "speed": 1.0, "plane": "xz", "phase_offset": true}),
-            "Linear", serde_json::json!({"n_objects": 2, "start": [-2.0, 0.0, 0.0], "end": [2.0, 0.0, 0.0]}),
-            n, 4.0);
+            "Group",
+            serde_json::json!({}),
+            "Circular",
+            serde_json::json!({"n_objects": 2, "radius": 2.0, "speed": 1.0, "plane": "xz", "phase_offset": true}),
+            "Linear",
+            serde_json::json!({"n_objects": 2, "start": [-2.0, 0.0, 0.0], "end": [2.0, 0.0, 0.0]}),
+            n,
+            4.0,
+        );
 
         let compiled = compile_graph_json(&graph_json);
 
@@ -861,7 +1099,12 @@ mod tests {
         for i in 0..n {
             let pos = compiled(1.0, i);
             let dist = (pos.x.powi(2) + pos.z.powi(2)).sqrt();
-            assert!((dist - 2.0).abs() < 0.3, "Group track {}: cercle dist={}", i, dist);
+            assert!(
+                (dist - 2.0).abs() < 0.3,
+                "Group track {}: cercle dist={}",
+                i,
+                dist
+            );
         }
     }
 
@@ -887,19 +1130,34 @@ mod tests {
 
         // Construire avec audio_state contenant BPM=120
         let mut audio_state = AudioState::new();
-        audio_state.bpm = Some(stagespace_engines::BPMData { bpm: 120.0, confidence: 1.0, last_beat_time: 0.0 });
+        audio_state.bpm = Some(stagespace_engines::BPMData {
+            bpm: 120.0,
+            confidence: 1.0,
+            last_beat_time: 0.0,
+        });
         let graph = build_graph_from_json(&graph_json, &audio_state).expect("graph build");
 
         // Vérifier que le BPM a été injecté dans les params du node BPM
-        let bpm_node = graph.nodes.values().find(|n| n.node_type == stagespace_engines::NodeType::BPM);
+        let bpm_node = graph
+            .nodes
+            .values()
+            .find(|n| n.node_type == stagespace_engines::NodeType::BPM);
         assert!(bpm_node.is_some(), "BPM node should exist");
         let bpm_val = bpm_node.unwrap().params.get("bpm").and_then(|v| v.as_f64());
-        assert_eq!(bpm_val, Some(120.0), "BPM should be injected from audio_state");
+        assert_eq!(
+            bpm_val,
+            Some(120.0),
+            "BPM should be injected from audio_state"
+        );
 
         let compiled = graph::compilation::compile_graph(&graph).expect("compile");
         let pos = compiled(1.0, 0);
         let dist = (pos.x.powi(2) + pos.z.powi(2)).sqrt();
-        assert!((dist - 2.0).abs() < 0.1, "BPM engine: cercle r=2, dist={}", dist);
+        assert!(
+            (dist - 2.0).abs() < 0.1,
+            "BPM engine: cercle r=2, dist={}",
+            dist
+        );
     }
 
     // ── Scénario 14 : Validation — graphe sans Output ──────────────────
@@ -922,8 +1180,11 @@ mod tests {
         let result = try_compile_graph_json(&graph_json);
         assert!(result.is_err(), "Should fail without Output node");
         let err = result.err().unwrap();
-        assert!(err.to_lowercase().contains("output") || err.to_lowercase().contains("missing"),
-            "Error should mention output: {}", err);
+        assert!(
+            err.to_lowercase().contains("output") || err.to_lowercase().contains("missing"),
+            "Error should mention output: {}",
+            err
+        );
     }
 
     // ── Scénario 15 : Comptes incompatibles — Objects=8 mais engine=4 ──
@@ -949,13 +1210,24 @@ mod tests {
         // Donc la validation ne devrait pas échouer — le parser harmonise les comptes
         let audio_state = AudioState::new();
         let graph = build_graph_from_json(&graph_json, &audio_state);
-        assert!(graph.is_ok(), "Graph build should succeed (parser harmonizes counts)");
+        assert!(
+            graph.is_ok(),
+            "Graph build should succeed (parser harmonizes counts)"
+        );
 
         // Vérifier que le parser a bien forcé n_objects=8 dans l'engine
         let graph = graph.unwrap();
-        let engine = graph.nodes.values().find(|n| n.node_type == stagespace_engines::NodeType::Circular).unwrap();
+        let engine = graph
+            .nodes
+            .values()
+            .find(|n| n.node_type == stagespace_engines::NodeType::Circular)
+            .unwrap();
         let n_obj = engine.params.get("n_objects").and_then(|v| v.as_u64());
-        assert_eq!(n_obj, Some(8), "Parser should force n_objects=8 from Objects node");
+        assert_eq!(
+            n_obj,
+            Some(8),
+            "Parser should force n_objects=8 from Objects node"
+        );
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -983,15 +1255,25 @@ mod tests {
         let global_json = make_global_graph_json(2.0);
         let audio_state = AudioState::new();
         let graph = build_graph_from_json(&global_json, &audio_state);
-        assert!(graph.is_ok(), "Global graph build failed: {:?}", graph.err());
+        assert!(
+            graph.is_ok(),
+            "Global graph build failed: {:?}",
+            graph.err()
+        );
 
         let graph = graph.unwrap();
         // Vérifier qu'on a bien les 3 nodes
         assert_eq!(graph.nodes.len(), 3);
         // Vérifier qu'on a un node Input
-        assert!(graph.nodes.values().any(|n| n.node_type == stagespace_engines::NodeType::Input));
+        assert!(graph
+            .nodes
+            .values()
+            .any(|n| n.node_type == stagespace_engines::NodeType::Input));
         // Vérifier qu'on a un node RadiusScale
-        assert!(graph.nodes.values().any(|n| n.node_type == stagespace_engines::NodeType::RadiusScale));
+        assert!(graph
+            .nodes
+            .values()
+            .any(|n| n.node_type == stagespace_engines::NodeType::RadiusScale));
     }
 
     /// Test: le graph global se compile en post_process_fn
@@ -1002,12 +1284,13 @@ mod tests {
         let graph = build_graph_from_json(&global_json, &audio_state).unwrap();
 
         let macros = std::sync::Arc::new(stagespace_engines::MacroState::new());
-        let compile_params = stagespace_engines::PostProcessCompileParams {
-            graph,
-            macros,
-        };
+        let compile_params = stagespace_engines::PostProcessCompileParams { graph, macros };
         let result = stagespace_engines::compile_post_process(compile_params);
-        assert!(result.is_ok(), "Post-process compilation failed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Post-process compilation failed: {:?}",
+            result.err()
+        );
     }
 
     /// Test: le MergeRuntime peut hot-swap un post_process_fn
@@ -1025,8 +1308,11 @@ mod tests {
         let post_process_fn = stagespace_engines::compile_post_process(compile_params).unwrap();
 
         // Créer un MergeRuntime
-        let osc_sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7788);
-        let merge_rt = stagespace_engines::MergeRuntime::new("127.0.0.1".to_string(), 7788, osc_sender, 60.0).unwrap();
+        let osc_sender =
+            OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7788);
+        let merge_rt =
+            stagespace_engines::MergeRuntime::new("127.0.0.1".to_string(), 7788, osc_sender, 60.0)
+                .unwrap();
 
         // Hot-swap le post_process_fn
         merge_rt.swap_post_process_fn(post_process_fn);
@@ -1049,10 +1335,17 @@ mod tests {
         });
         let audio_state = AudioState::new();
         let graph = build_graph_from_json(&global_json, &audio_state);
-        assert!(graph.is_ok(), "Global graph with MoveRef build failed: {:?}", graph.err());
+        assert!(
+            graph.is_ok(),
+            "Global graph with MoveRef build failed: {:?}",
+            graph.err()
+        );
 
         let graph = graph.unwrap();
-        assert!(graph.nodes.values().any(|n| n.node_type == stagespace_engines::NodeType::MoveRef));
+        assert!(graph
+            .nodes
+            .values()
+            .any(|n| n.node_type == stagespace_engines::NodeType::MoveRef));
     }
 
     /// Test: le graph global avec Merge node se construit
@@ -1071,17 +1364,24 @@ mod tests {
         });
         let audio_state = AudioState::new();
         let graph = build_graph_from_json(&global_json, &audio_state);
-        assert!(graph.is_ok(), "Global graph with Merge build failed: {:?}", graph.err());
+        assert!(
+            graph.is_ok(),
+            "Global graph with Merge build failed: {:?}",
+            graph.err()
+        );
 
         let graph = graph.unwrap();
-        assert!(graph.nodes.values().any(|n| n.node_type == stagespace_engines::NodeType::Merge));
+        assert!(graph
+            .nodes
+            .values()
+            .any(|n| n.node_type == stagespace_engines::NodeType::Merge));
     }
 
     /// Test: le cue étendu se sérialise/désérialise avec tous les champs Phase 3
     #[test]
     fn test_cue_extended_roundtrip() {
-        use std::collections::HashMap;
         use stagespace_engines::{Cue, MacroSnapshot, SpatialMacroSnapshot};
+        use std::collections::HashMap;
 
         let mut manual_pos = HashMap::new();
         manual_pos.insert(0, [1.0, 2.0, 3.0]);
@@ -1094,9 +1394,14 @@ mod tests {
             graph: serde_json::json!({"nodes": []}),
             timestamp: 100.0,
             macros: Some(MacroSnapshot {
-                speed: 1.5, scale: 2.0,
-                shift_x: 0.1, shift_y: 0.2, shift_z: 0.3,
-                yaw: 45.0, pitch: 0.0, roll: 0.0,
+                speed: 1.5,
+                scale: 2.0,
+                shift_x: 0.1,
+                shift_y: 0.2,
+                shift_z: 0.3,
+                yaw: 45.0,
+                pitch: 0.0,
+                roll: 0.0,
             }),
             track_indices: vec![0, 1, 2],
             fade_duration: 1.0,
@@ -1175,8 +1480,11 @@ mod tests {
         assert!(post_process_fn.is_ok(), "Global graph compilation failed");
 
         // 3. MergeRuntime avec le post_process_fn
-        let osc_sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7788);
-        let merge_rt = stagespace_engines::MergeRuntime::new("127.0.0.1".to_string(), 7788, osc_sender, 60.0).unwrap();
+        let osc_sender =
+            OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7788);
+        let merge_rt =
+            stagespace_engines::MergeRuntime::new("127.0.0.1".to_string(), 7788, osc_sender, 60.0)
+                .unwrap();
         merge_rt.swap_post_process_fn(post_process_fn.unwrap());
 
         // 4. Le workflow complet : sub-graph → worker → buffer → MergeRuntime → post_process → OSC

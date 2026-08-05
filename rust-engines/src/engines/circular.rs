@@ -6,16 +6,24 @@ pub struct Circular;
 
 impl Engine for Circular {
     fn position(&self, t: f64, object_index: usize, params: &EngineParams) -> Vector3<f64> {
-        let radius = params.extra.get("radius")
+        let radius = params
+            .extra
+            .get("radius")
             .and_then(|v| v.as_f64())
             .unwrap_or(0.7);
-        let speed = params.extra.get("speed")
+        let speed = params
+            .extra
+            .get("speed")
             .and_then(|v| v.as_f64())
             .unwrap_or(1.0);
-        let plane = params.extra.get("plane")
+        let plane = params
+            .extra
+            .get("plane")
             .and_then(|v| v.as_str())
             .unwrap_or("xz");
-        let phase_offset = params.extra.get("phase_offset")
+        let phase_offset = params
+            .extra
+            .get("phase_offset")
             .and_then(|v| v.as_bool())
             .unwrap_or(true);
 
@@ -28,26 +36,10 @@ impl Engine for Circular {
         let angle = 2.0 * PI * speed * t / params.duration + phase;
 
         match plane {
-            "xy" => Vector3::new(
-                radius * angle.cos(),
-                radius * angle.sin(),
-                0.0,
-            ),
-            "xz" => Vector3::new(
-                radius * angle.cos(),
-                0.0,
-                radius * angle.sin(),
-            ),
-            "yz" => Vector3::new(
-                0.0,
-                radius * angle.cos(),
-                radius * angle.sin(),
-            ),
-            _ => Vector3::new(
-                radius * angle.cos(),
-                0.0,
-                radius * angle.sin(),
-            ),
+            "xy" => Vector3::new(radius * angle.cos(), radius * angle.sin(), 0.0),
+            "xz" => Vector3::new(radius * angle.cos(), 0.0, radius * angle.sin()),
+            "yz" => Vector3::new(0.0, radius * angle.cos(), radius * angle.sin()),
+            _ => Vector3::new(radius * angle.cos(), 0.0, radius * angle.sin()),
         }
     }
 

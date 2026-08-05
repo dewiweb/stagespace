@@ -5,7 +5,9 @@ pub struct Linear;
 
 impl Engine for Linear {
     fn position(&self, t: f64, _object_index: usize, params: &EngineParams) -> Vector3<f64> {
-        let start = params.extra.get("start")
+        let start = params
+            .extra
+            .get("start")
             .and_then(|v| v.as_array())
             .and_then(|arr| {
                 if arr.len() >= 3 {
@@ -20,7 +22,9 @@ impl Engine for Linear {
             })
             .unwrap_or(Vector3::new(-1.0, 0.0, 0.0));
 
-        let end = params.extra.get("end")
+        let end = params
+            .extra
+            .get("end")
             .and_then(|v| v.as_array())
             .and_then(|arr| {
                 if arr.len() >= 3 {

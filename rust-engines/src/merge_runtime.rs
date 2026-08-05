@@ -20,10 +20,12 @@
 //! - OSC output : une seule socket
 //! - Callback : un seul event Tauri pour le 3D preview
 
+use crate::audio::AudioState;
 use crate::osc_sender::OscSender;
 use crate::position_buffer::PositionBuffer;
-use crate::runtime::{MacroState, PerfMonitor, PerfStats, PositionCallback, PostProcessFn, PostProcessContext};
-use crate::audio::AudioState;
+use crate::runtime::{
+    MacroState, PerfMonitor, PerfStats, PositionCallback, PostProcessContext, PostProcessFn,
+};
 use rosc::{OscMessage, OscPacket, OscType};
 use std::collections::HashMap;
 use std::net::UdpSocket;
@@ -31,10 +33,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 
+/// Type alias for a single move's positions entry: (move_id, fade, priority, positions per object_index)
+type MoveEntry = (String, f64, u32, Vec<(usize, nalgebra::Vector3<f64>)>);
+
 /// Stratégie de merge quand plusieurs moves ciblent le même track
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum MergeStrategy {
     /// Dernier move activé gagne (par poids/fade le plus élevé)
+    #[default]
     Override,
     /// Blend linéaire pondéré par weight * fade
     Crossfade,
@@ -42,12 +48,6 @@ pub enum MergeStrategy {
     Blend,
     /// Move avec la priorité la plus haute gagne
     Priority,
-}
-
-impl Default for MergeStrategy {
-    fn default() -> Self {
-        MergeStrategy::Override
-    }
 }
 
 /// État d'un move actif dans le MergeRuntime
@@ -167,9 +167,17 @@ pub struct MergeRuntime {
 
 impl MergeRuntime {
     /// Crée un nouveau MergeRuntime
-    pub fn new(osc_address: String, osc_port: u16, osc_sender: OscSender, fps: f64) -> crate::error::Result<Self> {
-        let socket = UdpSocket::bind("0.0.0.0:0").map_err(crate::error::StagespaceError::NetworkError)?;
-        socket.connect((osc_address.as_str(), osc_port)).map_err(crate::error::StagespaceError::NetworkError)?;
+    pub fn new(
+        osc_address: String,
+        osc_port: u16,
+        osc_sender: OscSender,
+        fps: f64,
+    ) -> crate::error::Result<Self> {
+        let socket =
+            UdpSocket::bind("0.0.0.0:0").map_err(crate::error::StagespaceError::NetworkError)?;
+        socket
+            .connect((osc_address.as_str(), osc_port))
+            .map_err(crate::error::StagespaceError::NetworkError)?;
 
         Ok(MergeRuntime {
             thread: None,
@@ -195,7 +203,10 @@ impl MergeRuntime {
 
     /// Définit le callback de position (pour le 3D preview)
     pub fn set_position_callback(&self, callback: PositionCallback) {
-        let mut cb = self.position_callback.lock().unwrap_or_else(|e| e.into_inner());
+        let mut cb = self
+            .position_callback
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         *cb = Some(callback);
     }
 
@@ -211,7 +222,10 @@ impl MergeRuntime {
 
     /// Récupère les osc_ids globaux actuels
     pub fn osc_ids(&self) -> Vec<u32> {
-        self.osc_ids.read().unwrap_or_else(|e| e.into_inner()).clone()
+        self.osc_ids
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     /// Recalcule les osc_ids globaux à partir des moves encore actifs.
@@ -237,32 +251,50 @@ impl MergeRuntime {
 
     /// Définit la stratégie de merge
     pub fn set_merge_strategy(&self, strategy: MergeStrategy) {
-        *self.merge_strategy.write().unwrap_or_else(|e| e.into_inner()) = strategy;
+        *self
+            .merge_strategy
+            .write()
+            .unwrap_or_else(|e| e.into_inner()) = strategy;
     }
 
     /// Hot-swap la fonction de post-processing (graph global)
     pub fn swap_post_process_fn(&self, new_fn: PostProcessFn) {
-        *self.post_process_fn.write().unwrap_or_else(|e| e.into_inner()) = new_fn;
+        *self
+            .post_process_fn
+            .write()
+            .unwrap_or_else(|e| e.into_inner()) = new_fn;
     }
 
     /// Définit les positions des tracks .hol (pour Barycenter)
     pub fn set_track_positions(&self, positions: HashMap<u32, [f64; 3]>) {
-        *self.track_positions.write().unwrap_or_else(|e| e.into_inner()) = positions;
+        *self
+            .track_positions
+            .write()
+            .unwrap_or_else(|e| e.into_inner()) = positions;
     }
 
     /// Définit une position manuelle pour un objet (pour ManualPosition)
     pub fn set_manual_position(&self, obj_index: usize, pos: [f64; 3]) {
-        self.manual_positions.write().unwrap_or_else(|e| e.into_inner()).insert(obj_index, pos);
+        self.manual_positions
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(obj_index, pos);
     }
 
     /// Efface la position manuelle pour un objet
     pub fn clear_manual_position(&self, obj_index: usize) {
-        self.manual_positions.write().unwrap_or_else(|e| e.into_inner()).remove(&obj_index);
+        self.manual_positions
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&obj_index);
     }
 
     /// Efface toutes les positions manuelles
     pub fn clear_all_manual_positions(&self) {
-        self.manual_positions.write().unwrap_or_else(|e| e.into_inner()).clear();
+        self.manual_positions
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
     }
 
     /// Récupère les macros (pour modification temps réel — fast path atomic)
@@ -290,13 +322,24 @@ impl MergeRuntime {
         is_preview: bool,
     ) {
         let state = MoveState::new(osc_ids, track_indices, is_preview);
-        self.active_moves.write().unwrap_or_else(|e| e.into_inner()).insert(move_id.clone(), state);
-        self.move_buffers.write().unwrap_or_else(|e| e.into_inner()).insert(move_id, buffer);
+        self.active_moves
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(move_id.clone(), state);
+        self.move_buffers
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(move_id, buffer);
     }
 
     /// Démarre un fade out pour un move (le move sera retiré quand le fade est terminé)
     pub fn start_fade_out(&self, move_id: &str, fade_duration: f64) {
-        if let Some(state) = self.active_moves.write().unwrap_or_else(|e| e.into_inner()).get_mut(move_id) {
+        if let Some(state) = self
+            .active_moves
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .get_mut(move_id)
+        {
             state.start_fade_out(fade_duration);
         }
     }
@@ -307,8 +350,14 @@ impl MergeRuntime {
     /// d'ids obsolètes (avant, l'appelant devait penser à appeler `rebuild_osc_ids`
     /// manuellement — oubli = bug silencieux).
     pub fn unregister_move(&self, move_id: &str) {
-        self.active_moves.write().unwrap_or_else(|e| e.into_inner()).remove(move_id);
-        self.move_buffers.write().unwrap_or_else(|e| e.into_inner()).remove(move_id);
+        self.active_moves
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(move_id);
+        self.move_buffers
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(move_id);
         self.rebuild_osc_ids();
     }
 
@@ -320,12 +369,15 @@ impl MergeRuntime {
     /// Démarre le merge thread
     pub fn start(&mut self) -> crate::error::Result<()> {
         if self.running.load(Ordering::SeqCst) {
-            return Ok(());  // Déjà démarré
+            return Ok(()); // Déjà démarré
         }
 
         self.running.store(true, Ordering::SeqCst);
         let running = self.running.clone();
-        let socket = self.socket.try_clone().map_err(crate::error::StagespaceError::NetworkError)?;
+        let socket = self
+            .socket
+            .try_clone()
+            .map_err(crate::error::StagespaceError::NetworkError)?;
         let move_buffers = self.move_buffers.clone();
         let active_moves = self.active_moves.clone();
         let macros = self.macros.clone();
@@ -356,12 +408,15 @@ impl MergeRuntime {
                 let dt = frame_duration.as_secs_f64();
 
                 // 1. Lire tous les buffers
-                let buffers = move_buffers.read().unwrap_or_else(|e| e.into_inner()).clone();
+                let buffers = move_buffers
+                    .read()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone();
                 let mut moves_guard = active_moves.write().unwrap_or_else(|e| e.into_inner());
 
                 // 2. Collecter les positions par move, avec fade et priorité
                 // Tuple : (move_id, fade, priority, positions_globales)
-                let mut move_positions: Vec<(String, f64, u32, Vec<(usize, nalgebra::Vector3<f64>)>)> = Vec::new();
+                let mut move_positions: Vec<MoveEntry> = Vec::new();
                 let mut moves_to_remove: Vec<String> = Vec::new();
 
                 for (move_id, state) in moves_guard.iter_mut() {
@@ -390,21 +445,32 @@ impl MergeRuntime {
                             //   c'est un bug d'invariant — on log et on SKIP le move plutôt que de
                             //   réutiliser des indices locaux comme s'ils étaient globaux (ce qui
                             //   ferait exactement la classe de bug qu'on a chassée en Phase 3).
-                            let global_positions: Vec<(usize, nalgebra::Vector3<f64>)> =
-                                if state.track_indices.is_empty() {
-                                    positions.clone()
-                                } else if state.track_indices.len() == positions.len() {
-                                    positions.iter().enumerate().map(|(local_idx, (_, pos))| {
+                            let global_positions: Vec<(usize, nalgebra::Vector3<f64>)> = if state
+                                .track_indices
+                                .is_empty()
+                            {
+                                positions.clone()
+                            } else if state.track_indices.len() == positions.len() {
+                                positions
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(local_idx, (_, pos))| {
                                         (state.track_indices[local_idx], *pos)
-                                    }).collect()
-                                } else {
-                                    crate::logging::log_osc_error(&format!(
+                                    })
+                                    .collect()
+                            } else {
+                                crate::logging::log_osc_error(&format!(
                                         "MergeRuntime: move {} skipped — track_indices.len()={} != positions.len()={} (invariant violé)",
                                         move_id, state.track_indices.len(), positions.len()
                                     ));
-                                    continue;
-                                };
-                            move_positions.push((move_id.clone(), fade, state.priority, global_positions));
+                                continue;
+                            };
+                            move_positions.push((
+                                move_id.clone(),
+                                fade,
+                                state.priority,
+                                global_positions,
+                            ));
                         }
                     }
                 }
@@ -434,8 +500,12 @@ impl MergeRuntime {
                 // de cloner les données à chaque frame (60fps × 5 clones = ~300 allocs/s).
                 let origin = *origin_arc.lock().unwrap_or_else(|e| e.into_inner());
                 let track_depths_guard = track_depths_arc.read().unwrap_or_else(|e| e.into_inner());
-                let track_positions_guard = track_positions_arc.read().unwrap_or_else(|e| e.into_inner());
-                let manual_positions_guard = manual_positions_arc.read().unwrap_or_else(|e| e.into_inner());
+                let track_positions_guard = track_positions_arc
+                    .read()
+                    .unwrap_or_else(|e| e.into_inner());
+                let manual_positions_guard = manual_positions_arc
+                    .read()
+                    .unwrap_or_else(|e| e.into_inner());
                 let audio_state_guard = audio_state_arc.lock().unwrap_or_else(|e| e.into_inner());
 
                 let ctx = PostProcessContext {
@@ -449,7 +519,9 @@ impl MergeRuntime {
                 };
 
                 let transformed: Vec<(usize, nalgebra::Vector3<f64>)> = {
-                    let pp_fn = post_process_fn_arc.read().unwrap_or_else(|e| e.into_inner());
+                    let pp_fn = post_process_fn_arc
+                        .read()
+                        .unwrap_or_else(|e| e.into_inner());
                     pp_fn(&ctx, merged)
                 };
                 // Les locks sont libérés ici (drop automatique à la fin du scope)
@@ -467,15 +539,21 @@ impl MergeRuntime {
                 let sender = osc_sender_arc.lock().unwrap_or_else(|e| e.into_inner());
                 for (obj_idx, pos) in &transformed {
                     if preview_tracks.contains(obj_idx) {
-                        continue;  // Skip OSC pour les moves en preview
+                        continue; // Skip OSC pour les moves en preview
                     }
                     if let Some(&osc_id) = osc_ids_guard.get(*obj_idx) {
                         let (addr, values) = sender.format_position(osc_id, *pos);
-                        let args: Vec<OscType> = values.iter().map(|v| OscType::Float(*v as f32)).collect();
-                        let packet = OscPacket::Message(OscMessage { addr: addr.clone(), args });
+                        let args: Vec<OscType> =
+                            values.iter().map(|v| OscType::Float(*v as f32)).collect();
+                        let packet = OscPacket::Message(OscMessage {
+                            addr: addr.clone(),
+                            args,
+                        });
                         if let Ok(bytes) = rosc::encoder::encode(&packet) {
                             if let Err(e) = socket.send(&bytes) {
-                                crate::logging::log_osc_error(&format!("MergeRuntime OSC send error: {}", e));
+                                crate::logging::log_osc_error(&format!(
+                                    "MergeRuntime OSC send error: {e}"
+                                ));
                             } else {
                                 osc_since_perf += 1;
                             }
@@ -550,13 +628,32 @@ impl MergeRuntime {
         }
 
         let macros = self.macros.clone();
-        let audio_state = self.audio_state.lock().unwrap_or_else(|e| e.into_inner()).clone();
-        let track_positions = self.track_positions.read().unwrap_or_else(|e| e.into_inner()).clone();
-        let manual_positions = self.manual_positions.read().unwrap_or_else(|e| e.into_inner()).clone();
+        let audio_state = self
+            .audio_state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let track_positions = self
+            .track_positions
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let manual_positions = self
+            .manual_positions
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
         let origin = *self.origin.lock().unwrap_or_else(|e| e.into_inner());
-        let track_depths = self.track_depths.read().unwrap_or_else(|e| e.into_inner()).clone();
+        let track_depths = self
+            .track_depths
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
 
-        let pp_fn = self.post_process_fn.read().unwrap_or_else(|e| e.into_inner());
+        let pp_fn = self
+            .post_process_fn
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
         let mut result = Vec::with_capacity(samples.len());
         for (t, x, y, z) in samples {
             let ctx = PostProcessContext {
@@ -586,7 +683,7 @@ impl MergeRuntime {
 ///
 /// Tuple d'entrée : `(move_id, fade, priority, positions)`.
 fn merge_positions(
-    move_positions: &[(String, f64, u32, Vec<(usize, nalgebra::Vector3<f64>)>)],
+    move_positions: &[MoveEntry],
     osc_ids: &[u32],
     strategy: MergeStrategy,
 ) -> Vec<(usize, nalgebra::Vector3<f64>)> {
@@ -603,10 +700,14 @@ fn merge_positions(
     }
 
     // Collecter toutes les positions par object_index, avec (fade, priority, pos)
-    let mut positions_by_index: HashMap<usize, Vec<(f64, u32, nalgebra::Vector3<f64>)>> = HashMap::new();
+    let mut positions_by_index: HashMap<usize, Vec<(f64, u32, nalgebra::Vector3<f64>)>> =
+        HashMap::new();
     for (_, fade, priority, positions) in move_positions {
         for (idx, pos) in positions {
-            positions_by_index.entry(*idx).or_default().push((*fade, *priority, *pos));
+            positions_by_index
+                .entry(*idx)
+                .or_default()
+                .push((*fade, *priority, *pos));
         }
     }
 
@@ -619,11 +720,11 @@ fn merge_positions(
                 (_, None) => nalgebra::Vector3::zeros(),
                 (_, Some(c)) if c.is_empty() => nalgebra::Vector3::zeros(),
                 // Override : prendre la position avec le fade le plus élevé
-                (MergeStrategy::Override, Some(c)) => {
-                    c.iter().max_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
-                        .map(|(_, _, pos)| *pos)
-                        .unwrap_or(nalgebra::Vector3::zeros())
-                }
+                (MergeStrategy::Override, Some(c)) => c
+                    .iter()
+                    .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
+                    .map(|(_, _, pos)| *pos)
+                    .unwrap_or(nalgebra::Vector3::zeros()),
                 // Crossfade / Blend : moyenne pondérée par fade
                 (MergeStrategy::Crossfade, Some(c)) | (MergeStrategy::Blend, Some(c)) => {
                     let total_weight: f64 = c.iter().map(|(f, _, _)| f.abs()).sum();
@@ -636,15 +737,15 @@ fn merge_positions(
                 // Priority : le move avec la priorité la plus élevée gagne.
                 // En cas d'égalité de priorité, on départage par fade le plus élevé
                 // (pour que le fade out d'un move cède la place à un move de même priorité).
-                (MergeStrategy::Priority, Some(c)) => {
-                    c.iter()
-                        .max_by(|a, b| {
-                            a.1.cmp(&b.1)
-                                .then_with(|| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
+                (MergeStrategy::Priority, Some(c)) => c
+                    .iter()
+                    .max_by(|a, b| {
+                        a.1.cmp(&b.1).then_with(|| {
+                            a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal)
                         })
-                        .map(|(_, _, pos)| *pos)
-                        .unwrap_or(nalgebra::Vector3::zeros())
-                }
+                    })
+                    .map(|(_, _, pos)| *pos)
+                    .unwrap_or(nalgebra::Vector3::zeros()),
             };
             (obj_idx, pos)
         })
@@ -735,14 +836,24 @@ mod tests {
 
     #[test]
     fn test_merge_override() {
-        let move_a = ("a".to_string(), 1.0, 0, vec![
-            (0, nalgebra::Vector3::new(1.0, 0.0, 0.0)),
-            (1, nalgebra::Vector3::new(2.0, 0.0, 0.0)),
-        ]);
-        let move_b = ("b".to_string(), 0.5, 0, vec![
-            (0, nalgebra::Vector3::new(10.0, 0.0, 0.0)),
-            (1, nalgebra::Vector3::new(20.0, 0.0, 0.0)),
-        ]);
+        let move_a = (
+            "a".to_string(),
+            1.0,
+            0,
+            vec![
+                (0, nalgebra::Vector3::new(1.0, 0.0, 0.0)),
+                (1, nalgebra::Vector3::new(2.0, 0.0, 0.0)),
+            ],
+        );
+        let move_b = (
+            "b".to_string(),
+            0.5,
+            0,
+            vec![
+                (0, nalgebra::Vector3::new(10.0, 0.0, 0.0)),
+                (1, nalgebra::Vector3::new(20.0, 0.0, 0.0)),
+            ],
+        );
         let osc_ids = vec![1, 2];
         let merged = merge_positions(&[move_a, move_b], &osc_ids, MergeStrategy::Override);
         // Override : fade le plus élevé gagne → move_a (fade 1.0)
@@ -752,12 +863,18 @@ mod tests {
 
     #[test]
     fn test_merge_crossfade() {
-        let move_a = ("a".to_string(), 1.0, 0, vec![
-            (0, nalgebra::Vector3::new(0.0, 0.0, 0.0)),
-        ]);
-        let move_b = ("b".to_string(), 1.0, 0, vec![
-            (0, nalgebra::Vector3::new(10.0, 0.0, 0.0)),
-        ]);
+        let move_a = (
+            "a".to_string(),
+            1.0,
+            0,
+            vec![(0, nalgebra::Vector3::new(0.0, 0.0, 0.0))],
+        );
+        let move_b = (
+            "b".to_string(),
+            1.0,
+            0,
+            vec![(0, nalgebra::Vector3::new(10.0, 0.0, 0.0))],
+        );
         let osc_ids = vec![1];
         let merged = merge_positions(&[move_a, move_b], &osc_ids, MergeStrategy::Crossfade);
         // Crossfade : moyenne pondérée → (0 + 10) / 2 = 5
@@ -766,9 +883,12 @@ mod tests {
 
     #[test]
     fn test_merge_single_move() {
-        let move_a = ("a".to_string(), 1.0, 0, vec![
-            (0, nalgebra::Vector3::new(1.0, 2.0, 3.0)),
-        ]);
+        let move_a = (
+            "a".to_string(),
+            1.0,
+            0,
+            vec![(0, nalgebra::Vector3::new(1.0, 2.0, 3.0))],
+        );
         let osc_ids = vec![1];
         let merged = merge_positions(&[move_a], &osc_ids, MergeStrategy::Override);
         assert_eq!(merged.len(), 1);
@@ -789,17 +909,27 @@ mod tests {
         // Move A contrôle tracks [0, 1, 2] (positions locales 0,1,2)
         // Move B contrôle tracks [3, 4, 5] (positions locales 0,1,2 → remappées en 3,4,5)
         // Après remapping, le merge ne doit pas écraser les positions de A avec celles de B
-        let move_a = ("a".to_string(), 1.0, 0, vec![
-            (0, nalgebra::Vector3::new(1.0, 0.0, 0.0)),
-            (1, nalgebra::Vector3::new(2.0, 0.0, 0.0)),
-            (2, nalgebra::Vector3::new(3.0, 0.0, 0.0)),
-        ]);
+        let move_a = (
+            "a".to_string(),
+            1.0,
+            0,
+            vec![
+                (0, nalgebra::Vector3::new(1.0, 0.0, 0.0)),
+                (1, nalgebra::Vector3::new(2.0, 0.0, 0.0)),
+                (2, nalgebra::Vector3::new(3.0, 0.0, 0.0)),
+            ],
+        );
         // Move B avec indices déjà remappés (3,4,5)
-        let move_b = ("b".to_string(), 1.0, 0, vec![
-            (3, nalgebra::Vector3::new(10.0, 0.0, 0.0)),
-            (4, nalgebra::Vector3::new(20.0, 0.0, 0.0)),
-            (5, nalgebra::Vector3::new(30.0, 0.0, 0.0)),
-        ]);
+        let move_b = (
+            "b".to_string(),
+            1.0,
+            0,
+            vec![
+                (3, nalgebra::Vector3::new(10.0, 0.0, 0.0)),
+                (4, nalgebra::Vector3::new(20.0, 0.0, 0.0)),
+                (5, nalgebra::Vector3::new(30.0, 0.0, 0.0)),
+            ],
+        );
         let osc_ids = vec![1, 2, 3, 4, 5, 6];
         let merged = merge_positions(&[move_a, move_b], &osc_ids, MergeStrategy::Override);
         assert_eq!(merged.len(), 6);
@@ -818,12 +948,18 @@ mod tests {
         // Move A : priority 1, position x=1
         // Move B : priority 5, position x=99
         // → B doit gagner malgré un fade plus faible
-        let move_a = ("a".to_string(), 1.0, 1, vec![
-            (0, nalgebra::Vector3::new(1.0, 0.0, 0.0)),
-        ]);
-        let move_b = ("b".to_string(), 0.1, 5, vec![
-            (0, nalgebra::Vector3::new(99.0, 0.0, 0.0)),
-        ]);
+        let move_a = (
+            "a".to_string(),
+            1.0,
+            1,
+            vec![(0, nalgebra::Vector3::new(1.0, 0.0, 0.0))],
+        );
+        let move_b = (
+            "b".to_string(),
+            0.1,
+            5,
+            vec![(0, nalgebra::Vector3::new(99.0, 0.0, 0.0))],
+        );
         let osc_ids = vec![1];
         let merged = merge_positions(&[move_a, move_b], &osc_ids, MergeStrategy::Priority);
         // Priority : B (priority 5) gagne sur A (priority 1) même si fade de B est plus faible
@@ -833,12 +969,18 @@ mod tests {
     #[test]
     fn test_merge_priority_tiebreak_by_fade() {
         // Deux moves même priorité : le fade le plus élevé gagne
-        let move_a = ("a".to_string(), 1.0, 5, vec![
-            (0, nalgebra::Vector3::new(1.0, 0.0, 0.0)),
-        ]);
-        let move_b = ("b".to_string(), 0.5, 5, vec![
-            (0, nalgebra::Vector3::new(99.0, 0.0, 0.0)),
-        ]);
+        let move_a = (
+            "a".to_string(),
+            1.0,
+            5,
+            vec![(0, nalgebra::Vector3::new(1.0, 0.0, 0.0))],
+        );
+        let move_b = (
+            "b".to_string(),
+            0.5,
+            5,
+            vec![(0, nalgebra::Vector3::new(99.0, 0.0, 0.0))],
+        );
         let osc_ids = vec![1];
         let merged = merge_positions(&[move_a, move_b], &osc_ids, MergeStrategy::Priority);
         // Même priorité → tiebreak par fade → A (fade 1.0) gagne

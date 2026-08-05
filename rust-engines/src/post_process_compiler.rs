@@ -11,7 +11,7 @@
 //! Chaque node transforme les positions et passe au suivant.
 
 use crate::graph::{Graph, Node, NodeId, NodeType};
-use crate::runtime::{PostProcessFn, PostProcessContext, MacroState};
+use crate::runtime::{MacroState, PostProcessContext, PostProcessFn};
 use crate::validator::{GraphContext, Validator};
 use nalgebra::Vector3;
 use std::sync::Arc;
@@ -55,7 +55,7 @@ pub fn compile_post_process(
     if let Err(errors) = Validator::validate_with_context(graph, GraphContext::Global) {
         let error_msg = errors
             .iter()
-            .map(|e| format!("{:?}", e))
+            .map(|e| format!("{e:?}"))
             .collect::<Vec<_>>()
             .join(", ");
         return Err(PostProcessCompileError::ValidationFailed(error_msg));
@@ -139,8 +139,7 @@ fn build_transform_chain(
                 NodeType::Input | NodeType::Merge | NodeType::MoveRef => break,
                 other => {
                     return Err(PostProcessCompileError::InvalidNode(format!(
-                        "{:?} is not a post-process node and cannot appear in the global graph chain",
-                        other
+                        "{other:?} is not a post-process node and cannot appear in the global graph chain"
                     )));
                 }
             }
@@ -217,18 +216,17 @@ fn get_param_f64(node: &Node, key: &str) -> Result<f64, PostProcessCompileError>
 }
 
 fn get_param_f64_or(node: &Node, key: &str, default: f64) -> f64 {
-    node.params.get(key).and_then(|v| v.as_f64()).unwrap_or(default)
+    node.params
+        .get(key)
+        .and_then(|v| v.as_f64())
+        .unwrap_or(default)
 }
 
 fn get_param_array_f64(node: &Node, key: &str) -> Vec<f64> {
     node.params
         .get(key)
         .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_f64())
-                .collect()
-        })
+        .map(|arr| arr.iter().filter_map(|v| v.as_f64()).collect())
         .unwrap_or_default()
 }
 
@@ -316,12 +314,7 @@ fn compile_height_offset(node: &Node) -> Result<TransformFn, PostProcessCompileE
         }
         positions
             .into_iter()
-            .map(|(idx, pos)| {
-                (
-                    idx,
-                    Vector3::new(pos.x, pos.y + height_offset, pos.z),
-                )
-            })
+            .map(|(idx, pos)| (idx, Vector3::new(pos.x, pos.y + height_offset, pos.z)))
             .collect()
     }))
 }
@@ -368,23 +361,24 @@ fn compile_audio_falloff(node: &Node) -> Result<TransformFn, PostProcessCompileE
         .to_string();
     Ok(Box::new(move |ctx, positions| {
         // Lire l'amplitude audio depuis l'AudioState
-        let amplitude = ctx.audio_state.amplitude.as_ref().map(|a| a.rms).unwrap_or(0.0);
+        let amplitude = ctx
+            .audio_state
+            .amplitude
+            .as_ref()
+            .map(|a| a.rms)
+            .unwrap_or(0.0);
         // Appliquer un facteur basé sur l'amplitude
         let factor = 1.0 + (amplitude - 0.5) * amount;
         match target.as_str() {
-            "scale" => {
-                positions
-                    .into_iter()
-                    .map(|(idx, pos)| (idx, pos * factor))
-                    .collect()
-            }
+            "scale" => positions
+                .into_iter()
+                .map(|(idx, pos)| (idx, pos * factor))
+                .collect(),
             "height" => {
                 let offset = (amplitude - 0.5) * amount;
                 positions
                     .into_iter()
-                    .map(|(idx, pos)| {
-                        (idx, Vector3::new(pos.x, pos.y + offset, pos.z))
-                    })
+                    .map(|(idx, pos)| (idx, Vector3::new(pos.x, pos.y + offset, pos.z)))
                     .collect()
             }
             _ => positions,
@@ -417,22 +411,20 @@ fn compile_mirror(node: &Node) -> Result<TransformFn, PostProcessCompileError> {
         .and_then(|v| v.as_str())
         .unwrap_or("x")
         .to_string();
-    Ok(Box::new(move |_ctx, positions| {
-        match axis.as_str() {
-            "x" => positions
-                .into_iter()
-                .map(|(idx, pos)| (idx, Vector3::new(-pos.x, pos.y, pos.z)))
-                .collect(),
-            "y" => positions
-                .into_iter()
-                .map(|(idx, pos)| (idx, Vector3::new(pos.x, -pos.y, pos.z)))
-                .collect(),
-            "z" => positions
-                .into_iter()
-                .map(|(idx, pos)| (idx, Vector3::new(pos.x, pos.y, -pos.z)))
-                .collect(),
-            _ => positions,
-        }
+    Ok(Box::new(move |_ctx, positions| match axis.as_str() {
+        "x" => positions
+            .into_iter()
+            .map(|(idx, pos)| (idx, Vector3::new(-pos.x, pos.y, pos.z)))
+            .collect(),
+        "y" => positions
+            .into_iter()
+            .map(|(idx, pos)| (idx, Vector3::new(pos.x, -pos.y, pos.z)))
+            .collect(),
+        "z" => positions
+            .into_iter()
+            .map(|(idx, pos)| (idx, Vector3::new(pos.x, pos.y, -pos.z)))
+            .collect(),
+        _ => positions,
     }))
 }
 
@@ -459,18 +451,18 @@ fn compile_clamp(node: &Node) -> Result<TransformFn, PostProcessCompileError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graph::{Graph, Node, Edge, NodeId};
-    use crate::runtime::MacroState;
     use crate::audio::AudioState;
-    use std::sync::Arc;
+    use crate::graph::{Edge, Graph, Node, NodeId};
+    use crate::runtime::MacroState;
     use std::collections::HashMap;
+    use std::sync::Arc;
 
     fn make_graph(nodes: Vec<(NodeType, serde_json::Value)>, edges: Vec<(usize, usize)>) -> Graph {
         let mut graph = Graph::new();
         let ids: Vec<NodeId> = (0..nodes.len()).map(|_| NodeId::new()).collect();
         for (i, (nt, params)) in nodes.into_iter().enumerate() {
             graph.add_node(Node {
-                id: ids[i].clone(),
+                id: ids[i],
                 node_type: nt,
                 params,
                 position: (0.0, 0.0),
@@ -478,8 +470,8 @@ mod tests {
         }
         for (from, to) in edges {
             graph.add_edge(Edge {
-                from: ids[from].clone(),
-                to: ids[to].clone(),
+                from: ids[from],
+                to: ids[to],
                 from_port: "output".to_string(),
                 to_port: "input".to_string(),
             });
@@ -527,7 +519,12 @@ mod tests {
             (0, nalgebra::Vector3::new(1.0, 0.0, 0.0)),
             (1, nalgebra::Vector3::new(0.0, 1.0, 0.0)),
         ];
-        let result = run_test(graph, positions.clone(), HashMap::new(), nalgebra::Vector3::zeros());
+        let result = run_test(
+            graph,
+            positions.clone(),
+            HashMap::new(),
+            nalgebra::Vector3::zeros(),
+        );
         assert_eq!(result.len(), 2);
         assert!((result[0].1.x - 1.0).abs() < 1e-10);
     }
@@ -569,7 +566,12 @@ mod tests {
             (0, nalgebra::Vector3::new(1.0, 0.0, 0.0)),
             (1, nalgebra::Vector3::new(0.0, 1.0, 0.0)),
         ];
-        let result = run_test(graph, positions, manual_positions, nalgebra::Vector3::zeros());
+        let result = run_test(
+            graph,
+            positions,
+            manual_positions,
+            nalgebra::Vector3::zeros(),
+        );
         // Object 0 should be overridden to [5, 5, 5]
         assert!((result[0].1.x - 5.0).abs() < 1e-10);
         assert!((result[0].1.y - 5.0).abs() < 1e-10);
@@ -583,7 +585,10 @@ mod tests {
         let graph = make_graph(
             vec![
                 (NodeType::Input, serde_json::json!({})),
-                (NodeType::Offset, serde_json::json!({"x": 1.0, "y": 0.0, "z": 0.0})),
+                (
+                    NodeType::Offset,
+                    serde_json::json!({"x": 1.0, "y": 0.0, "z": 0.0}),
+                ),
                 (NodeType::Output, serde_json::json!({})),
             ],
             vec![(0, 1), (1, 2)],
@@ -630,7 +635,11 @@ mod tests {
         macros: MacroState,
     ) -> Vec<(usize, nalgebra::Vector3<f64>)> {
         let macros_arc = Arc::new(MacroState::new());
-        let fn_compiled = compile_post_process(PostProcessCompileParams { graph, macros: macros_arc }).unwrap();
+        let fn_compiled = compile_post_process(PostProcessCompileParams {
+            graph,
+            macros: macros_arc,
+        })
+        .unwrap();
 
         let audio = AudioState::new();
         let track_positions = HashMap::new();
@@ -653,7 +662,10 @@ mod tests {
         let graph = make_graph(
             vec![
                 (NodeType::Input, serde_json::json!({})),
-                (NodeType::RadiusScale, serde_json::json!({"radius_scale": 2.0})),
+                (
+                    NodeType::RadiusScale,
+                    serde_json::json!({"radius_scale": 2.0}),
+                ),
                 (NodeType::Output, serde_json::json!({})),
             ],
             vec![(0, 1), (1, 2)],
@@ -674,7 +686,10 @@ mod tests {
         let graph = make_graph(
             vec![
                 (NodeType::Input, serde_json::json!({})),
-                (NodeType::HeightOffset, serde_json::json!({"height_offset": 1.5})),
+                (
+                    NodeType::HeightOffset,
+                    serde_json::json!({"height_offset": 1.5}),
+                ),
                 (NodeType::Output, serde_json::json!({})),
             ],
             vec![(0, 1), (1, 2)],
@@ -707,7 +722,14 @@ mod tests {
         ];
         let origin = nalgebra::Vector3::new(0.0, 0.0, 0.0);
         let track_depths = vec![0.5, 1.5];
-        let result = run_test_full(graph, positions, HashMap::new(), origin, HashMap::new(), track_depths);
+        let result = run_test_full(
+            graph,
+            positions,
+            HashMap::new(),
+            origin,
+            HashMap::new(),
+            track_depths,
+        );
         // obj 0: (pos - origin) * 0.5 = 2.0 * 0.5 = 1.0
         assert!((result[0].1.x - 1.0).abs() < 1e-10);
         // obj 1: (pos - origin) * 1.5 = 4.0 * 1.5 = 6.0
@@ -731,7 +753,14 @@ mod tests {
         let mut track_positions = HashMap::new();
         track_positions.insert(0u32, [1.0, 0.0, 0.0]);
         track_positions.insert(1u32, [3.0, 0.0, 0.0]);
-        let result = run_test_full(graph, positions, HashMap::new(), origin, track_positions, vec![]);
+        let result = run_test_full(
+            graph,
+            positions,
+            HashMap::new(),
+            origin,
+            track_positions,
+            vec![],
+        );
         // Barycenter is a no-op — positions unchanged
         assert!((result[0].1.x - 10.0).abs() < 1e-10);
     }
@@ -766,8 +795,14 @@ mod tests {
         let graph = make_graph(
             vec![
                 (NodeType::Input, serde_json::json!({})),
-                (NodeType::RadiusScale, serde_json::json!({"radius_scale": 2.0})),
-                (NodeType::HeightOffset, serde_json::json!({"height_offset": 1.0})),
+                (
+                    NodeType::RadiusScale,
+                    serde_json::json!({"radius_scale": 2.0}),
+                ),
+                (
+                    NodeType::HeightOffset,
+                    serde_json::json!({"height_offset": 1.0}),
+                ),
                 (NodeType::Output, serde_json::json!({})),
             ],
             vec![(0, 1), (1, 2), (2, 3)],
@@ -866,9 +901,12 @@ mod tests {
         assert!(result.is_err());
         match result {
             Err(PostProcessCompileError::ValidationFailed(msg)) => {
-                assert!(msg.contains("ContextIncompatible"), "Expected ContextIncompatible, got: {}", msg);
+                assert!(
+                    msg.contains("ContextIncompatible"),
+                    "Expected ContextIncompatible, got: {msg}"
+                );
             }
-            Err(other) => panic!("Expected ValidationFailed, got {:?}", other),
+            Err(other) => panic!("Expected ValidationFailed, got {other:?}"),
             Ok(_) => panic!("Expected error, got Ok"),
         }
     }
@@ -890,9 +928,12 @@ mod tests {
         assert!(result.is_err());
         match result {
             Err(PostProcessCompileError::ValidationFailed(msg)) => {
-                assert!(msg.contains("MissingRequiredNode"), "Expected MissingRequiredNode, got: {}", msg);
+                assert!(
+                    msg.contains("MissingRequiredNode"),
+                    "Expected MissingRequiredNode, got: {msg}"
+                );
             }
-            Err(other) => panic!("Expected ValidationFailed, got {:?}", other),
+            Err(other) => panic!("Expected ValidationFailed, got {other:?}"),
             Ok(_) => panic!("Expected error, got Ok"),
         }
     }
@@ -907,25 +948,46 @@ mod tests {
         let circular = Node::new(NodeType::Circular);
         let output = Node::new(NodeType::Output);
 
-        let id_input = input.id.clone();
-        let id_circular = circular.id.clone();
-        let id_output = output.id.clone();
+        let id_input = input.id;
+        let id_circular = circular.id;
+        let id_output = output.id;
 
         graph.add_node(input);
         graph.add_node(circular);
         graph.add_node(output);
 
-        graph.add_edge(Edge { from: id_input, to: id_circular.clone(), from_port: "output".to_string(), to_port: "input".to_string() });
-        graph.add_edge(Edge { from: id_circular, to: id_output, from_port: "output".to_string(), to_port: "input".to_string() });
+        graph.add_edge(Edge {
+            from: id_input,
+            to: id_circular,
+            from_port: "output".to_string(),
+            to_port: "input".to_string(),
+        });
+        graph.add_edge(Edge {
+            from: id_circular,
+            to: id_output,
+            from_port: "output".to_string(),
+            to_port: "input".to_string(),
+        });
 
         // On appelle build_transform_chain directement (sans validation)
-        let result = build_transform_chain(&graph, graph.nodes.values().find(|n| n.node_type == NodeType::Output).unwrap().id.clone());
+        let result = build_transform_chain(
+            &graph,
+            graph
+                .nodes
+                .values()
+                .find(|n| n.node_type == NodeType::Output)
+                .unwrap()
+                .id,
+        );
         assert!(result.is_err());
         match result {
             Err(PostProcessCompileError::InvalidNode(msg)) => {
-                assert!(msg.contains("Circular"), "Expected mention of Circular, got: {}", msg);
+                assert!(
+                    msg.contains("Circular"),
+                    "Expected mention of Circular, got: {msg}"
+                );
             }
-            other => panic!("Expected InvalidNode, got {:?}", other),
+            other => panic!("Expected InvalidNode, got {other:?}"),
         }
     }
 }

@@ -111,9 +111,7 @@ mod tests {
 
         let writer = thread::spawn(move || {
             for i in 0..100 {
-                buf_writer.write(vec![
-                    (0, nalgebra::Vector3::new(i as f64, 0.0, 0.0)),
-                ]);
+                buf_writer.write(vec![(0, nalgebra::Vector3::new(i as f64, 0.0, 0.0))]);
             }
         });
 

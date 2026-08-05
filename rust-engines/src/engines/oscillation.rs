@@ -6,16 +6,24 @@ pub struct Oscillation;
 
 impl Engine for Oscillation {
     fn position(&self, t: f64, object_index: usize, params: &EngineParams) -> Vector3<f64> {
-        let amplitude = params.extra.get("amplitude")
+        let amplitude = params
+            .extra
+            .get("amplitude")
             .and_then(|v| v.as_f64())
             .unwrap_or(0.5);
-        let frequency = params.extra.get("frequency")
+        let frequency = params
+            .extra
+            .get("frequency")
             .and_then(|v| v.as_f64())
             .unwrap_or(1.0);
-        let axis = params.extra.get("axis")
+        let axis = params
+            .extra
+            .get("axis")
             .and_then(|v| v.as_str())
             .unwrap_or("x");
-        let phase_offset = params.extra.get("phase_offset")
+        let phase_offset = params
+            .extra
+            .get("phase_offset")
             .and_then(|v| v.as_bool())
             .unwrap_or(true);
 

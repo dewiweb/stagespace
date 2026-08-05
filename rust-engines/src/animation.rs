@@ -4,7 +4,9 @@ use std::collections::HashMap;
 /// Type de shape — correspond aux engines disponibles
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum ShapeType {
+    #[default]
     Circle,
     Elliptical,
     Spiral,
@@ -21,33 +23,25 @@ pub enum ShapeType {
     Custom, // graphe expert
 }
 
-impl Default for ShapeType {
-    fn default() -> Self { ShapeType::Circle }
-}
-
 /// Direction de lecture
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum Direction {
+    #[default]
     Forward,
     Backward,
     PingPong,
 }
 
-impl Default for Direction {
-    fn default() -> Self { Direction::Forward }
-}
-
 /// Mode de loop
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum AnimationLoopMode {
+    #[default]
     Loop,
     OneShot,
-}
-
-impl Default for AnimationLoopMode {
-    fn default() -> Self { AnimationLoopMode::Loop }
 }
 
 /// Source audio pour un AudioMod
@@ -93,7 +87,9 @@ pub struct AudioMod {
     pub smoothing: f64,
 }
 
-fn default_smoothing() -> f64 { 0.3 }
+fn default_smoothing() -> f64 {
+    0.3
+}
 
 /// Assignment d'une track à une animation
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -107,7 +103,9 @@ pub struct TrackAssignment {
     pub phase_offset: f64,
 }
 
-fn default_depth() -> f64 { 1.0 }
+fn default_depth() -> f64 {
+    1.0
+}
 
 /// Une animation = un mouvement vivant
 /// C'est le modèle central de STAGESPACE — remplace le Cue basé sur le graphe
@@ -171,11 +169,21 @@ pub struct Animation {
     pub fade_out: f64,
 }
 
-fn default_speed() -> f64 { 1.0 }
-fn default_duration() -> f64 { 4.0 }
-fn default_scale() -> f64 { 1.0 }
-fn default_fade() -> f64 { 0.5 }
-fn default_graph_json() -> serde_json::Value { serde_json::json!({}) }
+fn default_speed() -> f64 {
+    1.0
+}
+fn default_duration() -> f64 {
+    4.0
+}
+fn default_scale() -> f64 {
+    1.0
+}
+fn default_fade() -> f64 {
+    0.5
+}
+fn default_graph_json() -> serde_json::Value {
+    serde_json::json!({})
+}
 
 impl Default for Animation {
     fn default() -> Self {
@@ -237,10 +245,10 @@ impl AnimationState {
 
         // Appliquer phase_spread : répartir les tracks uniformément sur le cycle
         if anim.phase_spread > 0.0 && n > 1 {
-            for i in 0..n {
+            for (i, phase_offset) in track_phase_offsets.iter_mut().enumerate() {
                 let spread_fraction = i as f64 / (n as f64);
                 // Le spread ajoute un offset proportionnel
-                track_phase_offsets[i] += spread_fraction * 360.0 * anim.phase_spread;
+                *phase_offset += spread_fraction * 360.0 * anim.phase_spread;
             }
         }
 
@@ -258,26 +266,20 @@ impl AnimationState {
     /// Récupère la valeur audio pour un AudioModSource donné
     fn get_audio_value(source: &AudioModSource, audio: &crate::audio::AudioState) -> f64 {
         match source {
-            AudioModSource::Bpm => {
-                audio.bpm.as_ref().map(|b| b.bpm / 120.0).unwrap_or(1.0)
-            }
-            AudioModSource::AmplitudeRms => {
-                audio.amplitude.as_ref().map(|a| a.rms).unwrap_or(0.0)
-            }
+            AudioModSource::Bpm => audio.bpm.as_ref().map(|b| b.bpm / 120.0).unwrap_or(1.0),
+            AudioModSource::AmplitudeRms => audio.amplitude.as_ref().map(|a| a.rms).unwrap_or(0.0),
             AudioModSource::AmplitudeBass => {
                 audio.amplitude.as_ref().map(|a| a.bass).unwrap_or(0.0)
             }
-            AudioModSource::AmplitudeMid => {
-                audio.amplitude.as_ref().map(|a| a.mid).unwrap_or(0.0)
-            }
+            AudioModSource::AmplitudeMid => audio.amplitude.as_ref().map(|a| a.mid).unwrap_or(0.0),
             AudioModSource::AmplitudeHigh => {
                 audio.amplitude.as_ref().map(|a| a.high).unwrap_or(0.0)
             }
-            AudioModSource::SpectrumBand(idx) => {
-                audio.spectrum.as_ref()
-                    .and_then(|s| s.spectrum.get(*idx).copied())
-                    .unwrap_or(0.0)
-            }
+            AudioModSource::SpectrumBand(idx) => audio
+                .spectrum
+                .as_ref()
+                .and_then(|s| s.spectrum.get(*idx).copied())
+                .unwrap_or(0.0),
         }
     }
 
@@ -302,8 +304,8 @@ impl AnimationState {
 
             // Appliquer le smoothing
             let smooth_factor = mod_.smoothing.clamp(0.0, 0.95);
-            self.smoothed_values[i] = self.smoothed_values[i] * smooth_factor
-                + raw_value * (1.0 - smooth_factor);
+            self.smoothed_values[i] =
+                self.smoothed_values[i] * smooth_factor + raw_value * (1.0 - smooth_factor);
 
             let smoothed = self.smoothed_values[i];
 

@@ -6,19 +6,29 @@ pub struct Spiral;
 
 impl Engine for Spiral {
     fn position(&self, t: f64, object_index: usize, params: &EngineParams) -> Vector3<f64> {
-        let radius = params.extra.get("radius")
+        let radius = params
+            .extra
+            .get("radius")
             .and_then(|v| v.as_f64())
             .unwrap_or(0.7);
-        let speed = params.extra.get("speed")
+        let speed = params
+            .extra
+            .get("speed")
             .and_then(|v| v.as_f64())
             .unwrap_or(1.0);
-        let expansion = params.extra.get("expansion")
+        let expansion = params
+            .extra
+            .get("expansion")
             .and_then(|v| v.as_f64())
             .unwrap_or(0.1);
-        let plane = params.extra.get("plane")
+        let plane = params
+            .extra
+            .get("plane")
             .and_then(|v| v.as_str())
             .unwrap_or("xz");
-        let phase_offset = params.extra.get("phase_offset")
+        let phase_offset = params
+            .extra
+            .get("phase_offset")
             .and_then(|v| v.as_bool())
             .unwrap_or(true);
 

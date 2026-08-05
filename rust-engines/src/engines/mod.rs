@@ -1,33 +1,33 @@
-pub mod circular;
-pub mod elliptical;
-pub mod spiral;
-pub mod lissajous;
-pub mod figure8;
-pub mod linear;
-pub mod oscillation;
-pub mod formation;
-pub mod perlin_noise;
-pub mod converge;
-pub mod pendulum;
-pub mod rose_curve;
-pub mod helix;
-pub mod bouncing;
-pub mod avoidance;
-pub mod spring;
-pub mod follow;
-pub mod swarm;
-pub mod custom_trajectory;
-pub mod wave;
-pub mod bpm;
 pub mod audio_amplitude;
-pub mod audio_spectrum;
-pub mod osc_input;
-pub mod time_falloff;
-pub mod point_distance_falloff;
-pub mod directional_falloff;
 pub mod audio_amplitude_falloff;
-pub mod spline;
+pub mod audio_spectrum;
+pub mod avoidance;
+pub mod bouncing;
+pub mod bpm;
+pub mod circular;
+pub mod converge;
+pub mod custom_trajectory;
+pub mod directional_falloff;
+pub mod elliptical;
+pub mod figure8;
+pub mod follow;
+pub mod formation;
+pub mod helix;
+pub mod linear;
+pub mod lissajous;
 pub mod modifiers;
+pub mod osc_input;
+pub mod oscillation;
+pub mod pendulum;
+pub mod perlin_noise;
+pub mod point_distance_falloff;
+pub mod rose_curve;
+pub mod spiral;
+pub mod spline;
+pub mod spring;
+pub mod swarm;
+pub mod time_falloff;
+pub mod wave;
 
 use nalgebra::Vector3;
 use serde::{Deserialize, Serialize};
@@ -54,7 +54,7 @@ pub struct EngineParams {
 pub trait Engine {
     /// Calcule la position d'un objet à un instant t
     fn position(&self, t: f64, object_index: usize, params: &EngineParams) -> Vector3<f64>;
-    
+
     /// Nom du moteur
     fn name(&self) -> &str;
 }
@@ -176,11 +176,11 @@ mod tests {
 
         let pos_start = engine.position(0.0, 0, &params);
         let pos_end = engine.position(4.0, 0, &params);
-        
+
         // Start should be at radius 0.9
         let r_start = (pos_start.x.powi(2) + pos_start.y.powi(2)).sqrt();
         assert!((r_start - 0.9).abs() < 0.1);
-        
+
         // End should be at radius 0.0
         let r_end = (pos_end.x.powi(2) + pos_end.y.powi(2)).sqrt();
         assert!(r_end < 0.1);

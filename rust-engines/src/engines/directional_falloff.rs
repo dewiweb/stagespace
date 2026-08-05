@@ -1,5 +1,5 @@
 use crate::engines::{Engine, EngineParams};
-use crate::falloffs::{DirectionalFalloff, FalloffCurve, FalloffContext, Falloff};
+use crate::falloffs::{DirectionalFalloff, Falloff, FalloffContext, FalloffCurve};
 use nalgebra::Vector3;
 
 /// Moteur DirectionalFalloff — applique un falloff directionnel sur une trajectoire
@@ -8,17 +8,42 @@ pub struct DirectionalFalloffEngine;
 
 impl Engine for DirectionalFalloffEngine {
     fn position(&self, t: f64, object_index: usize, params: &EngineParams) -> Vector3<f64> {
-        let direction = params.extra.get("direction").and_then(|v| v.as_array()).and_then(|arr| {
-            if arr.len() >= 3 {
-                Some([arr[0].as_f64().unwrap_or(0.0), arr[1].as_f64().unwrap_or(0.0), arr[2].as_f64().unwrap_or(1.0)])
-            } else {
-                None
-            }
-        }).unwrap_or([0.0, 1.0, 0.0]);
-        let max_distance = params.extra.get("max_distance").and_then(|v| v.as_f64()).unwrap_or(1.0);
-        let curve_str = params.extra.get("curve").and_then(|v| v.as_str()).unwrap_or("Linear");
-        let base_radius = params.extra.get("radius").and_then(|v| v.as_f64()).unwrap_or(1.0);
-        let plane = params.extra.get("plane").and_then(|v| v.as_str()).unwrap_or("xz");
+        let direction = params
+            .extra
+            .get("direction")
+            .and_then(|v| v.as_array())
+            .and_then(|arr| {
+                if arr.len() >= 3 {
+                    Some([
+                        arr[0].as_f64().unwrap_or(0.0),
+                        arr[1].as_f64().unwrap_or(0.0),
+                        arr[2].as_f64().unwrap_or(1.0),
+                    ])
+                } else {
+                    None
+                }
+            })
+            .unwrap_or([0.0, 1.0, 0.0]);
+        let max_distance = params
+            .extra
+            .get("max_distance")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0);
+        let curve_str = params
+            .extra
+            .get("curve")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Linear");
+        let base_radius = params
+            .extra
+            .get("radius")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0);
+        let plane = params
+            .extra
+            .get("plane")
+            .and_then(|v| v.as_str())
+            .unwrap_or("xz");
 
         let curve = match curve_str {
             "EaseIn" => FalloffCurve::EaseIn,
@@ -49,11 +74,7 @@ impl Engine for DirectionalFalloffEngine {
 
         // L'influence dépend de la position de l'objet dans la scène
         // Utiliser l'index d'objet pour décaler la position de base
-        let obj_offset = Vector3::new(
-            (object_index as f64) * 0.3,
-            0.0,
-            0.0,
-        );
+        let obj_offset = Vector3::new((object_index as f64) * 0.3, 0.0, 0.0);
         let influence = falloff.influence(t, base_pos + obj_offset, &context);
 
         // Moduler le rayon par l'influence

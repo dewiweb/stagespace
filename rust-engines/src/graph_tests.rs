@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::graph::{Graph, Node, NodeType, Edge};
+    use crate::graph::{Edge, Graph, Node, NodeType};
 
     #[test]
     fn test_graph_creation() {

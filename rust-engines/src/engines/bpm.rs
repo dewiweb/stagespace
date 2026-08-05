@@ -6,9 +6,21 @@ pub struct BpmEngine;
 
 impl Engine for BpmEngine {
     fn position(&self, t: f64, _object_index: usize, params: &EngineParams) -> Vector3<f64> {
-        let bpm = params.extra.get("bpm").and_then(|v| v.as_f64()).unwrap_or(120.0);
-        let radius = params.extra.get("radius").and_then(|v| v.as_f64()).unwrap_or(1.0);
-        let plane = params.extra.get("plane").and_then(|v| v.as_str()).unwrap_or("xz");
+        let bpm = params
+            .extra
+            .get("bpm")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(120.0);
+        let radius = params
+            .extra
+            .get("radius")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0);
+        let plane = params
+            .extra
+            .get("plane")
+            .and_then(|v| v.as_str())
+            .unwrap_or("xz");
 
         // Calculer la phase basée sur le BPM
         let beats_per_second = bpm / 60.0;

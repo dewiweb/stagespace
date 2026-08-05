@@ -6,16 +6,24 @@ pub struct Figure8;
 
 impl Engine for Figure8 {
     fn position(&self, t: f64, object_index: usize, params: &EngineParams) -> Vector3<f64> {
-        let scale = params.extra.get("scale")
+        let scale = params
+            .extra
+            .get("scale")
             .and_then(|v| v.as_f64())
             .unwrap_or(0.7);
-        let speed = params.extra.get("speed")
+        let speed = params
+            .extra
+            .get("speed")
             .and_then(|v| v.as_f64())
             .unwrap_or(1.0);
-        let plane = params.extra.get("plane")
+        let plane = params
+            .extra
+            .get("plane")
             .and_then(|v| v.as_str())
             .unwrap_or("xz");
-        let phase_offset = params.extra.get("phase_offset")
+        let phase_offset = params
+            .extra
+            .get("phase_offset")
             .and_then(|v| v.as_bool())
             .unwrap_or(true);
 

@@ -1,52 +1,58 @@
-use nalgebra::Vector3;
 use crate::engines::{Engine, EngineParams};
 use crate::rng::SimpleRng;
+use nalgebra::Vector3;
 
 pub struct Bouncing;
 
 impl Engine for Bouncing {
     fn position(&self, t: f64, object_index: usize, params: &EngineParams) -> Vector3<f64> {
-        let container = params.extra.get("container")
+        let container = params
+            .extra
+            .get("container")
             .and_then(|v| v.as_str())
             .unwrap_or("sphere");
-        let container_size = params.extra.get("container_size")
+        let container_size = params
+            .extra
+            .get("container_size")
             .and_then(|v| v.as_f64())
             .unwrap_or(0.9);
-        let restitution = params.extra.get("restitution")
+        let restitution = params
+            .extra
+            .get("restitution")
             .and_then(|v| v.as_f64())
             .unwrap_or(0.95);
-        let gravity = params.extra.get("gravity")
+        let gravity = params
+            .extra
+            .get("gravity")
             .and_then(|v| v.as_f64())
             .unwrap_or(0.0);
-        let seed = params.extra.get("seed")
+        let seed = params
+            .extra
+            .get("seed")
             .and_then(|v| v.as_i64())
             .unwrap_or(42) as u64;
-        
+
         let dt = 1.0 / params.fps;
         let n_steps = (t * params.fps) as i32;
-        
+
         let mut rng = SimpleRng::new(seed + object_index as u64 * 31);
-        
+
         // Position initiale
         let mut pos = Vector3::new(
             rng.uniform(-container_size * 0.5, container_size * 0.5),
             rng.uniform(-container_size * 0.5, container_size * 0.5),
             rng.uniform(-container_size * 0.5, container_size * 0.5),
         );
-        
+
         // Vélocité initiale
-        let mut vel = Vector3::new(
-            rng.uniform(-0.3, 0.3),
-            rng.uniform(-0.3, 0.3),
-            0.0,
-        );
-        
+        let mut vel = Vector3::new(rng.uniform(-0.3, 0.3), rng.uniform(-0.3, 0.3), 0.0);
+
         for _ in 0..n_steps {
             // Gravité
             vel.z -= gravity * dt * 0.01;
-            
+
             pos += vel * dt;
-            
+
             // Collisions avec le contenant
             match container {
                 "sphere" => {
@@ -89,7 +95,7 @@ impl Engine for Bouncing {
                 _ => {}
             }
         }
-        
+
         pos
     }
 
@@ -97,4 +103,3 @@ impl Engine for Bouncing {
         "bouncing"
     }
 }
-

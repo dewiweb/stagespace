@@ -1,11 +1,11 @@
+use crate::audio::AudioState;
 use crate::engines::{Engine, EngineParams, MAX_OBJECTS};
 use crate::graph::{Graph, Node, NodeId, NodeType};
+use crate::logging::{log_compilation_error, log_compilation_success, log_graph_compilation};
 use crate::validator::Validator;
-use crate::logging::{log_graph_compilation, log_compilation_success, log_compilation_error};
-use crate::audio::AudioState;
 use nalgebra::Vector3;
-use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 /// Overrides de paramètres audio — mis à jour à chaque frame par le runtime,
@@ -76,7 +76,7 @@ impl Compiler {
         if let Err(errors) = Validator::validate(graph) {
             let error_msg = errors
                 .iter()
-                .map(|e| format!("{:?}", e))
+                .map(|e| format!("{e:?}"))
                 .collect::<Vec<_>>()
                 .join(", ");
             log_compilation_error(&error_msg);
@@ -102,7 +102,7 @@ impl Compiler {
             let node = Self::node_ref(graph, *node_id)?;
             let result = Self::compile_node(graph, node, &audio_state);
             if result.is_ok() {
-                let duration_ms = start.elapsed().as_millis() as u128;
+                let duration_ms = start.elapsed().as_millis();
                 log_compilation_success(duration_ms);
             }
             return result;
@@ -153,7 +153,7 @@ impl Compiler {
             Vector3::new(0.0, 0.0, 0.0)
         });
 
-        let duration_ms = start.elapsed().as_millis() as u128;
+        let duration_ms = start.elapsed().as_millis();
         log_compilation_success(duration_ms);
         Ok(routing_fn)
     }
@@ -246,10 +246,15 @@ impl Compiler {
                 }))
             }
             NodeType::PhaseShift => {
-                let shift = node.params.get("shift").and_then(|v| v.as_f64()).unwrap_or(0.1);
+                let shift = node
+                    .params
+                    .get("shift")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.1);
                 let duration = Self::resolve_duration(graph, node);
                 Ok(Box::new(move |t, i| {
-                    let t_shifted = crate::engines::modifiers::phase_shift_time(t, i, shift, duration);
+                    let t_shifted =
+                        crate::engines::modifiers::phase_shift_time(t, i, shift, duration);
                     upstream_fn(t_shifted, i)
                 }))
             }
@@ -279,11 +284,15 @@ impl Compiler {
                 }))
             }
             NodeType::Mirror => {
-                let plane = node.params.get("plane")
+                let plane = node
+                    .params
+                    .get("plane")
                     .and_then(|v| v.as_str())
                     .unwrap_or("xz")
                     .to_string();
-                let offset = node.params.get("offset")
+                let offset = node
+                    .params
+                    .get("offset")
                     .and_then(|v| v.as_f64())
                     .unwrap_or(0.0);
                 Ok(Box::new(move |t, i| {
@@ -291,12 +300,36 @@ impl Compiler {
                 }))
             }
             NodeType::Clamp => {
-                let min_x = node.params.get("min_x").and_then(|v| v.as_f64()).unwrap_or(-100.0);
-                let min_y = node.params.get("min_y").and_then(|v| v.as_f64()).unwrap_or(-100.0);
-                let min_z = node.params.get("min_z").and_then(|v| v.as_f64()).unwrap_or(-100.0);
-                let max_x = node.params.get("max_x").and_then(|v| v.as_f64()).unwrap_or(100.0);
-                let max_y = node.params.get("max_y").and_then(|v| v.as_f64()).unwrap_or(100.0);
-                let max_z = node.params.get("max_z").and_then(|v| v.as_f64()).unwrap_or(100.0);
+                let min_x = node
+                    .params
+                    .get("min_x")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(-100.0);
+                let min_y = node
+                    .params
+                    .get("min_y")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(-100.0);
+                let min_z = node
+                    .params
+                    .get("min_z")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(-100.0);
+                let max_x = node
+                    .params
+                    .get("max_x")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(100.0);
+                let max_y = node
+                    .params
+                    .get("max_y")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(100.0);
+                let max_z = node
+                    .params
+                    .get("max_z")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(100.0);
                 let min = Vector3::new(min_x, min_y, min_z);
                 let max = Vector3::new(max_x, max_y, max_z);
                 Ok(Box::new(move |t, i| {
@@ -304,39 +337,70 @@ impl Compiler {
                 }))
             }
             NodeType::LFO => {
-                let waveform = node.params.get("waveform")
+                let waveform = node
+                    .params
+                    .get("waveform")
                     .and_then(|v| v.as_str())
                     .unwrap_or("sine")
                     .to_string();
-                let frequency = node.params.get("frequency")
+                let frequency = node
+                    .params
+                    .get("frequency")
                     .and_then(|v| v.as_f64())
                     .unwrap_or(0.5);
-                let amplitude = node.params.get("amplitude")
+                let amplitude = node
+                    .params
+                    .get("amplitude")
                     .and_then(|v| v.as_f64())
                     .unwrap_or(0.5);
-                let axis = node.params.get("axis")
+                let axis = node
+                    .params
+                    .get("axis")
                     .and_then(|v| v.as_str())
                     .unwrap_or("y")
                     .to_string();
-                let phase = node.params.get("phase")
+                let phase = node
+                    .params
+                    .get("phase")
                     .and_then(|v| v.as_f64())
                     .unwrap_or(0.0);
                 Ok(Box::new(move |t, i| {
-                    crate::engines::modifiers::lfo(upstream_fn(t, i), t, &waveform, frequency, amplitude, &axis, phase)
+                    crate::engines::modifiers::lfo(
+                        upstream_fn(t, i),
+                        t,
+                        &waveform,
+                        frequency,
+                        amplitude,
+                        &axis,
+                        phase,
+                    )
                 }))
             }
             NodeType::Jitter => {
-                let intensity = node.params.get("intensity")
+                let intensity = node
+                    .params
+                    .get("intensity")
                     .and_then(|v| v.as_f64())
                     .unwrap_or(0.2);
-                let frequency = node.params.get("frequency")
+                let frequency = node
+                    .params
+                    .get("frequency")
                     .and_then(|v| v.as_f64())
                     .unwrap_or(2.0);
-                let seed = node.params.get("seed")
+                let seed = node
+                    .params
+                    .get("seed")
                     .and_then(|v| v.as_f64())
                     .unwrap_or(42.0);
                 Ok(Box::new(move |t, i| {
-                    crate::engines::modifiers::jitter(upstream_fn(t, i), t, i, intensity, frequency, seed)
+                    crate::engines::modifiers::jitter(
+                        upstream_fn(t, i),
+                        t,
+                        i,
+                        intensity,
+                        frequency,
+                        seed,
+                    )
                 }))
             }
             _ => unreachable!(),
@@ -436,7 +500,9 @@ impl Compiler {
             )));
         }
 
-        let fade_duration = node.params.get("fade_duration")
+        let fade_duration = node
+            .params
+            .get("fade_duration")
             .and_then(|v| v.as_f64())
             .unwrap_or(1.0)
             .min(duration_a * 0.5); // Le fade ne peut pas dépasser la moitié de A
@@ -534,8 +600,10 @@ impl Compiler {
         // des valeurs audio temps réel dans params.extra
         let is_audio_engine = matches!(
             node_type,
-            NodeType::BPM | NodeType::AudioAmplitude
-            | NodeType::AudioSpectrum | NodeType::AudioAmplitudeFalloff
+            NodeType::BPM
+                | NodeType::AudioAmplitude
+                | NodeType::AudioSpectrum
+                | NodeType::AudioAmplitudeFalloff
         );
 
         let engine: Box<dyn Engine + Send + Sync> = match node_type {
@@ -557,16 +625,28 @@ impl Compiler {
             NodeType::Spring => Box::new(crate::engines::spring::Spring),
             NodeType::Follow => Box::new(crate::engines::follow::Follow),
             NodeType::Swarm => Box::new(crate::engines::swarm::Swarm),
-            NodeType::CustomTrajectory => Box::new(crate::engines::custom_trajectory::CustomTrajectory),
+            NodeType::CustomTrajectory => {
+                Box::new(crate::engines::custom_trajectory::CustomTrajectory)
+            }
             NodeType::Wave => Box::new(crate::engines::wave::Wave),
             NodeType::BPM => Box::new(crate::engines::bpm::BpmEngine),
-            NodeType::AudioAmplitude => Box::new(crate::engines::audio_amplitude::AudioAmplitudeEngine),
-            NodeType::AudioSpectrum => Box::new(crate::engines::audio_spectrum::AudioSpectrumEngine),
+            NodeType::AudioAmplitude => {
+                Box::new(crate::engines::audio_amplitude::AudioAmplitudeEngine)
+            }
+            NodeType::AudioSpectrum => {
+                Box::new(crate::engines::audio_spectrum::AudioSpectrumEngine)
+            }
             NodeType::OSCInput => Box::new(crate::engines::osc_input::OscInputEngine),
             NodeType::TimeFalloff => Box::new(crate::engines::time_falloff::TimeFalloffEngine),
-            NodeType::PointDistanceFalloff => Box::new(crate::engines::point_distance_falloff::PointDistanceFalloffEngine),
-            NodeType::DirectionalFalloff => Box::new(crate::engines::directional_falloff::DirectionalFalloffEngine),
-            NodeType::AudioAmplitudeFalloff => Box::new(crate::engines::audio_amplitude_falloff::AudioAmplitudeFalloffEngine),
+            NodeType::PointDistanceFalloff => {
+                Box::new(crate::engines::point_distance_falloff::PointDistanceFalloffEngine)
+            }
+            NodeType::DirectionalFalloff => {
+                Box::new(crate::engines::directional_falloff::DirectionalFalloffEngine)
+            }
+            NodeType::AudioAmplitudeFalloff => {
+                Box::new(crate::engines::audio_amplitude_falloff::AudioAmplitudeFalloffEngine)
+            }
             NodeType::DrawSpline => Box::new(crate::engines::spline::DrawSpline),
             NodeType::EvaluateSpline => Box::new(crate::engines::spline::EvaluateSpline),
             NodeType::TrimSpline => Box::new(crate::engines::spline::TrimSpline),
@@ -642,13 +722,22 @@ impl Compiler {
 // ── Helper functions for live audio injection ──
 
 /// Injecte les valeurs audio temps réel dans les params extra d'un engine
-fn inject_audio_values(map: &mut serde_json::Map<String, serde_json::Value>, audio_arc: &Arc<Mutex<AudioState>>) {
+fn inject_audio_values(
+    map: &mut serde_json::Map<String, serde_json::Value>,
+    audio_arc: &Arc<Mutex<AudioState>>,
+) {
     let audio = audio_arc.lock().unwrap_or_else(|e| e.into_inner());
     // BPM
     if let Some(bpm_data) = &audio.bpm {
         map.insert("bpm".to_string(), serde_json::json!(bpm_data.bpm));
-        map.insert("bpm_confidence".to_string(), serde_json::json!(bpm_data.confidence));
-        map.insert("last_beat_time".to_string(), serde_json::json!(bpm_data.last_beat_time));
+        map.insert(
+            "bpm_confidence".to_string(),
+            serde_json::json!(bpm_data.confidence),
+        );
+        map.insert(
+            "last_beat_time".to_string(),
+            serde_json::json!(bpm_data.last_beat_time),
+        );
     }
     // Amplitude par bande
     if let Some(amp) = &audio.amplitude {
@@ -662,16 +751,20 @@ fn inject_audio_values(map: &mut serde_json::Map<String, serde_json::Value>, aud
     if let Some(spec) = &audio.spectrum {
         let n_bands = 8;
         let bins_per_band = (spec.spectrum.len() / n_bands).max(1);
-        let bands: Vec<f64> = (0..n_bands).map(|i| {
-            let start = i * bins_per_band;
-            let end = ((i + 1) * bins_per_band).min(spec.spectrum.len());
-            if start >= end { return 0.0; }
-            let sum: f64 = spec.spectrum[start..end].iter().sum();
-            sum / (end - start) as f64
-        }).collect();
+        let bands: Vec<f64> = (0..n_bands)
+            .map(|i| {
+                let start = i * bins_per_band;
+                let end = ((i + 1) * bins_per_band).min(spec.spectrum.len());
+                if start >= end {
+                    return 0.0;
+                }
+                let sum: f64 = spec.spectrum[start..end].iter().sum();
+                sum / (end - start) as f64
+            })
+            .collect();
         map.insert("spectrum".to_string(), serde_json::json!(bands));
         for (i, val) in bands.iter().enumerate() {
-            map.insert(format!("spectrum_band_{}", i), serde_json::json!(val));
+            map.insert(format!("spectrum_band_{i}"), serde_json::json!(val));
         }
     }
 }

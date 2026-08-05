@@ -1,4 +1,4 @@
-use nalgebra::{Vector3, Rotation3};
+use nalgebra::{Rotation3, Vector3};
 use std::f64::consts::PI;
 
 /// Apply scale modifier to a position
@@ -40,8 +40,7 @@ pub fn barycentric_group(
         return pos;
     }
     let n = all_positions.len() as f64;
-    let barycenter: Vector3<f64> =
-        all_positions.iter().sum::<Vector3<f64>>() / n;
+    let barycenter: Vector3<f64> = all_positions.iter().sum::<Vector3<f64>>() / n;
     pos - barycenter + center
 }
 
@@ -66,18 +65,30 @@ pub fn clamp(pos: Vector3<f64>, min: Vector3<f64>, max: Vector3<f64>) -> Vector3
 
 /// LFO — add a low-frequency oscillation to a position axis
 /// waveform: sine, triangle, square, sawtooth
-pub fn lfo(pos: Vector3<f64>, t: f64, waveform: &str, frequency: f64, amplitude: f64, axis: &str, phase: f64) -> Vector3<f64> {
+pub fn lfo(
+    pos: Vector3<f64>,
+    t: f64,
+    waveform: &str,
+    frequency: f64,
+    amplitude: f64,
+    axis: &str,
+    phase: f64,
+) -> Vector3<f64> {
     let angle = 2.0 * PI * frequency * t + phase;
     let value = match waveform {
         "sine" => angle.sin(),
         "triangle" => (2.0 / PI) * (angle.sin()).asin(),
         "square" => {
-            if angle.sin() >= 0.0 { 1.0 } else { -1.0 }
-        },
+            if angle.sin() >= 0.0 {
+                1.0
+            } else {
+                -1.0
+            }
+        }
         "sawtooth" => {
             let normalized = (angle / (2.0 * PI)) % 1.0;
             2.0 * normalized - 1.0
-        },
+        }
         _ => angle.sin(),
     };
     let offset = amplitude * value;
@@ -92,11 +103,15 @@ pub fn lfo(pos: Vector3<f64>, t: f64, waveform: &str, frequency: f64, amplitude:
 
 /// Jitter — add smooth random noise to a position
 /// Uses a hash-based pseudo-random function smoothed by sin
-pub fn jitter(pos: Vector3<f64>, t: f64, object_index: usize, intensity: f64, frequency: f64, seed: f64) -> Vector3<f64> {
-    let hash = |n: f64| -> f64 {
-        let s = (n.sin() * 43758.5453 + seed).fract();
-        s
-    };
+pub fn jitter(
+    pos: Vector3<f64>,
+    t: f64,
+    object_index: usize,
+    intensity: f64,
+    frequency: f64,
+    seed: f64,
+) -> Vector3<f64> {
+    let hash = |n: f64| -> f64 { (n.sin() * 43758.5453 + seed).fract() };
     let noise = |dim: f64| -> f64 {
         let h1 = hash(dim + object_index as f64 * 17.0);
         let h2 = hash(dim + object_index as f64 * 17.0 + 100.0);
@@ -104,11 +119,7 @@ pub fn jitter(pos: Vector3<f64>, t: f64, object_index: usize, intensity: f64, fr
         let smooth2 = (2.0 * PI * frequency * t * 1.3 + h2 * 2.0 * PI).sin();
         intensity * smooth * 0.5 + intensity * smooth2 * 0.3
     };
-    Vector3::new(
-        pos.x + noise(0.0),
-        pos.y + noise(1.0),
-        pos.z + noise(2.0),
-    )
+    Vector3::new(pos.x + noise(0.0), pos.y + noise(1.0), pos.z + noise(2.0))
 }
 
 #[cfg(test)]
@@ -150,10 +161,7 @@ mod tests {
 
     #[test]
     fn test_barycentric_group() {
-        let positions = vec![
-            Vector3::new(1.0, 0.0, 0.0),
-            Vector3::new(-1.0, 0.0, 0.0),
-        ];
+        let positions = vec![Vector3::new(1.0, 0.0, 0.0), Vector3::new(-1.0, 0.0, 0.0)];
         let center = Vector3::new(0.0, 0.0, 0.0);
         let result = barycentric_group(positions[0], &positions, center);
         // barycenter = (0,0,0), so pos - bary + center = pos

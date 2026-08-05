@@ -1,5 +1,5 @@
 use crate::engines::{Engine, EngineParams};
-use crate::falloffs::{TimeFalloff, FalloffCurve, FalloffContext, Falloff};
+use crate::falloffs::{Falloff, FalloffContext, FalloffCurve, TimeFalloff};
 use nalgebra::Vector3;
 
 /// Moteur TimeFalloff - applique un falloff temporel sur une trajectoire
@@ -7,11 +7,31 @@ pub struct TimeFalloffEngine;
 
 impl Engine for TimeFalloffEngine {
     fn position(&self, t: f64, _object_index: usize, params: &EngineParams) -> Vector3<f64> {
-        let start_time = params.extra.get("start_time").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        let end_time = params.extra.get("end_time").and_then(|v| v.as_f64()).unwrap_or(params.duration);
-        let curve_str = params.extra.get("curve").and_then(|v| v.as_str()).unwrap_or("Linear");
-        let base_radius = params.extra.get("radius").and_then(|v| v.as_f64()).unwrap_or(1.0);
-        let plane = params.extra.get("plane").and_then(|v| v.as_str()).unwrap_or("xz");
+        let start_time = params
+            .extra
+            .get("start_time")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        let end_time = params
+            .extra
+            .get("end_time")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(params.duration);
+        let curve_str = params
+            .extra
+            .get("curve")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Linear");
+        let base_radius = params
+            .extra
+            .get("radius")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0);
+        let plane = params
+            .extra
+            .get("plane")
+            .and_then(|v| v.as_str())
+            .unwrap_or("xz");
 
         let curve = match curve_str {
             "EaseIn" => FalloffCurve::EaseIn,
@@ -38,10 +58,26 @@ impl Engine for TimeFalloffEngine {
         let modulated_radius = base_radius * influence;
 
         match plane {
-            "xy" => Vector3::new(modulated_radius * angle.cos(), modulated_radius * angle.sin(), 0.0),
-            "xz" => Vector3::new(modulated_radius * angle.cos(), 0.0, modulated_radius * angle.sin()),
-            "yz" => Vector3::new(0.0, modulated_radius * angle.cos(), modulated_radius * angle.sin()),
-            _ => Vector3::new(modulated_radius * angle.cos(), 0.0, modulated_radius * angle.sin()),
+            "xy" => Vector3::new(
+                modulated_radius * angle.cos(),
+                modulated_radius * angle.sin(),
+                0.0,
+            ),
+            "xz" => Vector3::new(
+                modulated_radius * angle.cos(),
+                0.0,
+                modulated_radius * angle.sin(),
+            ),
+            "yz" => Vector3::new(
+                0.0,
+                modulated_radius * angle.cos(),
+                modulated_radius * angle.sin(),
+            ),
+            _ => Vector3::new(
+                modulated_radius * angle.cos(),
+                0.0,
+                modulated_radius * angle.sin(),
+            ),
         }
     }
 

@@ -30,7 +30,10 @@ pub struct PostProcessContext<'a> {
 ///
 /// Hot-swappable pour mise à jour temps réel du graph global.
 pub type PostProcessFn = Box<
-    dyn Fn(&PostProcessContext, Vec<(usize, nalgebra::Vector3<f64>)>) -> Vec<(usize, nalgebra::Vector3<f64>)>
+    dyn Fn(
+            &PostProcessContext,
+            Vec<(usize, nalgebra::Vector3<f64>)>,
+        ) -> Vec<(usize, nalgebra::Vector3<f64>)>
         + Send
         + Sync,
 >;

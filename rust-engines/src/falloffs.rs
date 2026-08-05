@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 pub trait Falloff {
     /// Calcule l'influence [0, 1] à un instant t et une position
     fn influence(&self, t: f64, position: Vector3<f64>, context: &FalloffContext) -> f64;
-    
+
     /// Nom du falloff
     fn name(&self) -> &str;
 }
@@ -41,9 +41,9 @@ impl Falloff for TimeFalloff {
         if t > self.end_time {
             return 0.0;
         }
-        
+
         let progress = (t - self.start_time) / (self.end_time - self.start_time);
-        
+
         match self.curve {
             FalloffCurve::Linear => progress,
             FalloffCurve::EaseIn => progress * progress,
@@ -81,13 +81,13 @@ impl Falloff for PointDistanceFalloff {
     fn influence(&self, _t: f64, position: Vector3<f64>, _context: &FalloffContext) -> f64 {
         let center = self.center_vector();
         let distance = (position - center).norm();
-        
+
         if distance >= self.max_distance {
             return 0.0;
         }
-        
+
         let progress = 1.0 - (distance / self.max_distance);
-        
+
         match self.curve {
             FalloffCurve::Linear => progress,
             FalloffCurve::EaseIn => progress * progress,
@@ -227,10 +227,10 @@ mod tests {
 
         // Avant le start_time
         assert_eq!(falloff.influence(0.5, Vector3::zeros(), &context), 0.0);
-        
+
         // Pendant le falloff
         assert!((falloff.influence(2.0, Vector3::zeros(), &context) - 0.5).abs() < 0.01);
-        
+
         // Après le end_time
         assert_eq!(falloff.influence(4.0, Vector3::zeros(), &context), 0.0);
     }
@@ -265,12 +265,18 @@ mod tests {
         };
 
         // Au centre
-        assert_eq!(falloff.influence(0.0, Vector3::new(0.0, 0.0, 0.0), &context), 1.0);
-        
+        assert_eq!(
+            falloff.influence(0.0, Vector3::new(0.0, 0.0, 0.0), &context),
+            1.0
+        );
+
         // À mi-distance
         assert!((falloff.influence(0.0, Vector3::new(1.0, 0.0, 0.0), &context) - 0.5).abs() < 0.01);
-        
+
         // Au-delà de max_distance
-        assert_eq!(falloff.influence(0.0, Vector3::new(3.0, 0.0, 0.0), &context), 0.0);
+        assert_eq!(
+            falloff.influence(0.0, Vector3::new(3.0, 0.0, 0.0), &context),
+            0.0
+        );
     }
 }

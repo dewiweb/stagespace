@@ -9,11 +9,31 @@ pub struct OscInputEngine;
 
 impl Engine for OscInputEngine {
     fn position(&self, _t: f64, object_index: usize, params: &EngineParams) -> Vector3<f64> {
-        let base_radius = params.extra.get("radius").and_then(|v| v.as_f64()).unwrap_or(1.0);
-        let scale = params.extra.get("scale").and_then(|v| v.as_f64()).unwrap_or(1.0);
-        let offset_x = params.extra.get("offset_x").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        let offset_y = params.extra.get("offset_y").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        let offset_z = params.extra.get("offset_z").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let base_radius = params
+            .extra
+            .get("radius")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0);
+        let scale = params
+            .extra
+            .get("scale")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0);
+        let offset_x = params
+            .extra
+            .get("offset_x")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        let offset_y = params
+            .extra
+            .get("offset_y")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        let offset_z = params
+            .extra
+            .get("offset_z")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
 
         // Récupérer la valeur OSC injectée
         if let Some(val) = params.extra.get("osc_value") {
@@ -29,7 +49,8 @@ impl Engine for OscInputEngine {
             // Cas 2: scalaire → angle sur un cercle
             if let Some(scalar) = val.as_f64() {
                 let angle = scalar * std::f64::consts::PI; // normaliser vers radians
-                let obj_offset = (object_index as f64) * (2.0 * std::f64::consts::PI / params.n_objects.max(1) as f64);
+                let obj_offset = (object_index as f64)
+                    * (2.0 * std::f64::consts::PI / params.n_objects.max(1) as f64);
                 let final_angle = angle + obj_offset;
                 return Vector3::new(
                     base_radius * final_angle.cos() + offset_x,
@@ -40,7 +61,8 @@ impl Engine for OscInputEngine {
         }
 
         // En l'absence de valeur OSC, position par défaut (cercle statique)
-        let angle = (object_index as f64) * (2.0 * std::f64::consts::PI / params.n_objects.max(1) as f64);
+        let angle =
+            (object_index as f64) * (2.0 * std::f64::consts::PI / params.n_objects.max(1) as f64);
         Vector3::new(
             base_radius * angle.cos() + offset_x,
             offset_y,
@@ -87,7 +109,11 @@ mod tests {
         let pos = engine.position(0.0, 0, &params);
         // angle = 0.5 * PI, x = 2.0 * cos(0.5*PI) ≈ 0, z = 2.0 * sin(0.5*PI) = 2.0
         assert!((pos.x).abs() < 0.01, "x should be ~0, got {}", pos.x);
-        assert!((pos.z - 2.0).abs() < 0.01, "z should be ~2.0, got {}", pos.z);
+        assert!(
+            (pos.z - 2.0).abs() < 0.01,
+            "z should be ~2.0, got {}",
+            pos.z
+        );
     }
 
     #[test]

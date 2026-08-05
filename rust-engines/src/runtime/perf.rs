@@ -1,5 +1,5 @@
-use std::sync::atomic::{AtomicU64, Ordering};
 use super::types::PerfStats;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Monitor de performance — stats lock-free via atomics (bits de f64)
 pub struct PerfMonitor {
@@ -7,6 +7,12 @@ pub struct PerfMonitor {
     osc_rate: AtomicU64,
     latency_ms: AtomicU64,
     cpu: AtomicU64,
+}
+
+impl Default for PerfMonitor {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PerfMonitor {
@@ -22,7 +28,8 @@ impl PerfMonitor {
     pub fn update(&self, fps: f64, osc_rate: f64, latency_ms: f64, cpu: f64) {
         self.fps.store(fps.to_bits(), Ordering::Relaxed);
         self.osc_rate.store(osc_rate.to_bits(), Ordering::Relaxed);
-        self.latency_ms.store(latency_ms.to_bits(), Ordering::Relaxed);
+        self.latency_ms
+            .store(latency_ms.to_bits(), Ordering::Relaxed);
         self.cpu.store(cpu.to_bits(), Ordering::Relaxed);
     }
 

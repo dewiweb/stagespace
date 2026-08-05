@@ -1,6 +1,6 @@
+use nalgebra::Vector3;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use nalgebra::Vector3;
 
 /// Objet audio
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,7 +44,13 @@ impl PatchManager {
     }
 
     /// Crée ou met à jour un objet
-    pub fn set_object(&mut self, osc_id: u32, name: String, color: String, notes: String) -> AudioObject {
+    pub fn set_object(
+        &mut self,
+        osc_id: u32,
+        name: String,
+        color: String,
+        notes: String,
+    ) -> AudioObject {
         let obj = AudioObject {
             osc_id,
             name,
@@ -71,6 +77,7 @@ impl PatchManager {
     }
 
     /// Crée ou met à jour un groupe
+    #[allow(clippy::too_many_arguments)]
     pub fn set_group(
         &mut self,
         name: String,
@@ -105,20 +112,29 @@ impl PatchManager {
     }
 
     /// Convertit un groupe en paramètres de playback
-    pub fn group_to_play_params(&self, name: &str, host: String, port: u16, fps: f64) -> Result<serde_json::Value, String> {
-        let group = self.groups.get(name)
-            .ok_or_else(|| format!("Group '{}' not found", name))?;
-        
+    pub fn group_to_play_params(
+        &self,
+        name: &str,
+        host: String,
+        port: u16,
+        fps: f64,
+    ) -> Result<serde_json::Value, String> {
+        let group = self
+            .groups
+            .get(name)
+            .ok_or_else(|| format!("Group '{name}' not found"))?;
+
         // Filtrer les params qui ne sont pas spécifiques au moteur
         let engine_params = if let Some(params) = group.params.as_object() {
-            params.iter()
+            params
+                .iter()
                 .filter(|(k, _)| !matches!(k.as_str(), "n_objects" | "object_offset"))
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect()
         } else {
             serde_json::Map::new()
         };
-        
+
         Ok(serde_json::json!({
             "engine": group.engine,
             "profile": group.profile,
@@ -173,14 +189,24 @@ mod tests {
     #[test]
     fn test_set_object() {
         let mut manager = PatchManager::new();
-        manager.set_object(1, "Track 1".to_string(), "#FF0000".to_string(), "Bass".to_string());
+        manager.set_object(
+            1,
+            "Track 1".to_string(),
+            "#FF0000".to_string(),
+            "Bass".to_string(),
+        );
         assert_eq!(manager.object_count(), 1);
     }
 
     #[test]
     fn test_get_object() {
         let mut manager = PatchManager::new();
-        manager.set_object(1, "Track 1".to_string(), "#FF0000".to_string(), "Bass".to_string());
+        manager.set_object(
+            1,
+            "Track 1".to_string(),
+            "#FF0000".to_string(),
+            "Bass".to_string(),
+        );
         let obj = manager.get_object(1);
         assert!(obj.is_some());
         assert_eq!(obj.unwrap().name, "Track 1");
@@ -189,7 +215,12 @@ mod tests {
     #[test]
     fn test_remove_object() {
         let mut manager = PatchManager::new();
-        manager.set_object(1, "Track 1".to_string(), "#FF0000".to_string(), "Bass".to_string());
+        manager.set_object(
+            1,
+            "Track 1".to_string(),
+            "#FF0000".to_string(),
+            "Bass".to_string(),
+        );
         manager.remove_object(1);
         assert_eq!(manager.object_count(), 0);
     }
@@ -238,7 +269,7 @@ mod tests {
             "#00FF00".to_string(),
             Vector3::new(0.0, 0.0, 0.0),
         );
-        
+
         let params = manager.group_to_play_params("Group 1", "127.0.0.1".to_string(), 8000, 60.0);
         assert!(params.is_ok());
         let json = params.unwrap();
@@ -249,7 +280,12 @@ mod tests {
     #[test]
     fn test_clear() {
         let mut manager = PatchManager::new();
-        manager.set_object(1, "Track 1".to_string(), "#FF0000".to_string(), "Bass".to_string());
+        manager.set_object(
+            1,
+            "Track 1".to_string(),
+            "#FF0000".to_string(),
+            "Bass".to_string(),
+        );
         manager.set_group(
             "Group 1".to_string(),
             vec![1],

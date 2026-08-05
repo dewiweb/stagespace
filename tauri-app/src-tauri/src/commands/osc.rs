@@ -1,13 +1,13 @@
-use stagespace_engines::{OscMapping, OscReceiver};
-use tauri::State;
 use crate::AppState;
+use stagespace_engines::{OscMapping, OscReceiver};
 use std::sync::{Mutex, MutexGuard};
+use tauri::State;
 
 // OSC Receiver Commands
 /// Récupère le contenu d'un Mutex même s'il est empoisonné (poison recovery).
 fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(|e| {
-        eprintln!("[WARN] Mutex was poisoned, recovering inner data: {}", e);
+        eprintln!("[WARN] Mutex was poisoned, recovering inner data: {e}");
         e.into_inner()
     })
 }
@@ -37,32 +37,36 @@ pub async fn osc_list_mappings(state: State<'_, AppState>) -> Result<Vec<OscMapp
 }
 
 #[tauri::command]
-pub async fn osc_get_value(handler: String, state: State<'_, AppState>) -> Result<Vec<f64>, String> {
+pub async fn osc_get_value(
+    handler: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<f64>, String> {
     let receiver = lock_or_recover(&state.osc_receiver);
-    receiver.get_last_value(&handler).ok_or_else(|| format!("No value for handler: {}", handler))
+    receiver
+        .get_last_value(&handler)
+        .ok_or_else(|| format!("No value for handler: {handler}"))
 }
 
 #[tauri::command]
 pub async fn osc_get_all_values(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
     let receiver = lock_or_recover(&state.osc_receiver);
     let values = receiver.get_all_values();
-    Ok(serde_json::to_value(values).map_err(|e| e.to_string())?)
+    serde_json::to_value(values).map_err(|e| e.to_string())
 }
 
 /// Change le port du receiver OSC — stop l'ancien, crée un nouveau, démarre
 #[tauri::command]
-pub async fn set_osc_receiver_port(
-    port: u16,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn set_osc_receiver_port(port: u16, state: State<'_, AppState>) -> Result<(), String> {
     let mut receiver = lock_or_recover(&state.osc_receiver);
     // Stopper l'ancien receiver
     receiver.stop();
     // Créer un nouveau receiver sur le nouveau port
     *receiver = OscReceiver::new(port);
     // Démarrer le nouveau receiver
-    receiver.start().map_err(|e| format!("Failed to start OSC receiver on port {}: {}", port, e))?;
-    eprintln!("[INFO] OSC receiver now listening on port {}", port);
+    receiver
+        .start()
+        .map_err(|e| format!("Failed to start OSC receiver on port {port}: {e}"))?;
+    eprintln!("[INFO] OSC receiver now listening on port {port}");
     Ok(())
 }
 
@@ -90,12 +94,20 @@ pub async fn send_osc_position(
     drop(sender);
 
     // Créer un socket temporaire pour envoyer
-    let socket = std::net::UdpSocket::bind("0.0.0.0:0").map_err(|e| format!("Socket bind failed: {}", e))?;
-    socket.connect(dest_addr).map_err(|e| format!("Connect failed: {}", e))?;
+    let socket =
+        std::net::UdpSocket::bind("0.0.0.0:0").map_err(|e| format!("Socket bind failed: {e}"))?;
+    socket
+        .connect(dest_addr)
+        .map_err(|e| format!("Connect failed: {e}"))?;
 
-    let args: Vec<rosc::OscType> = values.iter().map(|v| rosc::OscType::Float(*v as f32)).collect();
+    let args: Vec<rosc::OscType> = values
+        .iter()
+        .map(|v| rosc::OscType::Float(*v as f32))
+        .collect();
     let packet = rosc::OscPacket::Message(rosc::OscMessage { addr, args });
-    let bytes = rosc::encoder::encode(&packet).map_err(|e| format!("OSC encode failed: {}", e))?;
-    socket.send(&bytes).map_err(|e| format!("OSC send failed: {}", e))?;
+    let bytes = rosc::encoder::encode(&packet).map_err(|e| format!("OSC encode failed: {e}"))?;
+    socket
+        .send(&bytes)
+        .map_err(|e| format!("OSC send failed: {e}"))?;
     Ok(())
 }

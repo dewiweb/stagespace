@@ -1,11 +1,14 @@
 #[cfg(test)]
 mod tests {
-    use crate::animation::{Animation, AnimationState, TrackAssignment, AudioMod, AudioModSource, AudioModTarget, ShapeType};
-    use crate::audio::{AudioState, AmplitudeData, BPMData};
+    use crate::animation::{
+        Animation, AnimationState, AudioMod, AudioModSource, AudioModTarget, ShapeType,
+        TrackAssignment,
+    };
+    use crate::audio::{AmplitudeData, AudioState, BPMData};
     use crate::compiler::Compiler;
     use crate::engines::EngineParams;
-    use crate::graph::{Graph, Node, NodeId, NodeType, Edge};
-    use crate::osc_sender::{OscSender, OscProfile};
+    use crate::graph::{Edge, Graph, Node, NodeId, NodeType};
+    use crate::osc_sender::{OscProfile, OscSender};
     use crate::runtime::Runtime;
     use serde_json::json;
     use std::time::Duration;
@@ -69,16 +72,22 @@ mod tests {
         });
 
         graph.add_edge(Edge {
-            from: objects_id, to: engine_id,
-            from_port: "output".to_string(), to_port: "input".to_string(),
+            from: objects_id,
+            to: engine_id,
+            from_port: "output".to_string(),
+            to_port: "input".to_string(),
         });
         graph.add_edge(Edge {
-            from: duration_id, to: engine_id,
-            from_port: "output".to_string(), to_port: "duration".to_string(),
+            from: duration_id,
+            to: engine_id,
+            from_port: "output".to_string(),
+            to_port: "duration".to_string(),
         });
         graph.add_edge(Edge {
-            from: engine_id, to: output_id,
-            from_port: "output".to_string(), to_port: "input".to_string(),
+            from: engine_id,
+            to: output_id,
+            from_port: "output".to_string(),
+            to_port: "input".to_string(),
         });
 
         graph
@@ -101,8 +110,16 @@ mod tests {
         anim.name = "Test Circle".to_string();
         anim.shape = ShapeType::Circle;
         anim.shape_params.insert("radius".to_string(), 3.0);
-        anim.assignments.push(TrackAssignment { track_id: 1, depth: 1.0, phase_offset: 0.0 });
-        anim.assignments.push(TrackAssignment { track_id: 2, depth: 0.5, phase_offset: 90.0 });
+        anim.assignments.push(TrackAssignment {
+            track_id: 1,
+            depth: 1.0,
+            phase_offset: 0.0,
+        });
+        anim.assignments.push(TrackAssignment {
+            track_id: 2,
+            depth: 0.5,
+            phase_offset: 90.0,
+        });
         anim.audio_mods.push(AudioMod {
             source: AudioModSource::AmplitudeBass,
             target: AudioModTarget::RadiusScale,
@@ -127,9 +144,21 @@ mod tests {
     fn test_animation_state_depth_and_phase() {
         let mut anim = Animation::default();
         anim.assignments = vec![
-            TrackAssignment { track_id: 1, depth: 1.0, phase_offset: 0.0 },
-            TrackAssignment { track_id: 2, depth: 0.5, phase_offset: 90.0 },
-            TrackAssignment { track_id: 3, depth: 0.0, phase_offset: 180.0 },
+            TrackAssignment {
+                track_id: 1,
+                depth: 1.0,
+                phase_offset: 0.0,
+            },
+            TrackAssignment {
+                track_id: 2,
+                depth: 0.5,
+                phase_offset: 90.0,
+            },
+            TrackAssignment {
+                track_id: 3,
+                depth: 0.0,
+                phase_offset: 180.0,
+            },
         ];
 
         let track_ids = vec![1, 2, 3];
@@ -146,10 +175,26 @@ mod tests {
         let mut anim = Animation::default();
         anim.phase_spread = 1.0; // 100% spread
         anim.assignments = vec![
-            TrackAssignment { track_id: 1, depth: 1.0, phase_offset: 0.0 },
-            TrackAssignment { track_id: 2, depth: 1.0, phase_offset: 0.0 },
-            TrackAssignment { track_id: 3, depth: 1.0, phase_offset: 0.0 },
-            TrackAssignment { track_id: 4, depth: 1.0, phase_offset: 0.0 },
+            TrackAssignment {
+                track_id: 1,
+                depth: 1.0,
+                phase_offset: 0.0,
+            },
+            TrackAssignment {
+                track_id: 2,
+                depth: 1.0,
+                phase_offset: 0.0,
+            },
+            TrackAssignment {
+                track_id: 3,
+                depth: 1.0,
+                phase_offset: 0.0,
+            },
+            TrackAssignment {
+                track_id: 4,
+                depth: 1.0,
+                phase_offset: 0.0,
+            },
         ];
 
         let track_ids = vec![1, 2, 3, 4];
@@ -187,8 +232,17 @@ mod tests {
 
         // Audio state avec bass=0.5 et bpm=120
         let mut audio = AudioState::new();
-        audio.amplitude = Some(AmplitudeData { rms: 0.3, bass: 0.5, mid: 0.2, high: 0.1 });
-        audio.bpm = Some(BPMData { bpm: 120.0, confidence: 1.0, last_beat_time: 0.0 });
+        audio.amplitude = Some(AmplitudeData {
+            rms: 0.3,
+            bass: 0.5,
+            mid: 0.2,
+            high: 0.1,
+        });
+        audio.bpm = Some(BPMData {
+            bpm: 120.0,
+            confidence: 1.0,
+            last_beat_time: 0.0,
+        });
 
         let params = state.compute_audio_modulated_params(&audio);
 
@@ -213,17 +267,22 @@ mod tests {
         let mut state = AnimationState::from_animation(&anim, &track_ids);
 
         let mut audio = AudioState::new();
-        audio.amplitude = Some(AmplitudeData { rms: 1.0, bass: 0.0, mid: 0.0, high: 0.0 });
+        audio.amplitude = Some(AmplitudeData {
+            rms: 1.0,
+            bass: 0.0,
+            mid: 0.0,
+            high: 0.0,
+        });
 
         // Première frame : smoothed = 0 * 0.9 + 1.0 * 0.1 = 0.1
         let p1 = state.compute_audio_modulated_params(&audio);
         let scale1 = p1.get("scale").copied().unwrap_or(0.0);
-        assert!((scale1 - 0.1).abs() < 1e-10, "expected 0.1, got {}", scale1);
+        assert!((scale1 - 0.1).abs() < 1e-10, "expected 0.1, got {scale1}");
 
         // Deuxième frame : smoothed = 0.1 * 0.9 + 1.0 * 0.1 = 0.19
         let p2 = state.compute_audio_modulated_params(&audio);
         let scale2 = p2.get("scale").copied().unwrap_or(0.0);
-        assert!((scale2 - 0.19).abs() < 1e-10, "expected 0.19, got {}", scale2);
+        assert!((scale2 - 0.19).abs() < 1e-10, "expected 0.19, got {scale2}");
     }
 
     #[test]
@@ -235,8 +294,16 @@ mod tests {
         anim.duration = 4.0;
         anim.speed = 1.0;
         anim.assignments = vec![
-            TrackAssignment { track_id: 1, depth: 1.0, phase_offset: 0.0 },
-            TrackAssignment { track_id: 2, depth: 0.5, phase_offset: 0.0 },
+            TrackAssignment {
+                track_id: 1,
+                depth: 1.0,
+                phase_offset: 0.0,
+            },
+            TrackAssignment {
+                track_id: 2,
+                depth: 0.5,
+                phase_offset: 0.0,
+            },
         ];
 
         let osc_ids = vec![1, 2];
@@ -249,7 +316,8 @@ mod tests {
         assert!(compiled.is_ok(), "Compilation failed: {:?}", compiled.err());
 
         // 4. Créer le runtime
-        let osc_sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7788);
+        let osc_sender =
+            OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7788);
         let runtime = Runtime::new("127.0.0.1".to_string(), 7788, osc_sender).unwrap();
 
         // 5. Set l'animation state
@@ -268,7 +336,7 @@ mod tests {
             extra: json!({}),
         };
         let result = runtime.play_compiled(compiled.unwrap(), params, osc_ids);
-        assert!(result.is_ok(), "Playback failed: {:?}", result);
+        assert!(result.is_ok(), "Playback failed: {result:?}");
         assert!(runtime.is_running());
 
         // 8. Attendre un peu puis arrêter
@@ -296,7 +364,8 @@ mod tests {
         let graph = build_graph_from_shape(&anim, osc_ids.len());
         let compiled = Compiler::compile(&graph).expect("compile");
 
-        let osc_sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7788);
+        let osc_sender =
+            OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7788);
         let runtime = Runtime::new("127.0.0.1".to_string(), 7788, osc_sender).unwrap();
 
         let anim_state = AnimationState::from_animation(&anim, &osc_ids);
@@ -304,7 +373,12 @@ mod tests {
 
         // Pousser un audio state
         let mut audio = AudioState::new();
-        audio.amplitude = Some(AmplitudeData { rms: 0.5, bass: 0.8, mid: 0.3, high: 0.1 });
+        audio.amplitude = Some(AmplitudeData {
+            rms: 0.5,
+            bass: 0.8,
+            mid: 0.3,
+            high: 0.1,
+        });
         runtime.set_audio_state(audio);
 
         let params = EngineParams {
@@ -314,7 +388,10 @@ mod tests {
             extra: json!({}),
         };
         let result = runtime.play_compiled(compiled, params, osc_ids);
-        assert!(result.is_ok(), "Playback with audio mods failed: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "Playback with audio mods failed: {result:?}"
+        );
 
         std::thread::sleep(Duration::from_millis(50));
         runtime.stop();
@@ -328,8 +405,16 @@ mod tests {
         anim.shape_params.insert("radius".to_string(), 5.0);
         anim.duration = 4.0;
         anim.assignments = vec![
-            TrackAssignment { track_id: 1, depth: 1.0, phase_offset: 0.0 },
-            TrackAssignment { track_id: 2, depth: 0.0, phase_offset: 0.0 }, // depth=0
+            TrackAssignment {
+                track_id: 1,
+                depth: 1.0,
+                phase_offset: 0.0,
+            },
+            TrackAssignment {
+                track_id: 2,
+                depth: 0.0,
+                phase_offset: 0.0,
+            }, // depth=0
         ];
 
         let osc_ids = vec![1, 2];
@@ -349,8 +434,16 @@ mod tests {
         anim.shape_params.insert("radius".to_string(), 1.0);
         anim.duration = 4.0;
         anim.assignments = vec![
-            TrackAssignment { track_id: 1, depth: 1.0, phase_offset: 0.0 },
-            TrackAssignment { track_id: 2, depth: 1.0, phase_offset: 180.0 },
+            TrackAssignment {
+                track_id: 1,
+                depth: 1.0,
+                phase_offset: 0.0,
+            },
+            TrackAssignment {
+                track_id: 2,
+                depth: 1.0,
+                phase_offset: 180.0,
+            },
         ];
 
         let osc_ids = vec![1, 2];
@@ -381,7 +474,12 @@ mod tests {
 
             let graph = build_graph_from_shape(&anim, 4);
             let result = Compiler::compile(&graph);
-            assert!(result.is_ok(), "Shape {:?} failed to compile: {:?}", shape, result.err());
+            assert!(
+                result.is_ok(),
+                "Shape {:?} failed to compile: {:?}",
+                shape,
+                result.err()
+            );
         }
     }
 }

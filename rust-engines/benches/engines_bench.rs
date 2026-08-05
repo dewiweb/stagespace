@@ -1,6 +1,8 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
-use stagespace_engines::engines::{circular, spiral, lissajous, swarm, perlin_noise, Engine, EngineParams};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use serde_json::json;
+use stagespace_engines::engines::{
+    circular, lissajous, perlin_noise, spiral, swarm, Engine, EngineParams,
+};
 
 fn bench_circular(c: &mut Criterion) {
     let engine = circular::Circular;

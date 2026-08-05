@@ -16,13 +16,13 @@ pub struct Track {
 
 #[tauri::command]
 pub async fn import_hol_project(file_path: String) -> Result<HolProject, String> {
-    let content = std::fs::read_to_string(&file_path)
-        .map_err(|e| format!("Failed to read file: {}", e))?;
+    let content =
+        std::fs::read_to_string(&file_path).map_err(|e| format!("Failed to read file: {e}"))?;
 
     // Le format .hol est: {"hol": {"ae": ["/track/1/name \"TRACK 1\"", "/track/1/azim 44.89", ...]}}
     // L'array "ae" contient des strings au format OSC plat
-    let project: serde_json::Value = serde_json::from_str(&content)
-        .map_err(|e| format!("Failed to parse JSON: {}", e))?;
+    let project: serde_json::Value =
+        serde_json::from_str(&content).map_err(|e| format!("Failed to parse JSON: {e}"))?;
 
     // Récupérer l'array "ae" — il peut être sous hol.ae ou directement
     let ae_array = project["hol"]["ae"]
@@ -82,7 +82,7 @@ pub async fn import_hol_project(file_path: String) -> Result<HolProject, String>
                         let r = (comps[0] * 255.0) as u8;
                         let g = (comps[1] * 255.0) as u8;
                         let b = (comps[2] * 255.0) as u8;
-                        track_colors.insert(id, format!("#{:02x}{:02x}{:02x}", r, g, b));
+                        track_colors.insert(id, format!("#{r:02x}{g:02x}{b:02x}"));
                     }
                 }
                 "azim" => {
@@ -124,8 +124,14 @@ pub async fn import_hol_project(file_path: String) -> Result<HolProject, String>
     let tracks: Vec<Track> = track_ids
         .iter()
         .map(|id| {
-            let name = track_names.get(id).cloned().unwrap_or_else(|| format!("Track {}", id));
-            let color = track_colors.get(id).cloned().unwrap_or_else(|| "#888888".to_string());
+            let name = track_names
+                .get(id)
+                .cloned()
+                .unwrap_or_else(|| format!("Track {id}"));
+            let color = track_colors
+                .get(id)
+                .cloned()
+                .unwrap_or_else(|| "#888888".to_string());
 
             let position = if let Some(xyz) = track_xyz.get(id) {
                 *xyz
@@ -145,7 +151,12 @@ pub async fn import_hol_project(file_path: String) -> Result<HolProject, String>
                 ]
             };
 
-            Track { id: *id, name, position, color }
+            Track {
+                id: *id,
+                name,
+                position,
+                color,
+            }
         })
         .collect();
 
@@ -158,17 +169,16 @@ pub async fn save_graph_to_file(
     graph_json: serde_json::Value,
 ) -> Result<(), String> {
     let data = serde_json::to_string_pretty(&graph_json)
-        .map_err(|e| format!("Failed to serialize: {}", e))?;
-    std::fs::write(&file_path, data)
-        .map_err(|e| format!("Failed to write file: {}", e))?;
+        .map_err(|e| format!("Failed to serialize: {e}"))?;
+    std::fs::write(&file_path, data).map_err(|e| format!("Failed to write file: {e}"))?;
     Ok(())
 }
 
 #[tauri::command]
 pub async fn load_graph_from_file(file_path: String) -> Result<serde_json::Value, String> {
-    let content = std::fs::read_to_string(&file_path)
-        .map_err(|e| format!("Failed to read file: {}", e))?;
-    let graph: serde_json::Value = serde_json::from_str(&content)
-        .map_err(|e| format!("Failed to parse JSON: {}", e))?;
+    let content =
+        std::fs::read_to_string(&file_path).map_err(|e| format!("Failed to read file: {e}"))?;
+    let graph: serde_json::Value =
+        serde_json::from_str(&content).map_err(|e| format!("Failed to parse JSON: {e}"))?;
     Ok(graph)
 }

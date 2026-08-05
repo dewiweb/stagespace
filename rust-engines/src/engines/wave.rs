@@ -8,19 +8,29 @@ pub struct Wave;
 
 impl Engine for Wave {
     fn position(&self, t: f64, object_index: usize, params: &EngineParams) -> Vector3<f64> {
-        let amplitude = params.extra.get("amplitude")
+        let amplitude = params
+            .extra
+            .get("amplitude")
             .and_then(|v| v.as_f64())
             .unwrap_or(1.0);
-        let frequency = params.extra.get("frequency")
+        let frequency = params
+            .extra
+            .get("frequency")
             .and_then(|v| v.as_f64())
             .unwrap_or(1.0);
-        let speed = params.extra.get("speed")
+        let speed = params
+            .extra
+            .get("speed")
             .and_then(|v| v.as_f64())
             .unwrap_or(1.0);
-        let axis = params.extra.get("axis")
+        let axis = params
+            .extra
+            .get("axis")
             .and_then(|v| v.as_str())
             .unwrap_or("y");
-        let phase_offset = params.extra.get("phase_offset")
+        let phase_offset = params
+            .extra
+            .get("phase_offset")
             .and_then(|v| v.as_bool())
             .unwrap_or(true);
 
@@ -32,7 +42,9 @@ impl Engine for Wave {
         };
 
         // Position de base répartie sur l'axe X
-        let spread = params.extra.get("spread")
+        let spread = params
+            .extra
+            .get("spread")
             .and_then(|v| v.as_f64())
             .unwrap_or(4.0);
         let base_x = if params.n_objects > 1 {

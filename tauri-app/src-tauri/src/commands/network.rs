@@ -18,10 +18,15 @@ pub async fn discover_osc_targets() -> Result<Vec<serde_json::Value>, String> {
 
     // 2. Scanner les ports OSC communs sur le réseau local
     // Port 8000 (Holophonix), 9000 (IEM), 7000 (Generic)
-    let common_ports = [(8000u16, "Holophonix"), (9000, "IEM MultiEncoder"), (7000, "Generic")];
+    let common_ports = [
+        (8000u16, "Holophonix"),
+        (9000, "IEM MultiEncoder"),
+        (7000, "Generic"),
+    ];
 
     // Récupérer notre IP pour déterminer le subnet
-    let local_ip = get_local_ip().unwrap_or_else(|| std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)));
+    let local_ip = get_local_ip()
+        .unwrap_or_else(|| std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)));
 
     if let std::net::IpAddr::V4(ipv4) = local_ip {
         let octets = ipv4.octets();
@@ -29,12 +34,21 @@ pub async fn discover_osc_targets() -> Result<Vec<serde_json::Value>, String> {
         for last in 1u8..=254u8 {
             let target_ip = format!("{}.{}.{}.{}", octets[0], octets[1], octets[2], last);
             for (port, name) in common_ports {
-                let addr_str = format!("{}:{}", target_ip, port);
+                let addr_str = format!("{target_ip}:{port}");
                 if let Ok(addr) = addr_str.parse::<std::net::SocketAddr>() {
                     // TCP connect avec timeout très court (non-bloquant)
-                    if let Ok(socket) = std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(50)) {
+                    if let Ok(socket) = std::net::TcpStream::connect_timeout(
+                        &addr,
+                        std::time::Duration::from_millis(50),
+                    ) {
                         drop(socket);
-                        let profile = if port == 8000 { "holophonix" } else if port == 9000 { "iem" } else { "generic" };
+                        let profile = if port == 8000 {
+                            "holophonix"
+                        } else if port == 9000 {
+                            "iem"
+                        } else {
+                            "generic"
+                        };
                         targets.push(serde_json::json!({
                             "name": format!("{} @ {}", name, target_ip),
                             "host": target_ip,

@@ -204,10 +204,9 @@ impl Graph {
         let mut rec_stack = HashSet::new();
 
         for &node_id in self.nodes.keys() {
-            if !visited.contains(&node_id) {
-                if self.dfs_cycle(node_id, &mut visited, &mut rec_stack) {
-                    return true;
-                }
+            if !visited.contains(&node_id) && self.dfs_cycle(node_id, &mut visited, &mut rec_stack)
+            {
+                return true;
             }
         }
 

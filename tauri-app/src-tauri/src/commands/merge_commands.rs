@@ -3,22 +3,21 @@
 //! Ces commands coexistent avec les commands legacy (play_movement, stop_movement).
 //! Le frontend utilisera activate_move/deactivate_move à la place.
 
-use stagespace_engines::{
-    Runtime, EngineParams, OscSender, LoopMode,
-    PositionBuffer, MergeStrategy,
-};
-use serde::Deserialize;
-use std::sync::{Arc, Mutex, MutexGuard};
-use tauri::{State, Emitter};
+use crate::commands::playback::SetMacroRequest;
+use crate::graph::compilation::compile_graph_with_audio_and_overrides;
+use crate::graph::parser::build_graph_from_json;
 use crate::AppState;
 use crate::{Movement, MAX_MOVEMENTS};
-use crate::graph::parser::build_graph_from_json;
-use crate::graph::compilation::compile_graph_with_audio_and_overrides;
-use crate::commands::playback::SetMacroRequest;
+use serde::Deserialize;
+use stagespace_engines::{
+    EngineParams, LoopMode, MergeStrategy, OscSender, PositionBuffer, Runtime,
+};
+use std::sync::{Arc, Mutex, MutexGuard};
+use tauri::{Emitter, State};
 
 fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(|e| {
-        eprintln!("[WARN] Mutex was poisoned, recovering inner data: {}", e);
+        eprintln!("[WARN] Mutex was poisoned, recovering inner data: {e}");
         e.into_inner()
     })
 }
@@ -44,7 +43,9 @@ pub struct ActivateMoveRequest {
     pub duration: f64,
 }
 
-fn default_duration() -> f64 { 4.0 }
+fn default_duration() -> f64 {
+    4.0
+}
 
 /// Active un move : crée un worker Runtime, l'attache au MergeRuntime.
 /// Le worker calcule f(t,i) en parallèle, écrit dans un PositionBuffer.
@@ -63,11 +64,12 @@ pub async fn activate_move(
     // On utilise une adresse factice car le worker n'enverra pas d'OSC en mode buffer
     let osc_sender = OscSender::default();
     let runtime = Runtime::new("127.0.0.1".to_string(), 8000, osc_sender)
-        .map_err(|e| format!("Failed to create worker runtime: {}", e))?;
+        .map_err(|e| format!("Failed to create worker runtime: {e}"))?;
 
     // 3. Compiler avec audio + overrides
     let overrides = runtime.audio_param_overrides();
-    let compiled = compile_graph_with_audio_and_overrides(&graph, state.audio_state.clone(), overrides)?;
+    let compiled =
+        compile_graph_with_audio_and_overrides(&graph, state.audio_state.clone(), overrides)?;
 
     // 4. Configurer le worker
     runtime.set_preview_mode(request.is_preview);
@@ -84,21 +86,25 @@ pub async fn activate_move(
     {
         let movements = lock_or_recover(&state.movements);
         if movements.len() >= MAX_MOVEMENTS {
-            return Err(format!("Maximum {} movements reached — stop some first", MAX_MOVEMENTS));
+            return Err(format!(
+                "Maximum {MAX_MOVEMENTS} movements reached — stop some first"
+            ));
         }
     }
 
     // 7. Démarrer le worker thread
-    let handle = runtime.play_compiled(
-        compiled,
-        EngineParams {
-            n_objects: request.osc_ids.len(),
-            duration: request.duration,
-            fps: 60.0,
-            extra: serde_json::json!({}),
-        },
-        request.osc_ids.clone(),
-    ).map_err(|e| format!("Worker playback failed: {}", e))?;
+    let handle = runtime
+        .play_compiled(
+            compiled,
+            EngineParams {
+                n_objects: request.osc_ids.len(),
+                duration: request.duration,
+                fps: 60.0,
+                extra: serde_json::json!({}),
+            },
+            request.osc_ids.clone(),
+        )
+        .map_err(|e| format!("Worker playback failed: {e}"))?;
 
     // 8. Enregistrer le movement (worker)
     let movement = Movement {
@@ -144,21 +150,29 @@ pub async fn activate_move(
         if !merge_rt.is_running() {
             // Callback position — emit sur un canal global unique
             let app_handle = lock_or_recover(&state.app_handle)
-                .as_ref().ok_or("App handle not available")?.clone();
-            merge_rt.set_position_callback(Box::new(move |t: f64, positions: Vec<(usize, nalgebra::Vector3<f64>)>| {
-                let positions_data: Vec<(usize, [f64; 3])> = positions
-                    .into_iter().map(|(idx, pos)| (idx, [pos.x, pos.y, pos.z])).collect();
-                let _ = app_handle.emit(
-                    "global-positions",
-                    serde_json::json!({
-                        "time": t,
-                        "positions": positions_data,
-                    }),
-                );
-            }));
-            drop(merge_rt);  // Relâcher le lock avant start (start prend &mut)
+                .as_ref()
+                .ok_or("App handle not available")?
+                .clone();
+            merge_rt.set_position_callback(Box::new(
+                move |t: f64, positions: Vec<(usize, nalgebra::Vector3<f64>)>| {
+                    let positions_data: Vec<(usize, [f64; 3])> = positions
+                        .into_iter()
+                        .map(|(idx, pos)| (idx, [pos.x, pos.y, pos.z]))
+                        .collect();
+                    let _ = app_handle.emit(
+                        "global-positions",
+                        serde_json::json!({
+                            "time": t,
+                            "positions": positions_data,
+                        }),
+                    );
+                },
+            ));
+            drop(merge_rt); // Relâcher le lock avant start (start prend &mut)
             let mut merge_rt = lock_or_recover(&state.merge_runtime);
-            merge_rt.start().map_err(|e| format!("Failed to start MergeRuntime: {}", e))?;
+            merge_rt
+                .start()
+                .map_err(|e| format!("Failed to start MergeRuntime: {e}"))?;
         }
     }
 
@@ -167,8 +181,15 @@ pub async fn activate_move(
         let _ = app_handle.emit("active-moves-update", ());
     }
 
-    Ok(format!("Move '{}' activated ({})", request.name,
-        if request.is_preview { "preview" } else { "live" }))
+    Ok(format!(
+        "Move '{}' activated ({})",
+        request.name,
+        if request.is_preview {
+            "preview"
+        } else {
+            "live"
+        }
+    ))
 }
 
 /// Désactive un move avec fade out
@@ -198,7 +219,10 @@ pub async fn deactivate_move(
     deactivate_move_immediate(&movement_id, &state)
 }
 
-fn deactivate_move_immediate(movement_id: &str, state: &State<'_, AppState>) -> Result<String, String> {
+fn deactivate_move_immediate(
+    movement_id: &str,
+    state: &State<'_, AppState>,
+) -> Result<String, String> {
     // Retirer du MergeRuntime et recalculer les osc_ids globaux
     {
         let merge_rt = lock_or_recover(&state.merge_runtime);
@@ -223,7 +247,7 @@ fn deactivate_move_immediate(movement_id: &str, state: &State<'_, AppState>) -> 
         let _ = app_handle.emit("active-moves-update", ());
     }
 
-    Ok(format!("Move '{}' deactivated", movement_id))
+    Ok(format!("Move '{movement_id}' deactivated"))
 }
 
 /// Désactive tous les moves avec fade out
@@ -263,7 +287,7 @@ pub async fn deactivate_all_moves(
         let _ = deactivate_move_immediate(id, &state);
     }
 
-    Ok(format!("{} moves deactivated", count))
+    Ok(format!("{count} moves deactivated"))
 }
 
 /// Définit la stratégie de merge
@@ -277,7 +301,7 @@ pub async fn set_merge_strategy(
         "crossfade" => MergeStrategy::Crossfade,
         "blend" => MergeStrategy::Blend,
         "priority" => MergeStrategy::Priority,
-        _ => return Err(format!("Unknown merge strategy: {}", strategy)),
+        _ => return Err(format!("Unknown merge strategy: {strategy}")),
     };
     let merge_rt = lock_or_recover(&state.merge_runtime);
     merge_rt.set_merge_strategy(strat);
@@ -293,7 +317,9 @@ pub async fn set_global_macro(
 ) -> Result<(), String> {
     let merge_rt = lock_or_recover(&state.merge_runtime);
     let macros = merge_rt.macros();
-    if let Some(s) = request.scale { macros.set_scale(s); }
+    if let Some(s) = request.scale {
+        macros.set_scale(s);
+    }
     let current_shift = macros.get_shift();
     macros.set_shift(
         request.shiftX.unwrap_or(current_shift.x),
@@ -306,8 +332,12 @@ pub async fn set_global_macro(
         request.pitch.unwrap_or(cp),
         request.roll.unwrap_or(cr),
     );
-    if let Some(v) = request.radius_scale { macros.set_radius_scale(v); }
-    if let Some(v) = request.height_offset { macros.set_height_offset(v); }
+    if let Some(v) = request.radius_scale {
+        macros.set_radius_scale(v);
+    }
+    if let Some(v) = request.height_offset {
+        macros.set_height_offset(v);
+    }
     // Note: speed n'est PAS appliqué ici — speed reste per-move
     Ok(())
 }
@@ -320,18 +350,16 @@ pub async fn set_move_speed(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     let movements = lock_or_recover(&state.movements);
-    let movement = movements.get(&movement_id)
-        .ok_or_else(|| format!("Movement '{}' not found", movement_id))?;
+    let movement = movements
+        .get(&movement_id)
+        .ok_or_else(|| format!("Movement '{movement_id}' not found"))?;
     movement.runtime.macros().set_speed(speed);
     Ok(())
 }
 
 /// Définit les depths par track (pour le MergeRuntime)
 #[tauri::command]
-pub async fn set_track_depths(
-    depths: Vec<f64>,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn set_track_depths(depths: Vec<f64>, state: State<'_, AppState>) -> Result<(), String> {
     let merge_rt = lock_or_recover(&state.merge_runtime);
     merge_rt.set_track_depths(depths);
     Ok(())
@@ -339,10 +367,7 @@ pub async fn set_track_depths(
 
 /// Définit l'origin global (isobarycentre des tracks)
 #[tauri::command]
-pub async fn set_global_origin(
-    origin: [f64; 3],
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn set_global_origin(origin: [f64; 3], state: State<'_, AppState>) -> Result<(), String> {
     let merge_rt = lock_or_recover(&state.merge_runtime);
     merge_rt.set_origin(nalgebra::Vector3::new(origin[0], origin[1], origin[2]));
     Ok(())
@@ -368,27 +393,27 @@ pub async fn update_move_graph_merged(
     state: State<'_, AppState>,
 ) -> Result<String, String> {
     let movements = lock_or_recover(&state.movements);
-    let movement = movements.get(&movement_id)
-        .ok_or_else(|| format!("Movement '{}' not found", movement_id))?;
+    let movement = movements
+        .get(&movement_id)
+        .ok_or_else(|| format!("Movement '{movement_id}' not found"))?;
 
     let audio_state = lock_or_recover(&state.audio_state);
     let graph = build_graph_from_json(&graph_json, &audio_state)?;
     drop(audio_state);
 
     let overrides = movement.runtime.audio_param_overrides();
-    let compiled = compile_graph_with_audio_and_overrides(&graph, state.audio_state.clone(), overrides)?;
+    let compiled =
+        compile_graph_with_audio_and_overrides(&graph, state.audio_state.clone(), overrides)?;
 
     let fade = fade_duration.unwrap_or(0.3);
     movement.runtime.recall_cue(compiled, fade);
 
-    Ok(format!("Move '{}' graph hot-swapped", movement_id))
+    Ok(format!("Move '{movement_id}' graph hot-swapped"))
 }
 
 /// Récupère les stats de performance du MergeRuntime
 #[tauri::command]
-pub async fn get_merge_perf_stats(
-    state: State<'_, AppState>,
-) -> Result<serde_json::Value, String> {
+pub async fn get_merge_perf_stats(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
     let merge_rt = lock_or_recover(&state.merge_runtime);
     let perf = merge_rt.get_perf_stats();
     Ok(serde_json::json!({
@@ -405,16 +430,19 @@ pub async fn list_active_moves(
     state: State<'_, AppState>,
 ) -> Result<Vec<serde_json::Value>, String> {
     let movements = lock_or_recover(&state.movements);
-    Ok(movements.values().map(|m| {
-        serde_json::json!({
-            "id": m.id,
-            "name": m.name,
-            "osc_ids": m.osc_ids,
-            "is_preview": m.is_preview,
-            "is_playing": m.runtime.is_running(),
-            "track_count": m.osc_ids.len(),
+    Ok(movements
+        .values()
+        .map(|m| {
+            serde_json::json!({
+                "id": m.id,
+                "name": m.name,
+                "osc_ids": m.osc_ids,
+                "is_preview": m.is_preview,
+                "is_playing": m.runtime.is_running(),
+                "track_count": m.osc_ids.len(),
+            })
         })
-    }).collect())
+        .collect())
 }
 
 /// Compile et hot-swap le graph global (post-processing)
@@ -427,24 +455,25 @@ pub async fn update_global_graph(
     // Récupérer l'audio state partagé
     let audio_state = {
         let merge_rt = lock_or_recover(&state.merge_runtime);
-        merge_rt.audio_state_arc().lock().unwrap_or_else(|e| e.into_inner()).clone()
+        merge_rt
+            .audio_state_arc()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     };
 
     // Parser le graph JSON en Graph
     let graph = build_graph_from_json(&graph_json, &audio_state)
-        .map_err(|e| format!("Failed to parse global graph: {}", e))?;
+        .map_err(|e| format!("Failed to parse global graph: {e}"))?;
 
     // Compiler le graph en PostProcessFn
     let merge_rt = lock_or_recover(&state.merge_runtime);
     let macros = merge_rt.macros();
 
-    let compile_params = stagespace_engines::PostProcessCompileParams {
-        graph,
-        macros,
-    };
+    let compile_params = stagespace_engines::PostProcessCompileParams { graph, macros };
 
     let post_process_fn = stagespace_engines::compile_post_process(compile_params)
-        .map_err(|e| format!("Failed to compile global graph: {:?}", e))?;
+        .map_err(|e| format!("Failed to compile global graph: {e:?}"))?;
 
     // Hot-swap la fonction dans le MergeRuntime
     merge_rt.swap_post_process_fn(post_process_fn);
@@ -488,9 +517,7 @@ pub async fn clear_manual_position(
 
 /// Efface toutes les positions manuelles
 #[tauri::command]
-pub async fn clear_all_manual_positions(
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn clear_all_manual_positions(state: State<'_, AppState>) -> Result<(), String> {
     let merge_rt = lock_or_recover(&state.merge_runtime);
     merge_rt.clear_all_manual_positions();
     Ok(())

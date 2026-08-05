@@ -1,4 +1,4 @@
-use stagespace_engines::{Graph, Node, NodeType, NodeId, Edge, AudioState};
+use stagespace_engines::{AudioState, Edge, Graph, Node, NodeId, NodeType};
 use std::collections::HashMap;
 
 /// Helper : conversion graphe frontend → Rust Graph
@@ -34,7 +34,7 @@ pub fn build_graph_from_json(
             .ok_or("Missing node type")?;
 
         let node_type: NodeType = serde_json::from_value(serde_json::json!(type_str))
-            .map_err(|e| format!("Invalid node type '{}': {}", type_str, e))?;
+            .map_err(|e| format!("Invalid node type '{type_str}': {e}"))?;
 
         let mut params = node
             .get("data")
@@ -62,8 +62,11 @@ pub fn build_graph_from_json(
         }
 
         // Convertir curve string pour les falloffs
-        if type_str == "TimeFalloff" || type_str == "PointDistanceFalloff"
-            || type_str == "DirectionalFalloff" || type_str == "AudioAmplitudeFalloff" {
+        if type_str == "TimeFalloff"
+            || type_str == "PointDistanceFalloff"
+            || type_str == "DirectionalFalloff"
+            || type_str == "AudioAmplitudeFalloff"
+        {
             if let Some(curve_str) = params.get("curve").and_then(|v| v.as_str()) {
                 let curve = match curve_str {
                     "ease_in" => "EaseIn",
@@ -76,27 +79,63 @@ pub fn build_graph_from_json(
         }
 
         let pos = node.get("position");
-        let x = pos.and_then(|p| p.get("x")).and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-        let y = pos.and_then(|p| p.get("y")).and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+        let x = pos
+            .and_then(|p| p.get("x"))
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0) as f32;
+        let y = pos
+            .and_then(|p| p.get("y"))
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0) as f32;
 
         let new_id = NodeId::new();
         id_map.insert(frontend_id, new_id);
-        graph.add_node(Node { id: new_id, node_type, params, position: (x, y) });
+        graph.add_node(Node {
+            id: new_id,
+            node_type,
+            params,
+            position: (x, y),
+        });
     }
 
     for edge in edges {
-        let source = edge.get("source").and_then(|v| v.as_str()).ok_or("Missing edge source")?;
-        let target = edge.get("target").and_then(|v| v.as_str()).ok_or("Missing edge target")?;
-        let from = *id_map.get(source).ok_or_else(|| format!("Unknown source node id: {}", source))?;
-        let to = *id_map.get(target).ok_or_else(|| format!("Unknown target node id: {}", target))?;
-        let from_port = edge.get("sourceHandle").and_then(|v| v.as_str()).unwrap_or("output").to_string();
-        let to_port = edge.get("targetHandle").and_then(|v| v.as_str()).unwrap_or("input").to_string();
-        graph.add_edge(Edge { from, to, from_port, to_port });
+        let source = edge
+            .get("source")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing edge source")?;
+        let target = edge
+            .get("target")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing edge target")?;
+        let from = *id_map
+            .get(source)
+            .ok_or_else(|| format!("Unknown source node id: {source}"))?;
+        let to = *id_map
+            .get(target)
+            .ok_or_else(|| format!("Unknown target node id: {target}"))?;
+        let from_port = edge
+            .get("sourceHandle")
+            .and_then(|v| v.as_str())
+            .unwrap_or("output")
+            .to_string();
+        let to_port = edge
+            .get("targetHandle")
+            .and_then(|v| v.as_str())
+            .unwrap_or("input")
+            .to_string();
+        graph.add_edge(Edge {
+            from,
+            to,
+            from_port,
+            to_port,
+        });
     }
 
     // Injecter n_objects du node Objects dans tous les engines qui ne l'ont pas
     // (ou qui ont une valeur différente) — évite les CountMismatch
-    let objects_n = graph.nodes.values()
+    let objects_n = graph
+        .nodes
+        .values()
         .find(|n| n.node_type == NodeType::Objects)
         .and_then(|n| n.params.get("n_objects"))
         .and_then(|v| v.as_u64())
@@ -104,14 +143,37 @@ pub fn build_graph_from_json(
 
     for node in graph.nodes.values_mut() {
         match node.node_type {
-            NodeType::Circular | NodeType::Elliptical | NodeType::Spiral | NodeType::Lissajous | NodeType::Figure8
-            | NodeType::Linear | NodeType::Oscillation | NodeType::Formation | NodeType::PerlinNoise
-            | NodeType::Converge | NodeType::Pendulum | NodeType::RoseCurve | NodeType::Helix
-            | NodeType::Bouncing | NodeType::Spring | NodeType::Follow | NodeType::Swarm | NodeType::Avoidance
+            NodeType::Circular
+            | NodeType::Elliptical
+            | NodeType::Spiral
+            | NodeType::Lissajous
+            | NodeType::Figure8
+            | NodeType::Linear
+            | NodeType::Oscillation
+            | NodeType::Formation
+            | NodeType::PerlinNoise
+            | NodeType::Converge
+            | NodeType::Pendulum
+            | NodeType::RoseCurve
+            | NodeType::Helix
+            | NodeType::Bouncing
+            | NodeType::Spring
+            | NodeType::Follow
+            | NodeType::Swarm
+            | NodeType::Avoidance
             | NodeType::CustomTrajectory
-            | NodeType::DrawSpline | NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline
-            | NodeType::BPM | NodeType::AudioAmplitude | NodeType::AudioSpectrum | NodeType::OSCInput
-            | NodeType::TimeFalloff | NodeType::PointDistanceFalloff | NodeType::DirectionalFalloff | NodeType::AudioAmplitudeFalloff => {
+            | NodeType::DrawSpline
+            | NodeType::EvaluateSpline
+            | NodeType::TrimSpline
+            | NodeType::OffsetSpline
+            | NodeType::BPM
+            | NodeType::AudioAmplitude
+            | NodeType::AudioSpectrum
+            | NodeType::OSCInput
+            | NodeType::TimeFalloff
+            | NodeType::PointDistanceFalloff
+            | NodeType::DirectionalFalloff
+            | NodeType::AudioAmplitudeFalloff => {
                 // Forcer n_objects = objects_n pour tous les engines
                 node.params["n_objects"] = serde_json::json!(objects_n);
             }

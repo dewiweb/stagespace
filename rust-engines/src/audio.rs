@@ -97,7 +97,7 @@ impl AudioReactor {
     }
 
     pub fn remove_binding(&mut self, source: &AudioSource, macro_name: &str) {
-        let key = format!("{:?}-{}", source, macro_name);
+        let key = format!("{source:?}-{macro_name}");
         self.bindings.remove(&key);
     }
 
@@ -116,7 +116,8 @@ impl AudioReactor {
                         AudioSource::Stream(_) => frame.rms,
                     };
                     // Appliquer min/max/smoothing
-                    let normalized = (value - binding.min_val) / (binding.max_val - binding.min_val);
+                    let normalized =
+                        (value - binding.min_val) / (binding.max_val - binding.min_val);
                     return Some(normalized.clamp(0.0, 1.0));
                 }
             }

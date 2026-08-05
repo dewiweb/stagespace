@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use nalgebra::Vector3;
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
 /// Profils OSC disponibles
@@ -21,10 +21,12 @@ impl FromStr for OscProfile {
             "iem" | "iem_multi_encoder" | "iemmultiencoder" => Ok(OscProfile::IEMMultiEncoder),
             "holophonix" => Ok(OscProfile::Holophonix),
             "ircam" | "ircam_spat" | "ircamspat" => Ok(OscProfile::IRCAMSpat),
-            "generic" | "generic_cartesian" | "genericcartesian" => Ok(OscProfile::GenericCartesian),
+            "generic" | "generic_cartesian" | "genericcartesian" => {
+                Ok(OscProfile::GenericCartesian)
+            }
             "generic_polar" | "genericpolar" => Ok(OscProfile::GenericPolar),
             "adm" | "adm_osc" | "admosc" => Ok(OscProfile::ADMOSC),
-            _ => Err(format!("Unknown OSC profile: {}", s)),
+            _ => Err(format!("Unknown OSC profile: {s}")),
         }
     }
 }
@@ -91,13 +93,13 @@ impl OscSender {
     /// Convertit une position cartésienne en format selon le profil
     pub fn format_position(&self, object_id: u32, position: Vector3<f64>) -> (String, Vec<f64>) {
         let osc_id = object_id + self.object_offset;
-        
+
         // Appliquer les macros (speed est appliquée par le runtime sur t, pas ici)
         let mut pos = position;
         pos.x = pos.x * self.scale + self.shift.x;
         pos.y = pos.y * self.scale + self.shift.y;
         pos.z = pos.z * self.scale + self.shift.z;
-        
+
         // Appliquer turbulence — bruit déterministe basé sur le temps et l'objet
         if self.turbulence > 0.0 {
             use crate::rng::SimpleRng;
@@ -112,7 +114,7 @@ impl OscSender {
             pos.y += noise_y;
             pos.z += noise_z;
         }
-        
+
         match &self.profile {
             OscProfile::IEMMultiEncoder => {
                 // IEM MultiEncoder (Ambisonics) - Polar coordinates
@@ -124,20 +126,23 @@ impl OscSender {
                     0.0
                 };
                 let distance_norm = distance.min(1.0);
-                
-                (format!("/MultiEncoder/{}/aed", osc_id), vec![azimuth, elevation, distance_norm])
+
+                (
+                    format!("/MultiEncoder/{osc_id}/aed"),
+                    vec![azimuth, elevation, distance_norm],
+                )
             }
             OscProfile::Holophonix => {
                 // Holophonix - Cartesian coordinates
-                (format!("/track/{}/xyz", osc_id), vec![pos.x, pos.y, pos.z])
+                (format!("/track/{osc_id}/xyz"), vec![pos.x, pos.y, pos.z])
             }
             OscProfile::IRCAMSpat => {
                 // IRCAM Spat - Cartesian coordinates
-                (format!("/source/{}/xyz", osc_id), vec![pos.x, pos.y, pos.z])
+                (format!("/source/{osc_id}/xyz"), vec![pos.x, pos.y, pos.z])
             }
             OscProfile::GenericCartesian => {
                 // Generic Cartesian
-                (format!("/object/{}/xyz", osc_id), vec![pos.x, pos.y, pos.z])
+                (format!("/object/{osc_id}/xyz"), vec![pos.x, pos.y, pos.z])
             }
             OscProfile::GenericPolar => {
                 // Generic Polar - envoi en 3 messages séparés
@@ -151,7 +156,10 @@ impl OscSender {
                 let distance_norm = distance.min(1.0);
 
                 // Pour GenericPolar, on retourne l'adresse base + les 3 valeurs
-                (format!("/object/{}", osc_id), vec![azimuth, elevation, distance_norm])
+                (
+                    format!("/object/{osc_id}"),
+                    vec![azimuth, elevation, distance_norm],
+                )
             }
             OscProfile::ADMOSC => {
                 // ADM-OSC - Ambisonics panning with spherical coordinates
@@ -164,7 +172,10 @@ impl OscSender {
                 };
                 let distance_norm = distance.min(1.0);
 
-                (format!("/adm/source/{}/aed", osc_id), vec![azimuth, elevation, distance_norm])
+                (
+                    format!("/adm/source/{osc_id}/aed"),
+                    vec![azimuth, elevation, distance_norm],
+                )
             }
         }
     }
@@ -256,9 +267,18 @@ mod tests {
 
     #[test]
     fn test_profile_from_str() {
-        assert_eq!(OscProfile::from_str("holophonix").unwrap(), OscProfile::Holophonix);
-        assert_eq!(OscProfile::from_str("IEM").unwrap(), OscProfile::IEMMultiEncoder);
-        assert_eq!(OscProfile::from_str("ircam").unwrap(), OscProfile::IRCAMSpat);
+        assert_eq!(
+            OscProfile::from_str("holophonix").unwrap(),
+            OscProfile::Holophonix
+        );
+        assert_eq!(
+            OscProfile::from_str("IEM").unwrap(),
+            OscProfile::IEMMultiEncoder
+        );
+        assert_eq!(
+            OscProfile::from_str("ircam").unwrap(),
+            OscProfile::IRCAMSpat
+        );
         assert_eq!(OscProfile::from_str("adm").unwrap(), OscProfile::ADMOSC);
         assert!(OscProfile::from_str("invalid").is_err());
     }

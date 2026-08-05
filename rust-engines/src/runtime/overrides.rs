@@ -1,10 +1,16 @@
-use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 /// Manager pour les overrides de position par objet — l'ingénieur peut forcer une position manuelle
 #[derive(Clone)]
 pub struct OverrideManager {
     overrides: Arc<Mutex<HashMap<usize, nalgebra::Vector3<f64>>>>,
+}
+
+impl Default for OverrideManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl OverrideManager {

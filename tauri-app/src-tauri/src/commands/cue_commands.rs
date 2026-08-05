@@ -3,14 +3,12 @@
 //! Store : snapshot complet (graph, macros, tracks, global graph, depths, manual positions)
 //! Recall : désactiver/activer moves, hot-swap global graph, restaurer macros/depths/positions
 
-use stagespace_engines::{
-    Cue, MacroSnapshot, SpatialMacroSnapshot,
-};
-use serde::Deserialize;
-use std::sync::{Mutex, MutexGuard};
-use tauri::{State, Emitter};
-use crate::AppState;
 use crate::graph::parser::build_graph_from_json;
+use crate::AppState;
+use serde::Deserialize;
+use stagespace_engines::{Cue, MacroSnapshot, SpatialMacroSnapshot};
+use std::sync::{Mutex, MutexGuard};
+use tauri::{Emitter, State};
 
 fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(|e| e.into_inner())
@@ -73,7 +71,10 @@ pub async fn store_cue(
     };
 
     // Émettre l'événement pour que le frontend persiste le cue
-    state.app_handle.lock().unwrap_or_else(|e| e.into_inner())
+    state
+        .app_handle
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
         .as_ref()
         .map(|handle| handle.emit("cue-stored", &cue));
 
@@ -84,10 +85,7 @@ pub async fn store_cue(
 
 /// Rappelle un cue : désactiver/activer moves, hot-swap global graph, restaurer macros/depths/positions
 #[tauri::command]
-pub async fn recall_cue(
-    cue: Cue,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), String> {
     // 1. Désactiver les moves qui ne sont pas dans active_move_ids
     {
         let movements = lock_or_recover(&state.movements);
@@ -121,22 +119,23 @@ pub async fn recall_cue(
     if let Some(ref global_graph) = cue.global_graph {
         let audio_state = {
             let merge_rt = lock_or_recover(&state.merge_runtime);
-            merge_rt.audio_state_arc().lock().unwrap_or_else(|e| e.into_inner()).clone()
+            merge_rt
+                .audio_state_arc()
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone()
         };
 
         let graph = build_graph_from_json(global_graph, &audio_state)
-            .map_err(|e| format!("Failed to parse global graph: {}", e))?;
+            .map_err(|e| format!("Failed to parse global graph: {e}"))?;
 
         let merge_rt = lock_or_recover(&state.merge_runtime);
         let macros = merge_rt.macros();
 
-        let compile_params = stagespace_engines::PostProcessCompileParams {
-            graph,
-            macros,
-        };
+        let compile_params = stagespace_engines::PostProcessCompileParams { graph, macros };
 
         let post_process_fn = stagespace_engines::compile_post_process(compile_params)
-            .map_err(|e| format!("Failed to compile global graph: {:?}", e))?;
+            .map_err(|e| format!("Failed to compile global graph: {e:?}"))?;
 
         merge_rt.swap_post_process_fn(post_process_fn);
     }
@@ -178,7 +177,10 @@ pub async fn recall_cue(
     // car il faut compiler le sub-graph et créer un worker.
     // Le frontend écoutera l'événement "cue-recalled" et activera les moves.
 
-    state.app_handle.lock().unwrap_or_else(|e| e.into_inner())
+    state
+        .app_handle
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
         .as_ref()
         .map(|handle| handle.emit("cue-recalled", &cue));
 

@@ -6,19 +6,51 @@ pub struct AudioAmplitudeEngine;
 
 impl Engine for AudioAmplitudeEngine {
     fn position(&self, t: f64, _object_index: usize, params: &EngineParams) -> Vector3<f64> {
-        let amplitude = params.extra.get("amplitude").and_then(|v| v.as_f64()).unwrap_or(0.5);
-        let radius = params.extra.get("radius").and_then(|v| v.as_f64()).unwrap_or(1.0);
-        let _band = params.extra.get("band").and_then(|v| v.as_str()).unwrap_or("rms");
-        let plane = params.extra.get("plane").and_then(|v| v.as_str()).unwrap_or("xz");
+        let amplitude = params
+            .extra
+            .get("amplitude")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.5);
+        let radius = params
+            .extra
+            .get("radius")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0);
+        let _band = params
+            .extra
+            .get("band")
+            .and_then(|v| v.as_str())
+            .unwrap_or("rms");
+        let plane = params
+            .extra
+            .get("plane")
+            .and_then(|v| v.as_str())
+            .unwrap_or("xz");
 
         let modulated_radius = radius * amplitude;
         let angle = 2.0 * std::f64::consts::PI * t / params.duration;
 
         match plane {
-            "xy" => Vector3::new(modulated_radius * angle.cos(), modulated_radius * angle.sin(), 0.0),
-            "xz" => Vector3::new(modulated_radius * angle.cos(), 0.0, modulated_radius * angle.sin()),
-            "yz" => Vector3::new(0.0, modulated_radius * angle.cos(), modulated_radius * angle.sin()),
-            _ => Vector3::new(modulated_radius * angle.cos(), 0.0, modulated_radius * angle.sin()),
+            "xy" => Vector3::new(
+                modulated_radius * angle.cos(),
+                modulated_radius * angle.sin(),
+                0.0,
+            ),
+            "xz" => Vector3::new(
+                modulated_radius * angle.cos(),
+                0.0,
+                modulated_radius * angle.sin(),
+            ),
+            "yz" => Vector3::new(
+                0.0,
+                modulated_radius * angle.cos(),
+                modulated_radius * angle.sin(),
+            ),
+            _ => Vector3::new(
+                modulated_radius * angle.cos(),
+                0.0,
+                modulated_radius * angle.sin(),
+            ),
         }
     }
 

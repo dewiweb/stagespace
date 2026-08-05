@@ -46,7 +46,7 @@ impl PresetManager {
         if self.presets.remove(name).is_some() {
             Ok(())
         } else {
-            Err(format!("Preset '{}' not found", name))
+            Err(format!("Preset '{name}' not found"))
         }
     }
 
@@ -106,7 +106,7 @@ mod tests {
         let mut manager = PresetManager::new();
         let config = serde_json::json!({"key": "value"});
         manager.save("test".to_string(), config.clone());
-        
+
         let loaded = manager.load("test");
         assert!(loaded.is_some());
         assert_eq!(loaded.unwrap().config, config);
@@ -125,7 +125,7 @@ mod tests {
         let mut manager = PresetManager::new();
         manager.save("preset1".to_string(), serde_json::json!({}));
         manager.save("preset2".to_string(), serde_json::json!({}));
-        
+
         let presets = manager.get_presets();
         assert_eq!(presets.len(), 2);
         assert!(presets.contains(&"preset1".to_string()));

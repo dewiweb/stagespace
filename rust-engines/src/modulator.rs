@@ -38,7 +38,14 @@ impl Modulator {
     }
 
     /// Ajoute un slot de modulation
-    pub fn add_slot(&mut self, target: String, waveform: Waveform, rate: f64, depth: f64, center: f64) {
+    pub fn add_slot(
+        &mut self,
+        target: String,
+        waveform: Waveform,
+        rate: f64,
+        depth: f64,
+        center: f64,
+    ) {
         let slot = ModulationSlot {
             target: target.clone(),
             waveform,
@@ -86,7 +93,11 @@ impl Modulator {
                     }
                 }
                 Waveform::Square => {
-                    if phase.sin() >= 0.0 { 1.0 } else { -1.0 }
+                    if phase.sin() >= 0.0 {
+                        1.0
+                    } else {
+                        -1.0
+                    }
                 }
                 Waveform::Sawtooth => {
                     let p = (phase / (2.0 * std::f64::consts::PI)) % 2.0;
@@ -97,7 +108,7 @@ impl Modulator {
                     (phase * 7.0).sin()
                 }
             };
-            
+
             Some(slot.center + modulation * slot.depth)
         } else {
             None
@@ -150,26 +161,14 @@ mod tests {
     #[test]
     fn test_add_slot() {
         let mut modulator = Modulator::new();
-        modulator.add_slot(
-            "speed".to_string(),
-            Waveform::Sine,
-            0.5,
-            0.3,
-            1.0,
-        );
+        modulator.add_slot("speed".to_string(), Waveform::Sine, 0.5, 0.3, 1.0);
         assert_eq!(modulator.len(), 1);
     }
 
     #[test]
     fn test_remove_slot() {
         let mut modulator = Modulator::new();
-        modulator.add_slot(
-            "speed".to_string(),
-            Waveform::Sine,
-            0.5,
-            0.3,
-            1.0,
-        );
+        modulator.add_slot("speed".to_string(), Waveform::Sine, 0.5, 0.3, 1.0);
         modulator.remove_slot("speed");
         assert!(modulator.is_empty());
     }
@@ -177,14 +176,8 @@ mod tests {
     #[test]
     fn test_calculate_value_sine() {
         let mut modulator = Modulator::new();
-        modulator.add_slot(
-            "speed".to_string(),
-            Waveform::Sine,
-            1.0,
-            0.5,
-            1.0,
-        );
-        
+        modulator.add_slot("speed".to_string(), Waveform::Sine, 1.0, 0.5, 1.0);
+
         let value = modulator.calculate_value("speed", 0.0);
         assert!(value.is_some());
         // At t=0, sin(0)=0, so value = center = 1.0
@@ -194,14 +187,8 @@ mod tests {
     #[test]
     fn test_calculate_value_triangle() {
         let mut modulator = Modulator::new();
-        modulator.add_slot(
-            "speed".to_string(),
-            Waveform::Triangle,
-            1.0,
-            0.5,
-            1.0,
-        );
-        
+        modulator.add_slot("speed".to_string(), Waveform::Triangle, 1.0, 0.5, 1.0);
+
         let value = modulator.calculate_value("speed", 0.0);
         assert!(value.is_some());
     }
@@ -218,13 +205,7 @@ mod tests {
     #[test]
     fn test_clear() {
         let mut modulator = Modulator::new();
-        modulator.add_slot(
-            "speed".to_string(),
-            Waveform::Sine,
-            0.5,
-            0.3,
-            1.0,
-        );
+        modulator.add_slot("speed".to_string(), Waveform::Sine, 0.5, 0.3, 1.0);
         modulator.clear();
         assert!(modulator.is_empty());
     }

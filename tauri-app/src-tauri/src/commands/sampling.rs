@@ -1,11 +1,11 @@
+use crate::AppState;
 use std::sync::{Mutex, MutexGuard};
 use tauri::State;
-use crate::AppState;
 
 /// Récupère le contenu d'un Mutex même s'il est empoisonné (poison recovery).
 fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(|e| {
-        eprintln!("[WARN] Mutex was poisoned, recovering inner data: {}", e);
+        eprintln!("[WARN] Mutex was poisoned, recovering inner data: {e}");
         e.into_inner()
     })
 }
@@ -66,9 +66,13 @@ pub async fn sample_movement_trajectory(
 ) -> Result<Vec<(f64, f64, f64, f64)>, String> {
     // 1. Sampler avec les macros du movement (depuis le runtime du movement)
     let movements = lock_or_recover(&state.movements);
-    let movement = movements.get(&movement_id)
-        .ok_or_else(|| format!("Movement '{}' not found", movement_id))?;
-    let raw_samples = movement.runtime.sample_trajectory(object_index, n_samples.max(2), duration.max(0.1));
+    let movement = movements
+        .get(&movement_id)
+        .ok_or_else(|| format!("Movement '{movement_id}' not found"))?;
+    let raw_samples =
+        movement
+            .runtime
+            .sample_trajectory(object_index, n_samples.max(2), duration.max(0.1));
     drop(movements);
 
     // 2. Appliquer le post-process global (depuis le MergeRuntime)
