@@ -4,6 +4,7 @@ use crate::logging::{log_runtime_init, log_playback_start, log_playback_stop, lo
 use crate::error::{StagespaceError, Result};
 use crate::animation::AnimationState;
 use crate::audio::AudioState;
+use crate::position_buffer::PositionBuffer;
 use rosc::{OscMessage, OscPacket, OscType};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -43,6 +44,12 @@ pub struct Runtime {
     /// Audio param overrides — calculés à chaque frame à partir des audio_mods,
     /// lus par la closure compilée pour injecter radius/height/turns/offset/rotation
     audio_param_overrides: Arc<Mutex<HashMap<String, f64>>>,
+    /// Buffer de positions — en mode "worker", le runtime écrit ses positions
+    /// dans ce buffer au lieu d'envoyer l'OSC directement. Le MergeRuntime lit
+    /// tous les buffers pour faire le merge + post-processing + OSC.
+    /// None = mode legacy (OSC direct, compatibilité)
+    /// Some(buf) = mode worker (écrit dans le buffer, pas d'OSC, pas de macros spatiales)
+    position_buffer: Mutex<Option<Arc<PositionBuffer>>>,
 }
 
 impl Runtime {
@@ -67,6 +74,7 @@ impl Runtime {
             animation_state: Arc::new(Mutex::new(None)),
             audio_state: Arc::new(Mutex::new(AudioState::new())),
             audio_param_overrides: Arc::new(Mutex::new(HashMap::new())),
+            position_buffer: Mutex::new(None),
         })
     }
 
@@ -74,6 +82,27 @@ impl Runtime {
     pub fn set_position_callback(&self, callback: PositionCallback) {
         let mut cb = self.position_callback.lock().unwrap_or_else(|e| e.into_inner());
         *cb = Some(callback);
+    }
+
+    /// Active le mode "worker" : le runtime écrit ses positions dans le buffer
+    /// au lieu d'envoyer l'OSC directement. Le MergeRuntime fera le merge + post-processing.
+    /// En mode worker, le runtime n'applique PAS les macros spatiales (scale, rotation, shift,
+    /// radius_scale, height_offset) ni le depth — ces transformations montent dans le merge thread.
+    /// Le runtime garde : speed, loop_mode, direction, phase_offset, fade, overrides.
+    pub fn set_position_buffer(&self, buffer: Arc<PositionBuffer>) {
+        let mut buf = self.position_buffer.lock().unwrap_or_else(|e| e.into_inner());
+        *buf = Some(buffer);
+    }
+
+    /// Désactive le mode "worker" : retour au mode legacy (OSC direct).
+    pub fn unset_position_buffer(&self) {
+        let mut buf = self.position_buffer.lock().unwrap_or_else(|e| e.into_inner());
+        *buf = None;
+    }
+
+    /// Vérifie si le runtime est en mode worker (buffer) ou legacy (OSC direct)
+    pub fn is_worker_mode(&self) -> bool {
+        self.position_buffer.lock().unwrap_or_else(|e| e.into_inner()).is_some()
     }
 
     /// Définit l'origin (isobarycentre des tracks ciblées)
@@ -198,6 +227,7 @@ impl Runtime {
         let anim_state_arc = self.animation_state.clone();
         let audio_state_arc = self.audio_state.clone();
         let audio_param_overrides_arc = self.audio_param_overrides.clone();
+        let position_buffer_arc = self.position_buffer.lock().unwrap_or_else(|e| e.into_inner()).clone();
 
         let handle = std::thread::spawn(move || {
             let start = Instant::now();
@@ -314,6 +344,67 @@ impl Runtime {
                 };
 
                 // Lire la fonction de position (hot-swappable)
+                // ── Mode worker : calculer juste raw_pos (avec speed, loop, direction, phase_offset, overrides)
+                //    et écrire dans le buffer. Le MergeRuntime fera le merge + post-processing + OSC.
+                // ── Mode legacy : calculer raw_pos + radius_scale + height_offset + depth,
+                //    puis envoyer OSC + callback (comportement actuel).
+                if let Some(ref buffer) = position_buffer_arc {
+                    // ── Mode worker ──
+                    let positions: Vec<(usize, nalgebra::Vector3<f64>)> = {
+                        let fn_ref = position_fn_arc.lock().unwrap_or_else(|e| e.into_inner());
+                        let ovr = overrides.lock();
+                        osc_ids.iter().enumerate().map(|(obj_idx, &_osc_id)| {
+                            // Si un override existe pour cet objet, l'utiliser
+                            let raw_pos = if let Some(override_pos) = ovr.get(&obj_idx) {
+                                *override_pos
+                            } else {
+                                // Appliquer le phase_offset pour cette track
+                                let phase_off = track_phase_offsets.get(obj_idx).copied().unwrap_or(0.0);
+                                let t_with_phase = if duration > 0.0 {
+                                    t_eff + (phase_off / 360.0) * duration
+                                } else {
+                                    t_eff
+                                };
+                                let t_looped = if loop_is_on && duration > 0.0 {
+                                    t_with_phase % duration
+                                } else {
+                                    t_with_phase
+                                };
+                                fn_ref(t_looped, obj_idx)
+                            };
+                            (obj_idx, raw_pos)
+                        }).collect()
+                    };
+                    // Écrire dans le buffer pour le MergeRuntime
+                    buffer.write(positions);
+
+                    frame_count += 1;
+                    frames_since_perf += 1;
+
+                    // Update perf stats every ~500ms
+                    let perf_elapsed = last_perf_update.elapsed();
+                    if perf_elapsed.as_millis() >= 500 {
+                        let secs = perf_elapsed.as_secs_f64();
+                        let fps = frames_since_perf as f64 / secs;
+                        let frame_time_us = start.elapsed().as_micros() as f64 / frame_count as f64;
+                        let latency_ms = frame_time_us / 1000.0;
+                        let cpu_pct = (latency_ms / (1000.0 / params.fps)) * 100.0;
+                        perf.update(fps, 0.0, latency_ms, cpu_pct);
+                        frames_since_perf = 0;
+                        last_perf_update = Instant::now();
+                    }
+
+                    // Timing précis
+                    let target_time = frame_count as u128 * frame_duration.as_nanos();
+                    let current_time = start.elapsed().as_nanos();
+                    if target_time > current_time {
+                        let sleep_ns = (target_time - current_time) as u64;
+                        spin_sleep::sleep(Duration::from_nanos(sleep_ns));
+                    }
+                    continue;  // Skip OSC + callback (géré par le MergeRuntime)
+                }
+
+                // ── Mode legacy (OSC direct) ──
                 let positions: Vec<(usize, nalgebra::Vector3<f64>)> = {
                     let fn_ref = position_fn_arc.lock().unwrap_or_else(|e| e.into_inner());
                     let ovr = overrides.lock();

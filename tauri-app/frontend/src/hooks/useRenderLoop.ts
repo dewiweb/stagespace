@@ -222,50 +222,39 @@ export function useRenderLoop({
       }
 
       if (mvts.length > 0) {
-        // Multi-movement: merger les positions de tous les movements actifs
-        // Pré-construire les index maps pour éviter O(n²) avec find()
-        const mvPosMaps = mvts.map((mv) => {
-          const mvPos = mvPosMap[mv.id];
-          if (!mvPos) return null;
-          const map = new Map<number, typeof mvPos[0]>();
-          for (const p of mvPos) map.set(p.index, p);
-          return { mv, map };
-        });
-
-        objs.forEach((mesh, objIdx) => {
-          // Ne pas écraser la position d'un objet en cours de drag manuel
-          if (dragObj !== null && objIdx === dragObj) return;
-          const trackId = holProj?.tracks[objIdx]?.id ?? useGraphStore.getState().manualOscIds[objIdx] ?? (objIdx + 1);
-          let found = false;
-          for (const entry of mvPosMaps) {
-            if (!entry) continue;
-            const posIdx = entry.mv.osc_ids.indexOf(trackId);
-            if (posIdx >= 0) {
-              const pos = entry.map.get(posIdx);
-              if (pos) {
-                mesh.position.set(pos.x, pos.y, pos.z);
-                mesh.visible = true;
-                const mat = mesh.material as THREE.MeshStandardMaterial;
-                if (entry.mv.is_preview) {
-                  mat.color.setHex(0x00ccff);
-                  mat.emissive.setHex(0x003344);
-                } else {
-                  mat.color.setHex(0x00ff44);
-                  mat.emissive.setHex(0x004411);
-                }
-                found = true;
-                break;
+        // Architecture hybride : les positions arrivent déjà mergées via 'global-positions'
+        // Le MergeRuntime a fait le merge + post-processing côté Rust.
+        // On lit directement les positions depuis 'global' dans movementPositions.
+        const globalPos = mvPosMap['global'];
+        if (globalPos) {
+          const posMap = new Map<number, typeof globalPos[0]>();
+          for (const p of globalPos) posMap.set(p.index, p);
+          objs.forEach((mesh, objIdx) => {
+            // Ne pas écraser la position d'un objet en cours de drag manuel
+            if (dragObj !== null && objIdx === dragObj) return;
+            const p = posMap.get(objIdx);
+            if (p) {
+              mesh.position.set(p.x, p.y, p.z);
+              mesh.visible = true;
+              const mat = mesh.material as THREE.MeshStandardMaterial;
+              // Couleur selon le mode du premier movement actif (preview vs live)
+              const isPreview = mvts.some((mv) => mv.is_preview);
+              if (isPreview) {
+                mat.color.setHex(0x00ccff);
+                mat.emissive.setHex(0x003344);
+              } else {
+                mat.color.setHex(0x00ff44);
+                mat.emissive.setHex(0x004411);
               }
+            } else if (!assignMode) {
+              const mat = mesh.material as THREE.MeshStandardMaterial;
+              mat.color.setHSL(objIdx / objs.length, 0.7, 0.55);
+              mat.emissive.setHSL(objIdx / objs.length, 0.5, 0.2);
+              mat.opacity = 1.0;
+              mat.transparent = false;
             }
-          }
-          if (!found && !assignMode) {
-            const mat = mesh.material as THREE.MeshStandardMaterial;
-            mat.color.setHSL(objIdx / objs.length, 0.7, 0.55);
-            mat.emissive.setHSL(objIdx / objs.length, 0.5, 0.2);
-            mat.opacity = 1.0;
-            mat.transparent = false;
-          }
-        });
+          });
+        }
       } else {
         // Mode legacy: positions du runtime unique
         const pos = positionsRef.current;

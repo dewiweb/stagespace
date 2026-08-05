@@ -34,8 +34,8 @@ export const createMacrosSlice: StateCreator<MacrosStore, [], [], MacrosSlice> =
 
   pushMacrosToRuntime: async () => {
     const { macros, movements } = get();
+    // Macros spatiales (globales — appliquées par le MergeRuntime)
     const macroReq = {
-      speed: macros.speed,
       scale: macros.scale,
       shiftX: macros.shiftX,
       shiftY: macros.shiftY,
@@ -45,16 +45,19 @@ export const createMacrosSlice: StateCreator<MacrosStore, [], [], MacrosSlice> =
       roll: macros.roll,
       radius_scale: macros.radius_scale,
       height_offset: macros.height_offset,
+      // Note: speed n'est PAS inclus ici — speed reste per-move
     };
     try {
       if (movements.length > 0) {
-        // Multi-movement: pousser vers chaque movement
+        // Pousser les macros spatiales au MergeRuntime (une seule fois)
+        await invoke('set_global_macro', { request: macroReq });
+        // Pousser le speed à chaque move individuellement (per-move)
         await Promise.all(movements.map((mv) =>
-          invoke('set_movement_macro', { movementId: mv.id, request: macroReq })
+          invoke('set_move_speed', { movementId: mv.id, speed: macros.speed })
         ));
       } else {
-        // Legacy: runtime global
-        await invoke('set_macro', { request: macroReq });
+        // Legacy: runtime global (pas de moves actifs)
+        await invoke('set_macro', { request: { ...macroReq, speed: macros.speed } });
       }
     } catch (e) {
       console.error('Failed to push macros:', e);

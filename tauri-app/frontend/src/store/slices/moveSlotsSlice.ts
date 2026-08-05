@@ -281,7 +281,7 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
     // Récupérer la config OSC globale
     const { oscAddress, oscPort, oscProfile } = get();
     try {
-      await invoke('play_movement', {
+      await invoke('activate_move', {
         request: {
           movement_id: movementId,
           name: slot.name,
@@ -289,30 +289,18 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
           osc_ids: slot.trackIds,
           track_indices: trackIndices,
           is_preview: slot.isPreview,
-          osc_address: oscAddress,
-          osc_port: oscPort,
-          osc_profile: oscProfile,
           origin,
         },
       });
-      // Appliquer les macros du slot au movement
+      // Appliquer le speed du slot au movement (per-move)
       if (slot.macros) {
         try {
-          await invoke('set_movement_macro', {
+          await invoke('set_move_speed', {
             movementId,
-            request: {
-              speed: slot.macros.speed,
-              scale: slot.macros.scale,
-              shiftX: slot.macros.shiftX,
-              shiftY: slot.macros.shiftY,
-              shiftZ: slot.macros.shiftZ,
-              yaw: slot.macros.yaw,
-              pitch: slot.macros.pitch,
-              roll: slot.macros.roll,
-            },
+            speed: slot.macros.speed ?? 1.0,
           });
         } catch (e) {
-          console.warn('[playSlot] set_movement_macro failed:', e);
+          console.warn('[playSlot] set_move_speed failed:', e);
         }
       }
       set((s) => {
@@ -413,10 +401,14 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
     const slot = get().moveSlots.find((s) => s.id === id);
     if (slot?.movementId) {
       try {
-        invoke('set_movement_macro', {
+        // Speed = per-move (worker)
+        invoke('set_move_speed', {
           movementId: slot.movementId,
+          speed: slot.macros.speed ?? 1.0,
+        }).catch((e) => console.warn('[setSlotMacros] set_move_speed failed:', e));
+        // Macros spatiales = globales (MergeRuntime)
+        invoke('set_global_macro', {
           request: {
-            speed: slot.macros.speed,
             scale: slot.macros.scale,
             shiftX: slot.macros.shiftX,
             shiftY: slot.macros.shiftY,
@@ -425,7 +417,7 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
             pitch: slot.macros.pitch,
             roll: slot.macros.roll,
           },
-        }).catch((e) => console.warn('[setSlotMacros] set_movement_macro failed:', e));
+        }).catch((e) => console.warn('[setSlotMacros] set_global_macro failed:', e));
       } catch {}
     }
   },

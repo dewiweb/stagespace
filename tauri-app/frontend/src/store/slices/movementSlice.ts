@@ -66,7 +66,7 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
 
     const movementId = `mv-${Date.now()}`;
     try {
-      await invoke('play_movement', {
+      await invoke('activate_move', {
         request: {
           movement_id: movementId,
           name,
@@ -74,9 +74,6 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
           osc_ids: oscIds,
           track_indices: trackIndices,
           is_preview: isPreview,
-          osc_address: oscAddress,
-          osc_port: oscPort,
-          osc_profile: oscProfile,
           origin,
         },
       });
@@ -97,7 +94,7 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
 
   stopMovement: async (movementId) => {
     try {
-      await invoke('stop_movement', { movementId });
+      await invoke('deactivate_move', { movementId, fadeDuration: 0.0 });
       // Nettoyer les positions et le graphe sauvegardé
       set((s) => {
         const newPositions = { ...s.movementPositions };
@@ -115,7 +112,7 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
 
   stopMovementWithFade: async (movementId, fadeDuration) => {
     try {
-      await invoke('stop_movement_with_fade', { movementId, fadeDuration });
+      await invoke('deactivate_move', { movementId, fadeDuration });
       set((s) => {
         const newPositions = { ...s.movementPositions };
         delete newPositions[movementId];
@@ -132,7 +129,7 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
 
   stopAllMovements: async () => {
     try {
-      await invoke('stop_all_movements');
+      await invoke('deactivate_all_moves', { fadeDuration: 0.0 });
       set({ movementPositions: {}, savedGraphs: {} });
       await get().refreshMovements(); // Await pour synchroniser listener
     } catch (e) {
@@ -142,7 +139,7 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
 
   refreshMovements: async () => {
     try {
-      const movements = await invoke<MovementInfo[]>('list_movements');
+      const movements = await invoke<MovementInfo[]>('list_active_moves');
       set({ movements });
     } catch (e) {
       console.error('Failed to list movements:', e);
@@ -154,7 +151,7 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
     const { prepareGraphForSave } = await import('../../components/nodeParamSchema');
     const graphData = prepareGraphForSave(nodes, edges);
     try {
-      await invoke('update_movement_graph', {
+      await invoke('update_move_graph_merged', {
         movementId,
         graphJson: graphData,
         fadeDuration: fadeDuration ?? 0.3,

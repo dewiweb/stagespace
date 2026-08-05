@@ -4,6 +4,7 @@
 use stagespace_engines::{Runtime, AudioState,
     OscReceiver, OscSender,
     PresetManager,
+    MergeRuntime,
     init_logging};
 use serde::Serialize;
 use std::collections::HashMap;
@@ -25,6 +26,13 @@ use commands::movements::{play_movement, stop_movement, stop_all_movements, list
 use commands::overrides::{set_object_override, clear_all_overrides};
 use commands::sampling::{get_perf_stats, sample_trajectory, sample_movement_trajectory};
 use commands::animation::{launch_animation, update_animation_state};
+use commands::merge_commands::{
+    activate_move, deactivate_move, deactivate_all_moves,
+    set_merge_strategy, set_global_macro, set_move_speed,
+    set_track_depths, set_global_origin, set_global_osc_ids,
+    update_move_graph_merged,
+    get_merge_perf_stats, list_active_moves,
+};
 
 // État global de l'application
 pub struct AppState {
@@ -36,8 +44,11 @@ pub struct AppState {
     pub current_osc_ids: Mutex<Vec<u32>>,
     pub presets: Arc<Mutex<PresetManager>>,
     pub app_handle: Mutex<Option<AppHandle>>,
-    /// Multi-movement: plusieurs runtimes parallèles indépendants
+    /// Multi-movement: plusieurs runtimes parallèles indépendants (workers)
     pub movements: Mutex<HashMap<String, Movement>>,
+    /// MergeRuntime global — merge les positions de tous les workers,
+    /// applique les macros spatiales, envoie l'OSC (une seule socket)
+    pub merge_runtime: Mutex<MergeRuntime>,
 }
 
 /// Un movement = un runtime indépendant avec ses propres tracks et mode (preview/live)
@@ -87,15 +98,25 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
-        .manage(AppState {
-            runtime: Mutex::new(None),
-            audio_state: Arc::new(Mutex::new(AudioState::new())),
-            osc_receiver: Arc::new(Mutex::new(OscReceiver::new(8001))),
-            osc_sender: Arc::new(Mutex::new(OscSender::default())),
-            current_osc_ids: Mutex::new(Vec::new()),
-            presets: Arc::new(Mutex::new(PresetManager::new())),
-            app_handle: Mutex::new(None),
-            movements: Mutex::new(HashMap::new()),
+        .manage({
+            let osc_sender = OscSender::default();
+            let merge_rt = MergeRuntime::new(
+                "127.0.0.1".to_string(),
+                8000,
+                osc_sender.clone(),
+                60.0,
+            ).expect("Failed to create MergeRuntime");
+            AppState {
+                runtime: Mutex::new(None),
+                audio_state: Arc::new(Mutex::new(AudioState::new())),
+                osc_receiver: Arc::new(Mutex::new(OscReceiver::new(8001))),
+                osc_sender: Arc::new(Mutex::new(osc_sender)),
+                current_osc_ids: Mutex::new(Vec::new()),
+                presets: Arc::new(Mutex::new(PresetManager::new())),
+                app_handle: Mutex::new(None),
+                movements: Mutex::new(HashMap::new()),
+                merge_runtime: Mutex::new(merge_rt),
+            }
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed | tauri::WindowEvent::CloseRequested { .. } = event {
@@ -115,6 +136,8 @@ pub fn run() {
                 if let Some(runtime) = state.runtime.lock().unwrap_or_else(|e| e.into_inner()).take() {
                     runtime.stop();
                 }
+                // Stopper le MergeRuntime
+                state.merge_runtime.lock().unwrap_or_else(|e| e.into_inner()).stop();
                 // Stopper le receiver OSC
                 state.osc_receiver.lock().unwrap_or_else(|e| e.into_inner()).stop();
                 eprintln!("[INFO] All movements stopped on window close");
@@ -174,7 +197,13 @@ pub fn run() {
             discover_osc_targets, sample_trajectory, sample_movement_trajectory,
             play_movement, stop_movement, stop_all_movements, list_movements,
             set_movement_macro, update_movement_graph, stop_movement_with_fade,
-            launch_animation, update_animation_state
+            launch_animation, update_animation_state,
+            // Merge commands (Phase 1 — architecture hybride)
+            activate_move, deactivate_move, deactivate_all_moves,
+            set_merge_strategy, set_global_macro, set_move_speed,
+            set_track_depths, set_global_origin, set_global_osc_ids,
+            update_move_graph_merged,
+            get_merge_perf_stats, list_active_moves,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

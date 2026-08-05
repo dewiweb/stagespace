@@ -17,6 +17,8 @@ pub mod logging;
 pub mod error;
 pub mod config;
 pub mod animation;
+pub mod position_buffer;
+pub mod merge_runtime;
 
 #[cfg(test)]
 mod bench;
@@ -58,3 +60,5 @@ pub use logging::{init_logging, log_runtime_init, log_graph_compilation, log_com
     log_osc_received, log_audio_state, log_audio_error};
 pub use error::{StagespaceError, Result};
 pub use config::{Config, RuntimeConfig, OscConfig, AudioConfig, GraphConfig};
+pub use position_buffer::{PositionBuffer, IndexedPosition};
+pub use merge_runtime::{MergeRuntime, MergeStrategy, MoveState};

@@ -430,48 +430,37 @@ export const useOscValueListener = () => {
   }, [setOscValues]);
 };
 
-// ── Movement positions listener — écoute les events movement-positions-* ──
-// Optimisé: ne se re-subscribe que quand les movement IDs changent (pas à chaque poll)
+// ── Global positions listener — écoute l'event global-positions du MergeRuntime ──
+// Une seule source de positions (déjà mergées + transformées), au lieu de N events par movement.
 export const useMovementPositionsListener = () => {
   const setMovementPositions = useGraphStore((s) => s.setMovementPositions);
   const movements = useGraphStore((s) => s.movements);
   const refreshMovements = useGraphStore((s) => s.refreshMovements);
-  // Extraire juste les IDs pour éviter re-subscribe inutile au polling
-  const movementIds = movements.map((m) => m.id).join(',');
-  const movementsRef = React.useRef(movements);
-  movementsRef.current = movements;
 
-  // Écouter movements-update pour sync la liste des movements (launch/stop côté backend)
+  // Écouter active-moves-update pour sync la liste des moves (activate/deactivate côté backend)
   React.useEffect(() => {
-    const unlisten = listen('movements-update', () => {
+    const unlisten = listen('active-moves-update', () => {
       refreshMovements();
     });
     return () => { unlisten.then((fn) => fn()).catch(() => {}); };
   }, [refreshMovements]);
 
+  // Écouter global-positions (un seul event avec toutes les positions mergées)
   React.useEffect(() => {
-    const ids = movementIds.split(',').filter(Boolean);
-    if (ids.length === 0) return;
-    const unlistens: Array<Promise<() => void>> = [];
-    for (const id of ids) {
-      const eventName = `movement-positions-${id}`;
-      const unlisten = listen(eventName, (event: any) => {
-        const { positions } = event.payload as {
-          time: number;
-          positions: Array<[number, [number, number, number]]>;
-        };
-        setMovementPositions(
-          id,
-          positions.map(([index, [x, y, z]]) => ({ index, x, y, z })),
-        );
-      });
-      unlistens.push(unlisten);
-    }
-    return () => {
-      for (const p of unlistens) {
-        p.then((fn) => fn()).catch(() => {});
-      }
-    };
-  }, [movementIds, setMovementPositions]);
+    if (movements.length === 0) return;
+    const unlisten = listen('global-positions', (event: any) => {
+      const { positions } = event.payload as {
+        time: number;
+        positions: Array<[number, [number, number, number]]>;
+      };
+      // Les positions sont déjà mergées + transformées par le MergeRuntime.
+      // On les stocke sous un pseudo-movement-id "global" pour compat avec le render loop.
+      setMovementPositions(
+        'global',
+        positions.map(([index, [x, y, z]]) => ({ index, x, y, z })),
+      );
+    });
+    return () => { unlisten.then((fn) => fn()).catch(() => {}); };
+  }, [movements.length, setMovementPositions]);
 };
 

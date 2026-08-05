@@ -382,8 +382,8 @@ export const useAnimationStore = create<AnimationStore>((set, get) => ({
 
 // ── Listen for movement updates from backend ──
 // Quand un movement est arrêté côté backend, on sync le store
-listen('movements-update', () => {
-  invoke<any[]>('list_movements').then((movements) => {
+listen('active-moves-update', () => {
+  invoke<any[]>('list_active_moves').then((movements) => {
     const activeIds = movements.map((m) => m.id);
     const { selectedMovementId } = useAnimationStore.getState();
     // Si le movement sélectionné n'est plus actif, on le désélectionne

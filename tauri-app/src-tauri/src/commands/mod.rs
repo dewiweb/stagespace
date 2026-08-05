@@ -8,3 +8,4 @@ pub mod movements;
 pub mod overrides;
 pub mod sampling;
 pub mod animation;
+pub mod merge_commands;
