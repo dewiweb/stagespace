@@ -2,13 +2,37 @@
 /// <reference types="@testing-library/jest-dom" />
 
 import { vi } from 'vitest';
+import '@testing-library/jest-dom';
 
 // Mock useAnimationStore with mutable state
-export const mockAnimState = { activeMovementIds: [] as string[] };
+export const mockAnimState = {
+  activeMovementIds: [] as string[],
+  showExpert: false,
+  setShowExpert: (show: boolean) => { mockAnimState.showExpert = show; },
+  current: null as any,
+  animations: [] as any[],
+  launchAnimation: async () => null,
+  updateLiveAnimation: async () => {},
+  setCurrent: (anim: any) => { mockAnimState.current = anim; },
+  renameAnimation: (id: string, name: string) => {},
+  deleteAnimation: (id: string) => {},
+  addAnimation: (anim: any) => {},
+};
+// Create a callable function that also has getState/setState (mimics Zustand)
+const useAnimationStoreHook: any = (selector?: (s: typeof mockAnimState) => any) => {
+  if (typeof selector === 'function') return selector(mockAnimState);
+  return mockAnimState;
+};
+useAnimationStoreHook.getState = () => mockAnimState;
+useAnimationStoreHook.setState = (partial: any) => {
+  if (typeof partial === 'function') partial(mockAnimState);
+  else Object.assign(mockAnimState, partial);
+  return mockAnimState;
+};
+useAnimationStoreHook.subscribe = () => () => {};
+useAnimationStoreHook.getInitialState = () => mockAnimState;
 vi.mock('../store/useAnimationStore', () => ({
-  useAnimationStore: {
-    getState: () => mockAnimState,
-  },
+  useAnimationStore: useAnimationStoreHook,
 }));
 
 // Mock safeInvoke/safeListen — captures invoke calls
