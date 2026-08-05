@@ -125,8 +125,17 @@ pub async fn activate_move(
             request.track_indices.clone(),
             request.is_preview,
         );
-        // Mettre à jour les OSC ids globaux et l'origin
-        merge_rt.set_osc_ids(request.osc_ids.clone());
+        // Mettre à jour les OSC ids globaux — fusionner avec les existants (pas écraser)
+        {
+            let existing = merge_rt.osc_ids();
+            let mut merged_ids = existing.clone();
+            for &id in &request.osc_ids {
+                if !merged_ids.contains(&id) {
+                    merged_ids.push(id);
+                }
+            }
+            merge_rt.set_osc_ids(merged_ids);
+        }
         if let Some(ref origin) = request.origin {
             merge_rt.set_origin(nalgebra::Vector3::new(origin[0], origin[1], origin[2]));
         }
@@ -190,10 +199,11 @@ pub async fn deactivate_move(
 }
 
 fn deactivate_move_immediate(movement_id: &str, state: &State<'_, AppState>) -> Result<String, String> {
-    // Retirer du MergeRuntime
+    // Retirer du MergeRuntime et recalculer les osc_ids globaux
     {
         let merge_rt = lock_or_recover(&state.merge_runtime);
         merge_rt.unregister_move(movement_id);
+        merge_rt.rebuild_osc_ids();
     }
 
     // Stopper le worker thread

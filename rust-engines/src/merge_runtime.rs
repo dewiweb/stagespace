@@ -209,6 +209,27 @@ impl MergeRuntime {
         *self.osc_ids.write().unwrap_or_else(|e| e.into_inner()) = osc_ids;
     }
 
+    /// Récupère les osc_ids globaux actuels
+    pub fn osc_ids(&self) -> Vec<u32> {
+        self.osc_ids.read().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
+    /// Recalcule les osc_ids globaux à partir des moves encore actifs.
+    /// À appeler après unregister_move pour éviter l'accumulation d'ids obsolètes.
+    pub fn rebuild_osc_ids(&self) {
+        let moves = self.active_moves.read().unwrap_or_else(|e| e.into_inner());
+        let mut ids: Vec<u32> = Vec::new();
+        for state in moves.values() {
+            for &id in &state.osc_ids {
+                if !ids.contains(&id) {
+                    ids.push(id);
+                }
+            }
+        }
+        drop(moves);
+        *self.osc_ids.write().unwrap_or_else(|e| e.into_inner()) = ids;
+    }
+
     /// Définit les depths par track
     pub fn set_track_depths(&self, depths: Vec<f64>) {
         *self.track_depths.write().unwrap_or_else(|e| e.into_inner()) = depths;

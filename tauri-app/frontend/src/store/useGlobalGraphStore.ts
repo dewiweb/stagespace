@@ -75,14 +75,24 @@ interface GlobalGraphState {
   resetToDefault: () => void;
 }
 
-const STORAGE_KEY = 'stagespace-global-graph-v3';
+const STORAGE_KEY = 'stagespace-global-graph-v4';
 
 function loadFromStorage(): { nodes: Node[]; edges: Edge[] } | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (parsed.nodes && parsed.edges) return parsed;
+    if (!parsed.nodes || !parsed.edges) return null;
+    // Validation : vérifier que tous les edges référencent des nodes existants
+    const nodeIds = new Set(parsed.nodes.map((n: Node) => n.id));
+    const validEdges = parsed.edges.filter(
+      (e: Edge) => nodeIds.has(e.source) && nodeIds.has(e.target),
+    );
+    if (validEdges.length !== parsed.edges.length) {
+      console.warn('[globalGraph] Cached graph has invalid edges, discarding');
+      return null;
+    }
+    return { nodes: parsed.nodes, edges: parsed.edges };
   } catch {}
   return null;
 }
