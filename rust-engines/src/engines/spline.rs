@@ -174,12 +174,11 @@ fn parse_spline(params: &EngineParams) -> Option<Spline> {
     // Handle both cases: JSON string (from frontend) or direct JSON array
     let points_arr = if let Some(arr) = points_json.as_array() {
         arr.clone()
-    } else if let Some(s) = points_json.as_str() {
+    } else {
+        let s = points_json.as_str()?;
         // It's a JSON string — parse it into an array
         let parsed: serde_json::Value = serde_json::from_str(s).ok()?;
         parsed.as_array()?.clone()
-    } else {
-        return None;
     };
 
     let points: Vec<SplinePoint> = points_arr

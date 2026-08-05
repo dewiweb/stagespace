@@ -308,7 +308,7 @@ impl Runtime {
                         PlayDirection::PingPong => {
                             // PingPong
                             let cycle = (t_virtual / duration) as u64;
-                            if cycle % 2 == 0 {
+                            if cycle.is_multiple_of(2) {
                                 t_mod
                             } else {
                                 duration - t_mod
