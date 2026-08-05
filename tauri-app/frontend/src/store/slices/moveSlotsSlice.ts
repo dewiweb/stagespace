@@ -42,6 +42,43 @@ function defaultMacros(): MoveMacros {
   return { speed: 1.0, scale: 1.0, shiftX: 0, shiftY: 0, shiftZ: 0, yaw: 0, pitch: 0, roll: 0 };
 }
 
+/// Sync visuel du node Objects SANS hot-swap backend.
+/// Utilisé quand on switch de slot pour édition — on veut juste mettre à jour
+/// l'affichage du node Objects sans affecter les moves en cours de lecture.
+function syncObjectsNodeNoHotSwap(get: () => any) {
+  const s = get();
+  const ids = Array.from(s.selectedTrackIds).sort((a: number, b: number) => a - b);
+  if (ids.length === 0 && !s.nodes.find((n: any) => (n.data as any)?.type === 'Objects')) return;
+
+  const ENGINE_TYPES = new Set([
+    'Circular', 'Elliptical', 'Spiral', 'Lissajous', 'Figure8',
+    'Linear', 'Oscillation', 'Formation', 'PerlinNoise', 'Converge', 'Pendulum',
+    'RoseCurve', 'Helix', 'Wave', 'CustomTrajectory',
+    'Bouncing', 'Avoidance', 'Spring', 'Follow', 'Swarm',
+    'DrawSpline', 'EvaluateSpline', 'TrimSpline', 'OffsetSpline',
+    'Mix', 'Group', 'Sequence', 'Crossfade',
+  ]);
+
+  const objectsNode = s.nodes.find((n: any) => (n.data as any)?.type === 'Objects');
+  if (objectsNode) {
+    const newParams = { ...(objectsNode.data as any).params, n_objects: ids.length, track_ids: ids };
+    s.updateNodeData(objectsNode.id, { params: newParams });
+  }
+
+  // Sync n_objects sur tous les nodes engines
+  const currentNodes = get().nodes;
+  currentNodes.forEach((node: any) => {
+    const nodeType = (node.data as any)?.type as string;
+    if (ENGINE_TYPES.has(nodeType)) {
+      const params = (node.data as any)?.params ?? {};
+      if (params.n_objects !== ids.length) {
+        s.updateNodeData(node.id, { params: { ...params, n_objects: ids.length } });
+      }
+    }
+  });
+  // PAS de hot-swap — on ne veut pas affecter les moves en cours
+}
+
 export interface MoveSlotsSlice {
   /// Tous les moves — persistés dans localStorage
   moveSlots: MoveSlot[];
@@ -172,13 +209,18 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
     const slot = get().moveSlots.find((s) => s.id === id);
     if (!slot) return;
     // Charger le graphe du slot dans l'éditeur AVANT de sync les tracks,
-    // pour que syncObjectsNode mette à jour le BON Objects node + hot-swap avec le bon graphe
+    // pour que syncObjectsNode mette à jour le BON Objects node.
     if (slot.graphJson) {
       get().setNodes(JSON.parse(JSON.stringify(slot.graphJson.nodes)));
       get().setEdges(JSON.parse(JSON.stringify(slot.graphJson.edges)));
     }
-    // Sync selectedTrackIds avec les tracks du slot (syncObjectsNode utilisera le nouveau graphe)
-    get().setSelectedTrackIds(new Set(slot.trackIds));
+    // Sync selectedTrackIds avec les tracks du slot.
+    // IMPORTANT: on met à jour selectedTrackIds SANS appeler syncObjectsNode
+    // (qui ferait un hot-swap sur TOUS les moves actifs).
+    // On sync juste le node Objects visuellement, sans hot-swap backend.
+    set({ selectedTrackIds: new Set(slot.trackIds) });
+    // Sync visuel du node Objects (sans hot-swap)
+    syncObjectsNodeNoHotSwap(get);
   },
 
   addMoveSlot: () => {
