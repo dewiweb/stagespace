@@ -430,15 +430,6 @@ impl MergeRuntime {
                     pp_fn(&ctx, merged)
                 };
 
-                // Debug: log les positions mergées toutes les ~60 frames
-                if frame_count % 60 == 0 {
-                    eprintln!("[MergeRuntime] frame={} moves={} transformed_pos={}",
-                        frame_count, move_positions.len(), transformed.len());
-                    if let Some((idx, pos)) = transformed.first() {
-                        eprintln!("[MergeRuntime] first pos: idx={} ({:.2}, {:.2}, {:.2})", idx, pos.x, pos.y, pos.z);
-                    }
-                }
-
                 // 5. OSC output (une seule socket)
                 // Séparer display (tout) de OSC (exclut les moves en preview)
                 let moves_guard = active_moves.read().unwrap_or_else(|e| e.into_inner());
