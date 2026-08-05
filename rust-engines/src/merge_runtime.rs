@@ -424,31 +424,35 @@ impl MergeRuntime {
                 }
 
                 // 3. Merge : résoudre les conflits par track
-                let osc_ids = osc_ids_arc.read().unwrap_or_else(|e| e.into_inner()).clone();
+                // On tient le lock sur osc_ids le temps du merge (pas de clone)
+                let osc_ids_guard = osc_ids_arc.read().unwrap_or_else(|e| e.into_inner());
                 let strategy = *merge_strategy_arc.read().unwrap_or_else(|e| e.into_inner());
-                let merged = merge_positions(&move_positions, &osc_ids, strategy);
+                let merged = merge_positions(&move_positions, &osc_ids_guard, strategy);
 
                 // 4. Post-processing via le graph global compilé (PostProcessFn)
+                // On tient les locks pendant l'appel post-process pour éviter
+                // de cloner les données à chaque frame (60fps × 5 clones = ~300 allocs/s).
                 let origin = *origin_arc.lock().unwrap_or_else(|e| e.into_inner());
-                let track_depths = track_depths_arc.read().unwrap_or_else(|e| e.into_inner()).clone();
-                let track_positions = track_positions_arc.read().unwrap_or_else(|e| e.into_inner()).clone();
-                let manual_positions = manual_positions_arc.read().unwrap_or_else(|e| e.into_inner()).clone();
-                let audio_state = audio_state_arc.lock().unwrap_or_else(|e| e.into_inner()).clone();
+                let track_depths_guard = track_depths_arc.read().unwrap_or_else(|e| e.into_inner());
+                let track_positions_guard = track_positions_arc.read().unwrap_or_else(|e| e.into_inner());
+                let manual_positions_guard = manual_positions_arc.read().unwrap_or_else(|e| e.into_inner());
+                let audio_state_guard = audio_state_arc.lock().unwrap_or_else(|e| e.into_inner());
 
                 let ctx = PostProcessContext {
                     t: t_real,
                     macros: &macros,
-                    audio_state: &audio_state,
-                    track_positions: &track_positions,
-                    manual_positions: &manual_positions,
+                    audio_state: &audio_state_guard,
+                    track_positions: &track_positions_guard,
+                    manual_positions: &manual_positions_guard,
                     origin,
-                    track_depths: &track_depths,
+                    track_depths: &track_depths_guard,
                 };
 
                 let transformed: Vec<(usize, nalgebra::Vector3<f64>)> = {
                     let pp_fn = post_process_fn_arc.read().unwrap_or_else(|e| e.into_inner());
                     pp_fn(&ctx, merged)
                 };
+                // Les locks sont libérés ici (drop automatique à la fin du scope)
 
                 // 5. OSC output (une seule socket)
                 // Séparer display (tout) de OSC (exclut les moves en preview)
@@ -465,7 +469,7 @@ impl MergeRuntime {
                     if preview_tracks.contains(obj_idx) {
                         continue;  // Skip OSC pour les moves en preview
                     }
-                    if let Some(&osc_id) = osc_ids.get(*obj_idx) {
+                    if let Some(&osc_id) = osc_ids_guard.get(*obj_idx) {
                         let (addr, values) = sender.format_position(osc_id, *pos);
                         let args: Vec<OscType> = values.iter().map(|v| OscType::Float(*v as f32)).collect();
                         let packet = OscPacket::Message(OscMessage { addr: addr.clone(), args });
@@ -526,6 +530,53 @@ impl MergeRuntime {
         if let Some(handle) = self.thread.take() {
             let _ = handle.join();
         }
+    }
+
+    /// Applique le post-process global (PostProcessFn) à des samples
+    /// de trajectoire déjà calculés (avec macros du movement).
+    ///
+    /// Utilisé par la visualisation 3D pour que la trajectoire affichée
+    /// corresponde à la sortie OSC réelle (qui passe par le post-process).
+    ///
+    /// `samples` : Vec<(t, x, y, z)> — samples raw d'un movement
+    /// `object_index` : l'index de l'objet dans le merge global
+    pub fn apply_post_process_to_samples(
+        &self,
+        samples: Vec<(f64, f64, f64, f64)>,
+        object_index: usize,
+    ) -> Vec<(f64, f64, f64, f64)> {
+        if samples.is_empty() {
+            return vec![];
+        }
+
+        let macros = self.macros.clone();
+        let audio_state = self.audio_state.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        let track_positions = self.track_positions.read().unwrap_or_else(|e| e.into_inner()).clone();
+        let manual_positions = self.manual_positions.read().unwrap_or_else(|e| e.into_inner()).clone();
+        let origin = *self.origin.lock().unwrap_or_else(|e| e.into_inner());
+        let track_depths = self.track_depths.read().unwrap_or_else(|e| e.into_inner()).clone();
+
+        let pp_fn = self.post_process_fn.read().unwrap_or_else(|e| e.into_inner());
+        let mut result = Vec::with_capacity(samples.len());
+        for (t, x, y, z) in samples {
+            let ctx = PostProcessContext {
+                t,
+                macros: &macros,
+                audio_state: &audio_state,
+                track_positions: &track_positions,
+                manual_positions: &manual_positions,
+                origin,
+                track_depths: &track_depths,
+            };
+            let pos = nalgebra::Vector3::new(x, y, z);
+            let transformed = pp_fn(&ctx, vec![(object_index, pos)]);
+            if let Some((_, tp)) = transformed.first() {
+                result.push((t, tp.x, tp.y, tp.z));
+            } else {
+                result.push((t, x, y, z));
+            }
+        }
+        result
     }
 }
 
