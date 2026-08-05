@@ -75,7 +75,7 @@ interface GlobalGraphState {
   resetToDefault: () => void;
 }
 
-const STORAGE_KEY = 'stagespace-global-graph-v2';
+const STORAGE_KEY = 'stagespace-global-graph-v3';
 
 function loadFromStorage(): { nodes: Node[]; edges: Edge[] } | null {
   try {
@@ -114,18 +114,25 @@ export const useGlobalGraphStore = create<GlobalGraphState>((set, get) => ({
     const { nodes, edges, isGlobalGraphEnabled } = get();
     if (!isGlobalGraphEnabled) return;
 
-    // Préparer le graph pour le backend (format JSON)
+    // Préparer le graph pour le backend — format React Flow (data.type, data.params)
+    // Le parser Rust (build_graph_from_json) attend ce format
     const graphJson = {
       nodes: nodes.map((n) => ({
         id: n.id,
-        node_type: (n.data as any)?.type ?? 'Output',
-        params: (n.data as any)?.params ?? {},
+        type: 'custom',
+        position: n.position,
+        data: {
+          label: (n.data as any)?.label ?? (n.data as any)?.type ?? '',
+          type: (n.data as any)?.type ?? 'Output',
+          params: (n.data as any)?.params ?? {},
+        },
       })),
       edges: edges.map((e) => ({
-        from: e.source,
-        to: e.target,
-        from_port: e.sourceHandle ?? 'output',
-        to_port: e.targetHandle ?? 'input',
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        sourceHandle: e.sourceHandle ?? 'output',
+        targetHandle: e.targetHandle ?? 'input',
       })),
     };
 
