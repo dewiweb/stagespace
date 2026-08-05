@@ -204,6 +204,8 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
   editingSlotId: null,
 
   selectSlotForEditing: (id) => {
+    // L'auto-save (useGraphStore) a déjà sauvegardé le slot précédent
+    // à chaque mutation. On n'a qu'à charger le nouveau slot.
     set({ editingSlotId: id });
     if (!id) return;
     const slot = get().moveSlots.find((s) => s.id === id);
@@ -214,6 +216,9 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
       get().setNodes(JSON.parse(JSON.stringify(slot.graphJson.nodes)));
       get().setEdges(JSON.parse(JSON.stringify(slot.graphJson.edges)));
     }
+    // Reset undo/redo — l'historique appartient au slot précédent.
+    // Sans ça, un undo après switch restaurerait le graphe d'un autre slot.
+    set({ _history: [], _historyIndex: -1, canUndo: false, canRedo: false } as any);
     // Sync selectedTrackIds avec les tracks du slot.
     // IMPORTANT: on met à jour selectedTrackIds SANS appeler syncObjectsNode
     // (qui ferait un hot-swap sur TOUS les moves actifs).

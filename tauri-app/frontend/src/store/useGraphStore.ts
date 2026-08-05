@@ -306,9 +306,10 @@ export const useGraphStore = create<GraphState>()((...a) => {
       if (isPlaying) {
         await invoke('update_graph', { graphJson: graphData, fadeDuration: fade });
       }
-      // Hot-swap : 2 tiers seulement.
-      // Tier 1 : si on édite un slot qui a un movement actif, hot-swap ce movement uniquement.
-      // Tier 2 : sinon, hot-swap tous les movements actifs (fallback).
+      // Hot-swap : cible TOUJOURS le movement du slot édité.
+      // Plus de fallback "tous les movements actifs" — c'était la source
+      // du bug où éditer le slot A hot-swapait aussi le movement du slot B.
+      // Si aucun slot n'est édité, on ne hot-swap pas (comportement explicite).
       const allMovementIds = new Set([
         ...movements.map((m) => m.id),
         ...activeMovementIds,
@@ -320,23 +321,12 @@ export const useGraphStore = create<GraphState>()((...a) => {
         ? moveSlots.find((s) => s.id === editingSlotId)?.movementId ?? null
         : null;
 
-      let targetIds: string[];
       if (editingSlotMovementId && allMovementIds.has(editingSlotMovementId)) {
-        // Tier 1 : hot-swap uniquement le movement du slot édité
-        targetIds = [editingSlotMovementId];
-      } else {
-        // Tier 2 : hot-swap tous les movements actifs
-        targetIds = Array.from(allMovementIds);
-      }
-
-      if (targetIds.length > 0) {
-        await Promise.all(targetIds.map((movementId) =>
-          invoke('update_move_graph_merged', {
-            movementId,
-            graphJson: graphData,
-            fadeDuration: fade,
-          }).catch((e: any) => console.error(`Hot-swap failed for movement ${movementId}:`, e))
-        ));
+        await invoke('update_move_graph_merged', {
+          movementId: editingSlotMovementId,
+          graphJson: graphData,
+          fadeDuration: fade,
+        }).catch((e: any) => console.error(`Hot-swap failed for movement ${editingSlotMovementId}:`, e));
       }
       set({ graphCompileVersion: get().graphCompileVersion + 1 });
     } catch (error: any) {
@@ -374,9 +364,8 @@ export const useGraphStore = create<GraphState>()((...a) => {
           graph_json: { nodes: newNodes, edges: newEdges },
         });
       });
-      // NOTE: on ne appelle PLUS updateGraphLive ici — setSlotTemplate gère le hot-swap
-      // du slot édité. updateGraphLive hot-swap TOUS les movements actifs, ce qui
-      // écraserait les graphs des autres slots avec celui du slot édité.
+      // NOTE: on n'appelle pas updateGraphLive ici — setSlotTemplate gère
+      // le hot-swap du slot édité directement (et sauve le graphe dans le slot).
     });
   },
 
