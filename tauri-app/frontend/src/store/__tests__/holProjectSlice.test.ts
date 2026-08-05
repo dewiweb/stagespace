@@ -165,7 +165,7 @@ describe('manual positions', () => {
     expect(Object.keys(positions)).toHaveLength(4);
     // Check that positions are on a circle (radius for n<=4 is 1.5)
     for (let i = 0; i < 4; i++) {
-      const [x, y, z] = positions[i];
+      const [x, _y, z] = positions[i];
       const r = Math.sqrt(x * x + z * z);
       expect(r).toBeCloseTo(1.5, 5);
     }

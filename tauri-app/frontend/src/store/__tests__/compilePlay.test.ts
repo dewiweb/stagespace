@@ -1,6 +1,6 @@
 /// <reference types="vitest/globals" />
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { useGraphStore, getInvokeCalls, resetStore, makeSimpleGraph } from './testHelpers';
 
 beforeEach(() => {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useCuelistStore, type CueData } from '../store/useCuelistStore';
+import { useCuelistStore } from '../store/useCuelistStore';
 import { useGraphStore } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 

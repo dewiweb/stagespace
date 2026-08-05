@@ -48,6 +48,17 @@ describe('Toolbar — rendering', () => {
     // Just verify it renders without error
     expect(screen.getByText(/Import \.hol/i)).toBeInTheDocument();
   });
+
+  it('shows status indicator with Idle label', () => {
+    render(<Toolbar />);
+    expect(screen.getByText('Idle')).toBeInTheDocument();
+  });
+
+  it('renders Save and Load graph buttons', () => {
+    render(<Toolbar />);
+    expect(screen.getByTitle(/Save graph/i)).toBeInTheDocument();
+    expect(screen.getByTitle(/Load graph/i)).toBeInTheDocument();
+  });
 });
 
 describe('Toolbar — hol project', () => {
@@ -71,8 +82,8 @@ describe('Toolbar — status', () => {
       movements: [{ id: 'mv-1' }, { id: 'mv-2' }] as any,
     } as any);
     render(<Toolbar />);
-    // Just verify it renders with movements active
-    expect(screen.getByText(/Import \.hol/i)).toBeInTheDocument();
+    // Status indicator should show "2 movements"
+    expect(screen.getByText(/2 movements/i)).toBeInTheDocument();
   });
 
   it('renders with compile error without crashing', () => {

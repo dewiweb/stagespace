@@ -1,7 +1,7 @@
 /// <reference types="vitest/globals" />
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useGraphStore, getInvokeCalls, resetStore, makeSimpleGraph, makeNode, makeEdge } from './testHelpers';
+import { useGraphStore, getInvokeCalls, resetStore, makeSimpleGraph } from './testHelpers';
 
 beforeEach(() => {
   resetStore();

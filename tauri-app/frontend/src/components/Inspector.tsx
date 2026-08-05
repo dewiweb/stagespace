@@ -55,7 +55,7 @@ export default function Inspector() {
 
   const { holProject, selectedTrackIds, toggleTrackSelection, selectAllTracks, deselectAllTracks,
     manualOscIds, panic, stopAllMovements, stopMovement, stopMovementWithFade,
-    movements, savedGraphs, nodes, updateNodeData, updateGraphLive,
+    movements, nodes, updateNodeData, updateGraphLive,
     macros, setMacros, pushMacrosToRuntime,
     editingSlotId,
   } = useGraphStore();
@@ -543,7 +543,6 @@ export default function Inspector() {
         {movements.length > 0 && (
           <div className="space-y-1 max-h-32 overflow-y-auto">
             {movements.map((mv, idx) => {
-              const saved = savedGraphs[mv.id];
               const trackCount = mv.osc_ids?.length ?? 0;
               return (
                 <div

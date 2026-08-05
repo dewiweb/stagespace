@@ -388,6 +388,13 @@ export default function MovesTable() {
                           className={`text-purple-400 hover:text-purple-300 text-[9px] px-1 rounded hover:bg-purple-900/30 ${editingSlotId === slot.id ? 'font-bold ring-1 ring-purple-600/50' : ''}`}
                           title="Éditer le graphe dans le node editor"
                         >✎</button>
+                        {isPlaying && (
+                          <button
+                            onClick={() => saveEditorToSlot(slot.id)}
+                            className="text-orange-400 hover:text-orange-300 text-[9px] px-1 rounded hover:bg-orange-900/30"
+                            title="Hot-swap : appliquer le graphe modifié au move en cours"
+                          >⟳</button>
+                        )}
                         <button
                           onClick={() => { selectSlotForEditing(slot.id); setEditingMacrosFor(slot.id); }}
                           className="text-gray-400 hover:text-gray-200 text-[9px] px-1 rounded hover:bg-gray-700/30"

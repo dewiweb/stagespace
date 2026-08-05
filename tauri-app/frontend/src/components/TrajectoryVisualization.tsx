@@ -44,7 +44,7 @@ export const TrajectoryVisualization: React.FC<TrajectoryVisualizationProps> = (
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene) return;
-    if (!(isPlaying || hasMovements) || objectsRef.current.length === 0) return;
+    if (!(isPlaying || hasMovements) || !objectsRef.current || objectsRef.current.length === 0) return;
 
     const timer = setTimeout(() => {
       // Nettoyer les anciennes lignes
@@ -59,7 +59,7 @@ export const TrajectoryVisualization: React.FC<TrajectoryVisualizationProps> = (
 
       const fetchTrajectory = async () => {
         try {
-          const nObjs = objectsRef.current.length;
+          const nObjs = objectsRef.current?.length ?? 0;
           const nSamples = 128;
 
           // Mode movement (système multi-move) : échantillonner depuis TOUS les movements actifs

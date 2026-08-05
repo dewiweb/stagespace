@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { safeInvoke as invoke } from '../utils/tauri';
-import { safeListen as listen } from '../utils/tauri';
 
 export interface CueData {
   id: string;

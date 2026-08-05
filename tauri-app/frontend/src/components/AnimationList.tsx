@@ -34,7 +34,7 @@ const CATEGORY_LABELS: Record<ShapePreset['category'], { label: string; color: s
 const CATEGORY_ORDER: ShapePreset['category'][] = ['basic', 'modifier', 'composite', 'spline', 'physics', 'audio'];
 
 export default function AnimationList() {
-  const { animations, current, setCurrent, saveAnimation, deleteAnimation, loadAnimation, renameAnimation, activeMovementIds } = useAnimationStore();
+  const { animations, current, setCurrent, saveAnimation, deleteAnimation, loadAnimation, renameAnimation } = useAnimationStore();
   const applyShapePreset = useGraphStore((s) => s.applyShapePreset);
   const getSelectedOscIds = useGraphStore((s) => s.getSelectedOscIds);
   const [editingId, setEditingId] = React.useState<string | null>(null);

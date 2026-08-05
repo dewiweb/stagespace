@@ -6,7 +6,7 @@ import type { HolProject } from '../types/index';
 export function computeCentroid(
   holProject: HolProject | null,
   trackIndices: number[],
-  manualOscIds: number[],
+  _manualOscIds: number[],
 ): [number, number, number] {
   if (holProject && holProject.tracks.length > 0) {
     const indices = trackIndices.length > 0

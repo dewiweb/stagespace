@@ -146,7 +146,7 @@ export function useManipulateMode({
       // Project on Y = current Y plane
       const currentY = draggingHandle
         ? handleRef.current?.position.y ?? 0
-        : objectsRef.current[draggingObject]?.position.y ?? 0;
+        : (draggingObject !== null ? objectsRef.current?.[draggingObject]?.position.y ?? 0 : 0);
       const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -currentY);
       const intersection = new THREE.Vector3();
       if (!raycaster.ray.intersectPlane(plane, intersection)) return;

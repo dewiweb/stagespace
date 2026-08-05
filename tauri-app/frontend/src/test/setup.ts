@@ -14,9 +14,9 @@ export const mockAnimState = {
   launchAnimation: async () => null,
   updateLiveAnimation: async () => {},
   setCurrent: (anim: any) => { mockAnimState.current = anim; },
-  renameAnimation: (id: string, name: string) => {},
-  deleteAnimation: (id: string) => {},
-  addAnimation: (anim: any) => {},
+  renameAnimation: (_id: string, _name: string) => {},
+  deleteAnimation: (_id: string) => {},
+  addAnimation: (_anim: any) => {},
 };
 // Create a callable function that also has getState/setState (mimics Zustand)
 const useAnimationStoreHook: any = (selector?: (s: typeof mockAnimState) => any) => {

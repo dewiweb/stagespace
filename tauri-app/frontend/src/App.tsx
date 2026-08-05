@@ -15,7 +15,6 @@ import { useAnimationStore } from './store/useAnimationStore';
 function App() {
   const status = useGraphStore((s) => s.status);
   const movements = useGraphStore((s) => s.movements);
-  const activeMovementIds = useAnimationStore((s) => s.activeMovementIds);
   const showExpert = useAnimationStore((s) => s.showExpert);
   const setShowExpert = useAnimationStore((s) => s.setShowExpert);
   const oscInPort = useGraphStore((s) => s.oscInPort);

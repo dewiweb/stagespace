@@ -56,7 +56,6 @@ const baseFlow = (
 
   // Insert extra nodes between engine and output
   let prevId = engine.id;
-  const outputX = 750;
   const spacing = 180;
   extraNodes.forEach((extra, i) => {
     const node = makeNode(extra.type, { x: 480 + i * spacing, y: 180 }, extra.params ?? {});

@@ -1,6 +1,5 @@
 import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
-import { useAnimationStore } from '../store/useAnimationStore';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { SettingsModal } from './SettingsModal';
@@ -15,9 +14,9 @@ const OSC_PROFILES = [
 ];
 
 export const Toolbar: React.FC = () => {
-  const { compile, stopAllMovements, movements, status, compileError, playError, clearCompileError, clearPlayError, nodes,
+  const { movements, status, compileError, playError, clearCompileError, clearPlayError, nodes,
     saveGraphToFile, loadGraphFromFile, importHol, holProject,
-    selectedTrackIds, getSelectedOscIds, drawMode, setDrawMode,
+    selectedTrackIds, getSelectedOscIds,
     undo, redo, canUndo, canRedo, panic, perfStats, setPerfStats,
     manualOscIds, setManualOscIds,
     oscAddress, oscPort, oscProfile, setOscAddress, setOscPort, setOscProfile } =
@@ -29,36 +28,9 @@ export const Toolbar: React.FC = () => {
   const [discovering, setDiscovering] = React.useState(false);
   const [discoveredTargets, setDiscoveredTargets] = React.useState<Array<{ name: string; host: string; port: number; profile: string; source: string }>>([]);
 
-  const hasNodes = nodes.length > 0;
   const hasError = !!(compileError || playError);
   const activeMovements = movements.length;
-
-  // Tracks cibles : sélection > tous
-  // Retourne des indices dans le tableau des tracks (holProject.tracks ou manualOscIds)
-  const getTargetTrackIndices = () => {
-    if (holProject) {
-      const indices = holProject.tracks
-        .map((t, idx) => selectedTrackIds.has(t.id) ? idx : -1)
-        .filter((idx) => idx >= 0);
-      if (indices.length > 0) return indices;
-      return holProject.tracks.map((_, idx) => idx); // tous par défaut
-    }
-    // Sans .hol: utiliser les manualOscIds
-    // Si tracks sélectionnés, filtrer par ID
-    if (selectedTrackIds.size > 0) {
-      return manualOscIds
-        .map((id, idx) => selectedTrackIds.has(id) ? idx : -1)
-        .filter((idx) => idx >= 0);
-    }
-    // Tous par défaut
-    return manualOscIds.map((_, idx) => idx);
-  };
-
-  const handleLaunch = async (isPreview: boolean) => {
-    // Nouveau système : utilise launchAnimation (basé sur l'Animation, pas le graphe)
-    const animStore = useAnimationStore.getState();
-    await animStore.launchAnimation(isPreview, oscAddress, oscPort, oscProfile);
-  };
+  const hasGraph = nodes.length > 0;
 
   // Keyboard shortcuts: Ctrl+Z (undo), Ctrl+Y / Ctrl+Shift+Z (redo), Space (play/stop), Esc (panic)
   React.useEffect(() => {
@@ -222,6 +194,23 @@ export const Toolbar: React.FC = () => {
           ↷
         </button>
 
+        {/* Save / Load graph (expert) */}
+        <button
+          onClick={handleSaveGraph}
+          disabled={!hasGraph}
+          className="px-2 py-1.5 text-xs font-medium rounded bg-gray-800 text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          title="Save graph to .hfg file"
+        >
+          💾
+        </button>
+        <button
+          onClick={handleLoadGraph}
+          className="px-2 py-1.5 text-xs font-medium rounded bg-gray-800 text-gray-400 hover:text-white transition-colors"
+          title="Load graph from .hfg file"
+        >
+          📂
+        </button>
+
         {/* Error badge */}
         {hasError && (
           <button
@@ -234,6 +223,12 @@ export const Toolbar: React.FC = () => {
 
         {/* Spacer */}
         <div className="flex-1" />
+
+        {/* Status indicator */}
+        <div className="flex items-center gap-1.5 px-2 py-0.5">
+          <span className={`w-2 h-2 rounded-full ${statusColor}`} />
+          <span className="text-[11px] text-gray-400 font-medium">{statusLabel}</span>
+        </div>
 
         {/* Performance overlay — visible quand des movements tournent */}
         {activeMovements > 0 && perfStats && (

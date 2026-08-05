@@ -47,7 +47,7 @@ function defaultMacros(): MoveMacros {
 /// l'affichage du node Objects sans affecter les moves en cours de lecture.
 function syncObjectsNodeNoHotSwap(get: () => any) {
   const s = get();
-  const ids = Array.from(s.selectedTrackIds).sort((a: number, b: number) => a - b);
+  const ids = Array.from(s.selectedTrackIds as Set<number>).sort((a: number, b: number) => a - b);
   if (ids.length === 0 && !s.nodes.find((n: any) => (n.data as any)?.type === 'Objects')) return;
 
   const ENGINE_TYPES = new Set([
@@ -420,8 +420,6 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
     const origin = computeCentroid(holProject, trackIndices, manualOscIds);
 
     const movementId = `mv-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    // Récupérer la config OSC globale
-    const { oscAddress, oscPort, oscProfile } = get();
     try {
       await invoke('activate_move', {
         request: {

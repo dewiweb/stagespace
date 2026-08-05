@@ -2,7 +2,6 @@ import { useEffect, useRef, MutableRefObject } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
-import { useGraphStore } from '../store/useGraphStore';
 import type { HolProject, MovementInfo } from '../store/useGraphStore';
 
 // Types des valeurs store lues dans le render loop
@@ -82,7 +81,6 @@ export function useRenderLoop({
   draggingObjectRef,
   manualPositions,
   setWebglFailed,
-  dimensions,
 }: UseRenderLoopParams) {
   // Refs internes pour les valeurs changeantes — lues dans le render loop à 60fps
   const positionsRef = useRef(positions);
@@ -193,7 +191,6 @@ export function useRenderLoop({
       const objs = objectsRef.current;
       const mvts = movementsRef.current;
       const mvPosMap = movementPositionsRef.current;
-      const mc = macrosRef.current;
       const holProj = holProjectRef.current;
       const assignMode = assignModeRef.current;
       const selTrackIds = selectedTrackIdsRef.current;

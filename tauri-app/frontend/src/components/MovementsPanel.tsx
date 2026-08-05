@@ -2,7 +2,7 @@ import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
 
 export default function MovementsPanel() {
-  const { movements, stopMovement, stopAllMovements, refreshMovements, nodes, holProject, selectedTrackIds, manualOscIds } = useGraphStore();
+  const { movements, stopMovement, stopAllMovements, refreshMovements, holProject, selectedTrackIds, manualOscIds } = useGraphStore();
 
   React.useEffect(() => {
     refreshMovements();
@@ -10,7 +10,6 @@ export default function MovementsPanel() {
     return () => clearInterval(interval);
   }, [refreshMovements]);
 
-  const hasGraph = nodes.length > 0;
   const previewCount = movements.filter((m) => m.is_preview).length;
   const liveCount = movements.filter((m) => !m.is_preview).length;
 

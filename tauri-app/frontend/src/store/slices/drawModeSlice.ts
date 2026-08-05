@@ -34,7 +34,7 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
   clearDrawnPoints: () => set({ drawnPoints: [] }),
 
   finalizeDrawing: async () => {
-    const { drawnPoints, nodes, addNode } = get();
+    const { drawnPoints, addNode } = get();
     if (drawnPoints.length < 3) return null;
 
     // Douglas-Peucker simplification
