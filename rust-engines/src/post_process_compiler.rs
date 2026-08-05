@@ -847,4 +847,85 @@ mod tests {
         assert!((result[0].1.y - 2.0).abs() < 1e-10);
         assert!((result[0].1.z - 3.0).abs() < 1e-10);
     }
+
+    /// Test: compile_post_process rejette un graph global contenant un engine
+    /// (Circular) — la validation de contexte doit l'attraper.
+    #[test]
+    fn test_compile_rejects_engine_in_global_graph() {
+        let graph = make_graph(
+            vec![
+                (NodeType::Input, serde_json::json!({})),
+                (NodeType::Circular, serde_json::json!({"n_objects": 3})),
+                (NodeType::Output, serde_json::json!({})),
+            ],
+            vec![(0, 1), (1, 2)],
+        );
+
+        let macros = Arc::new(MacroState::new());
+        let result = compile_post_process(PostProcessCompileParams { graph, macros });
+        assert!(result.is_err());
+        match result {
+            Err(PostProcessCompileError::ValidationFailed(msg)) => {
+                assert!(msg.contains("ContextIncompatible"), "Expected ContextIncompatible, got: {}", msg);
+            }
+            Err(other) => panic!("Expected ValidationFailed, got {:?}", other),
+            Ok(_) => panic!("Expected error, got Ok"),
+        }
+    }
+
+    /// Test: compile_post_process rejette un graph global sans source
+    /// (Input/Merge/MoveRef) — doit échouer avec MissingRequiredNode.
+    #[test]
+    fn test_compile_rejects_global_without_source() {
+        let graph = make_graph(
+            vec![
+                (NodeType::Scale, serde_json::json!({"scale": 2.0})),
+                (NodeType::Output, serde_json::json!({})),
+            ],
+            vec![(0, 1)],
+        );
+
+        let macros = Arc::new(MacroState::new());
+        let result = compile_post_process(PostProcessCompileParams { graph, macros });
+        assert!(result.is_err());
+        match result {
+            Err(PostProcessCompileError::ValidationFailed(msg)) => {
+                assert!(msg.contains("MissingRequiredNode"), "Expected MissingRequiredNode, got: {}", msg);
+            }
+            Err(other) => panic!("Expected ValidationFailed, got {:?}", other),
+            Ok(_) => panic!("Expected error, got Ok"),
+        }
+    }
+
+    /// Test: build_transform_chain lève une erreur explicite si on rencontre
+    /// un node non-post-process qui n'est pas Input/Merge/MoveRef.
+    /// Ce test bypass la validation pour tester la garde défensive.
+    #[test]
+    fn test_build_transform_chain_rejects_engine() {
+        let mut graph = Graph::new();
+        let input = Node::new(NodeType::Input);
+        let circular = Node::new(NodeType::Circular);
+        let output = Node::new(NodeType::Output);
+
+        let id_input = input.id.clone();
+        let id_circular = circular.id.clone();
+        let id_output = output.id.clone();
+
+        graph.add_node(input);
+        graph.add_node(circular);
+        graph.add_node(output);
+
+        graph.add_edge(Edge { from: id_input, to: id_circular.clone(), from_port: "output".to_string(), to_port: "input".to_string() });
+        graph.add_edge(Edge { from: id_circular, to: id_output, from_port: "output".to_string(), to_port: "input".to_string() });
+
+        // On appelle build_transform_chain directement (sans validation)
+        let result = build_transform_chain(&graph, graph.nodes.values().find(|n| n.node_type == NodeType::Output).unwrap().id.clone());
+        assert!(result.is_err());
+        match result {
+            Err(PostProcessCompileError::InvalidNode(msg)) => {
+                assert!(msg.contains("Circular"), "Expected mention of Circular, got: {}", msg);
+            }
+            other => panic!("Expected InvalidNode, got {:?}", other),
+        }
+    }
 }
