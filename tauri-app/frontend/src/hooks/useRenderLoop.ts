@@ -222,22 +222,20 @@ export function useRenderLoop({
       }
 
       if (mvts.length > 0) {
-        // Architecture hybride : les positions arrivent déjà mergées via 'global-positions'
-        // Le MergeRuntime a fait le merge + post-processing côté Rust.
-        // On lit directement les positions depuis 'global' dans movementPositions.
+        // ── Mode multi-move : les positions arrivent du backend via 'global-positions' ──
+        // Le MergeRuntime a déjà fait : merge + post-processing (macros, offset, etc.)
+        // Le visualiseur est un viewer passif — il ne recalcule RIEN.
         const globalPos = mvPosMap['global'];
         if (globalPos) {
           const posMap = new Map<number, typeof globalPos[0]>();
           for (const p of globalPos) posMap.set(p.index, p);
           objs.forEach((mesh, objIdx) => {
-            // Ne pas écraser la position d'un objet en cours de drag manuel
             if (dragObj !== null && objIdx === dragObj) return;
             const p = posMap.get(objIdx);
             if (p) {
               mesh.position.set(p.x, p.y, p.z);
               mesh.visible = true;
               const mat = mesh.material as THREE.MeshStandardMaterial;
-              // Couleur selon le mode du premier movement actif (preview vs live)
               const isPreview = mvts.some((mv) => mv.is_preview);
               if (isPreview) {
                 mat.color.setHex(0x00ccff);
@@ -247,6 +245,13 @@ export function useRenderLoop({
                 mat.emissive.setHex(0x004411);
               }
             } else if (!assignMode) {
+              // Pas de position pour cet objet → manualPositions (statique)
+              const manualPos = manualPositionsRef.current;
+              const mp = manualPos[objIdx];
+              if (mp) {
+                mesh.position.set(mp[0], mp[1], mp[2]);
+                mesh.visible = true;
+              }
               const mat = mesh.material as THREE.MeshStandardMaterial;
               mat.color.setHSL(objIdx / objs.length, 0.7, 0.55);
               mat.emissive.setHSL(objIdx / objs.length, 0.5, 0.2);
@@ -256,35 +261,17 @@ export function useRenderLoop({
           });
         }
       } else {
-        // Mode legacy: positions du runtime unique
-        const pos = positionsRef.current;
-        if (pos.length > 0) {
-          // Construire un index direct: index → position (évite O(n²) avec find)
-          const posMap = new Map<number, typeof pos[0]>();
-          for (const p of pos) posMap.set(p.index, p);
-          objs.forEach((mesh, i) => {
-            if (dragObj !== null && i === dragObj) return;
-            const p = posMap.get(i);
-            if (p) {
-              const x = p.x * mc.scale + mc.shiftX;
-              const y = p.y * mc.scale + mc.shiftY;
-              const z = p.z * mc.scale + mc.shiftZ;
-              mesh.position.set(x, y, z);
-              mesh.visible = true;
-            }
-          });
-        } else {
-          // Aucune position runtime — utiliser manualPositions (cercle par défaut ou drag)
-          const manualPos = manualPositionsRef.current;
-          objs.forEach((mesh, i) => {
-            if (dragObj !== null && i === dragObj) return;
-            const p = manualPos[i];
-            if (p) {
-              mesh.position.set(p[0], p[1], p[2]);
-              mesh.visible = true;
-            }
-          });
-        }
+        // ── Mode statique : aucun move actif, utiliser manualPositions ──
+        // Pas de calcul de trajectoire — juste les positions manuelles (drag, .hol, cercle)
+        const manualPos = manualPositionsRef.current;
+        objs.forEach((mesh, i) => {
+          if (dragObj !== null && i === dragObj) return;
+          const p = manualPos[i];
+          if (p) {
+            mesh.position.set(p[0], p[1], p[2]);
+            mesh.visible = true;
+          }
+        });
       }
 
       // Hol markers font face à la caméra (billboard)
@@ -293,31 +280,20 @@ export function useRenderLoop({
 
       // Mise à jour du handle + trajectory line en manipulate mode
       if (handleRef.current && trajectoryLineRef.current) {
-        // Utiliser les positions mergées (global) si des movements sont actifs, sinon legacy
+        // Utiliser uniquement les positions du backend (global-positions) — pas de recalcul
         let pos: Array<{ index: number; x: number; y: number; z: number }> = [];
         if (mvts.length > 0) {
-          // Architecture hybride : les positions sont mergées sous 'global'
           pos = mvPosMap['global'] ?? [];
-        } else {
-          pos = positionsRef.current;
         }
         if (pos.length > 0) {
-          // Les positions 'global' sont déjà transformées par le MergeRuntime (macros appliquées).
-          // Les positions legacy ne le sont pas — appliquer les macros manuellement.
-          const isMerged = mvts.length > 0;
+          // Les positions sont déjà transformées par le backend — pas de macros frontend
           const transform = (p: { x: number; y: number; z: number }) =>
-            isMerged
-              ? new THREE.Vector3(p.x, p.y, p.z)
-              : new THREE.Vector3(p.x * mc.scale + mc.shiftX, p.y * mc.scale + mc.shiftY, p.z * mc.scale + mc.shiftZ);
+            new THREE.Vector3(p.x, p.y, p.z);
 
           const cx = pos.reduce((s, p) => s + p.x, 0) / pos.length;
           const cy = pos.reduce((s, p) => s + p.y, 0) / pos.length;
           const cz = pos.reduce((s, p) => s + p.z, 0) / pos.length;
-          if (isMerged) {
-            handleRef.current.position.set(cx, cy, cz);
-          } else {
-            handleRef.current.position.set(cx * mc.scale + mc.shiftX, cy * mc.scale + mc.shiftY, cz * mc.scale + mc.shiftZ);
-          }
+          handleRef.current.position.set(cx, cy, cz);
 
           // Mise à jour de la trajectory line — seulement si les positions ont changé
           const posKey = pos.length + ':' + pos[0]?.x + ',' + pos[0]?.y + ',' + pos[0]?.z;

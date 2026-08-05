@@ -380,6 +380,7 @@ pub async fn update_move_graph_merged(
 
     let fade = fade_duration.unwrap_or(0.3);
     movement.runtime.recall_cue(compiled, fade);
+    eprintln!("[update_move_graph_merged] Hot-swapped movement '{}' with fade {}", movement_id, fade);
 
     Ok(format!("Move '{}' graph hot-swapped", movement_id))
 }

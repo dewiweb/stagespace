@@ -167,31 +167,27 @@ export function useManipulateMode({
         }
 
         // Normal drag = move the whole trajectory (offset)
-        // Utilise les positions legacy OU les movement positions
-        const pos = positionsRef.current;
+        // Utilise les positions du backend (global-positions) — pas de recalcul
         const mvts = movementsRef.current;
         const mvPosMap = movementPositionsRef.current;
         let cx = 0, cy = 0, count = 0;
 
-        if (pos.length > 0) {
-          cx = pos.reduce((s, p) => s + p.x, 0) / pos.length;
-          cy = pos.reduce((s, p) => s + p.y, 0) / pos.length;
-          count = pos.length;
-        } else if (mvts.length > 0) {
-          // Multi-movement: calculer le centroïde de toutes les positions actives
-          for (const mv of mvts) {
-            const mvPos = mvPosMap[mv.id];
-            if (!mvPos) continue;
-            for (const p of mvPos) { cx += p.x; cy += p.y; count++; }
+        if (mvts.length > 0) {
+          // Multi-movement: utiliser les positions mergées du backend
+          const globalPos = mvPosMap['global'];
+          if (globalPos) {
+            for (const p of globalPos) { cx += p.x; cy += p.y; count++; }
+            if (count > 0) { cx /= count; cy /= count; }
           }
-          if (count > 0) { cx /= count; cy /= count; }
         }
 
         if (count > 0) {
-          const newShiftX = intersection.x - cx * macros.scale;
-          const newShiftY = intersection.y - cy * macros.scale;
+          // Les positions sont déjà transformées par le backend — pas de macros
+          const newShiftX = intersection.x - cx;
+          const newShiftY = intersection.y - cy;
           // Mettre à jour les macros legacy
           setMacros({
+            ...macros,
             shiftX: newShiftX,
             shiftY: newShiftY,
             shiftZ: 0,
