@@ -17,7 +17,7 @@ import 'reactflow/dist/style.css';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import CustomNode from './CustomNode';
-import { NODE_CATEGORIES, NODE_COLORS, NODE_DESCRIPTIONS, getCategoryColor, getDefaultParams, getValidTargetTypes } from './nodeParamSchema';
+import { NODE_CATEGORIES, NODE_COLORS, NODE_DESCRIPTIONS, getCategoryColor, getDefaultParams, getValidTargetTypes, GLOBAL_ONLY_NODES, SUB_ONLY_NODES } from './nodeParamSchema';
 import { isValidConnection } from '../utils/connectionRules';
 
 const nodeTypes: NodeTypes = { custom: CustomNode };
@@ -227,6 +227,12 @@ export const NodeEditor: React.FC = () => {
 
         <div className="p-2 space-y-2">
           {NODE_CATEGORIES.map((cat) => {
+            // Filtrer les types selon le tab actif
+            const filteredTypes = activeTab === 'global'
+              ? cat.types.filter((t) => !SUB_ONLY_NODES.has(t))
+              : cat.types.filter((t) => !GLOBAL_ONLY_NODES.has(t));
+            // Skip la catégorie si elle n'a plus de types après le filtrage
+            if (filteredTypes.length === 0) return null;
             const isCollapsed = collapsedCats.has(cat.label);
             return (
               <div key={cat.label}>
@@ -240,11 +246,11 @@ export const NodeEditor: React.FC = () => {
                     style={{ background: NODE_COLORS[cat.color] ?? '#4b5563' }}
                   />
                   {cat.label}
-                  <span className="text-gray-700 ml-auto">{cat.types.length}</span>
+                  <span className="text-gray-700 ml-auto">{filteredTypes.length}</span>
                 </button>
                 {!isCollapsed && (
                   <div className="space-y-0.5">
-                    {cat.types.map((type) => (
+                    {filteredTypes.map((type) => (
                       <div
                         key={type}
                         className="relative"

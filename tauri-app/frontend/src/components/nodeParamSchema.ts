@@ -335,6 +335,39 @@ export const NODE_CATEGORIES: { label: string; color: string; types: NodeType[] 
   { label: 'Sources', color: 'yellow', types: ['BPM', 'AudioAmplitude', 'AudioSpectrum', 'OSCInput'] },
 ];
 
+/// Catégories disponibles pour le graph global (post-processing).
+/// Pas d'engines, pas de splines, pas de falloffs, pas d'Objects/Duration.
+/// Le graph global démarre depuis Input (positions mergées) ou MoveRef/Merge.
+export const GLOBAL_GRAPH_CATEGORIES: string[] = [
+  'Global (Post-process)',
+  'Composite',
+  'Sources',
+];
+
+/// Catégories disponibles pour les sub-graphs (moves).
+/// Pas de nodes global-only (Input, MoveRef, Merge, RadiusScale, etc.).
+export const SUB_GRAPH_CATEGORIES: string[] = [
+  'Structural',
+  'Math Engines',
+  'Physics Engines',
+  'Splines',
+  'Falloffs',
+  'Modifiers',
+  'Composite',
+  'Sources',
+];
+
+/// Nodes exclus du sub-graph (global-only)
+export const GLOBAL_ONLY_NODES: Set<NodeType> = new Set([
+  'Input', 'MoveRef', 'Merge', 'RadiusScale', 'HeightOffset',
+  'PerTrackDepth', 'Barycenter', 'AudioFalloff', 'ManualPosition',
+]);
+
+/// Nodes exclus du global graph (sub-graph-only)
+export const SUB_ONLY_NODES: Set<NodeType> = new Set([
+  'Objects', 'Duration',
+]);
+
 export const NODE_COLORS: Record<string, string> = {
   gray: '#4b5563',
   blue: '#2563eb',

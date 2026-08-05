@@ -566,4 +566,256 @@ mod tests {
         // pos + origin + shift = 1.0 + 2.0 + 1.0 = 4.0
         assert!((result[0].1.x - 4.0).abs() < 1e-10);
     }
+
+    /// Helper étendu : permet de spécifier track_positions, track_depths, et macros
+    fn run_test_full(
+        graph: Graph,
+        positions: Vec<(usize, nalgebra::Vector3<f64>)>,
+        manual_positions: HashMap<usize, [f64; 3]>,
+        origin: nalgebra::Vector3<f64>,
+        track_positions: HashMap<u32, [f64; 3]>,
+        track_depths: Vec<f64>,
+    ) -> Vec<(usize, nalgebra::Vector3<f64>)> {
+        let macros = Arc::new(MacroState::new());
+        let fn_compiled = compile_post_process(PostProcessCompileParams { graph, macros }).unwrap();
+
+        let macros_ref = MacroState::new();
+        let audio = AudioState::new();
+        let ctx = PostProcessContext {
+            t: 0.0,
+            macros: &macros_ref,
+            audio_state: &audio,
+            track_positions: &track_positions,
+            manual_positions: &manual_positions,
+            origin,
+            track_depths: &track_depths,
+        };
+        fn_compiled(&ctx, positions)
+    }
+
+    /// Helper avec macros personnalisées (pour tester RadiusScale, HeightOffset, etc.)
+    fn run_test_with_macros(
+        graph: Graph,
+        positions: Vec<(usize, nalgebra::Vector3<f64>)>,
+        origin: nalgebra::Vector3<f64>,
+        macros: MacroState,
+    ) -> Vec<(usize, nalgebra::Vector3<f64>)> {
+        let macros_arc = Arc::new(MacroState::new());
+        let fn_compiled = compile_post_process(PostProcessCompileParams { graph, macros: macros_arc }).unwrap();
+
+        let audio = AudioState::new();
+        let track_positions = HashMap::new();
+        let track_depths: Vec<f64> = vec![];
+        let ctx = PostProcessContext {
+            t: 0.0,
+            macros: &macros,
+            audio_state: &audio,
+            track_positions: &track_positions,
+            manual_positions: &HashMap::new(),
+            origin,
+            track_depths: &track_depths,
+        };
+        fn_compiled(&ctx, positions)
+    }
+
+    /// Test: RadiusScale node scales distance from origin (uses macro live value)
+    #[test]
+    fn test_compile_radius_scale() {
+        let graph = make_graph(
+            vec![
+                (NodeType::Input, serde_json::json!({})),
+                (NodeType::RadiusScale, serde_json::json!({"radius_scale": 2.0})),
+                (NodeType::Output, serde_json::json!({})),
+            ],
+            vec![(0, 1), (1, 2)],
+        );
+
+        let positions = vec![(0, nalgebra::Vector3::new(1.0, 0.0, 0.0))];
+        let origin = nalgebra::Vector3::new(0.0, 0.0, 0.0);
+        let macros = MacroState::new();
+        macros.set_radius_scale(2.0);
+        let result = run_test_with_macros(graph, positions, origin, macros);
+        // (pos - origin) * 2.0 + origin = 1.0 * 2.0 = 2.0
+        assert!((result[0].1.x - 2.0).abs() < 1e-10);
+    }
+
+    /// Test: HeightOffset node adds offset to z (uses macro live value)
+    #[test]
+    fn test_compile_height_offset() {
+        let graph = make_graph(
+            vec![
+                (NodeType::Input, serde_json::json!({})),
+                (NodeType::HeightOffset, serde_json::json!({"height_offset": 1.5})),
+                (NodeType::Output, serde_json::json!({})),
+            ],
+            vec![(0, 1), (1, 2)],
+        );
+
+        let positions = vec![(0, nalgebra::Vector3::new(0.0, 0.0, 0.0))];
+        let origin = nalgebra::Vector3::new(0.0, 0.0, 0.0);
+        let macros = MacroState::new();
+        macros.set_height_offset(1.5);
+        let result = run_test_with_macros(graph, positions, origin, macros);
+        // y + height_offset = 0.0 + 1.5 = 1.5
+        assert!((result[0].1.y - 1.5).abs() < 1e-10);
+    }
+
+    /// Test: PerTrackDepth node scales positions by per-track depth factor
+    #[test]
+    fn test_compile_per_track_depth() {
+        let graph = make_graph(
+            vec![
+                (NodeType::Input, serde_json::json!({})),
+                (NodeType::PerTrackDepth, serde_json::json!({})),
+                (NodeType::Output, serde_json::json!({})),
+            ],
+            vec![(0, 1), (1, 2)],
+        );
+
+        let positions = vec![
+            (0, nalgebra::Vector3::new(2.0, 0.0, 0.0)),
+            (1, nalgebra::Vector3::new(4.0, 0.0, 0.0)),
+        ];
+        let origin = nalgebra::Vector3::new(0.0, 0.0, 0.0);
+        let track_depths = vec![0.5, 1.5];
+        let result = run_test_full(graph, positions, HashMap::new(), origin, HashMap::new(), track_depths);
+        // obj 0: (pos - origin) * 0.5 = 2.0 * 0.5 = 1.0
+        assert!((result[0].1.x - 1.0).abs() < 1e-10);
+        // obj 1: (pos - origin) * 1.5 = 4.0 * 1.5 = 6.0
+        assert!((result[1].1.x - 6.0).abs() < 1e-10);
+    }
+
+    /// Test: Barycenter node is a no-op (origin is computed by the app, not the node)
+    #[test]
+    fn test_compile_barycenter() {
+        let graph = make_graph(
+            vec![
+                (NodeType::Input, serde_json::json!({})),
+                (NodeType::Barycenter, serde_json::json!({"weight": 1.0})),
+                (NodeType::Output, serde_json::json!({})),
+            ],
+            vec![(0, 1), (1, 2)],
+        );
+
+        let positions = vec![(0, nalgebra::Vector3::new(10.0, 0.0, 0.0))];
+        let origin = nalgebra::Vector3::new(0.0, 0.0, 0.0);
+        let mut track_positions = HashMap::new();
+        track_positions.insert(0u32, [1.0, 0.0, 0.0]);
+        track_positions.insert(1u32, [3.0, 0.0, 0.0]);
+        let result = run_test_full(graph, positions, HashMap::new(), origin, track_positions, vec![]);
+        // Barycenter is a no-op — positions unchanged
+        assert!((result[0].1.x - 10.0).abs() < 1e-10);
+    }
+
+    /// Test: MoveRef node is NOT a post-process node — build_transform_chain stops at it
+    #[test]
+    fn test_moveref_not_post_process() {
+        assert!(!is_post_process_node(&NodeType::MoveRef));
+    }
+
+    /// Test: Merge node is NOT a post-process node — it's a source like Input
+    #[test]
+    fn test_merge_not_post_process() {
+        assert!(!is_post_process_node(&NodeType::Merge));
+    }
+
+    /// Test: Input node is NOT a post-process node — it's the source
+    #[test]
+    fn test_input_not_post_process() {
+        assert!(!is_post_process_node(&NodeType::Input));
+    }
+
+    /// Test: Output node is NOT a post-process node — it's the sink
+    #[test]
+    fn test_output_not_post_process() {
+        assert!(!is_post_process_node(&NodeType::Output));
+    }
+
+    /// Test: chained post-process nodes (Input → RadiusScale → HeightOffset → Output)
+    #[test]
+    fn test_compile_chained_transforms() {
+        let graph = make_graph(
+            vec![
+                (NodeType::Input, serde_json::json!({})),
+                (NodeType::RadiusScale, serde_json::json!({"radius_scale": 2.0})),
+                (NodeType::HeightOffset, serde_json::json!({"height_offset": 1.0})),
+                (NodeType::Output, serde_json::json!({})),
+            ],
+            vec![(0, 1), (1, 2), (2, 3)],
+        );
+
+        let positions = vec![(0, nalgebra::Vector3::new(1.0, 0.0, 0.0))];
+        let origin = nalgebra::Vector3::new(0.0, 0.0, 0.0);
+        let macros = MacroState::new();
+        macros.set_radius_scale(2.0);
+        macros.set_height_offset(1.0);
+        let result = run_test_with_macros(graph, positions, origin, macros);
+        // After RadiusScale: x = 1.0 * 2.0 = 2.0
+        // After HeightOffset: y = 0.0 + 1.0 = 1.0
+        assert!((result[0].1.x - 2.0).abs() < 1e-10);
+        assert!((result[0].1.y - 1.0).abs() < 1e-10);
+    }
+
+    /// Test: Rotate node rotates positions around origin (uses macro live value)
+    #[test]
+    fn test_compile_rotate() {
+        let graph = make_graph(
+            vec![
+                (NodeType::Input, serde_json::json!({})),
+                (NodeType::Rotate, serde_json::json!({"yaw": 90.0})),
+                (NodeType::Output, serde_json::json!({})),
+            ],
+            vec![(0, 1), (1, 2)],
+        );
+
+        let positions = vec![(0, nalgebra::Vector3::new(1.0, 0.0, 0.0))];
+        let origin = nalgebra::Vector3::new(0.0, 0.0, 0.0);
+        let macros = MacroState::new();
+        macros.set_rotation(90.0, 0.0, 0.0);
+        let result = run_test_with_macros(graph, positions, origin, macros);
+        // 90° yaw (around Y axis): (1,0,0) → (0, 0, -1)
+        assert!((result[0].1.x).abs() < 1e-10);
+        assert!((result[0].1.z + 1.0).abs() < 1e-10);
+    }
+
+    /// Test: Mirror node mirrors positions
+    #[test]
+    fn test_compile_mirror() {
+        let graph = make_graph(
+            vec![
+                (NodeType::Input, serde_json::json!({})),
+                (NodeType::Mirror, serde_json::json!({"axis": "x"})),
+                (NodeType::Output, serde_json::json!({})),
+            ],
+            vec![(0, 1), (1, 2)],
+        );
+
+        let positions = vec![(0, nalgebra::Vector3::new(1.0, 2.0, 3.0))];
+        let origin = nalgebra::Vector3::new(0.0, 0.0, 0.0);
+        let result = run_test(graph, positions, HashMap::new(), origin);
+        // Mirror x: x → -x
+        assert!((result[0].1.x - (-1.0)).abs() < 1e-10);
+        assert!((result[0].1.y - 2.0).abs() < 1e-10);
+    }
+
+    /// Test: ManualPosition node with empty manual_positions → no change
+    #[test]
+    fn test_compile_manual_position_empty() {
+        let graph = make_graph(
+            vec![
+                (NodeType::Input, serde_json::json!({})),
+                (NodeType::ManualPosition, serde_json::json!({})),
+                (NodeType::Output, serde_json::json!({})),
+            ],
+            vec![(0, 1), (1, 2)],
+        );
+
+        let positions = vec![(0, nalgebra::Vector3::new(1.0, 2.0, 3.0))];
+        let origin = nalgebra::Vector3::new(0.0, 0.0, 0.0);
+        let result = run_test(graph, positions, HashMap::new(), origin);
+        // No manual positions → unchanged
+        assert!((result[0].1.x - 1.0).abs() < 1e-10);
+        assert!((result[0].1.y - 2.0).abs() < 1e-10);
+        assert!((result[0].1.z - 3.0).abs() < 1e-10);
+    }
 }
