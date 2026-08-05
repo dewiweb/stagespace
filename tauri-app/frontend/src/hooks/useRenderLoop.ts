@@ -2,6 +2,7 @@ import { useEffect, useRef, MutableRefObject } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
+import { useGraphStore } from '../store/useGraphStore';
 import type { HolProject, MovementInfo } from '../store/useGraphStore';
 
 // Types des valeurs store lues dans le render loop
@@ -234,7 +235,7 @@ export function useRenderLoop({
         objs.forEach((mesh, objIdx) => {
           // Ne pas écraser la position d'un objet en cours de drag manuel
           if (dragObj !== null && objIdx === dragObj) return;
-          const trackId = holProj?.tracks[objIdx]?.id ?? objIdx;
+          const trackId = holProj?.tracks[objIdx]?.id ?? useGraphStore.getState().manualOscIds[objIdx] ?? (objIdx + 1);
           let found = false;
           for (const entry of mvPosMaps) {
             if (!entry) continue;
