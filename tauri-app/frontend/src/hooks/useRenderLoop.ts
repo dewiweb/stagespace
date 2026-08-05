@@ -2,7 +2,8 @@ import { useEffect, useRef, MutableRefObject } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
-import type { HolProject, MovementInfo } from '../store/useGraphStore';
+import { useGraphStore } from '../store/useGraphStore';
+import type { HolProject } from '../store/useGraphStore';
 
 // Types des valeurs store lues dans le render loop
 type PositionArray = Array<{ index: number; x: number; y: number; z: number }>;
@@ -33,9 +34,9 @@ export interface UseRenderLoopParams {
   trajectoryLineRef: MutableRefObject<THREE.Line | null>;
   drawCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
   // Store values (passées pour sync vers refs internes)
+  // NOTE: movementPositions et movements sont lus via getState() dans la boucle
+  // pour éviter 60 re-renders React par seconde.
   positions: PositionArray;
-  movements: MovementInfo[];
-  movementPositions: Record<string, PositionArray>;
   macros: MacrosValue;
   assignMode: boolean;
   selectedTrackIds: Set<number>;
@@ -71,8 +72,6 @@ export function useRenderLoop({
   trajectoryLineRef,
   drawCanvasRef,
   positions,
-  movements,
-  movementPositions,
   macros,
   assignMode,
   selectedTrackIds,
@@ -84,8 +83,6 @@ export function useRenderLoop({
 }: UseRenderLoopParams) {
   // Refs internes pour les valeurs changeantes — lues dans le render loop à 60fps
   const positionsRef = useRef(positions);
-  const movementsRef = useRef(movements);
-  const movementPositionsRef = useRef(movementPositions);
   const macrosRef = useRef(macros);
   const assignModeRef = useRef(assignMode);
   const selectedTrackIdsRef = useRef(selectedTrackIds);
@@ -98,8 +95,6 @@ export function useRenderLoop({
 
   // Sync des refs à chaque render React (cheap — pas d'effet de bord)
   positionsRef.current = positions;
-  movementsRef.current = movements;
-  movementPositionsRef.current = movementPositions;
   macrosRef.current = macros;
   assignModeRef.current = assignMode;
   selectedTrackIdsRef.current = selectedTrackIds;
@@ -187,10 +182,14 @@ export function useRenderLoop({
       controls.update();
 
       // ── Mise à jour des positions dans le render loop (pas de useEffect) ──
-      // Lit les refs au lieu des props React — évite les re-renders à 60fps
+      // Lit les refs au lieu des props React — évite les re-renders à 60fps.
+      // movements et movementPositions sont lus via getState() car ils changent
+      // à 60fps (event global-positions) — un abonnement React déclencherait
+      // 60 re-renders/seconde de tout Scene3D et ses enfants.
       const objs = objectsRef.current;
-      const mvts = movementsRef.current;
-      const mvPosMap = movementPositionsRef.current;
+      const storeState = useGraphStore.getState();
+      const mvts = storeState.movements;
+      const mvPosMap = storeState.movementPositions;
       const holProj = holProjectRef.current;
       const assignMode = assignModeRef.current;
       const selTrackIds = selectedTrackIdsRef.current;

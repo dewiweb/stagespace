@@ -35,7 +35,6 @@ export function useManipulateMode({
 
   const positions = useGraphStore((s) => s.positions);
   const movements = useGraphStore((s) => s.movements);
-  const movementPositions = useGraphStore((s) => s.movementPositions);
   const macros = useGraphStore((s) => s.macros);
   const setMacros = useGraphStore((s) => s.setMacros);
   const isPlaying = useGraphStore((s) => s.isPlaying);
@@ -43,16 +42,16 @@ export function useManipulateMode({
   // Refs pour les valeurs lues dans les callbacks — évite les stale closures
   const positionsRef = useRef(positions);
   const movementsRef = useRef(movements);
-  const movementPositionsRef = useRef(movementPositions);
 
   // Animation store ref — pour la manipulation directe 3D (offset, scale, rotation)
   const animStoreRef = useRef(useAnimationStore.getState());
   animStoreRef.current = useAnimationStore.getState();
 
   // Sync des refs à chaque render React (cheap — pas d'effet de bord)
+  // movementPositions est lu via getState() dans les callbacks pour éviter
+  // 60 re-renders/seconde (event global-positions à 60fps).
   positionsRef.current = positions;
   movementsRef.current = movements;
-  movementPositionsRef.current = movementPositions;
   draggingObjectRef.current = draggingObject;
 
   // Manipulate handlers — drag objects or handle
@@ -169,7 +168,7 @@ export function useManipulateMode({
         // Normal drag = move the whole trajectory (offset)
         // Utilise les positions du backend (global-positions) — pas de recalcul
         const mvts = movementsRef.current;
-        const mvPosMap = movementPositionsRef.current;
+        const mvPosMap = useGraphStore.getState().movementPositions;
         let cx = 0, cy = 0, count = 0;
 
         if (mvts.length > 0) {

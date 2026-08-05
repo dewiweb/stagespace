@@ -45,8 +45,9 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   // Assign mode — click objects to assign/unassign from trajectory
   const [assignMode, setAssignMode] = useState(false);
 
-  // Multi-movement state — déclaré ici car utilisé par les refs ci-dessous
-  const movementPositions = useGraphStore((s) => s.movementPositions);
+  // Multi-movement state — movements et movementPositions sont lus via getState()
+  // dans useRenderLoop pour éviter 60 re-renders/seconde.
+  // On garde movements pour le useMemo nObjects et le rendu conditionnel.
   const movements = useGraphStore((s) => s.movements);
   const manualPositions = useGraphStore((s) => s.manualPositions);
 
@@ -136,8 +137,6 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
     trajectoryLineRef,
     drawCanvasRef,
     positions,
-    movements,
-    movementPositions,
     macros,
     assignMode,
     selectedTrackIds,
