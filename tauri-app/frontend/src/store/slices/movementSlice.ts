@@ -47,7 +47,7 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
   setMovementPositions: (movementId, positions) =>
     set((s) => ({ movementPositions: { ...s.movementPositions, [movementId]: positions } })),
 
-  playMovement: async (name, trackIndices, isPreview, oscAddress, oscPort, oscProfile) => {
+  playMovement: async (name, trackIndices, isPreview, _oscAddress, _oscPort, _oscProfile) => {
     const { nodes, edges, holProject, manualOscIds } = get();
     const { prepareGraphForSave } = await import('../../components/nodeParamSchema');
     const graphData = prepareGraphForSave(nodes, edges);

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { safeListen as listen } from '../utils/tauri';
-import { useGraphStore, HolProject } from './useGraphStore';
+import { useGraphStore } from './useGraphStore';
 
 // ── Types miroir du backend ──
 
