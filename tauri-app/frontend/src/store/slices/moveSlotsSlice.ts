@@ -501,19 +501,13 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
   },
 
   saveEditorToSlot: (id) => {
-    const { nodes, edges } = get();
-    set((s) => {
-      const newSlots = s.moveSlots.map((sl) =>
-        sl.id === id ? { ...sl, graphJson: { nodes: [...nodes], edges: [...edges] } } : sl
-      );
-      saveSlotsToStorage(newSlots);
-      return { moveSlots: newSlots };
-    });
-    // Hot-swap si le slot est en lecture
+    // Le graphe est déjà auto-sauvé dans le slot par autoSaveToEditingSlot
+    // (useGraphStore.ts). Cette fonction ne fait que le hot-swap si le slot
+    // est en cours de lecture.
     const slot = get().moveSlots.find((s) => s.id === id);
-    if (slot?.movementId) {
+    if (slot?.movementId && slot?.graphJson) {
       import('../../components/nodeParamSchema').then(({ prepareGraphForSave }) => {
-        const graphData = prepareGraphForSave(nodes, edges);
+        const graphData = prepareGraphForSave(slot.graphJson!.nodes, slot.graphJson!.edges);
         invoke('update_move_graph_merged', {
           movementId: slot.movementId,
           graphJson: graphData,

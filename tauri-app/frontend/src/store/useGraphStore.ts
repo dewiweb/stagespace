@@ -112,6 +112,40 @@ interface GraphState
 
 export const useGraphStore = create<GraphState>()((...a) => {
   const [set, get] = a;
+
+  // ── Auto-save : sauvegarde le graphe édité dans le slot édité ──
+  // Appelé après chaque mutation de nodes/edges pour garantir que
+  // slot.graphJson est toujours synchronisé avec l'éditeur.
+  // Ne modifie que moveSlots (pas nodes/edges) → pas de boucle.
+  function autoSaveToEditingSlot() {
+    const editingSlotId = (get() as any).editingSlotId as string | null;
+    if (!editingSlotId) return;
+    const { nodes, edges } = get();
+    const moveSlots = (get() as any).moveSlots as any[] | undefined;
+    if (!moveSlots) return;
+    const newSlots = moveSlots.map((sl: any) =>
+      sl.id === editingSlotId
+        ? { ...sl, graphJson: { nodes: [...nodes], edges: [...edges] } }
+        : sl
+    );
+    // Sauvegarder dans localStorage (la fonction est dans moveSlotsSlice)
+    try {
+      localStorage.setItem('stagespace-move-slots', JSON.stringify(newSlots));
+    } catch {}
+    set({ moveSlots: newSlots } as any);
+  }
+
+  // Debounce pour l'auto-save pendant le drag (onNodesChange/onEdgesChange)
+  // — évite d'écrire à chaque pixel de drag.
+  let dragSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  function debouncedAutoSave() {
+    if (dragSaveTimer) clearTimeout(dragSaveTimer);
+    dragSaveTimer = setTimeout(() => {
+      dragSaveTimer = null;
+      autoSaveToEditingSlot();
+    }, 400);
+  }
+
   return {
   ...createPerfSlice(...a),
   ...createAudioSlice(...a),
@@ -132,9 +166,12 @@ export const useGraphStore = create<GraphState>()((...a) => {
 
   onNodesChange: (changes) => {
     set({ nodes: applyNodeChanges(changes, get().nodes) as Node[] });
+    // Auto-save avec debounce (drag = beaucoup de changes)
+    debouncedAutoSave();
   },
   onEdgesChange: (changes) => {
     set({ edges: applyEdgeChanges(changes, get().edges) as Edge[] });
+    debouncedAutoSave();
   },
   onConnect: (connection) => {
     get().pushHistory();
@@ -144,11 +181,13 @@ export const useGraphStore = create<GraphState>()((...a) => {
         get().edges,
       ) as Edge[],
     });
+    autoSaveToEditingSlot();
   },
 
   addNode: (node) => {
     get().pushHistory();
     set((s) => ({ nodes: [...s.nodes, node] }));
+    autoSaveToEditingSlot();
   },
   removeNode: (id) => {
     get().pushHistory();
@@ -156,13 +195,18 @@ export const useGraphStore = create<GraphState>()((...a) => {
       nodes: s.nodes.filter((n) => n.id !== id),
       edges: s.edges.filter((e) => e.source !== id && e.target !== id),
     }));
+    autoSaveToEditingSlot();
   },
-  updateNodeData: (id, data) =>
+  updateNodeData: (id, data) => {
     set((s) => ({
       nodes: s.nodes.map((n) =>
         n.id === id ? { ...n, data: { ...n.data, ...data } } : n,
       ),
-    })),
+    }));
+    // Pas d'auto-save ici — updateNodeData est appelé très fréquemment
+    // (slider drag, etc.). Le debounce de CustomNode.tsx gère le hot-swap,
+    // et saveEditorToSlot / switch de slot sauve le graphe.
+  },
   setNodes: (nodes) => set({ nodes }),
   setEdges: (edges) => set({ edges }),
 
