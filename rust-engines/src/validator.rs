@@ -68,12 +68,10 @@ impl Validator {
                 // Pas d'Objects/Duration requis en global ; le graph global
                 // a juste besoin d'un Output et d'au moins une source
                 // (Input, Merge, ou MoveRef).
-                let has_source = graph.nodes.values().any(|n| {
-                    matches!(
-                        n.node_type,
-                        NodeType::Input | NodeType::Merge | NodeType::MoveRef
-                    )
-                });
+                let has_source = graph.nodes.values().any(|n| matches!(
+                    n.node_type,
+                    NodeType::Input | NodeType::Merge | NodeType::MoveRef
+                ));
                 if !has_source {
                     errors.push(ValidationError::MissingRequiredNode(NodeType::Input));
                 }
@@ -81,11 +79,7 @@ impl Validator {
         }
 
         // Output est toujours obligatoire
-        if !graph
-            .nodes
-            .values()
-            .any(|n| n.node_type == NodeType::Output)
-        {
+        if !graph.nodes.values().any(|n| n.node_type == NodeType::Output) {
             errors.push(ValidationError::MissingRequiredNode(NodeType::Output));
         }
 
@@ -145,37 +139,16 @@ impl Validator {
 
     /// Détecte si le graphe contient des moteurs (sub-graph).
     fn graph_has_engines(graph: &Graph) -> bool {
-        graph.nodes.values().any(|n| {
-            matches!(
-                n.node_type,
-                NodeType::Circular
-                    | NodeType::Elliptical
-                    | NodeType::Spiral
-                    | NodeType::Lissajous
-                    | NodeType::Figure8
-                    | NodeType::Linear
-                    | NodeType::Oscillation
-                    | NodeType::Formation
-                    | NodeType::PerlinNoise
-                    | NodeType::Converge
-                    | NodeType::Pendulum
-                    | NodeType::RoseCurve
-                    | NodeType::Helix
-                    | NodeType::Bouncing
-                    | NodeType::Spring
-                    | NodeType::Follow
-                    | NodeType::Swarm
-                    | NodeType::Avoidance
-                    | NodeType::CustomTrajectory
-                    | NodeType::BPM
-                    | NodeType::AudioAmplitude
-                    | NodeType::TimeFalloff
-                    | NodeType::PointDistanceFalloff
-                    | NodeType::DirectionalFalloff
-                    | NodeType::AudioAmplitudeFalloff
-                    | NodeType::Wave
-            )
-        })
+        graph.nodes.values().any(|n| matches!(n.node_type,
+            NodeType::Circular | NodeType::Elliptical | NodeType::Spiral | NodeType::Lissajous | NodeType::Figure8
+            | NodeType::Linear | NodeType::Oscillation | NodeType::Formation | NodeType::PerlinNoise
+            | NodeType::Converge | NodeType::Pendulum | NodeType::RoseCurve | NodeType::Helix
+            | NodeType::Bouncing | NodeType::Spring | NodeType::Follow | NodeType::Swarm | NodeType::Avoidance
+            | NodeType::CustomTrajectory | NodeType::BPM | NodeType::AudioAmplitude
+            | NodeType::TimeFalloff | NodeType::PointDistanceFalloff
+            | NodeType::DirectionalFalloff | NodeType::AudioAmplitudeFalloff
+            | NodeType::Wave
+        ))
     }
 
     /// Vérifie si une connexion entre deux types de nœuds est valide
@@ -205,7 +178,7 @@ impl Validator {
 
             // Moteurs physique
             NodeType::Bouncing | NodeType::Spring | NodeType::Follow | NodeType::Swarm | NodeType::Avoidance => {
-                matches!(to_type,
+                matches!(to_type, 
                     NodeType::Output | NodeType::Mix | NodeType::Group | NodeType::Sequence | NodeType::Crossfade
                 )
             }
@@ -233,8 +206,11 @@ impl Validator {
 
             // Sources
             NodeType::AudioSpectrum | NodeType::OSCInput => {
-                matches!(to_type, NodeType::TimeFalloff | NodeType::AudioAmplitudeFalloff
-                    | NodeType::DirectionalFalloff | NodeType::PointDistanceFalloff)
+                matches!(
+                    to_type,
+                    NodeType::TimeFalloff | NodeType::AudioAmplitudeFalloff
+                        | NodeType::DirectionalFalloff | NodeType::PointDistanceFalloff
+                )
             }
 
             // Structurels
@@ -348,69 +324,31 @@ impl Validator {
     fn has_input_port(node_type: &NodeType, port: &str) -> bool {
         let inputs: &[&str] = match node_type {
             // Sources / terminaux : aucune entrée
-            NodeType::Objects
-            | NodeType::Duration
-            | NodeType::AudioSpectrum
-            | NodeType::OSCInput
-            | NodeType::DrawSpline
-            | NodeType::Input
-            | NodeType::MoveRef
-            | NodeType::Merge => &[],
+            NodeType::Objects | NodeType::Duration
+            | NodeType::AudioSpectrum | NodeType::OSCInput
+            | NodeType::DrawSpline | NodeType::Input | NodeType::MoveRef | NodeType::Merge => &[],
 
             // Moteurs : entrée générale + durée depuis un nœud Duration
-            NodeType::Circular
-            | NodeType::Elliptical
-            | NodeType::Spiral
-            | NodeType::Lissajous
-            | NodeType::Figure8
-            | NodeType::Linear
-            | NodeType::Oscillation
-            | NodeType::Formation
-            | NodeType::PerlinNoise
-            | NodeType::Converge
-            | NodeType::Pendulum
-            | NodeType::RoseCurve
-            | NodeType::Helix
-            | NodeType::Bouncing
-            | NodeType::Spring
-            | NodeType::Follow
-            | NodeType::Swarm
-            | NodeType::Avoidance
-            | NodeType::CustomTrajectory
-            | NodeType::Wave
-            | NodeType::BPM
-            | NodeType::AudioAmplitude
-            | NodeType::TimeFalloff
-            | NodeType::PointDistanceFalloff
-            | NodeType::DirectionalFalloff
-            | NodeType::AudioAmplitudeFalloff => &["input", "duration"],
+            NodeType::Circular | NodeType::Elliptical | NodeType::Spiral | NodeType::Lissajous | NodeType::Figure8
+            | NodeType::Linear | NodeType::Oscillation | NodeType::Formation | NodeType::PerlinNoise
+            | NodeType::Converge | NodeType::Pendulum | NodeType::RoseCurve | NodeType::Helix
+            | NodeType::Bouncing | NodeType::Spring | NodeType::Follow | NodeType::Swarm | NodeType::Avoidance
+            | NodeType::CustomTrajectory | NodeType::Wave
+            | NodeType::BPM | NodeType::AudioAmplitude
+            | NodeType::TimeFalloff | NodeType::PointDistanceFalloff
+            | NodeType::DirectionalFalloff | NodeType::AudioAmplitudeFalloff => &["input", "duration"],
 
             // Modificateurs / splines : une seule entrée
-            NodeType::Scale
-            | NodeType::Rotate
-            | NodeType::Offset
-            | NodeType::PhaseShift
-            | NodeType::BarycentricGroup
-            | NodeType::Mirror
-            | NodeType::Clamp
-            | NodeType::LFO
-            | NodeType::Jitter
-            | NodeType::EvaluateSpline
-            | NodeType::TrimSpline
-            | NodeType::OffsetSpline
-            | NodeType::RadiusScale
-            | NodeType::HeightOffset
-            | NodeType::PerTrackDepth
-            | NodeType::Barycenter
-            | NodeType::AudioFalloff
-            | NodeType::ManualPosition
+            NodeType::Scale | NodeType::Rotate | NodeType::Offset | NodeType::PhaseShift | NodeType::BarycentricGroup
+            | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
+            | NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline
+            | NodeType::RadiusScale | NodeType::HeightOffset | NodeType::PerTrackDepth
+            | NodeType::Barycenter | NodeType::AudioFalloff | NodeType::ManualPosition
             | NodeType::Output => &["input"],
 
             // Composites binaires : acceptent input, input_a, input_b
             // (input_a/input_b sont les ports visuels A/B ; le compiler distingue par ordre des edges)
-            NodeType::Mix | NodeType::Group | NodeType::Sequence | NodeType::Crossfade => {
-                &["input", "input_a", "input_b"]
-            }
+            NodeType::Mix | NodeType::Group | NodeType::Sequence | NodeType::Crossfade => &["input", "input_a", "input_b"],
         };
         inputs.contains(&port)
     }
@@ -418,50 +356,25 @@ impl Validator {
     /// Vérifie la compatibilité des comptages (n_objects)
     fn validate_count_compatibility(graph: &Graph, errors: &mut Vec<ValidationError>) {
         // Trouver le nœud Objects
-        let objects_node = graph
-            .nodes
-            .values()
-            .find(|n| n.node_type == NodeType::Objects);
-
+        let objects_node = graph.nodes.values().find(|n| n.node_type == NodeType::Objects);
+        
         if let Some(objects_node) = objects_node {
-            let n_objects = objects_node
-                .params
-                .get("n_objects")
+            let n_objects = objects_node.params.get("n_objects")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(1) as usize;
 
             // Vérifier que tous les moteurs ont le même n_objects
             for node in graph.nodes.values() {
                 match node.node_type {
-                    NodeType::Circular
-                    | NodeType::Elliptical
-                    | NodeType::Spiral
-                    | NodeType::Lissajous
-                    | NodeType::Figure8
-                    | NodeType::Linear
-                    | NodeType::Oscillation
-                    | NodeType::Formation
-                    | NodeType::PerlinNoise
-                    | NodeType::Converge
-                    | NodeType::Pendulum
-                    | NodeType::RoseCurve
-                    | NodeType::Helix
-                    | NodeType::Bouncing
-                    | NodeType::Spring
-                    | NodeType::Follow
-                    | NodeType::Swarm
-                    | NodeType::Avoidance
-                    | NodeType::CustomTrajectory
-                    | NodeType::Wave
-                    | NodeType::DrawSpline
-                    | NodeType::EvaluateSpline
-                    | NodeType::TrimSpline
-                    | NodeType::OffsetSpline => {
-                        let node_n_objects =
-                            node.params
-                                .get("n_objects")
-                                .and_then(|v| v.as_u64())
-                                .unwrap_or(n_objects as u64) as usize;
+                    NodeType::Circular | NodeType::Elliptical | NodeType::Spiral | NodeType::Lissajous | NodeType::Figure8
+                    | NodeType::Linear | NodeType::Oscillation | NodeType::Formation | NodeType::PerlinNoise
+                    | NodeType::Converge | NodeType::Pendulum | NodeType::RoseCurve | NodeType::Helix
+                    | NodeType::Bouncing | NodeType::Spring | NodeType::Follow | NodeType::Swarm | NodeType::Avoidance
+                    | NodeType::CustomTrajectory | NodeType::Wave
+                    | NodeType::DrawSpline | NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline => {
+                        let node_n_objects = node.params.get("n_objects")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(n_objects as u64) as usize;
 
                         if node_n_objects != n_objects {
                             errors.push(ValidationError::CountMismatch(format!(
@@ -476,19 +389,11 @@ impl Validator {
                         if inputs.len() >= 2 {
                             let node_a = graph.nodes.get(&inputs[0]);
                             let node_b = graph.nodes.get(&inputs[1]);
-
+                            
                             if let (Some(na), Some(nb)) = (node_a, node_b) {
-                                let n_a =
-                                    na.params
-                                        .get("n_objects")
-                                        .and_then(|v| v.as_u64())
-                                        .unwrap_or(1) as usize;
-                                let n_b =
-                                    nb.params
-                                        .get("n_objects")
-                                        .and_then(|v| v.as_u64())
-                                        .unwrap_or(1) as usize;
-
+                                let n_a = na.params.get("n_objects").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
+                                let n_b = nb.params.get("n_objects").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
+                                
                                 if n_a != n_b {
                                     errors.push(ValidationError::CountMismatch(format!(
                                         "Mix node: input A has {n_a} objects but input B has {n_b} objects"
@@ -503,19 +408,11 @@ impl Validator {
                         if inputs.len() >= 2 {
                             let node_a = graph.nodes.get(&inputs[0]);
                             let node_b = graph.nodes.get(&inputs[1]);
-
+                            
                             if let (Some(na), Some(nb)) = (node_a, node_b) {
-                                let n_a =
-                                    na.params
-                                        .get("n_objects")
-                                        .and_then(|v| v.as_u64())
-                                        .unwrap_or(1) as usize;
-                                let n_b =
-                                    nb.params
-                                        .get("n_objects")
-                                        .and_then(|v| v.as_u64())
-                                        .unwrap_or(1) as usize;
-
+                                let n_a = na.params.get("n_objects").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
+                                let n_b = nb.params.get("n_objects").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
+                                
                                 if n_a != n_b {
                                     errors.push(ValidationError::CountMismatch(format!(
                                         "Sequence node: input A has {n_a} objects but input B has {n_b} objects"

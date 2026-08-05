@@ -2,10 +2,15 @@
 name = "stagespace-tauri"
 version = "0.1.0"
 edition = "2021"
+default-run = "stagespace-tauri"
 
 [lib]
 name = "stagespace_tauri"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "stagespace-tauri"
+path = "src/main.rs"
 
 [[bin]]
 name = "stagespace-cli"

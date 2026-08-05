@@ -20,8 +20,11 @@
 //! Usage one-liner :
 //!   echo "activate-move circle --tracks 1-5; sample --obj 0; stop-all" | stagespace-cli
 
+#[path = "../cli/cli_state.rs"]
 mod cli_state;
+#[path = "../cli/commands.rs"]
 mod commands;
+#[path = "../cli/graph_presets.rs"]
 mod graph_presets;
 
 use std::io::{self, BufRead, Write};
