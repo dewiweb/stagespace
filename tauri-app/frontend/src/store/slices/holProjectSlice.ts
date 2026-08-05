@@ -1,7 +1,7 @@
 import { StateCreator } from 'zustand';
 import type { Node } from 'reactflow';
 import { safeInvoke as invoke } from '../../utils/tauri';
-import type { HolProject, MovementInfo } from '../types/index';
+import type { HolProject } from '../types/index';
 
 export interface HolProjectSlice {
   // .hol project import
@@ -32,14 +32,11 @@ export interface HolProjectSlice {
   resetManualPositions: (nObjects: number) => void;
 }
 
-// syncObjectsNode accède à nodes, updateNodeData, addNode, isPlaying, movements, updateGraphLive via get()
+// syncObjectsNode accède à nodes, updateNodeData, addNode via get()
 type HolProjectStore = HolProjectSlice & {
   nodes: Node[];
   updateNodeData: (id: string, data: Partial<Record<string, any>>) => void;
   addNode: (node: Node) => void;
-  isPlaying: boolean;
-  movements: MovementInfo[];
-  updateGraphLive: (fadeDuration?: number) => Promise<void>;
   // Pour sync inverse : mettre à jour le slot édité quand selectedTrackIds change
   editingSlotId: string | null;
   setSlotTracks: (id: string, trackIds: number[]) => void;
@@ -201,9 +198,8 @@ export const createHolProjectSlice: StateCreator<HolProjectStore, [], [], HolPro
       }
     });
 
-    // Hot-swap si en lecture (runtime legacy ou movements)
-    if (s.isPlaying || s.movements.length > 0) {
-      get().updateGraphLive(0.3);
-    }
+    // PAS de hot-swap ici — la sélection de tracks ne doit pas affecter
+    // les moves en cours de lecture. Le hot-swap sera déclenché séparément
+    // par updateGraphLive quand l'utilisateur modifie un paramètre du graphe.
   },
 });

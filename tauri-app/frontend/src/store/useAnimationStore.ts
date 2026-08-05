@@ -74,9 +74,6 @@ interface AnimationStore {
   current: Animation;
   // IDs des movements actifs
   activeMovementIds: string[];
-  // Movement actuellement sélectionné (pour stop/hot-swap individuel)
-  selectedMovementId: string | null;
-  setSelectedMovementId: (id: string | null) => void;
   launchFlash: number; // timestamp du dernier launch (pour feedback visuel)
   // Mode Expert (node editor) — partagé pour que MovesPanel puisse l'activer via [edit]
   showExpert: boolean;
@@ -174,8 +171,6 @@ export const useAnimationStore = create<AnimationStore>((set, get) => ({
   animations: loadAnimationsFromStorage(),
   current: defaultAnimation(),
   activeMovementIds: [],
-  selectedMovementId: null,
-  setSelectedMovementId: (id) => set({ selectedMovementId: id }),
   launchFlash: 0,
   showExpert: false,
   setShowExpert: (show) => set({ showExpert: show }),
@@ -327,7 +322,6 @@ export const useAnimationStore = create<AnimationStore>((set, get) => ({
       });
       set((s) => ({
         activeMovementIds: [...s.activeMovementIds, movementId],
-        selectedMovementId: movementId,
         launchFlash: Date.now(),
       }));
       return movementId;
@@ -385,14 +379,8 @@ export const useAnimationStore = create<AnimationStore>((set, get) => ({
 listen('active-moves-update', () => {
   invoke<any[]>('list_active_moves').then((movements) => {
     const activeIds = movements.map((m) => m.id);
-    const { selectedMovementId } = useAnimationStore.getState();
-    // Si le movement sélectionné n'est plus actif, on le désélectionne
-    const newSelected = selectedMovementId && activeIds.includes(selectedMovementId)
-      ? selectedMovementId
-      : (activeIds.length === 1 ? activeIds[0] : null); // auto-select si 1 seul
     useAnimationStore.setState({
       activeMovementIds: activeIds,
-      selectedMovementId: newSelected,
     });
   }).catch(() => {});
 });

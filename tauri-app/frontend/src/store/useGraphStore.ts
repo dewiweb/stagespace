@@ -253,7 +253,7 @@ export const useGraphStore = create<GraphState>()((...a) => {
   updateGraphLive: async (fadeDuration?: number) => {
     const { isPlaying, movements, nodes, edges } = get();
     const { useAnimationStore } = await import('./useAnimationStore');
-    const { activeMovementIds, selectedMovementId } = useAnimationStore.getState();
+    const { activeMovementIds } = useAnimationStore.getState();
     if (!isPlaying && movements.length === 0 && activeMovementIds.length === 0) return;
     const { prepareGraphForSave } = await import('../components/nodeParamSchema');
     const graphData = prepareGraphForSave(nodes, edges);
@@ -262,14 +262,14 @@ export const useGraphStore = create<GraphState>()((...a) => {
       if (isPlaying) {
         await invoke('update_graph', { graphJson: graphData, fadeDuration: fade });
       }
-      // Hot-swap : priorité au movement du slot édité (si en lecture),
-      // sinon au movement sélectionné, sinon tous les movements actifs.
+      // Hot-swap : 2 tiers seulement.
+      // Tier 1 : si on édite un slot qui a un movement actif, hot-swap ce movement uniquement.
+      // Tier 2 : sinon, hot-swap tous les movements actifs (fallback).
       const allMovementIds = new Set([
         ...movements.map((m) => m.id),
         ...activeMovementIds,
       ]);
 
-      // Récupérer le movementId du slot édité
       const editingSlotId = (get() as any).editingSlotId as string | null;
       const moveSlots = (get() as any).moveSlots as Array<{ id: string; movementId: string | null }> | undefined;
       const editingSlotMovementId = editingSlotId && moveSlots
@@ -278,11 +278,10 @@ export const useGraphStore = create<GraphState>()((...a) => {
 
       let targetIds: string[];
       if (editingSlotMovementId && allMovementIds.has(editingSlotMovementId)) {
-        // Hot-swap uniquement le movement du slot édité
+        // Tier 1 : hot-swap uniquement le movement du slot édité
         targetIds = [editingSlotMovementId];
-      } else if (selectedMovementId && allMovementIds.has(selectedMovementId)) {
-        targetIds = [selectedMovementId];
       } else {
+        // Tier 2 : hot-swap tous les movements actifs
         targetIds = Array.from(allMovementIds);
       }
 

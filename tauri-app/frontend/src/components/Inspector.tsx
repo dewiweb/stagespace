@@ -49,7 +49,7 @@ export default function Inspector() {
     current, updateCurrent,
     updateAssignment, addAudioMod, removeAudioMod,
     computeCentroid,
-    activeMovementIds, selectedMovementId, setSelectedMovementId,
+    activeMovementIds,
     launchFlash,
   } = useAnimationStore();
 
@@ -543,17 +543,13 @@ export default function Inspector() {
         {movements.length > 0 && (
           <div className="space-y-1 max-h-32 overflow-y-auto">
             {movements.map((mv, idx) => {
-              const isSelected = mv.id === selectedMovementId;
               const saved = savedGraphs[mv.id];
               const trackCount = mv.osc_ids?.length ?? 0;
               return (
                 <div
                   key={mv.id}
-                  onClick={() => setSelectedMovementId(isSelected ? null : mv.id)}
-                  className={`flex items-center gap-1.5 px-1.5 py-1 rounded cursor-pointer transition-all ${
-                    isSelected
-                      ? 'bg-purple-900/40 border border-purple-600/50'
-                      : 'bg-gray-800/30 border border-gray-700/30 hover:border-gray-600/50'
+                  className={`flex items-center gap-1.5 px-1.5 py-1 rounded transition-all ${
+                    'bg-gray-800/30 border border-gray-700/30 hover:border-gray-600/50'
                   }`}
                 >
                   <span className={`text-[8px] font-mono w-4 h-4 rounded flex items-center justify-center flex-shrink-0 ${

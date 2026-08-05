@@ -24,7 +24,6 @@ export interface MovementSlice {
   stopMovementWithFade: (movementId: string, fadeDuration: number) => Promise<void>;
   stopAllMovements: () => Promise<void>;
   refreshMovements: () => Promise<void>;
-  updateMovementGraph: (movementId: string, fadeDuration?: number) => Promise<void>;
   /// Charge le graphe sauvegardé d'un movement dans l'éditeur (pour le [edit])
   loadMovementGraph: (movementId: string) => void;
 }
@@ -143,35 +142,6 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
       set({ movements });
     } catch (e) {
       console.error('Failed to list movements:', e);
-    }
-  },
-
-  updateMovementGraph: async (movementId, fadeDuration) => {
-    const { nodes, edges } = get();
-    const { prepareGraphForSave } = await import('../../components/nodeParamSchema');
-    const graphData = prepareGraphForSave(nodes, edges);
-    try {
-      await invoke('update_move_graph_merged', {
-        movementId,
-        graphJson: graphData,
-        fadeDuration: fadeDuration ?? 0.3,
-      });
-      // Mettre à jour le graphe sauvegardé
-      set((s) => {
-        const saved = s.savedGraphs[movementId];
-        if (saved) {
-          return {
-            savedGraphs: {
-              ...s.savedGraphs,
-              [movementId]: { ...saved, nodes: [...nodes], edges: [...edges] },
-            },
-          };
-        }
-        return {};
-      });
-      set({ graphCompileVersion: get().graphCompileVersion + 1 });
-    } catch (e) {
-      console.error(`Failed to hot-swap movement ${movementId}:`, e);
     }
   },
 
