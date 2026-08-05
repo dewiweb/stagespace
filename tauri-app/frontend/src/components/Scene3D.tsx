@@ -52,11 +52,24 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
 
   usePositionListener();
 
-  // Determine object count from graph (Objects node or default 9)
+  // Determine object count — utilise le max entre:
+  // - le node Objects du slot sélectionné
+  // - le nombre total de tracks du projet holophonix
+  // - le nombre total d'osc_ids uniques across tous les moves actifs
+  // Ceci assure qu'il y a assez de meshes pour afficher tous les objets
+  // quand plusieurs moves tournent sur des tracks différents.
   const nObjects = React.useMemo(() => {
     const objectsNode = nodes.find((n) => (n.data as any)?.type === 'Objects');
-    return (objectsNode?.data as any)?.params?.n_objects ?? 9;
-  }, [nodes]);
+    const fromGraph = (objectsNode?.data as any)?.params?.n_objects ?? 0;
+    const fromProject = holProject?.tracks?.length ?? 0;
+    // Compter les osc_ids uniques across tous les moves actifs
+    const allOscIds = new Set<number>();
+    movements.forEach((mv) => {
+      mv.osc_ids?.forEach((id: number) => allOscIds.add(id));
+    });
+    const fromMoves = allOscIds.size;
+    return Math.max(fromGraph, fromProject, fromMoves, 9);
+  }, [nodes, holProject, movements]);
 
   // ── Hooks extraits (création des objets 3D, marqueurs, handle, modes) ──
   const { holMarkersRef } = useHolMarkers({ sceneRef, cameraRef, holProject });
