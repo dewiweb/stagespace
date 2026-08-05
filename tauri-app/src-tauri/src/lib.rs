@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, State};
 
 mod commands;
-mod graph;
+pub mod graph;
 use commands::animation::{launch_animation, update_animation_state};
 use commands::audio::{get_audio_state, update_audio_state};
 use commands::cue_commands::{delete_cue, list_cues, recall_cue, store_cue};

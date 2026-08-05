@@ -7,6 +7,10 @@ edition = "2021"
 name = "stagespace_tauri"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[[bin]]
+name = "stagespace-cli"
+path = "src/bin/stagespace-cli.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

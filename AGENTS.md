@@ -41,7 +41,22 @@ cargo fmt -- --check     # Format check
 cd tauri-app/src-tauri
 cargo build              # Build
 cargo test --lib         # Run tests (27 tests)
-cargo clippy --lib --all-targets -- -D warnings  # Lint
+cargo clippy --lib -- -D warnings  # Lint
+```
+
+### CLI (workflow testing tool)
+
+```bash
+cd tauri-app/src-tauri
+cargo build --bin stagespace-cli                    # Build CLI
+cargo clippy --bin stagespace-cli -- -D warnings    # Lint CLI
+bash tests/e2e_cli_test.sh                          # Run E2E workflow tests (34 tests)
+
+# Usage
+./target/debug/stagespace-cli "templates"                                          # List templates
+./target/debug/stagespace-cli "activate-move circle --tracks 1-5; sample --move circle-1 --obj 0; stop-all"
+./target/debug/stagespace-cli --file script.txt                                    # Run from file
+./target/debug/stagespace-cli                                                       # Interactive REPL
 ```
 
 ### Frontend
@@ -71,7 +86,7 @@ cd ../frontend && npm test && npx tsc --noEmit && npm run build
 
 GitHub Actions runs three jobs on push/PR to main:
 1. **Rust Engines** — fmt check, clippy (deny warnings), tests
-2. **Tauri Backend** — clippy (deny warnings), tests
+2. **Tauri Backend** — clippy (deny warnings), tests, CLI clippy, E2E CLI workflow tests
 3. **Frontend** — tsc, vitest, vite build
 
 See `.github/workflows/ci.yml`.

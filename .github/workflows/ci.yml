@@ -82,8 +82,17 @@ jobs:
       - name: Clippy (deny warnings)
         run: cargo clippy --lib -- -D warnings
 
+      - name: Clippy CLI binary (deny warnings)
+        run: cargo clippy --bin stagespace-cli -- -D warnings
+
       - name: Tests
         run: cargo test --lib
+
+      - name: Build CLI
+        run: cargo build --bin stagespace-cli
+
+      - name: E2E CLI workflow tests
+        run: bash tests/e2e_cli_test.sh
 
   # ─── Frontend (React + TypeScript + Vitest) ───
   frontend:
