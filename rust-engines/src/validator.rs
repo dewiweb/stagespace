@@ -1,5 +1,17 @@
 use crate::graph::{Graph, NodeType};
 
+/// Contexte de validation : sub-graph (mouvement) ou graph global (post-processing).
+///
+/// Certains nodes n'ont de sens que dans un contexte :
+/// - `Input`, `MoveRef`, `Merge`, `RadiusScale`, `HeightOffset`, `PerTrackDepth`,
+///   `Barycenter`, `AudioFalloff`, `ManualPosition` → graph global uniquement
+/// - `Objects`, `Duration`, tous les moteurs, splines, falloffs, sources → sub-graph uniquement
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GraphContext {
+    SubGraph,
+    Global,
+}
+
 /// Erreur de validation
 #[derive(Debug, Clone)]
 pub enum ValidationError {
@@ -8,6 +20,8 @@ pub enum ValidationError {
     InvalidConnection(String),
     TypeMismatch(String),
     CountMismatch(String),
+    /// Node présent dans un contexte où il n'a pas de sens (sub-graph vs global)
+    ContextIncompatible(String),
 }
 
 /// Résultat de validation
@@ -17,36 +31,53 @@ pub type ValidationResult = Result<(), Vec<ValidationError>>;
 pub struct Validator;
 
 impl Validator {
-    /// Valide un graphe complet
+    /// Valide un graphe complet (contexte sub-graph par défaut).
+    ///
+    /// Pour valider un graph global, utiliser `validate_with_context(graph, GraphContext::Global)`.
     pub fn validate(graph: &Graph) -> ValidationResult {
+        Self::validate_with_context(graph, GraphContext::SubGraph)
+    }
+
+    /// Valide un graphe complet avec un contexte explicite (sub-graph ou global).
+    pub fn validate_with_context(graph: &Graph, context: GraphContext) -> ValidationResult {
         let mut errors = Vec::new();
+
+        // 0. Vérifier que les nodes sont compatibles avec le contexte
+        Self::validate_context_compatibility(graph, context, &mut errors);
 
         // 1. Vérifier les cycles
         if graph.has_cycle() {
             errors.push(ValidationError::CycleDetected);
         }
 
-        // 2. Vérifier les nœuds obligatoires
-        // Objects et Duration sont obligatoires seulement s'il y a des moteurs directs
-        let has_engines = graph.nodes.values().any(|n| matches!(n.node_type,
-            NodeType::Circular | NodeType::Spiral | NodeType::Lissajous | NodeType::Figure8
-            | NodeType::Linear | NodeType::Oscillation | NodeType::Formation | NodeType::PerlinNoise
-            | NodeType::Converge | NodeType::Pendulum | NodeType::RoseCurve | NodeType::Helix
-            | NodeType::Bouncing | NodeType::Spring | NodeType::Follow | NodeType::Swarm | NodeType::Avoidance
-            | NodeType::CustomTrajectory | NodeType::BPM | NodeType::AudioAmplitude
-            | NodeType::TimeFalloff | NodeType::PointDistanceFalloff
-            | NodeType::Wave
-        ));
-        
-        if has_engines {
-            let required_nodes = vec![NodeType::Objects, NodeType::Duration];
-            for required_type in required_nodes {
-                if !graph.nodes.values().any(|n| n.node_type == required_type) {
-                    errors.push(ValidationError::MissingRequiredNode(required_type));
+        // 2. Vérifier les nœuds obligatoires (différents selon le contexte)
+        match context {
+            GraphContext::SubGraph => {
+                // Objects et Duration sont obligatoires seulement s'il y a des moteurs directs
+                let has_engines = Self::graph_has_engines(graph);
+                if has_engines {
+                    let required_nodes = vec![NodeType::Objects, NodeType::Duration];
+                    for required_type in required_nodes {
+                        if !graph.nodes.values().any(|n| n.node_type == required_type) {
+                            errors.push(ValidationError::MissingRequiredNode(required_type));
+                        }
+                    }
+                }
+            }
+            GraphContext::Global => {
+                // Pas d'Objects/Duration requis en global ; le graph global
+                // a juste besoin d'un Output et d'au moins une source
+                // (Input, Merge, ou MoveRef).
+                let has_source = graph.nodes.values().any(|n| matches!(
+                    n.node_type,
+                    NodeType::Input | NodeType::Merge | NodeType::MoveRef
+                ));
+                if !has_source {
+                    errors.push(ValidationError::MissingRequiredNode(NodeType::Input));
                 }
             }
         }
-        
+
         // Output est toujours obligatoire
         if !graph.nodes.values().any(|n| n.node_type == NodeType::Output) {
             errors.push(ValidationError::MissingRequiredNode(NodeType::Output));
@@ -70,14 +101,55 @@ impl Validator {
         // 4. Vérifier la compatibilité des types
         Self::validate_type_compatibility(graph, &mut errors);
 
-        // 5. Vérifier la compatibilité des comptages
-        Self::validate_count_compatibility(graph, &mut errors);
+        // 5. Vérifier la compatibilité des comptages (sub-graph uniquement —
+        //    le graph global n'a pas de node Objects pour définir n_objects)
+        if context == GraphContext::SubGraph {
+            Self::validate_count_compatibility(graph, &mut errors);
+        }
 
         if errors.is_empty() {
             Ok(())
         } else {
             Err(errors)
         }
+    }
+
+    /// Vérifie qu'aucun node n'est présent dans un contexte où il n'a pas de sens.
+    fn validate_context_compatibility(
+        graph: &Graph,
+        context: GraphContext,
+        errors: &mut Vec<ValidationError>,
+    ) {
+        for node in graph.nodes.values() {
+            let incompatible = match context {
+                GraphContext::SubGraph => is_global_only_node(&node.node_type),
+                GraphContext::Global => is_subgraph_only_node(&node.node_type),
+            };
+            if incompatible {
+                errors.push(ValidationError::ContextIncompatible(format!(
+                    "{:?} is only allowed in {} graphs",
+                    node.node_type,
+                    match context {
+                        GraphContext::SubGraph => "global",
+                        GraphContext::Global => "sub-graph",
+                    }
+                )));
+            }
+        }
+    }
+
+    /// Détecte si le graphe contient des moteurs (sub-graph).
+    fn graph_has_engines(graph: &Graph) -> bool {
+        graph.nodes.values().any(|n| matches!(n.node_type,
+            NodeType::Circular | NodeType::Elliptical | NodeType::Spiral | NodeType::Lissajous | NodeType::Figure8
+            | NodeType::Linear | NodeType::Oscillation | NodeType::Formation | NodeType::PerlinNoise
+            | NodeType::Converge | NodeType::Pendulum | NodeType::RoseCurve | NodeType::Helix
+            | NodeType::Bouncing | NodeType::Spring | NodeType::Follow | NodeType::Swarm | NodeType::Avoidance
+            | NodeType::CustomTrajectory | NodeType::BPM | NodeType::AudioAmplitude
+            | NodeType::TimeFalloff | NodeType::PointDistanceFalloff
+            | NodeType::DirectionalFalloff | NodeType::AudioAmplitudeFalloff
+            | NodeType::Wave
+        ))
     }
 
     /// Vérifie si une connexion entre deux types de nœuds est valide
@@ -358,4 +430,67 @@ impl Validator {
             }
         }
     }
+}
+
+/// Vrai si le node n'a de sens que dans le graph global (post-processing).
+fn is_global_only_node(node_type: &NodeType) -> bool {
+    matches!(
+        node_type,
+        NodeType::Input
+            | NodeType::MoveRef
+            | NodeType::Merge
+            | NodeType::RadiusScale
+            | NodeType::HeightOffset
+            | NodeType::PerTrackDepth
+            | NodeType::Barycenter
+            | NodeType::AudioFalloff
+            | NodeType::ManualPosition
+    )
+}
+
+/// Vrai si le node n'a de sens que dans un sub-graph (mouvement).
+fn is_subgraph_only_node(node_type: &NodeType) -> bool {
+    matches!(
+        node_type,
+        // Structurels sub-graph
+        NodeType::Objects
+            | NodeType::Duration
+            // Moteurs math
+            | NodeType::Circular
+            | NodeType::Elliptical
+            | NodeType::Spiral
+            | NodeType::Lissajous
+            | NodeType::Figure8
+            | NodeType::Linear
+            | NodeType::Oscillation
+            | NodeType::Formation
+            | NodeType::PerlinNoise
+            | NodeType::Converge
+            | NodeType::Pendulum
+            | NodeType::RoseCurve
+            | NodeType::Helix
+            // Moteurs physique
+            | NodeType::Bouncing
+            | NodeType::Spring
+            | NodeType::Follow
+            | NodeType::Swarm
+            | NodeType::Avoidance
+            // Splines
+            | NodeType::DrawSpline
+            | NodeType::EvaluateSpline
+            | NodeType::TrimSpline
+            | NodeType::OffsetSpline
+            | NodeType::CustomTrajectory
+            // Falloffs
+            | NodeType::TimeFalloff
+            | NodeType::PointDistanceFalloff
+            | NodeType::DirectionalFalloff
+            | NodeType::AudioAmplitudeFalloff
+            // Sources
+            | NodeType::BPM
+            | NodeType::AudioAmplitude
+            | NodeType::AudioSpectrum
+            | NodeType::OSCInput
+            | NodeType::Wave
+    )
 }

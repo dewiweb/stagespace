@@ -12,6 +12,7 @@
 
 use crate::graph::{Graph, Node, NodeId, NodeType};
 use crate::runtime::{PostProcessFn, PostProcessContext, MacroState};
+use crate::validator::{GraphContext, Validator};
 use nalgebra::Vector3;
 use std::sync::Arc;
 
@@ -23,6 +24,9 @@ pub enum PostProcessCompileError {
     InvalidNode(String),
     MissingParameter(String),
     InvalidParameter(String),
+    /// Le graph global a échoué la validation (cycles, connexions invalides,
+    /// nodes de sub-graph placés en global, etc.).
+    ValidationFailed(String),
 }
 
 /// Paramètres pour compiler le graph global
@@ -44,6 +48,18 @@ pub fn compile_post_process(
     params: PostProcessCompileParams,
 ) -> Result<PostProcessFn, PostProcessCompileError> {
     let graph = &params.graph;
+
+    // 0. Valider le graph global (cycles, connexions, compatibilité de contexte).
+    //    Le sub-graph compiler valide déjà via Validator::validate ; le graph global
+    //    ne le faisait pas — c'était une faille silencieuse.
+    if let Err(errors) = Validator::validate_with_context(graph, GraphContext::Global) {
+        let error_msg = errors
+            .iter()
+            .map(|e| format!("{:?}", e))
+            .collect::<Vec<_>>()
+            .join(", ");
+        return Err(PostProcessCompileError::ValidationFailed(error_msg));
+    }
 
     // Trouver le node Output
     let output_node = graph
@@ -113,8 +129,21 @@ fn build_transform_chain(
                 break;
             }
         } else {
-            // Node non post-processing (ex: engine, Objects) — fin de la chaîne
-            break;
+            // Node non post-processing dans le graph global.
+            // Input/Merge/MoveRef sont les sources attendues en amont de la chaîne
+            // → fin légitime de la chaîne.
+            // Tout autre type (engine, Objects, Duration, falloff, source) est une
+            // erreur — le validateur devrait l'avoir attrapé avant, mais on garde
+            // cette garde défensive au cas où le validateur est contourné.
+            match node.node_type {
+                NodeType::Input | NodeType::Merge | NodeType::MoveRef => break,
+                other => {
+                    return Err(PostProcessCompileError::InvalidNode(format!(
+                        "{:?} is not a post-process node and cannot appear in the global graph chain",
+                        other
+                    )));
+                }
+            }
         }
     }
 
