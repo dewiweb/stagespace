@@ -210,6 +210,24 @@ impl MergeRuntime {
         *cb = Some(callback);
     }
 
+    /// Reconfigure la destination OSC (adresse + port + sender)
+    /// Utile pour les tests CLI où on veut envoyer vers un listener spécifique
+    pub fn set_osc_target(
+        &mut self,
+        osc_address: String,
+        osc_port: u16,
+        osc_sender: OscSender,
+    ) -> crate::error::Result<()> {
+        let socket =
+            UdpSocket::bind("0.0.0.0:0").map_err(crate::error::StagespaceError::NetworkError)?;
+        socket
+            .connect((osc_address.as_str(), osc_port))
+            .map_err(crate::error::StagespaceError::NetworkError)?;
+        self.socket = socket;
+        *self.osc_sender.lock().unwrap_or_else(|e| e.into_inner()) = osc_sender;
+        Ok(())
+    }
+
     /// Définit l'origin (isobarycentre des tracks)
     pub fn set_origin(&self, origin: nalgebra::Vector3<f64>) {
         *self.origin.lock().unwrap_or_else(|e| e.into_inner()) = origin;

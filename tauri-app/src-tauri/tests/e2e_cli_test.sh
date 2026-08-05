@@ -238,6 +238,46 @@ assert_contains "Stop OK" "$OUT" "Stopped 1 move"
 # ═══════════════════════════════════════════════════════════════
 # RÉSUMÉ
 # ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
+# TEST 16 : OSC validation — Holophonix profile
+# ═══════════════════════════════════════════════════════════════
+echo "── Test 16: OSC validate (holophonix) ──"
+OUT=$(run_cli "osc-validate --template circle --tracks 1-3 --port 9010 --profile holophonix --duration 2")
+assert_contains "Validation pass" "$OUT" "PASS"
+assert_contains "All packets valid" "$OUT" "All packets valid"
+assert_contains "3 track IDs" "$OUT" "3 (1,2,3)"
+assert_contains "No invalid packets" "$OUT" "Invalid: 0"
+
+# ═══════════════════════════════════════════════════════════════
+# TEST 17 : OSC validation — IEM profile
+# ═══════════════════════════════════════════════════════════════
+echo "── Test 17: OSC validate (iem) ──"
+OUT=$(run_cli "osc-validate --template spiral --tracks 1-5 --port 9011 --profile iem --duration 2")
+assert_contains "Validation pass" "$OUT" "PASS"
+assert_contains "5 track IDs" "$OUT" "5 (1,2,3,4,5)"
+
+# ═══════════════════════════════════════════════════════════════
+# TEST 18 : OSC validation — ADM profile
+# ═══════════════════════════════════════════════════════════════
+echo "── Test 18: OSC validate (adm) ──"
+OUT=$(run_cli "osc-validate --template lissajous --tracks 1-4 --port 9012 --profile adm --duration 2")
+assert_contains "Validation pass" "$OUT" "PASS"
+
+# ═══════════════════════════════════════════════════════════════
+# TEST 19 : OSC packet rate is reasonable (~60fps × tracks)
+# ═══════════════════════════════════════════════════════════════
+echo "── Test 19: OSC packet rate ──"
+OUT=$(run_cli "osc-validate --template circle --tracks 1-3 --port 9013 --profile holophonix --duration 2")
+# 3 tracks × 60fps = 180 pkt/s. Check rate > 100
+RATE=$(echo "$OUT" | grep "Packet rate" | grep -oP '[0-9]+\.' | head -1 | tr -d '.')
+if [ -n "$RATE" ] && [ "$RATE" -gt 100 ]; then
+    echo "  ✓ PASS: Packet rate > 100 ($RATE pkt/s)"
+    PASS=$((PASS + 1))
+else
+    echo "  ✗ FAIL: Packet rate too low ($RATE)"
+    FAIL=$((FAIL + 1))
+fi
+
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
 echo "Results: $PASS passed, $FAIL failed"
