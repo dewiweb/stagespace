@@ -262,15 +262,30 @@ export const useGraphStore = create<GraphState>()((...a) => {
       if (isPlaying) {
         await invoke('update_graph', { graphJson: graphData, fadeDuration: fade });
       }
-      // Hot-swap : si un movement est sélectionné, on ne swap que celui-ci.
-      // Sinon, on swap tous les movements actifs (fallback).
+      // Hot-swap : priorité au movement du slot édité (si en lecture),
+      // sinon au movement sélectionné, sinon tous les movements actifs.
       const allMovementIds = new Set([
         ...movements.map((m) => m.id),
         ...activeMovementIds,
       ]);
-      const targetIds = selectedMovementId && allMovementIds.has(selectedMovementId)
-        ? [selectedMovementId]
-        : Array.from(allMovementIds);
+
+      // Récupérer le movementId du slot édité
+      const editingSlotId = (get() as any).editingSlotId as string | null;
+      const moveSlots = (get() as any).moveSlots as Array<{ id: string; movementId: string | null }> | undefined;
+      const editingSlotMovementId = editingSlotId && moveSlots
+        ? moveSlots.find((s) => s.id === editingSlotId)?.movementId ?? null
+        : null;
+
+      let targetIds: string[];
+      if (editingSlotMovementId && allMovementIds.has(editingSlotMovementId)) {
+        // Hot-swap uniquement le movement du slot édité
+        targetIds = [editingSlotMovementId];
+      } else if (selectedMovementId && allMovementIds.has(selectedMovementId)) {
+        targetIds = [selectedMovementId];
+      } else {
+        targetIds = Array.from(allMovementIds);
+      }
+
       if (targetIds.length > 0) {
         await Promise.all(targetIds.map((movementId) =>
           invoke('update_move_graph_merged', {
