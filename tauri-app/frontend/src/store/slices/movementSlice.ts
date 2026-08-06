@@ -94,7 +94,6 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
   stopMovement: async (movementId) => {
     try {
       await invoke('deactivate_move', { movementId, fadeDuration: 0.0 });
-      // Nettoyer les positions et le graphe sauvegardé
       set((s) => {
         const newPositions = { ...s.movementPositions };
         delete newPositions[movementId];
@@ -102,7 +101,9 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
         delete newSaved[movementId];
         return { movementPositions: newPositions, savedGraphs: newSaved };
       });
-      await get().refreshMovements(); // Await pour synchroniser listener
+      // Fire-and-forget : le movementId du slot est déjà cleared,
+      // refreshMovements sert seulement à mettre à jour le panneau d'inspection
+      get().refreshMovements();
     } catch (e) {
       console.error('Failed to stop movement:', e);
       throw e;
@@ -119,7 +120,7 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
         delete newSaved[movementId];
         return { movementPositions: newPositions, savedGraphs: newSaved };
       });
-      await get().refreshMovements();
+      get().refreshMovements();
     } catch (e) {
       console.error('Failed to stop movement with fade:', e);
       throw e;
@@ -130,7 +131,7 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
     try {
       await invoke('deactivate_all_moves', { fadeDuration: 0.0 });
       set({ movementPositions: {}, savedGraphs: {} });
-      await get().refreshMovements(); // Await pour synchroniser listener
+      get().refreshMovements();
     } catch (e) {
       console.error('Failed to stop all movements:', e);
     }

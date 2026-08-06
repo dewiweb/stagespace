@@ -24,14 +24,14 @@ use commands::merge_commands::{
 use commands::network::discover_osc_targets;
 use commands::osc::{
     get_osc_receiver_port, osc_add_mapping, osc_get_all_values, osc_get_value, osc_list_mappings,
-    osc_remove_mapping, send_osc_position, set_osc_receiver_port,
+    osc_remove_mapping, send_osc_position, set_osc_output, set_osc_receiver_port,
 };
 use commands::overrides::{clear_all_overrides, set_object_override};
 use commands::playback::{
     play_graph, preview_graph, set_loop_mode, set_macro, stop_graph, update_graph,
 };
 use commands::presets::{preset_delete, preset_list, preset_load, preset_save};
-use commands::sampling::{get_perf_stats, sample_movement_trajectory, sample_trajectory};
+use commands::sampling::{frontend_log, get_perf_stats, sample_movement_trajectory, sample_trajectory};
 use graph::parser::build_graph_from_json;
 
 // État global de l'application
@@ -43,12 +43,12 @@ pub struct AppState {
     /// Osc IDs actuels (pour hot-swap)
     pub current_osc_ids: Mutex<Vec<u32>>,
     pub presets: Arc<Mutex<PresetManager>>,
-    pub app_handle: Mutex<Option<AppHandle>>,
+    pub app_handle: Arc<Mutex<Option<AppHandle>>>,
     /// Multi-movement: plusieurs runtimes parallèles indépendants (workers)
-    pub movements: Mutex<HashMap<String, Movement>>,
+    pub movements: Arc<Mutex<HashMap<String, Movement>>>,
     /// MergeRuntime global — merge les positions de tous les workers,
     /// applique les macros spatiales, envoie l'OSC (une seule socket)
-    pub merge_runtime: Mutex<MergeRuntime>,
+    pub merge_runtime: Arc<Mutex<MergeRuntime>>,
 }
 
 /// Un movement = un runtime indépendant avec ses propres tracks et mode (preview/live)
@@ -113,9 +113,9 @@ pub fn run() {
                 osc_sender: Arc::new(Mutex::new(osc_sender)),
                 current_osc_ids: Mutex::new(Vec::new()),
                 presets: Arc::new(Mutex::new(PresetManager::new())),
-                app_handle: Mutex::new(None),
-                movements: Mutex::new(HashMap::new()),
-                merge_runtime: Mutex::new(merge_rt),
+                app_handle: Arc::new(Mutex::new(None)),
+                movements: Arc::new(Mutex::new(HashMap::new())),
+                merge_runtime: Arc::new(Mutex::new(merge_rt)),
             }
         })
         .on_window_event(|window, event| {
@@ -211,6 +211,7 @@ pub fn run() {
             osc_get_value,
             osc_get_all_values,
             set_osc_receiver_port,
+            set_osc_output,
             get_osc_receiver_port,
             preset_save,
             preset_load,
@@ -258,6 +259,7 @@ pub fn run() {
             recall_cue,
             list_cues,
             delete_cue,
+            frontend_log,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

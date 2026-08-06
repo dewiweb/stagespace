@@ -17,6 +17,15 @@ export async function safeInvoke<T = any>(cmd: string, args?: Record<string, any
   return tauriInvoke<T>(cmd, args);
 }
 
+/// Log un message vers stderr du backend (visible dans le terminal)
+/// En mode browser (dev), fallback vers console.log
+export function feLog(message: string): void {
+  if (checkTauri()) {
+    tauriInvoke('frontend_log', { message }).catch(() => {});
+  }
+  console.log(message);
+}
+
 export async function safeListen<T = any>(
   event: string,
   handler: (payload: { payload: T }) => void,

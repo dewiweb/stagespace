@@ -1,5 +1,6 @@
 use crate::AppState;
-use stagespace_engines::{OscMapping, OscReceiver};
+use stagespace_engines::{OscMapping, OscProfile, OscReceiver, OscSender};
+use std::str::FromStr;
 use std::sync::{Mutex, MutexGuard};
 use tauri::State;
 
@@ -67,6 +68,25 @@ pub async fn set_osc_receiver_port(port: u16, state: State<'_, AppState>) -> Res
         .start()
         .map_err(|e| format!("Failed to start OSC receiver on port {port}: {e}"))?;
     eprintln!("[INFO] OSC receiver now listening on port {port}");
+    Ok(())
+}
+
+/// Configure la sortie OSC du MergeRuntime (adresse, port, profil)
+#[tauri::command]
+pub async fn set_osc_output(
+    address: String,
+    port: u16,
+    profile: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let profile_enum = OscProfile::from_str(&profile)
+        .map_err(|e| format!("Invalid OSC profile '{}': {e}", profile))?;
+    let osc_sender = OscSender::new(profile_enum, address.clone(), port);
+    let mut merge_rt = lock_or_recover(&state.merge_runtime);
+    merge_rt
+        .set_osc_target(address.clone(), port, osc_sender)
+        .map_err(|e| format!("Failed to set OSC target: {e:?}"))?;
+    eprintln!("[INFO] OSC output now sending to {}:{} ({})", address, port, profile);
     Ok(())
 }
 

@@ -10,6 +10,12 @@ fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     })
 }
 
+/// Log un message depuis le frontend vers stderr (debug)
+#[tauri::command]
+pub fn frontend_log(message: String) {
+    eprintln!("[FE] {message}");
+}
+
 /// Récupère les stats de performance du runtime (FPS, OSC rate, latency)
 #[tauri::command]
 pub async fn get_perf_stats(state: State<'_, AppState>) -> Result<serde_json::Value, String> {

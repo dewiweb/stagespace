@@ -425,81 +425,85 @@ impl MergeRuntime {
                 let t_real = start.elapsed().as_secs_f64();
                 let dt = frame_duration.as_secs_f64();
 
-                // 1. Lire tous les buffers
+                // 1. Lire tous les buffers (read lock très court)
                 let buffers = move_buffers
                     .read()
                     .unwrap_or_else(|e| e.into_inner())
                     .clone();
-                let mut moves_guard = active_moves.write().unwrap_or_else(|e| e.into_inner());
 
                 // 2. Collecter les positions par move, avec fade et priorité
-                // Tuple : (move_id, fade, priority, positions_globales)
+                // CRITICAL: ne pas tenir le write lock trop longtemps — register_move
+                // a besoin d'accéder à active_moves.write() et sinon il est bloqué
+                // pendant des secondes (lock starvation par le merge thread à 60 FPS).
+                // Solution: clone les états sous un write lock très court, puis
+                // traite tout hors lock.
                 let mut move_positions: Vec<MoveEntry> = Vec::new();
                 let mut moves_to_remove: Vec<String> = Vec::new();
 
-                for (move_id, state) in moves_guard.iter_mut() {
-                    if !state.is_active {
-                        moves_to_remove.push(move_id.clone());
-                        continue;
+                // --- Section critique courte: update fades + clone data ---
+                let move_snapshots: Vec<(String, f64, u32, Vec<usize>, bool)> = {
+                    let mut moves_guard =
+                        active_moves.write().unwrap_or_else(|e| e.into_inner());
+                    let mut snapshots = Vec::with_capacity(moves_guard.len());
+                    for (move_id, state) in moves_guard.iter_mut() {
+                        if !state.is_active {
+                            moves_to_remove.push(move_id.clone());
+                            continue;
+                        }
+                        let fade = state.update_fade(dt);
+                        if !state.is_active {
+                            moves_to_remove.push(move_id.clone());
+                            continue;
+                        }
+                        snapshots.push((
+                            move_id.clone(),
+                            fade,
+                            state.priority,
+                            state.track_indices.clone(),
+                            state.is_preview,
+                        ));
                     }
-
-                    let fade = state.update_fade(dt);
-                    if !state.is_active {
-                        moves_to_remove.push(move_id.clone());
-                        continue;
+                    for id in &moves_to_remove {
+                        moves_guard.remove(id);
                     }
+                    snapshots
+                };
+                // --- Fin section critique: lock relâché ---
 
+                // Lire les buffers et mapper hors lock
+                for (move_id, fade, priority, track_indices, _is_preview) in &move_snapshots {
                     if let Some(buffer) = buffers.get(move_id) {
                         let positions = buffer.read();
                         if !positions.is_empty() {
-                            // Remapper les positions locales (0..N du move) vers les indices globaux
-                            // en utilisant track_indices du MoveState.
-                            //
-                            // Cas légitimes :
-                            //   - track_indices vide → compat ascendante, on garde les indices locaux
-                            //   - track_indices.len() == positions.len() → remap normal
-                            //
-                            // Cas illégitime (longueurs mismatch avec track_indices non vide) :
-                            //   c'est un bug d'invariant — on log et on SKIP le move plutôt que de
-                            //   réutiliser des indices locaux comme s'ils étaient globaux (ce qui
-                            //   ferait exactement la classe de bug qu'on a chassée en Phase 3).
-                            let global_positions: Vec<(usize, nalgebra::Vector3<f64>)> = if state
-                                .track_indices
-                                .is_empty()
-                            {
-                                positions.clone()
-                            } else if state.track_indices.len() == positions.len() {
-                                positions
-                                    .iter()
-                                    .enumerate()
-                                    .map(|(local_idx, (_, pos))| {
-                                        (state.track_indices[local_idx], *pos)
-                                    })
-                                    .collect()
-                            } else {
-                                crate::logging::log_osc_error(&format!(
+                            let global_positions: Vec<(usize, nalgebra::Vector3<f64>)> =
+                                if track_indices.is_empty() {
+                                    positions.clone()
+                                } else if track_indices.len() == positions.len() {
+                                    positions
+                                        .iter()
+                                        .enumerate()
+                                        .map(|(local_idx, (_, pos))| {
+                                            (track_indices[local_idx], *pos)
+                                        })
+                                        .collect()
+                                } else {
+                                    crate::logging::log_osc_error(&format!(
                                         "MergeRuntime: move {} skipped — track_indices.len()={} != positions.len()={} (invariant violé)",
-                                        move_id, state.track_indices.len(), positions.len()
+                                        move_id, track_indices.len(), positions.len()
                                     ));
-                                continue;
-                            };
+                                    continue;
+                                };
                             move_positions.push((
                                 move_id.clone(),
-                                fade,
-                                state.priority,
+                                *fade,
+                                *priority,
                                 global_positions,
                             ));
                         }
                     }
                 }
 
-                // Retirer les moves inactifs
-                for id in &moves_to_remove {
-                    moves_guard.remove(id);
-                }
-                drop(moves_guard);
-
-                // Nettoyer aussi les buffers des moves retirés
+                // Nettoyer les buffers des moves retirés (write lock court)
                 if !moves_to_remove.is_empty() {
                     let mut bufs = move_buffers.write().unwrap_or_else(|e| e.into_inner());
                     for id in &moves_to_remove {
@@ -508,32 +512,36 @@ impl MergeRuntime {
                 }
 
                 // 3. Merge : résoudre les conflits par track
-                // On tient le lock sur osc_ids le temps du merge (pas de clone)
-                let osc_ids_guard = osc_ids_arc.read().unwrap_or_else(|e| e.into_inner());
+                // CRITICAL: clone osc_ids et relâcher le read lock immédiatement.
+                // Avant, le read lock était tenu pendant merge + post-process + OSC output
+                // (presque toute la frame), bloquant set_osc_ids dans register_move
+                // pendant des secondes (lock starvation à 60 FPS).
+                let osc_ids = osc_ids_arc.read().unwrap_or_else(|e| e.into_inner()).clone();
                 let strategy = *merge_strategy_arc.read().unwrap_or_else(|e| e.into_inner());
-                let merged = merge_positions(&move_positions, &osc_ids_guard, strategy);
+                let merged = merge_positions(&move_positions, &osc_ids, strategy);
 
                 // 4. Post-processing via le graph global compilé (PostProcessFn)
-                // On tient les locks pendant l'appel post-process pour éviter
-                // de cloner les données à chaque frame (60fps × 5 clones = ~300 allocs/s).
+                // Clone toutes les données sous des locks courts, puis traite hors lock.
                 let origin = *origin_arc.lock().unwrap_or_else(|e| e.into_inner());
-                let track_depths_guard = track_depths_arc.read().unwrap_or_else(|e| e.into_inner());
-                let track_positions_guard = track_positions_arc
+                let track_depths = track_depths_arc.read().unwrap_or_else(|e| e.into_inner()).clone();
+                let track_positions = track_positions_arc
                     .read()
-                    .unwrap_or_else(|e| e.into_inner());
-                let manual_positions_guard = manual_positions_arc
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone();
+                let manual_positions = manual_positions_arc
                     .read()
-                    .unwrap_or_else(|e| e.into_inner());
-                let audio_state_guard = audio_state_arc.lock().unwrap_or_else(|e| e.into_inner());
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone();
+                let audio_state = audio_state_arc.lock().unwrap_or_else(|e| e.into_inner()).clone();
 
                 let ctx = PostProcessContext {
                     t: t_real,
                     macros: &macros,
-                    audio_state: &audio_state_guard,
-                    track_positions: &track_positions_guard,
-                    manual_positions: &manual_positions_guard,
+                    audio_state: &audio_state,
+                    track_positions: &track_positions,
+                    manual_positions: &manual_positions,
                     origin,
-                    track_depths: &track_depths_guard,
+                    track_depths: &track_depths,
                 };
 
                 let transformed: Vec<(usize, nalgebra::Vector3<f64>)> = {
@@ -542,24 +550,24 @@ impl MergeRuntime {
                         .unwrap_or_else(|e| e.into_inner());
                     pp_fn(&ctx, merged)
                 };
-                // Les locks sont libérés ici (drop automatique à la fin du scope)
 
                 // 5. OSC output (une seule socket)
                 // Séparer display (tout) de OSC (exclut les moves en preview)
-                let moves_guard = active_moves.read().unwrap_or_else(|e| e.into_inner());
-                let preview_tracks: std::collections::HashSet<usize> = moves_guard
-                    .values()
-                    .filter(|m| m.is_preview)
-                    .flat_map(|m| m.track_indices.iter().copied())
-                    .collect();
-                drop(moves_guard);
+                let preview_tracks: std::collections::HashSet<usize> = {
+                    let moves_guard = active_moves.read().unwrap_or_else(|e| e.into_inner());
+                    moves_guard
+                        .values()
+                        .filter(|m| m.is_preview)
+                        .flat_map(|m| m.track_indices.iter().copied())
+                        .collect()
+                };
 
                 let sender = osc_sender_arc.lock().unwrap_or_else(|e| e.into_inner());
                 for (obj_idx, pos) in &transformed {
                     if preview_tracks.contains(obj_idx) {
                         continue; // Skip OSC pour les moves en preview
                     }
-                    if let Some(&osc_id) = osc_ids_guard.get(*obj_idx) {
+                    if let Some(&osc_id) = osc_ids.get(*obj_idx) {
                         let (addr, values) = sender.format_position(osc_id, *pos);
                         let args: Vec<OscType> =
                             values.iter().map(|v| OscType::Float(*v as f32)).collect();
@@ -729,9 +737,14 @@ fn merge_positions(
         }
     }
 
-    // Résoudre selon la stratégie
-    let n_objects = osc_ids.len();
-    (0..n_objects)
+    // Résoudre selon la stratégie.
+    // IMPORTANT: on itère sur les indices réels présents dans positions_by_index
+    // (qui sont les track_indices globaux), PAS sur 0..n_objects.
+    // Les track_indices peuvent être non-contigus (ex: [1, 3, 4, 5, 6, 8]).
+    let mut all_indices: Vec<usize> = positions_by_index.keys().copied().collect();
+    all_indices.sort_unstable();
+    all_indices
+        .into_iter()
         .map(|obj_idx| {
             let candidates = positions_by_index.get(&obj_idx);
             let pos = match (strategy, candidates) {

@@ -493,11 +493,22 @@ export const useMovementPositionsListener = () => {
 
   // Écouter active-moves-update pour sync la liste des moves (activate/deactivate côté backend)
   React.useEffect(() => {
-    const unlisten = listen('active-moves-update', () => {
-      refreshMovements();
+    const unlisten = listen('active-moves-update', async () => {
+      await refreshMovements();
+      // Sync les slots après refresh — nettoie les movementIds stale
+      useGraphStore.getState().syncSlotMovements();
     });
     return () => { unlisten.then((fn) => fn()).catch(() => {}); };
   }, [refreshMovements]);
+
+  // Appliquer la config OSC au backend (au démarrage + à chaque changement)
+  const oscAddress = useGraphStore((s) => s.oscAddress);
+  const oscPort = useGraphStore((s) => s.oscPort);
+  const oscProfile = useGraphStore((s) => s.oscProfile);
+  React.useEffect(() => {
+    invoke('set_osc_output', { address: oscAddress, port: oscPort, profile: oscProfile })
+      .catch((e) => console.error('Failed to set OSC output:', e));
+  }, [oscAddress, oscPort, oscProfile]);
 
   // Écouter global-positions (un seul event avec toutes les positions mergées)
   React.useEffect(() => {

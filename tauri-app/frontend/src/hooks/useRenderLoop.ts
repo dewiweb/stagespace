@@ -225,6 +225,41 @@ export function useRenderLoop({
         if (globalPos) {
           const posMap = new Map<number, typeof globalPos[0]>();
           for (const p of globalPos) posMap.set(p.index, p);
+
+          // Déterminer les tracks du move sélectionné (editingSlotId → movementId → track_indices)
+          const editingSlotId = storeState.editingSlotId;
+          const selectedMove = editingSlotId
+            ? storeState.moveSlots.find((s) => s.id === editingSlotId && s.movementId)
+            : null;
+          const selectedMoveInfo = selectedMove
+            ? mvts.find((mv) => mv.id === selectedMove.movementId)
+            : null;
+          // Construire le set des track_indices du move sélectionné
+          const highlightedTracks = new Set<number>();
+          if (selectedMoveInfo) {
+            // Le move a des osc_ids ; on doit retrouver les track_indices via holProject
+            // En mode multi-move, les positions sont indexées par track_index global.
+            // On highlight les tracks dont les positions sont dans ce move.
+            // Pour simplifier, on compare les osc_ids du move avec les osc_ids globaux.
+            // Mais plus simple : le render loop connaît objIdx (track_index).
+            // On peut retrouver les track_indices du move via le store.
+            const slot = storeState.moveSlots.find((s) => s.id === editingSlotId);
+            if (slot?.trackIds) {
+              // trackIds sont des osc_ids (track.id du projet hol)
+              // Convertir en track_indices
+              if (holProj) {
+                slot.trackIds.forEach((trackId) => {
+                  const idx = holProj.tracks.findIndex((t) => t.id === trackId);
+                  if (idx >= 0) highlightedTracks.add(idx);
+                });
+              }
+            }
+          }
+
+          // Couleur par défaut si pas de hol
+          const defaultColor = new THREE.Color();
+          const holTracks = holProj?.tracks ?? [];
+
           objs.forEach((mesh, objIdx) => {
             if (dragObj !== null && objIdx === dragObj) return;
             const p = posMap.get(objIdx);
@@ -232,13 +267,29 @@ export function useRenderLoop({
               mesh.position.set(p.x, p.y, p.z);
               mesh.visible = true;
               const mat = mesh.material as THREE.MeshStandardMaterial;
+
+              // Couleur d'origine : couleur hol de la track, ou HSL par défaut
+              const holTrack = holTracks[objIdx];
+              if (holTrack?.color) {
+                mat.color.set(holTrack.color);
+              } else {
+                defaultColor.setHSL(objIdx / Math.max(objs.length, 1), 0.7, 0.55);
+                mat.color.copy(defaultColor);
+              }
+
+              // Emissive : léger pour toutes les tracks en mouvement, renforcé pour le move sélectionné
+              const isHighlighted = highlightedTracks.has(objIdx);
               const isPreview = mvts.some((mv) => mv.is_preview);
               if (isPreview) {
+                // Preview : cyan override
                 mat.color.setHex(0x00ccff);
                 mat.emissive.setHex(0x003344);
+              } else if (isHighlighted) {
+                // Track du move sélectionné : emissive renforcé (blanc chaud)
+                mat.emissive.setHex(0x664400);
               } else {
-                mat.color.setHex(0x00ff44);
-                mat.emissive.setHex(0x004411);
+                // Track en mouvement normal : emissive léger de la même teinte
+                mat.emissive.copy(mat.color).multiplyScalar(0.15);
               }
             } else if (!assignMode) {
               // Pas de position pour cet objet → manualPositions (statique)
@@ -249,8 +300,14 @@ export function useRenderLoop({
                 mesh.visible = true;
               }
               const mat = mesh.material as THREE.MeshStandardMaterial;
-              mat.color.setHSL(objIdx / objs.length, 0.7, 0.55);
-              mat.emissive.setHSL(objIdx / objs.length, 0.5, 0.2);
+              // Couleur hol ou HSL par défaut
+              const holTrack = holTracks[objIdx];
+              if (holTrack?.color) {
+                mat.color.set(holTrack.color);
+              } else {
+                mat.color.setHSL(objIdx / Math.max(objs.length, 1), 0.7, 0.55);
+              }
+              mat.emissive.setHSL(objIdx / Math.max(objs.length, 1), 0.5, 0.2);
               mat.opacity = 1.0;
               mat.transparent = false;
             }

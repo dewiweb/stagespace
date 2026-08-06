@@ -15,6 +15,7 @@ export function resetStore() {
     edges: [],
     editingSlotId: null,
     moveSlots: [],
+    pendingPlays: [],
     setlistOrder: [],
     currentSetlistIndex: -1,
     _history: [],

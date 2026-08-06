@@ -25,10 +25,21 @@ export const TrajectoryVisualization: React.FC<TrajectoryVisualizationProps> = (
   const macros = useGraphStore((s) => s.macros);
   const graphCompileVersion = useGraphStore((s) => s.graphCompileVersion);
   const movements = useGraphStore((s) => s.movements);
+  const editingSlotId = useGraphStore((s) => s.editingSlotId);
+  const moveSlots = useGraphStore((s) => s.moveSlots);
   const currentAnim = useAnimationStore((s) => s.current);
 
+  // Trouver le movementId du slot sélectionné
+  const selectedMovementId = editingSlotId
+    ? moveSlots.find((s) => s.id === editingSlotId)?.movementId ?? null
+    : null;
+  // Si un move est sélectionné, n'afficher que son path ; sinon afficher tous
+  const movementsToShow = selectedMovementId
+    ? movements.filter((m) => m.id === selectedMovementId)
+    : movements;
+
   const macrosKey = `${macros.speed},${macros.scale},${macros.shiftX},${macros.shiftY},${macros.shiftZ},${macros.yaw},${macros.pitch},${macros.roll},${macros.radius_scale},${macros.height_offset}`;
-  const movementIdsKey = movements.map((m) => m.id).join(',');
+  const movementIdsKey = movementsToShow.map((m) => m.id).join(',');
   // animKey capture tous les params qui affectent la forme du path (live ou non)
   const animKey = [
     JSON.stringify(currentAnim.graph_json),
@@ -62,12 +73,13 @@ export const TrajectoryVisualization: React.FC<TrajectoryVisualizationProps> = (
           const nObjs = objectsRef.current?.length ?? 0;
           const nSamples = 128;
 
-          // Mode movement (système multi-move) : échantillonner depuis TOUS les movements actifs
-          if (hasMovements && movements.length > 0) {
+          // Mode movement (système multi-move) : échantillonner depuis les movements à afficher
+          // (uniquement le move sélectionné si editingSlotId pointe vers un move actif, sinon tous)
+          if (hasMovements && movementsToShow.length > 0) {
             const durationNode = useGraphStore.getState().nodes.find((n) => (n.data as any)?.type === 'Duration');
             const duration = (durationNode?.data as any)?.params?.duration ?? 4.0;
-            // Échantillonner chaque movement actif
-            for (const movement of movements) {
+            // Échantillonner chaque movement à afficher
+            for (const movement of movementsToShow) {
               for (let i = 0; i < Math.min(nObjs, 9); i++) {
                 if (cancelled) return;
                 try {

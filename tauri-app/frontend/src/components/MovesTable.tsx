@@ -19,25 +19,22 @@ export default function MovesTable() {
     toggleSlotPreview,
     playSlot, stopSlot, stopSlotWithFade,
     goAllSlots, stopAllSlots,
-    editSlotGraph, saveEditorToSlot, syncSlotMovements,
+    editSlotGraph, saveEditorToSlot,
     setlistOrder, currentSetlistIndex,
     addToSetlist, removeFromSetlist, moveSetlistItem, goToNextMove,
     holProject, manualOscIds, movements, refreshMovements,
     editingSlotId, selectSlotForEditing,
+    pendingPlays,
   } = useGraphStore();
 
   const showExpert = useAnimationStore((s) => s.showExpert);
   const setShowExpert = useAnimationStore((s) => s.setShowExpert);
 
-  // Sync les movementIds avec le backend
+  // Sync initial au montage — le polling est remplacé par le listener
+  // active-moves-update dans useGraphStore
   React.useEffect(() => {
     refreshMovements();
-    const interval = setInterval(() => {
-      refreshMovements();
-      syncSlotMovements();
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [refreshMovements, syncSlotMovements]);
+  }, [refreshMovements]);
 
   // Tous les tracks disponibles pour le picker
   const allTrackIds = holProject
@@ -209,7 +206,7 @@ export default function MovesTable() {
             </thead>
             <tbody>
               {moveSlots.map((slot, idx) => {
-                const isPlaying = !!slot.movementId;
+                const isPlaying = !!slot.movementId || pendingPlays.includes(slot.id);
                 const mv = movements.find((m) => m.id === slot.movementId);
                 const preset = SHAPE_PRESETS.find((p) => p.id === slot.templateId);
                 const isSelected = editingTemplateFor === slot.id;

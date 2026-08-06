@@ -10,10 +10,11 @@ use crate::AppState;
 use crate::{Movement, MAX_MOVEMENTS};
 use serde::Deserialize;
 use stagespace_engines::{
-    EngineParams, LoopMode, MergeStrategy, OscSender, PositionBuffer, Runtime,
+    EngineParams, LoopMode, MergeRuntime, MergeStrategy, OscSender, PositionBuffer, Runtime,
 };
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
-use tauri::{Emitter, State};
+use tauri::{AppHandle, Emitter, State};
 
 fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(|e| {
@@ -55,84 +56,97 @@ pub async fn activate_move(
     request: ActivateMoveRequest,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    // 1. Compiler le sub-graph
-    let audio_state = lock_or_recover(&state.audio_state);
-    let graph = build_graph_from_json(&request.graph_json, &audio_state)?;
-    drop(audio_state);
+    eprintln!(
+        "[ACTIVATE] id={} name={} tracks={:?}",
+        request.movement_id, request.name, request.track_indices
+    );
 
-    // 2. Créer le worker Runtime (sans OSC — le MergeRuntime gère l'OSC)
-    // On utilise une adresse factice car le worker n'enverra pas d'OSC en mode buffer
-    let osc_sender = OscSender::default();
-    let runtime = Runtime::new("127.0.0.1".to_string(), 8000, osc_sender)
-        .map_err(|e| format!("Failed to create worker runtime: {e}"))?;
+    // Le travail lourd (compilation, création runtime) est synchrone.
+    // L'exécuter dans spawn_blocking pour ne pas bloquer l'async runtime de Tauri
+    // (qui gère aussi les événements, les autres commandes IPC, etc.)
+    let audio_state_arc = state.audio_state.clone();
+    let movements_arc = state.movements.clone();
+    let merge_rt_arc = state.merge_runtime.clone();
+    let app_handle_arc = state.app_handle.clone();
+    let is_preview = request.is_preview;
+    let name = request.name.clone();
 
-    // 3. Compiler avec audio + overrides
-    let overrides = runtime.audio_param_overrides();
-    let compiled =
-        compile_graph_with_audio_and_overrides(&graph, state.audio_state.clone(), overrides)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        // 1. Compiler le sub-graph
+        let audio_state = lock_or_recover(&audio_state_arc);
+        let graph = build_graph_from_json(&request.graph_json, &audio_state)?;
+        drop(audio_state);
 
-    // 4. Configurer le worker
-    runtime.set_preview_mode(request.is_preview);
-    runtime.set_loop_mode(LoopMode::Loop);
-    if let Some(ref origin) = request.origin {
-        runtime.set_origin(nalgebra::Vector3::new(origin[0], origin[1], origin[2]));
-    }
+        // 2. Créer le worker Runtime
+        let osc_sender = OscSender::default();
+        let runtime = Runtime::new("127.0.0.1".to_string(), 8000, osc_sender)
+            .map_err(|e| format!("Failed to create worker runtime: {e}"))?;
 
-    // 5. Créer le PositionBuffer et l'attacher au worker
-    let buffer = Arc::new(PositionBuffer::new());
-    runtime.set_position_buffer(buffer.clone());
+        // 3. Compiler avec audio + overrides
+        let overrides = runtime.audio_param_overrides();
+        let compiled =
+            compile_graph_with_audio_and_overrides(&graph, audio_state_arc.clone(), overrides)?;
 
-    // 6. Vérifier la limite de movements
-    {
-        let movements = lock_or_recover(&state.movements);
-        if movements.len() >= MAX_MOVEMENTS {
-            return Err(format!(
-                "Maximum {MAX_MOVEMENTS} movements reached — stop some first"
-            ));
+        // 4. Configurer le worker
+        runtime.set_preview_mode(request.is_preview);
+        runtime.set_loop_mode(LoopMode::Loop);
+        if let Some(ref origin) = request.origin {
+            runtime.set_origin(nalgebra::Vector3::new(origin[0], origin[1], origin[2]));
         }
-    }
 
-    // 7. Démarrer le worker thread
-    let handle = runtime
-        .play_compiled(
-            compiled,
-            EngineParams {
-                n_objects: request.osc_ids.len(),
-                duration: request.duration,
-                fps: 60.0,
-                extra: serde_json::json!({}),
-            },
-            request.osc_ids.clone(),
-        )
-        .map_err(|e| format!("Worker playback failed: {e}"))?;
+        // 5. Créer le PositionBuffer et l'attacher au worker
+        let buffer = Arc::new(PositionBuffer::new());
+        runtime.set_position_buffer(buffer.clone());
 
-    // 8. Enregistrer le movement (worker)
-    let movement = Movement {
-        id: request.movement_id.clone(),
-        name: request.name.clone(),
-        runtime,
-        osc_ids: request.osc_ids.clone(),
-        is_preview: request.is_preview,
-        track_indices: request.track_indices.clone(),
-        thread_handle: Some(handle),
-    };
-    {
-        let mut movements = lock_or_recover(&state.movements);
-        movements.insert(request.movement_id.clone(), movement);
-    }
-
-    // 9. Enregistrer le move dans le MergeRuntime
-    {
-        let merge_rt = lock_or_recover(&state.merge_runtime);
-        merge_rt.register_move(
-            request.movement_id.clone(),
-            buffer,
-            request.osc_ids.clone(),
-            request.track_indices.clone(),
-            request.is_preview,
-        );
-        // Mettre à jour les OSC ids globaux — fusionner avec les existants (pas écraser)
+        // 6. Vérifier la limite de movements
         {
+            let movements = lock_or_recover(&movements_arc);
+            if movements.len() >= MAX_MOVEMENTS {
+                return Err(format!(
+                    "Maximum {MAX_MOVEMENTS} movements reached — stop some first"
+                ));
+            }
+        }
+
+        // 7. Démarrer le worker thread
+        let handle = runtime
+            .play_compiled(
+                compiled,
+                EngineParams {
+                    n_objects: request.osc_ids.len(),
+                    duration: request.duration,
+                    fps: 60.0,
+                    extra: serde_json::json!({}),
+                },
+                request.osc_ids.clone(),
+            )
+            .map_err(|e| format!("Worker playback failed: {e}"))?;
+
+        // 8. Enregistrer le movement
+        let movement = Movement {
+            id: request.movement_id.clone(),
+            name: request.name.clone(),
+            runtime,
+            osc_ids: request.osc_ids.clone(),
+            is_preview: request.is_preview,
+            track_indices: request.track_indices.clone(),
+            thread_handle: Some(handle),
+        };
+        {
+            let mut movements = lock_or_recover(&movements_arc);
+            movements.insert(request.movement_id.clone(), movement);
+        }
+
+        // 9. Enregistrer le move dans le MergeRuntime
+        {
+            let merge_rt = lock_or_recover(&merge_rt_arc);
+            merge_rt.register_move(
+                request.movement_id.clone(),
+                buffer,
+                request.osc_ids.clone(),
+                request.track_indices.clone(),
+                request.is_preview,
+            );
             let existing = merge_rt.osc_ids();
             let mut merged_ids = existing.clone();
             for &id in &request.osc_ids {
@@ -141,55 +155,51 @@ pub async fn activate_move(
                 }
             }
             merge_rt.set_osc_ids(merged_ids);
-        }
-        if let Some(ref origin) = request.origin {
-            merge_rt.set_origin(nalgebra::Vector3::new(origin[0], origin[1], origin[2]));
+            if let Some(ref origin) = request.origin {
+                merge_rt.set_origin(nalgebra::Vector3::new(origin[0], origin[1], origin[2]));
+            }
+
+            if !merge_rt.is_running() {
+                let app_handle = lock_or_recover(&app_handle_arc)
+                    .as_ref()
+                    .ok_or("App handle not available")?
+                    .clone();
+                merge_rt.set_position_callback(Box::new(
+                    move |t: f64, positions: Vec<(usize, nalgebra::Vector3<f64>)>| {
+                        let positions_data: Vec<(usize, [f64; 3])> = positions
+                            .into_iter()
+                            .map(|(idx, pos)| (idx, [pos.x, pos.y, pos.z]))
+                            .collect();
+                        let _ = app_handle.emit(
+                            "global-positions",
+                            serde_json::json!({
+                                "time": t,
+                                "positions": positions_data,
+                            }),
+                        );
+                    },
+                ));
+                drop(merge_rt);
+                let mut merge_rt = lock_or_recover(&merge_rt_arc);
+                merge_rt
+                    .start()
+                    .map_err(|e| format!("Failed to start MergeRuntime: {e}"))?;
+            }
         }
 
-        // Démarrer le MergeRuntime si pas déjà démarré
-        if !merge_rt.is_running() {
-            // Callback position — emit sur un canal global unique
-            let app_handle = lock_or_recover(&state.app_handle)
-                .as_ref()
-                .ok_or("App handle not available")?
-                .clone();
-            merge_rt.set_position_callback(Box::new(
-                move |t: f64, positions: Vec<(usize, nalgebra::Vector3<f64>)>| {
-                    let positions_data: Vec<(usize, [f64; 3])> = positions
-                        .into_iter()
-                        .map(|(idx, pos)| (idx, [pos.x, pos.y, pos.z]))
-                        .collect();
-                    let _ = app_handle.emit(
-                        "global-positions",
-                        serde_json::json!({
-                            "time": t,
-                            "positions": positions_data,
-                        }),
-                    );
-                },
-            ));
-            drop(merge_rt); // Relâcher le lock avant start (start prend &mut)
-            let mut merge_rt = lock_or_recover(&state.merge_runtime);
-            merge_rt
-                .start()
-                .map_err(|e| format!("Failed to start MergeRuntime: {e}"))?;
+        // 10. Emit active-moves-update
+        if let Some(app_handle) = lock_or_recover(&app_handle_arc).clone() {
+            let _ = app_handle.emit("active-moves-update", ());
         }
-    }
 
-    // 10. Emit active-moves-update
-    if let Some(app_handle) = lock_or_recover(&state.app_handle).clone() {
-        let _ = app_handle.emit("active-moves-update", ());
-    }
-
-    Ok(format!(
-        "Move '{}' activated ({})",
-        request.name,
-        if request.is_preview {
-            "preview"
-        } else {
-            "live"
-        }
-    ))
+        Ok(format!(
+            "Move '{}' activated ({})",
+            name,
+            if is_preview { "preview" } else { "live" }
+        ))
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
 }
 
 /// Désactive un move avec fade out
@@ -200,6 +210,7 @@ pub async fn deactivate_move(
     state: State<'_, AppState>,
 ) -> Result<String, String> {
     let fade = fade_duration.unwrap_or(0.5);
+    eprintln!("[DEACTIVATE] id={} fade={}", movement_id, fade);
 
     // 1. Démarrer le fade out dans le MergeRuntime
     {
@@ -207,46 +218,75 @@ pub async fn deactivate_move(
         merge_rt.start_fade_out(&movement_id, fade);
     }
 
-    // 2. Si fade instantané, retirer immédiatement
+    // 2. Si fade instantané, retirer immédiatement dans spawn_blocking
     if fade <= 0.0 {
-        return deactivate_move_immediate(&movement_id, &state);
+        let merge_rt_arc = state.merge_runtime.clone();
+        let movements_arc = state.movements.clone();
+        let app_handle_arc = state.app_handle.clone();
+        let mv_id = movement_id.clone();
+        return tauri::async_runtime::spawn_blocking(move || {
+            deactivate_move_immediate_arc(&mv_id, &merge_rt_arc, &movements_arc, &app_handle_arc)
+        })
+        .await
+        .map_err(|e| format!("Task join error: {e}"))?;
     }
 
-    // 3. Attendre la fin du fade, puis retirer
-    // Le MergeRuntime marquera le move comme inactif quand le fade sera terminé
-    // Mais il faut aussi stopper le worker thread
-    std::thread::sleep(std::time::Duration::from_secs_f64(fade));
-    deactivate_move_immediate(&movement_id, &state)
+    // 3. Attendre la fin du fade dans un thread séparé pour ne pas bloquer
+    //    l'async runtime de Tauri (std::thread::sleep bloque le task executor).
+    let mv_id = movement_id.clone();
+    let app_state = state.app_handle.clone();
+    let merge_rt = state.merge_runtime.clone();
+    let movements = state.movements.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs_f64(fade));
+        // Cleanup inline (évite d'appeler deactivate_move_immediate qui needing State)
+        {
+            let merge_rt = lock_or_recover(&merge_rt);
+            merge_rt.unregister_move(&mv_id);
+            merge_rt.rebuild_osc_ids();
+        }
+        let movement = {
+            let mut movements = lock_or_recover(&movements);
+            movements.remove(&mv_id)
+        };
+        if let Some(mut movement) = movement {
+            movement.runtime.stop();
+            if let Some(handle) = movement.thread_handle.take() {
+                drop(handle); // Detach — le thread exit au prochain check running
+            }
+        }
+        if let Some(app_handle) = lock_or_recover(&app_state).clone() {
+            let _ = app_handle.emit("active-moves-update", ());
+        }
+    });
+
+    Ok(format!("Move '{movement_id}' fading out"))
 }
 
-fn deactivate_move_immediate(
+fn deactivate_move_immediate_arc(
     movement_id: &str,
-    state: &State<'_, AppState>,
+    merge_runtime: &Arc<Mutex<MergeRuntime>>,
+    movements: &Arc<Mutex<HashMap<String, Movement>>>,
+    app_handle: &Arc<Mutex<Option<AppHandle>>>,
 ) -> Result<String, String> {
-    // Retirer du MergeRuntime et recalculer les osc_ids globaux
     {
-        let merge_rt = lock_or_recover(&state.merge_runtime);
+        let merge_rt = lock_or_recover(merge_runtime);
         merge_rt.unregister_move(movement_id);
         merge_rt.rebuild_osc_ids();
     }
-
-    // Stopper le worker thread
     let movement = {
-        let mut movements = lock_or_recover(&state.movements);
+        let mut movements = lock_or_recover(movements);
         movements.remove(movement_id)
     };
     if let Some(mut movement) = movement {
         movement.runtime.stop();
         if let Some(handle) = movement.thread_handle.take() {
-            let _ = handle.join();
+            drop(handle);
         }
     }
-
-    // Emit update
-    if let Some(app_handle) = lock_or_recover(&state.app_handle).clone() {
+    if let Some(app_handle) = lock_or_recover(app_handle).clone() {
         let _ = app_handle.emit("active-moves-update", ());
     }
-
     Ok(format!("Move '{movement_id}' deactivated"))
 }
 
@@ -276,18 +316,58 @@ pub async fn deactivate_all_moves(
         }
     }
 
-    // Attendre le fade
-    if fade > 0.0 {
-        std::thread::sleep(std::time::Duration::from_secs_f64(fade));
-    }
-
-    // Retirer tous les moves
+    // Attendre le fade dans un thread séparé pour ne pas bloquer l'async runtime
     let count = move_ids.len();
-    for id in &move_ids {
-        let _ = deactivate_move_immediate(id, &state);
+    if fade > 0.0 {
+        let app_state = state.app_handle.clone();
+        let merge_rt = state.merge_runtime.clone();
+        let movements = state.movements.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs_f64(fade));
+            for id in &move_ids {
+                {
+                    let merge_rt = lock_or_recover(&merge_rt);
+                    merge_rt.unregister_move(id);
+                }
+                let movement = {
+                    let mut movements = lock_or_recover(&movements);
+                    movements.remove(id)
+                };
+                if let Some(mut movement) = movement {
+                    movement.runtime.stop();
+                    if let Some(handle) = movement.thread_handle.take() {
+                        drop(handle);
+                    }
+                }
+            }
+            {
+                let merge_rt = lock_or_recover(&merge_rt);
+                merge_rt.rebuild_osc_ids();
+            }
+            if let Some(app_handle) = lock_or_recover(&app_state).clone() {
+                let _ = app_handle.emit("active-moves-update", ());
+            }
+        });
+        Ok(format!("{count} moves fading out"))
+    } else {
+        // Fade instantané : retirer immédiatement dans spawn_blocking
+        let merge_rt_arc = state.merge_runtime.clone();
+        let movements_arc = state.movements.clone();
+        let app_handle_arc = state.app_handle.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            for id in &move_ids {
+                let _ = deactivate_move_immediate_arc(
+                    id,
+                    &merge_rt_arc,
+                    &movements_arc,
+                    &app_handle_arc,
+                );
+            }
+        })
+        .await
+        .map_err(|e| format!("Task join error: {e}"))?;
+        Ok(format!("{count} moves deactivated"))
     }
-
-    Ok(format!("{count} moves deactivated"))
 }
 
 /// Définit la stratégie de merge

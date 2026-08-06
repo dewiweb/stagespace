@@ -1,5 +1,5 @@
 import { StateCreator } from 'zustand';
-import { safeInvoke as invoke } from '../../utils/tauri';
+import { safeInvoke as invoke, feLog } from '../../utils/tauri';
 import { computeCentroid } from '../utils/geometryUtils';
 import type { Node, Edge } from 'reactflow';
 import type { HolProject } from '../types/index';
@@ -16,7 +16,7 @@ export interface MoveSlot {
   templateId: string;
   /// Track IDs ciblées par ce slot
   trackIds: number[];
-  /// ID du movement actif (null = arrêté)
+  /// ID du movement actif (null = arrêté). Source de vérité = backend.
   movementId: string | null;
   /// Mode preview ou live
   isPreview: boolean;
@@ -88,6 +88,8 @@ export interface MoveSlotsSlice {
   currentSetlistIndex: number;
   /// ID du slot actuellement sélectionné pour édition (source de vérité pour l'UI)
   editingSlotId: string | null;
+  /// Slot IDs avec une activation en cours (anti double-clic, non persisté)
+  pendingPlays: string[];
 
   // ─── CRUD moves ───
   addMoveSlot: () => void;
@@ -202,6 +204,7 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
   setlistOrder: loadSetlistFromStorage(),
   currentSetlistIndex: -1,
   editingSlotId: null,
+  pendingPlays: [],
 
   selectSlotForEditing: (id) => {
     // L'auto-save (useGraphStore) a déjà sauvegardé le slot précédent
@@ -350,7 +353,6 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
     if (get().editingSlotId === id) {
       const currentSelected = get().selectedTrackIds;
       const newSet = new Set(sortedIds);
-      // Comparaison rapide : même taille + mêmes éléments
       let same = currentSelected.size === newSet.size;
       if (same) {
         for (const t of newSet) {
@@ -360,12 +362,20 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
       if (!same) {
         get().setSelectedTrackIds(newSet);
       }
-    } else {
-      // Slot non-édité mais en lecture : hot-swap avec le graphe mis à jour
-      const slot = get().moveSlots.find((s) => s.id === id);
-      if (slot?.movementId && slot?.graphJson) {
+    }
+    // Hot-swap si le slot est en lecture (édité ou non)
+    const slot = get().moveSlots.find((s) => s.id === id);
+    if (slot?.movementId) {
+      // Si c'est le slot édité, utiliser le graphe courant (nodes/edges) qui est
+      // plus à jour que slot.graphJson (syncObjectsNode vient de modifier les nodes
+      // mais autoSave n'a pas encore tourné).
+      const isEditing = get().editingSlotId === id;
+      const graphSource = isEditing
+        ? { nodes: (get() as any).nodes, edges: (get() as any).edges }
+        : slot.graphJson;
+      if (graphSource?.nodes && graphSource?.edges) {
         import('../../components/nodeParamSchema').then(({ prepareGraphForSave }) => {
-          const graphData = prepareGraphForSave(slot.graphJson!.nodes, slot.graphJson!.edges);
+          const graphData = prepareGraphForSave(graphSource.nodes, graphSource.edges);
           invoke('update_move_graph_merged', {
             movementId: slot.movementId,
             graphJson: graphData,
@@ -379,48 +389,57 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
   playSlot: async (id) => {
     const slot = get().moveSlots.find((s) => s.id === id);
     if (!slot) return;
-    if (slot.movementId) return; // Déjà en lecture
+    // Anti double-clic : ignorer si déjà en lecture ou si une activation est en cours
+    if (slot.movementId || get().pendingPlays.includes(id)) {
+      feLog(`[playSlot] slot ${id} busy (movementId=${slot.movementId}) — ignoring`);
+      return;
+    }
 
     const { holProject, manualOscIds } = get();
-
-    // Construire le graphe si pas déjà fait
-    let graphJson = slot.graphJson;
-    if (!graphJson) {
-      const { SHAPE_PRESETS } = await import('../../utils/shapePresets');
-      const preset = SHAPE_PRESETS.find((p) => p.id === slot.templateId) ?? SHAPE_PRESETS[0];
-      const built = preset.build(slot.trackIds.length);
-      graphJson = { nodes: built.nodes, edges: built.edges };
-      // Sauvegarder dans le slot
-      set((s) => {
-        const newSlots = s.moveSlots.map((sl) => sl.id === id ? { ...sl, graphJson } : sl);
-        saveSlotsToStorage(newSlots);
-        return { moveSlots: newSlots };
-      });
-    }
-
-    // Préparer le graphe pour le backend
-    const { prepareGraphForSave } = await import('../../components/nodeParamSchema');
-    const graphData = prepareGraphForSave(graphJson.nodes, graphJson.edges);
-
-    // Résoudre les trackIndices depuis les trackIds
-    const trackIndices: number[] = [];
-    if (holProject) {
-      slot.trackIds.forEach((id) => {
-        const idx = holProject.tracks.findIndex((t) => t.id === id);
-        if (idx >= 0) trackIndices.push(idx);
-      });
-    } else {
-      slot.trackIds.forEach((id) => {
-        const idx = manualOscIds.indexOf(id);
-        trackIndices.push(idx >= 0 ? idx : id - 1);
-      });
-    }
-
-    // Calculer le centroïde
-    const origin = computeCentroid(holProject, trackIndices, manualOscIds);
-
     const movementId = `mv-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+    // Setter movementId ET pendingPlays IMMÉDIATEMENT (avant tout await).
+    // - movementId permet à stopSlot de fonctionner tout de suite
+    // - pendingPlays empêche syncSlotMovements de nettoyer le movementId
+    //   pendant que activate_move est en cours
+    set((s) => ({
+      moveSlots: s.moveSlots.map((sl) => sl.id === id ? { ...sl, movementId } : sl),
+      pendingPlays: [...s.pendingPlays, id],
+    }));
+    feLog(`[playSlot] START slot=${id} movementId=${movementId}`);
+
     try {
+      let graphJson = slot.graphJson;
+      if (!graphJson) {
+        const { SHAPE_PRESETS } = await import('../../utils/shapePresets');
+        const preset = SHAPE_PRESETS.find((p) => p.id === slot.templateId) ?? SHAPE_PRESETS[0];
+        const built = preset.build(slot.trackIds.length);
+        graphJson = { nodes: built.nodes, edges: built.edges };
+        set((s) => {
+          const newSlots = s.moveSlots.map((sl) => sl.id === id ? { ...sl, graphJson } : sl);
+          saveSlotsToStorage(newSlots);
+          return { moveSlots: newSlots };
+        });
+      }
+
+      const { prepareGraphForSave } = await import('../../components/nodeParamSchema');
+      const graphData = prepareGraphForSave(graphJson.nodes, graphJson.edges);
+
+      const trackIndices: number[] = [];
+      if (holProject) {
+        slot.trackIds.forEach((tid) => {
+          const idx = holProject.tracks.findIndex((t) => t.id === tid);
+          if (idx >= 0) trackIndices.push(idx);
+        });
+      } else {
+        slot.trackIds.forEach((tid) => {
+          const idx = manualOscIds.indexOf(tid);
+          trackIndices.push(idx >= 0 ? idx : tid - 1);
+        });
+      }
+
+      const origin = computeCentroid(holProject, trackIndices, manualOscIds);
+
       await invoke('activate_move', {
         request: {
           movement_id: movementId,
@@ -432,7 +451,6 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
           origin,
         },
       });
-      // Appliquer le speed du slot au movement (per-move)
       if (slot.macros) {
         try {
           await invoke('set_move_speed', {
@@ -443,51 +461,63 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
           console.warn('[playSlot] set_move_speed failed:', e);
         }
       }
-      set((s) => {
-        const newSlots = s.moveSlots.map((sl) => sl.id === id ? { ...sl, movementId } : sl);
-        saveSlotsToStorage(newSlots);
-        return { moveSlots: newSlots };
-      });
-      await get().refreshMovements();
+      // Succès : retirer du pending — movementId est déjà setté
+      set((s) => ({
+        pendingPlays: s.pendingPlays.filter((pid) => pid !== id),
+      }));
+      saveSlotsToStorage(get().moveSlots);
+      feLog(`[playSlot] DONE slot=${id} movementId=${movementId}`);
+      // Fire-and-forget : le movementId est déjà setté sur le slot,
+      // refreshMovements sert seulement à mettre à jour le panneau d'inspection
+      get().refreshMovements();
     } catch (e) {
-      console.error(`[playSlot] Failed to play slot ${id}:`, e);
+      console.error(`[playSlot] FAILED slot=${id}:`, e);
+      set((s) => ({ pendingPlays: s.pendingPlays.filter((pid) => pid !== id) }));
     }
   },
 
   stopSlot: async (id) => {
     const slot = get().moveSlots.find((s) => s.id === id);
     if (!slot?.movementId) return;
+    const movementId = slot.movementId;
+    feLog(`[stopSlot] slot=${id} movementId=${movementId}`);
+    // Clearer movementId immédiatement — le bouton revient à "play" tout de suite.
+    // Le backend deactivate_move(fade=0) est synchrone.
+    set((s) => {
+      const newSlots = s.moveSlots.map((sl) => sl.id === id ? { ...sl, movementId: null } : sl);
+      saveSlotsToStorage(newSlots);
+      return { moveSlots: newSlots };
+    });
     try {
-      await get().stopMovement(slot.movementId);
-      set((s) => {
-        const newSlots = s.moveSlots.map((sl) => sl.id === id ? { ...sl, movementId: null } : sl);
-        saveSlotsToStorage(newSlots);
-        return { moveSlots: newSlots };
-      });
+      await get().stopMovement(movementId);
     } catch (e) {
-      console.error(`[stopSlot] Failed to stop slot ${id}:`, e);
+      console.error(`[stopSlot] FAILED slot=${id}:`, e);
     }
   },
 
   stopSlotWithFade: async (id, fadeDuration) => {
     const slot = get().moveSlots.find((s) => s.id === id);
     if (!slot?.movementId) return;
+    const movementId = slot.movementId;
+    feLog(`[stopSlotWithFade] slot=${id} movementId=${movementId} fade=${fadeDuration}`);
+    // Clearer movementId immédiatement — permet de re-jouer pendant le fade.
+    // Le backend garde le move actif pendant le fade puis le retire (thread séparé).
+    // syncSlotMovements nettoiera tout résidu si nécessaire.
+    set((s) => {
+      const newSlots = s.moveSlots.map((sl) => sl.id === id ? { ...sl, movementId: null } : sl);
+      saveSlotsToStorage(newSlots);
+      return { moveSlots: newSlots };
+    });
     try {
-      await get().stopMovementWithFade(slot.movementId, fadeDuration);
-      set((s) => {
-        const newSlots = s.moveSlots.map((sl) => sl.id === id ? { ...sl, movementId: null } : sl);
-        saveSlotsToStorage(newSlots);
-        return { moveSlots: newSlots };
-      });
+      await get().stopMovementWithFade(movementId, fadeDuration);
     } catch (e) {
-      console.error(`[stopSlotWithFade] Failed to stop slot ${id}:`, e);
-      // Ne pas mettre movementId à null si le stop a échoué
+      console.error(`[stopSlotWithFade] FAILED slot=${id}:`, e);
     }
   },
 
   goAllSlots: async () => {
-    const slots = get().moveSlots.filter((s) => !s.movementId);
-    // Lancer en séquentiel (le backend gère le parallèle)
+    const pending = get().pendingPlays;
+    const slots = get().moveSlots.filter((s) => !s.movementId && !pending.includes(s.id));
     for (const slot of slots) {
       await get().playSlot(slot.id);
     }
@@ -624,14 +654,19 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
   },
 
   syncSlotMovements: () => {
-    // Nettoyer les movementIds qui ne sont plus actifs côté backend
-    const { movements, moveSlots } = get();
+    // Nettoyer les movementIds qui ne sont plus actifs côté backend.
+    // Ignore les slots en pending (pendingPlays) car leur move n'est pas encore créé.
+    const { movements, moveSlots, pendingPlays } = get();
     const activeIds = new Set(movements.map((m) => m.id));
-    const hasStale = moveSlots.some((s) => s.movementId && !activeIds.has(s.movementId));
+    const hasStale = moveSlots.some(
+      (s) => s.movementId && !pendingPlays.includes(s.id) && !activeIds.has(s.movementId)
+    );
     if (hasStale) {
       set((s) => {
         const newSlots = s.moveSlots.map((sl) =>
-          sl.movementId && !activeIds.has(sl.movementId) ? { ...sl, movementId: null } : sl
+          sl.movementId && !s.pendingPlays.includes(sl.id) && !activeIds.has(sl.movementId)
+            ? { ...sl, movementId: null }
+            : sl
         );
         saveSlotsToStorage(newSlots);
         return { moveSlots: newSlots };
