@@ -10,6 +10,7 @@ export const DrawModeOverlay: React.FC = () => {
   const setDrawZ = useGraphStore((s) => s.setDrawZ);
   const clearDrawnPoints = useGraphStore((s) => s.clearDrawnPoints);
   const finalizeDrawing = useGraphStore((s) => s.finalizeDrawing);
+  const setDrawMode = useGraphStore((s) => s.setDrawMode);
 
   return (
     <>
@@ -27,6 +28,12 @@ export const DrawModeOverlay: React.FC = () => {
           className="ml-2 px-2 py-0.5 text-[10px] bg-orange-600 hover:bg-orange-700 text-white rounded font-medium"
         >
           Done
+        </button>
+        <button
+          onClick={() => { clearDrawnPoints(); setDrawMode(false); }}
+          className="px-2 py-0.5 text-[10px] bg-gray-700 hover:bg-gray-600 text-gray-300 rounded font-medium"
+        >
+          Cancel
         </button>
       </div>
       {/* Instructions */}

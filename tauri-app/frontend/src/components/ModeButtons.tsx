@@ -16,7 +16,16 @@ export const ModeButtons: React.FC<ModeButtonsProps> = ({
   manipulateMode, assignMode, setManipulateMode, setAssignMode,
 }) => {
   const drawMode = useGraphStore((s) => s.drawMode);
+  const setDrawMode = useGraphStore((s) => s.setDrawMode);
   const selectedTrackIds = useGraphStore((s) => s.selectedTrackIds);
+  const hasSplineNode = useGraphStore((s) =>
+    s.nodes.some((n) =>
+      n.data.type === 'DrawSpline' ||
+      n.data.type === 'EvaluateSpline' ||
+      n.data.type === 'TrimSpline' ||
+      n.data.type === 'OffsetSpline'
+    )
+  );
 
   if (drawMode) return null;
 
@@ -40,6 +49,15 @@ export const ModeButtons: React.FC<ModeButtonsProps> = ({
         >
           ⊕ Assign
         </button>
+        {hasSplineNode && (
+          <button
+            onClick={() => { setDrawMode(true); setManipulateMode(false); setAssignMode(false); }}
+            className="px-2.5 py-1 text-[10px] rounded font-medium transition-colors bg-gray-900/80 text-gray-400 hover:text-white border border-gray-700"
+            title="Draw a freehand spline trajectory"
+          >
+            ✎ Draw
+          </button>
+        )}
       </div>
       {assignMode && (
         <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 bg-gray-900/90 backdrop-blur rounded-lg px-3 py-1.5 border border-green-600/50">

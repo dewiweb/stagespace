@@ -4,6 +4,10 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { useGraphStore, usePositionListener } from '../store/useGraphStore';
 import { MacrosPanel } from './MacrosPanel';
+import { DebugPerfOverlay, debugPerf } from './DebugPerfOverlay';
+
+// Exposer debugPerf sur window pour le render loop et le listener IPC
+(window as any).__debugPerf = debugPerf;
 import { DrawModeOverlay } from './DrawModeOverlay';
 import { ModeButtons } from './ModeButtons';
 import { TrajectoryVisualization } from './TrajectoryVisualization';
@@ -63,13 +67,29 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
     const objectsNode = nodes.find((n) => (n.data as any)?.type === 'Objects');
     const fromGraph = (objectsNode?.data as any)?.params?.n_objects ?? 0;
     const fromProject = holProject?.tracks?.length ?? 0;
-    // Compter les osc_ids uniques across tous les moves actifs
-    const allOscIds = new Set<number>();
+    // Le nombre d'objets doit couvrir le track_index maximum envoyé par le backend.
+    // Les positions sont indexées par track_indices (ex: 0,1,10,11 → il faut au moins 12 meshes).
+    // On calcule le max track_index depuis les osc_ids des moves actifs.
+    const manualIds = useGraphStore.getState().manualOscIds;
+    const holProj = useGraphStore.getState().holProject;
+    let maxTrackIdx = -1;
     movements.forEach((mv) => {
-      mv.osc_ids?.forEach((id: number) => allOscIds.add(id));
+      mv.osc_ids?.forEach((oscId: number) => {
+        let idx: number;
+        if (holProj) {
+          idx = holProj.tracks.findIndex((t: any) => t.id === oscId);
+        } else {
+          idx = manualIds.indexOf(oscId);
+        }
+        if (idx > maxTrackIdx) maxTrackIdx = idx;
+      });
     });
-    const fromMoves = allOscIds.size;
-    return Math.max(fromGraph, fromProject, fromMoves, 9);
+    const fromMoves = maxTrackIdx + 1;
+    const result = Math.max(fromGraph, fromProject, fromMoves, 1);
+    // Log détaillé pour debug
+    const mvSummary = movements.map((mv: any) => `${mv.name}:${mv.osc_ids?.length ?? 0}ids`).join(', ');
+    console.log(`[DBG-nObjects] fromGraph=${fromGraph} fromProject=${fromProject} fromMoves=${fromMoves} result=${result} movements=[${mvSummary}]`);
+    return result;
   }, [nodes, holProject, movements]);
 
   // ── Hooks extraits (création des objets 3D, marqueurs, handle, modes) ──
@@ -139,6 +159,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
     positions,
     macros,
     assignMode,
+    manipulateMode,
     selectedTrackIds,
     holProject,
     drawnPoints,
@@ -255,6 +276,8 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
           ))}
         </div>
       )}
+      {/* Debug perf overlay — top left */}
+      <DebugPerfOverlay />
     </div>
   );
 };

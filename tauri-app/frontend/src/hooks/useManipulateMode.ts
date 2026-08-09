@@ -173,6 +173,9 @@ export function useManipulateMode({
 
         if (mvts.length > 0) {
           // Multi-movement: utiliser les positions mergées du backend
+          // Les positions du backend sont en coords Z-up (x, y=depth, z=up)
+          // intersection est en coords Three.js Y-up (x, y=up, z=depth)
+          // Pour le centroid, on utilise x et z (depth) du backend
           const globalPos = mvPosMap['global'];
           if (globalPos) {
             for (const p of globalPos) { cx += p.x; cy += p.y; count++; }
@@ -181,9 +184,10 @@ export function useManipulateMode({
         }
 
         if (count > 0) {
-          // Les positions sont déjà transformées par le backend — pas de macros
+          // intersection.x = Three.js x = backend x
+          // intersection.z = Three.js z (depth) = backend y
           const newShiftX = intersection.x - cx;
-          const newShiftY = intersection.y - cy;
+          const newShiftY = intersection.z - cy;
           // Mettre à jour les macros legacy
           setMacros({
             ...macros,
@@ -199,22 +203,24 @@ export function useManipulateMode({
         }
       } else if (draggingObject !== null) {
         // Move individual object — update mesh + persist to store
+        // Three.js: intersection est en coords Y-up (x=right, y=up, z=depth)
+        // Backend: stocke en coords Z-up (x=right, y=depth, z=up)
         const mesh = objectsRef.current[draggingObject];
         if (mesh) {
           mesh.position.x = intersection.x;
           mesh.position.z = intersection.z;
         }
-        // Persister la position dans le store (manualPositions)
-        useGraphStore.getState().setManualPosition(draggingObject, [
+        // Conversion Three.js → backend: [x, z_threejs, y_threejs]
+        const backendPos: [number, number, number] = [
           intersection.x,
-          mesh?.position.y ?? 0,
-          intersection.z,
-        ]);
-        // Envoyer l'override au runtime (MergeRuntime — set_manual_position)
+          intersection.z,            // Three.js z (depth) → backend y
+          mesh?.position.y ?? 0,     // Three.js y (up) → backend z
+        ];
+        useGraphStore.getState().setManualPosition(draggingObject, backendPos);
         if (isPlaying || movementsRef.current.length > 0) {
           invoke('set_manual_position', {
             objectIndex: draggingObject,
-            position: [intersection.x, mesh?.position.y ?? 0, intersection.z],
+            position: backendPos,
           }).catch(console.error);
         }
       }

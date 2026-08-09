@@ -72,10 +72,21 @@ describe('pushMacrosToRuntime', () => {
 });
 
 describe('setLoopMode', () => {
-  it('calls set_loop_mode on backend', async () => {
+  it('calls set_move_playback_mode on each active movement', async () => {
+    useGraphStore.setState({ movements: [{ id: 'mv-1' }, { id: 'mv-2' }] } as any);
     await useGraphStore.getState().setLoopMode('oneshot');
-    const calls = getInvokeCalls().filter((c) => c.cmd === 'set_loop_mode');
+    const calls = getInvokeCalls().filter((c) => c.cmd === 'set_move_playback_mode');
+    expect(calls).toHaveLength(2);
+    expect(calls[0].args?.loopMode).toBe('oneshot');
+  });
+});
+
+describe('setDirection', () => {
+  it('calls set_move_playback_mode on each active movement', async () => {
+    useGraphStore.setState({ movements: [{ id: 'mv-1' }] } as any);
+    await useGraphStore.getState().setDirection('backward');
+    const calls = getInvokeCalls().filter((c) => c.cmd === 'set_move_playback_mode');
     expect(calls).toHaveLength(1);
-    expect(calls[0].args?.mode).toBe('oneshot');
+    expect(calls[0].args?.direction).toBe('backward');
   });
 });

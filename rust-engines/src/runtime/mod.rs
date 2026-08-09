@@ -19,6 +19,9 @@ mod macros;
 mod overrides;
 mod perf;
 mod types;
+#[cfg(test)]
+mod tests;
+
 
 pub use config::*;
 pub use macros::*;
@@ -52,6 +55,14 @@ pub struct Runtime {
     /// None = mode legacy (OSC direct, compatibilité)
     /// Some(buf) = mode worker (écrit dans le buffer, pas d'OSC, pas de macros spatiales)
     position_buffer: Mutex<Option<Arc<PositionBuffer>>>,
+    /// Duration du move — stockée en ms (AtomicU64) pour hot-swap en live.
+    /// Le worker thread lit cette valeur à chaque frame au lieu de capturer
+    /// la duration dans sa closure.
+    duration_ms: Arc<std::sync::atomic::AtomicU64>,
+    /// OSC ids du move — hot-swappable en live via set_osc_ids.
+    /// Le worker thread lit cette valeur à chaque frame pour savoir
+    /// combien de positions calculer.
+    osc_ids_arc: Arc<std::sync::RwLock<Vec<u32>>>,
 }
 
 impl Runtime {
@@ -79,7 +90,26 @@ impl Runtime {
             audio_state: Arc::new(Mutex::new(AudioState::new())),
             audio_param_overrides: Arc::new(Mutex::new(HashMap::new())),
             position_buffer: Mutex::new(None),
+            duration_ms: Arc::new(std::sync::atomic::AtomicU64::new(4000)),
+            osc_ids_arc: Arc::new(std::sync::RwLock::new(Vec::new())),
         })
+    }
+
+    /// Définit la duration du move (en secondes) — hot-swappable en live
+    pub fn set_duration(&self, duration_secs: f64) {
+        let ms = (duration_secs * 1000.0).max(1.0) as u64;
+        self.duration_ms.store(ms, Ordering::Relaxed);
+    }
+
+    /// Définit les osc_ids du move — hot-swappable en live
+    pub fn set_osc_ids(&self, osc_ids: Vec<u32>) {
+        eprintln!("[DBG-WORKER] set_osc_ids count={} ids={:?}", osc_ids.len(), osc_ids);
+        *self.osc_ids_arc.write().unwrap_or_else(|e| e.into_inner()) = osc_ids;
+    }
+
+    /// Récupère la duration actuelle (en secondes)
+    pub fn duration(&self) -> f64 {
+        self.duration_ms.load(Ordering::Relaxed) as f64 / 1000.0
     }
 
     /// Définit le callback de position appelé à chaque frame
@@ -254,7 +284,12 @@ impl Runtime {
             .socket
             .try_clone()
             .map_err(StagespaceError::NetworkError)?;
-        let duration = params.duration;
+        // Stocker la duration dans le champ partagé pour hot-swap en live
+        self.set_duration(params.duration);
+        // Stocker les osc_ids dans le champ partagé pour hot-swap en live
+        self.set_osc_ids(osc_ids.clone());
+        let duration_arc = self.duration_ms.clone();
+        let osc_ids_arc = self.osc_ids_arc.clone();
         let position_fn_arc = self.position_fn.clone();
         let position_callback = self.position_callback.clone();
         let osc_sender_arc = self.osc_sender.clone();
@@ -283,6 +318,9 @@ impl Runtime {
             while running.load(Ordering::SeqCst) {
                 let elapsed = start.elapsed();
                 let t_real = elapsed.as_secs_f64();
+
+                // Lire la duration (hot-swappable) depuis l'AtomicU64
+                let duration = duration_arc.load(Ordering::Relaxed) as f64 / 1000.0;
 
                 // Lire les macros temps réel (base)
                 let speed = macros.get_speed();
@@ -431,6 +469,8 @@ impl Runtime {
                 //    puis envoyer OSC + callback (comportement actuel).
                 if let Some(ref buffer) = position_buffer_arc {
                     // ── Mode worker ──
+                    // Lire les osc_ids (hot-swappable) depuis l'arc
+                    let osc_ids = osc_ids_arc.read().unwrap_or_else(|e| e.into_inner()).clone();
                     let positions: Vec<(usize, nalgebra::Vector3<f64>)> = {
                         let fn_ref = position_fn_arc.lock().unwrap_or_else(|e| e.into_inner());
                         let ovr = overrides.lock();
@@ -455,7 +495,18 @@ impl Runtime {
                                     } else {
                                         t_with_phase
                                     };
-                                    fn_ref(t_looped, obj_idx)
+                                    // catch_unwind: la position_fn peut panic si obj_idx
+                                    // dépasse le n_objects pour lequel elle a été compilée
+                                    // (race condition lors du hot-swap des osc_ids avant
+                                    // le recall_cue). On retourne zeros plutôt que de laisser
+                                    // le thread mourir.
+                                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                        fn_ref(t_looped, obj_idx)
+                                    }))
+                                        .unwrap_or_else(|_e| {
+                                            eprintln!("[DBG-WORKER] PANIC in position_fn obj_idx={obj_idx} n_osc_ids={} t={t_looped:.3}", osc_ids.len());
+                                            nalgebra::Vector3::zeros()
+                                        })
                                 };
                                 (obj_idx, raw_pos)
                             })
@@ -476,6 +527,7 @@ impl Runtime {
                         let latency_ms = frame_time_us / 1000.0;
                         let cpu_pct = (latency_ms / (1000.0 / params.fps)) * 100.0;
                         perf.update(fps, 0.0, latency_ms, cpu_pct);
+                        eprintln!("[DBG-WORKER] frame={frame_count} fps={fps:.0} latency_ms={latency_ms:.2} cpu={cpu_pct:.1}% t_real={t_real:.3} t_eff={t_eff:.3} duration={duration:.1} ts_ms={}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis());
                         frames_since_perf = 0;
                         last_perf_update = Instant::now();
                     }
@@ -485,12 +537,14 @@ impl Runtime {
                     let current_time = start.elapsed().as_nanos();
                     if target_time > current_time {
                         let sleep_ns = (target_time - current_time) as u64;
-                        spin_sleep::sleep(Duration::from_nanos(sleep_ns));
+                        std::thread::sleep(Duration::from_nanos(sleep_ns));
                     }
                     continue; // Skip OSC + callback (géré par le MergeRuntime)
                 }
 
                 // ── Mode legacy (OSC direct) ──
+                // Lire les osc_ids (hot-swappable) depuis l'arc
+                let osc_ids = osc_ids_arc.read().unwrap_or_else(|e| e.into_inner()).clone();
                 let positions: Vec<(usize, nalgebra::Vector3<f64>)> = {
                     let fn_ref = position_fn_arc.lock().unwrap_or_else(|e| e.into_inner());
                     let ovr = overrides.lock();
@@ -516,7 +570,12 @@ impl Runtime {
                                 } else {
                                     t_with_phase
                                 };
-                                fn_ref(t_looped, obj_idx)
+                                // catch_unwind: protection contre les panics de position_fn
+                                // lors du hot-swap (obj_idx > n_objects compilé)
+                                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                    fn_ref(t_looped, obj_idx)
+                                }))
+                                    .unwrap_or_else(|_| nalgebra::Vector3::zeros())
                             };
 
                             // Appliquer radius_scale : scaling radial par rapport à l'origin
@@ -650,13 +709,13 @@ impl Runtime {
                     last_perf_update = Instant::now();
                 }
 
-                // Timing précis avec spin_sleep (busy-wait hybride)
+                // Timing précis — std::thread::sleep rend la main à l'OS
                 let target_time = frame_count as u128 * frame_duration.as_nanos();
                 let current_time = start.elapsed().as_nanos();
 
                 if target_time > current_time {
                     let sleep_ns = (target_time - current_time) as u64;
-                    spin_sleep::sleep(Duration::from_nanos(sleep_ns));
+                    std::thread::sleep(Duration::from_nanos(sleep_ns));
                 }
             }
         });
@@ -665,6 +724,7 @@ impl Runtime {
 
     /// Arrête le playback
     pub fn stop(&self) {
+        eprintln!("[DBG-WORKER] stop() called — stopping playback");
         self.running.store(false, Ordering::SeqCst);
         log_playback_stop();
     }
@@ -697,6 +757,7 @@ impl Runtime {
     /// `from_fn` = fonction actuelle, `to_fn` = fonction du cue cible
     /// `fade_duration` = durée du crossfade en secondes (0 = instantané)
     pub fn recall_cue(&self, to_fn: PositionFn, fade_duration: f64) {
+        eprintln!("[DBG-WORKER] recall_cue fade={fade_duration}");
         if fade_duration <= 0.0 {
             // Recall instantané
             self.swap_position_fn(to_fn);
@@ -729,37 +790,5 @@ impl Runtime {
         });
 
         self.swap_position_fn(crossfade_fn);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::osc_sender::{OscProfile, OscSender};
-
-    #[test]
-    fn test_runtime_creation() {
-        let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
-        let rt = Runtime::new("127.0.0.1".to_string(), 7000, sender).unwrap();
-        assert!(!rt.is_running());
-    }
-    #[test]
-    fn test_loop_mode() {
-        let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
-        let rt = Runtime::new("127.0.0.1".to_string(), 7000, sender).unwrap();
-        rt.set_loop_mode(LoopMode::OneShot);
-        assert_eq!(rt.config.get_loop_mode(), LoopMode::OneShot);
-        rt.set_loop_mode(LoopMode::Loop);
-        assert_eq!(rt.config.get_loop_mode(), LoopMode::Loop);
-    }
-    #[test]
-    fn test_hot_swap_position_fn() {
-        let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
-        let rt = Runtime::new("127.0.0.1".to_string(), 7000, sender).unwrap();
-        rt.swap_position_fn(Box::new(|t, i| nalgebra::Vector3::new(t, i as f64, 0.0)));
-        let fn_ref = rt.position_fn.lock().unwrap_or_else(|e| e.into_inner());
-        let pos = fn_ref(1.5, 3);
-        assert!((pos.x - 1.5).abs() < 1e-10);
-        assert!((pos.y - 3.0).abs() < 1e-10);
     }
 }

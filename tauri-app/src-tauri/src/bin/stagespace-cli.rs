@@ -22,7 +22,7 @@
 
 #[path = "../cli/cli_state.rs"]
 mod cli_state;
-#[path = "../cli/commands.rs"]
+#[path = "../cli/commands/mod.rs"]
 mod commands;
 #[path = "../cli/graph_presets.rs"]
 mod graph_presets;

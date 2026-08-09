@@ -23,6 +23,7 @@ import { createDrawModeSlice, type DrawModeSlice } from './slices/drawModeSlice'
 import { createMovementSlice, type MovementSlice } from './slices/movementSlice';
 import { createMoveSlotsSlice, type MoveSlotsSlice } from './slices/moveSlotsSlice';
 import { createOscConfigSlice, type OscConfigSlice } from './slices/oscConfigSlice';
+import { createSplineLibrarySlice, type SplineLibrarySlice } from './slices/splineLibrarySlice';
 import { SHAPE_PRESETS } from '../utils/shapePresets';
 import type {
   NodeType,
@@ -43,7 +44,7 @@ export type { NodeType, AppStatus, MovementInfo, HolTrack, HolProject };
 interface GraphState
   extends PerfSlice, AudioSlice, OscSlice, PersistenceSlice,
     MacrosSlice, HolProjectSlice, DrawModeSlice,
-    MovementSlice, MoveSlotsSlice, OscConfigSlice {
+    MovementSlice, MoveSlotsSlice, OscConfigSlice, SplineLibrarySlice {
   // React Flow state (single source of truth)
   nodes: Node[];
   edges: Edge[];
@@ -157,6 +158,7 @@ export const useGraphStore = create<GraphState>()((...a) => {
   ...createMovementSlice(...a),
   ...createMoveSlotsSlice(...a),
   ...createOscConfigSlice(...a),
+  ...createSplineLibrarySlice(...a),
 
   // Graphe par défaut — preset Circle pour que l'app ne démarre jamais vide
   ...(() => {
@@ -200,12 +202,33 @@ export const useGraphStore = create<GraphState>()((...a) => {
   updateNodeData: (id, data) => {
     set((s) => ({
       nodes: s.nodes.map((n) =>
-        n.id === id ? { ...n, data: { ...n.data, ...data } } : n,
+        n.id === id ? {
+          ...n,
+          data: {
+            ...n.data,
+            ...data,
+            // Deep merge params si les deux existent
+            params: data.params && (n.data as any).params
+              ? { ...(n.data as any).params, ...data.params }
+              : (data.params ?? (n.data as any).params),
+          },
+        } : n,
       ),
     }));
-    // Pas d'auto-save ici — updateNodeData est appelé très fréquemment
-    // (slider drag, etc.). Le debounce de CustomNode.tsx gère le hot-swap,
-    // et saveEditorToSlot / switch de slot sauve le graphe.
+    // Auto-save + hot-swap si le slot est en lecture
+    autoSaveToEditingSlot();
+    const editingSlotId = (get() as any).editingSlotId as string | null;
+    if (editingSlotId) {
+      const slot = (get() as any).moveSlots?.find((s: any) => s.id === editingSlotId);
+      if (slot?.movementId) {
+        // Hot-swap avec un léger debounce pour éviter de spammer pendant un drag
+        if (dragSaveTimer) clearTimeout(dragSaveTimer);
+        dragSaveTimer = setTimeout(() => {
+          dragSaveTimer = null;
+          (get() as any).updateGraphLive?.(0.3);
+        }, 200);
+      }
+    }
   },
   setNodes: (nodes) => set({ nodes }),
   setEdges: (edges) => set({ edges }),
@@ -316,16 +339,39 @@ export const useGraphStore = create<GraphState>()((...a) => {
       ]);
 
       const editingSlotId = (get() as any).editingSlotId as string | null;
-      const moveSlots = (get() as any).moveSlots as Array<{ id: string; movementId: string | null }> | undefined;
+      const moveSlots = (get() as any).moveSlots as Array<{ id: string; movementId: string | null; trackIds?: number[] }> | undefined;
       const editingSlotMovementId = editingSlotId && moveSlots
         ? moveSlots.find((s) => s.id === editingSlotId)?.movementId ?? null
         : null;
 
       if (editingSlotMovementId && allMovementIds.has(editingSlotMovementId)) {
+        // Extraire la duration du graphe courant
+        const durNode = nodes.find((n: any) => (n.data as any)?.type === 'Duration');
+        const duration = (durNode?.data as any)?.params?.duration ?? 4.0;
+        // Récupérer les osc_ids et track_indices du slot édité
+        const editingSlot = moveSlots?.find((s: any) => s.id === editingSlotId);
+        const oscIds = editingSlot?.trackIds ?? [];
+        const holProj = (get() as any).holProject;
+        const manualIds = (get() as any).manualOscIds ?? [];
+        const trackIndices: number[] = [];
+        if (holProj) {
+          oscIds.forEach((tid: number) => {
+            const idx = holProj.tracks.findIndex((t: any) => t.id === tid);
+            if (idx >= 0) trackIndices.push(idx);
+          });
+        } else {
+          oscIds.forEach((tid: number) => {
+            const idx = manualIds.indexOf(tid);
+            trackIndices.push(idx >= 0 ? idx : tid - 1);
+          });
+        }
         await invoke('update_move_graph_merged', {
           movementId: editingSlotMovementId,
           graphJson: graphData,
           fadeDuration: fade,
+          duration,
+          oscIds,
+          trackIndices,
         }).catch((e: any) => console.error(`Hot-swap failed for movement ${editingSlotMovementId}:`, e));
       }
       set({ graphCompileVersion: get().graphCompileVersion + 1 });
@@ -507,13 +553,47 @@ export const useMovementPositionsListener = () => {
   const oscProfile = useGraphStore((s) => s.oscProfile);
   React.useEffect(() => {
     invoke('set_osc_output', { address: oscAddress, port: oscPort, profile: oscProfile })
-      .catch((e) => console.error('Failed to set OSC output:', e));
+      .catch((e: any) => console.error('Failed to set OSC output:', e));
   }, [oscAddress, oscPort, oscProfile]);
+
+  // Pousser les osc_ids globaux (manualOscIds ou hol track ids) au backend.
+  // CRITICAL: le MergeRuntime utilise cette liste pour mapper track_indices → osc_id
+  // lors de l'OSC output. Si cette liste ne correspond pas aux track_indices,
+  // les positions ne sont pas envoyées en OSC.
+  const manualOscIds = useGraphStore((s) => s.manualOscIds);
+  const holProject = useGraphStore((s) => s.holProject);
+  const movementsCount = useGraphStore((s) => s.movements.length);
+  React.useEffect(() => {
+    // Utiliser les track ids du hol project si disponible, sinon manualOscIds
+    const globalIds = holProject?.tracks?.map((t: any) => t.id) ?? manualOscIds;
+    invoke('set_global_osc_ids', { oscIds: globalIds })
+      .catch((e: any) => console.error('Failed to set global osc ids:', e));
+  }, [manualOscIds, holProject, movementsCount]);
 
   // Écouter global-positions (un seul event avec toutes les positions mergées)
   React.useEffect(() => {
     if (movements.length === 0) return;
+    let ipcFrameCount = 0;
+    let ipcLastPerf = performance.now();
+    let ipcMaxDelta = 0;
+    let ipcLastTime = performance.now();
     const unlisten = listen('global-positions', (event: any) => {
+      const now = performance.now();
+      const delta = now - ipcLastTime;
+      if (delta > ipcMaxDelta) ipcMaxDelta = delta;
+      ipcLastTime = now;
+      ipcFrameCount++;
+      if (now - ipcLastPerf > 2000) {
+        const ipcFps = ipcFrameCount / ((now - ipcLastPerf) / 1000);
+        const dp = (window as any).__debugPerf;
+        if (dp) {
+          dp.ipcFps = ipcFps;
+          dp.ipcMaxGap = ipcMaxDelta;
+        }
+        ipcFrameCount = 0;
+        ipcMaxDelta = 0;
+        ipcLastPerf = now;
+      }
       const { positions } = event.payload as {
         time: number;
         positions: Array<[number, [number, number, number]]>;

@@ -251,19 +251,3 @@ pub async fn set_macro(request: SetMacroRequest, state: State<'_, AppState>) -> 
         Err("No active runtime".to_string())
     }
 }
-
-#[tauri::command]
-pub async fn set_loop_mode(mode: String, state: State<'_, AppState>) -> Result<(), String> {
-    let state_guard = lock_or_recover(&state.runtime);
-    if let Some(runtime) = &*state_guard {
-        let loop_mode = match mode.as_str() {
-            "loop" => LoopMode::Loop,
-            "oneshot" => LoopMode::OneShot,
-            _ => return Err(format!("Unknown loop mode: {mode}")),
-        };
-        runtime.set_loop_mode(loop_mode);
-        Ok(())
-    } else {
-        Err("No active runtime".to_string())
-    }
-}

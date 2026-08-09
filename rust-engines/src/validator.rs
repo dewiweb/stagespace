@@ -186,8 +186,19 @@ impl Validator {
             | NodeType::Linear | NodeType::Oscillation | NodeType::PerlinNoise | NodeType::Formation
             | NodeType::Converge | NodeType::Pendulum | NodeType::RoseCurve | NodeType::Helix
             | NodeType::CustomTrajectory | NodeType::BPM | NodeType::AudioAmplitude | NodeType::Wave
-            | NodeType::DrawSpline | NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline => {
+            | NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline => {
                 matches!(to_type,
+                    NodeType::Output | NodeType::Mix | NodeType::Group | NodeType::Sequence | NodeType::Crossfade |
+                    NodeType::Scale | NodeType::Rotate | NodeType::Offset | NodeType::PhaseShift
+                    | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
+                )
+            }
+
+            // DrawSpline = source de données spline, peut alimenter EvaluateSpline/TrimSpline/OffsetSpline
+            // ou les mêmes cibles que les moteurs
+            NodeType::DrawSpline => {
+                matches!(to_type,
+                    NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline |
                     NodeType::Output | NodeType::Mix | NodeType::Group | NodeType::Sequence | NodeType::Crossfade |
                     NodeType::Scale | NodeType::Rotate | NodeType::Offset | NodeType::PhaseShift
                     | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
@@ -356,7 +367,6 @@ impl Validator {
             | NodeType::Duration
             | NodeType::AudioSpectrum
             | NodeType::OSCInput
-            | NodeType::DrawSpline
             | NodeType::Input
             | NodeType::MoveRef
             | NodeType::Merge => &[],
@@ -387,9 +397,10 @@ impl Validator {
             | NodeType::TimeFalloff
             | NodeType::PointDistanceFalloff
             | NodeType::DirectionalFalloff
-            | NodeType::AudioAmplitudeFalloff => &["input", "duration"],
+            | NodeType::AudioAmplitudeFalloff
+            | NodeType::DrawSpline => &["input", "duration"],
 
-            // Modificateurs / splines : une seule entrée
+            // Modificateurs : une seule entrée
             NodeType::Scale
             | NodeType::Rotate
             | NodeType::Offset
@@ -399,9 +410,6 @@ impl Validator {
             | NodeType::Clamp
             | NodeType::LFO
             | NodeType::Jitter
-            | NodeType::EvaluateSpline
-            | NodeType::TrimSpline
-            | NodeType::OffsetSpline
             | NodeType::RadiusScale
             | NodeType::HeightOffset
             | NodeType::PerTrackDepth
@@ -409,6 +417,11 @@ impl Validator {
             | NodeType::AudioFalloff
             | NodeType::ManualPosition
             | NodeType::Output => &["input"],
+
+            // Splines : input (spline data) + duration
+            NodeType::EvaluateSpline
+            | NodeType::TrimSpline
+            | NodeType::OffsetSpline => &["input", "duration"],
 
             // Composites binaires : acceptent input, input_a, input_b
             // (input_a/input_b sont les ports visuels A/B ; le compiler distingue par ordre des edges)

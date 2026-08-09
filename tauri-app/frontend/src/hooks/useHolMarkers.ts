@@ -3,6 +3,11 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { HolProject } from '../store/useGraphStore';
 
+/// Conversion backend (x, y, z) où z=up → Three.js (x, z, y) où y=up
+function toThree(x: number, y: number, z: number): [number, number, number] {
+  return [x, z, y];
+}
+
 interface UseHolMarkersParams {
   sceneRef: MutableRefObject<THREE.Scene | null>;
   cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>;
@@ -44,7 +49,8 @@ export function useHolMarkers({ sceneRef, cameraRef, holProject }: UseHolMarkers
         opacity: 0.6,
       });
       const ring = new THREE.Mesh(geo, mat);
-      ring.position.set(track.position[0], track.position[1], track.position[2]);
+      const [rx, ry, rz] = toThree(track.position[0], track.position[1], track.position[2]);
+      ring.position.set(rx, ry, rz);
       ring.lookAt(cameraRef.current!.position);
       scene.add(ring);
       holMarkersRef.current.push(ring);
@@ -55,7 +61,7 @@ export function useHolMarkers({ sceneRef, cameraRef, holProject }: UseHolMarkers
       div.textContent = `${track.name} (#${track.id})`;
       div.style.cssText = 'color: #aaa; font-size: 10px; font-family: monospace; background: rgba(0,0,0,0.5); padding: 1px 4px; border-radius: 2px; white-space: nowrap;';
       const label = new CSS2DObject(div);
-      label.position.set(track.position[0], track.position[1] + 0.25, track.position[2]);
+      label.position.set(rx, ry + 0.25, rz);
       scene.add(label);
       holLabelsRef.current.push(label);
     });

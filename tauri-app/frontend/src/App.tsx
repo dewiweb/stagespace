@@ -20,12 +20,59 @@ function App() {
   const oscInPort = useGraphStore((s) => s.oscInPort);
   const [leftCollapsed, setLeftCollapsed] = React.useState(false);
   const [rightCollapsed, setRightCollapsed] = React.useState(false);
+  // Largeur redimensionnable du panneau droit (Inspector)
+  const [rightWidth, setRightWidth] = React.useState(288); // 72 * 4px = 288px par défaut
+  // Largeur redimensionnable du panneau gauche (Graphes + Moves)
+  const [leftWidth, setLeftWidth] = React.useState(256); // 64 * 4px = 256px par défaut
+  const resizingRef = React.useRef(false);
+  const resizingSideRef = React.useRef<'left' | 'right'>('right');
   // Sections collapsibles du panneau gauche
   const [graphsExpanded, setGraphsExpanded] = React.useState(true);
   const [movesExpanded, setMovesExpanded] = React.useState(true);
 
   // Listen to movement positions (multi-runtime)
   useMovementPositionsListener();
+
+  // ── Resize des panneaux gauche et droit ──
+  React.useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!resizingRef.current) return;
+      if (resizingSideRef.current === 'right') {
+        const newWidth = Math.max(220, Math.min(600, window.innerWidth - e.clientX));
+        setRightWidth(newWidth);
+      } else {
+        const newWidth = Math.max(200, Math.min(500, e.clientX));
+        setLeftWidth(newWidth);
+      }
+    };
+    const onMouseUp = () => {
+      resizingRef.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, []);
+
+  const startRightResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    resizingRef.current = true;
+    resizingSideRef.current = 'right';
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
+
+  const startLeftResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    resizingRef.current = true;
+    resizingSideRef.current = 'left';
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
 
   // Au démarrage : si le port OSC IN sauvegardé diffère du défaut (8001),
   // appliquer le port sauvegardé côté backend
@@ -109,7 +156,7 @@ function App() {
 
       {/* Main Content — 3 colonnes */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Colonne gauche : AnimationList + onglets secondaires (collapsible) */}
+        {/* Colonne gauche : AnimationList + onglets secondaires (collapsible + redimensionnable) */}
         {leftCollapsed ? (
           <button
             onClick={() => setLeftCollapsed(false)}
@@ -120,7 +167,8 @@ function App() {
             <span className="text-gray-600 text-[9px] mt-2 writing-vertical" style={{ writingMode: 'vertical-rl' }}>Graphes</span>
           </button>
         ) : (
-          <div className="w-64 border-r border-stagespace-border flex flex-col bg-stagespace-panel flex-shrink-0 relative">
+          <>
+          <div style={{ width: leftWidth }} className="border-r border-stagespace-border flex flex-col bg-stagespace-panel flex-shrink-0 relative">
             <button
               onClick={() => setLeftCollapsed(true)}
               className="absolute -right-3 top-2 z-20 w-6 h-6 bg-stagespace-panel border border-stagespace-border rounded-full flex items-center justify-center text-gray-500 hover:text-white hover:bg-gray-800 transition-colors text-xs"
@@ -161,6 +209,15 @@ function App() {
               )}
             </div>
           </div>
+          {/* Splitter — poignée de redimensionnement */}
+          <div
+            onMouseDown={startLeftResize}
+            className="w-1.5 flex-shrink-0 bg-stagespace-border hover:bg-blue-500/50 cursor-col-resize transition-colors relative group"
+            title="Glisser pour redimensionner"
+          >
+            <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-stagespace-border group-hover:bg-blue-500" />
+          </div>
+          </>
         )}
 
         {/* Colonne centre : 3D Canvas + Expert (split view quand Expert activé) */}
@@ -222,7 +279,7 @@ function App() {
           </div>
         </div>
 
-        {/* Colonne droite : Inspector (collapsible) */}
+        {/* Colonne droite : Inspector (collapsible + redimensionnable) */}
         {rightCollapsed ? (
           <button
             onClick={() => setRightCollapsed(false)}
@@ -233,7 +290,16 @@ function App() {
             <span className="text-gray-600 text-[9px] mt-2" style={{ writingMode: 'vertical-rl' }}>Inspector</span>
           </button>
         ) : (
-          <div className="w-72 border-l border-stagespace-border flex-shrink-0 relative flex flex-col">
+          <>
+            {/* Splitter — poignée de redimensionnement */}
+            <div
+              onMouseDown={startRightResize}
+              className="w-1.5 flex-shrink-0 bg-stagespace-border hover:bg-blue-500/50 cursor-col-resize transition-colors relative group"
+              title="Glisser pour redimensionner"
+            >
+              <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-stagespace-border group-hover:bg-blue-500" />
+            </div>
+            <div style={{ width: rightWidth }} className="border-l border-stagespace-border flex-shrink-0 relative flex flex-col">
             <button
               onClick={() => setRightCollapsed(true)}
               className="absolute -left-3 top-2 z-20 w-6 h-6 bg-stagespace-panel border border-stagespace-border rounded-full flex items-center justify-center text-gray-500 hover:text-white hover:bg-gray-800 transition-colors text-xs"
@@ -250,6 +316,7 @@ function App() {
               <Inspector />
             </div>
           </div>
+          </>
         )}
       </div>
     </div>

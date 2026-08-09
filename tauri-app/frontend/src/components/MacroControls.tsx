@@ -6,10 +6,12 @@ export const MacroControls: React.FC = () => {
   const setMacros = useGraphStore((s) => s.setMacros);
   const pushMacrosToRuntime = useGraphStore((s) => s.pushMacrosToRuntime);
   const setLoopMode = useGraphStore((s) => s.setLoopMode);
+  const setDirection = useGraphStore((s) => s.setDirection);
   const isPlaying = useGraphStore((s) => s.isPlaying);
   const movements = useGraphStore((s) => s.movements);
   const shouldPush = isPlaying || movements.length > 0;
   const [loopMode, setLoopModeState] = React.useState<'loop' | 'oneshot'>('loop');
+  const [direction, setDirectionState] = React.useState<'forward' | 'backward' | 'ping_pong'>('forward');
 
   const reset = async () => {
     setMacros({ speed: 1.0, scale: 1.0, shiftX: 0, shiftY: 0, shiftZ: 0, yaw: 0, pitch: 0, roll: 0 });
@@ -24,6 +26,11 @@ export const MacroControls: React.FC = () => {
   const handleLoopMode = async (mode: 'loop' | 'oneshot') => {
     setLoopModeState(mode);
     await setLoopMode(mode);
+  };
+
+  const handleDirection = async (dir: 'forward' | 'backward' | 'ping_pong') => {
+    setDirectionState(dir);
+    await setDirection(dir);
   };
 
   return (
@@ -52,6 +59,34 @@ export const MacroControls: React.FC = () => {
           }`}
         >
           One-shot
+        </button>
+      </div>
+
+      {/* Direction */}
+      <div className="flex gap-1 p-1 bg-gray-800/50 rounded border border-gray-700/50">
+        <button
+          onClick={() => handleDirection('forward')}
+          className={`flex-1 py-1 text-[10px] rounded font-medium transition-colors ${
+            direction === 'forward' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          → Fwd
+        </button>
+        <button
+          onClick={() => handleDirection('backward')}
+          className={`flex-1 py-1 text-[10px] rounded font-medium transition-colors ${
+            direction === 'backward' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          ← Bwd
+        </button>
+        <button
+          onClick={() => handleDirection('ping_pong')}
+          className={`flex-1 py-1 text-[10px] rounded font-medium transition-colors ${
+            direction === 'ping_pong' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          ↔ Ping
         </button>
       </div>
 

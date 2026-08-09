@@ -80,13 +80,13 @@ pub async fn set_osc_output(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     let profile_enum = OscProfile::from_str(&profile)
-        .map_err(|e| format!("Invalid OSC profile '{}': {e}", profile))?;
+        .map_err(|e| format!("Invalid OSC profile '{profile}': {e}"))?;
     let osc_sender = OscSender::new(profile_enum, address.clone(), port);
     let mut merge_rt = lock_or_recover(&state.merge_runtime);
     merge_rt
         .set_osc_target(address.clone(), port, osc_sender)
         .map_err(|e| format!("Failed to set OSC target: {e:?}"))?;
-    eprintln!("[INFO] OSC output now sending to {}:{} ({})", address, port, profile);
+    eprintln!("[INFO] OSC output now sending to {address}:{port} ({profile})");
     Ok(())
 }
 

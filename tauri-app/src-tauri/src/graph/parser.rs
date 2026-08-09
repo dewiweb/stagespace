@@ -176,6 +176,11 @@ pub fn build_graph_from_json(
             | NodeType::AudioAmplitudeFalloff => {
                 // Forcer n_objects = objects_n pour tous les engines
                 node.params["n_objects"] = serde_json::json!(objects_n);
+                // Debug log pour les nodes spline
+                if matches!(node.node_type, NodeType::DrawSpline | NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline) {
+                    let pts = node.params.get("points").and_then(|v| v.as_str()).unwrap_or("");
+                    eprintln!("[DBG-PARSER] {:?} id={:?} n_objects={} points_len={} points_preview={}", node.node_type, node.id, objects_n, pts.len(), &pts[..pts.len().min(100)]);
+                }
             }
             _ => {}
         }

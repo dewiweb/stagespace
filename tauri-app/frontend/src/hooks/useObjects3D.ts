@@ -3,6 +3,11 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { useGraphStore } from '../store/useGraphStore';
 
+/// Conversion backend (x, y, z) où z=up → Three.js (x, z, y) où y=up
+function toThree(x: number, y: number, z: number): [number, number, number] {
+  return [x, z, y];
+}
+
 interface UseObjects3DParams {
   sceneRef: MutableRefObject<THREE.Scene | null>;
   nObjects: number;
@@ -13,49 +18,59 @@ interface UseObjects3DParams {
 /**
  * Crée les sphères (objets) + labels CSS2D.
  * Lit manualOscIds depuis useGraphStore.getState() (pas en paramètre, pour éviter re-création).
+ *
+ * Au lieu de tout recréer à chaque changement de nObjects, on fait un diff :
+ * - ajouter les objets manquants
+ * - retirer les objets en trop
+ * - mettre à jour les labels des objets existants
+ * Cela évite les labels orphelins/dupliqués dans le DOM du CSS2DRenderer.
  */
 export function useObjects3D({ sceneRef, nObjects, sceneReady }: UseObjects3DParams) {
   const objectsRef = useRef<THREE.Mesh[]>([]);
-  const objectLabelsRef = useRef<CSS2DObject[]>([]);
+  // Pas besoin de tracker les labels séparément — ils sont enfants des meshes
+  // et sont nettoyés automatiquement par l'event 'removed' du CSS2DObject.
 
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene) return;
 
-    // Remove old objects + labels (dispose geometry/material pour éviter les fuites)
-    objectsRef.current.forEach((obj) => {
-      scene.remove(obj);
-      obj.geometry.dispose();
-      (obj.material as THREE.Material).dispose();
-    });
-    objectsRef.current = [];
-    objectLabelsRef.current.forEach((l) => scene.remove(l));
-    objectLabelsRef.current = [];
-
-    // Add new objects + labels
     const oscIds = useGraphStore.getState().manualOscIds;
     const manualPos = useGraphStore.getState().manualPositions;
-    for (let i = 0; i < nObjects; i++) {
+    const current = objectsRef.current;
+    const currentCount = current.length;
+
+    // 1. Retirer les objets en trop (du dernier vers le premier)
+    if (currentCount > nObjects) {
+      for (let i = currentCount - 1; i >= nObjects; i--) {
+        const obj = current[i];
+        scene.remove(obj);
+        obj.geometry.dispose();
+        (obj.material as THREE.Material).dispose();
+      }
+      current.length = nObjects;
+    }
+
+    // 2. Ajouter les objets manquants
+    for (let i = currentCount; i < nObjects; i++) {
       const geo = new THREE.SphereGeometry(0.2, 24, 24);
       const mat = new THREE.MeshStandardMaterial({
-        color: new THREE.Color().setHSL(i / nObjects, 0.7, 0.55),
-        emissive: new THREE.Color().setHSL(i / nObjects, 0.5, 0.2),
+        color: new THREE.Color().setHSL(i / Math.max(nObjects, 1), 0.7, 0.55),
+        emissive: new THREE.Color().setHSL(i / Math.max(nObjects, 1), 0.5, 0.2),
         roughness: 0.4,
         metalness: 0.3,
       });
       const mesh = new THREE.Mesh(geo, mat);
-      // Position initiale: manualPositions si disponible, sinon cercle par défaut
       const pos = manualPos[i];
       if (pos) {
-        mesh.position.set(pos[0], pos[1], pos[2]);
+        const [tx, ty, tz] = toThree(pos[0], pos[1], pos[2]);
+        mesh.position.set(tx, ty, tz);
       } else {
-        // Fallback: cercle
-        const angle = (i / nObjects) * Math.PI * 2;
-        const radius = nObjects <= 4 ? 1.5 : nObjects <= 8 ? 2.0 : 2.5;
-        mesh.position.set(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
+        // Fallback: cercle horizontal en backend coords (z=0)
+        const angle = (i / Math.max(nObjects, 1)) * Math.PI * 2;
+        const radius = nObjects <= 4 ? 1.5 : nObjects <= 8 ? 2.0 : nObjects <= 16 ? 3.0 : 4.0;
+        const [tx, ty, tz] = toThree(Math.cos(angle) * radius, Math.sin(angle) * radius, 0);
+        mesh.position.set(tx, ty, tz);
       }
-      scene.add(mesh);
-      objectsRef.current.push(mesh);
 
       // Label — utilise l'osc_id si disponible, sinon l'index
       const labelId = oscIds[i] ?? i + 1;
@@ -66,9 +81,24 @@ export function useObjects3D({ sceneRef, nObjects, sceneReady }: UseObjects3DPar
       const label = new CSS2DObject(div);
       label.position.set(0, 0.3, 0);
       mesh.add(label);
-      objectLabelsRef.current.push(label);
+
+      scene.add(mesh);
+      current.push(mesh);
+    }
+
+    // 3. Mettre à jour les labels des objets existants (au cas où oscIds a changé)
+    for (let i = 0; i < Math.min(currentCount, nObjects); i++) {
+      const mesh = current[i];
+      const labelId = oscIds[i] ?? i + 1;
+      const label = mesh.children.find((c: any) => c.isCSS2DObject) as CSS2DObject | undefined;
+      if (label && label.element) {
+        const newText = `#${labelId}`;
+        if (label.element.textContent !== newText) {
+          label.element.textContent = newText;
+        }
+      }
     }
   }, [nObjects, sceneReady]);
 
-  return { objectsRef, objectLabelsRef };
+  return { objectsRef, objectLabelsRef: objectsRef };
 }

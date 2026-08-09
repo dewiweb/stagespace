@@ -10,6 +10,8 @@ export { useGraphStore, mockAnimState, getInvokeCalls, clearInvokeCalls };
 
 export function resetStore() {
   mockAnimState.activeMovementIds = [];
+  // Vider l'objet mutable des positions avant de reset le store
+  useGraphStore.getState().clearMovementPositions?.();
   useGraphStore.setState({
     nodes: [],
     edges: [],
@@ -25,7 +27,6 @@ export function resetStore() {
     isPlaying: false,
     status: 'idle',
     movements: [],
-    movementPositions: {},
     savedGraphs: {},
     selectedTrackIds: new Set<number>(),
     holProject: null,

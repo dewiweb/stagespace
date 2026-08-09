@@ -4,6 +4,30 @@ import { computeCentroid } from '../utils/geometryUtils';
 import type { Node, Edge } from 'reactflow';
 import type { HolProject } from '../types/index';
 
+/// Extrait la duration d'un graphe (node Duration) — fallback 4.0s
+function extractDuration(nodes: Node[]): number {
+  const durNode = nodes.find((n: any) => (n.data as any)?.type === 'Duration');
+  return (durNode?.data as any)?.params?.duration ?? 4.0;
+}
+
+/// Calcule les track_indices (index 0-based dans le projet hol ou manualOscIds)
+/// à partir des trackIds (osc_ids) du slot
+function computeTrackIndices(trackIds: number[], holProject: any, manualOscIds: number[]): number[] {
+  const indices: number[] = [];
+  if (holProject) {
+    trackIds.forEach((tid) => {
+      const idx = holProject.tracks.findIndex((t: any) => t.id === tid);
+      if (idx >= 0) indices.push(idx);
+    });
+  } else {
+    trackIds.forEach((tid) => {
+      const idx = manualOscIds.indexOf(tid);
+      indices.push(idx >= 0 ? idx : tid - 1);
+    });
+  }
+  return indices;
+}
+
 /// MoveSlot — un move = une configuration persistante (graphe + tracks + macros)
 /// Tout est un Move. Certains moves sont dans la setlist (l'ordre du spectacle).
 /// Un Move peut être lancé indépendamment (live) ou rappelé via GO (spectacle).
@@ -24,6 +48,10 @@ export interface MoveSlot {
   macros: MoveMacros;
   /// Durée du fade pour les transitions (GO, stop avec fade)
   fadeDuration: number;
+  /// Loop mode : "loop" (défaut) ou "oneshot"
+  loopMode: 'loop' | 'oneshot';
+  /// Direction : "forward" (défaut), "backward", ou "ping_pong"
+  direction: 'forward' | 'backward' | 'ping_pong';
 }
 
 /// Macros d'un move — équivalent des macros du cue
@@ -99,6 +127,8 @@ export interface MoveSlotsSlice {
   setSlotTracks: (id: string, trackIds: number[]) => void;
   setSlotMacros: (id: string, macros: Partial<MoveMacros>) => void;
   setSlotFadeDuration: (id: string, fade: number) => void;
+  setSlotLoopMode: (id: string, mode: 'loop' | 'oneshot') => void;
+  setSlotDirection: (id: string, direction: 'forward' | 'backward' | 'ping_pong') => void;
   /// Bascule le mode preview (pas d'OSC out) / live (OSC out)
   toggleSlotPreview: (id: string) => void;
   /// Sélectionne un slot pour édition — sync selectedTrackIds + charge le graphe dans l'éditeur
@@ -171,6 +201,8 @@ function loadSlotsFromStorage(): MoveSlot[] {
       ...s,
       macros: s.macros ?? defaultMacros(),
       fadeDuration: s.fadeDuration ?? 2.0,
+      loopMode: s.loopMode ?? 'loop',
+      direction: s.direction ?? 'forward',
     }));
   } catch {
     return [];
@@ -250,6 +282,8 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
         isPreview: false,
         macros: defaultMacros(),
         fadeDuration: 2.0,
+        loopMode: 'loop' as const,
+        direction: 'forward' as const,
       }];
       saveSlotsToStorage(newSlots);
       return { moveSlots: newSlots };
@@ -307,12 +341,17 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
       }
       // Si le slot est en cours de lecture, hot-swap
       if (slot.movementId) {
+        const { holProject, manualOscIds } = get();
+        const trackIndices = computeTrackIndices(slot.trackIds, holProject, manualOscIds);
         import('../../components/nodeParamSchema').then(({ prepareGraphForSave }) => {
           const graphData = prepareGraphForSave(nodes, edges);
           invoke('update_move_graph_merged', {
             movementId: slot.movementId,
             graphJson: graphData,
             fadeDuration: 0.5,
+            duration: extractDuration(nodes),
+            oscIds: slot.trackIds,
+            trackIndices,
           }).catch(console.error);
         });
       }
@@ -366,6 +405,8 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
     // Hot-swap si le slot est en lecture (édité ou non)
     const slot = get().moveSlots.find((s) => s.id === id);
     if (slot?.movementId) {
+      const { holProject, manualOscIds } = get();
+      const trackIndices = computeTrackIndices(slot.trackIds, holProject, manualOscIds);
       // Si c'est le slot édité, utiliser le graphe courant (nodes/edges) qui est
       // plus à jour que slot.graphJson (syncObjectsNode vient de modifier les nodes
       // mais autoSave n'a pas encore tourné).
@@ -380,6 +421,9 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
             movementId: slot.movementId,
             graphJson: graphData,
             fadeDuration: 0.3,
+            duration: extractDuration(graphSource.nodes),
+            oscIds: slot.trackIds,
+            trackIndices,
           }).catch(console.error);
         });
       }
@@ -389,9 +433,10 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
   playSlot: async (id) => {
     const slot = get().moveSlots.find((s) => s.id === id);
     if (!slot) return;
+    console.log(`[DBG-playSlot] id=${id} name=${slot.name} trackIds=${slot.trackIds?.join(',')}`);
     // Anti double-clic : ignorer si déjà en lecture ou si une activation est en cours
     if (slot.movementId || get().pendingPlays.includes(id)) {
-      feLog(`[playSlot] slot ${id} busy (movementId=${slot.movementId}) — ignoring`);
+      console.log(`[DBG-playSlot] slot ${id} busy (movementId=${slot.movementId}) — ignoring`);
       return;
     }
 
@@ -422,8 +467,30 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
         });
       }
 
+      // Si c'est le slot édité, utiliser les nodes/edges courants du store
+      // (plus à jour que slot.graphJson — ex: après un dessin de spline,
+      // l'auto-save n'a pas forcément encore synchronisé slot.graphJson)
+      const isEditing = get().editingSlotId === id;
+      if (isEditing) {
+        const currentNodes = (get() as any).nodes;
+        const currentEdges = (get() as any).edges;
+        if (currentNodes?.length > 0) {
+          graphJson = { nodes: currentNodes, edges: currentEdges };
+        }
+      }
+
       const { prepareGraphForSave } = await import('../../components/nodeParamSchema');
       const graphData = prepareGraphForSave(graphJson.nodes, graphJson.edges);
+      feLog(`[DBG-playSlot] graphJson nodes=${graphJson.nodes.length} edges=${graphJson.edges.length} types=${graphJson.nodes.map((n: any) => n.data?.type).join(',')} isEditing=${isEditing}`);
+      // Log spécifique pour les nodes spline
+      const evalNode = graphJson.nodes.find((n: any) => (n.data as any)?.type === 'EvaluateSpline');
+      const drawNode = graphJson.nodes.find((n: any) => (n.data as any)?.type === 'DrawSpline');
+      feLog(`[DBG-playSlot] DrawSpline points=${((drawNode?.data as any)?.params?.points ?? 'NOT SET').slice(0, 120)}`);
+      feLog(`[DBG-playSlot] EvaluateSpline points=${((evalNode?.data as any)?.params?.points ?? 'NOT SET').slice(0, 120)}`);
+
+      // Lire la duration depuis le node Duration du graphe
+      const durationNode = graphJson.nodes.find((n: any) => (n.data as any)?.type === 'Duration');
+      const duration = (durationNode?.data as any)?.params?.duration ?? 4.0;
 
       const trackIndices: number[] = [];
       if (holProject) {
@@ -449,6 +516,9 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
           track_indices: trackIndices,
           is_preview: slot.isPreview,
           origin,
+          duration,
+          loop_mode: slot.loopMode,
+          direction: slot.direction,
         },
       });
       if (slot.macros) {
@@ -480,7 +550,7 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
     const slot = get().moveSlots.find((s) => s.id === id);
     if (!slot?.movementId) return;
     const movementId = slot.movementId;
-    feLog(`[stopSlot] slot=${id} movementId=${movementId}`);
+    console.log(`[DBG-stopSlot] id=${id} name=${slot.name} movementId=${movementId}`);
     // Clearer movementId immédiatement — le bouton revient à "play" tout de suite.
     // Le backend deactivate_move(fade=0) est synchrone.
     set((s) => {
@@ -539,12 +609,17 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
     // est en cours de lecture.
     const slot = get().moveSlots.find((s) => s.id === id);
     if (slot?.movementId && slot?.graphJson) {
+      const { holProject, manualOscIds } = get();
+      const trackIndices = computeTrackIndices(slot.trackIds, holProject, manualOscIds);
       import('../../components/nodeParamSchema').then(({ prepareGraphForSave }) => {
         const graphData = prepareGraphForSave(slot.graphJson!.nodes, slot.graphJson!.edges);
         invoke('update_move_graph_merged', {
           movementId: slot.movementId,
           graphJson: graphData,
           fadeDuration: 0.3,
+          duration: extractDuration(slot.graphJson!.nodes),
+          oscIds: slot.trackIds,
+          trackIndices,
         }).catch(console.error);
       });
     }
@@ -578,6 +653,32 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
       saveSlotsToStorage(newSlots);
       return { moveSlots: newSlots };
     });
+  },
+
+  setSlotLoopMode: (id, mode) => {
+    set((s) => {
+      const newSlots = s.moveSlots.map((sl) => sl.id === id ? { ...sl, loopMode: mode } : sl);
+      saveSlotsToStorage(newSlots);
+      return { moveSlots: newSlots };
+    });
+    // Live update si le move est actif
+    const slot = get().moveSlots.find((sl) => sl.id === id);
+    if (slot?.movementId) {
+      invoke('set_move_playback_mode', { movementId: slot.movementId, loopMode: mode });
+    }
+  },
+
+  setSlotDirection: (id, direction) => {
+    set((s) => {
+      const newSlots = s.moveSlots.map((sl) => sl.id === id ? { ...sl, direction } : sl);
+      saveSlotsToStorage(newSlots);
+      return { moveSlots: newSlots };
+    });
+    // Live update si le move est actif
+    const slot = get().moveSlots.find((sl) => sl.id === id);
+    if (slot?.movementId) {
+      invoke('set_move_playback_mode', { movementId: slot.movementId, direction });
+    }
   },
 
   toggleSlotPreview: (id) => {

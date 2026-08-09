@@ -4,6 +4,11 @@ import { invoke } from '@tauri-apps/api/core';
 import { useGraphStore } from '../store/useGraphStore';
 import { useAnimationStore } from '../store/useAnimationStore';
 
+/// Conversion backend (x, y, z) où z=up → Three.js (x, z, y) où y=up
+function toThree(x: number, y: number, z: number): [number, number, number] {
+  return [x, z, y];
+}
+
 interface TrajectoryVisualizationProps {
   sceneRef: React.RefObject<THREE.Scene | null>;
   objectsRef: React.RefObject<THREE.Mesh[]>;
@@ -80,7 +85,7 @@ export const TrajectoryVisualization: React.FC<TrajectoryVisualizationProps> = (
             const duration = (durationNode?.data as any)?.params?.duration ?? 4.0;
             // Échantillonner chaque movement à afficher
             for (const movement of movementsToShow) {
-              for (let i = 0; i < Math.min(nObjs, 9); i++) {
+              for (let i = 0; i < nObjs; i++) {
                 if (cancelled) return;
                 try {
                   const samples = await invoke<Array<[number, number, number, number]>>('sample_movement_trajectory', {
@@ -88,7 +93,10 @@ export const TrajectoryVisualization: React.FC<TrajectoryVisualizationProps> = (
                   });
                   if (cancelled || samples.length < 2) continue;
 
-                  const points = samples.map((s) => new THREE.Vector3(s[1], s[2], s[3]));
+                  const points = samples.map((s) => {
+                    const [tx, ty, tz] = toThree(s[1], s[2], s[3]);
+                    return new THREE.Vector3(tx, ty, tz);
+                  });
                   const geo = new THREE.BufferGeometry().setFromPoints(points);
                   const hue = i / nObjs;
                   const mat = new THREE.LineBasicMaterial({
@@ -111,14 +119,17 @@ export const TrajectoryVisualization: React.FC<TrajectoryVisualizationProps> = (
           const durationNode = graphNodes.find((n) => (n.data as any)?.type === 'Duration');
           const duration = (durationNode?.data as any)?.params?.duration ?? 4.0;
 
-          for (let i = 0; i < Math.min(nObjs, 9); i++) {
+          for (let i = 0; i < nObjs; i++) {
             if (cancelled) return;
             const samples = await invoke<Array<[number, number, number, number]>>('sample_trajectory', {
               objectIndex: i, nSamples, duration,
             });
             if (cancelled || samples.length < 2) continue;
 
-            const points = samples.map((s) => new THREE.Vector3(s[1], s[2], s[3]));
+            const points = samples.map((s) => {
+              const [tx, ty, tz] = toThree(s[1], s[2], s[3]);
+              return new THREE.Vector3(tx, ty, tz);
+            });
             const geo = new THREE.BufferGeometry().setFromPoints(points);
             const hue = i / nObjs;
             const mat = new THREE.LineBasicMaterial({

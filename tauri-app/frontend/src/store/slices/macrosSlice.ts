@@ -21,6 +21,7 @@ export interface MacrosSlice {
   setMacros: (macros: Partial<MacrosState>) => void;
   pushMacrosToRuntime: () => Promise<void>;
   setLoopMode: (mode: 'loop' | 'oneshot') => Promise<void>;
+  setDirection: (direction: 'forward' | 'backward' | 'ping_pong') => Promise<void>;
 }
 
 // pushMacrosToRuntime accède à movements via get() — on étend le type attendu du store
@@ -66,9 +67,34 @@ export const createMacrosSlice: StateCreator<MacrosStore, [], [], MacrosSlice> =
 
   setLoopMode: async (mode) => {
     try {
-      await invoke('set_loop_mode', { mode });
+      const { movements } = get();
+      if (movements.length > 0) {
+        // Per-move : appliquer à chaque worker actif (loop_mode est per-move)
+        await Promise.all(movements.map((mv) =>
+          invoke('set_move_playback_mode', {
+            movementId: mv.id,
+            loopMode: mode,
+          })
+        ));
+      }
     } catch (e) {
       console.error('Failed to set loop mode:', e);
+    }
+  },
+
+  setDirection: async (direction) => {
+    try {
+      const { movements } = get();
+      if (movements.length > 0) {
+        await Promise.all(movements.map((mv) =>
+          invoke('set_move_playback_mode', {
+            movementId: mv.id,
+            direction,
+          })
+        ));
+      }
+    } catch (e) {
+      console.error('Failed to set direction:', e);
     }
   },
 });

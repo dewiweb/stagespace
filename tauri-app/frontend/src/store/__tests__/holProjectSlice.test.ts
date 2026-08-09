@@ -164,10 +164,12 @@ describe('manual positions', () => {
     const positions = (useGraphStore.getState() as any).manualPositions;
     expect(Object.keys(positions)).toHaveLength(4);
     // Check that positions are on a circle (radius for n<=4 is 1.5)
+    // Cercle horizontal en backend coords: x et y varient, z=0
     for (let i = 0; i < 4; i++) {
-      const [x, _y, z] = positions[i];
-      const r = Math.sqrt(x * x + z * z);
+      const [x, y, z] = positions[i];
+      const r = Math.sqrt(x * x + y * y);
       expect(r).toBeCloseTo(1.5, 5);
+      expect(z).toBeCloseTo(0, 5);
     }
   });
 });

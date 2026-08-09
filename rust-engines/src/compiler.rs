@@ -710,6 +710,32 @@ impl Compiler {
             extra = serde_json::json!({ "duration": duration, "n_objects": n_objects });
         }
 
+        // Pour les nodes spline (EvaluateSpline/TrimSpline/OffsetSpline) :
+        // Si un DrawSpline est connecté en amont, utiliser ses points (données brutes).
+        // tension/closed restent dans EvaluateSpline (paramètres d'interpolation).
+        if matches!(node.node_type, NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline) {
+            let upstream_spline = graph
+                .get_inputs(node.id)
+                .iter()
+                .filter_map(|id| graph.nodes.get(id))
+                .find(|n| n.node_type == NodeType::DrawSpline);
+            if let Some(draw) = upstream_spline {
+                if let Some(map) = extra.as_object_mut() {
+                    // Points depuis DrawSpline (source de données)
+                    if let Some(points) = draw.params.get("points") {
+                        map.insert("points".to_string(), points.clone());
+                    }
+                    // tension/closed restent dans EvaluateSpline (interpolation)
+                }
+            }
+        }
+
+        // Debug log pour les nodes spline
+        if matches!(node.node_type, NodeType::DrawSpline | NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline) {
+            let pts = extra.get("points").and_then(|v| v.as_str()).unwrap_or("");
+            eprintln!("[DBG-COMPILE] {:?} id={:?} n_objects={} duration={} points_len={} points_preview={}", node.node_type, node.id, n_objects, duration, pts.len(), &pts[..pts.len().min(100)]);
+        }
+
         Ok(EngineParams {
             n_objects,
             duration,

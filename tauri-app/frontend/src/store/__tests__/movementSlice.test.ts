@@ -30,8 +30,8 @@ describe('setMovementPositions', () => {
 
 describe('stopMovement', () => {
   it('calls deactivate_move and cleans up positions + savedGraphs', async () => {
+    useGraphStore.getState().setMovementPositions('mv-1', [{ index: 0, x: 1, y: 2, z: 3 }]);
     useGraphStore.setState({
-      movementPositions: { 'mv-1': [{ index: 0, x: 1, y: 2, z: 3 }] },
       savedGraphs: { 'mv-1': { nodes: [], edges: [], trackIndices: [], name: 'test' } },
     } as any);
 
@@ -55,8 +55,8 @@ describe('stopMovementWithFade', () => {
   });
 
   it('cleans up positions and savedGraphs', async () => {
+    useGraphStore.getState().setMovementPositions('mv-1', [{ index: 0, x: 1, y: 2, z: 3 }]);
     useGraphStore.setState({
-      movementPositions: { 'mv-1': [{ index: 0, x: 1, y: 2, z: 3 }] },
       savedGraphs: { 'mv-1': { nodes: [], edges: [], trackIndices: [], name: 'test' } },
     } as any);
 
@@ -69,11 +69,9 @@ describe('stopMovementWithFade', () => {
 
 describe('stopAllMovements', () => {
   it('calls deactivate_all_moves and clears all positions + savedGraphs', async () => {
+    useGraphStore.getState().setMovementPositions('mv-1', [{ index: 0, x: 1, y: 2, z: 3 }]);
+    useGraphStore.getState().setMovementPositions('mv-2', [{ index: 0, x: 4, y: 5, z: 6 }]);
     useGraphStore.setState({
-      movementPositions: {
-        'mv-1': [{ index: 0, x: 1, y: 2, z: 3 }],
-        'mv-2': [{ index: 0, x: 4, y: 5, z: 6 }],
-      },
       savedGraphs: {
         'mv-1': { nodes: [], edges: [], trackIndices: [], name: 'a' },
         'mv-2': { nodes: [], edges: [], trackIndices: [], name: 'b' },

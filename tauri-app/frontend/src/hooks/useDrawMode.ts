@@ -38,11 +38,12 @@ export function useDrawMode({ cameraRef, containerRef }: UseDrawModeParams) {
       const raycaster = new THREE.Raycaster();
       raycaster.setFromCamera(ndc, camera);
 
-      // Intersect with horizontal plane at y = drawZ
+      // Intersect with horizontal plane at y = drawZ (Three.js Y-up)
       const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -drawZ);
       const intersection = new THREE.Vector3();
       if (raycaster.ray.intersectPlane(plane, intersection)) {
-        return [intersection.x, intersection.y, intersection.z];
+        // Convertir Three.js (x, y=up, z=depth) → backend (x, y=depth, z=up)
+        return [intersection.x, intersection.z, intersection.y];
       }
       return null;
     },

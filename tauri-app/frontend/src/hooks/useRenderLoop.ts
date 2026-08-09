@@ -5,6 +5,37 @@ import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { useGraphStore } from '../store/useGraphStore';
 import type { HolProject } from '../store/useGraphStore';
 
+/// Conversion backend (x, y, z) où z=up → Three.js (x, z, y) où y=up
+/// Le spatial audio utilise Z-up ; Three.js utilise Y-up.
+function toThree(x: number, y: number, z: number): [number, number, number] {
+  return [x, z, y];
+}
+
+/// Cache un mesh ET ses labels CSS2DObject enfants explicitement.
+/// Le CSS2DRenderer devrait le faire via la hiérarchie, mais on force pour être sûr.
+function hideMeshAndLabels(mesh: THREE.Mesh) {
+  mesh.visible = false;
+  mesh.children.forEach((child) => {
+    if ((child as any).isCSS2DObject) {
+      child.visible = false;
+      const el = (child as any).element as HTMLElement | undefined;
+      if (el) el.style.display = 'none';
+    }
+  });
+}
+
+/// Montre un mesh ET ses labels CSS2DObject enfants.
+function showMeshAndLabels(mesh: THREE.Mesh) {
+  mesh.visible = true;
+  mesh.children.forEach((child) => {
+    if ((child as any).isCSS2DObject) {
+      child.visible = true;
+      // Ne pas forcer display:'' ici — le CSS2DRenderer le gère
+      // en fonction de la projection caméra au prochain render
+    }
+  });
+}
+
 // Types des valeurs store lues dans le render loop
 type PositionArray = Array<{ index: number; x: number; y: number; z: number }>;
 type MacrosValue = {
@@ -39,6 +70,7 @@ export interface UseRenderLoopParams {
   positions: PositionArray;
   macros: MacrosValue;
   assignMode: boolean;
+  manipulateMode: boolean;
   selectedTrackIds: Set<number>;
   holProject: HolProject | null;
   drawnPoints: DrawnPointsValue;
@@ -74,6 +106,7 @@ export function useRenderLoop({
   positions,
   macros,
   assignMode,
+  manipulateMode,
   selectedTrackIds,
   holProject,
   drawnPoints,
@@ -85,18 +118,20 @@ export function useRenderLoop({
   const positionsRef = useRef(positions);
   const macrosRef = useRef(macros);
   const assignModeRef = useRef(assignMode);
+  const manipulateModeRef = useRef(manipulateMode);
   const selectedTrackIdsRef = useRef(selectedTrackIds);
   const holProjectRef = useRef(holProject);
   const drawnPointsRef = useRef(drawnPoints);
   const manualPositionsRef = useRef(manualPositions);
   const lastLineKeyRef = useRef('');
   const lastDrawnKeyRef = useRef('');
-  const tmpVecRef = useRef(new THREE.Vector3());
+  const lastDebugLogRef = useRef(0);
 
   // Sync des refs à chaque render React (cheap — pas d'effet de bord)
   positionsRef.current = positions;
   macrosRef.current = macros;
   assignModeRef.current = assignMode;
+  manipulateModeRef.current = manipulateMode;
   selectedTrackIdsRef.current = selectedTrackIds;
   holProjectRef.current = holProject;
   drawnPointsRef.current = drawnPoints;
@@ -127,14 +162,16 @@ export function useRenderLoop({
 
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true, failIfMajorPerformanceCaveat: false });
+      renderer = new THREE.WebGLRenderer({ antialias: false, failIfMajorPerformanceCaveat: false });
     } catch (e) {
       console.error('WebGL init failed:', e);
       setWebglFailed(true);
       return;
     }
     renderer.setSize(initW, initH);
-    renderer.setPixelRatio(window.devicePixelRatio);
+    // Limiter le pixel ratio à 1.5 — sur HiDPI, devicePixelRatio=2 ou 3
+    // multiplie le travail GPU par 4x ou 9x pour un bénéfice visuel minimal
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     renderer.domElement.style.position = 'absolute';
     renderer.domElement.style.top = '0';
     renderer.domElement.style.left = '0';
@@ -177,9 +214,39 @@ export function useRenderLoop({
     controlsRef.current = controls;
 
     let animationId: number;
+    let renderFrameCount = 0;
+    let renderStutterCount = 0;
+    let renderLastPerf = performance.now();
+    let renderLastFrameTime = performance.now();
+    let animateTotalMs = 0;
     const animate = () => {
+      const animateStart = performance.now();
       animationId = requestAnimationFrame(animate);
+      const frameNow = performance.now();
+      const frameDelta = frameNow - renderLastFrameTime;
+      renderLastFrameTime = frameNow;
       controls.update();
+
+      // Debug FPS — log toutes les ~2s
+      renderFrameCount++;
+      if (frameDelta > 25) renderStutterCount++;
+      if (frameNow - renderLastPerf > 2000) {
+        const fps = renderFrameCount / ((frameNow - renderLastPerf) / 1000);
+        const storeState0 = useGraphStore.getState();
+        const globalPos = (storeState0.movementPositions as any)['global'];
+        // Mettre à jour l'objet debug (pas de set() React)
+        const dp = (window as any).__debugPerf;
+        if (dp) {
+          dp.renderFps = fps;
+          dp.renderStutter = renderStutterCount;
+          dp.posLen = globalPos?.length ?? 0;
+          dp.mvts = storeState0.movements.length;
+          dp.animateMs = animateTotalMs;
+        }
+        renderFrameCount = 0;
+        renderStutterCount = 0;
+        renderLastPerf = frameNow;
+      }
 
       // ── Mise à jour des positions dans le render loop (pas de useEffect) ──
       // Lit les refs au lieu des props React — évite les re-renders à 60fps.
@@ -219,6 +286,12 @@ export function useRenderLoop({
 
       if (mvts.length > 0) {
         // ── Mode multi-move : les positions arrivent du backend via 'global-positions' ──
+        // Log périodique pour debug (toutes les ~2s)
+        if (performance.now() - (lastDebugLogRef.current ?? 0) > 2000) {
+          lastDebugLogRef.current = performance.now();
+          const globalPos = mvPosMap['global'];
+          console.log(`[DBG-RENDER] mvts=${mvts.length} objs=${objs.length} globalPos=${globalPos?.length ?? 0} indices=${globalPos?.map(p => p.index).join(',') ?? 'none'}`);
+        }
         // Le MergeRuntime a déjà fait : merge + post-processing (macros, offset, etc.)
         // Le visualiseur est un viewer passif — il ne recalcule RIEN.
         const globalPos = mvPosMap['global'];
@@ -260,12 +333,18 @@ export function useRenderLoop({
           const defaultColor = new THREE.Color();
           const holTracks = holProj?.tracks ?? [];
 
+          // D'abord, cacher tous les meshes qui ne sont pas dans posMap
+          // (ils seront remis en position manuelle si pas en mode assign)
+          objs.forEach((mesh) => { hideMeshAndLabels(mesh); });
+
+          // Ensuite, appliquer les positions du backend à chaque mesh par index
           objs.forEach((mesh, objIdx) => {
             if (dragObj !== null && objIdx === dragObj) return;
             const p = posMap.get(objIdx);
             if (p) {
-              mesh.position.set(p.x, p.y, p.z);
-              mesh.visible = true;
+              const [tx, ty, tz] = toThree(p.x, p.y, p.z);
+              mesh.position.set(tx, ty, tz);
+              showMeshAndLabels(mesh);
               const mat = mesh.material as THREE.MeshStandardMaterial;
 
               // Couleur d'origine : couleur hol de la track, ou HSL par défaut
@@ -296,8 +375,9 @@ export function useRenderLoop({
               const manualPos = manualPositionsRef.current;
               const mp = manualPos[objIdx];
               if (mp) {
-                mesh.position.set(mp[0], mp[1], mp[2]);
-                mesh.visible = true;
+                const [tx, ty, tz] = toThree(mp[0], mp[1], mp[2]);
+                mesh.position.set(tx, ty, tz);
+                showMeshAndLabels(mesh);
               }
               const mat = mesh.material as THREE.MeshStandardMaterial;
               // Couleur hol ou HSL par défaut
@@ -312,19 +392,31 @@ export function useRenderLoop({
               mat.transparent = false;
             }
           });
+        } else {
+          // globalPos est undefined (moves en cours de stop, positions pas encore arrivées)
+          // Cacher tous les meshes pour éviter les labels orphelins sur la dernière trajectoire
+          objs.forEach((mesh) => { hideMeshAndLabels(mesh); });
         }
       } else {
-        // ── Mode statique : aucun move actif, utiliser manualPositions ──
-        // Pas de calcul de trajectoire — juste les positions manuelles (drag, .hol, cercle)
+        // ── Mode statique : aucun move actif ──
+        // Les hol markers (anneaux + labels "TrackName (#19)") suffisent pour
+        // afficher les positions .hol. Les sphères objets ne sont montrées
+        // qu'en manipulate mode (pour le drag) ou assign mode (pour la sélection).
         const manualPos = manualPositionsRef.current;
-        objs.forEach((mesh, i) => {
-          if (dragObj !== null && i === dragObj) return;
-          const p = manualPos[i];
-          if (p) {
-            mesh.position.set(p[0], p[1], p[2]);
-            mesh.visible = true;
-          }
-        });
+        const manipMode = manipulateModeRef.current;
+        const asgnMode = assignModeRef.current;
+        objs.forEach((mesh) => { hideMeshAndLabels(mesh); });
+        if (manipMode || asgnMode) {
+          objs.forEach((mesh, i) => {
+            if (dragObj !== null && i === dragObj) return;
+            const p = manualPos[i];
+            if (p) {
+              const [tx, ty, tz] = toThree(p[0], p[1], p[2]);
+              mesh.position.set(tx, ty, tz);
+              showMeshAndLabels(mesh);
+            }
+          });
+        }
       }
 
       // Hol markers font face à la caméra (billboard)
@@ -340,12 +432,14 @@ export function useRenderLoop({
         }
         if (pos.length > 0) {
           // Les positions sont déjà transformées par le backend — pas de macros frontend
-          const transform = (p: { x: number; y: number; z: number }) =>
-            new THREE.Vector3(p.x, p.y, p.z);
+          const transform = (p: { x: number; y: number; z: number }) => {
+            const [tx, ty, tz] = toThree(p.x, p.y, p.z);
+            return new THREE.Vector3(tx, ty, tz);
+          };
 
           const cx = pos.reduce((s, p) => s + p.x, 0) / pos.length;
-          const cy = pos.reduce((s, p) => s + p.y, 0) / pos.length;
-          const cz = pos.reduce((s, p) => s + p.z, 0) / pos.length;
+          const cy = pos.reduce((s, p) => s + p.z, 0) / pos.length; // z=up → y
+          const cz = pos.reduce((s, p) => s + p.y, 0) / pos.length; // y=depth → z
           handleRef.current.position.set(cx, cy, cz);
 
           // Mise à jour de la trajectory line — seulement si les positions ont changé
@@ -362,62 +456,61 @@ export function useRenderLoop({
         }
       }
 
-      // Rendu de la trajectory dessinée sur le canvas 2D overlay
-      // Skip si rien n'a changé (drawnPoints + caméra) — évite le redraw à chaque frame
+      // Rendu de la trajectory dessinée — ligne 3D dans la scène (bouge avec la caméra)
       const drawCanvas = drawCanvasRef.current;
       const drawnPts = drawnPointsRef.current;
-      if (drawCanvas && drawnPts.length >= 2) {
-        // Check si la caméra a bougé ou les points ont changé
-        const camKey = camera.position.x + ',' + camera.position.y + ',' + camera.position.z + ',' + camera.rotation.x + ',' + camera.rotation.y;
-        const ptsKey = drawnPts.length + ':' + (drawnPts[0]?.[0] ?? 0);
-        const fullKey = camKey + '|' + ptsKey;
-        if (lastDrawnKeyRef.current === fullKey) {
-          // Rien n'a changé — skip le redraw
-        } else {
-          lastDrawnKeyRef.current = fullKey;
+      if (drawCanvas) {
+        // Toujours clearer le canvas 2D overlay — le spline est rendu en 3D maintenant
         const ctx = drawCanvas.getContext('2d');
         if (ctx) {
-          const dpr = window.devicePixelRatio || 1;
           const rect = drawCanvas.getBoundingClientRect();
-          if (drawCanvas.width !== rect.width * dpr || drawCanvas.height !== rect.height * dpr) {
-            drawCanvas.width = rect.width * dpr;
-            drawCanvas.height = rect.height * dpr;
-            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-          }
           ctx.clearRect(0, 0, rect.width, rect.height);
-          ctx.strokeStyle = '#ff8800';
-          ctx.lineWidth = 3;
-          ctx.lineCap = 'round';
-          ctx.lineJoin = 'round';
-          ctx.shadowColor = '#ff8800';
-          ctx.shadowBlur = 10;
-          ctx.beginPath();
-          const projVec = tmpVecRef.current;
-          let first = true;
-          for (const p of drawnPointsRef.current) {
-            projVec.set(p[0], p[1], p[2]).project(camera);
-            const sx = ((projVec.x + 1) / 2) * rect.width;
-            const sy = ((-projVec.y + 1) / 2) * rect.height;
-            if (first) { ctx.moveTo(sx, sy); first = false; }
-            else ctx.lineTo(sx, sy);
-          }
-          ctx.stroke();
-          ctx.shadowBlur = 0;
-
-          // Draw start point marker (reuse projVec)
-          projVec.set(drawnPointsRef.current[0][0], drawnPointsRef.current[0][1], drawnPointsRef.current[0][2]).project(camera);
-          const startX = ((projVec.x + 1) / 2) * rect.width;
-          const startY = ((-projVec.y + 1) / 2) * rect.height;
-          ctx.fillStyle = '#ffaa00';
-          ctx.beginPath();
-          ctx.arc(startX, startY, 6, 0, Math.PI * 2);
-          ctx.fill();
         }
-        } // end else (redraw needed)
+      }
+      // Rendu 3D du spline dessiné via une ligne dans la scène
+      const ptsKey = drawnPts.length + ':' + (drawnPts[0]?.[0] ?? 0);
+      if (lastDrawnKeyRef.current !== ptsKey) {
+        lastDrawnKeyRef.current = ptsKey;
+        // Retirer l'ancienne ligne de spline
+        const oldLine = scene.getObjectByName('__drawSplineLine') as THREE.Line | undefined;
+        if (oldLine) {
+          scene.remove(oldLine);
+          oldLine.geometry.dispose();
+          (oldLine.material as THREE.Material).dispose();
+        }
+        if (drawnPts.length >= 2) {
+          const linePoints = drawnPts.map((p) => {
+            const [tx, ty, tz] = toThree(p[0], p[1], p[2]);
+            return new THREE.Vector3(tx, ty, tz);
+          });
+          const geom = new THREE.BufferGeometry().setFromPoints(linePoints);
+          const mat = new THREE.LineBasicMaterial({ color: 0xff8800, linewidth: 3 });
+          const line = new THREE.Line(geom, mat);
+          line.name = '__drawSplineLine';
+          scene.add(line);
+          // Marqueur de point de départ
+          const startGeom = new THREE.SphereGeometry(0.08, 16, 16);
+          const startMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+          const startMarker = new THREE.Mesh(startGeom, startMat);
+          startMarker.name = '__drawSplineStart';
+          startMarker.position.copy(linePoints[0]);
+          scene.add(startMarker);
+        }
       }
 
+      // Timing précis des phases du render loop
+      const t0 = performance.now();
       renderer.render(scene, camera);
+      const t1 = performance.now();
       labelRenderer.render(scene, camera);
+      const t2 = performance.now();
+      // Mettre à jour debugPerf avec le timing
+      const dp = (window as any).__debugPerf;
+      if (dp) {
+        dp.glMs = t1 - t0;
+        dp.labelMs = t2 - t1;
+      }
+      animateTotalMs = performance.now() - animateStart;
     };
     animate();
 
@@ -445,6 +538,19 @@ export function useRenderLoop({
         trajectoryLineRef.current.geometry.dispose();
         (trajectoryLineRef.current.material as THREE.Material).dispose();
         trajectoryLineRef.current = null;
+      }
+      // Cleanup draw spline line + start marker
+      const drawLine = scene.getObjectByName('__drawSplineLine') as THREE.Line | undefined;
+      if (drawLine) {
+        scene.remove(drawLine);
+        drawLine.geometry.dispose();
+        (drawLine.material as THREE.Material).dispose();
+      }
+      const drawStart = scene.getObjectByName('__drawSplineStart') as THREE.Mesh | undefined;
+      if (drawStart) {
+        scene.remove(drawStart);
+        drawStart.geometry.dispose();
+        (drawStart.material as THREE.Material).dispose();
       }
       renderer.dispose();
       // CSS2DRenderer has no dispose() — just remove the DOM element

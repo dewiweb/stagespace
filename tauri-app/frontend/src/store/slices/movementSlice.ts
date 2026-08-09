@@ -12,6 +12,11 @@ export interface SavedGraph {
   name: string;
 }
 
+/// Objet mutable hors-store pour les positions à 60 FPS.
+/// Évite les re-renders React massifs quand setMovementPositions est appelé 60x/seconde.
+/// Le render loop lit via storeState.movementPositions (référence stable vers cet objet).
+const _movementPositionsExternal: Record<string, Array<{ index: number; x: number; y: number; z: number }>> = {};
+
 export interface MovementSlice {
   // Multi-movement: plusieurs runtimes parallèles
   movements: MovementInfo[];
@@ -19,6 +24,7 @@ export interface MovementSlice {
   /// Graphes sauvegardés par movementId — pour le [edit] dans le panneau Moves
   savedGraphs: Record<string, SavedGraph>;
   setMovementPositions: (movementId: string, positions: Array<{ index: number; x: number; y: number; z: number }>) => void;
+  clearMovementPositions: () => void;
   playMovement: (name: string, trackIndices: number[], isPreview: boolean, oscAddress: string, oscPort: number, oscProfile: string) => Promise<string | null>;
   stopMovement: (movementId: string) => Promise<void>;
   stopMovementWithFade: (movementId: string, fadeDuration: number) => Promise<void>;
@@ -41,11 +47,17 @@ type MovementStore = MovementSlice & {
 
 export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSlice> = (set, get) => ({
   movements: [],
-  movementPositions: {},
+  // Référence stable vers l'objet mutable — pas de set() à 60 FPS
+  movementPositions: _movementPositionsExternal,
   savedGraphs: {},
 
-  setMovementPositions: (movementId, positions) =>
-    set((s) => ({ movementPositions: { ...s.movementPositions, [movementId]: positions } })),
+  setMovementPositions: (movementId, positions) => {
+    // Mutation directe — pas de set() pour éviter 60 re-renders/seconde
+    _movementPositionsExternal[movementId] = positions;
+  },
+  clearMovementPositions: () => {
+    for (const k of Object.keys(_movementPositionsExternal)) delete _movementPositionsExternal[k];
+  },
 
   playMovement: async (name, trackIndices, isPreview, _oscAddress, _oscPort, _oscProfile) => {
     const { nodes, edges, holProject, manualOscIds } = get();
@@ -94,12 +106,13 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
   stopMovement: async (movementId) => {
     try {
       await invoke('deactivate_move', { movementId, fadeDuration: 0.0 });
+      // Nettoyer l'objet mutable directement (pas de set())
+      delete _movementPositionsExternal[movementId];
+      delete _movementPositionsExternal['global'];
       set((s) => {
-        const newPositions = { ...s.movementPositions };
-        delete newPositions[movementId];
         const newSaved = { ...s.savedGraphs };
         delete newSaved[movementId];
-        return { movementPositions: newPositions, savedGraphs: newSaved };
+        return { savedGraphs: newSaved };
       });
       // Fire-and-forget : le movementId du slot est déjà cleared,
       // refreshMovements sert seulement à mettre à jour le panneau d'inspection
@@ -113,12 +126,12 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
   stopMovementWithFade: async (movementId, fadeDuration) => {
     try {
       await invoke('deactivate_move', { movementId, fadeDuration });
+      delete _movementPositionsExternal[movementId];
+      delete _movementPositionsExternal['global'];
       set((s) => {
-        const newPositions = { ...s.movementPositions };
-        delete newPositions[movementId];
         const newSaved = { ...s.savedGraphs };
         delete newSaved[movementId];
-        return { movementPositions: newPositions, savedGraphs: newSaved };
+        return { savedGraphs: newSaved };
       });
       get().refreshMovements();
     } catch (e) {
@@ -130,7 +143,9 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
   stopAllMovements: async () => {
     try {
       await invoke('deactivate_all_moves', { fadeDuration: 0.0 });
-      set({ movementPositions: {}, savedGraphs: {} });
+      // Vider l'objet mutable
+      for (const k of Object.keys(_movementPositionsExternal)) delete _movementPositionsExternal[k];
+      set({ savedGraphs: {} });
       get().refreshMovements();
     } catch (e) {
       console.error('Failed to stop all movements:', e);
@@ -140,6 +155,7 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
   refreshMovements: async () => {
     try {
       const movements = await invoke<MovementInfo[]>('list_active_moves');
+      console.log(`[DBG-refreshMovements] ${movements.length} movements:`, movements.map(m => `${m.name}(${m.osc_ids?.length ?? 0}ids,playing=${m.is_playing})`).join(', '));
       set({ movements });
     } catch (e) {
       console.error('Failed to list movements:', e);

@@ -44,18 +44,22 @@ type HolProjectStore = HolProjectSlice & {
 
 // Génère des positions en cercle pour n objets (radius adaptatif)
 function defaultCirclePositions(n: number): Record<number, [number, number, number]> {
-  const radius = n <= 4 ? 1.5 : n <= 8 ? 2.0 : 2.5;
+  const radius = n <= 4 ? 1.5 : n <= 8 ? 2.0 : n <= 16 ? 3.0 : n <= 32 ? 4.0 : 5.0;
   const positions: Record<number, [number, number, number]> = {};
   for (let i = 0; i < n; i++) {
     const angle = (i / n) * Math.PI * 2;
+    // Backend coords: x=right, y=depth, z=up. Cercle horizontal → z=0
     positions[i] = [
       Math.cos(angle) * radius,
-      0,
       Math.sin(angle) * radius,
+      0,
     ];
   }
   return positions;
 }
+
+/// Nombre de tracks virtuels par défaut quand pas de projet .hol
+const DEFAULT_TRACK_COUNT = 64;
 
 /// Sync inverse : quand selectedTrackIds change (via Inspector/TrackGrid),
 /// mettre à jour les tracks du slot édité pour garder l'UI synchronisée.
@@ -105,13 +109,14 @@ export const createHolProjectSlice: StateCreator<HolProjectStore, [], [], HolPro
     invoke('set_track_positions', { positions: {} }).catch(() => {});
   },
 
-  // Track selection — tous sélectionnés par défaut (cohérent avec getSelectedOscIds)
-  selectedTrackIds: new Set<number>([1, 2, 3, 4, 5, 6, 7, 8, 9]),
-  manualOscIds: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+  // Track selection — pool de tracks virtuels (1..DEFAULT_TRACK_COUNT)
+  // Pas de projet .hol → on offre un pool généreux, tous sélectionnés par défaut
+  selectedTrackIds: new Set<number>(Array.from({ length: DEFAULT_TRACK_COUNT }, (_, i) => i + 1)),
+  manualOscIds: Array.from({ length: DEFAULT_TRACK_COUNT }, (_, i) => i + 1),
   setManualOscIds: (ids) => set({ manualOscIds: ids }),
 
-  // Manual positions — cercle par défaut pour 9 objets
-  manualPositions: defaultCirclePositions(9),
+  // Manual positions — cercle par défaut
+  manualPositions: defaultCirclePositions(DEFAULT_TRACK_COUNT),
   setManualPosition: (index, pos) =>
     set((s) => ({ manualPositions: { ...s.manualPositions, [index]: pos } })),
   setManualPositions: (positions) => set({ manualPositions: positions }),

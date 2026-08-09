@@ -96,6 +96,12 @@ export default function Inspector() {
   const mainEngineSchema = mainEngineType ? PARAM_SCHEMA[mainEngineType] ?? [] : [];
   const mainEngineParams = (mainEngineNode?.data as any)?.params ?? {};
 
+  // DrawSpline node pour la Spline Library (présent dans les graphs spline)
+  const drawSplineNode = React.useMemo(() =>
+    nodes.find((n) => (n.data as any)?.type === 'DrawSpline'),
+    [nodes]
+  );
+
   // Handler pour update un param du node engine principal + hot-swap
   const updateEngineParam = (key: string, value: any) => {
     if (!mainEngineNode) return;
@@ -402,6 +408,18 @@ export default function Inspector() {
                     : 'Aucun engine détecté dans le graphe. Choisissez un template dans le panneau gauche.'}
                 </div>
               )}
+
+              {/* Spline Library — visible quand le graphe contient un DrawSpline */}
+              {drawSplineNode && (
+                <InspectorSplineLibrary
+                  drawSplineNode={drawSplineNode}
+                  onUpdate={(points) => {
+                    updateNodeData(drawSplineNode.id, { params: { points } });
+                    if (macroDebounce.current) clearTimeout(macroDebounce.current);
+                    macroDebounce.current = setTimeout(() => { updateGraphLive(); }, 150);
+                  }}
+                />
+              )}
             </Section>
 
             {/* PERFORM — duration, direction, loop, fade */}
@@ -670,6 +688,105 @@ function AudioModAdder({ onAdd, onCancel }: { onAdd: (mod: AudioMod) => void; on
           ✕
         </button>
       </div>
+    </div>
+  );
+}
+
+// ── InspectorSplineLibrary ──────────────────────────────────────────────────
+// Section Spline Library pour l'Inspector (mode Simple, tab Params)
+function InspectorSplineLibrary({ drawSplineNode, onUpdate }: {
+  drawSplineNode: any;
+  onUpdate: (points: string) => void;
+}) {
+  const savedSplines = useGraphStore((s) => s.savedSplines);
+  const saveSpline = useGraphStore((s) => s.saveSpline);
+  const deleteSpline = useGraphStore((s) => s.deleteSpline);
+  const [showSave, setShowSave] = React.useState(false);
+  const [splineName, setSplineName] = React.useState('');
+
+  const currentPoints = (drawSplineNode?.data as any)?.params?.points ?? '';
+
+  const handleSave = () => {
+    const name = splineName.trim() || `Spline ${new Date().toLocaleTimeString()}`;
+    saveSpline(name, currentPoints);
+    setSplineName('');
+    setShowSave(false);
+  };
+
+  const handleLoad = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const splineId = e.target.value;
+    if (!splineId) return;
+    const spline = savedSplines.find((s) => s.id === splineId);
+    if (spline) onUpdate(spline.points);
+    e.target.value = '';
+  };
+
+  return (
+    <div className="mt-3 pt-2 border-t border-gray-700/50 space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="text-cyan-400 text-[10px] font-mono font-semibold">SPLINE LIBRARY</span>
+        <span className="text-gray-600 text-[9px]">{savedSplines.length} sauvée{savedSplines.length > 1 ? 's' : ''}</span>
+      </div>
+
+      {/* Charger depuis la bibliothèque */}
+      {savedSplines.length > 0 && (
+        <select
+          onChange={handleLoad}
+          defaultValue=""
+          className="w-full px-2 py-1.5 bg-gray-900 text-cyan-300 text-[10px] font-mono rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
+        >
+          <option value="" disabled>↳ Charger une spline...</option>
+          {savedSplines.map((s) => (
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
+        </select>
+      )}
+
+      {/* Liste des splines sauvegardées */}
+      {savedSplines.length > 0 && (
+        <div className="space-y-0.5 max-h-32 overflow-y-auto">
+          {savedSplines.map((s) => (
+            <div key={s.id} className="flex items-center justify-between text-[10px] py-0.5">
+              <button
+                onClick={() => onUpdate(s.points)}
+                className="text-gray-400 hover:text-cyan-300 font-mono truncate flex-1 text-left"
+                title="Charger cette spline"
+              >{s.name}</button>
+              <button
+                onClick={() => deleteSpline(s.id)}
+                className="text-red-500 hover:text-red-400 px-1 flex-shrink-0"
+                title="Supprimer"
+              >✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Sauvegarder la spline actuelle */}
+      {showSave ? (
+        <div className="flex gap-1">
+          <input
+            type="text"
+            value={splineName}
+            onChange={(e) => setSplineName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setShowSave(false); }}
+            placeholder="Nom de la spline..."
+            autoFocus
+            className="flex-1 px-2 py-1.5 bg-gray-900 text-white text-[10px] rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
+          />
+          <button onClick={handleSave}
+            className="text-green-400 hover:text-green-300 text-xs px-2" title="Confirmer">✓</button>
+          <button onClick={() => setShowSave(false)}
+            className="text-gray-500 hover:text-gray-400 text-xs px-2" title="Annuler">✕</button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setShowSave(true)}
+          className="w-full text-[10px] text-cyan-400 hover:text-cyan-300 border border-cyan-800/60 hover:border-cyan-600 rounded py-1.5 transition-colors"
+        >
+          + Sauvegarder cette spline
+        </button>
+      )}
     </div>
   );
 }

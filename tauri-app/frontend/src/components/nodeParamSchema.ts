@@ -189,13 +189,8 @@ export const PARAM_SCHEMA: Partial<Record<NodeType, ParamDef[]>> = {
   // Splines
   DrawSpline: [
     { key: 'points', label: 'Points', type: 'text' },
-    { key: 'closed', label: 'Closed', type: 'boolean' },
-    { key: 'tension', label: 'Tension', type: 'number', step: 0.1, min: 0, max: 1 },
-    { key: 'speed', label: 'Speed', type: 'number', step: 0.1 },
-    { key: 'phase_offset', label: 'Phase Offset', type: 'boolean' },
   ],
   EvaluateSpline: [
-    { key: 'points', label: 'Points', type: 'text' },
     { key: 'closed', label: 'Closed', type: 'boolean' },
     { key: 'tension', label: 'Tension', type: 'number', step: 0.1, min: 0, max: 1 },
     { key: 'speed', label: 'Speed', type: 'number', step: 0.1 },
@@ -441,8 +436,8 @@ export function getDefaultParams(type: NodeType): Record<string, any> {
     Elliptical: { a: 0.8, b: 0.4, speed: 1.0, plane: 'xy', phase_offset: true },
     RoseCurve: { radius: 0.8, n_petals: 4, speed: 1.0, plane: 'xy', phase_offset: true },
     Helix: { radius: 0.7, height: 1.6, turns: 3.0, speed: 1.0, phase_offset: true },
-    DrawSpline: { points: '[[-0.5,0,0],[0,0.5,0],[0.5,0,0]]', closed: false, tension: 0.5, speed: 1.0, phase_offset: true },
-    EvaluateSpline: { points: '[[-0.5,0,0],[0,0.5,0],[0.5,0,0]]', closed: false, tension: 0.5, speed: 1.0, phase_offset: true },
+    DrawSpline: { points: '[[-0.5,0,0],[0,0.5,0],[0.5,0,0]]' },
+    EvaluateSpline: { closed: false, tension: 0.5, speed: 1.0, phase_offset: true },
     TrimSpline: { points: '[[-0.5,0,0],[0,0.5,0],[0.5,0,0]]', trim_start: 0.0, trim_end: 1.0, speed: 1.0, phase_offset: true },
     OffsetSpline: { points: '[[-0.5,0,0],[0,0.5,0],[0.5,0,0]]', offset_x: 0, offset_y: 0, offset_z: 0, speed: 1.0, phase_offset: true },
     DirectionalFalloff: { direction: [0, 0, 1], max_distance: 1.0, curve: 'linear' },

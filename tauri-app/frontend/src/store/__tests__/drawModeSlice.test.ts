@@ -61,42 +61,55 @@ describe('finalizeDrawing', () => {
     expect(result).toBeNull();
   });
 
-  it('creates DrawSpline + Output nodes when >= 3 points', async () => {
+  it('updates existing DrawSpline node with drawn points', async () => {
+    // Préparer un graphe avec un node DrawSpline existant
+    const drawSplineId = 'draw-spline-test';
     useGraphStore.setState({
       drawnPoints: [[0, 0, 0], [1, 0, 0], [2, 0, 0], [1, 1, 0]],
-      nodes: [],
+      nodes: [
+        { id: drawSplineId, type: 'custom', position: { x: 0, y: 0 }, data: { type: 'DrawSpline', params: { points: '[[0,0,0]]' } } },
+      ],
       edges: [],
     } as any);
 
     const result = await useGraphStore.getState().finalizeDrawing();
 
-    expect(result).not.toBeNull();
-    expect(typeof result).toBe('string');
+    expect(result).toBe(drawSplineId);
 
     const nodes = useGraphStore.getState().nodes;
     const drawSplineNode = nodes.find((n: any) => (n.data as any)?.type === 'DrawSpline');
-    const outputNode = nodes.find((n: any) => (n.data as any)?.type === 'Output');
-
     expect(drawSplineNode).toBeDefined();
-    expect(outputNode).toBeDefined();
-
-    // Check edge DrawSpline → Output
-    const edges = useGraphStore.getState().edges;
-    const edge = edges.find((e: any) => e.source === drawSplineNode!.id && e.target === outputNode!.id);
-    expect(edge).toBeDefined();
+    // Les points doivent avoir été mis à jour
+    const points = (drawSplineNode!.data as any).params.points;
+    expect(points).toBeDefined();
+    const parsed = JSON.parse(points);
+    expect(parsed.length).toBeGreaterThanOrEqual(3);
   });
 
-  it('clears drawnPoints and disables drawMode after finalization', async () => {
+  it('returns null when no DrawSpline node exists', async () => {
+    useGraphStore.setState({
+      drawnPoints: [[0, 0, 0], [1, 0, 0], [2, 0, 0]],
+      nodes: [],
+      edges: [],
+    } as any);
+
+    const result = await useGraphStore.getState().finalizeDrawing();
+    expect(result).toBeNull();
+  });
+
+  it('disables drawMode after finalization', async () => {
+    const drawSplineId = 'draw-spline-test2';
     useGraphStore.setState({
       drawnPoints: [[0, 0, 0], [1, 0, 0], [2, 0, 0]],
       drawMode: true,
-      nodes: [],
+      nodes: [
+        { id: drawSplineId, type: 'custom', position: { x: 0, y: 0 }, data: { type: 'DrawSpline', params: { points: '[[0,0,0]]' } } },
+      ],
       edges: [],
     } as any);
 
     await useGraphStore.getState().finalizeDrawing();
 
-    expect((useGraphStore.getState() as any).drawnPoints).toEqual([]);
     expect((useGraphStore.getState() as any).drawMode).toBe(false);
   });
 });

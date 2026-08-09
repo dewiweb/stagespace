@@ -347,7 +347,7 @@ export default function MovesTable() {
                       <div className="flex items-center gap-0.5 justify-center">
                         {/* Preview/Live toggle */}
                         <button
-                          onClick={() => toggleSlotPreview(slot.id)}
+                          onClick={(e) => { e.stopPropagation(); toggleSlotPreview(slot.id); }}
                           className={`text-[9px] px-1 rounded transition-colors ${
                             slot.isPreview
                               ? 'bg-cyan-900/50 text-cyan-300 hover:bg-cyan-800/60'
@@ -358,19 +358,19 @@ export default function MovesTable() {
                         {isPlaying ? (
                           <>
                             <button
-                              onClick={() => stopSlotWithFade(slot.id, 1.0)}
+                              onClick={(e) => { e.stopPropagation(); stopSlotWithFade(slot.id, 1.0); }}
                               className="text-yellow-400 hover:text-yellow-300 text-[10px] px-1 rounded hover:bg-yellow-900/30"
                               title="Stop avec fade 1s"
                             >◆</button>
                             <button
-                              onClick={() => stopSlot(slot.id)}
+                              onClick={(e) => { e.stopPropagation(); stopSlot(slot.id); }}
                               className="text-red-400 hover:text-red-300 text-[10px] px-1 rounded hover:bg-red-900/30"
                               title="Stop immédiat"
                             >■</button>
                           </>
                         ) : (
                           <button
-                            onClick={() => playSlot(slot.id)}
+                            onClick={(e) => { e.stopPropagation(); playSlot(slot.id); }}
                             className={`text-[10px] px-1.5 rounded hover:bg-green-900/30 font-bold ${
                               slot.isPreview ? 'text-cyan-400 hover:text-cyan-300' : 'text-green-400 hover:text-green-300'
                             }`}
@@ -378,7 +378,8 @@ export default function MovesTable() {
                           >▶</button>
                         )}
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             editSlotGraph(slot.id);
                             if (!showExpert) setShowExpert(true);
                           }}
@@ -387,7 +388,7 @@ export default function MovesTable() {
                         >✎</button>
                         {isPlaying && (
                           <button
-                            onClick={() => saveEditorToSlot(slot.id)}
+                            onClick={(e) => { e.stopPropagation(); saveEditorToSlot(slot.id); }}
                             className="text-orange-400 hover:text-orange-300 text-[9px] px-1 rounded hover:bg-orange-900/30"
                             title="Hot-swap : appliquer le graphe modifié au move en cours"
                           >⟳</button>

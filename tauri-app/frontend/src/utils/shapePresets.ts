@@ -373,17 +373,12 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     build: (n) => {
       const objects = makeNode('Objects', { x: 50, y: 250 }, { n_objects: n });
       const duration = makeNode('Duration', { x: 50, y: 80 }, { duration: 6.0 });
-      const drawSpline = makeNode('DrawSpline', { x: 300, y: 120 }, {
+      const drawSpline = makeNode('DrawSpline', { x: 300, y: 50 }, {
         n_objects: n,
         points: '[[-2,0,0],[-1,1,0],[0,0.5,0],[1,1,0],[2,0,0]]',
-        closed: false,
-        tension: 0.5,
-        speed: 1.0,
-        phase_offset: true,
       });
-      const evalSpline = makeNode('EvaluateSpline', { x: 550, y: 120 }, {
+      const evalSpline = makeNode('EvaluateSpline', { x: 550, y: 180 }, {
         n_objects: n,
-        points: '[[-2,0,0],[-1,1,0],[0,0.5,0],[1,1,0],[2,0,0]]',
         closed: false,
         tension: 0.5,
         speed: 1.0,
@@ -395,6 +390,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
         edges: [
           makeEdge(objects.id, evalSpline.id, 'output', 'input'),
           makeEdge(duration.id, evalSpline.id, 'output', 'duration'),
+          makeEdge(drawSpline.id, evalSpline.id, 'output', 'input'),
           makeEdge(evalSpline.id, output.id, 'output', 'input'),
         ],
       };

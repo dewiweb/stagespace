@@ -281,6 +281,16 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
               )}
             </div>
           )}
+          {data.type === 'DrawSpline' && (
+            <SplineLibraryControls nodeId={id} currentPoints={data.params?.points ?? ''} />
+          )}
+        </div>
+      )}
+
+      {/* DrawSpline quand collapsed : bibliothèque toujours visible */}
+      {data.type === 'DrawSpline' && !expanded && (
+        <div className="px-3 py-1.5 border-t border-gray-700">
+          <SplineLibraryControls nodeId={id} currentPoints={data.params?.points ?? ''} />
         </div>
       )}
 
@@ -366,5 +376,108 @@ const MiniBar: React.FC<{ label: string; value: number; color: string }> = ({ la
     <span className="text-gray-600 text-[8px] font-mono w-6 text-right">{(value * 100).toFixed(0)}</span>
   </div>
 );
+
+// ── SplineLibraryControls ──────────────────────────────────────────────────
+// Bouton sauvegarder + dropdown charger pour les nodes DrawSpline.
+const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }> = ({
+  nodeId,
+  currentPoints,
+}) => {
+  const savedSplines = useGraphStore((s) => s.savedSplines);
+  const saveSpline = useGraphStore((s) => s.saveSpline);
+  const deleteSpline = useGraphStore((s) => s.deleteSpline);
+  const updateNodeData = useGraphStore((s) => s.updateNodeData);
+  const [showSave, setShowSave] = useState(false);
+  const [splineName, setSplineName] = useState('');
+
+  const handleSave = () => {
+    const name = splineName.trim() || `Spline ${new Date().toLocaleTimeString()}`;
+    saveSpline(name, currentPoints);
+    setSplineName('');
+    setShowSave(false);
+  };
+
+  const handleLoad = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const splineId = e.target.value;
+    if (!splineId) return;
+    const spline = savedSplines.find((s) => s.id === splineId);
+    if (spline) {
+      updateNodeData(nodeId, { params: { points: spline.points } });
+    }
+    e.target.value = '';
+  };
+
+  const handleDelete = (splineId: string) => {
+    deleteSpline(splineId);
+  };
+
+  return (
+    <div className="mt-2 pt-2 border-t border-gray-700 space-y-1.5">
+      <label className="text-cyan-400 text-[10px] font-mono">Spline Library</label>
+
+      {/* Charger depuis la bibliothèque */}
+      {savedSplines.length > 0 && (
+        <select
+          onChange={handleLoad}
+          defaultValue=""
+          className="w-full px-2 py-1 bg-gray-900 text-cyan-300 text-[10px] font-mono rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
+        >
+          <option value="" disabled>Charger une spline...</option>
+          {savedSplines.map((s) => (
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
+        </select>
+      )}
+
+      {/* Liste des splines sauvegardées avec bouton delete */}
+      {savedSplines.length > 0 && (
+        <div className="space-y-0.5 max-h-24 overflow-y-auto">
+          {savedSplines.map((s) => (
+            <div key={s.id} className="flex items-center justify-between text-[9px]">
+              <span className="text-gray-400 font-mono truncate flex-1">{s.name}</span>
+              <button
+                onClick={() => handleDelete(s.id)}
+                className="text-red-500 hover:text-red-400 px-1"
+                title="Supprimer"
+              >✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Sauvegarder la spline actuelle */}
+      {showSave ? (
+        <div className="flex gap-1">
+          <input
+            type="text"
+            value={splineName}
+            onChange={(e) => setSplineName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setShowSave(false); }}
+            placeholder="Nom de la spline..."
+            autoFocus
+            className="flex-1 px-2 py-1 bg-gray-900 text-white text-[10px] rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
+          />
+          <button
+            onClick={handleSave}
+            className="text-green-400 hover:text-green-300 text-[10px] px-2"
+            title="Confirmer"
+          >✓</button>
+          <button
+            onClick={() => setShowSave(false)}
+            className="text-gray-500 hover:text-gray-400 text-[10px] px-2"
+            title="Annuler"
+          >✕</button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setShowSave(true)}
+          className="w-full text-[10px] text-cyan-400 hover:text-cyan-300 border border-cyan-800 hover:border-cyan-600 rounded py-1"
+        >
+          + Sauvegarder cette spline
+        </button>
+      )}
+    </div>
+  );
+};
 
 export default CustomNode;
