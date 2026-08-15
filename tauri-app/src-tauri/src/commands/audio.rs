@@ -1,15 +1,8 @@
 use crate::AppState;
 use stagespace_engines::AudioState;
-use std::sync::{Mutex, MutexGuard};
+use super::state::lock_or_recover;
 use tauri::State;
 
-/// Récupère le contenu d'un Mutex même s'il est empoisonné (poison recovery).
-fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(|e| {
-        eprintln!("[WARN] Mutex was poisoned, recovering inner data: {e}");
-        e.into_inner()
-    })
-}
 #[tauri::command]
 pub async fn update_audio_state(
     state: State<'_, AppState>,

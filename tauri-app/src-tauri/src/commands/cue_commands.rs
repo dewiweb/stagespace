@@ -7,12 +7,8 @@ use crate::graph::parser::build_graph_from_json;
 use crate::AppState;
 use serde::Deserialize;
 use stagespace_engines::{Cue, MacroSnapshot, SpatialMacroSnapshot};
-use std::sync::{Mutex, MutexGuard};
+use super::state::lock_or_recover;
 use tauri::{Emitter, State};
-
-fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(|e| e.into_inner())
-}
 
 // ─── Store Cue ───
 

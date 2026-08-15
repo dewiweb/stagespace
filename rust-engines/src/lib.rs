@@ -36,8 +36,6 @@ mod graph_tests;
 #[cfg(test)]
 mod integration_tests;
 #[cfg(test)]
-mod runtime_tests;
-#[cfg(test)]
 mod validator_tests;
 
 pub use animation::{
@@ -60,9 +58,8 @@ pub use falloffs::{
 };
 pub use graph::{Edge, Graph, Node, NodeId, NodeType};
 pub use logging::{
-    init_logging, log_audio_error, log_audio_state, log_compilation_error, log_compilation_success,
-    log_graph_compilation, log_osc_error, log_osc_message, log_osc_received, log_playback_start,
-    log_playback_stop, log_runtime_init,
+    init_logging, log_compilation_error, log_compilation_success, log_graph_compilation,
+    log_osc_error, log_osc_message, log_playback_start, log_playback_stop, log_runtime_init,
 };
 pub use merge_runtime::{MergeRuntime, MergeStrategy, MoveState};
 pub use modulator::{ModulationSlot, Modulator, Waveform};

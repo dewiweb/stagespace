@@ -55,21 +55,3 @@ pub fn log_osc_message(address: &str, data_len: usize) {
 pub fn log_osc_error(error: &str) {
     warn!(error, "OSC error occurred");
 }
-
-/// Log la réception d'un message OSC
-#[instrument]
-pub fn log_osc_received(address: &str, handler: &str) {
-    debug!(address, handler, "OSC message received");
-}
-
-/// Log l'état audio
-#[instrument]
-pub fn log_audio_state(bpm: Option<f64>, amplitude: Option<f64>) {
-    debug!(?bpm, ?amplitude, "Audio state updated");
-}
-
-/// Log une erreur audio
-#[instrument]
-pub fn log_audio_error(error: &str) {
-    warn!(error, "Audio error occurred");
-}

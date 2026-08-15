@@ -8,8 +8,7 @@ mod macros;
 mod manual_positions;
 mod move_management;
 
-use std::sync::{Mutex, MutexGuard};
-
+pub use super::state::lock_or_recover;
 pub use graph_updates::{update_global_graph, update_move_graph_merged};
 pub use macros::{
     set_global_macro, set_global_origin, set_global_osc_ids, set_merge_strategy,
@@ -21,14 +20,6 @@ pub use manual_positions::{
 pub use move_management::{
     activate_move, deactivate_all_moves, deactivate_move, get_merge_perf_stats, list_active_moves,
 };
-
-/// Helper : lock un mutex en récupérant du poison si nécessaire
-pub(crate) fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(|e| {
-        eprintln!("[WARN] Mutex was poisoned, recovering inner data: {e}");
-        e.into_inner()
-    })
-}
 
 fn default_duration() -> f64 {
     4.0

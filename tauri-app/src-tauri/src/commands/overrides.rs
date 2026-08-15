@@ -1,15 +1,8 @@
 use crate::AppState;
-use std::sync::{Mutex, MutexGuard};
+use super::state::lock_or_recover;
 use tauri::State;
 
 /// Override la position d'un objet (par index) — l'objet ignore la trajectoire
-/// Récupère le contenu d'un Mutex même s'il est empoisonné (poison recovery).
-fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(|e| {
-        eprintln!("[WARN] Mutex was poisoned, recovering inner data: {e}");
-        e.into_inner()
-    })
-}
 #[tauri::command]
 pub async fn set_object_override(
     obj_index: usize,

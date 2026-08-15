@@ -174,7 +174,7 @@ export function getInputPorts(type: NodeType): string[] {
  * Retourne les ports de sortie valides pour un type de node.
  * Mirror de validator.rs::has_output_port
  */
-export function getOutputPorts(type: NodeType): string[] {
+function getOutputPorts(type: NodeType): string[] {
   switch (type) {
     case 'Output':
       return []; // Output n'a pas de sortie
@@ -189,17 +189,6 @@ export function getOutputPorts(type: NodeType): string[] {
     default:
       return ['output'];
   }
-}
-
-/**
- * Vérifie si un port spécifique existe sur un node.
- */
-export function hasInputPort(type: NodeType, port: string): boolean {
-  return getInputPorts(type).includes(port);
-}
-
-export function hasOutputPort(type: NodeType, port: string): boolean {
-  return getOutputPorts(type).includes(port);
 }
 
 /**

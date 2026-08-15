@@ -29,22 +29,6 @@ export interface MovementInfo {
   cpu_percent: number;
 }
 
-export interface CueInfo {
-  id: string;
-  name: string;
-  description: string;
-  graph: any;
-  timestamp: number;
-  macros?: {
-    speed: number; scale: number;
-    shiftX: number; shiftY: number; shiftZ: number;
-    yaw: number; pitch: number; roll: number;
-  };
-  track_indices?: number[];
-  fade_duration?: number;
-  cue_number?: string;
-}
-
 export interface HolTrack {
   id: number;
   name: string;

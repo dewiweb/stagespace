@@ -5,12 +5,8 @@ import { useGraphStore } from './useGraphStore';
 
 // ── Types miroir du backend ──
 
-// ShapeType est déprécié — tout est un graphe maintenant.
-// Gardé pour la compatibilité avec les animations sauvegardées dans localStorage.
-export type ShapeType = string;
-
-export type Direction = 'forward' | 'backward' | 'ping_pong';
-export type AnimationLoopMode = 'loop' | 'one_shot';
+type Direction = 'forward' | 'backward' | 'ping_pong';
+type AnimationLoopMode = 'loop' | 'one_shot';
 
 export type AudioModSource =
   | 'bpm' | 'amplitude_rms' | 'amplitude_bass'
@@ -39,10 +35,6 @@ export interface TrackAssignment {
 export interface Animation {
   id: string;
   name: string;
-  /** @deprecated — tout est un graphe maintenant, utiliser graph_json */
-  shape?: ShapeType;
-  /** @deprecated — tout est un graphe maintenant, utiliser graph_json */
-  shape_params?: Record<string, number>;
   speed: number;
   duration: number;
   direction: Direction;
