@@ -149,10 +149,6 @@ pub async fn activate_move(
                 request.track_indices.clone(),
                 request.is_preview,
             );
-            eprintln!(
-                "[DBG-ACTIVATE] registered in MergeRuntime id={} osc_ids={:?} track_indices={:?} preview={}",
-                request.movement_id, request.osc_ids, request.track_indices, request.is_preview
-            );
             if let Some(ref origin) = request.origin {
                 merge_rt.set_origin(nalgebra::Vector3::new(origin[0], origin[1], origin[2]));
             }
@@ -208,7 +204,6 @@ pub async fn deactivate_move(
     state: State<'_, AppState>,
 ) -> Result<String, String> {
     let fade = fade_duration.unwrap_or(0.5);
-    eprintln!("[DBG-DEACTIVATE] id={movement_id} fade={fade}");
 
     // 1. Démarrer le fade out dans le MergeRuntime
     {
@@ -291,13 +286,10 @@ pub async fn deactivate_all_moves(
     state: State<'_, AppState>,
 ) -> Result<String, String> {
     let fade = fade_duration.unwrap_or(0.5);
-    eprintln!("[DBG-DEACTIVATE-ALL] fade={fade}");
 
     let move_ids: Vec<String> = {
         let movements = lock_or_recover(&state.movements);
-        let ids: Vec<String> = movements.keys().cloned().collect();
-        eprintln!("[DBG-DEACTIVATE-ALL] moves to deactivate: {ids:?}");
-        ids
+        movements.keys().cloned().collect()
     };
 
     if move_ids.is_empty() {

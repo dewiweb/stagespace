@@ -659,7 +659,7 @@ impl Compiler {
 
         if has_audio {
             // Engine audio — injecte les valeurs audio live dans params.extra
-            let audio_arc = audio.as_ref().unwrap().clone();
+            let audio_arc = audio.as_ref().expect("checked by has_audio").clone();
             Ok(Box::new(move |t: f64, object_index: usize| {
                 let mut live_params = params.clone();
                 if let Some(map) = live_params.extra.as_object_mut() {
@@ -728,12 +728,6 @@ impl Compiler {
                     // tension/closed restent dans EvaluateSpline (interpolation)
                 }
             }
-        }
-
-        // Debug log pour les nodes spline
-        if matches!(node.node_type, NodeType::DrawSpline | NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline) {
-            let pts = extra.get("points").and_then(|v| v.as_str()).unwrap_or("");
-            eprintln!("[DBG-COMPILE] {:?} id={:?} n_objects={} duration={} points_len={} points_preview={}", node.node_type, node.id, n_objects, duration, pts.len(), &pts[..pts.len().min(100)]);
         }
 
         Ok(EngineParams {

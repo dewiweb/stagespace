@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback, MutableRefObject } from 'react';
 import * as THREE from 'three';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke as invoke } from '../utils/tauri';
 import { useGraphStore } from '../store/useGraphStore';
 import { useAnimationStore } from '../store/useAnimationStore';
 

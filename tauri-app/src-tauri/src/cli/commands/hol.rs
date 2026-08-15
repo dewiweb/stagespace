@@ -125,30 +125,30 @@ pub fn cmd_import_hol(args: &[&str]) -> Result<String, String> {
 
     let count = tracks.len();
     let state = cli_state::state();
-    *state.hol_tracks.lock().unwrap() = tracks;
+    *state.hol_tracks.lock().unwrap_or_else(|e| e.into_inner()) = tracks;
 
     // Mettre à jour les OSC IDs
     let osc_ids: Vec<u32> = state
         .hol_tracks
         .lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .iter()
         .map(|t| t.id)
         .collect();
-    *state.manual_osc_ids.lock().unwrap() = osc_ids.clone();
+    *state.manual_osc_ids.lock().unwrap_or_else(|e| e.into_inner()) = osc_ids.clone();
 
     // Pousser les positions des tracks au MergeRuntime (pour Barycenter)
     let positions: std::collections::HashMap<u32, [f64; 3]> = state
         .hol_tracks
         .lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .iter()
         .map(|t| (t.id, t.position))
         .collect();
     state
         .merge_runtime
         .lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .set_track_positions(positions);
 
     Ok(format!("Imported {count} tracks from {file_path}"))
@@ -156,10 +156,10 @@ pub fn cmd_import_hol(args: &[&str]) -> Result<String, String> {
 
 pub fn cmd_list_tracks(_args: &[&str]) -> Result<String, String> {
     let state = cli_state::state();
-    let tracks = state.hol_tracks.lock().unwrap();
+    let tracks = state.hol_tracks.lock().unwrap_or_else(|e| e.into_inner());
 
     if tracks.is_empty() {
-        let osc_ids = state.manual_osc_ids.lock().unwrap();
+        let osc_ids = state.manual_osc_ids.lock().unwrap_or_else(|e| e.into_inner());
         return Ok(format!(
             "No .hol imported. Manual OSC IDs: {}",
             osc_ids

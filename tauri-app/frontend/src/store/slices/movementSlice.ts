@@ -155,7 +155,6 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
   refreshMovements: async () => {
     try {
       const movements = await invoke<MovementInfo[]>('list_active_moves');
-      console.log(`[DBG-refreshMovements] ${movements.length} movements:`, movements.map(m => `${m.name}(${m.osc_ids?.length ?? 0}ids,playing=${m.is_playing})`).join(', '));
       set({ movements });
     } catch (e) {
       console.error('Failed to list movements:', e);

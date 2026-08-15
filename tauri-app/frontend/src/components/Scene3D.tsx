@@ -86,9 +86,6 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
     });
     const fromMoves = maxTrackIdx + 1;
     const result = Math.max(fromGraph, fromProject, fromMoves, 1);
-    // Log détaillé pour debug
-    const mvSummary = movements.map((mv: any) => `${mv.name}:${mv.osc_ids?.length ?? 0}ids`).join(', ');
-    console.log(`[DBG-nObjects] fromGraph=${fromGraph} fromProject=${fromProject} fromMoves=${fromMoves} result=${result} movements=[${mvSummary}]`);
     return result;
   }, [nodes, holProject, movements]);
 

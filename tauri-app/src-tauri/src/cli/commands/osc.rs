@@ -400,7 +400,7 @@ pub fn cmd_osc_validate(args: &[&str]) -> Result<String, String> {
         let profile_enum = OscProfile::from_str(profile)
             .map_err(|e| format!("Invalid OSC profile: {e}"))?;
         let osc_sender = OscSender::new(profile_enum, "127.0.0.1".to_string(), port);
-        let mut merge_rt = state.merge_runtime.lock().unwrap();
+        let mut merge_rt = state.merge_runtime.lock().unwrap_or_else(|e| e.into_inner());
         merge_rt
             .set_osc_target("127.0.0.1".to_string(), port, osc_sender)
             .map_err(|e| format!("Failed to set OSC target: {e:?}"))?;
@@ -409,7 +409,7 @@ pub fn cmd_osc_validate(args: &[&str]) -> Result<String, String> {
     // 3. Activer le move
     let graph_json = graph_presets::build_template_graph(template, n_objects, duration)?;
     let move_id = state.next_move_id("oscval");
-    let audio_state = state.audio_state.lock().unwrap().clone();
+    let audio_state = state.audio_state.lock().unwrap_or_else(|e| e.into_inner()).clone();
     let graph = build_graph_from_json(&graph_json, &audio_state)?;
     let osc_sender = OscSender::default();
     let runtime = Runtime::new("127.0.0.1".to_string(), port, osc_sender)
@@ -449,11 +449,11 @@ pub fn cmd_osc_validate(args: &[&str]) -> Result<String, String> {
     state
         .movements
         .lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .insert(move_id.clone(), movement);
 
     {
-        let merge_rt = state.merge_runtime.lock().unwrap();
+        let merge_rt = state.merge_runtime.lock().unwrap_or_else(|e| e.into_inner());
         merge_rt.register_move(
             move_id.clone(),
             buffer,
@@ -465,7 +465,7 @@ pub fn cmd_osc_validate(args: &[&str]) -> Result<String, String> {
         merge_rt.set_origin(nalgebra::Vector3::new(origin[0], origin[1], origin[2]));
         if !merge_rt.is_running() {
             drop(merge_rt);
-            let mut merge_rt = state.merge_runtime.lock().unwrap();
+            let mut merge_rt = state.merge_runtime.lock().unwrap_or_else(|e| e.into_inner());
             merge_rt
                 .start()
                 .map_err(|e| format!("Failed to start MergeRuntime: {e}"))?;
@@ -477,10 +477,10 @@ pub fn cmd_osc_validate(args: &[&str]) -> Result<String, String> {
 
     // 4. Stopper le move
     {
-        let merge_rt = state.merge_runtime.lock().unwrap();
+        let merge_rt = state.merge_runtime.lock().unwrap_or_else(|e| e.into_inner());
         merge_rt.unregister_move(&move_id);
     }
-    state.movements.lock().unwrap().remove(&move_id);
+    state.movements.lock().unwrap_or_else(|e| e.into_inner()).remove(&move_id);
 
     // 5. Récupérer le rapport du listener
     let report = listener_thread

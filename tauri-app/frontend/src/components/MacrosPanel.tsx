@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke as invoke } from '../utils/tauri';
 import { useGraphStore } from '../store/useGraphStore';
 
 interface MacrosPanelProps {

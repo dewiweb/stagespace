@@ -125,7 +125,6 @@ export function useRenderLoop({
   const manualPositionsRef = useRef(manualPositions);
   const lastLineKeyRef = useRef('');
   const lastDrawnKeyRef = useRef('');
-  const lastDebugLogRef = useRef(0);
 
   // Sync des refs à chaque render React (cheap — pas d'effet de bord)
   positionsRef.current = positions;
@@ -286,12 +285,6 @@ export function useRenderLoop({
 
       if (mvts.length > 0) {
         // ── Mode multi-move : les positions arrivent du backend via 'global-positions' ──
-        // Log périodique pour debug (toutes les ~2s)
-        if (performance.now() - (lastDebugLogRef.current ?? 0) > 2000) {
-          lastDebugLogRef.current = performance.now();
-          const globalPos = mvPosMap['global'];
-          console.log(`[DBG-RENDER] mvts=${mvts.length} objs=${objs.length} globalPos=${globalPos?.length ?? 0} indices=${globalPos?.map(p => p.index).join(',') ?? 'none'}`);
-        }
         // Le MergeRuntime a déjà fait : merge + post-processing (macros, offset, etc.)
         // Le visualiseur est un viewer passif — il ne recalcule RIEN.
         const globalPos = mvPosMap['global'];

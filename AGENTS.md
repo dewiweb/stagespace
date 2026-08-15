@@ -111,5 +111,6 @@ See `.github/workflows/ci.yml`.
 |-------|-------|
 | Rust engines | 191 |
 | Tauri backend | 27 |
-| Frontend (vitest) | 113 |
-| **Total** | **331** |
+| Frontend (vitest) | 173 |
+| E2E CLI | 42 |
+| **Total** | **433** |

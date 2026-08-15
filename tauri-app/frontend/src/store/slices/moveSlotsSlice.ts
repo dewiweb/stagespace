@@ -433,10 +433,8 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
   playSlot: async (id) => {
     const slot = get().moveSlots.find((s) => s.id === id);
     if (!slot) return;
-    console.log(`[DBG-playSlot] id=${id} name=${slot.name} trackIds=${slot.trackIds?.join(',')}`);
     // Anti double-clic : ignorer si déjà en lecture ou si une activation est en cours
     if (slot.movementId || get().pendingPlays.includes(id)) {
-      console.log(`[DBG-playSlot] slot ${id} busy (movementId=${slot.movementId}) — ignoring`);
       return;
     }
 
@@ -550,7 +548,6 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
     const slot = get().moveSlots.find((s) => s.id === id);
     if (!slot?.movementId) return;
     const movementId = slot.movementId;
-    console.log(`[DBG-stopSlot] id=${id} name=${slot.name} movementId=${movementId}`);
     // Clearer movementId immédiatement — le bouton revient à "play" tout de suite.
     // Le backend deactivate_move(fade=0) est synchrone.
     set((s) => {

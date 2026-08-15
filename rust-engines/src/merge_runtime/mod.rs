@@ -286,7 +286,6 @@ impl MergeRuntime {
     // On ne reconstruit plus les osc_ids ici — la liste globale doit rester
     // alignée avec les track_indices (indices dans cette liste).
     pub fn unregister_move(&self, move_id: &str) {
-        eprintln!("[DBG-MERGE] unregister_move id={move_id}");
         self.active_moves
             .write()
             .unwrap_or_else(|e| e.into_inner())
@@ -295,20 +294,10 @@ impl MergeRuntime {
             .write()
             .unwrap_or_else(|e| e.into_inner())
             .remove(move_id);
-        // Lister les moves restants
-        let remaining: Vec<String> = self
-            .active_moves
-            .read()
-            .unwrap_or_else(|e| e.into_inner())
-            .keys()
-            .cloned()
-            .collect();
-        eprintln!("[DBG-MERGE] remaining moves after unregister: {remaining:?}");
     }
 
     /// Met à jour les osc_ids d'un move actif (pour hot-swap des tracks)
     pub fn update_move_osc_ids(&self, move_id: &str, osc_ids: Vec<u32>) {
-        eprintln!("[DBG-MERGE] update_move_osc_ids id={move_id} osc_ids={osc_ids:?}");
         if let Some(state) = self
             .active_moves
             .write()
@@ -321,7 +310,6 @@ impl MergeRuntime {
 
     /// Met à jour les track_indices d'un move actif (pour hot-swap des tracks)
     pub fn update_move_track_indices(&self, move_id: &str, track_indices: Vec<usize>) {
-        eprintln!("[DBG-MERGE] update_move_track_indices id={move_id} track_indices={track_indices:?}");
         if let Some(state) = self
             .active_moves
             .write()
@@ -372,7 +360,6 @@ impl MergeRuntime {
             let mut last_perf_update = Instant::now();
             let mut frames_since_perf = 0u64;
             let mut osc_since_perf = 0u64;
-            let mut last_osc_ts: u128 = 0;
 
             while running.load(Ordering::SeqCst) {
                 let frame_start = Instant::now();
@@ -428,9 +415,6 @@ impl MergeRuntime {
                 for (move_id, fade, priority, track_indices, _is_preview) in &move_snapshots {
                     if let Some(buffer) = buffers.get(move_id) {
                         let positions = buffer.read();
-                        if positions.is_empty() {
-                            eprintln!("[DBG-MERGE-EMPTY] move={move_id} buffer_empty! frame={frame_count}");
-                        }
                         if !positions.is_empty() {
                             let global_positions: Vec<(usize, nalgebra::Vector3<f64>)> =
                                 if track_indices.is_empty() {
@@ -476,10 +460,6 @@ impl MergeRuntime {
                 let osc_ids = osc_ids_arc.read().unwrap_or_else(|e| e.into_inner()).clone();
                 let strategy = *merge_strategy_arc.read().unwrap_or_else(|e| e.into_inner());
                 let merged = merge_positions(&move_positions, &osc_ids, strategy);
-                let merged_len = merged.len();
-                if merged.is_empty() && !move_positions.is_empty() {
-                    eprintln!("[DBG-MERGE-EMPTY2] move_positions={} but merged empty! frame={}", move_positions.len(), frame_count);
-                }
 
                 // 4. Post-processing via le graph global compilé (PostProcessFn)
                 // Clone toutes les données sous des locks courts, puis traite hors lock.
@@ -548,21 +528,6 @@ impl MergeRuntime {
                     }
                 }
 
-                // Debug: log les timestamps d'envoi OSC pour analyser la régularité
-                let osc_ts = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_millis();
-                // Log la première position pour voir si les valeurs sont smooth
-                let first_pos = transformed.first().map(|(i, p)| (*i, p.x, p.y, p.z)).unwrap_or((0usize, 0.0f64, 0.0f64, 0.0f64));
-                // Détecter les gaps > 25ms entre frames
-                let gap = if frame_count > 0 { osc_ts.saturating_sub(last_osc_ts) } else { 0 };
-                if gap > 25 {
-                    eprintln!("[DBG-OSC-GAP] frame={frame_count} gap={gap}ms ts={osc_ts} t_real={t_real:.4}");
-                }
-                last_osc_ts = osc_ts;
-                eprintln!("[DBG-OSC-TS] frame={frame_count} ts_ms={osc_ts} t_real={t_real:.4} n_osc={} merged={} transformed={} pos[0]=({},{:.4},{:.4},{:.4})", osc_since_perf, merged_len, transformed.len(), first_pos.0, first_pos.1, first_pos.2, first_pos.3);
-
                 // 6. Callback pour le 3D preview (display positions = tout, y compris preview)
                 // On récupère le lock même si empoisonné (un panic dans un thread voisin
                 // ne doit pas couper silencieusement l'émission de positions au frontend).
@@ -588,21 +553,6 @@ impl MergeRuntime {
                     frames_since_perf = 0;
                     osc_since_perf = 0;
                     last_perf_update = Instant::now();
-
-                    // Debug log périodique
-                    let n_moves = move_snapshots.len();
-                    let n_osc_ids = osc_ids.len();
-                    let n_transformed = transformed.len();
-                    eprintln!(
-                        "[DBG-MERGE] frame={frame_count} fps={fps_actual:.0} osc_rate={osc_rate:.0} moves={n_moves} osc_ids={n_osc_ids} transformed={n_transformed} preview_skip={}",
-                        preview_tracks.len()
-                    );
-                    for (mid, fade, priority, tracks, is_preview) in &move_snapshots {
-                        let npos = buffers.get(mid).map(|b| b.read().len()).unwrap_or(0);
-                        eprintln!(
-                            "[DBG-MERGE]   move={mid} fade={fade:.2} prio={priority} tracks={tracks:?} npos={npos} preview={is_preview}"
-                        );
-                    }
                 }
 
                 // Timing précis

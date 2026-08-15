@@ -95,7 +95,6 @@ pub async fn set_global_osc_ids(
     osc_ids: Vec<u32>,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    eprintln!("[DBG-GLOBAL] set_global_osc_ids count={} ids={:?}", osc_ids.len(), osc_ids);
     let merge_rt = lock_or_recover(&state.merge_runtime);
     merge_rt.set_osc_ids(osc_ids);
     Ok(())

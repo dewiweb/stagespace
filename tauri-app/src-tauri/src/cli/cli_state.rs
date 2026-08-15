@@ -53,27 +53,27 @@ impl CliState {
 
     /// OSC IDs disponibles (depuis .hol ou manuels)
     pub fn get_osc_ids(&self) -> Vec<u32> {
-        let tracks = self.hol_tracks.lock().unwrap();
+        let tracks = self.hol_tracks.lock().unwrap_or_else(|e| e.into_inner());
         if !tracks.is_empty() {
             tracks.iter().map(|t| t.id).collect()
         } else {
-            self.manual_osc_ids.lock().unwrap().clone()
+            self.manual_osc_ids.lock().unwrap_or_else(|e| e.into_inner()).clone()
         }
     }
 
     /// Nombre de tracks
     pub fn track_count(&self) -> usize {
-        let tracks = self.hol_tracks.lock().unwrap();
+        let tracks = self.hol_tracks.lock().unwrap_or_else(|e| e.into_inner());
         if !tracks.is_empty() {
             tracks.len()
         } else {
-            self.manual_osc_ids.lock().unwrap().len()
+            self.manual_osc_ids.lock().unwrap_or_else(|e| e.into_inner()).len()
         }
     }
 
     /// Isobarycentre des tracks données par indice
     pub fn compute_centroid(&self, track_indices: &[usize]) -> [f64; 3] {
-        let tracks = self.hol_tracks.lock().unwrap();
+        let tracks = self.hol_tracks.lock().unwrap_or_else(|e| e.into_inner());
         if tracks.is_empty() {
             return [0.0, 0.0, 0.0];
         }
@@ -100,7 +100,7 @@ impl CliState {
 
     /// Génère un ID unique pour un move (utilise le name si fourni)
     pub fn next_move_id(&self, key: &str) -> String {
-        let mut counter = self.move_counter.lock().unwrap();
+        let mut counter = self.move_counter.lock().unwrap_or_else(|e| e.into_inner());
         *counter += 1;
         // Sanitize le key : lowercase, alphanum + hyphens
         let safe = key

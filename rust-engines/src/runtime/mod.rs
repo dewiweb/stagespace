@@ -103,7 +103,6 @@ impl Runtime {
 
     /// Définit les osc_ids du move — hot-swappable en live
     pub fn set_osc_ids(&self, osc_ids: Vec<u32>) {
-        eprintln!("[DBG-WORKER] set_osc_ids count={} ids={:?}", osc_ids.len(), osc_ids);
         *self.osc_ids_arc.write().unwrap_or_else(|e| e.into_inner()) = osc_ids;
     }
 
@@ -504,7 +503,6 @@ impl Runtime {
                                         fn_ref(t_looped, obj_idx)
                                     }))
                                         .unwrap_or_else(|_e| {
-                                            eprintln!("[DBG-WORKER] PANIC in position_fn obj_idx={obj_idx} n_osc_ids={} t={t_looped:.3}", osc_ids.len());
                                             nalgebra::Vector3::zeros()
                                         })
                                 };
@@ -527,7 +525,6 @@ impl Runtime {
                         let latency_ms = frame_time_us / 1000.0;
                         let cpu_pct = (latency_ms / (1000.0 / params.fps)) * 100.0;
                         perf.update(fps, 0.0, latency_ms, cpu_pct);
-                        eprintln!("[DBG-WORKER] frame={frame_count} fps={fps:.0} latency_ms={latency_ms:.2} cpu={cpu_pct:.1}% t_real={t_real:.3} t_eff={t_eff:.3} duration={duration:.1} ts_ms={}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis());
                         frames_since_perf = 0;
                         last_perf_update = Instant::now();
                     }
@@ -724,7 +721,6 @@ impl Runtime {
 
     /// Arrête le playback
     pub fn stop(&self) {
-        eprintln!("[DBG-WORKER] stop() called — stopping playback");
         self.running.store(false, Ordering::SeqCst);
         log_playback_stop();
     }
@@ -757,7 +753,6 @@ impl Runtime {
     /// `from_fn` = fonction actuelle, `to_fn` = fonction du cue cible
     /// `fade_duration` = durée du crossfade en secondes (0 = instantané)
     pub fn recall_cue(&self, to_fn: PositionFn, fade_duration: f64) {
-        eprintln!("[DBG-WORKER] recall_cue fade={fade_duration}");
         if fade_duration <= 0.0 {
             // Recall instantané
             self.swap_position_fn(to_fn);
