@@ -1,4 +1,5 @@
 import { StateCreator } from 'zustand';
+import { safeSetItem } from '../../utils/safeStorage';
 
 export interface SavedSpline {
   id: string;
@@ -28,9 +29,7 @@ function loadSplines(): SavedSpline[] {
 }
 
 function saveSplinesToStorage(splines: SavedSpline[]) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(splines));
-  } catch {}
+  safeSetItem(STORAGE_KEY, JSON.stringify(splines));
 }
 
 export const createSplineLibrarySlice: StateCreator<

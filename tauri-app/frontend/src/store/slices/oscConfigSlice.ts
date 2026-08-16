@@ -1,5 +1,7 @@
 import { StateCreator } from 'zustand';
 import { safeInvoke as invoke } from '../../utils/tauri';
+import { toast } from '../../utils/toast-helpers';
+import { safeSetItem } from '../../utils/safeStorage';
 
 /// Configuration OSC partagée — adresse, port, profil
 /// Utilisée par Toolbar (saisie), TrajectoryPanel (playMovement), goToNextCue (GO button)
@@ -25,9 +27,14 @@ function loadConfigFromStorage(): Partial<PersistedOscConfig> {
 }
 
 function saveConfigToStorage(config: PersistedOscConfig) {
-  try {
-    localStorage.setItem(OSC_CONFIG_STORAGE_KEY, JSON.stringify(config));
-  } catch {}
+  safeSetItem(OSC_CONFIG_STORAGE_KEY, JSON.stringify(config));
+}
+
+/// Vérifie si des movements sont actifs (playback en cours)
+/// Import dynamique pour éviter une dépendance circulaire
+async function isPlaybackActive(): Promise<boolean> {
+  const { useGraphStore } = await import('../useGraphStore');
+  return useGraphStore.getState().movements.length > 0;
 }
 
 export interface OscConfigSlice {
@@ -54,21 +61,43 @@ export const createOscConfigSlice: StateCreator<OscConfigSlice, [], [], OscConfi
     oscProfile: saved.oscProfile ?? 'holophonix',
     oscInPort: saved.oscInPort ?? 8001,
     setOscAddress: (addr) => {
-      set({ oscAddress: addr });
-      const s = get();
-      saveConfigToStorage({ oscAddress: addr, oscPort: s.oscPort, oscProfile: s.oscProfile, oscInPort: s.oscInPort });
+      isPlaybackActive().then((active) => {
+        if (active) {
+          toast.warning('Cannot change OSC address during playback. Stop all moves first.');
+          return;
+        }
+        set({ oscAddress: addr });
+        const s = get();
+        saveConfigToStorage({ oscAddress: addr, oscPort: s.oscPort, oscProfile: s.oscProfile, oscInPort: s.oscInPort });
+      });
     },
     setOscPort: (port) => {
-      set({ oscPort: port });
-      const s = get();
-      saveConfigToStorage({ oscAddress: s.oscAddress, oscPort: port, oscProfile: s.oscProfile, oscInPort: s.oscInPort });
+      isPlaybackActive().then((active) => {
+        if (active) {
+          toast.warning('Cannot change OSC port during playback. Stop all moves first.');
+          return;
+        }
+        set({ oscPort: port });
+        const s = get();
+        saveConfigToStorage({ oscAddress: s.oscAddress, oscPort: port, oscProfile: s.oscProfile, oscInPort: s.oscInPort });
+      });
     },
     setOscProfile: (profile) => {
-      set({ oscProfile: profile });
-      const s = get();
-      saveConfigToStorage({ oscAddress: s.oscAddress, oscPort: s.oscPort, oscProfile: profile, oscInPort: s.oscInPort });
+      isPlaybackActive().then((active) => {
+        if (active) {
+          toast.warning('Cannot change OSC profile during playback. Stop all moves first.');
+          return;
+        }
+        set({ oscProfile: profile });
+        const s = get();
+        saveConfigToStorage({ oscAddress: s.oscAddress, oscPort: s.oscPort, oscProfile: profile, oscInPort: s.oscInPort });
+      });
     },
     setOscInPort: async (port) => {
+      if (await isPlaybackActive()) {
+        toast.warning('Cannot change OSC input port during playback. Stop all moves first.');
+        return;
+      }
       set({ oscInPort: port });
       const s = get();
       saveConfigToStorage({ oscAddress: s.oscAddress, oscPort: s.oscPort, oscProfile: s.oscProfile, oscInPort: port });
@@ -77,6 +106,7 @@ export const createOscConfigSlice: StateCreator<OscConfigSlice, [], [], OscConfi
         await invoke('set_osc_receiver_port', { port });
       } catch (e) {
         console.error('[setOscInPort] Failed to set OSC receiver port:', e);
+        toast.error('OSC port change failed: ' + e);
       }
     },
   };

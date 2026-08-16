@@ -713,7 +713,10 @@ impl Compiler {
         // Pour les nodes spline (EvaluateSpline/TrimSpline/OffsetSpline) :
         // Si un DrawSpline est connecté en amont, utiliser ses points (données brutes).
         // tension/closed restent dans EvaluateSpline (paramètres d'interpolation).
-        if matches!(node.node_type, NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline) {
+        if matches!(
+            node.node_type,
+            NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline
+        ) {
             let upstream_spline = graph
                 .get_inputs(node.id)
                 .iter()

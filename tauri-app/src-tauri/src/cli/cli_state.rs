@@ -57,7 +57,10 @@ impl CliState {
         if !tracks.is_empty() {
             tracks.iter().map(|t| t.id).collect()
         } else {
-            self.manual_osc_ids.lock().unwrap_or_else(|e| e.into_inner()).clone()
+            self.manual_osc_ids
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone()
         }
     }
 
@@ -67,7 +70,10 @@ impl CliState {
         if !tracks.is_empty() {
             tracks.len()
         } else {
-            self.manual_osc_ids.lock().unwrap_or_else(|e| e.into_inner()).len()
+            self.manual_osc_ids
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .len()
         }
     }
 

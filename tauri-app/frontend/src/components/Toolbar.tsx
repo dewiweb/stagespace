@@ -1,5 +1,7 @@
 import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
+import { useCuelistStore } from '../store/useCuelistStore';
+import { toast } from '../utils/toast-helpers';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { SettingsModal } from './SettingsModal';
@@ -32,7 +34,7 @@ export const Toolbar: React.FC = () => {
   const activeMovements = movements.length;
   const hasGraph = nodes.length > 0;
 
-  // Keyboard shortcuts: Ctrl+Z (undo), Ctrl+Y / Ctrl+Shift+Z (redo), Space (play/stop), Esc (panic)
+  // Keyboard shortcuts: Ctrl+Z (undo), Ctrl+Y / Ctrl+Shift+Z (redo), Space (play/stop selected), Esc (panic), Enter (GO next cue), ArrowLeft/Right (cue nav)
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       // Ne pas intercepter si on tape dans un input
@@ -48,6 +50,30 @@ export const Toolbar: React.FC = () => {
       } else if (e.key === 'Escape') {
         e.preventDefault();
         panic();
+      } else if (e.key === 'Enter') {
+        // GO: next cue in setlist
+        e.preventDefault();
+        useCuelistStore.getState().goToNextCue();
+      } else if (e.key === 'Backspace') {
+        // Previous cue
+        e.preventDefault();
+        useCuelistStore.getState().goToPreviousCue();
+      } else if (e.key === ' ') {
+        // Space: play/stop the selected (editing) slot
+        e.preventDefault();
+        const gs = useGraphStore.getState();
+        const slotId = (gs as any).editingSlotId as string | null;
+        if (!slotId) {
+          toast.info('No move selected — click a move first');
+          return;
+        }
+        const slot = (gs as any).moveSlots?.find((s: any) => s.id === slotId);
+        if (!slot) return;
+        if (slot.movementId) {
+          (gs as any).stopSlot(slotId);
+        } else {
+          (gs as any).playSlot(slotId);
+        }
       }
     };
     window.addEventListener('keydown', handler);
@@ -55,15 +81,28 @@ export const Toolbar: React.FC = () => {
   }, [undo, redo, panic]);
 
   // Poll perf stats quand des movements sont actifs
+  const oscErrorToastShown = React.useRef(false);
   React.useEffect(() => {
     if (activeMovements === 0) {
       setPerfStats({ fps: 0, oscRate: 0, latencyMs: 0, cpuPercent: 0 });
+      oscErrorToastShown.current = false;
       return;
     }
     const interval = setInterval(async () => {
       try {
-        const stats = await invoke<{ fps: number; oscRate: number; latencyMs: number; cpuPercent: number }>('get_perf_stats');
+        const stats = await invoke<{ fps: number; oscRate: number; latencyMs: number; cpuPercent: number; oscErrorRate: number }>('get_perf_stats');
         setPerfStats(stats);
+        // Alerte OSC si taux d'erreur > 5% (une seule fois par session de playback)
+        if (stats.oscErrorRate > 0.05 && !oscErrorToastShown.current) {
+          oscErrorToastShown.current = true;
+          toast.error(
+            `OSC output failing: ${(stats.oscErrorRate * 100).toFixed(0)}% packet loss. Check network connection to spatializer.`,
+            10000,
+          );
+        }
+        if (stats.oscErrorRate < 0.01) {
+          oscErrorToastShown.current = false;
+        }
       } catch (e) {
         // ignore
       }

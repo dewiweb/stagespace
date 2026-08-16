@@ -3,12 +3,21 @@
 //! Store : snapshot complet (graph, macros, tracks, global graph, depths, manual positions)
 //! Recall : désactiver/activer moves, hot-swap global graph, restaurer macros/depths/positions
 
+use super::state::lock_or_recover;
 use crate::graph::parser::build_graph_from_json;
 use crate::AppState;
 use serde::Deserialize;
 use stagespace_engines::{Cue, MacroSnapshot, SpatialMacroSnapshot};
-use super::state::lock_or_recover;
+use std::sync::atomic::AtomicBool;
 use tauri::{Emitter, State};
+
+/// RAII guard : remet recall_in_progress à false quand droppé (même si recall panique)
+struct RecallGuard<'a>(&'a AtomicBool);
+impl Drop for RecallGuard<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+}
 
 // ─── Store Cue ───
 
@@ -82,6 +91,23 @@ pub async fn store_cue(
 /// Rappelle un cue : désactiver/activer moves, hot-swap global graph, restaurer macros/depths/positions
 #[tauri::command]
 pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), String> {
+    // Anti-recall concurrent : si un recall est déjà en cours, refuser
+    if state
+        .recall_in_progress
+        .compare_exchange(
+            false,
+            true,
+            std::sync::atomic::Ordering::SeqCst,
+            std::sync::atomic::Ordering::SeqCst,
+        )
+        .is_err()
+    {
+        return Err("A cue recall is already in progress — please wait.".to_string());
+    }
+
+    // Garantir que le flag est remis à false quoi qu'il arrive
+    let _guard = RecallGuard(&state.recall_in_progress);
+
     // 1. Désactiver les moves qui ne sont pas dans active_move_ids
     {
         let movements = lock_or_recover(&state.movements);

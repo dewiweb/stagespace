@@ -419,9 +419,9 @@ impl Validator {
             | NodeType::Output => &["input"],
 
             // Splines : input (spline data) + duration
-            NodeType::EvaluateSpline
-            | NodeType::TrimSpline
-            | NodeType::OffsetSpline => &["input", "duration"],
+            NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline => {
+                &["input", "duration"]
+            }
 
             // Composites binaires : acceptent input, input_a, input_b
             // (input_a/input_b sont les ports visuels A/B ; le compiler distingue par ordre des edges)

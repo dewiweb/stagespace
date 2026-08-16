@@ -65,19 +65,19 @@ pub async fn activate_move(
 
         // 2. Créer le worker Runtime
         let osc_sender = OscSender::default();
-        let runtime = Runtime::new("127.0.0.1".to_string(), 8000, osc_sender)
-            .map_err(|e| {
-                eprintln!("[ACTIVATE-ERROR] Runtime::new failed: {e}");
-                format!("Failed to create worker runtime: {e}")
-            })?;
+        let runtime = Runtime::new("127.0.0.1".to_string(), 8000, osc_sender).map_err(|e| {
+            eprintln!("[ACTIVATE-ERROR] Runtime::new failed: {e}");
+            format!("Failed to create worker runtime: {e}")
+        })?;
 
         // 3. Compiler avec audio + overrides
         let overrides = runtime.audio_param_overrides();
         let compiled =
-            compile_graph_with_audio_and_overrides(&graph, audio_state_arc.clone(), overrides).map_err(|e| {
-                eprintln!("[ACTIVATE-ERROR] compile_graph failed: {e}");
-                e
-            })?;
+            compile_graph_with_audio_and_overrides(&graph, audio_state_arc.clone(), overrides)
+                .map_err(|e| {
+                    eprintln!("[ACTIVATE-ERROR] compile_graph failed: {e}");
+                    e
+                })?;
 
         // 4. Configurer le worker
         runtime.set_preview_mode(request.is_preview);
@@ -361,6 +361,7 @@ pub async fn get_merge_perf_stats(state: State<'_, AppState>) -> Result<serde_js
         "osc_rate": perf.osc_rate,
         "latency_ms": perf.latency_ms,
         "cpu_percent": perf.cpu_percent,
+        "osc_error_rate": perf.osc_error_rate,
     }))
 }
 

@@ -1,5 +1,6 @@
 import { StateCreator } from 'zustand';
 import { safeInvoke as invoke } from '../../utils/tauri';
+import { toast } from '../../utils/toast-helpers';
 import { computeCentroid } from '../utils/geometryUtils';
 import type { Node, Edge } from 'reactflow';
 import type { MovementInfo, HolProject } from '../types/index';
@@ -99,6 +100,7 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
       return movementId;
     } catch (e) {
       console.error('Failed to start movement:', e);
+      toast.error('Failed to start movement: ' + e);
       return null;
     }
   },
@@ -119,6 +121,7 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
       get().refreshMovements();
     } catch (e) {
       console.error('Failed to stop movement:', e);
+      toast.error('Failed to stop movement: ' + e);
       throw e;
     }
   },
@@ -136,6 +139,7 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
       get().refreshMovements();
     } catch (e) {
       console.error('Failed to stop movement with fade:', e);
+      toast.error('Failed to stop movement with fade: ' + e);
       throw e;
     }
   },
@@ -149,6 +153,7 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
       get().refreshMovements();
     } catch (e) {
       console.error('Failed to stop all movements:', e);
+      toast.error('Stop all failed: ' + e);
     }
   },
 

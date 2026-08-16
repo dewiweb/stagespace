@@ -2,14 +2,12 @@
 
 use crate::cli_state;
 use crate::graph_presets;
-use stagespace_engines::{
-    EngineParams, LoopMode, OscSender, PositionBuffer, Runtime,
-};
+use stagespace_engines::{EngineParams, LoopMode, OscSender, PositionBuffer, Runtime};
 use stagespace_tauri::graph::compilation::compile_graph_with_audio_and_overrides;
 use stagespace_tauri::graph::parser::build_graph_from_json;
 use std::sync::Arc;
 
-use super::helpers::{parse_args, parse_track_list, osc_ids_to_indices};
+use super::helpers::{osc_ids_to_indices, parse_args, parse_track_list};
 
 pub fn cmd_osc_listen(args: &[&str]) -> Result<String, String> {
     let opts = parse_args(args);
@@ -58,8 +56,7 @@ pub fn cmd_osc_listen(args: &[&str]) -> Result<String, String> {
                 }
                 last_packet_time = Some(now);
 
-                if let Ok((_, rosc::OscPacket::Message(msg))) =
-                    rosc::decoder::decode_udp(&buf[..n])
+                if let Ok((_, rosc::OscPacket::Message(msg))) = rosc::decoder::decode_udp(&buf[..n])
                 {
                     let args: Vec<String> = msg
                         .args
@@ -86,11 +83,7 @@ pub fn cmd_osc_listen(args: &[&str]) -> Result<String, String> {
                             if !valid.0 {
                                 invalid_packets += 1;
                                 if errors.len() < 10 {
-                                    errors.push(format!(
-                                        "  ✗ {} — {}",
-                                        msg.addr,
-                                        valid.1
-                                    ));
+                                    errors.push(format!("  ✗ {} — {}", msg.addr, valid.1));
                                 }
                             } else {
                                 valid_packets += 1;
@@ -107,7 +100,11 @@ pub fn cmd_osc_listen(args: &[&str]) -> Result<String, String> {
 
                     if !quiet {
                         let marker = if validate {
-                            if is_valid { "✓" } else { "✗" }
+                            if is_valid {
+                                "✓"
+                            } else {
+                                "✗"
+                            }
                         } else {
                             " "
                         };
@@ -133,17 +130,32 @@ pub fn cmd_osc_listen(args: &[&str]) -> Result<String, String> {
     // Résumé
     out.push_str("\n═══ Summary ═══\n");
     out.push_str(&format!("  Total packets: {total_packets}\n"));
-    out.push_str(&format!("  Valid: {valid_packets} | Invalid: {invalid_packets}\n"));
+    out.push_str(&format!(
+        "  Valid: {valid_packets} | Invalid: {invalid_packets}\n"
+    ));
     out.push_str(&format!(
         "  Unique addresses: {} ({})\n",
         unique_addresses.len(),
-        unique_addresses.iter().take(5).cloned().collect::<Vec<_>>().join(", ")
+        unique_addresses
+            .iter()
+            .take(5)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ")
     ));
-    out.push_str(&format!("  Unique track IDs: {} ({})\n", unique_track_ids.len(), {
-        let mut ids: Vec<u32> = unique_track_ids.iter().copied().collect();
-        ids.sort();
-        ids.iter().take(10).map(|id| id.to_string()).collect::<Vec<_>>().join(", ")
-    }));
+    out.push_str(&format!(
+        "  Unique track IDs: {} ({})\n",
+        unique_track_ids.len(),
+        {
+            let mut ids: Vec<u32> = unique_track_ids.iter().copied().collect();
+            ids.sort();
+            ids.iter()
+                .take(10)
+                .map(|id| id.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        }
+    ));
 
     // Calcul du rate
     if let (Some(first), Some(last)) = (first_packet_time, last_packet_time) {
@@ -238,7 +250,10 @@ pub fn validate_osc_address(_addr: &str, profile: &str, args: &[rosc::OscType]) 
                 return (false, format!("Arg {i} is not finite (NaN/Inf)"));
             }
             if v.abs() > max_value {
-                return (false, format!("Arg {i} = {v:.4} — out of range (|v| > {max_value})"));
+                return (
+                    false,
+                    format!("Arg {i} = {v:.4} — out of range (|v| > {max_value})"),
+                );
             }
         }
     }
@@ -246,13 +261,9 @@ pub fn validate_osc_address(_addr: &str, profile: &str, args: &[rosc::OscType]) 
     (true, "OK".to_string())
 }
 
-
 pub fn cmd_osc_validate(args: &[&str]) -> Result<String, String> {
     let opts = parse_args(args);
-    let template = opts
-        .get("template")
-        .map(|s| s.as_str())
-        .unwrap_or("circle");
+    let template = opts.get("template").map(|s| s.as_str()).unwrap_or("circle");
     let track_str = opts.get("tracks").map(|s| s.as_str()).unwrap_or("1-5");
     let port: u16 = opts
         .get("port")
@@ -357,7 +368,10 @@ pub fn cmd_osc_validate(args: &[&str]) -> Result<String, String> {
             {
                 let mut ids: Vec<u32> = track_ids.iter().copied().collect();
                 ids.sort();
-                ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",")
+                ids.iter()
+                    .map(|id| id.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",")
             }
         ));
         summary.push_str(&format!("  Unique addresses: {}\n", addresses.len()));
@@ -397,10 +411,13 @@ pub fn cmd_osc_validate(args: &[&str]) -> Result<String, String> {
     {
         use stagespace_engines::{OscProfile, OscSender};
         use std::str::FromStr;
-        let profile_enum = OscProfile::from_str(profile)
-            .map_err(|e| format!("Invalid OSC profile: {e}"))?;
+        let profile_enum =
+            OscProfile::from_str(profile).map_err(|e| format!("Invalid OSC profile: {e}"))?;
         let osc_sender = OscSender::new(profile_enum, "127.0.0.1".to_string(), port);
-        let mut merge_rt = state.merge_runtime.lock().unwrap_or_else(|e| e.into_inner());
+        let mut merge_rt = state
+            .merge_runtime
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         merge_rt
             .set_osc_target("127.0.0.1".to_string(), port, osc_sender)
             .map_err(|e| format!("Failed to set OSC target: {e:?}"))?;
@@ -409,7 +426,11 @@ pub fn cmd_osc_validate(args: &[&str]) -> Result<String, String> {
     // 3. Activer le move
     let graph_json = graph_presets::build_template_graph(template, n_objects, duration)?;
     let move_id = state.next_move_id("oscval");
-    let audio_state = state.audio_state.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    let audio_state = state
+        .audio_state
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
     let graph = build_graph_from_json(&graph_json, &audio_state)?;
     let osc_sender = OscSender::default();
     let runtime = Runtime::new("127.0.0.1".to_string(), port, osc_sender)
@@ -453,7 +474,10 @@ pub fn cmd_osc_validate(args: &[&str]) -> Result<String, String> {
         .insert(move_id.clone(), movement);
 
     {
-        let merge_rt = state.merge_runtime.lock().unwrap_or_else(|e| e.into_inner());
+        let merge_rt = state
+            .merge_runtime
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         merge_rt.register_move(
             move_id.clone(),
             buffer,
@@ -465,7 +489,10 @@ pub fn cmd_osc_validate(args: &[&str]) -> Result<String, String> {
         merge_rt.set_origin(nalgebra::Vector3::new(origin[0], origin[1], origin[2]));
         if !merge_rt.is_running() {
             drop(merge_rt);
-            let mut merge_rt = state.merge_runtime.lock().unwrap_or_else(|e| e.into_inner());
+            let mut merge_rt = state
+                .merge_runtime
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             merge_rt
                 .start()
                 .map_err(|e| format!("Failed to start MergeRuntime: {e}"))?;
@@ -477,10 +504,17 @@ pub fn cmd_osc_validate(args: &[&str]) -> Result<String, String> {
 
     // 4. Stopper le move
     {
-        let merge_rt = state.merge_runtime.lock().unwrap_or_else(|e| e.into_inner());
+        let merge_rt = state
+            .merge_runtime
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         merge_rt.unregister_move(&move_id);
     }
-    state.movements.lock().unwrap_or_else(|e| e.into_inner()).remove(&move_id);
+    state
+        .movements
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(&move_id);
 
     // 5. Récupérer le rapport du listener
     let report = listener_thread

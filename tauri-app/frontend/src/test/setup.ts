@@ -68,6 +68,12 @@ vi.mock('@tauri-apps/plugin-shell', () => ({
   Shell: { open: vi.fn() },
 }));
 
+// Mock toast store — no-op in tests
+vi.mock('../store/useToastStore', () => ({
+  useToastStore: { getState: () => ({ push: () => {}, dismiss: () => {}, clear: () => {}, toasts: [] }) },
+  toast: { error: () => {}, warning: () => {}, info: () => {}, success: () => {} },
+}));
+
 // Expose helpers for tests
 export function getInvokeCalls(): Array<{ cmd: string; args?: Record<string, any> }> {
   return invokeCalls;

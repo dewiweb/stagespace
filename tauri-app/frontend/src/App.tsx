@@ -8,6 +8,7 @@ import Inspector from './components/Inspector';
 import AudioPanel from './components/AudioPanel';
 import TabPanel from './components/TabPanel';
 import Toolbar from './components/Toolbar';
+import ToastContainer from './components/ToastContainer';
 import { prepareGraphForSave } from './components/nodeParamSchema';
 import { useGraphStore, useMovementPositionsListener } from './store/useGraphStore';
 import { useAnimationStore } from './store/useAnimationStore';
@@ -319,6 +320,9 @@ function App() {
           </>
         )}
       </div>
+
+      {/* Toast notifications — erreurs backend, alerts OSC, etc. */}
+      <ToastContainer />
     </div>
   );
 }

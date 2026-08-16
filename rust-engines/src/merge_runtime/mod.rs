@@ -360,6 +360,7 @@ impl MergeRuntime {
             let mut last_perf_update = Instant::now();
             let mut frames_since_perf = 0u64;
             let mut osc_since_perf = 0u64;
+            let mut osc_errors_perf = 0u64;
 
             while running.load(Ordering::SeqCst) {
                 let frame_start = Instant::now();
@@ -383,8 +384,7 @@ impl MergeRuntime {
 
                 // --- Section critique courte: update fades + clone data ---
                 let move_snapshots: Vec<(String, f64, u32, Vec<usize>, bool)> = {
-                    let mut moves_guard =
-                        active_moves.write().unwrap_or_else(|e| e.into_inner());
+                    let mut moves_guard = active_moves.write().unwrap_or_else(|e| e.into_inner());
                     let mut snapshots = Vec::with_capacity(moves_guard.len());
                     for (move_id, state) in moves_guard.iter_mut() {
                         if !state.is_active {
@@ -457,14 +457,20 @@ impl MergeRuntime {
                 // Avant, le read lock était tenu pendant merge + post-process + OSC output
                 // (presque toute la frame), bloquant set_osc_ids dans register_move
                 // pendant des secondes (lock starvation à 60 FPS).
-                let osc_ids = osc_ids_arc.read().unwrap_or_else(|e| e.into_inner()).clone();
+                let osc_ids = osc_ids_arc
+                    .read()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone();
                 let strategy = *merge_strategy_arc.read().unwrap_or_else(|e| e.into_inner());
                 let merged = merge_positions(&move_positions, &osc_ids, strategy);
 
                 // 4. Post-processing via le graph global compilé (PostProcessFn)
                 // Clone toutes les données sous des locks courts, puis traite hors lock.
                 let origin = *origin_arc.lock().unwrap_or_else(|e| e.into_inner());
-                let track_depths = track_depths_arc.read().unwrap_or_else(|e| e.into_inner()).clone();
+                let track_depths = track_depths_arc
+                    .read()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone();
                 let track_positions = track_positions_arc
                     .read()
                     .unwrap_or_else(|e| e.into_inner())
@@ -473,7 +479,10 @@ impl MergeRuntime {
                     .read()
                     .unwrap_or_else(|e| e.into_inner())
                     .clone();
-                let audio_state = audio_state_arc.lock().unwrap_or_else(|e| e.into_inner()).clone();
+                let audio_state = audio_state_arc
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone();
 
                 let ctx = PostProcessContext {
                     t: t_real,
@@ -521,6 +530,7 @@ impl MergeRuntime {
                                 crate::logging::log_osc_error(&format!(
                                     "MergeRuntime OSC send error: {e}"
                                 ));
+                                osc_errors_perf += 1;
                             } else {
                                 osc_since_perf += 1;
                             }
@@ -549,9 +559,18 @@ impl MergeRuntime {
                     let frame_time_us = frame_start.elapsed().as_micros() as f64;
                     let latency_ms = frame_time_us / 1000.0;
                     let cpu_pct = (latency_ms / (1000.0 / fps)) * 100.0;
-                    perf.update(fps_actual, osc_rate, latency_ms, cpu_pct);
+                    let total_osc = osc_since_perf + osc_errors_perf;
+                    let error_rate = if total_osc > 0 {
+                        osc_errors_perf as f64 / total_osc as f64
+                    } else {
+                        0.0
+                    };
+                    perf.update_with_error_rate(
+                        fps_actual, osc_rate, latency_ms, cpu_pct, error_rate,
+                    );
                     frames_since_perf = 0;
                     osc_since_perf = 0;
+                    osc_errors_perf = 0;
                     last_perf_update = Instant::now();
                 }
 

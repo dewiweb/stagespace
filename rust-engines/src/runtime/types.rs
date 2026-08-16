@@ -65,4 +65,6 @@ pub struct PerfStats {
     pub osc_rate: f64,
     pub latency_ms: f64,
     pub cpu_percent: f64,
+    /// Taux d'erreur OSC (0.0 = parfait, 1.0 = tout échoue)
+    pub osc_error_rate: f64,
 }

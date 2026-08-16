@@ -25,6 +25,8 @@ import { createMoveSlotsSlice, type MoveSlotsSlice } from './slices/moveSlotsSli
 import { createOscConfigSlice, type OscConfigSlice } from './slices/oscConfigSlice';
 import { createSplineLibrarySlice, type SplineLibrarySlice } from './slices/splineLibrarySlice';
 import { SHAPE_PRESETS } from '../utils/shapePresets';
+import { toast } from '../utils/toast-helpers';
+import { safeSetItem } from '../utils/safeStorage';
 import type {
   NodeType,
   AppStatus,
@@ -130,9 +132,7 @@ export const useGraphStore = create<GraphState>()((...a) => {
         : sl
     );
     // Sauvegarder dans localStorage (la fonction est dans moveSlotsSlice)
-    try {
-      localStorage.setItem('stagespace-move-slots', JSON.stringify(newSlots));
-    } catch {}
+    safeSetItem('stagespace-move-slots', JSON.stringify(newSlots));
     set({ moveSlots: newSlots } as any);
   }
 
@@ -257,6 +257,7 @@ export const useGraphStore = create<GraphState>()((...a) => {
       const message = error?.message ?? String(error);
       set({ compileError: message, status: 'error' });
       console.error('Compilation failed:', error);
+      toast.error('Compilation failed: ' + message);
       return false;
     }
   },
@@ -282,6 +283,7 @@ export const useGraphStore = create<GraphState>()((...a) => {
       const message = error?.message ?? String(error);
       set({ playError: message, isPlaying: false, status: 'error' });
       console.error('Playback failed:', error);
+      toast.error('Playback failed: ' + message);
     }
   },
 
@@ -305,6 +307,7 @@ export const useGraphStore = create<GraphState>()((...a) => {
       const message = error?.message ?? String(error);
       set({ playError: message, isPlaying: false, status: 'error' });
       console.error('Preview failed:', error);
+      toast.error('Preview failed: ' + message);
     }
   },
 
@@ -314,6 +317,7 @@ export const useGraphStore = create<GraphState>()((...a) => {
       await invoke('stop_graph');
     } catch (error: any) {
       console.error('Stop failed:', error);
+      toast.error('Stop failed: ' + (error?.message ?? String(error)));
     }
   },
 
@@ -372,11 +376,15 @@ export const useGraphStore = create<GraphState>()((...a) => {
           duration,
           oscIds,
           trackIndices,
-        }).catch((e: any) => console.error(`Hot-swap failed for movement ${editingSlotMovementId}:`, e));
+        }).catch((e: any) => {
+          console.error(`Hot-swap failed for movement ${editingSlotMovementId}:`, e);
+          toast.error('Live update failed: ' + e);
+        });
       }
       set({ graphCompileVersion: get().graphCompileVersion + 1 });
     } catch (error: any) {
       console.error('Live update failed:', error);
+      toast.error('Live update failed: ' + (error?.message ?? String(error)));
     }
   },
 

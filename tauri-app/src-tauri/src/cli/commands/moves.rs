@@ -9,7 +9,7 @@ use stagespace_tauri::graph::compilation::compile_graph_with_audio_and_overrides
 use stagespace_tauri::graph::parser::build_graph_from_json;
 use std::sync::Arc;
 
-use super::helpers::{parse_args, parse_track_list, osc_ids_to_indices};
+use super::helpers::{osc_ids_to_indices, parse_args, parse_track_list};
 
 pub fn cmd_activate_move(args: &[&str]) -> Result<String, String> {
     if args.is_empty() {
@@ -45,7 +45,11 @@ pub fn cmd_activate_move(args: &[&str]) -> Result<String, String> {
     let move_id = state.next_move_id(&name);
 
     // Compiler le graphe
-    let audio_state = state.audio_state.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    let audio_state = state
+        .audio_state
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
     let graph = build_graph_from_json(&graph_json, &audio_state)?;
 
     // Créer le worker Runtime
@@ -100,7 +104,10 @@ pub fn cmd_activate_move(args: &[&str]) -> Result<String, String> {
 
     // Enregistrer dans le MergeRuntime
     {
-        let merge_rt = state.merge_runtime.lock().unwrap_or_else(|e| e.into_inner());
+        let merge_rt = state
+            .merge_runtime
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         merge_rt.register_move(
             move_id.clone(),
             buffer,
@@ -117,7 +124,10 @@ pub fn cmd_activate_move(args: &[&str]) -> Result<String, String> {
         // Démarrer le MergeRuntime si pas déjà démarré
         if !merge_rt.is_running() {
             drop(merge_rt); // Relâcher le lock avant start
-            let mut merge_rt = state.merge_runtime.lock().unwrap_or_else(|e| e.into_inner());
+            let mut merge_rt = state
+                .merge_runtime
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             merge_rt
                 .start()
                 .map_err(|e| format!("Failed to start MergeRuntime: {e}"))?;
@@ -160,7 +170,10 @@ pub fn cmd_list_moves(_args: &[&str]) -> Result<String, String> {
 pub fn cmd_set_macros(args: &[&str]) -> Result<String, String> {
     let opts = parse_args(args);
     let state = cli_state::state();
-    let merge_rt = state.merge_runtime.lock().unwrap_or_else(|e| e.into_inner());
+    let merge_rt = state
+        .merge_runtime
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let macros = merge_rt.macros();
 
     let mut changes = Vec::new();
@@ -299,12 +312,20 @@ pub fn cmd_stop_move(args: &[&str]) -> Result<String, String> {
 
     // Retirer du MergeRuntime
     {
-        let merge_rt = state.merge_runtime.lock().unwrap_or_else(|e| e.into_inner());
+        let merge_rt = state
+            .merge_runtime
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         merge_rt.unregister_move(&real_id);
     }
 
     // Retirer du state
-    let removed = state.movements.lock().unwrap_or_else(|e| e.into_inner()).remove(&real_id).is_some();
+    let removed = state
+        .movements
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(&real_id)
+        .is_some();
     if removed {
         Ok(format!("Move '{real_id}' stopped"))
     } else {
@@ -314,7 +335,13 @@ pub fn cmd_stop_move(args: &[&str]) -> Result<String, String> {
 
 pub fn cmd_stop_all(_args: &[&str]) -> Result<String, String> {
     let state = cli_state::state();
-    let ids: Vec<String> = state.movements.lock().unwrap_or_else(|e| e.into_inner()).keys().cloned().collect();
+    let ids: Vec<String> = state
+        .movements
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .keys()
+        .cloned()
+        .collect();
 
     if ids.is_empty() {
         return Ok("No active moves to stop".to_string());
@@ -322,7 +349,10 @@ pub fn cmd_stop_all(_args: &[&str]) -> Result<String, String> {
 
     // Retirer tous du MergeRuntime
     {
-        let merge_rt = state.merge_runtime.lock().unwrap_or_else(|e| e.into_inner());
+        let merge_rt = state
+            .merge_runtime
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         for id in &ids {
             merge_rt.unregister_move(id);
         }

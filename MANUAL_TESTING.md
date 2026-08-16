@@ -134,6 +134,14 @@ cd tauri-app/src-tauri
 - [ ] Status returns to "Idle"
 - [ ] No residual OSC output
 
+### 4.5 Keyboard Shortcuts (Live)
+- [ ] Space — play/stop the selected move (click a move first to select it)
+- [ ] Enter — GO to next cue in setlist
+- [ ] Backspace — Go to previous cue
+- [ ] Esc — Panic (stop all + send origin positions)
+- [ ] Ctrl+Z / Ctrl+Y — Undo/Redo graph edits
+- [ ] Verify: shortcuts don't fire when typing in input fields
+
 ---
 
 ## Phase 5: Setlist
@@ -193,6 +201,28 @@ cd tauri-app/src-tauri
 - [ ] Sources move in the spatialization software
 - [ ] Positions match 3D preview
 - [ ] No jitter in hardware software
+
+### 7.4 OSC Error Detection
+- [ ] Start a move with valid OSC target
+- [ ] Disconnect network cable (or change target IP to unreachable)
+- [ ] Verify: red toast appears after ~1s: "OSC output failing: X% packet loss"
+- [ ] Reconnect network
+- [ ] Verify: toast does not reappear on next playback session
+
+### 7.5 Storage Quota Warning
+- [ ] Fill localStorage to near quota (save many large graphs)
+- [ ] Verify: red sticky toast appears: "Storage full! Export your show file immediately"
+- [ ] Export a .json show file as backup
+- [ ] Clear some storage and verify toast disappears on next save
+
+### 7.6 OSC Config Lock During Playback
+- [ ] Start a move (playback active)
+- [ ] Try to change OSC address in Toolbar
+- [ ] Verify: warning toast "Cannot change OSC address during playback"
+- [ ] Try to change OSC port
+- [ ] Verify: warning toast appears
+- [ ] Stop all moves
+- [ ] Change OSC address — should now succeed
 
 ---
 

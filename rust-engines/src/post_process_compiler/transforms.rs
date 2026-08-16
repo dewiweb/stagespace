@@ -36,10 +36,7 @@ pub(crate) fn is_post_process_node(node_type: &NodeType) -> bool {
 
 /// Compile la chaîne de nodes en une liste de transformations
 pub(crate) fn compile_chain(chain: &[Node]) -> Result<Vec<TransformFn>, PostProcessCompileError> {
-    chain
-        .iter()
-        .map(compile_transform_node)
-        .collect()
+    chain.iter().map(compile_transform_node).collect()
 }
 
 /// Compile un node de post-processing en une transformation

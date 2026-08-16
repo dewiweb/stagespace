@@ -18,10 +18,9 @@ mod config;
 mod macros;
 mod overrides;
 mod perf;
-mod types;
 #[cfg(test)]
 mod tests;
-
+mod types;
 
 pub use config::*;
 pub use macros::*;
@@ -469,7 +468,10 @@ impl Runtime {
                 if let Some(ref buffer) = position_buffer_arc {
                     // ── Mode worker ──
                     // Lire les osc_ids (hot-swappable) depuis l'arc
-                    let osc_ids = osc_ids_arc.read().unwrap_or_else(|e| e.into_inner()).clone();
+                    let osc_ids = osc_ids_arc
+                        .read()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .clone();
                     let positions: Vec<(usize, nalgebra::Vector3<f64>)> = {
                         let fn_ref = position_fn_arc.lock().unwrap_or_else(|e| e.into_inner());
                         let ovr = overrides.lock();
@@ -502,9 +504,7 @@ impl Runtime {
                                     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                                         fn_ref(t_looped, obj_idx)
                                     }))
-                                        .unwrap_or_else(|_e| {
-                                            nalgebra::Vector3::zeros()
-                                        })
+                                    .unwrap_or_else(|_e| nalgebra::Vector3::zeros())
                                 };
                                 (obj_idx, raw_pos)
                             })
@@ -541,7 +541,10 @@ impl Runtime {
 
                 // ── Mode legacy (OSC direct) ──
                 // Lire les osc_ids (hot-swappable) depuis l'arc
-                let osc_ids = osc_ids_arc.read().unwrap_or_else(|e| e.into_inner()).clone();
+                let osc_ids = osc_ids_arc
+                    .read()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone();
                 let positions: Vec<(usize, nalgebra::Vector3<f64>)> = {
                     let fn_ref = position_fn_arc.lock().unwrap_or_else(|e| e.into_inner());
                     let ovr = overrides.lock();
@@ -572,7 +575,7 @@ impl Runtime {
                                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                                     fn_ref(t_looped, obj_idx)
                                 }))
-                                    .unwrap_or_else(|_| nalgebra::Vector3::zeros())
+                                .unwrap_or_else(|_| nalgebra::Vector3::zeros())
                             };
 
                             // Appliquer radius_scale : scaling radial par rapport à l'origin

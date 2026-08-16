@@ -1,6 +1,6 @@
 mod tests {
-    use crate::graph::parser::build_graph_from_json;
     use crate::graph;
+    use crate::graph::parser::build_graph_from_json;
     use stagespace_engines::{
         Animation, AnimationState, AudioMod, AudioState, EngineParams, OscProfile, OscSender,
         PositionFn, Runtime, TrackAssignment,

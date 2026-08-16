@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { safeListen as listen } from '../utils/tauri';
 import { useGraphStore } from './useGraphStore';
+import { toast } from '../utils/toast-helpers';
+import { safeSetItem } from '../utils/safeStorage';
 
 // ── Types miroir du backend ──
 
@@ -154,9 +156,7 @@ function defaultPresets(): Animation[] {
 }
 
 function saveAnimationsToStorage(animations: Animation[]) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(animations));
-  } catch {}
+  safeSetItem(STORAGE_KEY, JSON.stringify(animations));
 }
 
 export const useAnimationStore = create<AnimationStore>((set, get) => ({
@@ -319,7 +319,7 @@ export const useAnimationStore = create<AnimationStore>((set, get) => ({
       return movementId;
     } catch (e) {
       console.error('[launchAnimation] failed:', e);
-      alert('Launch failed: ' + String(e));
+      toast.error('Launch failed: ' + e);
       return null;
     }
   },
@@ -335,6 +335,7 @@ export const useAnimationStore = create<AnimationStore>((set, get) => ({
       });
     } catch (e) {
       console.error('Update animation state failed:', e);
+      toast.error('Update animation state failed: ' + e);
     }
   },
 

@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { safeInvoke as invoke } from '../utils/tauri';
+import { toast } from '../utils/toast-helpers';
+import { safeSetItem } from '../utils/safeStorage';
 
 export interface CueData {
   id: string;
@@ -58,9 +60,7 @@ function loadFromStorage(): CueData[] {
 }
 
 function saveToStorage(cues: CueData[]) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(cues));
-  } catch {}
+  safeSetItem(STORAGE_KEY, JSON.stringify(cues));
 }
 
 export const useCuelistStore = create<CuelistState>((set, get) => ({
@@ -95,6 +95,7 @@ export const useCuelistStore = create<CuelistState>((set, get) => ({
       set({ currentCueIndex: idx });
     } catch (e) {
       console.error('[recallCue] Failed:', e);
+      toast.error('Cue recall failed: ' + e);
     } finally {
       set({ isRecalling: false });
     }

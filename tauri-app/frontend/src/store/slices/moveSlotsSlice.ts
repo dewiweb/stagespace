@@ -1,8 +1,10 @@
 import { StateCreator } from 'zustand';
 import { safeInvoke as invoke, feLog } from '../../utils/tauri';
+import { toast } from '../../utils/toast-helpers';
 import { computeCentroid } from '../utils/geometryUtils';
 import type { Node, Edge } from 'reactflow';
 import type { HolProject } from '../types/index';
+import { safeSetItem } from '../../utils/safeStorage';
 
 /// Extrait la duration d'un graphe (node Duration) — fallback 4.0s
 function extractDuration(nodes: Node[]): number {
@@ -210,9 +212,7 @@ function loadSlotsFromStorage(): MoveSlot[] {
 }
 
 function saveSlotsToStorage(slots: MoveSlot[]) {
-  try {
-    localStorage.setItem(SLOTS_STORAGE_KEY, JSON.stringify(slots));
-  } catch {}
+  safeSetItem(SLOTS_STORAGE_KEY, JSON.stringify(slots));
 }
 
 function loadSetlistFromStorage(): string[] {
@@ -226,9 +226,7 @@ function loadSetlistFromStorage(): string[] {
 }
 
 function saveSetlistToStorage(setlist: string[]) {
-  try {
-    localStorage.setItem(SETLIST_STORAGE_KEY, JSON.stringify(setlist));
-  } catch {}
+  safeSetItem(SETLIST_STORAGE_KEY, JSON.stringify(setlist));
 }
 
 export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlotsSlice> = (set, get) => ({
@@ -540,6 +538,7 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
       get().refreshMovements();
     } catch (e) {
       console.error(`[playSlot] FAILED slot=${id}:`, e);
+      toast.error('Move failed: ' + e);
       set((s) => ({ pendingPlays: s.pendingPlays.filter((pid) => pid !== id) }));
     }
   },
@@ -559,6 +558,7 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
       await get().stopMovement(movementId);
     } catch (e) {
       console.error(`[stopSlot] FAILED slot=${id}:`, e);
+      toast.error('Stop failed: ' + e);
     }
   },
 
@@ -579,6 +579,7 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
       await get().stopMovementWithFade(movementId, fadeDuration);
     } catch (e) {
       console.error(`[stopSlotWithFade] FAILED slot=${id}:`, e);
+      toast.error('Stop with fade failed: ' + e);
     }
   },
 

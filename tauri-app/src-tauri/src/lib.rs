@@ -28,11 +28,11 @@ use commands::osc::{
     osc_remove_mapping, send_osc_position, set_osc_output, set_osc_receiver_port,
 };
 use commands::overrides::{clear_all_overrides, set_object_override};
-use commands::playback::{
-    play_graph, preview_graph, set_macro, stop_graph, update_graph,
-};
+use commands::playback::{play_graph, preview_graph, set_macro, stop_graph, update_graph};
 use commands::presets::{preset_delete, preset_list, preset_load, preset_save};
-use commands::sampling::{frontend_log, get_perf_stats, sample_movement_trajectory, sample_trajectory};
+use commands::sampling::{
+    frontend_log, get_perf_stats, sample_movement_trajectory, sample_trajectory,
+};
 use graph::parser::build_graph_from_json;
 
 // État global de l'application
@@ -50,6 +50,8 @@ pub struct AppState {
     /// MergeRuntime global — merge les positions de tous les workers,
     /// applique les macros spatiales, envoie l'OSC (une seule socket)
     pub merge_runtime: Arc<Mutex<MergeRuntime>>,
+    /// Flag anti-recall concurrent — empêche deux cue recalls simultanés
+    pub recall_in_progress: Arc<std::sync::atomic::AtomicBool>,
 }
 
 /// Un movement = un runtime indépendant avec ses propres tracks et mode (preview/live)
@@ -117,6 +119,7 @@ pub fn run() {
                 app_handle: Arc::new(Mutex::new(None)),
                 movements: Arc::new(Mutex::new(HashMap::new())),
                 merge_runtime: Arc::new(Mutex::new(merge_rt)),
+                recall_in_progress: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             }
         })
         .on_window_event(|window, event| {

@@ -8,8 +8,8 @@ mod sample;
 
 use hol::{cmd_import_hol, cmd_list_tracks};
 use moves::{
-    cmd_activate_move, cmd_list_moves, cmd_set_macros, cmd_set_merge_strategy,
-    cmd_set_move_speed, cmd_stop_all, cmd_stop_move,
+    cmd_activate_move, cmd_list_moves, cmd_set_macros, cmd_set_merge_strategy, cmd_set_move_speed,
+    cmd_stop_all, cmd_stop_move,
 };
 use osc::{cmd_osc_listen, cmd_osc_validate};
 use sample::{cmd_perf, cmd_sample, cmd_templates};
@@ -99,7 +99,11 @@ pub fn print_help(out: &mut impl Write) {
         "  osc-listen --port <port>           Listen for OSC packets"
     )
     .ok();
-    writeln!(out, "  osc-validate [opts]                Activate move + validate OSC output").ok();
+    writeln!(
+        out,
+        "  osc-validate [opts]                Activate move + validate OSC output"
+    )
+    .ok();
     writeln!(
         out,
         "  perf                               Show performance stats"

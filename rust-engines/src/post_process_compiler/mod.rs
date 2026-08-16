@@ -10,9 +10,9 @@
 //! Le graph global est une chaîne linéaire : Input → [Transform nodes] → Output.
 //! Chaque node transforme les positions et passe au suivant.
 
-mod transforms;
 #[cfg(test)]
 mod tests;
+mod transforms;
 
 use crate::graph::{Graph, Node, NodeId, NodeType};
 use crate::runtime::{MacroState, PostProcessContext, PostProcessFn};

@@ -1,4 +1,5 @@
 import { StateCreator } from 'zustand';
+import { safeSetItem } from '../../utils/safeStorage';
 
 const AUDIO_DEVICE_STORAGE_KEY = 'stagespace-audio-device';
 
@@ -26,13 +27,11 @@ function loadAudioDeviceFromStorage(): string | null {
 }
 
 function saveAudioDeviceToStorage(deviceId: string | null) {
-  try {
-    if (deviceId) {
-      localStorage.setItem(AUDIO_DEVICE_STORAGE_KEY, deviceId);
-    } else {
-      localStorage.removeItem(AUDIO_DEVICE_STORAGE_KEY);
-    }
-  } catch {}
+  if (deviceId) {
+    safeSetItem(AUDIO_DEVICE_STORAGE_KEY, deviceId);
+  } else {
+    localStorage.removeItem(AUDIO_DEVICE_STORAGE_KEY);
+  }
 }
 
 export const createAudioSlice: StateCreator<AudioSlice, [], [], AudioSlice> = (set) => ({

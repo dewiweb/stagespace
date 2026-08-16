@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { type Node, type Edge, MarkerType } from 'reactflow';
 import { safeInvoke as invoke } from '../utils/tauri';
+import { safeSetItem } from '../utils/safeStorage';
 
 // ─── Helpers ───
 
@@ -98,9 +99,7 @@ function loadFromStorage(): { nodes: Node[]; edges: Edge[] } | null {
 }
 
 function saveToStorage(nodes: Node[], edges: Edge[]) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ nodes, edges }));
-  } catch {}
+  safeSetItem(STORAGE_KEY, JSON.stringify({ nodes, edges }));
 }
 
 // Initialiser une seule fois pour que les IDs des nodes et edges correspondent

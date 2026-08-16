@@ -1,5 +1,5 @@
-use crate::AppState;
 use super::state::lock_or_recover;
+use crate::AppState;
 use tauri::State;
 
 /// Log un message depuis le frontend vers stderr (debug)
@@ -11,23 +11,16 @@ pub fn frontend_log(message: String) {
 /// Récupère les stats de performance du runtime (FPS, OSC rate, latency)
 #[tauri::command]
 pub async fn get_perf_stats(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
-    let state_guard = lock_or_recover(&state.runtime);
-    if let Some(runtime) = state_guard.as_ref() {
-        let stats = runtime.get_perf_stats();
-        Ok(serde_json::json!({
-            "fps": stats.fps,
-            "oscRate": stats.osc_rate,
-            "latencyMs": stats.latency_ms,
-            "cpuPercent": stats.cpu_percent,
-        }))
-    } else {
-        Ok(serde_json::json!({
-            "fps": 0,
-            "oscRate": 0,
-            "latencyMs": 0,
-            "cpuPercent": 0,
-        }))
-    }
+    // Priorité au MergeRuntime (architecture hybride) — c'est lui qui tourne en live
+    let merge_rt = lock_or_recover(&state.merge_runtime);
+    let stats = merge_rt.get_perf_stats();
+    Ok(serde_json::json!({
+        "fps": stats.fps,
+        "oscRate": stats.osc_rate,
+        "latencyMs": stats.latency_ms,
+        "cpuPercent": stats.cpu_percent,
+        "oscErrorRate": stats.osc_error_rate,
+    }))
 }
 
 /// Échantillonne la trajectoire compilée pour la visualiser dans la 3D
