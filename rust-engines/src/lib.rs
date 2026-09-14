@@ -1,5 +1,6 @@
 pub mod animation;
 pub mod audio;
+pub mod audio_capture;
 pub mod bpm;
 pub mod compiler;
 pub mod config;
@@ -46,6 +47,7 @@ pub use audio::{
     AmplitudeData, AudioBinding, AudioFrame, AudioReactor, AudioSource, AudioState, BPMData,
     SpectrumData,
 };
+pub use audio_capture::{AudioCaptureError, AudioCaptureManager, AudioDeviceInfo, BpmDetector};
 pub use bpm::BpmTracker;
 pub use compiler::{AudioParamOverrides, CompilationError, CompiledFunction, Compiler};
 pub use config::{AudioConfig, Config, GraphConfig, OscConfig, RuntimeConfig};

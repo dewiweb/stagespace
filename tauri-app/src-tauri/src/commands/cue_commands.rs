@@ -108,36 +108,8 @@ pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), Stri
     // Garantir que le flag est remis à false quoi qu'il arrive
     let _guard = RecallGuard(&state.recall_in_progress);
 
-    // 1. Désactiver les moves qui ne sont pas dans active_move_ids
-    {
-        let movements = lock_or_recover(&state.movements);
-        let active_ids: std::collections::HashSet<&str> =
-            cue.active_move_ids.iter().map(|s| s.as_str()).collect();
-
-        let to_deactivate: Vec<String> = movements
-            .keys()
-            .filter(|id| !active_ids.contains(id.as_str()))
-            .cloned()
-            .collect();
-
-        drop(movements);
-
-        for id in to_deactivate {
-            // Stop le worker
-            let mut movements = lock_or_recover(&state.movements);
-            if let Some(movement) = movements.get_mut(&id) {
-                movement.runtime.stop();
-                if let Some(handle) = movement.thread_handle.take() {
-                    drop(handle); // Le thread se terminera de lui-même
-                }
-            }
-            // Unregister du merge runtime
-            let merge_rt = lock_or_recover(&state.merge_runtime);
-            merge_rt.unregister_move(&id);
-        }
-    }
-
-    // 2. Hot-swap le graph global si présent
+    // 1. Hot-swap le graph global AVANT de désactiver les moves (fail-fast sans side effects)
+    //    Si la compilation échoue, on retourne une erreur sans avoir modifié l'état.
     if let Some(ref global_graph) = cue.global_graph {
         let audio_state = {
             let merge_rt = lock_or_recover(&state.merge_runtime);
@@ -160,6 +132,32 @@ pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), Stri
             .map_err(|e| format!("Failed to compile global graph: {e:?}"))?;
 
         merge_rt.swap_post_process_fn(post_process_fn);
+    }
+
+    // 2. Désactiver les moves qui ne sont pas dans active_move_ids
+    {
+        let movements = lock_or_recover(&state.movements);
+        let active_ids: std::collections::HashSet<&str> =
+            cue.active_move_ids.iter().map(|s| s.as_str()).collect();
+
+        let to_deactivate: Vec<String> = movements
+            .keys()
+            .filter(|id| !active_ids.contains(id.as_str()))
+            .cloned()
+            .collect();
+
+        drop(movements);
+
+        for id in to_deactivate {
+            // Stop le worker et join le thread proprement (stop() fait le join)
+            let mut movements = lock_or_recover(&state.movements);
+            if let Some(movement) = movements.get_mut(&id) {
+                movement.runtime.stop();
+            }
+            // Unregister du merge runtime
+            let merge_rt = lock_or_recover(&state.merge_runtime);
+            merge_rt.unregister_move(&id);
+        }
     }
 
     // 3. Restaurer les macros spatiales (fast path atomic)

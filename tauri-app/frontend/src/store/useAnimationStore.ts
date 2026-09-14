@@ -140,7 +140,7 @@ function loadAnimationsFromStorage(): Animation[] {
       // First launch ou version obsolète — seed with default presets
       const defaults = defaultPresets();
       saveAnimationsToStorage(defaults);
-      localStorage.setItem(STORAGE_KEY + '-version', String(STORAGE_VERSION));
+      safeSetItem(STORAGE_KEY + '-version', String(STORAGE_VERSION));
       return defaults;
     }
     return JSON.parse(raw);

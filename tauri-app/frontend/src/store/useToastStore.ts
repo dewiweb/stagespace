@@ -24,7 +24,11 @@ export const useToastStore = create<ToastStore>((set, get) => ({
   push: (type, message, timeout = 5000) => {
     const id = `toast-${++counter}`;
     const toast: Toast = { id, type, message, timeout };
-    set((s) => ({ toasts: [...s.toasts, toast] }));
+    set((s) => {
+      const newToasts = [...s.toasts, toast];
+      // Limite à 5 toasts visibles pour éviter l'overflow en live
+      return { toasts: newToasts.slice(-5) };
+    });
     if (timeout > 0) {
       setTimeout(() => get().dismiss(id), timeout);
     }

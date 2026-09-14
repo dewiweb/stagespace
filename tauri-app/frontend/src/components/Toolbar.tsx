@@ -53,11 +53,15 @@ export const Toolbar: React.FC = () => {
       } else if (e.key === 'Enter') {
         // GO: next cue in setlist
         e.preventDefault();
-        useCuelistStore.getState().goToNextCue();
+        if (!useCuelistStore.getState().isRecalling) {
+          useCuelistStore.getState().goToNextCue();
+        }
       } else if (e.key === 'Backspace') {
         // Previous cue
         e.preventDefault();
-        useCuelistStore.getState().goToPreviousCue();
+        if (!useCuelistStore.getState().isRecalling) {
+          useCuelistStore.getState().goToPreviousCue();
+        }
       } else if (e.key === ' ') {
         // Space: play/stop the selected (editing) slot
         e.preventDefault();
@@ -182,7 +186,7 @@ export const Toolbar: React.FC = () => {
           onClick={handleImportHol}
           className="px-3 py-1.5 text-xs font-medium rounded bg-blue-700 hover:bg-blue-600 text-white transition-colors flex items-center gap-1.5"
         >
-          <span className="text-[10px]">�</span> Import .hol
+          <span className="text-[10px]">◆</span> Import .hol
         </button>
         {holProject && (
           <span className="text-[11px] text-green-400 font-medium">

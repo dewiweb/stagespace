@@ -105,7 +105,7 @@ pub async fn launch_animation(
     ));
 
     // 7. Lancer le playback
-    let handle = runtime
+    runtime
         .play_compiled(
             compiled,
             EngineParams {
@@ -130,7 +130,6 @@ pub async fn launch_animation(
                 osc_ids,
                 is_preview,
                 track_indices: vec![],
-                thread_handle: Some(handle),
             },
         );
     }

@@ -20,8 +20,10 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Error handling
 thiserror = "1.0"
-# Precise sleep for live timing
-spin_sleep = "0.3"
+# Audio input (microphone) + FFT
+# cpal >= 0.15 publié depuis un moment, version stable
+cpal = "0.15"
+realfft = "3.3"
 
 [dev-dependencies]
 criterion = "0.5"

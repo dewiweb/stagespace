@@ -1,6 +1,7 @@
 import { StateCreator } from 'zustand';
 import type { Node, Edge } from 'reactflow';
 import { safeInvoke as invoke } from '../../utils/tauri';
+import { safeSetItem } from '../../utils/safeStorage';
 
 export interface PersistenceSlice {
   // Persistence (localStorage)
@@ -24,7 +25,7 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
   saveGraph: async (name) => {
     const { nodes, edges } = get();
     const graphData = { nodes, edges, timestamp: Date.now() };
-    localStorage.setItem(`stagespace_graph_${name}`, JSON.stringify(graphData));
+    safeSetItem(`stagespace_graph_${name}`, JSON.stringify(graphData));
   },
 
   loadGraph: async (name) => {

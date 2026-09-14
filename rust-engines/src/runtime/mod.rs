@@ -62,6 +62,8 @@ pub struct Runtime {
     /// Le worker thread lit cette valeur à chaque frame pour savoir
     /// combien de positions calculer.
     osc_ids_arc: Arc<std::sync::RwLock<Vec<u32>>>,
+    /// Handle du thread de playback — join propre dans stop()
+    thread_handle: Mutex<Option<std::thread::JoinHandle<()>>>,
 }
 
 impl Runtime {
@@ -91,6 +93,7 @@ impl Runtime {
             position_buffer: Mutex::new(None),
             duration_ms: Arc::new(std::sync::atomic::AtomicU64::new(4000)),
             osc_ids_arc: Arc::new(std::sync::RwLock::new(Vec::new())),
+            thread_handle: Mutex::new(None),
         })
     }
 
@@ -263,7 +266,7 @@ impl Runtime {
         position_fn: PositionFn,
         params: EngineParams,
         osc_ids: Vec<u32>,
-    ) -> Result<std::thread::JoinHandle<()>> {
+    ) -> Result<()> {
         log_runtime_init(params.fps, params.n_objects);
         log_playback_start(
             params.duration,
@@ -719,12 +722,26 @@ impl Runtime {
                 }
             }
         });
-        Ok(handle)
+        // Stocker le handle pour join propre dans stop()
+        *self
+            .thread_handle
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(handle);
+        Ok(())
     }
 
-    /// Arrête le playback
+    /// Arrête le playback et join le thread proprement
     pub fn stop(&self) {
         self.running.store(false, Ordering::SeqCst);
+        // Join le thread pour éviter stale OSC + use-after-free
+        if let Some(handle) = self
+            .thread_handle
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
+        {
+            let _ = handle.join();
+        }
         log_playback_stop();
     }
 

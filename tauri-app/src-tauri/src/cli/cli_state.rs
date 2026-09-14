@@ -13,7 +13,6 @@ pub struct CliMovement {
     pub osc_ids: Vec<u32>,
     pub is_preview: bool,
     pub track_indices: Vec<usize>,
-    pub thread_handle: Option<std::thread::JoinHandle<()>>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

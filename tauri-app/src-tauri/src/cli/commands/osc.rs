@@ -445,7 +445,7 @@ pub fn cmd_osc_validate(args: &[&str]) -> Result<String, String> {
     let buffer = Arc::new(PositionBuffer::new());
     runtime.set_position_buffer(buffer.clone());
 
-    let handle = runtime
+    runtime
         .play_compiled(
             compiled,
             EngineParams {
@@ -465,7 +465,6 @@ pub fn cmd_osc_validate(args: &[&str]) -> Result<String, String> {
         osc_ids: osc_ids.clone(),
         is_preview: false,
         track_indices: track_indices.clone(),
-        thread_handle: Some(handle),
     };
     state
         .movements

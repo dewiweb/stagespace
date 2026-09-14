@@ -111,7 +111,7 @@ pub async fn activate_move(
         }
 
         // 7. Démarrer le worker thread
-        let handle = runtime
+        runtime
             .play_compiled(
                 compiled,
                 EngineParams {
@@ -132,7 +132,6 @@ pub async fn activate_move(
             osc_ids: request.osc_ids.clone(),
             is_preview: request.is_preview,
             track_indices: request.track_indices.clone(),
-            thread_handle: Some(handle),
         };
         {
             let mut movements = lock_or_recover(&movements_arc);
@@ -240,10 +239,7 @@ pub async fn deactivate_move(
             movements.remove(&mv_id)
         };
         if let Some(mut movement) = movement {
-            movement.runtime.stop();
-            if let Some(handle) = movement.thread_handle.take() {
-                drop(handle);
-            }
+            movement.runtime.stop(); // stop() join le thread proprement
         }
         if let Some(app_handle) = lock_or_recover(&app_state).clone() {
             let _ = app_handle.emit("active-moves-update", ());
@@ -268,10 +264,7 @@ fn deactivate_move_immediate_arc(
         movements.remove(movement_id)
     };
     if let Some(mut movement) = movement {
-        movement.runtime.stop();
-        if let Some(handle) = movement.thread_handle.take() {
-            drop(handle);
-        }
+        movement.runtime.stop(); // stop() join le thread proprement
     }
     if let Some(app_handle) = lock_or_recover(app_handle).clone() {
         let _ = app_handle.emit("active-moves-update", ());
@@ -320,10 +313,7 @@ pub async fn deactivate_all_moves(
                     movements.remove(id)
                 };
                 if let Some(mut movement) = movement {
-                    movement.runtime.stop();
-                    if let Some(handle) = movement.thread_handle.take() {
-                        drop(handle);
-                    }
+                    movement.runtime.stop(); // stop() join le thread proprement
                 }
             }
             if let Some(app_handle) = lock_or_recover(&app_state).clone() {
@@ -358,10 +348,10 @@ pub async fn get_merge_perf_stats(state: State<'_, AppState>) -> Result<serde_js
     let perf = merge_rt.get_perf_stats();
     Ok(serde_json::json!({
         "fps": perf.fps,
-        "osc_rate": perf.osc_rate,
-        "latency_ms": perf.latency_ms,
-        "cpu_percent": perf.cpu_percent,
-        "osc_error_rate": perf.osc_error_rate,
+        "oscRate": perf.osc_rate,
+        "latencyMs": perf.latency_ms,
+        "cpuPercent": perf.cpu_percent,
+        "oscErrorRate": perf.osc_error_rate,
     }))
 }
 

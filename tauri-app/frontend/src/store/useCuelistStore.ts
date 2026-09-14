@@ -77,15 +77,22 @@ export const useCuelistStore = create<CuelistState>((set, get) => ({
   },
 
   storeCue: async (cueData) => {
-    // Appeler le backend pour créer le cue (valide la structure)
-    const cue = await invoke<CueData>('store_cue', { request: cueData });
-    const cues = [...get().cues, cue];
-    set({ cues });
-    saveToStorage(cues);
-    return cue;
+    try {
+      // Appeler le backend pour créer le cue (valide la structure)
+      const cue = await invoke<CueData>('store_cue', { request: cueData });
+      const cues = [...get().cues, cue];
+      set({ cues });
+      saveToStorage(cues);
+      return cue;
+    } catch (e) {
+      console.error('[storeCue] Failed:', e);
+      toast.error('Failed to store cue: ' + e);
+      throw e;
+    }
   },
 
   recallCue: async (cueId: string) => {
+    if (get().isRecalling) return; // empêche les recalls concurrents
     const cue = get().cues.find((c) => c.id === cueId);
     if (!cue) return;
     set({ isRecalling: true });

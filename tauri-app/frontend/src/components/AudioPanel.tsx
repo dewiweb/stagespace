@@ -1,145 +1,81 @@
 import React from 'react';
-import { safeInvoke as invoke } from '../utils/tauri';
+import { safeInvoke as invoke, safeListen } from '../utils/tauri';
 import { useGraphStore, type AudioState } from '../store/useGraphStore';
-import { createBpmDetector, detectBeat, type BpmDetector } from '../utils/bpmDetector';
+
+interface AudioDevice {
+  id: string;
+  name: string;
+}
 
 export default function AudioPanel() {
   const audioState = useGraphStore((s) => s.audioState);
   const setAudioState = useGraphStore((s) => s.setAudioState);
   const selectedAudioDeviceId = useGraphStore((s) => s.selectedAudioDeviceId);
+  const setSelectedAudioDeviceId = useGraphStore((s) => s.setSelectedAudioDeviceId);
   const [isListening, setIsListening] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [audioDevices, setAudioDevices] = React.useState<MediaDeviceInfo[]>([]);
-
-  const audioCtxRef = React.useRef<AudioContext | null>(null);
-  const analyserRef = React.useRef<AnalyserNode | null>(null);
-  const streamRef = React.useRef<MediaStream | null>(null);
-  const rafRef = React.useRef<number | null>(null);
-  const lastPushRef = React.useRef(0);
-  const bpmDetectorRef = React.useRef<BpmDetector>(createBpmDetector());
+  const [audioDevices, setAudioDevices] = React.useState<AudioDevice[]>([]);
 
   const stopListening = React.useCallback(async () => {
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    rafRef.current = null;
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
-    if (audioCtxRef.current) {
-      await audioCtxRef.current.close();
-      audioCtxRef.current = null;
-    }
-    analyserRef.current = null;
-    bpmDetectorRef.current = createBpmDetector();
     setIsListening(false);
+    try {
+      await invoke('stop_audio_capture', {});
+    } catch (e) {
+      console.error('[AudioPanel] stop_audio_capture failed:', e);
+    }
     setAudioState({ bpm: null, amplitude: null, spectrum: null });
   }, [setAudioState]);
 
   const startListening = React.useCallback(async () => {
     setError(null);
     try {
-      // Vérifier que getUserMedia est disponible
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error(
-          'Microphone not available. On Linux, run:\n' +
-          'gsettings set org.webkit.webkit2gtk allow-microphone true\n' +
-          'or launch with: WEBKIT_USE_SINGLE_WEB_PROCESS=1'
-        );
-      }
-
-      // Énumérer les devices audio si pas déjà fait
-      if (audioDevices.length === 0) {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        setAudioDevices(devices.filter((d) => d.kind === 'audioinput'));
-      }
-
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-          deviceId: selectedAudioDeviceId ? { exact: selectedAudioDeviceId } : undefined,
-        },
+      await invoke('start_audio_capture', {
+        deviceId: selectedAudioDeviceId,
       });
-      streamRef.current = stream;
-
-      const ctx = new AudioContext();
-      audioCtxRef.current = ctx;
-      const source = ctx.createMediaStreamSource(stream);
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 1024;
-      analyser.smoothingTimeConstant = 0.8;
-      source.connect(analyser);
-      analyserRef.current = analyser;
-
       setIsListening(true);
-
-      const freqData = new Uint8Array(analyser.frequencyBinCount);
-      const timeData = new Uint8Array(analyser.fftSize);
-
-      const tick = () => {
-        if (!analyserRef.current) return;
-        analyserRef.current.getByteFrequencyData(freqData);
-        analyserRef.current.getByteTimeDomainData(timeData);
-
-        // Compute RMS from time domain
-        let sum = 0;
-        for (let i = 0; i < timeData.length; i++) {
-          const v = (timeData[i] - 128) / 128;
-          sum += v * v;
-        }
-        const rms = Math.sqrt(sum / timeData.length);
-
-        // Compute bass/mid/high from frequency bins
-        const bins = freqData.length;
-        const bassEnd = Math.floor(bins * 0.1);
-        const midEnd = Math.floor(bins * 0.4);
-        let bassSum = 0, midSum = 0, highSum = 0;
-        for (let i = 0; i < bassEnd; i++) bassSum += freqData[i];
-        for (let i = bassEnd; i < midEnd; i++) midSum += freqData[i];
-        for (let i = midEnd; i < bins; i++) highSum += freqData[i];
-
-        const bass = bassSum / (bassEnd * 255);
-        const mid = midSum / ((midEnd - bassEnd) * 255);
-        const high = highSum / ((bins - midEnd) * 255);
-
-        // Beat detection — update BPM from low-frequency energy
-        const ctx = audioCtxRef.current;
-        const detector = detectBeat(
-          bpmDetectorRef.current, freqData, analyser.fftSize,
-          performance.now(), ctx?.sampleRate,
-        );
-        const bpm = detector.bpm !== null
-          ? { bpm: detector.bpm, confidence: detector.confidence, last_beat_time: detector.lastBeatTime / 1000 }
-          : null;
-
-        const newAudioState: AudioState = {
-          bpm,
-          amplitude: { rms, bass, mid, high },
-          spectrum: { spectrum: Array.from(freqData).map((v) => v / 255), fft_size: analyser.fftSize },
-        };
-
-        setAudioState(newAudioState);
-
-        // Push to Rust at most ~10/s
-        const now = performance.now();
-        if (now - lastPushRef.current > 100) {
-          lastPushRef.current = now;
-          invoke('update_audio_state', { audioData: newAudioState }).catch(console.error);
-        }
-
-        rafRef.current = requestAnimationFrame(tick);
-      };
-      rafRef.current = requestAnimationFrame(tick);
-    } catch (e: any) {
-      setError(e?.message ?? 'Failed to access microphone');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg ?? 'Failed to start audio capture');
       setIsListening(false);
     }
-  }, [setAudioState, selectedAudioDeviceId, audioDevices.length]);
+  }, [selectedAudioDeviceId]);
 
+  // Charger la liste des devices au montage
   React.useEffect(() => {
-    return () => { void stopListening(); };
-  }, [stopListening]);
+    invoke<AudioDevice[]>('list_audio_devices', {})
+      .then((devices) => setAudioDevices(devices))
+      .catch((e: unknown) => {
+        console.error('[AudioPanel] list_audio_devices failed:', e);
+        const msg = e instanceof Error ? e.message : String(e);
+        setError(`Audio device listing failed: ${msg}`);
+      });
+  }, []);
+
+  // Écouter les mises à jour audio du backend
+  React.useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let cancelled = false;
+    safeListen<AudioState>('audio-state-update', (event) => {
+      setAudioState(event.payload);
+    }).then((fn) => {
+      if (cancelled) {
+        fn(); // cleanup immédiat si déjà unmounted
+      } else {
+        unlisten = fn;
+      }
+    });
+    return () => {
+      cancelled = true;
+      if (unlisten) unlisten();
+    };
+  }, [setAudioState]);
+
+  // Cleanup à la fermeture — toujours stopper la capture au démontage
+  React.useEffect(() => {
+    return () => {
+      invoke('stop_audio_capture', {}).catch(() => {});
+    };
+  }, []);
 
   const amp = audioState.amplitude;
 
@@ -157,6 +93,21 @@ export default function AudioPanel() {
           {error}
         </div>
       )}
+
+      {/* Device selector */}
+      <select
+        value={selectedAudioDeviceId ?? ''}
+        onChange={(e) => setSelectedAudioDeviceId(e.target.value || null)}
+        disabled={isListening || audioDevices.length === 0}
+        className="w-full text-xs bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-gray-300 focus:outline-none focus:border-blue-500"
+      >
+        <option value="">{audioDevices.length === 0 ? 'No devices' : 'Default device'}</option>
+        {audioDevices.map((d) => (
+          <option key={d.id} value={d.id}>
+            {d.name}
+          </option>
+        ))}
+      </select>
 
       {/* Status */}
       <div className="p-2.5 bg-gray-800/50 rounded-lg border border-gray-700/50">
@@ -212,9 +163,12 @@ export default function AudioPanel() {
       <div className="mt-auto">
         <button
           onClick={isListening ? stopListening : startListening}
+          disabled={audioDevices.length === 0}
           className={`w-full py-2 px-3 rounded-lg font-medium text-xs transition-all ${
             isListening
               ? 'bg-red-600 hover:bg-red-700 text-white'
+              : audioDevices.length === 0
+              ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
               : 'bg-blue-600 hover:bg-blue-700 text-white'
           }`}
         >

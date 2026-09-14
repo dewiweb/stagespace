@@ -98,6 +98,7 @@ export const createOscConfigSlice: StateCreator<OscConfigSlice, [], [], OscConfi
         toast.warning('Cannot change OSC input port during playback. Stop all moves first.');
         return;
       }
+      const oldPort = get().oscInPort;
       set({ oscInPort: port });
       const s = get();
       saveConfigToStorage({ oscAddress: s.oscAddress, oscPort: s.oscPort, oscProfile: s.oscProfile, oscInPort: port });
@@ -105,6 +106,9 @@ export const createOscConfigSlice: StateCreator<OscConfigSlice, [], [], OscConfi
       try {
         await invoke('set_osc_receiver_port', { port });
       } catch (e) {
+        // Revert state + storage si le backend échoue
+        set({ oscInPort: oldPort });
+        saveConfigToStorage({ oscAddress: s.oscAddress, oscPort: s.oscPort, oscProfile: s.oscProfile, oscInPort: oldPort });
         console.error('[setOscInPort] Failed to set OSC receiver port:', e);
         toast.error('OSC port change failed: ' + e);
       }

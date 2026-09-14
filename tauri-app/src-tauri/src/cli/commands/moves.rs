@@ -73,7 +73,7 @@ pub fn cmd_activate_move(args: &[&str]) -> Result<String, String> {
     runtime.set_position_buffer(buffer.clone());
 
     // Démarrer le worker
-    let handle = runtime
+    runtime
         .play_compiled(
             compiled,
             EngineParams {
@@ -94,7 +94,6 @@ pub fn cmd_activate_move(args: &[&str]) -> Result<String, String> {
         osc_ids: osc_ids.clone(),
         is_preview,
         track_indices: track_indices.clone(),
-        thread_handle: Some(handle),
     };
     state
         .movements

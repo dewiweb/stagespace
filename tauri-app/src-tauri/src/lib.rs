@@ -3,16 +3,21 @@
 
 use serde::Serialize;
 use stagespace_engines::{
-    init_logging, AudioState, MergeRuntime, OscReceiver, OscSender, PresetManager, Runtime,
+    init_logging, AudioCaptureManager, AudioState, MergeRuntime, OscReceiver, OscSender,
+    PresetManager, Runtime,
 };
 use std::collections::HashMap;
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, State};
 
 mod commands;
 pub mod graph;
 use commands::animation::{launch_animation, update_animation_state};
-use commands::audio::{get_audio_state, update_audio_state};
+use commands::audio::{
+    get_audio_state, list_audio_devices, start_audio_capture, start_audio_poller,
+    stop_audio_capture, update_audio_state,
+};
 use commands::cue_commands::{delete_cue, list_cues, recall_cue, store_cue};
 use commands::file_io::{import_hol_project, load_graph_from_file, save_graph_to_file};
 use commands::merge_commands::{
@@ -52,6 +57,10 @@ pub struct AppState {
     pub merge_runtime: Arc<Mutex<MergeRuntime>>,
     /// Flag anti-recall concurrent — empêche deux cue recalls simultanés
     pub recall_in_progress: Arc<std::sync::atomic::AtomicBool>,
+    /// Capture audio via cpal (remplace getUserMedia de la WebView)
+    pub audio_capture: Arc<Mutex<AudioCaptureManager>>,
+    /// Flag pour arrêter le poller audio proprement à la fermeture
+    pub audio_poller_shutdown: Arc<AtomicBool>,
 }
 
 /// Un movement = un runtime indépendant avec ses propres tracks et mode (preview/live)
@@ -62,7 +71,6 @@ pub struct Movement {
     pub osc_ids: Vec<u32>,
     pub is_preview: bool,
     pub track_indices: Vec<usize>, // indices des tracks dans le .hol
-    pub thread_handle: Option<std::thread::JoinHandle<()>>,
 }
 
 /// Limite de movements simultanés pour éviter l'épuisement des ressources
@@ -106,9 +114,39 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage({
             let osc_sender = OscSender::default();
+            // Ne pas panic si le port 8000 est pris — mode dégradé
             let merge_rt =
-                MergeRuntime::new("127.0.0.1".to_string(), 8000, osc_sender.clone(), 60.0)
-                    .expect("Failed to create MergeRuntime");
+                match MergeRuntime::new("127.0.0.1".to_string(), 8000, osc_sender.clone(), 60.0) {
+                    Ok(rt) => rt,
+                    Err(e) => {
+                        eprintln!(
+                            "[WARN] MergeRuntime failed to bind port 8000: {e}. \
+                             Trying port 8002 as fallback..."
+                        );
+                        match MergeRuntime::new(
+                            "127.0.0.1".to_string(),
+                            8002,
+                            osc_sender.clone(),
+                            60.0,
+                        ) {
+                            Ok(rt) => rt,
+                            Err(e2) => {
+                                eprintln!(
+                                    "[ERROR] MergeRuntime failed on both ports: {e}, {e2}. \
+                                     Starting with a disabled merge runtime."
+                                );
+                                // Dernier recours : port 0 (OS assigne un port aléatoire)
+                                MergeRuntime::new(
+                                    "127.0.0.1".to_string(),
+                                    0,
+                                    osc_sender.clone(),
+                                    60.0,
+                                )
+                                .expect("MergeRuntime must start on port 0")
+                            }
+                        }
+                    }
+                };
             AppState {
                 runtime: Mutex::new(None),
                 audio_state: Arc::new(Mutex::new(AudioState::new())),
@@ -120,6 +158,8 @@ pub fn run() {
                 movements: Arc::new(Mutex::new(HashMap::new())),
                 merge_runtime: Arc::new(Mutex::new(merge_rt)),
                 recall_in_progress: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                audio_capture: Arc::new(Mutex::new(AudioCaptureManager::new())),
+                audio_poller_shutdown: Arc::new(AtomicBool::new(false)),
             }
         })
         .on_window_event(|window, event| {
@@ -132,10 +172,7 @@ pub fn run() {
                     movements.drain().map(|(_, m)| m).collect()
                 };
                 for movement in drained {
-                    movement.runtime.stop();
-                    if let Some(handle) = movement.thread_handle {
-                        let _ = handle.join();
-                    }
+                    movement.runtime.stop(); // stop() join le thread proprement
                 }
                 // Stopper aussi le runtime legacy
                 if let Some(runtime) = state
@@ -158,6 +195,15 @@ pub fn run() {
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .stop();
+                // Stopper la capture audio (libère le microphone)
+                {
+                    let capture = lock_or_recover(&state.audio_capture);
+                    capture.stop();
+                }
+                // Arrêter le poller audio
+                state
+                    .audio_poller_shutdown
+                    .store(true, std::sync::atomic::Ordering::SeqCst);
                 eprintln!("[INFO] All movements stopped on window close");
             }
         })
@@ -187,6 +233,14 @@ pub fn run() {
                 }
             }
 
+            // Démarrer le poller audio (envoie `audio-state-update` au frontend)
+            {
+                let app_handle = app.handle().clone();
+                let state: &AppState = &app.state();
+                start_audio_poller(app_handle, state);
+                eprintln!("[INFO] Audio state poller started");
+            }
+
             // Sur Linux WebKitGTK : autoriser getUserMedia (microphone)
             #[cfg(target_os = "linux")]
             {
@@ -196,7 +250,13 @@ pub fn run() {
                         use webkit2gtk::WebViewExt;
                         let webview = wv.inner();
                         webview.connect_permission_request(|_wv, req| {
-                            req.allow();
+                            // N'autoriser que les permissions audio (microphone)
+                            // Pas caméra, géolocation, notifications, etc.
+                            if req.downcast_ref::<webkit2gtk::PermissionRequestMediaAudio>()
+                                .is_some()
+                            {
+                                req.allow();
+                            }
                             false
                         });
                     });
@@ -207,6 +267,9 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             import_hol_project,
+            list_audio_devices,
+            start_audio_capture,
+            stop_audio_capture,
             update_audio_state,
             get_audio_state,
             osc_add_mapping,

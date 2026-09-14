@@ -90,11 +90,21 @@ pub async fn set_global_origin(origin: [f64; 3], state: State<'_, AppState>) -> 
 }
 
 /// Définit les OSC ids globaux (tracks sélectionnées)
+/// Bloqué pendant le playback pour éviter d'envoyer des positions vers des tracks inexistantes
 #[tauri::command]
 pub async fn set_global_osc_ids(
     osc_ids: Vec<u32>,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
+    // Vérifier si des movements sont actifs
+    {
+        let movements = lock_or_recover(&state.movements);
+        if !movements.is_empty() {
+            return Err(
+                "Cannot change OSC IDs during playback. Stop all moves first.".to_string(),
+            );
+        }
+    }
     let merge_rt = lock_or_recover(&state.merge_runtime);
     merge_rt.set_osc_ids(osc_ids);
     Ok(())

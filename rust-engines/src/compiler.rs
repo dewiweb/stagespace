@@ -278,7 +278,7 @@ impl Compiler {
                 let n_objects = Self::resolve_n_objects(graph, node)?;
                 Ok(Box::new(move |t, i| {
                     let pos = upstream_fn(t, i);
-                    // Compute all positions for barycenter
+                    // Compute all positions once and reuse (évite O(N²))
                     let all: Vec<_> = (0..n_objects).map(|j| upstream_fn(t, j)).collect();
                     crate::engines::modifiers::barycentric_group(pos, &all, center)
                 }))
@@ -403,7 +403,7 @@ impl Compiler {
                     )
                 }))
             }
-            _ => unreachable!(),
+            other => Err(CompilationError::InvalidNodeType(other)),
         }
     }
 
