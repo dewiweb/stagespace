@@ -21,11 +21,12 @@ use commands::audio::{
 use commands::cue_commands::{delete_cue, list_cues, recall_cue, store_cue};
 use commands::file_io::{import_hol_project, load_graph_from_file, save_graph_to_file};
 use commands::merge_commands::{
-    activate_move, add_channel_modulation, clear_all_manual_positions,
+    activate_move, add_channel_modulation, add_zone, clear_all_manual_positions,
     clear_all_spatial_channels, clear_channel_modulations, clear_manual_position,
-    clear_spatial_channel, deactivate_all_moves, deactivate_move, get_merge_perf_stats,
-    list_active_moves, remove_channel_modulation, set_global_macro, set_global_origin,
-    set_global_osc_ids, set_kinematic_smoothing, set_manual_position, set_merge_strategy,
+    clear_spatial_channel, clear_zones, deactivate_all_moves, deactivate_move,
+    get_merge_perf_stats, list_active_moves, list_zones, remove_channel_modulation,
+    remove_zone, set_global_macro, set_global_origin, set_global_osc_ids,
+    set_kinematic_smoothing, set_manual_position, set_merge_strategy,
     set_move_playback_mode, set_move_speed, set_spatial_channel, set_track_depths,
     set_track_positions, update_global_graph, update_move_graph_merged,
 };
@@ -351,6 +352,11 @@ pub fn run() {
             remove_channel_modulation,
             clear_channel_modulations,
             set_kinematic_smoothing,
+            // Zones (Phase 4 P4 — effets spatiaux par position)
+            add_zone,
+            remove_zone,
+            clear_zones,
+            list_zones,
             // Cue commands (Phase 3 — cue system étendu)
             store_cue,
             recall_cue,

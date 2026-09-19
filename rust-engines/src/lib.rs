@@ -22,6 +22,7 @@ pub mod presets;
 pub mod rng;
 pub mod runtime;
 pub mod validator;
+pub mod zones;
 
 #[cfg(test)]
 mod animation_tests;
@@ -84,3 +85,4 @@ pub use runtime::{
     Runtime,
 };
 pub use validator::{ValidationError, ValidationResult, Validator};
+pub use zones::{apply_zones, Zone, ZoneShape};

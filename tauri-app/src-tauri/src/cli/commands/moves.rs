@@ -555,3 +555,158 @@ pub fn cmd_kin_smoothing(args: &[&str]) -> Result<String, String> {
     merge_rt.set_kinematic_smoothing(value);
     Ok(format!("Kinematic smoothing set to {value}"))
 }
+
+// ─── Zones (P4) ─────────────────────────────────────────────────────────────
+
+/// Parse "gain=0.5,spread=1" → SpatialChannels
+fn parse_zone_channels(s: &str) -> Result<stagespace_engines::SpatialChannels, String> {
+    let mut channels = stagespace_engines::SpatialChannels::default();
+    for pair in s.split(',') {
+        let (name, val) = pair
+            .split_once('=')
+            .ok_or_else(|| format!("Invalid channel spec '{pair}' (expected ch=value)"))?;
+        let ch = stagespace_engines::SpatialChannel::from_str(name.trim())?;
+        let v: f64 = val
+            .trim()
+            .parse()
+            .map_err(|_| format!("Invalid channel value: {val}"))?;
+        channels.set(ch, v);
+    }
+    Ok(channels)
+}
+
+/// Usage:
+///   zone-add sphere <cx> <cy> <cz> <radius> --channels gain=0.5,spread=1 [--falloff 0.5] [--objs 0,2]
+///   zone-add box <minx> <miny> <minz> <maxx> <maxy> <maxz> --channels gain=0 [--falloff 0.5]
+pub fn cmd_zone_add(args: &[&str]) -> Result<String, String> {
+    let positional: Vec<&&str> = args.iter().filter(|a| !a.starts_with("--")).collect();
+    if positional.len() < 5 {
+        return Err(
+            "Usage: zone-add <sphere cx cy cz r | box minx miny minz maxx maxy maxz> --channels ch=v,... [--falloff f] [--objs i,j]"
+                .to_string(),
+        );
+    }
+    let num = |i: usize| -> Result<f64, String> {
+        positional
+            .get(i)
+            .ok_or_else(|| format!("Missing positional arg #{i}"))?
+            .parse::<f64>()
+            .map_err(|_| format!("Invalid number: {}", positional[i]))
+    };
+    let shape = match *positional[0] {
+        "sphere" => stagespace_engines::ZoneShape::Sphere {
+            center: [num(1)?, num(2)?, num(3)?],
+            radius: num(4)?,
+        },
+        "box" => stagespace_engines::ZoneShape::Box {
+            min: [num(1)?, num(2)?, num(3)?],
+            max: [num(4)?, num(5)?, num(6)?],
+        },
+        s => return Err(format!("Unknown zone shape '{s}' (sphere|box)")),
+    };
+
+    let opts = parse_args(args);
+    let channels = match opts.get("channels") {
+        Some(spec) => parse_zone_channels(spec)?,
+        None => return Err("Missing --channels ch=value,...".to_string()),
+    };
+    if channels.is_empty() {
+        return Err("Zone requires at least one channel".to_string());
+    }
+    let falloff = opts
+        .get("falloff")
+        .map(|s| s.parse::<f64>())
+        .transpose()
+        .map_err(|_| "Invalid --falloff".to_string())?
+        .unwrap_or(0.0)
+        .max(0.0);
+    let objects = opts
+        .get("objs")
+        .map(|s| {
+            s.split(',')
+                .map(|p| p.trim().parse::<usize>())
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|_| format!("Invalid --objs: {s}").to_string())
+        })
+        .transpose()?;
+
+    let zone = stagespace_engines::Zone {
+        shape,
+        falloff,
+        channels,
+        objects,
+        enabled: !opts.contains_key("disabled"),
+    };
+    let state = cli_state::state();
+    let merge_rt = state
+        .merge_runtime
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    let idx = merge_rt.add_zone(zone);
+    Ok(format!("Zone #{idx} added"))
+}
+
+/// Usage: zone-list
+pub fn cmd_zone_list(_args: &[&str]) -> Result<String, String> {
+    let state = cli_state::state();
+    let merge_rt = state
+        .merge_runtime
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    let zones = merge_rt.zones();
+    if zones.is_empty() {
+        return Ok("No zones".to_string());
+    }
+    let mut out = format!("Zones ({}):\n", zones.len());
+    for (i, z) in zones.iter().enumerate() {
+        let shape = match &z.shape {
+            stagespace_engines::ZoneShape::Sphere { center, radius } => {
+                format!("sphere c={center:?} r={radius}")
+            }
+            stagespace_engines::ZoneShape::Box { min, max } => {
+                format!("box {min:?}→{max:?}")
+            }
+        };
+        let chs: Vec<String> = z
+            .channels
+            .iter()
+            .map(|(ch, v)| format!("{ch:?}={v}"))
+            .collect();
+        let objs = z
+            .objects
+            .as_ref()
+            .map(|o| format!(" objs={o:?}"))
+            .unwrap_or_default();
+        let state = if z.enabled { "" } else { " [disabled]" };
+        out.push_str(&format!(
+            "  #{i} {shape} falloff={} ch=[{}]{objs}{state}\n",
+            z.falloff,
+            chs.join(",")
+        ));
+    }
+    Ok(out)
+}
+
+/// Usage: zone-clear <index|all>
+pub fn cmd_zone_clear(args: &[&str]) -> Result<String, String> {
+    if args.is_empty() {
+        return Err("Usage: zone-clear <index|all>".to_string());
+    }
+    let state = cli_state::state();
+    let merge_rt = state
+        .merge_runtime
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    if args[0] == "all" {
+        merge_rt.clear_zones();
+        return Ok("All zones cleared".to_string());
+    }
+    let idx: usize = args[0]
+        .parse()
+        .map_err(|_| format!("Invalid index: {}", args[0]))?;
+    if merge_rt.remove_zone(idx) {
+        Ok(format!("Zone #{idx} removed"))
+    } else {
+        Err(format!("No zone at index {idx}"))
+    }
+}

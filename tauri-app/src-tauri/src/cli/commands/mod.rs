@@ -10,7 +10,7 @@ use hol::{cmd_import_hol, cmd_list_tracks};
 use moves::{
     cmd_activate_move, cmd_clear_channel, cmd_kin_smoothing, cmd_list_moves, cmd_mod_add,
     cmd_mod_clear, cmd_mod_list, cmd_set_channel, cmd_set_macros, cmd_set_merge_strategy,
-    cmd_set_move_speed, cmd_stop_all, cmd_stop_move,
+    cmd_set_move_speed, cmd_stop_all, cmd_stop_move, cmd_zone_add, cmd_zone_clear, cmd_zone_list,
 };
 use osc::{
     cmd_osc_in, cmd_osc_inject, cmd_osc_listen, cmd_osc_map, cmd_osc_maps, cmd_osc_suppress,
@@ -48,6 +48,9 @@ pub fn dispatch(input: &str) -> Result<String, String> {
         "mod-list" => cmd_mod_list(rest),
         "mod-clear" => cmd_mod_clear(rest),
         "kin-smoothing" => cmd_kin_smoothing(rest),
+        "zone-add" => cmd_zone_add(rest),
+        "zone-list" | "zones" => cmd_zone_list(rest),
+        "zone-clear" => cmd_zone_clear(rest),
         "stop-move" => cmd_stop_move(rest),
         "stop-all" => cmd_stop_all(rest),
         "osc-listen" | "osc-listen-validate" => cmd_osc_listen(rest),
@@ -131,6 +134,13 @@ pub fn print_help(out: &mut impl Write) {
         "  kin-smoothing <0-0.99>             Set kinematic smoothing"
     )
     .ok();
+    writeln!(
+        out,
+        "  zone-add <sphere|box> .. --ch ..   Add spatial effect zone (channels ch=v,...)"
+    )
+    .ok();
+    writeln!(out, "  zone-list                          List zones").ok();
+    writeln!(out, "  zone-clear <index|all>             Remove zone(s)").ok();
     writeln!(out, "  stop-move <id>                     Stop a move").ok();
     writeln!(out, "  stop-all                           Stop all moves").ok();
     writeln!(

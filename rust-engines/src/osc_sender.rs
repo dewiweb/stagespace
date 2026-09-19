@@ -75,6 +75,34 @@ impl SpatialChannels {
         }
     }
 
+    /// Lit un canal (None si non défini)
+    pub fn get(&self, channel: SpatialChannel) -> Option<f64> {
+        match channel {
+            SpatialChannel::Gain => self.gain,
+            SpatialChannel::Spread => self.spread,
+            SpatialChannel::Distance => self.distance,
+            SpatialChannel::Presence => self.presence,
+            SpatialChannel::Yaw => self.yaw,
+            SpatialChannel::Aperture => self.aperture,
+            SpatialChannel::Lfe => self.lfe,
+        }
+    }
+
+    /// Itère sur les canaux définis (Some uniquement)
+    pub fn iter(&self) -> impl Iterator<Item = (SpatialChannel, f64)> + '_ {
+        [
+            (SpatialChannel::Gain, self.gain),
+            (SpatialChannel::Spread, self.spread),
+            (SpatialChannel::Distance, self.distance),
+            (SpatialChannel::Presence, self.presence),
+            (SpatialChannel::Yaw, self.yaw),
+            (SpatialChannel::Aperture, self.aperture),
+            (SpatialChannel::Lfe, self.lfe),
+        ]
+        .into_iter()
+        .filter_map(|(ch, v)| v.map(|v| (ch, v)))
+    }
+
     /// Efface un canal
     pub fn clear(&mut self, channel: SpatialChannel) {
         match channel {

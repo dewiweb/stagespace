@@ -758,7 +758,40 @@ internes, avec transform composable par mapping.
 `modparam:` (piloter les règles P2 par OSC), matching multi-segment `#`,
 valeurs dérivées (delta/vélocité d'entrée), learn-by-demonstration (Wekinator).
 
-### P4+ : voir `RESEARCH_STATE_OF_ART.md` §4.2
+### P4 : Zones d'effets spatiaux ✅
 
-Zone (SFFX contrôle-side), steering complet, SMS + rate limiting,
-sync (timetags/Link), VirtualMic (ViMiC).
+SFFX contrôle-side : une [`Zone`] est une région de l'espace (sphère ou boîte)
+qui tire les canaux spatiaux des objets présents vers des valeurs cibles,
+proportionnellement à l'influence (smoothstep sur `falloff` au-delà du bord).
+
+**Architecture** (`zones.rs`) :
+
+- `ZoneShape::Sphere { center, radius }` | `Box { min, max }` — distance
+  signée au bord (SDF), `influence = 1 − smoothstep(d/falloff)`.
+- `Zone { shape, falloff, channels, objects, enabled }` — `channels` =
+  `SpatialChannels` cible à pleine influence ; `objects` filtre optionnel.
+- Blend : `effective[ch] = lerp(base_ou_neutre, zone[ch], influence)` où
+  `base` = valeur statique ou modulée cinématiquement (neutre : gain=1,
+  autres=0). Zones composables — appliquées dans l'ordre.
+- Évalué dans le merge thread sur les positions **finales** après la
+  modulation cinématique — les zones voient le mouvement réellement émis.
+
+**Tâches** :
+- [x] `zones.rs` : `ZoneShape` (SDF sphère/boîte), `Zone`, `influence`,
+      `apply_zones`, `any_zone_applies`
+- [x] `SpatialChannels::get` / `iter`
+- [x] MergeRuntime : `add/remove/clear/list` zones, passe zones dans la
+      boucle après modulation cinématique
+- [x] Commands Tauri : `add_zone` (params struct), `remove_zone`,
+      `clear_zones`, `list_zones`
+- [x] CLI : `zone-add sphere|box … --channels ch=v,… [--falloff] [--objs]`,
+      `zone-list`, `zone-clear`
+
+**Reste** : node graphe `Zone` (défini dans le graphe, pas seulement runtime),
+formes supplémentaires (cylindre, plan half-space), zones temporelles,
+UI frontend (visualisation + édition), persistance cues.
+
+### P5+ : voir `RESEARCH_STATE_OF_ART.md` §4.2
+
+Steering complet (VectorField), SMS + rate limiting, sync (timetags/Link),
+VirtualMic (ViMiC), TUIO IN, MSC/MTC.

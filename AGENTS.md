@@ -30,7 +30,7 @@ stagespace/
 ```bash
 cd rust-engines
 cargo build              # Build
-cargo test --lib         # Run tests (214 tests)
+cargo test --lib         # Run tests (223 tests)
 cargo clippy --lib --all-targets -- -D warnings  # Lint
 cargo fmt -- --check     # Format check
 ```
@@ -109,11 +109,11 @@ See `.github/workflows/ci.yml`.
 
 | Suite | Count |
 |-------|-------|
-| Rust engines | 214 |
+| Rust engines | 223 |
 | Tauri backend | 27 |
 | Frontend (vitest) | 173 |
 | E2E CLI | 42 |
-| **Total** | **456** |
+| **Total** | **465** |
 
 ## Live Show Safety Features
 

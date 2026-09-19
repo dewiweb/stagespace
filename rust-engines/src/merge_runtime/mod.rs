@@ -89,6 +89,8 @@ pub struct MergeRuntime {
     channel_modulations: Arc<RwLock<Vec<ChannelModulation>>>,
     /// Coefficient de lissage des mesures cinématiques [0, 1)
     kinematic_smoothing: Arc<RwLock<f64>>,
+    /// Zones d'effets spatiaux (P4) — blend des canaux selon la position
+    zones: Arc<RwLock<Vec<crate::zones::Zone>>>,
 }
 
 impl MergeRuntime {
@@ -127,6 +129,7 @@ impl MergeRuntime {
             object_channels: Arc::new(RwLock::new(HashMap::new())),
             channel_modulations: Arc::new(RwLock::new(Vec::new())),
             kinematic_smoothing: Arc::new(RwLock::new(0.5)),
+            zones: Arc::new(RwLock::new(Vec::new())),
         })
     }
 
@@ -350,6 +353,37 @@ impl MergeRuntime {
             .unwrap_or_else(|e| e.into_inner()) = smoothing.clamp(0.0, 0.99);
     }
 
+    /// Ajoute une zone d'effet spatial. Retourne l'index de la zone.
+    pub fn add_zone(&self, zone: crate::zones::Zone) -> usize {
+        let mut zones = self.zones.write().unwrap_or_else(|e| e.into_inner());
+        zones.push(zone);
+        zones.len() - 1
+    }
+
+    /// Supprime une zone par index
+    pub fn remove_zone(&self, index: usize) -> bool {
+        let mut zones = self.zones.write().unwrap_or_else(|e| e.into_inner());
+        if index < zones.len() {
+            zones.remove(index);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Efface toutes les zones
+    pub fn clear_zones(&self) {
+        self.zones
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
+    }
+
+    /// Récupère les zones actives (pour debug/persistance)
+    pub fn zones(&self) -> Vec<crate::zones::Zone> {
+        self.zones.read().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
     /// Récupère les macros (pour modification temps réel — fast path atomic)
     pub fn macros(&self) -> Arc<MacroState> {
         self.macros.clone()
@@ -481,6 +515,7 @@ impl MergeRuntime {
         let track_positions_arc = self.track_positions.clone();
         let manual_positions_arc = self.manual_positions.clone();
         let object_channels_arc = self.object_channels.clone();
+        let zones_arc = self.zones.clone();
         let channel_modulations_arc = self.channel_modulations.clone();
         let kinematic_smoothing_arc = self.kinematic_smoothing.clone();
 
@@ -669,6 +704,11 @@ impl MergeRuntime {
                     apply_modulations(&rules, &kinematic_states)
                 };
 
+                // 4.6 Zones (P4) : snapshot sous read lock court — le blend
+                // par objet se fait sans lock dans la boucle d'envoi.
+                let zones: Vec<crate::zones::Zone> =
+                    zones_arc.read().unwrap_or_else(|e| e.into_inner()).clone();
+
                 // 5. OSC output (une seule socket)
                 // Séparer display (tout) de OSC (exclut les moves en preview)
                 let preview_tracks: std::collections::HashSet<usize> = {
@@ -691,17 +731,21 @@ impl MergeRuntime {
                     }
                     if let Some(&osc_id) = osc_ids.get(*obj_idx) {
                         // Canaux effectifs = statiques + modulés (modulation
-                        // prioritaire sur les canaux qu'elle cible)
+                        // prioritaire sur les canaux qu'elle cible) + zones
+                        // (blend par influence, prioritaires sur le reste)
+                        let has_zones = crate::zones::any_zone_applies(&zones, *obj_idx, pos);
                         let effective: Option<SpatialChannels> = match (
                             object_channels.get(obj_idx),
                             modulated_channels.get(obj_idx),
+                            has_zones,
                         ) {
-                            (None, None) => None,
-                            (s, m) => {
+                            (None, None, false) => None,
+                            (s, m, _) => {
                                 let mut eff = s.copied().unwrap_or_default();
                                 if let Some(mc) = m {
                                     eff.overlay(mc);
                                 }
+                                crate::zones::apply_zones(&zones, *obj_idx, pos, &mut eff);
                                 Some(eff)
                             }
                         };

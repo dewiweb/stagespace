@@ -4,7 +4,8 @@
 use crate::AppState;
 use serde::Deserialize;
 use stagespace_engines::kinematics::{ChannelModulation, KinematicSource};
-use stagespace_engines::osc_sender::SpatialChannel;
+use stagespace_engines::osc_sender::{SpatialChannel, SpatialChannels};
+use stagespace_engines::zones::{Zone, ZoneShape};
 use std::str::FromStr;
 use tauri::State;
 
@@ -120,4 +121,84 @@ pub async fn set_kinematic_smoothing(
     let merge_rt = lock_or_recover(&state.merge_runtime);
     merge_rt.set_kinematic_smoothing(smoothing);
     Ok(())
+}
+
+/// Paramètres d'une zone d'effet spatial
+#[derive(Deserialize)]
+pub struct ZoneParams {
+    /// "sphere" (center+radius) ou "box" (min+max)
+    pub shape: String,
+    /// sphere : [cx, cy, cz] ; box : [min_x, min_y, min_z]
+    pub a: [f64; 3],
+    /// sphere : rayon ; box : ignoré (utiliser b)
+    pub radius: Option<f64>,
+    /// box : [max_x, max_y, max_z]
+    pub b: Option<[f64; 3]>,
+    /// Largeur de transition au-delà du bord (défaut 0 = bord franc)
+    pub falloff: Option<f64>,
+    /// Canaux cibles à pleine influence
+    pub channels: std::collections::HashMap<String, f64>,
+    /// Objets concernés (défaut : tous)
+    pub objects: Option<Vec<usize>>,
+}
+
+/// Ajoute une zone d'effet spatial : les canaux listés sont tirés vers leurs
+/// valeurs cibles proportionnellement à l'influence (smoothstep sur falloff).
+#[tauri::command]
+pub async fn add_zone(params: ZoneParams, state: State<'_, AppState>) -> Result<usize, String> {
+    let shape = match params.shape.to_lowercase().as_str() {
+        "sphere" => ZoneShape::Sphere {
+            center: params.a,
+            radius: params.radius.unwrap_or(1.0),
+        },
+        "box" => ZoneShape::Box {
+            min: params.a,
+            max: params
+                .b
+                .ok_or("Box zone requires 'b' (max corner)")?,
+        },
+        s => return Err(format!("Unknown zone shape '{s}' (sphere|box)")),
+    };
+    let mut channels = SpatialChannels::default();
+    for (name, value) in &params.channels {
+        channels.set(SpatialChannel::from_str(name)?, *value);
+    }
+    if channels.is_empty() {
+        return Err("Zone requires at least one channel".to_string());
+    }
+    let zone = Zone {
+        shape,
+        falloff: params.falloff.unwrap_or(0.0).max(0.0),
+        channels,
+        objects: params.objects,
+        enabled: true,
+    };
+    let merge_rt = lock_or_recover(&state.merge_runtime);
+    Ok(merge_rt.add_zone(zone))
+}
+
+/// Supprime une zone par index
+#[tauri::command]
+pub async fn remove_zone(index: usize, state: State<'_, AppState>) -> Result<(), String> {
+    let merge_rt = lock_or_recover(&state.merge_runtime);
+    if merge_rt.remove_zone(index) {
+        Ok(())
+    } else {
+        Err(format!("No zone at index {index}"))
+    }
+}
+
+/// Efface toutes les zones
+#[tauri::command]
+pub async fn clear_zones(state: State<'_, AppState>) -> Result<(), String> {
+    let merge_rt = lock_or_recover(&state.merge_runtime);
+    merge_rt.clear_zones();
+    Ok(())
+}
+
+/// Liste les zones actives
+#[tauri::command]
+pub async fn list_zones(state: State<'_, AppState>) -> Result<Vec<Zone>, String> {
+    let merge_rt = lock_or_recover(&state.merge_runtime);
+    Ok(merge_rt.zones())
 }
