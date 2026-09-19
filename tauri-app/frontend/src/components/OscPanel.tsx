@@ -1,5 +1,6 @@
 import React from 'react';
 import { useGraphStore, useOscValueListener } from '../store/useGraphStore';
+import { describeDestination } from '../store/slices/oscSlice';
 
 export default function OscPanel() {
   const { oscMappings, oscValues, addOscMapping, removeOscMapping, listOscMappings } = useGraphStore();
@@ -61,14 +62,14 @@ export default function OscPanel() {
           type="text"
           value={handler}
           onChange={(e) => setHandler(e.target.value)}
-          placeholder="Handler name"
+          placeholder="Destination (handler:name, macro:scale, channel:gain:3, position:2)"
           className="w-full px-2.5 py-1.5 bg-gray-800 text-white text-xs rounded border border-gray-700 focus:border-orange-500 focus:outline-none"
         />
         <input
           type="text"
           value={transform}
           onChange={(e) => setTransform(e.target.value)}
-          placeholder="Transform (optional, e.g. x*2+1)"
+          placeholder="Transform (optional, e.g. scale=2 offset=1 min=0 max=1 smooth=0.5)"
           className="w-full px-2.5 py-1.5 bg-gray-800 text-white text-xs rounded border border-gray-700 focus:border-orange-500 focus:outline-none font-mono"
         />
         <button
@@ -97,9 +98,15 @@ export default function OscPanel() {
                   <div className="flex justify-between items-start">
                     <div className="flex-1 min-w-0">
                       <div className="text-white text-[11px] font-mono font-medium truncate">{addr}</div>
-                      <div className="text-gray-500 text-[10px] truncate">→ {mapping.handler}</div>
-                      {mapping.transform && (
-                        <div className="text-gray-600 text-[10px] truncate font-mono mt-0.5">{mapping.transform}</div>
+                      <div className="text-gray-500 text-[10px] truncate">→ {describeDestination(mapping.destination)}</div>
+                      {mapping.transform && (mapping.transform.scale !== 1 || mapping.transform.offset !== 0 || mapping.transform.min !== null || mapping.transform.max !== null || mapping.transform.smooth !== 0 || mapping.transform.deadzone !== 0) && (
+                        <div className="text-gray-600 text-[10px] truncate font-mono mt-0.5">
+                          scale={mapping.transform.scale} offset={mapping.transform.offset}
+                          {mapping.transform.min !== null && ` min=${mapping.transform.min}`}
+                          {mapping.transform.max !== null && ` max=${mapping.transform.max}`}
+                          {mapping.transform.smooth !== 0 && ` smooth=${mapping.transform.smooth}`}
+                          {mapping.transform.deadzone !== 0 && ` dz=${mapping.transform.deadzone}`}
+                        </div>
                       )}
                     </div>
                     <button

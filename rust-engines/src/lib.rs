@@ -67,8 +67,11 @@ pub use logging::{
 };
 pub use merge_runtime::{MergeRuntime, MergeStrategy, MoveState};
 pub use modulator::{ModulationSlot, Modulator, Waveform};
-pub use osc_receiver::{OscMapping, OscReceiver};
-pub use osc_sender::{OscProfile, OscSender};
+pub use osc_receiver::{
+    MacroTarget, MappingDestination, ObjectRef, OscInStatsSnapshot, OscInTargets, OscMapping,
+    OscReceiver, Transform,
+};
+pub use osc_sender::{OscProfile, OscSender, SpatialChannel, SpatialChannels};
 pub use patch::{AudioObject, ObjectGroup, PatchManager};
 pub use position_buffer::{IndexedPosition, PositionBuffer};
 pub use post_process_compiler::{

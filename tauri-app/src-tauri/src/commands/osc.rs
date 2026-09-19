@@ -1,25 +1,27 @@
 use super::state::lock_or_recover;
 use crate::AppState;
-use stagespace_engines::{OscMapping, OscProfile, OscReceiver, OscSender};
+use stagespace_engines::{
+    OscInStatsSnapshot, OscMapping, OscProfile, OscReceiver, OscSender,
+};
 use std::str::FromStr;
 use tauri::State;
 
 // OSC Receiver Commands
+
+/// Ajoute un mapping OSC IN → destination (handler | macro | channel | position).
+/// Le mapping est actif immédiatement, même si le receiver tourne déjà.
 #[tauri::command]
 pub async fn osc_add_mapping(
-    address: String,
-    handler: String,
-    transform: Option<String>,
+    mapping: OscMapping,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let mut receiver = lock_or_recover(&state.osc_receiver);
-    receiver.add_mapping(address, handler, transform);
-    Ok(())
+    let receiver = lock_or_recover(&state.osc_receiver);
+    receiver.add_mapping(mapping)
 }
 
 #[tauri::command]
 pub async fn osc_remove_mapping(address: String, state: State<'_, AppState>) -> Result<(), String> {
-    let mut receiver = lock_or_recover(&state.osc_receiver);
+    let receiver = lock_or_recover(&state.osc_receiver);
     receiver.remove_mapping(&address);
     Ok(())
 }
@@ -30,6 +32,35 @@ pub async fn osc_list_mappings(state: State<'_, AppState>) -> Result<Vec<OscMapp
     Ok(receiver.list_mappings())
 }
 
+/// Active/désactive globalement l'OSC IN (master switch anti-loop)
+#[tauri::command]
+pub async fn osc_set_in_enabled(enabled: bool, state: State<'_, AppState>) -> Result<(), String> {
+    let receiver = lock_or_recover(&state.osc_receiver);
+    receiver.set_in_enabled(enabled);
+    Ok(())
+}
+
+/// Supprime l'OSC IN pendant `duration_ms` — les messages reçus pendant la
+/// fenêtre sont ignorés (anti-loop après recall/panic)
+#[tauri::command]
+pub async fn osc_suppress_in(
+    duration_ms: u64,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let receiver = lock_or_recover(&state.osc_receiver);
+    receiver.suppress_ms(duration_ms);
+    Ok(())
+}
+
+/// Statistiques du pipeline OSC IN (reçus / matchés / routés / droppés)
+#[tauri::command]
+pub async fn osc_in_stats(state: State<'_, AppState>) -> Result<OscInStatsSnapshot, String> {
+    let receiver = lock_or_recover(&state.osc_receiver);
+    Ok(receiver.stats())
+}
+
+/// Retourne la dernière valeur reçue pour une clé (handler name ou feedback
+/// key de destination : "macro:scale", "channel:Gain:3", "position:2")
 #[tauri::command]
 pub async fn osc_get_value(
     handler: String,
@@ -48,18 +79,33 @@ pub async fn osc_get_all_values(state: State<'_, AppState>) -> Result<serde_json
     serde_json::to_value(values).map_err(|e| e.to_string())
 }
 
-/// Change le port du receiver OSC — stop l'ancien, crée un nouveau, démarre
+/// Change le port du receiver OSC — stop l'ancien, recrée un receiver en
+/// préservant mappings, targets, enable state, puis démarre
 #[tauri::command]
 pub async fn set_osc_receiver_port(port: u16, state: State<'_, AppState>) -> Result<(), String> {
-    let mut receiver = lock_or_recover(&state.osc_receiver);
-    // Stopper l'ancien receiver
-    receiver.stop();
-    // Créer un nouveau receiver sur le nouveau port
-    *receiver = OscReceiver::new(port);
-    // Démarrer le nouveau receiver
-    receiver
+    let (mappings, targets, enabled) = {
+        let mut receiver = lock_or_recover(&state.osc_receiver);
+        receiver.stop();
+        (
+            receiver.list_mappings(),
+            receiver.targets(),
+            receiver.in_enabled(),
+        )
+    };
+
+    let mut new_receiver = OscReceiver::new(port);
+    new_receiver.set_targets(targets);
+    new_receiver.set_in_enabled(enabled);
+    for mapping in mappings {
+        new_receiver
+            .add_mapping(mapping)
+            .map_err(|e| format!("Failed to restore mapping: {e}"))?;
+    }
+    new_receiver
         .start()
         .map_err(|e| format!("Failed to start OSC receiver on port {port}: {e}"))?;
+
+    *lock_or_recover(&state.osc_receiver) = new_receiver;
     eprintln!("[INFO] OSC receiver now listening on port {port}");
     Ok(())
 }
@@ -99,6 +145,9 @@ pub async fn send_osc_position(
     z: f64,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
+    // Anti-loop : ignorer les echoes OSC IN pendant le panic
+    lock_or_recover(&state.osc_receiver).suppress_ms(200);
+
     let sender = lock_or_recover(&state.osc_sender);
     let (addr, values) = sender.format_position(osc_id, nalgebra::Vector3::new(x, y, z));
 

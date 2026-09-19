@@ -31,8 +31,9 @@ use commands::merge_commands::{
 };
 use commands::network::discover_osc_targets;
 use commands::osc::{
-    get_osc_receiver_port, osc_add_mapping, osc_get_all_values, osc_get_value, osc_list_mappings,
-    osc_remove_mapping, send_osc_position, set_osc_output, set_osc_receiver_port,
+    get_osc_receiver_port, osc_add_mapping, osc_get_all_values, osc_get_value, osc_in_stats,
+    osc_list_mappings, osc_remove_mapping, osc_set_in_enabled, osc_suppress_in, send_osc_position,
+    set_osc_output, set_osc_receiver_port,
 };
 use commands::overrides::{clear_all_overrides, set_object_override};
 use commands::playback::{play_graph, preview_graph, set_macro, stop_graph, update_graph};
@@ -226,6 +227,14 @@ pub fn run() {
             // Non-fatal : si le port est pris, on log l'erreur mais l'app continue
             {
                 let mut receiver = state.osc_receiver.lock().unwrap_or_else(|e| e.into_inner());
+                // Connecter le routing OSC IN aux destinations du MergeRuntime
+                // (macros, canaux spatiaux, positions manuelles)
+                let targets = state
+                    .merge_runtime
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .osc_in_targets();
+                receiver.set_targets(targets);
                 if let Err(e) = receiver.start() {
                     eprintln!(
                         "[WARN] OSC receiver failed to start on port {}: {}",
@@ -286,6 +295,9 @@ pub fn run() {
             osc_list_mappings,
             osc_get_value,
             osc_get_all_values,
+            osc_set_in_enabled,
+            osc_suppress_in,
+            osc_in_stats,
             set_osc_receiver_port,
             set_osc_output,
             get_osc_receiver_port,

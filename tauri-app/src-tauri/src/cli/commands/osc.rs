@@ -2,9 +2,13 @@
 
 use crate::cli_state;
 use crate::graph_presets;
-use stagespace_engines::{EngineParams, LoopMode, OscSender, PositionBuffer, Runtime};
+use stagespace_engines::{
+    EngineParams, LoopMode, MacroTarget, MappingDestination, ObjectRef, OscMapping, OscSender,
+    PositionBuffer, Runtime, SpatialChannel, Transform,
+};
 use stagespace_tauri::graph::compilation::compile_graph_with_audio_and_overrides;
 use stagespace_tauri::graph::parser::build_graph_from_json;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use super::helpers::{osc_ids_to_indices, parse_args, parse_track_list};
@@ -523,4 +527,272 @@ pub fn cmd_osc_validate(args: &[&str]) -> Result<String, String> {
     Ok(format!(
         "OSC validation: template={template}, tracks={track_str}, port={port}, profile={profile}\n{report}"
     ))
+}
+
+// ─── OSC IN mapping (P3) ────────────────────────────────────────────────────
+
+/// Parse une destination : handler:NAME | macro:NAME | channel:CH:OBJ | position:OBJ
+/// OBJ = index (0,1,2…) ou wildcard ("*", "*1"…). Un nom nu → handler.
+fn parse_destination(s: &str) -> Result<MappingDestination, String> {
+    let parts: Vec<&str> = s.split(':').collect();
+    match parts.as_slice() {
+        ["handler", name] => Ok(MappingDestination::Handler {
+            name: (*name).to_string(),
+        }),
+        ["macro", name] => Ok(MappingDestination::Macro {
+            name: MacroTarget::from_str(name)?,
+        }),
+        ["channel", ch, obj] => Ok(MappingDestination::Channel {
+            channel: SpatialChannel::from_str(ch)?,
+            object: parse_object_ref(obj)?,
+        }),
+        ["position", obj] => Ok(MappingDestination::Position {
+            object: parse_object_ref(obj)?,
+        }),
+        [name] => Ok(MappingDestination::Handler {
+            name: (*name).to_string(),
+        }),
+        _ => Err(format!(
+            "Invalid destination '{s}' — expected handler:NAME | macro:NAME | channel:CH:OBJ | position:OBJ"
+        )),
+    }
+}
+
+fn parse_object_ref(s: &str) -> Result<ObjectRef, String> {
+    if s.starts_with('*') {
+        Ok(ObjectRef::Wildcard(s.to_string()))
+    } else {
+        s.parse::<usize>()
+            .map(ObjectRef::Index)
+            .map_err(|_| format!("Invalid object ref '{s}' — expected index or wildcard (*)"))
+    }
+}
+
+fn describe_object(o: &ObjectRef) -> String {
+    match o {
+        ObjectRef::Index(i) => i.to_string(),
+        ObjectRef::Wildcard(w) => w.clone(),
+    }
+}
+
+fn describe_mapping(m: &OscMapping) -> String {
+    let dest = match &m.destination {
+        MappingDestination::Handler { name } => format!("handler:{name}"),
+        MappingDestination::Macro { name } => format!("macro:{name:?}").to_lowercase(),
+        MappingDestination::Channel { channel, object } => {
+            format!("channel:{channel:?}:{}", describe_object(object)).to_lowercase()
+        }
+        MappingDestination::Position { object } => {
+            format!("position:{}", describe_object(object))
+        }
+    };
+    let t = &m.transform;
+    let mut tf = String::new();
+    if t.scale != 1.0 {
+        tf.push_str(&format!(" scale={}", t.scale));
+    }
+    if t.offset != 0.0 {
+        tf.push_str(&format!(" offset={}", t.offset));
+    }
+    if let Some(min) = t.min {
+        tf.push_str(&format!(" min={min}"));
+    }
+    if let Some(max) = t.max {
+        tf.push_str(&format!(" max={max}"));
+    }
+    if t.smooth > 0.0 {
+        tf.push_str(&format!(" smooth={}", t.smooth));
+    }
+    if t.deadzone > 0.0 {
+        tf.push_str(&format!(" deadzone={}", t.deadzone));
+    }
+    let state = if m.enabled { "" } else { " [disabled]" };
+    format!("{} → {dest}{tf}{state}", m.address)
+}
+
+/// Usage: osc-map <address> <dest> [--scale s] [--offset o] [--min m] [--max M] [--smooth s] [--deadzone d]
+/// dest: handler:NAME | macro:NAME | channel:CH:OBJ | position:OBJ (OBJ = index ou * / *N)
+pub fn cmd_osc_map(args: &[&str]) -> Result<String, String> {
+    let positional: Vec<&&str> = args.iter().filter(|a| !a.starts_with("--")).collect();
+    if positional.len() < 2 {
+        return Err(
+            "Usage: osc-map <address> <handler:NAME|macro:NAME|channel:CH:OBJ|position:OBJ> [opts]"
+                .to_string(),
+        );
+    }
+    let address = (*positional[0]).to_string();
+    let destination = parse_destination(positional[1])?;
+    let opts = parse_args(args);
+
+    let num = |key: &str| -> Result<Option<f64>, String> {
+        opts.get(key)
+            .map(|s| s.parse::<f64>().map_err(|_| format!("Invalid --{key}: {s}")))
+            .transpose()
+    };
+    let transform = Transform {
+        scale: num("scale")?.unwrap_or(1.0),
+        offset: num("offset")?.unwrap_or(0.0),
+        min: num("min")?,
+        max: num("max")?,
+        smooth: num("smooth")?.unwrap_or(0.0),
+        deadzone: num("deadzone")?.unwrap_or(0.0),
+    };
+
+    let mapping = OscMapping {
+        address,
+        destination,
+        transform,
+        enabled: !opts.contains_key("disabled"),
+    };
+    let desc = describe_mapping(&mapping);
+
+    let state = cli_state::state();
+    state
+        .osc_receiver
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .add_mapping(mapping)?;
+    Ok(format!("✓ Mapping added: {desc}"))
+}
+
+/// Usage: osc-unmap <address>
+pub fn cmd_osc_unmap(args: &[&str]) -> Result<String, String> {
+    let address = args.first().ok_or("Usage: osc-unmap <address>")?;
+    let state = cli_state::state();
+    let removed = state
+        .osc_receiver
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove_mapping(address);
+    if removed {
+        Ok(format!("✓ Mapping removed: {address}"))
+    } else {
+        Err(format!("No mapping for address: {address}"))
+    }
+}
+
+/// Usage: osc-maps
+pub fn cmd_osc_maps(_args: &[&str]) -> Result<String, String> {
+    let state = cli_state::state();
+    let receiver = state.osc_receiver.lock().unwrap_or_else(|e| e.into_inner());
+    let mappings = receiver.list_mappings();
+    if mappings.is_empty() {
+        return Ok("No OSC IN mappings".to_string());
+    }
+    let mut out = format!("OSC IN mappings ({}):\n", mappings.len());
+    let mut lines: Vec<String> = mappings.iter().map(describe_mapping).collect();
+    lines.sort();
+    for line in lines {
+        out.push_str(&format!("  {line}\n"));
+    }
+    Ok(out)
+}
+
+/// Usage: osc-inject <address> <v1> [v2] [v3] — injecte un message dans le
+/// pipeline de mapping sans passer par le socket UDP
+pub fn cmd_osc_inject(args: &[&str]) -> Result<String, String> {
+    if args.len() < 2 {
+        return Err("Usage: osc-inject <address> <v1> [v2] [v3...]".to_string());
+    }
+    let address = args[0];
+    let values: Result<Vec<f64>, _> = args[1..].iter().map(|s| s.parse::<f64>()).collect();
+    let values = values.map_err(|_| "Invalid numeric value".to_string())?;
+
+    let state = cli_state::state();
+    let receiver = state.osc_receiver.lock().unwrap_or_else(|e| e.into_inner());
+    receiver.handle_message(address, values);
+    let stats = receiver.stats();
+    Ok(format!(
+        "✓ Injected {address} — received={} matched={} routed={} dropped={}",
+        stats.packets_received, stats.messages_matched, stats.values_routed,
+        stats.messages_dropped
+    ))
+}
+
+/// Usage: osc-values [key]
+pub fn cmd_osc_values(args: &[&str]) -> Result<String, String> {
+    let state = cli_state::state();
+    let receiver = state.osc_receiver.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(key) = args.first() {
+        return match receiver.get_last_value(key) {
+            Some(v) => Ok(format!("{key} = {v:?}")),
+            None => Err(format!("No value for key: {key}")),
+        };
+    }
+    let all = receiver.get_all_values();
+    if all.is_empty() {
+        return Ok("No OSC IN values received".to_string());
+    }
+    let mut out = format!("OSC IN values ({}):\n", all.len());
+    let mut keys: Vec<&String> = all.keys().collect();
+    keys.sort();
+    for k in keys {
+        out.push_str(&format!("  {k} = {:?}\n", all[k]));
+    }
+    Ok(out)
+}
+
+/// Usage: osc-in <on|off|start|stop|stats> [--port N]
+pub fn cmd_osc_in(args: &[&str]) -> Result<String, String> {
+    let sub = args.first().copied().unwrap_or("stats");
+    let state = cli_state::state();
+    let mut receiver = state.osc_receiver.lock().unwrap_or_else(|e| e.into_inner());
+    match sub {
+        "on" => {
+            receiver.set_in_enabled(true);
+            Ok("✓ OSC IN enabled".to_string())
+        }
+        "off" => {
+            receiver.set_in_enabled(false);
+            Ok("✓ OSC IN disabled (anti-loop)".to_string())
+        }
+        "start" => {
+            let opts = parse_args(&args[1..]);
+            if let Some(p) = opts.get("port") {
+                let port: u16 = p.parse().map_err(|_| format!("Invalid port: {p}"))?;
+                if receiver.is_running {
+                    receiver.stop();
+                }
+                receiver.port = port;
+            }
+            receiver
+                .start()
+                .map(|_| format!("✓ OSC receiver listening on port {}", receiver.port))
+        }
+        "stop" => {
+            receiver.stop();
+            Ok("✓ OSC receiver stopped".to_string())
+        }
+        "stats" => {
+            let s = receiver.stats();
+            Ok(format!(
+                "OSC IN: enabled={} suppressed={} running={} port={}\n  received={} matched={} routed={} dropped={}",
+                receiver.in_enabled(),
+                receiver.is_suppressed(),
+                receiver.is_running,
+                receiver.port,
+                s.packets_received,
+                s.messages_matched,
+                s.values_routed,
+                s.messages_dropped
+            ))
+        }
+        _ => Err("Usage: osc-in <on|off|start|stop|stats> [--port N]".to_string()),
+    }
+}
+
+/// Usage: osc-suppress <ms> — fenêtre anti-loop
+pub fn cmd_osc_suppress(args: &[&str]) -> Result<String, String> {
+    let ms: u64 = args
+        .first()
+        .ok_or("Usage: osc-suppress <ms>")?
+        .parse()
+        .map_err(|_| "Invalid duration (ms)".to_string())?;
+    let state = cli_state::state();
+    state
+        .osc_receiver
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .suppress_ms(ms);
+    Ok(format!("✓ OSC IN suppressed for {ms}ms"))
 }

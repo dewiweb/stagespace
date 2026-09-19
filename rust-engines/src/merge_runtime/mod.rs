@@ -355,6 +355,17 @@ impl MergeRuntime {
         self.macros.clone()
     }
 
+    /// Points de sortie pour le routing OSC IN (P3) — le receiver écrit
+    /// directement dans ces Arcs partagés depuis son thread, sans lock
+    /// supplémentaire dans le chemin temps réel du merge.
+    pub fn osc_in_targets(&self) -> crate::osc_receiver::OscInTargets {
+        crate::osc_receiver::OscInTargets {
+            macros: Some(self.macros.clone()),
+            object_channels: Some(self.object_channels.clone()),
+            manual_positions: Some(self.manual_positions.clone()),
+        }
+    }
+
     /// Récupère l'Arc de l'audio state (pour mise à jour depuis l'app)
     pub fn audio_state_arc(&self) -> Arc<Mutex<AudioState>> {
         self.audio_state.clone()

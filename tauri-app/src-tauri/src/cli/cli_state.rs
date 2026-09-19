@@ -1,6 +1,6 @@
 //! État global du CLI — équivalent de l'AppState Tauri mais sans AppHandle.
 
-use stagespace_engines::{AudioState, MergeRuntime, OscSender, Runtime};
+use stagespace_engines::{AudioState, MergeRuntime, OscReceiver, OscSender, Runtime};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -28,6 +28,7 @@ pub struct CliState {
     pub audio_state: Arc<Mutex<AudioState>>,
     pub movements: Mutex<HashMap<String, CliMovement>>,
     pub merge_runtime: Mutex<MergeRuntime>,
+    pub osc_receiver: Mutex<OscReceiver>,
     pub hol_tracks: Mutex<Vec<HolTrack>>,
     pub manual_osc_ids: Mutex<Vec<u32>>,
     /// Compteur pour générer des IDs uniques
@@ -40,10 +41,17 @@ impl CliState {
         let merge_runtime = MergeRuntime::new("127.0.0.1".to_string(), 8000, osc_sender, 60.0)
             .map_err(|e| format!("Failed to create MergeRuntime: {e}"))?;
 
+        // Receiver OSC IN — connecté aux destinations du MergeRuntime
+        // (macros, canaux, positions manuelles). Socket non démarré par défaut
+        // (osc-in start --port N) mais handle_message fonctionne (osc-inject).
+        let osc_receiver = OscReceiver::new(8001);
+        osc_receiver.set_targets(merge_runtime.osc_in_targets());
+
         Ok(Self {
             audio_state: Arc::new(Mutex::new(AudioState::default())),
             movements: Mutex::new(HashMap::new()),
             merge_runtime: Mutex::new(merge_runtime),
+            osc_receiver: Mutex::new(osc_receiver),
             hol_tracks: Mutex::new(Vec::new()),
             manual_osc_ids: Mutex::new(vec![1, 2, 3, 4, 5, 6, 7, 8]),
             move_counter: Mutex::new(0),

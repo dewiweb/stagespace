@@ -712,7 +712,53 @@ one-pole configurable.
 (°/s autour du listener — borne MAMA) qui *configureraient* ces règles
 depuis le graphe + UI frontend + persistance cues.
 
-### P3+ : voir `RESEARCH_STATE_OF_ART.md` §4.2
+### P3 : OSC IN mapping style libmapper ✅
 
-Zone (SFFX contrôle-side), steering complet, OSC IN mapping libmapper-style,
-SMS + rate limiting, sync (timetags/Link), VirtualMic (ViMiC).
+Le cockpit devient bidirectionnel : tout contrôleur OSC (SpaceMouse, X-Touch,
+StreamDeck via Companion, Chataigne, TUIO…) peut piloter les paramètres
+internes, avec transform composable par mapping.
+
+**Architecture** (`osc_receiver.rs`) :
+
+- `OscMapping { address, destination, transform, enabled }` — l'adresse
+  accepte des wildcards `*` par segment (`/track/*/gain` capture l'index).
+- `MappingDestination` :
+  - `handler:name` — stockage passif (polling frontend / injection graphe)
+  - `macro:name` — macros spatiales du MergeRuntime (scale, shift_x/y/z,
+    yaw, pitch, roll, radius_scale, height_offset — `speed` exclu, per-move)
+  - `channel:ch:obj` — canal spatial étendu d'un objet (mêmes canaux que P1)
+  - `position:obj` — position manuelle (3 valeurs) → `manual_positions`
+  - `obj` = index fixe ou wildcard `"*"`/`"*N"` (segment capturé → usize)
+- `Transform` : deadzone → `v*scale+offset` → clamp [min,max] → lissage
+  one-pole par mapping (`smooth` [0,1)). Remplace l'ancien champ string inerte.
+- `OscInTargets` : Arcs partagés du MergeRuntime (`macros`, `object_channels`,
+  `manual_positions`) — le thread receiver écrit directement, **aucun lock
+  ajouté au chemin temps réel** du merge.
+- Mappings hot-reloadables (`Arc<RwLock>`) — modifiables pendant que le
+  receiver tourne (avant : figés au `start()`).
+- Anti-loop (pattern Holophonix-chataigne) : `suppress_ms()` — fenêtre
+  d'ignorance après recall (500ms) et panic (200ms) ; `set_in_enabled` master
+  switch ; `OscInStats` (reçus/matchés/routés/droppés).
+- `handle_message()` public — pipeline testable sans UDP (`osc-inject` CLI).
+
+**Tâches** :
+- [x] `Transform`, `ObjectRef`, `MacroTarget`, `MappingDestination`,
+      `OscMapping`, `OscInTargets`, `OscInStats` dans `osc_receiver.rs`
+- [x] `MergeRuntime::osc_in_targets()`
+- [x] Commands Tauri : `osc_add_mapping` (payload complet), `osc_set_in_enabled`,
+      `osc_suppress_in`, `osc_in_stats` ; `set_osc_receiver_port` préserve
+      mappings/targets/état ; suppression auto sur `recall_cue` (500ms) et
+      `send_osc_position`/panic (200ms)
+- [x] CLI : `osc-map`, `osc-unmap`, `osc-maps`, `osc-inject`, `osc-values`,
+      `osc-in on|off|start|stop|stats`, `osc-suppress`
+- [x] Frontend : `oscSlice` (destination + transform `key=value`),
+      `OscPanel` mis à jour
+
+**Reste** : persistance des mappings dans les cues/presets, destination
+`modparam:` (piloter les règles P2 par OSC), matching multi-segment `#`,
+valeurs dérivées (delta/vélocité d'entrée), learn-by-demonstration (Wekinator).
+
+### P4+ : voir `RESEARCH_STATE_OF_ART.md` §4.2
+
+Zone (SFFX contrôle-side), steering complet, SMS + rate limiting,
+sync (timetags/Link), VirtualMic (ViMiC).

@@ -108,6 +108,10 @@ pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), Stri
     // Garantir que le flag est remis à false quoi qu'il arrive
     let _guard = RecallGuard(&state.recall_in_progress);
 
+    // Anti-loop OSC IN : ignorer les messages entrants pendant le recall —
+    // le renderer renvoie souvent un echo des valeurs qu'on vient d'envoyer
+    lock_or_recover(&state.osc_receiver).suppress_ms(500);
+
     // 1. Hot-swap le graph global AVANT de désactiver les moves (fail-fast sans side effects)
     //    Si la compilation échoue, on retourne une erreur sans avoir modifié l'état.
     if let Some(ref global_graph) = cue.global_graph {

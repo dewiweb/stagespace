@@ -12,7 +12,10 @@ use moves::{
     cmd_mod_clear, cmd_mod_list, cmd_set_channel, cmd_set_macros, cmd_set_merge_strategy,
     cmd_set_move_speed, cmd_stop_all, cmd_stop_move,
 };
-use osc::{cmd_osc_listen, cmd_osc_validate};
+use osc::{
+    cmd_osc_in, cmd_osc_inject, cmd_osc_listen, cmd_osc_map, cmd_osc_maps, cmd_osc_suppress,
+    cmd_osc_unmap, cmd_osc_validate, cmd_osc_values,
+};
 use sample::{cmd_perf, cmd_sample, cmd_templates};
 
 use std::io::Write;
@@ -49,6 +52,13 @@ pub fn dispatch(input: &str) -> Result<String, String> {
         "stop-all" => cmd_stop_all(rest),
         "osc-listen" | "osc-listen-validate" => cmd_osc_listen(rest),
         "osc-validate" => cmd_osc_validate(rest),
+        "osc-map" => cmd_osc_map(rest),
+        "osc-unmap" => cmd_osc_unmap(rest),
+        "osc-maps" => cmd_osc_maps(rest),
+        "osc-inject" => cmd_osc_inject(rest),
+        "osc-values" => cmd_osc_values(rest),
+        "osc-in" => cmd_osc_in(rest),
+        "osc-suppress" => cmd_osc_suppress(rest),
         "perf" | "stats" => cmd_perf(rest),
         "templates" => cmd_templates(rest),
         "help" => {
@@ -131,6 +141,29 @@ pub fn print_help(out: &mut impl Write) {
     writeln!(
         out,
         "  osc-validate [opts]                Activate move + validate OSC output"
+    )
+    .ok();
+    writeln!(
+        out,
+        "  osc-map <addr> <dest> [opts]       Map OSC IN → handler:NAME|macro:NAME|channel:CH:OBJ|position:OBJ"
+    )
+    .ok();
+    writeln!(out, "  osc-unmap <addr>                   Remove OSC IN mapping").ok();
+    writeln!(out, "  osc-maps                           List OSC IN mappings").ok();
+    writeln!(
+        out,
+        "  osc-inject <addr> <v...>           Inject OSC message into mapping pipeline"
+    )
+    .ok();
+    writeln!(out, "  osc-values [key]                   Show OSC IN last values").ok();
+    writeln!(
+        out,
+        "  osc-in <on|off|start|stop|stats>   Control OSC IN receiver"
+    )
+    .ok();
+    writeln!(
+        out,
+        "  osc-suppress <ms>                  Anti-loop suppression window"
     )
     .ok();
     writeln!(
