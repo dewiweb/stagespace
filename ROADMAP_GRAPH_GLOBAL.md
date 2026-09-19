@@ -754,9 +754,9 @@ internes, avec transform composable par mapping.
 - [x] Frontend : `oscSlice` (destination + transform `key=value`),
       `OscPanel` mis à jour
 
-**Reste** : persistance des mappings dans les cues/presets, destination
-`modparam:` (piloter les règles P2 par OSC), matching multi-segment `#`,
-valeurs dérivées (delta/vélocité d'entrée), learn-by-demonstration (Wekinator).
+**Reste** : destination `modparam:` (piloter les règles P2 par OSC),
+matching multi-segment `#`, valeurs dérivées (delta/vélocité d'entrée),
+learn-by-demonstration (Wekinator). *(Persistance cues : fait — voir §Persistance.)*
 
 ### P4 : Zones d'effets spatiaux ✅
 
@@ -789,7 +789,22 @@ proportionnellement à l'influence (smoothstep sur `falloff` au-delà du bord).
 
 **Reste** : node graphe `Zone` (défini dans le graphe, pas seulement runtime),
 formes supplémentaires (cylindre, plan half-space), zones temporelles,
-UI frontend (visualisation + édition), persistance cues.
+UI frontend (visualisation + édition). *(Persistance cues : fait.)*
+
+### Persistance de l'état runtime dans les cues ✅
+
+`store_cue` capture l'état réel du backend au moment du store (l'engine
+détient la vérité, pas le frontend) : `object_channels` (P1),
+`channel_modulations` (P2), `osc_mappings` (P3), `zones` (P4) — tous
+`Option` + `#[serde(default)]` : les anciens cues (`None`) ne touchent pas
+à l'état courant, les nouveaux restaurent exactement (clear + re-set).
+
+Le frontend persiste le `Cue` complet reçu de `store_cue` — les nouveaux
+champs transitent automatiquement, aucun champ à renseigner côté UI.
+
+**Fix latent** : `ChannelModulation.min/max` (±∞ par défaut) n'étaient pas
+sérialisables en JSON (inf → null → erreur à la lecture). Helpers serde
+`f64 non-fini ↔ null` ajoutés.
 
 ### P5+ : voir `RESEARCH_STATE_OF_ART.md` §4.2
 

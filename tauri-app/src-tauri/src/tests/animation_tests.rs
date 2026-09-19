@@ -1146,6 +1146,10 @@ mod tests {
                 radius_scale: 1.2,
                 height_offset: -0.3,
             }),
+            object_channels: None,
+            channel_modulations: None,
+            osc_mappings: None,
+            zones: None,
         };
 
         // Sérialiser (comme Tauri fait pour IPC)

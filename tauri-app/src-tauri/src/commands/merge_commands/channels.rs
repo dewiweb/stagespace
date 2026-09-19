@@ -153,9 +153,7 @@ pub async fn add_zone(params: ZoneParams, state: State<'_, AppState>) -> Result<
         },
         "box" => ZoneShape::Box {
             min: params.a,
-            max: params
-                .b
-                .ok_or("Box zone requires 'b' (max corner)")?,
+            max: params.b.ok_or("Box zone requires 'b' (max corner)")?,
         },
         s => return Err(format!("Unknown zone shape '{s}' (sphere|box)")),
     };

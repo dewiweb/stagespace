@@ -100,9 +100,7 @@ pub async fn set_global_osc_ids(
     {
         let movements = lock_or_recover(&state.movements);
         if !movements.is_empty() {
-            return Err(
-                "Cannot change OSC IDs during playback. Stop all moves first.".to_string(),
-            );
+            return Err("Cannot change OSC IDs during playback. Stop all moves first.".to_string());
         }
     }
     let merge_rt = lock_or_recover(&state.merge_runtime);

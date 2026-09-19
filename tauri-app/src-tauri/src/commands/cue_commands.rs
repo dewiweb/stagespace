@@ -55,6 +55,18 @@ pub async fn store_cue(
     request: StoreCueRequest,
     state: State<'_, AppState>,
 ) -> Result<Cue, String> {
+    // Capturer l'état runtime réel du backend (P1-P4) — l'engine détient la
+    // vérité, le frontend ne voit qu'une partie de cet état.
+    let (object_channels, channel_modulations, zones) = {
+        let merge_rt = lock_or_recover(&state.merge_runtime);
+        (
+            merge_rt.object_channels(),
+            merge_rt.modulations(),
+            merge_rt.zones(),
+        )
+    };
+    let osc_mappings = lock_or_recover(&state.osc_receiver).list_mappings();
+
     let cue = Cue {
         id: uuid::Uuid::new_v4().to_string(),
         name: request.name,
@@ -73,6 +85,10 @@ pub async fn store_cue(
         per_track_depths: request.per_track_depths,
         manual_positions: request.manual_positions,
         spatial_macros: request.spatial_macros,
+        object_channels: Some(object_channels),
+        channel_modulations: Some(channel_modulations),
+        osc_mappings: Some(osc_mappings),
+        zones: Some(zones),
     };
 
     // Émettre l'événement pour que le frontend persiste le cue
@@ -193,6 +209,44 @@ pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), Stri
         merge_rt.clear_all_manual_positions();
         for (idx, pos) in &cue.manual_positions {
             merge_rt.set_manual_position(*idx, *pos);
+        }
+    }
+
+    // 6b. Restaurer l'état Phase 4 (canaux, modulations, zones, mappings OSC IN)
+    //     Champ absent (ancien cue) = ne pas toucher à l'état courant ;
+    //     champ présent (même vide) = restaurer exactement le snapshot.
+    {
+        let merge_rt = lock_or_recover(&state.merge_runtime);
+        if let Some(ref channels) = cue.object_channels {
+            merge_rt.clear_all_object_channels();
+            for (idx, chs) in channels {
+                for (ch, v) in chs.iter() {
+                    merge_rt.set_object_channel(*idx, ch, v);
+                }
+            }
+        }
+        if let Some(ref mods) = cue.channel_modulations {
+            merge_rt.clear_modulations();
+            for rule in mods {
+                merge_rt.add_modulation(rule.clone());
+            }
+        }
+        if let Some(ref zs) = cue.zones {
+            merge_rt.clear_zones();
+            for z in zs {
+                merge_rt.add_zone(z.clone());
+            }
+        }
+    }
+    if let Some(ref maps) = cue.osc_mappings {
+        let receiver = lock_or_recover(&state.osc_receiver);
+        receiver.clear_mappings();
+        for m in maps {
+            // Un mapping invalide dans un vieux cue ne doit pas faire
+            // échouer le recall — on log et on continue
+            if let Err(e) = receiver.add_mapping(m.clone()) {
+                eprintln!("[WARN] Skipping invalid OSC mapping '{}': {e}", m.address);
+            }
         }
     }
 

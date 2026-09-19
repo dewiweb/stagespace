@@ -38,6 +38,36 @@ impl FromStr for KinematicSource {
     }
 }
 
+/// Serde helper : f64 ±∞ ↔ JSON null (JSON ne représente pas l'infini).
+/// `serialize` écrit null pour les valeurs non finies ; `deserialize` lit
+/// null comme la borne par défaut du champ.
+mod serde_neg_inf {
+    use serde::{Deserialize, Deserializer, Serializer};
+    pub fn serialize<S: Serializer>(v: &f64, s: S) -> Result<S::Ok, S::Error> {
+        if v.is_finite() {
+            s.serialize_some(v)
+        } else {
+            s.serialize_none()
+        }
+    }
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<f64, D::Error> {
+        Ok(Option::<f64>::deserialize(d)?.unwrap_or(f64::NEG_INFINITY))
+    }
+}
+mod serde_pos_inf {
+    use serde::{Deserialize, Deserializer, Serializer};
+    pub fn serialize<S: Serializer>(v: &f64, s: S) -> Result<S::Ok, S::Error> {
+        if v.is_finite() {
+            s.serialize_some(v)
+        } else {
+            s.serialize_none()
+        }
+    }
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<f64, D::Error> {
+        Ok(Option::<f64>::deserialize(d)?.unwrap_or(f64::INFINITY))
+    }
+}
+
 /// Règle de modulation : source cinématique → canal spatial.
 ///
 /// `value = clamp(source * scale + offset, min, max)`
@@ -53,9 +83,11 @@ pub struct ChannelModulation {
     pub scale: f64,
     /// Décalage ajouté après le scale
     pub offset: f64,
-    /// Borne basse du résultat
+    /// Borne basse du résultat (−∞ = pas de borne, sérialisé null)
+    #[serde(with = "serde_neg_inf")]
     pub min: f64,
-    /// Borne haute du résultat
+    /// Borne haute du résultat (+∞ = pas de borne, sérialisé null)
+    #[serde(with = "serde_pos_inf")]
     pub max: f64,
 }
 

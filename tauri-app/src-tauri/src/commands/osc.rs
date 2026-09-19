@@ -1,8 +1,6 @@
 use super::state::lock_or_recover;
 use crate::AppState;
-use stagespace_engines::{
-    OscInStatsSnapshot, OscMapping, OscProfile, OscReceiver, OscSender,
-};
+use stagespace_engines::{OscInStatsSnapshot, OscMapping, OscProfile, OscReceiver, OscSender};
 use std::str::FromStr;
 use tauri::State;
 
@@ -43,10 +41,7 @@ pub async fn osc_set_in_enabled(enabled: bool, state: State<'_, AppState>) -> Re
 /// Supprime l'OSC IN pendant `duration_ms` — les messages reçus pendant la
 /// fenêtre sont ignorés (anti-loop après recall/panic)
 #[tauri::command]
-pub async fn osc_suppress_in(
-    duration_ms: u64,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn osc_suppress_in(duration_ms: u64, state: State<'_, AppState>) -> Result<(), String> {
     let receiver = lock_or_recover(&state.osc_receiver);
     receiver.suppress_ms(duration_ms);
     Ok(())

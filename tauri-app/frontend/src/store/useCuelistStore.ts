@@ -31,6 +31,11 @@ export interface CueData {
     radius_scale: number;
     height_offset: number;
   };
+  // Phase 4 : état runtime capturé par le backend au store
+  object_channels?: Record<number, Record<string, number>>;
+  channel_modulations?: unknown[];
+  osc_mappings?: unknown[];
+  zones?: unknown[];
 }
 
 interface CuelistState {

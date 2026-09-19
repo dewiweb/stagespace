@@ -128,7 +128,11 @@ pub fn print_help(out: &mut impl Write) {
     )
     .ok();
     writeln!(out, "  mod-list                           List modulations").ok();
-    writeln!(out, "  mod-clear <index|all>              Remove modulation(s)").ok();
+    writeln!(
+        out,
+        "  mod-clear <index|all>              Remove modulation(s)"
+    )
+    .ok();
     writeln!(
         out,
         "  kin-smoothing <0-0.99>             Set kinematic smoothing"
@@ -158,14 +162,26 @@ pub fn print_help(out: &mut impl Write) {
         "  osc-map <addr> <dest> [opts]       Map OSC IN → handler:NAME|macro:NAME|channel:CH:OBJ|position:OBJ"
     )
     .ok();
-    writeln!(out, "  osc-unmap <addr>                   Remove OSC IN mapping").ok();
-    writeln!(out, "  osc-maps                           List OSC IN mappings").ok();
+    writeln!(
+        out,
+        "  osc-unmap <addr>                   Remove OSC IN mapping"
+    )
+    .ok();
+    writeln!(
+        out,
+        "  osc-maps                           List OSC IN mappings"
+    )
+    .ok();
     writeln!(
         out,
         "  osc-inject <addr> <v...>           Inject OSC message into mapping pipeline"
     )
     .ok();
-    writeln!(out, "  osc-values [key]                   Show OSC IN last values").ok();
+    writeln!(
+        out,
+        "  osc-values [key]                   Show OSC IN last values"
+    )
+    .ok();
     writeln!(
         out,
         "  osc-in <on|off|start|stop|stats>   Control OSC IN receiver"

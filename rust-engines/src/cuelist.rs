@@ -1,3 +1,7 @@
+use crate::kinematics::ChannelModulation;
+use crate::osc_receiver::OscMapping;
+use crate::osc_sender::SpatialChannels;
+use crate::zones::Zone;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -45,6 +49,25 @@ pub struct Cue {
     /// Snapshot des macros spatiales étendues (radius_scale, height_offset)
     #[serde(default)]
     pub spatial_macros: Option<SpatialMacroSnapshot>,
+
+    // ─── Phase 4 : état runtime capturé au store ───
+    /// Canaux spatiaux étendus par objet (P1) — object_index → SpatialChannels.
+    /// None (cue ancien) = ne pas toucher à l'état courant ; Some (même vide)
+    /// = restaurer exactement (clear + re-set).
+    #[serde(default)]
+    pub object_channels: Option<HashMap<usize, SpatialChannels>>,
+
+    /// Règles de modulation cinématique (P2)
+    #[serde(default)]
+    pub channel_modulations: Option<Vec<ChannelModulation>>,
+
+    /// Mappings OSC IN (P3)
+    #[serde(default)]
+    pub osc_mappings: Option<Vec<OscMapping>>,
+
+    /// Zones d'effets spatiaux (P4)
+    #[serde(default)]
+    pub zones: Option<Vec<Zone>>,
 }
 
 /// Snapshot des macros spatiales étendues
@@ -183,6 +206,10 @@ mod tests {
             per_track_depths: vec![],
             manual_positions: HashMap::new(),
             spatial_macros: None,
+            object_channels: None,
+            channel_modulations: None,
+            osc_mappings: None,
+            zones: None,
         };
         manager.add(cue);
         assert_eq!(manager.len(), 1);
@@ -206,6 +233,10 @@ mod tests {
             per_track_depths: vec![],
             manual_positions: HashMap::new(),
             spatial_macros: None,
+            object_channels: None,
+            channel_modulations: None,
+            osc_mappings: None,
+            zones: None,
         };
         manager.add(cue);
         manager.remove(0).unwrap();
@@ -245,6 +276,10 @@ mod tests {
                 radius_scale: 1.2,
                 height_offset: -0.3,
             }),
+            object_channels: None,
+            channel_modulations: None,
+            osc_mappings: None,
+            zones: None,
         };
 
         // Sérialiser
@@ -263,6 +298,77 @@ mod tests {
         assert_eq!(decoded.manual_positions.get(&0), Some(&[1.0, 2.0, 3.0]));
         assert!(decoded.spatial_macros.is_some());
         assert!(decoded.global_graph.is_some());
+    }
+
+    #[test]
+    fn test_cue_phase4_fields_roundtrip() {
+        use crate::osc_receiver::{MappingDestination, ObjectRef, Transform};
+        use crate::osc_sender::SpatialChannel;
+        use crate::zones::ZoneShape;
+
+        let mut chs = SpatialChannels::default();
+        chs.gain = Some(0.8);
+        let mut object_channels = HashMap::new();
+        object_channels.insert(2usize, chs);
+
+        let mut zone_channels = SpatialChannels::default();
+        zone_channels.set(SpatialChannel::Spread, 1.0);
+
+        let cue = Cue {
+            id: "p4".to_string(),
+            name: "Phase4".to_string(),
+            description: String::new(),
+            graph: serde_json::json!({}),
+            timestamp: 0.0,
+            macros: None,
+            track_indices: vec![],
+            fade_duration: 0.5,
+            cue_number: None,
+            global_graph: None,
+            active_move_ids: vec![],
+            per_track_depths: vec![],
+            manual_positions: HashMap::new(),
+            spatial_macros: None,
+            object_channels: Some(object_channels),
+            channel_modulations: Some(vec![ChannelModulation::new(
+                crate::kinematics::KinematicSource::Speed,
+                SpatialChannel::Spread,
+                0.5,
+            )]),
+            osc_mappings: Some(vec![OscMapping {
+                address: "/track/*/gain".to_string(),
+                destination: MappingDestination::Channel {
+                    channel: SpatialChannel::Gain,
+                    object: ObjectRef::Wildcard("*".to_string()),
+                },
+                transform: Transform::default(),
+                enabled: true,
+            }]),
+            zones: Some(vec![Zone {
+                shape: ZoneShape::Sphere {
+                    center: [0.0; 3],
+                    radius: 2.0,
+                },
+                falloff: 0.5,
+                channels: zone_channels,
+                objects: None,
+                enabled: true,
+            }]),
+        };
+
+        let json = serde_json::to_string(&cue).unwrap();
+        let decoded: Cue = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            decoded
+                .object_channels
+                .as_ref()
+                .and_then(|m| m.get(&2))
+                .and_then(|c| c.gain),
+            Some(0.8)
+        );
+        assert_eq!(decoded.channel_modulations.as_ref().unwrap().len(), 1);
+        assert_eq!(decoded.osc_mappings.as_ref().unwrap().len(), 1);
+        assert_eq!(decoded.zones.as_ref().unwrap().len(), 1);
     }
 
     #[test]
@@ -288,6 +394,11 @@ mod tests {
         assert!(cue.per_track_depths.is_empty());
         assert!(cue.manual_positions.is_empty());
         assert!(cue.spatial_macros.is_none());
+        // Phase 4 : champs absents → None (le recall ne touche pas à l'état)
+        assert!(cue.object_channels.is_none());
+        assert!(cue.channel_modulations.is_none());
+        assert!(cue.osc_mappings.is_none());
+        assert!(cue.zones.is_none());
     }
 
     #[test]
@@ -308,6 +419,10 @@ mod tests {
             per_track_depths: vec![],
             manual_positions: HashMap::new(),
             spatial_macros: None,
+            object_channels: None,
+            channel_modulations: None,
+            osc_mappings: None,
+            zones: None,
         };
         manager.add(cue);
         manager.remove_by_id("cue1").unwrap();
@@ -332,6 +447,10 @@ mod tests {
             per_track_depths: vec![],
             manual_positions: HashMap::new(),
             spatial_macros: None,
+            object_channels: None,
+            channel_modulations: None,
+            osc_mappings: None,
+            zones: None,
         };
         manager.add(cue.clone());
         let retrieved = manager.get(0);
@@ -357,6 +476,10 @@ mod tests {
             per_track_depths: vec![],
             manual_positions: HashMap::new(),
             spatial_macros: None,
+            object_channels: None,
+            channel_modulations: None,
+            osc_mappings: None,
+            zones: None,
         };
         manager.add(cue);
         let retrieved = manager.get_by_id("cue1");
@@ -381,6 +504,10 @@ mod tests {
             per_track_depths: vec![],
             manual_positions: HashMap::new(),
             spatial_macros: None,
+            object_channels: None,
+            channel_modulations: None,
+            osc_mappings: None,
+            zones: None,
         };
         manager.add(cue);
 
@@ -399,6 +526,10 @@ mod tests {
             per_track_depths: vec![],
             manual_positions: HashMap::new(),
             spatial_macros: None,
+            object_channels: None,
+            channel_modulations: None,
+            osc_mappings: None,
+            zones: None,
         };
         manager.update(0, updated).unwrap();
 
@@ -424,6 +555,10 @@ mod tests {
             per_track_depths: vec![],
             manual_positions: HashMap::new(),
             spatial_macros: None,
+            object_channels: None,
+            channel_modulations: None,
+            osc_mappings: None,
+            zones: None,
         };
         manager.add(cue);
         manager.clear();

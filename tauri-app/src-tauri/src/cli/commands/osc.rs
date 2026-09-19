@@ -626,7 +626,10 @@ pub fn cmd_osc_map(args: &[&str]) -> Result<String, String> {
 
     let num = |key: &str| -> Result<Option<f64>, String> {
         opts.get(key)
-            .map(|s| s.parse::<f64>().map_err(|_| format!("Invalid --{key}: {s}")))
+            .map(|s| {
+                s.parse::<f64>()
+                    .map_err(|_| format!("Invalid --{key}: {s}"))
+            })
             .transpose()
     };
     let transform = Transform {
@@ -704,8 +707,7 @@ pub fn cmd_osc_inject(args: &[&str]) -> Result<String, String> {
     let stats = receiver.stats();
     Ok(format!(
         "✓ Injected {address} — received={} matched={} routed={} dropped={}",
-        stats.packets_received, stats.messages_matched, stats.values_routed,
-        stats.messages_dropped
+        stats.packets_received, stats.messages_matched, stats.values_routed, stats.messages_dropped
     ))
 }
 
