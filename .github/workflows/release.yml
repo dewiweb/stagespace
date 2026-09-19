@@ -1,0 +1,75 @@
+name: Release
+
+# Déclenché sur les tags de version : git tag v0.1.0 && git push --tags
+# Produit les bundles Tauri (AppImage + .deb sur Linux) et crée une
+# GitHub Release en draft avec les artifacts attachés.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-release:
+    name: Build & Release
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - os: ubuntu-22.04
+            # Pour étendre : ajouter macos-14 (dmg) et windows-latest (msi/nsis).
+            # Prérequis : icônes .icns/.ico générées (cargo tauri icon).
+            # Windows/macOS unsigned fonctionnent mais affichent un avertissement.
+    runs-on: ${{ matrix.platform.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system dependencies (Tauri + ALSA)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libasound2-dev \
+            libfuse2 \
+            patchelf
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: tauri-app/frontend/package-lock.json
+
+      - name: Build frontend (required by tauri::generate_context!)
+        run: |
+          cd tauri-app/frontend
+          npm ci
+          npm run build
+
+      - name: Build bundles + publish release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: tauri-app
+          tagName: ${{ github.ref_name }}
+          releaseName: 'STAGESPACE ${{ github.ref_name }}'
+          releaseBody: |
+            Spatial trajectory engine for OSC-controlled audio renderers.
+            - **AppImage** : portable, `chmod +x` puis lancer
+            - **.deb** : `sudo dpkg -i stagespace_*.deb`
+          releaseDraft: true
+          prerelease: false
