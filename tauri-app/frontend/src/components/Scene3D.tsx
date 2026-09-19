@@ -11,6 +11,7 @@ import { DebugPerfOverlay, debugPerf } from './DebugPerfOverlay';
 import { DrawModeOverlay } from './DrawModeOverlay';
 import { ModeButtons } from './ModeButtons';
 import { TrajectoryVisualization } from './TrajectoryVisualization';
+import { ZoneVisualization } from './ZoneVisualization';
 import { useHolMarkers } from '../hooks/useHolMarkers';
 import { useObjects3D } from '../hooks/useObjects3D';
 import { useManipulateHandle } from '../hooks/useManipulateHandle';
@@ -230,6 +231,8 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
         hasMovements={movements.length > 0}
         nObjects={nObjects}
       />
+      {/* Zones d'effets spatiaux — volumes translucides (sphere/box + falloff) */}
+      <ZoneVisualization sceneRef={sceneRef} />
       <canvas
         ref={drawCanvasRef}
         className="absolute inset-0 z-10"
