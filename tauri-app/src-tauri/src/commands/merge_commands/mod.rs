@@ -11,7 +11,9 @@ mod channels;
 
 pub use super::state::lock_or_recover;
 pub use channels::{
-    clear_all_spatial_channels, clear_spatial_channel, set_spatial_channel,
+    add_channel_modulation, clear_all_spatial_channels, clear_channel_modulations,
+    clear_spatial_channel, remove_channel_modulation, set_kinematic_smoothing,
+    set_spatial_channel,
 };
 pub use graph_updates::{update_global_graph, update_move_graph_merged};
 pub use macros::{

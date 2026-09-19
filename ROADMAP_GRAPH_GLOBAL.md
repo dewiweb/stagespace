@@ -681,12 +681,36 @@ Matrice conservatrice — n'envoyer que ce qui est confirmé supporté. Extensib
 - [x] Commands Tauri `set_spatial_channel`/`clear_spatial_channel`/`clear_all`
 - [x] CLI `set-channel`/`clear-channel` (test e2e)
 
-### P2 : Nodes cinématiques → canaux (suivant)
+### P2 : Modulation cinématique → canaux ✅ en cours
 
-`Velocity`/`Acceleration`/`PerceptualVelocity` (°/s autour du listener —
-borne MAMA psychoacoustique) → modulateurs qui écrivent dans
-`object_channels`. Nécessite d'étendre `PostProcessFn` pour produire des
-canaux en plus des positions.
+`Speed`/`Acceleration`/`Jerk` mesurés sur les positions **finales**
+(post-merge + post-process — ce que le renderer reçoit) → règles de
+modulation qui écrivent dans les canaux spatiaux, prioritaires sur les
+valeurs statiques (`SpatialChannels::overlay`).
+
+**Implémentation choisie** : règles de modulation au niveau MergeRuntime
+(`channel_modulations`), pas de modification de `PostProcessFn` — la
+cinématique est mesurée en sortie, donc elle capture aussi les effets des
+macros, merges et post-process. Thread-local dans le merge thread (aucun
+lock), échauffement anti-pic (vitesse ≥2 éch., accel ≥3, jerk ≥4), lissage
+one-pole configurable.
+
+**Tâches** :
+- [x] `kinematics.rs` : `KinematicSource` (speed/accel/jerk),
+      `KinematicState` (dérivées + warmup + lissage), `ChannelModulation`
+      (source→canal, scale/offset/clamp, filtre objet optionnel),
+      `apply_modulations`
+- [x] `SpatialChannels::overlay` (modulation prioritaire)
+- [x] MergeRuntime : `add/remove/clear_modulations`, `modulations`,
+      `set_kinematic_smoothing` — calcul dans la boucle, dt réel
+- [x] Commands Tauri : `add_channel_modulation` (params struct),
+      `remove_channel_modulation`, `clear_channel_modulations`,
+      `set_kinematic_smoothing`
+- [x] CLI : `mod-add`/`mod-list`/`mod-clear`/`kin-smoothing`
+
+**Reste** : nodes graphe `Velocity`/`Acceleration`/`PerceptualVelocity`
+(°/s autour du listener — borne MAMA) qui *configureraient* ces règles
+depuis le graphe + UI frontend + persistance cues.
 
 ### P3+ : voir `RESEARCH_STATE_OF_ART.md` §4.2
 

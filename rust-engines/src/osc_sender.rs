@@ -47,6 +47,34 @@ impl SpatialChannels {
         }
     }
 
+    /// Surcharge les canaux définis dans `other` (les Some d'other
+    /// remplacent les valeurs de self ; les None d'other sont ignorés).
+    /// Utilisé pour que les canaux modulés (cinématique) aient priorité
+    /// sur les canaux statiques.
+    pub fn overlay(&mut self, other: &SpatialChannels) {
+        if other.gain.is_some() {
+            self.gain = other.gain;
+        }
+        if other.spread.is_some() {
+            self.spread = other.spread;
+        }
+        if other.distance.is_some() {
+            self.distance = other.distance;
+        }
+        if other.presence.is_some() {
+            self.presence = other.presence;
+        }
+        if other.yaw.is_some() {
+            self.yaw = other.yaw;
+        }
+        if other.aperture.is_some() {
+            self.aperture = other.aperture;
+        }
+        if other.lfe.is_some() {
+            self.lfe = other.lfe;
+        }
+    }
+
     /// Efface un canal
     pub fn clear(&mut self, channel: SpatialChannel) {
         match channel {

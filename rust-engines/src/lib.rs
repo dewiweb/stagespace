@@ -9,6 +9,7 @@ pub mod engines;
 pub mod error;
 pub mod falloffs;
 pub mod graph;
+pub mod kinematics;
 pub mod logging;
 pub mod merge_runtime;
 pub mod modulator;
@@ -59,6 +60,7 @@ pub use falloffs::{
     PointDistanceFalloff, TimeFalloff,
 };
 pub use graph::{Edge, Graph, Node, NodeId, NodeType};
+pub use kinematics::{ChannelModulation, KinematicSource, KinematicState};
 pub use logging::{
     init_logging, log_compilation_error, log_compilation_success, log_graph_compilation,
     log_osc_error, log_osc_message, log_playback_start, log_playback_stop, log_runtime_init,

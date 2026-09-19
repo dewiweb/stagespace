@@ -427,3 +427,131 @@ pub fn cmd_clear_channel(args: &[&str]) -> Result<String, String> {
     merge_rt.clear_object_channel(obj, channel);
     Ok(format!("Channel(s) cleared for object {obj}"))
 }
+
+/// Ajoute une règle de modulation cinématique (source → canal spatial)
+/// Usage: mod-add <speed|accel|jerk> <channel> <scale> [offset] [min] [max] [obj]
+pub fn cmd_mod_add(args: &[&str]) -> Result<String, String> {
+    if args.len() < 3 {
+        return Err(
+            "Usage: mod-add <speed|accel|jerk> <channel> <scale> [offset] [min] [max] [obj]"
+                .to_string(),
+        );
+    }
+    let source = stagespace_engines::kinematics::KinematicSource::from_str(args[0])?;
+    let channel = stagespace_engines::osc_sender::SpatialChannel::from_str(args[1])?;
+    let scale: f64 = args[2]
+        .parse()
+        .map_err(|_| format!("Invalid scale: {}", args[2]))?;
+
+    // '-' = valeur par défaut pour un argument optionnel positionnel
+    let parse_opt = |i: usize| -> Result<Option<f64>, String> {
+        match args.get(i) {
+            Some(&"-") | None => Ok(None),
+            Some(s) => s
+                .parse::<f64>()
+                .map(Some)
+                .map_err(|_| format!("Invalid number: {s}")),
+        }
+    };
+    let offset = parse_opt(3)?.unwrap_or(0.0);
+    let min = parse_opt(4)?.unwrap_or(f64::NEG_INFINITY);
+    let max = parse_opt(5)?.unwrap_or(f64::INFINITY);
+    let object = match args.get(6) {
+        Some(&"-") | None => None,
+        Some(s) => Some(
+            s.parse::<usize>()
+                .map_err(|_| format!("Invalid object index: {s}"))?,
+        ),
+    };
+
+    let mut rule = stagespace_engines::kinematics::ChannelModulation::new(source, channel, scale);
+    rule.offset = offset;
+    rule.min = min;
+    rule.max = max;
+    rule.object = object;
+
+    let state = cli_state::state();
+    let merge_rt = state
+        .merge_runtime
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    let idx = merge_rt.add_modulation(rule);
+    Ok(format!(
+        "Modulation #{} added: {} → {} (scale {}, offset {}, range [{}..{}]{})",
+        idx,
+        args[0],
+        args[1],
+        scale,
+        offset,
+        min,
+        max,
+        object
+            .map(|o| format!(", obj {o}"))
+            .unwrap_or_else(|| ", all objects".to_string())
+    ))
+}
+
+/// Liste les règles de modulation actives
+/// Usage: mod-list
+pub fn cmd_mod_list(_args: &[&str]) -> Result<String, String> {
+    let state = cli_state::state();
+    let merge_rt = state
+        .merge_runtime
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    let rules = merge_rt.modulations();
+    if rules.is_empty() {
+        return Ok("No modulations".to_string());
+    }
+    let mut out = String::from("Modulations:\n");
+    for (i, r) in rules.iter().enumerate() {
+        out.push_str(&format!(
+            "  #{} {:?} → {:?} scale={} offset={} range=[{}..{}] obj={:?}\n",
+            i, r.source, r.channel, r.scale, r.offset, r.min, r.max, r.object
+        ));
+    }
+    Ok(out)
+}
+
+/// Supprime une ou toutes les règles de modulation
+/// Usage: mod-clear <index|all>
+pub fn cmd_mod_clear(args: &[&str]) -> Result<String, String> {
+    if args.is_empty() {
+        return Err("Usage: mod-clear <index|all>".to_string());
+    }
+    let state = cli_state::state();
+    let merge_rt = state
+        .merge_runtime
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    if args[0] == "all" {
+        merge_rt.clear_modulations();
+        return Ok("All modulations cleared".to_string());
+    }
+    let idx: usize = args[0]
+        .parse()
+        .map_err(|_| format!("Invalid index: {}", args[0]))?;
+    if merge_rt.remove_modulation(idx) {
+        Ok(format!("Modulation #{idx} removed"))
+    } else {
+        Err(format!("No modulation at index {idx}"))
+    }
+}
+
+/// Définit le lissage cinématique
+/// Usage: kin-smoothing <0.0-0.99>
+pub fn cmd_kin_smoothing(args: &[&str]) -> Result<String, String> {
+    if args.is_empty() {
+        return Err("Usage: kin-smoothing <0.0-0.99>".to_string());
+    }
+    let value: f64 = args[0]
+        .parse()
+        .map_err(|_| format!("Invalid value: {}", args[0]))?;
+    let state = cli_state::state();
+    let merge_rt = state
+        .merge_runtime
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    merge_rt.set_kinematic_smoothing(value);
+    Ok(format!("Kinematic smoothing set to {value}"))
+}

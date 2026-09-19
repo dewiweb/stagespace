@@ -29,7 +29,8 @@ pub use helpers::{default_post_process_fn, merge_positions, MoveEntry};
 pub use move_state::{MergeStrategy, MoveState};
 
 use crate::audio::AudioState;
-use crate::osc_sender::OscSender;
+use crate::kinematics::{apply_modulations, ChannelModulation, KinematicState};
+use crate::osc_sender::{OscSender, SpatialChannels};
 use crate::position_buffer::PositionBuffer;
 use crate::runtime::{
     MacroState, PerfMonitor, PerfStats, PositionCallback, PostProcessContext, PostProcessFn,
@@ -83,7 +84,11 @@ pub struct MergeRuntime {
     manual_positions: Arc<RwLock<HashMap<usize, [f64; 3]>>>,
     /// Canaux spatiaux étendus par objet (gain, spread, distance, presence,
     /// yaw, aperture, lfe) — object_index → SpatialChannels
-    object_channels: Arc<RwLock<HashMap<usize, crate::osc_sender::SpatialChannels>>>,
+    object_channels: Arc<RwLock<HashMap<usize, SpatialChannels>>>,
+    /// Règles de modulation cinématique (source cinématique → canal spatial)
+    channel_modulations: Arc<RwLock<Vec<ChannelModulation>>>,
+    /// Coefficient de lissage des mesures cinématiques [0, 1)
+    kinematic_smoothing: Arc<RwLock<f64>>,
 }
 
 impl MergeRuntime {
@@ -120,6 +125,8 @@ impl MergeRuntime {
             track_positions: Arc::new(RwLock::new(HashMap::new())),
             manual_positions: Arc::new(RwLock::new(HashMap::new())),
             object_channels: Arc::new(RwLock::new(HashMap::new())),
+            channel_modulations: Arc::new(RwLock::new(Vec::new())),
+            kinematic_smoothing: Arc::new(RwLock::new(0.5)),
         })
     }
 
@@ -287,11 +294,60 @@ impl MergeRuntime {
     }
 
     /// Récupère les canaux spatiaux actuels (pour debug/persistance)
-    pub fn object_channels(&self) -> HashMap<usize, crate::osc_sender::SpatialChannels> {
+    pub fn object_channels(&self) -> HashMap<usize, SpatialChannels> {
         self.object_channels
             .read()
             .unwrap_or_else(|e| e.into_inner())
             .clone()
+    }
+
+    /// Ajoute une règle de modulation cinématique (source → canal spatial).
+    /// Retourne l'index de la règle (pour suppression).
+    pub fn add_modulation(&self, rule: ChannelModulation) -> usize {
+        let mut rules = self
+            .channel_modulations
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
+        rules.push(rule);
+        rules.len() - 1
+    }
+
+    /// Supprime une règle de modulation par index
+    pub fn remove_modulation(&self, index: usize) -> bool {
+        let mut rules = self
+            .channel_modulations
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
+        if index < rules.len() {
+            rules.remove(index);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Efface toutes les règles de modulation
+    pub fn clear_modulations(&self) {
+        self.channel_modulations
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
+    }
+
+    /// Récupère les règles de modulation actives (pour debug/persistance)
+    pub fn modulations(&self) -> Vec<ChannelModulation> {
+        self.channel_modulations
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// Définit le lissage cinématique [0, 1) — 0 = brut, 0.9 = très lissé
+    pub fn set_kinematic_smoothing(&self, smoothing: f64) {
+        *self
+            .kinematic_smoothing
+            .write()
+            .unwrap_or_else(|e| e.into_inner()) = smoothing.clamp(0.0, 0.99);
     }
 
     /// Récupère les macros (pour modification temps réel — fast path atomic)
@@ -414,6 +470,8 @@ impl MergeRuntime {
         let track_positions_arc = self.track_positions.clone();
         let manual_positions_arc = self.manual_positions.clone();
         let object_channels_arc = self.object_channels.clone();
+        let channel_modulations_arc = self.channel_modulations.clone();
+        let kinematic_smoothing_arc = self.kinematic_smoothing.clone();
 
         let handle = std::thread::spawn(move || {
             let start = Instant::now();
@@ -423,6 +481,10 @@ impl MergeRuntime {
             let mut frames_since_perf = 0u64;
             let mut osc_since_perf = 0u64;
             let mut osc_errors_perf = 0u64;
+            // États cinématiques par objet — thread-local, aucun lock.
+            // Mesurés sur les positions finales (post-merge + post-process).
+            let mut kinematic_states: HashMap<usize, KinematicState> = HashMap::new();
+            let mut prev_t: Option<f64> = None;
 
             while running.load(Ordering::SeqCst) {
                 let frame_start = Instant::now();
@@ -563,6 +625,39 @@ impl MergeRuntime {
                     pp_fn(&ctx, merged)
                 };
 
+                // 4.5 Cinématique : vitesse/accélération/jerk sur les positions
+                // finales (celles réellement envoyées au renderer), dt réel
+                // entre frames pour une mesure correcte même en cas de jitter.
+                let kin_dt = prev_t.map(|p| (t_real - p).max(1e-6)).unwrap_or(dt);
+                prev_t = Some(t_real);
+                let kin_smoothing = *kinematic_smoothing_arc
+                    .read()
+                    .unwrap_or_else(|e| e.into_inner());
+                let has_modulations = !channel_modulations_arc
+                    .read()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .is_empty();
+                if has_modulations {
+                    let present: std::collections::HashSet<usize> =
+                        transformed.iter().map(|(i, _)| *i).collect();
+                    for (obj_idx, pos) in &transformed {
+                        kinematic_states.entry(*obj_idx).or_default().update(
+                            *pos,
+                            kin_dt,
+                            kin_smoothing,
+                        );
+                    }
+                    kinematic_states.retain(|idx, _| present.contains(idx));
+                } else if !kinematic_states.is_empty() {
+                    kinematic_states.clear();
+                }
+                let modulated_channels: HashMap<usize, SpatialChannels> = {
+                    let rules = channel_modulations_arc
+                        .read()
+                        .unwrap_or_else(|e| e.into_inner());
+                    apply_modulations(&rules, &kinematic_states)
+                };
+
                 // 5. OSC output (une seule socket)
                 // Séparer display (tout) de OSC (exclut les moves en preview)
                 let preview_tracks: std::collections::HashSet<usize> = {
@@ -584,8 +679,22 @@ impl MergeRuntime {
                         continue; // Skip OSC pour les moves en preview
                     }
                     if let Some(&osc_id) = osc_ids.get(*obj_idx) {
-                        let messages =
-                            sender.format_state(osc_id, *pos, object_channels.get(obj_idx));
+                        // Canaux effectifs = statiques + modulés (modulation
+                        // prioritaire sur les canaux qu'elle cible)
+                        let effective: Option<SpatialChannels> = match (
+                            object_channels.get(obj_idx),
+                            modulated_channels.get(obj_idx),
+                        ) {
+                            (None, None) => None,
+                            (s, m) => {
+                                let mut eff = s.copied().unwrap_or_default();
+                                if let Some(mc) = m {
+                                    eff.overlay(mc);
+                                }
+                                Some(eff)
+                            }
+                        };
+                        let messages = sender.format_state(osc_id, *pos, effective.as_ref());
                         for (addr, values) in messages {
                             let args: Vec<OscType> =
                                 values.iter().map(|v| OscType::Float(*v as f32)).collect();
