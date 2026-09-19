@@ -315,6 +315,8 @@ impl Runtime {
             let mut last_perf_update = Instant::now();
             let mut frames_since_perf = 0u64;
             let mut osc_since_perf = 0u64;
+            let mut osc_errors_perf = 0u64;
+            let mut osc_refused_perf = 0u64;
 
             while running.load(Ordering::SeqCst) {
                 let elapsed = start.elapsed();
@@ -664,7 +666,19 @@ impl Runtime {
 
                         if let Ok(bytes) = rosc::encoder::encode(&packet) {
                             if let Err(e) = socket.send(&bytes) {
-                                log_osc_error(&format!("Failed to send OSC: {e}"));
+                                let refused = e.kind() == std::io::ErrorKind::ConnectionRefused;
+                                log_osc_error(&format!(
+                                    "Failed to send OSC: {e}{}",
+                                    if refused {
+                                        " (destination unreachable)"
+                                    } else {
+                                        ""
+                                    }
+                                ));
+                                osc_errors_perf += 1;
+                                if refused {
+                                    osc_refused_perf += 1;
+                                }
                             } else {
                                 log_osc_message(&addr, values.len());
                                 osc_since_perf += 1;
@@ -705,10 +719,28 @@ impl Runtime {
                     let latency_ms = frame_time_us / 1000.0;
                     let cpu_pct = (latency_ms / (1000.0 / params.fps)) * 100.0;
 
-                    perf.update(fps, osc_rate, latency_ms, cpu_pct);
+                    let total_osc = osc_since_perf + osc_errors_perf;
+                    let (error_rate, refused_rate) = if total_osc > 0 {
+                        (
+                            osc_errors_perf as f64 / total_osc as f64,
+                            osc_refused_perf as f64 / total_osc as f64,
+                        )
+                    } else {
+                        (0.0, 0.0)
+                    };
+                    perf.update_with_error_rate(
+                        fps,
+                        osc_rate,
+                        latency_ms,
+                        cpu_pct,
+                        error_rate,
+                        refused_rate,
+                    );
 
                     frames_since_perf = 0;
                     osc_since_perf = 0;
+                    osc_errors_perf = 0;
+                    osc_refused_perf = 0;
                     last_perf_update = Instant::now();
                 }
 

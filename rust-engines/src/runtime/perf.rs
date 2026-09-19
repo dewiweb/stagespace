@@ -8,6 +8,7 @@ pub struct PerfMonitor {
     latency_ms: AtomicU64,
     cpu: AtomicU64,
     osc_error_rate: AtomicU64,
+    osc_refused_rate: AtomicU64,
 }
 
 impl Default for PerfMonitor {
@@ -24,11 +25,12 @@ impl PerfMonitor {
             latency_ms: AtomicU64::new(0),
             cpu: AtomicU64::new(0),
             osc_error_rate: AtomicU64::new(0),
+            osc_refused_rate: AtomicU64::new(0),
         }
     }
 
     pub fn update(&self, fps: f64, osc_rate: f64, latency_ms: f64, cpu: f64) {
-        self.update_with_error_rate(fps, osc_rate, latency_ms, cpu, 0.0);
+        self.update_with_error_rate(fps, osc_rate, latency_ms, cpu, 0.0, 0.0);
     }
 
     pub fn update_with_error_rate(
@@ -38,6 +40,7 @@ impl PerfMonitor {
         latency_ms: f64,
         cpu: f64,
         osc_error_rate: f64,
+        osc_refused_rate: f64,
     ) {
         self.fps.store(fps.to_bits(), Ordering::Relaxed);
         self.osc_rate.store(osc_rate.to_bits(), Ordering::Relaxed);
@@ -46,6 +49,8 @@ impl PerfMonitor {
         self.cpu.store(cpu.to_bits(), Ordering::Relaxed);
         self.osc_error_rate
             .store(osc_error_rate.to_bits(), Ordering::Relaxed);
+        self.osc_refused_rate
+            .store(osc_refused_rate.to_bits(), Ordering::Relaxed);
     }
 
     pub fn get_stats(&self) -> PerfStats {
@@ -55,6 +60,7 @@ impl PerfMonitor {
             latency_ms: f64::from_bits(self.latency_ms.load(Ordering::Relaxed)),
             cpu_percent: f64::from_bits(self.cpu.load(Ordering::Relaxed)),
             osc_error_rate: f64::from_bits(self.osc_error_rate.load(Ordering::Relaxed)),
+            osc_refused_rate: f64::from_bits(self.osc_refused_rate.load(Ordering::Relaxed)),
         }
     }
 }

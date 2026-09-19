@@ -94,13 +94,18 @@ export const Toolbar: React.FC = () => {
     }
     const interval = setInterval(async () => {
       try {
-        const stats = await invoke<{ fps: number; oscRate: number; latencyMs: number; cpuPercent: number; oscErrorRate: number }>('get_perf_stats');
+        const stats = await invoke<{ fps: number; oscRate: number; latencyMs: number; cpuPercent: number; oscErrorRate: number; oscRefusedRate: number }>('get_perf_stats');
         setPerfStats(stats);
-        // Alerte OSC si taux d'erreur > 5% (une seule fois par session de playback)
+        // Alerte OSC si taux d'erreur > 5% (une seule fois par session de playback).
+        // ECONNREFUSED dominant = personne n'écoute le port cible (pas du packet loss).
         if (stats.oscErrorRate > 0.05 && !oscErrorToastShown.current) {
           oscErrorToastShown.current = true;
+          const refusedDominant = stats.oscRefusedRate > stats.oscErrorRate / 2;
+          const { oscAddress: host, oscPort: port } = useGraphStore.getState();
           toast.error(
-            `OSC output failing: ${(stats.oscErrorRate * 100).toFixed(0)}% packet loss. Check network connection to spatializer.`,
+            refusedDominant
+              ? `OSC destination unreachable — nothing is listening on ${host}:${port}. Is the spatializer running?`
+              : `OSC output failing: ${(stats.oscErrorRate * 100).toFixed(0)}% packet loss. Check network connection to spatializer.`,
             10000,
           );
         }

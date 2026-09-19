@@ -527,6 +527,7 @@ impl MergeRuntime {
             let mut frames_since_perf = 0u64;
             let mut osc_since_perf = 0u64;
             let mut osc_errors_perf = 0u64;
+            let mut osc_refused_perf = 0u64;
             // États cinématiques par objet — thread-local, aucun lock.
             // Mesurés sur les positions finales (post-merge + post-process).
             let mut kinematic_states: HashMap<usize, KinematicState> = HashMap::new();
@@ -759,10 +760,22 @@ impl MergeRuntime {
                             });
                             if let Ok(bytes) = rosc::encoder::encode(&packet) {
                                 if let Err(e) = socket.send(&bytes) {
+                                    // ECONNREFUSED = ICMP port-unreachable reçu sur
+                                    // socket connectée → personne n'écoute la
+                                    // destination. Ce n'est pas du packet loss.
+                                    let refused = e.kind() == std::io::ErrorKind::ConnectionRefused;
                                     crate::logging::log_osc_error(&format!(
-                                        "MergeRuntime OSC send error: {e}"
+                                        "MergeRuntime OSC send error: {e}{}",
+                                        if refused {
+                                            " (destination unreachable)"
+                                        } else {
+                                            ""
+                                        }
                                     ));
                                     osc_errors_perf += 1;
+                                    if refused {
+                                        osc_refused_perf += 1;
+                                    }
                                 } else {
                                     osc_since_perf += 1;
                                 }
@@ -793,17 +806,26 @@ impl MergeRuntime {
                     let latency_ms = frame_time_us / 1000.0;
                     let cpu_pct = (latency_ms / (1000.0 / fps)) * 100.0;
                     let total_osc = osc_since_perf + osc_errors_perf;
-                    let error_rate = if total_osc > 0 {
-                        osc_errors_perf as f64 / total_osc as f64
+                    let (error_rate, refused_rate) = if total_osc > 0 {
+                        (
+                            osc_errors_perf as f64 / total_osc as f64,
+                            osc_refused_perf as f64 / total_osc as f64,
+                        )
                     } else {
-                        0.0
+                        (0.0, 0.0)
                     };
                     perf.update_with_error_rate(
-                        fps_actual, osc_rate, latency_ms, cpu_pct, error_rate,
+                        fps_actual,
+                        osc_rate,
+                        latency_ms,
+                        cpu_pct,
+                        error_rate,
+                        refused_rate,
                     );
                     frames_since_perf = 0;
                     osc_since_perf = 0;
                     osc_errors_perf = 0;
+                    osc_refused_perf = 0;
                     last_perf_update = Instant::now();
                 }
 

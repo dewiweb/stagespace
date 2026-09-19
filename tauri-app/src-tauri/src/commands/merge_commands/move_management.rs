@@ -352,6 +352,7 @@ pub async fn get_merge_perf_stats(state: State<'_, AppState>) -> Result<serde_js
         "latencyMs": perf.latency_ms,
         "cpuPercent": perf.cpu_percent,
         "oscErrorRate": perf.osc_error_rate,
+        "oscRefusedRate": perf.osc_refused_rate,
     }))
 }
 

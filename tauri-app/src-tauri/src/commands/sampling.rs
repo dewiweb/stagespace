@@ -20,6 +20,7 @@ pub async fn get_perf_stats(state: State<'_, AppState>) -> Result<serde_json::Va
         "latencyMs": stats.latency_ms,
         "cpuPercent": stats.cpu_percent,
         "oscErrorRate": stats.osc_error_rate,
+        "oscRefusedRate": stats.osc_refused_rate,
     }))
 }
 

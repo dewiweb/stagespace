@@ -21,7 +21,7 @@ stagespace/
 
 - **Rust**: stable toolchain (1.88+)
 - **Node.js**: 20+
-- **System deps (Linux)**: `libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf`
+- **System deps (Linux)**: `libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libasound2-dev patchelf` (`libasound2-dev` requis par `cpal`/`alsa-sys` pour la capture audio native)
 
 ## Build Commands
 
