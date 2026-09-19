@@ -108,6 +108,10 @@ export interface SpatialFxSlice {
   zones: Zone[];
   modulations: ChannelModulation[];
   objectChannels: Record<number, SpatialChannels>;
+  /// Effets déclarés dans le graph global (nodes Zone/Velocity) — read-only,
+  /// gérés via l'éditeur de graphe, pas les commandes manuelles.
+  graphZones: Zone[];
+  graphModulations: ChannelModulation[];
   refreshSpatialFx: () => Promise<void>;
   addZone: (params: ZoneParams) => Promise<void>;
   removeZone: (index: number) => Promise<void>;
@@ -125,9 +129,11 @@ export const createSpatialFxSlice: StateCreator<SpatialFxSlice, [], [], SpatialF
   zones: [],
   modulations: [],
   objectChannels: {},
+  graphZones: [],
+  graphModulations: [],
 
   refreshSpatialFx: async () => {
-    const [zones, modulations, objectChannels] = await Promise.all([
+    const [zones, modulations, objectChannels, graphEffects] = await Promise.all([
       invoke<Zone[]>('list_zones').catch((e) => {
         console.error('Failed to list zones:', e);
         return [] as Zone[];
@@ -140,8 +146,18 @@ export const createSpatialFxSlice: StateCreator<SpatialFxSlice, [], [], SpatialF
         console.error('Failed to list spatial channels:', e);
         return {} as Record<number, SpatialChannels>;
       }),
+      invoke<{ zones: Zone[]; modulations: ChannelModulation[] }>('list_graph_effects').catch((e) => {
+        console.error('Failed to list graph effects:', e);
+        return { zones: [] as Zone[], modulations: [] as ChannelModulation[] };
+      }),
     ]);
-    set({ zones, modulations, objectChannels });
+    set({
+      zones,
+      modulations,
+      objectChannels,
+      graphZones: graphEffects.zones,
+      graphModulations: graphEffects.modulations,
+    });
   },
 
   addZone: async (params) => {

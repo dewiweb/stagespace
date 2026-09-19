@@ -31,6 +31,8 @@ pub(crate) fn is_post_process_node(node_type: &NodeType) -> bool {
             | NodeType::ManualPosition
             | NodeType::Mirror
             | NodeType::Clamp
+            | NodeType::Zone
+            | NodeType::Velocity
     )
 }
 
@@ -53,6 +55,9 @@ fn compile_transform_node(node: &Node) -> Result<TransformFn, PostProcessCompile
         NodeType::ManualPosition => compile_manual_position(node),
         NodeType::Mirror => compile_mirror(node),
         NodeType::Clamp => compile_clamp(node),
+        // Déclarations d'effets — extraites par `extract_graph_effects`,
+        // pass-through dans la chaîne de positions.
+        NodeType::Zone | NodeType::Velocity => Ok(Box::new(|_ctx, positions| positions)),
         _ => Err(PostProcessCompileError::InvalidNode(format!(
             "{:?} is not a post-process node",
             node.node_type

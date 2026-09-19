@@ -143,6 +143,9 @@ pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), Stri
         let graph = build_graph_from_json(global_graph, &audio_state)
             .map_err(|e| format!("Failed to parse global graph: {e}"))?;
 
+        let effects = stagespace_engines::extract_graph_effects(&graph)
+            .map_err(|e| format!("Failed to extract graph effects: {e:?}"))?;
+
         let merge_rt = lock_or_recover(&state.merge_runtime);
         let macros = merge_rt.macros();
 
@@ -152,6 +155,7 @@ pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), Stri
             .map_err(|e| format!("Failed to compile global graph: {e:?}"))?;
 
         merge_rt.swap_post_process_fn(post_process_fn);
+        merge_rt.set_graph_effects(effects.zones, effects.modulations);
     }
 
     // 2. Désactiver les moves qui ne sont pas dans active_move_ids

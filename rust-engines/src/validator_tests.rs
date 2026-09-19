@@ -504,4 +504,116 @@ mod tests {
             "Elliptical graph should validate, got {result:?}"
         );
     }
+
+    #[test]
+    fn test_global_graph_with_zone_and_velocity() {
+        // Input → Zone → Velocity → Output : les nodes d'effets graph-native
+        // sont des déclarations pass-through dans la chaîne globale.
+        let mut graph = Graph::new();
+        let input = Node::new(NodeType::Input);
+        let zone = Node::with_params(
+            NodeType::Zone,
+            serde_json::json!({"shape": "sphere", "center": [0,0,0], "radius": 2.0,
+                               "channels": {"gain": 0.0}}),
+        );
+        let vel = Node::with_params(
+            NodeType::Velocity,
+            serde_json::json!({"source": "speed", "channel": "spread", "scale": 0.1}),
+        );
+        let output = Node::new(NodeType::Output);
+
+        let id_input = input.id;
+        let id_zone = zone.id;
+        let id_vel = vel.id;
+        let id_output = output.id;
+
+        graph.add_node(input);
+        graph.add_node(zone);
+        graph.add_node(vel);
+        graph.add_node(output);
+
+        graph.add_edge(Edge {
+            from: id_input,
+            to: id_zone,
+            from_port: "output".to_string(),
+            to_port: "input".to_string(),
+        });
+        graph.add_edge(Edge {
+            from: id_zone,
+            to: id_vel,
+            from_port: "output".to_string(),
+            to_port: "input".to_string(),
+        });
+        graph.add_edge(Edge {
+            from: id_vel,
+            to: id_output,
+            from_port: "output".to_string(),
+            to_port: "input".to_string(),
+        });
+
+        let result = Validator::validate_with_context(&graph, GraphContext::Global);
+        assert!(
+            result.is_ok(),
+            "Expected valid global graph with Zone/Velocity, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_subgraph_rejects_zone_and_velocity() {
+        // Zone/Velocity n'ont pas de sens dans un sub-graph (effets post-merge)
+        for node_type in [NodeType::Zone, NodeType::Velocity] {
+            let mut graph = Graph::new();
+            let objects = Node::with_params(NodeType::Objects, serde_json::json!({"n_objects": 3}));
+            let duration =
+                Node::with_params(NodeType::Duration, serde_json::json!({"duration": 4.0}));
+            let circular =
+                Node::with_params(NodeType::Circular, serde_json::json!({"n_objects": 3}));
+            let fx = Node::new(node_type.clone());
+            let output = Node::new(NodeType::Output);
+
+            let id_objects = objects.id;
+            let id_duration = duration.id;
+            let id_circular = circular.id;
+            let id_output = output.id;
+
+            graph.add_node(objects);
+            graph.add_node(duration);
+            graph.add_node(circular);
+            graph.add_node(fx);
+            graph.add_node(output);
+
+            graph.add_edge(Edge {
+                from: id_objects,
+                to: id_circular,
+                from_port: "output".to_string(),
+                to_port: "input".to_string(),
+            });
+            graph.add_edge(Edge {
+                from: id_duration,
+                to: id_circular,
+                from_port: "output".to_string(),
+                to_port: "duration".to_string(),
+            });
+            graph.add_edge(Edge {
+                from: id_circular,
+                to: id_output,
+                from_port: "output".to_string(),
+                to_port: "input".to_string(),
+            });
+
+            let result = Validator::validate(&graph);
+            assert!(
+                result.is_err(),
+                "{node_type:?} should be rejected in subgraph"
+            );
+            if let Err(errors) = result {
+                assert!(
+                    errors
+                        .iter()
+                        .any(|e| matches!(e, ValidationError::ContextIncompatible(_))),
+                    "Expected ContextIncompatible for {node_type:?} in subgraph, got {errors:?}"
+                );
+            }
+        }
+    }
 }

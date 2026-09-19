@@ -103,6 +103,20 @@ pub enum NodeType {
     /// Fonctionnellement équivalent à Input (produit les positions mergées).
     Merge,
 
+    /// Zone d'effet spatial (graph global uniquement).
+    /// Pass-through dans la chaîne de positions — ses params déclarent une
+    /// zone extraite à la compilation et évaluée par le MergeRuntime sur les
+    /// positions finales (canaux étendus tirés vers les valeurs cibles).
+    /// Params : shape ("sphere"|"box"), center|min+max, radius, falloff,
+    /// channels ({gain:0,...}), objects (optionnel).
+    Zone,
+
+    /// Modulation cinématique → canal spatial (graph global uniquement).
+    /// Pass-through — déclare une règle vitesse/accélération/jerk → canal.
+    /// Params : source ("speed"|"accel"|"jerk"), channel, scale, offset,
+    /// min, max, object (optionnel).
+    Velocity,
+
     // Sources
     BPM,
     AudioAmplitude,

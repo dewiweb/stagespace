@@ -103,6 +103,36 @@ impl ChannelModulation {
             max: f64::INFINITY,
         }
     }
+
+    /// Construit une règle depuis les params d'un node graphe `Velocity` :
+    /// `{source, channel, scale, offset, min, max, object}` — `min`/`max`
+    /// acceptent null/vide/absent pour "pas de borne" (±∞) ; les champs
+    /// numériques acceptent les strings de l'éditeur (`"0.5"`).
+    pub fn from_node_params(params: &serde_json::Value) -> Result<Self, String> {
+        use crate::node_params as np;
+        let get = |key: &str| params.get(key).and_then(np::flex_f64);
+        let source = KinematicSource::from_str(
+            params
+                .get("source")
+                .and_then(|v| v.as_str())
+                .unwrap_or("speed"),
+        )?;
+        let channel = SpatialChannel::from_str(
+            params
+                .get("channel")
+                .and_then(|v| v.as_str())
+                .ok_or("Velocity node requires 'channel'")?,
+        )?;
+        Ok(ChannelModulation {
+            object: params.get("object").and_then(np::flex_usize),
+            source,
+            channel,
+            scale: get("scale").unwrap_or(1.0),
+            offset: get("offset").unwrap_or(0.0),
+            min: get("min").unwrap_or(f64::NEG_INFINITY),
+            max: get("max").unwrap_or(f64::INFINITY),
+        })
+    }
 }
 
 /// État cinématique d'un objet — positions/vitesses précédentes + mesures
@@ -335,5 +365,52 @@ mod tests {
         rule.offset = 10.0;
         let out = apply_modulations(&[rule], &states);
         assert_eq!(out[&0].presence, Some(10.0));
+    }
+
+    #[test]
+    fn test_from_node_params_defaults() {
+        let m = ChannelModulation::from_node_params(&serde_json::json!({
+            "source": "speed", "channel": "spread", "scale": 0.1
+        }))
+        .unwrap();
+        assert_eq!(m.source, KinematicSource::Speed);
+        assert_eq!(m.channel, SpatialChannel::Spread);
+        assert_eq!(m.scale, 0.1);
+        assert_eq!(m.offset, 0.0);
+        assert_eq!(m.min, f64::NEG_INFINITY);
+        assert_eq!(m.max, f64::INFINITY);
+        assert!(m.object.is_none());
+    }
+
+    #[test]
+    fn test_from_node_params_string_forms() {
+        let m = ChannelModulation::from_node_params(&serde_json::json!({
+            "source": "jerk", "channel": "presence",
+            "scale": "0.5", "offset": "0.1",
+            "min": "", "max": "1.0", "object": "2"
+        }))
+        .unwrap();
+        assert_eq!(m.source, KinematicSource::Jerk);
+        assert_eq!(m.scale, 0.5);
+        assert_eq!(m.offset, 0.1);
+        assert_eq!(m.min, f64::NEG_INFINITY); // "" = pas de borne
+        assert_eq!(m.max, 1.0);
+        assert_eq!(m.object, Some(2));
+    }
+
+    #[test]
+    fn test_from_node_params_errors() {
+        // channel manquant → erreur
+        assert!(ChannelModulation::from_node_params(&serde_json::json!({})).is_err());
+        // canal inconnu → erreur
+        assert!(ChannelModulation::from_node_params(&serde_json::json!({
+            "channel": "bogus"
+        }))
+        .is_err());
+        // source inconnue → erreur
+        assert!(ChannelModulation::from_node_params(&serde_json::json!({
+            "source": "bogus", "channel": "gain"
+        }))
+        .is_err());
     }
 }

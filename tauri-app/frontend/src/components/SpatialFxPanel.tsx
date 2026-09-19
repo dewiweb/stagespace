@@ -50,6 +50,8 @@ export default function SpatialFxPanel() {
     zones,
     modulations,
     objectChannels,
+    graphZones,
+    graphModulations,
     refreshSpatialFx,
     addZone,
     removeZone,
@@ -382,6 +384,45 @@ export default function SpatialFxPanel() {
           </div>
         )}
       </Section>
+
+      {/* ── Graph-declared effects (read-only — gérés via l'éditeur de graphe) ── */}
+      {(graphZones.length > 0 || graphModulations.length > 0) && (
+        <div>
+          <h4 className="text-gray-500 text-[10px] font-semibold uppercase tracking-wider mb-1.5">
+            Graph effects ({graphZones.length + graphModulations.length})
+          </h4>
+          <div className="space-y-1">
+            {graphZones.map((zone, i) => (
+              <div key={`z${i}`} className="p-2 bg-cyan-900/20 rounded border border-cyan-800/40">
+                <div className="text-cyan-200 text-[11px] font-mono">{describeZoneShape(zone.shape)}</div>
+                <div className="text-gray-500 text-[10px] truncate">
+                  {describeChannels(zone.channels)}
+                  {zone.falloff > 0 && ` · falloff=${zone.falloff}`}
+                  {zone.objects && ` · objs=[${zone.objects.join(',')}]`}
+                  {!zone.enabled && ' · disabled'}
+                </div>
+              </div>
+            ))}
+            {graphModulations.map((mod, i) => (
+              <div key={`m${i}`} className="p-2 bg-cyan-900/20 rounded border border-cyan-800/40">
+                <div className="text-cyan-200 text-[11px] font-mono">
+                  {mod.source.toLowerCase()} → {mod.channel.toLowerCase()}
+                  {mod.object !== null && ` [obj ${mod.object}]`}
+                </div>
+                <div className="text-gray-500 text-[10px] font-mono truncate">
+                  ×{mod.scale}
+                  {mod.offset !== 0 && ` +${mod.offset}`}
+                  {mod.min !== null && ` min=${mod.min}`}
+                  {mod.max !== null && ` max=${mod.max}`}
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-gray-600 text-[10px] mt-1.5">
+            Declared by Zone/Velocity nodes in the global graph — edit via the node editor (Global tab).
+          </p>
+        </div>
+      )}
     </div>
   );
 }

@@ -13,6 +13,7 @@ pub mod kinematics;
 pub mod logging;
 pub mod merge_runtime;
 pub mod modulator;
+pub mod node_params;
 pub mod osc_receiver;
 pub mod osc_sender;
 pub mod patch;
@@ -76,7 +77,8 @@ pub use osc_sender::{OscProfile, OscSender, SpatialChannel, SpatialChannels};
 pub use patch::{AudioObject, ObjectGroup, PatchManager};
 pub use position_buffer::{IndexedPosition, PositionBuffer};
 pub use post_process_compiler::{
-    compile_post_process, PostProcessCompileError, PostProcessCompileParams,
+    compile_post_process, extract_graph_effects, GraphEffects, PostProcessCompileError,
+    PostProcessCompileParams,
 };
 pub use presets::{Preset, PresetManager};
 pub use rng::SimpleRng;

@@ -235,12 +235,14 @@ impl Validator {
             | NodeType::BarycentricGroup | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
             // Post-processing nodes (graph global)
             | NodeType::RadiusScale | NodeType::HeightOffset | NodeType::PerTrackDepth
-            | NodeType::Barycenter | NodeType::AudioFalloff | NodeType::ManualPosition => {
+            | NodeType::Barycenter | NodeType::AudioFalloff | NodeType::ManualPosition
+            | NodeType::Zone | NodeType::Velocity => {
                 matches!(to_type, NodeType::Output | NodeType::Mix | NodeType::Group | NodeType::Crossfade
                     | NodeType::Scale | NodeType::Rotate | NodeType::Offset | NodeType::PhaseShift
                     | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
                     | NodeType::RadiusScale | NodeType::HeightOffset | NodeType::PerTrackDepth
-                    | NodeType::Barycenter | NodeType::AudioFalloff | NodeType::ManualPosition)
+                    | NodeType::Barycenter | NodeType::AudioFalloff | NodeType::ManualPosition
+                    | NodeType::Zone | NodeType::Velocity)
             }
 
             // Sources
@@ -279,6 +281,7 @@ impl Validator {
                     | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
                     | NodeType::RadiusScale | NodeType::HeightOffset | NodeType::PerTrackDepth
                     | NodeType::Barycenter | NodeType::AudioFalloff | NodeType::ManualPosition
+                    | NodeType::Zone | NodeType::Velocity
                     | NodeType::Output
                 )
             }
@@ -290,6 +293,7 @@ impl Validator {
                     | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
                     | NodeType::RadiusScale | NodeType::HeightOffset | NodeType::PerTrackDepth
                     | NodeType::Barycenter | NodeType::AudioFalloff | NodeType::ManualPosition
+                    | NodeType::Zone | NodeType::Velocity
                     | NodeType::Output | NodeType::Mix | NodeType::Group | NodeType::Crossfade
                 )
             }
@@ -300,6 +304,7 @@ impl Validator {
                     | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
                     | NodeType::RadiusScale | NodeType::HeightOffset | NodeType::PerTrackDepth
                     | NodeType::Barycenter | NodeType::AudioFalloff | NodeType::ManualPosition
+                    | NodeType::Zone | NodeType::Velocity
                     | NodeType::Output
                 )
             }
@@ -416,6 +421,8 @@ impl Validator {
             | NodeType::Barycenter
             | NodeType::AudioFalloff
             | NodeType::ManualPosition
+            | NodeType::Zone
+            | NodeType::Velocity
             | NodeType::Output => &["input"],
 
             // Splines : input (spline data) + duration
@@ -565,6 +572,8 @@ fn is_global_only_node(node_type: &NodeType) -> bool {
             | NodeType::Barycenter
             | NodeType::AudioFalloff
             | NodeType::ManualPosition
+            | NodeType::Zone
+            | NodeType::Velocity
     )
 }
 

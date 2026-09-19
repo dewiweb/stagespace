@@ -91,6 +91,13 @@ pub struct MergeRuntime {
     kinematic_smoothing: Arc<RwLock<f64>>,
     /// Zones d'effets spatiaux (P4) — blend des canaux selon la position
     zones: Arc<RwLock<Vec<crate::zones::Zone>>>,
+    /// Zones déclarées dans le graph global (nodes `Zone`) — remplacées
+    /// en bloc à chaque `update_global_graph`, évaluées avant les zones
+    /// manuelles (qui gardent le dernier mot sur le blend).
+    graph_zones: Arc<RwLock<Vec<crate::zones::Zone>>>,
+    /// Modulations déclarées dans le graph global (nodes `Velocity`) —
+    /// évaluées avant les règles manuelles (priorité aux manuelles).
+    graph_modulations: Arc<RwLock<Vec<ChannelModulation>>>,
 }
 
 impl MergeRuntime {
@@ -130,6 +137,8 @@ impl MergeRuntime {
             channel_modulations: Arc::new(RwLock::new(Vec::new())),
             kinematic_smoothing: Arc::new(RwLock::new(0.5)),
             zones: Arc::new(RwLock::new(Vec::new())),
+            graph_zones: Arc::new(RwLock::new(Vec::new())),
+            graph_modulations: Arc::new(RwLock::new(Vec::new())),
         })
     }
 
@@ -384,6 +393,36 @@ impl MergeRuntime {
         self.zones.read().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
+    /// Remplace les effets déclarés dans le graph global (nodes `Zone` /
+    /// `Velocity`). Appelé à chaque `update_global_graph` — les effets
+    /// suivent le cycle de vie du graph, donc persistent via les slots/cues.
+    /// Les effets manuels (add_zone/add_modulation) ne sont pas touchés.
+    pub fn set_graph_effects(
+        &self,
+        zones: Vec<crate::zones::Zone>,
+        modulations: Vec<ChannelModulation>,
+    ) {
+        *self.graph_zones.write().unwrap_or_else(|e| e.into_inner()) = zones;
+        *self
+            .graph_modulations
+            .write()
+            .unwrap_or_else(|e| e.into_inner()) = modulations;
+    }
+
+    /// Récupère les effets déclarés par le graph global (pour debug/listing)
+    pub fn graph_effects(&self) -> (Vec<crate::zones::Zone>, Vec<ChannelModulation>) {
+        (
+            self.graph_zones
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone(),
+            self.graph_modulations
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone(),
+        )
+    }
+
     /// Récupère les macros (pour modification temps réel — fast path atomic)
     pub fn macros(&self) -> Arc<MacroState> {
         self.macros.clone()
@@ -518,6 +557,8 @@ impl MergeRuntime {
         let zones_arc = self.zones.clone();
         let channel_modulations_arc = self.channel_modulations.clone();
         let kinematic_smoothing_arc = self.kinematic_smoothing.clone();
+        let graph_zones_arc = self.graph_zones.clone();
+        let graph_modulations_arc = self.graph_modulations.clone();
 
         let handle = std::thread::spawn(move || {
             let start = Instant::now();
@@ -683,7 +724,11 @@ impl MergeRuntime {
                 let has_modulations = !channel_modulations_arc
                     .read()
                     .unwrap_or_else(|e| e.into_inner())
-                    .is_empty();
+                    .is_empty()
+                    || !graph_modulations_arc
+                        .read()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .is_empty();
                 if has_modulations {
                     let present: std::collections::HashSet<usize> =
                         transformed.iter().map(|(i, _)| *i).collect();
@@ -698,17 +743,37 @@ impl MergeRuntime {
                 } else if !kinematic_states.is_empty() {
                     kinematic_states.clear();
                 }
+                // Règles = graph-déclarées puis manuelles — les manuelles
+                // écrasent le graph sur les canaux qu'elles ciblent.
                 let modulated_channels: HashMap<usize, SpatialChannels> = {
-                    let rules = channel_modulations_arc
+                    let mut rules: Vec<ChannelModulation> = graph_modulations_arc
                         .read()
-                        .unwrap_or_else(|e| e.into_inner());
+                        .unwrap_or_else(|e| e.into_inner())
+                        .clone();
+                    rules.extend(
+                        channel_modulations_arc
+                            .read()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .iter()
+                            .cloned(),
+                    );
                     apply_modulations(&rules, &kinematic_states)
                 };
 
-                // 4.6 Zones (P4) : snapshot sous read lock court — le blend
-                // par objet se fait sans lock dans la boucle d'envoi.
-                let zones: Vec<crate::zones::Zone> =
-                    zones_arc.read().unwrap_or_else(|e| e.into_inner()).clone();
+                // 4.6 Zones : graph-déclarées puis manuelles (dernier mot au
+                // manuel). Snapshot sous read lock court — le blend par objet
+                // se fait sans lock dans la boucle d'envoi.
+                let mut zones: Vec<crate::zones::Zone> = graph_zones_arc
+                    .read()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone();
+                zones.extend(
+                    zones_arc
+                        .read()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .iter()
+                        .cloned(),
+                );
 
                 // 5. OSC output (une seule socket)
                 // Séparer display (tout) de OSC (exclut les moves en preview)

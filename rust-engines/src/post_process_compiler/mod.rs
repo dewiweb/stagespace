@@ -15,8 +15,10 @@ mod tests;
 mod transforms;
 
 use crate::graph::{Graph, Node, NodeId, NodeType};
+use crate::kinematics::ChannelModulation;
 use crate::runtime::{MacroState, PostProcessContext, PostProcessFn};
 use crate::validator::{GraphContext, Validator};
+use crate::zones::Zone;
 use std::sync::Arc;
 
 /// Erreur de compilation du graph global
@@ -30,6 +32,45 @@ pub enum PostProcessCompileError {
     /// Le graph global a échoué la validation (cycles, connexions invalides,
     /// nodes de sub-graph placés en global, etc.).
     ValidationFailed(String),
+}
+
+/// Effets déclarés dans le graph global — les nodes `Zone` et `Velocity`
+/// sont des déclarations pass-through : ils ne transforment pas les positions,
+/// leurs paramètres sont extraits ici et installés dans le MergeRuntime pour
+/// être évalués chaque frame avec les effets configurés manuellement.
+#[derive(Debug, Default)]
+pub struct GraphEffects {
+    /// Zones déclarées par les nodes `Zone` du graph
+    pub zones: Vec<Zone>,
+    /// Modulations cinématiques déclarées par les nodes `Velocity`
+    pub modulations: Vec<ChannelModulation>,
+}
+
+/// Extrait les effets déclarés dans le graph global (nodes Zone/Velocity).
+///
+/// Les nodes dont les params sont invalides produisent une erreur —
+/// mieux vaut échouer à l'update du graph que perdre silencieusement
+/// un effet attendu par l'utilisateur.
+pub fn extract_graph_effects(graph: &Graph) -> Result<GraphEffects, PostProcessCompileError> {
+    let mut effects = GraphEffects::default();
+    for node in graph.nodes.values() {
+        match node.node_type {
+            NodeType::Zone => {
+                let zone = Zone::from_node_params(&node.params).map_err(|e| {
+                    PostProcessCompileError::InvalidParameter(format!("Zone node: {e}"))
+                })?;
+                effects.zones.push(zone);
+            }
+            NodeType::Velocity => {
+                let m = ChannelModulation::from_node_params(&node.params).map_err(|e| {
+                    PostProcessCompileError::InvalidParameter(format!("Velocity node: {e}"))
+                })?;
+                effects.modulations.push(m);
+            }
+            _ => {}
+        }
+    }
+    Ok(effects)
 }
 
 /// Paramètres pour compiler le graph global

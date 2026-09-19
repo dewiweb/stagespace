@@ -34,6 +34,8 @@ const MODIFIER_TYPES: NodeType[] = [
   'Mirror', 'Clamp', 'LFO', 'Jitter',
   // Post-process nodes (graph global)
   'RadiusScale', 'HeightOffset', 'PerTrackDepth', 'Barycenter', 'AudioFalloff', 'ManualPosition',
+  // Déclarations d'effets graph-natives (pass-through dans la chaîne)
+  'Zone', 'Velocity',
 ];
 
 // Modifiers qui peuvent recevoir des falloffs limités (DirectionalFalloff, AudioAmplitudeFalloff)
@@ -158,6 +160,7 @@ export function getInputPorts(type: NodeType): string[] {
     case 'EvaluateSpline': case 'TrimSpline': case 'OffsetSpline':
     case 'RadiusScale': case 'HeightOffset': case 'PerTrackDepth':
     case 'Barycenter': case 'AudioFalloff': case 'ManualPosition':
+    case 'Zone': case 'Velocity':
     case 'Output':
       return ['input'];
 

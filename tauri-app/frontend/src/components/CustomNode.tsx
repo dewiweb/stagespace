@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
+import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import { PARAM_SCHEMA, getCategoryColor, type ParamDef } from './nodeParamSchema';
 import { isSourceNode, isTerminalNode, isBinaryComposite, getInputPorts } from '../utils/connectionRules';
 
@@ -16,6 +17,10 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
   const [expanded, setExpanded] = useState(false);
   const [trackIdsText, setTrackIdsText] = useState<string | null>(null);
   const updateNodeData = useGraphStore((s) => s.updateNodeData);
+  // Nodes du graph global : les params s'écrivent dans le store global
+  // (le pushGlobalGraph debounced du NodeEditor propage au backend)
+  const isGlobalNode = useGlobalGraphStore((s) => s.nodes.some((n) => n.id === id));
+  const updateGlobalNodeData = useGlobalGraphStore((s) => s.updateNodeData);
   const color = getCategoryColor(data.type);
   const schema = PARAM_SCHEMA[data.type] ?? [];
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -39,12 +44,16 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
   const audioHigh = audioState?.amplitude?.high ?? null;
 
   const handleChange = useCallback((key: string, value: any) => {
+    if (isGlobalNode) {
+      updateGlobalNodeData(id, { params: { ...data.params, [key]: value } });
+      return; // pushGlobalGraph (debounced) gère la propagation backend
+    }
     updateNodeData(id, { params: { ...data.params, [key]: value } });
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       useGraphStore.getState().updateGraphLive();
     }, 150);
-  }, [id, data.params, updateNodeData]);
+  }, [id, data.params, updateNodeData, isGlobalNode, updateGlobalNodeData]);
 
   const renderInput = (def: ParamDef) => {
     const value = data.params?.[def.key];

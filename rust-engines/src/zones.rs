@@ -103,6 +103,62 @@ impl Zone {
     pub fn applies_to(&self, obj: usize) -> bool {
         self.enabled && self.objects.as_ref().is_none_or(|o| o.contains(&obj))
     }
+
+    /// Construit une Zone depuis les params d'un node graphe :
+    /// `{shape, center|min+max, radius, falloff, channels, objects, enabled}`.
+    /// Les champs acceptent les valeurs JSON ou les strings de l'éditeur
+    /// (`channels` : objet ou `"gain=0,spread=1"` ; `objects` : array ou
+    /// `"0,2,4"` ; vec3 : array ou `"x,y,z"`).
+    pub fn from_node_params(params: &serde_json::Value) -> Result<Self, String> {
+        use crate::node_params as np;
+        use std::str::FromStr;
+        let shape_str = params
+            .get("shape")
+            .and_then(|v| v.as_str())
+            .unwrap_or("sphere")
+            .to_lowercase();
+        let shape = match shape_str.as_str() {
+            "sphere" => ZoneShape::Sphere {
+                center: params
+                    .get("center")
+                    .and_then(np::flex_vec3)
+                    .unwrap_or([0.0, 0.0, 0.0]),
+                radius: np::param_f64_or(params, "radius", 1.0),
+            },
+            "box" => ZoneShape::Box {
+                min: params
+                    .get("min")
+                    .and_then(np::flex_vec3)
+                    .ok_or("Zone box requires 'min' [x,y,z]")?,
+                max: params
+                    .get("max")
+                    .and_then(np::flex_vec3)
+                    .ok_or("Zone box requires 'max' [x,y,z]")?,
+            },
+            s => return Err(format!("Unknown zone shape '{s}' (sphere|box)")),
+        };
+        let mut channels = SpatialChannels::default();
+        for (name, v) in params
+            .get("channels")
+            .map(np::flex_f64_map)
+            .unwrap_or_default()
+        {
+            channels.set(SpatialChannel::from_str(&name)?, v);
+        }
+        if channels.is_empty() {
+            return Err("Zone requires at least one channel".to_string());
+        }
+        Ok(Zone {
+            shape,
+            falloff: np::param_f64_or(params, "falloff", 0.0).max(0.0),
+            channels,
+            objects: params.get("objects").and_then(np::flex_usize_list),
+            enabled: params
+                .get("enabled")
+                .and_then(np::flex_bool)
+                .unwrap_or(true),
+        })
+    }
 }
 
 /// Applique toutes les zones sur les canaux effectifs d'un objet.
@@ -258,5 +314,68 @@ mod tests {
             &Vector3::new(0.0, 0.0, 0.0)
         ));
         assert!(!any_zone_applies(&[z], 0, &Vector3::new(9.0, 0.0, 0.0)));
+    }
+
+    #[test]
+    fn test_from_node_params_sphere_json() {
+        let z = Zone::from_node_params(&serde_json::json!({
+            "shape": "sphere", "center": [1, 0, 0], "radius": 2.5,
+            "falloff": 0.5, "channels": {"gain": 0.0, "spread": 1.0}
+        }))
+        .unwrap();
+        match z.shape {
+            ZoneShape::Sphere { center, radius } => {
+                assert_eq!(center, [1.0, 0.0, 0.0]);
+                assert_eq!(radius, 2.5);
+            }
+            _ => panic!("expected sphere"),
+        }
+        assert_eq!(z.channels.gain, Some(0.0));
+        assert_eq!(z.channels.spread, Some(1.0));
+        assert_eq!(z.falloff, 0.5);
+        assert!(z.enabled);
+        assert!(z.objects.is_none());
+    }
+
+    #[test]
+    fn test_from_node_params_string_forms() {
+        // Les champs texte de l'éditeur arrivent en string — le parse est tolérant.
+        let z = Zone::from_node_params(&serde_json::json!({
+            "shape": "box", "min": "-1,-1,-1", "max": "[1,1,1]",
+            "channels": "gain=0,spread=1", "objects": "0,2,4",
+            "falloff": "0.25", "enabled": "true"
+        }))
+        .unwrap();
+        match z.shape {
+            ZoneShape::Box { min, max } => {
+                assert_eq!(min, [-1.0, -1.0, -1.0]);
+                assert_eq!(max, [1.0, 1.0, 1.0]);
+            }
+            _ => panic!("expected box"),
+        }
+        assert_eq!(z.objects, Some(vec![0, 2, 4]));
+        assert_eq!(z.falloff, 0.25);
+        assert_eq!(z.channels.gain, Some(0.0));
+    }
+
+    #[test]
+    fn test_from_node_params_errors() {
+        // Pas de channels → erreur
+        assert!(Zone::from_node_params(&serde_json::json!({"shape": "sphere"})).is_err());
+        // Shape inconnue → erreur
+        assert!(Zone::from_node_params(&serde_json::json!({
+            "shape": "cone", "channels": {"gain": 0}
+        }))
+        .is_err());
+        // Canal inconnu → erreur
+        assert!(Zone::from_node_params(&serde_json::json!({
+            "channels": {"bogus": 0}
+        }))
+        .is_err());
+        // Box sans min/max → erreur
+        assert!(Zone::from_node_params(&serde_json::json!({
+            "shape": "box", "channels": {"gain": 0}
+        }))
+        .is_err());
     }
 }

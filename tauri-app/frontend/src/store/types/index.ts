@@ -10,6 +10,7 @@ export type NodeType =
   | 'Scale' | 'Rotate' | 'Offset' | 'PhaseShift' | 'BarycentricGroup'
   | 'Mirror' | 'Clamp' | 'LFO' | 'Jitter'
   | 'RadiusScale' | 'HeightOffset' | 'PerTrackDepth' | 'Barycenter' | 'AudioFalloff' | 'ManualPosition'
+  | 'Zone' | 'Velocity'
   | 'MoveRef' | 'Merge'
   | 'BPM' | 'AudioAmplitude' | 'AudioSpectrum' | 'OSCInput'
   | 'Mix' | 'Group' | 'Sequence' | 'Crossfade';

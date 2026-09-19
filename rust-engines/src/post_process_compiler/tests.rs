@@ -539,3 +539,93 @@ fn test_build_transform_chain_rejects_engine() {
         other => panic!("Expected InvalidNode, got {other:?}"),
     }
 }
+
+#[test]
+fn test_extract_graph_effects_zone_and_velocity() {
+    let graph = make_graph(
+        vec![
+            (NodeType::Input, serde_json::json!({})),
+            (
+                NodeType::Zone,
+                serde_json::json!({
+                    "shape": "sphere", "center": [0, 0, 0], "radius": 2.0,
+                    "falloff": 0.5, "channels": {"gain": 0.0, "spread": 1.0}
+                }),
+            ),
+            (
+                NodeType::Velocity,
+                serde_json::json!({
+                    "source": "speed", "channel": "distance", "scale": 0.1, "max": 2.0
+                }),
+            ),
+            (NodeType::Output, serde_json::json!({})),
+        ],
+        vec![(0, 1), (1, 2), (2, 3)],
+    );
+
+    let effects = extract_graph_effects(&graph).unwrap();
+    assert_eq!(effects.zones.len(), 1);
+    assert_eq!(effects.modulations.len(), 1);
+    assert_eq!(effects.zones[0].channels.gain, Some(0.0));
+    assert_eq!(
+        effects.modulations[0].channel,
+        crate::SpatialChannel::Distance
+    );
+    assert_eq!(effects.modulations[0].max, 2.0);
+}
+
+#[test]
+fn test_extract_graph_effects_empty_and_invalid() {
+    // Pas de nodes d'effets → listes vides
+    let graph = make_graph(
+        vec![
+            (NodeType::Input, serde_json::json!({})),
+            (NodeType::Scale, serde_json::json!({"scale": 2.0})),
+            (NodeType::Output, serde_json::json!({})),
+        ],
+        vec![(0, 1), (1, 2)],
+    );
+    let effects = extract_graph_effects(&graph).unwrap();
+    assert!(effects.zones.is_empty());
+    assert!(effects.modulations.is_empty());
+
+    // Zone sans channels → erreur (mieux vaut échouer que perdre l'effet)
+    let graph = make_graph(
+        vec![
+            (NodeType::Input, serde_json::json!({})),
+            (NodeType::Zone, serde_json::json!({"shape": "sphere"})),
+            (NodeType::Output, serde_json::json!({})),
+        ],
+        vec![(0, 1), (1, 2)],
+    );
+    assert!(extract_graph_effects(&graph).is_err());
+}
+
+#[test]
+fn test_compile_graph_with_zone_velocity_passthrough() {
+    // Zone/Velocity dans la chaîne : pass-through pour les positions,
+    // la compilation du graphe complet reste valide.
+    let graph = make_graph(
+        vec![
+            (NodeType::Input, serde_json::json!({})),
+            (
+                NodeType::Zone,
+                serde_json::json!({"shape": "sphere", "channels": {"gain": 0.0}}),
+            ),
+            (
+                NodeType::Velocity,
+                serde_json::json!({"source": "speed", "channel": "spread"}),
+            ),
+            (NodeType::Output, serde_json::json!({})),
+        ],
+        vec![(0, 1), (1, 2), (2, 3)],
+    );
+    let positions = vec![(0, nalgebra::Vector3::new(1.0, 2.0, 3.0))];
+    let out = run_test(
+        graph,
+        positions.clone(),
+        HashMap::new(),
+        nalgebra::Vector3::zeros(),
+    );
+    assert_eq!(out, positions, "Zone/Velocity must not modify positions");
+}

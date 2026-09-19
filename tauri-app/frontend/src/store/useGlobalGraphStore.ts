@@ -67,6 +67,7 @@ interface GlobalGraphState {
 
   setNodes: (nodes: Node[]) => void;
   setEdges: (edges: Edge[]) => void;
+  updateNodeData: (id: string, data: Partial<Record<string, any>>) => void;
   toggleEnabled: () => void;
 
   // Compiler et pousser le graph global au backend
@@ -119,6 +120,25 @@ export const useGlobalGraphStore = create<GlobalGraphState>((set, get) => ({
   setEdges: (edges) => {
     set({ edges });
     saveToStorage(get().nodes, edges);
+  },
+
+  updateNodeData: (id, data) => {
+    const nodes = get().nodes.map((n) =>
+      n.id === id
+        ? {
+            ...n,
+            data: {
+              ...n.data,
+              ...data,
+              params: data.params && (n.data as any).params
+                ? { ...(n.data as any).params, ...data.params }
+                : (data.params ?? (n.data as any).params),
+            },
+          }
+        : n,
+    );
+    set({ nodes });
+    saveToStorage(nodes, get().edges);
   },
 
   toggleEnabled: () => set((s) => ({ isGlobalGraphEnabled: !s.isGlobalGraphEnabled })),

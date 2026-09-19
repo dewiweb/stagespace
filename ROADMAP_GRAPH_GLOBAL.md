@@ -708,9 +708,9 @@ one-pole configurable.
       `set_kinematic_smoothing`
 - [x] CLI : `mod-add`/`mod-list`/`mod-clear`/`kin-smoothing`
 
-**Reste** : nodes graphe `Velocity`/`Acceleration`/`PerceptualVelocity`
-(°/s autour du listener — borne MAMA) qui *configureraient* ces règles
-depuis le graphe + UI frontend + persistance cues.
+**Reste** : `PerceptualVelocity` (°/s autour du listener — borne MAMA).
+*(Nodes graphe `Velocity` + persistance cues : fait — voir §Graph-native
+effects ci-dessous.)*
 
 ### P3 : OSC IN mapping style libmapper ✅
 
@@ -787,9 +787,9 @@ proportionnellement à l'influence (smoothstep sur `falloff` au-delà du bord).
 - [x] CLI : `zone-add sphere|box … --channels ch=v,… [--falloff] [--objs]`,
       `zone-list`, `zone-clear`
 
-**Reste** : node graphe `Zone` (défini dans le graphe, pas seulement runtime),
-formes supplémentaires (cylindre, plan half-space), zones temporelles,
-UI frontend (visualisation + édition). *(Persistance cues : fait.)*
+**Reste** : formes supplémentaires (cylindre, plan half-space), zones
+temporelles, visualisation 3D des zones dans le canvas. *(Node graphe
+`Zone` + persistance cues : fait — voir §Graph-native effects.)*
 
 ### Persistance de l'état runtime dans les cues ✅
 
@@ -805,6 +805,42 @@ champs transitent automatiquement, aucun champ à renseigner côté UI.
 **Fix latent** : `ChannelModulation.min/max` (±∞ par défaut) n'étaient pas
 sérialisables en JSON (inf → null → erreur à la lecture). Helpers serde
 `f64 non-fini ↔ null` ajoutés.
+
+### Nodes graphe `Zone` / `Velocity` — effets graph-natifs ✅
+
+Les effets P2/P4 sont désormais **déclarables dans le graph global** via
+deux nodes, persistants par construction (graph JSON → localStorage → cues).
+
+**Architecture** — déclarations pass-through :
+
+- Les nodes `Zone`/`Velocity` vivent dans la chaîne linéaire du graph
+  global (`Input → … → Zone → … → Output`) comme des nodes à un port
+  `input` — mais ne transforment **pas** les positions (pass-through dans
+  `compile_transform_node`). Leur rôle est déclaratif.
+- À chaque `update_global_graph` (et au `recall_cue`), `extract_graph_effects`
+  parcourt les nodes, parse leurs params → `graph_zones` / `graph_modulations`
+  du MergeRuntime (`set_graph_effects` — remplacement en bloc, jamais de
+  doublons à la re-compilation).
+- Évalués chaque frame **avec** les effets manuels : les règles/zones
+  graph sont appliquées en premier, les manuelles ensuite — le réglage
+  live garde le dernier mot.
+- Params tolérants (`node_params.rs`) : les champs `text` de l'éditeur
+  arrivent en string — `channels` accepte `{"gain":0}` ou `"gain=0,spread=1"`,
+  `objects` accepte `[0,2]` ou `"0,2"`, vec3 accepte array ou `"x,y,z"`,
+  `min`/`max` vides → ±∞. Zone invalide (pas de channel, shape inconnue)
+  → erreur de compilation explicite plutôt qu'effet silencieusement perdu.
+- Validator : `Zone`/`Velocity` sont global-only (`ContextIncompatible`
+  en sub-graph), un port `input`, connectables depuis/vers les
+  post-process nodes.
+- Frontend : entrées `PARAM_SCHEMA` + catégorie Global (palette tab
+  global), `GLOBAL_ONLY_NODES`, descriptions ; le panneau FX affiche les
+  effets graph-déclarés en read-only (`list_graph_effects`).
+- Fix au passage : les edits de params des nodes du tab global allaient
+  dans le store sub-graph (no-op) — `CustomNode` route désormais vers
+  `useGlobalGraphStore.updateNodeData` quand le node y vit.
+
+**Reste** : les effets manuels (FX panel) restent runtime-only persistés
+par cues ; `PerceptualVelocity` comme variante perceptuelle de `Velocity`.
 
 ### P5+ : voir `RESEARCH_STATE_OF_ART.md` §4.2
 

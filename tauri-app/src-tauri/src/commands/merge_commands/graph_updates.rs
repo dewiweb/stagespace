@@ -83,6 +83,11 @@ pub async fn update_global_graph(
     let graph = build_graph_from_json(&graph_json, &audio_state)
         .map_err(|e| format!("Failed to parse global graph: {e}"))?;
 
+    // Extraire les effets déclarés dans le graph (nodes Zone/Velocity)
+    // avant que le graph soit consommé par la compilation.
+    let effects = stagespace_engines::extract_graph_effects(&graph)
+        .map_err(|e| format!("Failed to extract graph effects: {e:?}"))?;
+
     let merge_rt = lock_or_recover(&state.merge_runtime);
     let macros = merge_rt.macros();
 
@@ -92,6 +97,7 @@ pub async fn update_global_graph(
         .map_err(|e| format!("Failed to compile global graph: {e:?}"))?;
 
     merge_rt.swap_post_process_fn(post_process_fn);
+    merge_rt.set_graph_effects(effects.zones, effects.modulations);
 
     Ok(())
 }

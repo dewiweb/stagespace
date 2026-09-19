@@ -218,3 +218,15 @@ pub async fn list_zones(state: State<'_, AppState>) -> Result<Vec<Zone>, String>
     let merge_rt = lock_or_recover(&state.merge_runtime);
     Ok(merge_rt.zones())
 }
+
+/// Liste les effets déclarés par le graph global (nodes `Zone` / `Velocity`)
+/// — séparés des effets manuels (add_zone/add_channel_modulation).
+#[tauri::command]
+pub async fn list_graph_effects(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    let merge_rt = lock_or_recover(&state.merge_runtime);
+    let (zones, modulations) = merge_rt.graph_effects();
+    Ok(serde_json::json!({
+        "zones": zones,
+        "modulations": modulations,
+    }))
+}

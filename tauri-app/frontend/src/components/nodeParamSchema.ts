@@ -22,6 +22,9 @@ const CONTAINER_OPTIONS = ['sphere', 'box'];
 const COORD_OPTIONS = ['cartesian', 'polar', 'spherical'];
 const BAND_OPTIONS = ['rms', 'bass', 'mid', 'high'];
 const WAVEFORM_OPTIONS = ['sine', 'triangle', 'square', 'sawtooth'];
+const ZONE_SHAPE_OPTIONS = ['sphere', 'box'];
+const KINEMATIC_SOURCE_OPTIONS = ['speed', 'acceleration', 'jerk'];
+const SPATIAL_CHANNEL_OPTIONS = ['gain', 'spread', 'distance', 'presence', 'yaw', 'aperture', 'lfe'];
 
 export const PARAM_SCHEMA: Partial<Record<NodeType, ParamDef[]>> = {
   Objects: [{ key: 'n_objects', label: 'Count', type: 'number', min: 1, max: 64, step: 1 }],
@@ -301,6 +304,26 @@ export const PARAM_SCHEMA: Partial<Record<NodeType, ParamDef[]>> = {
     { key: 'target', label: 'Target', type: 'enum', options: ['scale', 'height'] },
   ],
   ManualPosition: [],
+  Zone: [
+    { key: 'shape', label: 'Shape', type: 'enum', options: ZONE_SHAPE_OPTIONS },
+    { key: 'center', label: 'Center (sphere)', type: 'vec3' },
+    { key: 'radius', label: 'Radius (sphere)', type: 'number', step: 0.1, min: 0 },
+    { key: 'min', label: 'Min corner (box)', type: 'vec3' },
+    { key: 'max', label: 'Max corner (box)', type: 'vec3' },
+    { key: 'falloff', label: 'Falloff', type: 'number', step: 0.1, min: 0 },
+    { key: 'channels', label: 'Channels (gain=0,spread=1)', type: 'text' },
+    { key: 'objects', label: 'Objects (0,2,4 — empty = all)', type: 'text' },
+    { key: 'enabled', label: 'Enabled', type: 'boolean' },
+  ],
+  Velocity: [
+    { key: 'source', label: 'Source', type: 'enum', options: KINEMATIC_SOURCE_OPTIONS },
+    { key: 'channel', label: 'Channel', type: 'enum', options: SPATIAL_CHANNEL_OPTIONS },
+    { key: 'scale', label: 'Scale', type: 'number', step: 0.01 },
+    { key: 'offset', label: 'Offset', type: 'number', step: 0.01 },
+    { key: 'min', label: 'Min (empty = −∞)', type: 'text' },
+    { key: 'max', label: 'Max (empty = +∞)', type: 'text' },
+    { key: 'object', label: 'Object (empty = all)', type: 'text' },
+  ],
   MoveRef: [
     { key: 'move_id', label: 'Move ID', type: 'text' },
   ],
@@ -325,7 +348,7 @@ export const NODE_CATEGORIES: { label: string; color: string; types: NodeType[] 
   { label: 'Splines', color: 'cyan', types: ['DrawSpline', 'EvaluateSpline', 'TrimSpline', 'OffsetSpline'] },
   { label: 'Falloffs', color: 'orange', types: ['TimeFalloff', 'PointDistanceFalloff', 'DirectionalFalloff', 'AudioAmplitudeFalloff'] },
   { label: 'Modifiers', color: 'pink', types: ['Scale', 'Rotate', 'Offset', 'PhaseShift', 'BarycentricGroup', 'Mirror', 'Clamp', 'LFO', 'Jitter'] },
-  { label: 'Global (Post-process)', color: 'cyan', types: ['RadiusScale', 'HeightOffset', 'PerTrackDepth', 'Barycenter', 'AudioFalloff', 'ManualPosition', 'MoveRef', 'Merge'] },
+  { label: 'Global (Post-process)', color: 'cyan', types: ['RadiusScale', 'HeightOffset', 'PerTrackDepth', 'Barycenter', 'AudioFalloff', 'ManualPosition', 'Zone', 'Velocity', 'MoveRef', 'Merge'] },
   { label: 'Composite', color: 'purple', types: ['Mix', 'Group', 'Sequence', 'Crossfade'] },
   { label: 'Sources', color: 'yellow', types: ['BPM', 'AudioAmplitude', 'AudioSpectrum', 'OSCInput'] },
 ];
@@ -356,6 +379,7 @@ export const SUB_GRAPH_CATEGORIES: string[] = [
 export const GLOBAL_ONLY_NODES: Set<NodeType> = new Set([
   'Input', 'MoveRef', 'Merge', 'RadiusScale', 'HeightOffset',
   'PerTrackDepth', 'Barycenter', 'AudioFalloff', 'ManualPosition',
+  'Zone', 'Velocity',
 ]);
 
 /// Nodes exclus du global graph (sub-graph-only)
@@ -463,6 +487,8 @@ export function getDefaultParams(type: NodeType): Record<string, any> {
     Barycenter: {},
     AudioFalloff: { amount: 1.0, target: 'scale' },
     ManualPosition: {},
+    Zone: { shape: 'sphere', center: [0, 0, 0], radius: 2.0, min: [-1, -1, -1], max: [1, 1, 1], falloff: 0.5, channels: 'gain=0', objects: '', enabled: true },
+    Velocity: { source: 'speed', channel: 'spread', scale: 0.1, offset: 0, min: '', max: '1', object: '' },
     MoveRef: { move_id: '' },
     Merge: { strategy: 'override', fade_duration: 0.5 },
   };
@@ -536,6 +562,8 @@ export const NODE_DESCRIPTIONS: Partial<Record<NodeType, string>> = {
   Barycenter: "Calcule l'origin depuis les positions des tracks .hol. Centre du groupe",
   AudioFalloff: "Module un paramètre (scale/height) par l'amplitude audio. Pour réactivité musicale",
   ManualPosition: "Override manuel de positions — lit les drag 3D. Pour positionnement à la main",
+  Zone: "Région spatiale (sphere/box) qui tire les canaux des objets vers des valeurs cibles — gain/spread/etc. varient avec la position. Pass-through : ne modifie pas les positions",
+  Velocity: "Modulation cinématique — speed/accel/jerk d'un objet → canal spatial (ex : vitesse → spread). Pass-through : ne modifie pas les positions",
   MoveRef: "Référence un sub-graph (move) par ID. Source — produit les positions du move référencé. Double-clic pour éditer le sub-graph",
   Merge: "Node Merge — représente le MergeRuntime. Produit les positions mergées de tous les moves actifs. Strategy: override/crossfade/blend/priority",
 };

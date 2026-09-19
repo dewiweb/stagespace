@@ -198,3 +198,35 @@ fn test_register_unregister_move() {
     rt.unregister_move("move1");
     assert_eq!(rt.active_moves.read().unwrap().len(), 0);
 }
+
+#[test]
+fn test_set_graph_effects_replaces_in_block() {
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+
+    let zone = crate::zones::Zone::from_node_params(&serde_json::json!({
+        "shape": "sphere", "channels": {"gain": 0.0}
+    }))
+    .unwrap();
+    let rule = crate::kinematics::ChannelModulation::from_node_params(&serde_json::json!({
+        "source": "speed", "channel": "spread", "scale": 0.1
+    }))
+    .unwrap();
+
+    // Premier set : 1 zone + 1 modulation
+    rt.set_graph_effects(vec![zone.clone()], vec![rule]);
+    let (z, m) = rt.graph_effects();
+    assert_eq!(z.len(), 1);
+    assert_eq!(m.len(), 1);
+
+    // Deuxième set : remplace en bloc (update du graphe sans effets → vide)
+    rt.set_graph_effects(Vec::new(), Vec::new());
+    let (z, m) = rt.graph_effects();
+    assert!(z.is_empty());
+    assert!(m.is_empty());
+
+    // Les effets manuels ne sont pas touchés par set_graph_effects
+    rt.add_zone(zone);
+    rt.set_graph_effects(Vec::new(), Vec::new());
+    assert_eq!(rt.zones().len(), 1);
+}
