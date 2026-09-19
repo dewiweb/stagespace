@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { useGraphStore } from '../store/useGraphStore';
 import type { HolProject } from '../store/useGraphStore';
+import { strongestZoneInfluence } from '../utils/zoneMath';
 
 /// Conversion backend (x, y, z) où z=up → Three.js (x, z, y) où y=up
 /// Le spatial audio utilise Z-up ; Three.js utilise Y-up.
@@ -35,6 +36,10 @@ function showMeshAndLabels(mesh: THREE.Mesh) {
     }
   });
 }
+
+// Couleurs de tinte des objets affectés par une zone — match ZoneVisualization
+const ZONE_MANUAL_TINT = 0x22d3ee; // cyan — zones manuelles
+const ZONE_GRAPH_TINT = 0x8b5cf6; // violet — zones graph-déclarées
 
 // Types des valeurs store lues dans le render loop
 type PositionArray = Array<{ index: number; x: number; y: number; z: number }>;
@@ -326,6 +331,12 @@ export function useRenderLoop({
           const defaultColor = new THREE.Color();
           const holTracks = holProj?.tracks ?? [];
 
+          // Zones actives — pour le highlight des objets affectés
+          const manualZones = storeState.zones ?? [];
+          const graphZones = storeState.graphZones ?? [];
+          const hasZones = !assignMode && (manualZones.length > 0 || graphZones.length > 0);
+          const zoneTint = new THREE.Color();
+
           // D'abord, cacher tous les meshes qui ne sont pas dans posMap
           // (ils seront remis en position manuelle si pas en mode assign)
           objs.forEach((mesh) => { hideMeshAndLabels(mesh); });
@@ -362,6 +373,19 @@ export function useRenderLoop({
               } else {
                 // Track en mouvement normal : emissive léger de la même teinte
                 mat.emissive.copy(mat.color).multiplyScalar(0.15);
+              }
+
+              // Zone influence : tinte l'emissive vers la couleur de la zone
+              // (violet si graph-déclarée domine, cyan si manuelle domine) —
+              // l'objet "s'allume" proportionnellement à son influence.
+              if (hasZones) {
+                const inGraph = strongestZoneInfluence(graphZones, objIdx, p.x, p.y, p.z);
+                const inManual = strongestZoneInfluence(manualZones, objIdx, p.x, p.y, p.z);
+                const influence = Math.max(inGraph, inManual);
+                if (influence > 0) {
+                  zoneTint.setHex(inGraph >= inManual ? ZONE_GRAPH_TINT : ZONE_MANUAL_TINT);
+                  mat.emissive.lerp(zoneTint, Math.min(influence, 1));
+                }
               }
             } else if (!assignMode) {
               // Pas de position pour cet objet → manualPositions (statique)
