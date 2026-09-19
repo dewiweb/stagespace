@@ -13,8 +13,11 @@ STAGESPACE. Version approfondie.
 ```
 FAMILLE A : RENDERERS (spatialisation + audio natif)
   Holophonix, SPAT Revolution, L-ISA, d&b Soundscape DS100,
-  SpatGRIS, Sound Trajectory, Panoramix, Zirkonium, SSR, ViMiC
+  SpatGRIS, Sound Trajectory, Panoramix, Zirkonium, SSR, ViMiC,
+  TiMax SoundHub/panLab, FletcherMachine (Adamson),
+  Yamaha AFC Image, 4DSOUND, Meyer Spacemap Go, Klang
   → rendu audio ET interface de positionnement
+  → convergence 2024-25 : tous intègrent un "trajectory engine"
 
 FAMILLE B : SÉQUENCEURS/AUTEURS de trajectoires (pas d'audio)
   IanniX, ossia score, ControlGRIS, Grapes 3D,
@@ -47,6 +50,43 @@ FAMILLE D : ÉCOSYSTÈMES D'INTEROPÉRABILITÉ
 | Zirkonium (ZKM) | Événements mathématiques + timeline | Partiel | Oui | macOS only |
 | SSR | WFS/HOA/binaural, scènes temps réel | Non | Oui | Rendu, pas d'auteur de mouvement |
 | **ViMiC** (CIRMMT/RPI) | **Microphones virtuels** dans une salle virtuelle | Non | Oui | Paradigme inversé — voir §1.6 |
+| **TiMax SoundHub/panLab** | Dynamic delay-matrix + trajectoires dessinées + Tracker | Partiel | Référence théâtre | Matrice propriétaire, pas de graphe |
+| **FletcherMachine** (Adamson) | Trajectory engine intégré + reverb ×3 + binaural | Partiel | Oui (1.3 ms, 128×128) | Hardware dédié, traj. par objet non composables |
+| **Yamaha AFC Image** | 128 objets, zones HP (×32), reverb 3D, tracking | Partiel | Oui | Écosystème Yamaha (RIVAGE/CL/QL) |
+| **4DSOUND** | Objets dimensionnels (taille/forme/comportement), particules, script Python | Oui | Oui (installations) | Système+venue liés, pas de standard ouvert |
+| **Meyer Spacemap Go** | Maps spatiales nodales sur Galaxy | Partiel | Oui | Lié hardware Meyer |
+| **Klang** | In-ear monitoring immersif | Non | Oui | Binaural IEM, pas trajectoires |
+
+**Points clés de la passe 2** :
+
+- **TiMax** (Out Board, UK) est le renderer-show-control de référence en
+  théâtre : sa *dynamic delay-matrix* spatialise par délais (pas par gains),
+  la localisation survit hors sweet spot ; **TrackerD4** (UWB AoA+TDoA)
+  sort en OSC, PosiStageNet, sACN/Art-Net (via Stage Precision) → pont
+  natif vers SoundHub, Soundscape, L-ISA, GrandMA, disguise, ETC Eos.
+  **TiMax TimeLine** orchestre cues MIDI/MTC/Follow-On/XML-UDP + OSC
+  bidirectionnel vers QLab, SSL, Grapes, panLab. Et signal fort 2025 :
+  **TiMax MCP** — premier renderer spatial avec intégration Model Context
+  Protocol (AI assistant). L'interopérabilité show-control est leur ADN.
+- **FletcherMachine** (Adamson) : moteur objet amplitude+time localization,
+  jusqu'à 3 moteurs de reverb autonomes, **trajectory engine intégré**,
+  contrôle console/DAW/VST, ADM-OSC natif + MIDI/OSC/PSN/RTTrPM, hiérarchie
+  leader/follower multi-remote, binaural head-tracked. La convergence
+  renderer ↔ tracking ↔ show-control est déjà là.
+- **Yamaha AFC Image** : 128 objets, **speaker zoning** (32 zones) — un
+  objet peut être restreint à un sous-ensemble de HP ; conversion
+  automatique des mouvements DAW vers le layout réel ; contrôle depuis les
+  consoles RIVAGE/CL/QL ; tracking d'objets. **AFC Enhance** : la salle
+  elle-même comme effet (voir §2.9).
+- **4DSOUND** (Amsterdam/Berlin) : le plus radical — la source n'est pas un
+  point mais un **objet dimensionnel** (taille, forme, comportement) ;
+  "sound holograms" via 20+ formes algorithmiques à particules, scripting
+  Python, layouts asymétriques arbitraires, framework NAP. Conceptualise
+  ce que notre `formation`/`spread` effleure : la *dimension* de la source
+  comme paramètre de composition.
+- **Spacemap Go** (Meyer/Galaxy) : panning nodal par "maps" spatiales
+  sur iPad — preuve que le paradigme nodal est adopté en produit pro,
+  mais toujours enfermé dans un écosystème hardware.
 
 ### 1.3 Famille B — Séquenceurs de trajectoires
 
@@ -190,6 +230,36 @@ Ce que personne d'autre ne fait :
 6. **Middleware multi-profil** (Holophonix, IEM, IRCAM Spat, ADM-OSC, génériques)
 7. **Cue list atomique + keyboard + panic** (cockpit régisseur)
 
+### 1.9 Ce que le renderer fait de nos positions — algorithmes de panning
+
+Notre sortie (xyz/aed + canaux) est interprétée par des algorithmes de
+rendu très différents — comprendre leurs propriétés conditionne ce qu'on
+envoie :
+
+- **VBAP** (Pulkki 1997) : panning par paires/triplets de HP. Standard
+  industriel (MPEG-H). Limite connue : sauts de gain au passage des arêtes
+  de triplets → un cercle continu produit des micro-sauts perceptibles ;
+  le spread perçu fluctue pendant le mouvement. → Nos trajectoires
+  rapides amplifient ce défaut.
+- **MDAP** : VBAP + sources fantômes multiples → spread variable continu.
+- **DBAP** (Lossius, ICMC 2009 — moteur de **SpatGRIS**) : distances aux
+  HP, **aucun sweet spot**, layouts irréguliers/arbitraires. C'est
+  l'algorithme de la diffusion acousmatique moderne — adapté aux setups
+  non-canoniques où vit l'utilisateur.
+- **AllRAP / Ambisonics Equivalent Panning** : loudness stable + largeur
+  réglable — proche du "spread" ambisonique.
+- **Delay-matrix** (TiMax) : localisation par **temps** plutôt que gains —
+  plus robuste pour tout l'auditoire, mais dépendant de la matrice
+  calibrée.
+- **WFS / HOA / binaural** : synthèse de champ complet / harmoniques
+  sphériques / HRTF — les paramètres spatiaux n'ont pas la même
+  sémantique (W = pression, coefficients ACN vs position objet).
+
+**Conséquence** : la sémantique de nos canaux étendus (`spread`,
+`distance`, `aperture`) n'est **pas universelle** — chaque renderer la
+traduit dans son modèle. La matrice de capacités par profil (P1) doit
+documenter cette traduction, pas seulement l'adresse OSC.
+
 ---
 
 ## PARTIE II — Effets audio live en environnements spatiaux
@@ -275,6 +345,51 @@ STAGESPACE = **compositeur/orchestrateur d'effets spatiaux** : les renderers
 sont les instruments, le graphe nodal est la partition qui dit quand, où et
 comment transformer le son dans l'espace et le temps.
 
+### 2.9 Acoustique active — la salle elle-même comme paramètre
+
+La "salle-instrument" (§2.5) a une filiation industrielle mûre — les
+systèmes d'**acoustique active** contrôlent la réverbération réelle du
+lieu par réseaux micros→DSP→HP :
+
+- **Meyer Constellation** (sur moteur NADIA) : contrôle du temps de
+  réverbération, des réflexions précoces, du "volume cubique effectif" —
+  presets par scène, régénératif + in-line hybride.
+- **Müller-BBM VIVACE** : scénarios acoustiques rappelables
+  (symphonique/opéra/parole), micros en scène et salle.
+- **CSTB Carmen** : "mur virtuel actif" — approche physique française,
+  plusieurs salles équipées.
+- **Yamaha AFC Enhance** : approche régénérative (boucle feedback
+  contrôlé) OU in-line (convolution) ; peut appliquer l'ambiance aux sons
+  du public en temps réel.
+- **d&b En-Space**, **LARES** (ancêtre), **L-ISA Room Engine** : salles
+  convolutives pilotables par automation.
+
+**Conséquence pour STAGESPACE** : dans un lieu équipé d'acoustique active,
+"la salle" est un paramètre de cue au même titre que les positions. Un
+node `Room` (sélection de scénario acoustique par cue/zone) s'intègre
+naturellement — l'orchestrateur d'effets étendu au bâtiment.
+
+### 2.10 Le marché des plugins "mouvement réactif" — validation commerciale
+
+Sound Particles a packagé le paradigme **audio→position** en plugins VST —
+preuve de marché pour notre audio-reactor :
+
+- **Energy Panner** : intensité → position (pan ou sliding mode).
+- **Brightness Panner** : spectre/pitch/MIDI → trajectoire 3D définie.
+- **Beat Panner** : séquenceur de panning **sync tempo**.
+- **Space Controller Studio** : le smartphone comme pointeur 3D → DAW.
+- **Doppler** / **Air** : émulation physique distance/atmosphère de
+  référence (moteur Sound Particles).
+- **inDelay**, **Density**, **GrainDust** : FX spatiaux granulaires.
+- **E4L (Envelop for Live)** : toolkit M4L open-source ambisonic —
+  encodeurs + décodeur custom + AuraVerb + **ADM-OSC out** + lien
+  EnvelopLX (lumière LED synchronisée au son spatial !).
+
+**Lecture** : le réactif est validé commercialement mais verrouillé dans
+des plugins mono-format. STAGESPACE fait la même chose **entre** DAW et
+renderers, en OSC, sans toucher l'audio — avec le graphe comme langage de
+réaction au lieu de presets.
+
 ---
 
 ## PARTIE III — Interfaces homme-machine (HCI)
@@ -356,11 +471,193 @@ sur SpaceMouse + X-Touch + StreamDeck + Chataigne déjà maîtrisés.
 7. Collaboratif multi-opérateurs via OSC IN multi-source.
 8. Sweet spot pratique : app desktop + device 6DoF > setup XR complet.
 
+### 3.7 Le mapping par démonstration — Wekinator et le ML gestuel
+
+**Wekinator** (Fiebrink, Trueman, Cook — NIME 2009, 2025 citations) est le
+système de référence du *mapping-by-demonstration* : au lieu de programmer
+le mapping geste→paramètre, on **montre des exemples** et le modèle
+(régression, classification, DTW) apprend la correspondance. OSC in/out
+natif — conçu exactement pour notre couche.
+
+**Enseignement** : le mapping OSC IN de STAGESPACE n'a pas besoin d'être du
+ML interne — mais l'architecture doit permettre d'insérer un tel moteur
+externe entre OSC IN et les paramètres du graphe (Wekinator/Glover/MuBu
+parlent déjà OSC). Le graphe est la cible, pas le learner.
+
+**MuBu** (IRCAM ISMM) : la boîte à outils Max de l'analyse gestuelle —
+XMM (GMM/HMM recognition), PiPo (descriptors), mubu.track — fait le lien
+entre capteur et reconnaissance de gestes appris.
+
+### 3.8 Le tangible et le wearable — contrôle sans écran
+
+- **TUIO / reacTIVision** : le protocole table tangible (fiduciaux/objets
+  physiques trackés → OSC position+rotation). Une table TUIO = surface de
+  contrôle spatial physique : déplacer un objet = déplacer une source.
+  Protocole ouvert, trivial à consommer — notre `follow` peut suivre un
+  fiducial.
+- **mi.mu Gloves / Glover** : gants flex+IMU → postures ML entraînables
+  (9/session), MIDI+OSC out, **haptique et LED embarquées** (feedback
+  sans écran). Le paradigme "musique par le mouvement" le plus abouti
+  commercialement — et sa logique de mapping posture→scène↔paramètre est
+  exactement celle d'une cuelist.
+- **MPE** (ROLI Seaboard, LinnStrument, Sensel Morph, Continuum) : 5
+  dimensions par note (strike/press/glide/slide/lift) — le canal
+  d'expression polyphonique standard. Chaque "note" peut être un objet
+  spatial dont la position suit glide/slide — modèle objet↔voix.
+- **Buchla Lightning/Thunder** : baguettes sans-fil X/Y — ancêtre du
+  contrôle gestuel spatial (Pamela Z).
+- **Neova/Genki Wave, MUGIC, SOMI-1** : anneaux/capteurs gestuels — le
+  wearable arrive au niveau "musicien de scène", pas chercheur.
+
+### 3.9 L'haptique — le sens manquant
+
+- **Ultraleap STRATOS** : haptique mid-air par ultrasons (256 transducteurs,
+  points focaux modulés à 40 kHz → sensations tactiles sans contact,
+  couplé au hand-tracking Leap Motion). Boutons/sliders/textures
+  virtuels dans l'air — la console de diffusion sans console.
+- **Falcon/Novint** (Gelineck & Serafin, déjà cité) : retour de force >
+  tracking visuel quand l'écran est occupé.
+- Recherche UCL (2023) : la **sonification des textures haptiques** modifie
+  la perception corporelle et le comportement moteur — audio et haptique
+  sont un seul canal perceptif croisé, pas deux modalités séparées.
+
+**Leçon** : la priorité haptique pour STAGESPACE n'est pas le hardware
+exotique — c'est le **feedback dans les devices existants** : LED/moteur
+mi.mu, faders motorisés X-Touch, vibration StreamDeck. Renvoyer l'état
+(cue active, erreur OSC, position) vers le device est aussi important que
+recevoir ses entrées.
+
+### 3.10 Les ancêtres — le geste qui dirige
+
+**Max Mathews, Radio Baton + Conductor Program** (CMJ 15(4), 1991) : deux
+baguettes trackées XYZ au-dessus d'une surface, modes **CONDUCTOR**
+(diriger une partition : tempo, dynamique, équilibres par le geste) et
+**IMPROV** (le geste pilote des algorithmes de composition). C'est
+l'ancêtre conceptuel exact : le geste n'écrit pas la musique, il
+**interprète un matériau préparé**. Nos graphes = le matériau ; les
+macros/OSC IN = le geste du chef.
+
+Note historique : le "trigger plane + threshold de réarmement" de Mathews
+(1970) est le premier anti-rebond gestuel documenté — nous avons le même
+mécanisme dans les falloffs/triggers.
+
 ---
 
-## PARTIE IV — Synthèse et roadmap
+## PARTIE IV — Écosystème de production : show control, co-création, live coding
 
-### 4.1 Positionnement final
+### 4.1 Le modèle cue — ce que l'industrie du live a résolu
+
+L'audio spatial n'a pas inventé le show control — la lumière et la vidéo
+l'ont industrialisé :
+
+- **DMX512 → Art-Net/sACN (E1.31)** : universes adressés, per-channel
+  priority (sACN 0xDD — une source prioritaire prend la main), merge
+  HTP/LTP, discovery (ArtPoll, E1.31 universe discovery). Le modèle
+  "channels + priorités + merge" = exactement nos merge strategies.
+- **GrandMA / ETC Eos** : cue lists avec tracking (seules les valeurs
+  modifiées changent), follow/hang, partiels, asserts, timing par
+  paramètre, fanning. Le niveau de maturité cible pour une cuelist pro.
+- **MSC** (MIDI Show Control) : GO/STOP/RESUME + numéro de cue universel —
+  la lingua franca inter-consoles. Un régisseur attend de pouvoir
+  envoyer `GO 47` à STAGESPACE depuis sa console.
+- **MTC/LTC** : timecode comme colonne vertébrale du show — nos
+  trajectoires pourraient être indexées timecode (cue "à TC 01:23:45:12").
+- **PosiStageNet** déjà couvert — le protocole position-scène ouvert
+  supporté par TiMax, L-ISA, MA, disguise.
+- **QLab** : le standard théâtre — spatial cues intégrées depuis QLab 5,
+  sort ADM-OSC. Le modèle UX de référence (un cue = un objet visuel,
+  tout est glissable, tout est automatable).
+
+**Conséquence** : la cuelist STAGESPACE doit parler le langage du show —
+**MSC IN (GO/STOP par cue #)** et **MTC** sont les deux intégrations à
+plus fort ROI immédiat, avant toute sophistication.
+
+### 4.2 Broadcast — le terrain de l'utilisateur, invisible pour la recherche
+
+Le corpus académique ignore le broadcast — mais c'est là que vit une
+partie de l'écosystème dewiweb :
+
+- **Sofie** (NRK, open source) : automation TV — rundown → state-based
+  device control, playout vidéo/audio/graphique, MOS protocol, plugins.
+  Le modèle "un rundown pilote N devices hétérogènes" = le nôtre.
+- **MOS Protocol** (2.8.5) : newsroom ↔ devices, l'ancêtre du show control
+  broadcast.
+- **Ember+** (Lawo) : arbre de paramètres hiérarchique, subscriptions,
+  matrices — le "OSC structuré" du broadcast audio. Le travail
+  emberplus_rust/MCxOSC de l'utilisateur en fait déjà un pont vers OSC.
+- **NMOS** (AMWA IS-04/05/07/08/09) : découverte + connexion + events +
+  mapping des devices IP — l'équivalent broadcast d'OSCQuery+patching.
+- **Ravenna/AES67, ST 2110** : transport + PTP (IEEE 1588) — l'horloge
+  commune que le monde OSC n'a pas nativement.
+
+**Insight** : personne ne relie encore l'automation broadcast (rundown,
+MOS, Ember+) à la génération de mouvement spatial. Un STAGESPACE
+"device-compatible" (Ember+ tree ou OSC + MOS) pourrait être piloté
+directement par un rundown Sofie — niche réelle pour les installations
+AV/broadcast immersives.
+
+### 4.3 Ableton Link — la sync musicale résolue
+
+Link (open source, C++) synchronise **tempo, beat, phase, start/stop**
+entre applications en réseau local — sessions peer-to-peer, n'importe qui
+change le tempo, tout le monde suit, join/leave libre. Multicast UDP
+20808. Pas une timeline partagée : chaque app garde sa timeline, Link
+maintient la **relation temporelle** (clock abstraction ↔ beat mapping).
+
+**Pour STAGESPACE** : c'est la bonne réponse au "BPM global du show" — le
+node `BPM` devrait pouvoir lire la session Link (crate
+`ableton-link` ou pont) plutôt que seulement l'analyse audio. Les engines
+rythmiques (pendulum, wave, orbit sync) deviennent alors musicalement
+verrouillés au set entier — y compris Strudel/Live lancé à côté.
+
+### 4.4 Live coding spatial — la trajectoire comme pattern
+
+- **TidalCycles / Strudel** : `orbit` (canaux stéréo indépendants) +
+  `.pan` + multi-channel orbits — les patterns algorithmiques sont déjà
+  spatialisables, mais canal-grain, pas objet-3D. La communauté algorave
+  veut du spatial ; elle n'a que du pan.
+- **FoxDot, Sardine, SuperDirt→SC** : même logique — le live coding
+  génère du contrôle discret ; le spatial y est sous-exploité faute
+  d'outils adaptés.
+- **Conséquence** : STAGESPACE recevant OSC de Strudel (pattern →
+  paramètres de graphe) est le chaînon manquant — les live codeurs
+  deviendraient des auteurs de mouvement spatial sans changer d'outil.
+  Un "STAGESPACE pattern bridge" (OSC namespace documenté) = feature
+  marketing vers cette communauté très active.
+
+### 4.5 Co-création machine — les agents improvisateurs
+
+- **Somax2 / OMax / DYCI2** (IRCAM, ERC REACH, Assayag) : agents
+  multi-écoute qui improvisent avec des musiciens depuis un corpus
+  appris — machine listening + modèle cognitif + agents autonomes.
+  **Circular Auto Spat (CAS, 2025)** ajoute la conscience spatiale :
+  spatialisation automatique du corpus ambisonic par descripteurs —
+  preuve que les agents co-créatifs **ont besoin d'une politique de
+  mouvement** qu'ils n'ont pas. C'est exactement notre couche manquante.
+- **CataRT** (Schwarz, MuBu) : navigation d'un corpus de grains dans un
+  **espace de descripteurs** (centroid, MFCC, noisiness) par proximité —
+  la trajectoire du curseur dans l'espace timbre sélectionne les grains.
+  → un node `DescriptorField` (trajectoire dans l'espace des descripteurs
+  audio analysés) est un pont direct entre notre moteur et la synthèse
+  concaténative — concept inédit, publiable.
+- **Djazz, Somax2 CAS** : la spatialisation devient un degré de liberté
+  des agents — ils produisent de l'intention, nous produisons le
+  mouvement qui la rend.
+
+### 4.6 AI/MCP — le signal TiMax
+
+**TiMax MCP** (2025) : premier renderer spatial à exposer un serveur
+Model Context Protocol — un assistant AI peut piloter le show control.
+Le context.md de STAGESPACE exclut l'IA générative de la V1 (décision
+assumée), mais l'**interface** compte : une API propre, documentée,
+découvrable (OSCQuery ou un manifest) est ce qui rendra STAGESPACE
+pilotable par n'importe quel orchestrateur — humain, rundown, ou agent.
+
+---
+
+## PARTIE V — Synthèse et roadmap
+
+### 5.1 Positionnement final
 
 ```
 STAGESPACE =
@@ -371,12 +668,22 @@ STAGESPACE =
     renderer-agnostic.
 ```
 
-Trois couches de valeur :
+Quatre couches de valeur :
 1. **Composition du mouvement** (graphe → f(t) — unique)
 2. **Orchestration des effets** (zones/cinématique → paramètres — unique)
 3. **Cockpit live** (cue atomique, panic, OSC in/out — filiation Acousmonium)
+4. **Interop show/broadcast** (MSC/MTC, Ember+/MOS, TUIO, Link — le
+   chaînon que ni la recherche ni les renderers ne couvrent)
 
-### 4.2 Roadmap recherche-informée
+**Ce que la passe 2 a changé** : le paysage renderer est plus concurrentiel
+qu'escompté — FletcherMachine, TiMax panLab, 4DSOUND ont tous des moteurs
+de trajectoire intégrés et l'interop (ADM-OSC, RTTrPM, PSN) y est déjà
+native. Mais **tous sont verrouillés dans leur hardware/écosystème** et
+aucun n'offre la composition nodale. Notre niche tient : c'est la couche
+*entre* les renderers — plus les renderers s'équipent de moteurs fermés,
+plus un orchestrateur ouvert et renderer-agnostic prend de la valeur.
+
+### 5.2 Roadmap recherche-informée
 
 **Court terme — créatif :**
 - Node `VectorField` + steering (Carpentier/Gerzso)
@@ -390,24 +697,34 @@ Trois couches de valeur :
 - Node `Proximity` (relationnels)
 - Mode SMS sur orbites + rate limiting
 - OSC IN mapping générique à la libmapper (expressions composables)
+- **MSC IN (GO/STOP par cue #) + MTC** — le langage du régisseur
 - OSCQuery auto-découverte params renderers
 - RTTrPM/PosiStageNet → `follow` sur acteurs réels
+- TUIO/reacTIVision IN → fiduciaux comme sources trackées
 - Support SpaceMouse (réutiliser `spacemouse-osc`)
 - OSC timetags / Ableton Link pour sync multi-app
+- Node `Room` → scénarios d'acoustique active par cue (Constellation/VIVACE)
 
 **Long terme — écosystème :**
 - Plugin VST3 ou API embedding (modèle ToscA/Wwise)
-- WebSocket/REST → TouchDesigner
+- WebSocket/REST → TouchDesigner ; pont Strudel/live coding
 - Node `VirtualMic` (paradigme ViMiC — composer l'écoute)
+- Node `DescriptorField` (trajectoire dans l'espace des descripteurs —
+  pont CataRT, concept publiable)
+- Ember+/MOS device mode → pilotage par rundown broadcast (Sofie)
+- Merge priorities type sACN (source prioritaire prend la main)
+- Feedback device (LED/motor mi.mu, faders motorisés) — bidirectionnel
 - Publication JIM/NIME : "node-graph compiled spatial trajectories" ou
   "zone-based spatial effects orchestration"
 
-### 4.3 Anti-roadmap
+### 5.3 Anti-roadmap
 
 - Pas de renderer audio · Pas de clip matrix · Pas de timeline post-prod ·
-  Pas de MIDI natif · Pas de tracking hardware propriétaire
+  Pas de MIDI natif · Pas de tracking hardware propriétaire ·
+  Pas d'IA générative interne (V1) — mais API découvrable pour en être
+  piloté
 
-### 4.4 Verdict final
+### 5.4 Verdict final
 
 La recherche confirme trois choses :
 
@@ -422,9 +739,17 @@ La recherche confirme trois choses :
    l'onset-displacement — des bornes mesurées qui doivent devenir des
    paramètres (PerceptualVelocity, SMS range, onset compensation).
 
-La vulnérabilité reste industrielle : SPAT/L-ISA ont les moyens d'ajouter un
-moteur nodal. La défense : vitesse open-source, spécialisation live, et
-l'intégration multi-renderer qu'ils ne feront jamais (conflit d'intérêt).
+La vulnérabilité reste industrielle : les renderers intègrent déjà leurs
+moteurs de trajectoire (FletcherMachine, TiMax, L-ISA FX, Holophonix Motion
+Engine). La défense tient en trois points : (1) aucun n'est renderer-agnostic
+— c'est structurel (conflit d'intérêt) ; (2) aucun n'offre la composition
+nodale ni l'orchestration d'effets par la géométrie ; (3) personne ne relie
+le show control (MSC/MTC), le broadcast (Ember+/MOS) et le gestuel
+(SpaceMouse, TUIO, mi.mu) au mouvement spatial — c'est le cockpit dewiweb.
+
+Signal à surveiller : **TiMax MCP** (AI assistant dans un renderer spatial)
+montre que la couche "orchestrateur pilotable" devient un enjeu — notre API
+découvrable (OSCQuery/manifest) est l'investissement défensif.
 
 ---
 
@@ -506,6 +831,41 @@ l'intégration multi-renderer qu'ils ne feront jamais (conflit d'intérêt).
 - Chataigne : benjamin.kuperberg.fr/chataigne
 - Space Controller : soundparticles.com — MPE : roli.com
 - PosiStageNet : posistage.net — BlackTrax : cast-soft.com
+
+### Renderers pro (passe 2)
+- TiMax : timaxspatial.com (SoundHub, panLab, TrackerD4, TimeLine, MCP)
+- FletcherMachine : adamson-fletcher-machine.com (V2.x)
+- Yamaha AFC Image/Enhance : usa.yamaha.com/proaudio/afc
+- 4DSOUND : 4dsound.net + paper CUMINCAD 2016
+- Meyer Spacemap Go / Constellation (NADIA) : meyersound.com
+- VIVACE : mbbm-aso.com — CARMEN : CSTB (pub.dega-akustik.de)
+- Klang:technologies : klang.com
+
+### Panning / rendu
+- VBAP : Pulkki, JAES 45(6) 1997 — MDAP, AllRAP (Neukom/Schacher 2008)
+- DBAP : Lossius/Baltazar/DeLaHogue, ICMC 2009 (jamoma.org)
+- Panning algos SPAT : doc.flux.audio/Spatialisation_Technology
+- Volumetric panning : embody.co
+
+### Show control / broadcast / sync
+- Art-Net 4 / sACN E1.31 / GrandMA : help.malighting.com
+- MSC (MIDI Show Control), MTC, PosiStageNet
+- Sofie : github.com/Sofie-Automation — MOS 2.8.5
+- Ember+ : github.com/Lawo/ember-plus — NMOS : AMWA IS-04/05
+- Ableton Link : ableton.github.io/link
+
+### Live coding / co-création / ML mapping
+- Strudel : strudel.cc — TidalCycles : tidalcycles.org
+- Somax2 : github.com/DYCI2/Somax2 — CAS : zenodo.15840075
+- CataRT/MuBu : ircam-ismm.github.io/max-msp
+- Wekinator : wekinator.org (Fiebrink, NIME 2009)
+- mi.mu Glover : mimugloves.com — MPE : roli.com
+- TUIO/reacTIVision : tuio.org
+- Ultraleap mid-air haptics : docs.ultraleap.com
+- Radio Baton : Mathews, CMJ 15(4) 1991 — ccrma.stanford.edu/radiobaton
+- Sound Particles plugins : soundparticles.com (Energy/Brightness/Beat
+  Panner, Doppler, Air, Space Controller, inDelay)
+- E4L Envelop for Live : github.com/EnvelopSound
 
 ### Corpus dewiweb (GitHub)
 spacemouse-osc, chataigne_spatiale, Holophonix-chataigne-module,
