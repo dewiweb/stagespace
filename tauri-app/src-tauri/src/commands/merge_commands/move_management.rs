@@ -238,7 +238,7 @@ pub async fn deactivate_move(
             let mut movements = lock_or_recover(&movements);
             movements.remove(&mv_id)
         };
-        if let Some(mut movement) = movement {
+        if let Some(movement) = movement {
             movement.runtime.stop(); // stop() join le thread proprement
         }
         if let Some(app_handle) = lock_or_recover(&app_state).clone() {
@@ -263,7 +263,7 @@ fn deactivate_move_immediate_arc(
         let mut movements = lock_or_recover(movements);
         movements.remove(movement_id)
     };
-    if let Some(mut movement) = movement {
+    if let Some(movement) = movement {
         movement.runtime.stop(); // stop() join le thread proprement
     }
     if let Some(app_handle) = lock_or_recover(app_handle).clone() {
@@ -312,7 +312,7 @@ pub async fn deactivate_all_moves(
                     let mut movements = lock_or_recover(&movements);
                     movements.remove(id)
                 };
-                if let Some(mut movement) = movement {
+                if let Some(movement) = movement {
                     movement.runtime.stop(); // stop() join le thread proprement
                 }
             }

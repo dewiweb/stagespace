@@ -624,3 +624,71 @@ Déjà le cas aujourd'hui. **Pas de changement nécessaire.**
 ### OSC profile — globalisé
 
 En Phase 1, l'OSC profile devient global (une seule socket, un seul receiver). En pratique, on envoie toujours au même receiver (Holophonix). Si on veut plusieurs receivers à terme, il faudra un routing node dans le graph global (Phase 3+).
+
+---
+
+## Phase 4 — Canaux spatiaux étendus (recherche-informée)
+
+Référence : `RESEARCH_STATE_OF_ART.md` — synthèse des implications recherche.
+
+### Justification
+
+La recherche (ToscA/IRCAM, SPAT Revolution, ADM-OSC, psychoacoustique du
+mouvement) montre que la position n'est qu'**1 paramètre sur ~10** acceptés par
+les renderers : gain, spread/width, distance, presence, yaw/orientation,
+aperture, lfe. STAGESPACE n'exploite aujourd'hui que `aed`/`xyz`.
+
+La 2e couche de valeur identifiée — **orchestrateur d'effets spatiaux** — est
+bloquée par ce format. Phase 4 la débloque.
+
+### P1 : `SpatialChannels` + envoi multi-messages ✅ en cours
+
+**Modèle** : état spatial étendu par objet, chaque canal `Option<f64>` —
+`None` = non envoyé (pas de trafic inutile).
+
+```rust
+pub struct SpatialChannels {
+    pub gain: Option<f64>,      // dB ou normalisé selon profil
+    pub spread: Option<f64>,    // 0-1 normalisé (converti par profil)
+    pub distance: Option<f64>,  // override explicite
+    pub presence: Option<f64>,  // IRCAM Spat
+    pub yaw: Option<f64>,       // orientation de source (degrés)
+    pub aperture: Option<f64>,  // IRCAM Spat (degrés)
+    pub lfe: Option<f64>,       // dB
+}
+```
+
+**Matrice de capacités par profil** (`channel_address`) :
+
+| Canal | IRCAMSpat | Holophonix | ADM-OSC | Generic* | IEM |
+|-------|-----------|------------|---------|----------|-----|
+| gain | `/source/N/gain` | `/track/N/gain` | `/adm/obj/N/gain` | `/object/N/gain` | — |
+| spread | `/source/N/spread` (×100) | — | `/adm/obj/N/width` | `/object/N/spread` | — |
+| distance | `/source/N/distance` | — | `/adm/obj/N/dist` | `/object/N/distance` | — |
+| presence | `/source/N/presence` | — | — | — | — |
+| yaw | `/source/N/yaw` | — | — | `/object/N/yaw` | — |
+| aperture | `/source/N/aperture` | — | — | — | — |
+| lfe | `/source/N/lfe` | — | — | — | — |
+
+Matrice conservatrice — n'envoyer que ce qui est confirmé supporté. Extensible.
+
+**Tâches** :
+- [x] `SpatialChannel` enum + `SpatialChannels` struct dans `osc_sender.rs`
+- [x] `OscProfile::channel_address()` — matrice de capacités
+- [x] `OscSender::format_state()` → `Vec<(addr, values)>` (position + canaux)
+- [x] `MergeRuntime::object_channels` map + `set_object_channel`/`clear_*`
+- [x] Boucle d'envoi étendue (position + messages canaux, preview filtré)
+- [x] Commands Tauri `set_spatial_channel`/`clear_spatial_channel`/`clear_all`
+- [x] CLI `set-channel`/`clear-channel` (test e2e)
+
+### P2 : Nodes cinématiques → canaux (suivant)
+
+`Velocity`/`Acceleration`/`PerceptualVelocity` (°/s autour du listener —
+borne MAMA psychoacoustique) → modulateurs qui écrivent dans
+`object_channels`. Nécessite d'étendre `PostProcessFn` pour produire des
+canaux en plus des positions.
+
+### P3+ : voir `RESEARCH_STATE_OF_ART.md` §4.2
+
+Zone (SFFX contrôle-side), steering complet, OSC IN mapping libmapper-style,
+SMS + rate limiting, sync (timetags/Link), VirtualMic (ViMiC).

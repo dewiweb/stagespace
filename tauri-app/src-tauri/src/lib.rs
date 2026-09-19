@@ -21,11 +21,12 @@ use commands::audio::{
 use commands::cue_commands::{delete_cue, list_cues, recall_cue, store_cue};
 use commands::file_io::{import_hol_project, load_graph_from_file, save_graph_to_file};
 use commands::merge_commands::{
-    activate_move, clear_all_manual_positions, clear_manual_position, deactivate_all_moves,
-    deactivate_move, get_merge_perf_stats, list_active_moves, set_global_macro, set_global_origin,
+    activate_move, clear_all_manual_positions, clear_all_spatial_channels,
+    clear_manual_position, clear_spatial_channel, deactivate_all_moves, deactivate_move,
+    get_merge_perf_stats, list_active_moves, set_global_macro, set_global_origin,
     set_global_osc_ids, set_manual_position, set_merge_strategy, set_move_playback_mode,
-    set_move_speed, set_track_depths, set_track_positions, update_global_graph,
-    update_move_graph_merged,
+    set_move_speed, set_spatial_channel, set_track_depths, set_track_positions,
+    update_global_graph, update_move_graph_merged,
 };
 use commands::network::discover_osc_targets;
 use commands::osc::{
@@ -38,6 +39,7 @@ use commands::presets::{preset_delete, preset_list, preset_load, preset_save};
 use commands::sampling::{
     frontend_log, get_perf_stats, sample_movement_trajectory, sample_trajectory,
 };
+use commands::state::lock_or_recover;
 use graph::parser::build_graph_from_json;
 
 // État global de l'application
@@ -246,16 +248,22 @@ pub fn run() {
             {
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.with_webview(|wv| {
+                        use webkit2gtk::glib::Cast;
                         use webkit2gtk::PermissionRequestExt;
+                        use webkit2gtk::UserMediaPermissionRequestExt;
                         use webkit2gtk::WebViewExt;
                         let webview = wv.inner();
                         webview.connect_permission_request(|_wv, req| {
                             // N'autoriser que les permissions audio (microphone)
                             // Pas caméra, géolocation, notifications, etc.
-                            if req.downcast_ref::<webkit2gtk::PermissionRequestMediaAudio>()
-                                .is_some()
+                            if let Some(media) = req
+                                .downcast_ref::<webkit2gtk::UserMediaPermissionRequest>()
                             {
-                                req.allow();
+                                if media.is_for_audio_device()
+                                    && !media.is_for_video_device()
+                                {
+                                    req.allow();
+                                }
                             }
                             false
                         });
@@ -321,6 +329,10 @@ pub fn run() {
             set_manual_position,
             clear_manual_position,
             clear_all_manual_positions,
+            // Spatial channels (Phase 4 — canaux étendus)
+            set_spatial_channel,
+            clear_spatial_channel,
+            clear_all_spatial_channels,
             // Cue commands (Phase 3 — cue system étendu)
             store_cue,
             recall_cue,

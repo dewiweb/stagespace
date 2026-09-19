@@ -723,10 +723,7 @@ impl Runtime {
             }
         });
         // Stocker le handle pour join propre dans stop()
-        *self
-            .thread_handle
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = Some(handle);
+        *self.thread_handle.lock().unwrap_or_else(|e| e.into_inner()) = Some(handle);
         Ok(())
     }
 

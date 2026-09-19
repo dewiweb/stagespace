@@ -7,8 +7,12 @@ mod graph_updates;
 mod macros;
 mod manual_positions;
 mod move_management;
+mod channels;
 
 pub use super::state::lock_or_recover;
+pub use channels::{
+    clear_all_spatial_channels, clear_spatial_channel, set_spatial_channel,
+};
 pub use graph_updates::{update_global_graph, update_move_graph_merged};
 pub use macros::{
     set_global_macro, set_global_origin, set_global_osc_ids, set_merge_strategy,

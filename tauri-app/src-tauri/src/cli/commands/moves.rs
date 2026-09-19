@@ -7,6 +7,7 @@ use stagespace_engines::{
 };
 use stagespace_tauri::graph::compilation::compile_graph_with_audio_and_overrides;
 use stagespace_tauri::graph::parser::build_graph_from_json;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use super::helpers::{osc_ids_to_indices, parse_args, parse_track_list};
@@ -364,4 +365,65 @@ pub fn cmd_stop_all(_args: &[&str]) -> Result<String, String> {
     }
 
     Ok(format!("Stopped {} move(s): {}", ids.len(), ids.join(", ")))
+}
+
+/// Définit un canal spatial étendu pour un objet
+/// Usage: set-channel <object_index> <channel> <value>
+pub fn cmd_set_channel(args: &[&str]) -> Result<String, String> {
+    if args.len() < 3 {
+        return Err(
+            "Usage: set-channel <object_index> <gain|spread|distance|presence|yaw|aperture|lfe> <value>"
+                .to_string(),
+        );
+    }
+    let obj: usize = args[0]
+        .parse()
+        .map_err(|_| format!("Invalid object index: {}", args[0]))?;
+    let channel = stagespace_engines::osc_sender::SpatialChannel::from_str(args[1])?;
+    let value: f64 = args[2]
+        .parse()
+        .map_err(|_| format!("Invalid value: {}", args[2]))?;
+
+    let state = cli_state::state();
+    let merge_rt = state
+        .merge_runtime
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    merge_rt.set_object_channel(obj, channel, value);
+    Ok(format!(
+        "Channel '{}' set to {} for object {}",
+        args[1], value, obj
+    ))
+}
+
+/// Efface un canal spatial pour un objet
+/// Usage: clear-channel <object_index> [channel]  (sans channel = tous)
+pub fn cmd_clear_channel(args: &[&str]) -> Result<String, String> {
+    if args.is_empty() {
+        return Err("Usage: clear-channel <object_index|all> [channel]".to_string());
+    }
+
+    let state = cli_state::state();
+    let merge_rt = state
+        .merge_runtime
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+
+    if args[0] == "all" {
+        merge_rt.clear_all_object_channels();
+        return Ok("All spatial channels cleared".to_string());
+    }
+
+    let obj: usize = args[0]
+        .parse()
+        .map_err(|_| format!("Invalid object index: {}", args[0]))?;
+    let channel = if args.len() > 1 {
+        Some(stagespace_engines::osc_sender::SpatialChannel::from_str(
+            args[1],
+        )?)
+    } else {
+        None
+    };
+    merge_rt.clear_object_channel(obj, channel);
+    Ok(format!("Channel(s) cleared for object {obj}"))
 }

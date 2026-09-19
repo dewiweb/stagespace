@@ -2,6 +2,94 @@ use nalgebra::Vector3;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
+/// Canaux spatiaux étendus — au-delà de la position (modèle ToscA).
+/// Chaque canal Option<f64> : None = non envoyé (pas de trafic OSC inutile).
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq)]
+pub struct SpatialChannels {
+    /// Gain de la source (dB ou normalisé selon profil)
+    pub gain: Option<f64>,
+    /// Spread/largeur de source, normalisé 0-1 (converti par profil)
+    pub spread: Option<f64>,
+    /// Distance explicite (override — les profils polaires l'ont déjà dans AED)
+    pub distance: Option<f64>,
+    /// Presence (IRCAM Spat, dB)
+    pub presence: Option<f64>,
+    /// Orientation de la source (degrés)
+    pub yaw: Option<f64>,
+    /// Aperture (IRCAM Spat, degrés)
+    pub aperture: Option<f64>,
+    /// Send LFE (dB)
+    pub lfe: Option<f64>,
+}
+
+impl SpatialChannels {
+    /// Retourne true si aucun canal n'est défini
+    pub fn is_empty(&self) -> bool {
+        self.gain.is_none()
+            && self.spread.is_none()
+            && self.distance.is_none()
+            && self.presence.is_none()
+            && self.yaw.is_none()
+            && self.aperture.is_none()
+            && self.lfe.is_none()
+    }
+
+    /// Définit un canal
+    pub fn set(&mut self, channel: SpatialChannel, value: f64) {
+        match channel {
+            SpatialChannel::Gain => self.gain = Some(value),
+            SpatialChannel::Spread => self.spread = Some(value),
+            SpatialChannel::Distance => self.distance = Some(value),
+            SpatialChannel::Presence => self.presence = Some(value),
+            SpatialChannel::Yaw => self.yaw = Some(value),
+            SpatialChannel::Aperture => self.aperture = Some(value),
+            SpatialChannel::Lfe => self.lfe = Some(value),
+        }
+    }
+
+    /// Efface un canal
+    pub fn clear(&mut self, channel: SpatialChannel) {
+        match channel {
+            SpatialChannel::Gain => self.gain = None,
+            SpatialChannel::Spread => self.spread = None,
+            SpatialChannel::Distance => self.distance = None,
+            SpatialChannel::Presence => self.presence = None,
+            SpatialChannel::Yaw => self.yaw = None,
+            SpatialChannel::Aperture => self.aperture = None,
+            SpatialChannel::Lfe => self.lfe = None,
+        }
+    }
+}
+
+/// Identifiant d'un canal spatial étendu
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum SpatialChannel {
+    Gain,
+    Spread,
+    Distance,
+    Presence,
+    Yaw,
+    Aperture,
+    Lfe,
+}
+
+impl FromStr for SpatialChannel {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "gain" => Ok(SpatialChannel::Gain),
+            "spread" | "width" => Ok(SpatialChannel::Spread),
+            "distance" | "dist" => Ok(SpatialChannel::Distance),
+            "presence" => Ok(SpatialChannel::Presence),
+            "yaw" | "orientation" => Ok(SpatialChannel::Yaw),
+            "aperture" => Ok(SpatialChannel::Aperture),
+            "lfe" => Ok(SpatialChannel::Lfe),
+            _ => Err(format!("Unknown spatial channel: {s}")),
+        }
+    }
+}
+
 /// Profils OSC disponibles
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum OscProfile {
@@ -40,6 +128,51 @@ impl OscProfile {
             OscProfile::GenericCartesian => 7000,
             OscProfile::GenericPolar => 7001,
             OscProfile::ADMOSC => 8001,
+        }
+    }
+
+    /// Matrice de capacités : adresse OSC d'un canal étendu selon le profil.
+    ///
+    /// Retourne `Some((adresse, valeur_convertie))` si le profil supporte le
+    /// canal, `None` sinon. Matrice conservatrice : seuls les canaux confirmés
+    /// sont mappés (extensible sans casser l'API).
+    ///
+    /// - `spread` est stocké normalisé 0-1, converti en 0-100 pour IRCAM Spat.
+    /// - `gain`, `presence`, `lfe` sont en dB pour les profils qui les supportent.
+    fn channel_message(
+        &self,
+        osc_id: u32,
+        channel: SpatialChannel,
+        value: f64,
+    ) -> Option<(String, f64)> {
+        match self {
+            OscProfile::IRCAMSpat => match channel {
+                SpatialChannel::Gain => Some((format!("/source/{osc_id}/gain"), value)),
+                SpatialChannel::Spread => Some((format!("/source/{osc_id}/spread"), value * 100.0)),
+                SpatialChannel::Distance => Some((format!("/source/{osc_id}/distance"), value)),
+                SpatialChannel::Presence => Some((format!("/source/{osc_id}/presence"), value)),
+                SpatialChannel::Yaw => Some((format!("/source/{osc_id}/yaw"), value)),
+                SpatialChannel::Aperture => Some((format!("/source/{osc_id}/aperture"), value)),
+                SpatialChannel::Lfe => Some((format!("/source/{osc_id}/lfe"), value)),
+            },
+            OscProfile::Holophonix => match channel {
+                SpatialChannel::Gain => Some((format!("/track/{osc_id}/gain"), value)),
+                _ => None,
+            },
+            OscProfile::ADMOSC => match channel {
+                SpatialChannel::Gain => Some((format!("/adm/obj/{osc_id}/gain"), value)),
+                SpatialChannel::Spread => Some((format!("/adm/obj/{osc_id}/width"), value)),
+                SpatialChannel::Distance => Some((format!("/adm/obj/{osc_id}/dist"), value)),
+                _ => None,
+            },
+            OscProfile::GenericCartesian | OscProfile::GenericPolar => match channel {
+                SpatialChannel::Gain => Some((format!("/object/{osc_id}/gain"), value)),
+                SpatialChannel::Spread => Some((format!("/object/{osc_id}/spread"), value)),
+                SpatialChannel::Distance => Some((format!("/object/{osc_id}/distance"), value)),
+                SpatialChannel::Yaw => Some((format!("/object/{osc_id}/yaw"), value)),
+                _ => None,
+            },
+            OscProfile::IEMMultiEncoder => None,
         }
     }
 }
@@ -180,6 +313,53 @@ impl OscSender {
         }
     }
 
+    /// Formate les canaux étendus d'un objet en messages OSC.
+    ///
+    /// Ne produit des messages que pour les canaux `Some` et supportés par le
+    /// profil (matrice de capacités). Retourne un vec vide si rien à envoyer.
+    pub fn format_channels(
+        &self,
+        object_id: u32,
+        channels: &SpatialChannels,
+    ) -> Vec<(String, Vec<f64>)> {
+        let osc_id = object_id + self.object_offset;
+        let mut messages = Vec::new();
+        let pairs: [(SpatialChannel, Option<f64>); 7] = [
+            (SpatialChannel::Gain, channels.gain),
+            (SpatialChannel::Spread, channels.spread),
+            (SpatialChannel::Distance, channels.distance),
+            (SpatialChannel::Presence, channels.presence),
+            (SpatialChannel::Yaw, channels.yaw),
+            (SpatialChannel::Aperture, channels.aperture),
+            (SpatialChannel::Lfe, channels.lfe),
+        ];
+        for (channel, value) in pairs {
+            if let Some(v) = value {
+                if let Some((addr, converted)) = self.profile.channel_message(osc_id, channel, v) {
+                    messages.push((addr, vec![converted]));
+                }
+            }
+        }
+        messages
+    }
+
+    /// État spatial complet d'un objet : position + canaux étendus.
+    ///
+    /// Retourne la liste de tous les messages OSC à envoyer pour cet objet
+    /// cette frame (position en premier, puis canaux).
+    pub fn format_state(
+        &self,
+        object_id: u32,
+        position: Vector3<f64>,
+        channels: Option<&SpatialChannels>,
+    ) -> Vec<(String, Vec<f64>)> {
+        let mut messages = vec![self.format_position(object_id, position)];
+        if let Some(ch) = channels {
+            messages.extend(self.format_channels(object_id, ch));
+        }
+        messages
+    }
+
     /// Définit l'offset d'objet
     pub fn set_object_offset(&mut self, offset: u32) {
         self.object_offset = offset;
@@ -290,5 +470,103 @@ mod tests {
         let (address, values) = sender.format_position(1, pos);
         assert_eq!(address, "/adm/source/1/aed");
         assert_eq!(values.len(), 3); // azimuth, elevation, distance
+    }
+
+    // ── Canaux spatiaux étendus ─────────────────────────────────────────
+
+    #[test]
+    fn test_spatial_channels_set_clear() {
+        let mut ch = SpatialChannels::default();
+        assert!(ch.is_empty());
+        ch.set(SpatialChannel::Gain, -6.0);
+        ch.set(SpatialChannel::Spread, 0.5);
+        assert!(!ch.is_empty());
+        assert_eq!(ch.gain, Some(-6.0));
+        ch.clear(SpatialChannel::Gain);
+        assert_eq!(ch.gain, None);
+        assert_eq!(ch.spread, Some(0.5));
+    }
+
+    #[test]
+    fn test_spatial_channel_from_str() {
+        assert_eq!(
+            SpatialChannel::from_str("gain").unwrap(),
+            SpatialChannel::Gain
+        );
+        assert_eq!(
+            SpatialChannel::from_str("spread").unwrap(),
+            SpatialChannel::Spread
+        );
+        assert_eq!(
+            SpatialChannel::from_str("width").unwrap(),
+            SpatialChannel::Spread
+        );
+        assert_eq!(
+            SpatialChannel::from_str("lfe").unwrap(),
+            SpatialChannel::Lfe
+        );
+        assert!(SpatialChannel::from_str("bogus").is_err());
+    }
+
+    #[test]
+    fn test_format_channels_ircam() {
+        let sender = OscSender::new(OscProfile::IRCAMSpat, "127.0.0.1".to_string(), 8000);
+        let mut ch = SpatialChannels::default();
+        ch.set(SpatialChannel::Spread, 0.5);
+        ch.set(SpatialChannel::Presence, -3.0);
+        ch.set(SpatialChannel::Yaw, 45.0);
+        let msgs = sender.format_channels(1, &ch);
+        assert_eq!(msgs.len(), 3);
+        // Spread normalisé 0-1 → 0-100 pour IRCAM
+        let spread = msgs.iter().find(|(a, _)| a == "/source/1/spread").unwrap();
+        assert_eq!(spread.1, vec![50.0]);
+        assert!(msgs.iter().any(|(a, _)| a == "/source/1/presence"));
+        assert!(msgs.iter().any(|(a, _)| a == "/source/1/yaw"));
+    }
+
+    #[test]
+    fn test_format_channels_capability_matrix() {
+        // IEM : position only, aucun canal
+        let iem = OscSender::new(OscProfile::IEMMultiEncoder, "127.0.0.1".to_string(), 9000);
+        let mut ch = SpatialChannels::default();
+        ch.set(SpatialChannel::Gain, -6.0);
+        assert!(iem.format_channels(1, &ch).is_empty());
+
+        // Holophonix : gain uniquement
+        let holo = OscSender::new(OscProfile::Holophonix, "127.0.0.1".to_string(), 8000);
+        let mut ch2 = SpatialChannels::default();
+        ch2.set(SpatialChannel::Gain, -6.0);
+        ch2.set(SpatialChannel::Spread, 0.5);
+        let msgs = holo.format_channels(1, &ch2);
+        assert_eq!(msgs.len(), 1);
+        assert_eq!(msgs[0].0, "/track/1/gain");
+
+        // ADM-OSC : gain + width + dist
+        let adm = OscSender::new(OscProfile::ADMOSC, "127.0.0.1".to_string(), 8001);
+        let mut ch3 = SpatialChannels::default();
+        ch3.set(SpatialChannel::Gain, -6.0);
+        ch3.set(SpatialChannel::Spread, 0.5);
+        ch3.set(SpatialChannel::Presence, -3.0); // non supporté
+        let msgs = adm.format_channels(1, &ch3);
+        assert_eq!(msgs.len(), 2);
+        assert!(msgs.iter().any(|(a, _)| a == "/adm/obj/1/gain"));
+        assert!(msgs.iter().any(|(a, _)| a == "/adm/obj/1/width"));
+    }
+
+    #[test]
+    fn test_format_state_position_plus_channels() {
+        let sender = OscSender::new(OscProfile::IRCAMSpat, "127.0.0.1".to_string(), 8000);
+        let pos = Vector3::new(0.5, 0.3, 0.2);
+        let mut ch = SpatialChannels::default();
+        ch.set(SpatialChannel::Gain, -6.0);
+
+        let msgs = sender.format_state(1, pos, Some(&ch));
+        assert_eq!(msgs.len(), 2);
+        assert_eq!(msgs[0].0, "/source/1/xyz");
+        assert_eq!(msgs[1].0, "/source/1/gain");
+
+        // Sans canaux : position seule
+        let msgs_none = sender.format_state(1, pos, None);
+        assert_eq!(msgs_none.len(), 1);
     }
 }

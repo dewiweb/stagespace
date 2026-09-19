@@ -8,8 +8,8 @@ mod sample;
 
 use hol::{cmd_import_hol, cmd_list_tracks};
 use moves::{
-    cmd_activate_move, cmd_list_moves, cmd_set_macros, cmd_set_merge_strategy, cmd_set_move_speed,
-    cmd_stop_all, cmd_stop_move,
+    cmd_activate_move, cmd_clear_channel, cmd_list_moves, cmd_set_channel, cmd_set_macros,
+    cmd_set_merge_strategy, cmd_set_move_speed, cmd_stop_all, cmd_stop_move,
 };
 use osc::{cmd_osc_listen, cmd_osc_validate};
 use sample::{cmd_perf, cmd_sample, cmd_templates};
@@ -38,6 +38,8 @@ pub fn dispatch(input: &str) -> Result<String, String> {
         "set-macros" | "macros" => cmd_set_macros(rest),
         "set-merge-strategy" | "merge-strategy" => cmd_set_merge_strategy(rest),
         "set-move-speed" | "move-speed" => cmd_set_move_speed(rest),
+        "set-channel" | "channel" => cmd_set_channel(rest),
+        "clear-channel" => cmd_clear_channel(rest),
         "stop-move" => cmd_stop_move(rest),
         "stop-all" => cmd_stop_all(rest),
         "osc-listen" | "osc-listen-validate" => cmd_osc_listen(rest),
@@ -90,6 +92,16 @@ pub fn print_help(out: &mut impl Write) {
     writeln!(
         out,
         "  set-move-speed <id> <speed>        Set per-move speed"
+    )
+    .ok();
+    writeln!(
+        out,
+        "  set-channel <obj> <ch> <val>       Set spatial channel (gain|spread|distance|presence|yaw|aperture|lfe)"
+    )
+    .ok();
+    writeln!(
+        out,
+        "  clear-channel <obj|all> [ch]       Clear spatial channel(s)"
     )
     .ok();
     writeln!(out, "  stop-move <id>                     Stop a move").ok();

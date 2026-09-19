@@ -81,6 +81,9 @@ pub struct MergeRuntime {
     track_positions: Arc<RwLock<HashMap<u32, [f64; 3]>>>,
     /// Positions manuelles (pour ManualPosition) — object_index → [x, y, z]
     manual_positions: Arc<RwLock<HashMap<usize, [f64; 3]>>>,
+    /// Canaux spatiaux étendus par objet (gain, spread, distance, presence,
+    /// yaw, aperture, lfe) — object_index → SpatialChannels
+    object_channels: Arc<RwLock<HashMap<usize, crate::osc_sender::SpatialChannels>>>,
 }
 
 impl MergeRuntime {
@@ -116,6 +119,7 @@ impl MergeRuntime {
             post_process_fn: Arc::new(RwLock::new(default_post_process_fn())),
             track_positions: Arc::new(RwLock::new(HashMap::new())),
             manual_positions: Arc::new(RwLock::new(HashMap::new())),
+            object_channels: Arc::new(RwLock::new(HashMap::new())),
         })
     }
 
@@ -231,6 +235,63 @@ impl MergeRuntime {
             .write()
             .unwrap_or_else(|e| e.into_inner())
             .clear();
+    }
+
+    /// Définit un canal spatial étendu pour un objet (gain, spread, distance,
+    /// presence, yaw, aperture, lfe — envoyé en OSC en plus de la position)
+    pub fn set_object_channel(
+        &self,
+        obj_index: usize,
+        channel: crate::osc_sender::SpatialChannel,
+        value: f64,
+    ) {
+        self.object_channels
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .entry(obj_index)
+            .or_default()
+            .set(channel, value);
+    }
+
+    /// Efface un canal spatial pour un objet (None = tous les canaux de l'objet)
+    pub fn clear_object_channel(
+        &self,
+        obj_index: usize,
+        channel: Option<crate::osc_sender::SpatialChannel>,
+    ) {
+        let mut channels = self
+            .object_channels
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
+        match channel {
+            Some(ch) => {
+                if let Some(entry) = channels.get_mut(&obj_index) {
+                    entry.clear(ch);
+                    if entry.is_empty() {
+                        channels.remove(&obj_index);
+                    }
+                }
+            }
+            None => {
+                channels.remove(&obj_index);
+            }
+        }
+    }
+
+    /// Efface tous les canaux spatiaux de tous les objets
+    pub fn clear_all_object_channels(&self) {
+        self.object_channels
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
+    }
+
+    /// Récupère les canaux spatiaux actuels (pour debug/persistance)
+    pub fn object_channels(&self) -> HashMap<usize, crate::osc_sender::SpatialChannels> {
+        self.object_channels
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     /// Récupère les macros (pour modification temps réel — fast path atomic)
@@ -352,6 +413,7 @@ impl MergeRuntime {
         let post_process_fn_arc = self.post_process_fn.clone();
         let track_positions_arc = self.track_positions.clone();
         let manual_positions_arc = self.manual_positions.clone();
+        let object_channels_arc = self.object_channels.clone();
 
         let handle = std::thread::spawn(move || {
             let start = Instant::now();
@@ -513,26 +575,33 @@ impl MergeRuntime {
                 };
 
                 let sender = osc_sender_arc.lock().unwrap_or_else(|e| e.into_inner());
+                let object_channels = object_channels_arc
+                    .read()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone();
                 for (obj_idx, pos) in &transformed {
                     if preview_tracks.contains(obj_idx) {
                         continue; // Skip OSC pour les moves en preview
                     }
                     if let Some(&osc_id) = osc_ids.get(*obj_idx) {
-                        let (addr, values) = sender.format_position(osc_id, *pos);
-                        let args: Vec<OscType> =
-                            values.iter().map(|v| OscType::Float(*v as f32)).collect();
-                        let packet = OscPacket::Message(OscMessage {
-                            addr: addr.clone(),
-                            args,
-                        });
-                        if let Ok(bytes) = rosc::encoder::encode(&packet) {
-                            if let Err(e) = socket.send(&bytes) {
-                                crate::logging::log_osc_error(&format!(
-                                    "MergeRuntime OSC send error: {e}"
-                                ));
-                                osc_errors_perf += 1;
-                            } else {
-                                osc_since_perf += 1;
+                        let messages =
+                            sender.format_state(osc_id, *pos, object_channels.get(obj_idx));
+                        for (addr, values) in messages {
+                            let args: Vec<OscType> =
+                                values.iter().map(|v| OscType::Float(*v as f32)).collect();
+                            let packet = OscPacket::Message(OscMessage {
+                                addr: addr.clone(),
+                                args,
+                            });
+                            if let Ok(bytes) = rosc::encoder::encode(&packet) {
+                                if let Err(e) = socket.send(&bytes) {
+                                    crate::logging::log_osc_error(&format!(
+                                        "MergeRuntime OSC send error: {e}"
+                                    ));
+                                    osc_errors_perf += 1;
+                                } else {
+                                    osc_since_perf += 1;
+                                }
                             }
                         }
                     }

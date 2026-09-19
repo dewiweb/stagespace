@@ -111,9 +111,8 @@ impl BpmDetector {
                     if self.intervals.len() >= 2 {
                         let mut sorted: Vec<f64> = self.intervals.iter().copied().collect();
                         // unwrap_or au lieu de unwrap — évite un panic si NaN
-                        sorted.sort_by(|a, b| {
-                            a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-                        });
+                        sorted
+                            .sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
                         let median = sorted[sorted.len() / 2];
                         let instant_bpm = 60000.0 / median;
 
@@ -169,14 +168,19 @@ impl Default for BpmDetector {
 }
 
 /// Gestionnaire de capture audio
+///
+/// Le `cpal::Stream` n'est **pas Send** : il vit et meurt dans un thread de
+/// capture dédié. Le manager ne garde que le `JoinHandle` et un canal de stop,
+/// ce qui rend `AudioCaptureManager` `Send + Sync` (requis par Tauri State).
 #[derive(Clone)]
 pub struct AudioCaptureManager {
     shared_state: Arc<Mutex<AudioState>>,
     running: Arc<AtomicBool>,
     sample_rate: Arc<Mutex<f64>>,
-    /// Le stream cpal est stocké ici pour permettre un stop propre
-    /// (remplace l'ancien `std::mem::forget` qui fuyait à chaque restart)
-    stream: Arc<Mutex<Option<cpal::Stream>>>,
+    /// Thread qui possède le stream cpal (build → play → attente stop → drop)
+    capture_thread: Arc<Mutex<Option<std::thread::JoinHandle<()>>>>,
+    /// Canal pour demander l'arrêt au thread de capture
+    stop_tx: Arc<Mutex<Option<std::sync::mpsc::Sender<()>>>>,
 }
 
 impl AudioCaptureManager {
@@ -185,7 +189,8 @@ impl AudioCaptureManager {
             shared_state: Arc::new(Mutex::new(AudioState::new())),
             running: Arc::new(AtomicBool::new(false)),
             sample_rate: Arc::new(Mutex::new(44100.0)),
-            stream: Arc::new(Mutex::new(None)),
+            capture_thread: Arc::new(Mutex::new(None)),
+            stop_tx: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -211,6 +216,10 @@ impl AudioCaptureManager {
     }
 
     /// Démarre la capture sur le périphérique choisi (id = index dans list_devices)
+    ///
+    /// Le stream cpal est construit **dans** le thread de capture (il n'est pas
+    /// Send). Un oneshot channel rapporte le résultat de l'init pour que les
+    /// erreurs remontent encore de façon synchrone à l'appelant.
     pub fn start(&self, device_id: Option<&str>) -> Result<(), AudioCaptureError> {
         // Si déjà en cours, stopper l'ancien stream proprement d'abord
         if self.running.swap(true, Ordering::SeqCst) {
@@ -218,222 +227,111 @@ impl AudioCaptureManager {
             self.running.store(true, Ordering::SeqCst);
         }
 
+        let device_id_owned = device_id.map(|s| s.to_string());
+        let shared_state = self.shared_state.clone();
+        let running = self.running.clone();
+        let sample_rate_arc = self.sample_rate.clone();
+        let (init_tx, init_rx) = std::sync::mpsc::channel::<Result<f64, String>>();
+        let (stop_tx, stop_rx) = std::sync::mpsc::channel::<()>();
+
+        let handle = std::thread::spawn(move || {
+            let result = Self::init_stream(device_id_owned.as_deref(), &running, &shared_state);
+            let (stream, rate) = match result {
+                Ok(ok) => ok,
+                Err(e) => {
+                    let _ = init_tx.send(Err(e));
+                    return;
+                }
+            };
+            *sample_rate_arc.lock().unwrap_or_else(|e| e.into_inner()) = rate;
+            if init_tx.send(Ok(rate)).is_err() {
+                return; // l'appelant est parti
+            }
+            // Garder le stream vivant jusqu'au stop
+            let _ = stop_rx.recv();
+            drop(stream);
+        });
+
+        *self
+            .capture_thread
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(handle);
+        *self.stop_tx.lock().unwrap_or_else(|e| e.into_inner()) = Some(stop_tx);
+
+        // Attendre le résultat de l'init (borné : ne jamais bloquer l'appelant)
+        match init_rx.recv_timeout(std::time::Duration::from_secs(5)) {
+            Ok(Ok(_)) => Ok(()),
+            Ok(Err(e)) => {
+                self.running.store(false, Ordering::SeqCst);
+                Err(AudioCaptureError::BuildStreamError(e))
+            }
+            Err(_) => {
+                self.running.store(false, Ordering::SeqCst);
+                Err(AudioCaptureError::BuildStreamError(
+                    "audio capture init timeout".to_string(),
+                ))
+            }
+        }
+    }
+
+    /// Construit et démarre le stream dans le thread courant.
+    /// Retourne (stream, sample_rate) — le stream doit être gardé vivant par l'appelant.
+    fn init_stream(
+        device_id: Option<&str>,
+        running: &Arc<AtomicBool>,
+        shared_state: &Arc<Mutex<AudioState>>,
+    ) -> Result<(cpal::Stream, f64), String> {
         let host = cpal::default_host();
         let devices: Vec<_> = match host.devices() {
             Ok(d) => d.collect(),
-            Err(e) => {
-                self.running.store(false, Ordering::SeqCst);
-                return Err(AudioCaptureError::BuildStreamError(e.to_string()));
-            }
+            Err(e) => return Err(e.to_string()),
         };
 
         let device = match device_id {
             Some(id) if id != "default" => {
-                let idx: usize = id
-                    .parse()
-                    .map_err(|_| AudioCaptureError::DeviceNotFound(id.to_string()))?;
+                let idx: usize = id.parse().map_err(|_| format!("device not found: {id}"))?;
                 devices
                     .into_iter()
                     .nth(idx)
-                    .ok_or_else(|| AudioCaptureError::DeviceNotFound(id.to_string()))?
+                    .ok_or_else(|| format!("device not found: {id}"))?
             }
             _ => host
                 .default_input_device()
-                .ok_or(AudioCaptureError::NoDevice)?,
+                .ok_or_else(|| "no input device".to_string())?,
         };
 
-        let supported_config = device
-            .default_input_config()
-            .map_err(|e| AudioCaptureError::BuildStreamError(e.to_string()))?;
+        let supported_config = device.default_input_config().map_err(|e| e.to_string())?;
         let sample_rate = supported_config.sample_rate().0 as f64;
-        *self.sample_rate.lock().unwrap_or_else(|e| e.into_inner()) = sample_rate;
-
         let sample_format = supported_config.sample_format();
 
-        // Construire le stream selon le format d'échantillon
         let stream = match sample_format {
-            SampleFormat::F32 => self.build_stream_f32(&device, &supported_config.into())?,
-            SampleFormat::I16 => self.build_stream_i16(&device, &supported_config.into())?,
-            SampleFormat::U16 => self.build_stream_u16(&device, &supported_config.into())?,
-            other => {
-                self.running.store(false, Ordering::SeqCst);
-                return Err(AudioCaptureError::UnsupportedSampleFormat(other));
-            }
-        };
+            SampleFormat::F32 => build_stream_generic(
+                &device,
+                &supported_config.into(),
+                running,
+                shared_state,
+                |s: f32| s as f64,
+            ),
+            SampleFormat::I16 => build_stream_generic(
+                &device,
+                &supported_config.into(),
+                running,
+                shared_state,
+                |s: i16| s as f64 / i16::MAX as f64,
+            ),
+            SampleFormat::U16 => build_stream_generic(
+                &device,
+                &supported_config.into(),
+                running,
+                shared_state,
+                |s: u16| (s as f64 - u16::MAX as f64 / 2.0) / (u16::MAX as f64 / 2.0),
+            ),
+            other => return Err(format!("unsupported sample format: {other:?}")),
+        }
+        .map_err(|e| e.to_string())?;
 
-        stream.play()?;
-
-        // Stocker le stream au lieu de mem::forget — permet un stop propre
-        *self.stream.lock().unwrap_or_else(|e| e.into_inner()) = Some(stream);
-
-        Ok(())
-    }
-
-    fn build_stream_f32(
-        &self,
-        device: &cpal::Device,
-        config: &cpal::StreamConfig,
-    ) -> Result<cpal::Stream, AudioCaptureError> {
-        self.build_stream_generic(device, config, |s: f32| s as f64)
-    }
-
-    fn build_stream_i16(
-        &self,
-        device: &cpal::Device,
-        config: &cpal::StreamConfig,
-    ) -> Result<cpal::Stream, AudioCaptureError> {
-        self.build_stream_generic(device, config, |s: i16| s as f64 / i16::MAX as f64)
-    }
-
-    fn build_stream_u16(
-        &self,
-        device: &cpal::Device,
-        config: &cpal::StreamConfig,
-    ) -> Result<cpal::Stream, AudioCaptureError> {
-        self.build_stream_generic(device, config, |s: u16| {
-            (s as f64 - u16::MAX as f64 / 2.0) / (u16::MAX as f64 / 2.0)
-        })
-    }
-
-    fn build_stream_generic<S, F>(
-        &self,
-        device: &cpal::Device,
-        config: &cpal::StreamConfig,
-        convert: F,
-    ) -> Result<cpal::Stream, AudioCaptureError>
-    where
-        S: cpal::Sample + cpal::SizedSample,
-        F: Fn(S) -> f64 + Send + 'static,
-    {
-        let sample_rate = config.sample_rate.0 as f64;
-        let fft_size = 1024usize;
-        let hop_size = fft_size / 2;
-        let shared_state = self.shared_state.clone();
-        let running = self.running.clone();
-
-        let mut planner = RealFftPlanner::<f64>::new();
-        let r2c = planner.plan_fft_forward(fft_size);
-        let window = hann_window(fft_size);
-        let mut input_buf: VecDeque<f64> = VecDeque::with_capacity(fft_size * 2);
-        let mut fft_input = r2c.make_input_vec();
-        let mut fft_output = r2c.make_output_vec();
-        let mut scratch = r2c.make_scratch_vec();
-        let mut spectrum = vec![0.0f64; fft_size / 2 + 1];
-        let mut bpm_detector = BpmDetector::new();
-        let stream_start = std::time::Instant::now();
-        let mut last_publish = std::time::Instant::now();
-
-        let stream = device.build_input_stream(
-            config,
-            move |data: &[S], _: &cpal::InputCallbackInfo| {
-                if !running.load(Ordering::SeqCst) {
-                    return;
-                }
-
-                for &sample in data {
-                    input_buf.push_back(convert(sample));
-                }
-
-                // Traiter par blocs de `hop_size` avec chevauchement 50%
-                while input_buf.len() >= fft_size {
-                    // Copier les échantillons dans fft_input avec fenêtre de Hann
-                    for i in 0..fft_size {
-                        fft_input[i] = input_buf[i] * window[i];
-                    }
-
-                    r2c.process_with_scratch(&mut fft_input, &mut fft_output, &mut scratch)
-                        .unwrap_or_else(|e| eprintln!("[WARN] FFT error: {e}"));
-
-                    for (i, c) in fft_output.iter().enumerate() {
-                        spectrum[i] = c.norm() / fft_size as f64;
-                    }
-
-                    // Normaliser le spectre 0-1
-                    let max_val = spectrum.iter().copied().fold(0.0, f64::max).max(1e-12);
-                    for v in &mut spectrum {
-                        *v /= max_val;
-                    }
-
-                    let bin_hz = sample_rate / fft_size as f64;
-
-                    // Bass / Mid / High
-                    let bins = spectrum.len();
-                    let bass_end = (bins as f64 * 0.1) as usize;
-                    let mid_end = (bins as f64 * 0.4) as usize;
-                    let (bass_sum, mid_sum, high_sum) =
-                        spectrum
-                            .iter()
-                            .enumerate()
-                            .fold((0.0, 0.0, 0.0), |(b, m, h), (i, &v)| {
-                                if i < bass_end {
-                                    (b + v, m, h)
-                                } else if i < mid_end {
-                                    (b, m + v, h)
-                                } else {
-                                    (b, m, h + v)
-                                }
-                            });
-
-                    let bass = if bass_end > 0 {
-                        bass_sum / bass_end as f64
-                    } else {
-                        0.0
-                    };
-                    let mid = if mid_end > bass_end {
-                        mid_sum / (mid_end - bass_end) as f64
-                    } else {
-                        0.0
-                    };
-                    let high = if bins > mid_end {
-                        high_sum / (bins - mid_end) as f64
-                    } else {
-                        0.0
-                    };
-
-                    // RMS depuis les échantillons temporels du bloc
-                    let rms = (input_buf.iter().take(fft_size).map(|v| v * v).sum::<f64>()
-                        / fft_size as f64)
-                        .sqrt();
-
-                    // BPM : horloge absolue depuis le début du stream (fixe le bug du wrap)
-                    let now = stream_start.elapsed().as_secs_f64();
-                    bpm_detector.process(&spectrum, bin_hz, now);
-
-                    // Publier AudioState toutes les ~100ms (throttle)
-                    if last_publish.elapsed().as_millis() >= 100 {
-                        last_publish = std::time::Instant::now();
-                        let spec_clone: Vec<f64> =
-                            spectrum.iter().map(|v| v.clamp(0.0, 1.0)).collect();
-                        let state = AudioState {
-                            bpm: bpm_detector.bpm_data(),
-                            amplitude: Some(AmplitudeData {
-                                rms: rms.clamp(0.0, 1.0),
-                                bass: bass.clamp(0.0, 1.0),
-                                mid: mid.clamp(0.0, 1.0),
-                                high: high.clamp(0.0, 1.0),
-                            }),
-                            spectrum: Some(SpectrumData {
-                                spectrum: spec_clone,
-                                fft_size,
-                            }),
-                        };
-                        // try_lock : ne pas bloquer le thread audio temps réel
-                        if let Ok(mut s) = shared_state.try_lock() {
-                            *s = state;
-                        }
-                    }
-
-                    // Avancer de hop_size — VecDeque pop_front est O(1)
-                    for _ in 0..hop_size {
-                        input_buf.pop_front();
-                    }
-                }
-            },
-            move |err| eprintln!("[WARN] Audio stream error: {err}"),
-            None,
-        )?;
-
-        Ok(stream)
+        stream.play().map_err(|e| e.to_string())?;
+        Ok((stream, sample_rate))
     }
 
     /// Stoppe la capture et drop le stream proprement
@@ -446,9 +344,22 @@ impl AudioCaptureManager {
 
     fn stop_internal(&self) {
         self.running.store(false, Ordering::SeqCst);
-        // Drop le stream → cpal arrête la capture
-        if let Ok(mut stream_guard) = self.stream.lock() {
-            stream_guard.take();
+        // Signaler le stop au thread puis attendre la fin (drop du stream)
+        if let Some(tx) = self
+            .stop_tx
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
+        {
+            let _ = tx.send(());
+        }
+        if let Some(handle) = self
+            .capture_thread
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
+        {
+            let _ = handle.join();
         }
     }
 
@@ -472,6 +383,149 @@ impl Default for AudioCaptureManager {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Construit le stream d'entrée pour un format d'échantillon donné.
+/// Fonction libre appelée dans le thread de capture (le stream n'est pas Send).
+fn build_stream_generic<S, F>(
+    device: &cpal::Device,
+    config: &cpal::StreamConfig,
+    running: &Arc<AtomicBool>,
+    shared_state: &Arc<Mutex<AudioState>>,
+    convert: F,
+) -> Result<cpal::Stream, AudioCaptureError>
+where
+    S: cpal::Sample + cpal::SizedSample,
+    F: Fn(S) -> f64 + Send + 'static,
+{
+    let sample_rate = config.sample_rate.0 as f64;
+    let fft_size = 1024usize;
+    let hop_size = fft_size / 2;
+    let shared_state = shared_state.clone();
+    let running = running.clone();
+
+    let mut planner = RealFftPlanner::<f64>::new();
+    let r2c = planner.plan_fft_forward(fft_size);
+    let window = hann_window(fft_size);
+    let mut input_buf: VecDeque<f64> = VecDeque::with_capacity(fft_size * 2);
+    let mut fft_input = r2c.make_input_vec();
+    let mut fft_output = r2c.make_output_vec();
+    let mut scratch = r2c.make_scratch_vec();
+    let mut spectrum = vec![0.0f64; fft_size / 2 + 1];
+    let mut bpm_detector = BpmDetector::new();
+    let stream_start = std::time::Instant::now();
+    let mut last_publish = std::time::Instant::now();
+
+    let stream = device.build_input_stream(
+        config,
+        move |data: &[S], _: &cpal::InputCallbackInfo| {
+            if !running.load(Ordering::SeqCst) {
+                return;
+            }
+
+            for &sample in data {
+                input_buf.push_back(convert(sample));
+            }
+
+            // Traiter par blocs de `hop_size` avec chevauchement 50%
+            while input_buf.len() >= fft_size {
+                // Copier les échantillons dans fft_input avec fenêtre de Hann
+                for i in 0..fft_size {
+                    fft_input[i] = input_buf[i] * window[i];
+                }
+
+                r2c.process_with_scratch(&mut fft_input, &mut fft_output, &mut scratch)
+                    .unwrap_or_else(|e| eprintln!("[WARN] FFT error: {e}"));
+
+                for (i, c) in fft_output.iter().enumerate() {
+                    spectrum[i] = c.norm() / fft_size as f64;
+                }
+
+                // Normaliser le spectre 0-1
+                let max_val = spectrum.iter().copied().fold(0.0, f64::max).max(1e-12);
+                for v in &mut spectrum {
+                    *v /= max_val;
+                }
+
+                let bin_hz = sample_rate / fft_size as f64;
+
+                // Bass / Mid / High
+                let bins = spectrum.len();
+                let bass_end = (bins as f64 * 0.1) as usize;
+                let mid_end = (bins as f64 * 0.4) as usize;
+                let (bass_sum, mid_sum, high_sum) =
+                    spectrum
+                        .iter()
+                        .enumerate()
+                        .fold((0.0, 0.0, 0.0), |(b, m, h), (i, &v)| {
+                            if i < bass_end {
+                                (b + v, m, h)
+                            } else if i < mid_end {
+                                (b, m + v, h)
+                            } else {
+                                (b, m, h + v)
+                            }
+                        });
+
+                let bass = if bass_end > 0 {
+                    bass_sum / bass_end as f64
+                } else {
+                    0.0
+                };
+                let mid = if mid_end > bass_end {
+                    mid_sum / (mid_end - bass_end) as f64
+                } else {
+                    0.0
+                };
+                let high = if bins > mid_end {
+                    high_sum / (bins - mid_end) as f64
+                } else {
+                    0.0
+                };
+
+                // RMS depuis les échantillons temporels du bloc
+                let rms = (input_buf.iter().take(fft_size).map(|v| v * v).sum::<f64>()
+                    / fft_size as f64)
+                    .sqrt();
+
+                // BPM : horloge absolue depuis le début du stream (fixe le bug du wrap)
+                let now = stream_start.elapsed().as_secs_f64();
+                bpm_detector.process(&spectrum, bin_hz, now);
+
+                // Publier AudioState toutes les ~100ms (throttle)
+                if last_publish.elapsed().as_millis() >= 100 {
+                    last_publish = std::time::Instant::now();
+                    let spec_clone: Vec<f64> = spectrum.iter().map(|v| v.clamp(0.0, 1.0)).collect();
+                    let state = AudioState {
+                        bpm: bpm_detector.bpm_data(),
+                        amplitude: Some(AmplitudeData {
+                            rms: rms.clamp(0.0, 1.0),
+                            bass: bass.clamp(0.0, 1.0),
+                            mid: mid.clamp(0.0, 1.0),
+                            high: high.clamp(0.0, 1.0),
+                        }),
+                        spectrum: Some(SpectrumData {
+                            spectrum: spec_clone,
+                            fft_size,
+                        }),
+                    };
+                    // try_lock : ne pas bloquer le thread audio temps réel
+                    if let Ok(mut s) = shared_state.try_lock() {
+                        *s = state;
+                    }
+                }
+
+                // Avancer de hop_size — VecDeque pop_front est O(1)
+                for _ in 0..hop_size {
+                    input_buf.pop_front();
+                }
+            }
+        },
+        move |err| eprintln!("[WARN] Audio stream error: {err}"),
+        None,
+    )?;
+
+    Ok(stream)
 }
 
 fn hann_window(size: usize) -> Vec<f64> {
