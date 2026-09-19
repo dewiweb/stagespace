@@ -49,6 +49,24 @@ pub async fn clear_all_spatial_channels(state: State<'_, AppState>) -> Result<()
     Ok(())
 }
 
+/// Liste les canaux spatiaux statiques par objet (pour UI/persistance)
+#[tauri::command]
+pub async fn list_spatial_channels(
+    state: State<'_, AppState>,
+) -> Result<std::collections::HashMap<usize, SpatialChannels>, String> {
+    let merge_rt = lock_or_recover(&state.merge_runtime);
+    Ok(merge_rt.object_channels())
+}
+
+/// Liste les règles de modulation cinématique actives
+#[tauri::command]
+pub async fn list_channel_modulations(
+    state: State<'_, AppState>,
+) -> Result<Vec<ChannelModulation>, String> {
+    let merge_rt = lock_or_recover(&state.merge_runtime);
+    Ok(merge_rt.modulations())
+}
+
 /// Paramètres d'une règle de modulation cinématique
 #[derive(Deserialize)]
 pub struct ModulationParams {

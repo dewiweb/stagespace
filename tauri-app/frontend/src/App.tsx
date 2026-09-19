@@ -3,6 +3,7 @@ import NodeEditor from './components/NodeEditor';
 import Scene3D from './components/Scene3D';
 import MovesTable from './components/MovesTable';
 import CuelistPanel from './components/CuelistPanel';
+import SpatialFxPanel from './components/SpatialFxPanel';
 import AnimationList from './components/AnimationList';
 import Inspector from './components/Inspector';
 import AudioPanel from './components/AudioPanel';
@@ -107,6 +108,7 @@ function App() {
   const secondaryTabs = [
     { id: 'moves', label: 'Moves', content: <MovesTable /> },
     { id: 'cues', label: 'Cues', content: <CuelistPanel /> },
+    { id: 'fx', label: 'FX', content: <SpatialFxPanel /> },
   ];
 
   const activeCount = movements.length;

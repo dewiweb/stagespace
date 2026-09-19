@@ -3,11 +3,12 @@ import { useGraphStore, useOscValueListener } from '../store/useGraphStore';
 import { describeDestination } from '../store/slices/oscSlice';
 
 export default function OscPanel() {
-  const { oscMappings, oscValues, addOscMapping, removeOscMapping, listOscMappings } = useGraphStore();
+  const { oscMappings, oscValues, addOscMapping, removeOscMapping, listOscMappings, setOscInEnabled } = useGraphStore();
 
   const [address, setAddress] = React.useState('');
   const [handler, setHandler] = React.useState('');
   const [transform, setTransform] = React.useState('');
+  const [inEnabled, setInEnabled] = React.useState(true);
 
   useOscValueListener();
 
@@ -47,6 +48,20 @@ export default function OscPanel() {
           <span className="text-white text-[10px]">OSC</span>
         </div>
         <h3 className="text-white font-semibold text-sm">OSC Input</h3>
+        <button
+          onClick={() => {
+            const next = !inEnabled;
+            setOscInEnabled(next)
+              .then(() => setInEnabled(next))
+              .catch((e) => console.error('Failed to toggle OSC IN:', e));
+          }}
+          className={`ml-auto px-2 py-0.5 text-[10px] font-medium rounded transition-colors ${
+            inEnabled ? 'bg-orange-600/80 text-white' : 'bg-gray-700 text-gray-400'
+          }`}
+          title="Active/désactive le routage OSC IN (anti-loop lors des recalls)"
+        >
+          {inEnabled ? 'IN on' : 'IN off'}
+        </button>
       </div>
 
       {/* Add Mapping */}

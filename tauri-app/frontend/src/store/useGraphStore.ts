@@ -24,6 +24,7 @@ import { createMovementSlice, type MovementSlice } from './slices/movementSlice'
 import { createMoveSlotsSlice, type MoveSlotsSlice } from './slices/moveSlotsSlice';
 import { createOscConfigSlice, type OscConfigSlice } from './slices/oscConfigSlice';
 import { createSplineLibrarySlice, type SplineLibrarySlice } from './slices/splineLibrarySlice';
+import { createSpatialFxSlice, type SpatialFxSlice } from './slices/spatialFxSlice';
 import { SHAPE_PRESETS } from '../utils/shapePresets';
 import { toast } from '../utils/toast-helpers';
 import { safeSetItem } from '../utils/safeStorage';
@@ -46,7 +47,7 @@ export type { NodeType, AppStatus, MovementInfo, HolTrack, HolProject };
 interface GraphState
   extends PerfSlice, AudioSlice, OscSlice, PersistenceSlice,
     MacrosSlice, HolProjectSlice, DrawModeSlice,
-    MovementSlice, MoveSlotsSlice, OscConfigSlice, SplineLibrarySlice {
+    MovementSlice, MoveSlotsSlice, OscConfigSlice, SplineLibrarySlice, SpatialFxSlice {
   // React Flow state (single source of truth)
   nodes: Node[];
   edges: Edge[];
@@ -159,6 +160,7 @@ export const useGraphStore = create<GraphState>()((...a) => {
   ...createMoveSlotsSlice(...a),
   ...createOscConfigSlice(...a),
   ...createSplineLibrarySlice(...a),
+  ...createSpatialFxSlice(...a),
 
   // Graphe par défaut — preset Circle pour que l'app ne démarre jamais vide
   ...(() => {

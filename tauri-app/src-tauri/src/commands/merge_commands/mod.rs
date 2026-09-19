@@ -12,8 +12,9 @@ mod move_management;
 pub use super::state::lock_or_recover;
 pub use channels::{
     add_channel_modulation, add_zone, clear_all_spatial_channels, clear_channel_modulations,
-    clear_spatial_channel, clear_zones, list_zones, remove_channel_modulation, remove_zone,
-    set_kinematic_smoothing, set_spatial_channel,
+    clear_spatial_channel, clear_zones, list_channel_modulations, list_spatial_channels,
+    list_zones, remove_channel_modulation, remove_zone, set_kinematic_smoothing,
+    set_spatial_channel,
 };
 pub use graph_updates::{update_global_graph, update_move_graph_merged};
 pub use macros::{
