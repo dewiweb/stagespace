@@ -14,19 +14,37 @@ import { useModalGuardOn } from '../utils/modalGuard';
 ///   4. ★ Add to setlist → ajoute à l'ordre du spectacle
 ///   5. GO → stoppe les moves actifs + lance le prochain move de la setlist
 export default function MovesTable() {
-  const {
-    moveSlots, addMoveSlot, removeMoveSlot, renameMoveSlot,
-    setSlotTemplate, setSlotTracks, setSlotMacros, setSlotFadeDuration,
-    toggleSlotPreview,
-    playSlot, stopSlot, stopSlotWithFade,
-    goAllSlots, stopAllSlots,
-    editSlotGraph, saveEditorToSlot,
-    setlistOrder, currentSetlistIndex,
-    addToSetlist, removeFromSetlist, moveSetlistItem, goToNextMove,
-    holProject, manualOscIds, movements, refreshMovements,
-    editingSlotId, selectSlotForEditing,
-    pendingPlays,
-  } = useGraphStore();
+  // Sélecteurs granulaires — pas de full-store subscribe (movementPositions
+  // écrit à 60fps re-renderait toute la table).
+  const moveSlots = useGraphStore((s) => s.moveSlots);
+  const addMoveSlot = useGraphStore((s) => s.addMoveSlot);
+  const removeMoveSlot = useGraphStore((s) => s.removeMoveSlot);
+  const renameMoveSlot = useGraphStore((s) => s.renameMoveSlot);
+  const setSlotTemplate = useGraphStore((s) => s.setSlotTemplate);
+  const setSlotTracks = useGraphStore((s) => s.setSlotTracks);
+  const setSlotMacros = useGraphStore((s) => s.setSlotMacros);
+  const setSlotFadeDuration = useGraphStore((s) => s.setSlotFadeDuration);
+  const toggleSlotPreview = useGraphStore((s) => s.toggleSlotPreview);
+  const playSlot = useGraphStore((s) => s.playSlot);
+  const stopSlot = useGraphStore((s) => s.stopSlot);
+  const stopSlotWithFade = useGraphStore((s) => s.stopSlotWithFade);
+  const goAllSlots = useGraphStore((s) => s.goAllSlots);
+  const stopAllSlots = useGraphStore((s) => s.stopAllSlots);
+  const editSlotGraph = useGraphStore((s) => s.editSlotGraph);
+  const saveEditorToSlot = useGraphStore((s) => s.saveEditorToSlot);
+  const setlistOrder = useGraphStore((s) => s.setlistOrder);
+  const currentSetlistIndex = useGraphStore((s) => s.currentSetlistIndex);
+  const addToSetlist = useGraphStore((s) => s.addToSetlist);
+  const removeFromSetlist = useGraphStore((s) => s.removeFromSetlist);
+  const moveSetlistItem = useGraphStore((s) => s.moveSetlistItem);
+  const goToNextMove = useGraphStore((s) => s.goToNextMove);
+  const holProject = useGraphStore((s) => s.holProject);
+  const manualOscIds = useGraphStore((s) => s.manualOscIds);
+  const movements = useGraphStore((s) => s.movements);
+  const refreshMovements = useGraphStore((s) => s.refreshMovements);
+  const editingSlotId = useGraphStore((s) => s.editingSlotId);
+  const selectSlotForEditing = useGraphStore((s) => s.selectSlotForEditing);
+  const pendingPlays = useGraphStore((s) => s.pendingPlays);
 
   const showExpert = useAnimationStore((s) => s.showExpert);
   const setShowExpert = useAnimationStore((s) => s.setShowExpert);

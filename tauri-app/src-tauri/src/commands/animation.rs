@@ -1,3 +1,4 @@
+use super::error::IpcError;
 use super::state::lock_or_recover;
 use crate::commands::merge_commands::{
     resolve_track_indices, spawn_move, MoveSpec, SpatialMacroInit,
@@ -31,7 +32,7 @@ pub async fn launch_animation(
     osc_port: u16,
     osc_profile: String,
     state: State<'_, AppState>,
-) -> Result<String, String> {
+) -> Result<String, IpcError> {
     let _ = (osc_address, osc_port, osc_profile); // merge-owned OSC target
     let movement_id = format!("anim-{}", animation.id);
 
@@ -73,7 +74,8 @@ pub async fn launch_animation(
     let sh = Shared::from_state(&state);
     tauri::async_runtime::spawn_blocking(move || spawn_move(spec, &sh))
         .await
-        .map_err(|e| format!("Task join error: {e}"))??;
+        .map_err(|e| IpcError::internal(format!("Task join error: {e}")))?
+        .map_err(IpcError::from)?;
 
     Ok(movement_id)
 }
@@ -84,11 +86,11 @@ pub async fn update_animation_state(
     movement_id: String,
     animation: Animation,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     let movements = lock_or_recover(&state.movements);
     let movement = movements
         .get(&movement_id)
-        .ok_or_else(|| format!("Movement {movement_id} not found"))?;
+        .ok_or_else(|| IpcError::not_found(format!("Movement {movement_id} not found")))?;
     let osc_ids = movement.osc_ids.clone();
     let anim_state = AnimationState::from_animation(&animation, &osc_ids);
     movement.runtime.set_animation_state(anim_state);

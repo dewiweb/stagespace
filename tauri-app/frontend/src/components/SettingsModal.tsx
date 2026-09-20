@@ -12,12 +12,18 @@ const OSC_PROFILES = [
 ];
 
 export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const {
-    oscAddress, oscPort, oscProfile, oscInPort,
-    setOscAddress, setOscPort, setOscProfile, setOscInPort,
-    manualOscIds, setManualOscIds,
-    selectedAudioDeviceId, setSelectedAudioDeviceId,
-  } = useGraphStore();
+  const oscAddress = useGraphStore((s) => s.oscAddress);
+  const oscPort = useGraphStore((s) => s.oscPort);
+  const oscProfile = useGraphStore((s) => s.oscProfile);
+  const oscInPort = useGraphStore((s) => s.oscInPort);
+  const setOscAddress = useGraphStore((s) => s.setOscAddress);
+  const setOscPort = useGraphStore((s) => s.setOscPort);
+  const setOscProfile = useGraphStore((s) => s.setOscProfile);
+  const setOscInPort = useGraphStore((s) => s.setOscInPort);
+  const manualOscIds = useGraphStore((s) => s.manualOscIds);
+  const setManualOscIds = useGraphStore((s) => s.setManualOscIds);
+  const selectedAudioDeviceId = useGraphStore((s) => s.selectedAudioDeviceId);
+  const setSelectedAudioDeviceId = useGraphStore((s) => s.setSelectedAudioDeviceId);
 
   const [oscIdsStr, setOscIdsStr] = React.useState(manualOscIds.join(','));
   const [audioDevices, setAudioDevices] = React.useState<MediaDeviceInfo[]>([]);

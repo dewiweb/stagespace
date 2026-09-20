@@ -1,3 +1,4 @@
+use super::error::IpcError;
 use super::state::lock_or_recover;
 use crate::commands::merge_commands::{
     remove_move_now, resolve_track_indices, spawn_move, MoveSpec,
@@ -39,7 +40,7 @@ pub struct PlayGraphRequest {
 pub async fn play_graph(
     request: PlayGraphRequest,
     state: State<'_, AppState>,
-) -> Result<String, String> {
+) -> Result<String, IpcError> {
     let sh = Shared::from_state(&state);
     tauri::async_runtime::spawn_blocking(move || {
         // Remplacement : un graph-main existant est stoppé proprement d'abord.
@@ -64,7 +65,8 @@ pub async fn play_graph(
         spawn_move(spec, &sh).map(|_| "Graph playback started".to_string())
     })
     .await
-    .map_err(|e| format!("Task join error: {e}"))?
+    .map_err(|e| IpcError::internal(format!("Task join error: {e}")))?
+    .map_err(IpcError::from)
 }
 
 /// Preview mode — joue la trajectoire SANS envoyer d'OSC (le merge route les
@@ -73,7 +75,7 @@ pub async fn play_graph(
 pub async fn preview_graph(
     request: PlayGraphRequest,
     state: State<'_, AppState>,
-) -> Result<String, String> {
+) -> Result<String, IpcError> {
     let sh = Shared::from_state(&state);
     tauri::async_runtime::spawn_blocking(move || {
         remove_move_now(GRAPH_PREVIEW_ID, &sh);
@@ -96,11 +98,12 @@ pub async fn preview_graph(
         spawn_move(spec, &sh).map(|_| "Preview started (no OSC sent)".to_string())
     })
     .await
-    .map_err(|e| format!("Task join error: {e}"))?
+    .map_err(|e| IpcError::internal(format!("Task join error: {e}")))?
+    .map_err(IpcError::from)
 }
 
 #[tauri::command]
-pub async fn stop_graph(state: State<'_, AppState>) -> Result<String, String> {
+pub async fn stop_graph(state: State<'_, AppState>) -> Result<String, IpcError> {
     let sh = Shared::from_state(&state);
     tauri::async_runtime::spawn_blocking(move || {
         let a = remove_move_now(GRAPH_MAIN_ID, &sh);
@@ -112,7 +115,7 @@ pub async fn stop_graph(state: State<'_, AppState>) -> Result<String, String> {
         }
     })
     .await
-    .map_err(|e| format!("Task join error: {e}"))
+    .map_err(|e| IpcError::internal(format!("Task join error: {e}")))
 }
 
 /// Hot-swap le graphe en cours de lecture — recompile et remplace la
@@ -122,7 +125,7 @@ pub async fn update_graph(
     graph_json: serde_json::Value,
     fade_duration: Option<f64>,
     state: State<'_, AppState>,
-) -> Result<String, String> {
+) -> Result<String, IpcError> {
     // Snapshot court sous le lock — la compilation se fait hors du lock
     // `movements` (sinon un edit de graphe pendant un show gèle stop/panic).
     let (target_id, generation, overrides) = {
@@ -135,7 +138,7 @@ pub async fn update_graph(
         };
         let movement = movements
             .get(target_id)
-            .ok_or("No runtime active — call play_graph first")?;
+            .ok_or_else(|| IpcError::not_found("No runtime active — call play_graph first"))?;
         (
             target_id,
             movement.generation,
@@ -144,18 +147,19 @@ pub async fn update_graph(
     };
 
     let audio_state = lock_or_recover(&state.audio_state);
-    let graph = build_graph_from_json(&graph_json, &audio_state)?;
+    let graph = build_graph_from_json(&graph_json, &audio_state).map_err(IpcError::from)?;
     drop(audio_state);
 
     let compiled =
-        compile_graph_with_audio_and_overrides(&graph, state.audio_state.clone(), overrides)?;
+        compile_graph_with_audio_and_overrides(&graph, state.audio_state.clone(), overrides)
+            .map_err(IpcError::from)?;
 
     // Ré-application sous lock — si le move a été stoppé pendant la compile
     // on signale l'échec plutôt que d'appliquer en silence à un fantôme.
     let mut movements = lock_or_recover(&state.movements);
     let movement = movements
         .get_mut(target_id)
-        .ok_or("Graph playback stopped during recompile")?;
+        .ok_or_else(|| IpcError::conflict("Graph playback stopped during recompile"))?;
     if movement.generation != generation {
         eprintln!("[WARN] update_graph: '{target_id}' respawned during compile");
     }
@@ -190,7 +194,10 @@ pub struct SetMacroRequest {
 /// graph-preview s'il tourne, sinon aux macros globales du MergeRuntime
 /// (les réglages survivront au prochain play).
 #[tauri::command]
-pub async fn set_macro(request: SetMacroRequest, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn set_macro(
+    request: SetMacroRequest,
+    state: State<'_, AppState>,
+) -> Result<(), IpcError> {
     let macros = {
         let movements = lock_or_recover(&state.movements);
         movements

@@ -22,7 +22,11 @@ pub fn cmd_sample(args: &[&str]) -> Result<String, String> {
         .unwrap_or(4.0);
 
     let state = cli_state::state();
-    let movements = state.movements.lock().unwrap_or_else(|e| e.into_inner());
+    let movements = state
+        .shared
+        .movements
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let movement = movements
         .get(move_id)
         .or_else(|| {
@@ -45,6 +49,7 @@ pub fn cmd_sample(args: &[&str]) -> Result<String, String> {
 
     // Appliquer le post-process global
     let mr = state
+        .shared
         .merge_runtime
         .lock()
         .unwrap_or_else(|e| e.into_inner());
@@ -80,12 +85,17 @@ pub fn cmd_sample(args: &[&str]) -> Result<String, String> {
 pub fn cmd_perf(_args: &[&str]) -> Result<String, String> {
     let state = cli_state::state();
     let merge_rt = state
+        .shared
         .merge_runtime
         .lock()
         .unwrap_or_else(|e| e.into_inner());
     let stats = merge_rt.get_perf_stats();
 
-    let movements = state.movements.lock().unwrap_or_else(|e| e.into_inner());
+    let movements = state
+        .shared
+        .movements
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let out = format!(
         "MergeRuntime:\n  fps: {:.1}\n  osc_rate: {:.1}\n  latency_ms: {:.2}\n  cpu_percent: {:.1}\n  active_moves: {}\n  osc_ids: {}\n",
         stats.fps,

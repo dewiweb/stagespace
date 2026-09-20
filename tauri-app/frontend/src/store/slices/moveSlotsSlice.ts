@@ -4,7 +4,8 @@ import { toast } from '../../utils/toast-helpers';
 import { computeCentroid } from '../utils/geometryUtils';
 import type { Node, Edge } from 'reactflow';
 import type { HolProject } from '../types/index';
-import { safeSetItem, safeParseStoredJson } from '../../utils/safeStorage';
+import { safeSetItem, safeParseStoredJson, debouncedSetItem } from '../../utils/safeStorage';
+import { throttleTrailingKeyed } from '../../utils/throttle';
 import { SHAPE_PRESETS } from '../../utils/shapePresets';
 
 /// Extrait la duration d'un graphe (node Duration) — fallback 4.0s
@@ -253,6 +254,21 @@ function loadSlotsFromStorage(): MoveSlot[] {
 export function saveSlotsToStorage(slots: MoveSlot[]) {
   safeSetItem(SLOTS_STORAGE_KEY, JSON.stringify(slots));
 }
+
+/// Variante debounced pour les hot paths (sliders → pointermove à 60Hz) :
+/// stringify+setItem synchrone de toute la librairie de slots à chaque pixel
+/// de drag = jank. Trailing edge — la dernière valeur est toujours écrite.
+function saveSlotsToStorageDebounced(slots: MoveSlot[]) {
+  debouncedSetItem(SLOTS_STORAGE_KEY, JSON.stringify(slots));
+}
+
+// Throttle des push live — un slider en drag ne doit pas spammer l'IPC.
+// Keyed par movementId : deux slots draggés en parallèle gardent chacun
+// leur trailing call.
+const throttledMoveSpeed = throttleTrailingKeyed((movementId: string, speed: number) => {
+  invoke('set_move_speed', { movementId, speed })
+    .catch((e) => console.warn('[setSlotMacros] set_move_speed failed:', e));
+}, 33);
 
 function loadSetlistFromStorage(): string[] {
   const parsed = safeParseStoredJson<string[]>(SETLIST_STORAGE_KEY, []);
@@ -722,17 +738,16 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
       const newSlots = s.moveSlots.map((sl) =>
         sl.id === id ? { ...sl, macros: { ...sl.macros, ...macros } } : sl
       );
-      saveSlotsToStorage(newSlots);
+      // Slider-driven → debounced (écriture synchrone de tous les slots par
+      // pointermove = jank).
+      saveSlotsToStorageDebounced(newSlots);
       return { moveSlots: newSlots };
     });
     // Appliquer en live si le slot est en lecture
     const slot = get().moveSlots.find((s) => s.id === id);
     if (slot?.movementId) {
-      // Speed = per-move (worker) — pousser au backend
-      invoke('set_move_speed', {
-        movementId: slot.movementId,
-        speed: slot.macros.speed ?? 1.0,
-      }).catch((e) => console.warn('[setSlotMacros] set_move_speed failed:', e));
+      // Speed = per-move (worker) — poussé au backend, throttlé à ~30Hz.
+      throttledMoveSpeed(slot.movementId, slot.macros.speed ?? 1.0);
       // Note: les macros spatiales (scale, shift, rotation) sont globales (MergeRuntime).
       // Elles ne sont PAS poussées ici — utiliser les macros globales de l'Inspector pour ça.
       // Les macros spatiales du slot sont appliquées au lancement (playSlot) via set_global_macro.
@@ -742,7 +757,7 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
   setSlotFadeDuration: (id, fade) => {
     set((s) => {
       const newSlots = s.moveSlots.map((sl) => sl.id === id ? { ...sl, fadeDuration: fade } : sl);
-      saveSlotsToStorage(newSlots);
+      saveSlotsToStorageDebounced(newSlots);
       return { moveSlots: newSlots };
     });
   },

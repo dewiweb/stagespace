@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, State};
 
-mod commands;
+pub mod commands;
 pub mod graph;
 use commands::animation::{launch_animation, update_animation_state};
 use commands::audio::{

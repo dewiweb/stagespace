@@ -17,13 +17,36 @@ const OSC_PROFILES = [
 ];
 
 export const Toolbar: React.FC = () => {
-  const { movements, status, compileError, playError, clearCompileError, clearPlayError, nodes,
-    saveGraphToFile, loadGraphFromFile, importHol, holProject,
-    selectedTrackIds, getSelectedOscIds,
-    undo, redo, canUndo, canRedo, panic, perfStats, setPerfStats,
-    manualOscIds, setManualOscIds,
-    oscAddress, oscPort, oscProfile, setOscAddress, setOscPort, setOscProfile } =
-    useGraphStore();
+  // Sélecteurs granulaires — un full-store subscribe re-renderait la Toolbar
+  // à chaque frame (movementPositions écrit à 60fps).
+  const movements = useGraphStore((s) => s.movements);
+  const status = useGraphStore((s) => s.status);
+  const compileError = useGraphStore((s) => s.compileError);
+  const playError = useGraphStore((s) => s.playError);
+  const clearCompileError = useGraphStore((s) => s.clearCompileError);
+  const clearPlayError = useGraphStore((s) => s.clearPlayError);
+  const nodes = useGraphStore((s) => s.nodes);
+  const saveGraphToFile = useGraphStore((s) => s.saveGraphToFile);
+  const loadGraphFromFile = useGraphStore((s) => s.loadGraphFromFile);
+  const importHol = useGraphStore((s) => s.importHol);
+  const holProject = useGraphStore((s) => s.holProject);
+  const selectedTrackIds = useGraphStore((s) => s.selectedTrackIds);
+  const getSelectedOscIds = useGraphStore((s) => s.getSelectedOscIds);
+  const undo = useGraphStore((s) => s.undo);
+  const redo = useGraphStore((s) => s.redo);
+  const canUndo = useGraphStore((s) => s.canUndo);
+  const canRedo = useGraphStore((s) => s.canRedo);
+  const panic = useGraphStore((s) => s.panic);
+  const perfStats = useGraphStore((s) => s.perfStats);
+  const setPerfStats = useGraphStore((s) => s.setPerfStats);
+  const manualOscIds = useGraphStore((s) => s.manualOscIds);
+  const setManualOscIds = useGraphStore((s) => s.setManualOscIds);
+  const oscAddress = useGraphStore((s) => s.oscAddress);
+  const oscPort = useGraphStore((s) => s.oscPort);
+  const oscProfile = useGraphStore((s) => s.oscProfile);
+  const setOscAddress = useGraphStore((s) => s.setOscAddress);
+  const setOscPort = useGraphStore((s) => s.setOscPort);
+  const setOscProfile = useGraphStore((s) => s.setOscProfile);
 
   const [oscIds, setOscIds] = React.useState(manualOscIds.join(','));
   const [showOsc, setShowOsc] = React.useState(false);

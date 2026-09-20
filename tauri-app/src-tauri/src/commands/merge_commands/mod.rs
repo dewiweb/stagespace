@@ -27,7 +27,9 @@ pub use manual_positions::{
 pub use move_management::{
     activate_move, deactivate_all_moves, deactivate_move, get_merge_perf_stats, list_active_moves,
 };
-pub(crate) use move_management::{
+// API "MoveService" — utilisée par les commands Tauri ET le CLI bin
+// (stagespace-cli) : un seul chemin de spawn/stop pour les deux surfaces.
+pub use move_management::{
     parse_direction, parse_loop_mode, remove_move_now, resolve_track_indices, spawn_move,
     spawn_move_for_recall, MoveSpec, SpatialMacroInit,
 };

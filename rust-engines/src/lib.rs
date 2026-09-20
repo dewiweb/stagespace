@@ -19,6 +19,7 @@ pub mod osc_receiver;
 pub mod osc_sender;
 pub mod patch;
 pub mod position_buffer;
+pub mod position_sink;
 pub mod post_process_compiler;
 pub mod presets;
 pub mod rng;
@@ -78,6 +79,7 @@ pub use osc_receiver::{
 pub use osc_sender::{OscProfile, OscSender, SpatialChannel, SpatialChannels};
 pub use patch::{AudioObject, ObjectGroup, PatchManager};
 pub use position_buffer::{IndexedPosition, PositionBuffer};
+pub use position_sink::{OscSink, PositionSink, SendReport};
 pub use post_process_compiler::{
     compile_post_process, extract_graph_effects, GraphEffects, PostProcessCompileError,
     PostProcessCompileParams,

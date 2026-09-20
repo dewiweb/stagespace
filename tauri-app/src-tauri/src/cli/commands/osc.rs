@@ -3,13 +3,9 @@
 use crate::cli_state;
 use crate::graph_presets;
 use stagespace_engines::{
-    EngineParams, LoopMode, MacroTarget, MappingDestination, ObjectRef, OscMapping, OscSender,
-    PositionBuffer, Runtime, SpatialChannel, Transform,
+    LoopMode, MacroTarget, MappingDestination, ObjectRef, OscMapping, SpatialChannel, Transform,
 };
-use stagespace_tauri::graph::compilation::compile_graph_with_audio_and_overrides;
-use stagespace_tauri::graph::parser::build_graph_from_json;
 use std::str::FromStr;
-use std::sync::Arc;
 
 use super::helpers::{osc_ids_to_indices, parse_args, parse_track_list};
 
@@ -419,6 +415,7 @@ pub fn cmd_osc_validate(args: &[&str]) -> Result<String, String> {
             OscProfile::from_str(profile).map_err(|e| format!("Invalid OSC profile: {e}"))?;
         let osc_sender = OscSender::new(profile_enum, "127.0.0.1".to_string(), port);
         let merge_rt = state
+            .shared
             .merge_runtime
             .lock()
             .unwrap_or_else(|e| e.into_inner());
@@ -427,102 +424,44 @@ pub fn cmd_osc_validate(args: &[&str]) -> Result<String, String> {
             .map_err(|e| format!("Failed to set OSC target: {e:?}"))?;
     }
 
-    // 3. Activer le move
+    // 3. Activer le move via le MoveService partagé (même chemin que l'app :
+    // réservation d'id, compile hors lock, worker + merge + cleanup).
     let graph_json = graph_presets::build_template_graph(template, n_objects, duration)?;
     let move_id = state.next_move_id("oscval");
-    let audio_state = state
-        .audio_state
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .clone();
-    let graph = build_graph_from_json(&graph_json, &audio_state)?;
-    let osc_sender = OscSender::default();
-    let runtime = Runtime::new_with_audio_state(
-        "127.0.0.1".to_string(),
-        port,
-        osc_sender,
-        state.audio_state.clone(),
-    )
-    .map_err(|e| format!("Failed to create runtime: {e}"))?;
-    let overrides = runtime.audio_param_overrides();
-    let compiled =
-        compile_graph_with_audio_and_overrides(&graph, state.audio_state.clone(), overrides)?;
-    runtime.set_loop_mode(LoopMode::Loop);
     let track_indices = osc_ids_to_indices(&osc_ids, &all_osc_ids);
     let origin = state.compute_centroid(&track_indices);
-    runtime.set_origin(nalgebra::Vector3::new(origin[0], origin[1], origin[2]));
-    let buffer = Arc::new(PositionBuffer::new());
-    runtime.set_position_buffer(buffer.clone());
-
-    runtime
-        .play_compiled(
-            compiled,
-            EngineParams {
-                n_objects: osc_ids.len(),
-                duration,
-                fps: 60.0,
-                extra: serde_json::json!({}),
-            },
-            osc_ids.clone(),
-        )
-        .map_err(|e| format!("Playback failed: {e:?}"))?;
-
-    let movement = cli_state::CliMovement {
+    // Globals = toutes les tracks connues — cohérent avec track_indices
+    // (avant : globals = sous-ensemble du move → indices hors bornes quand
+    // --tracks ne couvrait pas le préfixe 1..n).
+    state
+        .shared
+        .merge_runtime
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .set_osc_ids(all_osc_ids.clone());
+    let spec = stagespace_tauri::commands::merge_commands::MoveSpec {
         id: move_id.clone(),
         name: format!("osc-validate-{template}"),
-        runtime,
-        osc_ids: osc_ids.clone(),
+        graph_json,
+        osc_ids,
+        track_indices,
         is_preview: false,
-        track_indices: track_indices.clone(),
+        origin: Some(origin),
+        duration,
+        loop_mode: LoopMode::Loop,
+        direction: stagespace_engines::PlayDirection::Forward,
+        fade: None,
+        speed: None,
+        spatial_macros: None,
+        animation_state: None,
     };
-    state
-        .movements
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .insert(move_id.clone(), movement);
+    stagespace_tauri::commands::merge_commands::spawn_move(spec, &state.shared)?;
 
-    {
-        let merge_rt = state
-            .merge_runtime
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        merge_rt.register_move(
-            move_id.clone(),
-            buffer,
-            osc_ids.clone(),
-            track_indices,
-            false,
-        );
-        merge_rt.set_osc_ids(osc_ids.clone());
-        merge_rt.set_origin(nalgebra::Vector3::new(origin[0], origin[1], origin[2]));
-        if !merge_rt.is_running() {
-            drop(merge_rt);
-            let mut merge_rt = state
-                .merge_runtime
-                .lock()
-                .unwrap_or_else(|e| e.into_inner());
-            merge_rt
-                .start()
-                .map_err(|e| format!("Failed to start MergeRuntime: {e}"))?;
-        }
-    }
-
-    // 3. Attendre la durée du test
+    // 4. Attendre la durée du test
     std::thread::sleep(std::time::Duration::from_secs_f64(duration));
 
-    // 4. Stopper le move
-    {
-        let merge_rt = state
-            .merge_runtime
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        merge_rt.unregister_move(&move_id);
-    }
-    state
-        .movements
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .remove(&move_id);
+    // 5. Stopper le move (unregister + remove + join du worker)
+    stagespace_tauri::commands::merge_commands::remove_move_now(&move_id, &state.shared);
 
     // 5. Récupérer le rapport du listener
     let report = listener_thread
@@ -656,6 +595,7 @@ pub fn cmd_osc_map(args: &[&str]) -> Result<String, String> {
 
     let state = cli_state::state();
     state
+        .shared
         .osc_receiver
         .lock()
         .unwrap_or_else(|e| e.into_inner())
@@ -668,6 +608,7 @@ pub fn cmd_osc_unmap(args: &[&str]) -> Result<String, String> {
     let address = args.first().ok_or("Usage: osc-unmap <address>")?;
     let state = cli_state::state();
     let removed = state
+        .shared
         .osc_receiver
         .lock()
         .unwrap_or_else(|e| e.into_inner())
@@ -682,7 +623,11 @@ pub fn cmd_osc_unmap(args: &[&str]) -> Result<String, String> {
 /// Usage: osc-maps
 pub fn cmd_osc_maps(_args: &[&str]) -> Result<String, String> {
     let state = cli_state::state();
-    let receiver = state.osc_receiver.lock().unwrap_or_else(|e| e.into_inner());
+    let receiver = state
+        .shared
+        .osc_receiver
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let mappings = receiver.list_mappings();
     if mappings.is_empty() {
         return Ok("No OSC IN mappings".to_string());
@@ -707,7 +652,11 @@ pub fn cmd_osc_inject(args: &[&str]) -> Result<String, String> {
     let values = values.map_err(|_| "Invalid numeric value".to_string())?;
 
     let state = cli_state::state();
-    let receiver = state.osc_receiver.lock().unwrap_or_else(|e| e.into_inner());
+    let receiver = state
+        .shared
+        .osc_receiver
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     receiver.handle_message(address, values);
     let stats = receiver.stats();
     Ok(format!(
@@ -719,7 +668,11 @@ pub fn cmd_osc_inject(args: &[&str]) -> Result<String, String> {
 /// Usage: osc-values [key]
 pub fn cmd_osc_values(args: &[&str]) -> Result<String, String> {
     let state = cli_state::state();
-    let receiver = state.osc_receiver.lock().unwrap_or_else(|e| e.into_inner());
+    let receiver = state
+        .shared
+        .osc_receiver
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     if let Some(key) = args.first() {
         return match receiver.get_last_value(key) {
             Some(v) => Ok(format!("{key} = {v:?}")),
@@ -743,7 +696,11 @@ pub fn cmd_osc_values(args: &[&str]) -> Result<String, String> {
 pub fn cmd_osc_in(args: &[&str]) -> Result<String, String> {
     let sub = args.first().copied().unwrap_or("stats");
     let state = cli_state::state();
-    let mut receiver = state.osc_receiver.lock().unwrap_or_else(|e| e.into_inner());
+    let mut receiver = state
+        .shared
+        .osc_receiver
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     match sub {
         "on" => {
             receiver.set_in_enabled(true);
@@ -797,6 +754,7 @@ pub fn cmd_osc_suppress(args: &[&str]) -> Result<String, String> {
         .map_err(|_| "Invalid duration (ms)".to_string())?;
     let state = cli_state::state();
     state
+        .shared
         .osc_receiver
         .lock()
         .unwrap_or_else(|e| e.into_inner())

@@ -1,3 +1,4 @@
+use super::error::IpcError;
 use super::state::lock_or_recover;
 use crate::AppState;
 use stagespace_engines::{OscInStatsSnapshot, OscMapping, OscProfile, OscReceiver, OscSender};
@@ -12,27 +13,30 @@ use tauri::State;
 pub async fn osc_add_mapping(
     mapping: OscMapping,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     let receiver = lock_or_recover(&state.osc_receiver);
-    receiver.add_mapping(mapping)
+    receiver.add_mapping(mapping).map_err(IpcError::from)
 }
 
 #[tauri::command]
-pub async fn osc_remove_mapping(address: String, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn osc_remove_mapping(
+    address: String,
+    state: State<'_, AppState>,
+) -> Result<(), IpcError> {
     let receiver = lock_or_recover(&state.osc_receiver);
     receiver.remove_mapping(&address);
     Ok(())
 }
 
 #[tauri::command]
-pub async fn osc_list_mappings(state: State<'_, AppState>) -> Result<Vec<OscMapping>, String> {
+pub async fn osc_list_mappings(state: State<'_, AppState>) -> Result<Vec<OscMapping>, IpcError> {
     let receiver = lock_or_recover(&state.osc_receiver);
     Ok(receiver.list_mappings())
 }
 
 /// Active/désactive globalement l'OSC IN (master switch anti-loop)
 #[tauri::command]
-pub async fn osc_set_in_enabled(enabled: bool, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn osc_set_in_enabled(enabled: bool, state: State<'_, AppState>) -> Result<(), IpcError> {
     let receiver = lock_or_recover(&state.osc_receiver);
     receiver.set_in_enabled(enabled);
     Ok(())
@@ -41,7 +45,7 @@ pub async fn osc_set_in_enabled(enabled: bool, state: State<'_, AppState>) -> Re
 /// Supprime l'OSC IN pendant `duration_ms` — les messages reçus pendant la
 /// fenêtre sont ignorés (anti-loop après recall/panic)
 #[tauri::command]
-pub async fn osc_suppress_in(duration_ms: u64, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn osc_suppress_in(duration_ms: u64, state: State<'_, AppState>) -> Result<(), IpcError> {
     let receiver = lock_or_recover(&state.osc_receiver);
     receiver.suppress_ms(duration_ms);
     Ok(())
@@ -49,7 +53,7 @@ pub async fn osc_suppress_in(duration_ms: u64, state: State<'_, AppState>) -> Re
 
 /// Statistiques du pipeline OSC IN (reçus / matchés / routés / droppés)
 #[tauri::command]
-pub async fn osc_in_stats(state: State<'_, AppState>) -> Result<OscInStatsSnapshot, String> {
+pub async fn osc_in_stats(state: State<'_, AppState>) -> Result<OscInStatsSnapshot, IpcError> {
     let receiver = lock_or_recover(&state.osc_receiver);
     Ok(receiver.stats())
 }
@@ -60,25 +64,25 @@ pub async fn osc_in_stats(state: State<'_, AppState>) -> Result<OscInStatsSnapsh
 pub async fn osc_get_value(
     handler: String,
     state: State<'_, AppState>,
-) -> Result<Vec<f64>, String> {
+) -> Result<Vec<f64>, IpcError> {
     let receiver = lock_or_recover(&state.osc_receiver);
     receiver
         .get_last_value(&handler)
-        .ok_or_else(|| format!("No value for handler: {handler}"))
+        .ok_or_else(|| IpcError::not_found(format!("No value for handler: {handler}")))
 }
 
 #[tauri::command]
-pub async fn osc_get_all_values(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+pub async fn osc_get_all_values(state: State<'_, AppState>) -> Result<serde_json::Value, IpcError> {
     let receiver = lock_or_recover(&state.osc_receiver);
     let values = receiver.get_all_values();
-    serde_json::to_value(values).map_err(|e| e.to_string())
+    serde_json::to_value(values).map_err(|e| IpcError::internal(e.to_string()))
 }
 
 /// Change le port du receiver OSC — le nouveau receiver est bindé et démarré
 /// AVANT de stopper l'ancien : si le bind échoue, l'OSC IN reste fonctionnel
 /// (sinon un mauvais port laissait le receiver arrêté en silence).
 #[tauri::command]
-pub async fn set_osc_receiver_port(port: u16, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn set_osc_receiver_port(port: u16, state: State<'_, AppState>) -> Result<(), IpcError> {
     // Même port → rien à changer
     {
         let receiver = lock_or_recover(&state.osc_receiver);
@@ -102,12 +106,12 @@ pub async fn set_osc_receiver_port(port: u16, state: State<'_, AppState>) -> Res
     for mapping in mappings {
         new_receiver
             .add_mapping(mapping)
-            .map_err(|e| format!("Failed to restore mapping: {e}"))?;
+            .map_err(|e| IpcError::internal(format!("Failed to restore mapping: {e}")))?;
     }
     // Bind + démarrage AVANT de toucher l'ancien receiver
     new_receiver
         .start()
-        .map_err(|e| format!("Failed to start OSC receiver on port {port}: {e}"))?;
+        .map_err(|e| IpcError::io(format!("Failed to start OSC receiver on port {port}: {e}")))?;
 
     // Succès : stopper l'ancien et swapper
     {
@@ -126,21 +130,21 @@ pub async fn set_osc_output(
     port: u16,
     profile: String,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     let profile_enum = OscProfile::from_str(&profile)
-        .map_err(|e| format!("Invalid OSC profile '{profile}': {e}"))?;
+        .map_err(|e| IpcError::validation(format!("Invalid OSC profile '{profile}': {e}")))?;
     let osc_sender = OscSender::new(profile_enum, address.clone(), port);
     let merge_rt = lock_or_recover(&state.merge_runtime);
     merge_rt
         .set_osc_target(address.clone(), port, osc_sender)
-        .map_err(|e| format!("Failed to set OSC target: {e:?}"))?;
+        .map_err(|e| IpcError::io(format!("Failed to set OSC target: {e:?}")))?;
     eprintln!("[INFO] OSC output now sending to {address}:{port} ({profile})");
     Ok(())
 }
 
 /// Récupère le port actuel du receiver OSC
 #[tauri::command]
-pub async fn get_osc_receiver_port(state: State<'_, AppState>) -> Result<u16, String> {
+pub async fn get_osc_receiver_port(state: State<'_, AppState>) -> Result<u16, IpcError> {
     let receiver = lock_or_recover(&state.osc_receiver);
     Ok(receiver.port)
 }
@@ -153,7 +157,7 @@ pub async fn send_osc_position(
     y: f64,
     z: f64,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     // Anti-loop : ignorer les echoes OSC IN pendant le panic
     lock_or_recover(&state.osc_receiver).suppress_ms(200);
 
@@ -164,6 +168,6 @@ pub async fn send_osc_position(
     let merge_rt = lock_or_recover(&state.merge_runtime);
     merge_rt
         .send_position_now(osc_id, nalgebra::Vector3::new(x, y, z))
-        .map_err(|e| format!("OSC send failed: {e}"))?;
+        .map_err(|e| IpcError::io(format!("OSC send failed: {e}")))?;
     Ok(())
 }

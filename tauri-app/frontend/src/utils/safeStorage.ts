@@ -74,6 +74,40 @@ export function safeParseStoredJson<T>(key: string, fallback: T): T {
   }
 }
 
+/// Écriture debounced (trailing edge) pour les hot paths — les sliders qui
+/// appellent à chaque pointermove ne doivent pas sérialiser toute la librairie
+/// de façon synchrone à 60Hz (jank garanti sur le main thread).
+///
+/// La dernière valeur gagne ; flush automatique sur pagehide pour ne pas
+/// perdre l'état si l'onglet se ferme pendant la fenêtre de debounce.
+const pendingWrites = new Map<string, string>();
+let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+const STORAGE_DEBOUNCE_MS = 250;
+
+export function debouncedSetItem(key: string, value: string): void {
+  pendingWrites.set(key, value);
+  if (debounceTimer) clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(flushPendingWrites, STORAGE_DEBOUNCE_MS);
+}
+
+/// Écrit immédiatement tout ce qui est en attente de debounce.
+export function flushPendingWrites(): void {
+  if (debounceTimer) {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
+  }
+  for (const [key, value] of pendingWrites) {
+    safeSetItem(key, value);
+  }
+  pendingWrites.clear();
+}
+
+// Flush à la fermeture/masquage de l'onglet — sinon la dernière frame d'un
+// drag peut être perdue (250ms de fenêtre).
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', flushPendingWrites);
+}
+
 /// Estime l'espace localStorage utilisé (en KB)
 export function getStorageUsageKB(): number {
   let total = 0;

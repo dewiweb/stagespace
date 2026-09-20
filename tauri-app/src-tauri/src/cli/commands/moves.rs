@@ -2,13 +2,9 @@
 
 use crate::cli_state;
 use crate::graph_presets;
-use stagespace_engines::{
-    EngineParams, LoopMode, MergeStrategy, OscSender, PositionBuffer, Runtime,
-};
-use stagespace_tauri::graph::compilation::compile_graph_with_audio_and_overrides;
-use stagespace_tauri::graph::parser::build_graph_from_json;
+use stagespace_engines::{LoopMode, MergeStrategy, PlayDirection};
+use stagespace_tauri::commands::merge_commands::{remove_move_now, spawn_move, MoveSpec};
 use std::str::FromStr;
-use std::sync::Arc;
 
 use super::helpers::{osc_ids_to_indices, parse_args, parse_track_list};
 
@@ -45,120 +41,41 @@ pub fn cmd_activate_move(args: &[&str]) -> Result<String, String> {
     let graph_json = graph_presets::build_template_graph(template, n_objects, duration)?;
     let move_id = state.next_move_id(&name);
 
-    // Compiler le graphe
-    let audio_state = state
-        .audio_state
+    // Origin = isobarycentre des tracks ciblées (appliquée par le worker via
+    // MoveSpec.origin → move_transform).
+    let origin = state.compute_centroid(&track_indices);
+
+    // La liste globale du merge = TOUTES les tracks connues (pas le
+    // sous-ensemble du move) — sinon track_indices (index dans all_osc_ids)
+    // pointerait hors bornes ou sur les mauvaises tracks. Set AVANT le spawn :
+    // register_move cale les indices sur cette liste.
+    state
+        .shared
+        .merge_runtime
         .lock()
         .unwrap_or_else(|e| e.into_inner())
-        .clone();
-    let graph = build_graph_from_json(&graph_json, &audio_state)?;
+        .set_osc_ids(all_osc_ids.clone());
 
-    // Créer le worker Runtime — AudioState maître injecté (même Arc que le
-    // merge et le state : une seule source de vérité, pas de propagation).
-    let osc_sender = OscSender::default();
-    let runtime = Runtime::new_with_audio_state(
-        "127.0.0.1".to_string(),
-        8000,
-        osc_sender,
-        state.audio_state.clone(),
-    )
-    .map_err(|e| format!("Failed to create runtime: {e}"))?;
-
-    let overrides = runtime.audio_param_overrides();
-    let compiled =
-        compile_graph_with_audio_and_overrides(&graph, state.audio_state.clone(), overrides)?;
-
-    runtime.set_preview_mode(is_preview);
-    runtime.set_loop_mode(LoopMode::Loop);
-
-    // Origin = isobarycentre des tracks ciblées
-    let origin = state.compute_centroid(&track_indices);
-    runtime.set_origin(nalgebra::Vector3::new(origin[0], origin[1], origin[2]));
-
-    // PositionBuffer
-    let buffer = Arc::new(PositionBuffer::new());
-    runtime.set_position_buffer(buffer.clone());
-
-    // Démarrer le worker
-    runtime
-        .play_compiled(
-            compiled,
-            EngineParams {
-                n_objects: osc_ids.len(),
-                duration,
-                fps: 60.0,
-                extra: serde_json::json!({}),
-            },
-            osc_ids.clone(),
-        )
-        .map_err(|e| format!("Worker playback failed: {e:?}"))?;
-
-    // Enregistrer le movement
-    let movement = cli_state::CliMovement {
+    // Spawn via le MoveService partagé — même chemin que l'app Tauri :
+    // réservation d'id, compile hors lock, worker PositionBuffer,
+    // registration merge + démarrage, cleanup complet si une étape échoue.
+    let spec = MoveSpec {
         id: move_id.clone(),
         name: name.clone(),
-        runtime,
-        osc_ids: osc_ids.clone(),
+        graph_json,
+        osc_ids,
+        track_indices,
         is_preview,
-        track_indices: track_indices.clone(),
+        origin: Some(origin),
+        duration,
+        loop_mode: LoopMode::Loop,
+        direction: PlayDirection::Forward,
+        fade: None,
+        speed: None,
+        spatial_macros: None,
+        animation_state: None,
     };
-    state
-        .movements
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .insert(move_id.clone(), movement);
-
-    // Enregistrer dans le MergeRuntime
-    {
-        let merge_rt = state
-            .merge_runtime
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        merge_rt.register_move(
-            move_id.clone(),
-            buffer,
-            osc_ids.clone(),
-            track_indices,
-            is_preview,
-        );
-
-        // La liste globale = TOUTES les tracks connues (pas le sous-ensemble
-        // du move) — sinon track_indices (index dans all_osc_ids) pointerait
-        // hors bornes ou sur les mauvaises tracks.
-        merge_rt.set_osc_ids(all_osc_ids.clone());
-        // NB : l'origin du move est déjà appliquée par le worker
-        // (runtime.set_origin ci-dessus → move_transform). Ne PAS écrire
-        // l'origin globale du merge ici : c'est le pivot des transforms
-        // globaux, pas une ancre per-move (last-writer-wins).
-
-        // Démarrer le MergeRuntime si pas déjà démarré
-        if !merge_rt.is_running() {
-            drop(merge_rt); // Relâcher le lock avant start
-            let mut merge_rt = state
-                .merge_runtime
-                .lock()
-                .unwrap_or_else(|e| e.into_inner());
-            if let Err(e) = merge_rt.start() {
-                // Cleanup : ne pas laisser un worker orphelin enregistré
-                // (même logique que spawn_move / move_management.rs).
-                drop(merge_rt);
-                state
-                    .merge_runtime
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .unregister_move(&move_id);
-                let removed = state
-                    .movements
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .remove(&move_id);
-                if let Some(mv) = removed {
-                    mv.runtime.stop();
-                }
-                return Err(format!("Failed to start MergeRuntime: {e}"));
-            }
-        }
-    }
+    spawn_move(spec, &state.shared)?;
 
     let mode = if is_preview { "preview" } else { "live" };
     Ok(format!("Move '{name}' activated (id={move_id}, tracks={track_str}, mode={mode}, duration={duration}s)"))
@@ -166,7 +83,11 @@ pub fn cmd_activate_move(args: &[&str]) -> Result<String, String> {
 
 pub fn cmd_list_moves(_args: &[&str]) -> Result<String, String> {
     let state = cli_state::state();
-    let movements = state.movements.lock().unwrap_or_else(|e| e.into_inner());
+    let movements = state
+        .shared
+        .movements
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
 
     if movements.is_empty() {
         return Ok("No active moves".to_string());
@@ -197,6 +118,7 @@ pub fn cmd_set_macros(args: &[&str]) -> Result<String, String> {
     let opts = parse_args(args);
     let state = cli_state::state();
     let merge_rt = state
+        .shared
         .merge_runtime
         .lock()
         .unwrap_or_else(|e| e.into_inner());
@@ -282,6 +204,7 @@ pub fn cmd_set_merge_strategy(args: &[&str]) -> Result<String, String> {
     };
     let state = cli_state::state();
     state
+        .shared
         .merge_runtime
         .lock()
         .unwrap_or_else(|e| e.into_inner())
@@ -299,7 +222,11 @@ pub fn cmd_set_move_speed(args: &[&str]) -> Result<String, String> {
         .map_err(|_| format!("Invalid speed value: {}", args[1]))?;
 
     let state = cli_state::state();
-    let movements = state.movements.lock().unwrap_or_else(|e| e.into_inner());
+    let movements = state
+        .shared
+        .movements
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let movement = movements
         .get(move_id)
         .or_else(|| {
@@ -323,7 +250,11 @@ pub fn cmd_stop_move(args: &[&str]) -> Result<String, String> {
 
     // Trouver l'ID réel (case-insensitive)
     let real_id = {
-        let movements = state.movements.lock().unwrap_or_else(|e| e.into_inner());
+        let movements = state
+            .shared
+            .movements
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         if movements.contains_key(move_id) {
             move_id.to_string()
         } else {
@@ -336,23 +267,10 @@ pub fn cmd_stop_move(args: &[&str]) -> Result<String, String> {
         }
     };
 
-    // Retirer du MergeRuntime
-    {
-        let merge_rt = state
-            .merge_runtime
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        merge_rt.unregister_move(&real_id);
-    }
-
-    // Retirer du state
-    let removed = state
-        .movements
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .remove(&real_id)
-        .is_some();
-    if removed {
+    // Retirer via le MoveService partagé : unregister merge + remove +
+    // runtime.stop() (join du worker — avant, le thread restait détaché
+    // et continuait à écrire dans un buffer orphelin).
+    if remove_move_now(&real_id, &state.shared) {
         Ok(format!("Move '{real_id}' stopped"))
     } else {
         Err(format!("Move '{move_id}' not found"))
@@ -362,6 +280,7 @@ pub fn cmd_stop_move(args: &[&str]) -> Result<String, String> {
 pub fn cmd_stop_all(_args: &[&str]) -> Result<String, String> {
     let state = cli_state::state();
     let ids: Vec<String> = state
+        .shared
         .movements
         .lock()
         .unwrap_or_else(|e| e.into_inner())
@@ -373,21 +292,9 @@ pub fn cmd_stop_all(_args: &[&str]) -> Result<String, String> {
         return Ok("No active moves to stop".to_string());
     }
 
-    // Retirer tous du MergeRuntime
-    {
-        let merge_rt = state
-            .merge_runtime
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        for id in &ids {
-            merge_rt.unregister_move(id);
-        }
-    }
-
-    // Retirer tous du state
-    let mut movements = state.movements.lock().unwrap_or_else(|e| e.into_inner());
+    // MoveService partagé : unregister + remove + stop du worker par move.
     for id in &ids {
-        movements.remove(id);
+        remove_move_now(id, &state.shared);
     }
 
     Ok(format!("Stopped {} move(s): {}", ids.len(), ids.join(", ")))
@@ -412,6 +319,7 @@ pub fn cmd_set_channel(args: &[&str]) -> Result<String, String> {
 
     let state = cli_state::state();
     let merge_rt = state
+        .shared
         .merge_runtime
         .lock()
         .unwrap_or_else(|e| e.into_inner());
@@ -431,6 +339,7 @@ pub fn cmd_clear_channel(args: &[&str]) -> Result<String, String> {
 
     let state = cli_state::state();
     let merge_rt = state
+        .shared
         .merge_runtime
         .lock()
         .unwrap_or_else(|e| e.into_inner());
@@ -513,6 +422,7 @@ pub fn cmd_mod_add(args: &[&str]) -> Result<String, String> {
 
     let state = cli_state::state();
     let merge_rt = state
+        .shared
         .merge_runtime
         .lock()
         .unwrap_or_else(|e| e.into_inner());
@@ -537,6 +447,7 @@ pub fn cmd_mod_add(args: &[&str]) -> Result<String, String> {
 pub fn cmd_mod_list(_args: &[&str]) -> Result<String, String> {
     let state = cli_state::state();
     let merge_rt = state
+        .shared
         .merge_runtime
         .lock()
         .unwrap_or_else(|e| e.into_inner());
@@ -562,6 +473,7 @@ pub fn cmd_mod_clear(args: &[&str]) -> Result<String, String> {
     }
     let state = cli_state::state();
     let merge_rt = state
+        .shared
         .merge_runtime
         .lock()
         .unwrap_or_else(|e| e.into_inner());
@@ -590,6 +502,7 @@ pub fn cmd_kin_smoothing(args: &[&str]) -> Result<String, String> {
         .map_err(|_| format!("Invalid value: {}", args[0]))?;
     let state = cli_state::state();
     let merge_rt = state
+        .shared
         .merge_runtime
         .lock()
         .unwrap_or_else(|e| e.into_inner());
@@ -680,6 +593,7 @@ pub fn cmd_zone_add(args: &[&str]) -> Result<String, String> {
     };
     let state = cli_state::state();
     let merge_rt = state
+        .shared
         .merge_runtime
         .lock()
         .unwrap_or_else(|e| e.into_inner());
@@ -691,6 +605,7 @@ pub fn cmd_zone_add(args: &[&str]) -> Result<String, String> {
 pub fn cmd_zone_list(_args: &[&str]) -> Result<String, String> {
     let state = cli_state::state();
     let merge_rt = state
+        .shared
         .merge_runtime
         .lock()
         .unwrap_or_else(|e| e.into_inner());
@@ -735,6 +650,7 @@ pub fn cmd_zone_clear(args: &[&str]) -> Result<String, String> {
     }
     let state = cli_state::state();
     let merge_rt = state
+        .shared
         .merge_runtime
         .lock()
         .unwrap_or_else(|e| e.into_inner());

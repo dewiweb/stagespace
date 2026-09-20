@@ -3,6 +3,7 @@
 //! Store : snapshot complet (graph, macros, tracks, global graph, depths, manual positions)
 //! Recall : désactiver/activer moves, hot-swap global graph, restaurer macros/depths/positions
 
+use super::error::IpcError;
 use super::state::lock_or_recover;
 use crate::graph::parser::build_graph_from_json;
 use crate::AppState;
@@ -54,7 +55,7 @@ pub struct StoreCueRequest {
 pub async fn store_cue(
     request: StoreCueRequest,
     state: State<'_, AppState>,
-) -> Result<Cue, String> {
+) -> Result<Cue, IpcError> {
     // Capturer l'état runtime réel du backend (P1-P4) — l'engine détient la
     // vérité, le frontend ne voit qu'une partie de cet état.
     let (object_channels, channel_modulations, zones) = {
@@ -132,11 +133,12 @@ pub async fn store_cue(
 /// threads workers, respawn de moves) — elle tourne sur `spawn_blocking`
 /// pour ne pas affamer l'executor async pendant un live.
 #[tauri::command]
-pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), IpcError> {
     let sh = crate::commands::state::Shared::from_state(&state);
     tauri::async_runtime::spawn_blocking(move || recall_cue_inner(cue, sh))
         .await
-        .map_err(|e| format!("Cue recall task failed: {e}"))?
+        .map_err(|e| IpcError::internal(format!("Cue recall task failed: {e}")))?
+        .map_err(IpcError::from)
 }
 
 fn recall_cue_inner(cue: Cue, sh: crate::commands::state::Shared) -> Result<(), String> {
@@ -379,7 +381,7 @@ fn recall_cue_inner(cue: Cue, sh: crate::commands::state::Shared) -> Result<(), 
 /// Note: les cues sont persistés côté frontend (localStorage), pas côté Rust.
 /// Cette commande est un placeholder — le frontend gère la liste.
 #[tauri::command]
-pub async fn list_cues() -> Result<Vec<serde_json::Value>, String> {
+pub async fn list_cues() -> Result<Vec<serde_json::Value>, IpcError> {
     // Les cues sont gérés côté frontend (localStorage)
     // Cette commande existe pour compatibilité future
     Ok(vec![])
@@ -387,6 +389,6 @@ pub async fn list_cues() -> Result<Vec<serde_json::Value>, String> {
 
 /// Supprime un cue (placeholder — géré côté frontend)
 #[tauri::command]
-pub async fn delete_cue(_cue_id: String) -> Result<(), String> {
+pub async fn delete_cue(_cue_id: String) -> Result<(), IpcError> {
     Ok(())
 }

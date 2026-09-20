@@ -45,20 +45,34 @@ function Slider({ label, value, min, max, step, onChange, unit, color = 'blue' }
 
 export default function Inspector() {
   const showExpert = useAnimationStore((s) => s.showExpert);
-  const {
-    current, updateCurrent,
-    updateAssignment, addAudioMod, removeAudioMod,
-    computeCentroid,
-    activeMovementIds,
-    launchFlash,
-  } = useAnimationStore();
+  const current = useAnimationStore((s) => s.current);
+  const updateCurrent = useAnimationStore((s) => s.updateCurrent);
+  const updateAssignment = useAnimationStore((s) => s.updateAssignment);
+  const addAudioMod = useAnimationStore((s) => s.addAudioMod);
+  const removeAudioMod = useAnimationStore((s) => s.removeAudioMod);
+  const computeCentroid = useAnimationStore((s) => s.computeCentroid);
+  const activeMovementIds = useAnimationStore((s) => s.activeMovementIds);
+  const launchFlash = useAnimationStore((s) => s.launchFlash);
 
-  const { holProject, selectedTrackIds, toggleTrackSelection, selectAllTracks, deselectAllTracks,
-    manualOscIds, panic, stopAllMovements, stopMovement, stopMovementWithFade,
-    movements, nodes, updateNodeData, updateGraphLive,
-    macros, setMacros, pushMacrosToRuntime,
-    editingSlotId,
-  } = useGraphStore();
+  // Sélecteurs granulaires — évite les re-renders à 60fps (movementPositions)
+  const holProject = useGraphStore((s) => s.holProject);
+  const selectedTrackIds = useGraphStore((s) => s.selectedTrackIds);
+  const toggleTrackSelection = useGraphStore((s) => s.toggleTrackSelection);
+  const selectAllTracks = useGraphStore((s) => s.selectAllTracks);
+  const deselectAllTracks = useGraphStore((s) => s.deselectAllTracks);
+  const manualOscIds = useGraphStore((s) => s.manualOscIds);
+  const panic = useGraphStore((s) => s.panic);
+  const stopAllMovements = useGraphStore((s) => s.stopAllMovements);
+  const stopMovement = useGraphStore((s) => s.stopMovement);
+  const stopMovementWithFade = useGraphStore((s) => s.stopMovementWithFade);
+  const movements = useGraphStore((s) => s.movements);
+  const nodes = useGraphStore((s) => s.nodes);
+  const updateNodeData = useGraphStore((s) => s.updateNodeData);
+  const updateGraphLive = useGraphStore((s) => s.updateGraphLive);
+  const macros = useGraphStore((s) => s.macros);
+  const setMacros = useGraphStore((s) => s.setMacros);
+  const pushMacrosToRuntime = useGraphStore((s) => s.pushMacrosToRuntime);
+  const editingSlotId = useGraphStore((s) => s.editingSlotId);
 
   // Flash effect on launch
   const [flashClass, setFlashClass] = React.useState('');

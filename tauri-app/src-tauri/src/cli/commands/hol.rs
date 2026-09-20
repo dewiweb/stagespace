@@ -51,6 +51,7 @@ pub fn cmd_import_hol(args: &[&str]) -> Result<String, String> {
         .map(|t| (t.id, t.position))
         .collect();
     state
+        .shared
         .merge_runtime
         .lock()
         .unwrap_or_else(|e| e.into_inner())

@@ -47,24 +47,23 @@ function Section({
 }
 
 export default function SpatialFxPanel() {
-  const {
-    zones,
-    modulations,
-    objectChannels,
-    graphZones,
-    graphModulations,
-    refreshSpatialFx,
-    addZone,
-    removeZone,
-    clearZones,
-    addModulation,
-    removeModulation,
-    clearModulations,
-    setKinematicSmoothing,
-    setSpatialChannel,
-    clearSpatialChannel,
-    clearAllSpatialChannels,
-  } = useGraphStore();
+  // Sélecteurs granulaires — pas de full-store subscribe (60fps jank)
+  const zones = useGraphStore((s) => s.zones);
+  const modulations = useGraphStore((s) => s.modulations);
+  const objectChannels = useGraphStore((s) => s.objectChannels);
+  const graphZones = useGraphStore((s) => s.graphZones);
+  const graphModulations = useGraphStore((s) => s.graphModulations);
+  const refreshSpatialFx = useGraphStore((s) => s.refreshSpatialFx);
+  const addZone = useGraphStore((s) => s.addZone);
+  const removeZone = useGraphStore((s) => s.removeZone);
+  const clearZones = useGraphStore((s) => s.clearZones);
+  const addModulation = useGraphStore((s) => s.addModulation);
+  const removeModulation = useGraphStore((s) => s.removeModulation);
+  const clearModulations = useGraphStore((s) => s.clearModulations);
+  const setKinematicSmoothing = useGraphStore((s) => s.setKinematicSmoothing);
+  const setSpatialChannel = useGraphStore((s) => s.setSpatialChannel);
+  const clearSpatialChannel = useGraphStore((s) => s.clearSpatialChannel);
+  const clearAllSpatialChannels = useGraphStore((s) => s.clearAllSpatialChannels);
 
   // ── Zone form state ──
   const [zShape, setZShape] = React.useState<'sphere' | 'box'>('sphere');

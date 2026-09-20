@@ -3,7 +3,12 @@ import { useGraphStore } from '../store/useGraphStore';
 import { describeDestination } from '../store/slices/oscSlice';
 
 export default function OscPanel() {
-  const { oscMappings, oscValues, addOscMapping, removeOscMapping, listOscMappings, setOscInEnabled } = useGraphStore();
+  const oscMappings = useGraphStore((s) => s.oscMappings);
+  const oscValues = useGraphStore((s) => s.oscValues);
+  const addOscMapping = useGraphStore((s) => s.addOscMapping);
+  const removeOscMapping = useGraphStore((s) => s.removeOscMapping);
+  const listOscMappings = useGraphStore((s) => s.listOscMappings);
+  const setOscInEnabled = useGraphStore((s) => s.setOscInEnabled);
 
   const [address, setAddress] = React.useState('');
   const [handler, setHandler] = React.useState('');

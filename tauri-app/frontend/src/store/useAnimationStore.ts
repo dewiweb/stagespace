@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { useGraphStore } from './useGraphStore';
 import { toast } from '../utils/toast-helpers';
+import { throttleTrailing } from '../utils/throttle';
 import { safeSetItem, safeParseStoredJson } from '../utils/safeStorage';
 
 // ── Types miroir du backend ──
@@ -158,7 +159,28 @@ function saveAnimationsToStorage(animations: Animation[]) {
   safeSetItem(STORAGE_KEY, JSON.stringify(animations));
 }
 
-export const useAnimationStore = create<AnimationStore>((set, get) => ({
+// Push live de l'animation state — throttlé (voir updateLiveAnimation).
+// Défini au niveau module : un seul throttle pour tout le store.
+let throttledPushAnimationState: () => void = () => {};
+export function _initAnimationThrottle(getState: () => AnimationStore) {
+  throttledPushAnimationState = throttleTrailing(() => {
+    const { current, activeMovementIds } = getState();
+    if (activeMovementIds.length === 0) return;
+    const movementId = activeMovementIds[activeMovementIds.length - 1];
+    invoke('update_animation_state', {
+      movementId,
+      animation: current,
+    }).catch((e) => {
+      console.error('Update animation state failed:', e);
+      toast.error('Update animation state failed: ' + e);
+    });
+  }, 33);
+}
+
+export const useAnimationStore = create<AnimationStore>((set, get) => {
+  // Initialise le throttle live-update avec l'accesseur du store
+  _initAnimationThrottle(get);
+  return {
   animations: loadAnimationsFromStorage(),
   current: defaultAnimation(),
   activeMovementIds: [],
@@ -324,18 +346,10 @@ export const useAnimationStore = create<AnimationStore>((set, get) => ({
   },
 
   updateLiveAnimation: async () => {
-    const { current, activeMovementIds } = get();
-    if (activeMovementIds.length === 0) return;
-    const movementId = activeMovementIds[activeMovementIds.length - 1];
-    try {
-      await invoke('update_animation_state', {
-        movementId,
-        animation: current,
-      });
-    } catch (e) {
-      console.error('Update animation state failed:', e);
-      toast.error('Update animation state failed: ' + e);
-    }
+    // Throttle trailing ~30Hz — un drag de slider appelle updateCurrent à
+    // chaque pointermove ; sans ça chaque pixel sérialise l'animation
+    // complète en IPC. Le trailing call garantit l'état final.
+    throttledPushAnimationState();
   },
 
   computeCentroid: () => {
@@ -364,7 +378,8 @@ export const useAnimationStore = create<AnimationStore>((set, get) => ({
     }
     return manualOscIds;
   },
-}));
+  };
+});
 
 // ── Sync depuis useGraphStore.movements ──
 // useGraphStore écoute déjà 'active-moves-update' et refetch list_active_moves —

@@ -1,6 +1,7 @@
 pub mod animation;
 pub mod audio;
 pub mod cue_commands;
+pub mod error;
 pub mod file_io;
 pub mod merge_commands;
 pub mod network;

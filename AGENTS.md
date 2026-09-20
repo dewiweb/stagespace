@@ -40,7 +40,7 @@ cargo fmt -- --check     # Format check
 ```bash
 cd tauri-app/src-tauri
 cargo build              # Build
-cargo test --lib         # Run tests (27 tests)
+cargo test --lib         # Run tests (29 tests)
 cargo clippy --lib -- -D warnings  # Lint
 ```
 
@@ -110,10 +110,10 @@ See `.github/workflows/ci.yml`.
 | Suite | Count |
 |-------|-------|
 | Rust engines | 358 |
-| Tauri backend | 27 |
+| Tauri backend | 29 |
 | Frontend (vitest) | 173 |
 | E2E CLI | 122 |
-| **Total** | **680** |
+| **Total** | **682** |
 
 ## Live Show Safety Features
 

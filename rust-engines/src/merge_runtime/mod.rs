@@ -35,9 +35,7 @@ use crate::position_buffer::PositionBuffer;
 use crate::runtime::{
     MacroState, PerfMonitor, PerfStats, PositionCallback, PostProcessContext, PostProcessFn,
 };
-use rosc::{OscMessage, OscPacket, OscType};
 use std::collections::HashMap;
-use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
@@ -48,16 +46,13 @@ use std::time::{Duration, Instant};
 /// doit pas être fait sous le mutex).
 type SharedPositionCallback = Arc<dyn Fn(f64, Vec<(usize, nalgebra::Vector3<f64>)>) + Send + Sync>;
 
-/// Cible OSC partagée avec le merge thread : sender + socket swappés
-/// atomiquement sous un seul lock.
+/// Sink de sortie partagé avec le merge thread — `set_sink`/`set_osc_target`
+/// en cours de route swappe le transport atomiquement sous un seul lock.
 ///
 /// Avant, la socket était `try_clone`'d une fois au `start()` — un
 /// `set_osc_target` en cours de route swapait le sender mais laissait la
 /// socket figée → nouveau profil envoyé à l'ancienne destination.
-struct OscTarget {
-    sender: OscSender,
-    socket: Arc<UdpSocket>,
-}
+type SharedSink = Arc<Mutex<Box<dyn crate::position_sink::PositionSink>>>;
 
 /// Positions des tracks .hol partagées en copy-on-write : les writers
 /// remplacent l'Arc interne, les readers clonent l'Arc (snapshot cheap).
@@ -110,8 +105,8 @@ pub struct MergeRuntime {
     perf: Arc<PerfMonitor>,
     /// Callback de position (un seul event pour le 3D preview)
     position_callback: Arc<Mutex<Option<SharedPositionCallback>>>,
-    /// Cible OSC (sender + socket, swappés ensemble)
-    osc_target: Arc<Mutex<OscTarget>>,
+    /// Sink de sortie (OSC par défaut, tout PositionSink injectable)
+    sink: SharedSink,
     /// FPS cible
     fps: f64,
     /// Fonction de post-processing (graph global) — hot-swappable
@@ -169,10 +164,7 @@ impl MergeRuntime {
         fps: f64,
         audio_state: Arc<Mutex<AudioState>>,
     ) -> crate::error::Result<Self> {
-        let socket =
-            UdpSocket::bind("0.0.0.0:0").map_err(crate::error::StagespaceError::NetworkError)?;
-        socket
-            .connect((osc_address.as_str(), osc_port))
+        let osc_sink = crate::position_sink::OscSink::connect(&osc_address, osc_port, osc_sender)
             .map_err(crate::error::StagespaceError::NetworkError)?;
 
         Ok(MergeRuntime {
@@ -191,10 +183,7 @@ impl MergeRuntime {
             merge_strategy: Arc::new(RwLock::new(MergeStrategy::Override)),
             perf: Arc::new(PerfMonitor::new()),
             position_callback: Arc::new(Mutex::new(None)),
-            osc_target: Arc::new(Mutex::new(OscTarget {
-                sender: osc_sender,
-                socket: Arc::new(socket),
-            })),
+            sink: Arc::new(Mutex::new(Box::new(osc_sink))),
             fps,
             post_process_fn: Arc::new(RwLock::new(default_post_process_fn())),
             track_positions: Arc::new(RwLock::new(Arc::new(HashMap::new()))),
@@ -225,46 +214,47 @@ impl MergeRuntime {
     /// Sender ET socket sont swappés atomiquement sous le même lock —
     /// le merge thread prend un snapshot par frame, donc un merge en cours
     /// retargete immédiatement (plus de socket figée depuis le `start()`).
+    /// Swap le transport de sortie — le merge thread l'utilise dès la
+    /// prochaine frame. Seam pour d'autres renderers (MSC/MTC/PSN…) :
+    /// injecter n'importe quel `PositionSink` sans toucher la boucle.
+    pub fn set_sink(&self, sink: Box<dyn crate::position_sink::PositionSink>) {
+        *self.sink.lock().unwrap_or_else(|e| e.into_inner()) = sink;
+    }
+
+    /// Configure la sortie OSC (sink par défaut). Sender + socket swappés
+    /// atomiquement — un `set_osc_target` mid-show retargete au frame tick
+    /// suivant, jamais de sender neuf sur ancienne socket.
     pub fn set_osc_target(
         &self,
         osc_address: String,
         osc_port: u16,
         osc_sender: OscSender,
     ) -> crate::error::Result<()> {
-        let socket =
-            UdpSocket::bind("0.0.0.0:0").map_err(crate::error::StagespaceError::NetworkError)?;
-        socket
-            .connect((osc_address.as_str(), osc_port))
+        let sink = crate::position_sink::OscSink::connect(&osc_address, osc_port, osc_sender)
             .map_err(crate::error::StagespaceError::NetworkError)?;
-        *self.osc_target.lock().unwrap_or_else(|e| e.into_inner()) = OscTarget {
-            sender: osc_sender,
-            socket: Arc::new(socket),
-        };
+        self.set_sink(Box::new(sink));
         Ok(())
     }
 
-    /// Envoie une position immédiate à un track via la cible OSC courante
-    /// (sender + socket live). Utilisé par le panic/emergency stop — la cible
-    /// suit `set_osc_target`, contrairement à un sender capturé au startup
-    /// qui enverrait toujours à l'adresse initiale.
+    /// Envoie une position immédiate à un track via le sink courant.
+    /// Utilisé par le panic/emergency stop — la cible suit `set_osc_target`,
+    /// contrairement à un sender capturé au startup qui enverrait toujours
+    /// à l'adresse initiale.
     pub fn send_position_now(
         &self,
         osc_id: u32,
         pos: nalgebra::Vector3<f64>,
     ) -> crate::error::Result<()> {
-        let target = self.osc_target.lock().unwrap_or_else(|e| e.into_inner());
-        let (addr, values) = target.sender.format_position(osc_id, pos);
-        let args: Vec<rosc::OscType> = values
-            .iter()
-            .map(|v| rosc::OscType::Float(*v as f32))
-            .collect();
-        let packet = rosc::OscPacket::Message(rosc::OscMessage { addr, args });
-        let bytes = rosc::encoder::encode(&packet)
-            .map_err(|e| crate::error::StagespaceError::OscError(e.to_string()))?;
-        target
-            .socket
-            .send(&bytes)
-            .map_err(crate::error::StagespaceError::NetworkError)?;
+        let report = self
+            .sink
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .send_state(osc_id, pos, None);
+        if report.sent == 0 && report.errors > 0 {
+            return Err(crate::error::StagespaceError::NetworkError(
+                std::io::Error::other("position sink send failed"),
+            ));
+        }
         Ok(())
     }
 
@@ -741,7 +731,7 @@ impl MergeRuntime {
         let thread_died = self.thread_died.clone();
         let merge_frames = self.merge_frames.clone();
         let dropped_positions = self.dropped_positions.clone();
-        let osc_target = self.osc_target.clone();
+        let sink_arc = self.sink.clone();
         let move_buffers = self.move_buffers.clone();
         let active_moves = self.active_moves.clone();
         let macros = self.macros.clone();
@@ -1055,64 +1045,44 @@ impl MergeRuntime {
                     z
                 };
 
-                // 5. OSC output — snapshot (sender, socket) par frame sous un
-                // lock court : set_osc_target mid-show retargete au frame
-                // suivant, sans figer la socket depuis le start().
-                let (sender, socket) = {
-                    let target = osc_target.lock().unwrap_or_else(|e| e.into_inner());
-                    (target.sender.clone(), target.socket.clone())
-                };
+                // 5. Output — le sink est locké pour la frame entière : les
+                // sends par objet sont non-bloquants (~µs), et un set_sink
+                // mid-show ne peut pas swaper en plein milieu d'une frame.
+                // ECONNREFUSED = ICMP port-unreachable → personne n'écoute :
+                // compté dans `refused` (renderer down), pas du packet loss.
+                // Erreurs comptées, jamais loguées par paquet (flood de warn!
+                // quand le renderer est down).
                 let object_channels = object_channels_arc
                     .read()
                     .unwrap_or_else(|e| e.into_inner())
                     .clone();
-                for (obj_idx, pos) in &transformed {
-                    if let Some(&osc_id) = osc_ids.get(*obj_idx) {
-                        // Canaux effectifs = statiques + modulés (modulation
-                        // prioritaire sur les canaux qu'elle cible) + zones
-                        // (blend par influence, prioritaires sur le reste)
-                        let has_zones = crate::zones::any_zone_applies(&zones, *obj_idx, pos);
-                        let effective: Option<SpatialChannels> = match (
-                            object_channels.get(obj_idx),
-                            modulated_channels.get(obj_idx),
-                            has_zones,
-                        ) {
-                            (None, None, false) => None,
-                            (s, m, _) => {
-                                let mut eff = s.copied().unwrap_or_default();
-                                if let Some(mc) = m {
-                                    eff.overlay(mc);
-                                }
-                                crate::zones::apply_zones(&zones, *obj_idx, pos, &mut eff);
-                                Some(eff)
-                            }
-                        };
-                        let messages = sender.format_state(osc_id, *pos, effective.as_ref());
-                        for (addr, values) in messages {
-                            let args: Vec<OscType> =
-                                values.iter().map(|v| OscType::Float(*v as f32)).collect();
-                            let packet = OscPacket::Message(OscMessage {
-                                addr: addr.clone(),
-                                args,
-                            });
-                            match rosc::encoder::encode(&packet) {
-                                Ok(bytes) => match socket.send(&bytes) {
-                                    Ok(_) => osc_since_perf += 1,
-                                    Err(e) => {
-                                        // ECONNREFUSED = ICMP port-unreachable sur
-                                        // socket connectée → personne n'écoute.
-                                        // Pas du packet loss. Les erreurs sont
-                                        // comptées, pas loguées par paquet
-                                        // (sinon flood de warn! quand le renderer
-                                        // est down).
-                                        osc_errors_perf += 1;
-                                        if e.kind() == std::io::ErrorKind::ConnectionRefused {
-                                            osc_refused_perf += 1;
-                                        }
+                {
+                    let mut sink_guard = sink_arc.lock().unwrap_or_else(|e| e.into_inner());
+                    for (obj_idx, pos) in &transformed {
+                        if let Some(&osc_id) = osc_ids.get(*obj_idx) {
+                            // Canaux effectifs = statiques + modulés (modulation
+                            // prioritaire sur les canaux qu'elle cible) + zones
+                            // (blend par influence, prioritaires sur le reste)
+                            let has_zones = crate::zones::any_zone_applies(&zones, *obj_idx, pos);
+                            let effective: Option<SpatialChannels> = match (
+                                object_channels.get(obj_idx),
+                                modulated_channels.get(obj_idx),
+                                has_zones,
+                            ) {
+                                (None, None, false) => None,
+                                (s, m, _) => {
+                                    let mut eff = s.copied().unwrap_or_default();
+                                    if let Some(mc) = m {
+                                        eff.overlay(mc);
                                     }
-                                },
-                                Err(_) => osc_errors_perf += 1,
-                            }
+                                    crate::zones::apply_zones(&zones, *obj_idx, pos, &mut eff);
+                                    Some(eff)
+                                }
+                            };
+                            let report = sink_guard.send_state(osc_id, *pos, effective.as_ref());
+                            osc_since_perf += report.sent as u64;
+                            osc_errors_perf += report.errors as u64;
+                            osc_refused_perf += report.refused as u64;
                         }
                     }
                 }
@@ -1228,24 +1198,14 @@ impl MergeRuntime {
                     // Parking : envoyer l'origin à toutes les tracks (même
                     // comportement que le panic côté app) avant de mourir.
                     {
-                        let (sender, socket) = {
-                            let target = osc_target.lock().unwrap_or_else(|e| e.into_inner());
-                            (target.sender.clone(), target.socket.clone())
-                        };
                         let origin = *origin_arc.lock().unwrap_or_else(|e| e.into_inner());
                         let ids = osc_ids_arc
                             .read()
                             .unwrap_or_else(|e| e.into_inner())
                             .clone();
+                        let mut sink_guard = sink_arc.lock().unwrap_or_else(|e| e.into_inner());
                         for osc_id in ids.iter() {
-                            for (addr, values) in sender.format_state(*osc_id, origin, None) {
-                                let args: Vec<OscType> =
-                                    values.iter().map(|v| OscType::Float(*v as f32)).collect();
-                                let packet = OscPacket::Message(OscMessage { addr, args });
-                                if let Ok(bytes) = rosc::encoder::encode(&packet) {
-                                    let _ = socket.send(&bytes);
-                                }
-                            }
+                            let _ = sink_guard.send_state(*osc_id, origin, None);
                         }
                     }
                     let cb = position_callback

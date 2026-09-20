@@ -6,6 +6,7 @@
 //! PositionBuffer, registration merge, démarrage du MergeRuntime, et
 //! cleanup complet si une étape échoue.
 
+use crate::commands::error::IpcError;
 use crate::commands::state::{lock_or_recover, Shared};
 use crate::graph::compilation::compile_graph_with_audio_and_overrides;
 use crate::graph::parser::build_graph_from_json;
@@ -44,7 +45,7 @@ pub struct ActivateMoveRequest {
 
 /// Spec complet pour créer un worker move — partagé entre activate_move,
 /// launch_animation et recall_cue (restauration des snapshots).
-pub(crate) struct MoveSpec {
+pub struct MoveSpec {
     pub id: String,
     pub name: String,
     pub graph_json: serde_json::Value,
@@ -69,7 +70,7 @@ pub(crate) struct MoveSpec {
 }
 
 /// Macros spatiales initiales d'un worker (système Animation).
-pub(crate) struct SpatialMacroInit {
+pub struct SpatialMacroInit {
     pub scale: f64,
     pub shift: (f64, f64, f64),
     pub rotation: (f64, f64, f64),
@@ -79,7 +80,7 @@ pub(crate) struct SpatialMacroInit {
 /// position de chaque id dans la liste `osc_ids` globale du merge. Les ids
 /// absents sont ajoutés à la liste globale (sinon leurs positions
 /// tomberaient sur les mauvaises tracks via le fallback identité du merge).
-pub(crate) fn resolve_track_indices(
+pub fn resolve_track_indices(
     merge_runtime: &Arc<Mutex<stagespace_engines::MergeRuntime>>,
     osc_ids: &[u32],
 ) -> Vec<usize> {
@@ -105,7 +106,7 @@ pub(crate) fn resolve_track_indices(
 
 /// Retire un move du merge + de la map + stoppe son worker, sans connaître
 /// la génération à l'avance (snapshot interne). Idempotent.
-pub(crate) fn remove_move_now(movement_id: &str, sh: &Shared) -> bool {
+pub fn remove_move_now(movement_id: &str, sh: &Shared) -> bool {
     let generation = {
         let movements = lock_or_recover(&sh.movements);
         match movements.get(movement_id) {
@@ -122,14 +123,14 @@ pub(crate) fn remove_move_now(movement_id: &str, sh: &Shared) -> bool {
     )
 }
 
-pub(crate) fn loop_mode_label(mode: LoopMode) -> String {
+pub fn loop_mode_label(mode: LoopMode) -> String {
     match mode {
         LoopMode::OneShot => "oneshot".to_string(),
         LoopMode::Loop => "loop".to_string(),
     }
 }
 
-pub(crate) fn direction_label(dir: PlayDirection) -> String {
+pub fn direction_label(dir: PlayDirection) -> String {
     match dir {
         PlayDirection::Backward => "backward".to_string(),
         PlayDirection::PingPong => "ping_pong".to_string(),
@@ -137,14 +138,14 @@ pub(crate) fn direction_label(dir: PlayDirection) -> String {
     }
 }
 
-pub(crate) fn parse_loop_mode(s: &str) -> LoopMode {
+pub fn parse_loop_mode(s: &str) -> LoopMode {
     match s {
         "oneshot" => LoopMode::OneShot,
         _ => LoopMode::Loop,
     }
 }
 
-pub(crate) fn parse_direction(s: &str) -> PlayDirection {
+pub fn parse_direction(s: &str) -> PlayDirection {
     match s {
         "backward" => PlayDirection::Backward,
         "ping_pong" => PlayDirection::PingPong,
@@ -177,14 +178,14 @@ impl Drop for PendingGuard {
 ///   (pas de move fantôme qui streamerait dans le vide) ;
 /// - si un recall de cue est en cours, l'activation est abandonnée avant
 ///   l'insertion (le recall est l'autorité sur la liste des moves).
-pub(crate) fn spawn_move(spec: MoveSpec, sh: &Shared) -> Result<String, String> {
+pub fn spawn_move(spec: MoveSpec, sh: &Shared) -> Result<String, String> {
     spawn_move_inner(spec, sh, true)
 }
 
 /// Variante pour `recall_cue` : pendant un recall, `recall_in_progress` est
 /// posé par le recall lui-même — le check "abort if recall in progress" ne
 /// s'applique pas (le recall EST l'autorité sur la liste des moves).
-pub(crate) fn spawn_move_for_recall(spec: MoveSpec, sh: &Shared) -> Result<String, String> {
+pub fn spawn_move_for_recall(spec: MoveSpec, sh: &Shared) -> Result<String, String> {
     spawn_move_inner(spec, sh, false)
 }
 
@@ -401,7 +402,7 @@ fn spawn_move_inner(spec: MoveSpec, sh: &Shared, abort_on_recall: bool) -> Resul
 pub async fn activate_move(
     request: ActivateMoveRequest,
     state: State<'_, AppState>,
-) -> Result<String, String> {
+) -> Result<String, IpcError> {
     let spec = MoveSpec {
         id: request.movement_id,
         name: request.name,
@@ -421,7 +422,8 @@ pub async fn activate_move(
     let sh = Shared::from_state(&state);
     tauri::async_runtime::spawn_blocking(move || spawn_move(spec, &sh))
         .await
-        .map_err(|e| format!("Task join error: {e}"))?
+        .map_err(|e| IpcError::internal(format!("Task join error: {e}")))?
+        .map_err(IpcError::from)
 }
 
 /// Retire un move du merge + de la map + stoppe son worker, en vérifiant la
@@ -485,7 +487,7 @@ pub async fn deactivate_move(
     movement_id: String,
     fade_duration: Option<f64>,
     state: State<'_, AppState>,
-) -> Result<String, String> {
+) -> Result<String, IpcError> {
     let fade = fade_duration.unwrap_or(0.5);
 
     // 1. Snapshot génération + existence (section critique pending → movements)
@@ -493,9 +495,9 @@ pub async fn deactivate_move(
         let pending = lock_or_recover(&state.pending_move_ids);
         let movements = lock_or_recover(&state.movements);
         if pending.contains(&movement_id) {
-            return Err(format!(
+            return Err(IpcError::busy(format!(
                 "Move '{movement_id}' is being activated — try again in a moment"
-            ));
+            )));
         }
         movements.get(&movement_id).map(|m| m.generation)
     };
@@ -528,7 +530,8 @@ pub async fn deactivate_move(
             )
         })
         .await
-        .map_err(|e| format!("Task join error: {e}"))?;
+        .map_err(|e| IpcError::internal(format!("Task join error: {e}")))?
+        .map_err(IpcError::from);
     }
 
     // 4. Attendre la fin du fade dans un thread séparé. Le sleeper vérifie la
@@ -555,7 +558,7 @@ pub async fn deactivate_move(
 pub async fn deactivate_all_moves(
     fade_duration: Option<f64>,
     state: State<'_, AppState>,
-) -> Result<String, String> {
+) -> Result<String, IpcError> {
     let fade = fade_duration.unwrap_or(0.5);
 
     // Snapshot (id, génération) — le sleeper ne tuera que ces instances-là.
@@ -612,14 +615,16 @@ pub async fn deactivate_all_moves(
             }
         })
         .await
-        .map_err(|e| format!("Task join error: {e}"))?;
+        .map_err(|e| IpcError::internal(format!("Task join error: {e}")))?;
         Ok(format!("{count} moves deactivated"))
     }
 }
 
 /// Récupère les stats de performance du MergeRuntime
 #[tauri::command]
-pub async fn get_merge_perf_stats(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+pub async fn get_merge_perf_stats(
+    state: State<'_, AppState>,
+) -> Result<serde_json::Value, IpcError> {
     let merge_rt = lock_or_recover(&state.merge_runtime);
     let perf = merge_rt.get_perf_stats();
     Ok(serde_json::json!({
@@ -642,7 +647,7 @@ pub async fn get_merge_perf_stats(state: State<'_, AppState>) -> Result<serde_js
 #[tauri::command]
 pub async fn list_active_moves(
     state: State<'_, AppState>,
-) -> Result<Vec<serde_json::Value>, String> {
+) -> Result<Vec<serde_json::Value>, IpcError> {
     let movements = lock_or_recover(&state.movements);
     Ok(movements
         .values()

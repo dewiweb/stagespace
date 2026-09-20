@@ -10,11 +10,44 @@ export function checkTauri(): boolean {
   return isTauriAvailable;
 }
 
+/// Erreur IPC typée renvoyée par les commands backend migrées à `IpcError`.
+/// `code` est stable (snake_case) — matchable programmatiquement ;
+/// `message` reste lisible (`e.message` fonctionne partout).
+export interface IpcErrorPayload {
+  code: string;
+  message: string;
+}
+
+export class BackendError extends Error {
+  readonly code: string;
+  constructor(payload: IpcErrorPayload) {
+    super(payload.message);
+    this.name = 'BackendError';
+    this.code = payload.code;
+  }
+}
+
+function isIpcError(e: unknown): e is IpcErrorPayload {
+  return (
+    typeof e === 'object' &&
+    e !== null &&
+    typeof (e as IpcErrorPayload).code === 'string' &&
+    typeof (e as IpcErrorPayload).message === 'string'
+  );
+}
+
 export async function safeInvoke<T = any>(cmd: string, args?: Record<string, any>): Promise<T> {
   if (!checkTauri()) {
     throw new Error(`Tauri not available: invoke("${cmd}") called in browser mode`);
   }
-  return tauriInvoke<T>(cmd, args);
+  try {
+    return await tauriInvoke<T>(cmd, args);
+  } catch (e) {
+    // Les commands typées renvoient {code, message} — les wrappe en Error
+    // pour que String(e)/e.message restent lisibles dans les toasts, avec
+    // `code` dispo pour les décisions programmatiques.
+    throw isIpcError(e) ? new BackendError(e) : e;
+  }
 }
 
 /// Log un message vers stderr du backend (visible dans le terminal)

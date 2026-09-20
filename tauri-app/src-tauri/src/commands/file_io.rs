@@ -1,3 +1,4 @@
+use super::error::IpcError;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -14,14 +15,15 @@ pub struct Track {
 }
 
 #[tauri::command]
-pub async fn import_hol_project(file_path: String) -> Result<HolProject, String> {
-    let content =
-        std::fs::read_to_string(&file_path).map_err(|e| format!("Failed to read file: {e}"))?;
+pub async fn import_hol_project(file_path: String) -> Result<HolProject, IpcError> {
+    let content = std::fs::read_to_string(&file_path)
+        .map_err(|e| IpcError::io(format!("Failed to read file: {e}")))?;
 
     // Parser partagé (stagespace_engines::hol_parser) — une seule implémentation
     // du format .hol pour Tauri et le CLI : gère hol.ae / ae racine, couleurs
     // "#RRGGBB" et "r g b a", xyz groupé ou x/y/z séparés, fallback AED→XYZ.
-    let hol_tracks = stagespace_engines::hol_parser::parse_hol_project(&content)?;
+    let hol_tracks =
+        stagespace_engines::hol_parser::parse_hol_project(&content).map_err(IpcError::from)?;
 
     let tracks = hol_tracks
         .into_iter()
@@ -40,18 +42,19 @@ pub async fn import_hol_project(file_path: String) -> Result<HolProject, String>
 pub async fn save_graph_to_file(
     file_path: String,
     graph_json: serde_json::Value,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     let data = serde_json::to_string_pretty(&graph_json)
-        .map_err(|e| format!("Failed to serialize: {e}"))?;
-    std::fs::write(&file_path, data).map_err(|e| format!("Failed to write file: {e}"))?;
+        .map_err(|e| IpcError::internal(format!("Failed to serialize: {e}")))?;
+    std::fs::write(&file_path, data)
+        .map_err(|e| IpcError::io(format!("Failed to write file: {e}")))?;
     Ok(())
 }
 
 #[tauri::command]
-pub async fn load_graph_from_file(file_path: String) -> Result<serde_json::Value, String> {
-    let content =
-        std::fs::read_to_string(&file_path).map_err(|e| format!("Failed to read file: {e}"))?;
-    let graph: serde_json::Value =
-        serde_json::from_str(&content).map_err(|e| format!("Failed to parse JSON: {e}"))?;
+pub async fn load_graph_from_file(file_path: String) -> Result<serde_json::Value, IpcError> {
+    let content = std::fs::read_to_string(&file_path)
+        .map_err(|e| IpcError::io(format!("Failed to read file: {e}")))?;
+    let graph: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| IpcError::validation(format!("Failed to parse JSON: {e}")))?;
     Ok(graph)
 }
