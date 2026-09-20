@@ -8,6 +8,7 @@ use stagespace_engines::{
     OscSender, PlayDirection, Runtime,
 };
 use std::str::FromStr;
+use std::sync::atomic::Ordering;
 use tauri::{Emitter, State};
 
 // ═══════════════════════════════════════════════════════════════
@@ -120,6 +121,7 @@ pub async fn launch_animation(
 
     // 8. Stocker le movement
     {
+        let generation = state.move_generation.fetch_add(1, Ordering::SeqCst) + 1;
         let mut movements = lock_or_recover(&state.movements);
         movements.insert(
             movement_id.clone(),
@@ -130,6 +132,12 @@ pub async fn launch_animation(
                 osc_ids,
                 is_preview,
                 track_indices: vec![],
+                graph_json,
+                duration: animation.duration,
+                loop_mode: crate::commands::merge_commands::loop_mode_label(loop_mode_val),
+                direction: crate::commands::merge_commands::direction_label(dir_val),
+                origin,
+                generation,
             },
         );
     }

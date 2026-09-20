@@ -24,7 +24,9 @@ export const DrawModeOverlay: React.FC = () => {
         />
         <span className="text-white text-[10px] font-mono w-8">{drawZ.toFixed(1)}</span>
         <button
-          onClick={async () => { clearDrawnPoints(); await finalizeDrawing(); }}
+          // Finalize AVANT de clearer — finalizeDrawing lit drawnPoints.
+          // (finalizeDrawing sort déjà du drawMode en cas de succès)
+          onClick={async () => { await finalizeDrawing(); clearDrawnPoints(); setDrawMode(false); }}
           className="ml-2 px-2 py-0.5 text-[10px] bg-orange-600 hover:bg-orange-700 text-white rounded font-medium"
         >
           Done

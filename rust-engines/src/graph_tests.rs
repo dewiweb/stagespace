@@ -44,7 +44,7 @@ mod tests {
         graph.add_edge(edge);
         assert_eq!(graph.edges.len(), 1);
 
-        graph.remove_edge(id1, id2);
+        graph.remove_edge(id1, id2, None);
         assert_eq!(graph.edges.len(), 0);
     }
 

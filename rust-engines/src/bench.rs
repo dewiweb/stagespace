@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod bench {
+mod tests {
     use crate::engines::{circular, Engine, EngineParams};
     use serde_json::json;
     use std::time::Instant;

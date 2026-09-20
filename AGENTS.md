@@ -30,7 +30,7 @@ stagespace/
 ```bash
 cd rust-engines
 cargo build              # Build
-cargo test --lib         # Run tests (267 tests)
+cargo test --lib         # Run tests (351 tests)
 cargo clippy --lib --all-targets -- -D warnings  # Lint
 cargo fmt -- --check     # Format check
 ```
@@ -50,7 +50,7 @@ cargo clippy --lib -- -D warnings  # Lint
 cd tauri-app/src-tauri
 cargo build --bin stagespace-cli                    # Build CLI
 cargo clippy --bin stagespace-cli -- -D warnings    # Lint CLI
-bash tests/e2e_cli_test.sh                          # Run E2E workflow tests (34 tests)
+bash tests/e2e_cli_test.sh                          # Run E2E workflow tests (122 tests)
 
 # Usage
 ./target/debug/stagespace-cli "templates"                                          # List templates
@@ -109,11 +109,11 @@ See `.github/workflows/ci.yml`.
 
 | Suite | Count |
 |-------|-------|
-| Rust engines | 267 |
+| Rust engines | 351 |
 | Tauri backend | 27 |
 | Frontend (vitest) | 173 |
-| E2E CLI | 42 |
-| **Total** | **509** |
+| E2E CLI | 122 |
+| **Total** | **673** |
 
 ## Live Show Safety Features
 

@@ -2,9 +2,7 @@ use crate::animation::AnimationState;
 use crate::audio::AudioState;
 use crate::engines::EngineParams;
 use crate::error::{Result, StagespaceError};
-use crate::logging::{
-    log_osc_error, log_osc_message, log_playback_start, log_playback_stop, log_runtime_init,
-};
+use crate::logging::{log_osc_error, log_playback_start, log_playback_stop, log_runtime_init};
 use crate::osc_sender::OscSender;
 use crate::position_buffer::PositionBuffer;
 use rosc::{OscMessage, OscPacket, OscType};
@@ -267,6 +265,23 @@ impl Runtime {
         params: EngineParams,
         osc_ids: Vec<u32>,
     ) -> Result<()> {
+        // Garde anti double-spawn : un second appel orphelinerait le worker
+        // existant — les deux threads écriraient dans le même PositionBuffer /
+        // socket à des horloges indépendantes. CAS pour être race-safe.
+        let socket = self
+            .socket
+            .try_clone()
+            .map_err(StagespaceError::NetworkError)?;
+        if self
+            .running
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .is_err()
+        {
+            return Err(StagespaceError::RuntimeError(
+                "Runtime is already running — call stop() before play_compiled()".to_string(),
+            ));
+        }
+
         log_runtime_init(params.fps, params.n_objects);
         log_playback_start(
             params.duration,
@@ -279,12 +294,7 @@ impl Runtime {
         // Hot-swap la fonction
         self.swap_position_fn(position_fn);
 
-        self.running.store(true, Ordering::SeqCst);
         let running = self.running.clone();
-        let socket = self
-            .socket
-            .try_clone()
-            .map_err(StagespaceError::NetworkError)?;
         // Stocker la duration dans le champ partagé pour hot-swap en live
         self.set_duration(params.duration);
         // Stocker les osc_ids dans le champ partagé pour hot-swap en live
@@ -317,6 +327,8 @@ impl Runtime {
             let mut osc_since_perf = 0u64;
             let mut osc_errors_perf = 0u64;
             let mut osc_refused_perf = 0u64;
+            // Log OSC agrégé : max 1 warn/s au lieu d'un warn par packet perdu
+            let mut osc_err_log = ThrottledErrorLog::new();
 
             while running.load(Ordering::SeqCst) {
                 let elapsed = start.elapsed();
@@ -333,8 +345,10 @@ impl Runtime {
                 let radius_scale = macros.get_radius_scale();
                 let height_offset = macros.get_height_offset();
 
-                // Appliquer speed: temps virtuel
-                let t_virtual = t_real * speed;
+                // Appliquer speed: temps virtuel — clamp >= 0 : un speed
+                // négatif (macro ou audio mod) enverrait un t négatif aux
+                // engines (les sims freezent, les sinusoïdes tournent à rebours)
+                let t_virtual = (t_real * speed).max(0.0);
 
                 // Lire la direction
                 let dir = config.get_direction();
@@ -426,8 +440,9 @@ impl Runtime {
                 let eff_pitch = pitch + audio_param_overrides.get("pitch").copied().unwrap_or(0.0);
                 let eff_roll = roll + audio_param_overrides.get("roll").copied().unwrap_or(0.0);
 
-                // Recalculer le temps virtuel avec le speed effectif (audio-modulé)
-                let t_virtual_eff = t_real * effective_speed;
+                // Recalculer le temps virtuel avec le speed effectif
+                // (audio-modulé) — même clamp >= 0 que ci-dessus
+                let t_virtual_eff = (t_real * effective_speed).max(0.0);
                 let t_eff = if loop_is_on && duration > 0.0 {
                     t_virtual_eff % duration
                 } else if !loop_is_on && t_virtual_eff >= duration {
@@ -534,13 +549,8 @@ impl Runtime {
                         last_perf_update = Instant::now();
                     }
 
-                    // Timing précis
-                    let target_time = frame_count as u128 * frame_duration.as_nanos();
-                    let current_time = start.elapsed().as_nanos();
-                    if target_time > current_time {
-                        let sleep_ns = (target_time - current_time) as u64;
-                        std::thread::sleep(Duration::from_nanos(sleep_ns));
-                    }
+                    // Timing précis + ré-ancrage après un stall (>30 frames)
+                    pace_frame_clock(&mut frame_count, frame_duration, start);
                     continue; // Skip OSC + callback (géré par le MergeRuntime)
                 }
 
@@ -659,29 +669,39 @@ impl Runtime {
                         let args: Vec<OscType> =
                             values.iter().map(|v| OscType::Float(*v as f32)).collect();
 
-                        let packet = OscPacket::Message(OscMessage {
-                            addr: addr.clone(),
-                            args,
-                        });
+                        let packet = OscPacket::Message(OscMessage { addr, args });
 
-                        if let Ok(bytes) = rosc::encoder::encode(&packet) {
-                            if let Err(e) = socket.send(&bytes) {
-                                let refused = e.kind() == std::io::ErrorKind::ConnectionRefused;
-                                log_osc_error(&format!(
-                                    "Failed to send OSC: {e}{}",
-                                    if refused {
-                                        " (destination unreachable)"
-                                    } else {
-                                        ""
-                                    }
-                                ));
-                                osc_errors_perf += 1;
-                                if refused {
-                                    osc_refused_perf += 1;
+                        match rosc::encoder::encode(&packet) {
+                            Ok(bytes) => match socket.send(&bytes) {
+                                Ok(_) => {
+                                    osc_since_perf += 1;
                                 }
-                            } else {
-                                log_osc_message(&addr, values.len());
-                                osc_since_perf += 1;
+                                Err(e) => {
+                                    let refused = e.kind() == std::io::ErrorKind::ConnectionRefused;
+                                    osc_errors_perf += 1;
+                                    if refused {
+                                        osc_refused_perf += 1;
+                                    }
+                                    // Log agrégé : 1 warn/s max (pas un warn
+                                    // par packet — sinon flood en live)
+                                    if let Some((errs, refused_n)) = osc_err_log.record(refused) {
+                                        log_osc_error(&format!(
+                                            "OSC send failures: {errs} in ~1s \
+                                             ({refused_n} connection refused) — last: {e}"
+                                        ));
+                                    }
+                                }
+                            },
+                            Err(e) => {
+                                // Échec d'encodage — compté dans les stats
+                                // (avant : silencieusement droppé)
+                                osc_errors_perf += 1;
+                                if let Some((errs, refused_n)) = osc_err_log.record(false) {
+                                    log_osc_error(&format!(
+                                        "OSC encode/send failures: {errs} in ~1s \
+                                         ({refused_n} refused) — last: {e}"
+                                    ));
+                                }
                             }
                         }
                     }
@@ -744,24 +764,26 @@ impl Runtime {
                     last_perf_update = Instant::now();
                 }
 
-                // Timing précis — std::thread::sleep rend la main à l'OS
-                let target_time = frame_count as u128 * frame_duration.as_nanos();
-                let current_time = start.elapsed().as_nanos();
-
-                if target_time > current_time {
-                    let sleep_ns = (target_time - current_time) as u64;
-                    std::thread::sleep(Duration::from_nanos(sleep_ns));
-                }
+                // Timing précis — std::thread::sleep rend la main à l'OS.
+                // Ré-ancrage après un stall (>30 frames de retard) pour éviter
+                // une rafale de packets OSC stale — même politique que le
+                // MergeRuntime.
+                pace_frame_clock(&mut frame_count, frame_duration, start);
             }
+
+            // Sortie naturelle du loop (one-shot terminé, erreur, etc.) :
+            // on nettoie le flag pour que is_running() ne reste pas stale true.
+            running.store(false, Ordering::SeqCst);
         });
         // Stocker le handle pour join propre dans stop()
         *self.thread_handle.lock().unwrap_or_else(|e| e.into_inner()) = Some(handle);
         Ok(())
     }
 
-    /// Arrête le playback et join le thread proprement
+    /// Arrête le playback et join le thread proprement — idempotent
+    /// (appelable plusieurs fois, y compris depuis Drop)
     pub fn stop(&self) {
-        self.running.store(false, Ordering::SeqCst);
+        let was_running = self.running.swap(false, Ordering::SeqCst);
         // Join le thread pour éviter stale OSC + use-after-free
         if let Some(handle) = self
             .thread_handle
@@ -771,7 +793,9 @@ impl Runtime {
         {
             let _ = handle.join();
         }
-        log_playback_stop();
+        if was_running {
+            log_playback_stop();
+        }
     }
 
     pub fn get_perf_stats(&self) -> PerfStats {
@@ -802,24 +826,24 @@ impl Runtime {
     /// `from_fn` = fonction actuelle, `to_fn` = fonction du cue cible
     /// `fade_duration` = durée du crossfade en secondes (0 = instantané)
     pub fn recall_cue(&self, to_fn: PositionFn, fade_duration: f64) {
+        // Tout le swap se fait sous UN SEUL hold du lock : un frame live ne
+        // peut jamais évaluer le placeholder zeros (sinon tous les tracks
+        // sauteraient à l'origine pendant ~16ms à chaque cue fade).
+        let mut guard = self.position_fn.lock().unwrap_or_else(|e| e.into_inner());
         if fade_duration <= 0.0 {
             // Recall instantané
-            self.swap_position_fn(to_fn);
+            *guard = to_fn;
             return;
         }
 
-        // Capturer la fonction actuelle et créer un crossfade
-        let from_fn = {
-            // On ne peut pas cloner Box<dyn Fn>, donc on swap avec un placeholder
-            // et on prend ownership de l'ancienne fn pour le crossfade
-            let placeholder: PositionFn = Box::new(|_t, _i| nalgebra::Vector3::zeros());
-            let mut guard = self.position_fn.lock().unwrap_or_else(|e| e.into_inner());
-
-            std::mem::replace(&mut *guard, placeholder)
-        };
+        // On ne peut pas cloner Box<dyn Fn> : on prend ownership de l'ancienne
+        // fn via mem::replace, puis on ré-assigne immédiatement le crossfade
+        // sous le même guard — le placeholder n'est jamais visible.
+        let placeholder: PositionFn = Box::new(|_t, _i| nalgebra::Vector3::zeros());
+        let from_fn = std::mem::replace(&mut *guard, placeholder);
 
         let fade_start = Instant::now();
-        let crossfade_fn: PositionFn = Box::new(move |t, i| {
+        *guard = Box::new(move |t, i| {
             let elapsed = fade_start.elapsed().as_secs_f64();
             if elapsed >= fade_duration {
                 to_fn(t, i)
@@ -832,7 +856,75 @@ impl Runtime {
                 from_pos + (to_pos - from_pos) * blend
             }
         });
+    }
+}
 
-        self.swap_position_fn(crossfade_fn);
+impl Drop for Runtime {
+    /// Live-safety : drop sans stop() explicite join quand même le worker —
+    /// sinon le thread orphelin continue d'émettre de l'OSC / d'écrire dans
+    /// le PositionBuffer après la mort du Runtime.
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
+
+/// Seuil de frames de retard tolérées avant de ré-ancrer le frame clock.
+/// Au-delà, on saute les frames manquées plutôt que de bourster des packets
+/// OSC stale (même politique que le MergeRuntime : >30 frames).
+const MAX_CATCHUP_FRAMES: u64 = 30;
+
+/// Pacing du worker : dort jusqu'au timeslot de `frame_count`. Si le retard
+/// dépasse `MAX_CATCHUP_FRAMES` (stall du scheduler, breakpoint, etc.),
+/// avance `frame_count` pour se ré-ancrer sur l'horloge réelle — évite une
+/// rafale de frames obsolètes. `t` reste monotone (basé sur `start`).
+fn pace_frame_clock(frame_count: &mut u64, frame_duration: Duration, start: Instant) {
+    let frame_ns = frame_duration.as_nanos().max(1);
+    let target_time = *frame_count as u128 * frame_ns;
+    let current_time = start.elapsed().as_nanos();
+    if target_time > current_time {
+        std::thread::sleep(Duration::from_nanos((target_time - current_time) as u64));
+    } else {
+        let behind_ns = current_time - target_time;
+        if behind_ns > MAX_CATCHUP_FRAMES as u128 * frame_ns {
+            *frame_count += (behind_ns / frame_ns) as u64;
+        }
+    }
+}
+
+/// Agrégateur d'erreurs OSC : compte les erreurs et n'autorise un log qu'au
+/// maximum une fois par seconde (anti-flood pendant un live — un send() qui
+/// échoue à 60fps × N objets produirait des milliers de warn/s sinon).
+struct ThrottledErrorLog {
+    errors: u64,
+    refused: u64,
+    window_start: Instant,
+}
+
+impl ThrottledErrorLog {
+    fn new() -> Self {
+        ThrottledErrorLog {
+            errors: 0,
+            refused: 0,
+            window_start: Instant::now(),
+        }
+    }
+
+    /// Enregistre une erreur. Retourne `Some((errors, refused))` quand la
+    /// fenêtre d'1s est écoulée — le caller doit alors émettre le log agrégé.
+    /// Les compteurs sont réinitialisés à ce moment-là.
+    fn record(&mut self, refused: bool) -> Option<(u64, u64)> {
+        self.errors += 1;
+        if refused {
+            self.refused += 1;
+        }
+        if self.window_start.elapsed() >= Duration::from_secs(1) {
+            let out = (self.errors, self.refused);
+            self.errors = 0;
+            self.refused = 0;
+            self.window_start = Instant::now();
+            Some(out)
+        } else {
+            None
+        }
     }
 }

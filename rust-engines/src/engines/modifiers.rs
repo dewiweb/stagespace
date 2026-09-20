@@ -86,7 +86,9 @@ pub fn lfo(
             }
         }
         "sawtooth" => {
-            let normalized = (angle / (2.0 * PI)) % 1.0;
+            // rem_euclid : `%` donne un reste négatif pour angle < 0
+            // (t<0 ou phase<0) → le sawtooth sortait de [-1,1] en négatif.
+            let normalized = (angle / (2.0 * PI)).rem_euclid(1.0);
             2.0 * normalized - 1.0
         }
         _ => angle.sin(),
@@ -111,7 +113,10 @@ pub fn jitter(
     frequency: f64,
     seed: f64,
 ) -> Vector3<f64> {
-    let hash = |n: f64| -> f64 { (n.sin() * 43758.5453 + seed).fract() };
+    // Le seed entre dans l'argument de sin (multiplié par un irrationnel) :
+    // ajouté APRÈS le produit mais AVANT fract() — comme avant —, un seed
+    // entier était invisible (fract(x + k) = fract(x)).
+    let hash = |n: f64| -> f64 { ((n + seed * 12.9898).sin() * 43758.5453).fract() };
     let noise = |dim: f64| -> f64 {
         let h1 = hash(dim + object_index as f64 * 17.0);
         let h2 = hash(dim + object_index as f64 * 17.0 + 100.0);
@@ -229,5 +234,30 @@ mod tests {
         assert!(result.x.abs() <= 1.0);
         assert!(result.y.abs() <= 1.0);
         assert!(result.z.abs() <= 1.0);
+    }
+
+    #[test]
+    fn test_jitter_seed_changes_output() {
+        // Régression : le seed était ajouté AVANT fract() → fract(x + 42)
+        // ≡ fract(x + 43) — les seeds entiers produisaient un jitter identique.
+        let pos = Vector3::new(0.0, 0.0, 0.0);
+        let a = jitter(pos, 0.7, 0, 0.5, 1.0, 42.0);
+        let b = jitter(pos, 0.7, 0, 0.5, 1.0, 43.0);
+        assert!(
+            (a - b).norm() > 1e-6,
+            "seeds 42 et 43 doivent donner des jitters différents"
+        );
+    }
+
+    #[test]
+    fn test_lfo_sawtooth_negative_angle() {
+        // Régression : `% 1.0` donnait un reste négatif pour angle < 0.
+        // t = -0.25, freq = 1 → angle = -π/2 → normalized = 0.75 → 0.5
+        let pos = Vector3::new(0.0, 0.0, 0.0);
+        let result = lfo(pos, -0.25, "sawtooth", 1.0, 1.0, "y", 0.0);
+        assert!((result.y - 0.5).abs() < 1e-10, "y={}", result.y);
+        // Jamais hors [-1, 1]·amplitude, même pour t très négatif
+        let far = lfo(pos, -123.456, "sawtooth", 1.0, 1.0, "y", 0.0);
+        assert!(far.y.abs() <= 1.0 + 1e-12, "y={}", far.y);
     }
 }

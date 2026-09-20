@@ -1,4 +1,9 @@
-use std::sync::{Mutex, MutexGuard};
+use crate::{AppState, Movement};
+use stagespace_engines::{AudioState, MergeRuntime};
+use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, AtomicU64};
+use std::sync::{Arc, Mutex, MutexGuard};
+use tauri::AppHandle;
 
 /// Lock a mutex, recovering from poisoning instead of panicking.
 ///
@@ -10,4 +15,34 @@ pub fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
         eprintln!("[WARN] Mutex was poisoned, recovering inner data: {e}");
         e.into_inner()
     })
+}
+
+/// Handles clonables vers l'état partagé de l'app — pour les `spawn_blocking`
+/// qui ne peuvent pas capturer `State<'_, AppState>` (non 'static).
+///
+/// Ordre des locks (à respecter partout pour éviter les deadlocks) :
+/// `pending_move_ids` → `movements` → `merge_runtime` → `osc_receiver`.
+#[derive(Clone)]
+pub struct Shared {
+    pub audio_state: Arc<Mutex<AudioState>>,
+    pub app_handle: Arc<Mutex<Option<AppHandle>>>,
+    pub movements: Arc<Mutex<HashMap<String, Movement>>>,
+    pub pending_move_ids: Arc<Mutex<HashSet<String>>>,
+    pub move_generation: Arc<AtomicU64>,
+    pub merge_runtime: Arc<Mutex<MergeRuntime>>,
+    pub recall_in_progress: Arc<AtomicBool>,
+}
+
+impl Shared {
+    pub fn from_state(state: &AppState) -> Self {
+        Shared {
+            audio_state: state.audio_state.clone(),
+            app_handle: state.app_handle.clone(),
+            movements: state.movements.clone(),
+            pending_move_ids: state.pending_move_ids.clone(),
+            move_generation: state.move_generation.clone(),
+            merge_runtime: state.merge_runtime.clone(),
+            recall_in_progress: state.recall_in_progress.clone(),
+        }
+    }
 }

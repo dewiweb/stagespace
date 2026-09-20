@@ -2,48 +2,59 @@
 
 Référence architecturale : `ARCHITECTURE_FUTURE.md`
 
+> ## ⚑ Statut global — septembre 2025
+>
+> **Phases 1, 2, 3 et 4 (P1–P5) : implémentées.** Ce document reste la
+> référence de design ; le travail restant est listé dans les encadrés
+> « Reste » et en section P6+.
+>
+> Non implémenté (consciemment différé) : `PositionBuffer::read_stale`
+> (le buffer garde la dernière frame par construction) et le watchdog de
+> crash de worker (§1.3) — la stratégie de crash isolation est documentée
+> en « Notes techniques ».
+
 Architecture retenue : **hybride multi-threadée** — engines compilés en worker threads parallèles, merge + post-processing dans un thread unique, fast path atomique pour le live control.
 
 **Principes directeurs** : souplesse (per-move ou global, au choix) et intuitivité (sliders pour le live, nodes pour le design).
 
 ---
 
-## Phase 1 : Merge Node + MergeRuntime
+## Phase 1 : Merge Node + MergeRuntime ✅ TERMINÉE
 
 **Objectif** : Workers parallèles + merge thread unique + une seule socket OSC.
 **Durée estimée** : 3-5 sessions de travail.
 **Risque** : moyen (refactor minimal du runtime existant, nouveau MergeRuntime).
 
-### Étape 1.1 : PositionBuffer struct (Rust)
+### Étape 1.1 : PositionBuffer struct (Rust) ✅
 
 **Fichiers** :
 - `rust-engines/src/position_buffer.rs` (nouveau)
 - `rust-engines/src/lib.rs` (export)
 
 **Tâches** :
-- [ ] Créer `PositionBuffer` struct (lock simple, pas de double buffer) :
+- [x] Créer `PositionBuffer` struct (lock simple, pas de double buffer) :
   ```rust
   pub struct PositionBuffer {
       positions: Mutex<Vec<(usize, Vector3<f64>)>>,
   }
   ```
-- [ ] `write(positions)` : worker écrit sous le lock
-- [ ] `read() -> Vec<(usize, Vector3<f64>)>` : merge lit sous le lock (clone ~200 bytes)
-- [ ] `read_stale() -> Vec<(usize, Vector3<f64>)>` : retourne la dernière frame si worker pas prêt (pas de blocking)
-- [ ] Tests unitaires : write/read concurrent, pas de deadlock
+- [x] `write(positions)` : worker écrit sous le lock
+- [x] `read() -> Vec<(usize, Vector3<f64>)>` : merge lit sous le lock (clone ~200 bytes)
+- [ ] `read_stale() -> Vec<(usize, Vector3<f64>)>` : retourne la dernière frame si worker pas prêt (pas de blocking) — *non implémenté : le buffer conserve la dernière frame, le stale read est implicite*
+- [x] Tests unitaires : write/read concurrent, pas de deadlock
 
 **Note** : Mutex simple suffit pour 9 objets (~200 bytes). Pas de double buffer front/back.
 
-### Étape 1.2 : Modifier les workers Runtime existants
+### Étape 1.2 : Modifier les workers Runtime existants ✅
 
 **Fichiers** :
-- `rust-engines/src/runtime.rs` (modifier boucle de playback)
+- `rust-engines/src/runtime.rs` (modifier boucle de playback) — *implémenté dans `rust-engines/src/runtime/mod.rs`*
 
 **Tâches** :
-- [ ] Ajouter champ `position_buffer: Option<Arc<PositionBuffer>>` au `Runtime`
+- [x] Ajouter champ `position_buffer: Option<Arc<PositionBuffer>>` au `Runtime`
   - `None` = mode legacy (OSC direct, compatibilité)
   - `Some(buf)` = mode worker (écrit dans buffer, pas d'OSC)
-- [ ] Dans la boucle de playback (lignes 202-467) :
+- [x] Dans la boucle de playback (lignes 202-467) :
   - Si `position_buffer` est `Some` :
     - Calculer `raw_pos = fn_ref(t, i)` (sub-graph compilé)
     - Appliquer **speed** (per-move, reste dans le worker)
@@ -55,19 +66,19 @@ Architecture retenue : **hybride multi-threadée** — engines compilés en work
     - **Ne pas** émettre d'event Tauri
   - Si `position_buffer` est `None` :
     - Comportement actuel (legacy, compatibilité)
-- [ ] Ajouter `set_position_buffer(&mut self, buffer: Arc<PositionBuffer>)`
-- [ ] Ajouter `unset_position_buffer(&mut self)` (retour en mode legacy)
-- [ ] Garder `set_speed()` per-move (fast path atomic dans RuntimeConfig)
-- [ ] Tests : worker en mode buffer ne fait pas d'OSC, n'applique pas de macros spatiales
+- [x] Ajouter `set_position_buffer(&mut self, buffer: Arc<PositionBuffer>)`
+- [x] Ajouter `unset_position_buffer(&mut self)` (retour en mode legacy)
+- [x] Garder `set_speed()` per-move (fast path atomic dans RuntimeConfig)
+- [x] Tests : worker en mode buffer ne fait pas d'OSC, n'applique pas de macros spatiales
 
-### Étape 1.3 : MergeRuntime struct (Rust)
+### Étape 1.3 : MergeRuntime struct (Rust) ✅
 
 **Fichiers** :
-- `rust-engines/src/merge_runtime.rs` (nouveau)
+- `rust-engines/src/merge_runtime.rs` (nouveau) — *implémenté dans `rust-engines/src/merge_runtime/`*
 - `rust-engines/src/lib.rs` (export)
 
 **Tâches** :
-- [ ] Créer `MergeRuntime` struct :
+- [x] Créer `MergeRuntime` struct :
   ```rust
   pub struct MergeRuntime {
       thread: Option<JoinHandle<()>>,
@@ -87,7 +98,7 @@ Architecture retenue : **hybride multi-threadée** — engines compilés en work
       position_callback: Arc<Mutex<Option<Box<dyn Fn(f64, &[(usize, Vector3<f64>)]) + Send + Sync>>>>,
   }
   ```
-- [ ] Créer `MoveState` struct :
+- [x] Créer `MoveState` struct :
   ```rust
   struct MoveState {
       osc_ids: Vec<u32>,
@@ -101,7 +112,7 @@ Architecture retenue : **hybride multi-threadée** — engines compilés en work
       is_preview: bool,
   }
   ```
-- [ ] Créer `MergeStrategy` enum :
+- [x] Créer `MergeStrategy` enum :
   ```rust
   enum MergeStrategy {
       Override,      // dernier move actif gagne
@@ -110,9 +121,9 @@ Architecture retenue : **hybride multi-threadée** — engines compilés en work
       Priority,      // move avec priorité la plus haute
   }
   ```
-- [ ] Implémenter `MergeRuntime::start()` : démarre le merge thread
-- [ ] Implémenter `MergeRuntime::stop()` : arrête le thread proprement
-- [ ] Implémenter la boucle du merge thread :
+- [x] Implémenter `MergeRuntime::start()` : démarre le merge thread
+- [x] Implémenter `MergeRuntime::stop()` : arrête le thread proprement
+- [x] Implémenter la boucle du merge thread :
   ```
   1. Lire tous les buffers (lock simple, latest frame)
   2. Pour chaque track_id, résoudre les positions multiples selon MergeStrategy
@@ -125,39 +136,39 @@ Architecture retenue : **hybride multi-threadée** — engines compilés en work
   8. Callback position (un seul event, display_positions)
   9. Perf monitor
   ```
-- [ ] Implémenter `resolve_merge()` pour chaque stratégie :
+- [x] Implémenter `resolve_merge()` pour chaque stratégie :
   - `Override` : pour chaque track, prendre la position du move avec le poids le plus élevé
   - `Crossfade` : blend linéaire entre moves actifs pondéré par weight * fade
   - `Blend` : moyenne pondérée de toutes les positions
   - `Priority` : move avec priorité la plus haute gagne
-- [ ] Implémenter `register_move(move_id, buffer, osc_ids, track_indices, is_preview)`
-- [ ] Implémenter `unregister_move(move_id)`
-- [ ] Implémenter `set_merge_strategy(strategy)`
-- [ ] Implémenter `set_macros(request)` (fast path atomic, spatiales seulement)
-- [ ] Implémenter `set_origin(origin)`
-- [ ] Implémenter `set_osc_ids(osc_ids)` (quand la sélection de tracks change)
-- [ ] Implémenter la séparation preview : display_positions = tout, osc_positions = exclut preview
-- [ ] Gestion du crash : watchdog détecte si un worker n'a pas écrit depuis > 2 frames → unregister
+- [x] Implémenter `register_move(move_id, buffer, osc_ids, track_indices, is_preview)`
+- [x] Implémenter `unregister_move(move_id)`
+- [x] Implémenter `set_merge_strategy(strategy)`
+- [x] Implémenter `set_macros(request)` (fast path atomic, spatiales seulement)
+- [x] Implémenter `set_origin(origin)`
+- [x] Implémenter `set_osc_ids(osc_ids)` (quand la sélection de tracks change)
+- [x] Implémenter la séparation preview : display_positions = tout, osc_positions = exclut preview
+- [ ] Gestion du crash : watchdog détecte si un worker n'a pas écrit depuis > 2 frames → unregister — *non implémenté (voir « Notes techniques »)*
 
 **Tests** :
-- [ ] Test unitaire : 2 moves sur le même track → merge override
-- [ ] Test unitaire : 2 moves sur le même track → merge crossfade
-- [ ] Test unitaire : fade in/out d'un move
-- [ ] Test unitaire : un worker crash → merge skip, autres continuent
-- [ ] Test unitaire : macros spatiales appliquées une seule fois
-- [ ] Test unitaire : preview mode → display mais pas d'OSC
-- [ ] Test unitaire : speed reste per-move (vérifier que le merge thread ne touche pas à speed)
+- [x] Test unitaire : 2 moves sur le même track → merge override
+- [x] Test unitaire : 2 moves sur le même track → merge crossfade
+- [x] Test unitaire : fade in/out d'un move
+- [ ] Test unitaire : un worker crash → merge skip, autres continuent — *dépend du watchdog (non implémenté)*
+- [x] Test unitaire : macros spatiales appliquées une seule fois
+- [x] Test unitaire : preview mode → display mais pas d'OSC
+- [x] Test unitaire : speed reste per-move (vérifier que le merge thread ne touche pas à speed)
 
-### Étape 1.4 : Commands Tauri (Rust)
+### Étape 1.4 : Commands Tauri (Rust) ✅
 
 **Fichiers** :
-- `tauri-app/src-tauri/src/commands/movements.rs` (refactor)
+- `tauri-app/src-tauri/src/commands/merge_commands/` (move_management, graph_updates, macros, channels, zones, modulations, manual_positions)
 - `tauri-app/src-tauri/src/commands/playback.rs` (refactor)
 - `tauri-app/src-tauri/src/lib.rs` (register commands)
 - `tauri-app/src-tauri/src/state.rs` (AppState avec MergeRuntime)
 
 **Tâches** :
-- [ ] Ajouter `MergeRuntime` à `AppState` :
+- [x] Ajouter `MergeRuntime` à `AppState` :
   ```rust
   pub struct AppState {
       merge_runtime: Mutex<MergeRuntime>,
@@ -166,7 +177,7 @@ Architecture retenue : **hybride multi-threadée** — engines compilés en work
       // ... reste inchangé
   }
   ```
-- [ ] `activate_move(move_id, graph_json, osc_ids, track_indices, is_preview, origin)` :
+- [x] `activate_move(move_id, graph_json, osc_ids, track_indices, is_preview, origin)` :
   1. Compiler le sub-graph
   2. Créer un `Runtime` worker avec le sub-graph
   3. Partager `audio_state` avec le worker (déjà le cas)

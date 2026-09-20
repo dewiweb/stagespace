@@ -67,6 +67,27 @@ pub async fn store_cue(
     };
     let osc_mappings = lock_or_recover(&state.osc_receiver).list_mappings();
 
+    // Phase 5 : snapshot complet de chaque move actif — assez pour que
+    // `recall_cue` puisse les recréer seul (graph, tracks, loop, direction).
+    let moves: Vec<stagespace_engines::MoveSnapshot> = {
+        let movements = lock_or_recover(&state.movements);
+        movements
+            .values()
+            .map(|m| stagespace_engines::MoveSnapshot {
+                id: m.id.clone(),
+                name: m.name.clone(),
+                graph_json: m.graph_json.clone(),
+                osc_ids: m.osc_ids.clone(),
+                track_indices: m.track_indices.clone(),
+                is_preview: m.is_preview,
+                origin: m.origin,
+                duration: m.duration,
+                loop_mode: m.loop_mode.clone(),
+                direction: m.direction.clone(),
+            })
+            .collect()
+    };
+
     let cue = Cue {
         id: uuid::Uuid::new_v4().to_string(),
         name: request.name,
@@ -89,6 +110,7 @@ pub async fn store_cue(
         channel_modulations: Some(channel_modulations),
         osc_mappings: Some(osc_mappings),
         zones: Some(zones),
+        moves,
     };
 
     // Émettre l'événement pour que le frontend persiste le cue
@@ -173,14 +195,26 @@ pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), Stri
         drop(movements);
 
         for id in to_deactivate {
-            // Stop le worker et join le thread proprement (stop() fait le join)
-            let mut movements = lock_or_recover(&state.movements);
-            if let Some(movement) = movements.get_mut(&id) {
+            // Retirer de la map + unregister du merge + stop du worker.
+            // Un id en cours d'activation (pending) n'est pas touché — il
+            // s'auto-abortera via le check recall_in_progress de spawn_move.
+            let movement = {
+                let pending = lock_or_recover(&state.pending_move_ids);
+                let mut movements = lock_or_recover(&state.movements);
+                if pending.contains(&id) {
+                    None
+                } else {
+                    movements.remove(&id)
+                }
+            };
+            {
+                let merge_rt = lock_or_recover(&state.merge_runtime);
+                merge_rt.unregister_move(&id);
+            }
+            if let Some(movement) = movement {
+                // stop() join le thread proprement — fait HORS des locks.
                 movement.runtime.stop();
             }
-            // Unregister du merge runtime
-            let merge_rt = lock_or_recover(&state.merge_runtime);
-            merge_rt.unregister_move(&id);
         }
     }
 
@@ -254,10 +288,59 @@ pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), Stri
         }
     }
 
-    // 7. Activer les moves qui sont dans active_move_ids (avec fade)
-    // Note: l'activation des moves est gérée par le frontend via activate_move,
-    // car il faut compiler le sub-graph et créer un worker.
-    // Le frontend écoutera l'événement "cue-recalled" et activera les moves.
+    // 7. Restaurer les moves snapshotés au store (Phase 5). Le backend
+    //    recrée les workers lui-même — un move snapshoté reprend exactement
+    //    son graphe, ses tracks, son loop/direction. Champ vide = cue ancien
+    //    format → comportement legacy : le frontend écoute "cue-recalled".
+    if !cue.moves.is_empty() {
+        use crate::commands::merge_commands::{
+            parse_direction, parse_loop_mode, spawn_move_for_recall, MoveSpec,
+        };
+        let sh = crate::commands::state::Shared::from_state(&state);
+        let speed = cue.macros.as_ref().map(|m| m.speed);
+        for snap in &cue.moves {
+            // Déjà actif et running → ne pas respawner (le move continue).
+            let already_running = {
+                let movements = lock_or_recover(&state.movements);
+                movements
+                    .get(&snap.id)
+                    .is_some_and(|m| m.runtime.is_running())
+            };
+            if already_running {
+                continue;
+            }
+            // Entrée fantôme (worker stoppé mais pas retiré) → purger.
+            lock_or_recover(&state.movements).remove(&snap.id);
+            let spec = MoveSpec {
+                id: snap.id.clone(),
+                name: snap.name.clone(),
+                graph_json: snap.graph_json.clone(),
+                osc_ids: snap.osc_ids.clone(),
+                track_indices: snap.track_indices.clone(),
+                is_preview: snap.is_preview,
+                origin: snap.origin,
+                duration: snap.duration,
+                loop_mode: parse_loop_mode(&snap.loop_mode),
+                direction: parse_direction(&snap.direction),
+                fade: None,
+                speed,
+                animation_state: None,
+            };
+            match spawn_move_for_recall(spec, &sh) {
+                Ok(_) => {
+                    if cue.fade_duration > 0.0 {
+                        lock_or_recover(&state.merge_runtime)
+                            .start_fade_in(&snap.id, cue.fade_duration);
+                    }
+                }
+                // Un move qui échoue ne doit pas faire échouer le recall
+                // entier — on log et on continue (partial recall visible).
+                Err(e) => {
+                    eprintln!("[WARN] recall: failed to respawn move '{}': {e}", snap.id)
+                }
+            }
+        }
+    }
 
     state
         .app_handle

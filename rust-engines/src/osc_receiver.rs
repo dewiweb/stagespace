@@ -18,8 +18,18 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use crate::engines::MAX_OBJECTS;
 use crate::osc_sender::{SpatialChannel, SpatialChannels};
 use crate::runtime::MacroState;
+
+/// Profondeur max d'imbrication des bundles OSC — au-delà, le packet est
+/// droppé (protection contre les bundles récursifs malveillants).
+const MAX_BUNDLE_DEPTH: usize = 8;
+
+/// Nombre max de clés de feedback (`last_values`) — borne mémoire : les clés
+/// incluent l'index d'objet résolu, donc un mapping wildcard recevant des ids
+/// arbitraires (/track/*/gain) pourrait faire croître la map sans limite.
+const MAX_FEEDBACK_KEYS: usize = 4096;
 
 // ─── Transform ──────────────────────────────────────────────────────────────
 
@@ -276,6 +286,9 @@ pub struct OscInStats {
     pub messages_matched: AtomicU64,
     pub values_routed: AtomicU64,
     pub messages_dropped: AtomicU64,
+    /// Datagrams UDP reçus mais indécodables (malformés / non-OSC) —
+    /// avant : silencieusement ignorés.
+    pub decode_errors: AtomicU64,
 }
 
 /// Snapshot sérialisable des stats
@@ -285,6 +298,7 @@ pub struct OscInStatsSnapshot {
     pub messages_matched: u64,
     pub values_routed: u64,
     pub messages_dropped: u64,
+    pub decode_errors: u64,
 }
 
 // ─── Receiver ───────────────────────────────────────────────────────────────
@@ -299,6 +313,15 @@ struct Shared {
     in_enabled: Arc<AtomicBool>,
     suppress_until: Arc<Mutex<Option<Instant>>>,
     stats: Arc<OscInStats>,
+    /// Index d'objet max accepté par le routing (borne anti-fuite mémoire sur
+    /// les mappings wildcard : /track/*/gain avec un id arbitraire remplirait
+    /// object_channels/manual_positions indéfiniment — et ces maps sont
+    /// clonées à chaque frame de merge).
+    max_objects: Arc<AtomicU64>,
+    /// true tant que le thread socket tourne — passé à false par le thread
+    /// lui-même à sa sortie (shutdown OU erreur fatale recv). Contrairement
+    /// au champ `is_running`, ce flag reflète la mort spontanée du thread.
+    thread_running: Arc<AtomicBool>,
 }
 
 /// OSC Receiver — réception OSC avec mapping configurable style libmapper.
@@ -329,6 +352,8 @@ impl OscReceiver {
                 in_enabled: Arc::new(AtomicBool::new(true)),
                 suppress_until: Arc::new(Mutex::new(None)),
                 stats: Arc::new(OscInStats::default()),
+                max_objects: Arc::new(AtomicU64::new(MAX_OBJECTS as u64)),
+                thread_running: Arc::new(AtomicBool::new(false)),
             },
             shutdown: Arc::new(AtomicBool::new(false)),
             handle: None,
@@ -448,12 +473,26 @@ impl OscReceiver {
 
     /// Démarre le serveur OSC
     pub fn start(&mut self) -> Result<(), String> {
+        // Réconcilie l'état si le thread socket est mort en erreur fatale
+        // (sans ça `is_running` resterait true et le receiver serait briqué —
+        // impossible de redémarrer sans stop() explicite).
+        if self.is_running && !self.shared.thread_running.load(Ordering::SeqCst) {
+            if let Some(h) = self.handle.take() {
+                let _ = h.join(); // thread déjà terminé — join immédiat
+            }
+            self.is_running = false;
+        }
         if self.is_running {
             return Err("OSC receiver is already running".to_string());
         }
 
         let socket = UdpSocket::bind(("0.0.0.0", self.port))
             .map_err(|e| format!("Failed to bind UDP socket on port {}: {}", self.port, e))?;
+
+        // Port éphémère (0) → expose le port réellement bindé
+        if let Ok(addr) = socket.local_addr() {
+            self.port = addr.port();
+        }
 
         socket
             .set_read_timeout(Some(Duration::from_millis(100)))
@@ -462,15 +501,22 @@ impl OscReceiver {
         let port = self.port;
         let shared = self.shared.clone();
         let shutdown = self.shutdown.clone();
+        // Flag posé AVANT le spawn — sinon `is_alive()` peut voir false si le
+        // test/appelant vérifie avant que le thread soit schedulé (race).
+        shared.thread_running.store(true, Ordering::SeqCst);
         let handle = thread::spawn(move || {
-            let mut buf = [0u8; 4096];
+            // Buffer = datagram UDP max (65535) — aucune troncature
+            // silencieuse possible sur un packet OSC valide.
+            let mut buf = vec![0u8; 65535];
             while !shutdown.load(Ordering::SeqCst) {
                 match socket.recv_from(&mut buf) {
-                    Ok((len, _)) => {
-                        if let Ok((_, packet)) = decode_udp(&buf[..len]) {
-                            handle_packet(packet, &shared);
+                    Ok((len, _)) => match decode_udp(&buf[..len]) {
+                        Ok((_, packet)) => handle_packet(packet, &shared, 0),
+                        Err(_) => {
+                            // Packet malformé — compté, pas droppé en silence
+                            shared.stats.decode_errors.fetch_add(1, Ordering::Relaxed);
                         }
-                    }
+                    },
                     Err(ref e)
                         if e.kind() == std::io::ErrorKind::WouldBlock
                             || e.kind() == std::io::ErrorKind::TimedOut =>
@@ -478,9 +524,15 @@ impl OscReceiver {
                         // Timeout de 100ms atteint, on relit le drapeau d'arrêt
                         continue;
                     }
-                    Err(_) => break,
+                    Err(e) => {
+                        eprintln!("OSC receiver fatal recv error on port {port}: {e}");
+                        break;
+                    }
                 }
             }
+            // Marque le thread comme arrêté sur TOUTES les sorties (shutdown
+            // ou erreur fatale) — sinon is_running resterait stale true.
+            shared.thread_running.store(false, Ordering::SeqCst);
             drop(socket);
             eprintln!("OSC receiver thread stopped on port {port}");
         });
@@ -500,6 +552,25 @@ impl OscReceiver {
         self.is_running = false;
         // Réarme le drapeau pour permettre un redémarrage
         self.shutdown.store(false, Ordering::SeqCst);
+    }
+
+    /// État réel du thread socket — false dès sa sortie, y compris après une
+    /// erreur fatale recv (contrairement au champ `is_running`, qui n'est
+    /// mis à jour que par start()/stop()).
+    pub fn is_alive(&self) -> bool {
+        self.shared.thread_running.load(Ordering::SeqCst)
+    }
+
+    /// Configure l'index d'objet max accepté par le routing (défaut :
+    /// `engines::MAX_OBJECTS` = 1024). Les index résolus >= max sont rejetés —
+    /// borne anti-fuite mémoire sur les mappings wildcard.
+    pub fn set_max_objects(&self, max: usize) {
+        self.shared.max_objects.store(max as u64, Ordering::Relaxed);
+    }
+
+    /// Borne courante sur les index d'objet routables
+    pub fn max_objects(&self) -> usize {
+        self.shared.max_objects.load(Ordering::Relaxed) as usize
     }
 
     /// Retourne la dernière valeur reçue pour une clé (handler name ou
@@ -524,6 +595,7 @@ impl OscReceiver {
             messages_matched: self.shared.stats.messages_matched.load(Ordering::Relaxed),
             values_routed: self.shared.stats.values_routed.load(Ordering::Relaxed),
             messages_dropped: self.shared.stats.messages_dropped.load(Ordering::Relaxed),
+            decode_errors: self.shared.stats.decode_errors.load(Ordering::Relaxed),
         }
     }
 
@@ -538,6 +610,14 @@ impl OscReceiver {
 impl Default for OscReceiver {
     fn default() -> Self {
         Self::new(8001)
+    }
+}
+
+impl Drop for OscReceiver {
+    /// Live-safety : stop()+join implicite si l'app oublie stop() —
+    /// sinon le thread socket orphelin continue de recevoir/dispatcher.
+    fn drop(&mut self) {
+        self.stop();
     }
 }
 
@@ -621,14 +701,23 @@ fn extract_args(args: &[OscType]) -> Vec<f64> {
         .collect()
 }
 
-fn handle_packet(packet: OscPacket, shared: &Shared) {
+fn handle_packet(packet: OscPacket, shared: &Shared, depth: usize) {
     match packet {
         OscPacket::Message(msg) => {
             dispatch_message(&msg.addr, extract_args(&msg.args), shared);
         }
         OscPacket::Bundle(bundle) => {
+            if depth >= MAX_BUNDLE_DEPTH {
+                // Bundle trop profond — droppé et compté (anti-récursion
+                // infinie sur packets malveillants)
+                shared
+                    .stats
+                    .messages_dropped
+                    .fetch_add(1, Ordering::Relaxed);
+                return;
+            }
             for packet in bundle.content {
-                handle_packet(packet, shared);
+                handle_packet(packet, shared, depth + 1);
             }
         }
     }
@@ -650,16 +739,14 @@ fn dispatch_message(addr: &str, args: Vec<f64>, shared: &Shared) {
         return;
     }
 
-    // Snapshot des mappings sous read lock court
-    let mappings: Vec<OscMapping> = shared
-        .mappings
-        .read()
-        .unwrap_or_else(|e| e.into_inner())
-        .values()
-        .cloned()
-        .collect();
+    let max_objects = shared.max_objects.load(Ordering::Relaxed) as usize;
 
-    for mapping in &mappings {
+    // Itération sous read lock — pas de clone de la map par message.
+    // Pas de risque de deadlock : rien dans la boucle n'acquiert
+    // mappings.write() (add_mapping ne tient aucun autre lock).
+    let mappings_guard = shared.mappings.read().unwrap_or_else(|e| e.into_inner());
+
+    for mapping in mappings_guard.values() {
         let Some(captures) = match_address(&mapping.address, addr) else {
             continue;
         };
@@ -692,17 +779,27 @@ fn dispatch_message(addr: &str, args: Vec<f64>, shared: &Shared) {
             }
         }
 
-        // Feedback — la valeur transformée est visible via get_last_value
-        shared
-            .last_values
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .insert(mapping.destination.feedback_key(&captures), values.clone());
+        // Feedback — la valeur transformée est visible via get_last_value.
+        // Borné à MAX_FEEDBACK_KEYS : les clés incluant l'index résolu, un
+        // wildcard storm ne doit pas faire croître la map sans limite.
+        {
+            let key = mapping.destination.feedback_key(&captures);
+            let mut lv = shared.last_values.lock().unwrap_or_else(|e| e.into_inner());
+            if lv.len() < MAX_FEEDBACK_KEYS || lv.contains_key(&key) {
+                lv.insert(key, values.clone());
+            }
+        }
 
         // Routage vers la destination active
         let routed = {
             let targets = shared.targets.read().unwrap_or_else(|e| e.into_inner());
-            route_destination(&mapping.destination, &values, &captures, &targets)
+            route_destination(
+                &mapping.destination,
+                &values,
+                &captures,
+                &targets,
+                max_objects,
+            )
         };
         if routed {
             shared.stats.values_routed.fetch_add(1, Ordering::Relaxed);
@@ -715,6 +812,7 @@ fn route_destination(
     values: &[f64],
     captures: &[String],
     targets: &OscInTargets,
+    max_objects: usize,
 ) -> bool {
     match destination {
         MappingDestination::Handler { .. } => {
@@ -734,7 +832,10 @@ fn route_destination(
                 object.resolve(captures),
                 values.first(),
             ) {
-                (Some(channels), Some(obj), Some(&v)) => {
+                // Index borné : un id arbitraire via wildcard ne doit pas
+                // allouer une entrée dans la map (croissance illimitée +
+                // clone par frame de merge)
+                (Some(channels), Some(obj), Some(&v)) if obj < max_objects => {
                     channels
                         .write()
                         .unwrap_or_else(|e| e.into_inner())
@@ -748,7 +849,7 @@ fn route_destination(
         }
         MappingDestination::Position { object } => {
             match (&targets.manual_positions, object.resolve(captures)) {
-                (Some(positions), Some(obj)) if values.len() >= 3 => {
+                (Some(positions), Some(obj)) if values.len() >= 3 && obj < max_objects => {
                     positions
                         .write()
                         .unwrap_or_else(|e| e.into_inner())
@@ -1094,5 +1195,265 @@ mod tests {
         r.handle_message("/x", vec![1.0, 2.0]);
         let all = r.get_all_values();
         assert_eq!(all.get("h"), Some(&vec![1.0, 2.0]));
+    }
+
+    // ── Borne sur les index d'objet (anti wildcard-storm) ──
+
+    #[test]
+    fn test_out_of_range_object_index_rejected() {
+        let r = recv();
+        let channels: Arc<RwLock<HashMap<usize, SpatialChannels>>> =
+            Arc::new(RwLock::new(HashMap::new()));
+        let positions: Arc<RwLock<HashMap<usize, [f64; 3]>>> =
+            Arc::new(RwLock::new(HashMap::new()));
+        r.set_targets(OscInTargets {
+            object_channels: Some(channels.clone()),
+            manual_positions: Some(positions.clone()),
+            ..Default::default()
+        });
+        r.add_mapping(channel_mapping(
+            "/track/*/gain",
+            SpatialChannel::Gain,
+            ObjectRef::Wildcard("*".into()),
+        ))
+        .unwrap();
+        r.add_mapping(OscMapping {
+            address: "/obj/*/pos".into(),
+            destination: MappingDestination::Position {
+                object: ObjectRef::Wildcard("*".into()),
+            },
+            transform: Transform::default(),
+            enabled: true,
+        })
+        .unwrap();
+
+        // Index >= MAX_OBJECTS (1024) → rejeté, les maps ne grossissent pas
+        r.handle_message("/track/5000/gain", vec![0.8]);
+        r.handle_message("/obj/99999/pos", vec![1.0, 2.0, 3.0]);
+        assert!(channels.read().unwrap().is_empty());
+        assert!(positions.read().unwrap().is_empty());
+        assert_eq!(r.stats().values_routed, 0);
+
+        // Index valide → routé
+        r.handle_message("/track/3/gain", vec![0.8]);
+        r.handle_message("/obj/7/pos", vec![1.0, 2.0, 3.0]);
+        assert_eq!(
+            channels.read().unwrap().get(&3).and_then(|c| c.gain),
+            Some(0.8)
+        );
+        assert_eq!(positions.read().unwrap().get(&7), Some(&[1.0, 2.0, 3.0]));
+        assert_eq!(r.stats().values_routed, 2);
+    }
+
+    #[test]
+    fn test_max_objects_configurable() {
+        let r = recv();
+        assert_eq!(r.max_objects(), MAX_OBJECTS);
+        let channels: Arc<RwLock<HashMap<usize, SpatialChannels>>> =
+            Arc::new(RwLock::new(HashMap::new()));
+        r.set_targets(OscInTargets {
+            object_channels: Some(channels.clone()),
+            ..Default::default()
+        });
+        r.add_mapping(channel_mapping(
+            "/track/*/gain",
+            SpatialChannel::Gain,
+            ObjectRef::Wildcard("*".into()),
+        ))
+        .unwrap();
+        r.set_max_objects(8);
+        assert_eq!(r.max_objects(), 8);
+        r.handle_message("/track/9/gain", vec![0.5]);
+        assert!(channels.read().unwrap().is_empty());
+        r.handle_message("/track/7/gain", vec![0.5]);
+        assert_eq!(
+            channels.read().unwrap().get(&7).and_then(|c| c.gain),
+            Some(0.5)
+        );
+    }
+
+    // ── Borne mémoire sur le feedback ──
+
+    #[test]
+    fn test_last_values_capped() {
+        let r = recv();
+        r.add_handler_mapping("/x", "h").unwrap();
+        {
+            let mut lv = r.shared.last_values.lock().unwrap();
+            // Pré-remplit à la cap, en gardant "h" pour tester l'update
+            lv.insert("h".to_string(), vec![0.0]);
+            for i in 0..MAX_FEEDBACK_KEYS - 1 {
+                lv.insert(format!("k{i}"), vec![0.0]);
+            }
+        }
+        // Clé existante mise à jour malgré la cap atteinte
+        r.handle_message("/x", vec![1.0]);
+        assert_eq!(r.get_last_value("h"), Some(vec![1.0]));
+        assert_eq!(r.get_all_values().len(), MAX_FEEDBACK_KEYS);
+        // Nouvelle clé rejetée au-delà de la cap
+        r.add_handler_mapping("/y", "h2").unwrap();
+        r.handle_message("/y", vec![2.0]);
+        assert!(r.get_last_value("h2").is_none());
+        assert_eq!(r.get_all_values().len(), MAX_FEEDBACK_KEYS);
+    }
+
+    // ── Bundle depth limit ──
+
+    fn nested_bundle(depth: usize, leaf: OscPacket) -> OscPacket {
+        let mut p = leaf;
+        for _ in 0..depth {
+            p = OscPacket::Bundle(rosc::OscBundle {
+                timetag: rosc::OscTime {
+                    seconds: 0,
+                    fractional: 1,
+                },
+                content: vec![p],
+            });
+        }
+        p
+    }
+
+    #[test]
+    fn test_bundle_depth_limit() {
+        let r = recv();
+        r.add_handler_mapping("/x", "h").unwrap();
+        let shared = r.shared.clone();
+
+        // Bundle de 2 niveaux → le message interne est dispatché
+        let ok = nested_bundle(
+            2,
+            OscPacket::Message(rosc::OscMessage {
+                addr: "/x".to_string(),
+                args: vec![OscType::Float(0.5)],
+            }),
+        );
+        handle_packet(ok, &shared, 0);
+        assert_eq!(r.get_last_value("h"), Some(vec![0.5]));
+
+        // Bundle imbriqué > MAX_BUNDLE_DEPTH → droppé, pas de stack overflow
+        let deep = nested_bundle(
+            MAX_BUNDLE_DEPTH + 4,
+            OscPacket::Message(rosc::OscMessage {
+                addr: "/x".to_string(),
+                args: vec![OscType::Float(9.9)],
+            }),
+        );
+        handle_packet(deep, &shared, 0);
+        assert_eq!(r.get_last_value("h"), Some(vec![0.5])); // inchangé
+        assert!(r.stats().messages_dropped >= 1);
+    }
+
+    // ── Vrai socket UDP (couverture réelle du pipeline recv) ──
+
+    fn send_udp(addr: &str, args: Vec<OscType>, port: u16) {
+        let sock = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let pkt = OscPacket::Message(rosc::OscMessage {
+            addr: addr.to_string(),
+            args,
+        });
+        let bytes = rosc::encoder::encode(&pkt).unwrap();
+        sock.send_to(&bytes, ("127.0.0.1", port)).unwrap();
+    }
+
+    fn wait_until(cond: impl Fn() -> bool) -> bool {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while Instant::now() < deadline {
+            if cond() {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        false
+    }
+
+    #[test]
+    fn test_real_socket_udp_routing() {
+        let mut r = OscReceiver::new(0); // port éphémère
+        r.add_handler_mapping("/test/fader", "f").unwrap();
+        let macros = Arc::new(MacroState::new());
+        let channels: Arc<RwLock<HashMap<usize, SpatialChannels>>> =
+            Arc::new(RwLock::new(HashMap::new()));
+        r.set_targets(OscInTargets {
+            macros: Some(macros.clone()),
+            object_channels: Some(channels.clone()),
+            ..Default::default()
+        });
+        r.add_mapping(OscMapping {
+            address: "/ctl/scale".into(),
+            destination: MappingDestination::Macro {
+                name: MacroTarget::Scale,
+            },
+            transform: Transform::default(),
+            enabled: true,
+        })
+        .unwrap();
+        r.add_mapping(channel_mapping(
+            "/track/*/gain",
+            SpatialChannel::Gain,
+            ObjectRef::Wildcard("*".into()),
+        ))
+        .unwrap();
+
+        r.start().unwrap();
+        assert!(r.is_alive());
+        let port = r.port;
+        assert_ne!(port, 0, "port éphémère non résolu");
+
+        send_udp("/test/fader", vec![OscType::Float(0.5)], port);
+        send_udp("/ctl/scale", vec![OscType::Float(1.5)], port);
+        send_udp("/track/3/gain", vec![OscType::Float(0.8)], port);
+
+        assert!(wait_until(|| r.get_last_value("f").is_some()));
+        assert_eq!(r.get_last_value("f"), Some(vec![0.5]));
+
+        assert!(wait_until(|| {
+            f64::from_bits(macros.scale.load(Ordering::Relaxed)) == 1.5
+        }));
+        // 0.8 n'est pas représentable en f32 — la valeur routée est
+        // 0.8f32 as f64 ≈ 0.8000000119, jamais égale à 0.8f64 exactement.
+        assert!(wait_until(|| {
+            channels
+                .read()
+                .unwrap()
+                .get(&3)
+                .and_then(|c| c.gain)
+                .is_some_and(|g| (g - 0.8).abs() < 1e-6)
+        }));
+
+        let s = r.stats();
+        assert!(s.packets_received >= 3);
+        assert_eq!(s.decode_errors, 0);
+        r.stop();
+        assert!(!r.is_alive());
+    }
+
+    #[test]
+    fn test_double_start_error_and_restart() {
+        let mut r = OscReceiver::new(0);
+        r.start().unwrap();
+        assert!(r.is_running);
+        assert!(r.is_alive());
+        // Double-start → erreur explicite
+        assert!(r.start().is_err());
+        r.stop();
+        assert!(!r.is_running);
+        assert!(!r.is_alive());
+        // Restart propre après stop
+        r.start().unwrap();
+        assert!(r.is_running);
+        assert!(r.is_alive());
+        r.stop();
+    }
+
+    #[test]
+    fn test_decode_errors_counted() {
+        let mut r = OscReceiver::new(0);
+        r.start().unwrap();
+        let sock = UdpSocket::bind("127.0.0.1:0").unwrap();
+        // Datagram non-OSC → erreur de décodage comptée (pas de drop silencieux)
+        sock.send_to(b"definitely not an osc packet", ("127.0.0.1", r.port))
+            .unwrap();
+        assert!(wait_until(|| r.stats().decode_errors >= 1));
+        r.stop();
     }
 }

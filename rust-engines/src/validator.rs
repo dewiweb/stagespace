@@ -1,4 +1,6 @@
-use crate::graph::{Graph, NodeType};
+use crate::graph::{Graph, NodeId, NodeType};
+use std::collections::HashSet;
+use std::fmt;
 
 /// Contexte de validation : sub-graph (mouvement) ou graph global (post-processing).
 ///
@@ -22,6 +24,23 @@ pub enum ValidationError {
     CountMismatch(String),
     /// Node présent dans un contexte où il n'a pas de sens (sub-graph vs global)
     ContextIncompatible(String),
+}
+
+impl fmt::Display for ValidationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ValidationError::CycleDetected => write!(f, "cycle detected in graph"),
+            ValidationError::MissingRequiredNode(t) => {
+                write!(f, "missing required node {t:?}")
+            }
+            ValidationError::InvalidConnection(msg) => write!(f, "invalid connection: {msg}"),
+            ValidationError::TypeMismatch(msg) => write!(f, "type mismatch: {msg}"),
+            ValidationError::CountMismatch(msg) => write!(f, "count mismatch: {msg}"),
+            ValidationError::ContextIncompatible(msg) => {
+                write!(f, "context incompatible: {msg}")
+            }
+        }
+    }
 }
 
 /// Résultat de validation
@@ -56,9 +75,15 @@ impl Validator {
                 // Objects et Duration sont obligatoires seulement s'il y a des moteurs directs
                 let has_engines = Self::graph_has_engines(graph);
                 if has_engines {
-                    let required_nodes = vec![NodeType::Objects, NodeType::Duration];
-                    for required_type in required_nodes {
-                        if !graph.nodes.values().any(|n| n.node_type == required_type) {
+                    // Un node Objects/Duration ne compte que s'il est connecté
+                    // au graphe — un node orphelin ne fournit ni n_objects ni
+                    // duration aux engines (le compiler échouerait plus tard
+                    // avec un MissingParameter moins clair).
+                    for required_type in [NodeType::Objects, NodeType::Duration] {
+                        let connected = graph.nodes.values().any(|n| {
+                            n.node_type == required_type && !graph.get_outputs(n.id).is_empty()
+                        });
+                        if !connected {
                             errors.push(ValidationError::MissingRequiredNode(required_type));
                         }
                     }
@@ -89,22 +114,52 @@ impl Validator {
             errors.push(ValidationError::MissingRequiredNode(NodeType::Output));
         }
 
-        // 3. Vérifier les connexions valides
+        // Un seul node Objects — plusieurs seraient ambigus (le parser
+        // résoudrait n_objects de façon non déterministe via HashMap::find).
+        let objects_count = graph
+            .nodes
+            .values()
+            .filter(|n| n.node_type == NodeType::Objects)
+            .count();
+        if objects_count > 1 {
+            errors.push(ValidationError::InvalidConnection(format!(
+                "{objects_count} Objects nodes found — at most one is allowed"
+            )));
+        }
+
+        // 3. Vérifier les connexions valides + endpoints existants + doublons
+        let mut seen_edges: HashSet<(NodeId, NodeId, &str, &str)> = HashSet::new();
         for edge in &graph.edges {
-            if let Some(from_node) = graph.nodes.get(&edge.from) {
-                if let Some(to_node) = graph.nodes.get(&edge.to) {
-                    if !Self::is_valid_connection(&from_node.node_type, &to_node.node_type) {
+            if !seen_edges.insert((edge.from, edge.to, &edge.from_port, &edge.to_port)) {
+                errors.push(ValidationError::InvalidConnection(format!(
+                    "duplicate edge {:?} -> {:?} ({} -> {})",
+                    edge.from, edge.to, edge.from_port, edge.to_port
+                )));
+            }
+            match (graph.nodes.get(&edge.from), graph.nodes.get(&edge.to)) {
+                (Some(from_node), Some(to_node)) => {
+                    if edge.from == edge.to {
+                        errors.push(ValidationError::InvalidConnection(format!(
+                            "self-loop on {:?} is not allowed",
+                            from_node.node_type
+                        )));
+                    } else if !Self::is_valid_connection(&from_node.node_type, &to_node.node_type) {
                         errors.push(ValidationError::InvalidConnection(format!(
                             "{:?} -> {:?}",
                             from_node.node_type, to_node.node_type
                         )));
                     }
                 }
+                _ => errors.push(ValidationError::InvalidConnection(format!(
+                    "edge references missing node(s): {:?} -> {:?}",
+                    edge.from, edge.to
+                ))),
             }
         }
 
-        // 4. Vérifier la compatibilité des types
+        // 4. Vérifier la compatibilité des types + arité des ports
         Self::validate_type_compatibility(graph, &mut errors);
+        Self::validate_input_arity(graph, &mut errors);
 
         // 5. Vérifier la compatibilité des comptages (sub-graph uniquement —
         //    le graph global n'a pas de node Objects pour définir n_objects)
@@ -175,6 +230,14 @@ impl Validator {
                     | NodeType::DirectionalFalloff
                     | NodeType::AudioAmplitudeFalloff
                     | NodeType::Wave
+                    // Splines + sources audio/OSC : compilés comme des engines,
+                    // ils ont aussi besoin d'Objects/Duration résolubles
+                    | NodeType::DrawSpline
+                    | NodeType::EvaluateSpline
+                    | NodeType::TrimSpline
+                    | NodeType::OffsetSpline
+                    | NodeType::AudioSpectrum
+                    | NodeType::OSCInput
             )
         })
     }
@@ -233,7 +296,7 @@ impl Validator {
 
             // Modificateurs
             NodeType::Scale | NodeType::Rotate | NodeType::Offset | NodeType::PhaseShift
-            | NodeType::BarycentricGroup | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
+            | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
             // Post-processing nodes (graph global)
             | NodeType::RadiusScale | NodeType::HeightOffset | NodeType::PerTrackDepth
             | NodeType::Barycenter | NodeType::AudioFalloff | NodeType::ManualPosition
@@ -412,7 +475,6 @@ impl Validator {
             | NodeType::Rotate
             | NodeType::Offset
             | NodeType::PhaseShift
-            | NodeType::BarycentricGroup
             | NodeType::Mirror
             | NodeType::Clamp
             | NodeType::LFO
@@ -433,12 +495,52 @@ impl Validator {
             }
 
             // Composites binaires : acceptent input, input_a, input_b
-            // (input_a/input_b sont les ports visuels A/B ; le compiler distingue par ordre des edges)
+            // (input_a/input_b sont les ports visuels A/B ; le compiler
+            // résout A/B par nom de port via Graph::get_binary_inputs)
             NodeType::Mix | NodeType::Group | NodeType::Sequence | NodeType::Crossfade => {
                 &["input", "input_a", "input_b"]
             }
         };
         inputs.contains(&port)
+    }
+
+    /// Vérifie l'arité des entrées :
+    /// - au plus 1 edge par port d'entrée nommé (deux edges sur "input" sont
+    ///   silencieusement réduits à un par le compiler — erreur ici)
+    /// - les composites binaires exigent exactement 2 entrées
+    fn validate_input_arity(graph: &Graph, errors: &mut Vec<ValidationError>) {
+        for node in graph.nodes.values() {
+            let incoming: Vec<&crate::graph::Edge> =
+                graph.edges.iter().filter(|e| e.to == node.id).collect();
+
+            // Un même port ne peut recevoir qu'un seul edge
+            let mut port_counts: std::collections::HashMap<&str, usize> =
+                std::collections::HashMap::new();
+            for e in &incoming {
+                *port_counts.entry(e.to_port.as_str()).or_insert(0) += 1;
+            }
+            for (port, count) in port_counts {
+                if count > 1 {
+                    errors.push(ValidationError::TypeMismatch(format!(
+                        "{:?} input port '{port}' receives {count} edges — only one allowed",
+                        node.node_type
+                    )));
+                }
+            }
+
+            // Les composites binaires exigent exactement 2 entrées
+            if matches!(
+                node.node_type,
+                NodeType::Mix | NodeType::Group | NodeType::Sequence | NodeType::Crossfade
+            ) && incoming.len() != 2
+            {
+                errors.push(ValidationError::InvalidConnection(format!(
+                    "{:?} requires exactly 2 trajectory inputs, got {}",
+                    node.node_type,
+                    incoming.len()
+                )));
+            }
+        }
     }
 
     /// Vérifie la compatibilité des comptages (n_objects)

@@ -40,6 +40,64 @@ use serde::{Deserialize, Serialize};
 /// frontend ou d'un fichier de patch peut épuiser la mémoire ou geler le runtime.
 pub const MAX_OBJECTS: usize = 1024;
 
+/// Nombre max de pas de simulation rejoués depuis t=0 par les moteurs à état
+/// (intégration pas à pas : swarm, avoidance, bouncing, spring, follow,
+/// pendulum, vector_field).
+///
+/// Au-delà, le pas de temps est dilaté (`dt' = t / MAX_SIM_STEPS`) : la
+/// trajectoire reste globalement correcte en moyenne mais perd en fidélité
+/// locale — compromis délibéré pour qu'une durée de plusieurs heures ne puisse
+/// pas geler une frame (4M pas ≈ 18.5h à 60 fps en pas fins).
+pub const MAX_SIM_STEPS: u64 = 4_000_000;
+
+/// Nombre de pas de re-simulation et pas de temps effectif pour les moteurs
+/// dont le coût par pas est O(1) par objet (bouncing, spring, follow,
+/// pendulum, vector_field).
+///
+/// Retourne `(n_steps, dt)` :
+/// - cas nominal : `n_steps = (t.max(0) * fps.max(1)) as u64`, `dt = 1/fps`
+///   (pattern de référence : vector_field) — les t négatifs donnent 0 pas,
+///   c.-à-d. la position initiale ;
+/// - si `n_steps > MAX_SIM_STEPS`, on plafonne à `MAX_SIM_STEPS` avec
+///   `dt = t / MAX_SIM_STEPS` (dégradation douce, voir [`MAX_SIM_STEPS`]).
+pub fn sim_steps(t: f64, fps: f64) -> (u64, f64) {
+    let fps = fps.max(1.0);
+    let t = t.max(0.0);
+    let steps = (t * fps) as u64;
+    if steps <= MAX_SIM_STEPS {
+        (steps, 1.0 / fps)
+    } else {
+        (MAX_SIM_STEPS, t / MAX_SIM_STEPS as f64)
+    }
+}
+
+/// Variante de [`sim_steps`] pour les moteurs à interaction entre agents
+/// (swarm, avoidance) dont le pas de temps coûte O(n²) : le budget de pas est
+/// divisé par n² pour borner le coût total d'une re-simulation (~4M
+/// évaluations de paires), puis le dt est dilaté de la même façon.
+pub fn sim_steps_n2(t: f64, fps: f64, n_agents: usize) -> (u64, f64) {
+    let fps = fps.max(1.0);
+    let t = t.max(0.0);
+    let n2 = (n_agents as u64).saturating_mul(n_agents as u64).max(1);
+    let cap = (MAX_SIM_STEPS / n2).max(1);
+    let steps = (t * fps) as u64;
+    if steps <= cap {
+        (steps, 1.0 / fps)
+    } else {
+        (cap, t / cap as f64)
+    }
+}
+
+/// Garde-fou de sortie : un NaN/inf produit par des paramètres dégénérés ne
+/// doit jamais partir vers l'OSC — on retombe sur l'origine.
+pub fn finite_or_zero(p: Vector3<f64>) -> Vector3<f64> {
+    if p.iter().all(|v| v.is_finite()) {
+        p
+    } else {
+        Vector3::zeros()
+    }
+}
+
 /// Paramètres communs pour tous les moteurs
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EngineParams {
@@ -289,6 +347,62 @@ mod tests {
         let pos = engine.position(0.0, 0, &params);
         // Should be within bounds
         assert!(pos.norm() < 1.0);
+    }
+
+    #[test]
+    fn test_sim_steps_nominal() {
+        let (steps, dt) = sim_steps(1.0, 60.0);
+        assert_eq!(steps, 60);
+        assert!((dt - 1.0 / 60.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_sim_steps_negative_t_is_frozen() {
+        // t négatif → 0 pas → position initiale (pas de simulation à rebours)
+        let (steps, dt) = sim_steps(-5.0, 60.0);
+        assert_eq!(steps, 0);
+        assert!((dt - 1.0 / 60.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_sim_steps_zero_fps_clamped() {
+        let (steps, dt) = sim_steps(2.0, 0.0);
+        assert_eq!(steps, 2); // fps.max(1.0)
+        assert!((dt - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_sim_steps_caps_long_durations() {
+        // ~24h à 60 fps dépasse le cap → dt dilaté pour couvrir t
+        let t = 24.0 * 3600.0;
+        let (steps, dt) = sim_steps(t, 60.0);
+        assert_eq!(steps, MAX_SIM_STEPS);
+        assert!((dt - t / MAX_SIM_STEPS as f64).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_sim_steps_n2_bounds_total_work() {
+        // n=1024 agents : le cap est divisé par n² → la re-simulation ne peut
+        // pas dépasser ~MAX_SIM_STEPS évaluations de paires
+        let (steps, dt) = sim_steps_n2(1000.0, 60.0, 1024);
+        assert!(steps <= MAX_SIM_STEPS / (1024 * 1024) + 1);
+        assert!(dt > 1.0 / 60.0); // pas dilaté
+    }
+
+    #[test]
+    fn test_finite_or_zero() {
+        assert_eq!(
+            finite_or_zero(Vector3::new(1.0, 2.0, 3.0)),
+            Vector3::new(1.0, 2.0, 3.0)
+        );
+        assert_eq!(
+            finite_or_zero(Vector3::new(f64::NAN, 0.0, 0.0)),
+            Vector3::zeros()
+        );
+        assert_eq!(
+            finite_or_zero(Vector3::new(0.0, f64::INFINITY, 0.0)),
+            Vector3::zeros()
+        );
     }
 
     #[test]

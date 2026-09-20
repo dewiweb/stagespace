@@ -1,8 +1,10 @@
 use crate::engines::{Engine, EngineParams};
 use nalgebra::Vector3;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, OnceLock};
 
 /// A point in a spline
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct SplinePoint {
     pub x: f64,
     pub y: f64,
@@ -10,7 +12,7 @@ pub struct SplinePoint {
 }
 
 /// A spline definition
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Spline {
     pub points: Vec<SplinePoint>,
     pub closed: bool,
@@ -127,9 +129,70 @@ pub fn build_spline_lut(spline: &Spline) -> SplineLUT {
     }
 }
 
+// ── Cache global de LUT ─────────────────────────────────────────────────────
+//
+// Les moteurs spline (DrawSpline/EvaluateSpline/TrimSpline/OffsetSpline) sont
+// des structs unités instanciés via `Box::new(X)` dans compiler.rs — pas de
+// champ d'instance possible sans changer le call-site. Le build d'une LUT
+// coûte LUT_STEPS+1 évaluations Catmull-Rom + 2 allocations PAR appel de
+// position() (× objets × frames) : on mutualise donc un cache global borné.
+//
+// La clé est un hash FNV-1a de TOUTE la définition (points + closed +
+// tension) — O(n) mais négligeable devant les 201 évaluations — et la spline
+// est stockée à côté de la LUT pour éliminer tout risque de collision.
+// Le cache est borné : vidé quand il dépasse MAX_CACHED_LUTS entrées.
+
+type LutCache = Mutex<HashMap<u64, (Spline, Arc<SplineLUT>)>>;
+
+static LUT_CACHE: OnceLock<LutCache> = OnceLock::new();
+
+/// Borne du cache de LUT — un show n'a pas plus de quelques dizaines de
+/// splines distinctes ; au-delà on vide plutôt que de croître sans limite.
+const MAX_CACHED_LUTS: usize = 32;
+
+fn spline_cache_key(spline: &Spline) -> u64 {
+    // FNV-1a sur les bits f64 de la définition complète
+    let mut h: u64 = 0xcbf29ce484222325;
+    let mut mix = |bits: u64| {
+        h ^= bits;
+        h = h.wrapping_mul(0x100000001b3);
+    };
+    mix(spline.points.len() as u64);
+    mix(spline.closed as u64);
+    mix(spline.tension.to_bits());
+    for p in &spline.points {
+        mix(p.x.to_bits());
+        mix(p.y.to_bits());
+        mix(p.z.to_bits());
+    }
+    h
+}
+
+/// Retourne la LUT de la spline, depuis le cache si possible.
+fn cached_spline_lut(spline: &Spline) -> Arc<SplineLUT> {
+    let cache = LUT_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    let key = spline_cache_key(spline);
+    let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
+
+    if let Some((cached_spline, lut)) = guard.get(&key) {
+        // La spline est stockée → aucune collision de hash possible
+        if cached_spline == spline {
+            return Arc::clone(lut);
+        }
+    }
+
+    let lut = Arc::new(build_spline_lut(spline));
+    if guard.len() >= MAX_CACHED_LUTS {
+        guard.clear();
+    }
+    guard.insert(key, (spline.clone(), Arc::clone(&lut)));
+    lut
+}
+
 /// Evaluate spline at arc-length-uniform t ∈ [0,1]
 pub fn evaluate_spline(lut: &SplineLUT, t: f64) -> Vector3<f64> {
-    if lut.positions.len() <= 1 {
+    if lut.positions.len() <= 1 || !t.is_finite() {
+        // t non fini (ex. duration = 0 → tn = inf/NaN) → premier point
         return lut
             .positions
             .first()
@@ -241,7 +304,7 @@ impl Engine for DrawSpline {
             closed: false,
             tension: 0.5,
         });
-        let lut = build_spline_lut(&spline);
+        let lut = cached_spline_lut(&spline);
         let speed = params
             .extra
             .get("speed")
@@ -290,7 +353,7 @@ impl Engine for EvaluateSpline {
             closed: false,
             tension: 0.5,
         });
-        let lut = build_spline_lut(&spline);
+        let lut = cached_spline_lut(&spline);
         let speed = params
             .extra
             .get("speed")
@@ -339,7 +402,7 @@ impl Engine for TrimSpline {
             closed: false,
             tension: 0.5,
         });
-        let lut = build_spline_lut(&spline);
+        let lut = cached_spline_lut(&spline);
         let speed = params
             .extra
             .get("speed")
@@ -399,7 +462,7 @@ impl Engine for OffsetSpline {
             closed: false,
             tension: 0.5,
         });
-        let lut = build_spline_lut(&spline);
+        let lut = cached_spline_lut(&spline);
         let speed = params
             .extra
             .get("speed")
@@ -487,7 +550,7 @@ mod tests {
             closed: false,
             tension: 0.5,
         };
-        let lut = build_spline_lut(&spline);
+        let lut = cached_spline_lut(&spline);
         assert!(lut.total_length > 2.0);
 
         let p0 = evaluate_spline(&lut, 0.0);
@@ -533,5 +596,98 @@ mod tests {
             "pos.x should be near 0 at t=0, got {}",
             pos.x
         );
+    }
+
+    #[test]
+    fn test_lut_cache_hit_returns_same_lut() {
+        // Le cache doit retourner une LUT identique pour une même spline
+        // (et la MÊME Arc à clé égale → pas de rebuild).
+        let spline = Spline {
+            points: vec![
+                SplinePoint {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                SplinePoint {
+                    x: 1.0,
+                    y: 0.5,
+                    z: 0.0,
+                },
+                SplinePoint {
+                    x: 2.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+            ],
+            closed: false,
+            tension: 0.5,
+        };
+        let a = cached_spline_lut(&spline);
+        let b = cached_spline_lut(&spline);
+        assert!(Arc::ptr_eq(&a, &b), "même spline → même LUT en cache");
+    }
+
+    #[test]
+    fn test_lut_cache_no_false_hit_on_middle_point() {
+        // Deux splines qui ne diffèrent que par un point du milieu doivent
+        // produire des LUT distinctes — le hash couvre tous les points.
+        let base = |mid_y: f64| Spline {
+            points: vec![
+                SplinePoint {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                SplinePoint {
+                    x: 0.5,
+                    y: mid_y,
+                    z: 0.0,
+                },
+                SplinePoint {
+                    x: 1.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+            ],
+            closed: false,
+            tension: 0.5,
+        };
+        let flat = cached_spline_lut(&base(0.0));
+        let bumped = cached_spline_lut(&base(0.8));
+        assert!(
+            !Arc::ptr_eq(&flat, &bumped) && (flat.total_length - bumped.total_length).abs() > 0.01,
+            "un point médian différent doit invalider le cache"
+        );
+    }
+
+    #[test]
+    fn test_evaluate_spline_non_finite_t_is_safe() {
+        // duration = 0 dans un moteur → tn = inf/NaN : doit retourner le
+        // premier point plutôt que propager du NaN vers l'OSC.
+        let spline = Spline {
+            points: vec![
+                SplinePoint {
+                    x: 1.0,
+                    y: 2.0,
+                    z: 3.0,
+                },
+                SplinePoint {
+                    x: 4.0,
+                    y: 5.0,
+                    z: 6.0,
+                },
+            ],
+            closed: false,
+            tension: 0.5,
+        };
+        let lut = build_spline_lut(&spline);
+        for bad_t in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let p = evaluate_spline(&lut, bad_t);
+            assert!(
+                p.iter().all(|v| v.is_finite()),
+                "t={bad_t} doit donner une position finie"
+            );
+        }
     }
 }

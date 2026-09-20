@@ -35,14 +35,25 @@ pub enum FalloffCurve {
 
 impl Falloff for TimeFalloff {
     fn influence(&self, t: f64, _position: Vector3<f64>, _context: &FalloffContext) -> f64 {
+        // Sémantique fade-in : 0 avant start_time, rampe dans
+        // [start_time, end_time], puis influence tenue à 1 — retomber à 0
+        // après end_time produisait une impulsion discontinue (snap des
+        // positions à l'origine).
         if t < self.start_time {
             return 0.0;
         }
-        if t > self.end_time {
-            return 0.0;
+        if t >= self.end_time {
+            return 1.0;
         }
 
-        let progress = (t - self.start_time) / (self.end_time - self.start_time);
+        let span = self.end_time - self.start_time;
+        // start == end est intercepté ci-dessus ; on borne quand même la
+        // division pour les fenêtres quasi nulles (évite tout NaN).
+        let progress = if span.abs() < 1e-10 {
+            1.0
+        } else {
+            (t - self.start_time) / span
+        };
 
         match self.curve {
             FalloffCurve::Linear => progress,
@@ -174,11 +185,21 @@ pub struct AudioAmplitudeFalloff {
 impl AudioAmplitudeFalloff {
     /// Calcule l'influence à partir d'une valeur d'amplitude donnée
     pub fn influence_from_value(&self, amplitude: f64) -> f64 {
-        let clamped = amplitude.clamp(self.min_val, self.max_val);
-        let progress = if (self.max_val - self.min_val).abs() < 1e-10 {
+        // f64::clamp panique si min > max — paramètres venant du frontend
+        let (lo, hi) = if self.min_val <= self.max_val {
+            (self.min_val, self.max_val)
+        } else {
+            (self.max_val, self.min_val)
+        };
+        let clamped = if amplitude.is_finite() {
+            amplitude.clamp(lo, hi)
+        } else {
+            lo
+        };
+        let progress = if (hi - lo).abs() < 1e-10 {
             0.0
         } else {
-            (clamped - self.min_val) / (self.max_val - self.min_val)
+            (clamped - lo) / (hi - lo)
         };
 
         match self.curve {
@@ -231,8 +252,27 @@ mod tests {
         // Pendant le falloff
         assert!((falloff.influence(2.0, Vector3::zeros(), &context) - 0.5).abs() < 0.01);
 
-        // Après le end_time
-        assert_eq!(falloff.influence(4.0, Vector3::zeros(), &context), 0.0);
+        // Après le end_time : influence tenue à 1 (sémantique fade-in —
+        // retomber à 0 produisait une impulsion discontinue)
+        assert_eq!(falloff.influence(4.0, Vector3::zeros(), &context), 1.0);
+    }
+
+    #[test]
+    fn test_time_falloff_zero_width_window() {
+        // Régression : start == end → division 0/0 → NaN
+        let falloff = TimeFalloff {
+            start_time: 2.0,
+            end_time: 2.0,
+            curve: FalloffCurve::Linear,
+        };
+        let context = FalloffContext {
+            duration: 4.0,
+            n_objects: 9,
+        };
+        assert_eq!(falloff.influence(1.0, Vector3::zeros(), &context), 0.0);
+        let at = falloff.influence(2.0, Vector3::zeros(), &context);
+        assert!(at.is_finite() && at == 1.0, "influence={at}");
+        assert_eq!(falloff.influence(3.0, Vector3::zeros(), &context), 1.0);
     }
 
     #[test]

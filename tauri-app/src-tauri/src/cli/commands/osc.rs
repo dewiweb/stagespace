@@ -418,7 +418,7 @@ pub fn cmd_osc_validate(args: &[&str]) -> Result<String, String> {
         let profile_enum =
             OscProfile::from_str(profile).map_err(|e| format!("Invalid OSC profile: {e}"))?;
         let osc_sender = OscSender::new(profile_enum, "127.0.0.1".to_string(), port);
-        let mut merge_rt = state
+        let merge_rt = state
             .merge_runtime
             .lock()
             .unwrap_or_else(|e| e.into_inner());

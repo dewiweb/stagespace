@@ -1,5 +1,6 @@
 import { StateCreator } from 'zustand';
 import { safeInvoke as invoke } from '../../utils/tauri';
+import { toast } from '../../utils/toast-helpers';
 import type { MovementInfo } from '../types/index';
 
 export type MacrosState = {
@@ -62,6 +63,7 @@ export const createMacrosSlice: StateCreator<MacrosStore, [], [], MacrosSlice> =
       }
     } catch (e) {
       console.error('Failed to push macros:', e);
+      toast.error(`Failed to apply macros to runtime: ${e}`);
     }
   },
 
@@ -79,6 +81,7 @@ export const createMacrosSlice: StateCreator<MacrosStore, [], [], MacrosSlice> =
       }
     } catch (e) {
       console.error('Failed to set loop mode:', e);
+      toast.error(`Failed to set loop mode on running moves: ${e}`);
     }
   },
 
@@ -95,6 +98,7 @@ export const createMacrosSlice: StateCreator<MacrosStore, [], [], MacrosSlice> =
       }
     } catch (e) {
       console.error('Failed to set direction:', e);
+      toast.error(`Failed to set direction on running moves: ${e}`);
     }
   },
 });

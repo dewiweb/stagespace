@@ -38,9 +38,39 @@ use crate::runtime::{
 use rosc::{OscMessage, OscPacket, OscType};
 use std::collections::HashMap;
 use std::net::UdpSocket;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
+
+/// Callback de position partageable — `Arc` (pas `Box`) pour que le merge
+/// thread puisse cloner le handle sous un lock très court puis appeler le
+/// callback HORS du lock (l'emit Tauri sérialise tout le monde JSON — il ne
+/// doit pas être fait sous le mutex).
+type SharedPositionCallback = Arc<dyn Fn(f64, Vec<(usize, nalgebra::Vector3<f64>)>) + Send + Sync>;
+
+/// Cible OSC partagée avec le merge thread : sender + socket swappés
+/// atomiquement sous un seul lock.
+///
+/// Avant, la socket était `try_clone`'d une fois au `start()` — un
+/// `set_osc_target` en cours de route swapait le sender mais laissait la
+/// socket figée → nouveau profil envoyé à l'ancienne destination.
+struct OscTarget {
+    sender: OscSender,
+    socket: Arc<UdpSocket>,
+}
+
+/// Positions des tracks .hol partagées en copy-on-write : les writers
+/// remplacent l'Arc interne, les readers clonent l'Arc (snapshot cheap).
+type SharedTrackPositions = Arc<RwLock<Arc<HashMap<u32, [f64; 3]>>>>;
+
+/// Nombre de frames de merge consécutives sans write du worker avant de
+/// considérer le move zombie (worker mort/fini) et le retirer du merge.
+/// ~0.5 s à 60 FPS.
+const STALE_FRAME_LIMIT: u32 = 30;
+
+/// Seuil de retard (en frames) au-delà duquel on ré-ancre `frame_count`
+/// sur le temps réel au lieu de burst des frames obsolètes.
+const CATCHUP_FRAME_LIMIT: u128 = 30;
 
 /// Runtime global qui merge les positions de tous les workers.
 ///
@@ -49,6 +79,15 @@ use std::time::{Duration, Instant};
 pub struct MergeRuntime {
     thread: Option<std::thread::JoinHandle<()>>,
     running: Arc<AtomicBool>,
+    /// Vrai si le merge thread est mort d'un panic contenu (catch_unwind).
+    /// Observable : sans lui, un panic tuait le thread pendant que
+    /// `running` restait true → blackout OSC silencieux.
+    thread_died: Arc<AtomicBool>,
+    /// Compteur de frames mergées — liveness observable du merge thread
+    /// (incrémenté à chaque itération de la boucle, y compris idle).
+    merge_frames: Arc<AtomicU64>,
+    /// Total de positions non-finies (NaN/inf) droppées avant l'envoi OSC.
+    dropped_positions: Arc<AtomicU64>,
     /// Buffers par move ID
     move_buffers: Arc<RwLock<HashMap<String, Arc<PositionBuffer>>>>,
     /// États des moves actifs
@@ -60,44 +99,47 @@ pub struct MergeRuntime {
     audio_state: Arc<Mutex<AudioState>>,
     /// Origin = isobarycentre des tracks
     origin: Arc<Mutex<nalgebra::Vector3<f64>>>,
-    /// OSC ids globaux (tracks sélectionnées)
-    osc_ids: Arc<RwLock<Vec<u32>>>,
-    /// Profondeur par track (per-track depth)
-    track_depths: Arc<RwLock<Vec<f64>>>,
+    /// OSC ids globaux (tracks sélectionnées) — Arc<Vec> : snapshot par
+    /// frame = clone d'Arc au lieu de copier le Vec.
+    osc_ids: Arc<RwLock<Arc<Vec<u32>>>>,
+    /// Profondeur par track (per-track depth) — snapshot Arc par frame
+    track_depths: Arc<RwLock<Arc<Vec<f64>>>>,
     /// Stratégie de merge
     merge_strategy: Arc<RwLock<MergeStrategy>>,
     /// Performance monitor global
     perf: Arc<PerfMonitor>,
     /// Callback de position (un seul event pour le 3D preview)
-    position_callback: Arc<Mutex<Option<PositionCallback>>>,
-    /// OSC sender
-    osc_sender: Arc<Mutex<OscSender>>,
-    /// Socket UDP
-    socket: UdpSocket,
+    position_callback: Arc<Mutex<Option<SharedPositionCallback>>>,
+    /// Cible OSC (sender + socket, swappés ensemble)
+    osc_target: Arc<Mutex<OscTarget>>,
     /// FPS cible
     fps: f64,
     /// Fonction de post-processing (graph global) — hot-swappable
     post_process_fn: Arc<RwLock<PostProcessFn>>,
     /// Positions des tracks .hol (pour Barycenter) — track_id → [x, y, z]
-    track_positions: Arc<RwLock<HashMap<u32, [f64; 3]>>>,
+    /// Arc<HashMap> : snapshot par frame = clone d'Arc.
+    track_positions: SharedTrackPositions,
     /// Positions manuelles (pour ManualPosition) — object_index → [x, y, z]
+    /// Type figé par `OscInTargets` (osc_receiver) — clone par frame.
     manual_positions: Arc<RwLock<HashMap<usize, [f64; 3]>>>,
     /// Canaux spatiaux étendus par objet (gain, spread, distance, presence,
-    /// yaw, aperture, lfe) — object_index → SpatialChannels
+    /// yaw, aperture, lfe) — object_index → SpatialChannels.
+    /// Type figé par `OscInTargets` (osc_receiver).
     object_channels: Arc<RwLock<HashMap<usize, SpatialChannels>>>,
     /// Règles de modulation cinématique (source cinématique → canal spatial)
-    channel_modulations: Arc<RwLock<Vec<ChannelModulation>>>,
+    /// — Arc<Vec> : snapshot par frame = clone d'Arc.
+    channel_modulations: Arc<RwLock<Arc<Vec<ChannelModulation>>>>,
     /// Coefficient de lissage des mesures cinématiques [0, 1)
     kinematic_smoothing: Arc<RwLock<f64>>,
     /// Zones d'effets spatiaux (P4) — blend des canaux selon la position
-    zones: Arc<RwLock<Vec<crate::zones::Zone>>>,
+    zones: Arc<RwLock<Arc<Vec<crate::zones::Zone>>>>,
     /// Zones déclarées dans le graph global (nodes `Zone`) — remplacées
     /// en bloc à chaque `update_global_graph`, évaluées avant les zones
     /// manuelles (qui gardent le dernier mot sur le blend).
-    graph_zones: Arc<RwLock<Vec<crate::zones::Zone>>>,
+    graph_zones: Arc<RwLock<Arc<Vec<crate::zones::Zone>>>>,
     /// Modulations déclarées dans le graph global (nodes `Velocity`) —
     /// évaluées avant les règles manuelles (priorité aux manuelles).
-    graph_modulations: Arc<RwLock<Vec<ChannelModulation>>>,
+    graph_modulations: Arc<RwLock<Arc<Vec<ChannelModulation>>>>,
 }
 
 impl MergeRuntime {
@@ -117,28 +159,33 @@ impl MergeRuntime {
         Ok(MergeRuntime {
             thread: None,
             running: Arc::new(AtomicBool::new(false)),
+            thread_died: Arc::new(AtomicBool::new(false)),
+            merge_frames: Arc::new(AtomicU64::new(0)),
+            dropped_positions: Arc::new(AtomicU64::new(0)),
             move_buffers: Arc::new(RwLock::new(HashMap::new())),
             active_moves: Arc::new(RwLock::new(HashMap::new())),
             macros: Arc::new(MacroState::new()),
             audio_state: Arc::new(Mutex::new(AudioState::new())),
             origin: Arc::new(Mutex::new(nalgebra::Vector3::zeros())),
-            osc_ids: Arc::new(RwLock::new(Vec::new())),
-            track_depths: Arc::new(RwLock::new(Vec::new())),
+            osc_ids: Arc::new(RwLock::new(Arc::new(Vec::new()))),
+            track_depths: Arc::new(RwLock::new(Arc::new(Vec::new()))),
             merge_strategy: Arc::new(RwLock::new(MergeStrategy::Override)),
             perf: Arc::new(PerfMonitor::new()),
             position_callback: Arc::new(Mutex::new(None)),
-            osc_sender: Arc::new(Mutex::new(osc_sender)),
-            socket,
+            osc_target: Arc::new(Mutex::new(OscTarget {
+                sender: osc_sender,
+                socket: Arc::new(socket),
+            })),
             fps,
             post_process_fn: Arc::new(RwLock::new(default_post_process_fn())),
-            track_positions: Arc::new(RwLock::new(HashMap::new())),
+            track_positions: Arc::new(RwLock::new(Arc::new(HashMap::new()))),
             manual_positions: Arc::new(RwLock::new(HashMap::new())),
             object_channels: Arc::new(RwLock::new(HashMap::new())),
-            channel_modulations: Arc::new(RwLock::new(Vec::new())),
+            channel_modulations: Arc::new(RwLock::new(Arc::new(Vec::new()))),
             kinematic_smoothing: Arc::new(RwLock::new(0.5)),
-            zones: Arc::new(RwLock::new(Vec::new())),
-            graph_zones: Arc::new(RwLock::new(Vec::new())),
-            graph_modulations: Arc::new(RwLock::new(Vec::new())),
+            zones: Arc::new(RwLock::new(Arc::new(Vec::new()))),
+            graph_zones: Arc::new(RwLock::new(Arc::new(Vec::new()))),
+            graph_modulations: Arc::new(RwLock::new(Arc::new(Vec::new()))),
         })
     }
 
@@ -148,13 +195,19 @@ impl MergeRuntime {
             .position_callback
             .lock()
             .unwrap_or_else(|e| e.into_inner());
-        *cb = Some(callback);
+        // Box → Arc : le merge thread clone le handle sous lock court
+        // et émet l'event hors du lock.
+        *cb = Some(Arc::from(callback));
     }
 
-    /// Reconfigure la destination OSC (adresse + port + sender)
-    /// Utile pour les tests CLI où on veut envoyer vers un listener spécifique
+    /// Reconfigure la destination OSC (adresse + port + sender).
+    /// Utile pour les tests CLI où on veut envoyer vers un listener spécifique.
+    ///
+    /// Sender ET socket sont swappés atomiquement sous le même lock —
+    /// le merge thread prend un snapshot par frame, donc un merge en cours
+    /// retargete immédiatement (plus de socket figée depuis le `start()`).
     pub fn set_osc_target(
-        &mut self,
+        &self,
         osc_address: String,
         osc_port: u16,
         osc_sender: OscSender,
@@ -164,8 +217,35 @@ impl MergeRuntime {
         socket
             .connect((osc_address.as_str(), osc_port))
             .map_err(crate::error::StagespaceError::NetworkError)?;
-        self.socket = socket;
-        *self.osc_sender.lock().unwrap_or_else(|e| e.into_inner()) = osc_sender;
+        *self.osc_target.lock().unwrap_or_else(|e| e.into_inner()) = OscTarget {
+            sender: osc_sender,
+            socket: Arc::new(socket),
+        };
+        Ok(())
+    }
+
+    /// Envoie une position immédiate à un track via la cible OSC courante
+    /// (sender + socket live). Utilisé par le panic/emergency stop — la cible
+    /// suit `set_osc_target`, contrairement à un sender capturé au startup
+    /// qui enverrait toujours à l'adresse initiale.
+    pub fn send_position_now(
+        &self,
+        osc_id: u32,
+        pos: nalgebra::Vector3<f64>,
+    ) -> crate::error::Result<()> {
+        let target = self.osc_target.lock().unwrap_or_else(|e| e.into_inner());
+        let (addr, values) = target.sender.format_position(osc_id, pos);
+        let args: Vec<rosc::OscType> = values
+            .iter()
+            .map(|v| rosc::OscType::Float(*v as f32))
+            .collect();
+        let packet = rosc::OscPacket::Message(rosc::OscMessage { addr, args });
+        let bytes = rosc::encoder::encode(&packet)
+            .map_err(|e| crate::error::StagespaceError::OscError(e.to_string()))?;
+        target
+            .socket
+            .send(&bytes)
+            .map_err(crate::error::StagespaceError::NetworkError)?;
         Ok(())
     }
 
@@ -176,19 +256,21 @@ impl MergeRuntime {
 
     /// Définit les OSC ids globaux (tracks sélectionnées)
     pub fn set_osc_ids(&self, osc_ids: Vec<u32>) {
-        *self.osc_ids.write().unwrap_or_else(|e| e.into_inner()) = osc_ids;
+        *self.osc_ids.write().unwrap_or_else(|e| e.into_inner()) = Arc::new(osc_ids);
     }
 
     /// Récupère les osc_ids globaux actuels
     pub fn osc_ids(&self) -> Vec<u32> {
-        self.osc_ids
-            .read()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
+        let guard = self.osc_ids.read().unwrap_or_else(|e| e.into_inner());
+        (**guard).clone()
     }
 
     /// Recalcule les osc_ids globaux à partir des moves encore actifs.
-    /// À appeler après unregister_move pour éviter l'accumulation d'ids obsolètes.
+    ///
+    /// Helper de maintenance : aujourd'hui les osc_ids globaux sont pilotés
+    /// par le frontend via `set_osc_ids` (ils doivent rester alignés avec
+    /// `track_indices`). Conservé pour les chemins qui reparent des tracks
+    /// sans repasser par le frontend.
     pub fn rebuild_osc_ids(&self) {
         let moves = self.active_moves.read().unwrap_or_else(|e| e.into_inner());
         let mut ids: Vec<u32> = Vec::new();
@@ -200,12 +282,12 @@ impl MergeRuntime {
             }
         }
         drop(moves);
-        *self.osc_ids.write().unwrap_or_else(|e| e.into_inner()) = ids;
+        *self.osc_ids.write().unwrap_or_else(|e| e.into_inner()) = Arc::new(ids);
     }
 
     /// Définit les depths par track
     pub fn set_track_depths(&self, depths: Vec<f64>) {
-        *self.track_depths.write().unwrap_or_else(|e| e.into_inner()) = depths;
+        *self.track_depths.write().unwrap_or_else(|e| e.into_inner()) = Arc::new(depths);
     }
 
     /// Définit la stratégie de merge
@@ -229,7 +311,7 @@ impl MergeRuntime {
         *self
             .track_positions
             .write()
-            .unwrap_or_else(|e| e.into_inner()) = positions;
+            .unwrap_or_else(|e| e.into_inner()) = Arc::new(positions);
     }
 
     /// Définit une position manuelle pour un objet (pour ManualPosition)
@@ -315,23 +397,29 @@ impl MergeRuntime {
 
     /// Ajoute une règle de modulation cinématique (source → canal spatial).
     /// Retourne l'index de la règle (pour suppression).
+    /// Copy-on-write : le merge thread ne voit qu'un snapshot Arc par frame.
     pub fn add_modulation(&self, rule: ChannelModulation) -> usize {
-        let mut rules = self
+        let mut guard = self
             .channel_modulations
             .write()
             .unwrap_or_else(|e| e.into_inner());
+        let mut rules = (**guard).clone();
         rules.push(rule);
-        rules.len() - 1
+        let index = rules.len() - 1;
+        *guard = Arc::new(rules);
+        index
     }
 
     /// Supprime une règle de modulation par index
     pub fn remove_modulation(&self, index: usize) -> bool {
-        let mut rules = self
+        let mut guard = self
             .channel_modulations
             .write()
             .unwrap_or_else(|e| e.into_inner());
-        if index < rules.len() {
+        if index < guard.len() {
+            let mut rules = (**guard).clone();
             rules.remove(index);
+            *guard = Arc::new(rules);
             true
         } else {
             false
@@ -340,18 +428,19 @@ impl MergeRuntime {
 
     /// Efface toutes les règles de modulation
     pub fn clear_modulations(&self) {
-        self.channel_modulations
+        *self
+            .channel_modulations
             .write()
-            .unwrap_or_else(|e| e.into_inner())
-            .clear();
+            .unwrap_or_else(|e| e.into_inner()) = Arc::new(Vec::new());
     }
 
     /// Récupère les règles de modulation actives (pour debug/persistance)
     pub fn modulations(&self) -> Vec<ChannelModulation> {
-        self.channel_modulations
+        let guard = self
+            .channel_modulations
             .read()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
+            .unwrap_or_else(|e| e.into_inner());
+        (**guard).clone()
     }
 
     /// Définit le lissage cinématique [0, 1) — 0 = brut, 0.9 = très lissé
@@ -363,17 +452,23 @@ impl MergeRuntime {
     }
 
     /// Ajoute une zone d'effet spatial. Retourne l'index de la zone.
+    /// Copy-on-write : snapshot Arc par frame dans le merge thread.
     pub fn add_zone(&self, zone: crate::zones::Zone) -> usize {
-        let mut zones = self.zones.write().unwrap_or_else(|e| e.into_inner());
+        let mut guard = self.zones.write().unwrap_or_else(|e| e.into_inner());
+        let mut zones = (**guard).clone();
         zones.push(zone);
-        zones.len() - 1
+        let index = zones.len() - 1;
+        *guard = Arc::new(zones);
+        index
     }
 
     /// Supprime une zone par index
     pub fn remove_zone(&self, index: usize) -> bool {
-        let mut zones = self.zones.write().unwrap_or_else(|e| e.into_inner());
-        if index < zones.len() {
+        let mut guard = self.zones.write().unwrap_or_else(|e| e.into_inner());
+        if index < guard.len() {
+            let mut zones = (**guard).clone();
             zones.remove(index);
+            *guard = Arc::new(zones);
             true
         } else {
             false
@@ -382,15 +477,13 @@ impl MergeRuntime {
 
     /// Efface toutes les zones
     pub fn clear_zones(&self) {
-        self.zones
-            .write()
-            .unwrap_or_else(|e| e.into_inner())
-            .clear();
+        *self.zones.write().unwrap_or_else(|e| e.into_inner()) = Arc::new(Vec::new());
     }
 
     /// Récupère les zones actives (pour debug/persistance)
     pub fn zones(&self) -> Vec<crate::zones::Zone> {
-        self.zones.read().unwrap_or_else(|e| e.into_inner()).clone()
+        let guard = self.zones.read().unwrap_or_else(|e| e.into_inner());
+        (**guard).clone()
     }
 
     /// Remplace les effets déclarés dans le graph global (nodes `Zone` /
@@ -402,25 +495,21 @@ impl MergeRuntime {
         zones: Vec<crate::zones::Zone>,
         modulations: Vec<ChannelModulation>,
     ) {
-        *self.graph_zones.write().unwrap_or_else(|e| e.into_inner()) = zones;
+        *self.graph_zones.write().unwrap_or_else(|e| e.into_inner()) = Arc::new(zones);
         *self
             .graph_modulations
             .write()
-            .unwrap_or_else(|e| e.into_inner()) = modulations;
+            .unwrap_or_else(|e| e.into_inner()) = Arc::new(modulations);
     }
 
     /// Récupère les effets déclarés par le graph global (pour debug/listing)
     pub fn graph_effects(&self) -> (Vec<crate::zones::Zone>, Vec<ChannelModulation>) {
-        (
-            self.graph_zones
-                .read()
-                .unwrap_or_else(|e| e.into_inner())
-                .clone(),
-            self.graph_modulations
-                .read()
-                .unwrap_or_else(|e| e.into_inner())
-                .clone(),
-        )
+        let z = self.graph_zones.read().unwrap_or_else(|e| e.into_inner());
+        let m = self
+            .graph_modulations
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
+        ((**z).clone(), (**m).clone())
     }
 
     /// Récupère les macros (pour modification temps réel — fast path atomic)
@@ -467,6 +556,18 @@ impl MergeRuntime {
             .write()
             .unwrap_or_else(|e| e.into_inner())
             .insert(move_id, buffer);
+    }
+
+    /// Démarre un fade in pour un move (utilisé au recall pour un crossfade doux)
+    pub fn start_fade_in(&self, move_id: &str, fade_duration: f64) {
+        if let Some(state) = self
+            .active_moves
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .get_mut(move_id)
+        {
+            state.start_fade_in(fade_duration);
+        }
     }
 
     /// Démarre un fade out pour un move (le move sera retiré quand le fade est terminé)
@@ -526,6 +627,24 @@ impl MergeRuntime {
         self.running.load(Ordering::SeqCst)
     }
 
+    /// Vrai si le merge thread est mort d'un panic contenu (catch_unwind).
+    /// Reste true jusqu'au prochain `start()` — à surveiller côté app pour
+    /// détecter un blackout OSC silencieux.
+    pub fn thread_died(&self) -> bool {
+        self.thread_died.load(Ordering::SeqCst)
+    }
+
+    /// Nombre de frames mergées depuis le dernier `start()` — liveness
+    /// observable du merge thread (figé = thread mort ou bloqué).
+    pub fn merge_frame_count(&self) -> u64 {
+        self.merge_frames.load(Ordering::SeqCst)
+    }
+
+    /// Total de positions non-finies (NaN/inf) droppées avant l'envoi OSC.
+    pub fn dropped_position_count(&self) -> u64 {
+        self.dropped_positions.load(Ordering::SeqCst)
+    }
+
     /// Démarre le merge thread
     pub fn start(&mut self) -> crate::error::Result<()> {
         if self.running.load(Ordering::SeqCst) {
@@ -533,11 +652,13 @@ impl MergeRuntime {
         }
 
         self.running.store(true, Ordering::SeqCst);
+        self.thread_died.store(false, Ordering::SeqCst);
+        self.merge_frames.store(0, Ordering::SeqCst);
         let running = self.running.clone();
-        let socket = self
-            .socket
-            .try_clone()
-            .map_err(crate::error::StagespaceError::NetworkError)?;
+        let thread_died = self.thread_died.clone();
+        let merge_frames = self.merge_frames.clone();
+        let dropped_positions = self.dropped_positions.clone();
+        let osc_target = self.osc_target.clone();
         let move_buffers = self.move_buffers.clone();
         let active_moves = self.active_moves.clone();
         let macros = self.macros.clone();
@@ -548,7 +669,6 @@ impl MergeRuntime {
         let merge_strategy_arc = self.merge_strategy.clone();
         let perf = self.perf.clone();
         let position_callback = self.position_callback.clone();
-        let osc_sender_arc = self.osc_sender.clone();
         let fps = self.fps;
         let post_process_fn_arc = self.post_process_fn.clone();
         let track_positions_arc = self.track_positions.clone();
@@ -561,7 +681,7 @@ impl MergeRuntime {
         let graph_modulations_arc = self.graph_modulations.clone();
 
         let handle = std::thread::spawn(move || {
-            let start = Instant::now();
+            let mut start = Instant::now();
             let frame_duration = Duration::from_secs_f64(1.0 / fps);
             let mut frame_count = 0u64;
             let mut last_perf_update = Instant::now();
@@ -572,12 +692,22 @@ impl MergeRuntime {
             // États cinématiques par objet — thread-local, aucun lock.
             // Mesurés sur les positions finales (post-merge + post-process).
             let mut kinematic_states: HashMap<usize, KinematicState> = HashMap::new();
+            let mut prev_frame: Option<Instant> = None;
             let mut prev_t: Option<f64> = None;
 
-            while running.load(Ordering::SeqCst) {
+            // Une frame complète du merge. Séparée en closure pour être
+            // enveloppée dans catch_unwind : un panic (post-process, callback,
+            // modulations…) ne doit PAS tuer le thread en silence — blackout
+            // OSC total avec `running` toujours true. Avec catch_unwind on
+            // marque thread_died, on envoie une frame de parking, puis on sort.
+            let mut frame = || {
                 let frame_start = Instant::now();
                 let t_real = start.elapsed().as_secs_f64();
-                let dt = frame_duration.as_secs_f64();
+                // dt réel mesuré (jitter-tolérant) pour les fades
+                let dt = prev_frame
+                    .map(|p| (frame_start - p).as_secs_f64().max(1e-6))
+                    .unwrap_or_else(|| frame_duration.as_secs_f64());
+                prev_frame = Some(frame_start);
 
                 // 1. Lire tous les buffers (read lock très court)
                 let buffers = move_buffers
@@ -592,6 +722,7 @@ impl MergeRuntime {
                 // Solution: clone les états sous un write lock très court, puis
                 // traite tout hors lock.
                 let mut move_positions: Vec<MoveEntry> = Vec::new();
+                let mut preview_positions: Vec<(usize, nalgebra::Vector3<f64>)> = Vec::new();
                 let mut moves_to_remove: Vec<String> = Vec::new();
 
                 // --- Section critique courte: update fades + clone data ---
@@ -605,6 +736,31 @@ impl MergeRuntime {
                         }
                         let fade = state.update_fade(dt);
                         if !state.is_active {
+                            moves_to_remove.push(move_id.clone());
+                            continue;
+                        }
+                        // Détection de worker zombie : si le PositionBuffer du
+                        // move n'a pas été réécrit depuis STALE_FRAME_LIMIT
+                        // frames de merge (~0.5 s à 60 FPS), le worker est mort
+                        // ou fini — on retire le move au lieu de merger ses
+                        // dernières positions indéfiniment.
+                        let stale = buffers
+                            .get(move_id)
+                            .map(|b| b.frame_count() == state.last_frame_count)
+                            .unwrap_or(false);
+                        if stale {
+                            state.stale_frames += 1;
+                        } else {
+                            state.stale_frames = 0;
+                            state.last_frame_count =
+                                buffers.get(move_id).map(|b| b.frame_count()).unwrap_or(0);
+                        }
+                        if state.stale_frames > STALE_FRAME_LIMIT {
+                            crate::logging::log_osc_error(&format!(
+                                "MergeRuntime: move {move_id} retiré — worker inactif depuis {} frames",
+                                state.stale_frames
+                            ));
+                            state.is_active = false;
                             moves_to_remove.push(move_id.clone());
                             continue;
                         }
@@ -623,29 +779,36 @@ impl MergeRuntime {
                 };
                 // --- Fin section critique: lock relâché ---
 
-                // Lire les buffers et mapper hors lock
-                for (move_id, fade, priority, track_indices, _is_preview) in &move_snapshots {
+                // Lire les buffers et mapper hors lock. Les moves en PREVIEW
+                // n'entrent PAS dans le merge : ils pourraient gagner le merge
+                // (Override = fade le plus haut) sur une track partagée avec un
+                // move live → track live mutée. Leurs positions vont
+                // directement au callback display, sans toucher à l'OSC.
+                for (move_id, fade, priority, track_indices, is_preview) in &move_snapshots {
                     if let Some(buffer) = buffers.get(move_id) {
                         let positions = buffer.read();
-                        if !positions.is_empty() {
-                            let global_positions: Vec<(usize, nalgebra::Vector3<f64>)> =
-                                if track_indices.is_empty() {
-                                    positions.clone()
-                                } else if track_indices.len() == positions.len() {
-                                    positions
-                                        .iter()
-                                        .enumerate()
-                                        .map(|(local_idx, (_, pos))| {
-                                            (track_indices[local_idx], *pos)
-                                        })
-                                        .collect()
-                                } else {
-                                    crate::logging::log_osc_error(&format!(
-                                        "MergeRuntime: move {} skipped — track_indices.len()={} != positions.len()={} (invariant violé)",
-                                        move_id, track_indices.len(), positions.len()
-                                    ));
-                                    continue;
-                                };
+                        if positions.is_empty() {
+                            continue;
+                        }
+                        let global_positions: Vec<(usize, nalgebra::Vector3<f64>)> =
+                            if track_indices.is_empty() {
+                                positions.clone()
+                            } else if track_indices.len() == positions.len() {
+                                positions
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(local_idx, (_, pos))| (track_indices[local_idx], *pos))
+                                    .collect()
+                            } else {
+                                crate::logging::log_osc_error(&format!(
+                                    "MergeRuntime: move {} skipped — track_indices.len()={} != positions.len()={} (invariant violé)",
+                                    move_id, track_indices.len(), positions.len()
+                                ));
+                                continue;
+                            };
+                        if *is_preview {
+                            preview_positions.extend(global_positions);
+                        } else {
                             move_positions.push((
                                 move_id.clone(),
                                 *fade,
@@ -664,20 +827,26 @@ impl MergeRuntime {
                     }
                 }
 
-                // 3. Merge : résoudre les conflits par track
-                // CRITICAL: clone osc_ids et relâcher le read lock immédiatement.
-                // Avant, le read lock était tenu pendant merge + post-process + OSC output
-                // (presque toute la frame), bloquant set_osc_ids dans register_move
-                // pendant des secondes (lock starvation à 60 FPS).
+                // Idle : aucun move live ni preview → sauter le travail lourd,
+                // mais garder la boucle vivante (liveness observable via
+                // merge_frames) et le pacing.
+                if move_positions.is_empty() && preview_positions.is_empty() {
+                    frame_count += 1;
+                    return;
+                }
+
+                // 3. Merge : résoudre les conflits par track.
+                // Snapshot Arc — clone d'Arc, pas de copie du Vec.
                 let osc_ids = osc_ids_arc
                     .read()
                     .unwrap_or_else(|e| e.into_inner())
                     .clone();
                 let strategy = *merge_strategy_arc.read().unwrap_or_else(|e| e.into_inner());
-                let merged = merge_positions(&move_positions, &osc_ids, strategy);
+                // merge_positions trie ses candidats par move_id → déterministe.
+                let merged = merge_positions(&move_positions, strategy);
 
                 // 4. Post-processing via le graph global compilé (PostProcessFn)
-                // Clone toutes les données sous des locks courts, puis traite hors lock.
+                // Snapshots Arc sous locks courts, puis tout hors lock.
                 let origin = *origin_arc.lock().unwrap_or_else(|e| e.into_inner());
                 let track_depths = track_depths_arc
                     .read()
@@ -706,12 +875,27 @@ impl MergeRuntime {
                     track_depths: &track_depths,
                 };
 
-                let transformed: Vec<(usize, nalgebra::Vector3<f64>)> = {
+                let transformed_raw: Vec<(usize, nalgebra::Vector3<f64>)> = {
                     let pp_fn = post_process_fn_arc
                         .read()
                         .unwrap_or_else(|e| e.into_inner());
                     pp_fn(&ctx, merged)
                 };
+
+                // Sanitize : une position NaN/inf ne doit jamais partir en OSC
+                // (f64::clamp ne panique pas ici — on droppe l'objet). Le
+                // compteur dropped_positions rend la perte observable.
+                let transformed: Vec<(usize, nalgebra::Vector3<f64>)> = transformed_raw
+                    .into_iter()
+                    .filter(|(_, pos)| {
+                        if pos.iter().all(|v| v.is_finite()) {
+                            true
+                        } else {
+                            dropped_positions.fetch_add(1, Ordering::SeqCst);
+                            false
+                        }
+                    })
+                    .collect();
 
                 // 4.5 Cinématique : vitesse/accélération/jerk sur les positions
                 // finales (celles réellement envoyées au renderer), dt réel
@@ -746,55 +930,44 @@ impl MergeRuntime {
                 // Règles = graph-déclarées puis manuelles — les manuelles
                 // écrasent le graph sur les canaux qu'elles ciblent.
                 let modulated_channels: HashMap<usize, SpatialChannels> = {
-                    let mut rules: Vec<ChannelModulation> = graph_modulations_arc
+                    let graph_rules = graph_modulations_arc
                         .read()
                         .unwrap_or_else(|e| e.into_inner())
                         .clone();
-                    rules.extend(
-                        channel_modulations_arc
-                            .read()
-                            .unwrap_or_else(|e| e.into_inner())
-                            .iter()
-                            .cloned(),
-                    );
+                    let manual_rules = channel_modulations_arc
+                        .read()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .clone();
+                    let mut rules: Vec<ChannelModulation> = (*graph_rules).clone();
+                    rules.extend(manual_rules.iter().cloned());
                     apply_modulations(&rules, &kinematic_states)
                 };
 
                 // 4.6 Zones : graph-déclarées puis manuelles (dernier mot au
-                // manuel). Snapshot sous read lock court — le blend par objet
-                // se fait sans lock dans la boucle d'envoi.
-                let mut zones: Vec<crate::zones::Zone> = graph_zones_arc
-                    .read()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .clone();
-                zones.extend(
-                    zones_arc
+                // manuel). Snapshot Arc sous read lock court.
+                let zones: Vec<crate::zones::Zone> = {
+                    let graph = graph_zones_arc
                         .read()
                         .unwrap_or_else(|e| e.into_inner())
-                        .iter()
-                        .cloned(),
-                );
-
-                // 5. OSC output (une seule socket)
-                // Séparer display (tout) de OSC (exclut les moves en preview)
-                let preview_tracks: std::collections::HashSet<usize> = {
-                    let moves_guard = active_moves.read().unwrap_or_else(|e| e.into_inner());
-                    moves_guard
-                        .values()
-                        .filter(|m| m.is_preview)
-                        .flat_map(|m| m.track_indices.iter().copied())
-                        .collect()
+                        .clone();
+                    let manual = zones_arc.read().unwrap_or_else(|e| e.into_inner()).clone();
+                    let mut z = (*graph).clone();
+                    z.extend(manual.iter().cloned());
+                    z
                 };
 
-                let sender = osc_sender_arc.lock().unwrap_or_else(|e| e.into_inner());
+                // 5. OSC output — snapshot (sender, socket) par frame sous un
+                // lock court : set_osc_target mid-show retargete au frame
+                // suivant, sans figer la socket depuis le start().
+                let (sender, socket) = {
+                    let target = osc_target.lock().unwrap_or_else(|e| e.into_inner());
+                    (target.sender.clone(), target.socket.clone())
+                };
                 let object_channels = object_channels_arc
                     .read()
                     .unwrap_or_else(|e| e.into_inner())
                     .clone();
                 for (obj_idx, pos) in &transformed {
-                    if preview_tracks.contains(obj_idx) {
-                        continue; // Skip OSC pour les moves en preview
-                    }
                     if let Some(&osc_id) = osc_ids.get(*obj_idx) {
                         // Canaux effectifs = statiques + modulés (modulation
                         // prioritaire sur les canaux qu'elle cible) + zones
@@ -823,43 +996,44 @@ impl MergeRuntime {
                                 addr: addr.clone(),
                                 args,
                             });
-                            if let Ok(bytes) = rosc::encoder::encode(&packet) {
-                                if let Err(e) = socket.send(&bytes) {
-                                    // ECONNREFUSED = ICMP port-unreachable reçu sur
-                                    // socket connectée → personne n'écoute la
-                                    // destination. Ce n'est pas du packet loss.
-                                    let refused = e.kind() == std::io::ErrorKind::ConnectionRefused;
-                                    crate::logging::log_osc_error(&format!(
-                                        "MergeRuntime OSC send error: {e}{}",
-                                        if refused {
-                                            " (destination unreachable)"
-                                        } else {
-                                            ""
+                            match rosc::encoder::encode(&packet) {
+                                Ok(bytes) => match socket.send(&bytes) {
+                                    Ok(_) => osc_since_perf += 1,
+                                    Err(e) => {
+                                        // ECONNREFUSED = ICMP port-unreachable sur
+                                        // socket connectée → personne n'écoute.
+                                        // Pas du packet loss. Les erreurs sont
+                                        // comptées, pas loguées par paquet
+                                        // (sinon flood de warn! quand le renderer
+                                        // est down).
+                                        osc_errors_perf += 1;
+                                        if e.kind() == std::io::ErrorKind::ConnectionRefused {
+                                            osc_refused_perf += 1;
                                         }
-                                    ));
-                                    osc_errors_perf += 1;
-                                    if refused {
-                                        osc_refused_perf += 1;
                                     }
-                                } else {
-                                    osc_since_perf += 1;
-                                }
+                                },
+                                Err(_) => osc_errors_perf += 1,
                             }
                         }
                     }
                 }
 
-                // 6. Callback pour le 3D preview (display positions = tout, y compris preview)
-                // On récupère le lock même si empoisonné (un panic dans un thread voisin
-                // ne doit pas couper silencieusement l'émission de positions au frontend).
-                {
-                    let cb = position_callback.lock().unwrap_or_else(|e| e.into_inner());
-                    if let Some(ref callback) = *cb {
-                        callback(t_real, transformed.clone());
-                    }
+                // 6. Callback pour le 3D preview : display = positions mergées +
+                // positions preview (affichées mais jamais envoyées en OSC).
+                // Le handle Arc est cloné sous un lock très court, l'emit
+                // (sérialisation JSON complète) se fait HORS du lock.
+                let cb = position_callback
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone();
+                if let Some(callback) = cb {
+                    let mut display = transformed.clone();
+                    display.extend(preview_positions.iter().copied());
+                    callback(t_real, display);
                 }
 
-                // 7. Perf monitor + debug log
+                // 7. Perf monitor — agrégation des erreurs OSC (1 log max par
+                // fenêtre de 500 ms au lieu d'un warn! par paquet échoué).
                 frame_count += 1;
                 frames_since_perf += 1;
                 let perf_elapsed = last_perf_update.elapsed();
@@ -879,6 +1053,15 @@ impl MergeRuntime {
                     } else {
                         (0.0, 0.0)
                     };
+                    if osc_errors_perf > 0 {
+                        crate::logging::log_osc_error(&format!(
+                            "MergeRuntime OSC: {} erreurs / {} paquets sur {:.0} ms ({} refused)",
+                            osc_errors_perf,
+                            total_osc,
+                            perf_elapsed.as_millis(),
+                            osc_refused_perf
+                        ));
+                    }
                     perf.update_with_error_rate(
                         fps_actual,
                         osc_rate,
@@ -894,14 +1077,67 @@ impl MergeRuntime {
                     last_perf_update = Instant::now();
                 }
 
-                // Timing précis
+                // Timing précis + re-ancrage : après un stall (pause debug,
+                // emit bloquant, préemption), on ne burst pas des centaines de
+                // frames obsolètes — on ré-ancre frame_count sur le temps réel.
                 let target_time = frame_count as u128 * frame_duration.as_nanos();
                 let current_time = start.elapsed().as_nanos();
                 if target_time > current_time {
                     let sleep_ns = (target_time - current_time) as u64;
-                    // Utiliser std::thread::sleep au lieu de spin_sleep — rend la main à l'OS
-                    // au lieu de busy-wait à 100% CPU. Précision ~1-2ms suffisante pour 60 FPS.
+                    // std::thread::sleep au lieu de spin_sleep — rend la main à
+                    // l'OS. Précision ~1-2ms suffisante pour 60 FPS.
                     std::thread::sleep(Duration::from_nanos(sleep_ns));
+                } else if current_time - target_time
+                    > CATCHUP_FRAME_LIMIT * frame_duration.as_nanos()
+                {
+                    start = Instant::now();
+                    frame_count = 0;
+                }
+            };
+
+            while running.load(Ordering::SeqCst) {
+                merge_frames.fetch_add(1, Ordering::SeqCst);
+                if std::panic::catch_unwind(std::panic::AssertUnwindSafe(&mut frame)).is_err() {
+                    // Panic contenu : le merge thread va mourir — on le rend
+                    // observable (thread_died + running=false + frame_count
+                    // figé) et on tente une frame de parking sur les derniers
+                    // états connus avant de sortir.
+                    thread_died.store(true, Ordering::SeqCst);
+                    crate::logging::log_osc_error(
+                        "MergeRuntime: PANIC in merge thread — arrêt du merge",
+                    );
+                    // Parking : envoyer l'origin à toutes les tracks (même
+                    // comportement que le panic côté app) avant de mourir.
+                    {
+                        let (sender, socket) = {
+                            let target = osc_target.lock().unwrap_or_else(|e| e.into_inner());
+                            (target.sender.clone(), target.socket.clone())
+                        };
+                        let origin = *origin_arc.lock().unwrap_or_else(|e| e.into_inner());
+                        let ids = osc_ids_arc
+                            .read()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .clone();
+                        for osc_id in ids.iter() {
+                            for (addr, values) in sender.format_state(*osc_id, origin, None) {
+                                let args: Vec<OscType> =
+                                    values.iter().map(|v| OscType::Float(*v as f32)).collect();
+                                let packet = OscPacket::Message(OscMessage { addr, args });
+                                if let Ok(bytes) = rosc::encoder::encode(&packet) {
+                                    let _ = socket.send(&bytes);
+                                }
+                            }
+                        }
+                    }
+                    let cb = position_callback
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .clone();
+                    if let Some(callback) = cb {
+                        callback(0.0, Vec::new());
+                    }
+                    running.store(false, Ordering::SeqCst);
+                    break;
                 }
             }
         });

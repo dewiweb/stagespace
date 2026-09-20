@@ -1,7 +1,10 @@
 # STAGESPACE — Spatial Trajectory Engine
 
-Moteur de trajectoires spatiales temps réel piloté par un graphe de nœuds,
-compilé en fonctions continues `f(t)` pour un contrôle OSC multi-profil.
+Moteur de trajectoires spatiales temps réel **renderer-agnostic** : un graphe de
+nœuds compilé en fonctions continues `f(t)` orchestre le mouvement **et** les
+effets spatiaux (gain, spread, zones, modulations cinématiques) de sources audio
+contrôlées en OSC — Holophonix, SPAT Revolution, IEM, ADM-OSC ou tout récepteur
+OSC générique.
 **100% Rust + Tauri + React.** Performance temps réel, 60 FPS.
 
 ---
@@ -12,6 +15,7 @@ compilé en fonctions continues `f(t)` pour un contrôle OSC multi-profil.
 ┌──────────────────────────────────────────────────┐
 │            Node Editor  (React Flow)              │
 │  Objects → Motion Node → Duration → Output     │
+│  + Global graph tab (post-merge FX chain)      │
 └───────────────────┬──────────────────────────────┘
                     │ Tauri IPC
           ┌─────────▼──────────┐
@@ -23,23 +27,26 @@ compilé en fonctions continues `f(t)` pour un contrôle OSC multi-profil.
     │ circular     │  │ bouncing     │
     │ lissajous    │  │ swarm (boids)│
     │ spiral       │  │ spring       │
-    │ perlin_noise │  │ follow       │
+    │ perlin_noise │  │ follow       │ ← pursue/evade/orbit/arrive
     │ pendulum     │  │ avoidance    │
-    │ formation    │  └─────────────┘
-    │ converge     │
+    │ formation    │  │ vectorfield  │ ← champs procéduraux + drawn
+    │ converge     │  └─────────────┘
     │ figure8      │
-    │ linear       │
-    │ oscillation  │
-    │ BPM          │  ← Audio IN
+    │ linear       │  Splines : DrawSpline / EvaluateSpline /
+    │ oscillation  │             TrimSpline / OffsetSpline
+    │ BPM          │  ← Audio IN (cpal + FFT natifs)
     │ AudioAmp     │  ← Audio IN
     │ TimeFalloff  │  ← Falloffs
     │ PointDist    │  ← Falloffs
     └──────────────┘
                     │
          ┌──────────▼──────────┐
-         │  Runtime 60 FPS    │   ← f(t) appelé à chaque tick
-         │  OSC Out (rosc)     │   → 6 profils (Holophonix, IEM, IRCAM, ADM, Generic)
-         │  3D Preview        │   ← Three.js temps réel
+         │  MergeRuntime 60 FPS │   ← workers parallèles → merge → OSC
+         │  Post-process graph  │   ← Scale/Rotate/Shift/Zone/Velocity…
+         │  OSC Out (rosc)      │   → 6 profils (Holophonix, IEM, IRCAM,
+         │                      │      ADM, Generic XYZ/AED) + canaux
+         │                      │      étendus (gain, spread, distance…)
+         │  3D Preview          │   ← Three.js temps réel (+ viz zones)
          └─────────────────────┘
 ```
 
@@ -67,8 +74,27 @@ compilé en fonctions continues `f(t)` pour un contrôle OSC multi-profil.
 | `bouncing` | Rebonds dans conteneur |
 | `avoidance` | Répulsion mutuelle |
 | `spring` | Attraction vers cible |
-| `follow` | File indienne |
+| `follow` | File indienne — modes `pursue`/`evade`/`orbit`/`arrive` |
 | `swarm` | Essaim de Boids |
+| `vectorfield` | Advection par champ de vitesses (vortex/sink/flow/noise/**drawn**) |
+
+### Splines & trajectoires dessinées
+| Node | Description |
+|------|-------------|
+| `DrawSpline` | Dessin libre → spline |
+| `EvaluateSpline` | Échantillonnage d'une spline |
+| `TrimSpline` / `OffsetSpline` | Édition de spline |
+
+### Modificateurs & post-process (graph global)
+| Node | Description |
+|------|-------------|
+| `Scale` / `Rotate` / `Offset` | Transformations spatiales |
+| `RadiusScale` / `HeightOffset` / `PerTrackDepth` | Macros spatiales |
+| `Barycenter` / `ManualPosition` | Origin / override manuel |
+| `AudioFalloff` | Modulation audio des params |
+| `Zone` | Région d'espace → canaux spatiaux (sphere/box, falloff) |
+| `Velocity` | Modulation cinématique (speed/accel/jerk/**angvel**) → canaux |
+| `MoveRef` / `Merge` | Référence de sub-graph / merge strategies |
 
 ### Audio Sources
 | Moteur | Description |
@@ -91,10 +117,13 @@ compilé en fonctions continues `f(t)` pour un contrôle OSC multi-profil.
 cd rust-engines
 cargo build --release
 
-# Tauri app
-cd tauri-app
+# Frontend deps (required — beforeBuildCommand builds the frontend)
+cd ../tauri-app/frontend
 npm install
-npm run tauri dev
+
+# Tauri app (Tauri CLI)
+cd ..
+npm install
 ```
 
 ---
@@ -103,34 +132,61 @@ npm run tauri dev
 
 ```bash
 cd tauri-app
-npm run tauri dev
+npm run tauri dev     # ou : npx tauri dev
 ```
 
 L'application s'ouvre dans une fenêtre native.
+
+### CLI (workflow testing sans UI)
+
+```bash
+cd tauri-app/src-tauri
+cargo build --bin stagespace-cli
+./target/debug/stagespace-cli "templates"
+./target/debug/stagespace-cli "activate-move circle --tracks 1-5; sample --move circle-1 --obj 0; stop-all"
+bash tests/e2e_cli_test.sh    # suite E2E complète
+```
 
 ---
 
 ## Fonctionnalités
 
-- **Node Editor** : éditeur de graphe React Flow avec nœuds custom éditables
+- **Node Editor** : éditeur de graphe React Flow avec nœuds custom éditables,
+  deux onglets (sub-graph par move + **global graph** post-merge)
 - **Compilation** : validation et compilation en fonctions composites
-- **Playback** : lecture temps réel à 60 FPS avec OSC out
-- **3D Preview** : visualisation Three.js connectée au runtime
-- **Audio IN** : capture microphone avec BPM et amplitude
-- **Cue System** : snapshots de graphes avec rappel
-- **OSC IN** : mapping configurable pour contrôles externes
+- **Playback** : lecture temps réel à 60 FPS, workers parallèles + MergeRuntime
+- **Merge strategies** : override / crossfade / blend / priority
+- **3D Preview** : visualisation Three.js connectée au runtime, **visualisation
+  3D des zones** d'effets
+- **Spatial channels** : gain, spread, distance, presence, yaw, aperture, lfe
+  par objet et par profil OSC
+- **Kinematic modulations** : speed/accel/jerk/**angvel** (vitesse angulaire
+  autour d'un listener paramétrable) → canaux spatiaux
+- **Zones** : sphere/box + falloff smoothstep → pilotent les canaux des objets
+  présents ; déclarables en FX panel ou en node `Zone` du graph global
+- **OSC IN mappings** : n'importe quelle adresse OSC → macro / canal / position
+  (wildcards, transforms scale/offset/clamp/smooth, anti-loop)
+- **Audio IN** : capture microphone native (cpal) avec BPM et amplitude
+- **Cue System** : snapshots complets (graphes, moves actifs, effets runtime)
+  avec rappel atomique
 - **Save/Load** : persistance localStorage des graphes
 
 ---
 
 ## Profils OSC
 
-- **Holophonix** : `/holophonix/track/{id}/xyz`
-- **IEM MultiEncoder** : `/iem/azimuth/{id}`, `/iem/elevation/{id}`, `/iem/distance/{id}`
-- **IRCAM Spat** : `/spat/source/{id}/xyz`
-- **ADM-OSC** : `/adm/source/{id}/aed`
-- **Generic Cartesian** : `/xyz/{id}/x`, `/xyz/{id}/y`, `/xyz/{id}/z`
-- **Generic Polar** : `/polar/{id}/azimuth`, `/polar/{id}/elevation`, `/polar/{id}/distance`
+| Profil | Adresse position | Args |
+|--------|------------------|------|
+| **Holophonix** | `/track/{id}/xyz` | x, y, z (message unique) |
+| **IEM MultiEncoder** | `/MultiEncoder/{id}/aed` | azimuth°, elevation°, distance (message unique) |
+| **IRCAM Spat** | `/source/{id}/xyz` | x, y, z (message unique) |
+| **ADM-OSC** | `/adm/source/{id}/aed` | azimuth°, elevation°, distance |
+| **Generic Cartesian** | `/object/{id}/xyz` | x, y, z (message unique) |
+| **Generic Polar** | `/object/{id}` | azimuth°, elevation°, distance |
+
+Canaux étendus (gain, spread, distance, presence, yaw, aperture, lfe) envoyés
+en messages séparés selon la matrice de capacités du profil
+(ex. IRCAM `/source/{id}/spread`, Holophonix `/track/{id}/gain`).
 
 ---
 
@@ -143,19 +199,23 @@ L'application s'ouvre dans une fenêtre native.
 - **State** : Zustand
 - **Styles** : TailwindCSS
 - **OSC** : `rosc` (Rust)
-- **Audio IN** : Web Audio API (via Tauri IPC)
+- **Audio IN** : `cpal` + `realfft` (capture + FFT natives, Rust)
 - **Moteurs** : Rust pur (performance temps réel)
 
 ---
 
 ## Documentation
 
+- [AGENTS.md](AGENTS.md) — conventions, commandes de build, CI
+- [MANUAL_TESTING.md](MANUAL_TESTING.md) - Checklist de tests manuels
 - [LOGGING.md](rust-engines/LOGGING.md) - Guide du système de logging
 - [ERROR_HANDLING.md](rust-engines/ERROR_HANDLING.md) - Guide de la gestion d'erreurs
 - [CONFIG.md](rust-engines/CONFIG.md) - Guide de la configuration
 - [TESTING.md](rust-engines/TESTING.md) - Guide des tests
 - [BENCHMARKS.md](rust-engines/BENCHMARKS.md) - Guide des benchmarks
 - [CONTRIBUTING.md](CONTRIBUTING.md) - Guide pour contribuer
+- [ROADMAP_GRAPH_GLOBAL.md](ROADMAP_GRAPH_GLOBAL.md) - Roadmap de l'architecture graphe global
+- [ARCHITECTURE_FUTURE.md](ARCHITECTURE_FUTURE.md) - Document de design (partiellement implémenté)
 
 ## Tests
 
@@ -164,7 +224,8 @@ cd rust-engines
 cargo test --lib
 ```
 
-99 tests passent.
+267 tests passent côté moteurs (suites complètes : voir le tableau "Test
+Counts" dans [AGENTS.md](AGENTS.md)).
 
 ---
 

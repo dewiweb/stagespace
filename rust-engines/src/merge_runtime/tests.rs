@@ -25,8 +25,7 @@ fn test_merge_override() {
             (1, nalgebra::Vector3::new(20.0, 0.0, 0.0)),
         ],
     );
-    let osc_ids = vec![1, 2];
-    let merged = merge_positions(&[move_a, move_b], &osc_ids, MergeStrategy::Override);
+    let merged = merge_positions(&[move_a, move_b], MergeStrategy::Override);
     // Override : fade le plus élevé gagne → move_a (fade 1.0)
     assert!((merged[0].1.x - 1.0).abs() < 1e-10);
     assert!((merged[1].1.x - 2.0).abs() < 1e-10);
@@ -46,8 +45,7 @@ fn test_merge_crossfade() {
         0,
         vec![(0, nalgebra::Vector3::new(10.0, 0.0, 0.0))],
     );
-    let osc_ids = vec![1];
-    let merged = merge_positions(&[move_a, move_b], &osc_ids, MergeStrategy::Crossfade);
+    let merged = merge_positions(&[move_a, move_b], MergeStrategy::Crossfade);
     // Crossfade : moyenne pondérée → (0 + 10) / 2 = 5
     assert!((merged[0].1.x - 5.0).abs() < 1e-10);
 }
@@ -60,16 +58,14 @@ fn test_merge_single_move() {
         0,
         vec![(0, nalgebra::Vector3::new(1.0, 2.0, 3.0))],
     );
-    let osc_ids = vec![1];
-    let merged = merge_positions(&[move_a], &osc_ids, MergeStrategy::Override);
+    let merged = merge_positions(&[move_a], MergeStrategy::Override);
     assert_eq!(merged.len(), 1);
     assert!((merged[0].1.x - 1.0).abs() < 1e-10);
 }
 
 #[test]
 fn test_merge_empty() {
-    let osc_ids = vec![1, 2];
-    let merged = merge_positions(&[], &osc_ids, MergeStrategy::Override);
+    let merged = merge_positions(&[], MergeStrategy::Override);
     // When no moves are active, merge_positions returns empty (no OSC output)
     assert_eq!(merged.len(), 0);
 }
@@ -100,8 +96,7 @@ fn test_merge_disjoint_tracks() {
             (5, nalgebra::Vector3::new(30.0, 0.0, 0.0)),
         ],
     );
-    let osc_ids = vec![1, 2, 3, 4, 5, 6];
-    let merged = merge_positions(&[move_a, move_b], &osc_ids, MergeStrategy::Override);
+    let merged = merge_positions(&[move_a, move_b], MergeStrategy::Override);
     assert_eq!(merged.len(), 6);
     // Tracks 0-2 : move A
     assert!((merged[0].1.x - 1.0).abs() < 1e-10);
@@ -130,8 +125,7 @@ fn test_merge_priority() {
         5,
         vec![(0, nalgebra::Vector3::new(99.0, 0.0, 0.0))],
     );
-    let osc_ids = vec![1];
-    let merged = merge_positions(&[move_a, move_b], &osc_ids, MergeStrategy::Priority);
+    let merged = merge_positions(&[move_a, move_b], MergeStrategy::Priority);
     // Priority : B (priority 5) gagne sur A (priority 1) même si fade de B est plus faible
     assert!((merged[0].1.x - 99.0).abs() < 1e-10);
 }
@@ -151,8 +145,7 @@ fn test_merge_priority_tiebreak_by_fade() {
         5,
         vec![(0, nalgebra::Vector3::new(99.0, 0.0, 0.0))],
     );
-    let osc_ids = vec![1];
-    let merged = merge_positions(&[move_a, move_b], &osc_ids, MergeStrategy::Priority);
+    let merged = merge_positions(&[move_a, move_b], MergeStrategy::Priority);
     // Même priorité → tiebreak par fade → A (fade 1.0) gagne
     assert!((merged[0].1.x - 1.0).abs() < 1e-10);
 }

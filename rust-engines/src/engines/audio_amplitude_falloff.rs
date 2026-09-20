@@ -1,6 +1,7 @@
 use crate::engines::{Engine, EngineParams};
 use crate::falloffs::{AudioAmplitudeFalloff, FalloffCurve};
 use nalgebra::Vector3;
+use std::borrow::Cow;
 
 /// Moteur AudioAmplitudeFalloff — module une trajectoire par l'amplitude audio temps réel
 /// L'amplitude est injectée via les paramètres extra ("amplitude" field)
@@ -41,13 +42,24 @@ impl Engine for AudioAmplitudeFalloffEngine {
             .unwrap_or("xz");
 
         // Récupérer l'amplitude depuis les paramètres extra
-        // Le runtime injecte l'amplitude via extra["amplitude_<band>"]
-        let amplitude_key = format!("amplitude_{band}");
+        // Le runtime injecte l'amplitude via extra["amplitude_<band>"] avec
+        // band ∈ rms|bass|mid|high — clés statiques pour éviter un format!
+        // par objet×frame ; Cow::Owned seulement pour les bandes custom.
+        let amplitude_key: Cow<str> = match band {
+            "rms" => "amplitude_rms".into(),
+            "bass" => "amplitude_bass".into(),
+            "mid" => "amplitude_mid".into(),
+            "high" => "amplitude_high".into(),
+            other => format!("amplitude_{other}").into(),
+        };
         let amplitude = params
             .extra
-            .get(&amplitude_key)
+            .get(amplitude_key.as_ref())
             .and_then(|v| v.as_f64())
-            .unwrap_or(0.5);
+            // Pas de donnée audio → influence = 1 → la trajectoire de base est
+            // jouée à plein rayon (conforme au doc du module). Avant, le
+            // défaut 0.5 réduisait le rayon à 65% sans aucune entrée audio.
+            .unwrap_or(max_val);
 
         let curve = match curve_str {
             "EaseIn" => FalloffCurve::EaseIn,
@@ -66,7 +78,7 @@ impl Engine for AudioAmplitudeFalloffEngine {
         let influence = falloff.influence_from_value(amplitude);
 
         // Mouvement circulaire modulé par l'amplitude
-        let angle = 2.0 * std::f64::consts::PI * t / params.duration;
+        let angle = 2.0 * std::f64::consts::PI * t / params.duration.max(1e-9);
         let modulated_radius = base_radius * (0.3 + 0.7 * influence); // minimum 30% du rayon
 
         match plane {
@@ -115,6 +127,26 @@ mod tests {
         assert!(pos.x.is_finite());
         assert!(pos.y.is_finite());
         assert!(pos.z.is_finite());
+    }
+
+    #[test]
+    fn test_no_audio_preserves_base_radius() {
+        // Régression : sans donnée audio le défaut d'amplitude était 0.5 →
+        // rayon réduit à 65% de base, en contradiction avec le doc
+        // ("trajectoire de base jouée normalement"). L'influence doit être 1.
+        let engine = AudioAmplitudeFalloffEngine;
+        let params = EngineParams {
+            n_objects: 4,
+            duration: 4.0,
+            fps: 60.0,
+            extra: serde_json::json!({"radius": 2.0}),
+        };
+        let pos = engine.position(0.0, 0, &params);
+        let radius = (pos.x.powi(2) + pos.z.powi(2)).sqrt();
+        assert!(
+            (radius - 2.0).abs() < 1e-9,
+            "sans audio le rayon doit être le rayon de base, r={radius}"
+        );
     }
 
     #[test]

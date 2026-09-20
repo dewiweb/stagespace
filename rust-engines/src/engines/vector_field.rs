@@ -400,9 +400,9 @@ impl Engine for VectorField {
         let z = cfg.z_init + cfg.z_drift * t.max(0.0);
 
         let mut vel = Vector2::zeros();
-        let fps = params.fps.max(1.0);
-        let dt = 1.0 / fps;
-        let n_steps = (t.max(0.0) * fps) as u64;
+        // Pattern de référence + cap partagé (MAX_SIM_STEPS) — au-delà le dt
+        // est dilaté pour couvrir t sans geler une frame.
+        let (n_steps, dt) = crate::engines::sim_steps(t, params.fps);
         // RNG par objet : la composante wander diverge entre objets mais reste
         // reproductible pour un seed donné.
         let mut rng = SimpleRng::new(

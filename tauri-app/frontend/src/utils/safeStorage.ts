@@ -42,6 +42,35 @@ export function safeRemoveItem(key: string): void {
   }
 }
 
+/// Parse une valeur JSON depuis localStorage de façon sûre.
+/// En cas de corruption : toast sticky + la valeur brute est préservée sous
+/// `key + '.corrupt'` pour permettre une récupération manuelle.
+/// (Un show perdu silencieusement en live = désastre.)
+export function safeParseStoredJson<T>(key: string, fallback: T): T {
+  let raw: string | null = null;
+  try {
+    raw = localStorage.getItem(key);
+  } catch (e) {
+    toast.error(`Failed to read saved data: ${e}`, 5000);
+    return fallback;
+  }
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    try {
+      localStorage.setItem(`${key}.corrupt`, raw);
+    } catch {
+      // Même le backup peut échouer (quota) — le toast ci-dessous suffit
+    }
+    toast.error(
+      `Saved data "${key}" is corrupted — backed up under "${key}.corrupt" and reset to defaults.`,
+      0, // sticky — l'utilisateur doit voir ça
+    );
+    return fallback;
+  }
+}
+
 /// Estime l'espace localStorage utilisé (en KB)
 export function getStorageUsageKB(): number {
   let total = 0;

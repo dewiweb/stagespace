@@ -63,7 +63,9 @@ pub struct Zone {
     pub falloff: f64,
     /// Canaux cibles à pleine influence
     pub channels: SpatialChannels,
-    /// Objets concernés — None = tous
+    /// Objets concernés — `None` = tous. Une liste vide (`Some([])`)
+    /// équivaut à `None` : "aucun objet listé" s'applique à tous —
+    /// éviter qu'une liste vide ne désactive silencieusement la zone.
     pub objects: Option<Vec<usize>>,
     /// Zone active
     #[serde(default = "default_enabled")]
@@ -80,12 +82,11 @@ fn smoothstep(t: f64) -> f64 {
 }
 
 /// Valeur neutre d'un canal quand aucune base (statique/modulée) n'existe —
-/// le blend part de là. gain=1.0 (unité), les autres à 0.
-fn neutral(channel: SpatialChannel) -> f64 {
-    match channel {
-        SpatialChannel::Gain => 1.0,
-        _ => 0.0,
-    }
+/// le blend part de là. Tous les canaux neutres à 0.0 : `gain` est une
+/// échelle en dB (0 dB = unité) — une base à 1.0 biaisait chaque blend
+/// de +1 dB.
+fn neutral(_channel: SpatialChannel) -> f64 {
+    0.0
 }
 
 impl Zone {
@@ -99,9 +100,14 @@ impl Zone {
         1.0 - smoothstep(d / self.falloff)
     }
 
-    /// Vrai si la zone s'applique à cet objet
+    /// Vrai si la zone s'applique à cet objet.
+    /// `objects: Some([])` est traité comme `None` (tous les objets).
     pub fn applies_to(&self, obj: usize) -> bool {
-        self.enabled && self.objects.as_ref().is_none_or(|o| o.contains(&obj))
+        self.enabled
+            && self
+                .objects
+                .as_ref()
+                .is_none_or(|o| o.is_empty() || o.contains(&obj))
     }
 
     /// Construit une Zone depuis les params d'un node graphe :
@@ -194,6 +200,7 @@ pub fn any_zone_applies(zones: &[Zone], obj: usize, pos: &Vector3<f64>) -> bool 
 }
 
 #[cfg(test)]
+#[allow(clippy::field_reassign_with_default)]
 mod tests {
     use super::*;
 
@@ -377,5 +384,33 @@ mod tests {
             "shape": "box", "channels": {"gain": 0}
         }))
         .is_err());
+    }
+
+    #[test]
+    fn test_gain_neutral_is_zero_db() {
+        // Le gain est en dB : sans base, le blend part de 0 dB (pas 1.0 —
+        // une base à 1.0 biaisait chaque blend de +1 dB).
+        // Zone gain=-6, influence 0.5, pas de base → lerp(0, -6, 0.5) = -3
+        let z = sphere_zone(2.0, 1.0, -6.0);
+        let mut eff = SpatialChannels::default();
+        apply_zones(&[z], 0, &Vector3::new(2.5, 0.0, 0.0), &mut eff);
+        assert!(
+            (eff.gain.unwrap() - (-3.0)).abs() < 1e-9,
+            "gain={:?}",
+            eff.gain
+        );
+    }
+
+    #[test]
+    fn test_empty_objects_list_means_all() {
+        // Some([]) ≡ None : une liste vide doit s'appliquer à tous les objets
+        // (sinon la zone est silencieusement morte).
+        let mut z = sphere_zone(2.0, 0.0, 0.0);
+        z.objects = Some(vec![]);
+        assert!(z.applies_to(0));
+        assert!(z.applies_to(42));
+        let mut eff = SpatialChannels::default();
+        apply_zones(&[z], 7, &Vector3::new(0.0, 0.0, 0.0), &mut eff);
+        assert_eq!(eff.gain, Some(0.0));
     }
 }

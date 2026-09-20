@@ -1,5 +1,7 @@
 use nalgebra::Vector3;
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::str::FromStr;
 
 /// Canaux spatiaux étendus — au-delà de la position (modèle ToscA).
@@ -189,46 +191,47 @@ impl OscProfile {
 
     /// Matrice de capacités : adresse OSC d'un canal étendu selon le profil.
     ///
-    /// Retourne `Some((adresse, valeur_convertie))` si le profil supporte le
-    /// canal, `None` sinon. Matrice conservatrice : seuls les canaux confirmés
-    /// sont mappés (extensible sans casser l'API).
-    ///
-    /// - `spread` est stocké normalisé 0-1, converti en 0-100 pour IRCAM Spat.
-    /// - `gain`, `presence`, `lfe` sont en dB pour les profils qui les supportent.
-    fn channel_message(
-        &self,
-        osc_id: u32,
-        channel: SpatialChannel,
-        value: f64,
-    ) -> Option<(String, f64)> {
-        match self {
-            OscProfile::IRCAMSpat => match channel {
-                SpatialChannel::Gain => Some((format!("/source/{osc_id}/gain"), value)),
-                SpatialChannel::Spread => Some((format!("/source/{osc_id}/spread"), value * 100.0)),
-                SpatialChannel::Distance => Some((format!("/source/{osc_id}/distance"), value)),
-                SpatialChannel::Presence => Some((format!("/source/{osc_id}/presence"), value)),
-                SpatialChannel::Yaw => Some((format!("/source/{osc_id}/yaw"), value)),
-                SpatialChannel::Aperture => Some((format!("/source/{osc_id}/aperture"), value)),
-                SpatialChannel::Lfe => Some((format!("/source/{osc_id}/lfe"), value)),
-            },
-            OscProfile::Holophonix => match channel {
-                SpatialChannel::Gain => Some((format!("/track/{osc_id}/gain"), value)),
-                _ => None,
-            },
-            OscProfile::ADMOSC => match channel {
-                SpatialChannel::Gain => Some((format!("/adm/obj/{osc_id}/gain"), value)),
-                SpatialChannel::Spread => Some((format!("/adm/obj/{osc_id}/width"), value)),
-                SpatialChannel::Distance => Some((format!("/adm/obj/{osc_id}/dist"), value)),
-                _ => None,
-            },
-            OscProfile::GenericCartesian | OscProfile::GenericPolar => match channel {
-                SpatialChannel::Gain => Some((format!("/object/{osc_id}/gain"), value)),
-                SpatialChannel::Spread => Some((format!("/object/{osc_id}/spread"), value)),
-                SpatialChannel::Distance => Some((format!("/object/{osc_id}/distance"), value)),
-                SpatialChannel::Yaw => Some((format!("/object/{osc_id}/yaw"), value)),
-                _ => None,
-            },
-            OscProfile::IEMMultiEncoder => None,
+    /// Retourne `Some(adresse)` si le profil supporte le canal, `None` sinon.
+    /// Matrice conservatrice : seuls les canaux confirmés sont mappés
+    /// (extensible sans casser l'API).
+    fn channel_address(&self, osc_id: u32, channel: SpatialChannel) -> Option<String> {
+        match (self, channel) {
+            (OscProfile::IRCAMSpat, SpatialChannel::Gain) => Some(format!("/source/{osc_id}/gain")),
+            (OscProfile::IRCAMSpat, SpatialChannel::Spread) => {
+                Some(format!("/source/{osc_id}/spread"))
+            }
+            (OscProfile::IRCAMSpat, SpatialChannel::Distance) => {
+                Some(format!("/source/{osc_id}/distance"))
+            }
+            (OscProfile::IRCAMSpat, SpatialChannel::Presence) => {
+                Some(format!("/source/{osc_id}/presence"))
+            }
+            (OscProfile::IRCAMSpat, SpatialChannel::Yaw) => Some(format!("/source/{osc_id}/yaw")),
+            (OscProfile::IRCAMSpat, SpatialChannel::Aperture) => {
+                Some(format!("/source/{osc_id}/aperture"))
+            }
+            (OscProfile::IRCAMSpat, SpatialChannel::Lfe) => Some(format!("/source/{osc_id}/lfe")),
+            (OscProfile::Holophonix, SpatialChannel::Gain) => Some(format!("/track/{osc_id}/gain")),
+            (OscProfile::ADMOSC, SpatialChannel::Gain) => Some(format!("/adm/obj/{osc_id}/gain")),
+            (OscProfile::ADMOSC, SpatialChannel::Spread) => {
+                Some(format!("/adm/obj/{osc_id}/width"))
+            }
+            (OscProfile::ADMOSC, SpatialChannel::Distance) => {
+                Some(format!("/adm/obj/{osc_id}/dist"))
+            }
+            (OscProfile::GenericCartesian | OscProfile::GenericPolar, SpatialChannel::Gain) => {
+                Some(format!("/object/{osc_id}/gain"))
+            }
+            (OscProfile::GenericCartesian | OscProfile::GenericPolar, SpatialChannel::Spread) => {
+                Some(format!("/object/{osc_id}/spread"))
+            }
+            (OscProfile::GenericCartesian | OscProfile::GenericPolar, SpatialChannel::Distance) => {
+                Some(format!("/object/{osc_id}/distance"))
+            }
+            (OscProfile::GenericCartesian | OscProfile::GenericPolar, SpatialChannel::Yaw) => {
+                Some(format!("/object/{osc_id}/yaw"))
+            }
+            _ => None,
         }
     }
 }
@@ -245,6 +248,15 @@ pub struct OscSender {
     pub scale: f64,
     pub shift: Vector3<f64>,
     pub turbulence: f64,
+    /// Cache des adresses OSC formatées : clé (tag profil, osc_id, canal ou -1
+    /// pour la position). L'alloc `format!()` se fait une fois par
+    /// (profil, id) au lieu d'une fois par objet par frame à 60fps.
+    /// RefCell est sûr ici : OscSender n'est jamais partagé en `&self` entre
+    /// threads (toujours derrière un Mutex dans Runtime/MergeRuntime).
+    /// Invalide automatiquement sur changement de profil ou d'object_offset
+    /// (déjà inclus dans la clé).
+    #[serde(skip)]
+    addr_cache: RefCell<HashMap<(u8, u32, i8), String>>,
 }
 
 impl OscSender {
@@ -259,6 +271,7 @@ impl OscSender {
             scale: 1.0,
             shift: Vector3::new(0.0, 0.0, 0.0),
             turbulence: 0.0,
+            addr_cache: RefCell::new(HashMap::new()),
         }
     }
 
@@ -279,6 +292,64 @@ impl OscSender {
         (self.host.clone(), self.port)
     }
 
+    /// Tag discriminant du profil — composante de la clé de cache d'adresses
+    /// (invalide automatiquement le cache si le profil change)
+    fn profile_tag(&self) -> u8 {
+        match self.profile {
+            OscProfile::IEMMultiEncoder => 0,
+            OscProfile::Holophonix => 1,
+            OscProfile::IRCAMSpat => 2,
+            OscProfile::GenericCartesian => 3,
+            OscProfile::GenericPolar => 4,
+            OscProfile::ADMOSC => 5,
+        }
+    }
+
+    /// Adresse de position d'un objet — résultat mis en cache (l'allocation
+    /// `format!()` ne se fait qu'une fois par (profil, osc_id) au lieu d'une
+    /// fois par objet par frame). `osc_id` inclut déjà `object_offset`.
+    fn position_address(&self, osc_id: u32) -> String {
+        let key = (self.profile_tag(), osc_id, -1i8);
+        if let Some(addr) = self.addr_cache.borrow().get(&key) {
+            return addr.clone();
+        }
+        let addr = match &self.profile {
+            OscProfile::IEMMultiEncoder => format!("/MultiEncoder/{osc_id}/aed"),
+            OscProfile::Holophonix => format!("/track/{osc_id}/xyz"),
+            OscProfile::IRCAMSpat => format!("/source/{osc_id}/xyz"),
+            OscProfile::GenericCartesian => format!("/object/{osc_id}/xyz"),
+            OscProfile::GenericPolar => format!("/object/{osc_id}"),
+            OscProfile::ADMOSC => format!("/adm/source/{osc_id}/aed"),
+        };
+        self.addr_cache.borrow_mut().insert(key, addr.clone());
+        addr
+    }
+
+    /// Adresse d'un canal étendu — `None` si le profil ne supporte pas le
+    /// canal (matrice de capacités, voir [`OscProfile::channel_address`]).
+    /// Mise en cache comme [`Self::position_address`].
+    fn channel_address_cached(&self, osc_id: u32, channel: SpatialChannel) -> Option<String> {
+        let key = (self.profile_tag(), osc_id, channel as i8);
+        if let Some(addr) = self.addr_cache.borrow().get(&key) {
+            return Some(addr.clone());
+        }
+        let addr = self.profile.channel_address(osc_id, channel);
+        if let Some(ref a) = addr {
+            self.addr_cache.borrow_mut().insert(key, a.clone());
+        }
+        addr
+    }
+
+    /// Conversion de valeur d'un canal selon le profil :
+    /// `spread` est stocké normalisé 0-1 → converti en 0-100 pour IRCAM Spat.
+    /// Identité pour tous les autres canaux/profils.
+    fn channel_convert(&self, channel: SpatialChannel, value: f64) -> f64 {
+        match (&self.profile, channel) {
+            (&OscProfile::IRCAMSpat, SpatialChannel::Spread) => value * 100.0,
+            _ => value,
+        }
+    }
+
     /// Convertit une position cartésienne en format selon le profil
     pub fn format_position(&self, object_id: u32, position: Vector3<f64>) -> (String, Vec<f64>) {
         let osc_id = object_id + self.object_offset;
@@ -289,10 +360,14 @@ impl OscSender {
         pos.y = pos.y * self.scale + self.shift.y;
         pos.z = pos.z * self.scale + self.shift.z;
 
-        // Appliquer turbulence — bruit déterministe basé sur le temps et l'objet
+        // Appliquer turbulence — offset statique déterministe par objet.
+        // NOTE : la seed dépend UNIQUEMENT de object_id — le bruit est figé
+        // dans le temps (offset spatial constant par objet, pas une animation
+        // de bruit). Rendre la turbulence temporelle demanderait un paramètre
+        // `t` dans la signature de format_position.
         if self.turbulence > 0.0 {
             use crate::rng::SimpleRng;
-            // Seed déterministe: combine object_id et un hash du temps
+            // Seed déterministe : fonction de object_id uniquement
             let t_hash = (object_id as u64).wrapping_mul(0x9E3779B97F4A7C15);
             let mut rng = SimpleRng::new(t_hash);
             // Bruit gaussien multiplié par l'amplitude de turbulence
@@ -317,24 +392,25 @@ impl OscSender {
                 let distance_norm = distance.min(1.0);
 
                 (
-                    format!("/MultiEncoder/{osc_id}/aed"),
+                    self.position_address(osc_id),
                     vec![azimuth, elevation, distance_norm],
                 )
             }
             OscProfile::Holophonix => {
                 // Holophonix - Cartesian coordinates
-                (format!("/track/{osc_id}/xyz"), vec![pos.x, pos.y, pos.z])
+                (self.position_address(osc_id), vec![pos.x, pos.y, pos.z])
             }
             OscProfile::IRCAMSpat => {
                 // IRCAM Spat - Cartesian coordinates
-                (format!("/source/{osc_id}/xyz"), vec![pos.x, pos.y, pos.z])
+                (self.position_address(osc_id), vec![pos.x, pos.y, pos.z])
             }
             OscProfile::GenericCartesian => {
                 // Generic Cartesian
-                (format!("/object/{osc_id}/xyz"), vec![pos.x, pos.y, pos.z])
+                (self.position_address(osc_id), vec![pos.x, pos.y, pos.z])
             }
             OscProfile::GenericPolar => {
-                // Generic Polar - envoi en 3 messages séparés
+                // Generic Polar — UN seul message à 3 valeurs (azimuth,
+                // elevation, distance) sur l'adresse de base /object/{id}
                 let azimuth = pos.y.atan2(pos.x).to_degrees();
                 let distance = (pos.x.powi(2) + pos.y.powi(2)).sqrt();
                 let elevation = if distance > 0.0 {
@@ -344,9 +420,8 @@ impl OscSender {
                 };
                 let distance_norm = distance.min(1.0);
 
-                // Pour GenericPolar, on retourne l'adresse base + les 3 valeurs
                 (
-                    format!("/object/{osc_id}"),
+                    self.position_address(osc_id),
                     vec![azimuth, elevation, distance_norm],
                 )
             }
@@ -362,7 +437,7 @@ impl OscSender {
                 let distance_norm = distance.min(1.0);
 
                 (
-                    format!("/adm/source/{osc_id}/aed"),
+                    self.position_address(osc_id),
                     vec![azimuth, elevation, distance_norm],
                 )
             }
@@ -391,8 +466,8 @@ impl OscSender {
         ];
         for (channel, value) in pairs {
             if let Some(v) = value {
-                if let Some((addr, converted)) = self.profile.channel_message(osc_id, channel, v) {
-                    messages.push((addr, vec![converted]));
+                if let Some(addr) = self.channel_address_cached(osc_id, channel) {
+                    messages.push((addr, vec![self.channel_convert(channel, v)]));
                 }
             }
         }
@@ -624,5 +699,59 @@ mod tests {
         // Sans canaux : position seule
         let msgs_none = sender.format_state(1, pos, None);
         assert_eq!(msgs_none.len(), 1);
+    }
+
+    #[test]
+    fn test_generic_polar_single_message() {
+        // GenericPolar émet UN message à 3 valeurs (aed) sur l'adresse de base
+        let sender = OscSender::new(OscProfile::GenericPolar, "127.0.0.1".to_string(), 7001);
+        let (addr, values) = sender.format_position(2, Vector3::new(0.5, 0.0, 0.0));
+        assert_eq!(addr, "/object/2");
+        assert_eq!(values.len(), 3);
+    }
+
+    #[test]
+    fn test_turbulence_static_deterministic_per_object() {
+        // La turbulence est un offset STATIQUE par objet (seed = object_id
+        // uniquement, pas de temps) : deux appels identiques → même sortie,
+        // deux objets différents → offsets différents.
+        let mut sender = OscSender::new(OscProfile::Holophonix, "127.0.0.1".to_string(), 8000);
+        sender.set_turbulence(0.1);
+        let pos = Vector3::new(0.5, 0.3, 0.2);
+
+        let a1 = sender.format_position(1, pos);
+        let a2 = sender.format_position(1, pos);
+        assert_eq!(a1.1, a2.1, "turbulence doit être figée dans le temps");
+
+        let b = sender.format_position(2, pos);
+        assert_ne!(a1.1, b.1, "offset différent par objet");
+
+        // Turbulence 0 → aucune modification
+        let mut clean = OscSender::new(OscProfile::Holophonix, "127.0.0.1".to_string(), 8000);
+        clean.set_turbulence(0.0);
+        let (_, v) = clean.format_position(1, pos);
+        assert_eq!(v, vec![0.5, 0.3, 0.2]);
+    }
+
+    #[test]
+    fn test_position_address_cached_and_consistent() {
+        // Le cache d'adresses ne change pas les résultats, et les clés
+        // incluent profil + object_offset (invalidation implicite).
+        let mut sender = OscSender::new(OscProfile::Holophonix, "127.0.0.1".to_string(), 8000);
+        let pos = Vector3::new(0.5, 0.3, 0.2);
+        for _ in 0..3 {
+            assert_eq!(sender.format_position(1, pos).0, "/track/1/xyz");
+        }
+        sender.set_object_offset(10);
+        assert_eq!(sender.format_position(1, pos).0, "/track/11/xyz");
+        sender.profile = OscProfile::IRCAMSpat;
+        assert_eq!(sender.format_position(1, pos).0, "/source/11/xyz");
+        // Les canaux passent par le même cache
+        let mut ch = SpatialChannels::default();
+        ch.set(SpatialChannel::Spread, 0.5); // → 50.0 pour IRCAM
+        let msgs = sender.format_channels(1, &ch);
+        assert!(msgs
+            .iter()
+            .any(|(a, v)| a == "/source/11/spread" && v == &vec![50.0]));
     }
 }

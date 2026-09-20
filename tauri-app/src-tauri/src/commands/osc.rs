@@ -116,7 +116,7 @@ pub async fn set_osc_output(
     let profile_enum = OscProfile::from_str(&profile)
         .map_err(|e| format!("Invalid OSC profile '{profile}': {e}"))?;
     let osc_sender = OscSender::new(profile_enum, address.clone(), port);
-    let mut merge_rt = lock_or_recover(&state.merge_runtime);
+    let merge_rt = lock_or_recover(&state.merge_runtime);
     merge_rt
         .set_osc_target(address.clone(), port, osc_sender)
         .map_err(|e| format!("Failed to set OSC target: {e:?}"))?;
@@ -143,28 +143,13 @@ pub async fn send_osc_position(
     // Anti-loop : ignorer les echoes OSC IN pendant le panic
     lock_or_recover(&state.osc_receiver).suppress_ms(200);
 
-    let sender = lock_or_recover(&state.osc_sender);
-    let (addr, values) = sender.format_position(osc_id, nalgebra::Vector3::new(x, y, z));
-
-    // Récupérer l'adresse de destination depuis le sender
-    let dest_addr = sender.destination();
-    drop(sender);
-
-    // Créer un socket temporaire pour envoyer
-    let socket =
-        std::net::UdpSocket::bind("0.0.0.0:0").map_err(|e| format!("Socket bind failed: {e}"))?;
-    socket
-        .connect(dest_addr)
-        .map_err(|e| format!("Connect failed: {e}"))?;
-
-    let args: Vec<rosc::OscType> = values
-        .iter()
-        .map(|v| rosc::OscType::Float(*v as f32))
-        .collect();
-    let packet = rosc::OscPacket::Message(rosc::OscMessage { addr, args });
-    let bytes = rosc::encoder::encode(&packet).map_err(|e| format!("OSC encode failed: {e}"))?;
-    socket
-        .send(&bytes)
+    // Envoie via la cible OSC courante du MergeRuntime — celle-ci suit
+    // `set_osc_output`, contrairement à `state.osc_sender` qui reste figée
+    // sur le sender du startup (Generic@127.0.0.1:7000) : sans ça le panic
+    // n'atteignait jamais le renderer réel.
+    let merge_rt = lock_or_recover(&state.merge_runtime);
+    merge_rt
+        .send_position_now(osc_id, nalgebra::Vector3::new(x, y, z))
         .map_err(|e| format!("OSC send failed: {e}"))?;
     Ok(())
 }

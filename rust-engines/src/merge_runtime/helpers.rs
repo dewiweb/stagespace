@@ -9,9 +9,13 @@ use super::move_state::MergeStrategy;
 pub type MoveEntry = (String, f64, u32, Vec<(usize, nalgebra::Vector3<f64>)>);
 
 /// Merge les positions de plusieurs moves selon la stratégie choisie.
+///
+/// Déterminisme : les candidats de chaque track sont triés par move_id avant
+/// résolution — le résultat ne dépend ni de l'ordre de `move_positions` ni de
+/// l'ordre d'itération d'une HashMap. Les égalités (même fade / même priorité)
+/// sont départagées par move_id lexicographique (le plus grand gagne).
 pub fn merge_positions(
     move_positions: &[MoveEntry],
-    _osc_ids: &[u32],
     strategy: MergeStrategy,
 ) -> Vec<(usize, nalgebra::Vector3<f64>)> {
     if move_positions.is_empty() {
@@ -26,16 +30,24 @@ pub fn merge_positions(
         return move_positions[0].3.clone();
     }
 
-    // Collecter toutes les positions par object_index, avec (fade, priority, pos)
-    let mut positions_by_index: HashMap<usize, Vec<(f64, u32, nalgebra::Vector3<f64>)>> =
-        HashMap::new();
-    for (_, fade, priority, positions) in move_positions {
+    // Collecter toutes les positions par object_index, avec (fade, priority, move_id, pos)
+    type Candidates<'a> = Vec<(f64, u32, &'a str, nalgebra::Vector3<f64>)>;
+    let mut positions_by_index: HashMap<usize, Candidates<'_>> = HashMap::new();
+    for (move_id, fade, priority, positions) in move_positions {
         for (idx, pos) in positions {
-            positions_by_index
-                .entry(*idx)
-                .or_default()
-                .push((*fade, *priority, *pos));
+            positions_by_index.entry(*idx).or_default().push((
+                *fade,
+                *priority,
+                move_id.as_str(),
+                *pos,
+            ));
         }
+    }
+
+    // Trier les candidats par move_id : ordre de sommation et tie-breaks
+    // reproductibles quelle que soit l'ordre d'entrée / de la HashMap source.
+    for candidates in positions_by_index.values_mut() {
+        candidates.sort_unstable_by(|a, b| a.2.cmp(b.2));
     }
 
     // Résoudre selon la stratégie.
@@ -51,32 +63,43 @@ pub fn merge_positions(
             let pos = match (strategy, candidates) {
                 (_, None) => nalgebra::Vector3::zeros(),
                 (_, Some(c)) if c.is_empty() => nalgebra::Vector3::zeros(),
-                // Override : prendre la position avec le fade le plus élevé
+                // Override : prendre la position avec le fade le plus élevé.
+                // Tie-break déterministe : move_id le plus grand.
                 (MergeStrategy::Override, Some(c)) => c
                     .iter()
-                    .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
-                    .map(|(_, _, pos)| *pos)
+                    .max_by(|a, b| {
+                        a.0.partial_cmp(&b.0)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                            .then_with(|| a.2.cmp(b.2))
+                    })
+                    .map(|(_, _, _, pos)| *pos)
                     .unwrap_or(nalgebra::Vector3::zeros()),
-                // Crossfade / Blend : moyenne pondérée par fade
+                // Crossfade / Blend : moyenne pondérée par fade.
+                // L'ordre des candidats est trié par move_id → somme stable.
                 (MergeStrategy::Crossfade, Some(c)) | (MergeStrategy::Blend, Some(c)) => {
-                    let total_weight: f64 = c.iter().map(|(f, _, _)| f.abs()).sum();
+                    let total_weight: f64 = c.iter().map(|(f, _, _, _)| f.abs()).sum();
                     if total_weight > 1e-10 {
-                        c.iter().map(|(f, _, pos)| pos * (*f / total_weight)).sum()
+                        c.iter()
+                            .map(|(f, _, _, pos)| pos * (*f / total_weight))
+                            .sum()
                     } else {
-                        c[0].2
+                        c[0].3
                     }
                 }
                 // Priority : le move avec la priorité la plus élevée gagne.
                 // En cas d'égalité de priorité, on départage par fade le plus élevé
-                // (pour que le fade out d'un move cède la place à un move de même priorité).
+                // (pour que le fade out d'un move cède la place à un move de même
+                // priorité), puis par move_id — déterministe entre runs.
                 (MergeStrategy::Priority, Some(c)) => c
                     .iter()
                     .max_by(|a, b| {
-                        a.1.cmp(&b.1).then_with(|| {
-                            a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal)
-                        })
+                        a.1.cmp(&b.1)
+                            .then_with(|| {
+                                a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal)
+                            })
+                            .then_with(|| a.2.cmp(b.2))
                     })
-                    .map(|(_, _, pos)| *pos)
+                    .map(|(_, _, _, pos)| *pos)
                     .unwrap_or(nalgebra::Vector3::zeros()),
             };
             (obj_idx, pos)

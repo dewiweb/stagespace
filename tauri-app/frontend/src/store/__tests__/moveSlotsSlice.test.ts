@@ -17,7 +17,11 @@ describe('addMoveSlot', () => {
     expect(slots[0].name).toBe('Move 1');
     expect(slots[0].templateId).toBe('circle');
     expect(slots[0].trackIds).toEqual([1, 2, 3]);
-    expect(slots[0].graphJson).toBeNull();
+    // graphJson est construit à la création (slot self-contained : le GO
+    // n'a pas besoin de rebuilder le template — la setlist rejoue le graphe
+    // exact qui était affiché).
+    expect(slots[0].graphJson).not.toBeNull();
+    expect(slots[0].graphJson.nodes.length).toBeGreaterThan(0);
     expect(slots[0].movementId).toBeNull();
     expect(slots[0].isPreview).toBe(false);
     expect(slots[0].macros.speed).toBe(1.0);

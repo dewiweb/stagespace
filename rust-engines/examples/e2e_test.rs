@@ -96,12 +96,14 @@ fn main() {
         .unwrap();
 
     // 2. Créer une animation Circle
-    let mut anim = Animation::default();
-    anim.name = "Test E2E Circle".to_string();
-    anim.shape = ShapeType::Circle;
+    let mut anim = Animation {
+        name: "Test E2E Circle".to_string(),
+        shape: ShapeType::Circle,
+        duration: 4.0,
+        speed: 1.0,
+        ..Default::default()
+    };
     anim.shape_params.insert("radius".to_string(), 2.0);
-    anim.duration = 4.0;
-    anim.speed = 1.0;
     anim.assignments = vec![
         TrackAssignment {
             track_id: 1,
@@ -165,7 +167,7 @@ fn main() {
         fps: 60.0,
         extra: serde_json::json!({}),
     };
-    let handle = runtime
+    runtime
         .play_compiled(compiled, params, osc_ids)
         .expect("play");
     println!("[7] Playback lancé ! En attente de messages OSC...");
@@ -177,34 +179,29 @@ fn main() {
 
     while start.elapsed() < Duration::from_millis(1000) {
         let mut buf = [0u8; 1024];
-        match listener.recv_from(&mut buf) {
-            Ok((n, _addr)) => {
-                messages_received += 1;
-                if messages_received <= 5 {
-                    // Parser le message OSC
-                    if let Ok((_, packet)) = rosc::decoder::decode_udp(&buf[..n]) {
-                        if let rosc::OscPacket::Message(msg) = packet {
-                            let args_str: Vec<String> = msg
-                                .args
-                                .iter()
-                                .map(|a| match a {
-                                    rosc::OscType::Float(f) => format!("{f:.2}"),
-                                    rosc::OscType::Int(i) => i.to_string(),
-                                    _ => "?".to_string(),
-                                })
-                                .collect();
-                            first_messages.push(format!("  {} {}", msg.addr, args_str.join(", ")));
-                        }
-                    }
+        if let Ok((n, _addr)) = listener.recv_from(&mut buf) {
+            messages_received += 1;
+            if messages_received <= 5 {
+                // Parser le message OSC
+                if let Ok((_, rosc::OscPacket::Message(msg))) = rosc::decoder::decode_udp(&buf[..n])
+                {
+                    let args_str: Vec<String> = msg
+                        .args
+                        .iter()
+                        .map(|a| match a {
+                            rosc::OscType::Float(f) => format!("{f:.2}"),
+                            rosc::OscType::Int(i) => i.to_string(),
+                            _ => "?".to_string(),
+                        })
+                        .collect();
+                    first_messages.push(format!("  {} {}", msg.addr, args_str.join(", ")));
                 }
             }
-            Err(_) => {} // timeout, continue
         }
     }
 
     // 9. Arrêter
     runtime.stop();
-    let _ = handle.join();
     println!("[8] Playback arrêté");
 
     // 10. Résultats
@@ -229,10 +226,12 @@ fn main() {
         .set_read_timeout(Some(Duration::from_millis(500)))
         .unwrap();
 
-    let mut anim2 = Animation::default();
-    anim2.shape = ShapeType::Circle;
+    let mut anim2 = Animation {
+        shape: ShapeType::Circle,
+        duration: 4.0,
+        ..Default::default()
+    };
     anim2.shape_params.insert("radius".to_string(), 2.0);
-    anim2.duration = 4.0;
     anim2.audio_mods.push(stagespace_engines::AudioMod {
         source: stagespace_engines::AudioModSource::AmplitudeBass,
         target: stagespace_engines::AudioModTarget::RadiusScale,
@@ -269,7 +268,7 @@ fn main() {
         fps: 60.0,
         extra: serde_json::json!({}),
     };
-    let handle2 = runtime2
+    runtime2
         .play_compiled(compiled2, params2, osc_ids2)
         .expect("play2");
     println!("Playback avec audio mod (bass=0.8 → radius) lancé...");
@@ -281,25 +280,23 @@ fn main() {
         if let Ok((n, _)) = listener2.recv_from(&mut buf) {
             msg_count2 += 1;
             if msg_count2 <= 3 {
-                if let Ok((_, packet)) = rosc::decoder::decode_udp(&buf[..n]) {
-                    if let rosc::OscPacket::Message(msg) = packet {
-                        let args_str: Vec<String> = msg
-                            .args
-                            .iter()
-                            .map(|a| match a {
-                                rosc::OscType::Float(f) => format!("{f:.2}"),
-                                _ => "?".to_string(),
-                            })
-                            .collect();
-                        println!("  {} {}", msg.addr, args_str.join(", "));
-                    }
+                if let Ok((_, rosc::OscPacket::Message(msg))) = rosc::decoder::decode_udp(&buf[..n])
+                {
+                    let args_str: Vec<String> = msg
+                        .args
+                        .iter()
+                        .map(|a| match a {
+                            rosc::OscType::Float(f) => format!("{f:.2}"),
+                            _ => "?".to_string(),
+                        })
+                        .collect();
+                    println!("  {} {}", msg.addr, args_str.join(", "));
                 }
             }
         }
     }
 
     runtime2.stop();
-    let _ = handle2.join();
 
     if msg_count2 > 0 {
         println!("✅ Audio mod test: {msg_count2} messages OSC reçus avec Holophonix profile");

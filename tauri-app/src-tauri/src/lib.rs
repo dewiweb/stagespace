@@ -6,8 +6,8 @@ use stagespace_engines::{
     init_logging, AudioCaptureManager, AudioState, MergeRuntime, OscReceiver, OscSender,
     PresetManager, Runtime,
 };
-use std::collections::HashMap;
-use std::sync::atomic::AtomicBool;
+use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, State};
 
@@ -47,16 +47,25 @@ use graph::parser::build_graph_from_json;
 
 // État global de l'application
 pub struct AppState {
-    pub runtime: Mutex<Option<Runtime>>,
+    pub runtime: Arc<Mutex<Option<Runtime>>>,
     pub audio_state: Arc<Mutex<AudioState>>,
     pub osc_receiver: Arc<Mutex<OscReceiver>>,
+    /// Sender OSC "panique" — gardé en sync avec la config du MergeRuntime
+    /// par `set_osc_output` pour que send_osc_position atteigne le bon renderer.
     pub osc_sender: Arc<Mutex<OscSender>>,
     /// Osc IDs actuels (pour hot-swap)
-    pub current_osc_ids: Mutex<Vec<u32>>,
+    pub current_osc_ids: Arc<Mutex<Vec<u32>>>,
     pub presets: Arc<Mutex<PresetManager>>,
     pub app_handle: Arc<Mutex<Option<AppHandle>>>,
     /// Multi-movement: plusieurs runtimes parallèles indépendants (workers)
     pub movements: Arc<Mutex<HashMap<String, Movement>>>,
+    /// IDs réservés pendant l'activation d'un move (fenêtre compile+spawn) —
+    /// un deactivate sur un id en cours d'activation renvoie Err au lieu de
+    /// no-op silencieux.
+    pub pending_move_ids: Arc<Mutex<HashSet<String>>>,
+    /// Compteur de génération par move — un sleeper de fade-out ne supprime
+    /// un id que si la génération correspond (id réutilisé = génération différente).
+    pub move_generation: Arc<AtomicU64>,
     /// MergeRuntime global — merge les positions de tous les workers,
     /// applique les macros spatiales, envoie l'OSC (une seule socket)
     pub merge_runtime: Arc<Mutex<MergeRuntime>>,
@@ -69,6 +78,8 @@ pub struct AppState {
 }
 
 /// Un movement = un runtime indépendant avec ses propres tracks et mode (preview/live)
+/// Les champs de snapshot (graph_json, duration, loop_mode, direction, origin)
+/// permettent à store_cue/recall_cue de recréer le move sans le frontend.
 pub struct Movement {
     pub id: String,
     pub name: String,
@@ -76,6 +87,19 @@ pub struct Movement {
     pub osc_ids: Vec<u32>,
     pub is_preview: bool,
     pub track_indices: Vec<usize>, // indices des tracks dans le .hol
+    /// Sub-graph JSON utilisé à l'activation — snapshot pour les cues
+    pub graph_json: serde_json::Value,
+    /// Durée du move (secondes)
+    pub duration: f64,
+    /// Loop mode sérialisé : "loop" | "oneshot"
+    pub loop_mode: String,
+    /// Direction sérialisée : "forward" | "backward" | "ping_pong"
+    pub direction: String,
+    /// Origin (isobarycentre des tracks ciblées) à l'activation
+    pub origin: Option<[f64; 3]>,
+    /// Génération de l'id — un sleeper de fade-out ne touche l'entrée que
+    /// si la génération correspond encore (protection id réutilisé).
+    pub generation: u64,
 }
 
 /// Limite de movements simultanés pour éviter l'épuisement des ressources
@@ -101,15 +125,24 @@ async fn compile_graph(
     graph_json: serde_json::Value,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    let audio_state = state.audio_state.lock().unwrap_or_else(|e| {
-        eprintln!("[WARN] audio_state mutex poisoned, recovering: {e}");
-        e.into_inner()
-    });
-    let graph = build_graph_from_json(&graph_json, &audio_state)?;
-    match graph::compilation::compile_graph(&graph) {
-        Ok(_) => Ok("Graph compiled successfully".to_string()),
-        Err(e) => Err(e),
-    }
+    // Compilation = travail CPU lourd → spawn_blocking pour ne pas
+    // bloquer l'executor async de Tauri.
+    let audio_state_arc = state.audio_state.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let graph = {
+            let audio_state = audio_state_arc.lock().unwrap_or_else(|e| {
+                eprintln!("[WARN] audio_state mutex poisoned, recovering: {e}");
+                e.into_inner()
+            });
+            build_graph_from_json(&graph_json, &audio_state)?
+        };
+        match graph::compilation::compile_graph(&graph) {
+            Ok(_) => Ok("Graph compiled successfully".to_string()),
+            Err(e) => Err(e),
+        }
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -153,14 +186,16 @@ pub fn run() {
                     }
                 };
             AppState {
-                runtime: Mutex::new(None),
+                runtime: Arc::new(Mutex::new(None)),
                 audio_state: Arc::new(Mutex::new(AudioState::new())),
                 osc_receiver: Arc::new(Mutex::new(OscReceiver::new(8001))),
                 osc_sender: Arc::new(Mutex::new(osc_sender)),
-                current_osc_ids: Mutex::new(Vec::new()),
+                current_osc_ids: Arc::new(Mutex::new(Vec::new())),
                 presets: Arc::new(Mutex::new(PresetManager::new())),
                 app_handle: Arc::new(Mutex::new(None)),
                 movements: Arc::new(Mutex::new(HashMap::new())),
+                pending_move_ids: Arc::new(Mutex::new(HashSet::new())),
+                move_generation: Arc::new(AtomicU64::new(0)),
                 merge_runtime: Arc::new(Mutex::new(merge_rt)),
                 recall_in_progress: Arc::new(std::sync::atomic::AtomicBool::new(false)),
                 audio_capture: Arc::new(Mutex::new(AudioCaptureManager::new())),

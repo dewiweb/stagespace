@@ -18,6 +18,10 @@ export interface SavedGraph {
 /// Le render loop lit via storeState.movementPositions (référence stable vers cet objet).
 const _movementPositionsExternal: Record<string, Array<{ index: number; x: number; y: number; z: number }>> = {};
 
+/// Anti-spam : refreshMovements tourne après chaque play/stop — si le backend
+/// est mort on ne veut pas 20 toasts. Un seul toast par fenêtre de 10s.
+let _lastRefreshErrorToastAt = 0;
+
 export interface MovementSlice {
   // Multi-movement: plusieurs runtimes parallèles
   movements: MovementInfo[];
@@ -163,15 +167,28 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
       set({ movements });
     } catch (e) {
       console.error('Failed to list movements:', e);
+      const now = Date.now();
+      if (now - _lastRefreshErrorToastAt > 10_000) {
+        _lastRefreshErrorToastAt = now;
+        toast.error(`Cannot list running movements: ${e}`);
+      }
     }
   },
 
   loadMovementGraph: (movementId) => {
     const saved = get().savedGraphs[movementId];
     if (saved) {
+      if (!Array.isArray(saved.nodes) || !Array.isArray(saved.edges)) {
+        toast.error(`Saved graph for "${movementId}" is corrupted — cannot load`);
+        return;
+      }
+      // pushHistory AVANT de remplacer le graphe (undo ramène au graphe courant)
+      (get() as any).pushHistory?.();
       // Deep clone pour éviter de modifier le saved par référence
       get().setNodes(JSON.parse(JSON.stringify(saved.nodes)));
       get().setEdges(JSON.parse(JSON.stringify(saved.edges)));
+      // Persister vers le slot en édition — sinon le graphe chargé est perdu
+      (get() as any).autoSaveToEditingSlot?.();
     }
   },
 });

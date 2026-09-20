@@ -21,7 +21,7 @@ import { createMacrosSlice, type MacrosSlice } from './slices/macrosSlice';
 import { createHolProjectSlice, type HolProjectSlice } from './slices/holProjectSlice';
 import { createDrawModeSlice, type DrawModeSlice } from './slices/drawModeSlice';
 import { createMovementSlice, type MovementSlice } from './slices/movementSlice';
-import { createMoveSlotsSlice, type MoveSlotsSlice } from './slices/moveSlotsSlice';
+import { createMoveSlotsSlice, type MoveSlotsSlice, computeTrackIndices } from './slices/moveSlotsSlice';
 import { createOscConfigSlice, type OscConfigSlice } from './slices/oscConfigSlice';
 import { createSplineLibrarySlice, type SplineLibrarySlice } from './slices/splineLibrarySlice';
 import { createSpatialFxSlice, type SpatialFxSlice } from './slices/spatialFxSlice';
@@ -110,6 +110,11 @@ interface GraphState
   canRedo: boolean;
   pushHistory: () => void;
 
+  /// Persiste le graphe courant dans le slot en cours d'édition.
+  /// Exposé pour que les loaders externes (loadMovementGraph, loadAnimation,
+  /// loadGraph) puissent synchroniser le slot après avoir remplacé nodes/edges.
+  autoSaveToEditingSlot: () => void;
+
   // Panic
   panic: () => Promise<void>;
 }
@@ -148,7 +153,14 @@ export const useGraphStore = create<GraphState>()((...a) => {
     }, 400);
   }
 
+  // Timer SÉPARÉ pour le hot-swap débouncé d'updateNodeData — partager
+  // dragSaveTimer causait des pertes : un drag pouvait annuler un hot-swap
+  // pending et vice-versa.
+  let hotSwapTimer: ReturnType<typeof setTimeout> | null = null;
+
   return {
+  // Exposé pour les loaders externes (loadMovementGraph, persistenceSlice, etc.)
+  autoSaveToEditingSlot,
   ...createPerfSlice(...a),
   ...createAudioSlice(...a),
   ...createOscSlice(...a),
@@ -223,11 +235,14 @@ export const useGraphStore = create<GraphState>()((...a) => {
     if (editingSlotId) {
       const slot = (get() as any).moveSlots?.find((s: any) => s.id === editingSlotId);
       if (slot?.movementId) {
-        // Hot-swap avec un léger debounce pour éviter de spammer pendant un drag
-        if (dragSaveTimer) clearTimeout(dragSaveTimer);
-        dragSaveTimer = setTimeout(() => {
-          dragSaveTimer = null;
-          (get() as any).updateGraphLive?.(0.3);
+        // Hot-swap avec un léger debounce — timer dédié (hotSwapTimer),
+        // ne pas réutiliser dragSaveTimer (auto-save ≠ hot-swap).
+        if (hotSwapTimer) clearTimeout(hotSwapTimer);
+        hotSwapTimer = setTimeout(() => {
+          hotSwapTimer = null;
+          (get() as any).updateGraphLive?.(0.3).catch((e: any) => {
+            console.error('[updateNodeData] debounced hot-swap failed:', e);
+          });
         }, 200);
       }
     }
@@ -359,18 +374,7 @@ export const useGraphStore = create<GraphState>()((...a) => {
         const oscIds = editingSlot?.trackIds ?? [];
         const holProj = (get() as any).holProject;
         const manualIds = (get() as any).manualOscIds ?? [];
-        const trackIndices: number[] = [];
-        if (holProj) {
-          oscIds.forEach((tid: number) => {
-            const idx = holProj.tracks.findIndex((t: any) => t.id === tid);
-            if (idx >= 0) trackIndices.push(idx);
-          });
-        } else {
-          oscIds.forEach((tid: number) => {
-            const idx = manualIds.indexOf(tid);
-            trackIndices.push(idx >= 0 ? idx : tid - 1);
-          });
-        }
+        const trackIndices = computeTrackIndices(oscIds, holProj, manualIds);
         await invoke('update_move_graph_merged', {
           movementId: editingSlotMovementId,
           graphJson: graphData,
@@ -451,8 +455,12 @@ export const useGraphStore = create<GraphState>()((...a) => {
       canUndo: newIdx > 0,
       canRedo: true,
     } as any);
-    // Hot-swap si en lecture
-    if (get().isPlaying) get().updateGraphLive(0.3);
+    // Persister vers le slot en édition — sinon undo serait invisible
+    // dans graphJson et perdu à la prochaine sélection de slot.
+    autoSaveToEditingSlot();
+    // Hot-swap inconditionnel : updateGraphLive self-guard
+    // (isPlaying / movements / activeMovementIds)
+    get().updateGraphLive(0.3).catch((e) => console.error('[undo] hot-swap failed:', e));
   },
   redo: () => {
     const { _history, _historyIndex } = get() as any;
@@ -466,7 +474,8 @@ export const useGraphStore = create<GraphState>()((...a) => {
       canUndo: true,
       canRedo: newIdx < _history.length - 1,
     } as any);
-    if (get().isPlaying) get().updateGraphLive(0.3);
+    autoSaveToEditingSlot();
+    get().updateGraphLive(0.3).catch((e) => console.error('[redo] hot-swap failed:', e));
   },
 
   // ─── Panic ───

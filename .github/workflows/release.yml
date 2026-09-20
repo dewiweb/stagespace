@@ -1,12 +1,18 @@
 name: Release
 
 # Déclenché sur les tags de version : git tag v0.1.0 && git push --tags
+# (ou manuellement via workflow_dispatch avec un tag vX.Y.Z explicite).
 # Produit les bundles Tauri (AppImage + .deb sur Linux) et crée une
 # GitHub Release en draft avec les artifacts attachés.
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag de release (vX.Y.Z) — doit exister et correspondre à tauri.conf.json version"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -17,23 +23,43 @@ env:
 jobs:
   build-release:
     name: Build & Release
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         platform:
           - os: ubuntu-22.04
             # Pour étendre : ajouter macos-14 (dmg) et windows-latest (msi/nsis).
-            # Prérequis : icônes .icns/.ico générées (cargo tauri icon).
+            # Les icônes .icns/.ico sont déjà présentes dans src-tauri/icons/.
             # Windows/macOS unsigned fonctionnent mais affichent un avertissement.
     runs-on: ${{ matrix.platform.os }}
 
     steps:
+      # Sur un push de tag : checkout du tag. Sur workflow_dispatch :
+      # checkout du tag fourni en input (doit exister dans le repo).
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Resolve tag + verify version matches tauri.conf.json
+        run: |
+          TAG="${{ inputs.tag || github.ref_name }}"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag '$TAG' n'est pas un tag de version vX.Y.Z — rien à releaser."
+            exit 1
+          fi
+          CONF_VERSION=$(jq -r .version tauri-app/src-tauri/tauri.conf.json)
+          if [ "v$CONF_VERSION" != "$TAG" ]; then
+            echo "::error::tauri.conf.json version '$CONF_VERSION' ≠ tag '$TAG' — bumper la version avant de tagger."
+            exit 1
+          fi
+          echo "✓ Tag $TAG == tauri.conf.json version $CONF_VERSION"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install system dependencies (Tauri + ALSA)
+      - name: Install system dependencies (Tauri + ALSA + xvfb pour le smoke test)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
@@ -44,6 +70,7 @@ jobs:
             librsvg2-dev \
             libasound2-dev \
             libfuse2 \
+            xvfb \
             patchelf
 
       - name: Setup Node.js
@@ -53,11 +80,20 @@ jobs:
           cache: npm
           cache-dependency-path: tauri-app/frontend/package-lock.json
 
-      - name: Build frontend (required by tauri::generate_context!)
-        run: |
-          cd tauri-app/frontend
-          npm ci
-          npm run build
+      # Le frontend est buildé par beforeBuildCommand (tauri.conf.json) —
+      # on installe seulement les deps ici, pas de double build.
+      - name: Install frontend dependencies
+        run: cd tauri-app/frontend && npm ci
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            tauri-app/src-tauri/target
+            rust-engines/target
+          key: release-${{ runner.os }}-${{ hashFiles('tauri-app/src-tauri/Cargo.lock', 'rust-engines/Cargo.lock') }}
 
       - name: Build bundles + publish release
         uses: tauri-apps/tauri-action@v0
@@ -65,11 +101,47 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: tauri-app
-          tagName: ${{ github.ref_name }}
-          releaseName: 'STAGESPACE ${{ github.ref_name }}'
+          tagName: ${{ env.TAG }}
+          releaseName: 'STAGESPACE ${{ env.TAG }}'
           releaseBody: |
             Spatial trajectory engine for OSC-controlled audio renderers.
             - **AppImage** : portable, `chmod +x` puis lancer
             - **.deb** : `sudo dpkg -i stagespace_*.deb`
           releaseDraft: true
           prerelease: false
+
+      # Smoke test post-build : le bundle ne doit pas crasher au démarrage
+      # (classe de bug : dépendance système manquante type GStreamer).
+      - name: Smoke test bundles (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          set -e
+          BIN="tauri-app/src-tauri/target/release/stagespace-tauri"
+
+          # 1. Vérifie que le binaire n'a pas de librairies manquantes
+          if [ -f "$BIN" ]; then
+            if ldd "$BIN" | grep -q "not found"; then
+              echo "::error::Shared libraries manquantes :"
+              ldd "$BIN" | grep "not found"
+              exit 1
+            fi
+            echo "✓ Toutes les librairies du binaire sont résolues"
+          fi
+
+          # 2. Lance l'AppImage sous Xvfb — doit rester vivante ≥30s
+          #    (timeout tue le process → exit 124 = succès ; crash = autre code)
+          APPIMAGE=$(find tauri-app/src-tauri/target/release/bundle/appimage -name "*.AppImage" | head -1)
+          if [ -z "$APPIMAGE" ]; then
+            echo "::error::Aucun AppImage produit dans bundle/appimage"
+            exit 1
+          fi
+          chmod +x "$APPIMAGE"
+          set +e
+          APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run -a timeout 30 "$APPIMAGE"
+          rc=$?
+          set -e
+          if [ "$rc" -ne 0 ] && [ "$rc" -ne 124 ]; then
+            echo "::error::AppImage a quitté immédiatement (exit $rc) — probable crash au démarrage"
+            exit 1
+          fi
+          echo "✓ AppImage démarre et reste vivant (exit $rc)"

@@ -4,7 +4,8 @@ import { toast } from '../../utils/toast-helpers';
 import { computeCentroid } from '../utils/geometryUtils';
 import type { Node, Edge } from 'reactflow';
 import type { HolProject } from '../types/index';
-import { safeSetItem } from '../../utils/safeStorage';
+import { safeSetItem, safeParseStoredJson } from '../../utils/safeStorage';
+import { SHAPE_PRESETS } from '../../utils/shapePresets';
 
 /// Extrait la duration d'un graphe (node Duration) — fallback 4.0s
 function extractDuration(nodes: Node[]): number {
@@ -12,22 +13,47 @@ function extractDuration(nodes: Node[]): number {
   return (durNode?.data as any)?.params?.duration ?? 4.0;
 }
 
+/// Track IDs déjà signalés comme non résolubles (anti-spam de toasts)
+const _warnedTrackIds = new Set<string>();
+
 /// Calcule les track_indices (index 0-based dans le projet hol ou manualOscIds)
-/// à partir des trackIds (osc_ids) du slot
-function computeTrackIndices(trackIds: number[], holProject: any, manualOscIds: number[]): number[] {
+/// à partir des trackIds (osc_ids) du slot.
+/// ATTENTION : ne JAMAIS deviner `tid - 1` quand l'id est introuvable — ça mappe
+/// silencieusement sur la mauvaise track en live. On skip + on warn une fois.
+/// (exporté — réutilisé par drawModeSlice)
+export function computeTrackIndices(trackIds: number[], holProject: any, manualOscIds: number[]): number[] {
   const indices: number[] = [];
   if (holProject) {
     trackIds.forEach((tid) => {
       const idx = holProject.tracks.findIndex((t: any) => t.id === tid);
       if (idx >= 0) indices.push(idx);
+      else if (!_warnedTrackIds.has(`hol:${tid}`)) {
+        _warnedTrackIds.add(`hol:${tid}`);
+        toast.warning(`Track ${tid} not found in .hol project — skipped`);
+      }
     });
   } else {
     trackIds.forEach((tid) => {
       const idx = manualOscIds.indexOf(tid);
-      indices.push(idx >= 0 ? idx : tid - 1);
+      if (idx >= 0) {
+        indices.push(idx);
+      } else if (!_warnedTrackIds.has(`manual:${tid}`)) {
+        _warnedTrackIds.add(`manual:${tid}`);
+        toast.warning(`Track ${tid} not in manual OSC IDs — skipped (no silent fallback)`);
+      }
     });
   }
   return indices;
+}
+
+/// Construit le graphe d'un slot depuis son templateId.
+/// Utilisé à la création du slot et en fallback dans selectSlotForEditing
+/// (slots persistés avant que graphJson ne soit construit à la création).
+function buildGraphForSlot(templateId: string, nTracks: number): { nodes: Node[]; edges: Edge[] } | null {
+  const preset = SHAPE_PRESETS.find((p) => p.id === templateId) ?? SHAPE_PRESETS[0];
+  if (!preset) return null;
+  const built = preset.build(nTracks);
+  return { nodes: built.nodes, edges: built.edges };
 }
 
 /// MoveSlot — un move = une configuration persistante (graphe + tracks + macros)
@@ -137,7 +163,9 @@ export interface MoveSlotsSlice {
   selectSlotForEditing: (id: string | null) => void;
 
   // ─── Live (lancer/arrêter) ───
-  playSlot: (id: string) => Promise<void>;
+  /// Retourne true si le move est (ou sera) en lecture — false si l'activation a échoué.
+  /// Un slot déjà playing/pending retourne true (objectif atteint).
+  playSlot: (id: string) => Promise<boolean>;
   stopSlot: (id: string) => Promise<void>;
   stopSlotWithFade: (id: string, fadeDuration: number) => Promise<void>;
   goAllSlots: () => Promise<void>;
@@ -193,36 +221,42 @@ const ENGINE_TYPES_WITH_N_OBJECTS = new Set([
   'Mix', 'Group', 'Sequence', 'Crossfade',
 ]);
 
-function loadSlotsFromStorage(): MoveSlot[] {
-  try {
-    const raw = localStorage.getItem(SLOTS_STORAGE_KEY);
-    if (!raw) return [];
-    const slots = JSON.parse(raw);
-    // Migration: ajouter macros + fadeDuration si manquants (anciennes versions)
-    return slots.map((s: any) => ({
-      ...s,
-      macros: s.macros ?? defaultMacros(),
-      fadeDuration: s.fadeDuration ?? 2.0,
-      loopMode: s.loopMode ?? 'loop',
-      direction: s.direction ?? 'forward',
-    }));
-  } catch {
-    return [];
-  }
+/// Movement IDs en cours de fade-out côté backend.
+/// deactivate_move(fade>0) retourne immédiatement mais le move reste dans
+/// list_active_moves jusqu'à la fin du fade — syncSlotMovements ne doit pas
+/// les flagger comme orphelins pendant ce laps de temps.
+const _fadingMoveIds = new Set<string>();
+
+/// Movement IDs orphelins déjà signalés (une seule alerte par id)
+const _orphanWarnedIds = new Set<string>();
+
+function markFading(movementId: string, fadeDuration: number) {
+  _fadingMoveIds.add(movementId);
+  // La marge couvre la latence IPC + le jitter du thread de fade côté backend
+  setTimeout(() => _fadingMoveIds.delete(movementId), fadeDuration * 1000 + 1500);
 }
 
-function saveSlotsToStorage(slots: MoveSlot[]) {
+function loadSlotsFromStorage(): MoveSlot[] {
+  const slots = safeParseStoredJson<any[]>(SLOTS_STORAGE_KEY, []);
+  if (!Array.isArray(slots)) return [];
+  // Migration: ajouter macros + fadeDuration si manquants (anciennes versions)
+  return slots.map((s: any) => ({
+    ...s,
+    macros: s.macros ?? defaultMacros(),
+    fadeDuration: s.fadeDuration ?? 2.0,
+    loopMode: s.loopMode ?? 'loop',
+    direction: s.direction ?? 'forward',
+  }));
+}
+
+/// (exporté — drawModeSlice persiste aussi les slots après un dessin)
+export function saveSlotsToStorage(slots: MoveSlot[]) {
   safeSetItem(SLOTS_STORAGE_KEY, JSON.stringify(slots));
 }
 
 function loadSetlistFromStorage(): string[] {
-  try {
-    const raw = localStorage.getItem(SETLIST_STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw);
-  } catch {
-    return [];
-  }
+  const parsed = safeParseStoredJson<string[]>(SETLIST_STORAGE_KEY, []);
+  return Array.isArray(parsed) ? parsed : [];
 }
 
 function saveSetlistToStorage(setlist: string[]) {
@@ -243,11 +277,25 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
     if (!id) return;
     const slot = get().moveSlots.find((s) => s.id === id);
     if (!slot) return;
+    // Fallback : slots persistés avec graphJson:null (créés avant que le graphe
+    // ne soit construit à la création) — reconstruire depuis le template pour
+    // ne pas hériter visuellement du graphe du slot précédent.
+    let graphJson = slot.graphJson;
+    if (!graphJson) {
+      graphJson = buildGraphForSlot(slot.templateId, slot.trackIds.length);
+      if (graphJson) {
+        set((s) => {
+          const newSlots = s.moveSlots.map((sl) => sl.id === id ? { ...sl, graphJson } : sl);
+          saveSlotsToStorage(newSlots);
+          return { moveSlots: newSlots };
+        });
+      }
+    }
     // Charger le graphe du slot dans l'éditeur AVANT de sync les tracks,
     // pour que syncObjectsNode mette à jour le BON Objects node.
-    if (slot.graphJson) {
-      get().setNodes(JSON.parse(JSON.stringify(slot.graphJson.nodes)));
-      get().setEdges(JSON.parse(JSON.stringify(slot.graphJson.edges)));
+    if (graphJson) {
+      get().setNodes(JSON.parse(JSON.stringify(graphJson.nodes)));
+      get().setEdges(JSON.parse(JSON.stringify(graphJson.edges)));
     }
     // Reset undo/redo — l'historique appartient au slot précédent.
     // Sans ça, un undo après switch restaurerait le graphe d'un autre slot.
@@ -269,11 +317,15 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
       : manualOscIds;
     const idx = moveSlots.length + 1;
     const newSlotId = `slot-${Date.now()}`;
+    // Construire le graphe depuis le template IMMÉDIATEMENT — sinon le nouveau
+    // slot garde graphJson:null et l'éditeur montre le graphe du slot précédent
+    // (les edits iraient ensuite dans le mauvais graphe).
+    const graphJson = buildGraphForSlot('circle', defaultTrackIds.length);
     set((s) => {
       const newSlots = [...s.moveSlots, {
         id: newSlotId,
         name: `Move ${idx}`,
-        graphJson: null, // Sera construit au play depuis le template
+        graphJson,
         templateId: 'circle',
         trackIds: defaultTrackIds,
         movementId: null,
@@ -292,9 +344,14 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
 
   removeMoveSlot: (id) => {
     const slot = get().moveSlots.find((s) => s.id === id);
-    // Arrêter le movement si actif
+    // Arrêter le movement si actif — avec catch, sinon le move backend
+    // devient orphelin (joue sans qu'aucun slot ne le contrôle).
     if (slot?.movementId) {
-      get().stopMovement(slot.movementId);
+      const mvId = slot.movementId;
+      get().stopMovement(mvId).catch((e) => {
+        console.error('[removeMoveSlot] stopMovement failed:', e);
+        toast.warning(`Move "${slot.name}" deleted but its backend movement "${mvId}" may still be running (orphan): ${e}`);
+      });
     }
     set((s) => {
       const newSlots = s.moveSlots.filter((sl) => sl.id !== id);
@@ -350,7 +407,10 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
             duration: extractDuration(nodes),
             oscIds: slot.trackIds,
             trackIndices,
-          }).catch(console.error);
+          }).catch((e) => {
+            console.error('[applyShapePreset] update_move_graph_merged failed:', e);
+            toast.error(`Graph hot-swap failed: ${e}`);
+          });
         });
       }
     });
@@ -422,7 +482,10 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
             duration: extractDuration(graphSource.nodes),
             oscIds: slot.trackIds,
             trackIndices,
-          }).catch(console.error);
+          }).catch((e) => {
+            console.error('[setSlotTracks] update_move_graph_merged failed:', e);
+            toast.error(`Graph hot-swap failed: ${e}`);
+          });
         });
       }
     }
@@ -430,10 +493,10 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
 
   playSlot: async (id) => {
     const slot = get().moveSlots.find((s) => s.id === id);
-    if (!slot) return;
-    // Anti double-clic : ignorer si déjà en lecture ou si une activation est en cours
+    if (!slot) return false;
+    // Anti double-clic : déjà en lecture ou activation en cours → objectif atteint
     if (slot.movementId || get().pendingPlays.includes(id)) {
-      return;
+      return true;
     }
 
     const { holProject, manualOscIds } = get();
@@ -488,18 +551,7 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
       const durationNode = graphJson.nodes.find((n: any) => (n.data as any)?.type === 'Duration');
       const duration = (durationNode?.data as any)?.params?.duration ?? 4.0;
 
-      const trackIndices: number[] = [];
-      if (holProject) {
-        slot.trackIds.forEach((tid) => {
-          const idx = holProject.tracks.findIndex((t) => t.id === tid);
-          if (idx >= 0) trackIndices.push(idx);
-        });
-      } else {
-        slot.trackIds.forEach((tid) => {
-          const idx = manualOscIds.indexOf(tid);
-          trackIndices.push(idx >= 0 ? idx : tid - 1);
-        });
-      }
+      const trackIndices = computeTrackIndices(slot.trackIds, holProject, manualOscIds);
 
       const origin = computeCentroid(holProject, trackIndices, manualOscIds);
 
@@ -518,6 +570,11 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
         },
       });
       if (slot.macros) {
+        // Macros du slot : speed est per-move (worker), les macros spatiales
+        // (scale/shift/rotation) sont GLOBALES — appliquées au MergeRuntime via
+        // set_global_macro. ⚠ Elles écrasent les macros globales — c'est voulu :
+        // l'UI annonce « appliquées au lancement et au GO ».
+        // Non-fatal : un échec ici ne doit pas faire échouer le play.
         try {
           await invoke('set_move_speed', {
             movementId,
@@ -525,6 +582,23 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
           });
         } catch (e) {
           console.warn('[playSlot] set_move_speed failed:', e);
+          toast.warning(`"${slot.name}": speed macro not applied (${e})`);
+        }
+        try {
+          await invoke('set_global_macro', {
+            request: {
+              scale: slot.macros.scale,
+              shiftX: slot.macros.shiftX,
+              shiftY: slot.macros.shiftY,
+              shiftZ: slot.macros.shiftZ,
+              yaw: slot.macros.yaw,
+              pitch: slot.macros.pitch,
+              roll: slot.macros.roll,
+            },
+          });
+        } catch (e) {
+          console.warn('[playSlot] set_global_macro failed:', e);
+          toast.warning(`"${slot.name}": spatial macros not applied (${e})`);
         }
       }
       // Succès : retirer du pending — movementId est déjà setté
@@ -536,10 +610,18 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
       // Fire-and-forget : le movementId est déjà setté sur le slot,
       // refreshMovements sert seulement à mettre à jour le panneau d'inspection
       get().refreshMovements();
+      return true;
     } catch (e) {
       console.error(`[playSlot] FAILED slot=${id}:`, e);
       toast.error('Move failed: ' + e);
-      set((s) => ({ pendingPlays: s.pendingPlays.filter((pid) => pid !== id) }));
+      // Reset movementId (setté optimistement) + pending — sinon le slot
+      // afficherait "playing" pour toujours alors que rien ne tourne.
+      set((s) => {
+        const newSlots = s.moveSlots.map((sl) => sl.id === id ? { ...sl, movementId: null } : sl);
+        saveSlotsToStorage(newSlots);
+        return { moveSlots: newSlots, pendingPlays: s.pendingPlays.filter((pid) => pid !== id) };
+      });
+      return false;
     }
   },
 
@@ -547,19 +629,20 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
     const slot = get().moveSlots.find((s) => s.id === id);
     if (!slot?.movementId) return;
     const movementId = slot.movementId;
-    // Clearer movementId immédiatement — le bouton revient à "play" tout de suite.
-    // Le backend deactivate_move(fade=0) est synchrone.
+    try {
+      await get().stopMovement(movementId);
+    } catch (e) {
+      // NE PAS clearer movementId — le move backend tourne probablement encore.
+      // Garder le lien permet retry + reconcile via syncSlotMovements.
+      console.error(`[stopSlot] FAILED slot=${id}:`, e);
+      toast.error(`Stop failed for "${slot.name}" — movement may still be running: ${e}`);
+      return;
+    }
     set((s) => {
       const newSlots = s.moveSlots.map((sl) => sl.id === id ? { ...sl, movementId: null } : sl);
       saveSlotsToStorage(newSlots);
       return { moveSlots: newSlots };
     });
-    try {
-      await get().stopMovement(movementId);
-    } catch (e) {
-      console.error(`[stopSlot] FAILED slot=${id}:`, e);
-      toast.error('Stop failed: ' + e);
-    }
   },
 
   stopSlotWithFade: async (id, fadeDuration) => {
@@ -567,20 +650,23 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
     if (!slot?.movementId) return;
     const movementId = slot.movementId;
     feLog(`[stopSlotWithFade] slot=${id} movementId=${movementId} fade=${fadeDuration}`);
-    // Clearer movementId immédiatement — permet de re-jouer pendant le fade.
-    // Le backend garde le move actif pendant le fade puis le retire (thread séparé).
-    // syncSlotMovements nettoiera tout résidu si nécessaire.
+    try {
+      await get().stopMovementWithFade(movementId, fadeDuration);
+    } catch (e) {
+      // NE PAS clearer movementId — même raison que stopSlot.
+      console.error(`[stopSlotWithFade] FAILED slot=${id}:`, e);
+      toast.error(`Fade-out failed for "${slot.name}" — movement may still be running: ${e}`);
+      return;
+    }
+    // Succès : le fade tourne en arrière-plan côté backend — clearer le lien
+    // tout de suite pour permettre de re-jouer pendant le fade, et marquer
+    // l'id comme "en fade" pour que syncSlotMovements ne le flagge pas orphelin.
+    markFading(movementId, fadeDuration);
     set((s) => {
       const newSlots = s.moveSlots.map((sl) => sl.id === id ? { ...sl, movementId: null } : sl);
       saveSlotsToStorage(newSlots);
       return { moveSlots: newSlots };
     });
-    try {
-      await get().stopMovementWithFade(movementId, fadeDuration);
-    } catch (e) {
-      console.error(`[stopSlotWithFade] FAILED slot=${id}:`, e);
-      toast.error('Stop with fade failed: ' + e);
-    }
   },
 
   goAllSlots: async () => {
@@ -618,7 +704,10 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
           duration: extractDuration(slot.graphJson!.nodes),
           oscIds: slot.trackIds,
           trackIndices,
-        }).catch(console.error);
+        }).catch((e) => {
+          console.error('[saveEditorToSlot] update_move_graph_merged failed:', e);
+          toast.error(`Hot-swap failed for "${slot.name}": ${e}`);
+        });
       });
     }
   },
@@ -662,7 +751,11 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
     // Live update si le move est actif
     const slot = get().moveSlots.find((sl) => sl.id === id);
     if (slot?.movementId) {
-      invoke('set_move_playback_mode', { movementId: slot.movementId, loopMode: mode });
+      invoke('set_move_playback_mode', { movementId: slot.movementId, loopMode: mode })
+        .catch((e) => {
+          console.error('[setSlotLoopMode] failed:', e);
+          toast.error(`Loop mode change failed for "${slot.name}": ${e}`);
+        });
     }
   },
 
@@ -675,7 +768,11 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
     // Live update si le move est actif
     const slot = get().moveSlots.find((sl) => sl.id === id);
     if (slot?.movementId) {
-      invoke('set_move_playback_mode', { movementId: slot.movementId, direction });
+      invoke('set_move_playback_mode', { movementId: slot.movementId, direction })
+        .catch((e) => {
+          console.error('[setSlotDirection] failed:', e);
+          toast.error(`Direction change failed for "${slot.name}": ${e}`);
+        });
     }
   },
 
@@ -742,10 +839,19 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
       await Promise.all(activeSlots.map((s) => get().stopSlotWithFade(s.id, fadeDur)));
     }
 
-    // 2. Lancer le prochain move
-    await get().playSlot(nextSlotId);
+    // 2. Ne pas avancer si le slot cible a une activation en cours (anti double-GO)
+    if (get().pendingPlays.includes(nextSlotId)) {
+      return `Move "${nextSlot.name}" is already activating — wait`;
+    }
 
-    // 3. Avancer l'index
+    // 3. Lancer le prochain move — n'avancer l'index QUE sur succès,
+    //    sinon le GO suivant skipperait un move jamais lancé.
+    const ok = await get().playSlot(nextSlotId);
+    if (!ok) {
+      return `GO FAILED: "${nextSlot.name}" did not start (see error above)`;
+    }
+
+    // 4. Avancer l'index
     set({ currentSetlistIndex: nextIndex });
 
     const total = setlistOrder.length;
@@ -770,6 +876,24 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
         saveSlotsToStorage(newSlots);
         return { moveSlots: newSlots };
       });
+    }
+    // Direction inverse : moves backend (mv-*) que plus aucun slot ne track.
+    // Orphelins typiques : deactivate IPC échoué, crash du watcher.
+    // On ne les touche PAS automatiquement (risque de tuer un move voulu) —
+    // on les signale une fois par id, et seul STOP ALL peut les arrêter.
+    const trackedIds = new Set(
+      get().moveSlots.map((s) => s.movementId).filter(Boolean)
+    );
+    const orphans = movements.filter(
+      (m) => m.id.startsWith('mv-')
+        && !trackedIds.has(m.id)
+        && !_fadingMoveIds.has(m.id)
+        && !_orphanWarnedIds.has(m.id)
+    );
+    if (orphans.length > 0) {
+      orphans.forEach((o) => _orphanWarnedIds.add(o.id));
+      toast.warning(`${orphans.length} orphan move(s) running without a slot — use STOP ALL to clear`);
+      console.warn('[syncSlotMovements] orphan movements:', orphans.map((o) => o.id));
     }
   },
 });

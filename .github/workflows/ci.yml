@@ -15,6 +15,7 @@ jobs:
   rust-engines:
     name: Rust Engines
     runs-on: ubuntu-22.04
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: rust-engines
@@ -43,8 +44,13 @@ jobs:
       - name: Check formatting
         run: cargo fmt -- --check
 
-      - name: Clippy (deny warnings)
-        run: cargo clippy --lib -- -D warnings
+      - name: Clippy (deny warnings, all targets incl. tests + benches)
+        run: cargo clippy --all-targets -- -D warnings
+
+      # Benches (engines_bench + simple_bench) are not compiled by --lib
+      # test runs — this keeps them from bit-rotting.
+      - name: Check benches compile
+        run: cargo check --benches
 
       - name: Tests
         run: cargo test --lib
@@ -53,6 +59,7 @@ jobs:
   tauri-backend:
     name: Tauri Backend
     runs-on: ubuntu-22.04
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: tauri-app/src-tauri
@@ -62,7 +69,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          components: clippy, rustfmt
 
       - name: Install system dependencies (Tauri)
         run: |
@@ -98,11 +105,11 @@ jobs:
             rust-engines/target
           key: tauri-backend-${{ runner.os }}-${{ hashFiles('tauri-app/src-tauri/Cargo.lock', 'rust-engines/Cargo.lock') }}
 
-      - name: Clippy (deny warnings)
-        run: cargo clippy --lib -- -D warnings
+      - name: Check formatting
+        run: cargo fmt -- --check
 
-      - name: Clippy CLI binary (deny warnings)
-        run: cargo clippy --bin stagespace-cli -- -D warnings
+      - name: Clippy (deny warnings, all targets: lib + CLI bin + tests)
+        run: cargo clippy --all-targets -- -D warnings
 
       - name: Tests
         run: cargo test --lib
@@ -117,6 +124,7 @@ jobs:
   frontend:
     name: Frontend
     runs-on: ubuntu-22.04
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: tauri-app/frontend
@@ -132,6 +140,13 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # Non-bloquant : ~500 erreurs `no-explicit-any` pré-existantes dans les
+      # slices Zustand (convention `any` assumée). À rendre bloquant après
+      # un chantier de typage dédié.
+      - name: ESLint
+        run: npm run lint
+        continue-on-error: true
 
       - name: TypeScript check
         run: npx tsc --noEmit

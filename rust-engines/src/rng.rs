@@ -7,12 +7,15 @@
 /// LCG 64 bits (constantes de Knuth / PCG), suffisant pour du bruit visuel.
 pub struct SimpleRng {
     state: u64,
+    /// Seconde variate de Box-Muller mise de côté (voir [`Self::randn`]).
+    spare_gauss: Option<f64>,
 }
 
 impl SimpleRng {
     pub fn new(seed: u64) -> Self {
         SimpleRng {
             state: seed.wrapping_add(1),
+            spare_gauss: None,
         }
     }
 
@@ -24,16 +27,31 @@ impl SimpleRng {
     }
 
     /// Réel uniforme dans [min, max)
+    ///
+    /// Note : `min > max` n'est pas une erreur — l'intervalle est simplement
+    /// inversé (la pente `(max - min)` devient négative et le tirage tombe
+    /// dans `[max, min)`). Toléré volontairement : les paramètres venant du
+    /// frontend ne doivent pas pouvoir faire paniquer le moteur.
     pub fn uniform(&mut self, min: f64, max: f64) -> f64 {
         min + (max - min) * self.rand()
     }
 
-    /// Tirage gaussien centré réduit (transformée de Box-Muller)
+    /// Tirage gaussien centré réduit (transformée de Box-Muller).
+    ///
+    /// Box-Muller produit DEUX variates indépendantes : la seconde est mise en
+    /// cache et servie à l'appel suivant (une paire de tirages `rand` économisée
+    /// sur deux).
     pub fn randn(&mut self) -> f64 {
+        if let Some(spare) = self.spare_gauss.take() {
+            return spare;
+        }
         // u1 est borné pour éviter ln(0) = -inf lorsque rand() retourne 0.0
         let u1 = self.rand().max(f64::MIN_POSITIVE);
         let u2 = self.rand();
-        (-2.0 * u1.ln()).sqrt() * (2.0 * std::f64::consts::PI * u2).cos()
+        let r = (-2.0 * u1.ln()).sqrt();
+        let (sin, cos) = (2.0 * std::f64::consts::PI * u2).sin_cos();
+        self.spare_gauss = Some(r * sin);
+        r * cos
     }
 }
 
@@ -74,6 +92,41 @@ mod tests {
         let mut rng = SimpleRng::new(0);
         for _ in 0..10_000 {
             assert!(rng.randn().is_finite());
+        }
+    }
+
+    #[test]
+    fn test_randn_uses_both_box_muller_variates() {
+        // Les deux variates de Box-Muller sont servies : deux randn()
+        // consécutifs doivent être distincts (la seconde vient du cache, sans
+        // consommer le stream LCG).
+        let mut rng = SimpleRng::new(123);
+        let a = rng.randn();
+        let b = rng.randn();
+        assert!(a.is_finite() && b.is_finite());
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn test_randn_deterministic_with_spare() {
+        let mut a = SimpleRng::new(55);
+        let mut b = SimpleRng::new(55);
+        for _ in 0..100 {
+            assert_eq!(a.randn(), b.randn());
+        }
+    }
+
+    #[test]
+    fn test_uniform_inverted_bounds_is_tolerated() {
+        // Documenté : min > max inverse l'intervalle au lieu de paniquer
+        let mut rng = SimpleRng::new(1);
+        for _ in 0..100 {
+            let v = rng.uniform(0.5, -0.5);
+            // min + (max-min)·r, r ∈ [0,1) → tombe dans (max, min] inversé
+            assert!(
+                (-0.5..=0.5).contains(&v),
+                "uniform inversé hors bornes: {v}"
+            );
         }
     }
 }

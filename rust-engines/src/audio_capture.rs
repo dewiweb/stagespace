@@ -181,6 +181,9 @@ pub struct AudioCaptureManager {
     capture_thread: Arc<Mutex<Option<std::thread::JoinHandle<()>>>>,
     /// Canal pour demander l'arrêt au thread de capture
     stop_tx: Arc<Mutex<Option<std::sync::mpsc::Sender<()>>>>,
+    /// Dernière erreur fatale du stream (ex: device débranché) — consommée
+    /// par le poller via `take_error()` pour émettre `audio-error` au frontend.
+    last_error: Arc<Mutex<Option<String>>>,
 }
 
 impl AudioCaptureManager {
@@ -191,6 +194,7 @@ impl AudioCaptureManager {
             sample_rate: Arc::new(Mutex::new(44100.0)),
             capture_thread: Arc::new(Mutex::new(None)),
             stop_tx: Arc::new(Mutex::new(None)),
+            last_error: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -231,11 +235,19 @@ impl AudioCaptureManager {
         let shared_state = self.shared_state.clone();
         let running = self.running.clone();
         let sample_rate_arc = self.sample_rate.clone();
+        let last_error_arc = self.last_error.clone();
+        // Nouvelle tentative = erreur précédente consommée/obsolète
+        *self.last_error.lock().unwrap_or_else(|e| e.into_inner()) = None;
         let (init_tx, init_rx) = std::sync::mpsc::channel::<Result<f64, String>>();
         let (stop_tx, stop_rx) = std::sync::mpsc::channel::<()>();
 
         let handle = std::thread::spawn(move || {
-            let result = Self::init_stream(device_id_owned.as_deref(), &running, &shared_state);
+            let result = Self::init_stream(
+                device_id_owned.as_deref(),
+                &running,
+                &shared_state,
+                &last_error_arc,
+            );
             let (stream, rate) = match result {
                 Ok(ok) => ok,
                 Err(e) => {
@@ -280,6 +292,7 @@ impl AudioCaptureManager {
         device_id: Option<&str>,
         running: &Arc<AtomicBool>,
         shared_state: &Arc<Mutex<AudioState>>,
+        last_error: &Arc<Mutex<Option<String>>>,
     ) -> Result<(cpal::Stream, f64), String> {
         let host = cpal::default_host();
         let devices: Vec<_> = match host.devices() {
@@ -310,6 +323,7 @@ impl AudioCaptureManager {
                 &supported_config.into(),
                 running,
                 shared_state,
+                last_error,
                 |s: f32| s as f64,
             ),
             SampleFormat::I16 => build_stream_generic(
@@ -317,6 +331,7 @@ impl AudioCaptureManager {
                 &supported_config.into(),
                 running,
                 shared_state,
+                last_error,
                 |s: i16| s as f64 / i16::MAX as f64,
             ),
             SampleFormat::U16 => build_stream_generic(
@@ -324,6 +339,7 @@ impl AudioCaptureManager {
                 &supported_config.into(),
                 running,
                 shared_state,
+                last_error,
                 |s: u16| (s as f64 - u16::MAX as f64 / 2.0) / (u16::MAX as f64 / 2.0),
             ),
             other => return Err(format!("unsupported sample format: {other:?}")),
@@ -374,6 +390,23 @@ impl AudioCaptureManager {
         self.running.load(Ordering::SeqCst)
     }
 
+    /// Dernière erreur fatale du stream, s'il y en a une.
+    pub fn last_error(&self) -> Option<String> {
+        self.last_error
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// Consomme la dernière erreur (une seule notification par erreur).
+    /// Appelé par le poller audio pour émettre `audio-error` vers le frontend.
+    pub fn take_error(&self) -> Option<String> {
+        self.last_error
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
+    }
+
     pub fn sample_rate(&self) -> f64 {
         *self.sample_rate.lock().unwrap_or_else(|e| e.into_inner())
     }
@@ -392,6 +425,7 @@ fn build_stream_generic<S, F>(
     config: &cpal::StreamConfig,
     running: &Arc<AtomicBool>,
     shared_state: &Arc<Mutex<AudioState>>,
+    last_error: &Arc<Mutex<Option<String>>>,
     convert: F,
 ) -> Result<cpal::Stream, AudioCaptureError>
 where
@@ -399,10 +433,16 @@ where
     F: Fn(S) -> f64 + Send + 'static,
 {
     let sample_rate = config.sample_rate.0 as f64;
+    // Nombre de canaux du device — les données arrivent entrelacées
+    // (L R L R …). Sans mixdown, la FFT analyserait L/R alternés = spectre
+    // incohérent. On mixe en mono (moyenne des canaux de chaque frame).
+    let channels = (config.channels as usize).max(1);
     let fft_size = 1024usize;
     let hop_size = fft_size / 2;
     let shared_state = shared_state.clone();
     let running = running.clone();
+    let running_for_err = running.clone();
+    let last_error = last_error.clone();
 
     let mut planner = RealFftPlanner::<f64>::new();
     let r2c = planner.plan_fft_forward(fft_size);
@@ -423,8 +463,11 @@ where
                 return;
             }
 
-            for &sample in data {
-                input_buf.push_back(convert(sample));
+            // Mixdown multicanal → mono : moyenne des canaux par frame.
+            // `chunks` gère le dernier frame partiel (data.len() % channels).
+            for frame in data.chunks(channels) {
+                let sum: f64 = frame.iter().map(|&s| convert(s)).sum();
+                input_buf.push_back(sum / frame.len() as f64);
             }
 
             // Traiter par blocs de `hop_size` avec chevauchement 50%
@@ -521,7 +564,16 @@ where
                 }
             }
         },
-        move |err| eprintln!("[WARN] Audio stream error: {err}"),
+        // Erreur stream (ex: device débranché) — surface au frontend :
+        // on marque le manager comme arrêté et on stocke l'erreur pour que
+        // le poller émette `audio-error`. TODO(auto-reconnect): relancer
+        // init_stream sur le même device après un délai — pour l'instant
+        // l'utilisateur doit re-cliquer sur start.
+        move |err| {
+            eprintln!("[WARN] Audio stream error (fatal): {err}");
+            *last_error.lock().unwrap_or_else(|e| e.into_inner()) = Some(err.to_string());
+            running_for_err.store(false, Ordering::SeqCst);
+        },
         None,
     )?;
 

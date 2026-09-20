@@ -3,9 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently --names \"bridge,frontend\" --prefix-colors \"cyan,green\" \"npm run dev --prefix osc-bridge\" \"npm run dev --prefix frontend\""
-  },
-  "devDependencies": {
-    "concurrently": "^8.2.0"
+    "dev": "npm --prefix tauri-app run tauri -- dev",
+    "build": "npm --prefix tauri-app run tauri -- build",
+    "dev:frontend": "npm --prefix tauri-app/frontend run dev",
+    "test:rust": "cargo test --lib --manifest-path rust-engines/Cargo.toml",
+    "test:frontend": "npm --prefix tauri-app/frontend test",
+    "test:e2e": "cd tauri-app/src-tauri && bash tests/e2e_cli_test.sh"
   }
 }

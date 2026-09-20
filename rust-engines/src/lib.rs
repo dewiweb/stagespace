@@ -9,6 +9,7 @@ pub mod engines;
 pub mod error;
 pub mod falloffs;
 pub mod graph;
+pub mod hol_parser;
 pub mod kinematics;
 pub mod logging;
 pub mod merge_runtime;
@@ -54,7 +55,7 @@ pub use audio_capture::{AudioCaptureError, AudioCaptureManager, AudioDeviceInfo,
 pub use bpm::BpmTracker;
 pub use compiler::{AudioParamOverrides, CompilationError, CompiledFunction, Compiler};
 pub use config::{AudioConfig, Config, GraphConfig, OscConfig, RuntimeConfig};
-pub use cuelist::{Cue, CuelistManager, MacroSnapshot, SpatialMacroSnapshot};
+pub use cuelist::{Cue, CuelistManager, MacroSnapshot, MoveSnapshot, SpatialMacroSnapshot};
 pub use engines::{Engine, EngineParams, MAX_OBJECTS};
 pub use error::{Result, StagespaceError};
 pub use falloffs::{
@@ -62,6 +63,7 @@ pub use falloffs::{
     PointDistanceFalloff, TimeFalloff,
 };
 pub use graph::{Edge, Graph, Node, NodeId, NodeType};
+pub use hol_parser::{aed_to_xyz, parse_hol_project, HolTrack};
 pub use kinematics::{ChannelModulation, KinematicSource, KinematicState};
 pub use logging::{
     init_logging, log_compilation_error, log_compilation_success, log_graph_compilation,

@@ -2,25 +2,37 @@ use crate::engines::{Engine, EngineParams};
 use nalgebra::Vector3;
 
 /// Moteur AudioAmplitude - génère des positions modulées par l'amplitude audio
+/// Le runtime injecte extra["amplitude"] (= rms) et extra["amplitude_<band>"]
+/// pour band ∈ rms|bass|mid|high. `band` sélectionne la clé injectée ;
+/// "amplitude" reste le fallback (back-compat).
+/// Plan paramétrable, défaut "xz".
 pub struct AudioAmplitudeEngine;
 
 impl Engine for AudioAmplitudeEngine {
     fn position(&self, t: f64, _object_index: usize, params: &EngineParams) -> Vector3<f64> {
-        let amplitude = params
+        let band = params
             .extra
-            .get("amplitude")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.5);
+            .get("band")
+            .and_then(|v| v.as_str())
+            .unwrap_or("rms");
+        // Le runtime n'injecte que 4 clés connues — lookup statique sans alloc,
+        // format! seulement pour les bandes custom. Fallback sur "amplitude"
+        // générique (back-compat : le runtime l'injecte aussi, = rms).
+        let amplitude = match band {
+            "rms" => params.extra.get("amplitude_rms"),
+            "bass" => params.extra.get("amplitude_bass"),
+            "mid" => params.extra.get("amplitude_mid"),
+            "high" => params.extra.get("amplitude_high"),
+            other => params.extra.get(format!("amplitude_{other}")),
+        }
+        .and_then(|v| v.as_f64())
+        .or_else(|| params.extra.get("amplitude").and_then(|v| v.as_f64()))
+        .unwrap_or(0.5);
         let radius = params
             .extra
             .get("radius")
             .and_then(|v| v.as_f64())
             .unwrap_or(1.0);
-        let _band = params
-            .extra
-            .get("band")
-            .and_then(|v| v.as_str())
-            .unwrap_or("rms");
         let plane = params
             .extra
             .get("plane")
@@ -28,7 +40,7 @@ impl Engine for AudioAmplitudeEngine {
             .unwrap_or("xz");
 
         let modulated_radius = radius * amplitude;
-        let angle = 2.0 * std::f64::consts::PI * t / params.duration;
+        let angle = 2.0 * std::f64::consts::PI * t / params.duration.max(1e-9);
 
         match plane {
             "xy" => Vector3::new(
@@ -78,6 +90,42 @@ mod tests {
         assert_eq!(pos.x, 0.5);
         assert_eq!(pos.y, 0.0);
         assert_eq!(pos.z, 0.0);
+    }
+
+    #[test]
+    fn test_audio_amplitude_band_param_selects_injected_key() {
+        // Régression : le param `band` était lu mais jamais utilisé — le moteur
+        // lisait toujours "amplitude" (rms) quelle que soit la bande choisie.
+        let engine = AudioAmplitudeEngine;
+        let params = EngineParams {
+            n_objects: 1,
+            duration: 1.0,
+            fps: 60.0,
+            extra: json!({
+                "band": "bass",
+                "amplitude_rms": 0.2,
+                "amplitude_bass": 0.9,
+                "radius": 1.0,
+                "plane": "xz"
+            }),
+        };
+        let pos = engine.position(0.0, 0, &params);
+        // angle = 0 → x = radius * amplitude_bass = 0.9
+        assert!((pos.x - 0.9).abs() < 1e-9, "x={}", pos.x);
+    }
+
+    #[test]
+    fn test_audio_amplitude_band_falls_back_to_generic() {
+        // band = "rms" sans clé amplitude_rms → fallback sur "amplitude"
+        let engine = AudioAmplitudeEngine;
+        let params = EngineParams {
+            n_objects: 1,
+            duration: 1.0,
+            fps: 60.0,
+            extra: json!({"band": "rms", "amplitude": 0.7, "radius": 1.0}),
+        };
+        let pos = engine.position(0.0, 0, &params);
+        assert!((pos.x - 0.7).abs() < 1e-9, "x={}", pos.x);
     }
 
     #[test]

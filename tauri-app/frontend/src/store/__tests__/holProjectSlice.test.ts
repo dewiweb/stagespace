@@ -45,10 +45,15 @@ describe('selectAllTracks', () => {
     expect(ids).toEqual([10, 20, 30]);
   });
 
-  it('selects empty set when no holProject', () => {
-    useGraphStore.setState({ holProject: null, selectedTrackIds: new Set([1]) } as any);
+  it('selects manual OSC ids when no holProject', () => {
+    useGraphStore.setState({
+      holProject: null,
+      selectedTrackIds: new Set([1]),
+      manualOscIds: [4, 5, 6],
+    } as any);
     useGraphStore.getState().selectAllTracks();
-    expect((useGraphStore.getState() as any).selectedTrackIds.size).toBe(0);
+    const ids = Array.from((useGraphStore.getState() as any).selectedTrackIds).sort();
+    expect(ids).toEqual([4, 5, 6]);
   });
 });
 

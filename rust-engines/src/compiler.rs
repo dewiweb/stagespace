@@ -181,7 +181,6 @@ impl Compiler {
             | NodeType::Rotate
             | NodeType::Offset
             | NodeType::PhaseShift
-            | NodeType::BarycentricGroup
             | NodeType::Mirror
             | NodeType::Clamp
             | NodeType::LFO
@@ -256,31 +255,6 @@ impl Compiler {
                     let t_shifted =
                         crate::engines::modifiers::phase_shift_time(t, i, shift, duration);
                     upstream_fn(t_shifted, i)
-                }))
-            }
-            NodeType::BarycentricGroup => {
-                let cx = node
-                    .params
-                    .get("centerX")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(0.0);
-                let cy = node
-                    .params
-                    .get("centerY")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(0.0);
-                let cz = node
-                    .params
-                    .get("centerZ")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(0.0);
-                let center = Vector3::new(cx, cy, cz);
-                let n_objects = Self::resolve_n_objects(graph, node)?;
-                Ok(Box::new(move |t, i| {
-                    let pos = upstream_fn(t, i);
-                    // Compute all positions once and reuse (évite O(N²))
-                    let all: Vec<_> = (0..n_objects).map(|j| upstream_fn(t, j)).collect();
-                    crate::engines::modifiers::barycentric_group(pos, &all, center)
                 }))
             }
             NodeType::Mirror => {

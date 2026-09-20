@@ -27,6 +27,10 @@ pub use manual_positions::{
 pub use move_management::{
     activate_move, deactivate_all_moves, deactivate_move, get_merge_perf_stats, list_active_moves,
 };
+pub(crate) use move_management::{
+    direction_label, loop_mode_label, parse_direction, parse_loop_mode, spawn_move_for_recall,
+    MoveSpec,
+};
 
 fn default_duration() -> f64 {
     4.0

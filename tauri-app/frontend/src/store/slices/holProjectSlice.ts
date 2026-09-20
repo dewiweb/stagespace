@@ -1,6 +1,7 @@
 import { StateCreator } from 'zustand';
 import type { Node } from 'reactflow';
 import { safeInvoke as invoke } from '../../utils/tauri';
+import { toast } from '../../utils/toast-helpers';
 import type { HolProject } from '../types/index';
 
 export interface HolProjectSlice {
@@ -97,6 +98,7 @@ export const createHolProjectSlice: StateCreator<HolProjectStore, [], [], HolPro
         await invoke('set_track_positions', { positions: trackPositions });
       } catch (e) {
         console.error('[importHol] Failed to push track positions:', e);
+        toast.warning(`Track positions not sent to backend — Barycenter/origin may be wrong: ${e}`);
       }
     } catch (error: any) {
       console.error('Failed to import .hol project:', error);
@@ -106,7 +108,9 @@ export const createHolProjectSlice: StateCreator<HolProjectStore, [], [], HolPro
   clearHol: () => {
     set({ holProject: null, selectedTrackIds: new Set() });
     // Clear track positions au backend (pas de .hol → origin = [0,0,0])
-    invoke('set_track_positions', { positions: {} }).catch(() => {});
+    invoke('set_track_positions', { positions: {} }).catch((e) => {
+      console.error('[clearHol] set_track_positions failed:', e);
+    });
   },
 
   // Track selection — pool de tracks virtuels (1..DEFAULT_TRACK_COUNT)
@@ -135,7 +139,11 @@ export const createHolProjectSlice: StateCreator<HolProjectStore, [], [], HolPro
   },
   selectAllTracks: () => {
     set((s) => ({
-      selectedTrackIds: new Set(s.holProject?.tracks.map((t) => t.id) ?? []),
+      // Sans projet .hol, "select all" = tous les OSC IDs manuels —
+      // sinon la sélection se vide et le move part avec 0 track.
+      selectedTrackIds: new Set(
+        s.holProject ? s.holProject.tracks.map((t) => t.id) : s.manualOscIds
+      ),
     }));
     get().syncObjectsNode();
     syncEditingSlotTracks(get, set);

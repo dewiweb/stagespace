@@ -2,6 +2,7 @@ import { StateCreator } from 'zustand';
 import { type Node } from 'reactflow';
 import { simplifyPoints, computeCentroid } from '../utils/geometryUtils';
 import { feLog } from '../../utils/tauri';
+import { computeTrackIndices, saveSlotsToStorage } from './moveSlotsSlice';
 
 export interface DrawModeSlice {
   // Draw mode (freehand trajectory drawing)
@@ -49,19 +50,8 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
     feLog(`[DBG-finalize] simplified=${simplified.length} pts, first=${JSON.stringify(simplified[0])}, last=${JSON.stringify(simplified[simplified.length - 1])}`);
 
     // Calculer l'origin (isobarycentre des tracks sélectionnées)
-    const trackIndices: number[] = [];
     const trackIds = Array.from(selectedTrackIds);
-    if (holProject) {
-      trackIds.forEach((tid) => {
-        const idx = holProject.tracks.findIndex((t: any) => t.id === tid);
-        if (idx >= 0) trackIndices.push(idx);
-      });
-    } else {
-      trackIds.forEach((tid) => {
-        const idx = manualOscIds.indexOf(tid);
-        trackIndices.push(idx >= 0 ? idx : tid - 1);
-      });
-    }
+    const trackIndices = computeTrackIndices(trackIds, holProject, manualOscIds);
     const origin = computeCentroid(holProject, trackIndices, manualOscIds);
     feLog(`[DBG-finalize] origin=${JSON.stringify(origin)} trackIds=${trackIds.join(',')} trackIndices=${trackIndices.join(',')}`);
 
@@ -156,16 +146,17 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
             : sl
         );
         set({ moveSlots: newSlots } as any);
+        saveSlotsToStorage(newSlots); // persister — sinon le dessin est perdu au reload
         feLog(`[DBG-finalize] synced slot.graphJson for editingSlotId=${editingSlotId}`);
       }
     }
 
-    // Si en lecture, hot-swap
-    const { isPlaying } = get();
-    feLog(`[DBG-finalize] isPlaying=${isPlaying}`);
-    if (isPlaying) {
-      get().updateGraphLive(0.5);
-    }
+    // Hot-swap inconditionnel : updateGraphLive self-guard (isPlaying /
+    // movements actifs / slot en lecture) — ne pas le limiter à isPlaying,
+    // sinon un dessin sur un slot move en lecture ne serait jamais poussé.
+    get().updateGraphLive(0.5).catch((e) => {
+      console.error('[finalizeDrawing] updateGraphLive failed:', e);
+    });
 
     return drawSplineNode?.id ?? vectorFieldNode?.id ?? null;
   },

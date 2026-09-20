@@ -136,14 +136,20 @@ impl ChannelModulation {
                 .and_then(|v| v.as_str())
                 .ok_or("Velocity node requires 'channel'")?,
         )?;
+        // Garde-fou : f64::clamp panique si min > max — un node Velocity
+        // mal configuré tuerait le merge thread. On swap les bornes au
+        // parsing plutôt que de rejeter la règle (le show continue).
+        let min = get("min").unwrap_or(f64::NEG_INFINITY);
+        let max = get("max").unwrap_or(f64::INFINITY);
+        let (min, max) = if min <= max { (min, max) } else { (max, min) };
         Ok(ChannelModulation {
             object: params.get("object").and_then(np::flex_usize),
             source,
             channel,
             scale: get("scale").unwrap_or(1.0),
             offset: get("offset").unwrap_or(0.0),
-            min: get("min").unwrap_or(f64::NEG_INFINITY),
-            max: get("max").unwrap_or(f64::INFINITY),
+            min,
+            max,
             listener: params
                 .get("listener")
                 .and_then(np::flex_vec3)
@@ -272,14 +278,28 @@ pub fn apply_modulations(
                 }
                 _ => state.value(rule.source),
             };
-            let value = (measured * rule.scale + rule.offset).clamp(rule.min, rule.max);
-            out.entry(*obj).or_default().set(rule.channel, value);
+            // Défense en profondeur : f64::clamp panique si min > max —
+            // une règle construite hors from_node_params (deserialization,
+            // code direct) avec des bornes inversées ne doit pas tuer le
+            // merge thread. On swap plutôt que paniquer.
+            let (lo, hi) = if rule.min <= rule.max {
+                (rule.min, rule.max)
+            } else {
+                (rule.max, rule.min)
+            };
+            let value = (measured * rule.scale + rule.offset).clamp(lo, hi);
+            // Ne jamais émettre un canal NaN/inf (mesure ou scale/offset
+            // non finis) — ça se propagerait jusqu'à l'OSC.
+            if value.is_finite() {
+                out.entry(*obj).or_default().set(rule.channel, value);
+            }
         }
     }
     out
 }
 
 #[cfg(test)]
+#[allow(clippy::field_reassign_with_default)]
 mod tests {
     use super::*;
 
@@ -528,5 +548,50 @@ mod tests {
             "source": "bogus", "channel": "gain"
         }))
         .is_err());
+    }
+
+    #[test]
+    fn test_from_node_params_inverted_bounds_swapped() {
+        // min > max : f64::clamp paniquerait — les bornes sont swappées au
+        // parsing pour ne pas tuer le merge thread.
+        let m = ChannelModulation::from_node_params(&serde_json::json!({
+            "source": "speed", "channel": "spread", "min": 5.0, "max": -5.0
+        }))
+        .unwrap();
+        assert_eq!(m.min, -5.0);
+        assert_eq!(m.max, 5.0);
+    }
+
+    #[test]
+    fn test_apply_modulations_inverted_bounds_no_panic() {
+        // Règle construite directement (pas via from_node_params) avec
+        // min > max — ne doit pas paniquer dans le chemin apply.
+        let mut states = HashMap::new();
+        let mut st = KinematicState::default();
+        st.speed = 10.0;
+        states.insert(0usize, st);
+        let mut rule = ChannelModulation::new(KinematicSource::Speed, SpatialChannel::Gain, 1.0);
+        rule.min = 6.0;
+        rule.max = -12.0; // inversé
+        let out = apply_modulations(&[rule], &states);
+        // bornes swappées → clamp(10, -12, 6) = 6
+        assert_eq!(out[&0].gain, Some(6.0));
+    }
+
+    #[test]
+    fn test_apply_modulations_non_finite_value_skipped() {
+        // scale infini → valeur non-finie → canal non émis (pas de NaN en OSC)
+        let mut states = HashMap::new();
+        let mut st = KinematicState::default();
+        st.speed = 1.0;
+        states.insert(0usize, st);
+        let mut rule = ChannelModulation::new(
+            KinematicSource::Speed,
+            SpatialChannel::Spread,
+            f64::INFINITY,
+        );
+        rule.offset = 0.0;
+        let out = apply_modulations(&[rule], &states);
+        assert!(out.get(&0).is_none_or(|c| c.spread.is_none()));
     }
 }

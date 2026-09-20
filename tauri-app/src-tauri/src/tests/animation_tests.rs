@@ -1,3 +1,12 @@
+// Fixtures de tests : le style builder (Default + assignations) et les
+// messages d'assertion verbeux sont volontaires — lisibilité des échecs.
+#[allow(
+    clippy::module_inception,
+    clippy::field_reassign_with_default,
+    clippy::uninlined_format_args,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments
+)]
 mod tests {
     use crate::graph;
     use crate::graph::parser::build_graph_from_json;
@@ -708,11 +717,10 @@ mod tests {
             .any(|((_, sx, _, sz), raw)| (sx - raw.x).abs() > 0.01 || (sz - raw.z).abs() > 0.01);
         // Note: sample_trajectory appelle la fn compilée, pas l'animation_state
         // L'animation_state est appliquée dans le playback loop, pas dans sample_trajectory
-        // Donc on vérifie juste que l'animation state ne crash pas
-        assert!(
-            has_diff || !has_diff,
-            "Phase spread test: animation state set without crash"
-        );
+        // Donc on vérifie juste que l'animation state ne crash pas et que le
+        // sampling retourne bien les 10 points demandés.
+        let _ = has_diff;
+        assert_eq!(spread_samples.len(), 10, "Phase spread sampling");
     }
 
     // ── Scénario 10 : Graphe avec modifier Scale ───────────────────────
@@ -1150,6 +1158,7 @@ mod tests {
             channel_modulations: None,
             osc_mappings: None,
             zones: None,
+            moves: vec![],
         };
 
         // Sérialiser (comme Tauri fait pour IPC)

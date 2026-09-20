@@ -1,4 +1,4 @@
-use crate::engines::{Engine, EngineParams};
+use crate::engines::{finite_or_zero, sim_steps, Engine, EngineParams};
 use crate::rng::SimpleRng;
 use nalgebra::Vector3;
 
@@ -98,8 +98,7 @@ impl Engine for Follow {
             0.0
         };
 
-        let dt = 1.0 / params.fps;
-        let n_steps = (t * params.fps) as i32;
+        let (n_steps, dt) = sim_steps(t, params.fps);
 
         for step in 0..n_steps {
             let tau = step as f64 * dt;
@@ -183,7 +182,7 @@ impl Engine for Follow {
             }
         }
 
-        pos
+        finite_or_zero(pos)
     }
 
     fn name(&self) -> &str {

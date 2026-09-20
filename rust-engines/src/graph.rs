@@ -82,7 +82,6 @@ pub enum NodeType {
     Rotate,
     Offset,
     PhaseShift,
-    BarycentricGroup,
     Mirror,
     Clamp,
     LFO,
@@ -194,8 +193,46 @@ impl Graph {
         self.edges.push(edge);
     }
 
-    pub fn remove_edge(&mut self, from: NodeId, to: NodeId) {
-        self.edges.retain(|e| !(e.from == from && e.to == to));
+    /// Supprime les edges `from → to`. Si `to_port` est fourni, seuls les
+    /// edges arrivant sur ce port sont supprimés — les edges parallèles entre
+    /// les mêmes nodes sur d'autres ports sont conservés (le compiler est
+    /// port-aware : input_a/input_b/duration ont une sémantique distincte).
+    pub fn remove_edge(&mut self, from: NodeId, to: NodeId, to_port: Option<&str>) {
+        self.edges
+            .retain(|e| !(e.from == from && e.to == to && to_port.is_none_or(|p| e.to_port == p)));
+    }
+
+    /// Entrées d'un composite binaire (Mix, Group, Sequence, Crossfade)
+    /// ordonnées par port : le node connecté à `input_a` en premier, celui
+    /// connecté à `input_b` ensuite. Les edges sans port explicite (legacy
+    /// "input") remplissent les slots restants dans l'ordre d'insertion —
+    /// le résultat est déterministe quelle que soit la convention de ports.
+    pub fn get_binary_inputs(&self, id: NodeId) -> Vec<NodeId> {
+        let mut port_a: Option<NodeId> = None;
+        let mut port_b: Option<NodeId> = None;
+        let mut unnamed: Vec<NodeId> = Vec::new();
+
+        for e in self.edges.iter().filter(|e| e.to == id) {
+            match e.to_port.as_str() {
+                "input_a" if port_a.is_none() => port_a = Some(e.from),
+                "input_b" if port_b.is_none() => port_b = Some(e.from),
+                _ => unnamed.push(e.from),
+            }
+        }
+
+        let mut unnamed = unnamed.into_iter();
+        let a = port_a.or_else(|| unnamed.next());
+        let b = port_b.or_else(|| unnamed.next());
+
+        let mut ordered = Vec::new();
+        if let Some(x) = a {
+            ordered.push(x);
+        }
+        if let Some(x) = b {
+            ordered.push(x);
+        }
+        ordered.extend(unnamed);
+        ordered
     }
 
     /// Récupère les nœuds connectés en sortie d'un nœud

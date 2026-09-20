@@ -68,6 +68,60 @@ pub struct Cue {
     /// Zones d'effets spatiaux (P4)
     #[serde(default)]
     pub zones: Option<Vec<Zone>>,
+
+    // ─── Phase 5 : snapshots des moves (cue recall côté serveur) ───
+    /// Snapshot complet de chaque move actif au moment du store — assez pour
+    /// que `recall_cue` puisse les recréer seul (sub-graph, tracks, loop…).
+    /// Champ absent (ancien cue) = recall ne touche pas aux moves.
+    #[serde(default)]
+    pub moves: Vec<MoveSnapshot>,
+}
+
+/// Snapshot d'un move actif — capturé par `store_cue`, rejoué par `recall_cue`.
+/// Contient tout ce qu'il faut pour recréer le worker (graph_json → compile →
+/// play_compiled → register_move dans le MergeRuntime).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MoveSnapshot {
+    /// Id du movement (clé dans la map des moves actifs)
+    #[serde(default)]
+    pub id: String,
+    /// Nom affiché
+    pub name: String,
+    /// Sub-graph JSON (nodes/edges) — recompilé au recall
+    pub graph_json: serde_json::Value,
+    /// OSC ids ciblés par le move
+    #[serde(default)]
+    pub osc_ids: Vec<u32>,
+    /// Indices des tracks dans la liste globale (mapping merge → osc_ids)
+    #[serde(default)]
+    pub track_indices: Vec<usize>,
+    /// Move en preview (pas de sortie OSC)
+    #[serde(default)]
+    pub is_preview: bool,
+    /// Origin (isobarycentre des tracks) au moment de l'activation
+    #[serde(default)]
+    pub origin: Option<[f64; 3]>,
+    /// Durée du move (secondes) — pour le loop
+    #[serde(default = "default_move_duration")]
+    pub duration: f64,
+    /// Loop mode : "loop" | "oneshot"
+    #[serde(default = "default_move_loop_mode")]
+    pub loop_mode: String,
+    /// Direction : "forward" | "backward" | "ping_pong"
+    #[serde(default = "default_move_direction")]
+    pub direction: String,
+}
+
+fn default_move_duration() -> f64 {
+    4.0
+}
+
+fn default_move_loop_mode() -> String {
+    "loop".to_string()
+}
+
+fn default_move_direction() -> String {
+    "forward".to_string()
 }
 
 /// Snapshot des macros spatiales étendues
@@ -178,6 +232,7 @@ impl Default for CuelistManager {
 }
 
 #[cfg(test)]
+#[allow(clippy::field_reassign_with_default)]
 mod tests {
     use super::*;
 
@@ -210,6 +265,7 @@ mod tests {
             channel_modulations: None,
             osc_mappings: None,
             zones: None,
+            moves: vec![],
         };
         manager.add(cue);
         assert_eq!(manager.len(), 1);
@@ -237,6 +293,7 @@ mod tests {
             channel_modulations: None,
             osc_mappings: None,
             zones: None,
+            moves: vec![],
         };
         manager.add(cue);
         manager.remove(0).unwrap();
@@ -280,6 +337,7 @@ mod tests {
             channel_modulations: None,
             osc_mappings: None,
             zones: None,
+            moves: vec![],
         };
 
         // Sérialiser
@@ -354,6 +412,7 @@ mod tests {
                 objects: None,
                 enabled: true,
             }]),
+            moves: vec![],
         };
 
         let json = serde_json::to_string(&cue).unwrap();
@@ -423,6 +482,7 @@ mod tests {
             channel_modulations: None,
             osc_mappings: None,
             zones: None,
+            moves: vec![],
         };
         manager.add(cue);
         manager.remove_by_id("cue1").unwrap();
@@ -451,6 +511,7 @@ mod tests {
             channel_modulations: None,
             osc_mappings: None,
             zones: None,
+            moves: vec![],
         };
         manager.add(cue.clone());
         let retrieved = manager.get(0);
@@ -480,6 +541,7 @@ mod tests {
             channel_modulations: None,
             osc_mappings: None,
             zones: None,
+            moves: vec![],
         };
         manager.add(cue);
         let retrieved = manager.get_by_id("cue1");
@@ -508,6 +570,7 @@ mod tests {
             channel_modulations: None,
             osc_mappings: None,
             zones: None,
+            moves: vec![],
         };
         manager.add(cue);
 
@@ -530,6 +593,7 @@ mod tests {
             channel_modulations: None,
             osc_mappings: None,
             zones: None,
+            moves: vec![],
         };
         manager.update(0, updated).unwrap();
 
@@ -559,6 +623,7 @@ mod tests {
             channel_modulations: None,
             osc_mappings: None,
             zones: None,
+            moves: vec![],
         };
         manager.add(cue);
         manager.clear();
