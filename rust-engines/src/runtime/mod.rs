@@ -2,12 +2,9 @@ use crate::animation::AnimationState;
 use crate::audio::AudioState;
 use crate::engines::EngineParams;
 use crate::error::{Result, StagespaceError};
-use crate::logging::{log_osc_error, log_playback_start, log_playback_stop, log_runtime_init};
-use crate::osc_sender::OscSender;
+use crate::logging::{log_playback_start, log_playback_stop, log_runtime_init};
 use crate::position_buffer::PositionBuffer;
-use rosc::{OscMessage, OscPacket, OscType};
 use std::collections::HashMap;
-use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -26,13 +23,13 @@ pub use overrides::*;
 pub use perf::*;
 pub use types::*;
 
-/// Runtime pour le playback temps réel — conçu pour le live
+/// Worker de move pour le playback temps réel — conçu pour le live.
+/// Calcule les positions et les écrit dans son `PositionBuffer` ; le
+/// `MergeRuntime` se charge du merge, du post-processing global et de
+/// l'envoi via le `PositionSink` injecté (aucun OSC direct ici).
 pub struct Runtime {
-    socket: UdpSocket,
     running: Arc<AtomicBool>,
     position_fn: Arc<Mutex<PositionFn>>,
-    position_callback: Arc<Mutex<Option<PositionCallback>>>,
-    osc_sender: Arc<Mutex<OscSender>>,
     macros: Arc<MacroState>,
     config: Arc<RuntimeConfig>,
     perf: Arc<PerfMonitor>,
@@ -46,11 +43,11 @@ pub struct Runtime {
     /// Audio param overrides — calculés à chaque frame à partir des audio_mods,
     /// lus par la closure compilée pour injecter radius/height/turns/offset/rotation
     audio_param_overrides: Arc<Mutex<HashMap<String, f64>>>,
-    /// Buffer de positions — en mode "worker", le runtime écrit ses positions
-    /// dans ce buffer au lieu d'envoyer l'OSC directement. Le MergeRuntime lit
-    /// tous les buffers pour faire le merge + post-processing + OSC.
-    /// None = mode legacy (OSC direct, compatibilité)
-    /// Some(buf) = mode worker (écrit dans le buffer, pas d'OSC, pas de macros spatiales)
+    /// Buffer de positions — le worker écrit ses positions (world-space)
+    /// à chaque frame ; le MergeRuntime lit tous les buffers pour faire
+    /// le merge + post-processing + envoi via le sink.
+    /// Requis pour `play_compiled` — `set_position_buffer` doit être
+    /// appelé avant de démarrer le playback.
     position_buffer: Mutex<Option<Arc<PositionBuffer>>>,
     /// Duration du move — stockée en ms (AtomicU64) pour hot-swap en live.
     /// Le worker thread lit cette valeur à chaque frame au lieu de capturer
@@ -65,38 +62,20 @@ pub struct Runtime {
 }
 
 impl Runtime {
-    /// Crée un nouveau runtime
-    pub fn new(osc_address: String, osc_port: u16, osc_sender: OscSender) -> Result<Self> {
-        Self::new_with_audio_state(
-            osc_address,
-            osc_port,
-            osc_sender,
-            Arc::new(Mutex::new(AudioState::new())),
-        )
+    /// Crée un nouveau worker de move
+    pub fn new() -> Self {
+        Self::new_with_audio_state(Arc::new(Mutex::new(AudioState::new())))
     }
 
-    /// Runtime partageant l'`AudioState` de l'app — une seule source de vérité :
+    /// Worker partageant l'`AudioState` de l'app — une seule source de vérité :
     /// le poller écrit dans l'Arc maître, tous les workers le lisent à chaque
     /// frame (plus de copies synchronisées par polling, plus de lag de 100ms).
-    pub fn new_with_audio_state(
-        osc_address: String,
-        osc_port: u16,
-        osc_sender: OscSender,
-        audio_state: Arc<Mutex<AudioState>>,
-    ) -> Result<Self> {
-        let socket = UdpSocket::bind("0.0.0.0:0").map_err(StagespaceError::NetworkError)?;
-        socket
-            .connect((osc_address.as_str(), osc_port))
-            .map_err(StagespaceError::NetworkError)?;
-
+    pub fn new_with_audio_state(audio_state: Arc<Mutex<AudioState>>) -> Self {
         // Runtime démarre avec une fonction identité — sera hot-swappée avant play
         let initial_fn: PositionFn = Box::new(|_t, _i| nalgebra::Vector3::zeros());
-        Ok(Runtime {
-            socket,
+        Runtime {
             running: Arc::new(AtomicBool::new(false)),
             position_fn: Arc::new(Mutex::new(initial_fn)),
-            position_callback: Arc::new(Mutex::new(None)),
-            osc_sender: Arc::new(Mutex::new(osc_sender)),
             macros: Arc::new(MacroState::new()),
             config: Arc::new(RuntimeConfig::new()),
             perf: Arc::new(PerfMonitor::new()),
@@ -109,7 +88,7 @@ impl Runtime {
             duration_ms: Arc::new(std::sync::atomic::AtomicU64::new(4000)),
             osc_ids_arc: Arc::new(std::sync::RwLock::new(Vec::new())),
             thread_handle: Mutex::new(None),
-        })
+        }
     }
 
     /// Définit la duration du move (en secondes) — hot-swappable en live
@@ -128,43 +107,19 @@ impl Runtime {
         self.duration_ms.load(Ordering::Relaxed) as f64 / 1000.0
     }
 
-    /// Définit le callback de position appelé à chaque frame
-    pub fn set_position_callback(&self, callback: PositionCallback) {
-        let mut cb = self
-            .position_callback
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        *cb = Some(callback);
-    }
-
-    /// Active le mode "worker" : le runtime écrit ses positions dans le buffer
-    /// au lieu d'envoyer l'OSC directement. Le MergeRuntime fera le merge + post-processing.
-    /// En mode worker, le runtime n'applique PAS les macros spatiales (scale, rotation, shift,
-    /// radius_scale, height_offset) ni le depth — ces transformations montent dans le merge thread.
-    /// Le runtime garde : speed, loop_mode, direction, phase_offset, fade, overrides.
+    /// Attache le buffer de positions — le worker y écrit ses positions
+    /// (world-space) à chaque frame. Le MergeRuntime fait le merge +
+    /// post-processing + envoi. Requis avant `play_compiled`.
+    /// Le worker applique : speed, loop_mode, direction, phase_offset,
+    /// fade, overrides, et le transform per-move complet
+    /// (radius_scale → height_offset → fade/depth → scale → rotation →
+    /// + origin + shift). Le merge applique les transforms globaux.
     pub fn set_position_buffer(&self, buffer: Arc<PositionBuffer>) {
         let mut buf = self
             .position_buffer
             .lock()
             .unwrap_or_else(|e| e.into_inner());
         *buf = Some(buffer);
-    }
-
-    /// Désactive le mode "worker" : retour au mode legacy (OSC direct).
-    pub fn unset_position_buffer(&self) {
-        let mut buf = self
-            .position_buffer
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        *buf = None;
-    }
-
-    /// Vérifie si le runtime est en mode worker (buffer) ou legacy (OSC direct)
-    pub fn is_worker_mode(&self) -> bool {
-        self.position_buffer
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .is_some()
     }
 
     /// Définit l'origin (isobarycentre des tracks ciblées)
@@ -202,12 +157,6 @@ impl Runtime {
     /// Récupère l'Arc de l'audio state — permet de mettre à jour sans locker state.movements
     pub fn audio_state_arc(&self) -> Arc<Mutex<AudioState>> {
         self.audio_state.clone()
-    }
-
-    /// Définit le sender OSC
-    pub fn set_osc_sender(&self, osc_sender: OscSender) {
-        let mut sender = self.osc_sender.lock().unwrap_or_else(|e| e.into_inner());
-        *sender = osc_sender;
     }
 
     /// Hot-swap la fonction de position — pour cue recall sans arrêter le playback
@@ -292,12 +241,8 @@ impl Runtime {
         osc_ids: Vec<u32>,
     ) -> Result<()> {
         // Garde anti double-spawn : un second appel orphelinerait le worker
-        // existant — les deux threads écriraient dans le même PositionBuffer /
-        // socket à des horloges indépendantes. CAS pour être race-safe.
-        let socket = self
-            .socket
-            .try_clone()
-            .map_err(StagespaceError::NetworkError)?;
+        // existant — les deux threads écriraient dans le même PositionBuffer
+        // à des horloges indépendantes. CAS pour être race-safe.
         if self
             .running
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
@@ -308,14 +253,24 @@ impl Runtime {
             ));
         }
 
+        // Un worker sans buffer n'a aucune sortie — refuser plutôt que
+        // de tourner dans le vide en silence.
+        let buffer = self
+            .position_buffer
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+            .ok_or_else(|| {
+                // Rollback du flag running — le spawn n'aura pas lieu
+                self.running.store(false, Ordering::SeqCst);
+                StagespaceError::RuntimeError(
+                    "play_compiled requires a PositionBuffer — call set_position_buffer() first"
+                        .to_string(),
+                )
+            })?;
+
         log_runtime_init(params.fps, params.n_objects);
-        log_playback_start(
-            params.duration,
-            self.osc_sender
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .profile_name(),
-        );
+        log_playback_start(params.duration);
 
         // Hot-swap la fonction
         self.swap_position_fn(position_fn);
@@ -328,8 +283,6 @@ impl Runtime {
         let duration_arc = self.duration_ms.clone();
         let osc_ids_arc = self.osc_ids_arc.clone();
         let position_fn_arc = self.position_fn.clone();
-        let position_callback = self.position_callback.clone();
-        let osc_sender_arc = self.osc_sender.clone();
         let macros = self.macros.clone();
         let config = self.config.clone();
         let perf = self.perf.clone();
@@ -338,11 +291,6 @@ impl Runtime {
         let anim_state_arc = self.animation_state.clone();
         let audio_state_arc = self.audio_state.clone();
         let audio_param_overrides_arc = self.audio_param_overrides.clone();
-        let position_buffer_arc = self
-            .position_buffer
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
 
         let handle = std::thread::spawn(move || {
             let start = Instant::now();
@@ -350,11 +298,6 @@ impl Runtime {
             let mut frame_count = 0u64;
             let mut last_perf_update = Instant::now();
             let mut frames_since_perf = 0u64;
-            let mut osc_since_perf = 0u64;
-            let mut osc_errors_perf = 0u64;
-            let mut osc_refused_perf = 0u64;
-            // Log OSC agrégé : max 1 warn/s au lieu d'un warn par packet perdu
-            let mut osc_err_log = ThrottledErrorLog::new();
 
             while running.load(Ordering::SeqCst) {
                 let elapsed = start.elapsed();
@@ -374,34 +317,11 @@ impl Runtime {
                 // Appliquer speed: temps virtuel — clamp >= 0 : un speed
                 // négatif (macro ou audio mod) enverrait un t négatif aux
                 // engines (les sims freezent, les sinusoïdes tournent à rebours)
-                let t_virtual = (t_real * speed).max(0.0);
-
                 // Lire la direction
                 let dir = config.get_direction();
 
                 // Gérer loop vs one-shot
                 let loop_is_on = config.get_loop_mode() == LoopMode::Loop;
-                let t = if loop_is_on && duration > 0.0 {
-                    let t_mod = t_virtual % duration;
-                    // Appliquer la direction
-                    match dir {
-                        PlayDirection::Backward => duration - t_mod,
-                        PlayDirection::PingPong => {
-                            // PingPong
-                            let cycle = (t_virtual / duration) as u64;
-                            if cycle.is_multiple_of(2) {
-                                t_mod
-                            } else {
-                                duration - t_mod
-                            }
-                        }
-                        PlayDirection::Forward => t_mod,
-                    }
-                } else if !loop_is_on && t_virtual >= duration {
-                    break; // One-shot: arrêter à la fin
-                } else {
-                    t_virtual
-                };
 
                 // Lire l'animation state (depth + phase_offset par track)
                 let (track_depths, track_phase_offsets, audio_param_overrides) = {
@@ -470,7 +390,20 @@ impl Runtime {
                 // (audio-modulé) — même clamp >= 0 que ci-dessus
                 let t_virtual_eff = (t_real * effective_speed).max(0.0);
                 let t_eff = if loop_is_on && duration > 0.0 {
-                    t_virtual_eff % duration
+                    let t_mod = t_virtual_eff % duration;
+                    // Appliquer la direction (Forward/Backward/PingPong)
+                    match dir {
+                        PlayDirection::Backward => duration - t_mod,
+                        PlayDirection::PingPong => {
+                            let cycle = (t_virtual_eff / duration) as u64;
+                            if cycle.is_multiple_of(2) {
+                                t_mod
+                            } else {
+                                duration - t_mod
+                            }
+                        }
+                        PlayDirection::Forward => t_mod,
+                    }
                 } else if !loop_is_on && t_virtual_eff >= duration {
                     break;
                 } else {
@@ -506,127 +439,41 @@ impl Runtime {
                     f.clamp(0.0, 1.0)
                 };
 
-                // Lire la fonction de position (hot-swappable)
-                // ── Mode worker : calculer la position MONDE du move
-                //    (transform per-move : radius_scale → height_offset → fade →
-                //    scale → rotation → + origin + shift) et écrire dans le buffer.
-                //    Le MergeRuntime fera le merge + post-processing GLOBAL + OSC.
-                // ── Mode legacy : idem + depth/track_depths, puis envoi OSC direct.
-                if let Some(ref buffer) = position_buffer_arc {
-                    // ── Mode worker ──
-                    // Lire les osc_ids (hot-swappable) depuis l'arc
-                    let osc_ids = osc_ids_arc
-                        .read()
-                        .unwrap_or_else(|e| e.into_inner())
-                        .clone();
-                    // Origin du move (ancre monde de la trajectoire) — lue à
-                    // chaque frame pour refléter un set_origin en cours de jeu.
-                    let move_origin = *origin_arc.lock().unwrap_or_else(|e| e.into_inner());
-                    // Précalculer la matrice de rotation si rotation non-nulle
-                    let has_rotation = eff_yaw != 0.0 || eff_pitch != 0.0 || eff_roll != 0.0;
-                    let rot_matrix = if has_rotation {
-                        use nalgebra::Rotation3;
-                        let ry = Rotation3::from_axis_angle(
-                            &nalgebra::Vector3::y_axis(),
-                            eff_yaw.to_radians(),
-                        );
-                        let rx = Rotation3::from_axis_angle(
-                            &nalgebra::Vector3::x_axis(),
-                            eff_pitch.to_radians(),
-                        );
-                        let rz = Rotation3::from_axis_angle(
-                            &nalgebra::Vector3::z_axis(),
-                            eff_roll.to_radians(),
-                        );
-                        Some(rz * rx * ry)
-                    } else {
-                        None
-                    };
-                    let positions: Vec<(usize, nalgebra::Vector3<f64>)> = {
-                        let fn_ref = position_fn_arc.lock().unwrap_or_else(|e| e.into_inner());
-                        let ovr = overrides.lock();
-                        osc_ids
-                            .iter()
-                            .enumerate()
-                            .map(|(obj_idx, &_osc_id)| {
-                                // Si un override existe pour cet objet, l'utiliser
-                                let raw_pos = if let Some(override_pos) = ovr.get(&obj_idx) {
-                                    *override_pos
-                                } else {
-                                    // Appliquer le phase_offset pour cette track
-                                    let phase_off =
-                                        track_phase_offsets.get(obj_idx).copied().unwrap_or(0.0);
-                                    let t_with_phase = if duration > 0.0 {
-                                        t_eff + (phase_off / 360.0) * duration
-                                    } else {
-                                        t_eff
-                                    };
-                                    let t_looped = if loop_is_on && duration > 0.0 {
-                                        t_with_phase % duration
-                                    } else {
-                                        t_with_phase
-                                    };
-                                    // catch_unwind: la position_fn peut panic si obj_idx
-                                    // dépasse le n_objects pour lequel elle a été compilée
-                                    // (race condition lors du hot-swap des osc_ids avant
-                                    // le recall_cue). On retourne zeros plutôt que de laisser
-                                    // le thread mourir.
-                                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                                        fn_ref(t_looped, obj_idx)
-                                    }))
-                                    .unwrap_or_else(|_e| nalgebra::Vector3::zeros())
-                                };
-                                // Transform per-move → position monde
-                                // (radius_scale → height_offset → fade → scale →
-                                // rotation → + origin + shift)
-                                let pos = move_transform(
-                                    raw_pos,
-                                    move_origin,
-                                    effective_scale,
-                                    eff_shift,
-                                    rot_matrix.as_ref(),
-                                    effective_radius_scale,
-                                    effective_height_offset,
-                                    fade_factor,
-                                );
-                                (obj_idx, pos)
-                            })
-                            .collect()
-                    };
-                    // Écrire dans le buffer pour le MergeRuntime
-                    buffer.write(positions);
-
-                    frame_count += 1;
-                    frames_since_perf += 1;
-
-                    // Update perf stats every ~500ms
-                    let perf_elapsed = last_perf_update.elapsed();
-                    if perf_elapsed.as_millis() >= 500 {
-                        let secs = perf_elapsed.as_secs_f64();
-                        let fps = frames_since_perf as f64 / secs;
-                        let frame_time_us = start.elapsed().as_micros() as f64 / frame_count as f64;
-                        let latency_ms = frame_time_us / 1000.0;
-                        let cpu_pct = (latency_ms / (1000.0 / params.fps)) * 100.0;
-                        perf.update(fps, 0.0, latency_ms, cpu_pct);
-                        frames_since_perf = 0;
-                        last_perf_update = Instant::now();
-                    }
-
-                    // Timing précis + ré-ancrage après un stall (>30 frames)
-                    pace_frame_clock(&mut frame_count, frame_duration, start);
-                    continue; // Skip OSC + callback (géré par le MergeRuntime)
-                }
-
-                // ── Mode legacy (OSC direct) ──
+                // Calculer la position MONDE du move — transform per-move :
+                // radius_scale → height_offset → fade×depth → scale →
+                // rotation → + origin + shift — et écrire dans le buffer.
+                // Le MergeRuntime fera le merge + post-processing GLOBAL.
                 // Lire les osc_ids (hot-swappable) depuis l'arc
                 let osc_ids = osc_ids_arc
                     .read()
                     .unwrap_or_else(|e| e.into_inner())
                     .clone();
+                // Origin du move (ancre monde de la trajectoire) — lue à
+                // chaque frame pour refléter un set_origin en cours de jeu.
+                let move_origin = *origin_arc.lock().unwrap_or_else(|e| e.into_inner());
+                // Précalculer la matrice de rotation si rotation non-nulle
+                let has_rotation = eff_yaw != 0.0 || eff_pitch != 0.0 || eff_roll != 0.0;
+                let rot_matrix = if has_rotation {
+                    use nalgebra::Rotation3;
+                    let ry = Rotation3::from_axis_angle(
+                        &nalgebra::Vector3::y_axis(),
+                        eff_yaw.to_radians(),
+                    );
+                    let rx = Rotation3::from_axis_angle(
+                        &nalgebra::Vector3::x_axis(),
+                        eff_pitch.to_radians(),
+                    );
+                    let rz = Rotation3::from_axis_angle(
+                        &nalgebra::Vector3::z_axis(),
+                        eff_roll.to_radians(),
+                    );
+                    Some(rz * rx * ry)
+                } else {
+                    None
+                };
                 let positions: Vec<(usize, nalgebra::Vector3<f64>)> = {
                     let fn_ref = position_fn_arc.lock().unwrap_or_else(|e| e.into_inner());
                     let ovr = overrides.lock();
-                    let origin_local = *origin_arc.lock().unwrap_or_else(|e| e.into_inner());
                     osc_ids
                         .iter()
                         .enumerate()
@@ -648,146 +495,37 @@ impl Runtime {
                                 } else {
                                     t_with_phase
                                 };
-                                // catch_unwind: protection contre les panics de position_fn
-                                // lors du hot-swap (obj_idx > n_objects compilé)
+                                // catch_unwind: la position_fn peut panic si obj_idx
+                                // dépasse le n_objects pour lequel elle a été compilée
+                                // (race condition lors du hot-swap des osc_ids avant
+                                // le recall_cue). On retourne zeros plutôt que de laisser
+                                // le thread mourir.
                                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                                     fn_ref(t_looped, obj_idx)
                                 }))
-                                .unwrap_or_else(|_| nalgebra::Vector3::zeros())
+                                .unwrap_or_else(|_e| nalgebra::Vector3::zeros())
                             };
-
-                            // Appliquer radius_scale : scaling radial par rapport à l'origin
-                            // (multiplie la distance à l'origin, pas la position absolue)
-                            let pos_scaled_radius = if (effective_radius_scale - 1.0).abs() > 1e-10
-                            {
-                                origin_local + (raw_pos - origin_local) * effective_radius_scale
-                            } else {
-                                raw_pos
-                            };
-
-                            // Appliquer height_offset : translation Y post-engine
-                            let pos_with_height = if effective_height_offset.abs() > 1e-10 {
-                                nalgebra::Vector3::new(
-                                    pos_scaled_radius.x,
-                                    pos_scaled_radius.y + effective_height_offset,
-                                    pos_scaled_radius.z,
-                                )
-                            } else {
-                                pos_scaled_radius
-                            };
-
-                            // Appliquer le depth : interpoler entre origin et raw_pos, multiplié par le fade
-                            let depth =
+                            // Depth per-track × fade cycle — les deux contractent
+                            // la trajectoire vers l'ancre du move (même sémantique
+                            // radiale, composées comme dans l'ancienne chaîne).
+                            let radial =
                                 track_depths.get(obj_idx).copied().unwrap_or(1.0) * fade_factor;
-                            let pos_with_depth =
-                                origin_local + (pos_with_height - origin_local) * depth;
-
-                            (obj_idx, pos_with_depth)
+                            let pos = move_transform(
+                                raw_pos,
+                                move_origin,
+                                effective_scale,
+                                eff_shift,
+                                rot_matrix.as_ref(),
+                                effective_radius_scale,
+                                effective_height_offset,
+                                radial,
+                            );
+                            (obj_idx, pos)
                         })
                         .collect()
                 };
-
-                // Lire l'osc sender (hot-swappable pour profil/offset)
-                let sender = osc_sender_arc.lock().unwrap_or_else(|e| e.into_inner());
-
-                // Précalculer la matrice de rotation si rotation non-nulle
-                let has_rotation = eff_yaw != 0.0 || eff_pitch != 0.0 || eff_roll != 0.0;
-                let rot_matrix = if has_rotation {
-                    use nalgebra::Rotation3;
-                    let ry = Rotation3::from_axis_angle(
-                        &nalgebra::Vector3::y_axis(),
-                        eff_yaw.to_radians(),
-                    );
-                    let rx = Rotation3::from_axis_angle(
-                        &nalgebra::Vector3::x_axis(),
-                        eff_pitch.to_radians(),
-                    );
-                    let rz = Rotation3::from_axis_angle(
-                        &nalgebra::Vector3::z_axis(),
-                        eff_roll.to_radians(),
-                    );
-                    Some(rz * rx * ry)
-                } else {
-                    None
-                };
-
-                // Lire l'origin (isobarycentre des tracks)
-                let origin = *origin_arc.lock().unwrap_or_else(|e| e.into_inner());
-
-                // Envoyer OSC pour tous les objets (sauf en mode preview)
-                let is_preview = config.is_preview_mode();
-                if !is_preview {
-                    for (obj_idx, pos) in &positions {
-                        let osc_id = osc_ids[*obj_idx];
-                        // Appliquer macros: effective_scale → rotation → origin + shift
-                        // Note: pos contient déjà le depth appliqué, on scale par rapport à origin
-                        let pos_scaled = pos * effective_scale;
-                        let pos_rotated = if let Some(ref rot) = rot_matrix {
-                            rot * pos_scaled
-                        } else {
-                            pos_scaled
-                        };
-                        let pos_final = pos_rotated + origin + eff_shift;
-                        let (addr, values) = sender.format_position(osc_id, pos_final);
-                        let args: Vec<OscType> =
-                            values.iter().map(|v| OscType::Float(*v as f32)).collect();
-
-                        let packet = OscPacket::Message(OscMessage { addr, args });
-
-                        match rosc::encoder::encode(&packet) {
-                            Ok(bytes) => match socket.send(&bytes) {
-                                Ok(_) => {
-                                    osc_since_perf += 1;
-                                }
-                                Err(e) => {
-                                    let refused = e.kind() == std::io::ErrorKind::ConnectionRefused;
-                                    osc_errors_perf += 1;
-                                    if refused {
-                                        osc_refused_perf += 1;
-                                    }
-                                    // Log agrégé : 1 warn/s max (pas un warn
-                                    // par packet — sinon flood en live)
-                                    if let Some((errs, refused_n)) = osc_err_log.record(refused) {
-                                        log_osc_error(&format!(
-                                            "OSC send failures: {errs} in ~1s \
-                                             ({refused_n} connection refused) — last: {e}"
-                                        ));
-                                    }
-                                }
-                            },
-                            Err(e) => {
-                                // Échec d'encodage — compté dans les stats
-                                // (avant : silencieusement droppé)
-                                osc_errors_perf += 1;
-                                if let Some((errs, refused_n)) = osc_err_log.record(false) {
-                                    log_osc_error(&format!(
-                                        "OSC encode/send failures: {errs} in ~1s \
-                                         ({refused_n} refused) — last: {e}"
-                                    ));
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Appeler le callback avec les positions transformées (pour preview 3D)
-                if let Ok(cb) = position_callback.lock() {
-                    if let Some(ref callback) = *cb {
-                        let transformed: Vec<(usize, nalgebra::Vector3<f64>)> = positions
-                            .iter()
-                            .map(|(idx, pos)| {
-                                let ps = pos * effective_scale;
-                                let pr = if let Some(ref rot) = rot_matrix {
-                                    rot * ps
-                                } else {
-                                    ps
-                                };
-                                (*idx, pr + origin + eff_shift)
-                            })
-                            .collect();
-                        callback(t, transformed);
-                    }
-                }
+                // Écrire dans le buffer pour le MergeRuntime
+                buffer.write(positions);
 
                 frame_count += 1;
                 frames_since_perf += 1;
@@ -797,33 +535,11 @@ impl Runtime {
                 if perf_elapsed.as_millis() >= 500 {
                     let secs = perf_elapsed.as_secs_f64();
                     let fps = frames_since_perf as f64 / secs;
-                    let osc_rate = osc_since_perf as f64 / secs;
                     let frame_time_us = start.elapsed().as_micros() as f64 / frame_count as f64;
                     let latency_ms = frame_time_us / 1000.0;
                     let cpu_pct = (latency_ms / (1000.0 / params.fps)) * 100.0;
-
-                    let total_osc = osc_since_perf + osc_errors_perf;
-                    let (error_rate, refused_rate) = if total_osc > 0 {
-                        (
-                            osc_errors_perf as f64 / total_osc as f64,
-                            osc_refused_perf as f64 / total_osc as f64,
-                        )
-                    } else {
-                        (0.0, 0.0)
-                    };
-                    perf.update_with_error_rate(
-                        fps,
-                        osc_rate,
-                        latency_ms,
-                        cpu_pct,
-                        error_rate,
-                        refused_rate,
-                    );
-
+                    perf.update(fps, 0.0, latency_ms, cpu_pct);
                     frames_since_perf = 0;
-                    osc_since_perf = 0;
-                    osc_errors_perf = 0;
-                    osc_refused_perf = 0;
                     last_perf_update = Instant::now();
                 }
 
@@ -922,6 +638,12 @@ impl Runtime {
     }
 }
 
+impl Default for Runtime {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Drop for Runtime {
     /// Live-safety : drop sans stop() explicite join quand même le worker —
     /// sinon le thread orphelin continue d'émettre de l'OSC / d'écrire dans
@@ -1006,42 +728,4 @@ fn move_transform(
     };
     // Local → monde : une seule translation vers l'ancre du move
     pos + origin + shift
-}
-
-/// Agrégateur d'erreurs OSC : compte les erreurs et n'autorise un log qu'au
-/// maximum une fois par seconde (anti-flood pendant un live — un send() qui
-/// échoue à 60fps × N objets produirait des milliers de warn/s sinon).
-struct ThrottledErrorLog {
-    errors: u64,
-    refused: u64,
-    window_start: Instant,
-}
-
-impl ThrottledErrorLog {
-    fn new() -> Self {
-        ThrottledErrorLog {
-            errors: 0,
-            refused: 0,
-            window_start: Instant::now(),
-        }
-    }
-
-    /// Enregistre une erreur. Retourne `Some((errors, refused))` quand la
-    /// fenêtre d'1s est écoulée — le caller doit alors émettre le log agrégé.
-    /// Les compteurs sont réinitialisés à ce moment-là.
-    fn record(&mut self, refused: bool) -> Option<(u64, u64)> {
-        self.errors += 1;
-        if refused {
-            self.refused += 1;
-        }
-        if self.window_start.elapsed() >= Duration::from_secs(1) {
-            let out = (self.errors, self.refused);
-            self.errors = 0;
-            self.refused = 0;
-            self.window_start = Instant::now();
-            Some(out)
-        } else {
-            None
-        }
-    }
 }

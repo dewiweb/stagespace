@@ -9,7 +9,7 @@ mod tests {
     use crate::compiler::Compiler;
     use crate::engines::EngineParams;
     use crate::graph::{Edge, Graph, Node, NodeId, NodeType};
-    use crate::osc_sender::{OscProfile, OscSender};
+
     use crate::runtime::Runtime;
     use serde_json::json;
     use std::time::Duration;
@@ -316,10 +316,11 @@ mod tests {
         let compiled = Compiler::compile(&graph);
         assert!(compiled.is_ok(), "Compilation failed: {:?}", compiled.err());
 
-        // 4. Créer le runtime
-        let osc_sender =
-            OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7788);
-        let runtime = Runtime::new("127.0.0.1".to_string(), 7788, osc_sender).unwrap();
+        // 4. Créer le runtime (worker — écrit dans un PositionBuffer)
+        let runtime = Runtime::new();
+        runtime.set_position_buffer(std::sync::Arc::new(
+            crate::position_buffer::PositionBuffer::new(),
+        ));
 
         // 5. Set l'animation state
         let anim_state = AnimationState::from_animation(&anim, &osc_ids);
@@ -365,9 +366,10 @@ mod tests {
         let graph = build_graph_from_shape(&anim, osc_ids.len());
         let compiled = Compiler::compile(&graph).expect("compile");
 
-        let osc_sender =
-            OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7788);
-        let runtime = Runtime::new("127.0.0.1".to_string(), 7788, osc_sender).unwrap();
+        let runtime = Runtime::new();
+        runtime.set_position_buffer(std::sync::Arc::new(
+            crate::position_buffer::PositionBuffer::new(),
+        ));
 
         let anim_state = AnimationState::from_animation(&anim, &osc_ids);
         runtime.set_animation_state(anim_state);

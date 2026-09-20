@@ -1,6 +1,5 @@
 use super::*;
 use crate::engines::EngineParams;
-use crate::osc_sender::{OscProfile, OscSender};
 use crate::position_buffer::PositionBuffer;
 use serde_json::json;
 use std::sync::atomic::Ordering;
@@ -9,15 +8,13 @@ use std::time::{Duration, Instant};
 
 #[test]
 fn test_runtime_creation() {
-    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
-    let rt = Runtime::new("127.0.0.1".to_string(), 7000, sender).unwrap();
+    let rt = Runtime::new();
     assert!(!rt.is_running());
 }
 
 #[test]
 fn test_loop_mode() {
-    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
-    let rt = Runtime::new("127.0.0.1".to_string(), 7000, sender).unwrap();
+    let rt = Runtime::new();
     rt.set_loop_mode(LoopMode::OneShot);
     assert_eq!(rt.config.get_loop_mode(), LoopMode::OneShot);
     rt.set_loop_mode(LoopMode::Loop);
@@ -26,8 +23,7 @@ fn test_loop_mode() {
 
 #[test]
 fn test_hot_swap_position_fn() {
-    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
-    let rt = Runtime::new("127.0.0.1".to_string(), 7000, sender).unwrap();
+    let rt = Runtime::new();
     rt.swap_position_fn(Box::new(|t, i| nalgebra::Vector3::new(t, i as f64, 0.0)));
     let fn_ref = rt.position_fn.lock().unwrap_or_else(|e| e.into_inner());
     let pos = fn_ref(1.5, 3);
@@ -37,8 +33,8 @@ fn test_hot_swap_position_fn() {
 
 #[test]
 fn test_runtime_play_compiled() {
-    let osc_sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7788);
-    let runtime = Runtime::new("127.0.0.1".to_string(), 7788, osc_sender).unwrap();
+    let runtime = Runtime::new();
+    runtime.set_position_buffer(Arc::new(PositionBuffer::new()));
 
     let duration = 1.0;
     let params = EngineParams {
@@ -68,8 +64,32 @@ fn test_runtime_play_compiled() {
 }
 
 fn test_runtime() -> Runtime {
-    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
-    Runtime::new("127.0.0.1".to_string(), 7000, sender).unwrap()
+    let rt = Runtime::new();
+    rt.set_position_buffer(Arc::new(PositionBuffer::new()));
+    rt
+}
+
+#[test]
+fn test_play_compiled_requires_buffer() {
+    // Un worker sans PositionBuffer n'a aucune sortie — play_compiled doit
+    // refuser plutôt que de tourner dans le vide, et rester stoppable.
+    let rt = Runtime::new();
+    let result = rt.play_compiled(
+        Box::new(|_, _| nalgebra::Vector3::zeros()),
+        test_params(1.0),
+        vec![1],
+    );
+    assert!(result.is_err(), "play sans buffer doit être rejeté");
+    assert!(!rt.is_running(), "running doit être rollback après refus");
+    // Le runtime reste utilisable après le refus
+    rt.set_position_buffer(Arc::new(PositionBuffer::new()));
+    rt.play_compiled(
+        Box::new(|_, _| nalgebra::Vector3::zeros()),
+        test_params(1.0),
+        vec![1],
+    )
+    .unwrap();
+    rt.stop();
 }
 
 fn test_params(duration: f64) -> EngineParams {
@@ -299,19 +319,4 @@ fn test_worker_fade_collapses_toward_origin() {
     let p_end = buffer.read()[0].1;
     assert!((p_end.x - 6.0).abs() < 1e-9, "x={}", p_end.x);
     rt.stop();
-}
-
-#[test]
-fn test_throttled_error_log_aggregates() {
-    let mut log = ThrottledErrorLog::new();
-    // Fenêtre <1s → rien n'est émis
-    assert!(log.record(false).is_none());
-    assert!(log.record(true).is_none());
-    // Fenêtre écoulée → flush agrégé (erreurs + refused)
-    log.window_start = Instant::now() - Duration::from_secs(2);
-    let (errors, refused) = log.record(true).unwrap();
-    assert_eq!(errors, 3);
-    assert_eq!(refused, 2);
-    // Compteurs réinitialisés
-    assert!(log.record(false).is_none());
 }

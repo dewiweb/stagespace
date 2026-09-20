@@ -13,7 +13,7 @@ use crate::graph::parser::build_graph_from_json;
 use crate::{AppState, Movement, MAX_MOVEMENTS};
 use serde::Deserialize;
 use stagespace_engines::{
-    AnimationState, EngineParams, LoopMode, OscSender, PlayDirection, PositionBuffer, Runtime,
+    AnimationState, EngineParams, LoopMode, PlayDirection, PositionBuffer, Runtime,
 };
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
@@ -227,21 +227,12 @@ fn spawn_move_inner(spec: MoveSpec, sh: &Shared, abort_on_recall: bool) -> Resul
         })?
     };
 
-    // 2. Créer le worker Runtime (socket dédiée — jamais utilisée en mode
-    //    worker : les positions partent dans le PositionBuffer, l'OSC est
-    //    envoyé uniquement par le MergeRuntime).
+    // 2. Créer le worker Runtime — pas de socket propre : les positions
+    //    partent dans le PositionBuffer, l'OSC est envoyé uniquement par
+    //    le MergeRuntime via son PositionSink.
     // L'AudioState maître est injecté — le worker lit l'état audio à jour à
     // chaque frame sans propagation par polling (une seule source de vérité).
-    let runtime = Runtime::new_with_audio_state(
-        "127.0.0.1".to_string(),
-        8000,
-        OscSender::default(),
-        sh.audio_state.clone(),
-    )
-    .map_err(|e| {
-        eprintln!("[ACTIVATE-ERROR] Runtime::new failed: {e}");
-        format!("Failed to create worker runtime: {e}")
-    })?;
+    let runtime = Runtime::new_with_audio_state(sh.audio_state.clone());
 
     // 3. Compiler avec audio + overrides
     let overrides = runtime.audio_param_overrides();

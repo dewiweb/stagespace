@@ -138,10 +138,11 @@ mod tests {
         let graph = build_graph_from_json(&anim.graph_json, &audio_state).expect("graph build");
         let compiled = graph::compilation::compile_graph(&graph).expect("compile");
 
-        // 2. Créer le runtime
-        let osc_sender =
-            OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7788);
-        let runtime = Runtime::new("127.0.0.1".to_string(), 7788, osc_sender).unwrap();
+        // 2. Créer le runtime (worker — écrit dans un PositionBuffer)
+        let runtime = Runtime::new();
+        runtime.set_position_buffer(std::sync::Arc::new(
+            stagespace_engines::position_buffer::PositionBuffer::new(),
+        ));
 
         // 3. Set animation state
         let anim_state = AnimationState::from_animation(&anim, &osc_ids);
@@ -292,11 +293,13 @@ mod tests {
         graph::compilation::compile_graph(&graph)
     }
 
-    /// Crée un runtime avec un sender GenericCartesian sur localhost
+    /// Crée un runtime worker avec son PositionBuffer
     fn make_test_runtime() -> Runtime {
-        let osc_sender =
-            OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7788);
-        Runtime::new("127.0.0.1".to_string(), 7788, osc_sender).unwrap()
+        let rt = Runtime::new();
+        rt.set_position_buffer(std::sync::Arc::new(
+            stagespace_engines::position_buffer::PositionBuffer::new(),
+        ));
+        rt
     }
 
     // ── Scénario 1 : Cercle 8 tracks — positions correctes ──────────────

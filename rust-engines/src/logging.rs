@@ -34,8 +34,8 @@ pub fn log_compilation_error(error: &str) {
 
 /// Log le début du playback
 #[instrument]
-pub fn log_playback_start(duration: f64, osc_profile: &str) {
-    info!(duration, osc_profile, "Playback started");
+pub fn log_playback_start(duration: f64) {
+    info!(duration, "Playback started");
 }
 
 /// Log l'arrêt du playback
