@@ -1,5 +1,6 @@
 import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
+import Slider from './ui/Slider';
 
 /**
  * Overlay du mode Draw — slider Z + instructions + bouton Done.
@@ -17,10 +18,9 @@ export const DrawModeOverlay: React.FC = () => {
       {/* Z slider overlay */}
       <div className="absolute top-2 left-2 z-20 bg-gray-900/80 backdrop-blur rounded-lg p-2 border border-orange-600/50 flex items-center gap-2">
         <span className="text-orange-400 text-[10px] font-mono">Z</span>
-        <input
-          type="range" min={-3} max={3} step={0.1} value={drawZ}
-          onChange={(e) => setDrawZ(parseFloat(e.target.value))}
-          className="w-24 h-1 accent-orange-500"
+        <Slider
+          layout="bare" min={-3} max={3} step={0.1} value={drawZ}
+          onChange={setDrawZ} accent="orange" className="w-24"
         />
         <span className="text-white text-[10px] font-mono w-8">{drawZ.toFixed(1)}</span>
         <button

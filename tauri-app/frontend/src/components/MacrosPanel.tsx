@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { useGraphStore } from '../store/useGraphStore';
+import Slider from './ui/Slider';
 
 interface MacrosPanelProps {
   isPlaying: boolean;
@@ -29,22 +30,7 @@ export const MacrosPanel: React.FC<MacrosPanelProps> = ({ isPlaying, hasMovement
     [setMacros, pushMacrosToRuntime, shouldPush],
   );
 
-  const Slider = ({ label, value, min, max, step, suffix, onChange }: {
-    label: string; value: number; min: number; max: number; step: number; suffix?: string;
-    onChange: (v: number) => void;
-  }) => (
-    <div className="flex items-center gap-1.5">
-      <span className="text-gray-400 text-[10px] w-10">{label}</span>
-      <input
-        type="range" min={min} max={max} step={step} value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="flex-1 h-1 accent-blue-500"
-      />
-      <span className="text-white text-[10px] font-mono w-10 text-right">
-        {suffix ? value.toFixed(0) + suffix : value.toFixed(value < 1 ? 2 : 1)}
-      </span>
-    </div>
-  );
+
 
   return (
     <div className="absolute top-2 left-2 z-20 bg-gray-900/90 backdrop-blur rounded-lg p-3 border border-blue-600/50 flex flex-col gap-2 min-w-[200px]">
@@ -75,11 +61,11 @@ export const MacrosPanel: React.FC<MacrosPanelProps> = ({ isPlaying, hasMovement
         onChange={(v) => updateMacrosLive({ shiftZ: v })} />
       <Slider label="Speed" value={macros.speed} min={0} max={4} step={0.05}
         onChange={(v) => updateMacrosLive({ speed: v })} />
-      <Slider label="Yaw°" value={macros.yaw} min={-180} max={180} step={1} suffix="°"
+      <Slider label="Yaw°" value={macros.yaw} min={-180} max={180} step={1} unit="°" decimals={0}
         onChange={(v) => updateMacrosLive({ yaw: v })} />
-      <Slider label="Pitch°" value={macros.pitch} min={-180} max={180} step={1} suffix="°"
+      <Slider label="Pitch°" value={macros.pitch} min={-180} max={180} step={1} unit="°" decimals={0}
         onChange={(v) => updateMacrosLive({ pitch: v })} />
-      <Slider label="Roll°" value={macros.roll} min={-180} max={180} step={1} suffix="°"
+      <Slider label="Roll°" value={macros.roll} min={-180} max={180} step={1} unit="°" decimals={0}
         onChange={(v) => updateMacrosLive({ roll: v })} />
       <button
         onClick={() => updateMacrosLive({ scale: 1.0, shiftX: 0, shiftY: 0, shiftZ: 0, speed: 1.0, yaw: 0, pitch: 0, roll: 0 })}

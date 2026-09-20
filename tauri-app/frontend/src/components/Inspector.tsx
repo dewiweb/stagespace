@@ -25,23 +25,7 @@ function Section({ title, icon, defaultOpen = true, badge, badgeColor = 'gray', 
   );
 }
 
-// ── Slider compact ──
-function Slider({ label, value, min, max, step, onChange, unit, color = 'blue' }: {
-  label: string; value: number; min: number; max: number; step: number;
-  onChange: (v: number) => void; unit?: string; color?: 'blue' | 'green' | 'purple' | 'cyan';
-}) {
-  const accent = `accent-${color}-500`;
-  const decimals = step < 1 ? (step < 0.1 ? 2 : 1) : 0;
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-gray-400 text-[10px] w-16 flex-shrink-0">{label}</span>
-      <input type="range" min={min} max={max} step={step} value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-        className={`flex-1 h-1.5 ${accent}`} />
-      <span className="text-white text-[10px] font-mono w-12 text-right">{value.toFixed(decimals)}{unit ?? ''}</span>
-    </div>
-  );
-}
+import Slider from './ui/Slider';
 
 export default function Inspector() {
   const showExpert = useAnimationStore((s) => s.showExpert);
@@ -275,23 +259,23 @@ export default function Inspector() {
             <Section title="Macros" icon="⚡" defaultOpen={true}
               badge={activeMovementIds.length > 0 ? `${activeMovementIds.length} live` : undefined}>
               <Slider label="Échelle" value={macros.scale} min={0} max={4} step={0.05}
-                onChange={(v) => handleMacro('scale', v)} color="purple" />
+                onChange={(v) => handleMacro('scale', v)} accent="purple" />
               <Slider label="Shift X" value={macros.shiftX} min={-5} max={5} step={0.1}
-                onChange={(v) => handleMacro('shiftX', v)} color="purple" />
+                onChange={(v) => handleMacro('shiftX', v)} accent="purple" />
               <Slider label="Shift Y" value={macros.shiftY} min={-5} max={5} step={0.1}
-                onChange={(v) => handleMacro('shiftY', v)} color="purple" />
+                onChange={(v) => handleMacro('shiftY', v)} accent="purple" />
               <Slider label="Shift Z" value={macros.shiftZ} min={-5} max={5} step={0.1}
-                onChange={(v) => handleMacro('shiftZ', v)} color="purple" />
+                onChange={(v) => handleMacro('shiftZ', v)} accent="purple" />
               <Slider label="Yaw" value={macros.yaw} min={-180} max={180} step={1}
-                onChange={(v) => handleMacro('yaw', v)} unit="°" color="purple" />
+                onChange={(v) => handleMacro('yaw', v)} unit="°" accent="purple" />
               <Slider label="Pitch" value={macros.pitch} min={-90} max={90} step={1}
-                onChange={(v) => handleMacro('pitch', v)} unit="°" color="purple" />
+                onChange={(v) => handleMacro('pitch', v)} unit="°" accent="purple" />
               <Slider label="Roll" value={macros.roll} min={-180} max={180} step={1}
-                onChange={(v) => handleMacro('roll', v)} unit="°" color="purple" />
+                onChange={(v) => handleMacro('roll', v)} unit="°" accent="purple" />
               <Slider label="Radius" value={macros.radius_scale} min={0} max={4} step={0.05}
-                onChange={(v) => handleMacro('radius_scale', v)} unit="x" color="purple" />
+                onChange={(v) => handleMacro('radius_scale', v)} unit="x" accent="purple" />
               <Slider label="Height" value={macros.height_offset} min={-5} max={5} step={0.1}
-                onChange={(v) => handleMacro('height_offset', v)} unit="m" color="purple" />
+                onChange={(v) => handleMacro('height_offset', v)} unit="m" accent="purple" />
               <div className="text-gray-600 text-[9px] pt-1">Macros globales — appliquées à tous les moves actifs</div>
             </Section>
 
@@ -315,13 +299,13 @@ export default function Inspector() {
                       const mods = [...current.audio_mods];
                       mods[i] = { ...mod, amount: v };
                       updateCurrent({ audio_mods: mods });
-                    }} color="cyan" />
+                    }} accent="cyan" />
                   <Slider label="Lissage" value={mod.smoothing} min={0} max={0.95} step={0.05}
                     onChange={(v) => {
                       const mods = [...current.audio_mods];
                       mods[i] = { ...mod, smoothing: v };
                       updateCurrent({ audio_mods: mods });
-                    }} color="cyan" />
+                    }} accent="cyan" />
                 </div>
               ))}
               {showAudioAdd && (
@@ -374,25 +358,25 @@ export default function Inspector() {
             <Section title="Macros" icon="⚡" defaultOpen={true}
               badge={activeMovementIds.length > 0 ? `${activeMovementIds.length} live` : undefined}>
               <Slider label="Vitesse" value={macros.speed} min={0} max={4} step={0.05}
-                onChange={(v) => handleMacro('speed', v)} unit="x" color="purple" />
+                onChange={(v) => handleMacro('speed', v)} unit="x" accent="purple" />
               <Slider label="Échelle" value={macros.scale} min={0} max={4} step={0.05}
-                onChange={(v) => handleMacro('scale', v)} color="purple" />
+                onChange={(v) => handleMacro('scale', v)} accent="purple" />
               <Slider label="Shift X" value={macros.shiftX} min={-5} max={5} step={0.1}
-                onChange={(v) => handleMacro('shiftX', v)} color="purple" />
+                onChange={(v) => handleMacro('shiftX', v)} accent="purple" />
               <Slider label="Shift Y" value={macros.shiftY} min={-5} max={5} step={0.1}
-                onChange={(v) => handleMacro('shiftY', v)} color="purple" />
+                onChange={(v) => handleMacro('shiftY', v)} accent="purple" />
               <Slider label="Shift Z" value={macros.shiftZ} min={-5} max={5} step={0.1}
-                onChange={(v) => handleMacro('shiftZ', v)} color="purple" />
+                onChange={(v) => handleMacro('shiftZ', v)} accent="purple" />
               <Slider label="Yaw" value={macros.yaw} min={-180} max={180} step={1}
-                onChange={(v) => handleMacro('yaw', v)} unit="°" color="purple" />
+                onChange={(v) => handleMacro('yaw', v)} unit="°" accent="purple" />
               <Slider label="Pitch" value={macros.pitch} min={-90} max={90} step={1}
-                onChange={(v) => handleMacro('pitch', v)} unit="°" color="purple" />
+                onChange={(v) => handleMacro('pitch', v)} unit="°" accent="purple" />
               <Slider label="Roll" value={macros.roll} min={-180} max={180} step={1}
-                onChange={(v) => handleMacro('roll', v)} unit="°" color="purple" />
+                onChange={(v) => handleMacro('roll', v)} unit="°" accent="purple" />
               <Slider label="Radius" value={macros.radius_scale} min={0} max={4} step={0.05}
-                onChange={(v) => handleMacro('radius_scale', v)} unit="x" color="purple" />
+                onChange={(v) => handleMacro('radius_scale', v)} unit="x" accent="purple" />
               <Slider label="Height" value={macros.height_offset} min={-5} max={5} step={0.1}
-                onChange={(v) => handleMacro('height_offset', v)} unit="m" color="purple" />
+                onChange={(v) => handleMacro('height_offset', v)} unit="m" accent="purple" />
               <div className="text-gray-600 text-[9px] pt-1">Macros = transformations runtime appliquées à tous les moves actifs</div>
             </Section>
           </>
@@ -461,16 +445,16 @@ export default function Inspector() {
 
             {/* MACROS — speed, scale, shift, rotation (unifié avec Expert) */}
             <Section title="Macros" icon="⚡">
-              <Slider label="Vitesse" value={current.speed} min={0} max={4} step={0.05} onChange={(v) => handleTransform('speed', v)} unit="x" color="purple" />
-              <Slider label="Échelle" value={current.scale} min={0} max={4} step={0.05} onChange={(v) => handleTransform('scale', v)} color="purple" />
-              <Slider label="Shift X" value={current.offset_x} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_x', v)} color="purple" />
-              <Slider label="Shift Y" value={current.offset_y} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_y', v)} color="purple" />
-              <Slider label="Shift Z" value={current.offset_z} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_z', v)} color="purple" />
-              <Slider label="Yaw" value={current.yaw} min={-180} max={180} step={1} onChange={(v) => handleTransform('yaw', v)} unit="°" color="purple" />
-              <Slider label="Pitch" value={current.pitch} min={-90} max={90} step={1} onChange={(v) => handleTransform('pitch', v)} unit="°" color="purple" />
-              <Slider label="Roll" value={current.roll} min={-180} max={180} step={1} onChange={(v) => handleTransform('roll', v)} unit="°" color="purple" />
-              <Slider label="Radius" value={macros.radius_scale} min={0} max={4} step={0.05} onChange={(v) => handleMacro('radius_scale', v)} unit="x" color="purple" />
-              <Slider label="Height" value={macros.height_offset} min={-5} max={5} step={0.1} onChange={(v) => handleMacro('height_offset', v)} unit="m" color="purple" />
+              <Slider label="Vitesse" value={current.speed} min={0} max={4} step={0.05} onChange={(v) => handleTransform('speed', v)} unit="x" accent="purple" />
+              <Slider label="Échelle" value={current.scale} min={0} max={4} step={0.05} onChange={(v) => handleTransform('scale', v)} accent="purple" />
+              <Slider label="Shift X" value={current.offset_x} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_x', v)} accent="purple" />
+              <Slider label="Shift Y" value={current.offset_y} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_y', v)} accent="purple" />
+              <Slider label="Shift Z" value={current.offset_z} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_z', v)} accent="purple" />
+              <Slider label="Yaw" value={current.yaw} min={-180} max={180} step={1} onChange={(v) => handleTransform('yaw', v)} unit="°" accent="purple" />
+              <Slider label="Pitch" value={current.pitch} min={-90} max={90} step={1} onChange={(v) => handleTransform('pitch', v)} unit="°" accent="purple" />
+              <Slider label="Roll" value={current.roll} min={-180} max={180} step={1} onChange={(v) => handleTransform('roll', v)} unit="°" accent="purple" />
+              <Slider label="Radius" value={macros.radius_scale} min={0} max={4} step={0.05} onChange={(v) => handleMacro('radius_scale', v)} unit="x" accent="purple" />
+              <Slider label="Height" value={macros.height_offset} min={-5} max={5} step={0.1} onChange={(v) => handleMacro('height_offset', v)} unit="m" accent="purple" />
             </Section>
           </>
         )}
@@ -498,13 +482,13 @@ export default function Inspector() {
                   const mods = [...current.audio_mods];
                   mods[i] = { ...mod, amount: v };
                   updateCurrent({ audio_mods: mods });
-                }} color="cyan" />
+                }} accent="cyan" />
               <Slider label="Lissage" value={mod.smoothing} min={0} max={0.95} step={0.05}
                 onChange={(v) => {
                   const mods = [...current.audio_mods];
                   mods[i] = { ...mod, smoothing: v };
                   updateCurrent({ audio_mods: mods });
-                }} color="cyan" />
+                }} accent="cyan" />
             </div>
           ))}
           {showAudioAdd && (
@@ -555,7 +539,7 @@ export default function Inspector() {
           {!showExpert && (
             <>
               <Slider label="Spread" value={current.phase_spread} min={0} max={1} step={0.05}
-                onChange={(v) => updateCurrent({ phase_spread: v })} color="cyan" />
+                onChange={(v) => updateCurrent({ phase_spread: v })} accent="cyan" />
               <div className="text-gray-600 text-[9px] -mt-1">Décalage de phase entre tracks (effet chasing)</div>
             </>
           )}
@@ -685,13 +669,8 @@ function AudioModAdder({ onAdd, onCancel }: { onAdd: (mod: AudioMod) => void; on
           <option value="roll">Roll</option>
         </select>
       </div>
-      <div className="flex items-center gap-2">
-        <span className="text-gray-400 text-[10px] w-16">Intensité</span>
-        <input type="range" min={0} max={2} step={0.05} value={amount}
-          onChange={(e) => setAmount(parseFloat(e.target.value))}
-          className="flex-1 accent-cyan-500" />
-        <span className="text-white text-[10px] font-mono w-8 text-right">{amount.toFixed(2)}</span>
-      </div>
+      <Slider label="Intensité" value={amount} min={0} max={2} step={0.05}
+        onChange={setAmount} accent="cyan" decimals={2} />
       <div className="flex gap-1.5">
         <button onClick={() => onAdd({ source, target, amount, base_value: 0, smoothing: 0.3 })}
           className="flex-1 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-[10px] rounded font-medium">

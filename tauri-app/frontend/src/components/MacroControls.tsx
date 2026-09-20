@@ -1,5 +1,6 @@
 import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
+import UiSlider from './ui/Slider';
 
 export const MacroControls: React.FC = () => {
   const macros = useGraphStore((s) => s.macros);
@@ -190,6 +191,7 @@ export const MacroControls: React.FC = () => {
   );
 };
 
+/// Slider live — layout stack (label au-dessus) avec accent purple
 const Slider: React.FC<{
   label: string;
   value: number;
@@ -199,24 +201,13 @@ const Slider: React.FC<{
   onChange: (v: number) => void;
   live?: boolean;
   unit?: string;
-}> = ({ label, value, min, max, step, onChange, live, unit }) => (
-  <div className="space-y-1">
-    <div className="flex items-center justify-between">
-      <span className="text-gray-400 text-[11px]">{label}</span>
-      <span className={`text-[11px] font-mono ${live ? 'text-green-400' : 'text-white'}`}>
-        {value.toFixed(unit === '°' ? 0 : 2)}{unit ?? ''}
-      </span>
-    </div>
-    <input
-      type="range"
-      min={min}
-      max={max}
-      step={step}
-      value={value}
-      onChange={(e) => onChange(parseFloat(e.target.value))}
-      className="w-full h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
-    />
-  </div>
+}> = (props) => (
+  <UiSlider
+    {...props}
+    layout="stack"
+    accent="purple"
+    decimals={props.unit === '°' ? 0 : 2}
+  />
 );
 
 export default MacroControls;

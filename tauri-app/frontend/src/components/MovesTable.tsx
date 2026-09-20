@@ -3,6 +3,8 @@ import { useGraphStore } from '../store/useGraphStore';
 import { useAnimationStore } from '../store/useAnimationStore';
 import { SHAPE_PRESETS } from '../utils/shapePresets';
 import { useModalGuardOn } from '../utils/modalGuard';
+import Modal from './ui/Modal';
+import Slider from './ui/Slider';
 
 /// MovesTable — la table des moves (concept unifié)
 /// Tout est un Move. Certains moves sont dans la setlist (l'ordre du spectacle).
@@ -89,19 +91,14 @@ export default function MovesTable() {
   const [editingMacrosFor, setEditingMacrosFor] = React.useState<string | null>(null);
 
   // Bloque les raccourcis live (Esc=panic, Space, Enter, Backspace) tant
-  // qu'un picker/éditeur inline est ouvert — Esc ferme le picker au sommet
-  // via closeTopModal() (handler global Toolbar), jamais le panic.
-  const anyModalOpen =
-    editingTracksFor !== null ||
-    editingMacrosFor !== null ||
-    editingTemplateFor !== null ||
-    renamingId !== null;
+  // qu'un éditeur inline est ouvert. Les pickers tracks/macros utilisent
+  // le composant Modal qui s'enregistre lui-même dans la stack — seuls
+  // le rename et le template picker (inline) passent par ce guard.
+  const anyModalOpen = editingTemplateFor !== null || renamingId !== null;
   useModalGuardOn(anyModalOpen, () => {
     // Ordre = priorité de fermeture si plusieurs états sont empilés
     if (renamingId !== null) setRenamingId(null);
     else if (editingTemplateFor !== null) setEditingTemplateFor(null);
-    else if (editingMacrosFor !== null) setEditingMacrosFor(null);
-    else if (editingTracksFor !== null) setEditingTracksFor(null);
   });
 
   // ─── GO feedback ───
@@ -450,15 +447,8 @@ export default function MovesTable() {
 
       {/* ═══ Track Picker Modal ═══ */}
       {editingTracksFor && (
-        <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
-          onClick={() => setEditingTracksFor(null)}
-        >
-          <div
-            className="bg-stagespace-panel border border-stagespace-border rounded-lg p-4 max-w-md w-full mx-4 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-white text-sm font-semibold mb-3">Tracks du move</h3>
+        <Modal title="Tracks du move" onClose={() => setEditingTracksFor(null)}>
+          <div className="p-4">
             <div className="flex gap-2 mb-3">
               <button
                 onClick={() => setTempTrackIds([...allTrackIds])}
@@ -501,7 +491,7 @@ export default function MovesTable() {
               >Annuler</button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* ═══ Macros Editor Modal ═══ */}
@@ -509,15 +499,12 @@ export default function MovesTable() {
         const slot = moveSlots.find((s) => s.id === editingMacrosFor);
         if (!slot) return null;
         return (
-          <div
-            className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
-            onClick={() => setEditingMacrosFor(null)}
+          <Modal
+            title={`Macros — ${slot.name}`}
+            onClose={() => setEditingMacrosFor(null)}
+            widthClass="max-w-sm"
           >
-            <div
-              className="bg-stagespace-panel border border-stagespace-border rounded-lg p-4 max-w-sm w-full mx-4 shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h3 className="text-white text-sm font-semibold mb-1">Macros — {slot.name}</h3>
+            <div className="p-4">
               <p className="text-gray-500 text-[10px] mb-3">Appliquées au lancement et au GO</p>
               <div className="space-y-2">
                 {([
@@ -530,36 +517,30 @@ export default function MovesTable() {
                   { key: 'pitch', label: 'Pitch', min: -180, max: 180, step: 5 },
                   { key: 'roll', label: 'Roll', min: -180, max: 180, step: 5 },
                 ] as const).map(({ key, label, min, max, step }) => (
-                  <div key={key} className="flex items-center gap-2">
-                    <span className="text-gray-400 text-[10px] w-16">{label}</span>
-                    <input
-                      type="range"
-                      min={min}
-                      max={max}
-                      step={step}
-                      value={slot.macros[key]}
-                      onChange={(e) => setSlotMacros(slot.id, { [key]: parseFloat(e.target.value) })}
-                      className="flex-1 h-1.5 accent-indigo-500"
-                    />
-                    <span className="text-white text-[10px] font-mono w-12 text-right">
-                      {slot.macros[key].toFixed(1)}
-                    </span>
-                  </div>
+                  <Slider
+                    key={key}
+                    label={label}
+                    value={slot.macros[key]}
+                    min={min}
+                    max={max}
+                    step={step}
+                    accent="indigo"
+                    decimals={1}
+                    onChange={(v) => setSlotMacros(slot.id, { [key]: v })}
+                  />
                 ))}
-                <div className="flex items-center gap-2 pt-2 border-t border-gray-700/50">
-                  <span className="text-gray-400 text-[10px] w-16">Fade</span>
-                  <input
-                    type="range"
+                <div className="pt-2 border-t border-gray-700/50">
+                  <Slider
+                    label="Fade"
+                    value={slot.fadeDuration}
                     min={0}
                     max={10}
                     step={0.5}
-                    value={slot.fadeDuration}
-                    onChange={(e) => setSlotFadeDuration(slot.id, parseFloat(e.target.value))}
-                    className="flex-1 h-1.5 accent-purple-500"
+                    accent="purple"
+                    decimals={1}
+                    unit="s"
+                    onChange={(v) => setSlotFadeDuration(slot.id, v)}
                   />
-                  <span className="text-white text-[10px] font-mono w-12 text-right">
-                    {slot.fadeDuration.toFixed(1)}s
-                  </span>
                 </div>
               </div>
               <button
@@ -567,7 +548,7 @@ export default function MovesTable() {
                 className="w-full mt-4 py-1.5 bg-indigo-700 hover:bg-indigo-600 text-white text-[11px] rounded font-medium"
               >Fermer</button>
             </div>
-          </div>
+          </Modal>
         );
       })()}
     </div>

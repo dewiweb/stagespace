@@ -1,6 +1,6 @@
 import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
-import { useModalGuard } from '../utils/modalGuard';
+import Modal from './ui/Modal';
 
 const OSC_PROFILES = [
   { value: 'holophonix', label: 'Holophonix' },
@@ -44,9 +44,6 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     })();
   }, []);
 
-  // Ce composant est un modal — bloque les raccourcis live. Esc le ferme
-  // via closeTopModal() dans le handler global (Toolbar) — jamais panic.
-  useModalGuard(onClose);
 
   const handleOscIdsChange = (value: string) => {
     setOscIdsStr(value);
@@ -73,28 +70,15 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      onClick={onClose}
+    <Modal
+      title={
+        <span className="flex items-center gap-2">
+          <span className="text-lg">⚙</span> Settings
+        </span>
+      }
+      onClose={onClose}
+      widthClass="max-w-[520px]"
     >
-      <div
-        className="w-[520px] max-h-[80vh] overflow-y-auto bg-stagespace-panel border border-stagespace-border rounded-xl shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-stagespace-border">
-          <div className="flex items-center gap-2">
-            <span className="text-lg">⚙</span>
-            <h2 className="text-white font-semibold text-sm">Settings</h2>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-white text-lg leading-none"
-          >
-            ✕
-          </button>
-        </div>
-
         <div className="px-5 py-4 space-y-5">
           {/* ─── OSC OUT ─── */}
           <section>
@@ -226,7 +210,6 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
             Done
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
