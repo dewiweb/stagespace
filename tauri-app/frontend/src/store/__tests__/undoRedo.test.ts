@@ -134,6 +134,46 @@ describe('redo', () => {
   });
 });
 
+describe('keyboard delete (React Flow remove changes)', () => {
+  it('node deletion via onNodesChange is undoable', () => {
+    const graph = makeSimpleGraph(3);
+    useGraphStore.setState({ nodes: graph.nodes, edges: graph.edges } as any);
+    useGraphStore.getState().pushHistory(); // baseline
+
+    const nodeToDelete = useGraphStore.getState().nodes[0];
+    useGraphStore.getState().onNodesChange([
+      { type: 'remove', id: nodeToDelete.id } as any,
+    ]);
+
+    expect(useGraphStore.getState().nodes.find((n) => n.id === nodeToDelete.id)).toBeUndefined();
+
+    useGraphStore.getState().undo();
+    expect(useGraphStore.getState().nodes.find((n) => n.id === nodeToDelete.id)).toBeDefined();
+  });
+
+  it('node + incident edge removes produce a single history entry', () => {
+    const graph = makeSimpleGraph(3);
+    useGraphStore.setState({ nodes: graph.nodes, edges: graph.edges } as any);
+    useGraphStore.getState().pushHistory(); // baseline
+    const lenBefore = (useGraphStore.getState() as any)._history.length;
+
+    const nodeId = useGraphStore.getState().nodes[0].id;
+    const incidentEdges = useGraphStore
+      .getState()
+      .edges.filter((e) => e.source === nodeId || e.target === nodeId);
+
+    useGraphStore.getState().onNodesChange([{ type: 'remove', id: nodeId } as any]);
+    if (incidentEdges.length > 0) {
+      useGraphStore.getState().onEdgesChange(
+        incidentEdges.map((e) => ({ type: 'remove', id: e.id }) as any),
+      );
+    }
+
+    // Une seule entrée malgré node-remove + edge-removes du même geste
+    expect((useGraphStore.getState() as any)._history.length).toBe(lenBefore + 1);
+  });
+});
+
 describe('undo/redo interaction with slot switch', () => {
   it('undo after slot switch does NOT restore a different slot graph', () => {
     const graph1 = makeSimpleGraph(3);
@@ -152,11 +192,13 @@ describe('undo/redo interaction with slot switch', () => {
     useGraphStore.getState().pushHistory();
     expect((useGraphStore.getState() as any)._history.length).toBeGreaterThan(0);
 
-    // Switch to slot 2 — history should be reset
+    // Switch to slot 2 — history is reset to a single baseline entry
+    // (the slot's own graph) so the first edit is undoable without ever
+    // restoring another slot's graph.
     useGraphStore.getState().selectSlotForEditing('slot-2');
-    expect((useGraphStore.getState() as any)._history).toHaveLength(0);
+    expect((useGraphStore.getState() as any)._history).toHaveLength(1);
 
-    // Undo should do nothing (no history for this slot)
+    // Undo at baseline does nothing
     const nodesBefore = useGraphStore.getState().nodes;
     useGraphStore.getState().undo();
     expect(useGraphStore.getState().nodes).toBe(nodesBefore);

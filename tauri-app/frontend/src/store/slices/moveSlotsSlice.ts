@@ -316,6 +316,9 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
     // Reset undo/redo — l'historique appartient au slot précédent.
     // Sans ça, un undo après switch restaurerait le graphe d'un autre slot.
     set({ _history: [], _historyIndex: -1, canUndo: false, canRedo: false } as any);
+    // Baseline : le graphe du slot devient l'entrée 0 — sinon le premier
+    // edit après un switch n'était jamais undoable (undo bloque à index 0).
+    (get() as any).pushHistory?.();
     // Sync selectedTrackIds avec les tracks du slot.
     // IMPORTANT: on met à jour selectedTrackIds SANS appeler syncObjectsNode
     // (qui ferait un hot-swap sur TOUS les moves actifs).

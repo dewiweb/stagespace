@@ -22,6 +22,7 @@ export function resetStore() {
     currentSetlistIndex: -1,
     _history: [],
     _historyIndex: -1,
+    _lastRemovalPushAt: 0,
     canUndo: false,
     canRedo: false,
     isPlaying: false,

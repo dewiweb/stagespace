@@ -136,8 +136,10 @@ describe('selectSlotForEditing', () => {
     expect((useGraphStore.getState() as any)._history.length).toBeGreaterThan(0);
 
     useGraphStore.getState().selectSlotForEditing('slot-2');
-    expect((useGraphStore.getState() as any)._history).toHaveLength(0);
-    expect((useGraphStore.getState() as any)._historyIndex).toBe(-1);
+    // Baseline : l'entrée 0 = le graphe du slot 2 (premier edit undoable),
+    // mais rien à undo tant qu'on est sur la baseline.
+    expect((useGraphStore.getState() as any)._history).toHaveLength(1);
+    expect((useGraphStore.getState() as any)._historyIndex).toBe(0);
     expect((useGraphStore.getState() as any).canUndo).toBe(false);
     expect((useGraphStore.getState() as any).canRedo).toBe(false);
   });

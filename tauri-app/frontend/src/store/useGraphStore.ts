@@ -160,6 +160,20 @@ export const useGraphStore = create<GraphState>()((...a) => {
   // pending et vice-versa.
   let hotSwapTimer: ReturnType<typeof setTimeout> | null = null;
 
+  // Les deletes clavier (Delete/Backspace) arrivent via des changes 'remove'
+  // dans onNodesChange/onEdgesChange — pas via removeNode : sans push ici la
+  // suppression n'est pas undoable. Debounce 100ms : un delete de node émet
+  // aussi les removes des edges incidents → une seule entrée par geste.
+  // Le timestamp vit dans le state (pas en module) pour être resettable
+  // avec le reste du store.
+  function pushHistoryForRemoval() {
+    const now = Date.now();
+    const last = (get() as any)._lastRemovalPushAt ?? 0;
+    if (now - last <= 100) return;
+    set({ _lastRemovalPushAt: now } as any);
+    get().pushHistory();
+  }
+
   return {
   // Exposé pour les loaders externes (loadMovementGraph, persistenceSlice, etc.)
   autoSaveToEditingSlot,
@@ -184,11 +198,13 @@ export const useGraphStore = create<GraphState>()((...a) => {
   })(),
 
   onNodesChange: (changes) => {
+    if (changes.some((c) => c.type === 'remove')) pushHistoryForRemoval();
     set({ nodes: applyNodeChanges(changes, get().nodes) as Node[] });
     // Auto-save avec debounce (drag = beaucoup de changes)
     debouncedAutoSave();
   },
   onEdgesChange: (changes) => {
+    if (changes.some((c) => c.type === 'remove')) pushHistoryForRemoval();
     set({ edges: applyEdgeChanges(changes, get().edges) as Edge[] });
     debouncedAutoSave();
   },
