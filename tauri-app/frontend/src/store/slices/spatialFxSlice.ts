@@ -116,6 +116,8 @@ export interface SpatialFxSlice {
   /// gérés via l'éditeur de graphe, pas les commandes manuelles.
   graphZones: Zone[];
   graphModulations: ChannelModulation[];
+  /// Lissage cinématique — miroir du backend pour persistance dans le show file
+  kinematicSmoothing: number;
   refreshSpatialFx: () => Promise<void>;
   addZone: (params: ZoneParams) => Promise<void>;
   removeZone: (index: number) => Promise<void>;
@@ -135,6 +137,7 @@ export const createSpatialFxSlice: StateCreator<SpatialFxSlice, [], [], SpatialF
   objectChannels: {},
   graphZones: [],
   graphModulations: [],
+  kinematicSmoothing: 0.5,
 
   refreshSpatialFx: async () => {
     const [zones, modulations, objectChannels, graphEffects] = await Promise.all([
@@ -196,6 +199,7 @@ export const createSpatialFxSlice: StateCreator<SpatialFxSlice, [], [], SpatialF
 
   setKinematicSmoothing: async (smoothing) => {
     await invoke('set_kinematic_smoothing', { smoothing });
+    set({ kinematicSmoothing: smoothing });
   },
 
   setSpatialChannel: async (objectIndex, channel, value) => {

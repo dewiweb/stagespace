@@ -37,9 +37,11 @@ vi.mock('../store/useAnimationStore', () => ({
 
 // Mock safeInvoke/safeListen — captures invoke calls
 const invokeCalls: Array<{ cmd: string; args?: Record<string, any> }> = [];
+const invokeResponses = new Map<string, any>();
 vi.mock('../utils/tauri', () => ({
   safeInvoke: async <T = any>(cmd: string, args?: Record<string, any>): Promise<T> => {
     invokeCalls.push({ cmd, args });
+    if (invokeResponses.has(cmd)) return invokeResponses.get(cmd) as T;
     if (cmd === 'list_active_moves') return [] as unknown as T;
     if (cmd === 'load_graph_from_file') return { nodes: [], edges: [] } as unknown as T;
     return undefined as unknown as T;
@@ -80,6 +82,11 @@ export function getInvokeCalls(): Array<{ cmd: string; args?: Record<string, any
 }
 export function clearInvokeCalls(): void {
   invokeCalls.length = 0;
+  invokeResponses.clear();
+}
+/// Configure la réponse mockée d'une commande IPC (ex: load_graph_from_file)
+export function setInvokeResponse(cmd: string, response: any): void {
+  invokeResponses.set(cmd, response);
 }
 
 // Ensure localStorage exists (jsdom usually has it)

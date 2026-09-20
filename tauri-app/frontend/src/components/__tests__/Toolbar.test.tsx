@@ -54,10 +54,10 @@ describe('Toolbar — rendering', () => {
     expect(screen.getByText('Idle')).toBeInTheDocument();
   });
 
-  it('renders Save and Load graph buttons', () => {
+  it('renders Save and Load show buttons', () => {
     render(<Toolbar />);
-    expect(screen.getByTitle(/Save graph/i)).toBeInTheDocument();
-    expect(screen.getByTitle(/Load graph/i)).toBeInTheDocument();
+    expect(screen.getByTitle(/Save complete show/i)).toBeInTheDocument();
+    expect(screen.getByTitle(/Load show/i)).toBeInTheDocument();
   });
 });
 

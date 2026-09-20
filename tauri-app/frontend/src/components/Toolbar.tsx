@@ -201,30 +201,32 @@ export const Toolbar: React.FC = () => {
   const handleSaveGraph = async () => {
     try {
       const filePath = await save({
-        filters: [{ name: 'STAGESPACE Graph', extensions: ['hfg'] }],
-        defaultPath: 'graph.hfg',
+        filters: [{ name: 'STAGESPACE Show', extensions: ['hfg'] }],
+        defaultPath: 'show.hfg',
       });
       if (filePath) {
         await saveGraphToFile(filePath as string);
+        toast.success('Show saved');
       }
     } catch (e) {
-      console.error('Save graph failed:', e);
-      toast.error(`Save graph failed: ${e}`);
+      console.error('Save show failed:', e);
+      toast.error(`Save show failed: ${e}`);
     }
   };
 
   const handleLoadGraph = async () => {
     try {
       const result = await open({
-        filters: [{ name: 'STAGESPACE Graph', extensions: ['hfg', 'json'] }],
+        filters: [{ name: 'STAGESPACE Show', extensions: ['hfg', 'json'] }],
         multiple: false,
       });
       if (result) {
         await loadGraphFromFile(result as string);
+        toast.success('Show loaded');
       }
     } catch (e) {
-      console.error('Load graph failed:', e);
-      toast.error(`Load graph failed: ${e}`);
+      console.error('Load show failed:', e);
+      toast.error(`Load show failed: ${e}`);
     }
   };
 
@@ -316,19 +318,19 @@ export const Toolbar: React.FC = () => {
           ↷
         </button>
 
-        {/* Save / Load graph (expert) */}
+        {/* Save / Load show (graphe + slots + cues + OSC + spatial FX) */}
         <button
           onClick={handleSaveGraph}
           disabled={!hasGraph}
           className="px-2 py-1.5 text-xs font-medium rounded bg-gray-800 text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-          title="Save graph to .hfg file"
+          title="Save complete show to .hfg file"
         >
           💾
         </button>
         <button
           onClick={handleLoadGraph}
           className="px-2 py-1.5 text-xs font-medium rounded bg-gray-800 text-gray-400 hover:text-white transition-colors"
-          title="Load graph from .hfg file"
+          title="Load show from .hfg file (slots, cues, OSC, FX — blocked during playback)"
         >
           📂
         </button>

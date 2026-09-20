@@ -4,9 +4,9 @@
 // This file just provides test helpers and re-exports.
 
 import { useGraphStore } from '../useGraphStore';
-import { mockAnimState, getInvokeCalls, clearInvokeCalls } from '../../test/setup';
+import { mockAnimState, getInvokeCalls, clearInvokeCalls, setInvokeResponse } from '../../test/setup';
 
-export { useGraphStore, mockAnimState, getInvokeCalls, clearInvokeCalls };
+export { useGraphStore, mockAnimState, getInvokeCalls, clearInvokeCalls, setInvokeResponse };
 
 export function resetStore() {
   mockAnimState.activeMovementIds = [];
