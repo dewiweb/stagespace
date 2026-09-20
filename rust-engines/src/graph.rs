@@ -60,6 +60,10 @@ pub enum NodeType {
     Follow,
     Swarm,
     Avoidance,
+    /// Champ de vecteurs procédural — advection + steering.
+    /// Les objets sont advectés par un champ v(p) (vortex/sink/source/flow/noise)
+    /// avec steering inertiel, wander et containment — mouvement perpétuel.
+    VectorField,
 
     // Splines
     DrawSpline,

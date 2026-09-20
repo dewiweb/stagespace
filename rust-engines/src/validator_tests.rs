@@ -616,4 +616,142 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_vectorfield_valid_subgraph() {
+        // Objects + Duration + VectorField + Output = graphe valide
+        let mut graph = Graph::new();
+        let objects = Node::with_params(NodeType::Objects, serde_json::json!({"n_objects": 4}));
+        let duration = Node::with_params(NodeType::Duration, serde_json::json!({"duration": 8.0}));
+        let field = Node::with_params(
+            NodeType::VectorField,
+            serde_json::json!({"n_objects": 4, "field": "vortex"}),
+        );
+        let output = Node::new(NodeType::Output);
+
+        let id_objects = objects.id;
+        let id_duration = duration.id;
+        let id_field = field.id;
+        let id_output = output.id;
+
+        graph.add_node(objects);
+        graph.add_node(duration);
+        graph.add_node(field);
+        graph.add_node(output);
+
+        graph.add_edge(Edge {
+            from: id_objects,
+            to: id_field,
+            from_port: "output".to_string(),
+            to_port: "input".to_string(),
+        });
+        graph.add_edge(Edge {
+            from: id_duration,
+            to: id_field,
+            from_port: "output".to_string(),
+            to_port: "duration".to_string(),
+        });
+        graph.add_edge(Edge {
+            from: id_field,
+            to: id_output,
+            from_port: "output".to_string(),
+            to_port: "input".to_string(),
+        });
+
+        let result = Validator::validate(&graph);
+        assert!(
+            result.is_ok(),
+            "Expected valid VectorField graph, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_vectorfield_rejected_in_global_graph() {
+        // VectorField est un moteur sub-graph — pas un post-process global
+        let mut graph = Graph::new();
+        let input = Node::new(NodeType::Input);
+        let field = Node::new(NodeType::VectorField);
+        let output = Node::new(NodeType::Output);
+
+        let id_input = input.id;
+        let id_field = field.id;
+        let id_output = output.id;
+
+        graph.add_node(input);
+        graph.add_node(field);
+        graph.add_node(output);
+
+        graph.add_edge(Edge {
+            from: id_input,
+            to: id_output,
+            from_port: "output".to_string(),
+            to_port: "input".to_string(),
+        });
+        graph.add_edge(Edge {
+            from: id_field,
+            to: id_output,
+            from_port: "output".to_string(),
+            to_port: "input".to_string(),
+        });
+
+        let result = Validator::validate_with_context(&graph, GraphContext::Global);
+        assert!(result.is_err());
+        if let Err(errors) = result {
+            assert!(
+                errors
+                    .iter()
+                    .any(|e| matches!(e, ValidationError::ContextIncompatible(_))),
+                "Expected ContextIncompatible for VectorField in global graph, got {errors:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_vectorfield_cannot_feed_modifier() {
+        // Comme les autres moteurs physique, VectorField ne peut pas alimenter
+        // un modifier (Scale/Rotate/…) — Output/composites uniquement.
+        let mut graph = Graph::new();
+        let objects = Node::with_params(NodeType::Objects, serde_json::json!({"n_objects": 4}));
+        let field = Node::with_params(
+            NodeType::VectorField,
+            serde_json::json!({"n_objects": 4, "field": "flow"}),
+        );
+        let scale = Node::new(NodeType::Scale);
+        let output = Node::new(NodeType::Output);
+
+        let id_objects = objects.id;
+        let id_field = field.id;
+        let id_scale = scale.id;
+        let id_output = output.id;
+
+        graph.add_node(objects);
+        graph.add_node(field);
+        graph.add_node(scale);
+        graph.add_node(output);
+
+        graph.add_edge(Edge {
+            from: id_objects,
+            to: id_field,
+            from_port: "output".to_string(),
+            to_port: "input".to_string(),
+        });
+        graph.add_edge(Edge {
+            from: id_field,
+            to: id_scale,
+            from_port: "output".to_string(),
+            to_port: "input".to_string(),
+        });
+        graph.add_edge(Edge {
+            from: id_scale,
+            to: id_output,
+            from_port: "output".to_string(),
+            to_port: "input".to_string(),
+        });
+
+        let result = Validator::validate(&graph);
+        assert!(
+            result.is_err(),
+            "VectorField → Scale should be rejected (physics engines feed Output/composites only)"
+        );
+    }
 }

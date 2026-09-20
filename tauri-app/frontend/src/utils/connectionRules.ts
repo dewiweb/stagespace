@@ -20,7 +20,7 @@ const ENGINE_TYPES: NodeType[] = [
 ];
 
 const PHYSICS_TYPES: NodeType[] = [
-  'Bouncing', 'Spring', 'Follow', 'Swarm', 'Avoidance',
+  'Bouncing', 'Spring', 'Follow', 'Swarm', 'Avoidance', 'VectorField',
 ];
 
 // Falloffs "riches" : peuvent aller vers Output, composites, modifiers (comme les engines)
@@ -149,7 +149,7 @@ export function getInputPorts(type: NodeType): string[] {
     case 'Circular': case 'Elliptical': case 'Spiral': case 'Lissajous': case 'Figure8':
     case 'Linear': case 'Oscillation': case 'Formation': case 'PerlinNoise': case 'Converge':
     case 'Pendulum': case 'RoseCurve': case 'Helix': case 'Wave': case 'CustomTrajectory':
-    case 'Bouncing': case 'Spring': case 'Follow': case 'Swarm': case 'Avoidance':
+    case 'Bouncing': case 'Spring': case 'Follow': case 'Swarm': case 'Avoidance': case 'VectorField':
     case 'BPM': case 'AudioAmplitude':
     case 'TimeFalloff': case 'PointDistanceFalloff': case 'DirectionalFalloff': case 'AudioAmplitudeFalloff':
       return ['input', 'duration'];

@@ -166,6 +166,7 @@ impl Validator {
                     | NodeType::Follow
                     | NodeType::Swarm
                     | NodeType::Avoidance
+                    | NodeType::VectorField
                     | NodeType::CustomTrajectory
                     | NodeType::BPM
                     | NodeType::AudioAmplitude
@@ -215,7 +216,7 @@ impl Validator {
             }
 
             // Moteurs physique
-            NodeType::Bouncing | NodeType::Spring | NodeType::Follow | NodeType::Swarm | NodeType::Avoidance => {
+            NodeType::Bouncing | NodeType::Spring | NodeType::Follow | NodeType::Swarm | NodeType::Avoidance | NodeType::VectorField => {
                 matches!(
                     to_type,
                     NodeType::Output | NodeType::Mix | NodeType::Group | NodeType::Sequence | NodeType::Crossfade
@@ -259,7 +260,7 @@ impl Validator {
                 matches!(to_type, NodeType::Circular | NodeType::Elliptical | NodeType::Spiral | NodeType::Lissajous | NodeType::Figure8
                     | NodeType::Linear | NodeType::Oscillation | NodeType::Formation | NodeType::PerlinNoise | NodeType::Converge
                     | NodeType::Pendulum | NodeType::RoseCurve | NodeType::Helix | NodeType::Bouncing
-                    | NodeType::Spring | NodeType::Follow | NodeType::Swarm | NodeType::Avoidance
+                    | NodeType::Spring | NodeType::Follow | NodeType::Swarm | NodeType::Avoidance | NodeType::VectorField
                     | NodeType::CustomTrajectory | NodeType::Wave
                     | NodeType::BPM | NodeType::AudioAmplitude
                     | NodeType::DrawSpline | NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline)
@@ -270,7 +271,7 @@ impl Validator {
                     | NodeType::Pendulum | NodeType::RoseCurve | NodeType::Helix
                     | NodeType::CustomTrajectory | NodeType::Wave
                     | NodeType::BPM | NodeType::AudioAmplitude
-                    | NodeType::Bouncing | NodeType::Spring | NodeType::Follow | NodeType::Swarm | NodeType::Avoidance
+                    | NodeType::Bouncing | NodeType::Spring | NodeType::Follow | NodeType::Swarm | NodeType::Avoidance | NodeType::VectorField
                     | NodeType::DrawSpline | NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline)
             }
             NodeType::Output => false, // Output n'a pas de sortie
@@ -395,6 +396,7 @@ impl Validator {
             | NodeType::Follow
             | NodeType::Swarm
             | NodeType::Avoidance
+            | NodeType::VectorField
             | NodeType::CustomTrajectory
             | NodeType::Wave
             | NodeType::BPM
@@ -475,6 +477,7 @@ impl Validator {
                     | NodeType::Follow
                     | NodeType::Swarm
                     | NodeType::Avoidance
+                    | NodeType::VectorField
                     | NodeType::CustomTrajectory
                     | NodeType::Wave
                     | NodeType::DrawSpline
@@ -604,6 +607,7 @@ fn is_subgraph_only_node(node_type: &NodeType) -> bool {
             | NodeType::Follow
             | NodeType::Swarm
             | NodeType::Avoidance
+            | NodeType::VectorField
             // Splines
             | NodeType::DrawSpline
             | NodeType::EvaluateSpline

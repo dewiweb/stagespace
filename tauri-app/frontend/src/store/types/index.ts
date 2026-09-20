@@ -3,7 +3,7 @@ export type NodeType =
   | 'Circular' | 'Elliptical' | 'Spiral' | 'Lissajous' | 'Figure8' | 'Linear' | 'Oscillation'
   | 'Formation' | 'PerlinNoise' | 'Converge' | 'Pendulum'
   | 'RoseCurve' | 'Helix' | 'Wave'
-  | 'Bouncing' | 'Avoidance' | 'Spring' | 'Follow' | 'Swarm'
+  | 'Bouncing' | 'Avoidance' | 'Spring' | 'Follow' | 'Swarm' | 'VectorField'
   | 'CustomTrajectory'
   | 'DrawSpline' | 'EvaluateSpline' | 'TrimSpline' | 'OffsetSpline'
   | 'TimeFalloff' | 'PointDistanceFalloff' | 'DirectionalFalloff' | 'AudioAmplitudeFalloff'

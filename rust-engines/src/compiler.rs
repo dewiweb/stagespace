@@ -625,6 +625,7 @@ impl Compiler {
             NodeType::Spring => Box::new(crate::engines::spring::Spring),
             NodeType::Follow => Box::new(crate::engines::follow::Follow),
             NodeType::Swarm => Box::new(crate::engines::swarm::Swarm),
+            NodeType::VectorField => Box::new(crate::engines::vector_field::VectorField),
             NodeType::CustomTrajectory => {
                 Box::new(crate::engines::custom_trajectory::CustomTrajectory)
             }

@@ -35,6 +35,7 @@ pub fn list_templates() -> Vec<(&'static str, &'static str)> {
         ("bouncing", "Bouncing in container (physics)"),
         ("spring", "Spring attraction (physics)"),
         ("follow", "Follow-the-leader (physics)"),
+        ("vectorfield", "Vector field advection — vortex/sink/flow/noise (physics)"),
     ]
 }
 
@@ -61,8 +62,13 @@ pub fn build_template_graph(
         "bouncing" => ("Bouncing", json!({ "container_size": 0.8, "speed": 0.3 })),
         "spring" => ("Spring", json!({ "target": [0.0, 0.0, 0.0], "stiffness": 2.0 })),
         "follow" => ("Follow", json!({ "n_objects": n_objects, "spacing": 0.1 })),
+        "vectorfield" | "vortex" | "field" => ("VectorField", json!({
+            "field": "vortex", "strength": 0.5, "radius": 0.4,
+            "wander": 0.15, "responsiveness": 0.08, "max_speed": 0.8,
+            "bounds": 0.9, "init": "circle", "init_radius": 0.5, "seed": 42
+        })),
         _ => return Err(format!(
-            "Unknown template '{template}'. Available: circle, spiral, lissajous, figure8, linear, oscillation, formation, converge, pendulum, perlin, swarm, avoidance, bouncing, spring, follow"
+            "Unknown template '{template}'. Available: circle, spiral, lissajous, figure8, linear, oscillation, formation, converge, pendulum, perlin, swarm, avoidance, bouncing, spring, follow, vectorfield"
         )),
     };
 

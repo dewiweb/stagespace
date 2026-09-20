@@ -9,7 +9,7 @@ function animIcon(anim: Animation): string {
     const engineTypes = ['Circular', 'Elliptical', 'Spiral', 'Lissajous', 'Figure8',
       'Linear', 'Oscillation', 'Formation', 'PerlinNoise', 'Converge', 'Pendulum',
       'RoseCurve', 'Helix', 'Wave', 'CustomTrajectory',
-      'Bouncing', 'Avoidance', 'Spring', 'Follow', 'Swarm',
+      'Bouncing', 'Avoidance', 'Spring', 'Follow', 'Swarm', 'VectorField',
       'DrawSpline', 'EvaluateSpline', 'Mix', 'Group', 'Sequence', 'Crossfade'];
     for (const type of engineTypes) {
       if (anim.graph_json.nodes.some((n: any) => n.data?.type === type)) {

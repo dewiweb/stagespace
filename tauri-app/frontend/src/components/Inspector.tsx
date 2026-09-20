@@ -83,7 +83,7 @@ export default function Inspector() {
     const engineCategories = ['Circular', 'Elliptical', 'Spiral', 'Lissajous', 'Figure8',
       'Linear', 'Oscillation', 'Formation', 'PerlinNoise', 'Converge', 'Pendulum',
       'RoseCurve', 'Helix', 'Wave', 'CustomTrajectory',
-      'Bouncing', 'Avoidance', 'Spring', 'Follow', 'Swarm',
+      'Bouncing', 'Avoidance', 'Spring', 'Follow', 'Swarm', 'VectorField',
       'DrawSpline', 'EvaluateSpline',
       'Mix', 'Group', 'Sequence', 'Crossfade'];
     for (const engineType of engineCategories) {

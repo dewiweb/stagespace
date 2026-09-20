@@ -842,7 +842,35 @@ deux nodes, persistants par construction (graph JSON → localStorage → cues).
 **Reste** : les effets manuels (FX panel) restent runtime-only persistés
 par cues ; `PerceptualVelocity` comme variante perceptuelle de `Velocity`.
 
-### P5+ : voir `RESEARCH_STATE_OF_ART.md` §4.2
+### P5 — Node `VectorField` (steering, Carpentier/Gerzso) — FAIT
 
-Steering complet (VectorField), SMS + rate limiting, sync (timetags/Link),
-VirtualMic (ViMiC), TUIO IN, MSC/MTC.
+- Nouveau moteur physique `VectorField` (sub-graph, catégorie de
+  `Bouncing`/`Swarm`) : les objets sont **advectés** par un champ de
+  vitesses `v(p)` sur le plan (x,y) au lieu de suivre une courbe `f(t)`.
+- Champs procéduraux : `vortex` (corps rigide dedans, 1/r dehors),
+  `sink`/`source` (radial, `swirl` → spirale), `flow` (uniforme),
+  `noise` (value noise vectoriel lisse, seedé).
+- Steering : inertie `responsiveness`, jitter `wander` (RNG seedé par
+  objet → déterministe), confinement doux `bounds`/`containment`,
+  clamp `max_speed`. Layouts initiaux : circle/line/grid/random/point.
+  `z` en forme close (`z_init + z_drift·t`).
+- Pure `f(t)` par re-simulation déterministe depuis t=0 (pattern `swarm`)
+  — coût O(t·fps) par objet, pas d'état partagé.
+- Validator : ports `input`+`duration`, cibles Objects/Duration,
+  Output/composites uniquement (pas de modifiers — même restriction que
+  les moteurs physiques), sub-graph only (`ContextIncompatible` en global).
+- Frontend : `NodeType`, `connectionRules`, `PARAM_SCHEMA` (17 params),
+  catégorie Physics, defaults, descriptions, preset "Vector Field"
+  dans la bibliothèque de templates.
+- 12 tests (9 engine + 3 validator) : advection bornée, convergence sink,
+  translation flow, éjection source, déterminisme, divergence par objet,
+  z closed-form, connexions autorisées/interdites.
+
+**Reste** : champ **dessiné** (flèches éditées sur le canvas 2D —
+pendant du DrawSpline pour l'écoulement), extension `follow`
+(pursue/evade/orbit/arrive), `PerceptualVelocity`.
+
+### P6+ : voir `RESEARCH_STATE_OF_ART.md` §4.2
+
+SMS + rate limiting, sync (timetags/Link), VirtualMic (ViMiC), TUIO IN,
+MSC/MTC.

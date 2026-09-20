@@ -27,6 +27,7 @@ pub mod spline;
 pub mod spring;
 pub mod swarm;
 pub mod time_falloff;
+pub mod vector_field;
 pub mod wave;
 
 use nalgebra::Vector3;

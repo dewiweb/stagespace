@@ -84,7 +84,7 @@ function syncObjectsNodeNoHotSwap(get: () => any) {
     'Circular', 'Elliptical', 'Spiral', 'Lissajous', 'Figure8',
     'Linear', 'Oscillation', 'Formation', 'PerlinNoise', 'Converge', 'Pendulum',
     'RoseCurve', 'Helix', 'Wave', 'CustomTrajectory',
-    'Bouncing', 'Avoidance', 'Spring', 'Follow', 'Swarm',
+    'Bouncing', 'Avoidance', 'Spring', 'Follow', 'Swarm', 'VectorField',
     'DrawSpline', 'EvaluateSpline', 'TrimSpline', 'OffsetSpline',
     'Mix', 'Group', 'Sequence', 'Crossfade',
   ]);
@@ -188,7 +188,7 @@ const ENGINE_TYPES_WITH_N_OBJECTS = new Set([
   'Circular', 'Elliptical', 'Spiral', 'Lissajous', 'Figure8',
   'Linear', 'Oscillation', 'Formation', 'PerlinNoise', 'Converge', 'Pendulum',
   'RoseCurve', 'Helix', 'Wave', 'CustomTrajectory',
-  'Bouncing', 'Avoidance', 'Spring', 'Follow', 'Swarm',
+  'Bouncing', 'Avoidance', 'Spring', 'Follow', 'Swarm', 'VectorField',
   'DrawSpline', 'EvaluateSpline', 'TrimSpline', 'OffsetSpline',
   'Mix', 'Group', 'Sequence', 'Crossfade',
 ]);

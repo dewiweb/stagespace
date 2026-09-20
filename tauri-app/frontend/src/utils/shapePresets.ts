@@ -427,6 +427,18 @@ export const SHAPE_PRESETS: ShapePreset[] = [
       { n_objects: n, target: [0, 1, 0], stiffness: 3.0, damping_coef: 0.5, seed: 42 }, n, 6.0),
   },
   {
+    id: 'vectorfield',
+    name: 'Vector Field',
+    icon: '〰',
+    description: 'Objects advected by a procedural vector field (vortex/sink/flow/noise) — perpetual organic drift',
+    category: 'physics',
+    build: (n) => baseFlow('VectorField',
+      { n_objects: n, field: 'vortex', strength: 0.5, center: [0, 0, 0], radius: 0.6,
+        swirl: 0, direction: [1, 0, 0], noise_scale: 1.5, wander: 0.15,
+        responsiveness: 0.08, max_speed: 1.0, bounds: 2.5, containment: 0.5,
+        init: 'circle', init_radius: 1.2, z_init: 0, z_drift: 0, seed: 42 }, n, 8.0),
+  },
+  {
     id: 'converge',
     name: 'Converge',
     icon: '⊙',

@@ -169,7 +169,7 @@ export const createHolProjectSlice: StateCreator<HolProjectStore, [], [], HolPro
       'Circular', 'Elliptical', 'Spiral', 'Lissajous', 'Figure8',
       'Linear', 'Oscillation', 'Formation', 'PerlinNoise', 'Converge', 'Pendulum',
       'RoseCurve', 'Helix', 'Wave', 'CustomTrajectory',
-      'Bouncing', 'Avoidance', 'Spring', 'Follow', 'Swarm',
+      'Bouncing', 'Avoidance', 'Spring', 'Follow', 'Swarm', 'VectorField',
       'DrawSpline', 'EvaluateSpline', 'TrimSpline', 'OffsetSpline',
       'Mix', 'Group', 'Sequence', 'Crossfade',
     ]);
