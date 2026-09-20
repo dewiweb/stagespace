@@ -881,7 +881,14 @@ par cues.
       angulaire °/s autour du listener) — node `Velocity`, règles
       `ChannelModulation` (FX panel + `listener`), CLI `mod-add`.
 
-**Reste** : extension `follow` (pursue/evade/orbit/arrive).
+- [x] Extensions `follow` (steering Reynolds) : `mode` =
+      follow/pursue/evade/orbit/arrive — interception au point prédit
+      (`lookahead`), fuite confinée (`bounds`/`containment`), carrousel
+      par slots phasés (`orbit_speed`/`orbit_dir`), arrivée amortie
+      (`arrive_radius`). Cible configurable (`target_radius/speed/z`),
+      vitesse lissée (`responsiveness`), init dispersée par objet.
+      CLI : `pursue`/`evade`/`orbit`/`arrive` sont des templates-alias
+      de `follow`. P5 complet.
 
 ### P6+ : voir `RESEARCH_STATE_OF_ART.md` §4.2
 
