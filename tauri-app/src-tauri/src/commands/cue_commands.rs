@@ -302,15 +302,22 @@ pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), Stri
             // Déjà actif et running → ne pas respawner (le move continue).
             let already_running = {
                 let movements = lock_or_recover(&state.movements);
-                movements
+                let worker_alive = movements
                     .get(&snap.id)
-                    .is_some_and(|m| m.runtime.is_running())
+                    .is_some_and(|m| m.runtime.is_running());
+                // Worker vivant mais retiré du merge (stale-kill) = zombie —
+                // il faut respawn. is_running() seul ne suffit pas.
+                let in_merge = lock_or_recover(&state.merge_runtime).has_move(&snap.id);
+                worker_alive && in_merge
             };
             if already_running {
                 continue;
             }
-            // Entrée fantôme (worker stoppé mais pas retiré) → purger.
-            lock_or_recover(&state.movements).remove(&snap.id);
+            // Entrée fantôme (worker stoppé ou zombie hors-merge) → purger.
+            let ghost = lock_or_recover(&state.movements).remove(&snap.id);
+            if let Some(mv) = ghost {
+                mv.runtime.stop();
+            }
             let spec = MoveSpec {
                 id: snap.id.clone(),
                 name: snap.name.clone(),
@@ -324,6 +331,7 @@ pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), Stri
                 direction: parse_direction(&snap.direction),
                 fade: None,
                 speed,
+                spatial_macros: None,
                 animation_state: None,
             };
             match spawn_move_for_recall(spec, &sh) {

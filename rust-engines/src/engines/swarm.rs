@@ -127,7 +127,10 @@ impl Engine for Swarm {
             }
 
             for i in 0..n_objects {
-                let mut vel = all_velocities[i] + acc[i];
+                // Kick d'accélération normalisé au pas nominal (60 Hz) :
+                // sans ça la dynamique dépend du param fps (2× les steps =
+                // 2× plus de kicks par seconde simulée).
+                let mut vel = all_velocities[i] + acc[i] * (dt * 60.0);
                 let speed = vel.norm();
                 if speed > max_speed {
                     vel *= max_speed / speed;

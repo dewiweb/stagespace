@@ -131,6 +131,10 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
         return n;
       }),
       drawMode: false,
+      // Stroke persisté dans le node → vider le buffer pour éviter une
+      // double écriture au prochain finalize (l'append VectorField relit
+      // params.points existants).
+      drawnPoints: [],
     }));
 
     // Synchroniser slot.graphJson avec les nodes mis à jour

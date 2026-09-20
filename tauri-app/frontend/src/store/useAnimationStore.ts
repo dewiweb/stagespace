@@ -3,7 +3,7 @@ import { safeInvoke as invoke } from '../utils/tauri';
 import { safeListen as listen } from '../utils/tauri';
 import { useGraphStore } from './useGraphStore';
 import { toast } from '../utils/toast-helpers';
-import { safeSetItem } from '../utils/safeStorage';
+import { safeSetItem, safeParseStoredJson } from '../utils/safeStorage';
 
 // ── Types miroir du backend ──
 
@@ -133,20 +133,20 @@ const STORAGE_KEY = 'stagespace-animations';
 const STORAGE_VERSION = 2; // bump quand les presets changent
 
 function loadAnimationsFromStorage(): Animation[] {
+  let version: string | null = null;
   try {
-    const version = localStorage.getItem(STORAGE_KEY + '-version');
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw || version !== String(STORAGE_VERSION)) {
-      // First launch ou version obsolète — seed with default presets
-      const defaults = defaultPresets();
-      saveAnimationsToStorage(defaults);
-      safeSetItem(STORAGE_KEY + '-version', String(STORAGE_VERSION));
-      return defaults;
-    }
-    return JSON.parse(raw);
-  } catch {
-    return [];
+    version = localStorage.getItem(STORAGE_KEY + '-version');
+  } catch {}
+  if (version !== String(STORAGE_VERSION)) {
+    // First launch ou version obsolète — seed with default presets
+    const defaults = defaultPresets();
+    saveAnimationsToStorage(defaults);
+    safeSetItem(STORAGE_KEY + '-version', String(STORAGE_VERSION));
+    return defaults;
   }
+  // Corruption → safeParseStoredJson sauvegarde sous ".corrupt" + toast sticky
+  const parsed = safeParseStoredJson<Animation[] | null>(STORAGE_KEY, null);
+  return parsed ?? [];
 }
 
 function defaultPresets(): Animation[] {

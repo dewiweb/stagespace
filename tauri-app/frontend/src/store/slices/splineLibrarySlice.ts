@@ -1,5 +1,5 @@
 import { StateCreator } from 'zustand';
-import { safeSetItem } from '../../utils/safeStorage';
+import { safeSetItem, safeParseStoredJson } from '../../utils/safeStorage';
 
 export interface SavedSpline {
   id: string;
@@ -18,14 +18,8 @@ export interface SplineLibrarySlice {
 const STORAGE_KEY = 'stagespace-spline-library';
 
 function loadSplines(): SavedSpline[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  const parsed = safeParseStoredJson<unknown>(STORAGE_KEY, []);
+  return Array.isArray(parsed) ? (parsed as SavedSpline[]) : [];
 }
 
 function saveSplinesToStorage(splines: SavedSpline[]) {

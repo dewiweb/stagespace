@@ -171,9 +171,10 @@ impl Engine for Follow {
             }
             pos += vel * dt;
 
-            // Confinement doux (surtout utile en evade)
+            // Confinement doux (surtout utile en evade) — les 3 axes, sinon
+            // un evade fuit verticalement sans borne (z s'échappe à ~speed/s).
             if mode == Mode::Evade {
-                for axis in 0..2 {
+                for axis in 0..3 {
                     let over = pos[axis].abs() - bounds;
                     if over > 0.0 {
                         pos[axis] -= over * containment.min(1.0) * pos[axis].signum();

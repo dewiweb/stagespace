@@ -117,7 +117,19 @@ export const createHolProjectSlice: StateCreator<HolProjectStore, [], [], HolPro
   // Pas de projet .hol → on offre un pool généreux, tous sélectionnés par défaut
   selectedTrackIds: new Set<number>(Array.from({ length: DEFAULT_TRACK_COUNT }, (_, i) => i + 1)),
   manualOscIds: Array.from({ length: DEFAULT_TRACK_COUNT }, (_, i) => i + 1),
-  setManualOscIds: (ids) => set({ manualOscIds: ids }),
+  setManualOscIds: (ids) => {
+    // Resync la sélection : sans projet .hol, selectedTrackIds sont des OSC ids
+    // — une sélection qui dépasse les nouveaux ids enverrait des tracks
+    // inexistants au backend (computeTrackIndices les skip → move vide).
+    set((s) => ({
+      manualOscIds: ids,
+      selectedTrackIds: s.holProject
+        ? s.selectedTrackIds
+        : new Set([...s.selectedTrackIds].filter((id) => ids.includes(id))),
+    }));
+    get().syncObjectsNode();
+    syncEditingSlotTracks(get, set);
+  },
 
   // Manual positions — cercle par défaut
   manualPositions: defaultCirclePositions(DEFAULT_TRACK_COUNT),

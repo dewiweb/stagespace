@@ -425,4 +425,83 @@ mod tests {
         // Parser simplifié: on vérifie juste que ça compile et retourne quelque chose
         assert!(pos.x.abs() < 10.0); // Valeur quelconque mais bornée
     }
+
+    #[test]
+    fn test_custom_trajectory_arithmetic_and_vars() {
+        let engine = custom_trajectory::CustomTrajectory;
+        let params = create_params(
+            4,
+            8.0,
+            json!({
+                "coordinate_system": "cartesian",
+                "equations": { "x": "2*t + i*0.5", "y": "d/2", "z": "n" }
+            }),
+        );
+        // t=1, i=3, d=8, n=4 → x=2+1.5=3.5, y=4, z=4
+        let pos = engine.position(1.0, 3, &params);
+        assert!((pos.x - 3.5).abs() < 1e-9);
+        assert!((pos.y - 4.0).abs() < 1e-9);
+        assert!((pos.z - 4.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_custom_trajectory_functions_radians() {
+        let engine = custom_trajectory::CustomTrajectory;
+        let params = create_params(
+            1,
+            4.0,
+            json!({
+                "equations": { "x": "sin(pi/2)", "y": "sqrt(4)", "z": "max(1, 3)" }
+            }),
+        );
+        let pos = engine.position(0.0, 0, &params);
+        assert!((pos.x - 1.0).abs() < 1e-9); // sin(pi/2) en radians = 1
+        assert!((pos.y - 2.0).abs() < 1e-9); // sqrt fonctionne (n'est pas clobber par 't')
+        assert!((pos.z - 3.0).abs() < 1e-9); // fonction 2 args
+    }
+
+    #[test]
+    fn test_custom_trajectory_string_equations() {
+        let engine = custom_trajectory::CustomTrajectory;
+        // Format legacy frontend : string "x,y,z" — le split ignore les
+        // virgules dans les appels de fonction.
+        let params = create_params(1, 4.0, json!({ "equations": "min(t,2), 0.3, abs(-1)" }));
+        let pos = engine.position(5.0, 0, &params);
+        assert!((pos.x - 2.0).abs() < 1e-9);
+        assert!((pos.y - 0.3).abs() < 1e-9);
+        assert!((pos.z - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_custom_trajectory_invalid_and_nan() {
+        let engine = custom_trajectory::CustomTrajectory;
+        let params = create_params(
+            1,
+            4.0,
+            json!({
+                "equations": { "x": "sqrt(-1)", "y": "1/0", "z": "t**" }
+            }),
+        );
+        let pos = engine.position(1.0, 0, &params);
+        // NaN/inf/expressions invalides → 0, jamais propagé en OSC
+        assert!(pos.x.is_finite() && pos.y.is_finite() && pos.z.is_finite());
+        assert_eq!(pos, Vector3::zeros());
+    }
+
+    #[test]
+    fn test_custom_trajectory_polar() {
+        let engine = custom_trajectory::CustomTrajectory;
+        let params = create_params(
+            1,
+            4.0,
+            json!({
+                "coordinate_system": "polar",
+                "equations": { "azimuth": "0", "elevation": "0", "distance": "2" }
+            }),
+        );
+        let pos = engine.position(0.0, 0, &params);
+        // azim=0, elev=0, dist=2 → front (+Y) convention
+        assert!((pos.y - 2.0).abs() < 1e-9);
+        assert!(pos.x.abs() < 1e-9 && pos.z.abs() < 1e-9);
+    }
 }

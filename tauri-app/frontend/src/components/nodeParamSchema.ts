@@ -280,11 +280,6 @@ export const PARAM_SCHEMA: Partial<Record<NodeType, ParamDef[]>> = {
   PhaseShift: [
     { key: 'shift', label: 'Shift', type: 'number', step: 0.05, min: 0, max: 1 },
   ],
-  BarycentricGroup: [
-    { key: 'centerX', label: 'Center X', type: 'number', step: 0.1 },
-    { key: 'centerY', label: 'Center Y', type: 'number', step: 0.1 },
-    { key: 'centerZ', label: 'Center Z', type: 'number', step: 0.1 },
-  ],
   Mirror: [
     { key: 'plane', label: 'Mirror Plane', type: 'enum', options: PLANE_OPTIONS },
     { key: 'offset', label: 'Plane Offset', type: 'number', step: 0.1 },
@@ -381,7 +376,7 @@ export const NODE_CATEGORIES: { label: string; color: string; types: NodeType[] 
   },
   { label: 'Splines', color: 'cyan', types: ['DrawSpline', 'EvaluateSpline', 'TrimSpline', 'OffsetSpline'] },
   { label: 'Falloffs', color: 'orange', types: ['TimeFalloff', 'PointDistanceFalloff', 'DirectionalFalloff', 'AudioAmplitudeFalloff'] },
-  { label: 'Modifiers', color: 'pink', types: ['Scale', 'Rotate', 'Offset', 'PhaseShift', 'BarycentricGroup', 'Mirror', 'Clamp', 'LFO', 'Jitter'] },
+  { label: 'Modifiers', color: 'pink', types: ['Scale', 'Rotate', 'Offset', 'PhaseShift', 'Mirror', 'Clamp', 'LFO', 'Jitter'] },
   { label: 'Global (Post-process)', color: 'cyan', types: ['RadiusScale', 'HeightOffset', 'PerTrackDepth', 'Barycenter', 'AudioFalloff', 'ManualPosition', 'Zone', 'Velocity', 'MoveRef', 'Merge'] },
   { label: 'Composite', color: 'purple', types: ['Mix', 'Group', 'Sequence', 'Crossfade'] },
   { label: 'Sources', color: 'yellow', types: ['BPM', 'AudioAmplitude', 'AudioSpectrum', 'OSCInput'] },
@@ -417,8 +412,28 @@ export const GLOBAL_ONLY_NODES: Set<NodeType> = new Set([
 ]);
 
 /// Nodes exclus du global graph (sub-graph-only)
+/// Mirror de validator.rs::is_subgraph_only_node — le global graph est une
+/// chaîne de post-processing (Input/MoveRef → transforms → Output) ; tout
+/// node de mouvement/composite/structurel y échouerait au compile.
 export const SUB_ONLY_NODES: Set<NodeType> = new Set([
+  // Structurels
   'Objects', 'Duration',
+  // Moteurs math
+  'Circular', 'Elliptical', 'Spiral', 'Lissajous', 'Figure8',
+  'Linear', 'Oscillation', 'Formation', 'PerlinNoise', 'Converge',
+  'Pendulum', 'RoseCurve', 'Helix', 'Wave', 'CustomTrajectory',
+  // Physics
+  'Bouncing', 'Spring', 'Follow', 'Swarm', 'Avoidance', 'VectorField',
+  // Splines
+  'DrawSpline', 'EvaluateSpline', 'TrimSpline', 'OffsetSpline',
+  // Falloffs
+  'TimeFalloff', 'PointDistanceFalloff', 'DirectionalFalloff', 'AudioAmplitudeFalloff',
+  // Sources
+  'BPM', 'AudioAmplitude', 'AudioSpectrum', 'OSCInput',
+  // Modifiers sub-graph only (pas compilables en post-process)
+  'PhaseShift', 'LFO', 'Jitter',
+  // Composites binaires (le global graph est une chaîne linéaire)
+  'Mix', 'Group', 'Sequence', 'Crossfade',
 ]);
 
 export const NODE_COLORS: Record<string, string> = {
@@ -511,7 +526,6 @@ export function getDefaultParams(type: NodeType): Record<string, any> {
     Rotate: { angleX: 0, angleY: 0, angleZ: 0 },
     Offset: { x: 0, y: 0, z: 0 },
     PhaseShift: { shift: 0.1 },
-    BarycentricGroup: { centerX: 0, centerY: 0, centerZ: 0 },
     AudioSpectrum: { band: 'bass', radius: 1.0 },
     OSCInput: { address: '/track/1/xyz', radius: 1.0 },
     Wave: { amplitude: 1.0, frequency: 1.0, speed: 1.0, axis: 'y', spread: 4.0, phase_offset: true },
@@ -586,7 +600,6 @@ export const NODE_DESCRIPTIONS: Partial<Record<NodeType, string>> = {
   Rotate: "Rotation autour des axes (angleX, angleY, angleZ en radians)",
   Offset: "Translation (x, y, z). Pour décaler un mouvement",
   PhaseShift: "Décalage temporel par objet — chaque objet est en retard sur le précédent",
-  BarycentricGroup: "Recentre le groupe autour d'un point (centerX, centerY, centerZ)",
   Mirror: "Réfléchit les positions across un plan (xy/xz/yz). Pour setups symétriques",
   Clamp: "Constrain les positions dans une bounding box. Safety pour ne pas sortir du venue",
   LFO: "Ajoute une oscillation (sine/triangle/square/saw) à un axe. Effet de respiration",

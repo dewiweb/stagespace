@@ -1,22 +1,25 @@
 use super::state::lock_or_recover;
-use crate::graph::compilation::compile_graph_with_audio_and_overrides;
-use crate::graph::parser::build_graph_from_json;
-use crate::AppState;
-use crate::Movement;
-use stagespace_engines::{
-    Animation, AnimationLoopMode, AnimationState, Direction, EngineParams, LoopMode, OscProfile,
-    OscSender, PlayDirection, Runtime,
+use crate::commands::merge_commands::{
+    resolve_track_indices, spawn_move, MoveSpec, SpatialMacroInit,
 };
-use std::str::FromStr;
-use std::sync::atomic::Ordering;
-use tauri::{Emitter, State};
+use crate::commands::state::Shared;
+use crate::AppState;
+use stagespace_engines::{
+    Animation, AnimationLoopMode, AnimationState, Direction, LoopMode, PlayDirection,
+};
+use tauri::State;
 
 // ═══════════════════════════════════════════════════════════════
 // ANIMATION SYSTEM — le modèle vivant (game changer)
 // ═══════════════════════════════════════════════════════════════
 
-/// Lance une animation — compile le graphe, crée un runtime, set l'animation state
-/// C'est la commande principale du nouveau système
+/// Lance une animation via `spawn_move` — le chemin unique de création de
+/// worker. L'OSC sort exclusivement par le MergeRuntime (une seule stream,
+/// métriques/fades/zones/global post-processing couverts).
+///
+/// `osc_address`/`osc_port`/`osc_profile` sont acceptés pour compat IPC mais
+/// ignorés : la cible OSC appartient au MergeRuntime (config lock pendant le
+/// playback).
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub async fn launch_animation(
@@ -29,124 +32,48 @@ pub async fn launch_animation(
     osc_profile: String,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
+    let _ = (osc_address, osc_port, osc_profile); // merge-owned OSC target
     let movement_id = format!("anim-{}", animation.id);
-    let movement_id_for_cb = movement_id.clone();
-    let movement_name = animation.name.clone();
 
-    // 1. Récupérer le graphe JSON directement depuis l'animation
-    let graph_json = animation.graph_json.clone();
+    // track_indices = position de chaque osc_id dans la liste globale du
+    // merge (les ids absents y sont ajoutés).
+    let track_indices = resolve_track_indices(&state.merge_runtime, &osc_ids);
 
-    // 2. Compiler le graphe
-    let audio_state = lock_or_recover(&state.audio_state);
-    let graph = build_graph_from_json(&graph_json, &audio_state)?;
-    drop(audio_state);
-
-    // 3. Créer le runtime d'abord — pour récupérer l'Arc des audio_param_overrides
-    let osc_profile_enum =
-        OscProfile::from_str(&osc_profile).map_err(|e| format!("Invalid OSC profile: {e}"))?;
-    let osc_sender = OscSender::new(osc_profile_enum, osc_address.clone(), osc_port);
-    let runtime = Runtime::new(osc_address, osc_port, osc_sender)
-        .map_err(|e| format!("Failed to create runtime: {e}"))?;
-
-    // 4. Compiler avec audio + overrides (pour que les audio_mods affectent radius, height, etc.)
-    let overrides = runtime.audio_param_overrides();
-    let compiled =
-        compile_graph_with_audio_and_overrides(&graph, state.audio_state.clone(), overrides)?;
-
-    // Mode preview
-    runtime.set_preview_mode(is_preview);
-    let loop_mode_val = match animation.loop_mode {
+    let loop_mode = match animation.loop_mode {
         AnimationLoopMode::Loop => LoopMode::Loop,
         AnimationLoopMode::OneShot => LoopMode::OneShot,
     };
-    runtime.set_loop_mode(loop_mode_val);
-    let dir_val = match animation.direction {
+    let direction = match animation.direction {
         Direction::Forward => PlayDirection::Forward,
         Direction::Backward => PlayDirection::Backward,
         Direction::PingPong => PlayDirection::PingPong,
     };
-    runtime.set_direction(dir_val);
-    runtime.set_fade(animation.fade_in, animation.fade_out);
 
-    // Origin (isobarycentre)
-    if let Some(ref org) = origin {
-        runtime.set_origin(nalgebra::Vector3::new(org[0], org[1], org[2]));
-    }
+    let spec = MoveSpec {
+        id: movement_id.clone(),
+        name: animation.name.clone(),
+        graph_json: animation.graph_json.clone(),
+        osc_ids: osc_ids.clone(),
+        track_indices,
+        is_preview,
+        origin,
+        duration: animation.duration,
+        loop_mode,
+        direction,
+        fade: Some((animation.fade_in, animation.fade_out)),
+        speed: Some(animation.speed),
+        spatial_macros: Some(SpatialMacroInit {
+            scale: animation.scale,
+            shift: (animation.offset_x, animation.offset_y, animation.offset_z),
+            rotation: (animation.yaw, animation.pitch, animation.roll),
+        }),
+        animation_state: Some(AnimationState::from_animation(&animation, &osc_ids)),
+    };
 
-    // 4. Set les macros à partir des transform de l'animation
-    runtime.macros().set_speed(animation.speed);
-    runtime.macros().set_scale(animation.scale);
-    runtime
-        .macros()
-        .set_shift(animation.offset_x, animation.offset_y, animation.offset_z);
-    runtime
-        .macros()
-        .set_rotation(animation.yaw, animation.pitch, animation.roll);
-
-    // 5. Set l'animation state (depth + phase_offset + audio mods)
-    let anim_state = AnimationState::from_animation(&animation, &osc_ids);
-    runtime.set_animation_state(anim_state);
-
-    // 6. Callback position
-    let app_handle = lock_or_recover(&state.app_handle)
-        .clone()
-        .ok_or("App handle not set")?;
-    let osc_ids_cb = osc_ids.clone();
-    runtime.set_position_callback(Box::new(
-        move |t: f64, positions: Vec<(usize, nalgebra::Vector3<f64>)>| {
-            let positions_data: Vec<(usize, [f64; 3])> = positions
-                .into_iter()
-                .map(|(idx, pos)| (idx, [pos.x, pos.y, pos.z]))
-                .collect();
-            let _ = app_handle.emit(
-            &format!("movement-positions-{movement_id_for_cb}"),
-            serde_json::json!({ "time": t, "positions": positions_data, "osc_ids": osc_ids_cb }),
-        );
-        },
-    ));
-
-    // 7. Lancer le playback
-    runtime
-        .play_compiled(
-            compiled,
-            EngineParams {
-                fps: 60.0,
-                duration: animation.duration,
-                n_objects: osc_ids.len(),
-                extra: serde_json::json!({}),
-            },
-            osc_ids.clone(),
-        )
-        .map_err(|e| format!("Failed to start playback: {e:?}"))?;
-
-    // 8. Stocker le movement
-    {
-        let generation = state.move_generation.fetch_add(1, Ordering::SeqCst) + 1;
-        let mut movements = lock_or_recover(&state.movements);
-        movements.insert(
-            movement_id.clone(),
-            Movement {
-                id: movement_id.clone(),
-                name: movement_name,
-                runtime,
-                osc_ids,
-                is_preview,
-                track_indices: vec![],
-                graph_json,
-                duration: animation.duration,
-                loop_mode: crate::commands::merge_commands::loop_mode_label(loop_mode_val),
-                direction: crate::commands::merge_commands::direction_label(dir_val),
-                origin,
-                generation,
-            },
-        );
-    }
-
-    // Emit movement list update
-    let app_handle2 = lock_or_recover(&state.app_handle)
-        .clone()
-        .ok_or("App handle not set")?;
-    let _ = app_handle2.emit("movements-update", ());
+    let sh = Shared::from_state(&state);
+    tauri::async_runtime::spawn_blocking(move || spawn_move(spec, &sh))
+        .await
+        .map_err(|e| format!("Task join error: {e}"))??;
 
     Ok(movement_id)
 }

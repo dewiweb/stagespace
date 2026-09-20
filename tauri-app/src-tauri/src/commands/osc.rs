@@ -74,13 +74,21 @@ pub async fn osc_get_all_values(state: State<'_, AppState>) -> Result<serde_json
     serde_json::to_value(values).map_err(|e| e.to_string())
 }
 
-/// Change le port du receiver OSC — stop l'ancien, recrée un receiver en
-/// préservant mappings, targets, enable state, puis démarre
+/// Change le port du receiver OSC — le nouveau receiver est bindé et démarré
+/// AVANT de stopper l'ancien : si le bind échoue, l'OSC IN reste fonctionnel
+/// (sinon un mauvais port laissait le receiver arrêté en silence).
 #[tauri::command]
 pub async fn set_osc_receiver_port(port: u16, state: State<'_, AppState>) -> Result<(), String> {
+    // Même port → rien à changer
+    {
+        let receiver = lock_or_recover(&state.osc_receiver);
+        if receiver.port == port && receiver.is_alive() {
+            return Ok(());
+        }
+    }
+
     let (mappings, targets, enabled) = {
-        let mut receiver = lock_or_recover(&state.osc_receiver);
-        receiver.stop();
+        let receiver = lock_or_recover(&state.osc_receiver);
         (
             receiver.list_mappings(),
             receiver.targets(),
@@ -96,11 +104,17 @@ pub async fn set_osc_receiver_port(port: u16, state: State<'_, AppState>) -> Res
             .add_mapping(mapping)
             .map_err(|e| format!("Failed to restore mapping: {e}"))?;
     }
+    // Bind + démarrage AVANT de toucher l'ancien receiver
     new_receiver
         .start()
         .map_err(|e| format!("Failed to start OSC receiver on port {port}: {e}"))?;
 
-    *lock_or_recover(&state.osc_receiver) = new_receiver;
+    // Succès : stopper l'ancien et swapper
+    {
+        let mut receiver = lock_or_recover(&state.osc_receiver);
+        receiver.stop();
+        *receiver = new_receiver;
+    }
     eprintln!("[INFO] OSC receiver now listening on port {port}");
     Ok(())
 }

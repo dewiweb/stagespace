@@ -1,5 +1,6 @@
 import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
+import { useModalGuard } from '../utils/modalGuard';
 
 const OSC_PROFILES = [
   { value: 'holophonix', label: 'Holophonix' },
@@ -37,10 +38,17 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     })();
   }, []);
 
-  // Fermer avec Escape
+  // Ce composant est un modal — bloque les raccourcis live (Esc=panic…)
+  useModalGuard();
+
+  // Fermer avec Escape — preventDefault pour que le handler global
+  // (Toolbar) voie e.defaultPrevented et ne déclenche pas panic().
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

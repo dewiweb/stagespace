@@ -508,7 +508,10 @@ impl Compiler {
         node: &Node,
         label: &str,
     ) -> Result<(&'g Node, &'g Node), CompilationError> {
-        let inputs = graph.get_inputs(node.id);
+        // Port-aware : input_a/input_b ont une sémantique distincte — utiliser
+        // l'ordre d'insertion inverserait silencieusement A/B quand l'utilisateur
+        // câble B avant A.
+        let inputs = graph.get_binary_inputs(node.id);
         if inputs.len() < 2 {
             return Err(CompilationError::MissingParameter(format!(
                 "{label} node requires 2 trajectory inputs, got {}",

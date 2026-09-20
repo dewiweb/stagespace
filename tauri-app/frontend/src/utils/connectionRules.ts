@@ -30,7 +30,7 @@ const FALLOFF_RICH_TYPES: NodeType[] = ['TimeFalloff', 'PointDistanceFalloff'];
 const FALLOFF_LIMITED_TYPES: NodeType[] = ['DirectionalFalloff', 'AudioAmplitudeFalloff'];
 
 const MODIFIER_TYPES: NodeType[] = [
-  'Scale', 'Rotate', 'Offset', 'PhaseShift', 'BarycentricGroup',
+  'Scale', 'Rotate', 'Offset', 'PhaseShift',
   'Mirror', 'Clamp', 'LFO', 'Jitter',
   // Post-process nodes (graph global)
   'RadiusScale', 'HeightOffset', 'PerTrackDepth', 'Barycenter', 'AudioFalloff', 'ManualPosition',
@@ -70,9 +70,10 @@ export function isValidConnection(from: NodeType, to: NodeType): boolean {
     return isModifier(to) || to === 'Output';
   }
 
-  // MoveRef : source qui produit des positions. Peut connecter vers post-process, Output, composites.
+  // MoveRef : source qui produit des positions. Peut connecter vers post-process, Output,
+  // composites — sauf Sequence (Rust ne l'autorise pas pour MoveRef).
   if (from === 'MoveRef') {
-    return isModifier(to) || to === 'Output' || isComposite(to);
+    return isModifier(to) || to === 'Output' || MODIFIER_COMPOSITE_TARGETS.includes(to);
   }
 
   // Merge : équivalent à Input (représente le MergeRuntime).
@@ -85,9 +86,22 @@ export function isValidConnection(from: NodeType, to: NodeType): boolean {
     return isEngine(to) || isPhysics(to);
   }
 
-  // Duration → engines uniquement (pas physics, pas falloffs, pas sources)
+  // Duration → engines + physics (le validateur Rust autorise les deux)
   if (from === 'Duration') {
-    return isEngine(to);
+    return isEngine(to) || isPhysics(to);
+  }
+
+  // DrawSpline : source de données spline → nodes spline (port 'spline')
+  // + mêmes cibles qu'un engine (Output, composites, modifiers).
+  if (from === 'DrawSpline') {
+    return (
+      to === 'EvaluateSpline' ||
+      to === 'TrimSpline' ||
+      to === 'OffsetSpline' ||
+      to === 'Output' ||
+      isComposite(to) ||
+      isModifier(to)
+    );
   }
 
   // Engines (math + splines + BPM + AudioAmplitude) → Output, composites, modifiers
@@ -139,7 +153,6 @@ export function getInputPorts(type: NodeType): string[] {
     case 'Duration':
     case 'AudioSpectrum':
     case 'OSCInput':
-    case 'DrawSpline':
     case 'Input':
     case 'MoveRef':
     case 'Merge':
@@ -151,13 +164,17 @@ export function getInputPorts(type: NodeType): string[] {
     case 'Pendulum': case 'RoseCurve': case 'Helix': case 'Wave': case 'CustomTrajectory':
     case 'Bouncing': case 'Spring': case 'Follow': case 'Swarm': case 'Avoidance': case 'VectorField':
     case 'BPM': case 'AudioAmplitude':
+    case 'DrawSpline':
     case 'TimeFalloff': case 'PointDistanceFalloff': case 'DirectionalFalloff': case 'AudioAmplitudeFalloff':
       return ['input', 'duration'];
 
-    // Modifiers, splines (eval/trim/offset), Output : une seule entrée
-    case 'Scale': case 'Rotate': case 'Offset': case 'PhaseShift': case 'BarycentricGroup':
-    case 'Mirror': case 'Clamp': case 'LFO': case 'Jitter':
+    // Splines eval/trim/offset : input (trajectoire) + spline (DrawSpline) + duration
     case 'EvaluateSpline': case 'TrimSpline': case 'OffsetSpline':
+      return ['input', 'duration', 'spline'];
+
+    // Modifiers, Output : une seule entrée
+    case 'Scale': case 'Rotate': case 'Offset': case 'PhaseShift':
+    case 'Mirror': case 'Clamp': case 'LFO': case 'Jitter':
     case 'RadiusScale': case 'HeightOffset': case 'PerTrackDepth':
     case 'Barycenter': case 'AudioFalloff': case 'ManualPosition':
     case 'Zone': case 'Velocity':
@@ -183,10 +200,8 @@ function getOutputPorts(type: NodeType): string[] {
       return []; // Output n'a pas de sortie
 
     case 'Objects':
-      return ['output'];
-
     case 'Duration':
-      return ['output', 'duration'];
+      return ['output'];
 
     // Engines, physics, falloffs, modifiers, composites, sources, splines
     default:

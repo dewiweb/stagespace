@@ -489,9 +489,11 @@ impl Validator {
             | NodeType::Velocity
             | NodeType::Output => &["input"],
 
-            // Splines : input (spline data) + duration
+            // Splines : input (trajectoire/objets) + spline (données depuis
+            // DrawSpline) + duration. Sans le port 'spline' dédié, DrawSpline
+            // et Objects se disputent 'input' → arité invalide.
             NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline => {
-                &["input", "duration"]
+                &["input", "duration", "spline"]
             }
 
             // Composites binaires : acceptent input, input_a, input_b
@@ -727,5 +729,17 @@ fn is_subgraph_only_node(node_type: &NodeType) -> bool {
             | NodeType::AudioSpectrum
             | NodeType::OSCInput
             | NodeType::Wave
+            // Modifiers/compilables uniquement dans un sub-graph : absents de
+            // is_post_process_node → un graph global les accepterait à la
+            // validation puis échouerait à la compile.
+            | NodeType::PhaseShift
+            | NodeType::LFO
+            | NodeType::Jitter
+            // Composites binaires : le graph global est une chaîne linéaire
+            // (pas de sémantique A/B en post-processing).
+            | NodeType::Mix
+            | NodeType::Group
+            | NodeType::Sequence
+            | NodeType::Crossfade
     )
 }

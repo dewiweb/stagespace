@@ -37,7 +37,7 @@
 //!   z_drift      dérive verticale, unités/s                       (défaut 0.0)
 //!   seed         graine RNG (wander, noise, init random)          (défaut 42)
 
-use crate::engines::{Engine, EngineParams};
+use crate::engines::{finite_or_zero, Engine, EngineParams};
 use crate::rng::SimpleRng;
 use nalgebra::{Vector2, Vector3};
 use std::f64::consts::TAU;
@@ -436,7 +436,7 @@ impl Engine for VectorField {
             pos += vel * dt;
         }
 
-        Vector3::new(pos.x, pos.y, z)
+        finite_or_zero(Vector3::new(pos.x, pos.y, z))
     }
 
     fn name(&self) -> &str {

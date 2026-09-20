@@ -61,8 +61,64 @@ pub(crate) struct MoveSpec {
     pub fade: Option<(f64, f64)>,
     /// Macro speed per-move (appliquée dans le worker — effective en mode worker)
     pub speed: Option<f64>,
+    /// Macros spatiales initiales du worker (animations : scale/shift/rotation)
+    pub spatial_macros: Option<SpatialMacroInit>,
     /// AnimationState complet (animations — phase offsets + audio mods)
     pub animation_state: Option<AnimationState>,
+}
+
+/// Macros spatiales initiales d'un worker (système Animation).
+pub(crate) struct SpatialMacroInit {
+    pub scale: f64,
+    pub shift: (f64, f64, f64),
+    pub rotation: (f64, f64, f64),
+}
+
+/// Résout les track_indices globaux d'un move à partir de ses osc_ids :
+/// position de chaque id dans la liste `osc_ids` globale du merge. Les ids
+/// absents sont ajoutés à la liste globale (sinon leurs positions
+/// tomberaient sur les mauvaises tracks via le fallback identité du merge).
+pub(crate) fn resolve_track_indices(
+    merge_runtime: &Arc<Mutex<stagespace_engines::MergeRuntime>>,
+    osc_ids: &[u32],
+) -> Vec<usize> {
+    let merge_rt = lock_or_recover(merge_runtime);
+    let mut global = merge_rt.osc_ids();
+    let mut extended = false;
+    let indices: Vec<usize> = osc_ids
+        .iter()
+        .map(|id| match global.iter().position(|g| g == id) {
+            Some(i) => i,
+            None => {
+                global.push(*id);
+                extended = true;
+                global.len() - 1
+            }
+        })
+        .collect();
+    if extended {
+        merge_rt.set_osc_ids(global);
+    }
+    indices
+}
+
+/// Retire un move du merge + de la map + stoppe son worker, sans connaître
+/// la génération à l'avance (snapshot interne). Idempotent.
+pub(crate) fn remove_move_now(movement_id: &str, sh: &Shared) -> bool {
+    let generation = {
+        let movements = lock_or_recover(&sh.movements);
+        match movements.get(movement_id) {
+            Some(m) => m.generation,
+            None => return false,
+        }
+    };
+    remove_move_checked(
+        movement_id,
+        generation,
+        &sh.merge_runtime,
+        &sh.movements,
+        &sh.pending_move_ids,
+    )
 }
 
 pub(crate) fn loop_mode_label(mode: LoopMode) -> String {
@@ -197,6 +253,13 @@ fn spawn_move_inner(spec: MoveSpec, sh: &Shared, abort_on_recall: bool) -> Resul
     }
     if let Some(speed) = spec.speed {
         runtime.macros().set_speed(speed);
+    }
+    if let Some(ref m) = spec.spatial_macros {
+        runtime.macros().set_scale(m.scale);
+        runtime.macros().set_shift(m.shift.0, m.shift.1, m.shift.2);
+        runtime
+            .macros()
+            .set_rotation(m.rotation.0, m.rotation.1, m.rotation.2);
     }
     if let Some(ref origin) = spec.origin {
         runtime.set_origin(nalgebra::Vector3::new(origin[0], origin[1], origin[2]));
@@ -337,6 +400,7 @@ pub async fn activate_move(
         direction: parse_direction(&request.direction),
         fade: None,
         speed: None,
+        spatial_macros: None,
         animation_state: None,
     };
     let sh = Shared::from_state(&state);
@@ -550,6 +614,12 @@ pub async fn get_merge_perf_stats(state: State<'_, AppState>) -> Result<serde_js
         "cpuPercent": perf.cpu_percent,
         "oscErrorRate": perf.osc_error_rate,
         "oscRefusedRate": perf.osc_refused_rate,
+        // Liveness du merge thread — perf.fps reste figé à la dernière
+        // fenêtre si le thread meurt ; ces compteurs trahissent un blackout.
+        "isRunning": merge_rt.is_running(),
+        "threadDied": merge_rt.thread_died(),
+        "mergeFrames": merge_rt.merge_frame_count(),
+        "droppedPositions": merge_rt.dropped_position_count(),
     }))
 }
 

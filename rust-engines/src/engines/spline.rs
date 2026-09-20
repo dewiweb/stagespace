@@ -322,7 +322,7 @@ impl Engine for DrawSpline {
             0.0
         };
 
-        let tn = (speed * t / params.duration + phase) % 1.0;
+        let tn = (speed * t / params.duration + phase).rem_euclid(1.0);
         evaluate_spline(&lut, tn)
     }
 
@@ -371,7 +371,7 @@ impl Engine for EvaluateSpline {
             0.0
         };
 
-        let tn = (speed * t / params.duration + phase) % 1.0;
+        let tn = (speed * t / params.duration + phase).rem_euclid(1.0);
         evaluate_spline(&lut, tn)
     }
 
@@ -430,7 +430,7 @@ impl Engine for TrimSpline {
             0.0
         };
 
-        let tn = (speed * t / params.duration + phase) % 1.0;
+        let tn = (speed * t / params.duration + phase).rem_euclid(1.0);
         let trimmed = trim_start + tn * (trim_end - trim_start);
         evaluate_spline(&lut, trimmed)
     }
@@ -495,7 +495,7 @@ impl Engine for OffsetSpline {
             0.0
         };
 
-        let tn = (speed * t / params.duration + phase) % 1.0;
+        let tn = (speed * t / params.duration + phase).rem_euclid(1.0);
         let mut pos = evaluate_spline(&lut, tn);
         pos.x += offset_x;
         pos.y += offset_y;

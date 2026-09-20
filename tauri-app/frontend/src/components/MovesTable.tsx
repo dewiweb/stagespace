@@ -2,6 +2,7 @@ import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
 import { useAnimationStore } from '../store/useAnimationStore';
 import { SHAPE_PRESETS } from '../utils/shapePresets';
+import { useModalGuardOn } from '../utils/modalGuard';
 
 /// MovesTable — la table des moves (concept unifié)
 /// Tout est un Move. Certains moves sont dans la setlist (l'ordre du spectacle).
@@ -68,6 +69,16 @@ export default function MovesTable() {
 
   // ─── Macros editor (modal inline) ───
   const [editingMacrosFor, setEditingMacrosFor] = React.useState<string | null>(null);
+
+  // Bloque les raccourcis live (Esc=panic, Space, Enter, Backspace) tant
+  // qu'un picker/éditeur inline est ouvert — sinon Esc sur le picker
+  // paniquerait le show en même temps.
+  const anyModalOpen =
+    editingTracksFor !== null ||
+    editingMacrosFor !== null ||
+    editingTemplateFor !== null ||
+    renamingId !== null;
+  useModalGuardOn(anyModalOpen);
 
   // ─── GO feedback ───
   const [goFeedback, setGoFeedback] = React.useState<string | null>(null);

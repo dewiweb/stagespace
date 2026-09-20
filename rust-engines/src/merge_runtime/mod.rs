@@ -558,6 +558,17 @@ impl MergeRuntime {
             .insert(move_id, buffer);
     }
 
+    /// Vrai si le move est enregistré ET actif dans le merge (pas stale-killed).
+    /// Un worker peut tourner (`runtime.is_running()`) alors que le merge l'a
+    /// retiré pour staleness — cette méthode est la source de vérité.
+    pub fn has_move(&self, move_id: &str) -> bool {
+        self.active_moves
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(move_id)
+            .is_some_and(|s| s.is_active)
+    }
+
     /// Démarre un fade in pour un move (utilisé au recall pour un crossfade doux)
     pub fn start_fade_in(&self, move_id: &str, fade_duration: f64) {
         if let Some(state) = self
@@ -829,9 +840,22 @@ impl MergeRuntime {
 
                 // Idle : aucun move live ni preview → sauter le travail lourd,
                 // mais garder la boucle vivante (liveness observable via
-                // merge_frames) et le pacing.
+                // merge_frames) ET le pacing — sans sleep ici la boucle
+                // spinne à 100% CPU et martèle les locks.
                 if move_positions.is_empty() && preview_positions.is_empty() {
                     frame_count += 1;
+                    let target_time = frame_count as u128 * frame_duration.as_nanos();
+                    let current_time = start.elapsed().as_nanos();
+                    if target_time > current_time {
+                        std::thread::sleep(Duration::from_nanos(
+                            (target_time - current_time) as u64,
+                        ));
+                    } else if current_time - target_time
+                        > CATCHUP_FRAME_LIMIT * frame_duration.as_nanos()
+                    {
+                        start = Instant::now();
+                        frame_count = 0;
+                    }
                     return;
                 }
 
@@ -1103,6 +1127,11 @@ impl MergeRuntime {
                     // figé) et on tente une frame de parking sur les derniers
                     // états connus avant de sortir.
                     thread_died.store(true, Ordering::SeqCst);
+                    // Marquer stopped AVANT le parking : si le parking ou le
+                    // callback panique à son tour, is_running() ne doit pas
+                    // rester true sur un thread mort (spawn_move pourrait
+                    // alors ne jamais redémarrer le merge).
+                    running.store(false, Ordering::SeqCst);
                     crate::logging::log_osc_error(
                         "MergeRuntime: PANIC in merge thread — arrêt du merge",
                     );
@@ -1136,7 +1165,6 @@ impl MergeRuntime {
                     if let Some(callback) = cb {
                         callback(0.0, Vec::new());
                     }
-                    running.store(false, Ordering::SeqCst);
                     break;
                 }
             }

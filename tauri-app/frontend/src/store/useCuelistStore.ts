@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { toast } from '../utils/toast-helpers';
-import { safeSetItem } from '../utils/safeStorage';
+import { safeSetItem, safeParseStoredJson } from '../utils/safeStorage';
 
 export interface CueData {
   id: string;
@@ -55,13 +55,7 @@ interface CuelistState {
 const STORAGE_KEY = 'stagespace-cuelist';
 
 function loadFromStorage(): CueData[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw);
-  } catch {
-    return [];
-  }
+  return safeParseStoredJson<CueData[]>(STORAGE_KEY, []);
 }
 
 function saveToStorage(cues: CueData[]) {

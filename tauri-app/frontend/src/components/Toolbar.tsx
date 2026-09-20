@@ -3,6 +3,7 @@ import { useGraphStore } from '../store/useGraphStore';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { toast } from '../utils/toast-helpers';
 import { safeInvoke as invoke } from '../utils/tauri';
+import { isModalOpen } from '../utils/modalGuard';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { SettingsModal } from './SettingsModal';
 
@@ -37,9 +38,25 @@ export const Toolbar: React.FC = () => {
   // Keyboard shortcuts: Ctrl+Z (undo), Ctrl+Y / Ctrl+Shift+Z (redo), Space (play/stop selected), Esc (panic), Enter (GO next cue), ArrowLeft/Right (cue nav)
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      // Ne pas intercepter si on tape dans un input
+      // Ne pas intercepter si on tape dans un input / bouton / select
       const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'BUTTON' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable
+      )
+        return;
+      // Un handler plus spécifique a déjà consommé la touche (ex: modal Esc)
+      if (e.defaultPrevented) return;
+      // Un modal/picker est ouvert → aucun raccourci live (Esc=panic inclus)
+      if (isModalOpen()) return;
+      // Maintenir la touche ne doit pas spammer panic/GO/play
+      if (e.repeat) return;
+      // Dans l'éditeur React Flow : Delete/Backspace suppriment des nodes —
+      // aucun raccourci live ne doit s'activer depuis le canvas.
+      if (target instanceof Element && target.closest('.react-flow')) return;
 
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
@@ -86,16 +103,27 @@ export const Toolbar: React.FC = () => {
 
   // Poll perf stats quand des movements sont actifs
   const oscErrorToastShown = React.useRef(false);
+  const mergeDiedToastShown = React.useRef(false);
   React.useEffect(() => {
     if (activeMovements === 0) {
       setPerfStats({ fps: 0, oscRate: 0, latencyMs: 0, cpuPercent: 0 });
       oscErrorToastShown.current = false;
+      mergeDiedToastShown.current = false;
       return;
     }
     const interval = setInterval(async () => {
       try {
-        const stats = await invoke<{ fps: number; oscRate: number; latencyMs: number; cpuPercent: number; oscErrorRate: number; oscRefusedRate: number }>('get_perf_stats');
+        const stats = await invoke<{ fps: number; oscRate: number; latencyMs: number; cpuPercent: number; oscErrorRate: number; oscRefusedRate: number; threadDied?: boolean }>('get_perf_stats');
         setPerfStats(stats);
+        // Merge thread mort = blackout OSC silencieux (fps affiché = valeur
+        // figée, pas un signe de vie). Alerter une fois.
+        if (stats.threadDied && !mergeDiedToastShown.current) {
+          mergeDiedToastShown.current = true;
+          toast.error(
+            'CRITICAL: merge thread died — OSC output is stopped. Stop all moves and restart playback (Esc = panic).',
+            0,
+          );
+        }
         // Alerte OSC si taux d'erreur > 5% (une seule fois par session de playback).
         // ECONNREFUSED dominant = personne n'écoute le port cible (pas du packet loss).
         if (stats.oscErrorRate > 0.05 && !oscErrorToastShown.current) {

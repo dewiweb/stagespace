@@ -552,6 +552,11 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
       const duration = (durationNode?.data as any)?.params?.duration ?? 4.0;
 
       const trackIndices = computeTrackIndices(slot.trackIds, holProject, manualOscIds);
+      if (trackIndices.length === 0) {
+        throw new Error(
+          `No track indices — the slot's track selection doesn't map to current OSC ids (check OSC ids / selection).`,
+        );
+      }
 
       const origin = computeCentroid(holProject, trackIndices, manualOscIds);
 

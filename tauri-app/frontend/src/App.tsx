@@ -10,6 +10,7 @@ import AudioPanel from './components/AudioPanel';
 import TabPanel from './components/TabPanel';
 import Toolbar from './components/Toolbar';
 import ToastContainer from './components/ToastContainer';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { prepareGraphForSave } from './components/nodeParamSchema';
 import { useGraphStore, useMovementPositionsListener } from './store/useGraphStore';
 import { useAnimationStore } from './store/useAnimationStore';
@@ -157,8 +158,10 @@ function App() {
       {/* Toolbar (OSC settings, import .hol) */}
       <Toolbar />
 
-      {/* Main Content — 3 colonnes */}
+      {/* Main Content — 3 colonnes (boundary par colonne : un crash de render
+          ne doit pas démonter Toolbar/ToastContainer — panic Esc doit survivre) */}
       <div className="flex-1 flex overflow-hidden">
+        <ErrorBoundary zone="Left panel">
         {/* Colonne gauche : AnimationList + onglets secondaires (collapsible + redimensionnable) */}
         {leftCollapsed ? (
           <button
@@ -223,7 +226,10 @@ function App() {
           </>
         )}
 
+        </ErrorBoundary>
+
         {/* Colonne centre : 3D Canvas + Expert (split view quand Expert activé) */}
+        <ErrorBoundary zone="Canvas">
         <div className="flex-1 flex flex-col bg-stagespace-panel min-w-[300px]">
           {/* Barre du haut — change selon le mode */}
           {showExpert ? (
@@ -281,8 +287,10 @@ function App() {
             </div>
           </div>
         </div>
+        </ErrorBoundary>
 
         {/* Colonne droite : Inspector (collapsible + redimensionnable) */}
+        <ErrorBoundary zone="Inspector">
         {rightCollapsed ? (
           <button
             onClick={() => setRightCollapsed(false)}
@@ -321,6 +329,7 @@ function App() {
           </div>
           </>
         )}
+        </ErrorBoundary>
       </div>
 
       {/* Toast notifications — erreurs backend, alerts OSC, etc. */}

@@ -57,6 +57,14 @@ pub async fn update_audio_state(
         let mut s = arc.lock().unwrap_or_else(|e| e.into_inner());
         *s = audio_data.clone();
     }
+    // 4. Propager au MergeRuntime — les nodes audio du graph global
+    //    (AudioAmplitudeFalloff, BPM…) lisent cet état à chaque frame merge.
+    {
+        let merge_rt = lock_or_recover(&state.merge_runtime);
+        let arc = merge_rt.audio_state_arc();
+        let mut s = arc.lock().unwrap_or_else(|e| e.into_inner());
+        *s = audio_data;
+    }
     Ok(())
 }
 
@@ -67,6 +75,7 @@ pub fn start_audio_poller(app_handle: tauri::AppHandle, state: &AppState) {
     let audio_capture = state.audio_capture.clone();
     let audio_state = state.audio_state.clone();
     let movements = state.movements.clone();
+    let merge_runtime = state.merge_runtime.clone();
     let shutdown = state.audio_poller_shutdown.clone();
 
     std::thread::spawn(move || {
@@ -96,6 +105,24 @@ pub fn start_audio_poller(app_handle: tauri::AppHandle, state: &AppState) {
             for arc in &runtime_arcs {
                 if let Ok(mut s) = arc.lock() {
                     *s = state.clone();
+                }
+            }
+
+            // Propager au MergeRuntime — sinon les nodes audio du graph
+            // global (AudioAmplitudeFalloff…) voient un silence éternel.
+            {
+                let merge_rt = merge_runtime.lock().unwrap_or_else(|e| e.into_inner());
+                if let Ok(mut s) = merge_rt.audio_state_arc().lock() {
+                    *s = state.clone();
+                }
+            }
+
+            // Consommer les erreurs du device (débranché, stream mort…) —
+            // sans ça l'UI n'est jamais notifiée d'une capture tombée.
+            {
+                let capture = audio_capture.lock().unwrap_or_else(|e| e.into_inner());
+                if let Some(err) = capture.take_error() {
+                    let _ = app_handle.emit("audio-error", err);
                 }
             }
 

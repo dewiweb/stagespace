@@ -21,6 +21,12 @@ pub async fn get_perf_stats(state: State<'_, AppState>) -> Result<serde_json::Va
         "cpuPercent": stats.cpu_percent,
         "oscErrorRate": stats.osc_error_rate,
         "oscRefusedRate": stats.osc_refused_rate,
+        // Liveness : fps reste figé si le merge thread meurt — le frontend
+        // doit pouvoir détecter un blackout OSC silencieux.
+        "isRunning": merge_rt.is_running(),
+        "threadDied": merge_rt.thread_died(),
+        "mergeFrames": merge_rt.merge_frame_count(),
+        "droppedPositions": merge_rt.dropped_position_count(),
     }))
 }
 
@@ -33,12 +39,17 @@ pub async fn sample_trajectory(
     duration: f64,
     state: State<'_, AppState>,
 ) -> Result<Vec<(f64, f64, f64, f64)>, String> {
-    let state_guard = lock_or_recover(&state.runtime);
-    if let Some(runtime) = state_guard.as_ref() {
-        Ok(runtime.sample_trajectory(object_index, n_samples.max(2), duration.max(0.1)))
-    } else {
-        Ok(vec![])
-    }
+    // Le graphe "expert" tourne comme worker (graph-main / graph-preview)
+    let movements = lock_or_recover(&state.movements);
+    let movement = movements
+        .get("graph-main")
+        .or_else(|| movements.get("graph-preview"));
+    Ok(match movement {
+        Some(m) => m
+            .runtime
+            .sample_trajectory(object_index, n_samples.max(2), duration.max(0.1)),
+        None => vec![],
+    })
 }
 
 /// Échantillonne la trajectoire d'un movement actif (système Animation)

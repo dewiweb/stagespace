@@ -1,14 +1,24 @@
 use super::state::lock_or_recover;
-use crate::graph::compilation::{compile_graph_with_audio, compile_graph_with_audio_and_overrides};
+use crate::commands::merge_commands::{
+    remove_move_now, resolve_track_indices, spawn_move, MoveSpec,
+};
+use crate::commands::state::Shared;
+use crate::graph::compilation::compile_graph_with_audio_and_overrides;
 use crate::graph::parser::build_graph_from_json;
 use crate::AppState;
 use serde::Deserialize;
-use stagespace_engines::{EngineParams, LoopMode, OscProfile, OscSender, Runtime};
-use std::str::FromStr;
-use tauri::{Emitter, State};
+use stagespace_engines::{LoopMode, PlayDirection};
+use tauri::State;
 
+/// Ids réservés aux moves du graphe "expert" (legacy play/preview).
+/// Ce sont des workers MergeRuntime comme les autres — une seule stream OSC.
+const GRAPH_MAIN_ID: &str = "graph-main";
+const GRAPH_PREVIEW_ID: &str = "graph-preview";
+
+/// Les champs osc_* sont conservés pour compat IPC mais ignorés — la cible
+/// OSC appartient au MergeRuntime.
 #[derive(Deserialize)]
-#[allow(non_snake_case)]
+#[allow(non_snake_case, dead_code)]
 pub struct PlayGraphRequest {
     pub graph_json: serde_json::Value,
     #[serde(rename = "osc_address")]
@@ -21,170 +31,122 @@ pub struct PlayGraphRequest {
     pub oscProfile: String,
 }
 
+/// Joue le graphe courant en live via `spawn_move` — l'OSC sort par le
+/// MergeRuntime (une seule stream, fades/zones/post-processing couverts).
+/// `oscAddress`/`oscPort`/`oscProfile` sont ignorés : la cible OSC
+/// appartient au MergeRuntime.
 #[tauri::command]
 pub async fn play_graph(
     request: PlayGraphRequest,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    let audio_state = lock_or_recover(&state.audio_state);
-    let graph = build_graph_from_json(&request.graph_json, &audio_state)?;
-    drop(audio_state);
-
-    let compiled = compile_graph_with_audio(&graph, state.audio_state.clone())?;
-
-    let osc_profile = OscProfile::from_str(&request.oscProfile)
-        .map_err(|e| format!("Invalid OSC profile '{}': {}", request.oscProfile, e))?;
-
-    let osc_sender = OscSender::new(osc_profile, request.oscAddress.clone(), request.oscPort);
-    let runtime = Runtime::new(request.oscAddress, request.oscPort, osc_sender)
-        .map_err(|e| format!("Failed to create runtime: {e}"))?;
-
-    // Callback position pour le frontend (preview 3D)
-    let app_handle = lock_or_recover(&state.app_handle)
-        .as_ref()
-        .ok_or("App handle not available")?
-        .clone();
-    let osc_ids_for_callback = request.oscIds.clone();
-    let osc_ids_for_playback = request.oscIds.clone();
-
-    runtime.set_position_callback(Box::new(
-        move |t: f64, positions: Vec<(usize, nalgebra::Vector3<f64>)>| {
-            let positions_data: Vec<(usize, [f64; 3])> = positions
-                .into_iter()
-                .map(|(idx, pos)| (idx, [pos.x, pos.y, pos.z]))
-                .collect();
-            let _ = app_handle.emit(
-                "positions-update",
-                serde_json::json!({
-                    "time": t, "positions": positions_data, "osc_ids": osc_ids_for_callback,
-                }),
-            );
-        },
-    ));
-
-    // Loop infinie par défaut (live)
-    runtime.set_loop_mode(LoopMode::Loop);
-
-    runtime
-        .play_compiled(
-            compiled,
-            EngineParams {
-                n_objects: osc_ids_for_playback.len(),
-                duration: 4.0,
-                fps: 60.0,
-                extra: serde_json::json!({}),
-            },
-            osc_ids_for_playback.clone(),
-        )
-        .map_err(|e| format!("Failed to start playback: {e}"))?;
-
-    // Stocker le runtime + osc_ids
-    let mut state_guard = lock_or_recover(&state.runtime);
-    *state_guard = Some(runtime);
-    let mut ids = lock_or_recover(&state.current_osc_ids);
-    *ids = osc_ids_for_playback;
-
-    Ok("Graph playback started".to_string())
+    let sh = Shared::from_state(&state);
+    tauri::async_runtime::spawn_blocking(move || {
+        // Remplacement : un graph-main existant est stoppé proprement d'abord.
+        remove_move_now(GRAPH_MAIN_ID, &sh);
+        remove_move_now(GRAPH_PREVIEW_ID, &sh);
+        let spec = MoveSpec {
+            id: GRAPH_MAIN_ID.to_string(),
+            name: "Graph".to_string(),
+            graph_json: request.graph_json,
+            osc_ids: request.oscIds.clone(),
+            track_indices: resolve_track_indices(&sh.merge_runtime, &request.oscIds),
+            is_preview: false,
+            origin: None,
+            duration: 4.0,
+            loop_mode: LoopMode::Loop,
+            direction: PlayDirection::Forward,
+            fade: None,
+            speed: None,
+            spatial_macros: None,
+            animation_state: None,
+        };
+        spawn_move(spec, &sh).map(|_| "Graph playback started".to_string())
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
 }
 
-#[tauri::command]
-pub async fn stop_graph(state: State<'_, AppState>) -> Result<String, String> {
-    let mut state_guard = lock_or_recover(&state.runtime);
-    if let Some(runtime) = state_guard.take() {
-        runtime.stop();
-    }
-    Ok("Graph playback stopped".to_string())
-}
-
-/// Preview mode — compile et joue la trajectoire en 3D SANS envoyer d'OSC
-/// Permet à l'ingénieur de visualiser et régler avant de lancer en live
+/// Preview mode — joue la trajectoire SANS envoyer d'OSC (le merge route les
+/// positions preview vers le callback display uniquement).
 #[tauri::command]
 pub async fn preview_graph(
     request: PlayGraphRequest,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    let audio_state = lock_or_recover(&state.audio_state);
-    let graph = build_graph_from_json(&request.graph_json, &audio_state)?;
-    drop(audio_state);
-
-    let compiled = compile_graph_with_audio(&graph, state.audio_state.clone())?;
-
-    // Utiliser un OscSender "dummy" — pas d'envoi réel
-    let osc_sender = OscSender::new(OscProfile::Holophonix, "127.0.0.1".to_string(), 9999);
-    let runtime = Runtime::new("127.0.0.1".to_string(), 9999, osc_sender)
-        .map_err(|e| format!("Failed to create runtime: {e}"))?;
-
-    // Activer le mode preview
-    runtime.set_preview_mode(true);
-
-    // Callback position pour le frontend (preview 3D)
-    let app_handle = lock_or_recover(&state.app_handle)
-        .as_ref()
-        .ok_or("App handle not available")?
-        .clone();
-    let osc_ids_for_callback = request.oscIds.clone();
-
-    runtime.set_position_callback(Box::new(
-        move |t: f64, positions: Vec<(usize, nalgebra::Vector3<f64>)>| {
-            let positions_data: Vec<(usize, [f64; 3])> = positions
-                .into_iter()
-                .map(|(idx, pos)| (idx, [pos.x, pos.y, pos.z]))
-                .collect();
-            let _ = app_handle.emit(
-                "positions-update",
-                serde_json::json!({
-                    "time": t, "positions": positions_data, "osc_ids": osc_ids_for_callback,
-                }),
-            );
-        },
-    ));
-
-    runtime.set_loop_mode(LoopMode::Loop);
-
-    runtime
-        .play_compiled(
-            compiled,
-            EngineParams {
-                n_objects: request.oscIds.len(),
-                duration: 4.0,
-                fps: 60.0,
-                extra: serde_json::json!({}),
-            },
-            request.oscIds,
-        )
-        .map_err(|e| format!("Playback failed: {e}"))?;
-
-    // Stocker le runtime
-    let mut state_guard = lock_or_recover(&state.runtime);
-    *state_guard = Some(runtime);
-
-    Ok("Preview started (no OSC sent)".to_string())
+    let sh = Shared::from_state(&state);
+    tauri::async_runtime::spawn_blocking(move || {
+        remove_move_now(GRAPH_PREVIEW_ID, &sh);
+        let spec = MoveSpec {
+            id: GRAPH_PREVIEW_ID.to_string(),
+            name: "Graph preview".to_string(),
+            graph_json: request.graph_json,
+            osc_ids: request.oscIds.clone(),
+            track_indices: resolve_track_indices(&sh.merge_runtime, &request.oscIds),
+            is_preview: true,
+            origin: None,
+            duration: 4.0,
+            loop_mode: LoopMode::Loop,
+            direction: PlayDirection::Forward,
+            fade: None,
+            speed: None,
+            spatial_macros: None,
+            animation_state: None,
+        };
+        spawn_move(spec, &sh).map(|_| "Preview started (no OSC sent)".to_string())
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
 }
 
-/// Hot-swap le graphe en cours de lecture — recompile et remplace la position_fn sans arrêter
-/// Avec crossfade smooth pour éviter les sauts de position
+#[tauri::command]
+pub async fn stop_graph(state: State<'_, AppState>) -> Result<String, String> {
+    let sh = Shared::from_state(&state);
+    tauri::async_runtime::spawn_blocking(move || {
+        let a = remove_move_now(GRAPH_MAIN_ID, &sh);
+        let b = remove_move_now(GRAPH_PREVIEW_ID, &sh);
+        if a || b {
+            "Graph playback stopped".to_string()
+        } else {
+            "No graph playback active".to_string()
+        }
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))
+}
+
+/// Hot-swap le graphe en cours de lecture — recompile et remplace la
+/// position_fn avec crossfade pour éviter les sauts de position.
 #[tauri::command]
 pub async fn update_graph(
     graph_json: serde_json::Value,
     fade_duration: Option<f64>,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    let state_guard = lock_or_recover(&state.runtime);
-    let runtime = state_guard
-        .as_ref()
+    let mut movements = lock_or_recover(&state.movements);
+    // Cible : le move graphe actif (live prioritaire, sinon preview)
+    let target_id = if movements.contains_key(GRAPH_MAIN_ID) {
+        GRAPH_MAIN_ID
+    } else {
+        GRAPH_PREVIEW_ID
+    };
+    let movement = movements
+        .get_mut(target_id)
         .ok_or("No runtime active — call play_graph first")?;
 
     let audio_state = lock_or_recover(&state.audio_state);
     let graph = build_graph_from_json(&graph_json, &audio_state)?;
     drop(audio_state);
 
-    let overrides = runtime.audio_param_overrides();
+    let overrides = movement.runtime.audio_param_overrides();
     let compiled =
         compile_graph_with_audio_and_overrides(&graph, state.audio_state.clone(), overrides)?;
 
     // Crossfade smooth (défaut 0.5s) pour éviter les sauts
     let fade = fade_duration.unwrap_or(0.5);
-    runtime.recall_cue(compiled, fade);
+    movement.runtime.recall_cue(compiled, fade);
+    // Snapshot à jour pour les cues
+    movement.graph_json = graph_json;
 
     Ok("Graph hot-swapped with crossfade".to_string())
 }
@@ -206,40 +168,48 @@ pub struct SetMacroRequest {
     pub height_offset: Option<f64>,
 }
 
+/// Macros du chemin "graphe expert" : appliquées au worker graph-main /
+/// graph-preview s'il tourne, sinon aux macros globales du MergeRuntime
+/// (les réglages survivront au prochain play).
 #[tauri::command]
 pub async fn set_macro(request: SetMacroRequest, state: State<'_, AppState>) -> Result<(), String> {
-    let state_guard = lock_or_recover(&state.runtime);
-    if let Some(runtime) = &*state_guard {
-        let macros = runtime.macros();
-        if let Some(s) = request.speed {
-            macros.set_speed(s);
-        }
-        if let Some(s) = request.scale {
-            macros.set_scale(s);
-        }
-        // Shift: partial update
-        let current_shift = macros.get_shift();
-        macros.set_shift(
-            request.shiftX.unwrap_or(current_shift.x),
-            request.shiftY.unwrap_or(current_shift.y),
-            request.shiftZ.unwrap_or(current_shift.z),
-        );
-        // Rotation: partial update
-        let (cy, cp, cr) = macros.get_rotation();
-        macros.set_rotation(
-            request.yaw.unwrap_or(cy),
-            request.pitch.unwrap_or(cp),
-            request.roll.unwrap_or(cr),
-        );
-        // radius_scale + height_offset
-        if let Some(v) = request.radius_scale {
-            macros.set_radius_scale(v);
-        }
-        if let Some(v) = request.height_offset {
-            macros.set_height_offset(v);
-        }
-        Ok(())
-    } else {
-        Err("No active runtime".to_string())
+    let macros = {
+        let movements = lock_or_recover(&state.movements);
+        movements
+            .get(GRAPH_MAIN_ID)
+            .or_else(|| movements.get(GRAPH_PREVIEW_ID))
+            .map(|m| m.runtime.macros())
+    };
+    let macros = match macros {
+        Some(m) => m,
+        None => lock_or_recover(&state.merge_runtime).macros(),
+    };
+    if let Some(s) = request.speed {
+        macros.set_speed(s);
     }
+    if let Some(s) = request.scale {
+        macros.set_scale(s);
+    }
+    // Shift: partial update
+    let current_shift = macros.get_shift();
+    macros.set_shift(
+        request.shiftX.unwrap_or(current_shift.x),
+        request.shiftY.unwrap_or(current_shift.y),
+        request.shiftZ.unwrap_or(current_shift.z),
+    );
+    // Rotation: partial update
+    let (cy, cp, cr) = macros.get_rotation();
+    macros.set_rotation(
+        request.yaw.unwrap_or(cy),
+        request.pitch.unwrap_or(cp),
+        request.roll.unwrap_or(cr),
+    );
+    // radius_scale + height_offset
+    if let Some(v) = request.radius_scale {
+        macros.set_radius_scale(v);
+    }
+    if let Some(v) = request.height_offset {
+        macros.set_height_offset(v);
+    }
+    Ok(())
 }

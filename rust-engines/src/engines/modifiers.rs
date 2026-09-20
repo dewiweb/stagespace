@@ -23,25 +23,10 @@ pub fn rotate(pos: Vector3<f64>, angle_x: f64, angle_y: f64, angle_z: f64) -> Ve
 pub fn phase_shift_time(t: f64, object_index: usize, shift: f64, duration: f64) -> f64 {
     let shifted = t + object_index as f64 * shift * duration;
     if duration > 0.0 {
-        shifted % duration
+        shifted.rem_euclid(duration)
     } else {
         shifted
     }
-}
-
-/// Apply barycentric group: recenter positions around a target center
-/// Returns the adjusted position for object_index given all positions
-pub fn barycentric_group(
-    pos: Vector3<f64>,
-    all_positions: &[Vector3<f64>],
-    center: Vector3<f64>,
-) -> Vector3<f64> {
-    if all_positions.is_empty() {
-        return pos;
-    }
-    let n = all_positions.len() as f64;
-    let barycenter: Vector3<f64> = all_positions.iter().sum::<Vector3<f64>>() / n;
-    pos - barycenter + center
 }
 
 /// Mirror — reflect position across a plane (xy, xz, yz) at a given offset
@@ -54,12 +39,21 @@ pub fn mirror(pos: Vector3<f64>, plane: &str, offset: f64) -> Vector3<f64> {
     }
 }
 
-/// Clamp — constrain position to a bounding box
+/// Clamp — constrain position to a bounding box.
+/// Bounds are swapped per-axis if min > max — `f64::clamp` panics on inverted
+/// bounds, and a panic in the merge thread means an OSC blackout.
 pub fn clamp(pos: Vector3<f64>, min: Vector3<f64>, max: Vector3<f64>) -> Vector3<f64> {
+    let c = |v: f64, lo: f64, hi: f64| {
+        if lo <= hi {
+            v.clamp(lo, hi)
+        } else {
+            v.clamp(hi, lo)
+        }
+    };
     Vector3::new(
-        pos.x.clamp(min.x, max.x),
-        pos.y.clamp(min.y, max.y),
-        pos.z.clamp(min.z, max.z),
+        c(pos.x, min.x, max.x),
+        c(pos.y, min.y, max.y),
+        c(pos.z, min.z, max.z),
     )
 }
 
@@ -162,15 +156,6 @@ mod tests {
     fn test_phase_shift() {
         let t = phase_shift_time(0.0, 2, 0.1, 4.0);
         assert!((t - 0.8).abs() < 1e-10);
-    }
-
-    #[test]
-    fn test_barycentric_group() {
-        let positions = vec![Vector3::new(1.0, 0.0, 0.0), Vector3::new(-1.0, 0.0, 0.0)];
-        let center = Vector3::new(0.0, 0.0, 0.0);
-        let result = barycentric_group(positions[0], &positions, center);
-        // barycenter = (0,0,0), so pos - bary + center = pos
-        assert!((result.x - 1.0).abs() < 1e-10);
     }
 
     #[test]

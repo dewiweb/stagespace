@@ -7,7 +7,7 @@ export type NodeType =
   | 'CustomTrajectory'
   | 'DrawSpline' | 'EvaluateSpline' | 'TrimSpline' | 'OffsetSpline'
   | 'TimeFalloff' | 'PointDistanceFalloff' | 'DirectionalFalloff' | 'AudioAmplitudeFalloff'
-  | 'Scale' | 'Rotate' | 'Offset' | 'PhaseShift' | 'BarycentricGroup'
+  | 'Scale' | 'Rotate' | 'Offset' | 'PhaseShift'
   | 'Mirror' | 'Clamp' | 'LFO' | 'Jitter'
   | 'RadiusScale' | 'HeightOffset' | 'PerTrackDepth' | 'Barycenter' | 'AudioFalloff' | 'ManualPosition'
   | 'Zone' | 'Velocity'

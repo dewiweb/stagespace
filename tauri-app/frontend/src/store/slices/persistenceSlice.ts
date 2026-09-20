@@ -1,7 +1,7 @@
 import { StateCreator } from 'zustand';
 import type { Node, Edge } from 'reactflow';
 import { safeInvoke as invoke } from '../../utils/tauri';
-import { safeSetItem } from '../../utils/safeStorage';
+import { safeSetItem, safeParseStoredJson } from '../../utils/safeStorage';
 
 export interface PersistenceSlice {
   // Persistence (localStorage)
@@ -29,9 +29,14 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
   },
 
   loadGraph: async (name) => {
-    const data = localStorage.getItem(`stagespace_graph_${name}`);
-    if (!data) throw new Error(`Graph "${name}" not found`);
-    const graphData = JSON.parse(data);
+    const key = `stagespace_graph_${name}`;
+    let exists = false;
+    try {
+      exists = localStorage.getItem(key) !== null;
+    } catch {}
+    if (!exists) throw new Error(`Graph "${name}" not found`);
+    const graphData = safeParseStoredJson<{ nodes: Node[]; edges: Edge[] } | null>(key, null);
+    if (!graphData) throw new Error(`Graph "${name}" is corrupted (backup saved)`);
     set({ nodes: graphData.nodes, edges: graphData.edges });
   },
 

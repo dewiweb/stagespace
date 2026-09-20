@@ -1,7 +1,7 @@
 import { StateCreator } from 'zustand';
 import { safeInvoke as invoke } from '../../utils/tauri';
 import { toast } from '../../utils/toast-helpers';
-import { safeSetItem } from '../../utils/safeStorage';
+import { safeSetItem, safeParseStoredJson } from '../../utils/safeStorage';
 
 /// Configuration OSC partagée — adresse, port, profil
 /// Utilisée par Toolbar (saisie), TrajectoryPanel (playMovement), goToNextCue (GO button)
@@ -17,13 +17,7 @@ interface PersistedOscConfig {
 }
 
 function loadConfigFromStorage(): Partial<PersistedOscConfig> {
-  try {
-    const raw = localStorage.getItem(OSC_CONFIG_STORAGE_KEY);
-    if (!raw) return {};
-    return JSON.parse(raw);
-  } catch {
-    return {};
-  }
+  return safeParseStoredJson<Partial<PersistedOscConfig>>(OSC_CONFIG_STORAGE_KEY, {});
 }
 
 function saveConfigToStorage(config: PersistedOscConfig) {

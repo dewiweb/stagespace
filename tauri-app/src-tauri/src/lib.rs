@@ -47,14 +47,8 @@ use graph::parser::build_graph_from_json;
 
 // État global de l'application
 pub struct AppState {
-    pub runtime: Arc<Mutex<Option<Runtime>>>,
     pub audio_state: Arc<Mutex<AudioState>>,
     pub osc_receiver: Arc<Mutex<OscReceiver>>,
-    /// Sender OSC "panique" — gardé en sync avec la config du MergeRuntime
-    /// par `set_osc_output` pour que send_osc_position atteigne le bon renderer.
-    pub osc_sender: Arc<Mutex<OscSender>>,
-    /// Osc IDs actuels (pour hot-swap)
-    pub current_osc_ids: Arc<Mutex<Vec<u32>>>,
     pub presets: Arc<Mutex<PresetManager>>,
     pub app_handle: Arc<Mutex<Option<AppHandle>>>,
     /// Multi-movement: plusieurs runtimes parallèles indépendants (workers)
@@ -152,45 +146,30 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage({
             let osc_sender = OscSender::default();
-            // Ne pas panic si le port 8000 est pris — mode dégradé
-            let merge_rt =
-                match MergeRuntime::new("127.0.0.1".to_string(), 8000, osc_sender.clone(), 60.0) {
-                    Ok(rt) => rt,
-                    Err(e) => {
-                        eprintln!(
-                            "[WARN] MergeRuntime failed to bind port 8000: {e}. \
-                             Trying port 8002 as fallback..."
-                        );
-                        match MergeRuntime::new(
-                            "127.0.0.1".to_string(),
-                            8002,
-                            osc_sender.clone(),
-                            60.0,
-                        ) {
-                            Ok(rt) => rt,
-                            Err(e2) => {
-                                eprintln!(
-                                    "[ERROR] MergeRuntime failed on both ports: {e}, {e2}. \
-                                     Starting with a disabled merge runtime."
-                                );
-                                // Dernier recours : port 0 (OS assigne un port aléatoire)
-                                MergeRuntime::new(
-                                    "127.0.0.1".to_string(),
-                                    0,
-                                    osc_sender.clone(),
-                                    60.0,
-                                )
-                                .expect("MergeRuntime must start on port 0")
-                            }
+            // Ports candidats : 8000 (défaut), 8002 (fallback), 0 (port OS).
+            // Si aucun ne bind — pas de stack UDP — l'app ne peut pas servir :
+            // exit explicite plutôt qu'un panic ou un runtime zombie.
+            let merge_rt = [8000u16, 8002, 0]
+                .into_iter()
+                .enumerate()
+                .find_map(|(i, port)| {
+                    match MergeRuntime::new("127.0.0.1".to_string(), port, osc_sender.clone(), 60.0)
+                    {
+                        Ok(rt) => Some(rt),
+                        Err(e) => {
+                            eprintln!("[WARN] MergeRuntime bind port {port} failed: {e}");
+                            let _ = i;
+                            None
                         }
                     }
-                };
+                })
+                .unwrap_or_else(|| {
+                    eprintln!("[FATAL] MergeRuntime: no UDP port available — exiting");
+                    std::process::exit(1);
+                });
             AppState {
-                runtime: Arc::new(Mutex::new(None)),
                 audio_state: Arc::new(Mutex::new(AudioState::new())),
                 osc_receiver: Arc::new(Mutex::new(OscReceiver::new(8001))),
-                osc_sender: Arc::new(Mutex::new(osc_sender)),
-                current_osc_ids: Arc::new(Mutex::new(Vec::new())),
                 presets: Arc::new(Mutex::new(PresetManager::new())),
                 app_handle: Arc::new(Mutex::new(None)),
                 movements: Arc::new(Mutex::new(HashMap::new())),
@@ -213,15 +192,6 @@ pub fn run() {
                 };
                 for movement in drained {
                     movement.runtime.stop(); // stop() join le thread proprement
-                }
-                // Stopper aussi le runtime legacy
-                if let Some(runtime) = state
-                    .runtime
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .take()
-                {
-                    runtime.stop();
                 }
                 // Stopper le MergeRuntime
                 state

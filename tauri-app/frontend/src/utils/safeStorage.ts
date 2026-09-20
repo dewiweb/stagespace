@@ -60,6 +60,9 @@ export function safeParseStoredJson<T>(key: string, fallback: T): T {
   } catch {
     try {
       localStorage.setItem(`${key}.corrupt`, raw);
+      // Purger la clé d'origine — sinon chaque boot re-parse, re-backup et
+      // réaffiche le toast sticky jusqu'à intervention manuelle.
+      localStorage.removeItem(key);
     } catch {
       // Même le backup peut échouer (quota) — le toast ci-dessous suffit
     }

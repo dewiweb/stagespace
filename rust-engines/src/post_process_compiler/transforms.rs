@@ -289,21 +289,24 @@ fn compile_mirror(node: &Node) -> Result<TransformFn, PostProcessCompileError> {
 }
 
 fn compile_clamp(node: &Node) -> Result<TransformFn, PostProcessCompileError> {
-    let min = get_param_f64_or(node, "min", -10.0);
-    let max = get_param_f64_or(node, "max", 10.0);
+    // Accepte les deux schémas : min/max scalaires OU min_x..max_z par axe
+    // (clés du node Clamp sub-graph — le frontend envoie les deux selon le
+    // contexte). Bornes swappées si min > max : f64::clamp paniquerait dans
+    // le merge thread → blackout OSC.
+    let lo = Vector3::new(
+        get_param_f64_or(node, "min_x", get_param_f64_or(node, "min", -10.0)),
+        get_param_f64_or(node, "min_y", get_param_f64_or(node, "min", -10.0)),
+        get_param_f64_or(node, "min_z", get_param_f64_or(node, "min", -10.0)),
+    );
+    let hi = Vector3::new(
+        get_param_f64_or(node, "max_x", get_param_f64_or(node, "max", 10.0)),
+        get_param_f64_or(node, "max_y", get_param_f64_or(node, "max", 10.0)),
+        get_param_f64_or(node, "max_z", get_param_f64_or(node, "max", 10.0)),
+    );
     Ok(Box::new(move |_ctx, positions| {
         positions
             .into_iter()
-            .map(|(idx, pos)| {
-                (
-                    idx,
-                    Vector3::new(
-                        pos.x.clamp(min, max),
-                        pos.y.clamp(min, max),
-                        pos.z.clamp(min, max),
-                    ),
-                )
-            })
+            .map(|(idx, pos)| (idx, crate::engines::modifiers::clamp(pos, lo, hi)))
             .collect()
     }))
 }

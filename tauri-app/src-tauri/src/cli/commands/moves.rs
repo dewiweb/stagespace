@@ -116,9 +116,10 @@ pub fn cmd_activate_move(args: &[&str]) -> Result<String, String> {
             is_preview,
         );
 
-        // NOTE: les osc_ids globaux sont gérés par set_global_osc_ids (frontend).
-        // En mode CLI, on les set directement ici.
-        merge_rt.set_osc_ids(osc_ids.clone());
+        // La liste globale = TOUTES les tracks connues (pas le sous-ensemble
+        // du move) — sinon track_indices (index dans all_osc_ids) pointerait
+        // hors bornes ou sur les mauvaises tracks.
+        merge_rt.set_osc_ids(all_osc_ids.clone());
         merge_rt.set_origin(nalgebra::Vector3::new(origin[0], origin[1], origin[2]));
 
         // Démarrer le MergeRuntime si pas déjà démarré
@@ -128,9 +129,25 @@ pub fn cmd_activate_move(args: &[&str]) -> Result<String, String> {
                 .merge_runtime
                 .lock()
                 .unwrap_or_else(|e| e.into_inner());
-            merge_rt
-                .start()
-                .map_err(|e| format!("Failed to start MergeRuntime: {e}"))?;
+            if let Err(e) = merge_rt.start() {
+                // Cleanup : ne pas laisser un worker orphelin enregistré
+                // (même logique que spawn_move / move_management.rs).
+                drop(merge_rt);
+                state
+                    .merge_runtime
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .unregister_move(&move_id);
+                let removed = state
+                    .movements
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove(&move_id);
+                if let Some(mv) = removed {
+                    mv.runtime.stop();
+                }
+                return Err(format!("Failed to start MergeRuntime: {e}"));
+            }
         }
     }
 

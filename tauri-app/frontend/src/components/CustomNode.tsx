@@ -166,6 +166,8 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
     // Node standard : 1 handle en haut
     // Pour les engines/physics/falloffs qui ont aussi un port "duration", on ajoute un handle latéral
     const hasDurationPort = inputPorts.includes('duration');
+    // Nodes spline (Evaluate/Trim/Offset) : port 'spline' dédié pour DrawSpline
+    const hasSplinePort = inputPorts.includes('spline');
     return (
       <>
         <Handle
@@ -179,8 +181,17 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
             type="target"
             position={Position.Left}
             id="duration"
-            style={{ top: '50%' }}
+            style={{ top: hasSplinePort ? '30%' : '50%' }}
             className="!w-2.5 !h-2.5 !bg-yellow-500"
+          />
+        )}
+        {hasSplinePort && (
+          <Handle
+            type="target"
+            position={Position.Left}
+            id="spline"
+            style={{ top: '70%' }}
+            className="!w-2.5 !h-2.5 !bg-emerald-500"
           />
         )}
       </>

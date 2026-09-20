@@ -274,17 +274,6 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     ),
   },
   {
-    id: 'circle-barycentric',
-    name: 'Circle + Barycenter',
-    icon: '⊙',
-    description: 'Circle recentered around a custom point via barycentric group',
-    category: 'modifier',
-    build: (n) => baseFlow('Circular',
-      { n_objects: n, radius: 1.5, speed: 1.0, plane: 'xz', phase_offset: true }, n, 4.0,
-      [{ type: 'BarycentricGroup', position: { x: 480, y: 180 }, params: { centerX: 2.0, centerY: 0, centerZ: 0 } }],
-    ),
-  },
-  {
     id: 'modifier-chain',
     name: 'Modifier Chain',
     icon: '🔗',
@@ -390,7 +379,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
         edges: [
           makeEdge(objects.id, evalSpline.id, 'output', 'input'),
           makeEdge(duration.id, evalSpline.id, 'output', 'duration'),
-          makeEdge(drawSpline.id, evalSpline.id, 'output', 'input'),
+          makeEdge(drawSpline.id, evalSpline.id, 'output', 'spline'),
           makeEdge(evalSpline.id, output.id, 'output', 'input'),
         ],
       };
