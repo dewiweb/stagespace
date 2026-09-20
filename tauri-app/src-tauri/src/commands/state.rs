@@ -1,5 +1,5 @@
 use crate::{AppState, Movement};
-use stagespace_engines::{AudioState, MergeRuntime};
+use stagespace_engines::{AudioState, MergeRuntime, OscReceiver};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -31,6 +31,7 @@ pub struct Shared {
     pub move_generation: Arc<AtomicU64>,
     pub merge_runtime: Arc<Mutex<MergeRuntime>>,
     pub recall_in_progress: Arc<AtomicBool>,
+    pub osc_receiver: Arc<Mutex<OscReceiver>>,
 }
 
 impl Shared {
@@ -43,6 +44,7 @@ impl Shared {
             move_generation: state.move_generation.clone(),
             merge_runtime: state.merge_runtime.clone(),
             recall_in_progress: state.recall_in_progress.clone(),
+            osc_receiver: state.osc_receiver.clone(),
         }
     }
 }

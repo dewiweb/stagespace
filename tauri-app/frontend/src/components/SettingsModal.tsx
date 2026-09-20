@@ -38,21 +38,9 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     })();
   }, []);
 
-  // Ce composant est un modal — bloque les raccourcis live (Esc=panic…)
-  useModalGuard();
-
-  // Fermer avec Escape — preventDefault pour que le handler global
-  // (Toolbar) voie e.defaultPrevented et ne déclenche pas panic().
-  React.useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  // Ce composant est un modal — bloque les raccourcis live. Esc le ferme
+  // via closeTopModal() dans le handler global (Toolbar) — jamais panic.
+  useModalGuard(onClose);
 
   const handleOscIdsChange = (value: string) => {
     setOscIdsStr(value);

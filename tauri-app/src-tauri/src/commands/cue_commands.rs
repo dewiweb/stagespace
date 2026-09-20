@@ -127,10 +127,21 @@ pub async fn store_cue(
 // ─── Recall Cue ───
 
 /// Rappelle un cue : désactiver/activer moves, hot-swap global graph, restaurer macros/depths/positions
+///
+/// C'est la commande la plus lourde du backend (compile des graphes, join de
+/// threads workers, respawn de moves) — elle tourne sur `spawn_blocking`
+/// pour ne pas affamer l'executor async pendant un live.
 #[tauri::command]
 pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), String> {
+    let sh = crate::commands::state::Shared::from_state(&state);
+    tauri::async_runtime::spawn_blocking(move || recall_cue_inner(cue, sh))
+        .await
+        .map_err(|e| format!("Cue recall task failed: {e}"))?
+}
+
+fn recall_cue_inner(cue: Cue, sh: crate::commands::state::Shared) -> Result<(), String> {
     // Anti-recall concurrent : si un recall est déjà en cours, refuser
-    if state
+    if sh
         .recall_in_progress
         .compare_exchange(
             false,
@@ -144,7 +155,7 @@ pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), Stri
     }
 
     // Garantir que le flag est remis à false quoi qu'il arrive
-    let _guard = RecallGuard(&state.recall_in_progress);
+    let _guard = RecallGuard(&sh.recall_in_progress);
 
     // Anti-loop OSC IN : ignorer les messages entrants pendant le recall —
     // le renderer renvoie souvent un echo des valeurs qu'on vient d'envoyer.
@@ -152,13 +163,13 @@ pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), Stri
     // marge de settle (le fixe 500ms expirait avant la fin d'un long fade,
     // laissant passer les echos de fin de cue).
     let suppress_ms = 500u64 + (cue.fade_duration.max(0.0) * 1000.0) as u64;
-    lock_or_recover(&state.osc_receiver).suppress_ms(suppress_ms);
+    lock_or_recover(&sh.osc_receiver).suppress_ms(suppress_ms);
 
     // 1. Hot-swap le graph global AVANT de désactiver les moves (fail-fast sans side effects)
     //    Si la compilation échoue, on retourne une erreur sans avoir modifié l'état.
     if let Some(ref global_graph) = cue.global_graph {
         let audio_state = {
-            let merge_rt = lock_or_recover(&state.merge_runtime);
+            let merge_rt = lock_or_recover(&sh.merge_runtime);
             merge_rt
                 .audio_state_arc()
                 .lock()
@@ -172,7 +183,7 @@ pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), Stri
         let effects = stagespace_engines::extract_graph_effects(&graph)
             .map_err(|e| format!("Failed to extract graph effects: {e:?}"))?;
 
-        let merge_rt = lock_or_recover(&state.merge_runtime);
+        let merge_rt = lock_or_recover(&sh.merge_runtime);
         let macros = merge_rt.macros();
 
         let compile_params = stagespace_engines::PostProcessCompileParams { graph, macros };
@@ -186,7 +197,7 @@ pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), Stri
 
     // 2. Désactiver les moves qui ne sont pas dans active_move_ids
     {
-        let movements = lock_or_recover(&state.movements);
+        let movements = lock_or_recover(&sh.movements);
         let active_ids: std::collections::HashSet<&str> =
             cue.active_move_ids.iter().map(|s| s.as_str()).collect();
 
@@ -203,8 +214,8 @@ pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), Stri
             // Un id en cours d'activation (pending) n'est pas touché — il
             // s'auto-abortera via le check recall_in_progress de spawn_move.
             let movement = {
-                let pending = lock_or_recover(&state.pending_move_ids);
-                let mut movements = lock_or_recover(&state.movements);
+                let pending = lock_or_recover(&sh.pending_move_ids);
+                let mut movements = lock_or_recover(&sh.movements);
                 if pending.contains(&id) {
                     None
                 } else {
@@ -212,7 +223,7 @@ pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), Stri
                 }
             };
             {
-                let merge_rt = lock_or_recover(&state.merge_runtime);
+                let merge_rt = lock_or_recover(&sh.merge_runtime);
                 merge_rt.unregister_move(&id);
             }
             if let Some(movement) = movement {
@@ -224,7 +235,7 @@ pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), Stri
 
     // 3. Restaurer les macros spatiales (fast path atomic)
     if let Some(ref macros) = cue.macros {
-        let merge_rt = lock_or_recover(&state.merge_runtime);
+        let merge_rt = lock_or_recover(&sh.merge_runtime);
         let ms = merge_rt.macros();
         ms.set_scale(macros.scale);
         ms.set_shift(macros.shift_x, macros.shift_y, macros.shift_z);
@@ -233,7 +244,7 @@ pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), Stri
 
     // 4. Restaurer les macros spatiales étendues
     if let Some(ref spatial) = cue.spatial_macros {
-        let merge_rt = lock_or_recover(&state.merge_runtime);
+        let merge_rt = lock_or_recover(&sh.merge_runtime);
         let ms = merge_rt.macros();
         ms.set_radius_scale(spatial.radius_scale);
         ms.set_height_offset(spatial.height_offset);
@@ -241,13 +252,13 @@ pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), Stri
 
     // 5. Restaurer les per-track depths
     if !cue.per_track_depths.is_empty() {
-        let merge_rt = lock_or_recover(&state.merge_runtime);
+        let merge_rt = lock_or_recover(&sh.merge_runtime);
         merge_rt.set_track_depths(cue.per_track_depths.clone());
     }
 
     // 6. Restaurer les manual positions
     {
-        let merge_rt = lock_or_recover(&state.merge_runtime);
+        let merge_rt = lock_or_recover(&sh.merge_runtime);
         merge_rt.clear_all_manual_positions();
         for (idx, pos) in &cue.manual_positions {
             merge_rt.set_manual_position(*idx, *pos);
@@ -258,7 +269,7 @@ pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), Stri
     //     Champ absent (ancien cue) = ne pas toucher à l'état courant ;
     //     champ présent (même vide) = restaurer exactement le snapshot.
     {
-        let merge_rt = lock_or_recover(&state.merge_runtime);
+        let merge_rt = lock_or_recover(&sh.merge_runtime);
         if let Some(ref channels) = cue.object_channels {
             merge_rt.clear_all_object_channels();
             for (idx, chs) in channels {
@@ -281,7 +292,7 @@ pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), Stri
         }
     }
     if let Some(ref maps) = cue.osc_mappings {
-        let receiver = lock_or_recover(&state.osc_receiver);
+        let receiver = lock_or_recover(&sh.osc_receiver);
         receiver.clear_mappings();
         for m in maps {
             // Un mapping invalide dans un vieux cue ne doit pas faire
@@ -300,25 +311,24 @@ pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), Stri
         use crate::commands::merge_commands::{
             parse_direction, parse_loop_mode, spawn_move_for_recall, MoveSpec,
         };
-        let sh = crate::commands::state::Shared::from_state(&state);
         let speed = cue.macros.as_ref().map(|m| m.speed);
         for snap in &cue.moves {
             // Déjà actif et running → ne pas respawner (le move continue).
             let already_running = {
-                let movements = lock_or_recover(&state.movements);
+                let movements = lock_or_recover(&sh.movements);
                 let worker_alive = movements
                     .get(&snap.id)
                     .is_some_and(|m| m.runtime.is_running());
                 // Worker vivant mais retiré du merge (stale-kill) = zombie —
                 // il faut respawn. is_running() seul ne suffit pas.
-                let in_merge = lock_or_recover(&state.merge_runtime).has_move(&snap.id);
+                let in_merge = lock_or_recover(&sh.merge_runtime).has_move(&snap.id);
                 worker_alive && in_merge
             };
             if already_running {
                 continue;
             }
             // Entrée fantôme (worker stoppé ou zombie hors-merge) → purger.
-            let ghost = lock_or_recover(&state.movements).remove(&snap.id);
+            let ghost = lock_or_recover(&sh.movements).remove(&snap.id);
             if let Some(mv) = ghost {
                 mv.runtime.stop();
             }
@@ -341,7 +351,7 @@ pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), Stri
             match spawn_move_for_recall(spec, &sh) {
                 Ok(_) => {
                     if cue.fade_duration > 0.0 {
-                        lock_or_recover(&state.merge_runtime)
+                        lock_or_recover(&sh.merge_runtime)
                             .start_fade_in(&snap.id, cue.fade_duration);
                     }
                 }
@@ -354,8 +364,7 @@ pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), Stri
         }
     }
 
-    state
-        .app_handle
+    sh.app_handle
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .as_ref()

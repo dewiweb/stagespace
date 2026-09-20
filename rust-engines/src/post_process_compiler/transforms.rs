@@ -94,17 +94,19 @@ fn get_param_array_f64(node: &Node, key: &str) -> Vec<f64> {
 
 fn compile_scale(node: &Node) -> Result<TransformFn, PostProcessCompileError> {
     let default_scale = get_param_f64_or(node, "scale", 1.0);
-    Ok(Box::new(move |_ctx, positions| {
+    Ok(Box::new(move |ctx, positions| {
         // Si le MacroState a un scale != 1.0, l'utiliser ; sinon utiliser le param du node
-        let macro_scale = _ctx.macros.get_scale();
+        let macro_scale = ctx.macros.get_scale();
         let scale = if (macro_scale - 1.0).abs() > 1e-10 {
             macro_scale
         } else {
             default_scale
         };
+        // Positions world-space : le scale pivote autour de l'origin globale
+        let origin = ctx.origin;
         positions
             .into_iter()
-            .map(|(idx, pos)| (idx, pos * scale))
+            .map(|(idx, pos)| (idx, origin + (pos - origin) * scale))
             .collect()
     }))
 }
@@ -124,9 +126,11 @@ fn compile_rotate(node: &Node) -> Result<TransformFn, PostProcessCompileError> {
         let rx = Rotation3::from_axis_angle(&nalgebra::Vector3::x_axis(), pitch.to_radians());
         let rz = Rotation3::from_axis_angle(&nalgebra::Vector3::z_axis(), roll.to_radians());
         let rot = rz * rx * ry;
+        // Positions world-space : rotation autour de l'origin globale
+        let origin = ctx.origin;
         positions
             .into_iter()
-            .map(|(idx, pos)| (idx, rot * pos))
+            .map(|(idx, pos)| (idx, origin + rot * (pos - origin)))
             .collect()
     }))
 }
@@ -140,9 +144,9 @@ fn compile_offset(node: &Node) -> Result<TransformFn, PostProcessCompileError> {
         let dx = if shift.x != 0.0 { shift.x } else { default_x };
         let dy = if shift.y != 0.0 { shift.y } else { default_y };
         let dz = if shift.z != 0.0 { shift.z } else { default_z };
-        // Comme default_post_process_fn : pos + origin + shift
-        // (les positions des engines sont relatives à l'origin)
-        let offset = ctx.origin + Vector3::new(dx, dy, dz);
+        // Positions world-space : l'origin du move est déjà appliquée par le
+        // worker — l'offset est une translation pure (pas de + origin ici)
+        let offset = Vector3::new(dx, dy, dz);
         positions
             .into_iter()
             .map(|(idx, pos)| (idx, pos + offset))
@@ -229,10 +233,11 @@ fn compile_audio_falloff(node: &Node) -> Result<TransformFn, PostProcessCompileE
             .unwrap_or(0.0);
         // Appliquer un facteur basé sur l'amplitude
         let factor = 1.0 + (amplitude - 0.5) * amount;
+        let origin = ctx.origin;
         match target.as_str() {
             "scale" => positions
                 .into_iter()
-                .map(|(idx, pos)| (idx, pos * factor))
+                .map(|(idx, pos)| (idx, origin + (pos - origin) * factor))
                 .collect(),
             "height" => {
                 let offset = (amplitude - 0.5) * amount;
@@ -271,20 +276,19 @@ fn compile_mirror(node: &Node) -> Result<TransformFn, PostProcessCompileError> {
         .and_then(|v| v.as_str())
         .unwrap_or("x")
         .to_string();
-    Ok(Box::new(move |_ctx, positions| match axis.as_str() {
-        "x" => positions
+    Ok(Box::new(move |ctx, positions| {
+        // Positions world-space : le miroir pivote autour de l'origin globale
+        let origin = ctx.origin;
+        let mirror = |pos: Vector3<f64>| match axis.as_str() {
+            "x" => Vector3::new(-pos.x, pos.y, pos.z),
+            "y" => Vector3::new(pos.x, -pos.y, pos.z),
+            "z" => Vector3::new(pos.x, pos.y, -pos.z),
+            _ => pos,
+        };
+        positions
             .into_iter()
-            .map(|(idx, pos)| (idx, Vector3::new(-pos.x, pos.y, pos.z)))
-            .collect(),
-        "y" => positions
-            .into_iter()
-            .map(|(idx, pos)| (idx, Vector3::new(pos.x, -pos.y, pos.z)))
-            .collect(),
-        "z" => positions
-            .into_iter()
-            .map(|(idx, pos)| (idx, Vector3::new(pos.x, pos.y, -pos.z)))
-            .collect(),
-        _ => positions,
+            .map(|(idx, pos)| (idx, origin + mirror(pos - origin)))
+            .collect()
     }))
 }
 

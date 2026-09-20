@@ -25,6 +25,7 @@ import { createMoveSlotsSlice, type MoveSlotsSlice, computeTrackIndices } from '
 import { createOscConfigSlice, type OscConfigSlice } from './slices/oscConfigSlice';
 import { createSplineLibrarySlice, type SplineLibrarySlice } from './slices/splineLibrarySlice';
 import { createSpatialFxSlice, type SpatialFxSlice } from './slices/spatialFxSlice';
+import { createInteractionModesSlice, type InteractionModesSlice } from './slices/interactionModesSlice';
 import { SHAPE_PRESETS } from '../utils/shapePresets';
 import { toast } from '../utils/toast-helpers';
 import { safeSetItem } from '../utils/safeStorage';
@@ -47,7 +48,8 @@ export type { NodeType, AppStatus, MovementInfo, HolTrack, HolProject };
 interface GraphState
   extends PerfSlice, AudioSlice, OscSlice, PersistenceSlice,
     MacrosSlice, HolProjectSlice, DrawModeSlice,
-    MovementSlice, MoveSlotsSlice, OscConfigSlice, SplineLibrarySlice, SpatialFxSlice {
+    MovementSlice, MoveSlotsSlice, OscConfigSlice, SplineLibrarySlice, SpatialFxSlice,
+    InteractionModesSlice {
   // React Flow state (single source of truth)
   nodes: Node[];
   edges: Edge[];
@@ -173,6 +175,7 @@ export const useGraphStore = create<GraphState>()((...a) => {
   ...createOscConfigSlice(...a),
   ...createSplineLibrarySlice(...a),
   ...createSpatialFxSlice(...a),
+  ...createInteractionModesSlice(...a),
 
   // Graphe par défaut — preset Circle pour que l'app ne démarre jamais vide
   ...(() => {
@@ -481,72 +484,80 @@ export const useGraphStore = create<GraphState>()((...a) => {
   // ─── Panic ───
   panic: async () => {
     const { movements, holProject, manualOscIds } = get();
-    // Stop immédiat — tous les movements + runtime legacy
-    if (movements.length > 0) {
-      await get().stopAllMovements();
+    let failedStops = 0;
+    // Stop immédiat — tous les movements + runtime legacy. Un throw ici ne
+    // doit PAS empêcher l'envoi des positions d'origine (sinon le spatializer
+    // garde les dernières positions et les sources restent "en l'air").
+    try {
+      if (movements.length > 0) {
+        await get().stopAllMovements();
+      }
+      if (get().isPlaying) {
+        await get().stopGraph();
+      }
+    } catch (e) {
+      failedStops += 1;
+      console.error('Panic: stop failed:', e);
     }
-    if (get().isPlaying) {
-      await get().stopGraph();
-    }
-    // Envoyer les positions d'origine à tous les récepteurs OSC
-    const { safeInvoke: invoke } = await import('../utils/tauri');
+    // Envoyer les positions d'origine à tous les récepteurs OSC — en
+    // parallèle (64 awaits séquentiels dans un arrêt d'urgence = latence
+    // inutile). `send_osc_position` route via le MergeRuntime (cible live).
+    const sends: Promise<unknown>[] = [];
     if (holProject) {
       for (const track of holProject.tracks) {
-        try {
-          await invoke('send_osc_position', {
+        sends.push(
+          invoke('send_osc_position', {
             oscId: track.id,
             x: track.position[0],
             y: track.position[1],
             z: track.position[2],
-          });
-        } catch (e) {
-          console.error('Panic: failed to send position for track', track.id, e);
-        }
+          }),
+        );
       }
     } else {
       // Sans .hol: envoyer position (0,0,0) pour tous les manualOscIds
       for (const id of manualOscIds) {
-        try {
-          await invoke('send_osc_position', { oscId: id, x: 0, y: 0, z: 0 });
-        } catch (e) {
-          console.error('Panic: failed to send position for id', id, e);
-        }
+        sends.push(invoke('send_osc_position', { oscId: id, x: 0, y: 0, z: 0 }));
       }
+    }
+    const results = await Promise.allSettled(sends);
+    const failedSends = results.filter((r) => r.status === 'rejected').length;
+    for (const r of results) {
+      if (r.status === 'rejected') console.error('Panic: position reset failed:', r.reason);
+    }
+    // Feedback obligatoire — un panic silencieux est un panic douteux
+    if (failedStops === 0 && failedSends === 0) {
+      toast.warning('PANIC — all moves stopped, positions reset', 4000);
+    } else {
+      toast.error(
+        `PANIC partially failed — ${failedStops} stop error(s), ${failedSends} position reset(s) lost. Verify the spatializer state.`,
+        0,
+      );
     }
   },
 
   };
 });
 
-// Hook to listen to position updates from Rust
-export const usePositionListener = () => {
-  const setPositions = useGraphStore((s) => s.setPositions);
-  const setCurrentTime = useGraphStore((s) => s.setCurrentTime);
-
+// ── Audio error listener — surface les pannes de capture (micro débranché,
+// stream mort) pendant un show. Sans cet écouteur l'event `audio-error` émis
+// par le poller Rust tombait dans le vide.
+let lastAudioError = '';
+let lastAudioErrorAt = 0;
+export const useAudioErrorListener = () => {
   React.useEffect(() => {
-    const unlisten = listen('positions-update', (event: any) => {
-      const { time, positions } = event.payload as {
-        time: number;
-        positions: Array<[number, [number, number, number]]>;
-      };
-      setPositions(positions.map(([index, [x, y, z]]) => ({ index, x, y, z })));
-      setCurrentTime(time);
+    const unlisten = listen<string>('audio-error', (event) => {
+      const message = typeof event.payload === 'string' ? event.payload : String(event.payload);
+      // Dedup : le poller peut renvoyer la même erreur en boucle — un toast
+      // identique toutes les 5s max, sinon jamais.
+      const now = Date.now();
+      if (message === lastAudioError && now - lastAudioErrorAt < 5000) return;
+      lastAudioError = message;
+      lastAudioErrorAt = now;
+      toast.error(`Audio capture failed: ${message}`);
     });
     return () => { unlisten.then((fn) => fn()).catch(() => {}); };
-  }, [setPositions, setCurrentTime]);
-};
-
-// Hook to listen to OSC value updates from Rust
-export const useOscValueListener = () => {
-  const setOscValues = useGraphStore((s) => s.setOscValues);
-
-  React.useEffect(() => {
-    const unlisten = listen('osc-value-update', (event: any) => {
-      const { handler, value } = event.payload as { handler: string; value: number[] };
-      setOscValues((prev) => new Map(prev).set(handler, value));
-    });
-    return () => { unlisten.then((fn) => fn()).catch(() => {}); };
-  }, [setOscValues]);
+  }, []);
 };
 
 // ── Global positions listener — écoute l'event global-positions du MergeRuntime ──
@@ -572,7 +583,11 @@ export const useMovementPositionsListener = () => {
   const oscProfile = useGraphStore((s) => s.oscProfile);
   React.useEffect(() => {
     invoke('set_osc_output', { address: oscAddress, port: oscPort, profile: oscProfile })
-      .catch((e: any) => console.error('Failed to set OSC output:', e));
+      .catch((e: any) => {
+        console.error('Failed to set OSC output:', e);
+        // Zéro OSC sortant = show silencieux — l'utilisateur DOIT le voir.
+        toast.error(`OSC output config failed — no positions will be sent: ${e}`);
+      });
   }, [oscAddress, oscPort, oscProfile]);
 
   // Pousser les osc_ids globaux (manualOscIds ou hol track ids) au backend.
@@ -586,7 +601,11 @@ export const useMovementPositionsListener = () => {
     // Utiliser les track ids du hol project si disponible, sinon manualOscIds
     const globalIds = holProject?.tracks?.map((t: any) => t.id) ?? manualOscIds;
     invoke('set_global_osc_ids', { oscIds: globalIds })
-      .catch((e: any) => console.error('Failed to set global osc ids:', e));
+      .catch((e: any) => {
+        console.error('Failed to set global osc ids:', e);
+        // Sans mapping track→osc_id, le MergeRuntime n'émet rien — critique.
+        toast.error(`OSC track mapping failed — output may be silent: ${e}`);
+      });
   }, [manualOscIds, holProject, movementsCount]);
 
   // Écouter global-positions (un seul event avec toutes les positions mergées)

@@ -147,6 +147,10 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage({
             let osc_sender = OscSender::default();
+            // AudioState maître — partagé par le MergeRuntime et tous les
+            // workers (injection à la construction). Le poller n'écrit que
+            // cet Arc ; plus de copies synchronisées par polling.
+            let audio_state = Arc::new(Mutex::new(AudioState::new()));
             // Ports candidats : 8000 (défaut), 8002 (fallback), 0 (port OS).
             // Si aucun ne bind — pas de stack UDP — l'app ne peut pas servir :
             // exit explicite plutôt qu'un panic ou un runtime zombie.
@@ -154,8 +158,13 @@ pub fn run() {
                 .into_iter()
                 .enumerate()
                 .find_map(|(i, port)| {
-                    match MergeRuntime::new("127.0.0.1".to_string(), port, osc_sender.clone(), 60.0)
-                    {
+                    match MergeRuntime::new_with_audio_state(
+                        "127.0.0.1".to_string(),
+                        port,
+                        osc_sender.clone(),
+                        60.0,
+                        audio_state.clone(),
+                    ) {
                         Ok(rt) => Some(rt),
                         Err(e) => {
                             eprintln!("[WARN] MergeRuntime bind port {port} failed: {e}");
@@ -169,7 +178,7 @@ pub fn run() {
                     std::process::exit(1);
                 });
             AppState {
-                audio_state: Arc::new(Mutex::new(AudioState::new())),
+                audio_state,
                 osc_receiver: Arc::new(Mutex::new(OscReceiver::new(8001))),
                 presets: Arc::new(Mutex::new(PresetManager::new())),
                 app_handle: Arc::new(Mutex::new(None)),

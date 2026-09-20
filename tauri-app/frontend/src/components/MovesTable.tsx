@@ -71,14 +71,20 @@ export default function MovesTable() {
   const [editingMacrosFor, setEditingMacrosFor] = React.useState<string | null>(null);
 
   // Bloque les raccourcis live (Esc=panic, Space, Enter, Backspace) tant
-  // qu'un picker/éditeur inline est ouvert — sinon Esc sur le picker
-  // paniquerait le show en même temps.
+  // qu'un picker/éditeur inline est ouvert — Esc ferme le picker au sommet
+  // via closeTopModal() (handler global Toolbar), jamais le panic.
   const anyModalOpen =
     editingTracksFor !== null ||
     editingMacrosFor !== null ||
     editingTemplateFor !== null ||
     renamingId !== null;
-  useModalGuardOn(anyModalOpen);
+  useModalGuardOn(anyModalOpen, () => {
+    // Ordre = priorité de fermeture si plusieurs états sont empilés
+    if (renamingId !== null) setRenamingId(null);
+    else if (editingTemplateFor !== null) setEditingTemplateFor(null);
+    else if (editingMacrosFor !== null) setEditingMacrosFor(null);
+    else if (editingTracksFor !== null) setEditingTracksFor(null);
+  });
 
   // ─── GO feedback ───
   const [goFeedback, setGoFeedback] = React.useState<string | null>(null);

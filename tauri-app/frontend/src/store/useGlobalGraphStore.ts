@@ -175,6 +175,9 @@ export const useGlobalGraphStore = create<GlobalGraphState>((set, get) => ({
       await invoke('set_global_origin', { origin });
     } catch (e) {
       console.error('[pushGlobalGraph] Failed:', e);
+      // Le post-process global ne correspond plus à l'éditeur — critique en live.
+      const { toast } = await import('../utils/toast-helpers');
+      toast.error(`Global graph push failed — post-processing may be stale: ${e}`);
     }
   },
 

@@ -437,8 +437,13 @@ pub fn cmd_osc_validate(args: &[&str]) -> Result<String, String> {
         .clone();
     let graph = build_graph_from_json(&graph_json, &audio_state)?;
     let osc_sender = OscSender::default();
-    let runtime = Runtime::new("127.0.0.1".to_string(), port, osc_sender)
-        .map_err(|e| format!("Failed to create runtime: {e}"))?;
+    let runtime = Runtime::new_with_audio_state(
+        "127.0.0.1".to_string(),
+        port,
+        osc_sender,
+        state.audio_state.clone(),
+    )
+    .map_err(|e| format!("Failed to create runtime: {e}"))?;
     let overrides = runtime.audio_param_overrides();
     let compiled =
         compile_graph_with_audio_and_overrides(&graph, state.audio_state.clone(), overrides)?;

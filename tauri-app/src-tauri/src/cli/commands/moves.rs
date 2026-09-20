@@ -53,10 +53,16 @@ pub fn cmd_activate_move(args: &[&str]) -> Result<String, String> {
         .clone();
     let graph = build_graph_from_json(&graph_json, &audio_state)?;
 
-    // Créer le worker Runtime
+    // Créer le worker Runtime — AudioState maître injecté (même Arc que le
+    // merge et le state : une seule source de vérité, pas de propagation).
     let osc_sender = OscSender::default();
-    let runtime = Runtime::new("127.0.0.1".to_string(), 8000, osc_sender)
-        .map_err(|e| format!("Failed to create runtime: {e}"))?;
+    let runtime = Runtime::new_with_audio_state(
+        "127.0.0.1".to_string(),
+        8000,
+        osc_sender,
+        state.audio_state.clone(),
+    )
+    .map_err(|e| format!("Failed to create runtime: {e}"))?;
 
     let overrides = runtime.audio_param_overrides();
     let compiled =
@@ -120,7 +126,10 @@ pub fn cmd_activate_move(args: &[&str]) -> Result<String, String> {
         // du move) — sinon track_indices (index dans all_osc_ids) pointerait
         // hors bornes ou sur les mauvaises tracks.
         merge_rt.set_osc_ids(all_osc_ids.clone());
-        merge_rt.set_origin(nalgebra::Vector3::new(origin[0], origin[1], origin[2]));
+        // NB : l'origin du move est déjà appliquée par le worker
+        // (runtime.set_origin ci-dessus → move_transform). Ne PAS écrire
+        // l'origin globale du merge ici : c'est le pivot des transforms
+        // globaux, pas une ancre per-move (last-writer-wins).
 
         // Démarrer le MergeRuntime si pas déjà démarré
         if !merge_rt.is_running() {

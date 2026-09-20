@@ -18,18 +18,39 @@ pub async fn update_move_graph_merged(
     track_indices: Option<Vec<usize>>,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    let mut movements = lock_or_recover(&state.movements);
-    let movement = movements
-        .get_mut(&movement_id)
-        .ok_or_else(|| format!("Movement '{movement_id}' not found"))?;
+    // Snapshot court sous le lock — la compilation (lourde) se fait ensuite
+    // SANS tenir `movements`, sinon tout edit live gèle stop/panic/recall.
+    let (generation, overrides) = {
+        let movements = lock_or_recover(&state.movements);
+        let movement = movements
+            .get(&movement_id)
+            .ok_or_else(|| format!("Movement '{movement_id}' not found"))?;
+        (
+            movement.generation,
+            movement.runtime.audio_param_overrides(),
+        )
+    };
 
     let audio_state = lock_or_recover(&state.audio_state);
     let graph = build_graph_from_json(&graph_json, &audio_state)?;
     drop(audio_state);
 
-    let overrides = movement.runtime.audio_param_overrides();
     let compiled =
         compile_graph_with_audio_and_overrides(&graph, state.audio_state.clone(), overrides)?;
+
+    // Ré-application sous lock, avec check de génération — le move a pu être
+    // stoppé puis respawné pendant la compile : dans ce cas on applique au
+    // worker ACTUEL (même id, nouvelle génération) plutôt qu'au fantôme.
+    let mut movements = lock_or_recover(&state.movements);
+    let movement = movements
+        .get_mut(&movement_id)
+        .ok_or_else(|| format!("Movement '{movement_id}' stopped during recompile"))?;
+    if movement.generation != generation {
+        eprintln!(
+            "[WARN] update_move_graph_merged: '{movement_id}' respawned during \
+             compile — applying to the new worker anyway"
+        );
+    }
 
     // Hot-swap la duration si fournie
     if let Some(dur) = duration {
@@ -93,14 +114,17 @@ pub async fn update_global_graph(
     let effects = stagespace_engines::extract_graph_effects(&graph)
         .map_err(|e| format!("Failed to extract graph effects: {e:?}"))?;
 
-    let merge_rt = lock_or_recover(&state.merge_runtime);
-    let macros = merge_rt.macros();
+    // Snapshot des macros (Arc clonable) sous lock court — la compilation du
+    // post-process se fait SANS tenir `merge_runtime` (le thread merge lit
+    // les macros par Arc à chaque frame, pas besoin du lock pendant la compile).
+    let macros = lock_or_recover(&state.merge_runtime).macros();
 
     let compile_params = stagespace_engines::PostProcessCompileParams { graph, macros };
 
     let post_process_fn = stagespace_engines::compile_post_process(compile_params)
         .map_err(|e| format!("Failed to compile global graph: {e:?}"))?;
 
+    let merge_rt = lock_or_recover(&state.merge_runtime);
     merge_rt.swap_post_process_fn(post_process_fn);
     merge_rt.set_graph_effects(effects.zones, effects.modulations);
 

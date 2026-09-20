@@ -117,10 +117,17 @@ mod tests {
 
         let reader = thread::spawn(move || {
             let mut last_x = -1.0;
-            for _ in 0..100 {
+            // Borné mais assez grand pour que le writer finisse ses 100 writes
+            // même si le reader est schedulé en premier (race de scheduling —
+            // 100 reads peuvent terminer avant le premier write).
+            for _ in 0..100_000 {
                 let positions = buf_reader.read();
                 if !positions.is_empty() {
                     last_x = positions[0].1.x;
+                    // Une frame non-vide lue — condition remplie
+                    if last_x >= 0.0 {
+                        break;
+                    }
                 }
             }
             last_x

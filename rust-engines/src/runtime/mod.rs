@@ -67,6 +67,23 @@ pub struct Runtime {
 impl Runtime {
     /// Crée un nouveau runtime
     pub fn new(osc_address: String, osc_port: u16, osc_sender: OscSender) -> Result<Self> {
+        Self::new_with_audio_state(
+            osc_address,
+            osc_port,
+            osc_sender,
+            Arc::new(Mutex::new(AudioState::new())),
+        )
+    }
+
+    /// Runtime partageant l'`AudioState` de l'app — une seule source de vérité :
+    /// le poller écrit dans l'Arc maître, tous les workers le lisent à chaque
+    /// frame (plus de copies synchronisées par polling, plus de lag de 100ms).
+    pub fn new_with_audio_state(
+        osc_address: String,
+        osc_port: u16,
+        osc_sender: OscSender,
+        audio_state: Arc<Mutex<AudioState>>,
+    ) -> Result<Self> {
         let socket = UdpSocket::bind("0.0.0.0:0").map_err(StagespaceError::NetworkError)?;
         socket
             .connect((osc_address.as_str(), osc_port))
@@ -86,7 +103,7 @@ impl Runtime {
             overrides: OverrideManager::new(),
             origin: Arc::new(Mutex::new(nalgebra::Vector3::zeros())),
             animation_state: Arc::new(Mutex::new(None)),
-            audio_state: Arc::new(Mutex::new(AudioState::new())),
+            audio_state,
             audio_param_overrides: Arc::new(Mutex::new(HashMap::new())),
             position_buffer: Mutex::new(None),
             duration_ms: Arc::new(std::sync::atomic::AtomicU64::new(4000)),
@@ -226,17 +243,26 @@ impl Runtime {
         };
 
         let mut samples = Vec::with_capacity(n_samples);
+        // Origin du move : appliquée comme dans le playback loop (mode worker)
+        // pour que les samples soient en world-space, cohérents avec le buffer.
+        let origin = *self.origin.lock().unwrap_or_else(|e| e.into_inner());
+        let radius_scale = self.macros.get_radius_scale();
+        let height_offset = self.macros.get_height_offset();
         for i in 0..n_samples {
             let t = (i as f64 / (n_samples - 1).max(1) as f64) * duration;
             let pos = fn_ref(t, object_index);
-            // Appliquer macros: scale → rotation → shift (comme dans le playback loop)
-            let pos_scaled = pos * scale;
-            let pos_rotated = if let Some(ref rot) = rot_matrix {
-                rot * pos_scaled
-            } else {
-                pos_scaled
-            };
-            let pos_final = pos_rotated + shift;
+            // Même chaîne que le worker : radius_scale → height_offset →
+            // (fade=1) → scale → rotation → + origin + shift
+            let pos_final = move_transform(
+                pos,
+                origin,
+                scale,
+                shift,
+                rot_matrix.as_ref(),
+                radius_scale,
+                height_offset,
+                1.0,
+            );
             samples.push((t, pos_final.x, pos_final.y, pos_final.z));
         }
         samples
@@ -481,10 +507,11 @@ impl Runtime {
                 };
 
                 // Lire la fonction de position (hot-swappable)
-                // ── Mode worker : calculer juste raw_pos (avec speed, loop, direction, phase_offset, overrides)
-                //    et écrire dans le buffer. Le MergeRuntime fera le merge + post-processing + OSC.
-                // ── Mode legacy : calculer raw_pos + radius_scale + height_offset + depth,
-                //    puis envoyer OSC + callback (comportement actuel).
+                // ── Mode worker : calculer la position MONDE du move
+                //    (transform per-move : radius_scale → height_offset → fade →
+                //    scale → rotation → + origin + shift) et écrire dans le buffer.
+                //    Le MergeRuntime fera le merge + post-processing GLOBAL + OSC.
+                // ── Mode legacy : idem + depth/track_depths, puis envoi OSC direct.
                 if let Some(ref buffer) = position_buffer_arc {
                     // ── Mode worker ──
                     // Lire les osc_ids (hot-swappable) depuis l'arc
@@ -492,6 +519,29 @@ impl Runtime {
                         .read()
                         .unwrap_or_else(|e| e.into_inner())
                         .clone();
+                    // Origin du move (ancre monde de la trajectoire) — lue à
+                    // chaque frame pour refléter un set_origin en cours de jeu.
+                    let move_origin = *origin_arc.lock().unwrap_or_else(|e| e.into_inner());
+                    // Précalculer la matrice de rotation si rotation non-nulle
+                    let has_rotation = eff_yaw != 0.0 || eff_pitch != 0.0 || eff_roll != 0.0;
+                    let rot_matrix = if has_rotation {
+                        use nalgebra::Rotation3;
+                        let ry = Rotation3::from_axis_angle(
+                            &nalgebra::Vector3::y_axis(),
+                            eff_yaw.to_radians(),
+                        );
+                        let rx = Rotation3::from_axis_angle(
+                            &nalgebra::Vector3::x_axis(),
+                            eff_pitch.to_radians(),
+                        );
+                        let rz = Rotation3::from_axis_angle(
+                            &nalgebra::Vector3::z_axis(),
+                            eff_roll.to_radians(),
+                        );
+                        Some(rz * rx * ry)
+                    } else {
+                        None
+                    };
                     let positions: Vec<(usize, nalgebra::Vector3<f64>)> = {
                         let fn_ref = position_fn_arc.lock().unwrap_or_else(|e| e.into_inner());
                         let ovr = overrides.lock();
@@ -526,7 +576,20 @@ impl Runtime {
                                     }))
                                     .unwrap_or_else(|_e| nalgebra::Vector3::zeros())
                                 };
-                                (obj_idx, raw_pos)
+                                // Transform per-move → position monde
+                                // (radius_scale → height_offset → fade → scale →
+                                // rotation → + origin + shift)
+                                let pos = move_transform(
+                                    raw_pos,
+                                    move_origin,
+                                    effective_scale,
+                                    eff_shift,
+                                    rot_matrix.as_ref(),
+                                    effective_radius_scale,
+                                    effective_height_offset,
+                                    fade_factor,
+                                );
+                                (obj_idx, pos)
                             })
                             .collect()
                     };
@@ -889,6 +952,60 @@ fn pace_frame_clock(frame_count: &mut u64, frame_duration: Duration, start: Inst
             *frame_count += (behind_ns / frame_ns) as u64;
         }
     }
+}
+
+/// Transform per-move : convertit une position locale (sortie de la
+/// `position_fn`, centrée ~0) en position monde pour ce move.
+///
+/// La chaîne se fait en ESPACE LOCAL — chaque transform pivote
+/// naturellement autour du centre de la trajectoire — puis une seule
+/// translation `+ origin + shift` amène la position en world-space :
+///   radius_scale → height_offset → fade → scale → rotation → + origin + shift
+///
+/// NB : ceci corrige une fuite d'origin de l'ancienne chaîne legacy
+/// (`O + (pos-O)*k` suivi d'un `+O` final = ancre dérivée à `(2-k)·O` ;
+/// un fade à 0 collapsait vers `2·origin` au lieu de l'ancre du move).
+/// Le depth/track_depths n'est PAS appliqué ici — il relève du post-process
+/// global du MergeRuntime.
+#[allow(clippy::too_many_arguments)]
+fn move_transform(
+    raw: nalgebra::Vector3<f64>,
+    origin: nalgebra::Vector3<f64>,
+    scale: f64,
+    shift: nalgebra::Vector3<f64>,
+    rot_matrix: Option<&nalgebra::Rotation3<f64>>,
+    radius_scale: f64,
+    height_offset: f64,
+    fade: f64,
+) -> nalgebra::Vector3<f64> {
+    // radius_scale : scaling radial autour du centre de la trajectoire
+    let pos = if (radius_scale - 1.0).abs() > 1e-10 {
+        raw * radius_scale
+    } else {
+        raw
+    };
+    // height_offset : translation Y post-engine
+    let pos = if height_offset.abs() > 1e-10 {
+        nalgebra::Vector3::new(pos.x, pos.y + height_offset, pos.z)
+    } else {
+        pos
+    };
+    // fade : enveloppe temporelle — collapse vers le centre de la
+    // trajectoire (= l'ancre du move après translation)
+    let pos = if (fade - 1.0).abs() > 1e-10 {
+        pos * fade
+    } else {
+        pos
+    };
+    // scale → rotation
+    let pos = pos * scale;
+    let pos = if let Some(rot) = rot_matrix {
+        rot * pos
+    } else {
+        pos
+    };
+    // Local → monde : une seule translation vers l'ancre du move
+    pos + origin + shift
 }
 
 /// Agrégateur d'erreurs OSC : compte les erreurs et n'autorise un log qu'au

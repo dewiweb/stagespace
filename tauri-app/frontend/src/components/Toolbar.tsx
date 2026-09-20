@@ -3,7 +3,7 @@ import { useGraphStore } from '../store/useGraphStore';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { toast } from '../utils/toast-helpers';
 import { safeInvoke as invoke } from '../utils/tauri';
-import { isModalOpen } from '../utils/modalGuard';
+import { isModalOpen, closeTopModal } from '../utils/modalGuard';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { SettingsModal } from './SettingsModal';
 
@@ -38,21 +38,44 @@ export const Toolbar: React.FC = () => {
   // Keyboard shortcuts: Ctrl+Z (undo), Ctrl+Y / Ctrl+Shift+Z (redo), Space (play/stop selected), Esc (panic), Enter (GO next cue), ArrowLeft/Right (cue nav)
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      // Ne pas intercepter si on tape dans un input / bouton / select
       const target = e.target as HTMLElement;
-      if (
+      const isTextField =
         target.tagName === 'INPUT' ||
         target.tagName === 'TEXTAREA' ||
-        target.tagName === 'BUTTON' ||
         target.tagName === 'SELECT' ||
-        target.isContentEditable
-      )
+        target.isContentEditable;
+
+      // ── Escape : chaîne de priorité explicite ──
+      // 1. Un modal/picker est ouvert → Esc le ferme (jamais panic)
+      // 2. Dans un champ texte → blur (le prochain Esc paniquera)
+      // 3. Un mode d'édition est actif (draw/manipulate/assign) → annule le mode
+      // 4. Sinon → PANIC, inconditionnel (ni bouton ni React Flow ne bloquent)
+      if (e.key === 'Escape') {
+        if (e.defaultPrevented || e.repeat) return;
+        if (isModalOpen()) {
+          e.preventDefault();
+          closeTopModal();
+          return;
+        }
+        if (isTextField) {
+          target.blur();
+          return;
+        }
+        e.preventDefault();
+        const gs = useGraphStore.getState();
+        if (gs.cancelInteractionModes()) return;
+        panic();
         return;
-      // Un handler plus spécifique a déjà consommé la touche (ex: modal Esc)
+      }
+
+      // Ne pas intercepter les autres touches si on tape dans un champ
+      // ou qu'un bouton a le focus (Space/Enter = activation native)
+      if (isTextField || target.tagName === 'BUTTON') return;
+      // Un handler plus spécifique a déjà consommé la touche
       if (e.defaultPrevented) return;
-      // Un modal/picker est ouvert → aucun raccourci live (Esc=panic inclus)
+      // Un modal/picker est ouvert → aucun autre raccourci live
       if (isModalOpen()) return;
-      // Maintenir la touche ne doit pas spammer panic/GO/play
+      // Maintenir la touche ne doit pas spammer GO/play
       if (e.repeat) return;
       // Dans l'éditeur React Flow : Delete/Backspace suppriment des nodes —
       // aucun raccourci live ne doit s'activer depuis le canvas.
@@ -64,9 +87,6 @@ export const Toolbar: React.FC = () => {
       } else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
         e.preventDefault();
         redo();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        panic();
       } else if (e.key === 'Enter') {
         // GO: next cue in setlist
         e.preventDefault();
@@ -166,6 +186,7 @@ export const Toolbar: React.FC = () => {
       }
     } catch (e) {
       console.error('Save graph failed:', e);
+      toast.error(`Save graph failed: ${e}`);
     }
   };
 
@@ -180,6 +201,7 @@ export const Toolbar: React.FC = () => {
       }
     } catch (e) {
       console.error('Load graph failed:', e);
+      toast.error(`Load graph failed: ${e}`);
     }
   };
 
@@ -194,6 +216,7 @@ export const Toolbar: React.FC = () => {
       }
     } catch (e) {
       console.error('Import .hol failed:', e);
+      toast.error(`Import .hol failed: ${e}`);
     }
   };
 
@@ -300,6 +323,17 @@ export const Toolbar: React.FC = () => {
         {/* Spacer */}
         <div className="flex-1" />
 
+        {/* PANIC — arrêt d'urgence, toujours visible et accessible.
+            Jamais replié dans un panel : c'est le seul contrôle qui doit
+            survivre à tous les états de l'UI (Esc = même action). */}
+        <button
+          onClick={() => { panic(); }}
+          className="px-3 py-1.5 text-xs font-bold rounded bg-red-800 hover:bg-red-700 text-white border border-red-600 transition-colors tracking-wider"
+          title="PANIC (Esc) — stoppe tous les moves et renvoie les positions d'origine"
+        >
+          ◼ PANIC
+        </button>
+
         {/* Status indicator */}
         <div className="flex items-center gap-1.5 px-2 py-0.5">
           <span className={`w-2 h-2 rounded-full ${statusColor}`} />
@@ -383,6 +417,7 @@ export const Toolbar: React.FC = () => {
                 setDiscoveredTargets(targets);
               } catch (e) {
                 console.error('Discovery failed:', e);
+                toast.error(`OSC discovery failed: ${e}`);
               } finally {
                 setDiscovering(false);
               }

@@ -204,6 +204,57 @@ fn test_register_unregister_move() {
 }
 
 #[test]
+fn test_post_process_world_space_pivots() {
+    // Les positions en entrée du post-process sont WORLD-SPACE (transform
+    // per-move déjà appliqué par le worker). L'origin globale est un PIVOT
+    // pour les transforms — plus une translation ajoutée à la fin.
+    use crate::merge_runtime::helpers::default_post_process_fn;
+    use crate::runtime::PostProcessContext;
+    use crate::MacroState;
+    use std::collections::HashMap;
+
+    let macros = MacroState::new();
+    macros.set_scale(2.0);
+    let audio_state = crate::audio::AudioState::default();
+    let track_positions: HashMap<u32, [f64; 3]> = HashMap::new();
+    let manual_positions: HashMap<usize, [f64; 3]> = HashMap::new();
+    let track_depths: Vec<f64> = Vec::new();
+    let origin = nalgebra::Vector3::new(10.0, 0.0, 0.0);
+
+    let ctx = PostProcessContext {
+        t: 0.0,
+        macros: &macros,
+        audio_state: &audio_state,
+        track_positions: &track_positions,
+        manual_positions: &manual_positions,
+        origin,
+        track_depths: &track_depths,
+    };
+
+    let pp = default_post_process_fn();
+    // World pos (12, 0, 0) — à distance 2 de l'origin → scale 2 → distance 4
+    let out = pp(&ctx, vec![(0, nalgebra::Vector3::new(12.0, 0.0, 0.0))]);
+    assert!(
+        (out[0].1.x - 14.0).abs() < 1e-9,
+        "scale autour de l'origin: x={} attendu 14",
+        out[0].1.x
+    );
+
+    // Identité : une position monde passe inchangée (PAS de +origin)
+    let macros_id = MacroState::new();
+    let ctx_id = PostProcessContext {
+        macros: &macros_id,
+        ..ctx
+    };
+    let out = pp(&ctx_id, vec![(0, nalgebra::Vector3::new(3.0, 4.0, 5.0))]);
+    assert!(
+        (out[0].1 - nalgebra::Vector3::new(3.0, 4.0, 5.0)).norm() < 1e-9,
+        "identité: {:?}",
+        out[0].1
+    );
+}
+
+#[test]
 fn test_set_graph_effects_replaces_in_block() {
     let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
     let rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();

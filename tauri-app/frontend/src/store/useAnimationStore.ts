@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { safeInvoke as invoke } from '../utils/tauri';
-import { safeListen as listen } from '../utils/tauri';
 import { useGraphStore } from './useGraphStore';
 import { toast } from '../utils/toast-helpers';
 import { safeSetItem, safeParseStoredJson } from '../utils/safeStorage';
@@ -367,14 +366,13 @@ export const useAnimationStore = create<AnimationStore>((set, get) => ({
   },
 }));
 
-// ── Listen for movement updates from backend ──
-// Quand un movement est arrêté côté backend, on sync le store
-listen('active-moves-update', () => {
-  invoke<any[]>('list_active_moves').then((movements) => {
-    const activeIds = movements.map((m) => m.id);
-    useAnimationStore.setState({
-      activeMovementIds: activeIds,
-    });
-  }).catch(() => {});
+// ── Sync depuis useGraphStore.movements ──
+// useGraphStore écoute déjà 'active-moves-update' et refetch list_active_moves —
+// on dérive activeMovementIds de son résultat au lieu de doubler l'IPC.
+useGraphStore.subscribe((state) => {
+  const ids = state.movements.map((m) => m.id);
+  const current = useAnimationStore.getState().activeMovementIds;
+  if (ids.length === current.length && ids.every((id, i) => id === current[i])) return;
+  useAnimationStore.setState({ activeMovementIds: ids });
 });
 

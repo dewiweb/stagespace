@@ -12,7 +12,7 @@ import Toolbar from './components/Toolbar';
 import ToastContainer from './components/ToastContainer';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { prepareGraphForSave } from './components/nodeParamSchema';
-import { useGraphStore, useMovementPositionsListener } from './store/useGraphStore';
+import { useGraphStore, useMovementPositionsListener, useAudioErrorListener } from './store/useGraphStore';
 import { useAnimationStore } from './store/useAnimationStore';
 
 function App() {
@@ -35,6 +35,9 @@ function App() {
 
   // Listen to movement positions (multi-runtime)
   useMovementPositionsListener();
+  // Surface les pannes de capture audio (micro mort en show) — monté au niveau
+  // App, pas AudioPanel, pour survivre au collapse du panneau droit.
+  useAudioErrorListener();
 
   // ── Resize des panneaux gauche et droit ──
   React.useEffect(() => {

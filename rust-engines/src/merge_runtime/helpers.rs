@@ -111,15 +111,22 @@ pub fn merge_positions(
         .collect()
 }
 
-/// PostProcessFn par défaut — reproduit le comportement hardcodé d'avant la Phase 2.
+/// PostProcessFn par défaut — transforms GLOBAUX pivotant autour de l'origin
+/// de la scène (centroïde de toutes les tracks).
+///
+/// IMPORTANT : les positions d'entrée sont en WORLD-SPACE — le transform
+/// per-move (origin, macros, fade) est appliqué par le worker avant
+/// l'écriture dans le PositionBuffer. Ce post-process ne fait donc PAS de
+/// translation `+ origin` finale : l'origin sert uniquement de pivot pour
+/// les transforms globaux (radius_scale, depth, scale, rotation).
 ///
 /// Ordre d'application :
-/// 1. radius_scale (radial scaling par rapport à l'origin)
+/// 1. radius_scale (radial scaling, pivot origin)
 /// 2. height_offset (translation Y)
 /// 3. depth (interpolation origin ↔ pos)
-/// 4. scale (uniform scaling)
-/// 5. rotation (yaw → pitch → roll)
-/// 6. origin + shift (translation finale)
+/// 4. scale (uniform scaling, pivot origin)
+/// 5. rotation (yaw → pitch → roll, pivot origin)
+/// 6. shift (translation finale)
 pub fn default_post_process_fn() -> PostProcessFn {
     Box::new(|ctx: &PostProcessContext, positions| {
         let scale = ctx.macros.get_scale();
@@ -145,6 +152,7 @@ pub fn default_post_process_fn() -> PostProcessFn {
             .iter()
             .map(|(obj_idx, pos)| {
                 // ManualPosition : si une position manuelle existe, l'utiliser
+                // (les positions manuelles sont déjà en world-space)
                 let pos = if let Some(manual) = ctx.manual_positions.get(obj_idx) {
                     nalgebra::Vector3::new(manual[0], manual[1], manual[2])
                 } else {
@@ -173,14 +181,14 @@ pub fn default_post_process_fn() -> PostProcessFn {
                 let depth = ctx.track_depths.get(*obj_idx).copied().unwrap_or(1.0);
                 let pos_with_depth = origin + (pos_with_height - origin) * depth;
 
-                // scale → rotation → origin + shift
-                let pos_scaled = pos_with_depth * scale;
+                // scale → rotation (pivots à l'origin) → shift
+                let pos_scaled = origin + (pos_with_depth - origin) * scale;
                 let pos_rotated = if let Some(ref rot) = rot_matrix {
-                    rot * pos_scaled
+                    origin + rot * (pos_scaled - origin)
                 } else {
                     pos_scaled
                 };
-                let pos_final = pos_rotated + origin + shift;
+                let pos_final = pos_rotated + shift;
 
                 (*obj_idx, pos_final)
             })

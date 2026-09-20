@@ -57,7 +57,9 @@ export function useManipulateMode({
   // Manipulate handlers — drag objects or handle
   const handleManipulateDown = useCallback(
     (e: React.PointerEvent) => {
-      if (!manipulateMode) return;
+      // Assign mode a besoin des clics (toggle track) — le guard ne doit
+      // bloquer QUE si aucun des deux modes n'est actif.
+      if (!manipulateMode && !assignMode) return;
       const camera = cameraRef.current;
       const container = containerRef.current;
       if (!camera || !container) return;
@@ -70,8 +72,9 @@ export function useManipulateMode({
       const raycaster = new THREE.Raycaster();
       raycaster.setFromCamera(ndc, camera);
 
-      // Check handle first
-      if (handleRef.current) {
+      // Check handle first — uniquement en manipulate (le handle n'existe
+      // pas en assign mode, et on ne veut pas démarrer de drag dessus)
+      if (manipulateMode && handleRef.current) {
         const hits = raycaster.intersectObject(handleRef.current);
         if (hits.length > 0) {
           setDraggingHandle(true);

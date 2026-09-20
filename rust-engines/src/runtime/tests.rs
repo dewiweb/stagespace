@@ -237,6 +237,71 @@ fn test_pace_frame_clock_below_threshold_no_burst() {
 }
 
 #[test]
+fn test_worker_applies_move_transform() {
+    // Régression : en mode worker, le buffer doit recevoir des positions
+    // WORLD-SPACE — le transform per-move (scale, rotation, shift, origin,
+    // radius_scale, height_offset, fade) est appliqué avant l'écriture.
+    // Sinon l'origin et les macros spatiales des moves/animations sont
+    // silencieusement ignorées (dead writes sur des champs lus uniquement
+    // par la branche legacy).
+    let rt = test_runtime();
+    let buffer = Arc::new(PositionBuffer::new());
+    rt.set_position_buffer(buffer.clone());
+    rt.set_origin(nalgebra::Vector3::new(10.0, 0.0, 0.0));
+    rt.macros().set_scale(2.0);
+    rt.macros().set_shift(0.0, 1.0, 0.0);
+    rt.play_compiled(
+        Box::new(|_, _| nalgebra::Vector3::new(1.0, 0.0, 0.0)),
+        test_params(60.0),
+        vec![1],
+    )
+    .unwrap();
+    std::thread::sleep(Duration::from_millis(80));
+    rt.stop();
+    let positions = buffer.read();
+    assert_eq!(positions.len(), 1);
+    let p = positions[0].1;
+    // (1,0,0) * scale=2 → (2,0,0), + origin(10,0,0) + shift(0,1,0) → (12,1,0)
+    assert!((p.x - 12.0).abs() < 1e-9, "x={}", p.x);
+    assert!((p.y - 1.0).abs() < 1e-9, "y={}", p.y);
+    assert!(p.z.abs() < 1e-9, "z={}", p.z);
+}
+
+#[test]
+fn test_worker_fade_collapses_toward_origin() {
+    // Le fade du move (config.set_fade) doit replier la trajectoire vers
+    // l'origin du move pendant le fade_in — pas vers (0,0,0) ni rester
+    // inerte. Avec fade_in=0.2s et une fn constante à (1,0,0), les premières
+    // frames doivent être proches de l'origin (5,0,0), puis converger vers
+    // (6,0,0) une fois le fade terminé.
+    let rt = test_runtime();
+    let buffer = Arc::new(PositionBuffer::new());
+    rt.set_position_buffer(buffer.clone());
+    rt.set_origin(nalgebra::Vector3::new(5.0, 0.0, 0.0));
+    rt.set_fade(0.2, 0.0);
+    rt.play_compiled(
+        Box::new(|_, _| nalgebra::Vector3::new(1.0, 0.0, 0.0)),
+        test_params(60.0),
+        vec![1],
+    )
+    .unwrap();
+    // Pendant le fade_in : position intermédiaire entre l'ancre (5,0,0) et
+    // la cible (6,0,0) — le fade collapse la trajectoire vers l'origin.
+    std::thread::sleep(Duration::from_millis(60));
+    let p_mid = buffer.read()[0].1;
+    assert!(
+        p_mid.x > 5.0 && p_mid.x < 6.0,
+        "fade_in doit donner une position intermédiaire, x={}",
+        p_mid.x
+    );
+    // Après le fade : position finale (1,0,0)+(5,0,0) = (6,0,0)
+    std::thread::sleep(Duration::from_millis(250));
+    let p_end = buffer.read()[0].1;
+    assert!((p_end.x - 6.0).abs() < 1e-9, "x={}", p_end.x);
+    rt.stop();
+}
+
+#[test]
 fn test_throttled_error_log_aggregates() {
     let mut log = ThrottledErrorLog::new();
     // Fenêtre <1s → rien n'est émis

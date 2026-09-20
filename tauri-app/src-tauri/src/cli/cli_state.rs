@@ -38,8 +38,16 @@ pub struct CliState {
 impl CliState {
     pub fn new() -> Result<Self, String> {
         let osc_sender = OscSender::default();
-        let merge_runtime = MergeRuntime::new("127.0.0.1".to_string(), 8000, osc_sender, 60.0)
-            .map_err(|e| format!("Failed to create MergeRuntime: {e}"))?;
+        // AudioState maître partagé avec le merge (même pattern que l'app).
+        let audio_state = Arc::new(Mutex::new(AudioState::default()));
+        let merge_runtime = MergeRuntime::new_with_audio_state(
+            "127.0.0.1".to_string(),
+            8000,
+            osc_sender,
+            60.0,
+            audio_state.clone(),
+        )
+        .map_err(|e| format!("Failed to create MergeRuntime: {e}"))?;
 
         // Receiver OSC IN — connecté aux destinations du MergeRuntime
         // (macros, canaux, positions manuelles). Socket non démarré par défaut
@@ -48,7 +56,7 @@ impl CliState {
         osc_receiver.set_targets(merge_runtime.osc_in_targets());
 
         Ok(Self {
-            audio_state: Arc::new(Mutex::new(AudioState::default())),
+            audio_state,
             movements: Mutex::new(HashMap::new()),
             merge_runtime: Mutex::new(merge_runtime),
             osc_receiver: Mutex::new(osc_receiver),

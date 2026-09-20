@@ -128,7 +128,8 @@ fn test_compile_manual_position_node() {
     assert!((result[1].1.y - 1.0).abs() < 1e-10);
 }
 
-/// Test: Offset node adds origin + shift (matching default_post_process_fn)
+/// Test: Offset node adds shift only — positions are world-space, the move
+/// origin is already applied by the worker transform (no +origin here).
 #[test]
 fn test_compile_offset_with_origin() {
     let graph = make_graph(
@@ -146,8 +147,8 @@ fn test_compile_offset_with_origin() {
     let positions = vec![(0, nalgebra::Vector3::new(1.0, 0.0, 0.0))];
     let origin = nalgebra::Vector3::new(2.0, 0.0, 0.0);
     let result = run_test(graph, positions, HashMap::new(), origin);
-    // pos + origin + shift = 1.0 + 2.0 + 1.0 = 4.0
-    assert!((result[0].1.x - 4.0).abs() < 1e-10);
+    // pos + shift = 1.0 + 1.0 = 2.0 (origin est un pivot, pas une translation)
+    assert!((result[0].1.x - 2.0).abs() < 1e-10);
 }
 
 /// Helper étendu : permet de spécifier track_positions, track_depths, et macros

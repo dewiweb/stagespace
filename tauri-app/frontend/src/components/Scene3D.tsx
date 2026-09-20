@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
-import { useGraphStore, usePositionListener } from '../store/useGraphStore';
+import { useGraphStore } from '../store/useGraphStore';
 import { MacrosPanel } from './MacrosPanel';
 import { DebugPerfOverlay, debugPerf } from './DebugPerfOverlay';
 
@@ -45,18 +45,18 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   const drawMode = useGraphStore((s) => s.drawMode);
   const drawnPoints = useGraphStore((s) => s.drawnPoints);
 
-  // Manipulate mode (drag objects / handle in 3D)
-  const [manipulateMode, setManipulateMode] = useState(false);
-  // Assign mode — click objects to assign/unassign from trajectory
-  const [assignMode, setAssignMode] = useState(false);
+  // Modes d'interaction — slice du store (le handler Esc global peut les
+  // annuler avant le panic ; mutual exclusion gérée par le slice)
+  const manipulateMode = useGraphStore((s) => s.manipulateMode);
+  const assignMode = useGraphStore((s) => s.assignMode);
+  const setManipulateMode = useGraphStore((s) => s.setManipulateMode);
+  const setAssignMode = useGraphStore((s) => s.setAssignMode);
 
   // Multi-movement state — movements et movementPositions sont lus via getState()
   // dans useRenderLoop pour éviter 60 re-renders/seconde.
   // On garde movements pour le useMemo nObjects et le rendu conditionnel.
   const movements = useGraphStore((s) => s.movements);
   const manualPositions = useGraphStore((s) => s.manualPositions);
-
-  usePositionListener();
 
   // Determine object count — utilise le max entre:
   // - le node Objects du slot sélectionné
@@ -247,11 +247,18 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
         onPointerUp={handleDrawEnd}
         onPointerCancel={handleDrawEnd}
       />
-      {/* Manipulate interaction layer */}
-      {manipulateMode && (
+      {/* Interaction layer — manipulate ET assign (en assign : clic = toggle
+          la track ; sans cet overlay le mode assign était complètement inerte) */}
+      {(manipulateMode || assignMode) && (
         <div
           className="absolute inset-0 z-[15]"
-          style={{ cursor: draggingHandle || draggingObject !== null ? 'grabbing' : 'grab' }}
+          style={{
+            cursor: assignMode
+              ? 'pointer'
+              : draggingHandle || draggingObject !== null
+                ? 'grabbing'
+                : 'grab',
+          }}
           onPointerDown={handleManipulateDown}
           onPointerMove={handleManipulateMove}
           onPointerUp={handleManipulateUp}

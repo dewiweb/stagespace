@@ -2,6 +2,7 @@ import { StateCreator } from 'zustand';
 import { type Node } from 'reactflow';
 import { simplifyPoints, computeCentroid } from '../utils/geometryUtils';
 import { feLog } from '../../utils/tauri';
+import { toast } from '../../utils/toast-helpers';
 import { computeTrackIndices, saveSlotsToStorage } from './moveSlotsSlice';
 
 export interface DrawModeSlice {
@@ -160,6 +161,8 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
     // sinon un dessin sur un slot move en lecture ne serait jamais poussé.
     get().updateGraphLive(0.5).catch((e) => {
       console.error('[finalizeDrawing] updateGraphLive failed:', e);
+      // Le dessin est en store mais le runtime live ne l'a pas reçu — visible.
+      toast.error(`Drawing hot-swap failed — running move may be stale: ${e}`);
     });
 
     return drawSplineNode?.id ?? vectorFieldNode?.id ?? null;

@@ -1,4 +1,5 @@
 import React from 'react';
+import { toast } from '../utils/toast-helpers';
 import { useGraphStore } from '../store/useGraphStore';
 import {
   SPATIAL_CHANNELS,
@@ -111,6 +112,7 @@ export default function SpatialFxPanel() {
       setZChannels('');
     } catch (e) {
       console.error('Failed to add zone:', e);
+      toast.error(`Add zone failed: ${e}`);
     }
   };
 
@@ -137,6 +139,7 @@ export default function SpatialFxPanel() {
       });
     } catch (e) {
       console.error('Failed to add modulation:', e);
+      toast.error(`Add modulation failed: ${e}`);
     }
   };
 
@@ -148,6 +151,7 @@ export default function SpatialFxPanel() {
       await setSpatialChannel(obj, cChannel.toLowerCase(), val);
     } catch (e) {
       console.error('Failed to set channel:', e);
+      toast.error(`Set channel failed: ${e}`);
     }
   };
 
@@ -163,7 +167,7 @@ export default function SpatialFxPanel() {
       </div>
 
       {/* ── Zones ── */}
-      <Section title="Zones" count={zones.length} onClear={() => clearZones().catch((e) => console.error(e))}>
+      <Section title="Zones" count={zones.length} onClear={() => clearZones().catch((e) => toast.error(`Spatial FX failed: ${e}`))}>
         <div className="space-y-1.5 mb-2">
           <div className="flex gap-1.5">
             <select value={zShape} onChange={(e) => setZShape(e.target.value as 'sphere' | 'box')} className={selectCls}>
@@ -243,7 +247,7 @@ export default function SpatialFxPanel() {
                       {!zone.enabled && ' · disabled'}
                     </div>
                   </div>
-                  <button onClick={() => removeZone(i).catch((e) => console.error(e))} className={removeBtnCls} aria-label="Remove zone">
+                  <button onClick={() => removeZone(i).catch((e) => toast.error(`Spatial FX failed: ${e}`))} className={removeBtnCls} aria-label="Remove zone">
                     ✕
                   </button>
                 </div>
@@ -254,7 +258,7 @@ export default function SpatialFxPanel() {
       </Section>
 
       {/* ── Kinematic modulations ── */}
-      <Section title="Modulations" count={modulations.length} onClear={() => clearModulations().catch((e) => console.error(e))}>
+      <Section title="Modulations" count={modulations.length} onClear={() => clearModulations().catch((e) => toast.error(`Spatial FX failed: ${e}`))}>
         <div className="space-y-1.5 mb-2">
           <div className="flex gap-1.5">
             <select value={mSource} onChange={(e) => setMSource(e.target.value as KinematicSourceName)} className={selectCls}>
@@ -313,7 +317,7 @@ export default function SpatialFxPanel() {
               onClick={() => {
                 const v = parseFloat(smoothing);
                 if (!isNaN(v) && v >= 0 && v < 1) {
-                  setKinematicSmoothing(v).catch((e) => console.error(e));
+                  setKinematicSmoothing(v).catch((e) => toast.error(`Spatial FX failed: ${e}`));
                 }
               }}
               className="px-2 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded whitespace-nowrap"
@@ -343,7 +347,7 @@ export default function SpatialFxPanel() {
                       {mod.max !== null && ` max=${mod.max}`}
                     </div>
                   </div>
-                  <button onClick={() => removeModulation(i).catch((e) => console.error(e))} className={removeBtnCls} aria-label="Remove modulation">
+                  <button onClick={() => removeModulation(i).catch((e) => toast.error(`Spatial FX failed: ${e}`))} className={removeBtnCls} aria-label="Remove modulation">
                     ✕
                   </button>
                 </div>
@@ -357,7 +361,7 @@ export default function SpatialFxPanel() {
       <Section
         title="Object channels"
         count={channelEntries.length}
-        onClear={() => clearAllSpatialChannels().catch((e) => console.error(e))}
+        onClear={() => clearAllSpatialChannels().catch((e) => toast.error(`Spatial FX failed: ${e}`))}
       >
         <div className="space-y-1.5 mb-2">
           <div className="flex gap-1.5">
@@ -393,7 +397,7 @@ export default function SpatialFxPanel() {
                     <div className="text-gray-500 text-[10px] font-mono truncate">{describeChannels(channels)}</div>
                   </div>
                   <button
-                    onClick={() => clearSpatialChannel(parseInt(obj, 10)).catch((e) => console.error(e))}
+                    onClick={() => clearSpatialChannel(parseInt(obj, 10)).catch((e) => toast.error(`Spatial FX failed: ${e}`))}
                     className={removeBtnCls}
                     aria-label="Clear object channels"
                   >

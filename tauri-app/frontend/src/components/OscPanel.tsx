@@ -1,5 +1,5 @@
 import React from 'react';
-import { useGraphStore, useOscValueListener } from '../store/useGraphStore';
+import { useGraphStore } from '../store/useGraphStore';
 import { describeDestination } from '../store/slices/oscSlice';
 
 export default function OscPanel() {
@@ -9,8 +9,6 @@ export default function OscPanel() {
   const [handler, setHandler] = React.useState('');
   const [transform, setTransform] = React.useState('');
   const [inEnabled, setInEnabled] = React.useState(true);
-
-  useOscValueListener();
 
   React.useEffect(() => {
     listOscMappings().then((mappings) => {

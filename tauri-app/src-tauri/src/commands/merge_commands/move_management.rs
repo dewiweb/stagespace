@@ -55,9 +55,10 @@ pub(crate) struct MoveSpec {
     pub duration: f64,
     pub loop_mode: LoopMode,
     pub direction: PlayDirection,
-    /// Fades du worker (utilisé par launch_animation). NOTE: en mode worker
-    /// (PositionBuffer) le runtime n'applique pas les fades — c'est le
-    /// MergeRuntime qui fade via MoveState. Conservé pour compat/snapshot.
+    /// Fades du worker (utilisé par launch_animation) : enveloppe temporelle
+    /// du cycle (fade-in au début, fade-out en fin de boucle) — appliquée
+    /// par le worker dans move_transform. Distinct du fade MoveState du
+    /// merge (fade d'activation/désactivation wall-clock).
     pub fade: Option<(f64, f64)>,
     /// Macro speed per-move (appliquée dans le worker — effective en mode worker)
     pub speed: Option<f64>,
@@ -228,11 +229,18 @@ fn spawn_move_inner(spec: MoveSpec, sh: &Shared, abort_on_recall: bool) -> Resul
     // 2. Créer le worker Runtime (socket dédiée — jamais utilisée en mode
     //    worker : les positions partent dans le PositionBuffer, l'OSC est
     //    envoyé uniquement par le MergeRuntime).
-    let runtime =
-        Runtime::new("127.0.0.1".to_string(), 8000, OscSender::default()).map_err(|e| {
-            eprintln!("[ACTIVATE-ERROR] Runtime::new failed: {e}");
-            format!("Failed to create worker runtime: {e}")
-        })?;
+    // L'AudioState maître est injecté — le worker lit l'état audio à jour à
+    // chaque frame sans propagation par polling (une seule source de vérité).
+    let runtime = Runtime::new_with_audio_state(
+        "127.0.0.1".to_string(),
+        8000,
+        OscSender::default(),
+        sh.audio_state.clone(),
+    )
+    .map_err(|e| {
+        eprintln!("[ACTIVATE-ERROR] Runtime::new failed: {e}");
+        format!("Failed to create worker runtime: {e}")
+    })?;
 
     // 3. Compiler avec audio + overrides
     let overrides = runtime.audio_param_overrides();
@@ -261,9 +269,14 @@ fn spawn_move_inner(spec: MoveSpec, sh: &Shared, abort_on_recall: bool) -> Resul
             .macros()
             .set_rotation(m.rotation.0, m.rotation.1, m.rotation.2);
     }
-    if let Some(ref origin) = spec.origin {
-        runtime.set_origin(nalgebra::Vector3::new(origin[0], origin[1], origin[2]));
-    }
+    // Origin du move : explicite (centroïde des tracks du move, envoyé par le
+    // frontend) ou fallback sur l'origin globale courante du merge — le worker
+    // l'applique dans son transform per-move avant l'écriture du buffer.
+    let move_origin = match spec.origin {
+        Some(ref o) => nalgebra::Vector3::new(o[0], o[1], o[2]),
+        None => lock_or_recover(&sh.merge_runtime).origin(),
+    };
+    runtime.set_origin(move_origin);
     if let Some(anim_state) = spec.animation_state {
         runtime.set_animation_state(anim_state);
     }

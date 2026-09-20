@@ -30,8 +30,9 @@ type SelectionPattern = 'all' | 'none' | 'even' | 'odd' | 'first_half' | 'second
 const PATTERNS: { id: SelectionPattern; label: string; icon: string; title: string }[] = [
   { id: 'all', label: 'All', icon: '◉', title: 'Tout sélectionner (100%)' },
   { id: 'none', label: 'None', icon: '○', title: 'Tout désélectionner' },
-  { id: 'even', label: '1 sur 2', icon: '⫼', title: 'Sélectionner un sur deux' },
-  { id: 'odd', label: 'Inverse', icon: '⇄', title: 'Inverser la sélection' },
+  { id: 'even', label: '1 sur 2', icon: '⫼', title: 'Sélectionner un sur deux (indices pairs)' },
+  { id: 'odd', label: 'Impairs', icon: '⫻', title: 'Sélectionner un sur deux (indices impairs)' },
+  { id: 'inverse', label: 'Inverse', icon: '⇄', title: 'Inverser la sélection courante' },
   { id: 'first_half', label: '1ère moitié', icon: '◀', title: 'Première moitié' },
   { id: 'second_half', label: '2ème moitié', icon: '▶', title: 'Deuxième moitié' },
 ];

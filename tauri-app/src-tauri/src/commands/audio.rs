@@ -39,31 +39,11 @@ pub async fn update_audio_state(
     state: State<'_, AppState>,
     audio_data: AudioState,
 ) -> Result<(), String> {
-    // 1. Stocker dans AppState (lock très bref)
+    // Une seule écriture : workers et MergeRuntime partagent l'Arc maître
+    // (injecté à la construction) — plus de propagation N-copies.
     {
         let mut audio_state = lock_or_recover(&state.audio_state);
-        *audio_state = audio_data.clone();
-    }
-    // 2. Collecter les Arcs des runtimes actifs (lock bref sur movements)
-    let runtime_arcs: Vec<_> = {
-        let movements = lock_or_recover(&state.movements);
-        movements
-            .values()
-            .map(|m| m.runtime.audio_state_arc())
-            .collect()
-    };
-    // 3. Mettre à jour chaque runtime SANS tenir le lock sur movements
-    for arc in &runtime_arcs {
-        let mut s = arc.lock().unwrap_or_else(|e| e.into_inner());
-        *s = audio_data.clone();
-    }
-    // 4. Propager au MergeRuntime — les nodes audio du graph global
-    //    (AudioAmplitudeFalloff, BPM…) lisent cet état à chaque frame merge.
-    {
-        let merge_rt = lock_or_recover(&state.merge_runtime);
-        let arc = merge_rt.audio_state_arc();
-        let mut s = arc.lock().unwrap_or_else(|e| e.into_inner());
-        *s = audio_data;
+        *audio_state = audio_data;
     }
     Ok(())
 }
@@ -74,8 +54,6 @@ pub fn start_audio_poller(app_handle: tauri::AppHandle, state: &AppState) {
     let app_handle = app_handle.clone();
     let audio_capture = state.audio_capture.clone();
     let audio_state = state.audio_state.clone();
-    let movements = state.movements.clone();
-    let merge_runtime = state.merge_runtime.clone();
     let shutdown = state.audio_poller_shutdown.clone();
 
     std::thread::spawn(move || {
@@ -91,30 +69,13 @@ pub fn start_audio_poller(app_handle: tauri::AppHandle, state: &AppState) {
                 capture.get_state()
             };
 
-            // Propager à AppState
+            // Une seule écriture dans l'Arc maître — workers et MergeRuntime
+            // partagent ce même Arc (injectés à la construction) : les nodes
+            // audio du graph global et les audio mods des workers voient
+            // l'état à jour sans copie supplémentaire.
             {
                 let mut s = audio_state.lock().unwrap_or_else(|e| e.into_inner());
                 *s = state.clone();
-            }
-
-            // Propager aux runtimes
-            let runtime_arcs: Vec<_> = {
-                let m = movements.lock().unwrap_or_else(|e| e.into_inner());
-                m.values().map(|mv| mv.runtime.audio_state_arc()).collect()
-            };
-            for arc in &runtime_arcs {
-                if let Ok(mut s) = arc.lock() {
-                    *s = state.clone();
-                }
-            }
-
-            // Propager au MergeRuntime — sinon les nodes audio du graph
-            // global (AudioAmplitudeFalloff…) voient un silence éternel.
-            {
-                let merge_rt = merge_runtime.lock().unwrap_or_else(|e| e.into_inner());
-                if let Ok(mut s) = merge_rt.audio_state_arc().lock() {
-                    *s = state.clone();
-                }
             }
 
             // Consommer les erreurs du device (débranché, stream mort…) —

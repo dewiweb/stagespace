@@ -150,6 +150,25 @@ impl MergeRuntime {
         osc_sender: OscSender,
         fps: f64,
     ) -> crate::error::Result<Self> {
+        Self::new_with_audio_state(
+            osc_address,
+            osc_port,
+            osc_sender,
+            fps,
+            Arc::new(Mutex::new(AudioState::new())),
+        )
+    }
+
+    /// MergeRuntime partageant l'`AudioState` de l'app — même Arc que les
+    /// workers : les nodes audio du graph global voient l'état à jour sans
+    /// propagation par polling.
+    pub fn new_with_audio_state(
+        osc_address: String,
+        osc_port: u16,
+        osc_sender: OscSender,
+        fps: f64,
+        audio_state: Arc<Mutex<AudioState>>,
+    ) -> crate::error::Result<Self> {
         let socket =
             UdpSocket::bind("0.0.0.0:0").map_err(crate::error::StagespaceError::NetworkError)?;
         socket
@@ -165,7 +184,7 @@ impl MergeRuntime {
             move_buffers: Arc::new(RwLock::new(HashMap::new())),
             active_moves: Arc::new(RwLock::new(HashMap::new())),
             macros: Arc::new(MacroState::new()),
-            audio_state: Arc::new(Mutex::new(AudioState::new())),
+            audio_state,
             origin: Arc::new(Mutex::new(nalgebra::Vector3::zeros())),
             osc_ids: Arc::new(RwLock::new(Arc::new(Vec::new()))),
             track_depths: Arc::new(RwLock::new(Arc::new(Vec::new()))),
@@ -252,6 +271,12 @@ impl MergeRuntime {
     /// Définit l'origin (isobarycentre des tracks)
     pub fn set_origin(&self, origin: nalgebra::Vector3<f64>) {
         *self.origin.lock().unwrap_or_else(|e| e.into_inner()) = origin;
+    }
+
+    /// Lit l'origin globale courante (pivot des transforms du post-process).
+    /// Utilisée comme origin par défaut pour un move qui n'en spécifie pas.
+    pub fn origin(&self) -> nalgebra::Vector3<f64> {
+        *self.origin.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     /// Définit les OSC ids globaux (tracks sélectionnées)
@@ -1243,7 +1268,12 @@ impl MergeRuntime {
     pub fn stop(&mut self) {
         self.running.store(false, Ordering::SeqCst);
         if let Some(handle) = self.thread.take() {
-            let _ = handle.join();
+            // join() depuis le thread lui-même paniquerait — garde défensive
+            // (un drop depuis le merge thread ne devrait pas arriver, mais un
+            // panic dans Drop est non-catchable proprement).
+            if handle.thread().id() != std::thread::current().id() {
+                let _ = handle.join();
+            }
         }
     }
 
@@ -1311,5 +1341,13 @@ impl MergeRuntime {
             }
         }
         result
+    }
+}
+
+impl Drop for MergeRuntime {
+    /// Un drop sans `stop()` explicite ne doit pas laisser le thread merge/OSC
+    /// tourner en fantôme (émetteur silencieux survivant à l'app).
+    fn drop(&mut self) {
+        self.stop();
     }
 }

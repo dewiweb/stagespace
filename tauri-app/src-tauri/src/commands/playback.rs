@@ -123,24 +123,42 @@ pub async fn update_graph(
     fade_duration: Option<f64>,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    let mut movements = lock_or_recover(&state.movements);
-    // Cible : le move graphe actif (live prioritaire, sinon preview)
-    let target_id = if movements.contains_key(GRAPH_MAIN_ID) {
-        GRAPH_MAIN_ID
-    } else {
-        GRAPH_PREVIEW_ID
+    // Snapshot court sous le lock — la compilation se fait hors du lock
+    // `movements` (sinon un edit de graphe pendant un show gèle stop/panic).
+    let (target_id, generation, overrides) = {
+        let movements = lock_or_recover(&state.movements);
+        // Cible : le move graphe actif (live prioritaire, sinon preview)
+        let target_id = if movements.contains_key(GRAPH_MAIN_ID) {
+            GRAPH_MAIN_ID
+        } else {
+            GRAPH_PREVIEW_ID
+        };
+        let movement = movements
+            .get(target_id)
+            .ok_or("No runtime active — call play_graph first")?;
+        (
+            target_id,
+            movement.generation,
+            movement.runtime.audio_param_overrides(),
+        )
     };
-    let movement = movements
-        .get_mut(target_id)
-        .ok_or("No runtime active — call play_graph first")?;
 
     let audio_state = lock_or_recover(&state.audio_state);
     let graph = build_graph_from_json(&graph_json, &audio_state)?;
     drop(audio_state);
 
-    let overrides = movement.runtime.audio_param_overrides();
     let compiled =
         compile_graph_with_audio_and_overrides(&graph, state.audio_state.clone(), overrides)?;
+
+    // Ré-application sous lock — si le move a été stoppé pendant la compile
+    // on signale l'échec plutôt que d'appliquer en silence à un fantôme.
+    let mut movements = lock_or_recover(&state.movements);
+    let movement = movements
+        .get_mut(target_id)
+        .ok_or("Graph playback stopped during recompile")?;
+    if movement.generation != generation {
+        eprintln!("[WARN] update_graph: '{target_id}' respawned during compile");
+    }
 
     // Crossfade smooth (défaut 0.5s) pour éviter les sauts
     let fade = fade_duration.unwrap_or(0.5);

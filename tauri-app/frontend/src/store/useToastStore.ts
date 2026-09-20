@@ -26,8 +26,14 @@ export const useToastStore = create<ToastStore>((set, get) => ({
     const toast: Toast = { id, type, message, timeout };
     set((s) => {
       const newToasts = [...s.toasts, toast];
-      // Limite à 5 toasts visibles pour éviter l'overflow en live
-      return { toasts: newToasts.slice(-5) };
+      // Les sticky (timeout=0) ne sont JAMAIS évincés par du bruit ordinaire —
+      // ce sont les alertes critiques (storage full, panic partiel, thread
+      // mort). Cap à 5 sticky quand même : au-delà c'est un flood, pas de
+      // l'information. Les éphémères gardent la fenêtre des 5 derniers.
+      const sticky = newToasts.filter((t) => t.timeout === 0).slice(-5);
+      const ephemeral = newToasts.filter((t) => t.timeout !== 0).slice(-5);
+      const kept = new Set([...sticky, ...ephemeral].map((t) => t.id));
+      return { toasts: newToasts.filter((t) => kept.has(t.id)) };
     });
     if (timeout > 0) {
       setTimeout(() => get().dismiss(id), timeout);
