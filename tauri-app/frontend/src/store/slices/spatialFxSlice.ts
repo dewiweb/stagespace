@@ -27,7 +27,7 @@ export interface Zone {
   enabled: boolean;
 }
 
-export type KinematicSourceName = 'Speed' | 'Acceleration' | 'Jerk';
+export type KinematicSourceName = 'Speed' | 'Acceleration' | 'Jerk' | 'AngularSpeed';
 
 /// min/max arrivent en `number | null` (null = ±∞ côté Rust).
 export interface ChannelModulation {
@@ -38,6 +38,8 @@ export interface ChannelModulation {
   offset: number;
   min: number | null;
   max: number | null;
+  /// Position du listener pour AngularSpeed (°/s perceptuels)
+  listener?: [number, number, number];
 }
 
 /// Payload pour `add_zone` — shape textuelle + coins génériques a/b.
@@ -53,13 +55,15 @@ export interface ZoneParams {
 
 /// Payload pour `add_channel_modulation`.
 export interface ModulationParams {
-  source: 'speed' | 'accel' | 'jerk';
+  source: 'speed' | 'accel' | 'jerk' | 'angvel';
   channel: string;
   scale: number;
   offset?: number | null;
   min?: number | null;
   max?: number | null;
   object_index?: number | null;
+  /// Position du listener pour 'angvel' (défaut : origine)
+  listener?: [number, number, number] | null;
 }
 
 /// Parse "gain=0.5,spread=1" → { gain: 0.5, spread: 1 }.

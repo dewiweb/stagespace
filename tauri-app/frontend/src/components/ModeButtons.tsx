@@ -18,12 +18,14 @@ export const ModeButtons: React.FC<ModeButtonsProps> = ({
   const drawMode = useGraphStore((s) => s.drawMode);
   const setDrawMode = useGraphStore((s) => s.setDrawMode);
   const selectedTrackIds = useGraphStore((s) => s.selectedTrackIds);
-  const hasSplineNode = useGraphStore((s) =>
+  const hasDrawableNode = useGraphStore((s) =>
     s.nodes.some((n) =>
       n.data.type === 'DrawSpline' ||
       n.data.type === 'EvaluateSpline' ||
       n.data.type === 'TrimSpline' ||
-      n.data.type === 'OffsetSpline'
+      n.data.type === 'OffsetSpline' ||
+      // Champ dessiné : le stroke devient des vecteurs tangents (lignes de flux)
+      (n.data.type === 'VectorField' && (n.data.params as any)?.field === 'drawn')
     )
   );
 
@@ -49,11 +51,11 @@ export const ModeButtons: React.FC<ModeButtonsProps> = ({
         >
           ⊕ Assign
         </button>
-        {hasSplineNode && (
+        {hasDrawableNode && (
           <button
             onClick={() => { setDrawMode(true); setManipulateMode(false); setAssignMode(false); }}
             className="px-2.5 py-1 text-[10px] rounded font-medium transition-colors bg-gray-900/80 text-gray-400 hover:text-white border border-gray-700"
-            title="Draw a freehand spline trajectory"
+            title="Draw a freehand spline trajectory (or flow line for a drawn VectorField)"
           >
             ✎ Draw
           </button>

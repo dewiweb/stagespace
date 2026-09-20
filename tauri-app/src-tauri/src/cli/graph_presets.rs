@@ -35,7 +35,10 @@ pub fn list_templates() -> Vec<(&'static str, &'static str)> {
         ("bouncing", "Bouncing in container (physics)"),
         ("spring", "Spring attraction (physics)"),
         ("follow", "Follow-the-leader (physics)"),
-        ("vectorfield", "Vector field advection — vortex/sink/flow/noise (physics)"),
+        (
+            "vectorfield",
+            "Vector field advection — vortex/sink/flow/noise (physics)",
+        ),
     ]
 }
 

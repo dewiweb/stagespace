@@ -82,6 +82,7 @@ export default function SpatialFxPanel() {
   const [mMin, setMMin] = React.useState('');
   const [mMax, setMMax] = React.useState('');
   const [mObject, setMObject] = React.useState('');
+  const [mListener, setMListener] = React.useState('0,0,0');
   const [smoothing, setSmoothing] = React.useState('0.5');
 
   // ── Channel form state ──
@@ -118,14 +119,21 @@ export default function SpatialFxPanel() {
     if (isNaN(scale)) return;
     const num = (s: string) => (s.trim() === '' ? null : parseFloat(s));
     try {
+      const sourceMap: Record<string, 'speed' | 'accel' | 'jerk' | 'angvel'> = {
+        Speed: 'speed',
+        Acceleration: 'accel',
+        Jerk: 'jerk',
+        AngularSpeed: 'angvel',
+      };
       await addModulation({
-        source: mSource === 'Speed' ? 'speed' : mSource === 'Acceleration' ? 'accel' : 'jerk',
+        source: sourceMap[mSource] ?? 'speed',
         channel: mChannel.toLowerCase(),
         scale,
         offset: num(mOffset),
         min: num(mMin),
         max: num(mMax),
         object_index: mObject.trim() === '' ? null : parseInt(mObject, 10),
+        listener: mSource === 'AngularSpeed' ? parseVec3(mListener) : null,
       });
     } catch (e) {
       console.error('Failed to add modulation:', e);
@@ -253,6 +261,7 @@ export default function SpatialFxPanel() {
               <option value="Speed">speed</option>
               <option value="Acceleration">accel</option>
               <option value="Jerk">jerk</option>
+              <option value="AngularSpeed">angvel°/s</option>
             </select>
             <span className="text-gray-600 self-center text-xs">→</span>
             <select value={mChannel} onChange={(e) => setMChannel(e.target.value as SpatialChannelName)} className={selectCls}>
@@ -272,6 +281,18 @@ export default function SpatialFxPanel() {
             <input type="text" value={mMax} onChange={(e) => setMMax(e.target.value)} placeholder="max (+∞)" className={`${inputCls} font-mono`} />
             <input type="text" value={mObject} onChange={(e) => setMObject(e.target.value)} placeholder="obj (all)" className={`${inputCls} font-mono`} />
           </div>
+          {mSource === 'AngularSpeed' && (
+            <div className="flex gap-1.5">
+              <input
+                type="text"
+                value={mListener}
+                onChange={(e) => setMListener(e.target.value)}
+                placeholder="listener x,y,z"
+                className={`${inputCls} font-mono`}
+                title="Position du point d'écoute — la vitesse angulaire est mesurée autour de ce point (°/s)"
+              />
+            </div>
+          )}
           <button
             onClick={handleAddModulation}
             disabled={isNaN(parseFloat(mScale))}

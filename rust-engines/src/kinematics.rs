@@ -23,6 +23,11 @@ pub enum KinematicSource {
     Acceleration,
     /// Norme du jerk (unités scène / s³)
     Jerk,
+    /// Vitesse angulaire autour du listener (°/s) — mesure perceptuelle :
+    /// ω = |d × v| / |d|² en 3D. Une source lointaine rapide bouge
+    /// "lentement", une source proche lente bouge "vite". Le point
+    /// d'écoute est défini par la règle (`listener`, défaut : origine).
+    AngularSpeed,
 }
 
 impl FromStr for KinematicSource {
@@ -33,6 +38,9 @@ impl FromStr for KinematicSource {
             "speed" | "velocity" | "vel" => Ok(KinematicSource::Speed),
             "acceleration" | "accel" => Ok(KinematicSource::Acceleration),
             "jerk" => Ok(KinematicSource::Jerk),
+            "angvel" | "angular" | "angular_speed" | "angularspeed" | "perceptual" => {
+                Ok(KinematicSource::AngularSpeed)
+            }
             _ => Err(format!("Unknown kinematic source: {s}")),
         }
     }
@@ -89,6 +97,10 @@ pub struct ChannelModulation {
     /// Borne haute du résultat (+∞ = pas de borne, sérialisé null)
     #[serde(with = "serde_pos_inf")]
     pub max: f64,
+    /// Position du listener pour `AngularSpeed` (défaut : origine).
+    /// `#[serde(default)]` pour la rétrocompat des cues persistées.
+    #[serde(default)]
+    pub listener: [f64; 3],
 }
 
 impl ChannelModulation {
@@ -101,6 +113,7 @@ impl ChannelModulation {
             offset: 0.0,
             min: f64::NEG_INFINITY,
             max: f64::INFINITY,
+            listener: [0.0, 0.0, 0.0],
         }
     }
 
@@ -131,6 +144,10 @@ impl ChannelModulation {
             offset: get("offset").unwrap_or(0.0),
             min: get("min").unwrap_or(f64::NEG_INFINITY),
             max: get("max").unwrap_or(f64::INFINITY),
+            listener: params
+                .get("listener")
+                .and_then(np::flex_vec3)
+                .unwrap_or([0.0, 0.0, 0.0]),
         })
     }
 }
@@ -144,6 +161,10 @@ pub struct KinematicState {
     prev_accel: Option<Vector3<f64>>,
     /// Nombre d'échantillons valides accumulés (échauffement des dérivées)
     age: u8,
+    /// Dernière position (sert à la vitesse angulaire)
+    pos: Vector3<f64>,
+    /// Vitesse lissée vectorielle (unités/s) — sert à la vitesse angulaire
+    vel_smooth: Vector3<f64>,
     /// Vitesse lissée (unités/s)
     pub speed: f64,
     /// Accélération lissée (unités/s²)
@@ -183,6 +204,8 @@ impl KinematicState {
         self.prev_vel = Some(vel);
         self.prev_accel = Some(accel);
         self.age = self.age.saturating_add(1);
+        self.pos = pos;
+        self.vel_smooth = alpha * self.vel_smooth + (1.0 - alpha) * vel;
 
         let raw_speed = if self.age >= 2 { vel.norm() } else { 0.0 };
         let raw_accel = if self.age >= 3 { accel.norm() } else { 0.0 };
@@ -193,12 +216,32 @@ impl KinematicState {
         self.jerk = alpha * self.jerk + (1.0 - alpha) * raw_jerk;
     }
 
+    /// Rayon minimal pour la mesure angulaire — une source traversant la
+    /// tête de l'auditeur donne une vitesse angulaire grande mais finie.
+    const MIN_ANGULAR_RADIUS: f64 = 0.05;
+
+    /// Vitesse angulaire autour d'un point d'écoute (°/s).
+    /// ω = |d × v| / r² : la composante transverse de la vitesse rapportée
+    /// à la distance — c'est ce que le système auditif perçoit (borne
+    /// perceptuelle : au-delà de ~90-180°/s la localisation se brouille).
+    pub fn angular_speed_deg(&self, listener: Vector3<f64>) -> f64 {
+        if self.age < 2 {
+            return 0.0;
+        }
+        let d = self.pos - listener;
+        let r = d.norm().max(Self::MIN_ANGULAR_RADIUS);
+        d.cross(&self.vel_smooth).norm() / (r * r) * (180.0 / std::f64::consts::PI)
+    }
+
     /// Valeur courante d'une source cinématique
     pub fn value(&self, source: KinematicSource) -> f64 {
         match source {
             KinematicSource::Speed => self.speed,
             KinematicSource::Acceleration => self.accel,
             KinematicSource::Jerk => self.jerk,
+            // AngularSpeed dépend du listener (paramètre de la règle, pas de
+            // l'état) — la mesure est calculée dans apply_modulations.
+            KinematicSource::AngularSpeed => 0.0,
         }
     }
 }
@@ -223,8 +266,13 @@ pub fn apply_modulations(
                     continue;
                 }
             }
-            let value =
-                (state.value(rule.source) * rule.scale + rule.offset).clamp(rule.min, rule.max);
+            let measured = match rule.source {
+                KinematicSource::AngularSpeed => {
+                    state.angular_speed_deg(Vector3::from(rule.listener))
+                }
+                _ => state.value(rule.source),
+            };
+            let value = (measured * rule.scale + rule.offset).clamp(rule.min, rule.max);
             out.entry(*obj).or_default().set(rule.channel, value);
         }
     }
@@ -396,6 +444,74 @@ mod tests {
         assert_eq!(m.min, f64::NEG_INFINITY); // "" = pas de borne
         assert_eq!(m.max, 1.0);
         assert_eq!(m.object, Some(2));
+    }
+
+    #[test]
+    fn test_angular_speed_orbiting_object() {
+        // Objet en orbite à r=1, vitesse angulaire réelle 1 rad/s → 57.3°/s
+        let mut st = KinematicState::default();
+        let dt = 1.0 / 60.0;
+        for i in 0..120 {
+            let t = i as f64 * dt;
+            st.update(Vector3::new(t.cos(), t.sin(), 0.0), dt, 0.0);
+        }
+        let deg = st.angular_speed_deg(Vector3::zeros());
+        assert!(
+            (deg - 57.2958).abs() < 2.0,
+            "angvel={deg}°/s, attendu ~57.3"
+        );
+    }
+
+    #[test]
+    fn test_angular_speed_radial_motion_is_zero() {
+        // Mouvement purement radial vers le listener → pas de composante
+        // transverse → vitesse angulaire nulle
+        let mut st = KinematicState::default();
+        let dt = 1.0 / 60.0;
+        for i in 0..30 {
+            let x = 2.0 - i as f64 * dt; // approche à 1 u/s selon x
+            st.update(Vector3::new(x, 0.0, 0.0), dt, 0.0);
+        }
+        assert!(st.angular_speed_deg(Vector3::zeros()) < 1e-6);
+    }
+
+    #[test]
+    fn test_angular_speed_far_object_perceived_slower() {
+        // Même vitesse linéaire : un objet proche "bouge" perceptuellement
+        // plus vite qu'un objet lointain
+        let dt = 1.0 / 60.0;
+        let mut near = KinematicState::default();
+        let mut far = KinematicState::default();
+        for i in 0..30 {
+            let t = i as f64 * dt;
+            near.update(Vector3::new(0.5, t, 0.0), dt, 0.0);
+            far.update(Vector3::new(5.0, t, 0.0), dt, 0.0);
+        }
+        let listener = Vector3::zeros();
+        let w_near = near.angular_speed_deg(listener);
+        let w_far = far.angular_speed_deg(listener);
+        assert!(w_near > w_far * 5.0, "near={w_near} far={w_far}");
+    }
+
+    #[test]
+    fn test_angular_speed_modulation_rule() {
+        // Règle complète : source angvel + listener → canal
+        let mut st = KinematicState::default();
+        let dt = 1.0 / 60.0;
+        for i in 0..120 {
+            let t = i as f64 * dt;
+            st.update(Vector3::new(2.0 * t.cos(), 2.0 * t.sin(), 0.0), dt, 0.0);
+        }
+        let mut states = HashMap::new();
+        states.insert(0usize, st);
+        let rule = ChannelModulation::from_node_params(&serde_json::json!({
+            "source": "angvel", "channel": "presence", "listener": [0, 0, 0]
+        }))
+        .unwrap();
+        let out = apply_modulations(&[rule], &states);
+        // ω orbital = 1 rad/s → ~57.3°/s (indépendant du rayon)
+        let v = out[&0].presence.unwrap();
+        assert!((v - 57.30).abs() < 2.0, "presence={v}");
     }
 
     #[test]

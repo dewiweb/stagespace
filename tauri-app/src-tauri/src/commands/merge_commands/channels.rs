@@ -84,6 +84,8 @@ pub struct ModulationParams {
     pub max: Option<f64>,
     /// Objet cible (défaut : tous)
     pub object_index: Option<usize>,
+    /// Position du listener pour la source `angvel` (défaut : origine)
+    pub listener: Option<[f64; 3]>,
 }
 
 /// Ajoute une règle de modulation cinématique (vitesse/accélération/jerk
@@ -104,6 +106,9 @@ pub async fn add_channel_modulation(
     rule.min = params.min.unwrap_or(f64::NEG_INFINITY);
     rule.max = params.max.unwrap_or(f64::INFINITY);
     rule.object = params.object_index;
+    if let Some(l) = params.listener {
+        rule.listener = l;
+    }
     let merge_rt = lock_or_recover(&state.merge_runtime);
     Ok(merge_rt.add_modulation(rule))
 }

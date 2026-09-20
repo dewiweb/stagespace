@@ -74,22 +74,45 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
     const pointsJson = JSON.stringify(relativePoints);
     feLog(`[DBG-finalize] pointsJson=${pointsJson.slice(0, 200)}...`);
 
-    // Chercher le node DrawSpline dans le graphe courant
-    // C'est le seul node à mettre à jour — EvaluateSpline lit les points
-    // depuis DrawSpline via la connexion (resolve_spline_points dans le compiler)
+    // Chercher les nodes cibles : DrawSpline (trajectoire) et/ou
+    // VectorField field="drawn" (lignes de flux → vecteurs tangents)
     const drawSplineNode = nodes.find((n) => (n.data as any)?.type === 'DrawSpline');
-    feLog(`[DBG-finalize] drawSplineNode=${drawSplineNode?.id ?? 'NOT FOUND'}`);
+    const vectorFieldNode = nodes.find(
+      (n) => (n.data as any)?.type === 'VectorField' && (n.data as any)?.params?.field === 'drawn'
+    );
+    feLog(`[DBG-finalize] drawSplineNode=${drawSplineNode?.id ?? 'NOT FOUND'} vectorFieldNode=${vectorFieldNode?.id ?? 'NOT FOUND'}`);
 
-    if (!drawSplineNode) {
-      feLog(`[DBG-finalize] ABORT: no DrawSpline node found`);
+    if (!drawSplineNode && !vectorFieldNode) {
+      feLog(`[DBG-finalize] ABORT: no DrawSpline or drawn VectorField node found`);
       set({ drawMode: false });
       return null;
     }
 
-    // Mettre à jour uniquement le node DrawSpline avec les points dessinés
+    // Stroke → vecteurs tangents [x, y, vx, vy] (direction unitaire dans le
+    // plan x,y — la magnitude est portée par le param strength du champ)
+    let vectorsSpec: string | null = null;
+    if (vectorFieldNode) {
+      const vectors = relativePoints.map((p, i) => {
+        const prev = relativePoints[Math.max(0, i - 1)];
+        const next = relativePoints[Math.min(relativePoints.length - 1, i + 1)];
+        const tx = next[0] - prev[0];
+        const ty = next[1] - prev[1];
+        const norm = Math.hypot(tx, ty) || 1;
+        return [p[0], p[1], tx / norm, ty / norm];
+      });
+      const strokeSpec = vectors
+        .map((v) => v.map((c) => +c.toFixed(3)).join(','))
+        .join('; ');
+      // Append : chaque stroke ajoute une ligne de flux au champ existant
+      const existing = String((vectorFieldNode.data as any)?.params?.points ?? '').trim();
+      vectorsSpec = existing ? `${existing}; ${strokeSpec}` : strokeSpec;
+      feLog(`[DBG-finalize] vectorField vectors=${vectors.length}`);
+    }
+
+    // Mettre à jour les nodes cibles
     set((s) => ({
       nodes: s.nodes.map((n) => {
-        if (n.id === drawSplineNode.id) {
+        if (drawSplineNode && n.id === drawSplineNode.id) {
           feLog(`[DBG-finalize] updating DrawSpline ${n.id} oldPoints=${((n.data as any)?.params?.points ?? '').slice(0, 80)}...`);
           return {
             ...n,
@@ -98,6 +121,19 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
               params: {
                 ...(n.data as any).params,
                 points: pointsJson,
+              },
+            },
+          };
+        }
+        if (vectorFieldNode && n.id === vectorFieldNode.id && vectorsSpec !== null) {
+          feLog(`[DBG-finalize] updating VectorField ${n.id}`);
+          return {
+            ...n,
+            data: {
+              ...n.data,
+              params: {
+                ...(n.data as any).params,
+                points: vectorsSpec,
               },
             },
           };
@@ -131,6 +167,6 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
       get().updateGraphLive(0.5);
     }
 
-    return drawSplineNode.id;
+    return drawSplineNode?.id ?? vectorFieldNode?.id ?? null;
   },
 });

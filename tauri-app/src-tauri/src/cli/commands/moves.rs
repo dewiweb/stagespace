@@ -429,11 +429,11 @@ pub fn cmd_clear_channel(args: &[&str]) -> Result<String, String> {
 }
 
 /// Ajoute une règle de modulation cinématique (source → canal spatial)
-/// Usage: mod-add <speed|accel|jerk> <channel> <scale> [offset] [min] [max] [obj]
+/// Usage: mod-add <speed|accel|jerk|angvel> <channel> <scale> [offset] [min] [max] [obj] [listener x,y,z]
 pub fn cmd_mod_add(args: &[&str]) -> Result<String, String> {
     if args.len() < 3 {
         return Err(
-            "Usage: mod-add <speed|accel|jerk> <channel> <scale> [offset] [min] [max] [obj]"
+            "Usage: mod-add <speed|accel|jerk|angvel> <channel> <scale> [offset] [min] [max] [obj] [listener x,y,z]"
                 .to_string(),
         );
     }
@@ -464,11 +464,26 @@ pub fn cmd_mod_add(args: &[&str]) -> Result<String, String> {
         ),
     };
 
+    // args[7] = listener "x,y,z" — position du point d'écoute pour `angvel`
+    let listener = match args.get(7) {
+        Some(&"-") | None => None,
+        Some(s) => {
+            let parts: Vec<f64> = s.split(',').filter_map(|t| t.trim().parse().ok()).collect();
+            if parts.len() != 3 {
+                return Err(format!("Invalid listener (expected 'x,y,z'): {s}"));
+            }
+            Some([parts[0], parts[1], parts[2]])
+        }
+    };
+
     let mut rule = stagespace_engines::kinematics::ChannelModulation::new(source, channel, scale);
     rule.offset = offset;
     rule.min = min;
     rule.max = max;
     rule.object = object;
+    if let Some(l) = listener {
+        rule.listener = l;
+    }
 
     let state = cli_state::state();
     let merge_rt = state

@@ -708,7 +708,12 @@ one-pole configurable.
       `set_kinematic_smoothing`
 - [x] CLI : `mod-add`/`mod-list`/`mod-clear`/`kin-smoothing`
 
-**Reste** : `PerceptualVelocity` (°/s autour du listener — borne MAMA).
+- [x] `PerceptualVelocity` : source `angvel` (AngularSpeed) — vitesse
+      angulaire °/s autour du `listener` (point d'écoute paramétrable,
+      borne MAMA) — `KinematicState` stocke le vecteur vitesse lissé,
+      `ChannelModulation.listener`, CLI `mod-add angvel ... [listener x,y,z]`,
+      FX panel (option AngularSpeed + inputs listener)
+
 *(Nodes graphe `Velocity` + persistance cues : fait — voir §Graph-native
 effects ci-dessous.)*
 
@@ -840,7 +845,7 @@ deux nodes, persistants par construction (graph JSON → localStorage → cues).
   `useGlobalGraphStore.updateNodeData` quand le node y vit.
 
 **Reste** : les effets manuels (FX panel) restent runtime-only persistés
-par cues ; `PerceptualVelocity` comme variante perceptuelle de `Velocity`.
+par cues.
 
 ### P5 — Node `VectorField` (steering, Carpentier/Gerzso) — FAIT
 
@@ -866,9 +871,17 @@ par cues ; `PerceptualVelocity` comme variante perceptuelle de `Velocity`.
   translation flow, éjection source, déterminisme, divergence par objet,
   z closed-form, connexions autorisées/interdites.
 
-**Reste** : champ **dessiné** (flèches éditées sur le canvas 2D —
-pendant du DrawSpline pour l'écoulement), extension `follow`
-(pursue/evade/orbit/arrive), `PerceptualVelocity`.
+- [x] Champ **dessiné** (`field:"drawn"`) : un stroke tracé en mode Draw
+      (activé dès qu'un node `VectorField` est dans le graphe — spline non
+      requis) est converti en vecteurs tangents interpolés par IDW
+      (`drawn_points`/`drawn_vectors` dans les params du node, hot-swap
+      pendant la lecture). Le draw mode conserve le comportement spline
+      quand un node spline est présent.
+- [x] `PerceptualVelocity` : source cinématique `angvel` (vitesse
+      angulaire °/s autour du listener) — node `Velocity`, règles
+      `ChannelModulation` (FX panel + `listener`), CLI `mod-add`.
+
+**Reste** : extension `follow` (pursue/evade/orbit/arrive).
 
 ### P6+ : voir `RESEARCH_STATE_OF_ART.md` §4.2
 

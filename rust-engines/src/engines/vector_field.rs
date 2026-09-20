@@ -15,7 +15,11 @@
 //! appel (RNG seedé, init déterministe). Coût O(t·fps) par objet.
 //!
 //! Params (extra) :
-//!   field        "vortex" | "sink" | "source" | "flow" | "noise"  (défaut vortex)
+//!   field        "vortex" | "sink" | "source" | "flow" | "noise" | "drawn"
+//!                                                              (défaut vortex)
+//!   points       champ "drawn" : [[x,y,vx,vy], ...] ou "x,y,vx,vy; ..."
+//!                (vecteurs placés à la main, interpolés par IDW)
+//!   idw_power    exposant IDW du champ "drawn"                    (défaut 2.0)
 //!   strength     vitesse cible du champ, unités/s                 (défaut 0.5)
 //!   center       [x, y] centre des champs radiaux                 (défaut [0,0])
 //!   radius       rayon caractéristique (pic vortex / portée)      (défaut 0.6)
@@ -47,6 +51,8 @@ enum FieldKind {
     Source,
     Flow,
     Noise,
+    /// Champ dessiné : vecteurs placés à la main, interpolés par IDW.
+    Drawn,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -77,6 +83,10 @@ struct Config {
     z_init: f64,
     z_drift: f64,
     seed: u64,
+    /// Vecteurs placés à la main (position, vecteur) — champ `drawn`
+    drawn: Vec<(Vector2<f64>, Vector2<f64>)>,
+    /// Exposant IDW pour l'interpolation des vecteurs dessinés
+    idw_power: f64,
 }
 
 fn f64_param(params: &EngineParams, key: &str, default: f64) -> f64 {
@@ -116,6 +126,7 @@ impl Config {
             "source" => FieldKind::Source,
             "flow" => FieldKind::Flow,
             "noise" => FieldKind::Noise,
+            "drawn" => FieldKind::Drawn,
             _ => FieldKind::Vortex,
         };
         let layout = match params
@@ -132,6 +143,8 @@ impl Config {
         };
         Config {
             kind,
+            drawn: parse_drawn_points(params.extra.get("points")),
+            idw_power: f64_param(params, "idw_power", 2.0).clamp(0.5, 8.0),
             strength: f64_param(params, "strength", 0.5).max(0.0),
             center: vec2_param(params, "center", Vector2::zeros()),
             radius: f64_param(params, "radius", 0.6).max(1e-3),
@@ -158,6 +171,81 @@ impl Config {
 
 fn smoothstep(t: f64) -> f64 {
     t * t * (3.0 - 2.0 * t)
+}
+
+/// Nombre max de vecteurs dessinés — borne de sécurité mémoire/CPU.
+const MAX_DRAWN_VECTORS: usize = 256;
+
+/// Parse un quad [x, y, vx, vy] depuis une valeur JSON (array, objet
+/// {x,y,vx,vy} ou {pos:[x,y], vec:[vx,vy]}, ou string "x,y,vx,vy").
+fn parse_vec4(v: &serde_json::Value) -> Option<(Vector2<f64>, Vector2<f64>)> {
+    match v {
+        serde_json::Value::Array(a) if a.len() >= 4 => {
+            let g = |i: usize| a.get(i).and_then(|x| x.as_f64());
+            match (g(0), g(1), g(2), g(3)) {
+                (Some(x), Some(y), Some(vx), Some(vy)) => {
+                    Some((Vector2::new(x, y), Vector2::new(vx, vy)))
+                }
+                _ => None,
+            }
+        }
+        serde_json::Value::Object(o) => {
+            // {x, y, vx, vy} ou {pos: [x,y], vec: [vx,vy]}
+            if let (Some(x), Some(y), Some(vx), Some(vy)) = (
+                o.get("x").and_then(|v| v.as_f64()),
+                o.get("y").and_then(|v| v.as_f64()),
+                o.get("vx").and_then(|v| v.as_f64()),
+                o.get("vy").and_then(|v| v.as_f64()),
+            ) {
+                return Some((Vector2::new(x, y), Vector2::new(vx, vy)));
+            }
+            let get2 = |key: &str| {
+                o.get(key).and_then(|v| v.as_array()).and_then(|a| {
+                    match (
+                        a.first().and_then(|x| x.as_f64()),
+                        a.get(1).and_then(|y| y.as_f64()),
+                    ) {
+                        (Some(x), Some(y)) => Some(Vector2::new(x, y)),
+                        _ => None,
+                    }
+                })
+            };
+            match (get2("pos"), get2("vec")) {
+                (Some(p), Some(v)) => Some((p, v)),
+                _ => None,
+            }
+        }
+        serde_json::Value::String(s) => {
+            let parts: Vec<f64> = s
+                .split(',')
+                .filter_map(|t| t.trim().parse::<f64>().ok())
+                .collect();
+            if parts.len() >= 4 {
+                Some((
+                    Vector2::new(parts[0], parts[1]),
+                    Vector2::new(parts[2], parts[3]),
+                ))
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+/// Parse le param `points` du champ `drawn` :
+/// `[[x,y,vx,vy], ...]` ou `"x,y,vx,vy; x,y,vx,vy; ..."`.
+fn parse_drawn_points(v: Option<&serde_json::Value>) -> Vec<(Vector2<f64>, Vector2<f64>)> {
+    let mut out: Vec<(Vector2<f64>, Vector2<f64>)> = match v {
+        Some(serde_json::Value::String(s)) => s
+            .split(';')
+            .filter_map(|e| parse_vec4(&serde_json::Value::String(e.trim().to_string())))
+            .collect(),
+        Some(serde_json::Value::Array(arr)) => arr.iter().filter_map(parse_vec4).collect(),
+        _ => Vec::new(),
+    };
+    out.truncate(MAX_DRAWN_VECTORS);
+    out
 }
 
 /// Hash déterministe cellule → vecteur unitaire (angle uniforme).
@@ -207,6 +295,22 @@ fn field_velocity(p: Vector2<f64>, cfg: &Config) -> Vector2<f64> {
             }
         }
         FieldKind::Noise => noise_field(p * cfg.noise_scale, cfg.seed) * cfg.strength,
+        // Champ dessiné : interpolation IDW des vecteurs placés.
+        // v(p) = Σ v_i·w_i / Σ w_i  avec w_i = 1/(d_i^power + eps)
+        FieldKind::Drawn => {
+            if cfg.drawn.is_empty() {
+                return Vector2::zeros();
+            }
+            let mut num = Vector2::zeros();
+            let mut den = 0.0;
+            for (pi, vi) in &cfg.drawn {
+                let d2 = (p - pi).norm_squared();
+                let w = 1.0 / (d2.powf(cfg.idw_power * 0.5) + 1e-4);
+                num += vi * w;
+                den += w;
+            }
+            (num / den) * cfg.strength
+        }
         _ => {
             // Champs radiaux autour de center
             let d = p - cfg.center;
@@ -466,6 +570,52 @@ mod tests {
         );
         let pos = e.position(3.0, 0, &p);
         assert!((pos.z - 0.8).abs() < 1e-9, "z={}", pos.z);
+    }
+
+    #[test]
+    fn drawn_single_vector_dominates() {
+        // Un seul vecteur placé → le champ suit ce vecteur partout
+        let e = VectorField;
+        let p = params(
+            1,
+            json!({"field": "drawn", "points": [[0.0, 0.0, 0.5, 0.0]],
+                   "strength": 1.0, "responsiveness": 1.0, "wander": 0.0,
+                   "bounds": 10.0, "init": "point", "center": [0.0, 0.0]}),
+        );
+        let pos = e.position(1.0, 0, &p);
+        // ~0.5 u/s en +x → x ≈ 0.5 après 1s
+        assert!(pos.x > 0.4, "x={}", pos.x);
+        assert!(pos.y.abs() < 0.05);
+    }
+
+    #[test]
+    fn drawn_opposite_vectors_cancel_at_midpoint() {
+        // Deux vecteurs opposés → le champ au milieu s'annule
+        let e = VectorField;
+        let p = params(
+            2,
+            json!({"field": "drawn",
+                   "points": [[-0.5, 0.0, 0.5, 0.0], [0.5, 0.0, -0.5, 0.0]],
+                   "strength": 1.0, "responsiveness": 1.0, "wander": 0.0,
+                   "bounds": 10.0, "init": "point", "center": [0.0, 0.0]}),
+        );
+        // Objet au milieu : poussé vers +x puis −x symétriquement → reste ~0
+        let pos = e.position(2.0, 0, &p);
+        assert!(pos.x.abs() < 0.15, "x={} (devrait rester ~0)", pos.x);
+    }
+
+    #[test]
+    fn drawn_string_form_parsed() {
+        // Forme string "x,y,vx,vy; ..." (champ text de l'éditeur)
+        let e = VectorField;
+        let p = params(
+            1,
+            json!({"field": "drawn", "points": "0,0,0.4,0",
+                   "strength": 1.0, "responsiveness": 1.0, "wander": 0.0,
+                   "bounds": 10.0, "init": "point", "center": [0.0, 0.0]}),
+        );
+        let pos = e.position(1.0, 0, &p);
+        assert!(pos.x > 0.3, "x={}", pos.x);
     }
 
     #[test]

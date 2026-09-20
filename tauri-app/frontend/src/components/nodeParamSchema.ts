@@ -23,7 +23,7 @@ const COORD_OPTIONS = ['cartesian', 'polar', 'spherical'];
 const BAND_OPTIONS = ['rms', 'bass', 'mid', 'high'];
 const WAVEFORM_OPTIONS = ['sine', 'triangle', 'square', 'sawtooth'];
 const ZONE_SHAPE_OPTIONS = ['sphere', 'box'];
-const KINEMATIC_SOURCE_OPTIONS = ['speed', 'acceleration', 'jerk'];
+const KINEMATIC_SOURCE_OPTIONS = ['speed', 'acceleration', 'jerk', 'angvel'];
 const SPATIAL_CHANNEL_OPTIONS = ['gain', 'spread', 'distance', 'presence', 'yaw', 'aperture', 'lfe'];
 
 export const PARAM_SCHEMA: Partial<Record<NodeType, ParamDef[]>> = {
@@ -123,7 +123,9 @@ export const PARAM_SCHEMA: Partial<Record<NodeType, ParamDef[]>> = {
     { key: 'seed', label: 'Seed', type: 'number', step: 1 },
   ],
   VectorField: [
-    { key: 'field', label: 'Field', type: 'enum', options: ['vortex', 'sink', 'source', 'flow', 'noise'] },
+    { key: 'field', label: 'Field', type: 'enum', options: ['vortex', 'sink', 'source', 'flow', 'noise', 'drawn'] },
+    { key: 'points', label: 'Drawn Vectors x,y,vx,vy;...', type: 'text' },
+    { key: 'idw_power', label: 'IDW Power', type: 'number', step: 0.5, min: 0.5, max: 8 },
     { key: 'strength', label: 'Strength', type: 'number', step: 0.1, min: 0 },
     { key: 'center', label: 'Center', type: 'vec3' },
     { key: 'radius', label: 'Radius', type: 'number', step: 0.1, min: 0.01 },
@@ -342,6 +344,7 @@ export const PARAM_SCHEMA: Partial<Record<NodeType, ParamDef[]>> = {
     { key: 'min', label: 'Min (empty = −∞)', type: 'text' },
     { key: 'max', label: 'Max (empty = +∞)', type: 'text' },
     { key: 'object', label: 'Object (empty = all)', type: 'text' },
+    { key: 'listener', label: 'Listener (angvel)', type: 'vec3' },
   ],
   MoveRef: [
     { key: 'move_id', label: 'Move ID', type: 'text' },
@@ -473,7 +476,8 @@ export function getDefaultParams(type: NodeType): Record<string, any> {
     VectorField: { field: 'vortex', strength: 0.5, center: [0, 0, 0], radius: 0.6, swirl: 0,
       direction: [1, 0, 0], noise_scale: 1.5, wander: 0.1, responsiveness: 0.1,
       max_speed: 1.0, bounds: 1.0, containment: 0.5, init: 'circle', init_radius: 0.6,
-      z_init: 0, z_drift: 0, seed: 42 },
+      z_init: 0, z_drift: 0, points: '', idw_power: 2.0, seed: 42 },
+    Velocity: { source: 'speed', channel: 'spread', scale: 0.1, offset: 0, min: '', max: '1', object: '', listener: [0, 0, 0] },
     CustomTrajectory: { coordinate_system: 'cartesian', equations: '0.5,0.3,0.0' },
     BPM: { bpm: 120, radius: 1.0, plane: 'xz' },
     AudioAmplitude: { amplitude: 0.5, radius: 1.0, band: 'rms', plane: 'xz' },
@@ -511,7 +515,7 @@ export function getDefaultParams(type: NodeType): Record<string, any> {
     AudioFalloff: { amount: 1.0, target: 'scale' },
     ManualPosition: {},
     Zone: { shape: 'sphere', center: [0, 0, 0], radius: 2.0, min: [-1, -1, -1], max: [1, 1, 1], falloff: 0.5, channels: 'gain=0', objects: '', enabled: true },
-    Velocity: { source: 'speed', channel: 'spread', scale: 0.1, offset: 0, min: '', max: '1', object: '' },
+
     MoveRef: { move_id: '' },
     Merge: { strategy: 'override', fade_duration: 0.5 },
   };
@@ -587,7 +591,7 @@ export const NODE_DESCRIPTIONS: Partial<Record<NodeType, string>> = {
   AudioFalloff: "Module un paramètre (scale/height) par l'amplitude audio. Pour réactivité musicale",
   ManualPosition: "Override manuel de positions — lit les drag 3D. Pour positionnement à la main",
   Zone: "Région spatiale (sphere/box) qui tire les canaux des objets vers des valeurs cibles — gain/spread/etc. varient avec la position. Pass-through : ne modifie pas les positions",
-  Velocity: "Modulation cinématique — speed/accel/jerk d'un objet → canal spatial (ex : vitesse → spread). Pass-through : ne modifie pas les positions",
+  Velocity: "Modulation cinématique — speed/accel/jerk/angvel d'un objet → canal spatial. angvel = vitesse angulaire °/s autour du listener (borne perceptuelle). Pass-through : ne modifie pas les positions",
   MoveRef: "Référence un sub-graph (move) par ID. Source — produit les positions du move référencé. Double-clic pour éditer le sub-graph",
   Merge: "Node Merge — représente le MergeRuntime. Produit les positions mergées de tous les moves actifs. Strategy: override/crossfade/blend/priority",
 };
