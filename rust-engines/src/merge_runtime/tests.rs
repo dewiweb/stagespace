@@ -10,6 +10,7 @@ fn test_merge_override() {
     let move_a = (
         "a".to_string(),
         1.0,
+        1.0,
         0,
         vec![
             (0, nalgebra::Vector3::new(1.0, 0.0, 0.0)),
@@ -19,6 +20,7 @@ fn test_merge_override() {
     let move_b = (
         "b".to_string(),
         0.5,
+        1.0,
         0,
         vec![
             (0, nalgebra::Vector3::new(10.0, 0.0, 0.0)),
@@ -36,11 +38,13 @@ fn test_merge_crossfade() {
     let move_a = (
         "a".to_string(),
         1.0,
+        1.0,
         0,
         vec![(0, nalgebra::Vector3::new(0.0, 0.0, 0.0))],
     );
     let move_b = (
         "b".to_string(),
+        1.0,
         1.0,
         0,
         vec![(0, nalgebra::Vector3::new(10.0, 0.0, 0.0))],
@@ -54,6 +58,7 @@ fn test_merge_crossfade() {
 fn test_merge_single_move() {
     let move_a = (
         "a".to_string(),
+        1.0,
         1.0,
         0,
         vec![(0, nalgebra::Vector3::new(1.0, 2.0, 3.0))],
@@ -78,6 +83,7 @@ fn test_merge_disjoint_tracks() {
     let move_a = (
         "a".to_string(),
         1.0,
+        1.0,
         0,
         vec![
             (0, nalgebra::Vector3::new(1.0, 0.0, 0.0)),
@@ -88,6 +94,7 @@ fn test_merge_disjoint_tracks() {
     // Move B avec indices déjà remappés (3,4,5)
     let move_b = (
         "b".to_string(),
+        1.0,
         1.0,
         0,
         vec![
@@ -116,12 +123,14 @@ fn test_merge_priority() {
     let move_a = (
         "a".to_string(),
         1.0,
+        1.0,
         1,
         vec![(0, nalgebra::Vector3::new(1.0, 0.0, 0.0))],
     );
     let move_b = (
         "b".to_string(),
         0.1,
+        1.0,
         5,
         vec![(0, nalgebra::Vector3::new(99.0, 0.0, 0.0))],
     );
@@ -136,12 +145,14 @@ fn test_merge_priority_tiebreak_by_fade() {
     let move_a = (
         "a".to_string(),
         1.0,
+        1.0,
         5,
         vec![(0, nalgebra::Vector3::new(1.0, 0.0, 0.0))],
     );
     let move_b = (
         "b".to_string(),
         0.5,
+        1.0,
         5,
         vec![(0, nalgebra::Vector3::new(99.0, 0.0, 0.0))],
     );

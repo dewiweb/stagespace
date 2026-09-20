@@ -5,8 +5,10 @@ use std::collections::HashMap;
 
 use super::move_state::MergeStrategy;
 
-/// Type alias for a single move's positions entry: (move_id, fade, priority, positions per object_index)
-pub type MoveEntry = (String, f64, u32, Vec<(usize, nalgebra::Vector3<f64>)>);
+/// Type alias for a single move's positions entry:
+/// (move_id, fade, weight, priority, positions per object_index).
+/// Le fade effectif utilisé par les stratégies est `fade × weight`.
+pub type MoveEntry = (String, f64, f64, u32, Vec<(usize, nalgebra::Vector3<f64>)>);
 
 /// Merge les positions de plusieurs moves selon la stratégie choisie.
 ///
@@ -27,16 +29,18 @@ pub fn merge_positions(
 
     // Si un seul move, pas de merge nécessaire
     if move_positions.len() == 1 {
-        return move_positions[0].3.clone();
+        return move_positions[0].4.clone();
     }
 
-    // Collecter toutes les positions par object_index, avec (fade, priority, move_id, pos)
+    // Collecter toutes les positions par object_index, avec
+    // (fade effectif = fade × weight, priority, move_id, pos)
     type Candidates<'a> = Vec<(f64, u32, &'a str, nalgebra::Vector3<f64>)>;
     let mut positions_by_index: HashMap<usize, Candidates<'_>> = HashMap::new();
-    for (move_id, fade, priority, positions) in move_positions {
+    for (move_id, fade, weight, priority, positions) in move_positions {
+        let effective_fade = fade * weight;
         for (idx, pos) in positions {
             positions_by_index.entry(*idx).or_default().push((
-                *fade,
+                effective_fade,
                 *priority,
                 move_id.as_str(),
                 *pos,

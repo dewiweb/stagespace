@@ -3,16 +3,16 @@
 /// Stratégie de merge quand plusieurs moves ciblent le même track
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum MergeStrategy {
-    /// Dernier move activé gagne (par poids/fade le plus élevé).
+    /// Move avec le fade effectif (fade × weight) le plus élevé gagne.
     /// Tie-break déterministe : move_id lexicographiquement le plus grand.
     #[default]
     Override,
-    /// Blend linéaire pondéré par weight * fade
+    /// Blend linéaire pondéré par weight × fade
     Crossfade,
-    /// Moyenne pondérée de toutes les positions
+    /// Moyenne pondérée (weight × fade) de toutes les positions
     Blend,
     /// Move avec la priorité la plus haute gagne
-    /// (tie-breaks : fade puis move_id — déterministe)
+    /// (tie-breaks : fade effectif puis move_id — déterministe)
     Priority,
 }
 
@@ -25,13 +25,15 @@ pub struct MoveState {
     pub fade_out_remaining: f64,
     pub fade_in_duration: f64,
     pub fade_out_duration: f64,
-    /// Poids du move — multiplie le fade dans le snapshot mergé
-    /// (Crossfade/Blend "pondéré par weight * fade"). Défaut 1.0.
+    /// Poids du move — multiplie le fade dans le merge (fade effectif =
+    /// `fade × weight` pour Override/Crossfade/Blend, tie-break de
+    /// Priority). Réglable via `MergeRuntime::set_move_weight`. Défaut 1.0.
     pub weight: f64,
+    /// Priorité pour la stratégie Priority (plus élevé = gagne).
+    /// Réglable via `MergeRuntime::set_move_priority`. Défaut 0.
+    pub priority: u32,
     pub is_active: bool,
     pub is_preview: bool,
-    /// Priorité pour la stratégie Priority (plus élevé = gagne)
-    pub priority: u32,
     /// Dernier `frame_count` observé sur le PositionBuffer du worker —
     /// lu à chaque frame du merge pour détecter les workers stale/morts.
     pub last_frame_count: u64,

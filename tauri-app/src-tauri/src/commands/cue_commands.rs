@@ -147,8 +147,12 @@ pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), Stri
     let _guard = RecallGuard(&state.recall_in_progress);
 
     // Anti-loop OSC IN : ignorer les messages entrants pendant le recall —
-    // le renderer renvoie souvent un echo des valeurs qu'on vient d'envoyer
-    lock_or_recover(&state.osc_receiver).suppress_ms(500);
+    // le renderer renvoie souvent un echo des valeurs qu'on vient d'envoyer.
+    // La fenêtre couvre le recall entier : fade_in des moves respawnés +
+    // marge de settle (le fixe 500ms expirait avant la fin d'un long fade,
+    // laissant passer les echos de fin de cue).
+    let suppress_ms = 500u64 + (cue.fade_duration.max(0.0) * 1000.0) as u64;
+    lock_or_recover(&state.osc_receiver).suppress_ms(suppress_ms);
 
     // 1. Hot-swap le graph global AVANT de désactiver les moves (fail-fast sans side effects)
     //    Si la compilation échoue, on retourne une erreur sans avoir modifié l'état.

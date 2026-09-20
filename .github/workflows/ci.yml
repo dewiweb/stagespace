@@ -5,6 +5,8 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+  # Réutilisable par release.yml — une release ne part jamais sans CI verte.
+  workflow_call:
 
 env:
   CARGO_TERM_COLOR: always

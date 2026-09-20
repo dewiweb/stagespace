@@ -73,6 +73,42 @@ pub async fn set_move_speed(
     Ok(())
 }
 
+/// Définit le poids de merge d'un move (fade effectif = fade × weight)
+#[tauri::command]
+pub async fn set_move_weight(
+    movement_id: String,
+    weight: f64,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    {
+        let movements = lock_or_recover(&state.movements);
+        if !movements.contains_key(&movement_id) {
+            return Err(format!("Movement '{movement_id}' not found"));
+        }
+    }
+    let merge_rt = lock_or_recover(&state.merge_runtime);
+    merge_rt.set_move_weight(&movement_id, weight);
+    Ok(())
+}
+
+/// Définit la priorité de merge d'un move (stratégie Priority)
+#[tauri::command]
+pub async fn set_move_priority(
+    movement_id: String,
+    priority: u32,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    {
+        let movements = lock_or_recover(&state.movements);
+        if !movements.contains_key(&movement_id) {
+            return Err(format!("Movement '{movement_id}' not found"));
+        }
+    }
+    let merge_rt = lock_or_recover(&state.merge_runtime);
+    merge_rt.set_move_priority(&movement_id, priority);
+    Ok(())
+}
+
 /// Définit les depths par track (pour le MergeRuntime)
 #[tauri::command]
 pub async fn set_track_depths(depths: Vec<f64>, state: State<'_, AppState>) -> Result<(), String> {

@@ -27,8 +27,9 @@ use commands::merge_commands::{
     get_merge_perf_stats, list_active_moves, list_channel_modulations, list_graph_effects,
     list_spatial_channels, list_zones, remove_channel_modulation, remove_zone, set_global_macro,
     set_global_origin, set_global_osc_ids, set_kinematic_smoothing, set_manual_position,
-    set_merge_strategy, set_move_playback_mode, set_move_speed, set_spatial_channel,
-    set_track_depths, set_track_positions, update_global_graph, update_move_graph_merged,
+    set_merge_strategy, set_move_playback_mode, set_move_priority, set_move_speed, set_move_weight,
+    set_spatial_channel, set_track_depths, set_track_positions, update_global_graph,
+    update_move_graph_merged,
 };
 use commands::network::discover_osc_targets;
 use commands::osc::{
@@ -334,6 +335,8 @@ pub fn run() {
             set_global_macro,
             set_move_speed,
             set_move_playback_mode,
+            set_move_weight,
+            set_move_priority,
             set_track_depths,
             set_global_origin,
             set_global_osc_ids,

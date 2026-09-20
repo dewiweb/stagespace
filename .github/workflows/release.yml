@@ -21,8 +21,15 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # Gate : la suite CI complète doit passer sur le tag avant de builder —
+  # une release sur du code non testé est la classe de bug qu'on ne shippe
+  # pas (cf. AppImage/GStreamer).
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   build-release:
     name: Build & Release
+    needs: ci
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -112,6 +119,10 @@ jobs:
 
       # Smoke test post-build : le bundle ne doit pas crasher au démarrage
       # (classe de bug : dépendance système manquante type GStreamer).
+      # ORDRE : tauri-action publie une DRAFT release — si ce smoke test
+      # échoue, le run est rouge et la draft doit être SUPPRIMÉE, jamais
+      # publiée. Rebuilder avant le smoke doublerait le temps de CI (~30 min)
+      # pour un gate que le draft remplit déjà.
       - name: Smoke test bundles (Linux)
         if: runner.os == 'Linux'
         run: |

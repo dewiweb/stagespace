@@ -609,6 +609,37 @@ impl MergeRuntime {
             .remove(move_id);
     }
 
+    /// Règle le poids d'un move actif — fade effectif = fade × weight
+    /// (Override/Crossfade/Blend, tie-break de Priority).
+    pub fn set_move_weight(&self, move_id: &str, weight: f64) {
+        if let Some(state) = self
+            .active_moves
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .get_mut(move_id)
+        {
+            // Un poids négatif/NaN casserait les comparaisons du merge —
+            // on borne à [0, +∞) avec fallback 1.0.
+            state.weight = if weight.is_finite() && weight >= 0.0 {
+                weight
+            } else {
+                1.0
+            };
+        }
+    }
+
+    /// Règle la priorité d'un move actif (stratégie Priority).
+    pub fn set_move_priority(&self, move_id: &str, priority: u32) {
+        if let Some(state) = self
+            .active_moves
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .get_mut(move_id)
+        {
+            state.priority = priority;
+        }
+    }
+
     /// Met à jour les osc_ids d'un move actif (pour hot-swap des tracks)
     pub fn update_move_osc_ids(&self, move_id: &str, osc_ids: Vec<u32>) {
         if let Some(state) = self
@@ -629,6 +660,22 @@ impl MergeRuntime {
             .unwrap_or_else(|e| e.into_inner())
             .get_mut(move_id)
         {
+            state.track_indices = track_indices;
+        }
+    }
+
+    /// Update atomique osc_ids + track_indices — les deux changent sous un
+    /// seul write lock, sinon une frame du merge pouvait voir des ids
+    /// nouveaux avec des indices périmés (positions sur les mauvaises
+    /// tracks pendant une frame).
+    pub fn update_move_routing(&self, move_id: &str, osc_ids: Vec<u32>, track_indices: Vec<usize>) {
+        if let Some(state) = self
+            .active_moves
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .get_mut(move_id)
+        {
+            state.osc_ids = osc_ids;
             state.track_indices = track_indices;
         }
     }
@@ -737,7 +784,7 @@ impl MergeRuntime {
                 let mut moves_to_remove: Vec<String> = Vec::new();
 
                 // --- Section critique courte: update fades + clone data ---
-                let move_snapshots: Vec<(String, f64, u32, Vec<usize>, bool)> = {
+                let move_snapshots: Vec<(String, f64, f64, u32, Vec<usize>, bool)> = {
                     let mut moves_guard = active_moves.write().unwrap_or_else(|e| e.into_inner());
                     let mut snapshots = Vec::with_capacity(moves_guard.len());
                     for (move_id, state) in moves_guard.iter_mut() {
@@ -778,6 +825,7 @@ impl MergeRuntime {
                         snapshots.push((
                             move_id.clone(),
                             fade,
+                            state.weight,
                             state.priority,
                             state.track_indices.clone(),
                             state.is_preview,
@@ -795,7 +843,8 @@ impl MergeRuntime {
                 // (Override = fade le plus haut) sur une track partagée avec un
                 // move live → track live mutée. Leurs positions vont
                 // directement au callback display, sans toucher à l'OSC.
-                for (move_id, fade, priority, track_indices, is_preview) in &move_snapshots {
+                for (move_id, fade, weight, priority, track_indices, is_preview) in &move_snapshots
+                {
                     if let Some(buffer) = buffers.get(move_id) {
                         let positions = buffer.read();
                         if positions.is_empty() {
@@ -823,6 +872,7 @@ impl MergeRuntime {
                             move_positions.push((
                                 move_id.clone(),
                                 *fade,
+                                *weight,
                                 *priority,
                                 global_positions,
                             ));
@@ -1044,6 +1094,9 @@ impl MergeRuntime {
 
                 // 6. Callback pour le 3D preview : display = positions mergées +
                 // positions preview (affichées mais jamais envoyées en OSC).
+                // Parité : les positions preview passent par le MÊME post-process
+                // que le live — sinon le 3D ment sur ce que l'OSC enverrait si le
+                // move passait live (scale/rotate/origin du graph global).
                 // Le handle Arc est cloné sous un lock très court, l'emit
                 // (sérialisation JSON complète) se fait HORS du lock.
                 let cb = position_callback
@@ -1051,8 +1104,20 @@ impl MergeRuntime {
                     .unwrap_or_else(|e| e.into_inner())
                     .clone();
                 if let Some(callback) = cb {
+                    let preview_transformed: Vec<(usize, nalgebra::Vector3<f64>)> =
+                        if preview_positions.is_empty() {
+                            Vec::new()
+                        } else {
+                            let pp_fn = post_process_fn_arc
+                                .read()
+                                .unwrap_or_else(|e| e.into_inner());
+                            pp_fn(&ctx, preview_positions.clone())
+                                .into_iter()
+                                .filter(|(_, pos)| pos.iter().all(|v| v.is_finite()))
+                                .collect()
+                        };
                     let mut display = transformed.clone();
-                    display.extend(preview_positions.iter().copied());
+                    display.extend(preview_transformed);
                     callback(t_real, display);
                 }
 

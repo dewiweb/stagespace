@@ -44,14 +44,19 @@ pub async fn update_move_graph_merged(
         movement.track_indices = indices.clone();
     }
 
-    // Mettre à jour le MoveState dans le MergeRuntime (pour le merge)
+    // Mettre à jour le MoveState dans le MergeRuntime — update atomique
+    // des deux côtés du routage quand ils sont fournis ensemble.
     {
         let merge_rt = lock_or_recover(&state.merge_runtime);
-        if let Some(ref ids) = osc_ids {
-            merge_rt.update_move_osc_ids(&movement_id, ids.clone());
-        }
-        if let Some(ref indices) = track_indices {
-            merge_rt.update_move_track_indices(&movement_id, indices.clone());
+        match (&osc_ids, &track_indices) {
+            (Some(ids), Some(indices)) => {
+                merge_rt.update_move_routing(&movement_id, ids.clone(), indices.clone())
+            }
+            (Some(ids), None) => merge_rt.update_move_osc_ids(&movement_id, ids.clone()),
+            (None, Some(indices)) => {
+                merge_rt.update_move_track_indices(&movement_id, indices.clone())
+            }
+            (None, None) => {}
         }
     }
 

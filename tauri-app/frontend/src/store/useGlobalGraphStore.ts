@@ -166,6 +166,13 @@ export const useGlobalGraphStore = create<GlobalGraphState>((set, get) => ({
 
     try {
       await invoke('update_global_graph', { graphJson });
+      // L'origin du post-process global = centroïde de TOUTES les tracks
+      // (pas celle du dernier move spawné — le backend n'y touche plus).
+      const { useGraphStore } = await import('./useGraphStore');
+      const { computeCentroid } = await import('./utils/geometryUtils');
+      const { holProject, manualOscIds } = useGraphStore.getState();
+      const origin = computeCentroid(holProject, [], manualOscIds);
+      await invoke('set_global_origin', { origin });
     } catch (e) {
       console.error('[pushGlobalGraph] Failed:', e);
     }

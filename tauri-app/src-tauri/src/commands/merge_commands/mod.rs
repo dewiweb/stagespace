@@ -19,7 +19,7 @@ pub use channels::{
 pub use graph_updates::{update_global_graph, update_move_graph_merged};
 pub use macros::{
     set_global_macro, set_global_origin, set_global_osc_ids, set_merge_strategy,
-    set_move_playback_mode, set_move_speed, set_track_depths,
+    set_move_playback_mode, set_move_priority, set_move_speed, set_move_weight, set_track_depths,
 };
 pub use manual_positions::{
     clear_all_manual_positions, clear_manual_position, set_manual_position, set_track_positions,

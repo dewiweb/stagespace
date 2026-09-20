@@ -332,9 +332,11 @@ fn spawn_move_inner(spec: MoveSpec, sh: &Shared, abort_on_recall: bool) -> Resul
             spec.track_indices.clone(),
             spec.is_preview,
         );
-        if let Some(ref origin) = spec.origin {
-            merge_rt.set_origin(nalgebra::Vector3::new(origin[0], origin[1], origin[2]));
-        }
+        // L'origin du move est passée au WORKER (runtime.set_origin, étape 4)
+        // — le merge garde SON origin globale (set_global_origin, centroïde
+        // de toutes les tracks). Écrire l'origin du move ici faisait du
+        // last-writer-wins : deux moves avec des centroïdes différents
+        // écrasaient l'origin du post-process global.
 
         if !merge_rt.is_running() {
             // Callback positions → event 'global-positions' (preview 3D).
