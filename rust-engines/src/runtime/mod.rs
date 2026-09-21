@@ -165,6 +165,17 @@ impl Runtime {
         *old = new_fn;
     }
 
+    /// Handle échantillonneur cheap-cloneable — capture les Arc nécessaires
+    /// pour sampler HORS du lock `movements` (qui sinon bloque stop/recall
+    /// pendant des milliers d'évaluations).
+    pub fn sampler(&self) -> TrajectorySampler {
+        TrajectorySampler {
+            position_fn: self.position_fn.clone(),
+            macros: self.macros.clone(),
+            origin: self.origin.clone(),
+        }
+    }
+
     /// Échantillonne la trajectoire compilée pour un objet donné sur N points
     /// Applique les macros (scale, rotation, shift) pour refléter le rendu réel
     /// Retourne Vec<(t, x, y, z)> — utilisé par le frontend pour visualiser le chemin
@@ -174,10 +185,33 @@ impl Runtime {
         n_samples: usize,
         duration: f64,
     ) -> Vec<(f64, f64, f64, f64)> {
-        let fn_ref = self.position_fn.lock().unwrap_or_else(|e| e.into_inner());
-        let scale = self.macros.get_scale();
-        let shift = self.macros.get_shift();
-        let (yaw, pitch, roll) = self.macros.get_rotation();
+        self.sampler().sample(object_index, n_samples, duration)
+    }
+}
+
+/// Échantillonneur detaché du Runtime — les mêmes Arc partagées, sans
+/// besoin de tenir le lock `movements` du côté command.
+#[derive(Clone)]
+pub struct TrajectorySampler {
+    position_fn: Arc<Mutex<PositionFn>>,
+    macros: Arc<MacroState>,
+    origin: Arc<Mutex<nalgebra::Vector3<f64>>>,
+}
+
+impl TrajectorySampler {
+    /// Même sémantique que l'ancien `Runtime::sample_trajectory`.
+    pub fn sample(
+        &self,
+        object_index: usize,
+        n_samples: usize,
+        duration: f64,
+    ) -> Vec<(f64, f64, f64, f64)> {
+        let msnap = self.macros.snapshot();
+        let scale = msnap.scale;
+        let shift = msnap.shift;
+        let (yaw, pitch, roll) = (msnap.yaw, msnap.pitch, msnap.roll);
+        let radius_scale = msnap.radius_scale;
+        let height_offset = msnap.height_offset;
 
         // Précalculer la matrice de rotation si rotation non-nulle
         let has_rotation = yaw != 0.0 || pitch != 0.0 || roll != 0.0;
@@ -195,28 +229,37 @@ impl Runtime {
         // Origin du move : appliquée comme dans le playback loop (mode worker)
         // pour que les samples soient en world-space, cohérents avec le buffer.
         let origin = *self.origin.lock().unwrap_or_else(|e| e.into_inner());
-        let radius_scale = self.macros.get_radius_scale();
-        let height_offset = self.macros.get_height_offset();
-        for i in 0..n_samples {
-            let t = (i as f64 / (n_samples - 1).max(1) as f64) * duration;
-            let pos = fn_ref(t, object_index);
-            // Même chaîne que le worker : radius_scale → height_offset →
-            // (fade=1) → scale → rotation → + origin + shift
-            let pos_final = move_transform(
-                pos,
-                origin,
-                scale,
-                shift,
-                rot_matrix.as_ref(),
-                radius_scale,
-                height_offset,
-                1.0,
-            );
-            samples.push((t, pos_final.x, pos_final.y, pos_final.z));
+        // Lock par chunks : tenir `position_fn` pendant tout le sampling
+        // affame le worker live → stale-kill par le merge au-delà de ~0.5s.
+        const SAMPLE_CHUNK: usize = 512;
+        for chunk_start in (0..n_samples).step_by(SAMPLE_CHUNK) {
+            let chunk_end = (chunk_start + SAMPLE_CHUNK).min(n_samples);
+            {
+                let fn_ref = self.position_fn.lock().unwrap_or_else(|e| e.into_inner());
+                for i in chunk_start..chunk_end {
+                    let t = (i as f64 / (n_samples - 1).max(1) as f64) * duration;
+                    let pos = fn_ref(t, object_index);
+                    // Même chaîne que le worker : radius_scale → height_offset →
+                    // (fade=1) → scale → rotation → + origin + shift
+                    let pos_final = move_transform(
+                        pos,
+                        origin,
+                        scale,
+                        shift,
+                        rot_matrix.as_ref(),
+                        radius_scale,
+                        height_offset,
+                        1.0,
+                    );
+                    samples.push((t, pos_final.x, pos_final.y, pos_final.z));
+                }
+            }
         }
         samples
     }
+}
 
+impl Runtime {
     /// Récupère l'état des macros (pour modification temps réel)
     pub fn macros(&self) -> Arc<MacroState> {
         self.macros.clone()
@@ -293,6 +336,18 @@ impl Runtime {
         let audio_param_overrides_arc = self.audio_param_overrides.clone();
 
         let handle = std::thread::spawn(move || {
+            // RAII : si la closure panique (bug engine, poison critique),
+            // `running` resterait true pour toujours — le merge et l'UI
+            // croiraient le worker vivant (zombie silencieux). Le guard
+            // garantit is_running() honnête quel que soit le chemin de sortie.
+            struct ClearRunning(Arc<std::sync::atomic::AtomicBool>);
+            impl Drop for ClearRunning {
+                fn drop(&mut self) {
+                    self.0.store(false, Ordering::SeqCst);
+                }
+            }
+            let _clear_running = ClearRunning(running.clone());
+
             let start = Instant::now();
             let frame_duration = Duration::from_secs_f64(1.0 / params.fps);
             let mut frame_count = 0u64;
@@ -306,13 +361,15 @@ impl Runtime {
                 // Lire la duration (hot-swappable) depuis l'AtomicU64
                 let duration = duration_arc.load(Ordering::Relaxed) as f64 / 1000.0;
 
-                // Lire les macros temps réel (base)
-                let speed = macros.get_speed();
-                let scale = macros.get_scale();
-                let shift = macros.get_shift();
-                let (yaw, pitch, roll) = macros.get_rotation();
-                let radius_scale = macros.get_radius_scale();
-                let height_offset = macros.get_height_offset();
+                // Lire les macros temps réel — snapshot seqlock : les 6
+                // champs viennent de la même écriture (pas de transform mixte).
+                let msnap = macros.snapshot();
+                let speed = msnap.speed;
+                let scale = msnap.scale;
+                let shift = msnap.shift;
+                let (yaw, pitch, roll) = (msnap.yaw, msnap.pitch, msnap.roll);
+                let radius_scale = msnap.radius_scale;
+                let height_offset = msnap.height_offset;
 
                 // Appliquer speed: temps virtuel — clamp >= 0 : un speed
                 // négatif (macro ou audio mod) enverrait un t négatif aux

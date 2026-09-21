@@ -586,7 +586,7 @@ export default function Inspector() {
               );
             })}
             <button
-              onClick={() => stopAllMovements()}
+              onClick={() => stopAllMovements().catch(() => {})}
               className="w-full py-1 bg-red-900/50 hover:bg-red-900/70 text-red-400 text-[10px] rounded font-medium transition-colors"
             >
               ■ Stop All

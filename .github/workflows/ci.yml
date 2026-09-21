@@ -122,7 +122,14 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           bash scripts/gen_contracts.sh
-          git diff --exit-code -- tauri-app/frontend/src/types/generated/
+          # `git diff` ne voit que les fichiers trackés — un nouveau type
+          # généré non commité passerait. `status --porcelain` attrape les
+          # deux (modifiés + untracked).
+          if [ -n "$(git status --porcelain -- tauri-app/frontend/src/types/generated/)" ]; then
+            echo "::error::Generated TS contracts drift — run 'npm run contracts' and commit"
+            git status --porcelain -- tauri-app/frontend/src/types/generated/
+            exit 1
+          fi
 
       - name: Build CLI
         run: cargo build --bin stagespace-cli
@@ -158,8 +165,10 @@ jobs:
         run: npm run lint
         continue-on-error: true
 
+      # `tsc -b` et non `tsc --noEmit` : le tsconfig racine est solution-style
+      # (files: [] + references) — sans -b il ne compile RIEN et passe toujours.
       - name: TypeScript check
-        run: npx tsc --noEmit
+        run: npx tsc -b
 
       - name: Tests
         run: npm test

@@ -138,13 +138,24 @@ pub async fn store_cue(
 #[tauri::command]
 pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), IpcError> {
     let sh = crate::commands::state::Shared::from_state(&state);
-    tauri::async_runtime::spawn_blocking(move || recall_cue_inner(cue, sh))
+    let handle = sh
+        .app_handle
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    let result = tauri::async_runtime::spawn_blocking(move || recall_cue_inner(cue, sh))
         .await
         .map_err(|e| IpcError::internal(format!("Cue recall task failed: {e}")))?
-        .map_err(IpcError::from)
+        .map_err(IpcError::from);
+    // Le recall tue/respawn des moves (même partiellement en cas d'échec) —
+    // l'UI doit resynchroniser sa liste sinon elle affiche des zombies.
+    if let Some(h) = handle {
+        let _ = h.emit("active-moves-update", ());
+    }
+    result
 }
 
-fn recall_cue_inner(cue: Cue, sh: crate::commands::state::Shared) -> Result<(), String> {
+pub(crate) fn recall_cue_inner(cue: Cue, sh: crate::commands::state::Shared) -> Result<(), String> {
     // Anti-recall concurrent : si un recall est déjà en cours, refuser
     if sh
         .recall_in_progress
@@ -167,7 +178,11 @@ fn recall_cue_inner(cue: Cue, sh: crate::commands::state::Shared) -> Result<(), 
     // La fenêtre couvre le recall entier : fade_in des moves respawnés +
     // marge de settle (le fixe 500ms expirait avant la fin d'un long fade,
     // laissant passer les echos de fin de cue).
-    let suppress_ms = 500u64 + (cue.fade_duration.max(0.0) * 1000.0) as u64;
+    // Clampée comme osc_suppress_in : un fade_duration géant (cue .hfg
+    // éditée à la main) overflowait le u64 et paniquait à mi-recall.
+    const MAX_SUPPRESS_MS: u64 = 120_000;
+    let suppress_ms =
+        (500.0 + cue.fade_duration.max(0.0) * 1000.0).min(MAX_SUPPRESS_MS as f64) as u64;
     lock_or_recover(&sh.osc_receiver).suppress_ms(suppress_ms);
 
     // 1. Hot-swap le graph global AVANT de désactiver les moves (fail-fast sans side effects)
@@ -238,21 +253,25 @@ fn recall_cue_inner(cue: Cue, sh: crate::commands::state::Shared) -> Result<(), 
         }
     }
 
-    // 3. Restaurer les macros spatiales (fast path atomic)
-    if let Some(ref macros) = cue.macros {
+    // 3+4. Restaurer les macros — UNE écriture atomique (restore_all) :
+    //      les 5 set_* séparés laissaient plusieurs frames lire un mix
+    //      ancien/nouveau pendant le recall.
+    if cue.macros.is_some() || cue.spatial_macros.is_some() {
         let merge_rt = lock_or_recover(&sh.merge_runtime);
         let ms = merge_rt.macros();
-        ms.set_scale(macros.scale);
-        ms.set_shift(macros.shift_x, macros.shift_y, macros.shift_z);
-        ms.set_rotation(macros.yaw, macros.pitch, macros.roll);
-    }
-
-    // 4. Restaurer les macros spatiales étendues
-    if let Some(ref spatial) = cue.spatial_macros {
-        let merge_rt = lock_or_recover(&sh.merge_runtime);
-        let ms = merge_rt.macros();
-        ms.set_radius_scale(spatial.radius_scale);
-        ms.set_height_offset(spatial.height_offset);
+        let mut snap = ms.snapshot();
+        if let Some(ref macros) = cue.macros {
+            snap.scale = macros.scale;
+            snap.shift = nalgebra::Vector3::new(macros.shift_x, macros.shift_y, macros.shift_z);
+            snap.yaw = macros.yaw;
+            snap.pitch = macros.pitch;
+            snap.roll = macros.roll;
+        }
+        if let Some(ref spatial) = cue.spatial_macros {
+            snap.radius_scale = spatial.radius_scale;
+            snap.height_offset = spatial.height_offset;
+        }
+        ms.restore_all(&snap);
     }
 
     // 5. Restaurer les per-track depths
@@ -311,7 +330,8 @@ fn recall_cue_inner(cue: Cue, sh: crate::commands::state::Shared) -> Result<(), 
     // 7. Restaurer les moves snapshotés au store (Phase 5). Le backend
     //    recrée les workers lui-même — un move snapshoté reprend exactement
     //    son graphe, ses tracks, son loop/direction. Champ vide = cue ancien
-    //    format → comportement legacy : le frontend écoute "cue-recalled".
+    //    format → le frontend rejoue `cue.graph` (listener cue-recalled).
+    let mut failed_moves: Vec<String> = Vec::new();
     if !cue.moves.is_empty() {
         use crate::commands::merge_commands::{
             parse_direction, parse_loop_mode, spawn_move_for_recall, MoveSpec,
@@ -363,35 +383,25 @@ fn recall_cue_inner(cue: Cue, sh: crate::commands::state::Shared) -> Result<(), 
                 // Un move qui échoue ne doit pas faire échouer le recall
                 // entier — on log et on continue (partial recall visible).
                 Err(e) => {
-                    eprintln!("[WARN] recall: failed to respawn move '{}': {e}", snap.id)
+                    eprintln!("[WARN] recall: failed to respawn move '{}': {e}", snap.id);
+                    failed_moves.push(snap.id.clone());
                 }
             }
         }
     }
 
+    // Le payload porte les respawns échoués — un recall partiel ne doit pas
+    // passer pour un succès côté UI.
     sh.app_handle
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .as_ref()
-        .map(|handle| handle.emit("cue-recalled", &cue));
+        .map(|handle| {
+            handle.emit(
+                "cue-recalled",
+                serde_json::json!({ "cue_id": cue.id, "failed_moves": failed_moves }),
+            )
+        });
 
-    Ok(())
-}
-
-// ─── List / Delete ───
-
-/// Liste les cues (depuis le frontend qui les persiste)
-/// Note: les cues sont persistés côté frontend (localStorage), pas côté Rust.
-/// Cette commande est un placeholder — le frontend gère la liste.
-#[tauri::command]
-pub async fn list_cues() -> Result<Vec<serde_json::Value>, IpcError> {
-    // Les cues sont gérés côté frontend (localStorage)
-    // Cette commande existe pour compatibilité future
-    Ok(vec![])
-}
-
-/// Supprime un cue (placeholder — géré côté frontend)
-#[tauri::command]
-pub async fn delete_cue(_cue_id: String) -> Result<(), IpcError> {
     Ok(())
 }

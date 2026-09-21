@@ -63,6 +63,12 @@ type SharedTrackPositions = Arc<RwLock<Arc<HashMap<u32, [f64; 3]>>>>;
 /// ~0.5 s à 60 FPS.
 const STALE_FRAME_LIMIT: u32 = 30;
 
+/// Grace plus longue pour un move qui n'a JAMAIS écrit encore (worker
+/// fraîchement spawné : compile + premier frame peuvent dépasser 0.5 s
+/// sur machine chargée). Sans ça le merge retire un move avant même sa
+/// première émission. ~5 s à 60 FPS.
+const FRESH_STALE_FRAME_LIMIT: u32 = 300;
+
 /// Seuil de retard (en frames) au-delà duquel on ré-ancre `frame_count`
 /// sur le temps réel au lieu de burst des frames obsolètes.
 const CATCHUP_FRAME_LIMIT: u128 = 30;
@@ -584,6 +590,16 @@ impl MergeRuntime {
             .is_some_and(|s| s.is_active)
     }
 
+    /// Vrai si au moins un move est encore actif dans le merge — utilisé
+    /// pour décider si un thread mort mérite un respawn automatique.
+    pub fn has_active_moves(&self) -> bool {
+        self.active_moves
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .values()
+            .any(|s| s.is_active)
+    }
+
     /// Démarre un fade in pour un move (utilisé au recall pour un crossfade doux)
     pub fn start_fade_in(&self, move_id: &str, fade_duration: f64) {
         if let Some(state) = self
@@ -828,7 +844,16 @@ impl MergeRuntime {
                             state.last_frame_count =
                                 buffers.get(move_id).map(|b| b.frame_count()).unwrap_or(0);
                         }
-                        if state.stale_frames > STALE_FRAME_LIMIT {
+                        // Grace allongée tant que le worker n'a jamais
+                        // écrit (last_frame_count == 0 = jamais observé
+                        // de write) — sinon un premier frame lent fait
+                        // tuer le move avant sa première émission.
+                        let stale_limit = if state.last_frame_count == 0 {
+                            FRESH_STALE_FRAME_LIMIT
+                        } else {
+                            STALE_FRAME_LIMIT
+                        };
+                        if state.stale_frames > stale_limit {
                             crate::logging::log_osc_error(&format!(
                                 "MergeRuntime: move {move_id} retiré — worker inactif depuis {} frames",
                                 state.stale_frames

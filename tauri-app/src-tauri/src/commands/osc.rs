@@ -34,6 +34,15 @@ pub async fn osc_list_mappings(state: State<'_, AppState>) -> Result<Vec<OscMapp
     Ok(receiver.list_mappings())
 }
 
+/// Vide tous les mappings OSC IN — utilisé par le restore .hfg (le fichier
+/// remplace l'état courant : clear + replay des mappings sauvegardés).
+#[tauri::command]
+pub async fn osc_clear_mappings(state: State<'_, AppState>) -> Result<(), IpcError> {
+    let receiver = lock_or_recover(&state.osc_receiver);
+    receiver.clear_mappings();
+    Ok(())
+}
+
 /// Active/désactive globalement l'OSC IN (master switch anti-loop)
 #[tauri::command]
 pub async fn osc_set_in_enabled(enabled: bool, state: State<'_, AppState>) -> Result<(), IpcError> {
@@ -43,11 +52,13 @@ pub async fn osc_set_in_enabled(enabled: bool, state: State<'_, AppState>) -> Re
 }
 
 /// Supprime l'OSC IN pendant `duration_ms` — les messages reçus pendant la
-/// fenêtre sont ignorés (anti-loop après recall/panic)
+/// fenêtre sont ignorés (anti-loop après recall/panic). Clampée : un `u64`
+/// arbitraire pouvait overflower `Instant + Duration` et paniquer.
 #[tauri::command]
 pub async fn osc_suppress_in(duration_ms: u64, state: State<'_, AppState>) -> Result<(), IpcError> {
+    const MAX_SUPPRESS_MS: u64 = 120_000;
     let receiver = lock_or_recover(&state.osc_receiver);
-    receiver.suppress_ms(duration_ms);
+    receiver.suppress_ms(duration_ms.min(MAX_SUPPRESS_MS));
     Ok(())
 }
 
@@ -83,6 +94,16 @@ pub async fn osc_get_all_values(state: State<'_, AppState>) -> Result<serde_json
 /// (sinon un mauvais port laissait le receiver arrêté en silence).
 #[tauri::command]
 pub async fn set_osc_receiver_port(port: u16, state: State<'_, AppState>) -> Result<(), IpcError> {
+    // Même garde que set_global_osc_ids : le frontend peut être stale
+    // (TOCTOU) — un rebind OSC IN pendant le playback casse les mappings.
+    {
+        let movements = lock_or_recover(&state.movements);
+        if !movements.is_empty() {
+            return Err(IpcError::conflict(
+                "Cannot change OSC input port during playback. Stop all moves first.",
+            ));
+        }
+    }
     // Même port → rien à changer
     {
         let receiver = lock_or_recover(&state.osc_receiver);
@@ -133,6 +154,16 @@ pub async fn set_osc_output(
 ) -> Result<(), IpcError> {
     let profile_enum = OscProfile::from_str(&profile)
         .map_err(|e| IpcError::validation(format!("Invalid OSC profile '{profile}': {e}")))?;
+    // Garde backend (le check frontend peut être stale) : reconfigurer la
+    // cible OSC pendant le playback rerouterait toutes les positions.
+    {
+        let movements = lock_or_recover(&state.movements);
+        if !movements.is_empty() {
+            return Err(IpcError::conflict(
+                "Cannot change OSC output during playback. Stop all moves first.",
+            ));
+        }
+    }
     let osc_sender = OscSender::new(profile_enum, address.clone(), port);
     let merge_rt = lock_or_recover(&state.merge_runtime);
     merge_rt

@@ -142,7 +142,18 @@ export const Toolbar: React.FC = () => {
       }
     };
     window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    // Un bouton qui garde le focus après un click capture Space/Enter —
+    // Space re-cliquait le bouton (ex: GO) au lieu de jouer le slot.
+    const blurButtons = (e: MouseEvent) => {
+      if ((e.target as HTMLElement).tagName === 'BUTTON') {
+        (e.target as HTMLElement).blur();
+      }
+    };
+    document.addEventListener('click', blurButtons, true);
+    return () => {
+      window.removeEventListener('keydown', handler);
+      document.removeEventListener('click', blurButtons, true);
+    };
   }, [undo, redo, panic]);
 
   // Poll perf stats quand des movements sont actifs

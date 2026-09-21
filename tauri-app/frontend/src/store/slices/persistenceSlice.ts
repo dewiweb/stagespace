@@ -7,6 +7,8 @@ import type { MoveSlot } from './moveSlotsSlice';
 import { saveSlotsToStorage } from './moveSlotsSlice';
 import type { CueData } from '../useCuelistStore';
 import type { HolProject } from '../types/index';
+import type { OscMapping } from '../../types/generated/OscMapping';
+import type { MacrosState } from './macrosSlice';
 import type {
   Zone,
   ZoneParams,
@@ -48,7 +50,9 @@ type PersistenceStore = PersistenceSlice & {
   modulations: ChannelModulation[];
   objectChannels: Record<number, SpatialChannels>;
   kinematicSmoothing: number;
+  macros: MacrosState;
   refreshSpatialFx: () => Promise<void>;
+  pushMacrosToRuntime: () => Promise<void>;
 };
 
 // ─── Enveloppe .hfg ───
@@ -98,14 +102,24 @@ interface ShowFileEnvelope {
   osc?: OscConfigData;
   spatialFx?: SpatialFxData;
   tracks?: TracksData;
+  oscMappings?: OscMapping[];
+  macros?: MacrosState;
 }
 
 /// Valide l'enveloppe et retourne la version effective (0 = legacy brut).
+/// Un `format` présent mais inconnu est REJETÉ (typo/format futur) — sinon il
+/// serait traité en v0 et cues/slots/FX seraient silencieusement droppés.
 function validateShowFile(raw: ShowFileEnvelope): number {
   if (!raw || !Array.isArray(raw.nodes) || !Array.isArray(raw.edges)) {
     throw new Error('Invalid show file: missing nodes/edges');
   }
-  if (raw.format === SHOW_FILE_FORMAT || raw.format === 'stagespace-graph') {
+  if (raw.format !== undefined) {
+    if (raw.format !== SHOW_FILE_FORMAT && raw.format !== 'stagespace-graph') {
+      throw new Error(`Unrecognized show file format '${raw.format}'`);
+    }
+    if (raw.format === SHOW_FILE_FORMAT && raw.version === undefined) {
+      throw new Error('Show file is missing its version field');
+    }
     const v = raw.version ?? 0;
     if (v > SHOW_FILE_VERSION) {
       throw new Error(
@@ -115,6 +129,28 @@ function validateShowFile(raw: ShowFileEnvelope): number {
     return v;
   }
   return 0; // legacy brut — accepté tel quel
+}
+
+/// Sections v2 : si présentes, elles doivent être des tableaux — sinon elles
+/// seraient stockées verbatim et casseraient plus tard dans `.map`.
+function validateSections(raw: ShowFileEnvelope) {
+  const arrays: Array<[string, unknown]> = [
+    ['slots', raw.slots],
+    ['cues', raw.cues],
+    ['setlistOrder', raw.setlistOrder],
+    ['oscMappings', raw.oscMappings],
+  ];
+  for (const [name, v] of arrays) {
+    if (v !== undefined && !Array.isArray(v)) {
+      throw new Error(`Invalid show file: '${name}' must be an array`);
+    }
+  }
+  if (raw.tracks !== undefined && (typeof raw.tracks !== 'object' || raw.tracks === null)) {
+    throw new Error("Invalid show file: 'tracks' must be an object");
+  }
+  if (raw.spatialFx !== undefined && (typeof raw.spatialFx !== 'object' || raw.spatialFx === null)) {
+    throw new Error("Invalid show file: 'spatialFx' must be an object");
+  }
 }
 
 // ─── Conversions pour le restore des spatial FX ───
@@ -204,6 +240,15 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
     const globalStore = useGlobalGraphStore.getState();
     const cueStore = useCuelistStore.getState();
 
+    // OSC IN mappings : sérialisables — sinon ils sont perdus au load.
+    let oscMappings: OscMapping[] | undefined;
+    try {
+      oscMappings = await invoke<OscMapping[]>('osc_list_mappings');
+    } catch (e) {
+      console.error('[saveGraphToFile] osc_list_mappings failed:', e);
+      toast.warning(`OSC IN mappings not saved — list failed: ${e}`);
+    }
+
     const envelope: ShowFileEnvelope = {
       format: SHOW_FILE_FORMAT,
       version: SHOW_FILE_VERSION,
@@ -211,11 +256,15 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
       nodes: s.nodes,
       edges: s.edges,
       globalGraph: { nodes: globalStore.nodes, edges: globalStore.edges },
-      slots: s.moveSlots,
+      // Strip runtime state : movementId n'a de sens que pendant la session —
+      // un slot rechargé afficherait un fantôme "playing".
+      slots: s.moveSlots.map((sl) => ({ ...sl, movementId: null })),
       setlistOrder: s.setlistOrder,
       currentSetlistIndex: s.currentSetlistIndex,
       editingSlotId: s.editingSlotId,
       cues: cueStore.cues,
+      oscMappings,
+      macros: s.macros,
       osc: {
         oscAddress: s.oscAddress,
         oscPort: s.oscPort,
@@ -255,6 +304,17 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
 
     const raw = await invoke<ShowFileEnvelope>('load_graph_from_file', { filePath });
     const version = validateShowFile(raw);
+    validateSections(raw);
+
+    // Undo reset : l'historique pointe sur l'ancien show — un Ctrl+Z après
+    // load réinjecterait le graphe d'avant-load dans le nouveau (et
+    // l'autosave le pousserait en live).
+    set({
+      _history: [],
+      _historyIndex: -1,
+      canUndo: false,
+      canRedo: false,
+    } as any);
 
     // v0/v1 : graphe seul — comportement historique
     set({ nodes: raw.nodes, edges: raw.edges });
@@ -292,6 +352,31 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
       useCuelistStore.getState().saveToStorage();
     }
 
+    // 3b. OSC IN mappings — clear + replay (le fichier remplace l'état)
+    if (raw.oscMappings !== undefined) {
+      try {
+        await invoke('osc_clear_mappings');
+        for (const m of raw.oscMappings) {
+          await invoke('osc_add_mapping', { mapping: m });
+        }
+      } catch (e) {
+        console.error('Failed to restore OSC IN mappings:', e);
+        toast.error(`Show loaded but OSC IN mappings restore failed: ${e}`);
+      }
+    }
+
+    // 3c. Macros globales — restore frontend + push backend (idle → set_macro
+    //     s'applique aux macros du MergeRuntime pour le prochain play).
+    if (raw.macros) {
+      set({ macros: { ...get().macros, ...raw.macros } });
+      try {
+        await get().pushMacrosToRuntime?.();
+      } catch (e) {
+        console.error('Failed to push restored macros:', e);
+        toast.error(`Show loaded but macros failed to apply: ${e}`);
+      }
+    }
+
     // 4. Config OSC — set direct + push backend (playback déjà exclu)
     if (raw.osc) {
       set({
@@ -325,6 +410,7 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
         await useGlobalGraphStore.getState().pushGlobalGraph();
       } catch (e) {
         console.error('Failed to push restored global graph:', e);
+        toast.error(`Show loaded but global graph failed to apply: ${e}`);
       }
     }
 

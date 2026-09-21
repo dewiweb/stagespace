@@ -1,6 +1,7 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { useGraphStore } from '../store/useGraphStore';
+import { throttleTrailing } from '../utils/throttle';
 import Slider from './ui/Slider';
 
 interface MacrosPanelProps {
@@ -15,8 +16,14 @@ interface MacrosPanelProps {
 export const MacrosPanel: React.FC<MacrosPanelProps> = ({ isPlaying, hasMovements = false }) => {
   const macros = useGraphStore((s) => s.macros);
   const setMacros = useGraphStore((s) => s.setMacros);
-  const pushMacrosToRuntime = useGraphStore((s) => s.pushMacrosToRuntime);
   const shouldPush = isPlaying || hasMovements;
+
+  // Les sliders tirent à chaque input event — on throtttle le push IPC,
+  // le store local reste immédiat pour l'affichage.
+  const pushThrottled = useMemo(
+    () => throttleTrailing(() => useGraphStore.getState().pushMacrosToRuntime(), 40),
+    [],
+  );
 
   const updateMacrosLive = useCallback(
     (partial: Partial<typeof macros>) => {
@@ -25,9 +32,9 @@ export const MacrosPanel: React.FC<MacrosPanelProps> = ({ isPlaying, hasMovement
         sanitized[k as keyof typeof macros] = typeof v === 'number' && isNaN(v) ? 0 : v;
       }
       setMacros(sanitized);
-      if (shouldPush) pushMacrosToRuntime();
+      if (shouldPush) pushThrottled();
     },
-    [setMacros, pushMacrosToRuntime, shouldPush],
+    [setMacros, pushThrottled, shouldPush],
   );
 
 

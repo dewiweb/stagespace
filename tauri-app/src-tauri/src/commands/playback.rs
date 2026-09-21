@@ -120,57 +120,64 @@ pub async fn stop_graph(state: State<'_, AppState>) -> Result<String, IpcError> 
 
 /// Hot-swap le graphe en cours de lecture — recompile et remplace la
 /// position_fn avec crossfade pour éviter les sauts de position.
+/// `spawn_blocking` : la compilation est un travail CPU lourd — inline elle
+/// bloquerait un thread de l'executor async (dispatch IPC gelé).
 #[tauri::command]
 pub async fn update_graph(
     graph_json: serde_json::Value,
     fade_duration: Option<f64>,
     state: State<'_, AppState>,
 ) -> Result<String, IpcError> {
-    // Snapshot court sous le lock — la compilation se fait hors du lock
-    // `movements` (sinon un edit de graphe pendant un show gèle stop/panic).
-    let (target_id, generation, overrides) = {
-        let movements = lock_or_recover(&state.movements);
-        // Cible : le move graphe actif (live prioritaire, sinon preview)
-        let target_id = if movements.contains_key(GRAPH_MAIN_ID) {
-            GRAPH_MAIN_ID
-        } else {
-            GRAPH_PREVIEW_ID
+    let sh = Shared::from_state(&state);
+    tauri::async_runtime::spawn_blocking(move || {
+        // Snapshot court sous le lock — la compilation se fait hors du lock
+        // `movements` (sinon un edit de graphe pendant un show gèle stop/panic).
+        let (target_id, generation, overrides) = {
+            let movements = lock_or_recover(&sh.movements);
+            // Cible : le move graphe actif (live prioritaire, sinon preview)
+            let target_id = if movements.contains_key(GRAPH_MAIN_ID) {
+                GRAPH_MAIN_ID
+            } else {
+                GRAPH_PREVIEW_ID
+            };
+            let movement = movements
+                .get(target_id)
+                .ok_or_else(|| IpcError::not_found("No runtime active — call play_graph first"))?;
+            (
+                target_id,
+                movement.generation,
+                movement.runtime.audio_param_overrides(),
+            )
         };
+
+        let audio_state = lock_or_recover(&sh.audio_state);
+        let graph = build_graph_from_json(&graph_json, &audio_state).map_err(IpcError::from)?;
+        drop(audio_state);
+
+        let compiled =
+            compile_graph_with_audio_and_overrides(&graph, sh.audio_state.clone(), overrides)
+                .map_err(IpcError::from)?;
+
+        // Ré-application sous lock — si le move a été stoppé pendant la compile
+        // on signale l'échec plutôt que d'appliquer en silence à un fantôme.
+        let mut movements = lock_or_recover(&sh.movements);
         let movement = movements
-            .get(target_id)
-            .ok_or_else(|| IpcError::not_found("No runtime active — call play_graph first"))?;
-        (
-            target_id,
-            movement.generation,
-            movement.runtime.audio_param_overrides(),
-        )
-    };
+            .get_mut(target_id)
+            .ok_or_else(|| IpcError::conflict("Graph playback stopped during recompile"))?;
+        if movement.generation != generation {
+            eprintln!("[WARN] update_graph: '{target_id}' respawned during compile");
+        }
 
-    let audio_state = lock_or_recover(&state.audio_state);
-    let graph = build_graph_from_json(&graph_json, &audio_state).map_err(IpcError::from)?;
-    drop(audio_state);
+        // Crossfade smooth (défaut 0.5s) pour éviter les sauts
+        let fade = fade_duration.unwrap_or(0.5);
+        movement.runtime.recall_cue(compiled, fade);
+        // Snapshot à jour pour les cues
+        movement.graph_json = graph_json;
 
-    let compiled =
-        compile_graph_with_audio_and_overrides(&graph, state.audio_state.clone(), overrides)
-            .map_err(IpcError::from)?;
-
-    // Ré-application sous lock — si le move a été stoppé pendant la compile
-    // on signale l'échec plutôt que d'appliquer en silence à un fantôme.
-    let mut movements = lock_or_recover(&state.movements);
-    let movement = movements
-        .get_mut(target_id)
-        .ok_or_else(|| IpcError::conflict("Graph playback stopped during recompile"))?;
-    if movement.generation != generation {
-        eprintln!("[WARN] update_graph: '{target_id}' respawned during compile");
-    }
-
-    // Crossfade smooth (défaut 0.5s) pour éviter les sauts
-    let fade = fade_duration.unwrap_or(0.5);
-    movement.runtime.recall_cue(compiled, fade);
-    // Snapshot à jour pour les cues
-    movement.graph_json = graph_json;
-
-    Ok("Graph hot-swapped with crossfade".to_string())
+        Ok("Graph hot-swapped with crossfade".to_string())
+    })
+    .await
+    .map_err(|e| IpcError::internal(format!("Task join error: {e}")))?
 }
 
 // ── Live commands : macros, loop mode, cue recall ──────────────────────────

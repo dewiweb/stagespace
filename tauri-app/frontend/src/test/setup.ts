@@ -41,7 +41,12 @@ const invokeResponses = new Map<string, any>();
 vi.mock('../utils/tauri', () => ({
   safeInvoke: async <T = any>(cmd: string, args?: Record<string, any>): Promise<T> => {
     invokeCalls.push({ cmd, args });
-    if (invokeResponses.has(cmd)) return invokeResponses.get(cmd) as T;
+    if (invokeResponses.has(cmd)) {
+      const r = invokeResponses.get(cmd);
+      // Un Error = la commande rejette (injection de panne backend dans les tests)
+      if (r instanceof Error) throw r;
+      return r as T;
+    }
     if (cmd === 'list_active_moves') return [] as unknown as T;
     if (cmd === 'load_graph_from_file') return { nodes: [], edges: [] } as unknown as T;
     return undefined as unknown as T;

@@ -29,4 +29,6 @@ export interface HolTrack {
 
 export interface HolProject {
   tracks: HolTrack[];
+  /** Données malformées droppées par le parser .hol (surfacées via toast). */
+  warnings?: string[];
 }

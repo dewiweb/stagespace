@@ -158,6 +158,9 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
     } catch (e) {
       console.error('Failed to stop all movements:', e);
       toast.error('Stop all failed: ' + e);
+      // Rethrow : panic() doit savoir que le stop a échoué (sinon il
+      // afficherait "all moves stopped" alors que des moves tournent).
+      throw e;
     }
   },
 

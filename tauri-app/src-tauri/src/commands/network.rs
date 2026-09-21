@@ -1,3 +1,5 @@
+use crate::commands::error::IpcError;
+
 /// Découverte réseau — cherche holophonix.local et autres dispositifs OSC sur le réseau.
 ///
 /// Note : OSC est UDP — le scan TCP ci-dessous ne peut PAS détecter un vrai
@@ -5,12 +7,13 @@
 /// services TCP tiers sur les ports courants — best-effort. La résolution
 /// mDNS (holophonix.local) est le seul signal fiable ici.
 #[tauri::command]
-pub async fn discover_osc_targets() -> Result<Vec<serde_json::Value>, String> {
+pub async fn discover_osc_targets() -> Result<Vec<serde_json::Value>, IpcError> {
     // Le scan (DNS + 254 IPs × 3 ports TCP) peut prendre des dizaines de
     // secondes — ne jamais tourner inline sur l'executor async.
     tauri::async_runtime::spawn_blocking(discover_osc_targets_blocking)
         .await
-        .map_err(|e| format!("Discovery task failed: {e}"))?
+        .map_err(|e| IpcError::internal(format!("Discovery task failed: {e}")))?
+        .map_err(IpcError::from)
 }
 
 fn discover_osc_targets_blocking() -> Result<Vec<serde_json::Value>, String> {

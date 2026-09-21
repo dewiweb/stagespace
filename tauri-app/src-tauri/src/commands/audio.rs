@@ -1,33 +1,42 @@
 use super::state::lock_or_recover;
+use crate::commands::error::IpcError;
 use crate::AppState;
 use stagespace_engines::{AudioCaptureManager, AudioDeviceInfo, AudioState};
 use tauri::{Emitter, State};
 
 #[tauri::command]
-pub async fn list_audio_devices() -> Result<Vec<AudioDeviceInfo>, String> {
-    AudioCaptureManager::list_devices().map_err(|e| e.to_string())
+pub async fn list_audio_devices() -> Result<Vec<AudioDeviceInfo>, IpcError> {
+    AudioCaptureManager::list_devices().map_err(|e| IpcError::io(e.to_string()))
 }
 
 #[tauri::command]
 pub async fn start_audio_capture(
     state: State<'_, AppState>,
     device_id: Option<String>,
-) -> Result<(), String> {
-    let capture = lock_or_recover(&state.audio_capture);
-    capture
-        .start(device_id.as_deref())
-        .map_err(|e| e.to_string())
+) -> Result<(), IpcError> {
+    // spawn_blocking : `start()` peut attendre jusqu'à 5s sur un device wedged
+    // — inline, ça gèle un thread de l'executor async pendant un show.
+    let capture = state.audio_capture.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let capture = lock_or_recover(&capture);
+        capture
+            .start(device_id.as_deref())
+            .map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| IpcError::internal(format!("Audio capture task failed: {e}")))?
+    .map_err(IpcError::from)
 }
 
 #[tauri::command]
-pub async fn stop_audio_capture(state: State<'_, AppState>) -> Result<(), String> {
+pub async fn stop_audio_capture(state: State<'_, AppState>) -> Result<(), IpcError> {
     let capture = lock_or_recover(&state.audio_capture);
     capture.stop();
     Ok(())
 }
 
 #[tauri::command]
-pub async fn get_audio_state(state: State<'_, AppState>) -> Result<AudioState, String> {
+pub async fn get_audio_state(state: State<'_, AppState>) -> Result<AudioState, IpcError> {
     let capture = lock_or_recover(&state.audio_capture);
     Ok(capture.get_state())
 }
@@ -38,7 +47,7 @@ pub async fn get_audio_state(state: State<'_, AppState>) -> Result<AudioState, S
 pub async fn update_audio_state(
     state: State<'_, AppState>,
     audio_data: AudioState,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     // Une seule écriture : workers et MergeRuntime partagent l'Arc maître
     // (injecté à la construction) — plus de propagation N-copies.
     {
@@ -64,31 +73,39 @@ pub fn start_audio_poller(app_handle: tauri::AppHandle, state: &AppState) {
                 break;
             }
 
-            let state = {
-                let capture = audio_capture.lock().unwrap_or_else(|e| e.into_inner());
-                capture.get_state()
-            };
+            // catch_unwind : un panic dans le poller ne doit pas tuer le
+            // thread en silence (audio state figé pour toujours). On log et
+            // on continue — l'itération suivante reprend le polling.
+            let tick = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let state = {
+                    let capture = audio_capture.lock().unwrap_or_else(|e| e.into_inner());
+                    capture.get_state()
+                };
 
-            // Une seule écriture dans l'Arc maître — workers et MergeRuntime
-            // partagent ce même Arc (injectés à la construction) : les nodes
-            // audio du graph global et les audio mods des workers voient
-            // l'état à jour sans copie supplémentaire.
-            {
-                let mut s = audio_state.lock().unwrap_or_else(|e| e.into_inner());
-                *s = state.clone();
-            }
-
-            // Consommer les erreurs du device (débranché, stream mort…) —
-            // sans ça l'UI n'est jamais notifiée d'une capture tombée.
-            {
-                let capture = audio_capture.lock().unwrap_or_else(|e| e.into_inner());
-                if let Some(err) = capture.take_error() {
-                    let _ = app_handle.emit("audio-error", err);
+                // Une seule écriture dans l'Arc maître — workers et MergeRuntime
+                // partagent ce même Arc (injectés à la construction) : les nodes
+                // audio du graph global et les audio mods des workers voient
+                // l'état à jour sans copie supplémentaire.
+                {
+                    let mut s = audio_state.lock().unwrap_or_else(|e| e.into_inner());
+                    *s = state.clone();
                 }
-            }
 
-            // Émettre vers le frontend
-            let _ = app_handle.emit("audio-state-update", state);
+                // Consommer les erreurs du device (débranché, stream mort…) —
+                // sans ça l'UI n'est jamais notifiée d'une capture tombée.
+                {
+                    let capture = audio_capture.lock().unwrap_or_else(|e| e.into_inner());
+                    if let Some(err) = capture.take_error() {
+                        let _ = app_handle.emit("audio-error", err);
+                    }
+                }
+
+                // Émettre vers le frontend
+                let _ = app_handle.emit("audio-state-update", state);
+            }));
+            if let Err(e) = tick {
+                eprintln!("[ERROR] Audio poller tick panicked: {e:?} — continuing");
+            }
         }
         eprintln!("[INFO] Audio poller thread terminated");
     });

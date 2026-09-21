@@ -354,6 +354,7 @@ export const useGraphStore = create<GraphState>()((...a) => {
     } catch (error: any) {
       console.error('Stop failed:', error);
       toast.error('Stop failed: ' + (error?.message ?? String(error)));
+      throw error;
     }
   },
 
@@ -499,21 +500,26 @@ export const useGraphStore = create<GraphState>()((...a) => {
 
   // ─── Panic ───
   panic: async () => {
-    const { movements, holProject, manualOscIds } = get();
+    const { holProject, manualOscIds } = get();
     let failedStops = 0;
-    // Stop immédiat — tous les movements + runtime legacy. Un throw ici ne
-    // doit PAS empêcher l'envoi des positions d'origine (sinon le spatializer
-    // garde les dernières positions et les sources restent "en l'air").
+    // Stop immédiat — inconditionnel. `deactivate_all_moves` est idempotent et
+    // le cache `movements` peut être stale : ne JAMAIS s'en servir de garde.
+    // Un throw ici ne doit PAS empêcher l'envoi des positions d'origine (sinon
+    // le spatializer garde les dernières positions et les sources restent "en
+    // l'air").
     try {
-      if (movements.length > 0) {
-        await get().stopAllMovements();
-      }
+      await get().stopAllMovements();
+    } catch (e) {
+      failedStops += 1;
+      console.error('Panic: stop all failed:', e);
+    }
+    try {
       if (get().isPlaying) {
         await get().stopGraph();
       }
     } catch (e) {
       failedStops += 1;
-      console.error('Panic: stop failed:', e);
+      console.error('Panic: stop graph failed:', e);
     }
     // Envoyer les positions d'origine à tous les récepteurs OSC — en
     // parallèle (64 awaits séquentiels dans un arrêt d'urgence = latence
@@ -541,9 +547,14 @@ export const useGraphStore = create<GraphState>()((...a) => {
     for (const r of results) {
       if (r.status === 'rejected') console.error('Panic: position reset failed:', r.reason);
     }
-    // Feedback obligatoire — un panic silencieux est un panic douteux
+    // Feedback obligatoire — un panic silencieux est un panic douteux.
+    // Ne jamais prétendre que les positions ont été reset si aucun envoi
+    // n'était possible (pas de .hol ni de manualOscIds).
     if (failedStops === 0 && failedSends === 0) {
-      toast.warning('PANIC — all moves stopped, positions reset', 4000);
+      const msg = sends.length > 0
+        ? 'PANIC — all moves stopped, positions reset'
+        : 'PANIC — all moves stopped';
+      toast.warning(msg, 4000);
     } else {
       toast.error(
         `PANIC partially failed — ${failedStops} stop error(s), ${failedSends} position reset(s) lost. Verify the spatializer state.`,
@@ -576,6 +587,29 @@ export const useAudioErrorListener = () => {
   }, []);
 };
 
+// ── Cue recall listener — surface les respawns échoués d'un recall partiel.
+// Le backend continue un recall même si un move échoue (partial recall) —
+// sans ce listener l'échec passerait pour un succès complet.
+export const useCueRecallListener = () => {
+  const refreshMovements = useGraphStore((s) => s.refreshMovements);
+  React.useEffect(() => {
+    const unlisten = listen<{ cue_id: string; failed_moves: string[] }>(
+      'cue-recalled',
+      (event) => {
+        refreshMovements();
+        const failed = event.payload?.failed_moves ?? [];
+        if (failed.length > 0) {
+          toast.error(
+            `Cue recall partial — ${failed.length} move(s) failed to restart (${failed.join(', ')}). Check the spatializer.`,
+            0,
+          );
+        }
+      },
+    );
+    return () => { unlisten.then((fn) => fn()).catch(() => {}); };
+  }, [refreshMovements]);
+};
+
 // ── Global positions listener — écoute l'event global-positions du MergeRuntime ──
 // Une seule source de positions (déjà mergées + transformées), au lieu de N events par movement.
 export const useMovementPositionsListener = () => {
@@ -593,17 +627,30 @@ export const useMovementPositionsListener = () => {
     return () => { unlisten.then((fn) => fn()).catch(() => {}); };
   }, [refreshMovements]);
 
+  // Ref partagé pour les effects qui doivent connaître l'état playback sans
+  // y souscrire (évite de déclencher les invokes de config pendant le show).
+  const movementsCount = useGraphStore((s) => s.movements.length);
+  const movementsCountRef = React.useRef(movementsCount);
+  movementsCountRef.current = movementsCount;
+
   // Appliquer la config OSC au backend (au démarrage + à chaque changement)
   const oscAddress = useGraphStore((s) => s.oscAddress);
   const oscPort = useGraphStore((s) => s.oscPort);
   const oscProfile = useGraphStore((s) => s.oscProfile);
   React.useEffect(() => {
-    invoke('set_osc_output', { address: oscAddress, port: oscPort, profile: oscProfile })
-      .catch((e: any) => {
-        console.error('Failed to set OSC output:', e);
-        // Zéro OSC sortant = show silencieux — l'utilisateur DOIT le voir.
-        toast.error(`OSC output config failed — no positions will be sent: ${e}`);
-      });
+    // Pendant le playback la config OSC est lockée backend-side — ne pas
+    // invoquer (évite un faux toast d'erreur à chaque transition).
+    if (movementsCountRef.current > 0) return;
+    // Debounce : la saisie clavier produit un invoke par keystroke sinon.
+    const t = setTimeout(() => {
+      invoke('set_osc_output', { address: oscAddress, port: oscPort, profile: oscProfile })
+        .catch((e: any) => {
+          console.error('Failed to set OSC output:', e);
+          // Zéro OSC sortant = show silencieux — l'utilisateur DOIT le voir.
+          toast.error(`OSC output config failed — no positions will be sent: ${e}`);
+        });
+    }, 300);
+    return () => clearTimeout(t);
   }, [oscAddress, oscPort, oscProfile]);
 
   // Pousser les osc_ids globaux (manualOscIds ou hol track ids) au backend.
@@ -612,16 +659,24 @@ export const useMovementPositionsListener = () => {
   // les positions ne sont pas envoyées en OSC.
   const manualOscIds = useGraphStore((s) => s.manualOscIds);
   const holProject = useGraphStore((s) => s.holProject);
-  const movementsCount = useGraphStore((s) => s.movements.length);
   React.useEffect(() => {
-    // Utiliser les track ids du hol project si disponible, sinon manualOscIds
-    const globalIds = holProject?.tracks?.map((t: any) => t.id) ?? manualOscIds;
-    invoke('set_global_osc_ids', { oscIds: globalIds })
-      .catch((e: any) => {
-        console.error('Failed to set global osc ids:', e);
-        // Sans mapping track→osc_id, le MergeRuntime n'émet rien — critique.
-        toast.error(`OSC track mapping failed — output may be silent: ${e}`);
-      });
+    // Pendant le playback le backend rejette set_global_osc_ids — ne pas
+    // invoquer (évitait le toast "OSC track mapping failed" à chaque play).
+    // movementsCount dans les deps : quand le dernier move s'arrête, l'effect
+    // refire et pousse les ids en attente.
+    if (movementsCount > 0) return;
+    // Debounce : manualOscIds change à chaque keystroke dans le champ.
+    const t = setTimeout(() => {
+      // Utiliser les track ids du hol project si disponible, sinon manualOscIds
+      const globalIds = holProject?.tracks?.map((t: any) => t.id) ?? manualOscIds;
+      invoke('set_global_osc_ids', { oscIds: globalIds })
+        .catch((e: any) => {
+          console.error('Failed to set global osc ids:', e);
+          // Sans mapping track→osc_id, le MergeRuntime n'émet rien — critique.
+          toast.error(`OSC track mapping failed — output may be silent: ${e}`);
+        });
+    }, 300);
+    return () => clearTimeout(t);
   }, [manualOscIds, holProject, movementsCount]);
 
   // Écouter global-positions (un seul event avec toutes les positions mergées)

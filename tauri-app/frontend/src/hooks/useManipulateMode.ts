@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { useGraphStore } from '../store/useGraphStore';
 import { useAnimationStore } from '../store/useAnimationStore';
+import { throttleTrailingKeyed } from '../utils/throttle';
 
 interface UseManipulateModeParams {
   cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>;
@@ -53,6 +54,14 @@ export function useManipulateMode({
   positionsRef.current = positions;
   movementsRef.current = movements;
   draggingObjectRef.current = draggingObject;
+
+  // Drag 3D : un invoke par pointermove saturerait l'IPC — throttle trailing
+  // ~33ms (30fps suffit pour le merge, la dernière position est toujours poussée).
+  const pushManualPositionThrottled = useRef(
+    throttleTrailingKeyed((objectIndex: number, position: [number, number, number]) => {
+      invoke('set_manual_position', { objectIndex, position }).catch(console.error);
+    }, 33),
+  );
 
   // Manipulate handlers — drag objects or handle
   const handleManipulateDown = useCallback(
@@ -221,10 +230,7 @@ export function useManipulateMode({
         ];
         useGraphStore.getState().setManualPosition(draggingObject, backendPos);
         if (isPlaying || movementsRef.current.length > 0) {
-          invoke('set_manual_position', {
-            objectIndex: draggingObject,
-            position: backendPos,
-          }).catch(console.error);
+          pushManualPositionThrottled.current(draggingObject, backendPos);
         }
       }
     },

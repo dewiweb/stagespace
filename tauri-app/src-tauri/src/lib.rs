@@ -18,7 +18,7 @@ use commands::audio::{
     get_audio_state, list_audio_devices, start_audio_capture, start_audio_poller,
     stop_audio_capture, update_audio_state,
 };
-use commands::cue_commands::{delete_cue, list_cues, recall_cue, store_cue};
+use commands::cue_commands::{recall_cue, store_cue};
 use commands::file_io::{import_hol_project, load_graph_from_file, save_graph_to_file};
 use commands::merge_commands::{
     activate_move, add_channel_modulation, add_zone, clear_all_manual_positions,
@@ -33,9 +33,9 @@ use commands::merge_commands::{
 };
 use commands::network::discover_osc_targets;
 use commands::osc::{
-    get_osc_receiver_port, osc_add_mapping, osc_get_all_values, osc_get_value, osc_in_stats,
-    osc_list_mappings, osc_remove_mapping, osc_set_in_enabled, osc_suppress_in, send_osc_position,
-    set_osc_output, set_osc_receiver_port,
+    get_osc_receiver_port, osc_add_mapping, osc_clear_mappings, osc_get_all_values, osc_get_value,
+    osc_in_stats, osc_list_mappings, osc_remove_mapping, osc_set_in_enabled, osc_suppress_in,
+    send_osc_position, set_osc_output, set_osc_receiver_port,
 };
 use commands::overrides::{clear_all_overrides, set_object_override};
 use commands::playback::{play_graph, preview_graph, set_macro, stop_graph, update_graph};
@@ -109,10 +109,6 @@ pub struct MovementInfo {
     pub is_preview: bool,
     pub is_playing: bool,
     pub track_count: usize,
-    pub fps: f64,
-    pub osc_rate: f64,
-    pub latency_ms: f64,
-    pub cpu_percent: f64,
 }
 
 // Graph Compilation
@@ -120,7 +116,7 @@ pub struct MovementInfo {
 async fn compile_graph(
     graph_json: serde_json::Value,
     state: State<'_, AppState>,
-) -> Result<String, String> {
+) -> Result<String, commands::error::IpcError> {
     // Compilation = travail CPU lourd → spawn_blocking pour ne pas
     // bloquer l'executor async de Tauri.
     let audio_state_arc = state.audio_state.clone();
@@ -138,7 +134,8 @@ async fn compile_graph(
         }
     })
     .await
-    .map_err(|e| format!("Task join error: {e}"))?
+    .map_err(|e| commands::error::IpcError::internal(format!("Task join error: {e}")))?
+    .map_err(commands::error::IpcError::from)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -308,6 +305,7 @@ pub fn run() {
             osc_add_mapping,
             osc_remove_mapping,
             osc_list_mappings,
+            osc_clear_mappings,
             osc_get_value,
             osc_get_all_values,
             osc_set_in_enabled,
@@ -380,8 +378,6 @@ pub fn run() {
             // Cue commands (Phase 3 — cue system étendu)
             store_cue,
             recall_cue,
-            list_cues,
-            delete_cue,
             frontend_log,
         ])
         .run(tauri::generate_context!())
@@ -396,3 +392,7 @@ pub fn run() {
 #[cfg(test)]
 #[path = "tests/animation_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "tests/recall_tests.rs"]
+mod recall_test_file;

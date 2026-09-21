@@ -70,6 +70,25 @@ export const useCuelistStore = create<CuelistState>((set, get) => ({
       await invoke('recall_cue', { cue });
       const idx = get().cues.findIndex((c) => c.id === cueId);
       set({ currentCueIndex: idx });
+      // Cue legacy (pré-Phase5) : `moves` est vide, le backend a désactivé
+      // les moves mais ne peut pas respawner — le graphe vit dans cue.graph.
+      // Le restaurer dans l'éditeur et le rejouer, sinon le show reste muet.
+      if ((!cue.moves || cue.moves.length === 0) && cue.graph) {
+        const g = cue.graph as { nodes?: unknown[]; edges?: unknown[] };
+        if (Array.isArray(g.nodes) && g.nodes.length > 0) {
+          const { useGraphStore } = await import('./useGraphStore');
+          const gs = useGraphStore.getState();
+          gs.setNodes(g.nodes as never);
+          gs.setEdges(Array.isArray(g.edges) ? (g.edges as never) : []);
+          gs.autoSaveToEditingSlot();
+          const id = await gs.playMovement(cue.name, cue.track_indices ?? [], false, '', 0, '');
+          if (id) {
+            toast.info(`Legacy cue "${cue.name}" — graph restored and replayed`);
+          } else {
+            toast.error(`Legacy cue "${cue.name}" — graph restored but replay failed`, 0);
+          }
+        }
+      }
     } catch (e) {
       console.error('[recallCue] Failed:', e);
       toast.error('Cue recall failed: ' + e);
@@ -79,9 +98,20 @@ export const useCuelistStore = create<CuelistState>((set, get) => ({
   },
 
   deleteCue: (cueId: string) => {
-    const cues = get().cues.filter((c) => c.id !== cueId);
-    set({ cues, currentCueIndex: -1 });
-    saveToStorage(cues);
+    const { cues, currentCueIndex } = get();
+    const currentCue = currentCueIndex >= 0 ? cues[currentCueIndex] : null;
+    const filtered = cues.filter((c) => c.id !== cueId);
+    // Ne JAMAIS reset à -1 : le prochain GO sauterait au cue 1 au lieu de
+    // suivre la position courante. Si le cue courant est supprimé, se placer
+    // juste avant le cue suivant pour que GO le rappelle.
+    let newIndex = -1;
+    if (currentCue) {
+      newIndex = currentCue.id === cueId
+        ? Math.min(currentCueIndex, filtered.length) - 1
+        : filtered.findIndex((c) => c.id === currentCue.id);
+    }
+    set({ cues: filtered, currentCueIndex: newIndex });
+    saveToStorage(filtered);
   },
 
   goToNextCue: async () => {

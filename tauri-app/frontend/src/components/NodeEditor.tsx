@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -60,11 +60,32 @@ export const NodeEditor: React.FC = () => {
 
   // Moves actifs (pour highlight les MoveRef dont le move est actif)
   const movements = useGraphStore((s) => s.movements);
-  const activeMoveIds = new Set(movements.map((m) => m.id));
+  const activeMoveIds = useMemo(() => new Set(movements.map((m) => m.id)), [movements]);
 
   // Les nodes/edges affichés dépendent du tab actif
   const displayNodes = activeTab === 'global' ? globalNodes : nodes;
   const displayEdges = activeTab === 'global' ? globalEdges : edges;
+
+  // Décor des nodes (highlight connexion + MoveRef actif) memoized — sans ça,
+  // chaque render recrée tous les objets node et React Flow re-render tout.
+  const decoratedNodes = useMemo(
+    () =>
+      displayNodes.map((n) => {
+        const nodeType = (n.data as any)?.type as NodeType;
+        const isMoveRef = nodeType === 'MoveRef';
+        const moveId = (n.data as any)?.params?.move_id as string;
+        const isMoveActive = isMoveRef && moveId && activeMoveIds.has(moveId);
+        return {
+          ...n,
+          className: [
+            connectingFrom && !isValidConnection(connectingFrom, nodeType) ? 'rf-node-invalid-target' : '',
+            isMoveActive ? 'rf-node-moveref-active' : '',
+          ].filter(Boolean).join(' '),
+          style: isMoveActive ? { ...n.style, boxShadow: '0 0 8px 2px rgba(34, 197, 94, 0.6)' } : n.style,
+        };
+      }),
+    [displayNodes, connectingFrom, activeMoveIds],
+  );
 
   // Pour le tab global, on utilise des handlers locaux (pas le store global)
   const handleGlobalNodesChange = useCallback((changes: any[]) => {
@@ -155,12 +176,6 @@ export const NodeEditor: React.FC = () => {
     // Switcher vers le tab sub-graph
     setActiveTab('sub');
   }, []);
-
-  // Détermine si un node du canvas est une cible valide (pour le highlight)
-  const isValidTarget = useCallback((nodeType: NodeType): boolean => {
-    if (!connectingFrom) return false;
-    return isValidConnection(connectingFrom, nodeType);
-  }, [connectingFrom]);
 
   const toggleCat = (label: string) => {
     setCollapsedCats((prev) => {
@@ -321,20 +336,7 @@ export const NodeEditor: React.FC = () => {
       {/* Canvas */}
       <div className="flex-1 bg-stagespace-bg relative">
         <ReactFlow
-          nodes={displayNodes.map((n) => {
-            const nodeType = (n.data as any)?.type as NodeType;
-            const isMoveRef = nodeType === 'MoveRef';
-            const moveId = (n.data as any)?.params?.move_id as string;
-            const isMoveActive = isMoveRef && moveId && activeMoveIds.has(moveId);
-            return {
-              ...n,
-              className: [
-                connectingFrom && !isValidTarget(nodeType) ? 'rf-node-invalid-target' : '',
-                isMoveActive ? 'rf-node-moveref-active' : '',
-              ].filter(Boolean).join(' '),
-              style: isMoveActive ? { ...n.style, boxShadow: '0 0 8px 2px rgba(34, 197, 94, 0.6)' } : n.style,
-            };
-          })}
+          nodes={decoratedNodes}
           edges={displayEdges}
           onNodesChange={activeTab === 'global' ? handleGlobalNodesChange : onNodesChange}
           onEdgesChange={activeTab === 'global' ? handleGlobalEdgesChange : onEdgesChange}

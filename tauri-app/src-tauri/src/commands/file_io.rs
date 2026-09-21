@@ -1,9 +1,16 @@
 use super::error::IpcError;
+use super::state::lock_or_recover;
+use crate::AppState;
 use serde::{Deserialize, Serialize};
+use tauri::State;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HolProject {
     pub tracks: Vec<Track>,
+    /// Données malformées/unsupported droppées pendant le parse — surfacées
+    /// au frontend (toast) plutôt qu'avalées en silence.
+    #[serde(default)]
+    pub warnings: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -15,15 +22,29 @@ pub struct Track {
 }
 
 #[tauri::command]
-pub async fn import_hol_project(file_path: String) -> Result<HolProject, IpcError> {
+pub async fn import_hol_project(
+    file_path: String,
+    state: State<'_, AppState>,
+) -> Result<HolProject, IpcError> {
+    // Importer un .hol redéfinit le mapping track→osc_id — interdit pendant
+    // le playback (les moves actifs routent via ce mapping).
+    {
+        let movements = lock_or_recover(&state.movements);
+        if !movements.is_empty() {
+            return Err(IpcError::conflict(
+                "Cannot import a .hol project during playback. Stop all moves first.",
+            ));
+        }
+    }
     let content = std::fs::read_to_string(&file_path)
         .map_err(|e| IpcError::io(format!("Failed to read file: {e}")))?;
 
     // Parser partagé (stagespace_engines::hol_parser) — une seule implémentation
     // du format .hol pour Tauri et le CLI : gère hol.ae / ae racine, couleurs
     // "#RRGGBB" et "r g b a", xyz groupé ou x/y/z séparés, fallback AED→XYZ.
-    let hol_tracks =
-        stagespace_engines::hol_parser::parse_hol_project(&content).map_err(IpcError::from)?;
+    let (hol_tracks, warnings) =
+        stagespace_engines::hol_parser::parse_hol_project_with_warnings(&content)
+            .map_err(IpcError::from)?;
 
     let tracks = hol_tracks
         .into_iter()
@@ -35,7 +56,7 @@ pub async fn import_hol_project(file_path: String) -> Result<HolProject, IpcErro
         })
         .collect();
 
-    Ok(HolProject { tracks })
+    Ok(HolProject { tracks, warnings })
 }
 
 #[tauri::command]

@@ -12,7 +12,7 @@ import Toolbar from './components/Toolbar';
 import ToastContainer from './components/ToastContainer';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { prepareGraphForSave } from './components/nodeParamSchema';
-import { useGraphStore, useMovementPositionsListener, useAudioErrorListener } from './store/useGraphStore';
+import { useGraphStore, useMovementPositionsListener, useAudioErrorListener, useCueRecallListener } from './store/useGraphStore';
 import { useAnimationStore } from './store/useAnimationStore';
 
 function App() {
@@ -38,6 +38,8 @@ function App() {
   // Surface les pannes de capture audio (micro mort en show) — monté au niveau
   // App, pas AudioPanel, pour survivre au collapse du panneau droit.
   useAudioErrorListener();
+  // Surface les recalls partiels (moves qui n'ont pas respawné).
+  useCueRecallListener();
 
   // ── Resize des panneaux gauche et droit ──
   React.useEffect(() => {

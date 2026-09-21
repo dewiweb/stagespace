@@ -384,19 +384,19 @@ impl OscSender {
 
         match &self.profile {
             OscProfile::IEMMultiEncoder => {
-                // IEM MultiEncoder (Ambisonics) - Polar coordinates
-                let azimuth = pos.y.atan2(pos.x).to_degrees();
+                // IEM MultiEncoder (Ambisonics) - Polar coordinates.
+                // Convention interne : azim 0 = front (+Y), >0 vers +X →
+                // atan2(x, y) et non atan2(y, x) (qui mesurait depuis +X).
+                let azimuth = pos.x.atan2(pos.y).to_degrees();
                 let distance = (pos.x.powi(2) + pos.y.powi(2)).sqrt();
                 let elevation = if distance > 0.0 {
                     pos.z.atan2(distance).to_degrees()
                 } else {
                     0.0
                 };
-                let distance_norm = distance.min(1.0);
-
                 (
                     self.position_address(osc_id),
-                    vec![azimuth, elevation, distance_norm],
+                    vec![azimuth, elevation, distance],
                 )
             }
             OscProfile::Holophonix => {
@@ -414,34 +414,30 @@ impl OscSender {
             OscProfile::GenericPolar => {
                 // Generic Polar — UN seul message à 3 valeurs (azimuth,
                 // elevation, distance) sur l'adresse de base /object/{id}
-                let azimuth = pos.y.atan2(pos.x).to_degrees();
+                let azimuth = pos.x.atan2(pos.y).to_degrees();
                 let distance = (pos.x.powi(2) + pos.y.powi(2)).sqrt();
                 let elevation = if distance > 0.0 {
                     pos.z.atan2(distance).to_degrees()
                 } else {
                     0.0
                 };
-                let distance_norm = distance.min(1.0);
-
                 (
                     self.position_address(osc_id),
-                    vec![azimuth, elevation, distance_norm],
+                    vec![azimuth, elevation, distance],
                 )
             }
             OscProfile::ADMOSC => {
                 // ADM-OSC - Ambisonics panning with spherical coordinates
-                let azimuth = pos.y.atan2(pos.x).to_degrees();
+                let azimuth = pos.x.atan2(pos.y).to_degrees();
                 let distance = (pos.x.powi(2) + pos.y.powi(2)).sqrt();
                 let elevation = if distance > 0.0 {
                     pos.z.atan2(distance).to_degrees()
                 } else {
                     0.0
                 };
-                let distance_norm = distance.min(1.0);
-
                 (
                     self.position_address(osc_id),
-                    vec![azimuth, elevation, distance_norm],
+                    vec![azimuth, elevation, distance],
                 )
             }
         }
@@ -553,6 +549,41 @@ mod tests {
         let (address, values) = sender.format_position(1, pos);
         assert_eq!(address, "/MultiEncoder/1/aed");
         assert_eq!(values.len(), 3); // azimuth, elevation, distance
+    }
+
+    /// Convention polaire : azim 0 = front (+Y), azim > 0 vers +X, distance
+    /// brute (unités scène). Vérifie que les 3 profils AED suivent la même
+    /// convention que le preview 3D et les profils cartésiens.
+    #[test]
+    fn test_polar_profiles_azimuth_convention() {
+        for profile in [
+            OscProfile::IEMMultiEncoder,
+            OscProfile::GenericPolar,
+            OscProfile::ADMOSC,
+        ] {
+            let sender = OscSender::new(profile, "127.0.0.1".to_string(), 9000);
+            // Front (+Y) → azimuth 0
+            let (_, front) = sender.format_position(1, Vector3::new(0.0, 1.0, 0.0));
+            assert!(
+                front[0].abs() < 1e-9,
+                "azim front devrait être 0: {}",
+                front[0]
+            );
+            // +X → azimuth +90
+            let (_, right) = sender.format_position(1, Vector3::new(1.0, 0.0, 0.0));
+            assert!(
+                (right[0] - 90.0).abs() < 1e-9,
+                "azim +X devrait être 90: {}",
+                right[0]
+            );
+            // Distance brute : dist 2.5 → 2.5 (pas de clamp à 1.0)
+            let (_, far) = sender.format_position(1, Vector3::new(0.0, 2.5, 0.0));
+            assert!(
+                (far[2] - 2.5).abs() < 1e-9,
+                "distance devrait être brute: {}",
+                far[2]
+            );
+        }
     }
 
     #[test]

@@ -15,7 +15,15 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string)
       tabIndex={0}
       className={`${style.bg} ${style.border} border-l-4 text-white text-xs px-3 py-2 rounded shadow-lg flex items-start gap-2 min-w-[260px] max-w-[420px] cursor-pointer animate-fadein`}
       onClick={() => onDismiss(toast.id)}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onDismiss(toast.id); }}
+      onKeyDown={(e) => {
+        // stopPropagation : sans ça la touche remonte au handler global —
+        // Enter déclenchait aussi GO / Space aussi play (double action).
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          e.stopPropagation();
+          onDismiss(toast.id);
+        }
+      }}
     >
       <span className="flex-shrink-0 font-bold text-sm leading-tight">{style.icon}</span>
       <span className="flex-1 leading-snug break-words">{toast.message}</span>

@@ -77,8 +77,23 @@ function syncEditingSlotTracks(
 export const createHolProjectSlice: StateCreator<HolProjectStore, [], [], HolProjectSlice> = (set, get) => ({
   holProject: null,
   importHol: async (filePath) => {
+    // Live-guard : un .hol redéfinit le mapping track→osc_id — refusé pendant
+    // le playback (le backend garde aussi, mais autant éviter le round-trip).
+    if ((get() as { movements?: { length: number } }).movements?.length) {
+      toast.warning('Cannot import a .hol project while moves are playing — stop all first');
+      return;
+    }
     try {
       const project = await invoke<HolProject>('import_hol_project', { filePath });
+      // Le parser drop les données malformées — les surfacer (sticky si des
+      // positions ont été perdues, sinon warning simple).
+      if (project.warnings && project.warnings.length > 0) {
+        const posLost = project.warnings.some((w) => w.includes('position') || w.includes('invalid'));
+        toast.warning(
+          `.hol imported with ${project.warnings.length} warning(s):\n${project.warnings.slice(0, 4).join('\n')}${project.warnings.length > 4 ? `\n… +${project.warnings.length - 4} more` : ''}`,
+          posLost ? 0 : 8000,
+        );
+      }
       // Auto-sélectionner tous les tracks
       const allIds = new Set(project.tracks.map((t) => t.id));
       // Initialiser manualPositions depuis les tracks du .hol
@@ -106,6 +121,10 @@ export const createHolProjectSlice: StateCreator<HolProjectStore, [], [], HolPro
     }
   },
   clearHol: () => {
+    if ((get() as { movements?: { length: number } }).movements?.length) {
+      toast.warning('Cannot clear the .hol project while moves are playing — stop all first');
+      return;
+    }
     set({ holProject: null, selectedTrackIds: new Set() });
     // Clear track positions au backend (pas de .hol → origin = [0,0,0])
     invoke('set_track_positions', { positions: {} }).catch((e) => {

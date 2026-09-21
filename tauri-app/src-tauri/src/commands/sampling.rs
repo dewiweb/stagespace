@@ -1,4 +1,5 @@
 use super::state::lock_or_recover;
+use crate::commands::error::IpcError;
 use crate::AppState;
 use tauri::State;
 
@@ -27,9 +28,21 @@ pub struct PerfStatsResponse {
 
 /// Récupère les stats de performance du runtime (FPS, OSC rate, latency)
 #[tauri::command]
-pub async fn get_perf_stats(state: State<'_, AppState>) -> Result<PerfStatsResponse, String> {
+pub async fn get_perf_stats(state: State<'_, AppState>) -> Result<PerfStatsResponse, IpcError> {
     // Priorité au MergeRuntime (architecture hybride) — c'est lui qui tourne en live
-    let merge_rt = lock_or_recover(&state.merge_runtime);
+    let mut merge_rt = lock_or_recover(&state.merge_runtime);
+    // Auto-recovery : un panic contenu (catch_unwind) tue le merge thread et
+    // coupe tout l'OSC — blackout silencieux jusqu'à la prochaine activation.
+    // Le frontend poll cette commande toutes les ~500ms : on tente un respawn
+    // ici si le thread est mort et que des moves sont encore enregistrés.
+    if merge_rt.thread_died() && !merge_rt.is_running() && merge_rt.has_active_moves() {
+        stagespace_engines::logging::log_osc_error(
+            "MergeRuntime thread died — attempting automatic restart",
+        );
+        if merge_rt.start().is_ok() {
+            stagespace_engines::logging::log_osc_error("MergeRuntime restarted after thread death");
+        }
+    }
     Ok(PerfStatsResponse {
         stats: merge_rt.get_perf_stats(),
         is_running: merge_rt.is_running(),
@@ -48,15 +61,22 @@ pub async fn sample_trajectory(
     duration: f64,
     state: State<'_, AppState>,
 ) -> Result<Vec<(f64, f64, f64, f64)>, String> {
-    // Le graphe "expert" tourne comme worker (graph-main / graph-preview)
-    let movements = lock_or_recover(&state.movements);
-    let movement = movements
-        .get("graph-main")
-        .or_else(|| movements.get("graph-preview"));
-    Ok(match movement {
-        Some(m) => m
-            .runtime
-            .sample_trajectory(object_index, n_samples.max(2), duration.max(0.1)),
+    // Le graphe "expert" tourne comme worker (graph-main / graph-preview).
+    // On capture un sampler detaché et on RELÂCHE le lock movements AVANT
+    // d'échantillonner — sinon stop-all/recall attendent des milliers
+    // d'évaluations.
+    let sampler = {
+        let movements = lock_or_recover(&state.movements);
+        movements
+            .get("graph-main")
+            .or_else(|| movements.get("graph-preview"))
+            .map(|m| m.runtime.sampler())
+    };
+    // Clamp : un n_samples non borné (bug frontend ou IPC malveillant)
+    // allouerait des GB et gèlerait les commands d'urgence.
+    let n = n_samples.clamp(2, 10_000);
+    Ok(match sampler {
+        Some(s) => s.sample(object_index, n, duration.max(0.1)),
         None => vec![],
     })
 }
@@ -76,16 +96,17 @@ pub async fn sample_movement_trajectory(
     duration: f64,
     state: State<'_, AppState>,
 ) -> Result<Vec<(f64, f64, f64, f64)>, String> {
-    // 1. Sampler avec les macros du movement (depuis le runtime du movement)
-    let movements = lock_or_recover(&state.movements);
-    let movement = movements
-        .get(&movement_id)
-        .ok_or_else(|| format!("Movement '{movement_id}' not found"))?;
-    let raw_samples =
-        movement
+    // 1. Capturer le sampler puis relâcher le lock movements AVANT de
+    //    sampler (idem sample_trajectory : pas de lock pendant l'évaluation).
+    let sampler = {
+        let movements = lock_or_recover(&state.movements);
+        movements
+            .get(&movement_id)
+            .ok_or_else(|| format!("Movement '{movement_id}' not found"))?
             .runtime
-            .sample_trajectory(object_index, n_samples.max(2), duration.max(0.1));
-    drop(movements);
+            .sampler()
+    };
+    let raw_samples = sampler.sample(object_index, n_samples.clamp(2, 10_000), duration.max(0.1));
 
     // 2. Appliquer le post-process global (depuis le MergeRuntime)
     let mr = lock_or_recover(&state.merge_runtime);

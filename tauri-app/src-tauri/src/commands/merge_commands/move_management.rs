@@ -218,6 +218,28 @@ fn spawn_move_inner(spec: MoveSpec, sh: &Shared, abort_on_recall: bool) -> Resul
         pending: sh.pending_move_ids.clone(),
     };
 
+    // 0b. Valider track_indices AVANT tout travail lourd : le merge skippe
+    //     silencieusement tout move dont la longueur ne correspond pas aux
+    //     positions produites, et un index hors de la liste OSC globale
+    //     mapperait les positions sur une track inexistante.
+    if !spec.track_indices.is_empty() {
+        if spec.track_indices.len() != spec.osc_ids.len() {
+            return Err(format!(
+                "Move '{id}': track_indices.len()={} != osc_ids.len()={} — \
+                 le merge skipperait ce move (silent)",
+                spec.track_indices.len(),
+                spec.osc_ids.len()
+            ));
+        }
+        let global_len = lock_or_recover(&sh.merge_runtime).osc_ids().len();
+        if let Some(&bad) = spec.track_indices.iter().find(|&&i| i >= global_len) {
+            return Err(format!(
+                "Move '{id}': track_index {bad} hors de la liste OSC globale \
+                 ({global_len} entrées) — mapping stale, re-sélectionner les tracks"
+            ));
+        }
+    }
+
     // 1. Compiler le sub-graph
     let graph = {
         let audio_state = lock_or_recover(&sh.audio_state);
@@ -304,9 +326,17 @@ fn spawn_move_inner(spec: MoveSpec, sh: &Shared, abort_on_recall: bool) -> Resul
         return Err("Cue recall in progress — activation aborted".to_string());
     }
 
-    // 8. Enregistrer le movement
+    // 8. Enregistrer le movement — le check recall est refait SOUS le lock :
+    //    entre le check de l'étape 7 et cet insert, un recall peut avoir
+    //    sweep la map (il ne voit pas ce move) → ghost. Comme le sweep du
+    //    recall tient aussi ce lock, vérifier le flag ici ferme la fenêtre.
     {
         let mut movements = lock_or_recover(&sh.movements);
+        if abort_on_recall && sh.recall_in_progress.load(Ordering::SeqCst) {
+            drop(movements);
+            runtime.stop();
+            return Err("Cue recall in progress — activation aborted".to_string());
+        }
         movements.insert(
             id.clone(),
             Movement {
@@ -634,23 +664,37 @@ pub async fn get_merge_perf_stats(
     }))
 }
 
+/// Projection `Movement` → `MovementInfo` — extraite pour être testable
+/// sans `State<AppState>` (le `is_playing` honnête est critique en live).
+pub(crate) fn collect_movement_infos(
+    movements: &HashMap<String, Movement>,
+    merge_runtime: &stagespace_engines::MergeRuntime,
+) -> Vec<crate::MovementInfo> {
+    movements
+        .values()
+        .map(|m| {
+            // `is_running` seul ment : un worker stale-killé par le merge (ou
+            // mort par panic hors catch_unwind) garde running=true alors que
+            // le merge ne stream plus ses positions.
+            let alive_in_merge = merge_runtime.has_move(&m.id);
+            crate::MovementInfo {
+                id: m.id.clone(),
+                name: m.name.clone(),
+                osc_ids: m.osc_ids.clone(),
+                is_preview: m.is_preview,
+                is_playing: m.runtime.is_running() && alive_in_merge,
+                track_count: m.osc_ids.len(),
+            }
+        })
+        .collect()
+}
+
 /// Liste les moves actifs
 #[tauri::command]
 pub async fn list_active_moves(
     state: State<'_, AppState>,
-) -> Result<Vec<serde_json::Value>, IpcError> {
+) -> Result<Vec<crate::MovementInfo>, IpcError> {
     let movements = lock_or_recover(&state.movements);
-    Ok(movements
-        .values()
-        .map(|m| {
-            serde_json::json!({
-                "id": m.id,
-                "name": m.name,
-                "osc_ids": m.osc_ids,
-                "is_preview": m.is_preview,
-                "is_playing": m.runtime.is_running(),
-                "track_count": m.osc_ids.len(),
-            })
-        })
-        .collect())
+    let merge_rt = lock_or_recover(&state.merge_runtime);
+    Ok(collect_movement_infos(&movements, &merge_rt))
 }

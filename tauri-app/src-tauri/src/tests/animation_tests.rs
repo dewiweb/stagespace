@@ -472,9 +472,10 @@ mod tests {
         let (addr, vals) = iem_sender.format_position(1, pos);
         assert_eq!(addr, "/MultiEncoder/1/aed");
         assert_eq!(vals.len(), 3); // azimuth, elevation, distance
-                                   // azimuth = atan2(y, x) en degrés = atan2(0.5, 1.0) ≈ 26.57°
+                                   // Convention : azim 0 = front (+Y), >0 vers +X → atan2(x, y)
+                                   // = atan2(1.0, 0.5) ≈ 63.43°
         assert!(
-            vals[0] > 20.0 && vals[0] < 30.0,
+            vals[0] > 60.0 && vals[0] < 67.0,
             "IEM azimuth incorrect: {}",
             vals[0]
         );

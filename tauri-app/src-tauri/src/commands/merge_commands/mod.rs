@@ -24,6 +24,8 @@ pub use macros::{
 pub use manual_positions::{
     clear_all_manual_positions, clear_manual_position, set_manual_position, set_track_positions,
 };
+#[cfg(test)]
+pub(crate) use move_management::collect_movement_infos;
 pub use move_management::{
     activate_move, deactivate_all_moves, deactivate_move, get_merge_perf_stats, list_active_moves,
 };

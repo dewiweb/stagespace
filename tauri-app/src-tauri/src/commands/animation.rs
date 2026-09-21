@@ -87,13 +87,26 @@ pub async fn update_animation_state(
     animation: Animation,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
-    let movements = lock_or_recover(&state.movements);
+    let mut movements = lock_or_recover(&state.movements);
     let movement = movements
-        .get(&movement_id)
+        .get_mut(&movement_id)
         .ok_or_else(|| IpcError::not_found(format!("Movement {movement_id} not found")))?;
     let osc_ids = movement.osc_ids.clone();
     let anim_state = AnimationState::from_animation(&animation, &osc_ids);
     movement.runtime.set_animation_state(anim_state);
+    // Durée hot-swappable — et sync du snapshot Movement, sinon un cue
+    // store/recall ramène la durée/loop/direction d'avant l'edit.
+    movement.runtime.set_duration(animation.duration);
+    movement.duration = animation.duration;
+    movement.loop_mode = match animation.loop_mode {
+        AnimationLoopMode::Loop => "loop".to_string(),
+        AnimationLoopMode::OneShot => "oneshot".to_string(),
+    };
+    movement.direction = match animation.direction {
+        Direction::Forward => "forward".to_string(),
+        Direction::Backward => "backward".to_string(),
+        Direction::PingPong => "ping_pong".to_string(),
+    };
     // Mettre à jour les macros aussi
     movement.runtime.macros().set_speed(animation.speed);
     movement.runtime.macros().set_scale(animation.scale);

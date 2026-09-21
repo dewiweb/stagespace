@@ -285,3 +285,110 @@ fn test_set_graph_effects_replaces_in_block() {
     rt.set_graph_effects(Vec::new(), Vec::new());
     assert_eq!(rt.zones().len(), 1);
 }
+
+/// Sink de test qui échoue sur chaque envoi — vérifie que les erreurs
+/// remontent dans osc_error_rate (sinon un renderer down est invisible).
+struct FailSink;
+impl crate::position_sink::PositionSink for FailSink {
+    fn send_state(
+        &mut self,
+        _object_id: u32,
+        _position: nalgebra::Vector3<f64>,
+        _channels: Option<&crate::osc_sender::SpatialChannels>,
+    ) -> crate::position_sink::SendReport {
+        crate::position_sink::SendReport {
+            sent: 0,
+            errors: 1,
+            refused: 0,
+        }
+    }
+    fn describe(&self) -> String {
+        "fail://test".to_string()
+    }
+}
+
+#[test]
+fn test_failing_sink_surfaces_osc_error_rate() {
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    rt.set_sink(Box::new(FailSink));
+    // La liste osc_ids GLOBALE doit contenir l'id — sinon le merge ne
+    // résout pas le track_index et n'appelle jamais le sink.
+    rt.set_osc_ids(vec![1]);
+
+    let buffer = Arc::new(PositionBuffer::new());
+    buffer.write(vec![(0, nalgebra::Vector3::new(1.0, 0.0, 0.0))]);
+    let writer = {
+        let b = buffer.clone();
+        std::thread::spawn(move || {
+            for _ in 0..120 {
+                b.write(vec![(0, nalgebra::Vector3::new(1.0, 0.0, 0.0))]);
+                std::thread::sleep(std::time::Duration::from_millis(8));
+            }
+        })
+    };
+    rt.register_move("m1".to_string(), buffer, vec![1], vec![0], false);
+    rt.start().unwrap();
+    // Perf stats ne se rafraîchissent que toutes les ~500 ms.
+    std::thread::sleep(std::time::Duration::from_millis(900));
+    rt.stop();
+    writer.join().unwrap();
+
+    let stats = rt.get_perf_stats();
+    assert!(
+        stats.osc_error_rate > 0.0,
+        "les échecs du sink doivent remonter dans osc_error_rate"
+    );
+}
+
+#[test]
+fn test_thread_died_marks_liveness() {
+    // Un panic dans le post-process doit tuer le thread de façon OBSERVABLE :
+    // thread_died=true + running=false — sinon blackout OSC silencieux.
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    rt.swap_post_process_fn(Box::new(|_ctx, _positions| {
+        panic!("injected post-process panic");
+    }));
+
+    let buffer = Arc::new(PositionBuffer::new());
+    buffer.write(vec![(0, nalgebra::Vector3::new(1.0, 0.0, 0.0))]);
+    let writer = {
+        let b = buffer.clone();
+        std::thread::spawn(move || {
+            for _ in 0..60 {
+                b.write(vec![(0, nalgebra::Vector3::new(1.0, 0.0, 0.0))]);
+                std::thread::sleep(std::time::Duration::from_millis(8));
+            }
+        })
+    };
+    rt.register_move("m1".to_string(), buffer, vec![1], vec![0], false);
+    rt.start().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    writer.join().unwrap();
+
+    assert!(
+        rt.thread_died(),
+        "le panic contenu doit marquer thread_died"
+    );
+    assert!(!rt.is_running(), "le thread mort ne doit plus dire running");
+    rt.stop();
+}
+
+#[test]
+fn test_fresh_move_survives_stale_grace() {
+    // Un move fraîchement enregistré dont le premier write tarde ne doit PAS
+    // être retiré à la limite normale (30 frames ≈ 0.5 s) — grace étendue.
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    let buffer = Arc::new(PositionBuffer::new()); // jamais écrit dans le test
+    rt.register_move("fresh".to_string(), buffer, vec![1], vec![0], false);
+    rt.start().unwrap();
+    // ~70 frames à 60 FPS — dépasse largement l'ancienne limite de 30.
+    std::thread::sleep(std::time::Duration::from_millis(1200));
+    rt.stop();
+    assert!(
+        rt.has_move("fresh"),
+        "un move frais (jamais écrit) doit survivre à la grace période"
+    );
+}

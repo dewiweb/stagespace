@@ -1,5 +1,6 @@
 //! Positions manuelles et positions de tracks : set/clear pour drag 3D et Barycenter
 
+use crate::commands::error::IpcError;
 use crate::AppState;
 use std::collections::HashMap;
 use tauri::State;
@@ -11,7 +12,7 @@ use super::lock_or_recover;
 pub async fn set_track_positions(
     positions: HashMap<u32, [f64; 3]>,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     let merge_rt = lock_or_recover(&state.merge_runtime);
     merge_rt.set_track_positions(positions);
     Ok(())
@@ -23,7 +24,7 @@ pub async fn set_manual_position(
     object_index: usize,
     position: [f64; 3],
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     let merge_rt = lock_or_recover(&state.merge_runtime);
     merge_rt.set_manual_position(object_index, position);
     Ok(())
@@ -34,7 +35,7 @@ pub async fn set_manual_position(
 pub async fn clear_manual_position(
     object_index: usize,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     let merge_rt = lock_or_recover(&state.merge_runtime);
     merge_rt.clear_manual_position(object_index);
     Ok(())
@@ -42,7 +43,7 @@ pub async fn clear_manual_position(
 
 /// Efface toutes les positions manuelles
 #[tauri::command]
-pub async fn clear_all_manual_positions(state: State<'_, AppState>) -> Result<(), String> {
+pub async fn clear_all_manual_positions(state: State<'_, AppState>) -> Result<(), IpcError> {
     let merge_rt = lock_or_recover(&state.merge_runtime);
     merge_rt.clear_all_manual_positions();
     Ok(())

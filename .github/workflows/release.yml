@@ -168,3 +168,25 @@ jobs:
             exit 1
           fi
           echo "✓ AppImage démarre et reste vivant (exit $rc)"
+
+  # Si un leg de la matrix échoue (build ou smoke test), tauri-action a déjà
+  # pu créer la draft release et d'autres legs continuent d'y attacher des
+  # artifacts (fail-fast: false) — on obtient une draft "complète en
+  # apparence" avec un bundle potentiellement cassé. Ce job supprime la draft
+  # dès qu'un leg a raté : on retag + rebuild, jamais une release partielle.
+  cleanup-on-failure:
+    name: Delete draft release on failure
+    needs: build-release
+    if: ${{ failure() || cancelled() }}
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - name: Resolve tag
+        shell: bash
+        run: echo "TAG=${{ inputs.tag || github.ref_name }}" >> "$GITHUB_ENV"
+      - name: Delete draft release (artifacts partiels jamais publiables)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release delete "$TAG" --yes || echo "No draft release to delete"

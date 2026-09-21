@@ -50,6 +50,15 @@ struct TrackAcc {
 
 /// Parse le contenu d'un fichier `.hol` → tracks triées par id croissant.
 pub fn parse_hol_project(content: &str) -> Result<Vec<HolTrack>, String> {
+    parse_hol_project_with_warnings(content).map(|(tracks, _)| tracks)
+}
+
+/// Parse + diagnostics : les données malformées sont droppées mais RAPPORTÉES
+/// (ligne + raison) — un `dist` typo déplaçait la source à front-1m en silence.
+/// Les params inconnus sont dédupliqués dans un warning agrégé.
+pub fn parse_hol_project_with_warnings(
+    content: &str,
+) -> Result<(Vec<HolTrack>, Vec<String>), String> {
     let project: serde_json::Value =
         serde_json::from_str(content).map_err(|e| format!("Failed to parse JSON: {e}"))?;
 
@@ -61,18 +70,32 @@ pub fn parse_hol_project(content: &str) -> Result<Vec<HolTrack>, String> {
 
     let mut acc: HashMap<u32, TrackAcc> = HashMap::new();
     let mut track_ids: BTreeSet<u32> = BTreeSet::new();
+    let mut warnings: Vec<String> = Vec::new();
+    let mut unknown_params: BTreeSet<String> = BTreeSet::new();
 
-    for item in ae_array {
-        let Some(line) = item.as_str() else { continue };
+    for (line_idx, item) in ae_array.iter().enumerate() {
+        let Some(line) = item.as_str() else {
+            warnings.push(format!("line {}: non-string entry skipped", line_idx + 1));
+            continue;
+        };
         if !line.starts_with("/track/") {
             continue;
         }
         // "/track/{id}/{param} {value}" → ["", "track", "{id}", "{param} {value}"]
         let parts: Vec<&str> = line.splitn(4, '/').collect();
         if parts.len() < 4 {
+            warnings.push(format!(
+                "line {}: malformed track path '{line}'",
+                line_idx + 1
+            ));
             continue;
         }
         let Ok(id) = parts[2].parse::<u32>() else {
+            warnings.push(format!(
+                "line {}: invalid track id '{}' in '{line}'",
+                line_idx + 1,
+                parts[2]
+            ));
             continue;
         };
         track_ids.insert(id);
@@ -103,37 +126,50 @@ pub fn parse_hol_project(content: &str) -> Result<Vec<HolTrack>, String> {
                         let g = (comps[1].clamp(0.0, 1.0) * 255.0) as u8;
                         let b = (comps[2].clamp(0.0, 1.0) * 255.0) as u8;
                         entry.color = Some(format!("#{r:02x}{g:02x}{b:02x}"));
+                    } else {
+                        warnings.push(format!(
+                            "line {}: track {id} unparseable color '{v}'",
+                            line_idx + 1
+                        ));
                     }
                 }
             }
-            "azim" => {
-                if let Ok(v) = value.parse() {
-                    entry.azim = Some(v);
-                }
-            }
-            "elev" => {
-                if let Ok(v) = value.parse() {
-                    entry.elev = Some(v);
-                }
-            }
-            "dist" => {
-                if let Ok(v) = value.parse() {
-                    entry.dist = Some(v);
-                }
-            }
-            "xyz" => {
-                // Format combiné : "x y z"
+            "azim" | "elev" | "dist" => match value.parse::<f64>() {
+                Ok(v) => match param {
+                    "azim" => entry.azim = Some(v),
+                    "elev" => entry.elev = Some(v),
+                    _ => entry.dist = Some(v),
+                },
+                Err(_) => warnings.push(format!(
+                    "line {}: track {id} invalid {param} value '{value}'",
+                    line_idx + 1
+                )),
+            },
+            "xyz" | "aed" => {
+                // Format combiné : "x y z" ou "a e d" (aussi comma-separated)
                 let comps: Vec<f64> = value
-                    .split_whitespace()
+                    .trim_matches('"')
+                    .split(|c: char| c.is_whitespace() || c == ',')
+                    .filter(|s| !s.is_empty())
                     .filter_map(|s| s.parse().ok())
                     .collect();
                 if comps.len() >= 3 {
-                    entry.xyz = Some([comps[0], comps[1], comps[2]]);
+                    if param == "xyz" {
+                        entry.xyz = Some([comps[0], comps[1], comps[2]]);
+                    } else {
+                        // aed combiné → conversion immédiate en xyz
+                        entry.xyz = Some(aed_to_xyz(comps[0], comps[1], comps[2]));
+                    }
+                } else {
+                    warnings.push(format!(
+                        "line {}: track {id} invalid {param} value '{value}'",
+                        line_idx + 1
+                    ));
                 }
             }
             // Axes séparés (certains exports Holophonix)
-            "x" | "y" | "z" => {
-                if let Ok(v) = value.parse::<f64>() {
+            "x" | "y" | "z" => match value.parse::<f64>() {
+                Ok(v) => {
                     let xyz = entry.xyz.get_or_insert([0.0, 0.0, 0.0]);
                     let axis = match param {
                         "x" => 0,
@@ -142,13 +178,26 @@ pub fn parse_hol_project(content: &str) -> Result<Vec<HolTrack>, String> {
                     };
                     xyz[axis] = v;
                 }
+                Err(_) => warnings.push(format!(
+                    "line {}: track {id} invalid {param} value '{value}'",
+                    line_idx + 1
+                )),
+            },
+            _ => {
+                unknown_params.insert(param.to_string());
             }
-            _ => {}
         }
     }
 
     if track_ids.is_empty() {
         return Err("No tracks found in .hol file".to_string());
+    }
+
+    if !unknown_params.is_empty() {
+        warnings.push(format!(
+            "unrecognized track params ignored: {}",
+            unknown_params.into_iter().collect::<Vec<_>>().join(", ")
+        ));
     }
 
     let tracks = track_ids
@@ -161,6 +210,12 @@ pub fn parse_hol_project(content: &str) -> Result<Vec<HolTrack>, String> {
             let color = a
                 .and_then(|a| a.color.clone())
                 .unwrap_or_else(|| "#888888".to_string());
+            let has_position = a.and_then(|a| a.xyz).is_some() || a.and_then(|a| a.dist).is_some();
+            if !has_position {
+                warnings.push(format!(
+                    "track {id}: no position data — defaulted to front (0,1,0)"
+                ));
+            }
             let position = match a.and_then(|a| a.xyz) {
                 Some(xyz) => xyz,
                 None => aed_to_xyz(
@@ -178,7 +233,7 @@ pub fn parse_hol_project(content: &str) -> Result<Vec<HolTrack>, String> {
         })
         .collect();
 
-    Ok(tracks)
+    Ok((tracks, warnings))
 }
 
 #[cfg(test)]

@@ -1,5 +1,6 @@
 //! Macros et settings globaux : merge strategy, scale, rotation, shift, speed, depths, origin, osc_ids
 
+use crate::commands::error::IpcError;
 use crate::commands::playback::SetMacroRequest;
 use crate::AppState;
 use stagespace_engines::{LoopMode, MergeStrategy, PlayDirection};
@@ -12,13 +13,17 @@ use super::lock_or_recover;
 pub async fn set_merge_strategy(
     strategy: String,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     let strat = match strategy.as_str() {
         "override" => MergeStrategy::Override,
         "crossfade" => MergeStrategy::Crossfade,
         "blend" => MergeStrategy::Blend,
         "priority" => MergeStrategy::Priority,
-        _ => return Err(format!("Unknown merge strategy: {strategy}")),
+        _ => {
+            return Err(IpcError::validation(format!(
+                "Unknown merge strategy: {strategy}"
+            )))
+        }
     };
     let merge_rt = lock_or_recover(&state.merge_runtime);
     merge_rt.set_merge_strategy(strat);
@@ -31,7 +36,7 @@ pub async fn set_merge_strategy(
 pub async fn set_global_macro(
     request: SetMacroRequest,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     let merge_rt = lock_or_recover(&state.merge_runtime);
     let macros = merge_rt.macros();
     if let Some(s) = request.scale {
@@ -64,7 +69,7 @@ pub async fn set_move_speed(
     movement_id: String,
     speed: f64,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     let movements = lock_or_recover(&state.movements);
     let movement = movements
         .get(&movement_id)
@@ -79,11 +84,13 @@ pub async fn set_move_weight(
     movement_id: String,
     weight: f64,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     {
         let movements = lock_or_recover(&state.movements);
         if !movements.contains_key(&movement_id) {
-            return Err(format!("Movement '{movement_id}' not found"));
+            return Err(IpcError::not_found(format!(
+                "Movement '{movement_id}' not found"
+            )));
         }
     }
     let merge_rt = lock_or_recover(&state.merge_runtime);
@@ -97,11 +104,13 @@ pub async fn set_move_priority(
     movement_id: String,
     priority: u32,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     {
         let movements = lock_or_recover(&state.movements);
         if !movements.contains_key(&movement_id) {
-            return Err(format!("Movement '{movement_id}' not found"));
+            return Err(IpcError::not_found(format!(
+                "Movement '{movement_id}' not found"
+            )));
         }
     }
     let merge_rt = lock_or_recover(&state.merge_runtime);
@@ -111,7 +120,10 @@ pub async fn set_move_priority(
 
 /// Définit les depths par track (pour le MergeRuntime)
 #[tauri::command]
-pub async fn set_track_depths(depths: Vec<f64>, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn set_track_depths(
+    depths: Vec<f64>,
+    state: State<'_, AppState>,
+) -> Result<(), IpcError> {
     let merge_rt = lock_or_recover(&state.merge_runtime);
     merge_rt.set_track_depths(depths);
     Ok(())
@@ -119,7 +131,10 @@ pub async fn set_track_depths(depths: Vec<f64>, state: State<'_, AppState>) -> R
 
 /// Définit l'origin global (isobarycentre des tracks)
 #[tauri::command]
-pub async fn set_global_origin(origin: [f64; 3], state: State<'_, AppState>) -> Result<(), String> {
+pub async fn set_global_origin(
+    origin: [f64; 3],
+    state: State<'_, AppState>,
+) -> Result<(), IpcError> {
     let merge_rt = lock_or_recover(&state.merge_runtime);
     merge_rt.set_origin(nalgebra::Vector3::new(origin[0], origin[1], origin[2]));
     Ok(())
@@ -131,12 +146,14 @@ pub async fn set_global_origin(origin: [f64; 3], state: State<'_, AppState>) -> 
 pub async fn set_global_osc_ids(
     osc_ids: Vec<u32>,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     // Vérifier si des movements sont actifs
     {
         let movements = lock_or_recover(&state.movements);
         if !movements.is_empty() {
-            return Err("Cannot change OSC IDs during playback. Stop all moves first.".to_string());
+            return Err(IpcError::busy(
+                "Cannot change OSC IDs during playback. Stop all moves first.",
+            ));
         }
     }
     let merge_rt = lock_or_recover(&state.merge_runtime);
@@ -152,7 +169,7 @@ pub async fn set_move_playback_mode(
     loop_mode: Option<String>,
     direction: Option<String>,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     let movements = lock_or_recover(&state.movements);
     let movement = movements
         .get(&movement_id)
@@ -161,7 +178,7 @@ pub async fn set_move_playback_mode(
         let mode = match lm.as_str() {
             "oneshot" => LoopMode::OneShot,
             "loop" => LoopMode::Loop,
-            _ => return Err(format!("Unknown loop mode: {lm}")),
+            _ => return Err(IpcError::validation(format!("Unknown loop mode: {lm}"))),
         };
         movement.runtime.set_loop_mode(mode);
     }
@@ -170,7 +187,7 @@ pub async fn set_move_playback_mode(
             "forward" => PlayDirection::Forward,
             "backward" => PlayDirection::Backward,
             "ping_pong" => PlayDirection::PingPong,
-            _ => return Err(format!("Unknown direction: {dir}")),
+            _ => return Err(IpcError::validation(format!("Unknown direction: {dir}"))),
         };
         movement.runtime.set_direction(pd);
     }

@@ -1,4 +1,5 @@
 use super::state::lock_or_recover;
+use crate::commands::error::IpcError;
 use crate::AppState;
 use tauri::State;
 
@@ -10,7 +11,7 @@ pub async fn set_object_override(
     y: f64,
     z: f64,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     let pos = nalgebra::Vector3::new(x, y, z);
     // Appliquer à tous les movements actifs — le graphe "expert" tourne
     // aussi comme worker (graph-main / graph-preview).
@@ -23,7 +24,7 @@ pub async fn set_object_override(
 
 /// Supprime tous les overrides
 #[tauri::command]
-pub async fn clear_all_overrides(state: State<'_, AppState>) -> Result<(), String> {
+pub async fn clear_all_overrides(state: State<'_, AppState>) -> Result<(), IpcError> {
     let movements = lock_or_recover(&state.movements);
     for movement in movements.values() {
         movement.runtime.clear_all_overrides();

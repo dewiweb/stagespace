@@ -118,7 +118,8 @@ export default function MovesTable() {
   const handleGO = async () => {
     const msg = await goToNextMove();
     if (msg) {
-      setGoFeedback(msg);
+      // "GO:" préfixe = succès ; tout le reste est un message d'échec/blocage.
+      setGoFeedback(msg.startsWith('GO:') ? `ok:${msg}` : `err:${msg}`);
       setTimeout(() => setGoFeedback(null), 3000);
     }
   };
@@ -202,7 +203,9 @@ export default function MovesTable() {
             </button>
           </div>
           {goFeedback && (
-            <div className="text-green-400 text-[10px] mt-1 text-center animate-pulse">{goFeedback}</div>
+            <div className={`text-[10px] mt-1 text-center animate-pulse ${goFeedback.startsWith('ok:') ? 'text-green-400' : 'text-red-400 font-bold'}`}>
+              {goFeedback.slice(4)}
+            </div>
           )}
         </div>
       )}
@@ -293,7 +296,7 @@ export default function MovesTable() {
                       )}
                       {isPlaying && mv && (
                         <div className="text-[8px] font-mono text-green-500 mt-0.5">
-                          {mv.fps?.toFixed(0)}fps · {mv.osc_rate?.toFixed(0)}osc/s
+                          {mv.track_count} tracks
                         </div>
                       )}
                     </td>
@@ -377,15 +380,20 @@ export default function MovesTable() {
                     {/* Actions */}
                     <td className="px-1 py-1.5" onClick={() => selectSlotForEditing(slot.id)}>
                       <div className="flex items-center gap-0.5 justify-center">
-                        {/* Preview/Live toggle */}
+                        {/* Preview/Live toggle — désactivé pendant la lecture :
+                            le backend capture is_preview à l'activation, le
+                            toggle frontend seul mentirait sur l'OSC out. */}
                         <button
                           onClick={(e) => { e.stopPropagation(); toggleSlotPreview(slot.id); }}
+                          disabled={!!slot.movementId}
                           className={`text-[9px] px-1 rounded transition-colors ${
                             slot.isPreview
                               ? 'bg-cyan-900/50 text-cyan-300 hover:bg-cyan-800/60'
                               : 'text-gray-600 hover:text-gray-400 hover:bg-gray-800/30'
-                          }`}
-                          title={slot.isPreview ? 'Mode Preview (pas d\'OSC out) — cliquer pour passer en Live' : 'Mode Live (OSC out) — cliquer pour passer en Preview'}
+                          } disabled:opacity-30 disabled:cursor-not-allowed`}
+                          title={slot.movementId
+                            ? 'Preview/Live verrouillé pendant la lecture — stopper le move d\'abord'
+                            : slot.isPreview ? 'Mode Preview (pas d\'OSC out) — cliquer pour passer en Live' : 'Mode Live (OSC out) — cliquer pour passer en Preview'}
                         >◉</button>
                         {isPlaying ? (
                           <>
