@@ -352,8 +352,12 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
       useCuelistStore.getState().saveToStorage();
     }
 
-    // 3b. OSC IN mappings — clear + replay (le fichier remplace l'état)
+    // 3b. OSC IN mappings — clear + replay (le fichier remplace l'état).
+    //     Rollback sur l'état précédent si le replay échoue à mi-parcours :
+    //     un clear réussi suivi d'un add en échec laisserait sinon des
+    //     mappings partiels silencieusement.
     if (raw.oscMappings !== undefined) {
+      const prevMappings: OscMapping[] = await invoke<OscMapping[]>('osc_list_mappings').catch(() => []);
       try {
         await invoke('osc_clear_mappings');
         for (const m of raw.oscMappings) {
@@ -361,24 +365,42 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
         }
       } catch (e) {
         console.error('Failed to restore OSC IN mappings:', e);
+        try {
+          await invoke('osc_clear_mappings');
+          for (const m of prevMappings) {
+            await invoke('osc_add_mapping', { mapping: m });
+          }
+        } catch (rbErr) {
+          console.error('OSC mappings rollback failed:', rbErr);
+        }
         toast.error(`Show loaded but OSC IN mappings restore failed: ${e}`);
       }
     }
 
-    // 3c. Macros globales — restore frontend + push backend (idle → set_macro
-    //     s'applique aux macros du MergeRuntime pour le prochain play).
+    // 3c. Macros globales — restore frontend + push backend. Sur échec du
+    //     push, revert le frontend pour rester aligné avec le backend.
     if (raw.macros) {
+      const prevMacros = get().macros;
       set({ macros: { ...get().macros, ...raw.macros } });
       try {
         await get().pushMacrosToRuntime?.();
       } catch (e) {
         console.error('Failed to push restored macros:', e);
+        set({ macros: prevMacros });
+        await get().pushMacrosToRuntime?.().catch(() => {});
         toast.error(`Show loaded but macros failed to apply: ${e}`);
       }
     }
 
-    // 4. Config OSC — set direct + push backend (playback déjà exclu)
+    // 4. Config OSC — set direct + push backend (playback déjà exclu).
+    //    Rollback frontend + backend sur échec pour éviter la divergence.
     if (raw.osc) {
+      const prevOsc = {
+        oscAddress: get().oscAddress,
+        oscPort: get().oscPort,
+        oscProfile: get().oscProfile,
+        oscInPort: get().oscInPort,
+      };
       set({
         oscAddress: raw.osc.oscAddress,
         oscPort: raw.osc.oscPort,
@@ -395,13 +417,23 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
         await invoke('set_osc_receiver_port', { port: raw.osc.oscInPort });
       } catch (e) {
         console.error('Failed to restore OSC config:', e);
+        set(prevOsc);
+        safeSetItem('stagespace-osc-config', JSON.stringify(prevOsc));
+        await invoke('set_osc_output', {
+          address: prevOsc.oscAddress,
+          port: prevOsc.oscPort,
+          profile: prevOsc.oscProfile,
+        }).catch(() => {});
+        await invoke('set_osc_receiver_port', { port: prevOsc.oscInPort }).catch(() => {});
         toast.error(`Show loaded but OSC config failed to apply: ${e}`);
       }
     }
 
-    // 5. Graphe global — restore + push backend pour que le post-process
-    //    reflète le fichier (sinon le merge tourne sur l'ancien graphe)
+    // 5. Graphe global — restore + push backend. Revert + re-push de
+    //    l'ancien graphe si le push échoue (frontend/backend alignés).
     if (raw.globalGraph) {
+      const prevNodes = useGlobalGraphStore.getState().nodes;
+      const prevEdges = useGlobalGraphStore.getState().edges;
       useGlobalGraphStore.setState({
         nodes: raw.globalGraph.nodes,
         edges: raw.globalGraph.edges,
@@ -410,24 +442,34 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
         await useGlobalGraphStore.getState().pushGlobalGraph();
       } catch (e) {
         console.error('Failed to push restored global graph:', e);
+        useGlobalGraphStore.setState({ nodes: prevNodes, edges: prevEdges });
+        await useGlobalGraphStore.getState().pushGlobalGraph().catch(() => {});
         toast.error(`Show loaded but global graph failed to apply: ${e}`);
       }
     }
 
     // 6. Spatial FX — replay des zones/modulations/channels sur le backend
-    //    (clear d'abord : le fichier remplace l'état courant)
+    //    (clear d'abord : le fichier remplace l'état courant). Le store
+    //    frontend est le snapshot de l'état précédent (playback exclu →
+    //    pas de divergence possible) — rollback par replay sur échec.
     if (raw.spatialFx) {
-      try {
+      const prevFx = {
+        zones: get().zones,
+        modulations: get().modulations,
+        objectChannels: get().objectChannels,
+        kinematicSmoothing: get().kinematicSmoothing,
+      };
+      const replayFx = async (fx: typeof prevFx) => {
         await invoke('clear_zones');
         await invoke('clear_channel_modulations');
         await invoke('clear_all_spatial_channels');
-        for (const z of raw.spatialFx.zones ?? []) {
+        for (const z of fx.zones ?? []) {
           await invoke('add_zone', { params: zoneToParams(z) });
         }
-        for (const m of raw.spatialFx.modulations ?? []) {
+        for (const m of fx.modulations ?? []) {
           await invoke('add_channel_modulation', { params: modulationToParams(m) });
         }
-        for (const [objIdx, channels] of Object.entries(raw.spatialFx.objectChannels ?? {})) {
+        for (const [objIdx, channels] of Object.entries(fx.objectChannels ?? {})) {
           for (const [channel, value] of Object.entries(channels)) {
             if (typeof value === 'number') {
               await invoke('set_spatial_channel', {
@@ -438,12 +480,27 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
             }
           }
         }
-        if (typeof raw.spatialFx.kinematicSmoothing === 'number') {
-          await invoke('set_kinematic_smoothing', { smoothing: raw.spatialFx.kinematicSmoothing });
-        }
+        await invoke('set_kinematic_smoothing', { smoothing: fx.kinematicSmoothing });
+      };
+      try {
+        await replayFx({
+          zones: raw.spatialFx.zones ?? [],
+          modulations: raw.spatialFx.modulations ?? [],
+          objectChannels: raw.spatialFx.objectChannels ?? {},
+          kinematicSmoothing:
+            typeof raw.spatialFx.kinematicSmoothing === 'number'
+              ? raw.spatialFx.kinematicSmoothing
+              : prevFx.kinematicSmoothing,
+        });
         await get().refreshSpatialFx?.();
       } catch (e) {
         console.error('Failed to restore spatial FX:', e);
+        try {
+          await replayFx(prevFx);
+          await get().refreshSpatialFx?.();
+        } catch (rbErr) {
+          console.error('Spatial FX rollback failed:', rbErr);
+        }
         toast.error(`Show loaded but spatial FX restore failed: ${e}`);
       }
     }

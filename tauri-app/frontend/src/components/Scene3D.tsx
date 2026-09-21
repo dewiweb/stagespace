@@ -36,7 +36,6 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   const [webglFailed, setWebglFailed] = useState(false);
   const [sceneReady, setSceneReady] = useState(false);
 
-  const positions = useGraphStore((s) => s.positions);
   const isPlaying = useGraphStore((s) => s.isPlaying);
   const macros = useGraphStore((s) => s.macros);
   const nodes = useGraphStore((s) => s.nodes);
@@ -154,7 +153,6 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
     handleRef,
     trajectoryLineRef,
     drawCanvasRef,
-    positions,
     macros,
     assignMode,
     manipulateMode,

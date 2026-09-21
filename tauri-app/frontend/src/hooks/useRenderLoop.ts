@@ -42,7 +42,6 @@ const ZONE_MANUAL_TINT = 0x22d3ee; // cyan — zones manuelles
 const ZONE_GRAPH_TINT = 0x8b5cf6; // violet — zones graph-déclarées
 
 // Types des valeurs store lues dans le render loop
-type PositionArray = Array<{ index: number; x: number; y: number; z: number }>;
 type MacrosValue = {
   speed: number;
   scale: number;
@@ -72,7 +71,6 @@ export interface UseRenderLoopParams {
   // Store values (passées pour sync vers refs internes)
   // NOTE: movementPositions et movements sont lus via getState() dans la boucle
   // pour éviter 60 re-renders React par seconde.
-  positions: PositionArray;
   macros: MacrosValue;
   assignMode: boolean;
   manipulateMode: boolean;
@@ -92,7 +90,7 @@ export interface UseRenderLoopParams {
  * Crée la scène Three.js complète (caméra, renderer WebGL, CSS2DRenderer, lumières,
  * grille, axes, OrbitControls) et lance la boucle `animate()` via requestAnimationFrame.
  *
- * Les refs internes (positionsRef, movementsRef, etc.) sont créées DANS le hook et
+ * Les refs internes (macrosRef, movementsRef, etc.) sont créées DANS le hook et
  * synchronisées à chaque render React (cheap — pas d'effet de bord). Le useEffect
  * principal a `[]` dependencies → n'est JAMAIS recréé par React.
  */
@@ -108,7 +106,6 @@ export function useRenderLoop({
   handleRef,
   trajectoryLineRef,
   drawCanvasRef,
-  positions,
   macros,
   assignMode,
   manipulateMode,
@@ -120,7 +117,6 @@ export function useRenderLoop({
   setWebglFailed,
 }: UseRenderLoopParams) {
   // Refs internes pour les valeurs changeantes — lues dans le render loop à 60fps
-  const positionsRef = useRef(positions);
   const macrosRef = useRef(macros);
   const assignModeRef = useRef(assignMode);
   const manipulateModeRef = useRef(manipulateMode);
@@ -132,7 +128,6 @@ export function useRenderLoop({
   const lastDrawnKeyRef = useRef('');
 
   // Sync des refs à chaque render React (cheap — pas d'effet de bord)
-  positionsRef.current = positions;
   macrosRef.current = macros;
   assignModeRef.current = assignMode;
   manipulateModeRef.current = manipulateMode;

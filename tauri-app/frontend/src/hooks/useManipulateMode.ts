@@ -34,14 +34,12 @@ export function useManipulateMode({
   const dragStartPosRef = useRef<{ x: number; y: number } | null>(null);
   const dragStartYawRef = useRef(0);
 
-  const positions = useGraphStore((s) => s.positions);
   const movements = useGraphStore((s) => s.movements);
   const macros = useGraphStore((s) => s.macros);
   const setMacros = useGraphStore((s) => s.setMacros);
   const isPlaying = useGraphStore((s) => s.isPlaying);
 
   // Refs pour les valeurs lues dans les callbacks — évite les stale closures
-  const positionsRef = useRef(positions);
   const movementsRef = useRef(movements);
 
   // Animation store ref — pour la manipulation directe 3D (offset, scale, rotation)
@@ -51,7 +49,6 @@ export function useManipulateMode({
   // Sync des refs à chaque render React (cheap — pas d'effet de bord)
   // movementPositions est lu via getState() dans les callbacks pour éviter
   // 60 re-renders/seconde (event global-positions à 60fps).
-  positionsRef.current = positions;
   movementsRef.current = movements;
   draggingObjectRef.current = draggingObject;
 
@@ -234,7 +231,7 @@ export function useManipulateMode({
         }
       }
     },
-    [manipulateMode, draggingObject, draggingHandle, positions, macros, setMacros, isPlaying],
+    [manipulateMode, draggingObject, draggingHandle, macros, setMacros, isPlaying],
   );
 
   const handleManipulateUp = useCallback(

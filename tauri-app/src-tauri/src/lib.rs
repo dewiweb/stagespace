@@ -38,13 +38,12 @@ use commands::osc::{
     send_osc_position, set_osc_output, set_osc_receiver_port,
 };
 use commands::overrides::{clear_all_overrides, set_object_override};
-use commands::playback::{play_graph, preview_graph, set_macro, stop_graph, update_graph};
+use commands::playback::set_macro;
 use commands::presets::{preset_delete, preset_list, preset_load, preset_save};
 use commands::sampling::{
     frontend_log, get_perf_stats, sample_movement_trajectory, sample_trajectory,
 };
 use commands::state::lock_or_recover;
-use graph::parser::build_graph_from_json;
 
 // État global de l'application
 pub struct AppState {
@@ -109,33 +108,6 @@ pub struct MovementInfo {
     pub is_preview: bool,
     pub is_playing: bool,
     pub track_count: usize,
-}
-
-// Graph Compilation
-#[tauri::command]
-async fn compile_graph(
-    graph_json: serde_json::Value,
-    state: State<'_, AppState>,
-) -> Result<String, commands::error::IpcError> {
-    // Compilation = travail CPU lourd → spawn_blocking pour ne pas
-    // bloquer l'executor async de Tauri.
-    let audio_state_arc = state.audio_state.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        let graph = {
-            let audio_state = audio_state_arc.lock().unwrap_or_else(|e| {
-                eprintln!("[WARN] audio_state mutex poisoned, recovering: {e}");
-                e.into_inner()
-            });
-            build_graph_from_json(&graph_json, &audio_state)?
-        };
-        match graph::compilation::compile_graph(&graph) {
-            Ok(_) => Ok("Graph compiled successfully".to_string()),
-            Err(e) => Err(e),
-        }
-    })
-    .await
-    .map_err(|e| commands::error::IpcError::internal(format!("Task join error: {e}")))?
-    .map_err(commands::error::IpcError::from)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -318,11 +290,6 @@ pub fn run() {
             preset_load,
             preset_delete,
             preset_list,
-            compile_graph,
-            play_graph,
-            stop_graph,
-            update_graph,
-            preview_graph,
             set_macro,
             save_graph_to_file,
             load_graph_from_file,

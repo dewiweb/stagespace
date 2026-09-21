@@ -70,16 +70,10 @@ interface GraphState
   duration: number;
   compileError: string | null;
   playError: string | null;
-  positions: Array<{ index: number; x: number; y: number; z: number }>;
   clearCompileError: () => void;
   clearPlayError: () => void;
-  setPositions: (positions: Array<{ index: number; x: number; y: number; z: number }>) => void;
 
-  // Compilation & playback
-  compile: () => Promise<boolean>;
-  playGraph: (oscAddress: string, oscPort: number, oscIds: number[], oscProfile: string) => Promise<void>;
-  previewGraph: (oscIds: number[]) => Promise<void>;
-  stopGraph: () => Promise<void>;
+  // Hot-swap du graphe en lecture — cible le move du slot édité
   updateGraphLive: (fadeDuration?: number) => Promise<void>;
   // Incrémenté à chaque compilation/update — pour déclencher la visu de trajectoire
   graphCompileVersion: number;
@@ -276,100 +270,19 @@ export const useGraphStore = create<GraphState>()((...a) => {
   duration: 4.0,
   compileError: null,
   playError: null,
-  positions: [],
   clearCompileError: () => set({ compileError: null, status: get().isPlaying ? 'playing' : 'idle' }),
   clearPlayError: () => set({ playError: null, status: get().isPlaying ? 'playing' : 'idle' }),
-  setPositions: (positions) => set({ positions }),
   graphCompileVersion: 0,
 
-  compile: async () => {
-    set({ compileError: null, status: 'compiling' });
-    const { nodes, edges } = get();
-    try {
-      await invoke('compile_graph', { graphJson: { nodes, edges } });
-      set({ status: 'compiled', graphCompileVersion: get().graphCompileVersion + 1 });
-      return true;
-    } catch (error: any) {
-      const message = error?.message ?? String(error);
-      set({ compileError: message, status: 'error' });
-      console.error('Compilation failed:', error);
-      toast.error('Compilation failed: ' + message);
-      return false;
-    }
-  },
-
-  playGraph: async (oscAddress, oscPort, oscIds, oscProfile) => {
-    set({ playError: null });
-    const { nodes, edges } = get();
-    // Fusionner les params par défaut avant l'envoi
-    const { prepareGraphForSave } = await import('../components/nodeParamSchema');
-    const graphData = prepareGraphForSave(nodes, edges);
-    try {
-      await invoke('play_graph', {
-        request: {
-          graph_json: graphData,
-          osc_address: oscAddress,
-          osc_port: oscPort,
-          osc_ids: oscIds,
-          osc_profile: oscProfile,
-        },
-      });
-      set({ isPlaying: true, status: 'playing' });
-    } catch (error: any) {
-      const message = error?.message ?? String(error);
-      set({ playError: message, isPlaying: false, status: 'error' });
-      console.error('Playback failed:', error);
-      toast.error('Playback failed: ' + message);
-    }
-  },
-
-  previewGraph: async (oscIds) => {
-    set({ playError: null });
-    const { nodes, edges } = get();
-    const { prepareGraphForSave } = await import('../components/nodeParamSchema');
-    const graphData = prepareGraphForSave(nodes, edges);
-    try {
-      await invoke('preview_graph', {
-        request: {
-          graph_json: graphData,
-          osc_address: '127.0.0.1',
-          osc_port: 9999,
-          osc_ids: oscIds,
-          osc_profile: 'holophonix',
-        },
-      });
-      set({ isPlaying: true, status: 'playing' });
-    } catch (error: any) {
-      const message = error?.message ?? String(error);
-      set({ playError: message, isPlaying: false, status: 'error' });
-      console.error('Preview failed:', error);
-      toast.error('Preview failed: ' + message);
-    }
-  },
-
-  stopGraph: async () => {
-    set({ isPlaying: false, status: 'idle' });
-    try {
-      await invoke('stop_graph');
-    } catch (error: any) {
-      console.error('Stop failed:', error);
-      toast.error('Stop failed: ' + (error?.message ?? String(error)));
-      throw error;
-    }
-  },
-
   updateGraphLive: async (fadeDuration?: number) => {
-    const { isPlaying, movements, nodes, edges } = get();
+    const { movements, nodes, edges } = get();
     const { useAnimationStore } = await import('./useAnimationStore');
     const { activeMovementIds } = useAnimationStore.getState();
-    if (!isPlaying && movements.length === 0 && activeMovementIds.length === 0) return;
+    if (movements.length === 0 && activeMovementIds.length === 0) return;
     const { prepareGraphForSave } = await import('../components/nodeParamSchema');
     const graphData = prepareGraphForSave(nodes, edges);
     const fade = fadeDuration ?? 0.3;
     try {
-      if (isPlaying) {
-        await invoke('update_graph', { graphJson: graphData, fadeDuration: fade });
-      }
       // Hot-swap : cible TOUJOURS le movement du slot édité.
       // Plus de fallback "tous les movements actifs" — c'était la source
       // du bug où éditer le slot A hot-swapait aussi le movement du slot B.
@@ -512,14 +425,6 @@ export const useGraphStore = create<GraphState>()((...a) => {
     } catch (e) {
       failedStops += 1;
       console.error('Panic: stop all failed:', e);
-    }
-    try {
-      if (get().isPlaying) {
-        await get().stopGraph();
-      }
-    } catch (e) {
-      failedStops += 1;
-      console.error('Panic: stop graph failed:', e);
     }
     // Envoyer les positions d'origine à tous les récepteurs OSC — en
     // parallèle (64 awaits séquentiels dans un arrêt d'urgence = latence
