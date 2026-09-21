@@ -36,9 +36,13 @@ jobs:
       matrix:
         platform:
           - os: ubuntu-22.04
-            # Pour étendre : ajouter macos-14 (dmg) et windows-latest (msi/nsis).
-            # Les icônes .icns/.ico sont déjà présentes dans src-tauri/icons/.
-            # Windows/macOS unsigned fonctionnent mais affichent un avertissement.
+            bundles: deb,appimage
+          # Windows/macOS unsigned fonctionnent mais affichent un
+          # avertissement (SmartScreen / Gatekeeper).
+          - os: macos-14
+            bundles: dmg,app
+          - os: windows-latest
+            bundles: msi,nsis
     runs-on: ${{ matrix.platform.os }}
 
     steps:
@@ -49,6 +53,9 @@ jobs:
           ref: ${{ inputs.tag || github.ref }}
 
       - name: Resolve tag + verify version matches tauri.conf.json
+        # shell: bash explicite — le runner Windows utiliserait pwsh sinon
+        # et la syntaxe [[ =~ ]] + jq casserait.
+        shell: bash
         run: |
           TAG="${{ inputs.tag || github.ref_name }}"
           if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -108,12 +115,17 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: tauri-app
+          # Bundles par plateforme — tauri.conf.json reste sur deb/appimage,
+          # --bundles override la config pour macOS/Windows.
+          args: --bundles ${{ matrix.platform.bundles }}
           tagName: ${{ env.TAG }}
           releaseName: 'STAGESPACE ${{ env.TAG }}'
           releaseBody: |
             Spatial trajectory engine for OSC-controlled audio renderers.
             - **AppImage** : portable, `chmod +x` puis lancer
             - **.deb** : `sudo dpkg -i stagespace_*.deb`
+            - **.dmg / .app** (macOS) : non signé — clic droit → Ouvrir
+            - **.msi / .nsis** (Windows) : non signé — SmartScreen → Exécuter
           releaseDraft: true
           prerelease: false
 

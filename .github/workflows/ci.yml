@@ -110,7 +110,7 @@ jobs:
       - name: Check formatting
         run: cargo fmt -- --check
 
-      - name: Clippy (deny warnings, all targets: lib + CLI bin + tests)
+      - name: "Clippy (deny warnings, all targets: lib + CLI bin + tests)"
         run: cargo clippy --all-targets -- -D warnings
 
       - name: Tests
