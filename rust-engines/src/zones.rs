@@ -258,7 +258,12 @@ mod tests {
         // Zone gain=0 — objet dedans → gain 0 ; dehors → rien émis
         let z = sphere_zone(2.0, 0.0, 0.0);
         let mut eff = SpatialChannels::default();
-        apply_zones(&[z.clone()], 0, &Vector3::new(1.0, 0.0, 0.0), &mut eff);
+        apply_zones(
+            std::slice::from_ref(&z),
+            0,
+            &Vector3::new(1.0, 0.0, 0.0),
+            &mut eff,
+        );
         assert_eq!(eff.gain, Some(0.0));
         let mut eff2 = SpatialChannels::default();
         apply_zones(&[z], 0, &Vector3::new(5.0, 0.0, 0.0), &mut eff2);
@@ -319,7 +324,7 @@ mod tests {
     fn test_any_zone_applies() {
         let z = sphere_zone(1.0, 0.0, 0.5);
         assert!(any_zone_applies(
-            &[z.clone()],
+            std::slice::from_ref(&z),
             0,
             &Vector3::new(0.0, 0.0, 0.0)
         ));
