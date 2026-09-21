@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { useGraphStore } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
+import { ConfirmModal } from './ui/ConfirmModal';
 
 export const CuelistPanel: React.FC = () => {
   const cues = useCuelistStore((s) => s.cues);
@@ -14,6 +15,9 @@ export const CuelistPanel: React.FC = () => {
   const goToPreviousCue = useCuelistStore((s) => s.goToPreviousCue);
 
   const [newCueName, setNewCueName] = useState('');
+  // Confirmation avant delete — un cue supprimé n'est pas récupérable et
+  // le bouton ✕ est adjacent au recall (un misclick live coûte le cue).
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
 
   // Récupérer l'état actuel pour le store
   const nodes = useGraphStore((s) => s.nodes);
@@ -160,7 +164,7 @@ export const CuelistPanel: React.FC = () => {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    deleteCue(cue.id);
+                    setPendingDelete({ id: cue.id, name: cue.name });
                   }}
                   className="text-gray-600 hover:text-red-400 text-[10px] px-1"
                   title="Supprimer"
@@ -172,6 +176,24 @@ export const CuelistPanel: React.FC = () => {
           </div>
         )}
       </div>
+
+      {pendingDelete && (
+        <ConfirmModal
+          title="Supprimer le cue"
+          message={
+            <>
+              Supprimer <span className="text-white font-semibold">« {pendingDelete.name} »</span> ?
+              <br />
+              <span className="text-gray-500">Action définitive — le cue n'est pas récupérable.</span>
+            </>
+          }
+          onConfirm={() => {
+            deleteCue(pendingDelete.id);
+            setPendingDelete(null);
+          }}
+          onCancel={() => setPendingDelete(null)}
+        />
+      )}
     </div>
   );
 };

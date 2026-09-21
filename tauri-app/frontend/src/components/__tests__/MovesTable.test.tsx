@@ -187,12 +187,24 @@ describe('MovesTable — slot selection', () => {
 });
 
 describe('MovesTable — remove slot', () => {
-  it('clicking ✕ button removes the slot', () => {
+  it('clicking ✕ opens a confirmation — delete only after confirm', () => {
     const slot = makeSlot({ id: 'slot-1', name: 'To Remove' });
     useGraphStore.setState({ moveSlots: [slot] } as any);
     render(<MovesTable />);
     const removeBtn = screen.getByTitle(/Supprimer ce slot/i);
     fireEvent.click(removeBtn);
+    // Le slot n'est pas supprimé tant que le modal n'est pas confirmé
+    expect((useGraphStore.getState() as any).moveSlots).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }));
     expect((useGraphStore.getState() as any).moveSlots).toHaveLength(0);
+  });
+
+  it('cancelling the confirmation keeps the slot', () => {
+    const slot = makeSlot({ id: 'slot-1', name: 'To Remove' });
+    useGraphStore.setState({ moveSlots: [slot] } as any);
+    render(<MovesTable />);
+    fireEvent.click(screen.getByTitle(/Supprimer ce slot/i));
+    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+    expect((useGraphStore.getState() as any).moveSlots).toHaveLength(1);
   });
 });

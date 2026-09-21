@@ -5,6 +5,7 @@ import { SHAPE_PRESETS } from '../utils/shapePresets';
 import { useModalGuardOn } from '../utils/modalGuard';
 import Modal from './ui/Modal';
 import Slider from './ui/Slider';
+import ConfirmModal from './ui/ConfirmModal';
 
 /// MovesTable — la table des moves (concept unifié)
 /// Tout est un Move. Certains moves sont dans la setlist (l'ordre du spectacle).
@@ -103,6 +104,9 @@ export default function MovesTable() {
 
   // ─── GO feedback ───
   const [goFeedback, setGoFeedback] = React.useState<string | null>(null);
+  // Confirmation avant delete — le slot contient graphe+tracks+macros, non
+  // récupérable (l'undo ne couvre pas removeMoveSlot).
+  const [pendingDeleteSlot, setPendingDeleteSlot] = React.useState<{ id: string; name: string } | null>(null);
 
   // Templates basiques pour le dropdown
   const basicTemplates = SHAPE_PRESETS.filter((p) => p.category === 'basic' || p.category === 'composite');
@@ -439,7 +443,7 @@ export default function MovesTable() {
                           title="Macros (speed, scale, shift, rotation)"
                         >⚙</button>
                         <button
-                          onClick={() => removeMoveSlot(slot.id)}
+                          onClick={(e) => { e.stopPropagation(); setPendingDeleteSlot({ id: slot.id, name: slot.name }); }}
                           className="text-gray-600 hover:text-red-400 text-[9px] px-1 rounded hover:bg-red-900/20"
                           title="Supprimer ce slot"
                         >✕</button>
@@ -559,6 +563,25 @@ export default function MovesTable() {
           </Modal>
         );
       })()}
+
+      {/* ═══ Delete confirmation ═══ */}
+      {pendingDeleteSlot && (
+        <ConfirmModal
+          title="Supprimer le move"
+          message={
+            <>
+              Supprimer <span className="text-white font-semibold">« {pendingDeleteSlot.name} »</span> ?
+              <br />
+              <span className="text-gray-500">Graphe, tracks et macros du slot perdus — non récupérable.</span>
+            </>
+          }
+          onConfirm={() => {
+            removeMoveSlot(pendingDeleteSlot.id);
+            setPendingDeleteSlot(null);
+          }}
+          onCancel={() => setPendingDeleteSlot(null)}
+        />
+      )}
     </div>
   );
 }
