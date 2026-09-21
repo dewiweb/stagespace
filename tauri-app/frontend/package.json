@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
+    "contracts": "bash ../../scripts/gen_contracts.sh",
     "test:watch": "vitest"
   },
   "dependencies": {

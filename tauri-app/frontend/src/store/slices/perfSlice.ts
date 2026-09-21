@@ -1,11 +1,9 @@
 import { StateCreator } from 'zustand';
+import type { PerfStatsResponse } from '../../types/generated/PerfStatsResponse';
 
-export interface PerfStats {
-  fps: number;
-  oscRate: number;
-  latencyMs: number;
-  cpuPercent: number;
-}
+/// Payload complet de `get_perf_stats` — généré depuis Rust (ts-rs).
+/// Inclut les champs liveness (isRunning, threadDied…) en plus des métriques.
+export type PerfStats = PerfStatsResponse;
 
 export interface PerfSlice {
   // Performance overlay

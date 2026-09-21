@@ -6,12 +6,15 @@
 //! `String` et classifient à la frontière via `IpcError::classify`.
 
 use serde::Serialize;
+use ts_rs::TS;
 
 /// Erreur de commande sérialisée vers le frontend.
 /// `code` : snake_case stable — le frontend peut matcher dessus.
 /// `message` : lisible, affiché dans les toasts.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
 pub struct IpcError {
+    #[ts(type = "string")]
     pub code: &'static str,
     pub message: String,
 }

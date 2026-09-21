@@ -4,14 +4,17 @@ use crate::osc_sender::SpatialChannels;
 use crate::zones::Zone;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use ts_rs::TS;
 
 /// Cue - snapshot complet d'un moment du spectacle
 /// Contient le graphe + les macros + les tracks ciblées + le fade
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct Cue {
     pub id: String,
     pub name: String,
     pub description: String,
+    #[ts(type = "unknown")]
     pub graph: serde_json::Value,
     pub timestamp: f64,
     /// Macros au moment du store (speed, scale, shift, rotation)
@@ -31,6 +34,7 @@ pub struct Cue {
     /// Graph global (post-processing) au moment du store.
     /// Si présent, sera hot-swappé lors du recall.
     #[serde(default)]
+    #[ts(type = "unknown | null")]
     pub global_graph: Option<serde_json::Value>,
 
     /// IDs des moves actifs au moment du store.
@@ -80,7 +84,8 @@ pub struct Cue {
 /// Snapshot d'un move actif — capturé par `store_cue`, rejoué par `recall_cue`.
 /// Contient tout ce qu'il faut pour recréer le worker (graph_json → compile →
 /// play_compiled → register_move dans le MergeRuntime).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct MoveSnapshot {
     /// Id du movement (clé dans la map des moves actifs)
     #[serde(default)]
@@ -88,6 +93,7 @@ pub struct MoveSnapshot {
     /// Nom affiché
     pub name: String,
     /// Sub-graph JSON (nodes/edges) — recompilé au recall
+    #[ts(type = "unknown")]
     pub graph_json: serde_json::Value,
     /// OSC ids ciblés par le move
     #[serde(default)]
@@ -125,14 +131,16 @@ fn default_move_direction() -> String {
 }
 
 /// Snapshot des macros spatiales étendues
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct SpatialMacroSnapshot {
     pub radius_scale: f64,
     pub height_offset: f64,
 }
 
 /// Snapshot des macros au moment du store
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct MacroSnapshot {
     pub speed: f64,
     pub scale: f64,

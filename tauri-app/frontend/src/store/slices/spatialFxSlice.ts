@@ -1,46 +1,27 @@
 import { StateCreator } from 'zustand';
 import { safeInvoke as invoke } from '../../utils/tauri';
+// Types générés depuis Rust via ts-rs — ne pas éditer les miroirs.
+import type { SpatialChannel } from '../../types/generated/SpatialChannel';
+import type { SpatialChannels as RustSpatialChannels } from '../../types/generated/SpatialChannels';
+import type { KinematicSource } from '../../types/generated/KinematicSource';
+import type { Zone } from '../../types/generated/Zone';
+import type { ZoneShape } from '../../types/generated/ZoneShape';
+import type { ChannelModulation } from '../../types/generated/ChannelModulation';
+
+export type { Zone, ZoneShape, ChannelModulation };
 
 /// Noms sérialisés côté Rust : SpatialChannel → "Gain" | "Spread" | …
-export type SpatialChannelName =
-  | 'Gain' | 'Spread' | 'Distance' | 'Presence' | 'Yaw' | 'Aperture' | 'Lfe';
+export type SpatialChannelName = SpatialChannel;
 
 export const SPATIAL_CHANNELS: SpatialChannelName[] = [
   'Gain', 'Spread', 'Distance', 'Presence', 'Yaw', 'Aperture', 'Lfe',
 ];
 
-/// Tous les champs sont optionnels (Option<f64> côté Rust).
-export type SpatialChannels = Partial<Record<
-  'gain' | 'spread' | 'distance' | 'presence' | 'yaw' | 'aperture' | 'lfe',
-  number | null
->>;
+/// Tous les champs sont optionnels (Option<f64> côté Rust — le backend
+/// sérialise null ; le frontend peut construire des objets partiels).
+export type SpatialChannels = Partial<RustSpatialChannels>;
 
-export type ZoneShape =
-  | { shape: 'sphere'; center: [number, number, number]; radius: number }
-  | { shape: 'box'; min: [number, number, number]; max: [number, number, number] };
-
-export interface Zone {
-  shape: ZoneShape;
-  falloff: number;
-  channels: SpatialChannels;
-  objects?: number[] | null;
-  enabled: boolean;
-}
-
-export type KinematicSourceName = 'Speed' | 'Acceleration' | 'Jerk' | 'AngularSpeed';
-
-/// min/max arrivent en `number | null` (null = ±∞ côté Rust).
-export interface ChannelModulation {
-  object: number | null;
-  source: KinematicSourceName;
-  channel: SpatialChannelName;
-  scale: number;
-  offset: number;
-  min: number | null;
-  max: number | null;
-  /// Position du listener pour AngularSpeed (°/s perceptuels)
-  listener?: [number, number, number];
-}
+export type KinematicSourceName = KinematicSource;
 
 /// Payload pour `add_zone` — shape textuelle + coins génériques a/b.
 export interface ZoneParams {

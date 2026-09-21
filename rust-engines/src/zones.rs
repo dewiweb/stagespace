@@ -14,10 +14,12 @@
 use crate::osc_sender::{SpatialChannel, SpatialChannels};
 use nalgebra::Vector3;
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 /// Forme d'une zone d'effet spatial
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, TS)]
 #[serde(tag = "shape", rename_all = "snake_case")]
+#[ts(export)]
 pub enum ZoneShape {
     /// Sphère : centre + rayon
     Sphere { center: [f64; 3], radius: f64 },
@@ -55,7 +57,8 @@ impl ZoneShape {
 
 /// Zone d'effet spatial : à l'intérieur, les canaux listés sont tirés vers
 /// leurs valeurs cibles proportionnellement à l'influence.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct Zone {
     /// Forme de la zone
     pub shape: ZoneShape,

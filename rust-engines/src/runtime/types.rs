@@ -59,7 +59,9 @@ pub enum PlayDirection {
 }
 
 /// Stats de performance — lues à chaque frame
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct PerfStats {
     pub fps: f64,
     pub osc_rate: f64,

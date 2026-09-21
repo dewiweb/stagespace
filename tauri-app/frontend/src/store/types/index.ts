@@ -17,18 +17,8 @@ export type NodeType =
 
 export type AppStatus = 'idle' | 'compiling' | 'compiled' | 'playing' | 'error';
 
-export interface MovementInfo {
-  id: string;
-  name: string;
-  osc_ids: number[];
-  is_preview: boolean;
-  is_playing: boolean;
-  track_count: number;
-  fps: number;
-  osc_rate: number;
-  latency_ms: number;
-  cpu_percent: number;
-}
+// Généré depuis Rust (ts-rs) — voir src-tauri/src/lib.rs `MovementInfo`.
+export type { MovementInfo } from '../../types/generated/MovementInfo';
 
 export interface HolTrack {
   id: number;

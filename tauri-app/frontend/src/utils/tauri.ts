@@ -13,10 +13,10 @@ export function checkTauri(): boolean {
 /// Erreur IPC typée renvoyée par les commands backend migrées à `IpcError`.
 /// `code` est stable (snake_case) — matchable programmatiquement ;
 /// `message` reste lisible (`e.message` fonctionne partout).
-export interface IpcErrorPayload {
-  code: string;
-  message: string;
-}
+/// Type généré depuis Rust via ts-rs — ne pas éditer le miroir.
+import type { IpcError } from '../types/generated/IpcError';
+export type { IpcError };
+export type IpcErrorPayload = IpcError;
 
 export class BackendError extends Error {
   readonly code: string;

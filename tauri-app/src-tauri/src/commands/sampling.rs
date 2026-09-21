@@ -8,26 +8,35 @@ pub fn frontend_log(message: String) {
     eprintln!("[FE] {message}");
 }
 
+/// Réponse de `get_perf_stats` — `PerfStats` du merge + liveness du thread.
+/// `is_running`/`thread_died`/`merge_frames` : le fps reste figé si le merge
+/// thread meurt — le frontend doit pouvoir détecter un blackout OSC silencieux.
+#[derive(serde::Serialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct PerfStatsResponse {
+    #[serde(flatten)]
+    pub stats: stagespace_engines::PerfStats,
+    pub is_running: bool,
+    pub thread_died: bool,
+    #[ts(type = "number")]
+    pub merge_frames: u64,
+    #[ts(type = "number")]
+    pub dropped_positions: u64,
+}
+
 /// Récupère les stats de performance du runtime (FPS, OSC rate, latency)
 #[tauri::command]
-pub async fn get_perf_stats(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+pub async fn get_perf_stats(state: State<'_, AppState>) -> Result<PerfStatsResponse, String> {
     // Priorité au MergeRuntime (architecture hybride) — c'est lui qui tourne en live
     let merge_rt = lock_or_recover(&state.merge_runtime);
-    let stats = merge_rt.get_perf_stats();
-    Ok(serde_json::json!({
-        "fps": stats.fps,
-        "oscRate": stats.osc_rate,
-        "latencyMs": stats.latency_ms,
-        "cpuPercent": stats.cpu_percent,
-        "oscErrorRate": stats.osc_error_rate,
-        "oscRefusedRate": stats.osc_refused_rate,
-        // Liveness : fps reste figé si le merge thread meurt — le frontend
-        // doit pouvoir détecter un blackout OSC silencieux.
-        "isRunning": merge_rt.is_running(),
-        "threadDied": merge_rt.thread_died(),
-        "mergeFrames": merge_rt.merge_frame_count(),
-        "droppedPositions": merge_rt.dropped_position_count(),
-    }))
+    Ok(PerfStatsResponse {
+        stats: merge_rt.get_perf_stats(),
+        is_running: merge_rt.is_running(),
+        thread_died: merge_rt.thread_died(),
+        merge_frames: merge_rt.merge_frame_count(),
+        dropped_positions: merge_rt.dropped_position_count(),
+    })
 }
 
 /// Échantillonne la trajectoire compilée pour la visualiser dans la 3D

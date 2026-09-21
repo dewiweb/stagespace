@@ -24,6 +24,7 @@ thiserror = "1.0"
 # cpal >= 0.15 publié depuis un moment, version stable
 cpal = "0.15"
 realfft = "3.3"
+ts-rs = "10"
 
 [dev-dependencies]
 criterion = "0.5"

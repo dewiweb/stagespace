@@ -63,7 +63,7 @@ export const CuelistPanel: React.FC = () => {
       },
       track_indices: slot?.trackIds ?? [],
       fade_duration: 0.5,
-      cue_number: undefined,
+      cue_number: null,
       global_graph: globalGraphJson,
       active_move_ids: activeMoveIds,
       per_track_depths: [],

@@ -31,6 +31,7 @@ nalgebra = "0.33"
 rosc = "0.10"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+ts-rs = "10"
 
 [features]
 default = ["custom-protocol"]

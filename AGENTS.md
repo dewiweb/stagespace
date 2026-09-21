@@ -30,7 +30,7 @@ stagespace/
 ```bash
 cd rust-engines
 cargo build              # Build
-cargo test --lib         # Run tests (358 tests)
+cargo test --lib         # Run tests (375 tests, incl. ts-rs export tests)
 cargo clippy --lib --all-targets -- -D warnings  # Lint
 cargo fmt -- --check     # Format check
 ```
@@ -66,7 +66,8 @@ cd tauri-app/frontend
 npm install              # Install deps
 npm run dev              # Dev server (Vite)
 npm run build            # Production build (tsc + vite build)
-npm test                 # Run tests (173 tests, vitest)
+npm test                 # Run tests (187 tests, vitest)
+npm run contracts        # Regenerate TS types from Rust (ts-rs → src/types/generated/)
 npm run test:watch       # Watch mode
 npx tsc --noEmit         # Type check only
 ```
@@ -105,15 +106,23 @@ See `.github/workflows/ci.yml`.
 - Tauri IPC: use `safeInvoke` from `utils/tauri.ts` (not raw `invoke`)
 - No `console.log` in production code (use `console.error` for error paths only)
 
+### Generated contracts (ts-rs)
+
+Wire types shared between Rust and the frontend are generated, not mirrored
+by hand. `#[derive(TS)] + #[ts(export)]` on the Rust type emits a `.ts` file
+into `tauri-app/frontend/src/types/generated/` (committed). Regenerate after
+editing a contract: `npm run contracts` (or `bash scripts/gen_contracts.sh`).
+CI fails if the committed files drift from the Rust sources.
+
 ## Test Counts
 
 | Suite | Count |
 |-------|-------|
-| Rust engines | 358 |
-| Tauri backend | 29 |
-| Frontend (vitest) | 173 |
+| Rust engines | 375 |
+| Tauri backend | 33 |
+| Frontend (vitest) | 187 |
 | E2E CLI | 122 |
-| **Total** | **682** |
+| **Total** | **717** |
 
 ## Live Show Safety Features
 

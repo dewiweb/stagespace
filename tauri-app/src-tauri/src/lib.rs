@@ -100,7 +100,8 @@ pub struct Movement {
 /// Limite de movements simultanés pour éviter l'épuisement des ressources
 pub const MAX_MOVEMENTS: usize = 32;
 
-#[derive(Serialize)]
+#[derive(Serialize, ts_rs::TS)]
+#[ts(export)]
 pub struct MovementInfo {
     pub id: String,
     pub name: String,

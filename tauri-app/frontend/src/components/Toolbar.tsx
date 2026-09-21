@@ -6,6 +6,7 @@ import { safeInvoke as invoke } from '../utils/tauri';
 import { isModalOpen, closeTopModal } from '../utils/modalGuard';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { SettingsModal } from './SettingsModal';
+import type { PerfStatsResponse } from '../types/generated/PerfStatsResponse';
 
 const OSC_PROFILES = [
   { value: 'holophonix', label: 'Holophonix' },
@@ -149,14 +150,25 @@ export const Toolbar: React.FC = () => {
   const mergeDiedToastShown = React.useRef(false);
   React.useEffect(() => {
     if (activeMovements === 0) {
-      setPerfStats({ fps: 0, oscRate: 0, latencyMs: 0, cpuPercent: 0 });
+      setPerfStats({
+        fps: 0,
+        oscRate: 0,
+        latencyMs: 0,
+        cpuPercent: 0,
+        oscErrorRate: 0,
+        oscRefusedRate: 0,
+        isRunning: false,
+        threadDied: false,
+        mergeFrames: 0,
+        droppedPositions: 0,
+      });
       oscErrorToastShown.current = false;
       mergeDiedToastShown.current = false;
       return;
     }
     const interval = setInterval(async () => {
       try {
-        const stats = await invoke<{ fps: number; oscRate: number; latencyMs: number; cpuPercent: number; oscErrorRate: number; oscRefusedRate: number; threadDied?: boolean }>('get_perf_stats');
+        const stats = await invoke<PerfStatsResponse>('get_perf_stats');
         setPerfStats(stats);
         // Merge thread mort = blackout OSC silencieux (fps affiché = valeur
         // figée, pas un signe de vie). Alerter une fois.

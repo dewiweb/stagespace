@@ -15,7 +15,8 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 /// Source cinématique mesurable sur la trajectoire d'un objet.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[ts(export)]
 pub enum KinematicSource {
     /// Norme de la vitesse (unités scène / s)
     Speed,
@@ -79,7 +80,8 @@ mod serde_pos_inf {
 /// Règle de modulation : source cinématique → canal spatial.
 ///
 /// `value = clamp(source * scale + offset, min, max)`
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[ts(export)]
 pub struct ChannelModulation {
     /// Objet cible — None = tous les objets
     pub object: Option<usize>,
@@ -93,9 +95,11 @@ pub struct ChannelModulation {
     pub offset: f64,
     /// Borne basse du résultat (−∞ = pas de borne, sérialisé null)
     #[serde(with = "serde_neg_inf")]
+    #[ts(type = "number | null")]
     pub min: f64,
     /// Borne haute du résultat (+∞ = pas de borne, sérialisé null)
     #[serde(with = "serde_pos_inf")]
+    #[ts(type = "number | null")]
     pub max: f64,
     /// Position du listener pour `AngularSpeed` (défaut : origine).
     /// `#[serde(default)]` pour la rétrocompat des cues persistées.

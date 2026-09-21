@@ -2,41 +2,12 @@ import { create } from 'zustand';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { toast } from '../utils/toast-helpers';
 import { safeSetItem, safeParseStoredJson } from '../utils/safeStorage';
+import type { Cue } from '../types/generated/Cue';
+import type { StoreCueRequest } from '../types/generated/StoreCueRequest';
 
-export interface CueData {
-  id: string;
-  name: string;
-  description: string;
-  graph: any;
-  timestamp: number;
-  macros?: {
-    speed: number;
-    scale: number;
-    shift_x: number;
-    shift_y: number;
-    shift_z: number;
-    yaw: number;
-    pitch: number;
-    roll: number;
-  };
-  track_indices: number[];
-  fade_duration: number;
-  cue_number?: string;
-  // Phase 3
-  global_graph?: any;
-  active_move_ids: string[];
-  per_track_depths: number[];
-  manual_positions: Record<number, [number, number, number]>;
-  spatial_macros?: {
-    radius_scale: number;
-    height_offset: number;
-  };
-  // Phase 4 : état runtime capturé par le backend au store
-  object_channels?: Record<number, Record<string, number>>;
-  channel_modulations?: unknown[];
-  osc_mappings?: unknown[];
-  zones?: unknown[];
-}
+/// Cue complet tel que sérialisé par le backend — type généré (ts-rs).
+/// Inclut `moves`/`object_channels` capturés côté Rust au store.
+export type CueData = Cue;
 
 interface CuelistState {
   cues: CueData[];
@@ -45,7 +16,7 @@ interface CuelistState {
 
   loadFromStorage: () => void;
   saveToStorage: () => void;
-  storeCue: (cue: Omit<CueData, 'id' | 'timestamp'>) => Promise<CueData>;
+  storeCue: (cue: StoreCueRequest) => Promise<CueData>;
   recallCue: (cueId: string) => Promise<void>;
   deleteCue: (cueId: string) => void;
   goToNextCue: () => Promise<void>;

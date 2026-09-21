@@ -1,34 +1,21 @@
 import { StateCreator } from 'zustand';
 import { safeInvoke as invoke } from '../../utils/tauri';
+// Types générés depuis Rust via ts-rs — ne pas éditer les miroirs.
+import type { Transform } from '../../types/generated/Transform';
+import type { MappingDestination } from '../../types/generated/MappingDestination';
+import type { OscMapping } from '../../types/generated/OscMapping';
+import type { OscInStatsSnapshot } from '../../types/generated/OscInStatsSnapshot';
+import type { MacroTarget } from '../../types/generated/MacroTarget';
+import type { SpatialChannel } from '../../types/generated/SpatialChannel';
+import type { ObjectRef } from '../../types/generated/ObjectRef';
 
-export interface OscTransform {
-  scale: number;
-  offset: number;
-  min: number | null;
-  max: number | null;
-  smooth: number;
-  deadzone: number;
-}
+export type { MappingDestination, OscMapping };
+export type OscTransform = Transform;
+export type OscInStats = OscInStatsSnapshot;
 
-export type MappingDestination =
-  | { kind: 'handler'; name: string }
-  | { kind: 'macro'; name: string }
-  | { kind: 'channel'; channel: string; object: number | string }
-  | { kind: 'position'; object: number | string };
-
-export interface OscMapping {
-  address: string;
-  destination: MappingDestination;
-  transform: OscTransform;
-  enabled: boolean;
-}
-
-export interface OscInStats {
-  packets_received: number;
-  messages_matched: number;
-  values_routed: number;
-  messages_dropped: number;
-}
+/// Macros spatiales pilotables par OSC IN — utilisé pour typer la sortie du
+/// parser textuel (le backend valide au désérialiser).
+export type { MacroTarget };
 
 const DEFAULT_TRANSFORM: OscTransform = {
   scale: 1,
@@ -48,15 +35,15 @@ export function parseDestination(spec: string): MappingDestination {
     return { kind: 'handler', name: parts[1] };
   }
   if (parts[0] === 'macro' && parts[1]) {
-    return { kind: 'macro', name: parts[1] };
+    return { kind: 'macro', name: parts[1] as MacroTarget };
   }
   if (parts[0] === 'channel' && parts[1] && parts[2] !== undefined) {
-    const channel = parts[1][0].toUpperCase() + parts[1].slice(1).toLowerCase();
-    const object = parts[2].startsWith('*') ? parts[2] : parseInt(parts[2], 10);
+    const channel = (parts[1][0].toUpperCase() + parts[1].slice(1).toLowerCase()) as SpatialChannel;
+    const object: ObjectRef = parts[2].startsWith('*') ? parts[2] : parseInt(parts[2], 10);
     return { kind: 'channel', channel, object };
   }
   if (parts[0] === 'position' && parts[1] !== undefined) {
-    const object = parts[1].startsWith('*') ? parts[1] : parseInt(parts[1], 10);
+    const object: ObjectRef = parts[1].startsWith('*') ? parts[1] : parseInt(parts[1], 10);
     return { kind: 'position', object };
   }
   return { kind: 'handler', name: spec };

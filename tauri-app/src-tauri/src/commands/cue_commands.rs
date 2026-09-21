@@ -23,11 +23,13 @@ impl Drop for RecallGuard<'_> {
 // ─── Store Cue ───
 
 /// Données pour stocker un cue (envoyées par le frontend)
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ts_rs::TS)]
+#[ts(export)]
 pub struct StoreCueRequest {
     pub name: String,
     pub description: String,
     /// Sub-graph du move (graph_json)
+    #[ts(type = "unknown")]
     pub graph: serde_json::Value,
     /// Macros per-move (speed, scale, shift, rotation)
     pub macros: Option<MacroSnapshot>,
@@ -41,6 +43,7 @@ pub struct StoreCueRequest {
     pub cue_number: Option<String>,
     // ─── Phase 3 : champs étendus ───
     /// Graph global (post-processing)
+    #[ts(type = "unknown | null")]
     pub global_graph: Option<serde_json::Value>,
     /// IDs des moves actifs
     pub active_move_ids: Vec<String>,

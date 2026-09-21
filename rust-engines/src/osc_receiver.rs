@@ -17,6 +17,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
+use ts_rs::TS;
 
 use crate::engines::MAX_OBJECTS;
 use crate::osc_sender::{SpatialChannel, SpatialChannels};
@@ -35,7 +36,8 @@ const MAX_FEEDBACK_KEYS: usize = 4096;
 
 /// Transformation appliquée à chaque valeur OSC entrante.
 /// Ordre : deadzone → `v * scale + offset` → clamp [min, max] → lissage.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct Transform {
     pub scale: f64,
     pub offset: f64,
@@ -96,8 +98,9 @@ impl Transform {
 // ─── Destinations ───────────────────────────────────────────────────────────
 
 /// Référence à un objet cible : index fixe ou segment wildcard de l'adresse.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(untagged)]
+#[ts(export)]
 pub enum ObjectRef {
     /// Index fixe dans la liste des objets (même convention que set-channel)
     Index(usize),
@@ -126,8 +129,9 @@ impl ObjectRef {
 
 /// Macros spatiales du MergeRuntime pilotables par OSC IN.
 /// (`speed` est exclu — il est per-move, pas global.)
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "snake_case")]
+#[ts(export)]
 pub enum MacroTarget {
     Scale,
     ShiftX,
@@ -194,8 +198,9 @@ impl MacroTarget {
 }
 
 /// Destination d'un mapping OSC IN.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case")]
+#[ts(export)]
 pub enum MappingDestination {
     /// Stockage passif — valeur lisible via get_last_value / get_all_values
     /// (polling par le frontend ou injection manuelle dans le graphe)
@@ -236,7 +241,8 @@ impl MappingDestination {
 }
 
 /// Mapping OSC → destination avec transform.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct OscMapping {
     /// Adresse OSC — `*` matche exactement un segment (capturé pour
     /// [`ObjectRef::Wildcard`])
@@ -292,12 +298,18 @@ pub struct OscInStats {
 }
 
 /// Snapshot sérialisable des stats
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct OscInStatsSnapshot {
+    #[ts(type = "number")]
     pub packets_received: u64,
+    #[ts(type = "number")]
     pub messages_matched: u64,
+    #[ts(type = "number")]
     pub values_routed: u64,
+    #[ts(type = "number")]
     pub messages_dropped: u64,
+    #[ts(type = "number")]
     pub decode_errors: u64,
 }
 

@@ -3,10 +3,12 @@ use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::str::FromStr;
+use ts_rs::TS;
 
 /// Canaux spatiaux étendus — au-delà de la position (modèle ToscA).
 /// Chaque canal Option<f64> : None = non envoyé (pas de trafic OSC inutile).
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, TS)]
+#[ts(export)]
 pub struct SpatialChannels {
     /// Gain de la source (dB ou normalisé selon profil)
     pub gain: Option<f64>,
@@ -120,7 +122,8 @@ impl SpatialChannels {
 }
 
 /// Identifiant d'un canal spatial étendu
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[ts(export)]
 pub enum SpatialChannel {
     Gain,
     Spread,

@@ -31,3 +31,4 @@ Thumbs.db
 tauri-app/node_modules/
 tauri-app/src-tauri/target/
 **/target/
+bindings/
