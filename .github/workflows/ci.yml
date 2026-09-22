@@ -22,7 +22,7 @@ jobs:
       run:
         working-directory: rust-engines
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -35,7 +35,7 @@ jobs:
           sudo apt-get install -y libasound2-dev
 
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -66,7 +66,7 @@ jobs:
       run:
         working-directory: tauri-app/src-tauri
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -85,9 +85,9 @@ jobs:
             patchelf
 
       - name: Setup Node.js (for frontend dist)
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: tauri-app/frontend/package-lock.json
 
@@ -98,7 +98,7 @@ jobs:
           npm run build
 
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -146,12 +146,12 @@ jobs:
       run:
         working-directory: tauri-app/frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: tauri-app/frontend/package-lock.json
 
