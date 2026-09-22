@@ -12,7 +12,7 @@ import Toolbar from './components/Toolbar';
 import ToastContainer from './components/ToastContainer';
 import PerformView from './components/PerformView';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { Workflow, ChevronRight, ChevronDown, PanelRightClose, PanelLeftClose, PanelLeftOpen, PanelRightOpen } from 'lucide-react';
+import { Workflow, ChevronRight, ChevronDown, PanelRightClose, PanelLeftClose, PanelLeftOpen, PanelRightOpen, Maximize2, Minimize2 } from 'lucide-react';
 import { useLiveShortcuts, usePerfStatsPolling } from './hooks/useLiveShortcuts';
 import { prepareGraphForSave } from './components/nodeParamSchema';
 import { useGraphStore, useMovementPositionsListener, useAudioErrorListener, useCueRecallListener } from './store/useGraphStore';
@@ -33,7 +33,10 @@ function App() {
   // Largeur redimensionnable du panneau gauche (Graphes + Moves)
   const [leftWidth, setLeftWidth] = React.useState(256); // 64 * 4px = 256px par défaut
   const resizingRef = React.useRef(false);
-  const resizingSideRef = React.useRef<'left' | 'right'>('right');
+  const resizingSideRef = React.useRef<'left' | 'right' | 'expert'>('right');
+  // Ratio NodeEditor/Scene3D en mode Expert (0.5 = moitié/moitié)
+  const [expertSplit, setExpertSplit] = React.useState(0.5);
+  const centerColRef = React.useRef<HTMLDivElement | null>(null);
   // Sections collapsibles du panneau gauche
   const [graphsExpanded, setGraphsExpanded] = React.useState(true);
   const [movesExpanded, setMovesExpanded] = React.useState(true);
@@ -58,6 +61,12 @@ function App() {
       if (resizingSideRef.current === 'right') {
         const newWidth = Math.max(220, Math.min(600, window.innerWidth - e.clientX));
         setRightWidth(newWidth);
+      } else if (resizingSideRef.current === 'expert') {
+        // Split NodeEditor/Scene3D — ratio relatif à la colonne centre
+        const rect = centerColRef.current?.getBoundingClientRect();
+        if (!rect || rect.width === 0) return;
+        const ratio = (e.clientX - rect.left) / rect.width;
+        setExpertSplit(Math.max(0.25, Math.min(0.8, ratio)));
       } else {
         const newWidth = Math.max(200, Math.min(500, e.clientX));
         setLeftWidth(newWidth);
@@ -88,6 +97,14 @@ function App() {
     e.preventDefault();
     resizingRef.current = true;
     resizingSideRef.current = 'left';
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
+
+  const startExpertResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    resizingRef.current = true;
+    resizingSideRef.current = 'expert';
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
   };
@@ -304,18 +321,41 @@ function App() {
           )}
 
           {/* Contenu : NodeEditor (Expert only) + Scene3D (toujours monté, même position) */}
-          <div className="flex-1 flex min-h-0">
+          <div ref={centerColRef} className="flex-1 flex min-h-0">
             {showExpert && (
-              <div className="flex-1 min-w-0 border-r border-stagespace-border">
+              <div
+                style={{ width: `${expertSplit * 100}%` }}
+                className="min-w-[280px] border-r border-stagespace-border flex-shrink-0"
+              >
                 <NodeEditor />
               </div>
             )}
+            {/* Splitter Expert — poignée de redimensionnement NodeEditor/3D.
+                Scene3D reste monté (jamais démonté : la scène se réinitialise). */}
+            {showExpert && (
+              <div
+                onMouseDown={startExpertResize}
+                onDoubleClick={() => setExpertSplit(0.5)}
+                className="w-1.5 flex-shrink-0 bg-stagespace-border hover:bg-purple-500/50 cursor-col-resize transition-colors relative group"
+                title="Glisser pour redimensionner · double-clic = 50/50"
+              >
+                <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-stagespace-border group-hover:bg-purple-500" />
+              </div>
+            )}
             {/* Scene3D toujours rendu au même endroit — pas de unmount/remount */}
-            <div className={showExpert ? "w-1/2 min-w-[200px] flex flex-col" : "flex-1 flex flex-col"}>
+            <div className="flex-1 min-w-[200px] flex flex-col">
               {showExpert && (
                 <div className="h-7 border-b border-stagespace-border flex items-center px-2 bg-stagespace-panel flex-shrink-0">
                   <span className="text-gray-400 text-[10px] font-medium">3D Preview</span>
                   <span className="text-gray-600 text-[10px] ml-2">orbit: drag · zoom: scroll</span>
+                  <div className="flex-1" />
+                  <button
+                    onClick={() => setExpertSplit(expertSplit > 0.7 ? 0.5 : 0.78)}
+                    className="text-gray-500 hover:text-white px-1"
+                    title={expertSplit > 0.7 ? 'Rétablir le split 50/50' : 'Agrandir le node editor'}
+                  >
+                    {expertSplit > 0.7 ? <Minimize2 size={11} /> : <Maximize2 size={11} />}
+                  </button>
                 </div>
               )}
               <div className="flex-1 min-h-0">
