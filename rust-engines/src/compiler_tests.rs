@@ -163,6 +163,107 @@ mod tests {
         }
     }
 
+    /// Les falloffs sont des engines autonomes : Objects → input et
+    /// Duration → duration doivent compiler (n_objects/duration résolus
+    /// via les edges, comme les autres moteurs).
+    #[test]
+    fn test_compile_falloffs_with_objects_duration() {
+        // Falloffs riches → Output direct
+        for node_type in [NodeType::TimeFalloff, NodeType::PointDistanceFalloff] {
+            let mut graph = Graph::new();
+            let objects = Node::with_params(NodeType::Objects, serde_json::json!({"n_objects": 3}));
+            let duration =
+                Node::with_params(NodeType::Duration, serde_json::json!({"duration": 4.0}));
+            // Pas de n_objects/duration en param — résolution via les edges
+            let falloff = Node::with_params(node_type.clone(), serde_json::json!({}));
+            let output = Node::new(NodeType::Output);
+
+            let (id_o, id_d, id_f, id_out) = (objects.id, duration.id, falloff.id, output.id);
+            graph.add_node(objects);
+            graph.add_node(duration);
+            graph.add_node(falloff);
+            graph.add_node(output);
+            graph.add_edge(Edge {
+                from: id_o,
+                to: id_f,
+                from_port: "output".to_string(),
+                to_port: "input".to_string(),
+            });
+            graph.add_edge(Edge {
+                from: id_d,
+                to: id_f,
+                from_port: "output".to_string(),
+                to_port: "duration".to_string(),
+            });
+            graph.add_edge(Edge {
+                from: id_f,
+                to: id_out,
+                from_port: "output".to_string(),
+                to_port: "input".to_string(),
+            });
+
+            let result = Compiler::compile(&graph);
+            assert!(
+                result.is_ok(),
+                "Failed to compile {node_type:?}: {:?}",
+                result.err()
+            );
+        }
+
+        // Falloffs limités → modifier (Scale/Rotate/Offset) → Output
+        for node_type in [
+            NodeType::DirectionalFalloff,
+            NodeType::AudioAmplitudeFalloff,
+        ] {
+            let mut graph = Graph::new();
+            let objects = Node::with_params(NodeType::Objects, serde_json::json!({"n_objects": 3}));
+            let duration =
+                Node::with_params(NodeType::Duration, serde_json::json!({"duration": 4.0}));
+            let falloff = Node::with_params(node_type.clone(), serde_json::json!({}));
+            let rotate = Node::with_params(NodeType::Rotate, serde_json::json!({"angleZ": 0.3}));
+            let output = Node::new(NodeType::Output);
+
+            let (id_o, id_d, id_f, id_r, id_out) =
+                (objects.id, duration.id, falloff.id, rotate.id, output.id);
+            graph.add_node(objects);
+            graph.add_node(duration);
+            graph.add_node(falloff);
+            graph.add_node(rotate);
+            graph.add_node(output);
+            graph.add_edge(Edge {
+                from: id_o,
+                to: id_f,
+                from_port: "output".to_string(),
+                to_port: "input".to_string(),
+            });
+            graph.add_edge(Edge {
+                from: id_d,
+                to: id_f,
+                from_port: "output".to_string(),
+                to_port: "duration".to_string(),
+            });
+            graph.add_edge(Edge {
+                from: id_f,
+                to: id_r,
+                from_port: "output".to_string(),
+                to_port: "input".to_string(),
+            });
+            graph.add_edge(Edge {
+                from: id_r,
+                to: id_out,
+                from_port: "output".to_string(),
+                to_port: "input".to_string(),
+            });
+
+            let result = Compiler::compile(&graph);
+            assert!(
+                result.is_ok(),
+                "Failed to compile {node_type:?}: {:?}",
+                result.err()
+            );
+        }
+    }
+
     // Mix/Group/Sequence sont testés dans les tests d'intégration de lib.rs
     // (test_sound_engineer_mix_circle_figure8, test_sound_engineer_group_partition,
     //  test_sound_engineer_sequence_circle_spiral)

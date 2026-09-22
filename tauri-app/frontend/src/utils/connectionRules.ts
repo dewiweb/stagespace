@@ -81,14 +81,15 @@ export function isValidConnection(from: NodeType, to: NodeType): boolean {
     return isModifier(to) || to === 'Output';
   }
 
-  // Objects → engines + physics + splines (pas DrawSpline qui est une source)
+  // Objects → engines + physics + splines + falloffs (engines autonomes)
+  // (pas DrawSpline qui est une source)
   if (from === 'Objects') {
-    return isEngine(to) || isPhysics(to);
+    return isEngine(to) || isPhysics(to) || isFalloffRich(to) || isFalloffLimited(to);
   }
 
-  // Duration → engines + physics (le validateur Rust autorise les deux)
+  // Duration → engines + physics + falloffs (port 'duration' déclaré)
   if (from === 'Duration') {
-    return isEngine(to) || isPhysics(to);
+    return isEngine(to) || isPhysics(to) || isFalloffRich(to) || isFalloffLimited(to);
   }
 
   // DrawSpline : source de données spline → nodes spline (port 'spline')

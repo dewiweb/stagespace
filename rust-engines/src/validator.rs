@@ -326,7 +326,11 @@ impl Validator {
                     | NodeType::Spring | NodeType::Follow | NodeType::Swarm | NodeType::Avoidance | NodeType::VectorField
                     | NodeType::CustomTrajectory | NodeType::Wave
                     | NodeType::BPM | NodeType::AudioAmplitude
-                    | NodeType::DrawSpline | NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline)
+                    | NodeType::DrawSpline | NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline
+                    // Les falloffs sont des engines autonomes — ils résolvent n_objects
+                    // via l'edge Objects comme les autres moteurs.
+                    | NodeType::TimeFalloff | NodeType::PointDistanceFalloff
+                    | NodeType::DirectionalFalloff | NodeType::AudioAmplitudeFalloff)
             }
             NodeType::Duration => {
                 matches!(to_type, NodeType::Circular | NodeType::Elliptical | NodeType::Spiral | NodeType::Lissajous | NodeType::Figure8
@@ -335,7 +339,11 @@ impl Validator {
                     | NodeType::CustomTrajectory | NodeType::Wave
                     | NodeType::BPM | NodeType::AudioAmplitude
                     | NodeType::Bouncing | NodeType::Spring | NodeType::Follow | NodeType::Swarm | NodeType::Avoidance | NodeType::VectorField
-                    | NodeType::DrawSpline | NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline)
+                    | NodeType::DrawSpline | NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline
+                    // Les falloffs ont un port 'duration' — sinon le paramètre
+                    // resterait figé à sa valeur par défaut.
+                    | NodeType::TimeFalloff | NodeType::PointDistanceFalloff
+                    | NodeType::DirectionalFalloff | NodeType::AudioAmplitudeFalloff)
             }
             NodeType::Output => false, // Output n'a pas de sortie
             // Input (graph global) : peut connecter vers n'importe quel post-process node

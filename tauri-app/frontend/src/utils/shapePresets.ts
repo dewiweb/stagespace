@@ -182,6 +182,54 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     category: 'basic',
     build: (n) => baseFlow('Wave', { n_objects: n, amplitude: 1.5, frequency: 1.0, speed: 1.0, axis: 'y', spread: 4.0, phase_offset: true }, n, 4.0),
   },
+  {
+    id: 'oscillation',
+    name: 'Oscillation',
+    icon: '∿',
+    description: 'Sinusoidal sway on one axis — gentle periodic breathing',
+    category: 'basic',
+    build: (n) => baseFlow('Oscillation', { n_objects: n, amplitude: 1.5, frequency: 1.0, axis: 'y', phase_offset: true }, n),
+  },
+  {
+    id: 'pendulum',
+    name: 'Pendulum',
+    icon: '◠',
+    description: 'Gravity swing with damping — natural decelerating arc',
+    category: 'basic',
+    build: (n) => baseFlow('Pendulum', { n_objects: n, length: 2.0, gravity: 9.81, initial_angle: 0.7, damping: 0.03, phase_offset: true }, n, 6.0),
+  },
+  {
+    id: 'perlin',
+    name: 'Perlin Drift',
+    icon: '≈',
+    description: 'Perlin noise wander — organic non-repeating drift',
+    category: 'basic',
+    build: (n) => baseFlow('PerlinNoise', { n_objects: n, intensity: 1.2, smoothness: 0.5, seed: 42 }, n, 8.0),
+  },
+  {
+    id: 'formation',
+    name: 'Formation',
+    icon: '▦',
+    description: 'Static grid formation with slow rotation — held positions',
+    category: 'basic',
+    build: (n) => baseFlow('Formation', { n_objects: n, shape: 'grid', radius: 2.0, rotate: 0.15, elevation: 0.0 }, n),
+  },
+  {
+    id: 'orbit-fade-in',
+    name: 'Orbit Fade-In',
+    icon: '◎',
+    description: 'Orbit radius grows from center over time — eased intro effect',
+    category: 'basic',
+    build: (n) => baseFlow('TimeFalloff', { start_time: 0.0, end_time: 2.5, radius: 2.5, curve: 'ease_out', plane: 'xz' }, n, 6.0),
+  },
+  {
+    id: 'gravity-well',
+    name: 'Gravity Well',
+    icon: '◉',
+    description: 'Eccentric orbit — collapses toward origin opposite the attractor point',
+    category: 'basic',
+    build: (n) => baseFlow('PointDistanceFalloff', { center: [2.0, 0, 0], max_distance: 4.0, radius: 2.0, curve: 'ease_in_out', plane: 'xz' }, n, 5.0),
+  },
 
   // ═══════════════ MODIFIERS ═══════════════
 
@@ -287,6 +335,17 @@ export const SHAPE_PRESETS: ShapePreset[] = [
       ],
     ),
   },
+  {
+    id: 'side-sweep',
+    name: 'Side Sweep',
+    icon: '◐',
+    description: 'One-sided motion — objects on the +X side animate, others hold; tilted',
+    category: 'modifier',
+    build: (n) => baseFlow('DirectionalFalloff',
+      { direction: [1, 0, 0], max_distance: 3.0, radius: 2.0, curve: 'ease_in_out', plane: 'xz' }, n, 4.0,
+      [{ type: 'Rotate', position: { x: 480, y: 180 }, params: { angleX: 0, angleY: 0, angleZ: 0.35 } }],
+    ),
+  },
 
   // ═══════════════ COMPOSITES ═══════════════
 
@@ -350,6 +409,32 @@ export const SHAPE_PRESETS: ShapePreset[] = [
       n, 4.0,
     ),
   },
+  {
+    id: 'mix-order-chaos',
+    name: 'Mix: Order + Chaos',
+    icon: '⊕',
+    description: 'Blend a stable orbit with flocking — controlled disorder (70% circle)',
+    category: 'composite',
+    build: (n) => binaryComposite('Mix', { blend: 0.7 },
+      'Circular', { n_objects: n, radius: 2.0, speed: 1.0, plane: 'xz', phase_offset: true },
+      'Swarm', { n_objects: n, separation: 0.3, alignment: 0.5, cohesion: 0.3, max_speed: 0.4, seed: 42 },
+      n, 8.0,
+    ),
+  },
+  {
+    id: 'crossfade-pursuit-orbit',
+    name: 'Crossfade: Pursuit⇄Orbit',
+    icon: '⇆',
+    description: 'Chase then settle into circling — pursuit crossfades to orbit',
+    category: 'composite',
+    build: (n) => binaryComposite('Crossfade', { fade_duration: 1.5 },
+      'Follow', { n_objects: n, mode: 'pursue', speed: 1.5, distance: 0.4, lookahead: 0.5, responsiveness: 0.12,
+        target_radius: 1.5, target_speed: 0.5, init_radius: 1.0, bounds: 3.0, containment: 0.5, seed: 42 },
+      'Follow', { n_objects: n, mode: 'orbit', speed: 1.2, distance: 1.5, orbit_speed: 0.6, orbit_dir: 1, responsiveness: 0.15,
+        target_radius: 1.2, target_speed: 0.5, init_radius: 0.8, bounds: 3.0, containment: 0.5, seed: 42 },
+      n, 8.0,
+    ),
+  },
 
   // ═══════════════ SPLINES ═══════════════
 
@@ -381,6 +466,71 @@ export const SHAPE_PRESETS: ShapePreset[] = [
           makeEdge(duration.id, evalSpline.id, 'output', 'duration'),
           makeEdge(drawSpline.id, evalSpline.id, 'output', 'spline'),
           makeEdge(evalSpline.id, output.id, 'output', 'input'),
+        ],
+      };
+    },
+  },
+  {
+    id: 'spline-trim',
+    name: 'Spline Trim',
+    icon: '✂',
+    description: 'Follow only a section of the drawn path (15%–85%)',
+    category: 'spline',
+    build: (n) => {
+      const objects = makeNode('Objects', { x: 50, y: 250 }, { n_objects: n });
+      const duration = makeNode('Duration', { x: 50, y: 80 }, { duration: 6.0 });
+      const drawSpline = makeNode('DrawSpline', { x: 300, y: 50 }, {
+        n_objects: n,
+        points: '[[-2,0,0],[-1,1,0],[0,0.5,0],[1,1,0],[2,0,0]]',
+      });
+      const trimSpline = makeNode('TrimSpline', { x: 550, y: 180 }, {
+        n_objects: n,
+        trim_start: 0.15,
+        trim_end: 0.85,
+        speed: 1.0,
+        phase_offset: true,
+      });
+      const output = makeNode('Output', { x: 800, y: 180 });
+      return {
+        nodes: [objects, duration, drawSpline, trimSpline, output],
+        edges: [
+          makeEdge(objects.id, trimSpline.id, 'output', 'input'),
+          makeEdge(duration.id, trimSpline.id, 'output', 'duration'),
+          makeEdge(drawSpline.id, trimSpline.id, 'output', 'spline'),
+          makeEdge(trimSpline.id, output.id, 'output', 'input'),
+        ],
+      };
+    },
+  },
+  {
+    id: 'spline-offset',
+    name: 'Spline Offset',
+    icon: '⧉',
+    description: 'Drawn path shifted in space — parallel trajectory',
+    category: 'spline',
+    build: (n) => {
+      const objects = makeNode('Objects', { x: 50, y: 250 }, { n_objects: n });
+      const duration = makeNode('Duration', { x: 50, y: 80 }, { duration: 6.0 });
+      const drawSpline = makeNode('DrawSpline', { x: 300, y: 50 }, {
+        n_objects: n,
+        points: '[[-2,0,0],[-1,1,0],[0,0.5,0],[1,1,0],[2,0,0]]',
+      });
+      const offsetSpline = makeNode('OffsetSpline', { x: 550, y: 180 }, {
+        n_objects: n,
+        offset_x: 0.0,
+        offset_y: 0.8,
+        offset_z: 0.0,
+        speed: 1.0,
+        phase_offset: true,
+      });
+      const output = makeNode('Output', { x: 800, y: 180 });
+      return {
+        nodes: [objects, duration, drawSpline, offsetSpline, output],
+        edges: [
+          makeEdge(objects.id, offsetSpline.id, 'output', 'input'),
+          makeEdge(duration.id, offsetSpline.id, 'output', 'duration'),
+          makeEdge(drawSpline.id, offsetSpline.id, 'output', 'spline'),
+          makeEdge(offsetSpline.id, output.id, 'output', 'input'),
         ],
       };
     },
@@ -436,6 +586,60 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     build: (n) => baseFlow('Converge',
       { n_objects: n, start_radius: 3.0, end_radius: 0.5, easing: 'ease_in_out' }, n, 4.0),
   },
+  {
+    id: 'orbit-target',
+    name: 'Orbit Target',
+    icon: '🛰',
+    description: 'Objects orbit a roaming target — satellite ring chasing a leader',
+    category: 'physics',
+    build: (n) => baseFlow('Follow',
+      { n_objects: n, mode: 'orbit', speed: 1.2, distance: 1.5, orbit_speed: 0.6, orbit_dir: 1,
+        responsiveness: 0.15, target_radius: 1.2, target_speed: 0.5, target_z: 0,
+        init_radius: 0.8, bounds: 3.0, containment: 0.5, seed: 42 }, n, 8.0),
+  },
+  {
+    id: 'pursuit',
+    name: 'Pursuit',
+    icon: '🎯',
+    description: 'Pack chases a moving target with anticipation (lookahead)',
+    category: 'physics',
+    build: (n) => baseFlow('Follow',
+      { n_objects: n, mode: 'pursue', speed: 1.5, distance: 0.4, lookahead: 0.5,
+        responsiveness: 0.12, target_radius: 1.5, target_speed: 0.5, target_z: 0,
+        init_radius: 1.0, bounds: 3.0, containment: 0.5, seed: 42 }, n, 8.0),
+  },
+  {
+    id: 'evade',
+    name: 'Evade',
+    icon: '💨',
+    description: 'Objects flee a roaming target inside bounds — scatter and regroup',
+    category: 'physics',
+    build: (n) => baseFlow('Follow',
+      { n_objects: n, mode: 'evade', speed: 1.4, distance: 0.3, lookahead: 0.4,
+        responsiveness: 0.15, target_radius: 1.5, target_speed: 0.4, target_z: 0,
+        init_radius: 1.0, bounds: 2.5, containment: 0.6, seed: 42 }, n, 8.0),
+  },
+  {
+    id: 'arrive',
+    name: 'Arrive',
+    icon: '📍',
+    description: 'Glide to the target and settle — soft landing, no overshoot',
+    category: 'physics',
+    build: (n) => baseFlow('Follow',
+      { n_objects: n, mode: 'arrive', speed: 1.8, distance: 0.25, arrive_radius: 0.8,
+        responsiveness: 0.12, target_radius: 1.5, target_speed: 0.4, target_z: 0,
+        init_radius: 1.2, bounds: 3.0, containment: 0.5, seed: 42 }, n, 8.0),
+  },
+  {
+    id: 'avoidance',
+    name: 'Avoidance',
+    icon: '🧲',
+    description: 'Mutual repulsion inside a container — self-organizing spread',
+    category: 'physics',
+    build: (n) => baseFlow('Avoidance',
+      { n_objects: n, repulsion_radius: 0.6, repulsion_strength: 1.5, damping: 0.9,
+        container_size: 2.0, seed: 42 }, n, 8.0),
+  },
 
   // ═══════════════ AUDIO ═══════════════
 
@@ -456,5 +660,16 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     category: 'audio',
     build: (n) => baseFlow('AudioAmplitude',
       { n_objects: n, amplitude: 0.5, radius: 1.5, band: 'rms', plane: 'xz' }, n, 4.0),
+  },
+  {
+    id: 'bass-pulse',
+    name: 'Bass Pulse',
+    icon: '💓',
+    description: 'Orbit radius breathes with the bass band — tilted audio-driven pulse',
+    category: 'audio',
+    build: (n) => baseFlow('AudioAmplitudeFalloff',
+      { band: 'bass', min_val: 0.15, max_val: 1.0, curve: 'ease_out', radius: 2.5, plane: 'xz' }, n, 4.0,
+      [{ type: 'Rotate', position: { x: 480, y: 180 }, params: { angleX: 0.25, angleY: 0, angleZ: 0 } }],
+    ),
   },
 ];
