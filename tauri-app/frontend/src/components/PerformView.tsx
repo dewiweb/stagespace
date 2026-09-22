@@ -1,5 +1,7 @@
 import React from 'react';
-import { Play, Square, Globe, X, SlidersHorizontal } from 'lucide-react';
+import { Play, Square, Globe, X, SlidersHorizontal, ListOrdered, AudioLines } from 'lucide-react';
+import { TrackGrid } from './TrackGrid';
+import { AudioModList } from './AudioModControls';
 import Scene3D from './Scene3D';
 import CuelistPanel from './CuelistPanel';
 import { Slider } from './ui/Slider';
@@ -238,9 +240,9 @@ export const PerformView: React.FC = () => {
   );
 };
 
-/// Chips des moves live + drawer de params live pour le move sélectionné.
-/// Le drawer écrit via updateCurrent/updateNodeData → write-through vers le
-/// slot + hot-swap backend (update_animation_state / update_move_graph_merged).
+/// Drawer live à scopes — gros boutons à la demande (Params / Tracks /
+/// Audio du move sélectionné + Global merge-scope). Panneau bas, PAS modal :
+/// le canvas reste visible pendant le tweak — c'est le point de l'app.
 const LiveDrawer: React.FC = () => {
   const moveSlots = useGraphStore((s) => s.moveSlots);
   const editingSlotId = useGraphStore((s) => s.editingSlotId);
@@ -248,16 +250,22 @@ const LiveDrawer: React.FC = () => {
   const setSlotMacros = useGraphStore((s) => s.setSlotMacros);
   const setSlotDirection = useGraphStore((s) => s.setSlotDirection);
   const setSlotLoopMode = useGraphStore((s) => s.setSlotLoopMode);
+  const setSlotTracks = useGraphStore((s) => s.setSlotTracks);
+  const holProject = useGraphStore((s) => s.holProject);
+  const manualOscIds = useGraphStore((s) => s.manualOscIds);
   const nodes = useGraphStore((s) => s.nodes);
   const updateNodeData = useGraphStore((s) => s.updateNodeData);
   const updateCurrent = useAnimationStore((s) => s.updateCurrent);
+  const updateAssignment = useAnimationStore((s) => s.updateAssignment);
   const current = useAnimationStore((s) => s.current);
 
   const macros = useGraphStore((s) => s.macros);
   const setMacros = useGraphStore((s) => s.setMacros);
   const pushMacrosToRuntime = useGraphStore((s) => s.pushMacrosToRuntime);
-  const [globalOpen, setGlobalOpen] = React.useState(false);
   const macroDebounce = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  type Scope = 'params' | 'tracks' | 'audio' | 'global';
+  const [scope, setScope] = React.useState<Scope | null>(null);
 
   const slot = moveSlots.find((s) => s.id === editingSlotId);
   const playingSlots = moveSlots.filter((s) => s.movementId);
@@ -285,9 +293,45 @@ const LiveDrawer: React.FC = () => {
     updateNodeData(engineNode.id, { params: { ...engineParams, [key]: value } });
   };
 
+  // Tracks du projet (.hol) ou IDs manuels — pour la grille d'assignation
+  const trackInfos = (holProject?.tracks ?? []).map((t) => ({
+    id: t.id, name: t.name, color: t.color, position: t.position,
+  }));
+  const allTrackInfos = trackInfos.length > 0
+    ? trackInfos
+    : manualOscIds.map((id) => ({ id, name: `#${id}` }));
+
+  const selectMove = (slotId: string) => {
+    if (editingSlotId === slotId) {
+      // Re-tap sur le chip actif → referme le drawer params
+      if (scope === 'params') setScope(null);
+      else setScope('params');
+    } else {
+      selectSlotForEditing(slotId);
+      setScope('params');
+    }
+  };
+
+  const toggleScope = (sc: Scope) => setScope((prev) => (prev === sc ? null : sc));
+
+  const scopeBtn = (sc: Scope, label: React.ReactNode, needsSlot: boolean, title: string) => (
+    <button
+      onClick={() => toggleScope(sc)}
+      disabled={needsSlot && !slot}
+      className={`px-4 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors active:scale-95 ${
+        scope === sc
+          ? sc === 'global' ? 'bg-orange-600 text-white' : 'bg-indigo-600 text-white'
+          : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white border border-gray-700'
+      } disabled:opacity-30 disabled:cursor-not-allowed`}
+      title={title}
+    >
+      {label}
+    </button>
+  );
+
   return (
     <div className="flex-shrink-0 border-t border-stagespace-border bg-stagespace-panel">
-      {/* Chips des moves live — tap = ouvrir le drawer params */}
+      {/* Barre : chips des moves live + gros boutons de scope */}
       <div className="flex items-center gap-2 px-3 py-1.5 overflow-x-auto">
         <span className="text-gray-500 text-[10px] uppercase tracking-wider flex-shrink-0">
           Live{playingSlots.length > 0 ? ` ${playingSlots.length}` : ''}
@@ -295,12 +339,9 @@ const LiveDrawer: React.FC = () => {
         {playingSlots.map((s) => (
           <button
             key={s.id}
-            onClick={() => {
-              setGlobalOpen(false);
-              selectSlotForEditing(editingSlotId === s.id ? null : s.id);
-            }}
+            onClick={() => selectMove(s.id)}
             className={`px-3 py-1 rounded-full text-[11px] font-medium whitespace-nowrap transition-colors ${
-              editingSlotId === s.id && !globalOpen
+              editingSlotId === s.id && scope !== 'global'
                 ? 'bg-indigo-600 text-white'
                 : 'bg-green-900/40 text-green-300 hover:bg-green-800/50 border border-green-800/50'
             }`}
@@ -309,37 +350,39 @@ const LiveDrawer: React.FC = () => {
             {s.isPreview ? '◌' : '●'} {s.name}
           </button>
         ))}
-        {playingSlots.length > 0 && (
-          <button
-            onClick={() => setGlobalOpen(!globalOpen)}
-            className={`px-3 py-1 rounded-full text-[11px] font-medium whitespace-nowrap transition-colors ${
-              globalOpen
-                ? 'bg-orange-600 text-white'
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700 border border-gray-700'
-            }`}
-            title="Macros globales — affectent TOUS les moves live (merge)"
-          >
-            <Globe size={11} className="inline -mt-0.5" /> Global
-          </button>
-        )}
-        {playingSlots.length === 0 && !slot && (
-          <span className="text-gray-600 text-[10px]">
-            aucun move actif — tap un move pour ses params · <Play size={9} className="inline -mt-0.5" /> = layer live
+
+        <div className="w-px h-6 bg-stagespace-border mx-1 flex-shrink-0" />
+
+        {scopeBtn('params', <><SlidersHorizontal size={12} className="inline -mt-0.5" /> Params</>, true,
+          'Params du move sélectionné (moteur, speed, fades)')}
+        {scopeBtn('tracks', <><ListOrdered size={12} className="inline -mt-0.5" /> Tracks</>, true,
+          'Assignation tracks + depth/phase du move sélectionné')}
+        {scopeBtn('audio', <><AudioLines size={12} className="inline -mt-0.5" /> Audio</>, true,
+          'Mods audio-réactifs du move sélectionné')}
+        {scopeBtn('global', <><Globe size={12} className="inline -mt-0.5" /> Global</>, false,
+          'Macros globales — affectent TOUS les moves live (merge)')}
+
+        {!slot && playingSlots.length === 0 && (
+          <span className="text-gray-600 text-[10px] ml-2">
+            tap un move pour ses params · <Play size={9} className="inline -mt-0.5" /> = layer live
           </span>
         )}
-        {playingSlots.length === 0 && slot && (
-          <span className="text-indigo-400/70 text-[10px]">params : {slot.name} (stoppé)</span>
+        {!slot && playingSlots.length > 0 && (
+          <span className="text-gray-600 text-[10px] ml-2">tap un chip pour éditer un move</span>
+        )}
+        {slot && !slot.movementId && (
+          <span className="text-indigo-400/70 text-[10px] ml-2">édition : {slot.name} (stoppé)</span>
         )}
       </div>
 
-      {/* Drawer macros globales — scope merge : affecte TOUS les moves live */}
-      {globalOpen && (
-        <div className="border-t border-stagespace-border px-4 py-2 flex items-start gap-6 overflow-x-auto">
+      {/* ── Drawer GLOBAL — scope merge : affecte TOUS les moves live ── */}
+      {scope === 'global' && (
+        <div className="border-t border-orange-900/40 px-4 py-2 flex items-start gap-6 overflow-x-auto max-h-[42vh] overflow-y-auto">
           <div className="flex-shrink-0 w-64 space-y-1">
             <div className="flex items-center gap-2 mb-1">
               <span className="text-orange-400 text-xs font-bold flex items-center gap-1.5"><Globe size={12} /> Macros globales</span>
               <button
-                onClick={() => setGlobalOpen(false)}
+                onClick={() => setScope(null)}
                 className="ml-auto text-gray-500 hover:text-white text-xs px-1"
                 title="Fermer"
               ><X size={12} /></button>
@@ -364,15 +407,20 @@ const LiveDrawer: React.FC = () => {
         </div>
       )}
 
-      {/* Drawer params — visible seulement quand un move est sélectionné */}
-      {slot && !globalOpen && (
-        <div className="border-t border-stagespace-border px-4 py-2 flex items-start gap-6 overflow-x-auto">
+      {/* ── Drawer PARAMS — moteur + lecture du move sélectionné ── */}
+      {scope === 'params' && slot && (
+        <div className="border-t border-indigo-900/40 px-4 py-2 flex items-start gap-6 overflow-x-auto max-h-[42vh] overflow-y-auto">
           {/* Bloc lecture : speed / direction / loop / fades */}
           <div className="flex-shrink-0 w-64 space-y-1">
             <div className="flex items-center gap-2 mb-1">
               <span className="text-white text-xs font-bold truncate">{slot.name}</span>
+              {slot.movementId && (
+                <span className={`text-[10px] px-1 rounded ${slot.isPreview ? 'bg-cyan-900 text-cyan-300' : 'bg-green-900 text-green-300'}`}>
+                  {slot.isPreview ? 'PREV' : 'LIVE'}
+                </span>
+              )}
               <button
-                onClick={() => selectSlotForEditing(null)}
+                onClick={() => setScope(null)}
                 className="ml-auto text-gray-500 hover:text-white text-xs px-1"
                 title="Fermer les params"
               ><X size={12} /></button>
@@ -479,25 +527,55 @@ const LiveDrawer: React.FC = () => {
               )}
             </div>
           )}
+        </div>
+      )}
 
-          {/* Bloc audio mods + tracks — readout compact */}
-          <div className="flex-shrink-0 w-48 space-y-1">
-            <div className="text-gray-500 text-[10px] uppercase tracking-wider">Audio / tracks</div>
-            {slot.audioMods.length > 0 ? (
-              <div className="flex flex-wrap gap-1">
-                {slot.audioMods.map((m, i) => (
-                  <span key={i} className="px-1.5 py-0.5 bg-cyan-900/30 text-cyan-300 text-[10px] rounded">
-                    {typeof m.source === 'string' ? m.source : 'fft'}→{m.target} ×{m.amount}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <div className="text-gray-700 text-[10px]">pas de mod audio</div>
-            )}
-            <div className="text-gray-600 text-[10px]">
-              tracks: {slot.trackIds.join(', ') || '—'}
-            </div>
+      {/* ── Drawer TRACKS — assignation + depth/phase du move sélectionné ── */}
+      {scope === 'tracks' && slot && (
+        <div className="border-t border-indigo-900/40 px-4 py-2 max-h-[42vh] overflow-y-auto">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-white text-xs font-bold truncate">{slot.name}</span>
+            <span className="text-gray-600 text-[10px]">— {slot.trackIds.length} track(s)</span>
+            <button
+              onClick={() => setScope(null)}
+              className="ml-auto text-gray-500 hover:text-white text-xs px-1"
+              title="Fermer"
+            ><X size={12} /></button>
           </div>
+          <TrackGrid
+            tracks={allTrackInfos}
+            selectedTrackIds={new Set(slot.trackIds)}
+            toggleTrackSelection={(tid) =>
+              setSlotTracks(slot.id, slot.trackIds.includes(tid)
+                ? slot.trackIds.filter((t) => t !== tid)
+                : [...slot.trackIds, tid])
+            }
+            selectAllTracks={() => setSlotTracks(slot.id, allTrackInfos.map((t) => t.id))}
+            deselectAllTracks={() => setSlotTracks(slot.id, [])}
+            assignments={current.assignments}
+            updateAssignment={updateAssignment}
+          />
+          {slot.movementId && (
+            <div className="text-green-700 text-[10px] mt-1">
+              live — toggles appliqués via hot-swap, depth/phase via update_animation_state
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Drawer AUDIO — mods audio-réactifs du move sélectionné ── */}
+      {scope === 'audio' && slot && (
+        <div className="border-t border-indigo-900/40 px-4 py-2 max-h-[42vh] overflow-y-auto">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-white text-xs font-bold truncate">{slot.name}</span>
+            <span className="text-gray-600 text-[10px]">— audio → macros du move</span>
+            <button
+              onClick={() => setScope(null)}
+              className="ml-auto text-gray-500 hover:text-white text-xs px-1"
+              title="Fermer"
+            ><X size={12} /></button>
+          </div>
+          <AudioModList />
         </div>
       )}
     </div>

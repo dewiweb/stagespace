@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAnimationStore, AudioMod, AudioModSource, AudioModTarget, Animation } from '../store/useAnimationStore';
+import { useAnimationStore, Animation } from '../store/useAnimationStore';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { TrackGrid } from './TrackGrid';
 import { PARAM_SCHEMA, NODE_DESCRIPTIONS, getCategoryColor, type ParamDef, type NodeParamValue, type GraphNodeData } from './nodeParamSchema';
@@ -27,6 +27,7 @@ function Section({ title, icon, defaultOpen = true, badge, badgeColor = 'gray', 
 }
 
 import Slider from './ui/Slider';
+import { AudioModList } from './AudioModControls';
 import { Zap, AudioLines, Hexagon, SlidersHorizontal, Play, CircleDot, X, Square, ChevronRight, TriangleAlert, Check } from 'lucide-react';
 
 export default function Inspector() {
@@ -34,8 +35,6 @@ export default function Inspector() {
   const current = useAnimationStore((s) => s.current);
   const updateCurrent = useAnimationStore((s) => s.updateCurrent);
   const updateAssignment = useAnimationStore((s) => s.updateAssignment);
-  const addAudioMod = useAnimationStore((s) => s.addAudioMod);
-  const removeAudioMod = useAnimationStore((s) => s.removeAudioMod);
   const computeCentroid = useAnimationStore((s) => s.computeCentroid);
   const activeMovementIds = useAnimationStore((s) => s.activeMovementIds);
   const launchFlash = useAnimationStore((s) => s.launchFlash);
@@ -123,7 +122,6 @@ export default function Inspector() {
   const nodeColor = selectedNodeType ? getCategoryColor(selectedNodeType) : '#4b5563';
 
   // ── Audio mod UI ──
-  const [showAudioAdd, setShowAudioAdd] = React.useState(false);
 
   // ── Macros debounce ──
   const macroDebounce = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -304,42 +302,7 @@ export default function Inspector() {
 
             {/* AUDIO — mods audio-reactifs globaux */}
             <Section title="Audio" icon={<AudioLines size={12} />} defaultOpen={false} badge={current.audio_mods.length > 0 ? `${current.audio_mods.length}` : undefined}>
-              {current.audio_mods.length === 0 && !showAudioAdd && (
-                <div className="text-gray-600 text-[10px] py-1">
-                  Aucun mod audio. Cliquez « + Ajouter » pour créer un mapping audio.
-                </div>
-              )}
-              {current.audio_mods.map((mod, i) => (
-                <div key={i} className="bg-gray-800/60 rounded p-2 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-cyan-400 text-[10px] font-mono">
-                      {audioSourceLabel(mod.source)} → {audioTargetLabel(mod.target)}
-                    </span>
-                    <button onClick={() => removeAudioMod(i)} className="text-red-400 text-[10px]"><X size={11} /></button>
-                  </div>
-                  <Slider label="Intensité" value={mod.amount} min={0} max={2} step={0.05}
-                    onChange={(v) => {
-                      const mods = [...current.audio_mods];
-                      mods[i] = { ...mod, amount: v };
-                      updateCurrent({ audio_mods: mods });
-                    }} accent="cyan" />
-                  <Slider label="Lissage" value={mod.smoothing} min={0} max={0.95} step={0.05}
-                    onChange={(v) => {
-                      const mods = [...current.audio_mods];
-                      mods[i] = { ...mod, smoothing: v };
-                      updateCurrent({ audio_mods: mods });
-                    }} accent="cyan" />
-                </div>
-              ))}
-              {showAudioAdd && (
-                <AudioModAdder onAdd={(mod) => { addAudioMod(mod); setShowAudioAdd(false); }} onCancel={() => setShowAudioAdd(false)} />
-              )}
-              {!showAudioAdd && (
-                <button onClick={() => setShowAudioAdd(true)}
-                  className="w-full py-1.5 bg-cyan-900/40 hover:bg-cyan-800/60 text-cyan-300 text-[10px] rounded font-medium">
-                  + Ajouter un mod audio
-                </button>
-              )}
+              <AudioModList />
             </Section>
           </>
         ) : showExpert ? (
@@ -487,42 +450,7 @@ export default function Inspector() {
         {/* AUDIO — mods audio-reactifs (commun aux deux modes) */}
         {hasEditingSlot && (
         <Section title="Audio" icon={<AudioLines size={12} />} defaultOpen={false} badge={current.audio_mods.length > 0 ? `${current.audio_mods.length}` : undefined}>
-          {current.audio_mods.length === 0 && !showAudioAdd && (
-            <div className="text-gray-600 text-[10px] py-1">
-              Aucun mod audio. Cliquez « + Ajouter » pour créer un mapping audio.
-            </div>
-          )}
-          {current.audio_mods.map((mod, i) => (
-            <div key={i} className="bg-gray-800/60 rounded p-2 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-cyan-400 text-[10px] font-mono">
-                  {audioSourceLabel(mod.source)} → {audioTargetLabel(mod.target)}
-                </span>
-                <button onClick={() => removeAudioMod(i)} className="text-red-400 text-[10px]"><X size={11} /></button>
-              </div>
-              <Slider label="Intensité" value={mod.amount} min={0} max={2} step={0.05}
-                onChange={(v) => {
-                  const mods = [...current.audio_mods];
-                  mods[i] = { ...mod, amount: v };
-                  updateCurrent({ audio_mods: mods });
-                }} accent="cyan" />
-              <Slider label="Lissage" value={mod.smoothing} min={0} max={0.95} step={0.05}
-                onChange={(v) => {
-                  const mods = [...current.audio_mods];
-                  mods[i] = { ...mod, smoothing: v };
-                  updateCurrent({ audio_mods: mods });
-                }} accent="cyan" />
-            </div>
-          ))}
-          {showAudioAdd && (
-            <AudioModAdder onAdd={(mod) => { addAudioMod(mod); setShowAudioAdd(false); }} onCancel={() => setShowAudioAdd(false)} />
-          )}
-          {!showAudioAdd && (
-            <button onClick={() => setShowAudioAdd(true)}
-              className="w-full py-1.5 bg-cyan-900/40 hover:bg-cyan-800/60 text-cyan-300 text-[10px] rounded font-medium">
-              + Ajouter un mod audio
-            </button>
-          )}
+          <AudioModList />
         </Section>
         )}
 
@@ -633,80 +561,6 @@ export default function Inspector() {
   );
 }
 
-// ── Helpers pour labels audio ──
-function audioSourceLabel(s: AudioModSource): string {
-  if (typeof s === 'string') {
-    const map: Record<string, string> = {
-      bpm: 'BPM', amplitude_rms: 'RMS', amplitude_bass: 'Bass',
-      amplitude_mid: 'Mid', amplitude_high: 'High',
-    };
-    return map[s] ?? s;
-  }
-  return `Band ${s.spectrum_band}`;
-}
-
-function audioTargetLabel(t: AudioModTarget): string {
-  const map: Record<string, string> = {
-    speed: 'Speed', scale: 'Scale', radius_scale: 'Radius',
-    height_offset: 'Height', offset_x: 'Offset X', offset_y: 'Offset Y',
-    offset_z: 'Offset Z', yaw: 'Yaw', pitch: 'Pitch', roll: 'Roll',
-  };
-  if (typeof t === 'string') return map[t] ?? t;
-  return String(t);
-}
-
-// ── Composant pour ajouter un audio mod ──
-function AudioModAdder({ onAdd, onCancel }: { onAdd: (mod: AudioMod) => void; onCancel: () => void }) {
-  const [source, setSource] = React.useState<AudioModSource>('amplitude_bass');
-  const [target, setTarget] = React.useState<AudioModTarget>('radius_scale');
-  const [amount, setAmount] = React.useState(0.5);
-
-  return (
-    <div className="bg-gray-800/80 rounded p-2 space-y-2 border border-cyan-900/40">
-      <div>
-        <div className="text-gray-400 text-[10px] mb-0.5">Source</div>
-        <select value={typeof source === 'string' ? source : 'spectrum_band'}
-          onChange={(e) => setSource(e.target.value as AudioModSource)}
-          className="w-full bg-gray-900 text-white text-[10px] rounded px-1.5 py-1 border border-gray-700">
-          <option value="bpm">BPM</option>
-          <option value="amplitude_rms">Amplitude RMS</option>
-          <option value="amplitude_bass">Bass</option>
-          <option value="amplitude_mid">Mid</option>
-          <option value="amplitude_high">High</option>
-        </select>
-      </div>
-      <div>
-        <div className="text-gray-400 text-[10px] mb-0.5">Target (macro)</div>
-        <select value={typeof target === 'string' ? target : 'radius_scale'}
-          onChange={(e) => setTarget(e.target.value as AudioModTarget)}
-          className="w-full bg-gray-900 text-white text-[10px] rounded px-1.5 py-1 border border-gray-700">
-          <option value="radius_scale">Radius Scale</option>
-          <option value="height_offset">Height Offset</option>
-          <option value="speed">Speed</option>
-          <option value="scale">Scale</option>
-          <option value="offset_x">Offset X</option>
-          <option value="offset_y">Offset Y</option>
-          <option value="offset_z">Offset Z</option>
-          <option value="yaw">Yaw</option>
-          <option value="pitch">Pitch</option>
-          <option value="roll">Roll</option>
-        </select>
-      </div>
-      <Slider label="Intensité" value={amount} min={0} max={2} step={0.05}
-        onChange={setAmount} accent="cyan" decimals={2} />
-      <div className="flex gap-1.5">
-        <button onClick={() => onAdd({ source, target, amount, base_value: 0, smoothing: 0.3 })}
-          className="flex-1 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-[10px] rounded font-medium">
-          Ajouter
-        </button>
-        <button onClick={onCancel}
-          className="px-2 py-1.5 bg-gray-800 text-gray-400 hover:text-white text-[10px] rounded">
-          <X size={11} />
-        </button>
-      </div>
-    </div>
-  );
-}
 
 // ── InspectorSplineLibrary ──────────────────────────────────────────────────
 // Section Spline Library pour l'Inspector (mode Simple, tab Params)
