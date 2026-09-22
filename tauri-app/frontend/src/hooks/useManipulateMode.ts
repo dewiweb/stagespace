@@ -90,7 +90,10 @@ export function useManipulateMode({
       }
 
       // Check objects — recursive:true pour traverser les enfants (labels CSS2DObject)
-      const objHits = raycaster.intersectObjects(objectsRef.current, true);
+      // IMPORTANT: Raycaster ne teste PAS le flag `visible` — sans ce filtre,
+      // les tracks cachées par le focus slot restent cliquables/draggables.
+      const visibleObjs = objectsRef.current.filter((o) => o.visible);
+      const objHits = raycaster.intersectObjects(visibleObjs, true);
       if (objHits.length > 0) {
         // Trouver l'objet parent dans objectsRef (peut être un enfant si labels ajoutés)
         let hitObj = objHits[0].object as THREE.Mesh;
