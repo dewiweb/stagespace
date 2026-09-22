@@ -313,19 +313,43 @@ export const useAnimationStore = create<AnimationStore>((set, get) => {
   },
 
   loadAnimation: (anim) => {
-    set({ current: { ...anim } });
-    // Toujours charger le graphe dans le Node Editor
+    const graphStore = useGraphStore.getState();
+    const editingSlotId = graphStore.editingSlotId;
+
+    // Quand un slot est édité, l'id projeté reste `slot-<id>` — sinon le
+    // write-through perdrait le lien (et current.id = anim.id brouillerait
+    // la correspondance affichée dans l'Inspector).
+    const projectedId = editingSlotId ? `slot-${editingSlotId}` : anim.id;
+
+    // Charger le graphe dans le Node Editor
     if (anim.graph_json && anim.graph_json.nodes && anim.graph_json.edges) {
-      const graphStore = useGraphStore.getState();
-      graphStore.setNodes(JSON.parse(JSON.stringify(anim.graph_json.nodes)));
-      graphStore.setEdges(JSON.parse(JSON.stringify(anim.graph_json.edges)));
+      const nodes = JSON.parse(JSON.stringify(anim.graph_json.nodes));
+      const edges = JSON.parse(JSON.stringify(anim.graph_json.edges));
+      graphStore.setNodes(nodes);
+      graphStore.setEdges(edges);
+      set({ current: { ...anim, id: projectedId } });
     } else {
       // Animation sans graph_json (legacy) — utiliser le graphe par défaut
       const def = defaultAnimation();
-      const graphStore = useGraphStore.getState();
       graphStore.setNodes(JSON.parse(JSON.stringify(def.graph_json.nodes)));
       graphStore.setEdges(JSON.parse(JSON.stringify(def.graph_json.edges)));
-      set({ current: { ...anim, graph_json: def.graph_json } });
+      set({ current: { ...anim, id: projectedId, graph_json: def.graph_json } });
+    }
+
+    if (editingSlotId) {
+      // Write-through complet vers le slot — sans ça, charger un preset de la
+      // bibliothèque ne modifiait que l'affichage : slot.graphJson gardait
+      // l'ancien graphe et playSlot relançait l'ancienne config.
+      graphStore.autoSaveToEditingSlot();
+      syncCurrentToSlot(get, {
+        name: '', speed: 0, scale: 0, yaw: 0, pitch: 0, roll: 0,
+        offset_x: 0, offset_y: 0, offset_z: 0,
+        direction: 'forward', loop_mode: 'loop',
+        fade_in: 0, fade_out: 0, phase_spread: 0,
+        audio_mods: [], assignments: [], duration: 0,
+      });
+      // Hot-swap si le slot tourne (updateGraphLive self-guard : no-op sinon)
+      graphStore.updateGraphLive(0.5).catch((e) => console.error('[loadAnimation] hot-swap failed:', e));
     }
   },
 

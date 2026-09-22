@@ -37,35 +37,23 @@ const CATEGORY_ORDER: ShapePreset['category'][] = ['basic', 'modifier', 'composi
 export default function AnimationList() {
   const animations = useAnimationStore((s) => s.animations);
   const current = useAnimationStore((s) => s.current);
-  const setCurrent = useAnimationStore((s) => s.setCurrent);
   const saveAnimation = useAnimationStore((s) => s.saveAnimation);
   const deleteAnimation = useAnimationStore((s) => s.deleteAnimation);
   const loadAnimation = useAnimationStore((s) => s.loadAnimation);
   const renameAnimation = useAnimationStore((s) => s.renameAnimation);
   const applyShapePreset = useGraphStore((s) => s.applyShapePreset);
   const getSelectedOscIds = useGraphStore((s) => s.getSelectedOscIds);
+  const addMoveSlot = useGraphStore((s) => s.addMoveSlot);
+  const editingSlotId = useGraphStore((s) => s.editingSlotId);
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editName, setEditName] = React.useState('');
   const [collapsedCats, setCollapsedCats] = React.useState<Set<string>>(new Set(['modifier', 'composite', 'spline', 'physics', 'audio']));
 
+  // "+" crée un nouveau SLOT (l'unité de travail unifiée — un `current`
+  // orphelin sans slot n'arrivait jamais au moteur). addMoveSlot
+  // auto-sélectionne le slot pour édition.
   const handleNew = () => {
-    const newAnim: Animation = {
-      id: `anim-${Date.now()}`,
-      name: 'Nouveau graphe',
-      speed: 1.0,
-      duration: 4.0,
-      direction: 'forward',
-      loop_mode: 'loop',
-      scale: 1.0,
-      yaw: 0, pitch: 0, roll: 0,
-      offset_x: 0, offset_y: 0, offset_z: 0,
-      assignments: [],
-      phase_spread: 0,
-      audio_mods: [],
-      fade_in: 0.5,
-      fade_out: 0.5,
-    };
-    setCurrent(newAnim);
+    addMoveSlot();
   };
 
   const startRename = (anim: Animation) => {
@@ -104,8 +92,8 @@ export default function AnimationList() {
     <div className="h-full flex flex-col bg-stagespace-panel">
       {/* Header */}
       <div className="px-3 py-2 border-b border-gray-700/50 flex items-center gap-2">
-        <span className="text-gray-300 text-[11px] font-semibold uppercase tracking-wider flex-1">Graphes</span>
-        <button onClick={handleNew} className="text-blue-400 hover:text-blue-300 text-sm font-bold" title="Nouveau graphe vierge">+</button>
+        <span className="text-gray-300 text-[11px] font-semibold uppercase tracking-wider flex-1">Templates</span>
+        <button onClick={handleNew} className="text-blue-400 hover:text-blue-300 text-sm font-bold" title="Nouveau move (slot)">+</button>
       </div>
 
       {/* Scrollable content */}
@@ -189,9 +177,9 @@ export default function AnimationList() {
           </button>
         </div>
 
-        {/* ═══ MES GRAPHES (bibliothèque utilisateur) ═══ */}
+        {/* ═══ BIBLIOTHÈQUE (presets utilisateur — chargés dans le slot sélectionné) ═══ */}
         <div className="p-2 space-y-1">
-          <div className="text-gray-500 text-[10px] uppercase tracking-wider mb-1 px-1">Mes graphes</div>
+          <div className="text-gray-500 text-[10px] uppercase tracking-wider mb-1 px-1">Bibliothèque</div>
           {animations.length === 0 ? (
             <div className="text-gray-600 text-[10px] text-center py-4 bg-gray-800/30 rounded border border-gray-700/30">
               Aucun graphe sauvegardé
@@ -248,8 +236,11 @@ export default function AnimationList() {
 
         {/* Hint */}
         <div className="text-gray-700 text-[10px] text-center py-2 px-2">
-          Templates = point de départ · Mes graphes = bibliothèque
-          <div className="mt-0.5">Double-clic pour renommer</div>
+          Templates &amp; bibliothèque = presets appliqués au slot sélectionné
+          <div className="mt-0.5">
+            {editingSlotId ? 'Chargement → écrit dans le slot en édition' : 'Sélectionnez un slot (Moves) pour appliquer'}
+            {' '}· double-clic pour renommer
+          </div>
         </div>
       </div>
     </div>
