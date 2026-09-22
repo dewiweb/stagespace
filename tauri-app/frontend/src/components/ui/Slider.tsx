@@ -74,8 +74,8 @@ export const Slider: React.FC<SliderProps> = ({
   if (layout === 'stack') {
     return (
       <div className={`space-y-1 ${className}`}>
-        <div className="flex items-center justify-between">
-          <span className="text-gray-400 text-[11px]">{label}</span>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-gray-400 text-[11px] truncate" title={label}>{label}</span>
           <span
             className={`text-[11px] font-mono ${live ? 'text-green-400' : 'text-white'}`}
           >
@@ -90,7 +90,9 @@ export const Slider: React.FC<SliderProps> = ({
   return (
     <div className={`flex items-center gap-2 ${className}`}>
       {label !== undefined && (
-        <span className="text-gray-400 text-[10px] w-16 flex-shrink-0">{label}</span>
+        <span className="text-gray-400 text-[10px] w-16 flex-shrink-0 truncate" title={label}>
+          {label}
+        </span>
       )}
       {input}
       <span

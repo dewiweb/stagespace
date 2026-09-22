@@ -513,7 +513,7 @@ const LiveDrawer: React.FC = () => {
             </div>
           )}
           {paramNodes.length > 0 && paramNode && (
-            <div className="flex-shrink-0 w-[30rem] space-y-1.5">
+            <div className="flex-1 min-w-0 space-y-2">
               {/* Chips de nodes — tap = éditer les params de CE node */}
               <div className="flex flex-wrap gap-1 pb-1">
                 {paramNodes.map((n, i) => {
@@ -538,7 +538,10 @@ const LiveDrawer: React.FC = () => {
                   );
                 })}
               </div>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+              <div
+                className="grid gap-x-4 gap-y-2.5"
+                style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(11rem, 1fr))' }}
+              >
                 {paramSchema.map((d) => (
                   <NodeParamField
                     key={d.key}
@@ -614,6 +617,7 @@ const NodeParamField: React.FC<{
             max={def.max}
             step={def.step ?? 0.1}
             accent="cyan"
+            layout="stack"
             live={live}
             onChange={onChange}
           />
@@ -621,7 +625,7 @@ const NodeParamField: React.FC<{
       }
       return (
         <div className="flex items-center gap-2">
-          <span className="text-gray-400 text-[10px] w-24 flex-shrink-0 truncate">{def.label}</span>
+          <span className="text-gray-400 text-[10px] w-24 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
           <input
             type="number"
             step={def.step ?? 0.1}
@@ -636,7 +640,7 @@ const NodeParamField: React.FC<{
     case 'boolean':
       return (
         <div className="flex items-center gap-2">
-          <span className="text-gray-400 text-[10px] w-24 flex-shrink-0 truncate">{def.label}</span>
+          <span className="text-gray-400 text-[10px] w-24 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
           <button
             onClick={() => onChange(value !== true)}
             className={`relative w-9 h-5 rounded-full transition-colors ${value === true ? 'bg-cyan-600' : 'bg-gray-700'}`}
@@ -648,7 +652,7 @@ const NodeParamField: React.FC<{
     case 'enum':
       return (
         <div className="flex items-center gap-2">
-          <span className="text-gray-400 text-[10px] w-24 flex-shrink-0 truncate">{def.label}</span>
+          <span className="text-gray-400 text-[10px] w-24 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
           <select
             value={typeof value === 'string' ? value : ''}
             onChange={(e) => onChange(e.target.value)}
@@ -661,8 +665,8 @@ const NodeParamField: React.FC<{
     case 'vec3': {
       const arr = Array.isArray(value) ? value : [0, 0, 0];
       return (
-        <div className="flex items-center gap-2">
-          <span className="text-gray-400 text-[10px] w-24 flex-shrink-0 truncate">{def.label}</span>
+        <div className="flex items-center gap-2 col-span-2">
+          <span className="text-gray-400 text-[10px] w-24 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
           <input
             type="text"
             value={arr.join(', ')}
@@ -679,8 +683,8 @@ const NodeParamField: React.FC<{
     case 'text':
     case 'string':
       return (
-        <div className="flex items-center gap-2">
-          <span className="text-gray-400 text-[10px] w-24 flex-shrink-0 truncate">{def.label}</span>
+        <div className="flex items-center gap-2 col-span-2">
+          <span className="text-gray-400 text-[10px] w-24 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
           <input
             type="text"
             value={typeof value === 'string' ? value : ''}
