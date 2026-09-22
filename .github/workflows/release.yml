@@ -96,8 +96,12 @@ jobs:
 
       # Le frontend est buildé par beforeBuildCommand (tauri.conf.json) —
       # on installe seulement les deps ici, pas de double build.
+      # Le npm ci racine installe @tauri-apps/cli — tauri-action exécute
+      # `npm run tauri` depuis tauri-app/, sans lui → "tauri: not found".
       - name: Install frontend dependencies
-        run: cd tauri-app/frontend && npm ci
+        run: |
+          cd tauri-app && npm ci
+          cd frontend && npm ci
 
       - name: Cache cargo
         uses: actions/cache@v4
