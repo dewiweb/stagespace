@@ -59,6 +59,10 @@ export default function Inspector() {
   const setMacros = useGraphStore((s) => s.setMacros);
   const pushMacrosToRuntime = useGraphStore((s) => s.pushMacrosToRuntime);
   const editingSlotId = useGraphStore((s) => s.editingSlotId);
+  // Statut live du slot édité — les edits d'un move ON AIR partent au runtime
+  // (hot-swap / update_animation_state), ce badge rend ce scope visible.
+  const editingSlot = useGraphStore((s) => s.moveSlots.find((sl) => sl.id === editingSlotId) ?? null);
+  const editingIsLive = !!editingSlot?.movementId;
 
   // Flash effect on launch
   const [flashClass, setFlashClass] = React.useState('');
@@ -236,12 +240,29 @@ export default function Inspector() {
       {/* Header */}
       <div className="px-3 py-2 border-b border-gray-700/50 flex-shrink-0">
         {hasEditingSlot ? (
-          <input
-            type="text"
-            value={current.name}
-            onChange={(e) => updateCurrent({ name: e.target.value, id: current.id })}
-            className="w-full bg-transparent text-white text-sm font-semibold focus:outline-none focus:text-blue-400"
-          />
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={current.name}
+              onChange={(e) => updateCurrent({ name: e.target.value, id: current.id })}
+              className="flex-1 min-w-0 bg-transparent text-white text-sm font-semibold focus:outline-none focus:text-blue-400"
+            />
+            {editingIsLive && (
+              <span
+                className={`flex-shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                  editingSlot?.isPreview
+                    ? 'bg-cyan-900/60 text-cyan-300 border border-cyan-700/50'
+                    : 'bg-green-900/60 text-green-300 border border-green-700/50 animate-pulse'
+                }`}
+                title={editingSlot?.isPreview
+                  ? 'Ce move tourne en preview — les edits sont appliqués en direct (pas d\'OSC out)'
+                  : 'ON AIR — les edits de ce panneau partent au renderer en direct'}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${editingSlot?.isPreview ? 'bg-cyan-400' : 'bg-green-400'}`} />
+                {editingSlot?.isPreview ? 'PREVIEW' : 'LIVE'}
+              </span>
+            )}
+          </div>
         ) : (
           <div className="w-full text-gray-500 text-sm font-semibold flex items-center gap-2">
             <span className="text-gray-600">Global</span>
