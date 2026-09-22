@@ -577,11 +577,16 @@ const LiveDrawer: React.FC = () => {
             compact
             tracks={allTrackInfos}
             selectedTrackIds={new Set(slot.trackIds)}
-            toggleTrackSelection={(tid) =>
-              setSlotTracks(slot.id, slot.trackIds.includes(tid)
-                ? slot.trackIds.filter((t) => t !== tid)
-                : [...slot.trackIds, tid])
-            }
+            // IMPORTANT : lire l'état frais du store à chaque appel — les
+            // patterns (even/odd/inverse) font une rafale de toggles dans le
+            // même tick ; slot.trackIds (prop) serait stale et chaque toggle
+            // écraserait le précédent (seul le dernier survivait).
+            toggleTrackSelection={(tid) => {
+              const fresh = useGraphStore.getState().moveSlots.find((s) => s.id === slot.id)?.trackIds ?? [];
+              setSlotTracks(slot.id, fresh.includes(tid)
+                ? fresh.filter((t) => t !== tid)
+                : [...fresh, tid]);
+            }}
             selectAllTracks={() => setSlotTracks(slot.id, allTrackInfos.map((t) => t.id))}
             deselectAllTracks={() => setSlotTracks(slot.id, [])}
             assignments={current.assignments}
