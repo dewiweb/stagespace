@@ -3,6 +3,7 @@ import { useAnimationStore, Animation } from '../store/useAnimationStore';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { TrackGrid } from './TrackGrid';
 import { PARAM_SCHEMA, NODE_DESCRIPTIONS, getCategoryColor, type ParamDef, type NodeParamValue, type GraphNodeData } from './nodeParamSchema';
+import { NodeParamsPanel } from './NodeParamsPanel';
 import type { MacrosState } from '../store/slices/macrosSlice';
 
 // ── Section repliable ──
@@ -79,40 +80,11 @@ export default function Inspector() {
   const centroid = computeCentroid();
   const hasEditingSlot = editingSlotId !== null;
 
-  // ── Simple mode: trouver le node engine principal du graphe (toujours) ──
-  const mainEngineNode = React.useMemo(() => {
-    // Chercher le node engine (pas structural, pas modifier, pas source, pas output)
-    // Priorité: Math Engines > Physics Engines > Splines > Composite
-    const engineCategories = ['Circular', 'Elliptical', 'Spiral', 'Lissajous', 'Figure8',
-      'Linear', 'Oscillation', 'Formation', 'PerlinNoise', 'Converge', 'Pendulum',
-      'RoseCurve', 'Helix', 'Wave', 'CustomTrajectory',
-      'Bouncing', 'Avoidance', 'Spring', 'Follow', 'Swarm', 'VectorField',
-      'DrawSpline', 'EvaluateSpline',
-      'Mix', 'Group', 'Sequence', 'Crossfade'];
-    for (const engineType of engineCategories) {
-      const found = nodes.find((n) => (n.data as GraphNodeData)?.type === engineType);
-      if (found) return found;
-    }
-    return null;
-  }, [nodes]);
-  const mainEngineType = (mainEngineNode?.data as GraphNodeData | undefined)?.type as NodeType | undefined;
-  const mainEngineSchema = mainEngineType ? PARAM_SCHEMA[mainEngineType] ?? [] : [];
-  const mainEngineParams: Record<string, NodeParamValue> = (mainEngineNode?.data as GraphNodeData | undefined)?.params ?? {};
-
   // DrawSpline node pour la Spline Library (présent dans les graphs spline)
   const drawSplineNode = React.useMemo(() =>
     nodes.find((n) => (n.data as GraphNodeData)?.type === 'DrawSpline'),
     [nodes]
   );
-
-  // Handler pour update un param du node engine principal + hot-swap
-  const updateEngineParam = (key: string, value: NodeParamValue) => {
-    if (!mainEngineNode) return;
-    updateNodeData(mainEngineNode.id, { params: { ...mainEngineParams, [key]: value } });
-    // Hot-swap live avec debounce
-    if (macroDebounce.current) clearTimeout(macroDebounce.current);
-    macroDebounce.current = setTimeout(() => { updateGraphLive(); }, 150);
-  };
 
   // ── Expert mode: node sélectionné ──
   const selectedNode = nodes.find((n) => n.selected);
@@ -370,28 +342,19 @@ export default function Inspector() {
           /* ═══════════════ MODE SIMPLE ═══════════════ */
 
           <>
-            {/* PARAMS — params du node engine principal du graphe (template choisi à gauche) */}
+            {/* PARAMS — chips de nodes paramétrables + params du node choisi
+                (même composant que le drawer Params de Perform : le graphe
+                n'est plus une boîte noire en mode Simple) */}
             <Section title="Params" icon={<SlidersHorizontal size={12} />}>
-              <div className="flex items-center gap-2 pb-2">
-                <span className="text-blue-400 text-[11px] font-semibold">
-                  {mainEngineType ?? 'Aucun engine'}
-                </span>
-                <span className="text-gray-600 text-[10px]">— template depuis le panneau gauche</span>
-              </div>
-
-              {mainEngineSchema.length > 0 ? (
-                <div className="space-y-1.5">
-                  {mainEngineSchema.map((def) => (
-                    <div key={def.key}>{renderNodeParamInput(def, mainEngineParams, updateEngineParam)}</div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-gray-600 text-[10px] py-1">
-                  {mainEngineNode
-                    ? "Cet engine n'a pas de paramètres éditables."
-                    : 'Aucun engine détecté dans le graphe. Choisissez un template dans le panneau gauche.'}
-                </div>
-              )}
+              <NodeParamsPanel
+                nodes={nodes}
+                live={editingIsLive}
+                resetKey={editingSlotId}
+                onParam={(nodeId, key, v, params) =>
+                  updateNodeData(nodeId, { params: { ...params, [key]: v } })
+                }
+                emptyHint="Aucun node paramétrable — choisissez un template dans le panneau gauche."
+              />
 
               {/* Spline Library — visible quand le graphe contient un DrawSpline */}
               {drawSplineNode && (

@@ -669,3 +669,18 @@ export function prepareGraphForSave(nodes: any[], edges: any[]) {
     edges: [...edges],
   };
 }
+
+/// Types de nodes "engine" — prioritaires pour la sélection par défaut
+/// du chip de params (NodeParamsPanel : Perform drawer + Inspector Edit).
+export const ENGINE_TYPES = new Set([
+  'Circular', 'Elliptical', 'Spiral', 'Lissajous', 'Figure8',
+  'Linear', 'Oscillation', 'Formation', 'PerlinNoise', 'Converge', 'Pendulum',
+  'RoseCurve', 'Helix', 'Wave', 'CustomTrajectory',
+  'Bouncing', 'Avoidance', 'Spring', 'Follow', 'Swarm', 'VectorField',
+  'DrawSpline', 'EvaluateSpline', 'TrimSpline', 'OffsetSpline',
+  'Mix', 'Group', 'Sequence', 'Crossfade',
+]);
+
+/// Nodes qui ont leur propre surface dédiée — exclus des chips de params
+/// (évite les doublons de contrôle : n_objects → Tracks, duration → Lecture).
+export const NON_PARAM_NODES = new Set(['Objects', 'Duration', 'Output']);
