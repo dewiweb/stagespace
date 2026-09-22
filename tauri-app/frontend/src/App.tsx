@@ -12,7 +12,7 @@ import Toolbar from './components/Toolbar';
 import ToastContainer from './components/ToastContainer';
 import PerformView from './components/PerformView';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { Workflow, ChevronRight, ChevronDown, PanelRightClose, PanelLeftClose, PanelLeftOpen, PanelRightOpen, Maximize2, Minimize2 } from 'lucide-react';
+import { Workflow, ChevronRight, ChevronDown, PanelRightClose, PanelLeftClose, PanelLeftOpen, PanelRightOpen, Maximize2, Minimize2, Activity } from 'lucide-react';
 import { useLiveShortcuts, usePerfStatsPolling } from './hooks/useLiveShortcuts';
 import { prepareGraphForSave } from './components/nodeParamSchema';
 import { useGraphStore, useMovementPositionsListener, useAudioErrorListener, useCueRecallListener } from './store/useGraphStore';
@@ -25,6 +25,8 @@ function App() {
   const setShowExpert = useAnimationStore((s) => s.setShowExpert);
   const performMode = useAnimationStore((s) => s.performMode);
   const setPerformMode = useAnimationStore((s) => s.setPerformMode);
+  const debugPerfVisible = useAnimationStore((s) => s.debugPerfVisible);
+  const setDebugPerfVisible = useAnimationStore((s) => s.setDebugPerfVisible);
   const oscInPort = useGraphStore((s) => s.oscInPort);
   const [leftCollapsed, setLeftCollapsed] = React.useState(false);
   const [rightCollapsed, setRightCollapsed] = React.useState(false);
@@ -316,6 +318,13 @@ function App() {
                 <span className="text-gray-300 text-xs font-medium">Canvas</span>
               </div>
               <div className="flex-1" />
+              <button
+                onClick={() => setDebugPerfVisible(!debugPerfVisible)}
+                className={`p-1 rounded transition-colors ${debugPerfVisible ? 'text-cyan-400 bg-cyan-900/30' : 'text-gray-600 hover:text-gray-400'}`}
+                title="Overlay DEBUG PERF (fps render/IPC, stutter) — outil dev"
+              >
+                <Activity size={12} />
+              </button>
               <span className="text-gray-600 text-[10px]">orbit: drag · zoom: scroll</span>
             </div>
           )}
@@ -349,6 +358,13 @@ function App() {
                   <span className="text-gray-400 text-[10px] font-medium">3D Preview</span>
                   <span className="text-gray-600 text-[10px] ml-2">orbit: drag · zoom: scroll</span>
                   <div className="flex-1" />
+                  <button
+                    onClick={() => setDebugPerfVisible(!debugPerfVisible)}
+                    className={`p-1 rounded transition-colors ${debugPerfVisible ? 'text-cyan-400 bg-cyan-900/30' : 'text-gray-600 hover:text-gray-400'}`}
+                    title="Overlay DEBUG PERF — outil dev"
+                  >
+                    <Activity size={11} />
+                  </button>
                   <button
                     onClick={() => setExpertSplit(expertSplit > 0.7 ? 0.5 : 0.78)}
                     className="text-gray-500 hover:text-white px-1"

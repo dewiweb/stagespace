@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { useGraphStore } from '../store/useGraphStore';
+import { useAnimationStore } from '../store/useAnimationStore';
 import { TriangleAlert } from 'lucide-react';
 import { MacrosPanel } from './MacrosPanel';
 import { DebugPerfOverlay } from './DebugPerfOverlay';
@@ -56,6 +57,8 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   const movements = useGraphStore((s) => s.movements);
   const manualPositions = useGraphStore((s) => s.manualPositions);
   const manualOscIds = useGraphStore((s) => s.manualOscIds);
+  const editingSlotId = useGraphStore((s) => s.editingSlotId);
+  const debugPerfVisible = useAnimationStore((s) => s.debugPerfVisible);
 
   // Determine object count — utilise le max entre:
   // - le node Objects du slot sélectionné
@@ -271,8 +274,21 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
           ))}
         </div>
       )}
-      {/* Debug perf overlay — top left */}
-      <DebugPerfOverlay />
+      {/* État vide — aucun move actif, aucun slot en édition : le canvas
+          communique la prochaine action au lieu d'afficher une plaine vide.
+          pointer-events-none : l'orbit reste utilisable. */}
+      {movements.length === 0 && editingSlotId === null && !manipulateMode && !drawMode && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+          <div className="text-center bg-gray-900/70 backdrop-blur rounded-xl px-6 py-4 border border-gray-700/40">
+            <div className="text-gray-300 text-xs font-medium">Aucun move en cours</div>
+            <div className="text-gray-500 text-[10px] mt-1.5 leading-relaxed">
+              <span className="text-gray-400">+ Move</span> crée un slot · un <span className="text-gray-400">template</span> le remplit · <span className="text-gray-400">▶</span> le lance
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Debug perf overlay — top left, opt-in via le toggle de la barre canvas */}
+      {debugPerfVisible && <DebugPerfOverlay />}
     </div>
   );
 };

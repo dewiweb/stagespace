@@ -77,6 +77,9 @@ interface AnimationStore {
   // demande). L'édition structurelle (nodes, templates, OSC config) est cachée.
   performMode: boolean;
   setPerformMode: (on: boolean) => void;
+  // Overlay DEBUG PERF sur le canvas 3D — opt-in (outil dev, pas prod)
+  debugPerfVisible: boolean;
+  setDebugPerfVisible: (on: boolean) => void;
 
   // Actions
   setCurrent: (anim: Animation) => void;
@@ -255,6 +258,8 @@ export const useAnimationStore = create<AnimationStore>((set, get) => {
   setShowExpert: (show) => set({ showExpert: show }),
   performMode: false,
   setPerformMode: (on) => set({ performMode: on }),
+  debugPerfVisible: false,
+  setDebugPerfVisible: (on) => set({ debugPerfVisible: on }),
 
   setCurrent: (anim) => set({ current: anim }),
 
