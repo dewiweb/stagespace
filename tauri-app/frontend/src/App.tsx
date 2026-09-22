@@ -201,10 +201,10 @@ function App() {
           <button
             onClick={() => setLeftCollapsed(false)}
             className="w-7 border-r border-stagespace-border bg-stagespace-panel flex flex-col items-center pt-3 flex-shrink-0 hover:bg-gray-800 transition-colors group"
-            title="Afficher le panneau des graphes"
+            title="Afficher le panneau Show / Templates"
           >
             <PanelLeftOpen size={13} className="text-gray-500 group-hover:text-white" />
-            <span className="text-gray-600 text-[10px] mt-2 writing-vertical" style={{ writingMode: 'vertical-rl' }}>Graphes</span>
+            <span className="text-gray-600 text-[10px] mt-2 writing-vertical" style={{ writingMode: 'vertical-rl' }}>Moves</span>
           </button>
         ) : (
           <>
@@ -216,35 +216,38 @@ function App() {
             >
               <PanelLeftClose size={11} />
             </button>
-            {/* Section 1: Graphes (AnimationList) — collapsible */}
-            <div className={`flex flex-col min-h-0 ${graphsExpanded ? 'flex-1' : 'flex-shrink-0'} ${movesExpanded ? '' : 'flex-1'}`}>
-              <div className="flex items-center gap-1 px-3 py-1.5 border-b border-stagespace-border flex-shrink-0 bg-gray-900/30">
-                <button
-                  onClick={() => setGraphsExpanded(!graphsExpanded)}
-                  className="text-gray-400 hover:text-white text-[10px] w-4"
-                  title={graphsExpanded ? "Réduire" : "Agrandir"}
-                >{graphsExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}</button>
-                <span className="text-gray-400 text-[10px] uppercase tracking-wider font-medium">Graphes</span>
-              </div>
-              {graphsExpanded && (
-                <div className="flex-1 min-h-0 overflow-hidden">
-                  <AnimationList />
-                </div>
-              )}
-            </div>
-            {/* Section 2: Moves (TabPanel) — collapsible */}
-            <div className={`${movesExpanded ? 'h-64' : 'flex-shrink-0'} flex flex-col border-t border-stagespace-border ${graphsExpanded ? '' : 'flex-1'}`}>
+            {/* Section 1: Moves (TabPanel Moves/Cues/FX) — prioritaire, flex-1.
+                Le slot est l'unité de travail : il passe avant la bibliothèque. */}
+            <div className={`flex flex-col min-h-0 ${movesExpanded ? 'flex-1' : 'flex-shrink-0'} ${graphsExpanded ? '' : 'flex-1'}`}>
               <div className="flex items-center gap-1 px-3 py-1.5 border-b border-stagespace-border flex-shrink-0 bg-gray-900/30">
                 <button
                   onClick={() => setMovesExpanded(!movesExpanded)}
                   className="text-gray-400 hover:text-white text-[10px] w-4"
                   title={movesExpanded ? "Réduire" : "Agrandir"}
                 >{movesExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}</button>
-                <span className="text-gray-400 text-[10px] uppercase tracking-wider font-medium">Moves</span>
+                <span className="text-gray-400 text-[10px] uppercase tracking-wider font-medium">Show</span>
               </div>
               {movesExpanded && (
                 <div className="flex-1 min-h-0 overflow-hidden">
                   <TabPanel tabs={secondaryTabs} defaultTab="moves" />
+                </div>
+              )}
+            </div>
+            {/* Section 2: Templates (AnimationList) — secondaire, hauteur bornée.
+                Le "+" qui créait un slot vivait ici — redondant avec "+ Move"
+                de la MovesTable, il a été retiré de l'header interne. */}
+            <div className={`${graphsExpanded ? 'h-80' : 'flex-shrink-0'} flex flex-col border-t border-stagespace-border ${movesExpanded ? '' : 'flex-1'}`}>
+              <div className="flex items-center gap-1 px-3 py-1.5 border-b border-stagespace-border flex-shrink-0 bg-gray-900/30">
+                <button
+                  onClick={() => setGraphsExpanded(!graphsExpanded)}
+                  className="text-gray-400 hover:text-white text-[10px] w-4"
+                  title={graphsExpanded ? "Réduire" : "Agrandir"}
+                >{graphsExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}</button>
+                <span className="text-gray-400 text-[10px] uppercase tracking-wider font-medium">Templates</span>
+              </div>
+              {graphsExpanded && (
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <AnimationList />
                 </div>
               )}
             </div>

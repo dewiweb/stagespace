@@ -43,18 +43,10 @@ export default function AnimationList() {
   const renameAnimation = useAnimationStore((s) => s.renameAnimation);
   const applyShapePreset = useGraphStore((s) => s.applyShapePreset);
   const getSelectedOscIds = useGraphStore((s) => s.getSelectedOscIds);
-  const addMoveSlot = useGraphStore((s) => s.addMoveSlot);
   const editingSlotId = useGraphStore((s) => s.editingSlotId);
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editName, setEditName] = React.useState('');
   const [collapsedCats, setCollapsedCats] = React.useState<Set<string>>(new Set(['modifier', 'composite', 'spline', 'physics', 'audio']));
-
-  // "+" crée un nouveau SLOT (l'unité de travail unifiée — un `current`
-  // orphelin sans slot n'arrivait jamais au moteur). addMoveSlot
-  // auto-sélectionne le slot pour édition.
-  const handleNew = () => {
-    addMoveSlot();
-  };
 
   const startRename = (anim: Animation) => {
     setEditingId(anim.id);
@@ -90,13 +82,9 @@ export default function AnimationList() {
 
   return (
     <div className="h-full flex flex-col bg-stagespace-panel">
-      {/* Header */}
-      <div className="px-3 py-2 border-b border-gray-700/50 flex items-center gap-2">
-        <span className="text-gray-300 text-[11px] font-semibold uppercase tracking-wider flex-1">Templates</span>
-        <button onClick={handleNew} className="text-blue-400 hover:text-blue-300 text-sm font-bold" title="Nouveau move (slot)">+</button>
-      </div>
-
-      {/* Scrollable content */}
+      {/* Scrollable content — le header "Templates" vit dans App.tsx
+          (section collapsible) ; le "+" créait un slot, redondant avec
+          "+ Move" de la MovesTable. */}
       <div className="flex-1 overflow-y-auto">
         {/* ═══ TEMPLATES (built-in presets) ═══ */}
         <div className="p-2 space-y-1">
