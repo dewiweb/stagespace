@@ -247,8 +247,22 @@ const LiveDrawer: React.FC = () => {
   const updateCurrent = useAnimationStore((s) => s.updateCurrent);
   const current = useAnimationStore((s) => s.current);
 
+  const macros = useGraphStore((s) => s.macros);
+  const setMacros = useGraphStore((s) => s.setMacros);
+  const pushMacrosToRuntime = useGraphStore((s) => s.pushMacrosToRuntime);
+  const [globalOpen, setGlobalOpen] = React.useState(false);
+  const macroDebounce = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const slot = moveSlots.find((s) => s.id === editingSlotId);
   const playingSlots = moveSlots.filter((s) => s.movementId);
+
+  // Macros GLOBALES (merge — affectent tous les moves live). Debounce 100ms
+  // comme l'Inspector : un drag de slider ne doit pas spammer l'IPC.
+  const setGlobalMacro = (key: string, value: number) => {
+    setMacros({ [key]: value } as Partial<typeof macros>);
+    if (macroDebounce.current) clearTimeout(macroDebounce.current);
+    macroDebounce.current = setTimeout(() => { pushMacrosToRuntime(); }, 100);
+  };
 
   // Node engine principal du graphe chargé (= celui du slot en édition)
   const engineNode = React.useMemo(
@@ -275,9 +289,12 @@ const LiveDrawer: React.FC = () => {
         {playingSlots.map((s) => (
           <button
             key={s.id}
-            onClick={() => selectSlotForEditing(editingSlotId === s.id ? null : s.id)}
+            onClick={() => {
+              setGlobalOpen(false);
+              selectSlotForEditing(editingSlotId === s.id ? null : s.id);
+            }}
             className={`px-3 py-1 rounded-full text-[11px] font-medium whitespace-nowrap transition-colors ${
-              editingSlotId === s.id
+              editingSlotId === s.id && !globalOpen
                 ? 'bg-indigo-600 text-white'
                 : 'bg-green-900/40 text-green-300 hover:bg-green-800/50 border border-green-800/50'
             }`}
@@ -286,13 +303,60 @@ const LiveDrawer: React.FC = () => {
             {s.isPreview ? '◌' : '●'} {s.name}
           </button>
         ))}
+        {playingSlots.length > 0 && (
+          <button
+            onClick={() => setGlobalOpen(!globalOpen)}
+            className={`px-3 py-1 rounded-full text-[11px] font-medium whitespace-nowrap transition-colors ${
+              globalOpen
+                ? 'bg-orange-600 text-white'
+                : 'bg-gray-800 text-gray-400 hover:bg-gray-700 border border-gray-700'
+            }`}
+            title="Macros globales — affectent TOUS les moves live (merge)"
+          >
+            ◈ Global
+          </button>
+        )}
         {playingSlots.length === 0 && (
           <span className="text-gray-600 text-[10px]">aucun move actif — ▶ sur la setlist</span>
         )}
       </div>
 
+      {/* Drawer macros globales — scope merge : affecte TOUS les moves live */}
+      {globalOpen && (
+        <div className="border-t border-stagespace-border px-4 py-2 flex items-start gap-6 overflow-x-auto">
+          <div className="flex-shrink-0 w-64 space-y-1">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-orange-400 text-xs font-bold">◈ Macros globales</span>
+              <button
+                onClick={() => setGlobalOpen(false)}
+                className="ml-auto text-gray-500 hover:text-white text-xs px-1"
+                title="Fermer"
+              >
+                ✕
+              </button>
+            </div>
+            <Slider label="Scale" value={macros.scale} min={0.1} max={3} step={0.05} accent="orange" live onChange={(v) => setGlobalMacro('scale', v)} />
+            <Slider label="Speed all" value={macros.speed} min={0} max={3} step={0.05} unit="x" accent="orange" live onChange={(v) => setGlobalMacro('speed', v)} />
+            <Slider label="Radius ×" value={macros.radius_scale} min={0.1} max={3} step={0.05} accent="orange" live onChange={(v) => setGlobalMacro('radius_scale', v)} />
+            <Slider label="Height +" value={macros.height_offset} min={-5} max={5} step={0.1} unit="m" accent="orange" live onChange={(v) => setGlobalMacro('height_offset', v)} />
+          </div>
+          <div className="flex-shrink-0 w-64 space-y-1">
+            <div className="text-gray-500 text-[9px] uppercase tracking-wider">Shift (global)</div>
+            <Slider label="X" value={macros.shiftX} min={-10} max={10} step={0.1} unit="m" accent="orange" live onChange={(v) => setGlobalMacro('shiftX', v)} />
+            <Slider label="Y" value={macros.shiftY} min={-10} max={10} step={0.1} unit="m" accent="orange" live onChange={(v) => setGlobalMacro('shiftY', v)} />
+            <Slider label="Z" value={macros.shiftZ} min={-10} max={10} step={0.1} unit="m" accent="orange" live onChange={(v) => setGlobalMacro('shiftZ', v)} />
+          </div>
+          <div className="flex-shrink-0 w-64 space-y-1">
+            <div className="text-gray-500 text-[9px] uppercase tracking-wider">Rotation (global)</div>
+            <Slider label="Yaw" value={macros.yaw} min={-180} max={180} step={1} unit="°" accent="orange" live onChange={(v) => setGlobalMacro('yaw', v)} />
+            <Slider label="Pitch" value={macros.pitch} min={-180} max={180} step={1} unit="°" accent="orange" live onChange={(v) => setGlobalMacro('pitch', v)} />
+            <Slider label="Roll" value={macros.roll} min={-180} max={180} step={1} unit="°" accent="orange" live onChange={(v) => setGlobalMacro('roll', v)} />
+          </div>
+        </div>
+      )}
+
       {/* Drawer params — visible seulement quand un move est sélectionné */}
-      {slot && (
+      {slot && !globalOpen && (
         <div className="border-t border-stagespace-border px-4 py-2 flex items-start gap-6 overflow-x-auto">
           {/* Bloc lecture : speed / direction / loop / fades */}
           <div className="flex-shrink-0 w-64 space-y-1">
