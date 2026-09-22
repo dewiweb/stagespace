@@ -7,15 +7,22 @@ import type { HolProject } from '../store/useGraphStore';
 import { strongestZoneInfluence } from '../utils/zoneMath';
 import { toThree } from '../utils/coords';
 
-/// Cache un mesh — CSS2DRenderer cache automatiquement les CSS2DObject
-/// enfants d'un objet invisible (récursion dans renderObject). Pas besoin
-/// d'écrire el.style.display à chaque frame (DOM writes ×60fps).
+/// Cache un mesh ET ses labels CSS2DObject enfants.
+/// ATTENTION : CSS2DRenderer teste object.visible du CSS2DObject lui-même,
+/// pas celui du parent — il faut toggler le flag sur les enfants (booléen
+/// JS cheap, PAS d'écriture el.style.display — le renderer la gère).
 function hideMeshAndLabels(mesh: THREE.Mesh) {
   mesh.visible = false;
+  mesh.children.forEach((child) => {
+    if ((child as any).isCSS2DObject) child.visible = false;
+  });
 }
 
 function showMeshAndLabels(mesh: THREE.Mesh) {
   mesh.visible = true;
+  mesh.children.forEach((child) => {
+    if ((child as any).isCSS2DObject) child.visible = true;
+  });
 }
 
 // Couleurs de tinte des objets affectés par une zone — match ZoneVisualization
