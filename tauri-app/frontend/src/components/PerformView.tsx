@@ -520,7 +520,7 @@ const LiveDrawer: React.FC = () => {
           {/* Bloc params du graphe — chips de nodes + tous les params du
               node choisi (pas seulement l'engine principal) */}
           {paramNodes.length > 0 && paramNode && (
-            <div className="flex-shrink-0 w-80 space-y-1">
+            <div className="flex-shrink-0 w-[30rem] space-y-1.5">
               {/* Chips de nodes — tap = éditer les params de CE node */}
               <div className="flex flex-wrap gap-1 pb-1">
                 {paramNodes.map((n, i) => {
@@ -545,7 +545,7 @@ const LiveDrawer: React.FC = () => {
                   );
                 })}
               </div>
-              <div className="grid grid-cols-1 gap-1">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                 {paramSchema.map((d) => (
                   <NodeParamField
                     key={d.key}
@@ -574,6 +574,7 @@ const LiveDrawer: React.FC = () => {
             ><X size={12} /></button>
           </div>
           <TrackGrid
+            compact
             tracks={allTrackInfos}
             selectedTrackIds={new Set(slot.trackIds)}
             toggleTrackSelection={(tid) =>

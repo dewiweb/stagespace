@@ -16,6 +16,9 @@ interface TrackGridProps {
   deselectAllTracks: () => void;
   assignments: TrackAssignment[];
   updateAssignment: (trackId: number, patch: Partial<TrackAssignment>) => void;
+  /// Mode dense pour le drawer Perform (pleine largeur) : cellules petites,
+  /// grille auto-fill au lieu de 4 colonnes fixes.
+  compact?: boolean;
 }
 
 /// Couleur HSL pour un index
@@ -41,6 +44,7 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
   tracks, selectedTrackIds, toggleTrackSelection,
   selectAllTracks, deselectAllTracks,
   assignments, updateAssignment,
+  compact = false,
 }) => {
   const [showDepth, setShowDepth] = React.useState(false);
 
@@ -134,8 +138,11 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
         </span>
       </div>
 
-      {/* Grille de tracks */}
-      <div className="grid grid-cols-4 gap-1 max-h-40 overflow-y-auto p-0.5">
+      {/* Grille de tracks — compact = auto-fill petites cellules (drawer
+          Perform pleine largeur) ; sinon 4 colonnes (Inspector étroit) */}
+      <div className={`grid gap-1 overflow-y-auto p-0.5 ${
+        compact ? 'grid-cols-[repeat(auto-fill,minmax(3rem,1fr))] max-h-44' : 'grid-cols-4 max-h-40'
+      }`}>
         {tracks.map((t, i) => {
           const isSelected = selectedTrackIds.has(t.id);
           const asg = assignments.find((a) => a.track_id === t.id);
@@ -147,7 +154,7 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
             return (
               <div
                 key={t.id}
-                className={`relative rounded-lg p-1 transition-all cursor-pointer border ${
+                className={`relative rounded-lg p-1 transition-all cursor-pointer border ${compact ? 'col-span-2' : ''} ${
                   isSelected
                     ? 'bg-blue-900/40 border-blue-600/50'
                     : 'bg-gray-800/40 border-gray-700/30 opacity-50'
@@ -195,16 +202,16 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
             <button
               key={t.id}
               onClick={() => toggleTrackSelection(t.id)}
-              className={`relative aspect-square rounded-lg flex flex-col items-center justify-center transition-all border-2 ${
+              className={`relative ${compact ? 'h-9' : 'aspect-square'} rounded-lg flex ${compact ? 'flex-row gap-1 px-1' : 'flex-col'} items-center justify-center transition-all border-2 ${
                 isSelected
-                  ? 'border-blue-500 bg-blue-900/40 scale-105'
+                  ? 'border-blue-500 bg-blue-900/40'
                   : 'border-gray-700/30 bg-gray-800/40 hover:border-gray-600'
-              }`}
+              } ${compact ? '' : isSelected ? 'scale-105' : ''}`}
               title={`${t.name} (#${t.id})`}
             >
               {/* Color indicator */}
               <div
-                className="w-3 h-3 rounded-full mb-0.5"
+                className={`${compact ? 'w-2 h-2' : 'w-3 h-3 mb-0.5'} rounded-full flex-shrink-0`}
                 style={{
                   backgroundColor: color,
                   opacity: isSelected ? 1.0 : 0.3,
