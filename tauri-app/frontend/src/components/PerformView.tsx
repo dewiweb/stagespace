@@ -268,7 +268,7 @@ const LiveDrawer: React.FC = () => {
   const pushMacrosToRuntime = useGraphStore((s) => s.pushMacrosToRuntime);
   const macroDebounce = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  type Scope = 'params' | 'tracks' | 'audio' | 'global';
+  type Scope = 'params' | 'playback' | 'tracks' | 'audio' | 'global';
   const [scope, setScope] = React.useState<Scope | null>(null);
 
   const slot = moveSlots.find((s) => s.id === editingSlotId);
@@ -375,7 +375,9 @@ const LiveDrawer: React.FC = () => {
         <div className="w-px h-6 bg-stagespace-border mx-1 flex-shrink-0" />
 
         {scopeBtn('params', <><SlidersHorizontal size={12} className="inline -mt-0.5" /> Params</>, true,
-          'Params du move sélectionné (moteur, speed, fades)')}
+          'Params des nodes du graphe du move sélectionné')}
+        {scopeBtn('playback', <><Play size={12} className="inline -mt-0.5" /> Playback</>, true,
+          'Lecture du move sélectionné (speed, direction, loop, fades)')}
         {scopeBtn('tracks', <><ListOrdered size={12} className="inline -mt-0.5" /> Tracks</>, true,
           'Assignation tracks + depth/phase du move sélectionné')}
         {scopeBtn('audio', <><AudioLines size={12} className="inline -mt-0.5" /> Audio</>, true,
@@ -428,10 +430,9 @@ const LiveDrawer: React.FC = () => {
         </div>
       )}
 
-      {/* ── Drawer PARAMS — moteur + lecture du move sélectionné ── */}
-      {scope === 'params' && slot && (
+      {/* ── Drawer PLAYBACK — lecture du move sélectionné ── */}
+      {scope === 'playback' && slot && (
         <div className="border-t border-indigo-900/40 px-4 py-2 flex items-start gap-6 overflow-x-auto max-h-[42vh] overflow-y-auto">
-          {/* Bloc lecture : speed / direction / loop / fades */}
           <div className="flex-shrink-0 w-64 space-y-1">
             <div className="flex items-center gap-2 mb-1">
               <span className="text-white text-xs font-bold truncate">{slot.name}</span>
@@ -443,7 +444,7 @@ const LiveDrawer: React.FC = () => {
               <button
                 onClick={() => setScope(null)}
                 className="ml-auto text-gray-500 hover:text-white text-xs px-1"
-                title="Fermer les params"
+                title="Fermer"
               ><X size={12} /></button>
             </div>
             <Slider
@@ -516,9 +517,32 @@ const LiveDrawer: React.FC = () => {
               </div>
             </div>
           </div>
+        </div>
+      )}
 
-          {/* Bloc params du graphe — chips de nodes + tous les params du
-              node choisi (pas seulement l'engine principal) */}
+      {/* ── Drawer PARAMS — chips de nodes + tous les params du node choisi ── */}
+      {scope === 'params' && slot && (
+        <div className="border-t border-indigo-900/40 px-4 py-2 flex items-start gap-6 overflow-x-auto max-h-[42vh] overflow-y-auto">
+          <div className="flex-shrink-0 w-40 pt-0.5">
+            <div className="flex items-center gap-2">
+              <span className="text-white text-xs font-bold truncate flex-1">{slot.name}</span>
+              <button
+                onClick={() => setScope(null)}
+                className="text-gray-500 hover:text-white text-xs px-1"
+                title="Fermer"
+              ><X size={12} /></button>
+            </div>
+            {slot.movementId && (
+              <span className={`text-[10px] px-1 rounded ${slot.isPreview ? 'bg-cyan-900 text-cyan-300' : 'bg-green-900 text-green-300'}`}>
+                {slot.isPreview ? 'PREV' : 'LIVE'}
+              </span>
+            )}
+          </div>
+          {paramNodes.length === 0 && (
+            <div className="text-gray-600 text-[10px] self-center">
+              Aucun node paramétrable dans ce graphe — voir Playback / Tracks.
+            </div>
+          )}
           {paramNodes.length > 0 && paramNode && (
             <div className="flex-shrink-0 w-[30rem] space-y-1.5">
               {/* Chips de nodes — tap = éditer les params de CE node */}
