@@ -625,7 +625,7 @@ const NodeParamField: React.FC<{
       }
       return (
         <div className="flex items-center gap-2">
-          <span className="text-gray-400 text-[10px] w-24 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
+          <span className="text-gray-400 text-[10px] w-20 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
           <input
             type="number"
             step={def.step ?? 0.1}
@@ -633,14 +633,14 @@ const NodeParamField: React.FC<{
             max={def.max}
             value={typeof value === 'number' ? value : 0}
             onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-            className="flex-1 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
+            className="flex-1 min-w-0 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
           />
         </div>
       );
     case 'boolean':
       return (
         <div className="flex items-center gap-2">
-          <span className="text-gray-400 text-[10px] w-24 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
+          <span className="text-gray-400 text-[10px] w-20 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
           <button
             onClick={() => onChange(value !== true)}
             className={`relative w-9 h-5 rounded-full transition-colors ${value === true ? 'bg-cyan-600' : 'bg-gray-700'}`}
@@ -652,11 +652,11 @@ const NodeParamField: React.FC<{
     case 'enum':
       return (
         <div className="flex items-center gap-2">
-          <span className="text-gray-400 text-[10px] w-24 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
+          <span className="text-gray-400 text-[10px] w-20 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
           <select
             value={typeof value === 'string' ? value : ''}
             onChange={(e) => onChange(e.target.value)}
-            className="flex-1 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
+            className="flex-1 min-w-0 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
           >
             {def.options?.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
           </select>
@@ -666,7 +666,7 @@ const NodeParamField: React.FC<{
       const arr = Array.isArray(value) ? value : [0, 0, 0];
       return (
         <div className="flex items-center gap-2 col-span-2">
-          <span className="text-gray-400 text-[10px] w-24 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
+          <span className="text-gray-400 text-[10px] w-20 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
           <input
             type="text"
             value={arr.join(', ')}
@@ -674,7 +674,7 @@ const NodeParamField: React.FC<{
               const parsed = e.target.value.split(',').map((v) => parseFloat(v.trim()));
               if (parsed.length === 3 && parsed.every((n) => !isNaN(n))) onChange(parsed);
             }}
-            className="flex-1 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none font-mono"
+            className="flex-1 min-w-0 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none font-mono"
             placeholder="x, y, z"
           />
         </div>
@@ -684,12 +684,12 @@ const NodeParamField: React.FC<{
     case 'string':
       return (
         <div className="flex items-center gap-2 col-span-2">
-          <span className="text-gray-400 text-[10px] w-24 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
+          <span className="text-gray-400 text-[10px] w-20 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
           <input
             type="text"
             value={typeof value === 'string' ? value : ''}
             onChange={(e) => onChange(e.target.value)}
-            className="flex-1 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none font-mono"
+            className="flex-1 min-w-0 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none font-mono"
           />
         </div>
       );
