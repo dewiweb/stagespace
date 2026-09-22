@@ -8,7 +8,7 @@ import { Slider } from './ui/Slider';
 import { useGraphStore } from '../store/useGraphStore';
 import { useAnimationStore } from '../store/useAnimationStore';
 import { useCuelistStore } from '../store/useCuelistStore';
-import { PARAM_SCHEMA, type NodeParamValue, type GraphNodeData } from './nodeParamSchema';
+import { PARAM_SCHEMA, type NodeParamValue, type GraphNodeData, type ParamDef } from './nodeParamSchema';
 import type { NodeType } from '../store/types/index';
 import { toast } from '../utils/toast-helpers';
 
@@ -29,6 +29,10 @@ const ENGINE_TYPES = new Set([
   'DrawSpline', 'EvaluateSpline', 'TrimSpline', 'OffsetSpline',
   'Mix', 'Group', 'Sequence', 'Crossfade',
 ]);
+
+/// Nodes qui ont leur propre surface ailleurs dans le drawer — exclus des
+/// chips de params (évite les doublons de contrôle).
+const NON_PARAM_NODES = new Set(['Objects', 'Duration', 'Output']);
 
 export const PerformView: React.FC = () => {
   const moveSlots = useGraphStore((s) => s.moveSlots);
@@ -278,19 +282,36 @@ const LiveDrawer: React.FC = () => {
     macroDebounce.current = setTimeout(() => { pushMacrosToRuntime(); }, 100);
   };
 
-  // Node engine principal du graphe chargé (= celui du slot en édition)
-  const engineNode = React.useMemo(
-    () => nodes.find((n) => ENGINE_TYPES.has((n.data as GraphNodeData)?.type ?? '')),
+  // Nodes paramétrables du graphe du slot — chacun devient un chip dans le
+  // drawer Params (accès direct, sans passer par le node editor).
+  // Objects/Duration/Output exclus : n_objects est piloté par le drawer
+  // Tracks, duration par le bloc Lecture, track_range est legacy.
+  const paramNodes = React.useMemo(
+    () =>
+      nodes.filter((n) => {
+        const t = (n.data as GraphNodeData)?.type;
+        return !!t && !NON_PARAM_NODES.has(t) && (PARAM_SCHEMA[t]?.length ?? 0) > 0;
+      }),
     [nodes],
   );
-  const engineType = (engineNode?.data as GraphNodeData | undefined)?.type as NodeType | undefined;
-  const engineSchema = engineType ? PARAM_SCHEMA[engineType] ?? [] : [];
-  const engineParams = ((engineNode?.data as GraphNodeData | undefined)?.params ?? {}) as Record<string, NodeParamValue>;
+  const [paramNodeId, setParamNodeId] = React.useState<string | null>(null);
+  // Défaut : le premier node engine (comportement précédent) — sinon le
+  // premier node paramétrable. Reset quand le slot édité change.
+  const defaultParamNode = React.useMemo(
+    () => paramNodes.find((n) => ENGINE_TYPES.has((n.data as GraphNodeData)?.type ?? '')) ?? paramNodes[0] ?? null,
+    [paramNodes],
+  );
+  React.useEffect(() => { setParamNodeId(null); }, [editingSlotId]);
+  const paramNode =
+    paramNodes.find((n) => n.id === paramNodeId) ?? defaultParamNode;
+  const paramNodeType = (paramNode?.data as GraphNodeData | undefined)?.type as NodeType | undefined;
+  const paramSchema = paramNodeType ? PARAM_SCHEMA[paramNodeType] ?? [] : [];
+  const paramNodeParams = ((paramNode?.data as GraphNodeData | undefined)?.params ?? {}) as Record<string, NodeParamValue>;
 
-  const setEngineParam = (key: string, value: NodeParamValue) => {
-    if (!engineNode) return;
+  const setNodeParam = (key: string, value: NodeParamValue) => {
+    if (!paramNode) return;
     // Hot-swap debouncé intégré dans updateNodeData (updateGraphLive interne)
-    updateNodeData(engineNode.id, { params: { ...engineParams, [key]: value } });
+    updateNodeData(paramNode.id, { params: { ...paramNodeParams, [key]: value } });
   };
 
   // Tracks du projet (.hol) ou IDs manuels — pour la grille d'assignation
@@ -496,35 +517,45 @@ const LiveDrawer: React.FC = () => {
             </div>
           </div>
 
-          {/* Bloc engine params — le cœur du live tweaking */}
-          {engineSchema.length > 0 && (
-            <div className="flex-shrink-0 w-72 space-y-1">
-              <div className="text-gray-500 text-[10px] uppercase tracking-wider">
-                {engineType} params
+          {/* Bloc params du graphe — chips de nodes + tous les params du
+              node choisi (pas seulement l'engine principal) */}
+          {paramNodes.length > 0 && paramNode && (
+            <div className="flex-shrink-0 w-80 space-y-1">
+              {/* Chips de nodes — tap = éditer les params de CE node */}
+              <div className="flex flex-wrap gap-1 pb-1">
+                {paramNodes.map((n, i) => {
+                  const t = (n.data as GraphNodeData)?.type ?? '?';
+                  // Indice d'occurrence si plusieurs nodes du même type
+                  const sameType = paramNodes.filter((o) => (o.data as GraphNodeData)?.type === t);
+                  const occ = sameType.length > 1 ? sameType.indexOf(n) + 1 : 0;
+                  const active = paramNode.id === n.id;
+                  return (
+                    <button
+                      key={n.id}
+                      onClick={() => setParamNodeId(n.id)}
+                      className={`px-2 py-1 rounded text-[10px] font-medium transition-colors ${
+                        active
+                          ? 'bg-cyan-700 text-white'
+                          : 'bg-gray-800 text-gray-400 hover:text-white border border-gray-700'
+                      }`}
+                      title={`Node ${i + 1} — params`}
+                    >
+                      {t}{occ > 0 ? ` ${occ}` : ''}
+                    </button>
+                  );
+                })}
               </div>
               <div className="grid grid-cols-1 gap-1">
-                {engineSchema
-                  .filter((d) => d.type === 'number' && typeof d.min === 'number' && typeof d.max === 'number')
-                  .slice(0, 6)
-                  .map((d) => (
-                    <Slider
-                      key={d.key}
-                      label={d.label}
-                      value={typeof engineParams[d.key] === 'number' ? (engineParams[d.key] as number) : 0}
-                      min={d.min!}
-                      max={d.max!}
-                      step={d.step ?? 0.1}
-                      accent="cyan"
-                      live={!!slot.movementId}
-                      onChange={(v) => setEngineParam(d.key, v)}
-                    />
-                  ))}
+                {paramSchema.map((d) => (
+                  <NodeParamField
+                    key={d.key}
+                    def={d}
+                    value={paramNodeParams[d.key]}
+                    live={!!slot.movementId}
+                    onChange={(v) => setNodeParam(d.key, v)}
+                  />
+                ))}
               </div>
-              {engineSchema.some((d) => d.type !== 'number' || d.min === undefined || d.max === undefined) && (
-                <div className="text-gray-700 text-[10px]">
-                  params non-numériques → mode Edit
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -580,6 +611,106 @@ const LiveDrawer: React.FC = () => {
       )}
     </div>
   );
+};
+
+/// Champ de paramètre de node — version Perform : sliders bornés pour les
+/// numbers, toggle pour boolean, select pour enum, input compact pour le
+/// reste. `live` colore le slider quand le move tourne (hot-swap actif).
+const NodeParamField: React.FC<{
+  def: ParamDef;
+  value: NodeParamValue;
+  live: boolean;
+  onChange: (v: NodeParamValue) => void;
+}> = ({ def, value, live, onChange }) => {
+  switch (def.type) {
+    case 'number':
+      if (typeof def.min === 'number' && typeof def.max === 'number') {
+        return (
+          <Slider
+            label={def.label}
+            value={typeof value === 'number' ? value : 0}
+            min={def.min}
+            max={def.max}
+            step={def.step ?? 0.1}
+            accent="cyan"
+            live={live}
+            onChange={onChange}
+          />
+        );
+      }
+      return (
+        <div className="flex items-center gap-2">
+          <span className="text-gray-400 text-[10px] w-24 flex-shrink-0 truncate">{def.label}</span>
+          <input
+            type="number"
+            step={def.step ?? 0.1}
+            min={def.min}
+            max={def.max}
+            value={typeof value === 'number' ? value : 0}
+            onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
+            className="flex-1 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
+          />
+        </div>
+      );
+    case 'boolean':
+      return (
+        <div className="flex items-center gap-2">
+          <span className="text-gray-400 text-[10px] w-24 flex-shrink-0 truncate">{def.label}</span>
+          <button
+            onClick={() => onChange(value !== true)}
+            className={`relative w-9 h-5 rounded-full transition-colors ${value === true ? 'bg-cyan-600' : 'bg-gray-700'}`}
+          >
+            <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${value === true ? 'translate-x-4' : ''}`} />
+          </button>
+        </div>
+      );
+    case 'enum':
+      return (
+        <div className="flex items-center gap-2">
+          <span className="text-gray-400 text-[10px] w-24 flex-shrink-0 truncate">{def.label}</span>
+          <select
+            value={typeof value === 'string' ? value : ''}
+            onChange={(e) => onChange(e.target.value)}
+            className="flex-1 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
+          >
+            {def.options?.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+          </select>
+        </div>
+      );
+    case 'vec3': {
+      const arr = Array.isArray(value) ? value : [0, 0, 0];
+      return (
+        <div className="flex items-center gap-2">
+          <span className="text-gray-400 text-[10px] w-24 flex-shrink-0 truncate">{def.label}</span>
+          <input
+            type="text"
+            value={arr.join(', ')}
+            onChange={(e) => {
+              const parsed = e.target.value.split(',').map((v) => parseFloat(v.trim()));
+              if (parsed.length === 3 && parsed.every((n) => !isNaN(n))) onChange(parsed);
+            }}
+            className="flex-1 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none font-mono"
+            placeholder="x, y, z"
+          />
+        </div>
+      );
+    }
+    case 'text':
+    case 'string':
+      return (
+        <div className="flex items-center gap-2">
+          <span className="text-gray-400 text-[10px] w-24 flex-shrink-0 truncate">{def.label}</span>
+          <input
+            type="text"
+            value={typeof value === 'string' ? value : ''}
+            onChange={(e) => onChange(e.target.value)}
+            className="flex-1 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none font-mono"
+          />
+        </div>
+      );
+    default:
+      return null;
+  }
 };
 
 export default PerformView;
