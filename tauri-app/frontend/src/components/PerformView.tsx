@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Square, Globe, X, SlidersHorizontal, ListOrdered, AudioLines } from 'lucide-react';
+import { Play, Square, Globe, SlidersHorizontal, ListOrdered, AudioLines } from 'lucide-react';
 import { TrackGrid } from './TrackGrid';
 import { AudioModList } from './AudioModControls';
 import Scene3D from './Scene3D';
@@ -393,8 +393,13 @@ const LiveDrawer: React.FC = () => {
         {!slot && playingSlots.length > 0 && (
           <span className="text-gray-600 text-[10px] ml-2">tap un chip pour éditer un move</span>
         )}
-        {slot && !slot.movementId && (
-          <span className="text-indigo-400/70 text-[10px] ml-2">édition : {slot.name} (stoppé)</span>
+        {slot && (
+          <span className="text-indigo-400/70 text-[10px] ml-2 flex items-center gap-1.5">
+            édition : {slot.name}
+            {slot.movementId
+              ? <span className={`px-1 rounded ${slot.isPreview ? 'bg-cyan-900 text-cyan-300' : 'bg-green-900 text-green-300'}`}>{slot.isPreview ? 'PREV' : 'LIVE'}</span>
+              : <span className="text-gray-600">(stoppé)</span>}
+          </span>
         )}
       </div>
 
@@ -402,14 +407,6 @@ const LiveDrawer: React.FC = () => {
       {scope === 'global' && (
         <div className="border-t border-orange-900/40 px-4 py-2 flex items-start gap-6 overflow-x-auto max-h-[42vh] overflow-y-auto">
           <div className="flex-shrink-0 w-64 space-y-1">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-orange-400 text-xs font-bold flex items-center gap-1.5"><Globe size={12} /> Macros globales</span>
-              <button
-                onClick={() => setScope(null)}
-                className="ml-auto text-gray-500 hover:text-white text-xs px-1"
-                title="Fermer"
-              ><X size={12} /></button>
-            </div>
             <Slider label="Scale" value={macros.scale} min={0.1} max={3} step={0.05} accent="orange" live onChange={(v) => setGlobalMacro('scale', v)} />
             <Slider label="Speed all" value={macros.speed} min={0} max={3} step={0.05} unit="x" accent="orange" live onChange={(v) => setGlobalMacro('speed', v)} />
             <Slider label="Radius ×" value={macros.radius_scale} min={0.1} max={3} step={0.05} accent="orange" live onChange={(v) => setGlobalMacro('radius_scale', v)} />
@@ -434,19 +431,6 @@ const LiveDrawer: React.FC = () => {
       {scope === 'playback' && slot && (
         <div className="border-t border-indigo-900/40 px-4 py-2 flex items-start gap-6 overflow-x-auto max-h-[42vh] overflow-y-auto">
           <div className="flex-shrink-0 w-64 space-y-1">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-white text-xs font-bold truncate">{slot.name}</span>
-              {slot.movementId && (
-                <span className={`text-[10px] px-1 rounded ${slot.isPreview ? 'bg-cyan-900 text-cyan-300' : 'bg-green-900 text-green-300'}`}>
-                  {slot.isPreview ? 'PREV' : 'LIVE'}
-                </span>
-              )}
-              <button
-                onClick={() => setScope(null)}
-                className="ml-auto text-gray-500 hover:text-white text-xs px-1"
-                title="Fermer"
-              ><X size={12} /></button>
-            </div>
             <Slider
               label="Speed"
               value={slot.macros.speed}
@@ -523,21 +507,6 @@ const LiveDrawer: React.FC = () => {
       {/* ── Drawer PARAMS — chips de nodes + tous les params du node choisi ── */}
       {scope === 'params' && slot && (
         <div className="border-t border-indigo-900/40 px-4 py-2 flex items-start gap-6 overflow-x-auto max-h-[42vh] overflow-y-auto">
-          <div className="flex-shrink-0 w-40 pt-0.5">
-            <div className="flex items-center gap-2">
-              <span className="text-white text-xs font-bold truncate flex-1">{slot.name}</span>
-              <button
-                onClick={() => setScope(null)}
-                className="text-gray-500 hover:text-white text-xs px-1"
-                title="Fermer"
-              ><X size={12} /></button>
-            </div>
-            {slot.movementId && (
-              <span className={`text-[10px] px-1 rounded ${slot.isPreview ? 'bg-cyan-900 text-cyan-300' : 'bg-green-900 text-green-300'}`}>
-                {slot.isPreview ? 'PREV' : 'LIVE'}
-              </span>
-            )}
-          </div>
           {paramNodes.length === 0 && (
             <div className="text-gray-600 text-[10px] self-center">
               Aucun node paramétrable dans ce graphe — voir Playback / Tracks.
@@ -588,15 +557,6 @@ const LiveDrawer: React.FC = () => {
       {/* ── Drawer TRACKS — assignation + depth/phase du move sélectionné ── */}
       {scope === 'tracks' && slot && (
         <div className="border-t border-indigo-900/40 px-4 py-2 max-h-[42vh] overflow-y-auto">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-white text-xs font-bold truncate">{slot.name}</span>
-            <span className="text-gray-600 text-[10px]">— {slot.trackIds.length} track(s)</span>
-            <button
-              onClick={() => setScope(null)}
-              className="ml-auto text-gray-500 hover:text-white text-xs px-1"
-              title="Fermer"
-            ><X size={12} /></button>
-          </div>
           <TrackGrid
             compact
             tracks={allTrackInfos}
@@ -627,15 +587,6 @@ const LiveDrawer: React.FC = () => {
       {/* ── Drawer AUDIO — mods audio-réactifs du move sélectionné ── */}
       {scope === 'audio' && slot && (
         <div className="border-t border-indigo-900/40 px-4 py-2 max-h-[42vh] overflow-y-auto">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-white text-xs font-bold truncate">{slot.name}</span>
-            <span className="text-gray-600 text-[10px]">— audio → macros du move</span>
-            <button
-              onClick={() => setScope(null)}
-              className="ml-auto text-gray-500 hover:text-white text-xs px-1"
-              title="Fermer"
-            ><X size={12} /></button>
-          </div>
           <AudioModList />
         </div>
       )}
