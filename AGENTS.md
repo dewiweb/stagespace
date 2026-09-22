@@ -151,8 +151,10 @@ CI fails if the committed files drift from the Rust sources.
 
 ### Keyboard Shortcuts (Live)
 - `Space` — play/stop selected move
-- `Enter` — GO to next cue
-- `Backspace` — Go to previous cue
+- `Enter` — GO : advance setlist (crossfade to next move)
+- `Shift+Enter` — RECALL next cue (kills all moves + respawns snapshot)
+- `Backspace` — previous cue (recall)
 - `Esc` — Panic (stop all + send origin positions)
 - `Ctrl+Z` / `Ctrl+Y` — Undo/Redo
+- Cue list: click = arm, double-click = recall (no single-click scene kill)
 - Shortcuts disabled when typing in input fields

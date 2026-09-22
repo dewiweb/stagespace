@@ -10,7 +10,9 @@ import AudioPanel from './components/AudioPanel';
 import TabPanel from './components/TabPanel';
 import Toolbar from './components/Toolbar';
 import ToastContainer from './components/ToastContainer';
+import PerformView from './components/PerformView';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { useLiveShortcuts, usePerfStatsPolling } from './hooks/useLiveShortcuts';
 import { prepareGraphForSave } from './components/nodeParamSchema';
 import { useGraphStore, useMovementPositionsListener, useAudioErrorListener, useCueRecallListener } from './store/useGraphStore';
 import { useAnimationStore } from './store/useAnimationStore';
@@ -20,6 +22,8 @@ function App() {
   const movements = useGraphStore((s) => s.movements);
   const showExpert = useAnimationStore((s) => s.showExpert);
   const setShowExpert = useAnimationStore((s) => s.setShowExpert);
+  const performMode = useAnimationStore((s) => s.performMode);
+  const setPerformMode = useAnimationStore((s) => s.setPerformMode);
   const oscInPort = useGraphStore((s) => s.oscInPort);
   const [leftCollapsed, setLeftCollapsed] = React.useState(false);
   const [rightCollapsed, setRightCollapsed] = React.useState(false);
@@ -40,6 +44,11 @@ function App() {
   useAudioErrorListener();
   // Surface les recalls partiels (moves qui n'ont pas respawné).
   useCueRecallListener();
+  // Raccourcis live (Esc=panic, Enter=GO, Shift+Enter=recall) + polling perf —
+  // au niveau App : ils doivent fonctionner aussi en mode Perform (le Toolbar
+  // et sa stack se démontent).
+  useLiveShortcuts();
+  usePerfStatsPolling();
 
   // ── Resize des panneaux gauche et droit ──
   React.useEffect(() => {
@@ -148,18 +157,37 @@ function App() {
           </div>
           <div className="w-px h-4 bg-stagespace-border" />
           <button
-            onClick={() => setShowExpert(!showExpert)}
+            onClick={() => setPerformMode(!performMode)}
             className={`px-3 py-1 text-xs font-bold rounded transition-all flex items-center gap-1.5 ${
-              showExpert ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+              performMode ? 'bg-green-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
             }`}
-            title="Mode Expert — éditeur de graphe avancé (nodes, connexions, custom trajectories)"
+            title="Mode Perform — surface live : setlist, GO, panic, params live à la demande. L'édition est masquée."
           >
-            <span className="text-[10px]">{showExpert ? '◆' : '◇'}</span>
-            {showExpert ? 'Expert' : 'Simple'}
+            {performMode ? '◉ Perform' : '◎ Edit'}
           </button>
+          {!performMode && (
+            <button
+              onClick={() => setShowExpert(!showExpert)}
+              className={`px-3 py-1 text-xs font-bold rounded transition-all flex items-center gap-1.5 ${
+                showExpert ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+              }`}
+              title="Mode Expert — éditeur de graphe avancé (nodes, connexions, custom trajectories)"
+            >
+              <span className="text-[10px]">{showExpert ? '◆' : '◇'}</span>
+              {showExpert ? 'Expert' : 'Simple'}
+            </button>
+          )}
         </div>
       </header>
 
+      {performMode ? (
+        /* Mode Perform — surface live filtrée : Toolbar et édition absents,
+           les raccourcis live restent actifs (montés ci-dessus). */
+        <ErrorBoundary zone="Perform">
+          <PerformView />
+        </ErrorBoundary>
+      ) : (
+        <>
       {/* Toolbar (OSC settings, import .hol) */}
       <Toolbar />
 
@@ -336,6 +364,8 @@ function App() {
         )}
         </ErrorBoundary>
       </div>
+        </>
+      )}
 
       {/* Toast notifications — erreurs backend, alerts OSC, etc. */}
       <ToastContainer />

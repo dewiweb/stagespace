@@ -18,6 +18,10 @@ export const CuelistPanel: React.FC = () => {
   // Confirmation avant delete — un cue supprimé n'est pas récupérable et
   // le bouton ✕ est adjacent au recall (un misclick live coûte le cue).
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  // Arm-before-recall : un simple clic sur un cue l'arme (outline), le
+  // double-clic déclenche le recall. Un recall tue TOUS les moves actifs —
+  // un misclick en live viderait la scène.
+  const [armedCueId, setArmedCueId] = useState<string | null>(null);
 
   // Récupérer l'état actuel pour le store
   const nodes = useGraphStore((s) => s.nodes);
@@ -104,10 +108,10 @@ export const CuelistPanel: React.FC = () => {
         <button
           onClick={() => goToNextCue()}
           disabled={currentCueIndex + 1 >= cues.length || isRecalling}
-          className="px-1.5 py-0.5 text-[10px] bg-green-800 hover:bg-green-700 text-green-200 rounded disabled:opacity-30"
-          title="Cue suivant (GO)"
+          className="px-1.5 py-0.5 text-[10px] bg-purple-800 hover:bg-purple-700 text-purple-200 rounded disabled:opacity-30"
+          title="Cue suivant — RECALL : remplace toute la scène (kill + respawn). GO setlist = Enter."
         >
-          GO ▶
+          RECALL ▶
         </button>
       </div>
 
@@ -144,9 +148,16 @@ export const CuelistPanel: React.FC = () => {
                 className={`px-3 py-2 flex items-center gap-2 cursor-pointer transition-colors ${
                   idx === currentCueIndex
                     ? 'bg-purple-900/30 border-l-2 border-purple-500'
-                    : 'hover:bg-gray-800/50'
+                    : cue.id === armedCueId
+                      ? 'bg-purple-900/10 ring-1 ring-inset ring-purple-500/60'
+                      : 'hover:bg-gray-800/50'
                 }`}
-                onClick={() => recallCue(cue.id)}
+                onClick={() => setArmedCueId(cue.id === armedCueId ? null : cue.id)}
+                onDoubleClick={() => {
+                  setArmedCueId(null);
+                  recallCue(cue.id);
+                }}
+                title={idx === currentCueIndex ? 'Cue courant' : 'Clic = armer · double-clic = RECALL (remplace toute la scène)'}
               >
                 <span className="text-gray-500 text-[10px] tabular-nums w-6">
                   {idx + 1}

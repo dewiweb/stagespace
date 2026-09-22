@@ -73,6 +73,10 @@ interface AnimationStore {
   // Mode Expert (node editor) — partagé pour que MovesPanel puisse l'activer via [edit]
   showExpert: boolean;
   setShowExpert: (show: boolean) => void;
+  // Mode Perform — surface live réduite (setlist + canvas + params live à la
+  // demande). L'édition structurelle (nodes, templates, OSC config) est cachée.
+  performMode: boolean;
+  setPerformMode: (on: boolean) => void;
 
   // Actions
   setCurrent: (anim: Animation) => void;
@@ -249,6 +253,8 @@ export const useAnimationStore = create<AnimationStore>((set, get) => {
   launchFlash: 0,
   showExpert: false,
   setShowExpert: (show) => set({ showExpert: show }),
+  performMode: false,
+  setPerformMode: (on) => set({ performMode: on }),
 
   setCurrent: (anim) => set({ current: anim }),
 

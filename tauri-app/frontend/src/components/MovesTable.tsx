@@ -201,7 +201,7 @@ export default function MovesTable() {
               onClick={handleGO}
               disabled={!nextSetlistSlotId}
               className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm font-bold rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95"
-              title="GO : passe au prochain move de la setlist"
+              title="GO : passe au prochain move de la setlist (crossfade) — Enter. RECALL cue = Shift+Enter."
             >
               GO ▶
             </button>
