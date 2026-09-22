@@ -59,6 +59,8 @@ export default function Inspector() {
   const setMacros = useGraphStore((s) => s.setMacros);
   const pushMacrosToRuntime = useGraphStore((s) => s.pushMacrosToRuntime);
   const editingSlotId = useGraphStore((s) => s.editingSlotId);
+  const moveSlots = useGraphStore((s) => s.moveSlots);
+  const selectSlotForEditing = useGraphStore((s) => s.selectSlotForEditing);
   // Statut live du slot édité — les edits d'un move ON AIR partent au runtime
   // (hot-swap / update_animation_state), ce badge rend ce scope visible.
   const editingSlot = useGraphStore((s) => s.moveSlots.find((sl) => sl.id === editingSlotId) ?? null);
@@ -246,8 +248,40 @@ export default function Inspector() {
 
         {!hasEditingSlot ? (
           /* ═══════════════ MODE GLOBAL (aucun slot sélectionné) ═══════════════ */
-          /* Only show global-affecting sections: Macros + Audio + movements list */
           <>
+            {/* MOVES — mini liste : tap → sélectionne le slot pour édition.
+                Sans ça l'Inspector global était une impasse (macros seuls). */}
+            <Section title="Moves" icon={<Play size={12} />} defaultOpen={true}
+              badge={moveSlots.length > 0 ? `${moveSlots.length}` : undefined}>
+              {moveSlots.length === 0 ? (
+                <div className="text-gray-600 text-[10px] py-1">
+                  Aucun slot — crée un move depuis le panneau Show (gauche).
+                </div>
+              ) : (
+                <div className="space-y-0.5">
+                  {moveSlots.map((slot) => (
+                    <button
+                      key={slot.id}
+                      onClick={() => selectSlotForEditing(slot.id)}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded border bg-gray-800/40 border-gray-700/40 hover:border-gray-600 hover:bg-gray-800/60 transition-all text-left"
+                      title="Sélectionner ce move pour l'éditer"
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                        slot.movementId
+                          ? slot.isPreview ? 'bg-cyan-400' : 'bg-green-400 animate-pulse'
+                          : 'bg-gray-600'
+                      }`} />
+                      <span className="text-white text-[11px] flex-1 truncate">{slot.name}</span>
+                      <span className="text-gray-500 text-[10px] font-mono flex-shrink-0">
+                        {slot.trackIds.length}trk
+                      </span>
+                      <span className="text-gray-600 text-[10px]">→</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </Section>
+
             {/* MACROS — runtime controls globaux (affectent tous les moves) */}
             <Section title="Macros" icon={<Zap size={12} />} defaultOpen={true}
               badge={activeMovementIds.length > 0 ? `${activeMovementIds.length} live` : undefined}>
