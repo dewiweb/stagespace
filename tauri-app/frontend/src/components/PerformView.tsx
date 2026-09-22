@@ -430,76 +430,85 @@ const LiveDrawer: React.FC = () => {
       {/* ── Drawer PLAYBACK — lecture du move sélectionné ── */}
       {scope === 'playback' && slot && (
         <div className="border-t border-indigo-900/40 px-4 py-2 flex items-start gap-6 overflow-x-auto max-h-[42vh] overflow-y-auto">
+          {/* Speed — gros fader du move */}
           <div className="flex-shrink-0 w-64 space-y-1">
+            <div className="text-gray-500 text-[10px] uppercase tracking-wider">Speed</div>
             <Slider
-              label="Speed"
               value={slot.macros.speed}
               min={0}
               max={3}
               step={0.05}
               unit="x"
               accent="green"
+              layout="stack"
               live={!!slot.movementId}
               onChange={(v) => setSlotMacros(slot.id, { speed: v })}
             />
-            <div className="flex gap-1">
-              {(['forward', 'backward', 'ping_pong'] as const).map((d) => (
-                <button
-                  key={d}
-                  onClick={() => setSlotDirection(slot.id, d)}
-                  className={`flex-1 py-1 text-[10px] rounded ${
-                    slot.direction === d
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-800 text-gray-500 hover:text-gray-300'
-                  }`}
-                >
-                  {d === 'ping_pong' ? 'pingpong' : d}
-                </button>
-              ))}
-            </div>
-            <div className="flex gap-1">
-              {(['loop', 'oneshot'] as const).map((l) => (
-                <button
-                  key={l}
-                  onClick={() => setSlotLoopMode(slot.id, l)}
-                  className={`flex-1 py-1 text-[10px] rounded ${
-                    slot.loopMode === l
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-800 text-gray-500 hover:text-gray-300'
-                  }`}
-                >
-                  {l}
-                </button>
-              ))}
-            </div>
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <Slider
-                  label="Fade in"
-                  value={current.fade_in}
-                  min={0}
-                  max={5}
-                  step={0.1}
-                  unit="s"
-                  accent="purple"
-                  live={!!slot.movementId}
-                  onChange={(v) => updateCurrent({ fade_in: v })}
-                />
-              </div>
-              <div className="flex-1">
-                <Slider
-                  label="Fade out"
-                  value={current.fade_out}
-                  min={0}
-                  max={5}
-                  step={0.1}
-                  unit="s"
-                  accent="purple"
-                  live={!!slot.movementId}
-                  onChange={(v) => updateCurrent({ fade_out: v })}
-                />
+          </div>
+          {/* Direction + loop — groupes de boutons */}
+          <div className="flex-shrink-0 w-56 space-y-2">
+            <div>
+              <div className="text-gray-500 text-[10px] uppercase tracking-wider mb-1">Direction</div>
+              <div className="flex gap-1">
+                {(['forward', 'backward', 'ping_pong'] as const).map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => setSlotDirection(slot.id, d)}
+                    className={`flex-1 py-1.5 text-[10px] rounded ${
+                      slot.direction === d
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-800 text-gray-500 hover:text-gray-300'
+                    }`}
+                  >
+                    {d === 'ping_pong' ? 'pingpong' : d}
+                  </button>
+                ))}
               </div>
             </div>
+            <div>
+              <div className="text-gray-500 text-[10px] uppercase tracking-wider mb-1">Mode</div>
+              <div className="flex gap-1">
+                {(['loop', 'oneshot'] as const).map((l) => (
+                  <button
+                    key={l}
+                    onClick={() => setSlotLoopMode(slot.id, l)}
+                    className={`flex-1 py-1.5 text-[10px] rounded ${
+                      slot.loopMode === l
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-800 text-gray-500 hover:text-gray-300'
+                    }`}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          {/* Fades de cycle */}
+          <div className="flex-shrink-0 w-64 space-y-1">
+            <div className="text-gray-500 text-[10px] uppercase tracking-wider">Fades</div>
+            <Slider
+              label="In"
+              value={current.fade_in}
+              min={0}
+              max={5}
+              step={0.1}
+              unit="s"
+              accent="purple"
+              live={!!slot.movementId}
+              onChange={(v) => updateCurrent({ fade_in: v })}
+            />
+            <Slider
+              label="Out"
+              value={current.fade_out}
+              min={0}
+              max={5}
+              step={0.1}
+              unit="s"
+              accent="purple"
+              live={!!slot.movementId}
+              onChange={(v) => updateCurrent({ fade_out: v })}
+            />
           </div>
         </div>
       )}
