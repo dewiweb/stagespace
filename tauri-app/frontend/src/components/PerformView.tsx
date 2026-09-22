@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Square, Globe, X } from 'lucide-react';
+import { Play, Square, Globe, X, SlidersHorizontal } from 'lucide-react';
 import Scene3D from './Scene3D';
 import CuelistPanel from './CuelistPanel';
 import { Slider } from './ui/Slider';
@@ -147,7 +147,7 @@ export const PerformView: React.FC = () => {
         <div className="w-72 flex-shrink-0 border-r border-stagespace-border flex flex-col bg-stagespace-panel min-h-0">
           <div className="flex-1 overflow-y-auto min-h-0">
             <div className="px-3 py-2 text-gray-500 text-[10px] uppercase tracking-wider border-b border-stagespace-border">
-              Moves — tap ▶ = layer
+              Moves — tap = params · <Play size={9} className="inline -mt-0.5" /> = layer
             </div>
             {orderedSlots.map((slot) => {
               const isPlaying = !!slot.movementId || pendingPlays.includes(slot.id);
@@ -158,7 +158,8 @@ export const PerformView: React.FC = () => {
                 <div
                   key={slot.id}
                   onClick={() => selectSlotForEditing(isSelected ? null : slot.id)}
-                  className={`flex items-center gap-2 px-3 py-2.5 cursor-pointer border-b border-gray-800/40 transition-colors ${
+                  title="Params live de ce move"
+                  className={`group flex items-center gap-2 px-3 py-2.5 cursor-pointer border-b border-gray-800/40 transition-colors ${
                     isSelected
                       ? 'bg-indigo-900/30 ring-1 ring-inset ring-indigo-600/60'
                       : isPlaying
@@ -206,6 +207,10 @@ export const PerformView: React.FC = () => {
                   {isCurrentSetlist && (
                     <span className="text-purple-400 text-[10px] font-bold" title="Setlist courante">●</span>
                   )}
+                  <SlidersHorizontal
+                    size={12}
+                    className={`flex-shrink-0 ${isSelected ? 'text-indigo-300' : 'text-gray-700 group-hover:text-gray-500'}`}
+                  />
                 </div>
               );
             })}
@@ -317,8 +322,13 @@ const LiveDrawer: React.FC = () => {
             <Globe size={11} className="inline -mt-0.5" /> Global
           </button>
         )}
-        {playingSlots.length === 0 && (
-          <span className="text-gray-600 text-[10px]">aucun move actif — ▶ sur la setlist</span>
+        {playingSlots.length === 0 && !slot && (
+          <span className="text-gray-600 text-[10px]">
+            aucun move actif — tap un move pour ses params · <Play size={9} className="inline -mt-0.5" /> = layer live
+          </span>
+        )}
+        {playingSlots.length === 0 && slot && (
+          <span className="text-indigo-400/70 text-[10px]">params : {slot.name} (stoppé)</span>
         )}
       </div>
 
