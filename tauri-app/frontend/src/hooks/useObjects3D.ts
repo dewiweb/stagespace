@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { useGraphStore } from '../store/useGraphStore';
 import { toThree } from '../utils/coords';
+import { removeWithLabels } from '../utils/three';
 
 
 interface UseObjects3DParams {
@@ -46,7 +47,10 @@ export function useObjects3D({ sceneRef, nObjects, sceneReady }: UseObjects3DPar
     if (currentCount > nObjects) {
       for (let i = currentCount - 1; i >= nObjects; i--) {
         const obj = current[i];
-        scene.remove(obj);
+        // removeWithLabels : sans ça, l'event 'removed' n'atteint pas le
+        // CSS2DObject enfant → son div reste orphelin dans le DOM du
+        // CSS2DRenderer (label figé, visible alors que le mesh est parti).
+        removeWithLabels(scene, obj);
         obj.geometry.dispose();
         (obj.material as THREE.Material).dispose();
       }

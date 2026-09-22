@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { HolProject } from '../store/useGraphStore';
 import { toThree } from '../utils/coords';
+import { removeWithLabels } from '../utils/three';
 
 
 interface UseHolMarkersParams {
@@ -23,13 +24,15 @@ export function useHolMarkers({ sceneRef, cameraRef, holProject }: UseHolMarkers
     const scene = sceneRef.current;
     if (!scene) return;
 
-    // Remove old markers + labels (dispose geometry/material pour éviter les fuites)
+    // Remove old markers (les labels sont enfants des rings — retirés et
+    // détachés du DOM par l'event 'removed' propagé aux descendants)
     holMarkersRef.current.forEach((m) => {
-      scene.remove(m);
+      // removeWithLabels : détache le CSS2DObject enfant du DOM (l'event
+      // 'removed' ne se propage pas aux descendants dans three.js).
+      removeWithLabels(scene, m);
       m.geometry.dispose();
       (m.material as THREE.Material).dispose();
     });
-    holLabelsRef.current.forEach((l) => scene.remove(l));
     holMarkersRef.current = [];
     holLabelsRef.current = [];
 
@@ -52,14 +55,16 @@ export function useHolMarkers({ sceneRef, cameraRef, holProject }: UseHolMarkers
       scene.add(ring);
       holMarkersRef.current.push(ring);
 
-      // Label
+      // Label — ENFANT du ring (offset local) : la visibilité suit le
+      // marker automatiquement (CSS2DRenderer cache les descendants d'un
+      // objet invisible). Avant : ajouté à la scène → jamais caché.
       const div = document.createElement('div');
       div.className = 'hol-track-label';
       div.textContent = `${track.name} (#${track.id})`;
       div.style.cssText = 'color: #aaa; font-size: 10px; font-family: monospace; background: rgba(0,0,0,0.5); padding: 1px 4px; border-radius: 2px; white-space: nowrap;';
       const label = new CSS2DObject(div);
-      label.position.set(rx, ry + 0.25, rz);
-      scene.add(label);
+      label.position.set(0, 0.25, 0);
+      ring.add(label);
       holLabelsRef.current.push(label);
     });
   }, [holProject, sceneRef, cameraRef]);

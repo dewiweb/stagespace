@@ -406,9 +406,13 @@ export function useRenderLoop({
       }
 
 
-      // Hol markers font face à la caméra (billboard)
+      // Hol markers : billboard + règle focus (slot sélectionné → seuls les
+      // markers de ses tracks). visible=false cache aussi le label enfant.
       const camPos = camera.position;
-      holMarkersRef.current.forEach((m) => m.lookAt(camPos));
+      holMarkersRef.current.forEach((m, i) => {
+        m.visible = !focusActive || focusedTracks.has(i);
+        if (m.visible) m.lookAt(camPos);
+      });
 
       // Mise à jour du handle + trajectory line en manipulate mode
       if (handleRef.current && trajectoryLineRef.current) {
