@@ -60,9 +60,7 @@ export interface UseRenderLoopParams {
   // NOTE: movementPositions et movements sont lus via getState() dans la boucle
   // pour éviter 60 re-renders React par seconde.
   macros: MacrosValue;
-  assignMode: boolean;
   manipulateMode: boolean;
-  selectedTrackIds: Set<number>;
   holProject: HolProject | null;
   drawnPoints: DrawnPointsValue;
   draggingObjectRef: MutableRefObject<number | null>;
@@ -95,9 +93,7 @@ export function useRenderLoop({
   trajectoryLineRef,
   drawCanvasRef,
   macros,
-  assignMode,
   manipulateMode,
-  selectedTrackIds,
   holProject,
   drawnPoints,
   draggingObjectRef,
@@ -106,9 +102,7 @@ export function useRenderLoop({
 }: UseRenderLoopParams) {
   // Refs internes pour les valeurs changeantes — lues dans le render loop à 60fps
   const macrosRef = useRef(macros);
-  const assignModeRef = useRef(assignMode);
   const manipulateModeRef = useRef(manipulateMode);
-  const selectedTrackIdsRef = useRef(selectedTrackIds);
   const holProjectRef = useRef(holProject);
   const drawnPointsRef = useRef(drawnPoints);
   const manualPositionsRef = useRef(manualPositions);
@@ -116,9 +110,7 @@ export function useRenderLoop({
 
   // Sync des refs à chaque render React (cheap — pas d'effet de bord)
   macrosRef.current = macros;
-  assignModeRef.current = assignMode;
   manipulateModeRef.current = manipulateMode;
-  selectedTrackIdsRef.current = selectedTrackIds;
   holProjectRef.current = holProject;
   drawnPointsRef.current = drawnPoints;
   manualPositionsRef.current = manualPositions;
@@ -214,6 +206,7 @@ export function useRenderLoop({
     const scratch = {
       posMap: new Map<number, { index: number; x: number; y: number; z: number }>(),
       highlighted: new Set<number>(),
+      focused: new Set<number>(),
       previewTracks: new Set<number>(),
       liveTracks: new Set<number>(),
       defaultColor: new THREE.Color(),
@@ -258,14 +251,13 @@ export function useRenderLoop({
       const mvts = storeState.movements;
       const mvPosMap = storeState.movementPositions;
       const holProj = holProjectRef.current;
-      const assignMode = assignModeRef.current;
-      const selTrackIds = selectedTrackIdsRef.current;
       const dragObj = draggingObjectRef.current;
 
       // Structures scratch réutilisées à chaque frame — pas d'allocation
       // dans la boucle (Map/Set/Color recréés à 60fps = pression GC).
       const posMap = scratch.posMap; posMap.clear();
       const highlightedTracks = scratch.highlighted; highlightedTracks.clear();
+      const focusedTracks = scratch.focused; focusedTracks.clear();
       const previewTracks = scratch.previewTracks; previewTracks.clear();
       const liveTracks = scratch.liveTracks; liveTracks.clear();
       const defaultColor = scratch.defaultColor;
@@ -274,6 +266,22 @@ export function useRenderLoop({
       const globalPos = mvPosMap['global'];
       const holTracks = holProj?.tracks ?? [];
       const manualIds = storeState.manualOscIds;
+
+      // ── Focus : slot sélectionné → la scène ne montre que SES tracks ──
+      // Pas de slot sélectionné = vue d'ensemble (tous les moves/tracks).
+      const editingSlotId = storeState.editingSlotId;
+      const editingSlot = editingSlotId
+        ? storeState.moveSlots.find((s) => s.id === editingSlotId)
+        : null;
+      const focusActive = !!editingSlot;
+      if (focusActive) {
+        editingSlot.trackIds.forEach((trackId) => {
+          const idx = holProj
+            ? holTracks.findIndex((t) => t.id === trackId)
+            : manualIds.indexOf(trackId);
+          if (idx >= 0) focusedTracks.add(idx);
+        });
+      }
 
       // Sets par move — une track est "preview" si un move preview la couvre
       // et qu'AUCUN move live ne la couvre (un move live gagne toujours).
@@ -290,30 +298,24 @@ export function useRenderLoop({
         // Le visualiseur est un viewer passif — il ne recalcule RIEN.
         for (const p of globalPos) posMap.set(p.index, p);
 
-        // Tracks du move sélectionné → highlight (hol ou manual ids)
-        const editingSlotId = storeState.editingSlotId;
-        if (editingSlotId) {
-          const slot = storeState.moveSlots.find((s) => s.id === editingSlotId && s.movementId);
-          if (slot?.trackIds) {
-            slot.trackIds.forEach((trackId) => {
-              const idx = holProj
-                ? holTracks.findIndex((t) => t.id === trackId)
-                : manualIds.indexOf(trackId);
-              if (idx >= 0) highlightedTracks.add(idx);
-            });
-          }
+        // Tracks du move sélectionné → highlight (le set focused est déjà
+        // calculé plus haut ; on ne highlight que si le slot est live)
+        if (editingSlot?.movementId) {
+          focusedTracks.forEach((idx) => highlightedTracks.add(idx));
         }
 
         // Zones actives — pour le highlight des objets affectés
         const manualZones = storeState.zones ?? [];
         const graphZones = storeState.graphZones ?? [];
-        const hasZones = !assignMode && (manualZones.length > 0 || graphZones.length > 0);
+        const hasZones = manualZones.length > 0 || graphZones.length > 0;
 
         // Cacher tous les meshes, puis réafficher ceux qui ont une position
         objs.forEach((mesh) => { hideMeshAndLabels(mesh); });
 
         objs.forEach((mesh, objIdx) => {
           if (dragObj !== null && objIdx === dragObj) return;
+          // Focus : hors des tracks du slot édité → caché
+          if (focusActive && !focusedTracks.has(objIdx)) return;
           const p = posMap.get(objIdx);
           if (p) {
             const [tx, ty, tz] = toThree(p.x, p.y, p.z);
@@ -358,7 +360,7 @@ export function useRenderLoop({
                 mat.emissive.lerp(zoneTint, Math.min(influence, 1));
               }
             }
-          } else if (!assignMode) {
+          } else {
             // Pas de position pour cet objet → manualPositions (statique)
             const manualPos = manualPositionsRef.current;
             const mp = manualPos[objIdx];
@@ -386,12 +388,13 @@ export function useRenderLoop({
         // plutôt qu'un flash de scène vide) ──
         const manualPos = manualPositionsRef.current;
         const manipMode = manipulateModeRef.current;
-        const asgnMode = assignModeRef.current;
-        const showObjects = manipMode || asgnMode || mvts.length > 0;
+        const showObjects = manipMode || mvts.length > 0;
         objs.forEach((mesh) => { hideMeshAndLabels(mesh); });
         if (showObjects) {
           objs.forEach((mesh, i) => {
             if (dragObj !== null && i === dragObj) return;
+            // Focus : hors des tracks du slot édité → caché
+            if (focusActive && !focusedTracks.has(i)) return;
             const p = manualPos[i];
             if (p) {
               const [tx, ty, tz] = toThree(p[0], p[1], p[2]);
@@ -402,30 +405,6 @@ export function useRenderLoop({
         }
       }
 
-      // Mode assign : couleurs vert/gris selon la sélection — APPLIQUÉ EN
-      // DERNIER pour rester visible pendant la lecture (avant, le bloc
-      // multi-move écrasait les couleurs → assign inerte dès qu'un move
-      // tournait).
-      if (assignMode && holProj) {
-        objs.forEach((mesh, i) => {
-          if (i < holProj.tracks.length) {
-            const trackId = holProj.tracks[i].id;
-            const isSelected = selTrackIds.has(trackId);
-            const mat = mesh.material as THREE.MeshStandardMaterial;
-            if (isSelected) {
-              mat.color.setHex(0x00ff66);
-              mat.emissive.setHex(0x004422);
-              mat.opacity = 1.0;
-              mat.transparent = false;
-            } else {
-              mat.color.setHex(0x444444);
-              mat.emissive.setHex(0x111111);
-              mat.opacity = 0.3;
-              mat.transparent = true;
-            }
-          }
-        });
-      }
 
       // Hol markers font face à la caméra (billboard)
       const camPos = camera.position;

@@ -7,11 +7,10 @@ interface UseInteractionModesParams {
   rendererRef: MutableRefObject<THREE.WebGLRenderer | null>;
   drawMode: boolean;
   manipulateMode: boolean;
-  assignMode: boolean;
 }
 
 /**
- * Active/désactive OrbitControls selon le mode (draw/manipulate/assign).
+ * Active/désactive OrbitControls selon le mode (draw/manipulate).
  * Gère les pointer events du canvas WebGL.
  *
  * Mutation impérative de refs Three.js — pas besoin de useEffect car :
@@ -24,9 +23,8 @@ export function useInteractionModes({
   rendererRef,
   drawMode,
   manipulateMode,
-  assignMode,
 }: UseInteractionModesParams) {
-  const interactMode = drawMode || manipulateMode || assignMode;
+  const interactMode = drawMode || manipulateMode;
   if (controlsRef.current) {
     controlsRef.current.enabled = !interactMode;
   }

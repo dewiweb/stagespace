@@ -35,12 +35,13 @@ export const TrajectoryVisualization: React.FC<TrajectoryVisualizationProps> = (
   const selectedMovementId = editingSlotId
     ? moveSlots.find((s) => s.id === editingSlotId)?.movementId ?? null
     : null;
-  // Si un move est sélectionné, n'afficher que son path ; sinon afficher tous
+  // Focus cohérent avec la scène : slot sélectionné → son path seulement
+  // (stoppé = aucun path) ; aucun slot sélectionné → tous les paths.
   // useMemo : identité stable entre renders (le filter sinon crée un tableau
   // neuf à chaque render → l'effet ci-dessous re-samplerait en boucle).
   const movementsToShow = useMemo(
-    () => (selectedMovementId ? movements.filter((m) => m.id === selectedMovementId) : movements),
-    [movements, selectedMovementId],
+    () => (editingSlotId ? movements.filter((m) => m.id === selectedMovementId) : movements),
+    [movements, selectedMovementId, editingSlotId],
   );
 
   const macrosKey = `${macros.speed},${macros.scale},${macros.shiftX},${macros.shiftY},${macros.shiftZ},${macros.yaw},${macros.pitch},${macros.roll},${macros.radius_scale},${macros.height_offset}`;

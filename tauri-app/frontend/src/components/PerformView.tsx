@@ -357,6 +357,19 @@ const LiveDrawer: React.FC = () => {
         <span className="text-gray-500 text-[10px] uppercase tracking-wider flex-shrink-0">
           Live{playingSlots.length > 0 ? ` ${playingSlots.length}` : ''}
         </span>
+        {playingSlots.length > 0 && (
+          <button
+            onClick={() => { selectSlotForEditing(null); setScope(null); }}
+            className={`px-3 py-1 rounded-full text-[11px] font-medium whitespace-nowrap transition-colors ${
+              !editingSlotId
+                ? 'bg-indigo-600 text-white'
+                : 'bg-gray-800 text-gray-400 hover:text-white border border-gray-700'
+            }`}
+            title="Vue d'ensemble — toutes les tracks de tous les moves"
+          >
+            All
+          </button>
+        )}
         {playingSlots.map((s) => (
           <button
             key={s.id}

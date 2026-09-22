@@ -1,24 +1,22 @@
 import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
-import { Move3d, Crosshair, Pencil } from 'lucide-react';
+import { Move3d, Pencil } from 'lucide-react';
 
 interface ModeButtonsProps {
   manipulateMode: boolean;
-  assignMode: boolean;
   setManipulateMode: (v: boolean) => void;
-  setAssignMode: (v: boolean) => void;
 }
 
 /**
- * Boutons toggle Manipulate / Assign — toujours visibles (sauf en draw mode).
- * Extrait de Scene3D.
+ * Boutons toggle Manipulate / Draw — toujours visibles (sauf en draw mode).
+ * Extrait de Scene3D. (L'assignation de tracks se fait dans la TrackGrid —
+ * le mode assign 3D a été retiré.)
  */
 export const ModeButtons: React.FC<ModeButtonsProps> = ({
-  manipulateMode, assignMode, setManipulateMode, setAssignMode,
+  manipulateMode, setManipulateMode,
 }) => {
   const drawMode = useGraphStore((s) => s.drawMode);
   const setDrawMode = useGraphStore((s) => s.setDrawMode);
-  const selectedTrackIds = useGraphStore((s) => s.selectedTrackIds);
   const hasDrawableNode = useGraphStore((s) =>
     s.nodes.some((n) =>
       n.data.type === 'DrawSpline' ||
@@ -36,25 +34,16 @@ export const ModeButtons: React.FC<ModeButtonsProps> = ({
     <>
       <div className="absolute bottom-2 left-2 z-20 flex gap-1">
         <button
-          onClick={() => { setManipulateMode(!manipulateMode); setAssignMode(false); }}
+          onClick={() => setManipulateMode(!manipulateMode)}
           className={`px-2.5 py-1 text-[10px] rounded font-medium transition-colors ${
             manipulateMode ? 'bg-blue-600 text-white' : 'bg-gray-900/80 text-gray-400 hover:text-white border border-gray-700'
           }`}
         >
           <Move3d size={11} className="inline -mt-0.5" /> Manipulate
         </button>
-        <button
-          onClick={() => { setAssignMode(!assignMode); setManipulateMode(false); }}
-          className={`px-2.5 py-1 text-[10px] rounded font-medium transition-colors ${
-            assignMode ? 'bg-green-600 text-white' : 'bg-gray-900/80 text-gray-400 hover:text-white border border-gray-700'
-          }`}
-          title="Click objects to assign/unassign them from the trajectory"
-        >
-          <Crosshair size={11} className="inline -mt-0.5" /> Assign
-        </button>
         {hasDrawableNode && (
           <button
-            onClick={() => { setDrawMode(true); setManipulateMode(false); setAssignMode(false); }}
+            onClick={() => { setDrawMode(true); setManipulateMode(false); }}
             className="px-2.5 py-1 text-[10px] rounded font-medium transition-colors bg-gray-900/80 text-gray-400 hover:text-white border border-gray-700"
             title="Draw a freehand spline trajectory (or flow line for a drawn VectorField)"
           >
@@ -62,13 +51,6 @@ export const ModeButtons: React.FC<ModeButtonsProps> = ({
           </button>
         )}
       </div>
-      {assignMode && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 bg-gray-900/90 backdrop-blur rounded-lg px-3 py-1.5 border border-green-600/50">
-          <span className="text-green-400 text-[10px] font-medium">
-            <Crosshair size={11} className="inline -mt-0.5" /> Assign mode — click objects to toggle assignment ({selectedTrackIds.size} selected)
-          </span>
-        </div>
-      )}
       {manipulateMode && (
         <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 bg-gray-900/90 backdrop-blur rounded-lg px-3 py-1.5 border border-blue-600/50">
           <span className="text-blue-400 text-[10px] font-medium">

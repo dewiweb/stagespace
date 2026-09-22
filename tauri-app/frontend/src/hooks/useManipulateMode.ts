@@ -12,12 +12,12 @@ interface UseManipulateModeParams {
   objectsRef: MutableRefObject<THREE.Mesh[]>;
   handleRef: MutableRefObject<THREE.Mesh | null>;
   manipulateMode: boolean;
-  assignMode: boolean;
 }
 
 /**
  * Gère le mode manipulation : drag des objets 3D et du handle,
- * rotation (shift+drag), scale (scroll), et mode assign (clic pour sélectionner).
+ * rotation (shift+drag), scale (scroll).
+ * (L'assignation de tracks se fait dans la TrackGrid — mode assign retiré.)
  */
 export function useManipulateMode({
   cameraRef,
@@ -25,7 +25,6 @@ export function useManipulateMode({
   objectsRef,
   handleRef,
   manipulateMode,
-  assignMode,
 }: UseManipulateModeParams) {
   const [draggingObject, setDraggingObject] = useState<number | null>(null);
   const draggingObjectRef = useRef<number | null>(null);
@@ -64,9 +63,7 @@ export function useManipulateMode({
   // Manipulate handlers — drag objects or handle
   const handleManipulateDown = useCallback(
     (e: React.PointerEvent) => {
-      // Assign mode a besoin des clics (toggle track) — le guard ne doit
-      // bloquer QUE si aucun des deux modes n'est actif.
-      if (!manipulateMode && !assignMode) return;
+      if (!manipulateMode) return;
       const camera = cameraRef.current;
       const container = containerRef.current;
       if (!camera || !container) return;
@@ -79,9 +76,8 @@ export function useManipulateMode({
       const raycaster = new THREE.Raycaster();
       raycaster.setFromCamera(ndc, camera);
 
-      // Check handle first — uniquement en manipulate (le handle n'existe
-      // pas en assign mode, et on ne veut pas démarrer de drag dessus)
-      if (manipulateMode && handleRef.current) {
+      // Check handle first
+      if (handleRef.current) {
         const hits = raycaster.intersectObject(handleRef.current);
         if (hits.length > 0) {
           setDraggingHandle(true);
@@ -105,34 +101,12 @@ export function useManipulateMode({
           idx = objectsRef.current.indexOf(hitObj);
         }
         if (idx >= 0) {
-          if (assignMode) {
-            // Mode assign: toggle cet objet dans la sélection de tracks
-            const holProj = useGraphStore.getState().holProject;
-            const manualIds = useGraphStore.getState().manualOscIds;
-            let trackId: number | null = null;
-            if (holProj && idx < holProj.tracks.length) {
-              trackId = holProj.tracks[idx].id;
-            } else if (idx < manualIds.length) {
-              trackId = manualIds[idx];
-            }
-            if (trackId !== null) {
-              useGraphStore.getState().toggleTrackSelection(trackId);
-              // Sync l'animation store : si la track devient sélectionnée, ajouter un assignment à 100%
-              const isSelected = useGraphStore.getState().selectedTrackIds.has(trackId);
-              const animStore = animStoreRef.current;
-              const existing = animStore.current.assignments.find((a) => a.track_id === trackId);
-              if (isSelected && !existing) {
-                animStore.updateAssignment(trackId, { depth: 1.0, phase_offset: 0 });
-              }
-            }
-          } else {
-            setDraggingObject(idx);
-            (e.target as HTMLElement).setPointerCapture(e.pointerId);
-          }
+          setDraggingObject(idx);
+          (e.target as HTMLElement).setPointerCapture(e.pointerId);
         }
       }
     },
-    [manipulateMode, assignMode, cameraRef, containerRef, handleRef, objectsRef],
+    [manipulateMode, cameraRef, containerRef, handleRef, objectsRef],
   );
 
   const handleManipulateMove = useCallback(

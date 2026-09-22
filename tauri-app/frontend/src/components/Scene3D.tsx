@@ -42,16 +42,13 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   const macros = useGraphStore((s) => s.macros);
   const nodes = useGraphStore((s) => s.nodes);
   const holProject = useGraphStore((s) => s.holProject);
-  const selectedTrackIds = useGraphStore((s) => s.selectedTrackIds);
   const drawMode = useGraphStore((s) => s.drawMode);
   const drawnPoints = useGraphStore((s) => s.drawnPoints);
 
   // Modes d'interaction — slice du store (le handler Esc global peut les
   // annuler avant le panic ; mutual exclusion gérée par le slice)
   const manipulateMode = useGraphStore((s) => s.manipulateMode);
-  const assignMode = useGraphStore((s) => s.assignMode);
   const setManipulateMode = useGraphStore((s) => s.setManipulateMode);
-  const setAssignMode = useGraphStore((s) => s.setAssignMode);
 
   // Multi-movement state — movements et movementPositions sont lus via getState()
   // dans useRenderLoop pour éviter 60 re-renders/seconde.
@@ -95,7 +92,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   const { holMarkersRef } = useHolMarkers({ sceneRef, cameraRef, holProject });
   const { objectsRef } = useObjects3D({ sceneRef, nObjects, sceneReady });
   const { handleRef, trajectoryLineRef } = useManipulateHandle({ sceneRef, manipulateMode });
-  useInteractionModes({ controlsRef, rendererRef, drawMode, manipulateMode, assignMode });
+  useInteractionModes({ controlsRef, rendererRef, drawMode, manipulateMode });
 
   // ── Hooks extraits (handlers d'interaction) ──
   const { drawCanvasRef, handleDrawStart, handleDrawMove, handleDrawEnd } =
@@ -114,7 +111,6 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
     objectsRef,
     handleRef,
     manipulateMode,
-    assignMode,
   });
 
   // Resize observer — merge du handle resize en un seul effect
@@ -156,9 +152,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
     trajectoryLineRef,
     drawCanvasRef,
     macros,
-    assignMode,
     manipulateMode,
-    selectedTrackIds,
     holProject,
     drawnPoints,
     draggingObjectRef,
@@ -219,9 +213,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
       {manipulateMode && <MacrosPanel isPlaying={isPlaying} hasMovements={movements.length > 0} />}
       <ModeButtons
         manipulateMode={manipulateMode}
-        assignMode={assignMode}
         setManipulateMode={setManipulateMode}
-        setAssignMode={setAssignMode}
       />
       {/* Trajectory visualization — composant séparé qui gère ses propres lignes */}
       <TrajectoryVisualization
@@ -247,17 +239,12 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
         onPointerUp={handleDrawEnd}
         onPointerCancel={handleDrawEnd}
       />
-      {/* Interaction layer — manipulate ET assign (en assign : clic = toggle
-          la track ; sans cet overlay le mode assign était complètement inerte) */}
-      {(manipulateMode || assignMode) && (
+      {/* Interaction layer — manipulate seulement (assign via TrackGrid) */}
+      {manipulateMode && (
         <div
           className="absolute inset-0 z-[15]"
           style={{
-            cursor: assignMode
-              ? 'pointer'
-              : draggingHandle || draggingObject !== null
-                ? 'grabbing'
-                : 'grab',
+            cursor: draggingHandle || draggingObject !== null ? 'grabbing' : 'grab',
           }}
           onPointerDown={handleManipulateDown}
           onPointerMove={handleManipulateMove}
