@@ -83,22 +83,29 @@ export const TrajectoryVisualization: React.FC<TrajectoryVisualizationProps> = (
           if (hasMovements && movementsToShow.length > 0) {
             const durationNode = useGraphStore.getState().nodes.find((n) => (n.data as any)?.type === 'Duration');
             const duration = (durationNode?.data as any)?.params?.duration ?? 4.0;
-            // Échantillonner chaque movement à afficher
+            // Échantillonner chaque movement à afficher — UN invoke batché
+            // par move (sample_movement_trajectories retourne tous les paths
+            // avec leur track_index global). Avant : nObjs invokes séquentiels
+            // par move, dont la plupart échouaient silencieusement pour les
+            // moves couvrant peu de tracks.
             for (const movement of movementsToShow) {
-              for (let i = 0; i < nObjs; i++) {
-                if (cancelled) return;
-                try {
-                  const samples = await invoke<Array<[number, number, number, number]>>('sample_movement_trajectory', {
-                    movementId: movement.id, objectIndex: i, nSamples, duration,
-                  });
-                  if (cancelled || samples.length < 2) continue;
+              if (cancelled) return;
+              try {
+                const paths = await invoke<Array<{ track_index: number; points: Array<[number, number, number, number]> }>>(
+                  'sample_movement_trajectories',
+                  { movementId: movement.id, nSamples, duration },
+                );
+                for (const path of paths) {
+                  if (cancelled) return;
+                  if (path.points.length < 2) continue;
 
-                  const points = samples.map((s) => {
+                  const points = path.points.map((s) => {
                     const [tx, ty, tz] = toThree(s[1], s[2], s[3]);
                     return new THREE.Vector3(tx, ty, tz);
                   });
                   const geo = new THREE.BufferGeometry().setFromPoints(points);
-                  const hue = i / nObjs;
+                  // Teinte par track_index global — stable entre moves
+                  const hue = path.track_index / Math.max(nObjs, 1);
                   const mat = new THREE.LineBasicMaterial({
                     color: new THREE.Color().setHSL(hue, 0.7, 0.5),
                     transparent: true, opacity: movement.is_preview ? 0.2 : 0.35,
@@ -106,9 +113,9 @@ export const TrajectoryVisualization: React.FC<TrajectoryVisualizationProps> = (
                   const line = new THREE.Line(geo, mat);
                   scene.add(line);
                   pathLinesRef.current.push(line);
-                } catch {
-                  // Un movement peut ne pas avoir de runtime — silencieux
                 }
+              } catch {
+                // Un movement peut ne pas avoir de runtime — silencieux
               }
             }
             return;

@@ -81,6 +81,56 @@ pub async fn sample_trajectory(
     })
 }
 
+/// Un chemin samplé d'une track d'un move — retourné par
+/// `sample_movement_trajectories` (batch : 1 invoke pour tout le move
+/// au lieu de N invokes séquentiels côté frontend).
+#[derive(serde::Serialize)]
+pub struct SampledPath {
+    /// Index global de la track (index dans le .hol / pool de meshes frontend)
+    pub track_index: usize,
+    /// (t, x, y, z)
+    pub points: Vec<(f64, f64, f64, f64)>,
+}
+
+/// Échantillonne les trajectoires de TOUTES les tracks d'un movement actif
+/// en un seul appel — remplace la boucle frontend de `sample_movement_trajectory`
+/// (qui en plus passait l'index global du mesh au sampler alors qu'il attend
+/// l'index local du move → paths faux pour les moves ne commençant pas à 0).
+#[tauri::command]
+pub async fn sample_movement_trajectories(
+    movement_id: String,
+    n_samples: usize,
+    duration: f64,
+    state: State<'_, AppState>,
+) -> Result<Vec<SampledPath>, String> {
+    // Capturer le sampler + les track_indices puis relâcher le lock AVANT
+    // d'échantillonner (pas de lock pendant l'évaluation).
+    let (sampler, track_indices) = {
+        let movements = lock_or_recover(&state.movements);
+        let mv = movements
+            .get(&movement_id)
+            .ok_or_else(|| format!("Movement '{movement_id}' not found"))?;
+        (mv.runtime.sampler(), mv.track_indices.clone())
+    };
+    let mr = lock_or_recover(&state.merge_runtime);
+    let n = n_samples.clamp(2, 10_000);
+    let dur = duration.max(0.1);
+    let mut out = Vec::with_capacity(track_indices.len());
+    for (object_index, &track_index) in track_indices.iter().enumerate() {
+        // object_index = index LOCAL du move (0..n_objects) pour le sampler ;
+        // track_index = index GLOBAL (.hol) pour le post-process et le frontend.
+        let raw = sampler.sample(object_index, n, dur);
+        let points = mr.apply_post_process_to_samples(raw, track_index);
+        if points.len() >= 2 {
+            out.push(SampledPath {
+                track_index,
+                points,
+            });
+        }
+    }
+    Ok(out)
+}
+
 /// Échantillonne la trajectoire d'un movement actif (système Animation)
 /// en appliquant le post-process global (graph global compilé).
 /// Retourne N points (t, x, y, z) pour un objet donné.

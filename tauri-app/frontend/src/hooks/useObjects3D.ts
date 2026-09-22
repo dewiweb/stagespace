@@ -24,6 +24,9 @@ interface UseObjects3DParams {
  */
 export function useObjects3D({ sceneRef, nObjects, sceneReady }: UseObjects3DParams) {
   const objectsRef = useRef<THREE.Mesh[]>([]);
+  // Subscription réactive — les labels doivent se mettre à jour quand le
+  // .hol se charge (track.id), même si nObjects ne change pas.
+  const holProject = useGraphStore((s) => s.holProject);
   // Pas besoin de tracker les labels séparément — ils sont enfants des meshes
   // et sont nettoyés automatiquement par l'event 'removed' du CSS2DObject.
 
@@ -33,6 +36,9 @@ export function useObjects3D({ sceneRef, nObjects, sceneReady }: UseObjects3DPar
 
     const oscIds = useGraphStore.getState().manualOscIds;
     const manualPos = useGraphStore.getState().manualPositions;
+    const holTracks = holProject?.tracks ?? [];
+    // Label : vrai track.id du .hol si chargé, sinon osc_id manuel, sinon index
+    const labelFor = (i: number) => holTracks[i]?.id ?? oscIds[i] ?? i + 1;
     const current = objectsRef.current;
     const currentCount = current.length;
 
@@ -69,8 +75,8 @@ export function useObjects3D({ sceneRef, nObjects, sceneReady }: UseObjects3DPar
         mesh.position.set(tx, ty, tz);
       }
 
-      // Label — utilise l'osc_id si disponible, sinon l'index
-      const labelId = oscIds[i] ?? i + 1;
+      // Label — track.id (.hol) > osc_id manuel > index
+      const labelId = labelFor(i);
       const div = document.createElement('div');
       div.className = 'obj-label';
       div.textContent = `#${labelId}`;
@@ -83,10 +89,10 @@ export function useObjects3D({ sceneRef, nObjects, sceneReady }: UseObjects3DPar
       current.push(mesh);
     }
 
-    // 3. Mettre à jour les labels des objets existants (au cas où oscIds a changé)
+    // 3. Mettre à jour les labels des objets existants (au cas où oscIds/hol a changé)
     for (let i = 0; i < Math.min(currentCount, nObjects); i++) {
       const mesh = current[i];
-      const labelId = oscIds[i] ?? i + 1;
+      const labelId = labelFor(i);
       const label = mesh.children.find((c: any) => c.isCSS2DObject) as CSS2DObject | undefined;
       if (label && label.element) {
         const newText = `#${labelId}`;
@@ -95,7 +101,7 @@ export function useObjects3D({ sceneRef, nObjects, sceneReady }: UseObjects3DPar
         }
       }
     }
-  }, [nObjects, sceneReady, sceneRef]);
+  }, [nObjects, sceneReady, sceneRef, holProject]);
 
   return { objectsRef, objectLabelsRef: objectsRef };
 }
