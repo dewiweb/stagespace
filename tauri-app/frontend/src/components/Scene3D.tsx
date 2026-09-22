@@ -55,13 +55,15 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   // On garde movements pour le useMemo nObjects et le rendu conditionnel.
   const movements = useGraphStore((s) => s.movements);
   const manualPositions = useGraphStore((s) => s.manualPositions);
+  const manualOscIds = useGraphStore((s) => s.manualOscIds);
 
   // Determine object count — utilise le max entre:
   // - le node Objects du slot sélectionné
   // - le nombre total de tracks du projet holophonix
+  // - le nombre d'osc_ids manuels (l'espace d'indexation complet : la
+  //   sélection peut viser les derniers indices — ex "2ème moitié" sur 8
+  //   tracks = indices 4-7, il faut le pool entier même si n_objects=4)
   // - le nombre total d'osc_ids uniques across tous les moves actifs
-  // Ceci assure qu'il y a assez de meshes pour afficher tous les objets
-  // quand plusieurs moves tournent sur des tracks différents.
   const nObjects = React.useMemo(() => {
     const objectsNode = nodes.find((n) => (n.data as any)?.type === 'Objects');
     const fromGraph = (objectsNode?.data as any)?.params?.n_objects ?? 0;
@@ -69,7 +71,6 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
     // Le nombre d'objets doit couvrir le track_index maximum envoyé par le backend.
     // Les positions sont indexées par track_indices (ex: 0,1,10,11 → il faut au moins 12 meshes).
     // On calcule le max track_index depuis les osc_ids des moves actifs.
-    const manualIds = useGraphStore.getState().manualOscIds;
     const holProj = useGraphStore.getState().holProject;
     let maxTrackIdx = -1;
     movements.forEach((mv) => {
@@ -78,15 +79,15 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
         if (holProj) {
           idx = holProj.tracks.findIndex((t: any) => t.id === oscId);
         } else {
-          idx = manualIds.indexOf(oscId);
+          idx = manualOscIds.indexOf(oscId);
         }
         if (idx > maxTrackIdx) maxTrackIdx = idx;
       });
     });
     const fromMoves = maxTrackIdx + 1;
-    const result = Math.max(fromGraph, fromProject, fromMoves, 1);
+    const result = Math.max(fromGraph, fromProject, fromMoves, holProject ? 0 : manualOscIds.length, 1);
     return result;
-  }, [nodes, holProject, movements]);
+  }, [nodes, holProject, movements, manualOscIds]);
 
   // ── Hooks extraits (création des objets 3D, marqueurs, handle, modes) ──
   const { holMarkersRef } = useHolMarkers({ sceneRef, cameraRef, holProject });
