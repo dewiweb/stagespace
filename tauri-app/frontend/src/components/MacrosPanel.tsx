@@ -43,9 +43,9 @@ export const MacrosPanel: React.FC<MacrosPanelProps> = ({ isPlaying, hasMovement
     <div className="absolute top-2 left-2 z-20 bg-gray-900/90 backdrop-blur rounded-lg p-3 border border-blue-600/50 flex flex-col gap-2 min-w-[200px]">
       <div className="flex items-center gap-2">
         <span className="text-blue-400 text-[11px] font-semibold">✥ Manipulate</span>
-        {shouldPush && <span className="text-green-400 text-[9px]">LIVE</span>}
+        {shouldPush && <span className="text-green-400 text-[10px]">LIVE</span>}
       </div>
-      <div className="text-gray-500 text-[9px] leading-tight">
+      <div className="text-gray-500 text-[10px] leading-tight">
         Drag handle ◆ = move all<br />
         Drag sphere = move one (override)<br />
         <span className="text-blue-400">Overrides send real OSC</span>

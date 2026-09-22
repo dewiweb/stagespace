@@ -268,11 +268,11 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
       {/* Active movements indicator — bottom right */}
       {movements.length > 0 && (
         <div className="absolute bottom-2 right-2 z-20 bg-gray-900/80 backdrop-blur rounded-lg px-2 py-1 border border-gray-700/50 flex items-center gap-1.5">
-          <span className="text-gray-500 text-[9px] font-mono">MOVEMENTS</span>
+          <span className="text-gray-500 text-[10px] font-mono">MOVEMENTS</span>
           {movements.map((mv, idx) => (
             <span
               key={mv.id}
-              className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${
+              className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
                 mv.is_preview ? 'bg-cyan-900 text-cyan-400' : 'bg-green-900 text-green-400'
               }`}
               title={`${mv.name} — ${mv.track_count} tracks`}

@@ -27,14 +27,15 @@ describe('Toolbar — rendering', () => {
     expect(screen.getByText(/Import \.hol/i)).toBeInTheDocument();
   });
 
-  it('renders OSC button with address:port', () => {
+  it('renders OSC chip with address:port and profile', () => {
     render(<Toolbar />);
-    expect(screen.getByText(/OSC/i)).toBeInTheDocument();
+    expect(screen.getByText(/127\.0\.0\.1:\d+/)).toBeInTheDocument();
+    expect(screen.getByText('holophonix')).toBeInTheDocument();
   });
 
-  it('renders Settings button', () => {
+  it('renders Settings chip that opens the modal', () => {
     render(<Toolbar />);
-    expect(screen.getByText('Settings')).toBeInTheDocument();
+    expect(screen.getByTitle(/OSC →.*Settings/i)).toBeInTheDocument();
   });
 
   it('renders Undo and Redo buttons', () => {
@@ -98,30 +99,18 @@ describe('Toolbar — status', () => {
 });
 
 describe('Toolbar — settings modal', () => {
-  it('opens settings modal on click', () => {
+  it('opens settings modal on OSC chip click', () => {
     render(<Toolbar />);
-    fireEvent.click(screen.getByText('Settings'));
+    fireEvent.click(screen.getByTitle(/OSC →.*Settings/i));
     expect(screen.getByTestId('settings-modal')).toBeInTheDocument();
   });
 
   it('closes settings modal on close button', () => {
     render(<Toolbar />);
-    fireEvent.click(screen.getByText('Settings'));
+    fireEvent.click(screen.getByTitle(/OSC →.*Settings/i));
     expect(screen.getByTestId('settings-modal')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Close Settings'));
     expect(screen.queryByTestId('settings-modal')).not.toBeInTheDocument();
-  });
-});
-
-describe('Toolbar — OSC panel', () => {
-  it('toggles OSC panel on click', () => {
-    render(<Toolbar />);
-    const oscBtn = screen.getByText(/OSC/i).closest('button')!;
-    // Panel not visible initially — no Host input
-    expect(screen.queryByPlaceholderText('127.0.0.1')).not.toBeInTheDocument();
-    // Click to open
-    fireEvent.click(oscBtn);
-    expect(screen.getByPlaceholderText('127.0.0.1')).toBeInTheDocument();
   });
 });
 

@@ -1,18 +1,8 @@
 import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
 import { toast } from '../utils/toast-helpers';
-import { safeInvoke as invoke } from '../utils/tauri';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { SettingsModal } from './SettingsModal';
-
-const OSC_PROFILES = [
-  { value: 'holophonix', label: 'Holophonix' },
-  { value: 'iem', label: 'IEM MultiEncoder' },
-  { value: 'ircam', label: 'IRCAM Spat' },
-  { value: 'adm', label: 'ADM-OSC' },
-  { value: 'generic', label: 'Generic Cartesian' },
-  { value: 'generic_polar', label: 'Generic Polar' },
-];
 
 export const Toolbar: React.FC = () => {
   // Sélecteurs granulaires — un full-store subscribe re-renderait la Toolbar
@@ -28,28 +18,17 @@ export const Toolbar: React.FC = () => {
   const loadGraphFromFile = useGraphStore((s) => s.loadGraphFromFile);
   const importHol = useGraphStore((s) => s.importHol);
   const holProject = useGraphStore((s) => s.holProject);
-  const selectedTrackIds = useGraphStore((s) => s.selectedTrackIds);
-  const getSelectedOscIds = useGraphStore((s) => s.getSelectedOscIds);
   const undo = useGraphStore((s) => s.undo);
   const redo = useGraphStore((s) => s.redo);
   const canUndo = useGraphStore((s) => s.canUndo);
   const canRedo = useGraphStore((s) => s.canRedo);
   const panic = useGraphStore((s) => s.panic);
   const perfStats = useGraphStore((s) => s.perfStats);
-  const manualOscIds = useGraphStore((s) => s.manualOscIds);
-  const setManualOscIds = useGraphStore((s) => s.setManualOscIds);
   const oscAddress = useGraphStore((s) => s.oscAddress);
   const oscPort = useGraphStore((s) => s.oscPort);
   const oscProfile = useGraphStore((s) => s.oscProfile);
-  const setOscAddress = useGraphStore((s) => s.setOscAddress);
-  const setOscPort = useGraphStore((s) => s.setOscPort);
-  const setOscProfile = useGraphStore((s) => s.setOscProfile);
 
-  const [oscIds, setOscIds] = React.useState(manualOscIds.join(','));
-  const [showOsc, setShowOsc] = React.useState(false);
   const [showSettings, setShowSettings] = React.useState(false);
-  const [discovering, setDiscovering] = React.useState(false);
-  const [discoveredTargets, setDiscoveredTargets] = React.useState<Array<{ name: string; host: string; port: number; profile: string; source: string }>>([]);
 
   const hasError = !!(compileError || playError);
   const activeMovements = movements.length;
@@ -58,14 +37,6 @@ export const Toolbar: React.FC = () => {
   // Les raccourcis live (Esc panic, Enter GO, …) et le polling perfStats sont
   // montés au niveau App (hooks/useLiveShortcuts.ts) — ils doivent survivre au
   // démontage du Toolbar en mode Perform.
-
-  // Auto-fill OSC IDs from selected tracks
-  React.useEffect(() => {
-    const ids = getSelectedOscIds();
-    if (ids.length > 0) {
-      setOscIds(ids.join(','));
-    }
-  }, [selectedTrackIds, getSelectedOscIds]);
 
   const handleSaveGraph = async () => {
     try {
@@ -146,24 +117,16 @@ export const Toolbar: React.FC = () => {
 
         <div className="w-px h-5 bg-stagespace-border mx-1" />
 
-        {/* OSC quick toggle (inline panel) */}
-        <button
-          onClick={() => setShowOsc(!showOsc)}
-          className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${
-            showOsc ? 'bg-gray-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
-          }`}
-        >
-          <span className="text-[10px]">⚙</span> OSC
-          <span className="text-gray-500 font-mono text-[10px]">{oscAddress}:{oscPort}</span>
-        </button>
-
-        {/* Settings (modal) */}
+        {/* OSC status chip → ouvre Settings (source unique d'édition —
+            le panneau inline dupliquait host/port/profile/trackIds/discovery) */}
         <button
           onClick={() => setShowSettings(true)}
-          className="px-2.5 py-1.5 text-xs font-medium rounded bg-gray-800 text-gray-400 hover:text-white transition-colors flex items-center gap-1.5"
-          title="Settings — OSC, audio, tracks"
+          className="px-3 py-1.5 text-xs font-medium rounded bg-gray-800 text-gray-400 hover:text-white transition-colors flex items-center gap-1.5"
+          title={`OSC → ${oscAddress}:${oscPort} (${oscProfile}) — Settings`}
         >
-          <span className="text-[10px]">☰</span> Settings
+          <span className="text-[10px]">⚙</span>
+          <span className="text-gray-500 font-mono text-[10px]">{oscAddress}:{oscPort}</span>
+          <span className="text-gray-600 text-[10px]">{oscProfile}</span>
         </button>
         {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
 
@@ -249,106 +212,6 @@ export const Toolbar: React.FC = () => {
           </div>
         )}
       </div>
-
-      {/* OSC Settings panel */}
-      {showOsc && (
-        <div className="px-4 py-2.5 border-t border-stagespace-border bg-gray-900/50 flex items-center gap-3 flex-wrap animate-fade-in">
-          <div className="flex items-center gap-1.5">
-            <label className="text-gray-500 text-[11px]">Host</label>
-            <input
-              type="text"
-              value={oscAddress}
-              onChange={(e) => setOscAddress(e.target.value)}
-              className="w-28 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none"
-              placeholder="127.0.0.1"
-            />
-          </div>
-          <div className="flex items-center gap-1.5">
-            <label className="text-gray-500 text-[11px]">Port</label>
-            <input
-              type="number"
-              value={oscPort}
-              onChange={(e) => setOscPort(Number(e.target.value) || 0)}
-              className="w-16 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none"
-            />
-          </div>
-          <div className="flex items-center gap-1.5">
-            <label className="text-gray-500 text-[11px]">Profile</label>
-            <select
-              value={oscProfile}
-              onChange={(e) => setOscProfile(e.target.value)}
-              className="px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none"
-            >
-              {OSC_PROFILES.map((p) => (
-                <option key={p.value} value={p.value}>{p.label}</option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <label className="text-gray-500 text-[11px]">Track IDs</label>
-            <input
-              type="text"
-              value={oscIds}
-              onChange={(e) => {
-                setOscIds(e.target.value);
-                const parsed = e.target.value
-                  .split(',')
-                  .map((id) => parseInt(id.trim(), 10))
-                  .filter((id) => !isNaN(id));
-                setManualOscIds(parsed);
-              }}
-              className="w-32 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
-              placeholder="1,2,3..."
-            />
-          </div>
-
-          {/* Network Discovery */}
-          <button
-            onClick={async () => {
-              setDiscovering(true);
-              try {
-                const targets = await invoke<Array<{ name: string; host: string; port: number; profile: string; source: string }>>('discover_osc_targets');
-                setDiscoveredTargets(targets);
-              } catch (e) {
-                console.error('Discovery failed:', e);
-                toast.error(`OSC discovery failed: ${e}`);
-              } finally {
-                setDiscovering(false);
-              }
-            }}
-            disabled={discovering}
-            className="px-3 py-1 text-[11px] font-medium rounded bg-cyan-700 hover:bg-cyan-600 text-white transition-colors disabled:opacity-40"
-          >
-            {discovering ? 'Scanning...' : '🔍 Discover'}
-          </button>
-
-          {/* Discovered targets */}
-          {discoveredTargets.length > 0 && (
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {discoveredTargets.map((t, i) => (
-                <button
-                  key={i}
-                  onClick={() => {
-                    setOscAddress(t.host);
-                    setOscPort(t.port);
-                    setOscProfile(t.profile);
-                  }}
-                  className={`px-2 py-1 text-[10px] rounded border transition-colors ${
-                    t.source === 'mdns'
-                      ? 'bg-green-900/40 border-green-700/50 text-green-400 hover:bg-green-900/60'
-                      : t.source === 'scan'
-                      ? 'bg-blue-900/40 border-blue-700/50 text-blue-400 hover:bg-blue-900/60'
-                      : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'
-                  }`}
-                  title={`${t.source}: ${t.host}:${t.port}`}
-                >
-                  {t.name}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Error detail */}
       {(compileError || playError) && (

@@ -15,6 +15,10 @@ export default function AudioPanel() {
   const [isListening, setIsListening] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [audioDevices, setAudioDevices] = React.useState<AudioDevice[]>([]);
+  // Replié par défaut : la capture est un usage occasionnel, le panneau ne doit
+  // pas occuper ~40% de la colonne droite en permanence. Le composant reste
+  // monté quand collapsed — les hooks (capture, listeners) continuent de vivre.
+  const [collapsed, setCollapsed] = React.useState(true);
 
   const stopListening = React.useCallback(async () => {
     setIsListening(false);
@@ -80,13 +84,28 @@ export default function AudioPanel() {
   const amp = audioState.amplitude;
 
   return (
-    <div className="p-3 flex flex-col gap-2">
-      <div className="flex items-center gap-2">
-        <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
-          <span className="text-white text-xs">MIC</span>
-        </div>
-        <h3 className="text-white font-semibold text-sm">Audio Input</h3>
-      </div>
+    <div className="flex flex-col">
+      {/* Header — toujours visible, résume l'état même replié */}
+      <button
+        onClick={() => setCollapsed((c) => !c)}
+        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-800/40 transition-colors text-left"
+        title={collapsed ? 'Show audio input controls' : 'Hide audio input controls'}
+      >
+        <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isListening ? 'bg-green-500 animate-pulse' : 'bg-gray-600'}`} />
+        <h3 className="text-gray-300 font-semibold text-xs flex-1">Audio Input</h3>
+        {isListening && amp && (
+          <div className="w-16 h-1.5 bg-gray-900 rounded-full overflow-hidden">
+            <div className="h-full bg-cyan-500 transition-all duration-100" style={{ width: `${Math.min(100, amp.rms * 100)}%` }} />
+          </div>
+        )}
+        {isListening && audioState.bpm && (
+          <span className="text-cyan-400 text-[10px] font-mono">{audioState.bpm.bpm.toFixed(0)} BPM</span>
+        )}
+        <span className="text-gray-600 text-[10px]">{collapsed ? '▸' : '▾'}</span>
+      </button>
+
+      {collapsed ? null : (
+      <div className="px-3 pb-3 flex flex-col gap-2">
 
       {error && (
         <div className="p-2 bg-red-950/40 border border-red-800/50 rounded text-red-400 text-[11px]">
@@ -175,6 +194,8 @@ export default function AudioPanel() {
           {isListening ? 'Stop' : 'Start'}
         </button>
       </div>
+      </div>
+      )}
     </div>
   );
 }

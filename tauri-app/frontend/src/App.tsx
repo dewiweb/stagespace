@@ -203,7 +203,7 @@ function App() {
             title="Afficher le panneau des graphes"
           >
             <span className="text-gray-500 group-hover:text-white text-xs">▸</span>
-            <span className="text-gray-600 text-[9px] mt-2 writing-vertical" style={{ writingMode: 'vertical-rl' }}>Graphes</span>
+            <span className="text-gray-600 text-[10px] mt-2 writing-vertical" style={{ writingMode: 'vertical-rl' }}>Graphes</span>
           </button>
         ) : (
           <>
@@ -290,7 +290,7 @@ function App() {
             <div className="h-9 border-b border-stagespace-border flex items-center px-3 bg-stagespace-panel flex-shrink-0">
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 rounded bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                  <span className="text-white text-[8px] font-bold">3D</span>
+                  <span className="text-white text-[10px] font-bold">3D</span>
                 </div>
                 <span className="text-gray-300 text-xs font-medium">Canvas</span>
               </div>
@@ -311,7 +311,7 @@ function App() {
               {showExpert && (
                 <div className="h-7 border-b border-stagespace-border flex items-center px-2 bg-stagespace-panel flex-shrink-0">
                   <span className="text-gray-400 text-[10px] font-medium">3D Preview</span>
-                  <span className="text-gray-600 text-[9px] ml-2">orbit: drag · zoom: scroll</span>
+                  <span className="text-gray-600 text-[10px] ml-2">orbit: drag · zoom: scroll</span>
                 </div>
               )}
               <div className="flex-1 min-h-0">
@@ -331,7 +331,7 @@ function App() {
             title="Afficher l'Inspector"
           >
             <span className="text-gray-500 group-hover:text-white text-xs">◂</span>
-            <span className="text-gray-600 text-[9px] mt-2" style={{ writingMode: 'vertical-rl' }}>Inspector</span>
+            <span className="text-gray-600 text-[10px] mt-2" style={{ writingMode: 'vertical-rl' }}>Inspector</span>
           </button>
         ) : (
           <>

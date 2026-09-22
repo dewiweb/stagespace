@@ -93,7 +93,7 @@ export const MacroControls: React.FC = () => {
 
       {/* Section: Speed & Scale */}
       <div className="space-y-1.5">
-        <div className="text-gray-500 text-[9px] font-semibold uppercase tracking-wider">Motion</div>
+        <div className="text-gray-500 text-[10px] font-semibold uppercase tracking-wider">Motion</div>
         <Slider
           label="Speed"
           value={macros.speed}
@@ -116,7 +116,7 @@ export const MacroControls: React.FC = () => {
 
       {/* Section: Shift (translate the whole trajectory) */}
       <div className="space-y-1.5">
-        <div className="text-gray-500 text-[9px] font-semibold uppercase tracking-wider">Shift</div>
+        <div className="text-gray-500 text-[10px] font-semibold uppercase tracking-wider">Shift</div>
         <Slider
           label="Shift X"
           value={macros.shiftX}
@@ -148,7 +148,7 @@ export const MacroControls: React.FC = () => {
 
       {/* Section: Rotation (rotate the whole trajectory) */}
       <div className="space-y-1.5">
-        <div className="text-gray-500 text-[9px] font-semibold uppercase tracking-wider">Rotation</div>
+        <div className="text-gray-500 text-[10px] font-semibold uppercase tracking-wider">Rotation</div>
         <Slider
           label="Yaw (Y)"
           value={macros.yaw}

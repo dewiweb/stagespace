@@ -208,7 +208,7 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
           {isAudioNode && audioRms !== null && (
             <span className="flex items-center gap-1 flex-shrink-0">
               <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-              <span className="text-red-400 text-[8px] font-bold tracking-wider">LIVE</span>
+              <span className="text-red-400 text-[10px] font-bold tracking-wider">LIVE</span>
             </span>
           )}
           <span className="text-white text-sm font-semibold truncate">{data.label}</span>
@@ -260,7 +260,7 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
 
       {/* Binary composite labels for A/B inputs */}
       {isBinary && hasInput && (
-        <div className="flex justify-between px-1 py-0.5 text-[8px] text-gray-500 font-mono">
+        <div className="flex justify-between px-1 py-0.5 text-[10px] text-gray-500 font-mono">
           <span className="text-blue-400">A</span>
           <span className="text-purple-400">B</span>
         </div>
@@ -290,12 +290,12 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
               {((data.params?.track_ids as number[]) ?? []).length > 0 && (
                 <div className="flex flex-wrap gap-0.5 mt-1">
                   {(data.params.track_ids as number[]).slice(0, 16).map((id: number) => (
-                    <span key={id} className="text-[8px] font-mono px-1 py-0.5 bg-cyan-900/40 text-cyan-400 rounded">
+                    <span key={id} className="text-[10px] font-mono px-1 py-0.5 bg-cyan-900/40 text-cyan-400 rounded">
                       {id}
                     </span>
                   ))}
                   {(data.params.track_ids as number[]).length > 16 && (
-                    <span className="text-[8px] text-gray-500">+{(data.params.track_ids as number[]).length - 16}</span>
+                    <span className="text-[10px] text-gray-500">+{(data.params.track_ids as number[]).length - 16}</span>
                   )}
                 </div>
               )}
@@ -330,12 +330,12 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
           {((data.params?.track_ids as number[]) ?? []).length > 0 && (
             <div className="flex flex-wrap gap-0.5 mt-1">
               {(data.params.track_ids as number[]).slice(0, 12).map((id: number) => (
-                <span key={id} className="text-[8px] font-mono px-1 py-0.5 bg-cyan-900/40 text-cyan-400 rounded">
+                <span key={id} className="text-[10px] font-mono px-1 py-0.5 bg-cyan-900/40 text-cyan-400 rounded">
                   {id}
                 </span>
               ))}
               {(data.params.track_ids as number[]).length > 12 && (
-                <span className="text-[8px] text-gray-500">+{(data.params.track_ids as number[]).length - 12}</span>
+                <span className="text-[10px] text-gray-500">+{(data.params.track_ids as number[]).length - 12}</span>
               )}
             </div>
           )}
@@ -363,7 +363,7 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
                   const ids: number[] = [];
                   for (let i = start; i <= end && i < start + 24; i++) ids.push(i);
                   return ids.map((id) => (
-                    <span key={id} className="text-[8px] font-mono px-1 py-0.5 bg-green-900/40 text-green-400 rounded">
+                    <span key={id} className="text-[10px] font-mono px-1 py-0.5 bg-green-900/40 text-green-400 rounded">
                       {id}
                     </span>
                   ));
@@ -386,14 +386,14 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
 
 const MiniBar: React.FC<{ label: string; value: number; color: string }> = ({ label, value, color }) => (
   <div className="flex items-center gap-1.5">
-    <span className="text-gray-500 text-[9px] w-7">{label}</span>
+    <span className="text-gray-500 text-[10px] w-7">{label}</span>
     <div className="flex-1 h-1.5 bg-gray-950 rounded-full overflow-hidden">
       <div
         className={`h-full ${color} transition-all duration-75 rounded-full`}
         style={{ width: `${Math.min(100, value * 100)}%` }}
       />
     </div>
-    <span className="text-gray-600 text-[8px] font-mono w-6 text-right">{(value * 100).toFixed(0)}</span>
+    <span className="text-gray-600 text-[10px] font-mono w-6 text-right">{(value * 100).toFixed(0)}</span>
   </div>
 );
 
@@ -453,7 +453,7 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
       {savedSplines.length > 0 && (
         <div className="space-y-0.5 max-h-24 overflow-y-auto">
           {savedSplines.map((s) => (
-            <div key={s.id} className="flex items-center justify-between text-[9px]">
+            <div key={s.id} className="flex items-center justify-between text-[10px]">
               <span className="text-gray-400 font-mono truncate flex-1">{s.name}</span>
               <button
                 onClick={() => handleDelete(s.id)}

@@ -1,5 +1,7 @@
 import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
+import { safeInvoke as invoke } from '../utils/tauri';
+import { toast } from '../utils/toast-helpers';
 import Modal from './ui/Modal';
 
 const OSC_PROFILES = [
@@ -29,6 +31,21 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const [audioDevices, setAudioDevices] = React.useState<MediaDeviceInfo[]>([]);
   const [oscInPortStr, setOscInPortStr] = React.useState(String(oscInPort));
   const [oscInStatus, setOscInStatus] = React.useState<string | null>(null);
+  const [discovering, setDiscovering] = React.useState(false);
+  const [discoveredTargets, setDiscoveredTargets] = React.useState<Array<{ name: string; host: string; port: number; profile: string; source: string }>>([]);
+
+  const handleDiscover = async () => {
+    setDiscovering(true);
+    try {
+      const targets = await invoke<Array<{ name: string; host: string; port: number; profile: string; source: string }>>('discover_osc_targets');
+      setDiscoveredTargets(targets);
+    } catch (e) {
+      console.error('Discovery failed:', e);
+      toast.error(`OSC discovery failed: ${e}`);
+    } finally {
+      setDiscovering(false);
+    }
+  };
 
   // Énumérer les devices audio
   React.useEffect(() => {
@@ -120,6 +137,38 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   ))}
                 </select>
               </div>
+            </div>
+            {/* Discovery — source unique (le panneau inline de la Toolbar a
+                été retiré : une seule surface d'édition OSC évite le fork
+                mental "quelle config est la vraie"). */}
+            <div className="mt-3 flex items-center gap-2 flex-wrap">
+              <button
+                onClick={handleDiscover}
+                disabled={discovering}
+                className="px-3 py-1.5 text-[11px] font-medium rounded bg-cyan-700 hover:bg-cyan-600 text-white transition-colors disabled:opacity-40"
+              >
+                {discovering ? 'Scanning…' : 'Discover renderers'}
+              </button>
+              {discoveredTargets.map((t, i) => (
+                <button
+                  key={i}
+                  onClick={() => {
+                    setOscAddress(t.host);
+                    setOscPort(t.port);
+                    setOscProfile(t.profile);
+                  }}
+                  className={`px-2 py-1 text-[10px] rounded border transition-colors ${
+                    t.source === 'mdns'
+                      ? 'bg-green-900/40 border-green-700/50 text-green-400 hover:bg-green-900/60'
+                      : t.source === 'scan'
+                        ? 'bg-blue-900/40 border-blue-700/50 text-blue-400 hover:bg-blue-900/60'
+                        : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'
+                  }`}
+                  title={`${t.source}: ${t.host}:${t.port}`}
+                >
+                  {t.name}
+                </button>
+              ))}
             </div>
           </section>
 

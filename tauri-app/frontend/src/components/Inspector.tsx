@@ -11,8 +11,8 @@ function Section({ title, icon, defaultOpen = true, badge, badgeColor = 'gray', 
 }) {
   const [open, setOpen] = React.useState(defaultOpen);
   const badgeCls = badgeColor === 'orange'
-    ? 'text-orange-400 bg-orange-900/40 px-1.5 py-0.5 rounded text-[9px] font-mono animate-pulse'
-    : 'text-gray-500 text-[9px] font-mono';
+    ? 'text-orange-400 bg-orange-900/40 px-1.5 py-0.5 rounded text-[10px] font-mono animate-pulse'
+    : 'text-gray-500 text-[10px] font-mono';
   return (
     <div className="border-b border-gray-700/40">
       <button onClick={() => setOpen(!open)} className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-800/40 transition-colors">
@@ -244,7 +244,7 @@ export default function Inspector() {
         ) : (
           <div className="w-full text-gray-500 text-sm font-semibold flex items-center gap-2">
             <span className="text-gray-600">Global</span>
-            <span className="text-[9px] text-gray-700 font-normal">— sélectionnez un move pour l'éditer</span>
+            <span className="text-[10px] text-gray-700 font-normal">— sélectionnez un move pour l'éditer</span>
           </div>
         )}
       </div>
@@ -277,7 +277,7 @@ export default function Inspector() {
                 onChange={(v) => handleMacro('radius_scale', v)} unit="x" accent="purple" />
               <Slider label="Height" value={macros.height_offset} min={-5} max={5} step={0.1}
                 onChange={(v) => handleMacro('height_offset', v)} unit="m" accent="purple" />
-              <div className="text-gray-600 text-[9px] pt-1">Macros globales — appliquées à tous les moves actifs</div>
+              <div className="text-gray-600 text-[10px] pt-1">Macros globales — appliquées à tous les moves actifs</div>
             </Section>
 
             {/* AUDIO — mods audio-reactifs globaux */}
@@ -332,7 +332,7 @@ export default function Inspector() {
                     <span className="w-2 h-2 rounded-full" style={{ background: nodeColor }} />
                     <span className="text-white text-xs font-semibold">{selectedNodeType}</span>
                     {NODE_DESCRIPTIONS[selectedNodeType] && (
-                      <span className="text-gray-600 text-[9px] ml-auto truncate" title={NODE_DESCRIPTIONS[selectedNodeType]}>
+                      <span className="text-gray-600 text-[10px] ml-auto truncate" title={NODE_DESCRIPTIONS[selectedNodeType]}>
                         {NODE_DESCRIPTIONS[selectedNodeType]?.split('—')[0]}
                       </span>
                     )}
@@ -350,7 +350,7 @@ export default function Inspector() {
               ) : (
                 <div className="text-gray-600 text-[10px] py-2 text-center">
                   Sélectionnez un node dans le graphe
-                  <div className="text-gray-700 text-[9px] mt-1">Cliquez sur un node pour éditer ses params</div>
+                  <div className="text-gray-700 text-[10px] mt-1">Cliquez sur un node pour éditer ses params</div>
                 </div>
               )}
             </Section>
@@ -378,7 +378,7 @@ export default function Inspector() {
                 onChange={(v) => handleMacro('radius_scale', v)} unit="x" accent="purple" />
               <Slider label="Height" value={macros.height_offset} min={-5} max={5} step={0.1}
                 onChange={(v) => handleMacro('height_offset', v)} unit="m" accent="purple" />
-              <div className="text-gray-600 text-[9px] pt-1">Macros = transformations runtime appliquées à tous les moves actifs</div>
+              <div className="text-gray-600 text-[10px] pt-1">Macros = transformations runtime appliquées à tous les moves actifs</div>
             </Section>
           </>
         ) : (
@@ -391,7 +391,7 @@ export default function Inspector() {
                 <span className="text-blue-400 text-[11px] font-semibold">
                   {mainEngineType ?? 'Aucun engine'}
                 </span>
-                <span className="text-gray-600 text-[9px]">— template depuis le panneau gauche</span>
+                <span className="text-gray-600 text-[10px]">— template depuis le panneau gauche</span>
               </div>
 
               {mainEngineSchema.length > 0 ? (
@@ -427,7 +427,7 @@ export default function Inspector() {
               <div className="flex gap-1 pt-1">
                 {(['forward', 'backward', 'ping_pong'] as const).map((d) => (
                   <button key={d} onClick={() => updateCurrent({ direction: d })}
-                    className={`flex-1 py-1 text-[9px] rounded ${current.direction === d ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-500'}`}>
+                    className={`flex-1 py-1 text-[10px] rounded ${current.direction === d ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-500'}`}>
                     {d === 'forward' ? '→ Fwd' : d === 'backward' ? '← Bwd' : '↔ Ping'}
                   </button>
                 ))}
@@ -435,7 +435,7 @@ export default function Inspector() {
               <div className="flex gap-1">
                 {(['loop', 'one_shot'] as const).map((l) => (
                   <button key={l} onClick={() => updateCurrent({ loop_mode: l })}
-                    className={`flex-1 py-1 text-[9px] rounded ${current.loop_mode === l ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-500'}`}>
+                    className={`flex-1 py-1 text-[10px] rounded ${current.loop_mode === l ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-500'}`}>
                     {l === 'loop' ? '↻ Loop' : '▶ One-shot'}
                   </button>
                 ))}
@@ -532,7 +532,7 @@ export default function Inspector() {
               ) : (
                 <div className="text-center py-3">
                   <div className="text-gray-600 text-[10px] mb-1">Aucune track disponible</div>
-                  <div className="text-gray-700 text-[9px]">Import .hol ou ajoutez des tracks manuelles</div>
+                  <div className="text-gray-700 text-[10px]">Import .hol ou ajoutez des tracks manuelles</div>
                 </div>
               )}
             </div>
@@ -541,11 +541,11 @@ export default function Inspector() {
             <>
               <Slider label="Spread" value={current.phase_spread} min={0} max={1} step={0.05}
                 onChange={(v) => updateCurrent({ phase_spread: v })} accent="cyan" />
-              <div className="text-gray-600 text-[9px] -mt-1">Décalage de phase entre tracks (effet chasing)</div>
+              <div className="text-gray-600 text-[10px] -mt-1">Décalage de phase entre tracks (effet chasing)</div>
             </>
           )}
           {centroid && (
-            <div className="text-cyan-400 text-[9px] font-mono pt-1">
+            <div className="text-cyan-400 text-[10px] font-mono pt-1">
               centre: ({centroid[0].toFixed(1)}, {centroid[1].toFixed(1)}, {centroid[2].toFixed(1)})
             </div>
           )}
@@ -568,19 +568,19 @@ export default function Inspector() {
                     'bg-gray-800/30 border border-gray-700/30 hover:border-gray-600/50'
                   }`}
                 >
-                  <span className={`text-[8px] font-mono w-4 h-4 rounded flex items-center justify-center flex-shrink-0 ${
+                  <span className={`text-[10px] font-mono w-4 h-4 rounded flex items-center justify-center flex-shrink-0 ${
                     mv.is_preview ? 'bg-cyan-800 text-cyan-300' : 'bg-green-800 text-green-300'
                   }`}>{idx + 1}</span>
                   <span className="text-white text-[10px] font-medium truncate flex-1">{mv.name}</span>
-                  <span className="text-gray-500 text-[8px] font-mono flex-shrink-0">{trackCount}tr</span>
+                  <span className="text-gray-500 text-[10px] font-mono flex-shrink-0">{trackCount}tr</span>
                   <button
                     onClick={(e) => { e.stopPropagation(); stopMovementWithFade(mv.id, 0.5); }}
-                    className="text-yellow-400 hover:text-yellow-300 text-[9px] px-1 flex-shrink-0"
+                    className="text-yellow-400 hover:text-yellow-300 text-[10px] px-1 flex-shrink-0"
                     title="Stop avec fade 0.5s"
                   >◆</button>
                   <button
                     onClick={(e) => { e.stopPropagation(); stopMovement(mv.id); }}
-                    className="text-red-400 hover:text-red-300 text-[9px] px-1 flex-shrink-0"
+                    className="text-red-400 hover:text-red-300 text-[10px] px-1 flex-shrink-0"
                     title="Stop immédiat"
                   >■</button>
                 </div>
@@ -642,7 +642,7 @@ function AudioModAdder({ onAdd, onCancel }: { onAdd: (mod: AudioMod) => void; on
   return (
     <div className="bg-gray-800/80 rounded p-2 space-y-2 border border-cyan-900/40">
       <div>
-        <div className="text-gray-400 text-[9px] mb-0.5">Source</div>
+        <div className="text-gray-400 text-[10px] mb-0.5">Source</div>
         <select value={typeof source === 'string' ? source : 'spectrum_band'}
           onChange={(e) => setSource(e.target.value as AudioModSource)}
           className="w-full bg-gray-900 text-white text-[10px] rounded px-1.5 py-1 border border-gray-700">
@@ -654,7 +654,7 @@ function AudioModAdder({ onAdd, onCancel }: { onAdd: (mod: AudioMod) => void; on
         </select>
       </div>
       <div>
-        <div className="text-gray-400 text-[9px] mb-0.5">Target (macro)</div>
+        <div className="text-gray-400 text-[10px] mb-0.5">Target (macro)</div>
         <select value={typeof target === 'string' ? target : 'radius_scale'}
           onChange={(e) => setTarget(e.target.value as AudioModTarget)}
           className="w-full bg-gray-900 text-white text-[10px] rounded px-1.5 py-1 border border-gray-700">
@@ -720,7 +720,7 @@ function InspectorSplineLibrary({ drawSplineNode, onUpdate }: {
     <div className="mt-3 pt-2 border-t border-gray-700/50 space-y-2">
       <div className="flex items-center gap-2">
         <span className="text-cyan-400 text-[10px] font-mono font-semibold">SPLINE LIBRARY</span>
-        <span className="text-gray-600 text-[9px]">{savedSplines.length} sauvée{savedSplines.length > 1 ? 's' : ''}</span>
+        <span className="text-gray-600 text-[10px]">{savedSplines.length} sauvée{savedSplines.length > 1 ? 's' : ''}</span>
       </div>
 
       {/* Charger depuis la bibliothèque */}

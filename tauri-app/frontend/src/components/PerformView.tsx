@@ -103,7 +103,7 @@ export const PerformView: React.FC = () => {
             Setlist {currentSetlistIndex + 1}/{setlistOrder.length}
           </span>
           <div className="min-w-0">
-            <div className="text-gray-500 text-[9px]">next</div>
+            <div className="text-gray-500 text-[10px]">next</div>
             <div className="text-white text-sm font-semibold truncate">
               {nextSetlistSlot?.name ?? '—'}
             </div>
@@ -185,7 +185,7 @@ export const PerformView: React.FC = () => {
                       <span className="text-white text-xs font-medium truncate">{slot.name}</span>
                       {isPlaying && (
                         <span
-                          className={`text-[8px] px-1 rounded ${
+                          className={`text-[10px] px-1 rounded ${
                             slot.isPreview ? 'bg-cyan-900 text-cyan-300' : 'bg-green-900 text-green-300'
                           }`}
                         >
@@ -193,7 +193,7 @@ export const PerformView: React.FC = () => {
                         </span>
                       )}
                     </div>
-                    <div className="text-gray-600 text-[9px]">
+                    <div className="text-gray-600 text-[10px]">
                       {slot.trackIds.length} trk
                       {setlistIdx >= 0 && (
                         <span className={isCurrentSetlist ? 'text-purple-400' : ''}>
@@ -283,7 +283,7 @@ const LiveDrawer: React.FC = () => {
     <div className="flex-shrink-0 border-t border-stagespace-border bg-stagespace-panel">
       {/* Chips des moves live — tap = ouvrir le drawer params */}
       <div className="flex items-center gap-2 px-3 py-1.5 overflow-x-auto">
-        <span className="text-gray-500 text-[9px] uppercase tracking-wider flex-shrink-0">
+        <span className="text-gray-500 text-[10px] uppercase tracking-wider flex-shrink-0">
           Live{playingSlots.length > 0 ? ` ${playingSlots.length}` : ''}
         </span>
         {playingSlots.map((s) => (
@@ -341,13 +341,13 @@ const LiveDrawer: React.FC = () => {
             <Slider label="Height +" value={macros.height_offset} min={-5} max={5} step={0.1} unit="m" accent="orange" live onChange={(v) => setGlobalMacro('height_offset', v)} />
           </div>
           <div className="flex-shrink-0 w-64 space-y-1">
-            <div className="text-gray-500 text-[9px] uppercase tracking-wider">Shift (global)</div>
+            <div className="text-gray-500 text-[10px] uppercase tracking-wider">Shift (global)</div>
             <Slider label="X" value={macros.shiftX} min={-10} max={10} step={0.1} unit="m" accent="orange" live onChange={(v) => setGlobalMacro('shiftX', v)} />
             <Slider label="Y" value={macros.shiftY} min={-10} max={10} step={0.1} unit="m" accent="orange" live onChange={(v) => setGlobalMacro('shiftY', v)} />
             <Slider label="Z" value={macros.shiftZ} min={-10} max={10} step={0.1} unit="m" accent="orange" live onChange={(v) => setGlobalMacro('shiftZ', v)} />
           </div>
           <div className="flex-shrink-0 w-64 space-y-1">
-            <div className="text-gray-500 text-[9px] uppercase tracking-wider">Rotation (global)</div>
+            <div className="text-gray-500 text-[10px] uppercase tracking-wider">Rotation (global)</div>
             <Slider label="Yaw" value={macros.yaw} min={-180} max={180} step={1} unit="°" accent="orange" live onChange={(v) => setGlobalMacro('yaw', v)} />
             <Slider label="Pitch" value={macros.pitch} min={-180} max={180} step={1} unit="°" accent="orange" live onChange={(v) => setGlobalMacro('pitch', v)} />
             <Slider label="Roll" value={macros.roll} min={-180} max={180} step={1} unit="°" accent="orange" live onChange={(v) => setGlobalMacro('roll', v)} />
@@ -386,7 +386,7 @@ const LiveDrawer: React.FC = () => {
                 <button
                   key={d}
                   onClick={() => setSlotDirection(slot.id, d)}
-                  className={`flex-1 py-1 text-[9px] rounded ${
+                  className={`flex-1 py-1 text-[10px] rounded ${
                     slot.direction === d
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-800 text-gray-500 hover:text-gray-300'
@@ -401,7 +401,7 @@ const LiveDrawer: React.FC = () => {
                 <button
                   key={l}
                   onClick={() => setSlotLoopMode(slot.id, l)}
-                  className={`flex-1 py-1 text-[9px] rounded ${
+                  className={`flex-1 py-1 text-[10px] rounded ${
                     slot.loopMode === l
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-800 text-gray-500 hover:text-gray-300'
@@ -444,7 +444,7 @@ const LiveDrawer: React.FC = () => {
           {/* Bloc engine params — le cœur du live tweaking */}
           {engineSchema.length > 0 && (
             <div className="flex-shrink-0 w-72 space-y-1">
-              <div className="text-gray-500 text-[9px] uppercase tracking-wider">
+              <div className="text-gray-500 text-[10px] uppercase tracking-wider">
                 {engineType} params
               </div>
               <div className="grid grid-cols-1 gap-1">
@@ -466,7 +466,7 @@ const LiveDrawer: React.FC = () => {
                   ))}
               </div>
               {engineSchema.some((d) => d.type !== 'number' || d.min === undefined || d.max === undefined) && (
-                <div className="text-gray-700 text-[9px]">
+                <div className="text-gray-700 text-[10px]">
                   params non-numériques → mode Edit
                 </div>
               )}
@@ -475,19 +475,19 @@ const LiveDrawer: React.FC = () => {
 
           {/* Bloc audio mods + tracks — readout compact */}
           <div className="flex-shrink-0 w-48 space-y-1">
-            <div className="text-gray-500 text-[9px] uppercase tracking-wider">Audio / tracks</div>
+            <div className="text-gray-500 text-[10px] uppercase tracking-wider">Audio / tracks</div>
             {slot.audioMods.length > 0 ? (
               <div className="flex flex-wrap gap-1">
                 {slot.audioMods.map((m, i) => (
-                  <span key={i} className="px-1.5 py-0.5 bg-cyan-900/30 text-cyan-300 text-[9px] rounded">
+                  <span key={i} className="px-1.5 py-0.5 bg-cyan-900/30 text-cyan-300 text-[10px] rounded">
                     {typeof m.source === 'string' ? m.source : 'fft'}→{m.target} ×{m.amount}
                   </span>
                 ))}
               </div>
             ) : (
-              <div className="text-gray-700 text-[9px]">pas de mod audio</div>
+              <div className="text-gray-700 text-[10px]">pas de mod audio</div>
             )}
-            <div className="text-gray-600 text-[9px]">
+            <div className="text-gray-600 text-[10px]">
               tracks: {slot.trackIds.join(', ') || '—'}
             </div>
           </div>

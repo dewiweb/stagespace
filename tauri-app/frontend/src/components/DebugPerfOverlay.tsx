@@ -27,7 +27,7 @@ export const DebugPerfOverlay: React.FC = () => {
 
   return (
     <div className="absolute top-2 left-2 z-30 bg-gray-900/90 backdrop-blur rounded-lg px-3 py-2 border border-gray-700/50 font-mono text-[10px] space-y-0.5">
-      <div className="text-gray-500 uppercase tracking-wider text-[8px] mb-1">DEBUG PERF</div>
+      <div className="text-gray-500 uppercase tracking-wider text-[10px] mb-1">DEBUG PERF</div>
       <div className="flex gap-2">
         <span className="text-gray-500">Render:</span>
         <span className={stutterColor}>{debugPerf.renderFps.toFixed(0)} fps</span>

@@ -111,7 +111,7 @@ export default function AnimationList() {
       <div className="flex-1 overflow-y-auto">
         {/* ═══ TEMPLATES (built-in presets) ═══ */}
         <div className="p-2 space-y-1">
-          <div className="text-gray-500 text-[9px] uppercase tracking-wider mb-1 px-1">Templates</div>
+          <div className="text-gray-500 text-[10px] uppercase tracking-wider mb-1 px-1">Templates</div>
 
           {presetsByCategory.map((group) => {
             const isCollapsed = collapsedCats.has(group.cat);
@@ -120,7 +120,7 @@ export default function AnimationList() {
               <div key={group.cat}>
                 <button
                   onClick={() => toggleCat(group.cat)}
-                  className="w-full flex items-center gap-1 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wider hover:text-gray-300 transition-colors"
+                  className="w-full flex items-center gap-1 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wider hover:text-gray-300 transition-colors"
                 >
                   <span className="text-[7px] text-gray-600">{isCollapsed ? '▸' : '▾'}</span>
                   <span className={catLabel.color}>{catLabel.label}</span>
@@ -151,7 +151,7 @@ export default function AnimationList() {
 
         {/* ═══ EN COURS D'ÉDITION ═══ */}
         <div className="px-2 pb-2">
-          <div className="text-gray-500 text-[9px] uppercase tracking-wider mb-1 px-1">En cours d'édition</div>
+          <div className="text-gray-500 text-[10px] uppercase tracking-wider mb-1 px-1">En cours d'édition</div>
           <div className="flex items-center gap-2 px-2 py-1.5 bg-blue-900/30 rounded border border-blue-700/40">
             <span className="text-base">{animIcon(current)}</span>
             {editingId === current.id ? (
@@ -173,10 +173,10 @@ export default function AnimationList() {
             )}
             <div className="flex items-center gap-0.5">
               {current.graph_json?.nodes && (
-                <span className="text-purple-400 text-[8px] font-mono bg-purple-900/40 px-1 rounded" title="Graphe custom">◆</span>
+                <span className="text-purple-400 text-[10px] font-mono bg-purple-900/40 px-1 rounded" title="Graphe custom">◆</span>
               )}
               {current.assignments.length > 0 && (
-                <span className="text-blue-400 text-[8px] font-mono bg-blue-900/40 px-1 rounded" title={`${current.assignments.length} tracks`}>
+                <span className="text-blue-400 text-[10px] font-mono bg-blue-900/40 px-1 rounded" title={`${current.assignments.length} tracks`}>
                   ◉{current.assignments.length}
                 </span>
               )}
@@ -190,11 +190,11 @@ export default function AnimationList() {
 
         {/* ═══ MES GRAPHES (bibliothèque utilisateur) ═══ */}
         <div className="p-2 space-y-1">
-          <div className="text-gray-500 text-[9px] uppercase tracking-wider mb-1 px-1">Mes graphes</div>
+          <div className="text-gray-500 text-[10px] uppercase tracking-wider mb-1 px-1">Mes graphes</div>
           {animations.length === 0 ? (
             <div className="text-gray-600 text-[10px] text-center py-4 bg-gray-800/30 rounded border border-gray-700/30">
               Aucun graphe sauvegardé
-              <div className="text-gray-700 text-[9px] mt-1">Clique Sauvegarder pour ajouter</div>
+              <div className="text-gray-700 text-[10px] mt-1">Clique Sauvegarder pour ajouter</div>
             </div>
           ) : (
             animations.map((anim) => {
@@ -229,10 +229,10 @@ export default function AnimationList() {
                   )}
                   <div className="flex items-center gap-0.5">
                     {hasGraph && (
-                      <span className="text-purple-400 text-[8px] font-mono bg-purple-900/40 px-1 rounded" title="Graphe custom (node editor)">◆</span>
+                      <span className="text-purple-400 text-[10px] font-mono bg-purple-900/40 px-1 rounded" title="Graphe custom (node editor)">◆</span>
                     )}
                     {anim.assignments.length > 0 && (
-                      <span className="text-blue-400 text-[8px] font-mono bg-blue-900/40 px-1 rounded" title={`${anim.assignments.length} tracks`}>
+                      <span className="text-blue-400 text-[10px] font-mono bg-blue-900/40 px-1 rounded" title={`${anim.assignments.length} tracks`}>
                         ◉{anim.assignments.length}
                       </span>
                     )}
@@ -246,7 +246,7 @@ export default function AnimationList() {
         </div>
 
         {/* Hint */}
-        <div className="text-gray-700 text-[9px] text-center py-2 px-2">
+        <div className="text-gray-700 text-[10px] text-center py-2 px-2">
           Templates = point de départ · Mes graphes = bibliothèque
           <div className="mt-0.5">Double-clic pour renommer</div>
         </div>

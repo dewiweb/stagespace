@@ -255,7 +255,7 @@ export const NodeEditor: React.FC = () => {
                   onClick={() => toggleCat(cat.label)}
                   className="w-full flex items-center gap-1 text-gray-500 text-[10px] font-semibold mb-1 px-1 uppercase tracking-wider hover:text-gray-300 transition-colors"
                 >
-                  <span className="text-[8px]">{isCollapsed ? '▸' : '▾'}</span>
+                  <span className="text-[10px]">{isCollapsed ? '▸' : '▾'}</span>
                   <span
                     className="w-1.5 h-1.5 rounded-full flex-shrink-0"
                     style={{ background: NODE_COLORS[cat.color] ?? '#4b5563' }}
@@ -300,8 +300,8 @@ export const NodeEditor: React.FC = () => {
                               if (targets.length === 0) return null;
                               return (
                                 <div className="mt-1.5 pt-1.5 border-t border-gray-700">
-                                  <div className="text-gray-500 text-[9px] uppercase">Can connect to:</div>
-                                  <div className="text-gray-400 text-[9px] mt-0.5 flex flex-wrap gap-1">
+                                  <div className="text-gray-500 text-[10px] uppercase">Can connect to:</div>
+                                  <div className="text-gray-400 text-[10px] mt-0.5 flex flex-wrap gap-1">
                                     {targets.slice(0, 8).map((t) => (
                                       <span key={t} className="px-1 py-0.5 bg-gray-800 rounded">{t}</span>
                                     ))}
@@ -323,7 +323,7 @@ export const NodeEditor: React.FC = () => {
 
         {/* Help footer */}
         <div className="p-3 border-t border-stagespace-border mt-2">
-          <div className="text-gray-600 text-[9px] leading-relaxed space-y-1">
+          <div className="text-gray-600 text-[10px] leading-relaxed space-y-1">
             <div><span className="text-gray-400 font-semibold">Flow:</span> Objects → Engine → Output</div>
             <div><span className="text-gray-400 font-semibold">Chain:</span> Engine → Modifier → Output</div>
             <div><span className="text-gray-400 font-semibold">Blend:</span> 2 Engines → Mix → Output</div>

@@ -167,7 +167,7 @@ export const CuelistPanel: React.FC = () => {
                     {cue.name}
                   </div>
                   {cue.active_move_ids.length > 0 && (
-                    <div className="text-gray-600 text-[9px] truncate">
+                    <div className="text-gray-600 text-[10px] truncate">
                       {cue.active_move_ids.length} move(s)
                     </div>
                   )}
