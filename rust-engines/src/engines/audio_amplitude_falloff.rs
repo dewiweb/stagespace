@@ -61,10 +61,12 @@ impl Engine for AudioAmplitudeFalloffEngine {
             // défaut 0.5 réduisait le rayon à 65% sans aucune entrée audio.
             .unwrap_or(max_val);
 
-        let curve = match curve_str {
-            "EaseIn" => FalloffCurve::EaseIn,
-            "EaseOut" => FalloffCurve::EaseOut,
-            "EaseInOut" => FalloffCurve::EaseInOut,
+        // Le schema UI envoie snake_case ("ease_in_out"), les valeurs
+        // legacy étaient capitalisées ("EaseInOut") — on accepte les deux.
+        let curve = match curve_str.to_lowercase().replace('_', "").as_str() {
+            "easein" => FalloffCurve::EaseIn,
+            "easeout" => FalloffCurve::EaseOut,
+            "easeinout" => FalloffCurve::EaseInOut,
             _ => FalloffCurve::Linear,
         };
 
