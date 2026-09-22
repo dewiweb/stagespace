@@ -1,4 +1,5 @@
 import React from 'react';
+import { Hexagon, X } from 'lucide-react';
 import { useAnimationStore, Animation } from '../store/useAnimationStore';
 import { useGraphStore } from '../store/useGraphStore';
 import { SHAPE_PRESETS, type ShapePreset } from '../utils/shapePresets';
@@ -173,7 +174,7 @@ export default function AnimationList() {
             )}
             <div className="flex items-center gap-0.5">
               {current.graph_json?.nodes && (
-                <span className="text-purple-400 text-[10px] font-mono bg-purple-900/40 px-1 rounded" title="Graphe custom">◆</span>
+                <span className="text-purple-400 text-[10px] font-mono bg-purple-900/40 px-1 rounded" title="Graphe custom"><Hexagon size={9} /></span>
               )}
               {current.assignments.length > 0 && (
                 <span className="text-blue-400 text-[10px] font-mono bg-blue-900/40 px-1 rounded" title={`${current.assignments.length} tracks`}>
@@ -229,7 +230,7 @@ export default function AnimationList() {
                   )}
                   <div className="flex items-center gap-0.5">
                     {hasGraph && (
-                      <span className="text-purple-400 text-[10px] font-mono bg-purple-900/40 px-1 rounded" title="Graphe custom (node editor)">◆</span>
+                      <span className="text-purple-400 text-[10px] font-mono bg-purple-900/40 px-1 rounded" title="Graphe custom (node editor)"><Hexagon size={9} /></span>
                     )}
                     {anim.assignments.length > 0 && (
                       <span className="text-blue-400 text-[10px] font-mono bg-blue-900/40 px-1 rounded" title={`${anim.assignments.length} tracks`}>
@@ -238,7 +239,7 @@ export default function AnimationList() {
                     )}
                   </div>
                   <button onClick={(e) => { e.stopPropagation(); deleteAnimation(anim.id); }}
-                    className="text-red-400 hover:text-red-300 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
+                    className="text-red-400 hover:text-red-300 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"><X size={10} /></button>
                 </div>
               );
             })

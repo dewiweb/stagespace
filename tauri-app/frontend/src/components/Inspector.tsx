@@ -7,7 +7,7 @@ import type { MacrosState } from '../store/slices/macrosSlice';
 
 // ── Section repliable ──
 function Section({ title, icon, defaultOpen = true, badge, badgeColor = 'gray', children }: {
-  title: string; icon: string; defaultOpen?: boolean; badge?: string; badgeColor?: 'gray' | 'orange'; children: React.ReactNode;
+  title: string; icon: React.ReactNode; defaultOpen?: boolean; badge?: string; badgeColor?: 'gray' | 'orange'; children: React.ReactNode;
 }) {
   const [open, setOpen] = React.useState(defaultOpen);
   const badgeCls = badgeColor === 'orange'
@@ -19,7 +19,7 @@ function Section({ title, icon, defaultOpen = true, badge, badgeColor = 'gray', 
         <span className="text-xs">{icon}</span>
         <span className="text-gray-300 text-[11px] font-semibold uppercase tracking-wider flex-1 text-left">{title}</span>
         {badge && <span className={badgeCls}>{badge}</span>}
-        <span className={`text-gray-500 text-[10px] transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
+        <ChevronRight size={11} className={`text-gray-500 transition-transform ${open ? 'rotate-90' : ''}`} />
       </button>
       {open && <div className="px-3 pb-3 space-y-2">{children}</div>}
     </div>
@@ -27,6 +27,7 @@ function Section({ title, icon, defaultOpen = true, badge, badgeColor = 'gray', 
 }
 
 import Slider from './ui/Slider';
+import { Zap, AudioLines, Hexagon, SlidersHorizontal, Play, CircleDot, X, Square, ChevronRight, TriangleAlert, Check } from 'lucide-react';
 
 export default function Inspector() {
   const showExpert = useAnimationStore((s) => s.showExpert);
@@ -257,7 +258,7 @@ export default function Inspector() {
           /* Only show global-affecting sections: Macros + Audio + movements list */
           <>
             {/* MACROS — runtime controls globaux (affectent tous les moves) */}
-            <Section title="Macros" icon="⚡" defaultOpen={true}
+            <Section title="Macros" icon={<Zap size={12} />} defaultOpen={true}
               badge={activeMovementIds.length > 0 ? `${activeMovementIds.length} live` : undefined}>
               <Slider label="Échelle" value={macros.scale} min={0} max={4} step={0.05}
                 onChange={(v) => handleMacro('scale', v)} accent="purple" />
@@ -281,7 +282,7 @@ export default function Inspector() {
             </Section>
 
             {/* AUDIO — mods audio-reactifs globaux */}
-            <Section title="Audio" icon="♪" defaultOpen={false} badge={current.audio_mods.length > 0 ? `${current.audio_mods.length}` : undefined}>
+            <Section title="Audio" icon={<AudioLines size={12} />} defaultOpen={false} badge={current.audio_mods.length > 0 ? `${current.audio_mods.length}` : undefined}>
               {current.audio_mods.length === 0 && !showAudioAdd && (
                 <div className="text-gray-600 text-[10px] py-1">
                   Aucun mod audio. Cliquez « + Ajouter » pour créer un mapping audio.
@@ -293,7 +294,7 @@ export default function Inspector() {
                     <span className="text-cyan-400 text-[10px] font-mono">
                       {audioSourceLabel(mod.source)} → {audioTargetLabel(mod.target)}
                     </span>
-                    <button onClick={() => removeAudioMod(i)} className="text-red-400 text-[10px]">✕</button>
+                    <button onClick={() => removeAudioMod(i)} className="text-red-400 text-[10px]"><X size={11} /></button>
                   </div>
                   <Slider label="Intensité" value={mod.amount} min={0} max={2} step={0.05}
                     onChange={(v) => {
@@ -325,7 +326,7 @@ export default function Inspector() {
 
           <>
             {/* NODE SÉLECTIONNÉ — params du node */}
-            <Section title="Node" icon="◆" defaultOpen={true}>
+            <Section title="Node" icon={<Hexagon size={12} />} defaultOpen={true}>
               {selectedNode && selectedNodeType ? (
                 <>
                   <div className="flex items-center gap-2 px-1 pb-2">
@@ -356,7 +357,7 @@ export default function Inspector() {
             </Section>
 
             {/* MACROS — runtime controls appliqués à tous les moves */}
-            <Section title="Macros" icon="⚡" defaultOpen={true}
+            <Section title="Macros" icon={<Zap size={12} />} defaultOpen={true}
               badge={activeMovementIds.length > 0 ? `${activeMovementIds.length} live` : undefined}>
               <Slider label="Vitesse" value={macros.speed} min={0} max={4} step={0.05}
                 onChange={(v) => handleMacro('speed', v)} unit="x" accent="purple" />
@@ -386,7 +387,7 @@ export default function Inspector() {
 
           <>
             {/* PARAMS — params du node engine principal du graphe (template choisi à gauche) */}
-            <Section title="Params" icon={mainEngineType ? '◆' : '◇'}>
+            <Section title="Params" icon={<SlidersHorizontal size={12} />}>
               <div className="flex items-center gap-2 pb-2">
                 <span className="text-blue-400 text-[11px] font-semibold">
                   {mainEngineType ?? 'Aucun engine'}
@@ -422,7 +423,7 @@ export default function Inspector() {
             </Section>
 
             {/* PERFORM — duration, direction, loop, fade */}
-            <Section title="Perform" icon="▶">
+            <Section title="Perform" icon={<Play size={12} />}>
               <Slider label="Durée" value={current.duration} min={0.5} max={30} step={0.5} onChange={(v) => updateCurrent({ duration: v })} unit="s" />
               <div className="flex gap-1 pt-1">
                 {(['forward', 'backward', 'ping_pong'] as const).map((d) => (
@@ -445,7 +446,7 @@ export default function Inspector() {
             </Section>
 
             {/* MACROS — speed, scale, shift, rotation (unifié avec Expert) */}
-            <Section title="Macros" icon="⚡">
+            <Section title="Macros" icon={<Zap size={12} />}>
               <Slider label="Vitesse" value={current.speed} min={0} max={4} step={0.05} onChange={(v) => handleTransform('speed', v)} unit="x" accent="purple" />
               <Slider label="Échelle" value={current.scale} min={0} max={4} step={0.05} onChange={(v) => handleTransform('scale', v)} accent="purple" />
               <Slider label="Shift X" value={current.offset_x} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_x', v)} accent="purple" />
@@ -464,7 +465,7 @@ export default function Inspector() {
 
         {/* AUDIO — mods audio-reactifs (commun aux deux modes) */}
         {hasEditingSlot && (
-        <Section title="Audio" icon="♪" defaultOpen={false} badge={current.audio_mods.length > 0 ? `${current.audio_mods.length}` : undefined}>
+        <Section title="Audio" icon={<AudioLines size={12} />} defaultOpen={false} badge={current.audio_mods.length > 0 ? `${current.audio_mods.length}` : undefined}>
           {current.audio_mods.length === 0 && !showAudioAdd && (
             <div className="text-gray-600 text-[10px] py-1">
               Aucun mod audio. Cliquez « + Ajouter » pour créer un mapping audio.
@@ -476,7 +477,7 @@ export default function Inspector() {
                 <span className="text-cyan-400 text-[10px] font-mono">
                   {audioSourceLabel(mod.source)} → {audioTargetLabel(mod.target)}
                 </span>
-                <button onClick={() => removeAudioMod(i)} className="text-red-400 text-[10px]">✕</button>
+                <button onClick={() => removeAudioMod(i)} className="text-red-400 text-[10px]"><X size={11} /></button>
               </div>
               <Slider label="Intensité" value={mod.amount} min={0} max={2} step={0.05}
                 onChange={(v) => {
@@ -506,7 +507,7 @@ export default function Inspector() {
 
         {/* TRACKS — sélection + depth + phase spread (seulement si slot édité) */}
         {hasEditingSlot && (
-        <Section title="Tracks" icon="◉" badge={selectedCount > 0 ? `${selectedCount}/${totalTracks}` : `${totalTracks}`}>
+        <Section title="Tracks" icon={<CircleDot size={12} />} badge={selectedCount > 0 ? `${selectedCount}/${totalTracks}` : `${totalTracks}`}>
           {tracks.length > 0 ? (
             <TrackGrid
               tracks={tracks}
@@ -577,12 +578,12 @@ export default function Inspector() {
                     onClick={(e) => { e.stopPropagation(); stopMovementWithFade(mv.id, 0.5); }}
                     className="text-yellow-400 hover:text-yellow-300 text-[10px] px-1 flex-shrink-0"
                     title="Stop avec fade 0.5s"
-                  >◆</button>
+                  ><Square size={10} /></button>
                   <button
                     onClick={(e) => { e.stopPropagation(); stopMovement(mv.id); }}
                     className="text-red-400 hover:text-red-300 text-[10px] px-1 flex-shrink-0"
                     title="Stop immédiat"
-                  >■</button>
+                  ><Square size={10} fill="currentColor" /></button>
                 </div>
               );
             })}
@@ -603,7 +604,7 @@ export default function Inspector() {
             className="px-2 py-2.5 bg-red-800 hover:bg-red-700 text-white text-[11px] rounded-lg font-bold border border-red-500/50 transition-colors"
             title="PANIC (Esc) — Stop all + return to origin"
           >
-            ⚠
+            <TriangleAlert size={14} />
           </button>
         </div>
       </div>
@@ -679,7 +680,7 @@ function AudioModAdder({ onAdd, onCancel }: { onAdd: (mod: AudioMod) => void; on
         </button>
         <button onClick={onCancel}
           className="px-2 py-1.5 bg-gray-800 text-gray-400 hover:text-white text-[10px] rounded">
-          ✕
+          <X size={11} />
         </button>
       </div>
     </div>
@@ -751,7 +752,7 @@ function InspectorSplineLibrary({ drawSplineNode, onUpdate }: {
                 onClick={() => deleteSpline(s.id)}
                 className="text-red-500 hover:text-red-400 px-1 flex-shrink-0"
                 title="Supprimer"
-              >✕</button>
+              ><X size={11} /></button>
             </div>
           ))}
         </div>
@@ -770,9 +771,9 @@ function InspectorSplineLibrary({ drawSplineNode, onUpdate }: {
             className="flex-1 px-2 py-1.5 bg-gray-900 text-white text-[10px] rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
           />
           <button onClick={handleSave}
-            className="text-green-400 hover:text-green-300 text-xs px-2" title="Confirmer">✓</button>
+            className="text-green-400 hover:text-green-300 text-xs px-2" title="Confirmer"><Check size={12} /></button>
           <button onClick={() => setShowSave(false)}
-            className="text-gray-500 hover:text-gray-400 text-xs px-2" title="Annuler">✕</button>
+            className="text-gray-500 hover:text-gray-400 text-xs px-2" title="Annuler"><X size={12} /></button>
         </div>
       ) : (
         <button

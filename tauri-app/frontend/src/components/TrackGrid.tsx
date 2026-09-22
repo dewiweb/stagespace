@@ -127,7 +127,7 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
             showDepth ? 'bg-cyan-700 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
           }`}
         >
-          {showDepth ? '◐ Depth' : '◑ Select'}
+          {showDepth ? 'Depth' : 'Select'}
         </button>
         <span className="text-gray-500 text-[10px] font-mono ml-auto">
           {assignedCount}/{tracks.length} · Σ={totalDepth.toFixed(1)}

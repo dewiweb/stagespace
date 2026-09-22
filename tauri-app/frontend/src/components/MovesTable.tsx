@@ -1,4 +1,5 @@
 import React from 'react';
+import { CircleDot, Play, Square, RefreshCw, Pencil, SlidersHorizontal, X, Star, ChevronDown } from 'lucide-react';
 import { useGraphStore } from '../store/useGraphStore';
 import { useAnimationStore } from '../store/useAnimationStore';
 import { SHAPE_PRESETS } from '../utils/shapePresets';
@@ -365,19 +366,19 @@ export default function MovesTable() {
                             disabled={setlistIdx === setlistOrder.length - 1}
                             className="text-gray-500 hover:text-white text-[10px] disabled:opacity-20"
                             title="Descendre dans la setlist"
-                          >▼</button>
+                          ><ChevronDown size={11} /></button>
                           <button
                             onClick={() => removeFromSetlist(slot.id)}
                             className="text-yellow-600 hover:text-yellow-400 text-[10px] ml-0.5"
                             title="Retirer de la setlist"
-                          >✕</button>
+                          ><X size={11} /></button>
                         </div>
                       ) : (
                         <button
                           onClick={() => addToSetlist(slot.id)}
                           className="text-gray-600 hover:text-yellow-400 text-[10px]"
                           title="Ajouter à la setlist du spectacle"
-                        >★</button>
+                        ><Star size={11} /></button>
                       )}
                     </td>
 
@@ -398,19 +399,19 @@ export default function MovesTable() {
                           title={slot.movementId
                             ? 'Preview/Live verrouillé pendant la lecture — stopper le move d\'abord'
                             : slot.isPreview ? 'Mode Preview (pas d\'OSC out) — cliquer pour passer en Live' : 'Mode Live (OSC out) — cliquer pour passer en Preview'}
-                        >◉</button>
+                        ><CircleDot size={11} /></button>
                         {isPlaying ? (
                           <>
                             <button
                               onClick={(e) => { e.stopPropagation(); stopSlotWithFade(slot.id, 1.0); }}
                               className="text-yellow-400 hover:text-yellow-300 text-[10px] px-1 rounded hover:bg-yellow-900/30"
                               title="Stop avec fade 1s"
-                            >◆</button>
+                            ><Square size={10} /></button>
                             <button
                               onClick={(e) => { e.stopPropagation(); stopSlot(slot.id); }}
                               className="text-red-400 hover:text-red-300 text-[10px] px-1 rounded hover:bg-red-900/30"
                               title="Stop immédiat"
-                            >■</button>
+                            ><Square size={10} fill="currentColor" /></button>
                           </>
                         ) : (
                           <button
@@ -419,7 +420,7 @@ export default function MovesTable() {
                               slot.isPreview ? 'text-cyan-400 hover:text-cyan-300' : 'text-green-400 hover:text-green-300'
                             }`}
                             title={slot.isPreview ? 'Lancer en preview (pas d\'OSC out)' : 'Lancer en live (OSC out)'}
-                          >▶</button>
+                          ><Play size={10} fill="currentColor" /></button>
                         )}
                         <button
                           onClick={(e) => {
@@ -429,24 +430,24 @@ export default function MovesTable() {
                           }}
                           className={`text-purple-400 hover:text-purple-300 text-[10px] px-1 rounded hover:bg-purple-900/30 ${editingSlotId === slot.id ? 'font-bold ring-1 ring-purple-600/50' : ''}`}
                           title="Éditer le graphe dans le node editor"
-                        >✎</button>
+                        ><Pencil size={10} /></button>
                         {isPlaying && (
                           <button
                             onClick={(e) => { e.stopPropagation(); saveEditorToSlot(slot.id); }}
                             className="text-orange-400 hover:text-orange-300 text-[10px] px-1 rounded hover:bg-orange-900/30"
                             title="Hot-swap : appliquer le graphe modifié au move en cours"
-                          >⟳</button>
+                          ><RefreshCw size={10} /></button>
                         )}
                         <button
                           onClick={() => { selectSlotForEditing(slot.id); setEditingMacrosFor(slot.id); }}
                           className="text-gray-400 hover:text-gray-200 text-[10px] px-1 rounded hover:bg-gray-700/30"
                           title="Macros (speed, scale, shift, rotation)"
-                        >⚙</button>
+                        ><SlidersHorizontal size={10} /></button>
                         <button
                           onClick={(e) => { e.stopPropagation(); setPendingDeleteSlot({ id: slot.id, name: slot.name }); }}
                           className="text-gray-600 hover:text-red-400 text-[10px] px-1 rounded hover:bg-red-900/20"
                           title="Supprimer ce slot"
-                        >✕</button>
+                        ><X size={11} /></button>
                       </div>
                     </td>
                   </tr>

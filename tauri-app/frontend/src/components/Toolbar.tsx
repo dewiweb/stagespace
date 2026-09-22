@@ -2,6 +2,7 @@ import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
 import { toast } from '../utils/toast-helpers';
 import { open, save } from '@tauri-apps/plugin-dialog';
+import { FolderInput, Settings, Undo2, Redo2, Save, FolderOpen, TriangleAlert } from 'lucide-react';
 import { SettingsModal } from './SettingsModal';
 
 export const Toolbar: React.FC = () => {
@@ -107,7 +108,7 @@ export const Toolbar: React.FC = () => {
           onClick={handleImportHol}
           className="px-3 py-1.5 text-xs font-medium rounded bg-blue-700 hover:bg-blue-600 text-white transition-colors flex items-center gap-1.5"
         >
-          <span className="text-[10px]">◆</span> Import .hol
+          <FolderInput size={13} /> Import .hol
         </button>
         {holProject && (
           <span className="text-[11px] text-green-400 font-medium">
@@ -124,7 +125,7 @@ export const Toolbar: React.FC = () => {
           className="px-3 py-1.5 text-xs font-medium rounded bg-gray-800 text-gray-400 hover:text-white transition-colors flex items-center gap-1.5"
           title={`OSC → ${oscAddress}:${oscPort} (${oscProfile}) — Settings`}
         >
-          <span className="text-[10px]">⚙</span>
+          <Settings size={13} />
           <span className="text-gray-500 font-mono text-[10px]">{oscAddress}:{oscPort}</span>
           <span className="text-gray-600 text-[10px]">{oscProfile}</span>
         </button>
@@ -139,7 +140,7 @@ export const Toolbar: React.FC = () => {
           className="px-2 py-1.5 text-xs font-medium rounded bg-gray-800 text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           title="Undo (Ctrl+Z)"
         >
-          ↶
+          <Undo2 size={14} />
         </button>
         <button
           onClick={redo}
@@ -147,7 +148,7 @@ export const Toolbar: React.FC = () => {
           className="px-2 py-1.5 text-xs font-medium rounded bg-gray-800 text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           title="Redo (Ctrl+Y)"
         >
-          ↷
+          <Redo2 size={14} />
         </button>
 
         {/* Save / Load show (graphe + slots + cues + OSC + spatial FX) */}
@@ -157,14 +158,14 @@ export const Toolbar: React.FC = () => {
           className="px-2 py-1.5 text-xs font-medium rounded bg-gray-800 text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           title="Save complete show to .hfg file"
         >
-          💾
+          <Save size={14} />
         </button>
         <button
           onClick={handleLoadGraph}
           className="px-2 py-1.5 text-xs font-medium rounded bg-gray-800 text-gray-400 hover:text-white transition-colors"
           title="Load show from .hfg file (slots, cues, OSC, FX — blocked during playback)"
         >
-          📂
+          <FolderOpen size={14} />
         </button>
 
         {/* Error badge */}
@@ -173,7 +174,7 @@ export const Toolbar: React.FC = () => {
             onClick={() => { clearCompileError(); clearPlayError(); }}
             className="px-2 py-1 text-[11px] font-medium rounded bg-red-900/50 text-red-400 border border-red-700/50 hover:bg-red-900/70 transition-colors"
           >
-            ⚠ Error — dismiss
+            <TriangleAlert size={11} className="inline -mt-0.5" /> Error — dismiss
           </button>
         )}
 

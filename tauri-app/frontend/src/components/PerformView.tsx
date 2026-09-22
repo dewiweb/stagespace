@@ -1,4 +1,5 @@
 import React from 'react';
+import { Play, Square, Globe, X } from 'lucide-react';
 import Scene3D from './Scene3D';
 import CuelistPanel from './CuelistPanel';
 import { Slider } from './ui/Slider';
@@ -178,7 +179,7 @@ export const PerformView: React.FC = () => {
                     }`}
                     title={isPlaying ? 'Stop ce move' : 'Lancer (en layer — les autres continuent)'}
                   >
-                    {isPlaying ? '■' : '▶'}
+                    {isPlaying ? <Square size={11} fill="currentColor" /> : <Play size={11} fill="currentColor" />}
                   </button>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
@@ -210,7 +211,7 @@ export const PerformView: React.FC = () => {
             })}
             {orderedSlots.length === 0 && (
               <div className="px-3 py-6 text-center text-gray-600 text-[11px]">
-                Aucun move — quitter Perform (⚙ header) pour en créer.
+                Aucun move — quitter Perform (header) pour en créer.
               </div>
             )}
           </div>
@@ -313,7 +314,7 @@ const LiveDrawer: React.FC = () => {
             }`}
             title="Macros globales — affectent TOUS les moves live (merge)"
           >
-            ◈ Global
+            <Globe size={11} className="inline -mt-0.5" /> Global
           </button>
         )}
         {playingSlots.length === 0 && (
@@ -326,14 +327,12 @@ const LiveDrawer: React.FC = () => {
         <div className="border-t border-stagespace-border px-4 py-2 flex items-start gap-6 overflow-x-auto">
           <div className="flex-shrink-0 w-64 space-y-1">
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-orange-400 text-xs font-bold">◈ Macros globales</span>
+              <span className="text-orange-400 text-xs font-bold flex items-center gap-1.5"><Globe size={12} /> Macros globales</span>
               <button
                 onClick={() => setGlobalOpen(false)}
                 className="ml-auto text-gray-500 hover:text-white text-xs px-1"
                 title="Fermer"
-              >
-                ✕
-              </button>
+              ><X size={12} /></button>
             </div>
             <Slider label="Scale" value={macros.scale} min={0.1} max={3} step={0.05} accent="orange" live onChange={(v) => setGlobalMacro('scale', v)} />
             <Slider label="Speed all" value={macros.speed} min={0} max={3} step={0.05} unit="x" accent="orange" live onChange={(v) => setGlobalMacro('speed', v)} />
@@ -366,9 +365,7 @@ const LiveDrawer: React.FC = () => {
                 onClick={() => selectSlotForEditing(null)}
                 className="ml-auto text-gray-500 hover:text-white text-xs px-1"
                 title="Fermer les params"
-              >
-                ✕
-              </button>
+              ><X size={12} /></button>
             </div>
             <Slider
               label="Speed"

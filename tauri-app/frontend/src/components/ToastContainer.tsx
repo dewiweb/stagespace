@@ -1,10 +1,11 @@
 import { useToastStore, Toast, ToastType } from '../store/useToastStore';
+import { X, TriangleAlert, CircleCheck, Info } from 'lucide-react';
 
-const STYLES: Record<ToastType, { bg: string; border: string; icon: string }> = {
-  error:   { bg: 'bg-red-900/95',     border: 'border-red-500',   icon: '✕' },
-  warning: { bg: 'bg-amber-900/95',   border: 'border-amber-500', icon: '⚠' },
-  info:    { bg: 'bg-blue-900/95',    border: 'border-blue-500',  icon: 'ℹ' },
-  success: { bg: 'bg-green-900/95',   border: 'border-green-500', icon: '✓' },
+const STYLES: Record<ToastType, { bg: string; border: string; icon: React.ReactNode }> = {
+  error:   { bg: 'bg-red-900/95',     border: 'border-red-500',   icon: <X size={13} /> },
+  warning: { bg: 'bg-amber-900/95',   border: 'border-amber-500', icon: <TriangleAlert size={13} /> },
+  info:    { bg: 'bg-blue-900/95',    border: 'border-blue-500',  icon: <Info size={13} /> },
+  success: { bg: 'bg-green-900/95',   border: 'border-green-500', icon: <CircleCheck size={13} /> },
 };
 
 function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string) => void }) {
@@ -27,7 +28,7 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string)
     >
       <span className="flex-shrink-0 font-bold text-sm leading-tight">{style.icon}</span>
       <span className="flex-1 leading-snug break-words">{toast.message}</span>
-      <span className="flex-shrink-0 text-gray-400 hover:text-white text-xs">✕</span>
+      <span className="flex-shrink-0 text-gray-400 hover:text-white text-xs"><X size={12} /></span>
     </div>
   );
 }

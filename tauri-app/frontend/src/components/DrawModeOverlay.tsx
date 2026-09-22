@@ -1,4 +1,5 @@
 import React from 'react';
+import { Pencil } from 'lucide-react';
 import { useGraphStore } from '../store/useGraphStore';
 import Slider from './ui/Slider';
 
@@ -41,7 +42,7 @@ export const DrawModeOverlay: React.FC = () => {
       {/* Instructions */}
       <div className="absolute top-2 right-2 z-20 bg-gray-900/80 backdrop-blur rounded-lg px-3 py-1.5 border border-orange-600/50">
         <span className="text-orange-400 text-[10px] font-medium">
-          ✎ Draw mode — click & drag on the scene
+          <Pencil size={11} className="inline -mt-0.5" /> Draw mode — click & drag on the scene
         </span>
       </div>
     </>

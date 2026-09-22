@@ -1,4 +1,5 @@
 import React from 'react';
+import { X } from 'lucide-react';
 import { toast } from '../utils/toast-helpers';
 import { useGraphStore } from '../store/useGraphStore';
 import {
@@ -246,9 +247,7 @@ export default function SpatialFxPanel() {
                       {!zone.enabled && ' · disabled'}
                     </div>
                   </div>
-                  <button onClick={() => removeZone(i).catch((e) => toast.error(`Spatial FX failed: ${e}`))} className={removeBtnCls} aria-label="Remove zone">
-                    ✕
-                  </button>
+                  <button onClick={() => removeZone(i).catch((e) => toast.error(`Spatial FX failed: ${e}`))} className={removeBtnCls} aria-label="Remove zone"><X size={11} /></button>
                 </div>
               </div>
             ))}
@@ -346,9 +345,7 @@ export default function SpatialFxPanel() {
                       {mod.max !== null && ` max=${mod.max}`}
                     </div>
                   </div>
-                  <button onClick={() => removeModulation(i).catch((e) => toast.error(`Spatial FX failed: ${e}`))} className={removeBtnCls} aria-label="Remove modulation">
-                    ✕
-                  </button>
+                  <button onClick={() => removeModulation(i).catch((e) => toast.error(`Spatial FX failed: ${e}`))} className={removeBtnCls} aria-label="Remove modulation"><X size={11} /></button>
                 </div>
               </div>
             ))}
@@ -399,9 +396,7 @@ export default function SpatialFxPanel() {
                     onClick={() => clearSpatialChannel(parseInt(obj, 10)).catch((e) => toast.error(`Spatial FX failed: ${e}`))}
                     className={removeBtnCls}
                     aria-label="Clear object channels"
-                  >
-                    ✕
-                  </button>
+                  ><X size={11} /></button>
                 </div>
               </div>
             ))}

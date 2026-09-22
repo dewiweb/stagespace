@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { useGraphStore } from '../store/useGraphStore';
+import { TriangleAlert } from 'lucide-react';
 import { MacrosPanel } from './MacrosPanel';
 import { DebugPerfOverlay } from './DebugPerfOverlay';
 import { debugPerf } from '../utils/debugPerf';
@@ -195,7 +196,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
     <div ref={containerRef} style={{ width, height, overflow: 'hidden', position: 'relative' }}>
       {webglFailed && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-900/90 z-30 p-4">
-          <div className="text-4xl">⚠️</div>
+          <TriangleAlert size={32} className="text-amber-400" />
           <div className="text-white text-sm font-medium">WebGL unavailable</div>
           <div className="text-gray-400 text-[11px] text-center max-w-xs">
             GPU acceleration is blocked in this environment (sandboxed WebKit).

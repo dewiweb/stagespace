@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
+import { X, Check } from 'lucide-react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
@@ -459,7 +460,7 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
                 onClick={() => handleDelete(s.id)}
                 className="text-red-500 hover:text-red-400 px-1"
                 title="Supprimer"
-              >✕</button>
+              ><X size={10} /></button>
             </div>
           ))}
         </div>
@@ -481,12 +482,12 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
             onClick={handleSave}
             className="text-green-400 hover:text-green-300 text-[10px] px-2"
             title="Confirmer"
-          >✓</button>
+          ><Check size={10} /></button>
           <button
             onClick={() => setShowSave(false)}
             className="text-gray-500 hover:text-gray-400 text-[10px] px-2"
             title="Annuler"
-          >✕</button>
+          ><X size={10} /></button>
         </div>
       ) : (
         <button

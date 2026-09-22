@@ -3,6 +3,7 @@ import { useGraphStore } from '../store/useGraphStore';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { toast } from '../utils/toast-helpers';
 import Modal from './ui/Modal';
+import { Settings, ListOrdered } from 'lucide-react';
 
 const OSC_PROFILES = [
   { value: 'holophonix', label: 'Holophonix' },
@@ -90,7 +91,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     <Modal
       title={
         <span className="flex items-center gap-2">
-          <span className="text-lg">⚙</span> Settings
+          <Settings size={16} /> Settings
         </span>
       }
       onClose={onClose}
@@ -207,7 +208,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           {/* ─── Track IDs ─── */}
           <section>
             <h3 className="text-gray-400 text-[11px] font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-              <span className="text-purple-400">◆</span> Track IDs
+              <ListOrdered size={11} className="text-purple-400" /> Track IDs
             </h3>
             <p className="text-gray-600 text-[10px] mb-3">
               Virtual track IDs when no .hol project is loaded

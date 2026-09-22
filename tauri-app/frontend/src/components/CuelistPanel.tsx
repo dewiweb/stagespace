@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { X } from 'lucide-react';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { useGraphStore } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
@@ -180,7 +181,7 @@ export const CuelistPanel: React.FC = () => {
                   className="text-gray-600 hover:text-red-400 text-[10px] px-1"
                   title="Supprimer"
                 >
-                  ✕
+                  <X size={11} />
                 </button>
               </div>
             ))}

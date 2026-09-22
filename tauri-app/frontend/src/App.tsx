@@ -12,6 +12,7 @@ import Toolbar from './components/Toolbar';
 import ToastContainer from './components/ToastContainer';
 import PerformView from './components/PerformView';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { Workflow, ChevronRight, ChevronDown, PanelRightClose, PanelLeftClose, PanelLeftOpen, PanelRightOpen } from 'lucide-react';
 import { useLiveShortcuts, usePerfStatsPolling } from './hooks/useLiveShortcuts';
 import { prepareGraphForSave } from './components/nodeParamSchema';
 import { useGraphStore, useMovementPositionsListener, useAudioErrorListener, useCueRecallListener } from './store/useGraphStore';
@@ -173,7 +174,7 @@ function App() {
               }`}
               title="Mode Expert — éditeur de graphe avancé (nodes, connexions, custom trajectories)"
             >
-              <span className="text-[10px]">{showExpert ? '◆' : '◇'}</span>
+              <Workflow size={12} />
               {showExpert ? 'Expert' : 'Simple'}
             </button>
           )}
@@ -202,7 +203,7 @@ function App() {
             className="w-7 border-r border-stagespace-border bg-stagespace-panel flex flex-col items-center pt-3 flex-shrink-0 hover:bg-gray-800 transition-colors group"
             title="Afficher le panneau des graphes"
           >
-            <span className="text-gray-500 group-hover:text-white text-xs">▸</span>
+            <PanelLeftOpen size={13} className="text-gray-500 group-hover:text-white" />
             <span className="text-gray-600 text-[10px] mt-2 writing-vertical" style={{ writingMode: 'vertical-rl' }}>Graphes</span>
           </button>
         ) : (
@@ -213,7 +214,7 @@ function App() {
               className="absolute -right-3 top-2 z-20 w-6 h-6 bg-stagespace-panel border border-stagespace-border rounded-full flex items-center justify-center text-gray-500 hover:text-white hover:bg-gray-800 transition-colors text-xs"
               title="Masquer le panneau"
             >
-              ◂
+              <PanelLeftClose size={11} />
             </button>
             {/* Section 1: Graphes (AnimationList) — collapsible */}
             <div className={`flex flex-col min-h-0 ${graphsExpanded ? 'flex-1' : 'flex-shrink-0'} ${movesExpanded ? '' : 'flex-1'}`}>
@@ -222,7 +223,7 @@ function App() {
                   onClick={() => setGraphsExpanded(!graphsExpanded)}
                   className="text-gray-400 hover:text-white text-[10px] w-4"
                   title={graphsExpanded ? "Réduire" : "Agrandir"}
-                >{graphsExpanded ? '▼' : '▶'}</button>
+                >{graphsExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}</button>
                 <span className="text-gray-400 text-[10px] uppercase tracking-wider font-medium">Graphes</span>
               </div>
               {graphsExpanded && (
@@ -238,7 +239,7 @@ function App() {
                   onClick={() => setMovesExpanded(!movesExpanded)}
                   className="text-gray-400 hover:text-white text-[10px] w-4"
                   title={movesExpanded ? "Réduire" : "Agrandir"}
-                >{movesExpanded ? '▼' : '▶'}</button>
+                >{movesExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}</button>
                 <span className="text-gray-400 text-[10px] uppercase tracking-wider font-medium">Moves</span>
               </div>
               {movesExpanded && (
@@ -330,7 +331,7 @@ function App() {
             className="w-7 border-l border-stagespace-border bg-stagespace-panel flex flex-col items-center pt-3 flex-shrink-0 hover:bg-gray-800 transition-colors group"
             title="Afficher l'Inspector"
           >
-            <span className="text-gray-500 group-hover:text-white text-xs">◂</span>
+            <PanelRightOpen size={13} className="text-gray-500 group-hover:text-white" />
             <span className="text-gray-600 text-[10px] mt-2" style={{ writingMode: 'vertical-rl' }}>Inspector</span>
           </button>
         ) : (
@@ -349,7 +350,7 @@ function App() {
               className="absolute -left-3 top-2 z-20 w-6 h-6 bg-stagespace-panel border border-stagespace-border rounded-full flex items-center justify-center text-gray-500 hover:text-white hover:bg-gray-800 transition-colors text-xs"
               title="Masquer l'Inspector"
             >
-              ▸
+              <PanelRightClose size={11} />
             </button>
             {/* Audio Panel — compact, en haut */}
             <div className="flex-shrink-0 max-h-[40%] overflow-y-auto border-b border-stagespace-border">
