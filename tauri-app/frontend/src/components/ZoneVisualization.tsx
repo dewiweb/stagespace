@@ -3,11 +3,8 @@ import * as THREE from 'three';
 import { useGraphStore } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import type { Zone } from '../store/slices/spatialFxSlice';
+import { toThree } from '../utils/coords';
 
-/// Conversion backend (x, y, z) où z=up → Three.js (x, z, y) où y=up
-function toThree(x: number, y: number, z: number): [number, number, number] {
-  return [x, z, y];
-}
 
 const MANUAL_COLOR = 0x22d3ee; // cyan — zones manuelles (FX panel / CLI / OSC IN)
 const GRAPH_COLOR = 0x8b5cf6; // violet — zones déclarées dans le graph global (nodes Zone)

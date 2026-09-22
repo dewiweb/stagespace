@@ -1,6 +1,7 @@
 import { useRef, useState, useCallback, MutableRefObject } from 'react';
 import * as THREE from 'three';
 import { useGraphStore } from '../store/useGraphStore';
+import { fromThree } from '../utils/coords';
 
 interface UseDrawModeParams {
   cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>;
@@ -43,7 +44,7 @@ export function useDrawMode({ cameraRef, containerRef }: UseDrawModeParams) {
       const intersection = new THREE.Vector3();
       if (raycaster.ray.intersectPlane(plane, intersection)) {
         // Convertir Three.js (x, y=up, z=depth) → backend (x, y=depth, z=up)
-        return [intersection.x, intersection.z, intersection.y];
+        return fromThree(intersection.x, intersection.y, intersection.z);
       }
       return null;
     },

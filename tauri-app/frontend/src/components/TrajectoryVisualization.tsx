@@ -3,11 +3,8 @@ import * as THREE from 'three';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { useGraphStore } from '../store/useGraphStore';
 import { useAnimationStore } from '../store/useAnimationStore';
+import { toThree } from '../utils/coords';
 
-/// Conversion backend (x, y, z) où z=up → Three.js (x, z, y) où y=up
-function toThree(x: number, y: number, z: number): [number, number, number] {
-  return [x, z, y];
-}
 
 interface TrajectoryVisualizationProps {
   sceneRef: React.RefObject<THREE.Scene | null>;

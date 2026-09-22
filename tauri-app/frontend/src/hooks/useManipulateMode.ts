@@ -4,6 +4,7 @@ import { safeInvoke as invoke } from '../utils/tauri';
 import { useGraphStore } from '../store/useGraphStore';
 import { useAnimationStore } from '../store/useAnimationStore';
 import { throttleTrailingKeyed } from '../utils/throttle';
+import { fromThree } from '../utils/coords';
 
 interface UseManipulateModeParams {
   cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>;
@@ -219,12 +220,8 @@ export function useManipulateMode({
           mesh.position.x = intersection.x;
           mesh.position.z = intersection.z;
         }
-        // Conversion Three.js → backend: [x, z_threejs, y_threejs]
-        const backendPos: [number, number, number] = [
-          intersection.x,
-          intersection.z,            // Three.js z (depth) → backend y
-          mesh?.position.y ?? 0,     // Three.js y (up) → backend z
-        ];
+        // Conversion Three.js (x, y=up, z=depth) → backend (x, y=depth, z=up)
+        const backendPos = fromThree(intersection.x, mesh?.position.y ?? 0, intersection.z);
         useGraphStore.getState().setManualPosition(draggingObject, backendPos);
         if (isPlaying || movementsRef.current.length > 0) {
           pushManualPositionThrottled.current(draggingObject, backendPos);

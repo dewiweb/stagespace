@@ -2,11 +2,8 @@ import { useEffect, useRef, MutableRefObject } from 'react';
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { useGraphStore } from '../store/useGraphStore';
+import { toThree } from '../utils/coords';
 
-/// Conversion backend (x, y, z) où z=up → Three.js (x, z, y) où y=up
-function toThree(x: number, y: number, z: number): [number, number, number] {
-  return [x, z, y];
-}
 
 interface UseObjects3DParams {
   sceneRef: MutableRefObject<THREE.Scene | null>;

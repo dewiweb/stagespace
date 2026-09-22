@@ -5,36 +5,17 @@ import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { useGraphStore } from '../store/useGraphStore';
 import type { HolProject } from '../store/useGraphStore';
 import { strongestZoneInfluence } from '../utils/zoneMath';
+import { toThree } from '../utils/coords';
 
-/// Conversion backend (x, y, z) où z=up → Three.js (x, z, y) où y=up
-/// Le spatial audio utilise Z-up ; Three.js utilise Y-up.
-function toThree(x: number, y: number, z: number): [number, number, number] {
-  return [x, z, y];
-}
-
-/// Cache un mesh ET ses labels CSS2DObject enfants explicitement.
-/// Le CSS2DRenderer devrait le faire via la hiérarchie, mais on force pour être sûr.
+/// Cache un mesh — CSS2DRenderer cache automatiquement les CSS2DObject
+/// enfants d'un objet invisible (récursion dans renderObject). Pas besoin
+/// d'écrire el.style.display à chaque frame (DOM writes ×60fps).
 function hideMeshAndLabels(mesh: THREE.Mesh) {
   mesh.visible = false;
-  mesh.children.forEach((child) => {
-    if ((child as any).isCSS2DObject) {
-      child.visible = false;
-      const el = (child as any).element as HTMLElement | undefined;
-      if (el) el.style.display = 'none';
-    }
-  });
 }
 
-/// Montre un mesh ET ses labels CSS2DObject enfants.
 function showMeshAndLabels(mesh: THREE.Mesh) {
   mesh.visible = true;
-  mesh.children.forEach((child) => {
-    if ((child as any).isCSS2DObject) {
-      child.visible = true;
-      // Ne pas forcer display:'' ici — le CSS2DRenderer le gère
-      // en fonction de la projection caméra au prochain render
-    }
-  });
 }
 
 // Couleurs de tinte des objets affectés par une zone — match ZoneVisualization
@@ -124,7 +105,6 @@ export function useRenderLoop({
   const holProjectRef = useRef(holProject);
   const drawnPointsRef = useRef(drawnPoints);
   const manualPositionsRef = useRef(manualPositions);
-  const lastLineKeyRef = useRef('');
   const lastDrawnKeyRef = useRef('');
 
   // Sync des refs à chaque render React (cheap — pas d'effet de bord)
@@ -222,6 +202,16 @@ export function useRenderLoop({
     let renderLastPerf = performance.now();
     let renderLastFrameTime = performance.now();
     let animateTotalMs = 0;
+    // Structures scratch réutilisées à chaque frame — évite les allocations
+    // Map/Set/Color dans la boucle 60fps (pression GC constante).
+    const scratch = {
+      posMap: new Map<number, { index: number; x: number; y: number; z: number }>(),
+      highlighted: new Set<number>(),
+      previewTracks: new Set<number>(),
+      liveTracks: new Set<number>(),
+      defaultColor: new THREE.Color(),
+      zoneTint: new THREE.Color(),
+    };
     const animate = () => {
       const animateStart = performance.now();
       animationId = requestAnimationFrame(animate);
@@ -265,7 +255,150 @@ export function useRenderLoop({
       const selTrackIds = selectedTrackIdsRef.current;
       const dragObj = draggingObjectRef.current;
 
-      // Mode assign: couleurs vert/gris selon la sélection
+      // Structures scratch réutilisées à chaque frame — pas d'allocation
+      // dans la boucle (Map/Set/Color recréés à 60fps = pression GC).
+      const posMap = scratch.posMap; posMap.clear();
+      const highlightedTracks = scratch.highlighted; highlightedTracks.clear();
+      const previewTracks = scratch.previewTracks; previewTracks.clear();
+      const liveTracks = scratch.liveTracks; liveTracks.clear();
+      const defaultColor = scratch.defaultColor;
+      const zoneTint = scratch.zoneTint;
+
+      const globalPos = mvPosMap['global'];
+      const holTracks = holProj?.tracks ?? [];
+      const manualIds = storeState.manualOscIds;
+
+      // Sets par move — une track est "preview" si un move preview la couvre
+      // et qu'AUCUN move live ne la couvre (un move live gagne toujours).
+      for (const mv of mvts) {
+        const mvPos = mvPosMap[mv.id];
+        if (!mvPos) continue;
+        const target = mv.is_preview ? previewTracks : liveTracks;
+        for (const p of mvPos) target.add(p.index);
+      }
+
+      if (mvts.length > 0 && globalPos) {
+        // ── Mode multi-move : les positions arrivent du backend via 'global-positions' ──
+        // Le MergeRuntime a déjà fait : merge + post-processing (macros, offset, etc.)
+        // Le visualiseur est un viewer passif — il ne recalcule RIEN.
+        for (const p of globalPos) posMap.set(p.index, p);
+
+        // Tracks du move sélectionné → highlight (hol ou manual ids)
+        const editingSlotId = storeState.editingSlotId;
+        if (editingSlotId) {
+          const slot = storeState.moveSlots.find((s) => s.id === editingSlotId && s.movementId);
+          if (slot?.trackIds) {
+            slot.trackIds.forEach((trackId) => {
+              const idx = holProj
+                ? holTracks.findIndex((t) => t.id === trackId)
+                : manualIds.indexOf(trackId);
+              if (idx >= 0) highlightedTracks.add(idx);
+            });
+          }
+        }
+
+        // Zones actives — pour le highlight des objets affectés
+        const manualZones = storeState.zones ?? [];
+        const graphZones = storeState.graphZones ?? [];
+        const hasZones = !assignMode && (manualZones.length > 0 || graphZones.length > 0);
+
+        // Cacher tous les meshes, puis réafficher ceux qui ont une position
+        objs.forEach((mesh) => { hideMeshAndLabels(mesh); });
+
+        objs.forEach((mesh, objIdx) => {
+          if (dragObj !== null && objIdx === dragObj) return;
+          const p = posMap.get(objIdx);
+          if (p) {
+            const [tx, ty, tz] = toThree(p.x, p.y, p.z);
+            mesh.position.set(tx, ty, tz);
+            showMeshAndLabels(mesh);
+            const mat = mesh.material as THREE.MeshStandardMaterial;
+
+            // Couleur d'origine : couleur hol de la track, ou HSL par défaut
+            const holTrack = holTracks[objIdx];
+            if (holTrack?.color) {
+              mat.color.set(holTrack.color);
+            } else {
+              defaultColor.setHSL(objIdx / Math.max(objs.length, 1), 0.7, 0.55);
+              mat.color.copy(defaultColor);
+            }
+
+            // Preview : cyan uniquement pour les tracks couvertes par un move
+            // preview ET par aucun move live (avant : UN move preview rendait
+            // toute la scène cyan, on ne distinguait plus ce qui était on air).
+            const isPreviewTrack = previewTracks.has(objIdx) && !liveTracks.has(objIdx);
+            const isHighlighted = highlightedTracks.has(objIdx);
+            if (isPreviewTrack) {
+              mat.color.setHex(0x00ccff);
+              mat.emissive.setHex(0x003344);
+            } else if (isHighlighted) {
+              // Track du move sélectionné : emissive renforcé (blanc chaud)
+              mat.emissive.setHex(0x664400);
+            } else {
+              // Track en mouvement normal : emissive léger de la même teinte
+              mat.emissive.copy(mat.color).multiplyScalar(0.15);
+            }
+
+            // Zone influence : tinte l'emissive vers la couleur de la zone
+            // (violet si graph-déclarée domine, cyan si manuelle domine) —
+            // l'objet "s'allume" proportionnellement à son influence.
+            if (hasZones) {
+              const inGraph = strongestZoneInfluence(graphZones, objIdx, p.x, p.y, p.z);
+              const inManual = strongestZoneInfluence(manualZones, objIdx, p.x, p.y, p.z);
+              const influence = Math.max(inGraph, inManual);
+              if (influence > 0) {
+                zoneTint.setHex(inGraph >= inManual ? ZONE_GRAPH_TINT : ZONE_MANUAL_TINT);
+                mat.emissive.lerp(zoneTint, Math.min(influence, 1));
+              }
+            }
+          } else if (!assignMode) {
+            // Pas de position pour cet objet → manualPositions (statique)
+            const manualPos = manualPositionsRef.current;
+            const mp = manualPos[objIdx];
+            if (mp) {
+              const [tx, ty, tz] = toThree(mp[0], mp[1], mp[2]);
+              mesh.position.set(tx, ty, tz);
+              showMeshAndLabels(mesh);
+            }
+            const mat = mesh.material as THREE.MeshStandardMaterial;
+            // Couleur hol ou HSL par défaut
+            const holTrack = holTracks[objIdx];
+            if (holTrack?.color) {
+              mat.color.set(holTrack.color);
+            } else {
+              mat.color.setHSL(objIdx / Math.max(objs.length, 1), 0.7, 0.55);
+            }
+            mat.emissive.setHSL(objIdx / Math.max(objs.length, 1), 0.5, 0.2);
+            mat.opacity = 1.0;
+            mat.transparent = false;
+          }
+        });
+      } else {
+        // ── Mode statique : aucun move actif, OU positions pas encore arrivées
+        // (transition après GO/recall — on montre les positions manuelles
+        // plutôt qu'un flash de scène vide) ──
+        const manualPos = manualPositionsRef.current;
+        const manipMode = manipulateModeRef.current;
+        const asgnMode = assignModeRef.current;
+        const showObjects = manipMode || asgnMode || mvts.length > 0;
+        objs.forEach((mesh) => { hideMeshAndLabels(mesh); });
+        if (showObjects) {
+          objs.forEach((mesh, i) => {
+            if (dragObj !== null && i === dragObj) return;
+            const p = manualPos[i];
+            if (p) {
+              const [tx, ty, tz] = toThree(p[0], p[1], p[2]);
+              mesh.position.set(tx, ty, tz);
+              showMeshAndLabels(mesh);
+            }
+          });
+        }
+      }
+
+      // Mode assign : couleurs vert/gris selon la sélection — APPLIQUÉ EN
+      // DERNIER pour rester visible pendant la lecture (avant, le bloc
+      // multi-move écrasait les couleurs → assign inerte dès qu'un move
+      // tournait).
       if (assignMode && holProj) {
         objs.forEach((mesh, i) => {
           if (i < holProj.tracks.length) {
@@ -287,154 +420,6 @@ export function useRenderLoop({
         });
       }
 
-      if (mvts.length > 0) {
-        // ── Mode multi-move : les positions arrivent du backend via 'global-positions' ──
-        // Le MergeRuntime a déjà fait : merge + post-processing (macros, offset, etc.)
-        // Le visualiseur est un viewer passif — il ne recalcule RIEN.
-        const globalPos = mvPosMap['global'];
-        if (globalPos) {
-          const posMap = new Map<number, typeof globalPos[0]>();
-          for (const p of globalPos) posMap.set(p.index, p);
-
-          // Déterminer les tracks du move sélectionné (editingSlotId → movementId → track_indices)
-          const editingSlotId = storeState.editingSlotId;
-          const selectedMove = editingSlotId
-            ? storeState.moveSlots.find((s) => s.id === editingSlotId && s.movementId)
-            : null;
-          const selectedMoveInfo = selectedMove
-            ? mvts.find((mv) => mv.id === selectedMove.movementId)
-            : null;
-          // Construire le set des track_indices du move sélectionné
-          const highlightedTracks = new Set<number>();
-          if (selectedMoveInfo) {
-            // Le move a des osc_ids ; on doit retrouver les track_indices via holProject
-            // En mode multi-move, les positions sont indexées par track_index global.
-            // On highlight les tracks dont les positions sont dans ce move.
-            // Pour simplifier, on compare les osc_ids du move avec les osc_ids globaux.
-            // Mais plus simple : le render loop connaît objIdx (track_index).
-            // On peut retrouver les track_indices du move via le store.
-            const slot = storeState.moveSlots.find((s) => s.id === editingSlotId);
-            if (slot?.trackIds) {
-              // trackIds sont des osc_ids (track.id du projet hol)
-              // Convertir en track_indices
-              if (holProj) {
-                slot.trackIds.forEach((trackId) => {
-                  const idx = holProj.tracks.findIndex((t) => t.id === trackId);
-                  if (idx >= 0) highlightedTracks.add(idx);
-                });
-              }
-            }
-          }
-
-          // Couleur par défaut si pas de hol
-          const defaultColor = new THREE.Color();
-          const holTracks = holProj?.tracks ?? [];
-
-          // Zones actives — pour le highlight des objets affectés
-          const manualZones = storeState.zones ?? [];
-          const graphZones = storeState.graphZones ?? [];
-          const hasZones = !assignMode && (manualZones.length > 0 || graphZones.length > 0);
-          const zoneTint = new THREE.Color();
-
-          // D'abord, cacher tous les meshes qui ne sont pas dans posMap
-          // (ils seront remis en position manuelle si pas en mode assign)
-          objs.forEach((mesh) => { hideMeshAndLabels(mesh); });
-
-          // Ensuite, appliquer les positions du backend à chaque mesh par index
-          objs.forEach((mesh, objIdx) => {
-            if (dragObj !== null && objIdx === dragObj) return;
-            const p = posMap.get(objIdx);
-            if (p) {
-              const [tx, ty, tz] = toThree(p.x, p.y, p.z);
-              mesh.position.set(tx, ty, tz);
-              showMeshAndLabels(mesh);
-              const mat = mesh.material as THREE.MeshStandardMaterial;
-
-              // Couleur d'origine : couleur hol de la track, ou HSL par défaut
-              const holTrack = holTracks[objIdx];
-              if (holTrack?.color) {
-                mat.color.set(holTrack.color);
-              } else {
-                defaultColor.setHSL(objIdx / Math.max(objs.length, 1), 0.7, 0.55);
-                mat.color.copy(defaultColor);
-              }
-
-              // Emissive : léger pour toutes les tracks en mouvement, renforcé pour le move sélectionné
-              const isHighlighted = highlightedTracks.has(objIdx);
-              const isPreview = mvts.some((mv) => mv.is_preview);
-              if (isPreview) {
-                // Preview : cyan override
-                mat.color.setHex(0x00ccff);
-                mat.emissive.setHex(0x003344);
-              } else if (isHighlighted) {
-                // Track du move sélectionné : emissive renforcé (blanc chaud)
-                mat.emissive.setHex(0x664400);
-              } else {
-                // Track en mouvement normal : emissive léger de la même teinte
-                mat.emissive.copy(mat.color).multiplyScalar(0.15);
-              }
-
-              // Zone influence : tinte l'emissive vers la couleur de la zone
-              // (violet si graph-déclarée domine, cyan si manuelle domine) —
-              // l'objet "s'allume" proportionnellement à son influence.
-              if (hasZones) {
-                const inGraph = strongestZoneInfluence(graphZones, objIdx, p.x, p.y, p.z);
-                const inManual = strongestZoneInfluence(manualZones, objIdx, p.x, p.y, p.z);
-                const influence = Math.max(inGraph, inManual);
-                if (influence > 0) {
-                  zoneTint.setHex(inGraph >= inManual ? ZONE_GRAPH_TINT : ZONE_MANUAL_TINT);
-                  mat.emissive.lerp(zoneTint, Math.min(influence, 1));
-                }
-              }
-            } else if (!assignMode) {
-              // Pas de position pour cet objet → manualPositions (statique)
-              const manualPos = manualPositionsRef.current;
-              const mp = manualPos[objIdx];
-              if (mp) {
-                const [tx, ty, tz] = toThree(mp[0], mp[1], mp[2]);
-                mesh.position.set(tx, ty, tz);
-                showMeshAndLabels(mesh);
-              }
-              const mat = mesh.material as THREE.MeshStandardMaterial;
-              // Couleur hol ou HSL par défaut
-              const holTrack = holTracks[objIdx];
-              if (holTrack?.color) {
-                mat.color.set(holTrack.color);
-              } else {
-                mat.color.setHSL(objIdx / Math.max(objs.length, 1), 0.7, 0.55);
-              }
-              mat.emissive.setHSL(objIdx / Math.max(objs.length, 1), 0.5, 0.2);
-              mat.opacity = 1.0;
-              mat.transparent = false;
-            }
-          });
-        } else {
-          // globalPos est undefined (moves en cours de stop, positions pas encore arrivées)
-          // Cacher tous les meshes pour éviter les labels orphelins sur la dernière trajectoire
-          objs.forEach((mesh) => { hideMeshAndLabels(mesh); });
-        }
-      } else {
-        // ── Mode statique : aucun move actif ──
-        // Les hol markers (anneaux + labels "TrackName (#19)") suffisent pour
-        // afficher les positions .hol. Les sphères objets ne sont montrées
-        // qu'en manipulate mode (pour le drag) ou assign mode (pour la sélection).
-        const manualPos = manualPositionsRef.current;
-        const manipMode = manipulateModeRef.current;
-        const asgnMode = assignModeRef.current;
-        objs.forEach((mesh) => { hideMeshAndLabels(mesh); });
-        if (manipMode || asgnMode) {
-          objs.forEach((mesh, i) => {
-            if (dragObj !== null && i === dragObj) return;
-            const p = manualPos[i];
-            if (p) {
-              const [tx, ty, tz] = toThree(p[0], p[1], p[2]);
-              mesh.position.set(tx, ty, tz);
-              showMeshAndLabels(mesh);
-            }
-          });
-        }
-      }
-
       // Hol markers font face à la caméra (billboard)
       const camPos = camera.position;
       holMarkersRef.current.forEach((m) => m.lookAt(camPos));
@@ -448,27 +433,45 @@ export function useRenderLoop({
         }
         if (pos.length > 0) {
           // Les positions sont déjà transformées par le backend — pas de macros frontend
-          const transform = (p: { x: number; y: number; z: number }) => {
-            const [tx, ty, tz] = toThree(p.x, p.y, p.z);
-            return new THREE.Vector3(tx, ty, tz);
-          };
-
           const cx = pos.reduce((s, p) => s + p.x, 0) / pos.length;
           const cy = pos.reduce((s, p) => s + p.z, 0) / pos.length; // z=up → y
           const cz = pos.reduce((s, p) => s + p.y, 0) / pos.length; // y=depth → z
           handleRef.current.position.set(cx, cy, cz);
 
-          // Mise à jour de la trajectory line — seulement si les positions ont changé
-          const posKey = pos.length + ':' + pos[0]?.x + ',' + pos[0]?.y + ',' + pos[0]?.z;
-          if (lastLineKeyRef.current !== posKey) {
-            lastLineKeyRef.current = posKey;
-            const linePoints = pos.map(transform);
-            if (linePoints.length > 2) linePoints.push(linePoints[0].clone());
-            const line = trajectoryLineRef.current;
+          // Mise à jour de la trajectory line EN PLACE — le buffer est
+          // préalloué (capacité fixe), on réécrit les positions et on ajuste
+          // le drawRange. Avant : dispose + new BufferGeometry chaque frame
+          // (la clé changeait à chaque mouvement → churn GPU à 60fps).
+          const line = trajectoryLineRef.current;
+          const nPts = pos.length > 2 ? pos.length + 1 : pos.length; // fermeture du loop
+          const attr = line.geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
+          if (!attr || attr.count < nPts) {
+            // Capacité insuffisante — recréer une fois (rare : le nb de points
+            // ne grandit qu'avec le nb de tracks)
+            const capacity = Math.max(nPts * 2, 256);
             line.geometry.dispose();
-            line.geometry = new THREE.BufferGeometry().setFromPoints(linePoints);
-            line.computeLineDistances();
+            line.geometry = new THREE.BufferGeometry();
+            line.geometry.setAttribute(
+              'position',
+              new THREE.BufferAttribute(new Float32Array(capacity * 3), 3),
+            );
           }
+          const arr = (line.geometry.getAttribute('position') as THREE.BufferAttribute).array as Float32Array;
+          for (let i = 0; i < pos.length; i++) {
+            arr[i * 3] = pos[i].x;
+            arr[i * 3 + 1] = pos[i].z; // backend z=up → three y
+            arr[i * 3 + 2] = pos[i].y; // backend y=depth → three z
+          }
+          if (pos.length > 2) {
+            const last = pos.length * 3;
+            arr[last] = pos[0].x;
+            arr[last + 1] = pos[0].z;
+            arr[last + 2] = pos[0].y;
+          }
+          const posAttr = line.geometry.getAttribute('position') as THREE.BufferAttribute;
+          posAttr.needsUpdate = true;
+          line.geometry.setDrawRange(0, nPts);
+          line.computeLineDistances();
         }
       }
 
@@ -494,13 +497,21 @@ export function useRenderLoop({
           oldLine.geometry.dispose();
           (oldLine.material as THREE.Material).dispose();
         }
+        // Retirer l'ancien marqueur de départ aussi — sinon une sphère
+        // s'accumule à chaque point ajouté pendant le dessin (fuite).
+        const oldStart = scene.getObjectByName('__drawSplineStart') as THREE.Mesh | undefined;
+        if (oldStart) {
+          scene.remove(oldStart);
+          oldStart.geometry.dispose();
+          (oldStart.material as THREE.Material).dispose();
+        }
         if (drawnPts.length >= 2) {
           const linePoints = drawnPts.map((p) => {
             const [tx, ty, tz] = toThree(p[0], p[1], p[2]);
             return new THREE.Vector3(tx, ty, tz);
           });
           const geom = new THREE.BufferGeometry().setFromPoints(linePoints);
-          const mat = new THREE.LineBasicMaterial({ color: 0xff8800, linewidth: 3 });
+          const mat = new THREE.LineBasicMaterial({ color: 0xff8800 });
           const line = new THREE.Line(geom, mat);
           line.name = '__drawSplineLine';
           scene.add(line);
