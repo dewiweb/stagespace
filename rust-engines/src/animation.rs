@@ -214,8 +214,9 @@ impl Default for Animation {
 }
 
 /// État d'exécution d'une animation — ce que le runtime lit à chaque frame
-/// Dérivé de l'Animation au moment du launch, puis modifiable en temps réel
-#[derive(Debug, Clone)]
+/// Dérivé de l'Animation au moment du launch, puis modifiable en temps réel.
+/// Sérialisable pour les snapshots de cue (recall restaurateur complet).
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnimationState {
     // Per-track : depth et phase_offset
     pub track_depths: Vec<f64>,

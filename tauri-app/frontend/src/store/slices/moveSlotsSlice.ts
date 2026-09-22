@@ -4,6 +4,7 @@ import { toast } from '../../utils/toast-helpers';
 import { computeCentroid } from '../utils/geometryUtils';
 import type { Node, Edge } from 'reactflow';
 import type { HolProject } from '../types/index';
+import type { Animation, TrackAssignment, AudioMod } from '../useAnimationStore';
 import { safeSetItem, safeParseStoredJson, debouncedSetItem } from '../../utils/safeStorage';
 import { throttleTrailingKeyed } from '../../utils/throttle';
 import { SHAPE_PRESETS } from '../../utils/shapePresets';
@@ -81,6 +82,16 @@ export interface MoveSlot {
   loopMode: 'loop' | 'oneshot';
   /// Direction : "forward" (défaut), "backward", ou "ping_pong"
   direction: 'forward' | 'backward' | 'ping_pong';
+  /// Enveloppe de fade du cycle worker (début/fin de boucle) — distinct de
+  /// fadeDuration (fade d'activation/désactivation du move, wall-clock).
+  fadeIn: number;
+  fadeOut: number;
+  /// Répartition uniforme des phases des tracks sur le cycle (0 = groupé)
+  phaseSpread: number;
+  /// Depth + phase offset par track (matché par track_id à l'activation)
+  assignments: TrackAssignment[];
+  /// Modulations audio-réactives (AudioModSource → AudioModTarget)
+  audioMods: AudioMod[];
 }
 
 /// Macros d'un move — équivalent des macros du cue
@@ -158,6 +169,9 @@ export interface MoveSlotsSlice {
   setSlotFadeDuration: (id: string, fade: number) => void;
   setSlotLoopMode: (id: string, mode: 'loop' | 'oneshot') => void;
   setSlotDirection: (id: string, direction: 'forward' | 'backward' | 'ping_pong') => void;
+  /// Champs "animation" du slot (fade cycle, phase spread, assignments, audio mods)
+  /// — write-through depuis l'Inspector (updateCurrent → ici).
+  updateSlotAnimationFields: (id: string, fields: Partial<Pick<MoveSlot, 'fadeIn' | 'fadeOut' | 'phaseSpread' | 'assignments' | 'audioMods'>>) => void;
   /// Bascule le mode preview (pas d'OSC out) / live (OSC out)
   toggleSlotPreview: (id: string) => void;
   /// Sélectionne un slot pour édition — sync selectedTrackIds + charge le graphe dans l'éditeur
@@ -237,17 +251,66 @@ function markFading(movementId: string, fadeDuration: number) {
   setTimeout(() => _fadingMoveIds.delete(movementId), fadeDuration * 1000 + 1500);
 }
 
-function loadSlotsFromStorage(): MoveSlot[] {
-  const slots = safeParseStoredJson<any[]>(SLOTS_STORAGE_KEY, []);
-  if (!Array.isArray(slots)) return [];
-  // Migration: ajouter macros + fadeDuration si manquants (anciennes versions)
-  return slots.map((s: any) => ({
+/// Backfill des champs ajoutés après coup — utilisé par le load localStorage
+/// ET le restore .hfg (un slot sérialisé par une ancienne version n'a pas les
+/// nouveaux champs ; sans ça ils arrivent undefined dans le store).
+export function normalizeSlot(s: any): MoveSlot {
+  return {
     ...s,
     macros: s.macros ?? defaultMacros(),
     fadeDuration: s.fadeDuration ?? 2.0,
     loopMode: s.loopMode ?? 'loop',
     direction: s.direction ?? 'forward',
-  }));
+    fadeIn: s.fadeIn ?? 0.5,
+    fadeOut: s.fadeOut ?? 0.5,
+    phaseSpread: s.phaseSpread ?? 0,
+    assignments: s.assignments ?? [],
+    audioMods: s.audioMods ?? [],
+  };
+}
+
+function loadSlotsFromStorage(): MoveSlot[] {
+  const slots = safeParseStoredJson<any[]>(SLOTS_STORAGE_KEY, []);
+  if (!Array.isArray(slots)) return [];
+  return slots.map(normalizeSlot);
+}
+
+/// Projette un slot en `Animation` — la forme que l'Inspector édite via
+/// `current`. La source de vérité reste le slot : `current` est une vue
+/// mutable, write-through vers le slot (updateCurrent → setSlot*).
+function slotToAnimation(raw: MoveSlot): Animation {
+  // Défensif : des slots peuvent arriver sans les champs récents (setState
+  // direct dans les tests, restaurations partielles) — normalizeSlot backfill.
+  const slot = normalizeSlot(raw);
+  const duration = slot.graphJson ? extractDuration(slot.graphJson.nodes) : 4.0;
+  // Reconstruire les assignments complets : les trackIds sans entrée
+  // sauvegardée obtiennent les défauts (depth 1, phase 0).
+  const assignments = slot.trackIds.map(
+    (tid) =>
+      slot.assignments.find((a) => a.track_id === tid) ??
+      { track_id: tid, depth: 1.0, phase_offset: 0 },
+  );
+  return {
+    id: `slot-${slot.id}`,
+    name: slot.name,
+    speed: slot.macros.speed,
+    duration,
+    direction: slot.direction,
+    loop_mode: slot.loopMode === 'oneshot' ? 'one_shot' : 'loop',
+    scale: slot.macros.scale,
+    yaw: slot.macros.yaw,
+    pitch: slot.macros.pitch,
+    roll: slot.macros.roll,
+    offset_x: slot.macros.shiftX,
+    offset_y: slot.macros.shiftY,
+    offset_z: slot.macros.shiftZ,
+    assignments,
+    phase_spread: slot.phaseSpread,
+    audio_mods: slot.audioMods,
+    graph_json: slot.graphJson ?? undefined,
+    fade_in: slot.fadeIn,
+    fade_out: slot.fadeOut,
+  };
 }
 
 /// (exporté — drawModeSlice persiste aussi les slots après un dessin)
@@ -326,6 +389,12 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
     set({ selectedTrackIds: new Set(slot.trackIds) });
     // Sync visuel du node Objects (sans hot-swap)
     syncObjectsNodeNoHotSwap(get);
+    // Projeter le slot dans `current` — l'Inspector édite `current`, qui est
+    // write-through vers ce slot. Import deferred : cycle useGraphStore ↔
+    // useAnimationStore (même pattern que les autres call-sites du store).
+    import('../useAnimationStore').then(({ useAnimationStore }) => {
+      useAnimationStore.getState().setCurrent(slotToAnimation(get().moveSlots.find((s) => s.id === id) ?? slot));
+    });
   },
 
   addMoveSlot: () => {
@@ -353,6 +422,11 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
         fadeDuration: 2.0,
         loopMode: 'loop' as const,
         direction: 'forward' as const,
+        fadeIn: 0.5,
+        fadeOut: 0.5,
+        phaseSpread: 0,
+        assignments: [],
+        audioMods: [],
       }];
       saveSlotsToStorage(newSlots);
       return { moveSlots: newSlots };
@@ -511,8 +585,11 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
   },
 
   playSlot: async (id) => {
-    const slot = get().moveSlots.find((s) => s.id === id);
-    if (!slot) return false;
+    const found = get().moveSlots.find((s) => s.id === id);
+    if (!found) return false;
+    // Défensif : backfill des champs récents si le slot est arrivé brut
+    // dans le store (tests, restauration partielle).
+    const slot = normalizeSlot(found);
     // Anti double-clic : déjà en lecture ou activation en cours → objectif atteint
     if (slot.movementId || get().pendingPlays.includes(id)) {
       return true;
@@ -579,6 +656,33 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
 
       const origin = computeCentroid(holProject, trackIndices, manualOscIds);
 
+      // Payload animation complet — le backend en extrait fade (cycle),
+      // speed (worker) et AnimationState (depths, phase offsets, audio mods).
+      // NB: les macros spatiales scale/shift/rotation de l'animation ne sont
+      // PAS reprises dans le spec backend — elles restent globales (merge)
+      // via set_global_macro ci-dessous, sinon double-application.
+      const animation = {
+        id: slot.id,
+        name: slot.name,
+        speed: slot.macros.speed,
+        duration,
+        direction: slot.direction,
+        loop_mode: slot.loopMode === 'oneshot' ? 'one_shot' : 'loop',
+        scale: slot.macros.scale,
+        yaw: slot.macros.yaw,
+        pitch: slot.macros.pitch,
+        roll: slot.macros.roll,
+        offset_x: slot.macros.shiftX,
+        offset_y: slot.macros.shiftY,
+        offset_z: slot.macros.shiftZ,
+        assignments: slot.assignments,
+        phase_spread: slot.phaseSpread,
+        audio_mods: slot.audioMods,
+        graph_json: graphData,
+        fade_in: slot.fadeIn,
+        fade_out: slot.fadeOut,
+      };
+
       await invoke('activate_move', {
         request: {
           movement_id: movementId,
@@ -591,23 +695,16 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
           duration,
           loop_mode: slot.loopMode,
           direction: slot.direction,
+          animation,
         },
       });
       if (slot.macros) {
-        // Macros du slot : speed est per-move (worker), les macros spatiales
-        // (scale/shift/rotation) sont GLOBALES — appliquées au MergeRuntime via
-        // set_global_macro. ⚠ Elles écrasent les macros globales — c'est voulu :
-        // l'UI annonce « appliquées au lancement et au GO ».
+        // Macros du slot : speed est per-move (worker — posée via spec.speed
+        // dans l'animation payload), les macros spatiales (scale/shift/rotation)
+        // sont GLOBALES — appliquées au MergeRuntime via set_global_macro.
+        // ⚠ Elles écrasent les macros globales — c'est voulu : l'UI annonce
+        // « appliquées au lancement et au GO ».
         // Non-fatal : un échec ici ne doit pas faire échouer le play.
-        try {
-          await invoke('set_move_speed', {
-            movementId,
-            speed: slot.macros.speed ?? 1.0,
-          });
-        } catch (e) {
-          console.warn('[playSlot] set_move_speed failed:', e);
-          toast.warning(`"${slot.name}": speed macro not applied (${e})`);
-        }
         try {
           await invoke('set_global_macro', {
             request: {
@@ -797,6 +894,15 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
           toast.error(`Direction change failed for "${slot.name}": ${e}`);
         });
     }
+  },
+
+  updateSlotAnimationFields: (id, fields) => {
+    set((s) => {
+      const newSlots = s.moveSlots.map((sl) => sl.id === id ? { ...sl, ...fields } : sl);
+      // Chemin slider (fade/phase_spread) → debounced comme setSlotMacros.
+      saveSlotsToStorageDebounced(newSlots);
+      return { moveSlots: newSlots };
+    });
   },
 
   toggleSlotPreview: (id) => {

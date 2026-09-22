@@ -4,6 +4,7 @@ import { useGraphStore } from './useGraphStore';
 import { toast } from '../utils/toast-helpers';
 import { throttleTrailing } from '../utils/throttle';
 import { safeSetItem, safeParseStoredJson } from '../utils/safeStorage';
+import type { MoveMacros } from './slices/moveSlotsSlice';
 
 // ── Types miroir du backend ──
 
@@ -167,16 +168,75 @@ let throttledPushAnimationState: () => void = () => {};
 export function _initAnimationThrottle(getState: () => AnimationStore) {
   throttledPushAnimationState = throttleTrailing(() => {
     const { current, activeMovementIds } = getState();
-    if (activeMovementIds.length === 0) return;
-    const movementId = activeMovementIds[activeMovementIds.length - 1];
+    const gs = useGraphStore.getState();
+    // Cible : le slot en édition s'il joue — sinon le dernier mouvement actif
+    // (chemin legacy launchAnimation, pas de slot édité). Si un slot est édité
+    // mais arrêté, on ne pousse PAS son anim sur un autre move actif.
+    const movementId = gs.editingSlotId
+      ? gs.moveSlots.find((s) => s.id === gs.editingSlotId)?.movementId ?? undefined
+      : activeMovementIds[activeMovementIds.length - 1];
+    if (!movementId) return;
+    // Sémantique slot : les macros spatiales (scale/shift/rotation) vivent au
+    // niveau MERGE global (set_global_macro au launch). update_animation_state
+    // les écrit au WORKER — envoyer les valeurs réelles doublerait le
+    // transform (merge × worker). On neutralise : le worker reste neutre,
+    // le merge porte le spatial. Speed est bien per-move → envoyé tel quel.
+    const animation = gs.editingSlotId
+      ? { ...current, scale: 1.0, offset_x: 0, offset_y: 0, offset_z: 0, yaw: 0, pitch: 0, roll: 0 }
+      : current;
     invoke('update_animation_state', {
       movementId,
-      animation: current,
+      animation,
     }).catch((e) => {
       console.error('Update animation state failed:', e);
       toast.error('Update animation state failed: ' + e);
     });
   }, 33);
+}
+
+/// Write-through `current` → slot en édition (le slot est la source de
+/// vérité pour playSlot — sans ça, les edits de l'Inspector étaient des
+/// dead-writes : jamais lus à l'activation). No-op si aucun slot édité
+/// (édition libre → brouillon pour saveAnimation).
+function syncCurrentToSlot(get: () => AnimationStore, patch: Partial<Animation>) {
+  const gs = useGraphStore.getState();
+  const slotId = gs.editingSlotId;
+  if (!slotId) return;
+  const cur = get().current;
+
+  const macros: Partial<MoveMacros> = {};
+  if (patch.speed !== undefined) macros.speed = cur.speed;
+  if (patch.scale !== undefined) macros.scale = cur.scale;
+  if (patch.yaw !== undefined) macros.yaw = cur.yaw;
+  if (patch.pitch !== undefined) macros.pitch = cur.pitch;
+  if (patch.roll !== undefined) macros.roll = cur.roll;
+  if (patch.offset_x !== undefined) macros.shiftX = cur.offset_x;
+  if (patch.offset_y !== undefined) macros.shiftY = cur.offset_y;
+  if (patch.offset_z !== undefined) macros.shiftZ = cur.offset_z;
+  if (Object.keys(macros).length) gs.setSlotMacros(slotId, macros);
+  if (patch.direction !== undefined) gs.setSlotDirection(slotId, cur.direction);
+  if (patch.loop_mode !== undefined) {
+    gs.setSlotLoopMode(slotId, cur.loop_mode === 'one_shot' ? 'oneshot' : 'loop');
+  }
+  if (patch.name !== undefined) gs.renameMoveSlot(slotId, cur.name);
+
+  const fields: Parameters<typeof gs.updateSlotAnimationFields>[1] = {};
+  if (patch.fade_in !== undefined) fields.fadeIn = cur.fade_in;
+  if (patch.fade_out !== undefined) fields.fadeOut = cur.fade_out;
+  if (patch.phase_spread !== undefined) fields.phaseSpread = cur.phase_spread;
+  if (patch.audio_mods !== undefined) fields.audioMods = cur.audio_mods;
+  if (patch.assignments !== undefined) fields.assignments = cur.assignments;
+  if (Object.keys(fields).length) gs.updateSlotAnimationFields(slotId, fields);
+
+  // Duration : le node Duration du graphe est la source de vérité lue par
+  // playSlot — le slider de l'Inspector écrit donc dans le node.
+  if (patch.duration !== undefined) {
+    const durNode = gs.nodes.find((n) => (n.data as { type?: string })?.type === 'Duration');
+    if (durNode) {
+      const params = (durNode.data as { params?: Record<string, unknown> }).params ?? {};
+      gs.updateNodeData(durNode.id, { params: { ...params, duration: cur.duration } });
+    }
+  }
 }
 
 export const useAnimationStore = create<AnimationStore>((set, get) => {
@@ -194,13 +254,10 @@ export const useAnimationStore = create<AnimationStore>((set, get) => {
 
   updateCurrent: (patch) => {
     set((s) => ({ current: { ...s.current, ...patch } }));
-    const { activeMovementIds } = get();
-    if (activeMovementIds.length > 0) {
-      // graph_json est géré par useGraphStore.updateGraphLive()
-      // Les autres params (speed, scale, offset, etc.) sont mis à jour en live
-      if (!('graph_json' in patch)) {
-        get().updateLiveAnimation();
-      }
+    // graph_json est géré par useGraphStore.updateGraphLive()
+    if (!('graph_json' in patch)) {
+      syncCurrentToSlot(get, patch);
+      get().updateLiveAnimation();
     }
   },
 
@@ -215,18 +272,14 @@ export const useAnimationStore = create<AnimationStore>((set, get) => {
       }
       return { current: { ...s.current, assignments } };
     });
-    const { activeMovementIds } = get();
-    if (activeMovementIds.length > 0) {
-      get().updateLiveAnimation();
-    }
+    syncCurrentToSlot(get, { assignments: get().current.assignments });
+    get().updateLiveAnimation();
   },
 
   addAudioMod: (mod) => {
     set((s) => ({ current: { ...s.current, audio_mods: [...s.current.audio_mods, mod] } }));
-    const { activeMovementIds } = get();
-    if (activeMovementIds.length > 0) {
-      get().updateLiveAnimation();
-    }
+    syncCurrentToSlot(get, { audio_mods: get().current.audio_mods });
+    get().updateLiveAnimation();
   },
 
   removeAudioMod: (index) => {
@@ -236,10 +289,8 @@ export const useAnimationStore = create<AnimationStore>((set, get) => {
         audio_mods: s.current.audio_mods.filter((_, i) => i !== index),
       },
     }));
-    const { activeMovementIds } = get();
-    if (activeMovementIds.length > 0) {
-      get().updateLiveAnimation();
-    }
+    syncCurrentToSlot(get, { audio_mods: get().current.audio_mods });
+    get().updateLiveAnimation();
   },
 
   saveAnimation: async () => {

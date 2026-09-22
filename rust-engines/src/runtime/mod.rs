@@ -143,6 +143,20 @@ impl Runtime {
         *s = Some(state);
     }
 
+    /// Lecture de l'animation state courant — utilisé par store_cue pour
+    /// snapshoter depths/phases/audio mods (le recall les restaure).
+    pub fn animation_state(&self) -> Option<AnimationState> {
+        self.animation_state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// Enveloppe de fade du cycle (worker) — pour snapshot cue.
+    pub fn fade(&self) -> (f64, f64) {
+        self.config.get_fade()
+    }
+
     /// Met à jour l'audio state (appelé à chaque frame par l'app)
     pub fn set_audio_state(&self, audio: AudioState) {
         let mut s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());

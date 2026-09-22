@@ -45,4 +45,13 @@ loop_mode: string,
 /**
  * Direction : "forward" | "backward" | "ping_pong"
  */
-direction: string, };
+direction: string, 
+/**
+ * État d'exécution (track depths, phase offsets, audio mods) — restauré
+ * au recall. `unknown` côté TS : le frontend ne le lit pas.
+ */
+animation_state: unknown, 
+/**
+ * Enveloppe de fade du cycle worker (fade-in/out en début/fin de boucle)
+ */
+fade_in: number, fade_out: number, };

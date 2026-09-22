@@ -4,7 +4,7 @@ import { safeInvoke as invoke } from '../../utils/tauri';
 import { safeSetItem, safeParseStoredJson } from '../../utils/safeStorage';
 import { toast } from '../../utils/toast-helpers';
 import type { MoveSlot } from './moveSlotsSlice';
-import { saveSlotsToStorage } from './moveSlotsSlice';
+import { normalizeSlot, saveSlotsToStorage } from './moveSlotsSlice';
 import type { CueData } from '../useCuelistStore';
 import type { HolProject } from '../types/index';
 import type { OscMapping } from '../../types/generated/OscMapping';
@@ -337,15 +337,18 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
       });
     }
 
-    // 2. Slots + setlist + slot en édition — persistés comme d'habitude
+    // 2. Slots + setlist + slot en édition — persistés comme d'habitude.
+    //    normalizeSlot backfill les champs ajoutés après coup (un .hfg écrit
+    //    par une ancienne version n'a pas fadeIn/assignments/audioMods…).
     if (raw.slots) {
+      const slots = raw.slots.map(normalizeSlot);
       set({
-        moveSlots: raw.slots,
-        setlistOrder: raw.setlistOrder ?? raw.slots.map((sl) => sl.id),
+        moveSlots: slots,
+        setlistOrder: raw.setlistOrder ?? slots.map((sl) => sl.id),
         currentSetlistIndex: raw.currentSetlistIndex ?? -1,
         editingSlotId: raw.editingSlotId ?? null,
       });
-      saveSlotsToStorage(raw.slots);
+      saveSlotsToStorage(slots);
     }
 
     // 3. Cues — frontend-owned (localStorage), juste à restaurer

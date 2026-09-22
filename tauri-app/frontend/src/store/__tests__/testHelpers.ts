@@ -89,6 +89,11 @@ export function makeSlot(overrides: Partial<any> = {}): any {
     isPreview: false,
     macros: { speed: 1.0, scale: 1.0, shiftX: 0, shiftY: 0, shiftZ: 0, yaw: 0, pitch: 0, roll: 0 },
     fadeDuration: 2.0,
+    fadeIn: 0.5,
+    fadeOut: 0.5,
+    phaseSpread: 0,
+    assignments: [],
+    audioMods: [],
     ...overrides,
   };
 }

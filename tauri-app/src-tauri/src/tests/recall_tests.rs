@@ -151,6 +151,9 @@ mod recall_tests {
             duration: 4.0,
             loop_mode: "loop".to_string(),
             direction: "forward".to_string(),
+            animation_state: None,
+            fade_in: 0.0,
+            fade_out: 0.0,
         }];
         recall_cue_inner(cue, sh.clone()).expect("recall with respawn");
 

@@ -116,6 +116,16 @@ pub struct MoveSnapshot {
     /// Direction : "forward" | "backward" | "ping_pong"
     #[serde(default = "default_move_direction")]
     pub direction: String,
+    /// État d'exécution (track depths, phase offsets, audio mods) — restauré
+    /// au recall. `unknown` côté TS : le frontend ne le lit pas.
+    #[serde(default)]
+    #[ts(type = "unknown")]
+    pub animation_state: Option<crate::animation::AnimationState>,
+    /// Enveloppe de fade du cycle worker (fade-in/out en début/fin de boucle)
+    #[serde(default)]
+    pub fade_in: f64,
+    #[serde(default)]
+    pub fade_out: f64,
 }
 
 fn default_move_duration() -> f64 {

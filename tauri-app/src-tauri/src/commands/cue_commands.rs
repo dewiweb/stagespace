@@ -77,17 +77,25 @@ pub async fn store_cue(
         let movements = lock_or_recover(&state.movements);
         movements
             .values()
-            .map(|m| stagespace_engines::MoveSnapshot {
-                id: m.id.clone(),
-                name: m.name.clone(),
-                graph_json: m.graph_json.clone(),
-                osc_ids: m.osc_ids.clone(),
-                track_indices: m.track_indices.clone(),
-                is_preview: m.is_preview,
-                origin: m.origin,
-                duration: m.duration,
-                loop_mode: m.loop_mode.clone(),
-                direction: m.direction.clone(),
+            .map(|m| {
+                let (fade_in, fade_out) = m.runtime.fade();
+                stagespace_engines::MoveSnapshot {
+                    id: m.id.clone(),
+                    name: m.name.clone(),
+                    graph_json: m.graph_json.clone(),
+                    osc_ids: m.osc_ids.clone(),
+                    track_indices: m.track_indices.clone(),
+                    is_preview: m.is_preview,
+                    origin: m.origin,
+                    duration: m.duration,
+                    loop_mode: m.loop_mode.clone(),
+                    direction: m.direction.clone(),
+                    // Depths/phases/audio mods + enveloppe de cycle — snapshotés
+                    // depuis le runtime live (toujours à jour, hot-swaps inclus).
+                    animation_state: m.runtime.animation_state(),
+                    fade_in,
+                    fade_out,
+                }
             })
             .collect()
     };
@@ -368,10 +376,10 @@ pub(crate) fn recall_cue_inner(cue: Cue, sh: crate::commands::state::Shared) -> 
                 duration: snap.duration,
                 loop_mode: parse_loop_mode(&snap.loop_mode),
                 direction: parse_direction(&snap.direction),
-                fade: None,
+                fade: Some((snap.fade_in, snap.fade_out)),
                 speed,
                 spatial_macros: None,
-                animation_state: None,
+                animation_state: snap.animation_state.clone(),
             };
             match spawn_move_for_recall(spec, &sh) {
                 Ok(_) => {

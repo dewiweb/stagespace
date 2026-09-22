@@ -13,7 +13,7 @@ use crate::graph::parser::build_graph_from_json;
 use crate::{AppState, Movement, MAX_MOVEMENTS};
 use serde::Deserialize;
 use stagespace_engines::{
-    AnimationState, EngineParams, LoopMode, PlayDirection, PositionBuffer, Runtime,
+    Animation, AnimationState, EngineParams, LoopMode, PlayDirection, PositionBuffer, Runtime,
 };
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
@@ -41,6 +41,13 @@ pub struct ActivateMoveRequest {
     /// Direction : "forward" (défaut), "backward", ou "ping_pong"
     #[serde(default = "super::default_direction")]
     pub direction: String,
+    /// Animation complète (optionnel) — quand présente, fournit au worker :
+    /// fade (enveloppe de cycle), speed (macro per-move) et AnimationState
+    /// (track depths, phase offsets, audio mods). Les macros spatiales de
+    /// l'animation (scale/shift/rotation) NE sont PAS reprises ici : pour les
+    /// slots elles vont au merge global via `set_global_macro` (sémantique
+    /// "appliquées au lancement" — un double report créerait un transform ×2).
+    pub animation: Option<Animation>,
 }
 
 /// Spec complet pour créer un worker move — partagé entre activate_move,
@@ -424,6 +431,11 @@ pub async fn activate_move(
     request: ActivateMoveRequest,
     state: State<'_, AppState>,
 ) -> Result<String, IpcError> {
+    // Extrait AVANT le move des champs de request dans spec.
+    let animation_state = request
+        .animation
+        .as_ref()
+        .map(|a| AnimationState::from_animation(a, &request.osc_ids));
     let spec = MoveSpec {
         id: request.movement_id,
         name: request.name,
@@ -435,10 +447,10 @@ pub async fn activate_move(
         duration: request.duration,
         loop_mode: parse_loop_mode(&request.loop_mode),
         direction: parse_direction(&request.direction),
-        fade: None,
-        speed: None,
+        fade: request.animation.as_ref().map(|a| (a.fade_in, a.fade_out)),
+        speed: request.animation.as_ref().map(|a| a.speed),
         spatial_macros: None,
-        animation_state: None,
+        animation_state,
     };
     let sh = Shared::from_state(&state);
     tauri::async_runtime::spawn_blocking(move || spawn_move(spec, &sh))
