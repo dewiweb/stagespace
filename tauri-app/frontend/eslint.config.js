@@ -23,6 +23,21 @@ export default tseslint.config(
         'warn',
         { allowConstantExport: true },
       ],
+      // Le préfixe `_` marque un paramètre/variable intentionnellement inutilisé
+      // (signature imposée par une interface, mock de test, etc.)
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+          destructuredArrayIgnorePattern: '^_',
+        },
+      ],
+      // Dette existante (~490 sites : React Flow node.data, accès cross-slice
+      // Zustand). En warn le temps de la migration typée — les nouvelles
+      // erreurs restent bloquantes en CI.
+      '@typescript-eslint/no-explicit-any': 'warn',
     },
   },
 )

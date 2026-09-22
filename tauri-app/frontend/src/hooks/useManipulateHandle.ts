@@ -58,7 +58,7 @@ export function useManipulateHandle({ sceneRef, manipulateMode }: UseManipulateH
     line.computeLineDistances();
     scene.add(line);
     trajectoryLineRef.current = line;
-  }, [manipulateMode]);
+  }, [manipulateMode, sceneRef]);
 
   return { handleRef, trajectoryLineRef };
 }

@@ -62,8 +62,8 @@ export const CuelistPanel: React.FC = () => {
         roll: macros.roll,
       },
       spatial_macros: {
-        radius_scale: (macros as any).radius_scale ?? 1.0,
-        height_offset: (macros as any).height_offset ?? 0.0,
+        radius_scale: macros.radius_scale ?? 1.0,
+        height_offset: macros.height_offset ?? 0.0,
       },
       track_indices: slot?.trackIds ?? [],
       fade_duration: 0.5,

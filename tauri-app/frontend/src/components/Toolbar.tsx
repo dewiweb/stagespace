@@ -206,7 +206,7 @@ export const Toolbar: React.FC = () => {
         if (stats.oscErrorRate < 0.01) {
           oscErrorToastShown.current = false;
         }
-      } catch (e) {
+      } catch {
         // ignore
       }
     }, 500);

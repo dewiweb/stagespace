@@ -1,8 +1,9 @@
 import React from 'react';
-import { useAnimationStore, AudioMod, AudioModSource, AudioModTarget } from '../store/useAnimationStore';
+import { useAnimationStore, AudioMod, AudioModSource, AudioModTarget, Animation } from '../store/useAnimationStore';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { TrackGrid } from './TrackGrid';
-import { PARAM_SCHEMA, NODE_DESCRIPTIONS, getCategoryColor, type ParamDef } from './nodeParamSchema';
+import { PARAM_SCHEMA, NODE_DESCRIPTIONS, getCategoryColor, type ParamDef, type NodeParamValue, type GraphNodeData } from './nodeParamSchema';
+import type { MacrosState } from '../store/slices/macrosSlice';
 
 // ── Section repliable ──
 function Section({ title, icon, defaultOpen = true, badge, badgeColor = 'gray', children }: {
@@ -85,23 +86,23 @@ export default function Inspector() {
       'DrawSpline', 'EvaluateSpline',
       'Mix', 'Group', 'Sequence', 'Crossfade'];
     for (const engineType of engineCategories) {
-      const found = nodes.find((n) => (n.data as any)?.type === engineType);
+      const found = nodes.find((n) => (n.data as GraphNodeData)?.type === engineType);
       if (found) return found;
     }
     return null;
   }, [nodes]);
-  const mainEngineType = (mainEngineNode?.data as any)?.type as NodeType | undefined;
+  const mainEngineType = (mainEngineNode?.data as GraphNodeData | undefined)?.type as NodeType | undefined;
   const mainEngineSchema = mainEngineType ? PARAM_SCHEMA[mainEngineType] ?? [] : [];
-  const mainEngineParams = (mainEngineNode?.data as any)?.params ?? {};
+  const mainEngineParams: Record<string, NodeParamValue> = (mainEngineNode?.data as GraphNodeData | undefined)?.params ?? {};
 
   // DrawSpline node pour la Spline Library (présent dans les graphs spline)
   const drawSplineNode = React.useMemo(() =>
-    nodes.find((n) => (n.data as any)?.type === 'DrawSpline'),
+    nodes.find((n) => (n.data as GraphNodeData)?.type === 'DrawSpline'),
     [nodes]
   );
 
   // Handler pour update un param du node engine principal + hot-swap
-  const updateEngineParam = (key: string, value: any) => {
+  const updateEngineParam = (key: string, value: NodeParamValue) => {
     if (!mainEngineNode) return;
     updateNodeData(mainEngineNode.id, { params: { ...mainEngineParams, [key]: value } });
     // Hot-swap live avec debounce
@@ -111,9 +112,9 @@ export default function Inspector() {
 
   // ── Expert mode: node sélectionné ──
   const selectedNode = nodes.find((n) => n.selected);
-  const selectedNodeType = (selectedNode?.data as any)?.type as NodeType | undefined;
+  const selectedNodeType = (selectedNode?.data as GraphNodeData | undefined)?.type as NodeType | undefined;
   const selectedNodeSchema = selectedNodeType ? PARAM_SCHEMA[selectedNodeType] ?? [] : [];
-  const selectedNodeParams = (selectedNode?.data as any)?.params ?? {};
+  const selectedNodeParams: Record<string, NodeParamValue> = (selectedNode?.data as GraphNodeData | undefined)?.params ?? {};
   const nodeColor = selectedNodeType ? getCategoryColor(selectedNodeType) : '#4b5563';
 
   // ── Audio mod UI ──
@@ -141,14 +142,14 @@ export default function Inspector() {
   const handleUnified = (key: string, value: number, source: 'simple' | 'expert') => {
     if (source === 'simple') {
       // key est un nom Simple (offset_x, scale, yaw, ...)
-      updateCurrent({ [key]: value } as any);
+      updateCurrent({ [key]: value } as Partial<Animation>);
       const macroKey = SIMPLE_TO_MACRO[key];
-      if (macroKey) setMacros({ [macroKey]: value } as any);
+      if (macroKey) setMacros({ [macroKey]: value } as Partial<MacrosState>);
     } else {
       // key est un nom Expert (shiftX, scale, yaw, ...)
-      setMacros({ [key]: value } as any);
+      setMacros({ [key]: value } as Partial<MacrosState>);
       const animKey = MACRO_TO_SIMPLE[key];
-      if (animKey) updateCurrent({ [animKey]: value } as any);
+      if (animKey) updateCurrent({ [animKey]: value } as Partial<Animation>);
     }
     // Toujours pousser vers le runtime (debounced) — c'était manquant pour le mode Simple
     if (macroDebounce.current) clearTimeout(macroDebounce.current);
@@ -158,7 +159,7 @@ export default function Inspector() {
   const handleMacro = (key: string, value: number) => handleUnified(key, value, 'expert');
   const handleTransform = (key: string, value: number) => handleUnified(key, value, 'simple');
 
-  const handleNodeParamChange = (key: string, value: any) => {
+  const handleNodeParamChange = (key: string, value: NodeParamValue) => {
     if (!selectedNode) return;
     updateNodeData(selectedNode.id, { params: { ...selectedNodeParams, [key]: value } });
     // Hot-swap live avec debounce
@@ -166,7 +167,7 @@ export default function Inspector() {
     macroDebounce.current = setTimeout(() => { updateGraphLive(); }, 150);
   };
 
-  const renderNodeParamInput = (def: ParamDef, params: Record<string, any>, onChange: (key: string, value: any) => void) => {
+  const renderNodeParamInput = (def: ParamDef, params: Record<string, NodeParamValue>, onChange: (key: string, value: NodeParamValue) => void) => {
     const value = params?.[def.key];
     switch (def.type) {
       case 'number':
@@ -174,7 +175,7 @@ export default function Inspector() {
           <div className="flex items-center gap-2">
             <span className="text-gray-400 text-[10px] w-20 flex-shrink-0">{def.label}</span>
             <input type="number" step={def.step ?? 0.1} min={def.min} max={def.max}
-              value={value ?? 0}
+              value={typeof value === 'number' ? value : 0}
               onChange={(e) => onChange(def.key, parseFloat(e.target.value) || 0)}
               className="flex-1 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none" />
           </div>
@@ -183,9 +184,9 @@ export default function Inspector() {
         return (
           <div className="flex items-center gap-2">
             <span className="text-gray-400 text-[10px] w-20 flex-shrink-0">{def.label}</span>
-            <button onClick={() => onChange(def.key, !value)}
-              className={`relative w-9 h-5 rounded-full transition-colors ${value ? 'bg-blue-600' : 'bg-gray-700'}`}>
-              <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${value ? 'translate-x-4' : ''}`} />
+            <button onClick={() => onChange(def.key, value !== true)}
+              className={`relative w-9 h-5 rounded-full transition-colors ${value === true ? 'bg-blue-600' : 'bg-gray-700'}`}>
+              <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${value === true ? 'translate-x-4' : ''}`} />
             </button>
           </div>
         );
@@ -193,7 +194,7 @@ export default function Inspector() {
         return (
           <div className="flex items-center gap-2">
             <span className="text-gray-400 text-[10px] w-20 flex-shrink-0">{def.label}</span>
-            <select value={value ?? ''}
+            <select value={typeof value === 'string' ? value : ''}
               onChange={(e) => onChange(def.key, e.target.value)}
               className="flex-1 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none">
               {def.options?.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
@@ -220,7 +221,7 @@ export default function Inspector() {
         return (
           <div className="flex items-center gap-2">
             <span className="text-gray-400 text-[10px] w-20 flex-shrink-0">{def.label}</span>
-            <input type="text" value={value ?? ''}
+            <input type="text" value={typeof value === 'string' ? value : ''}
               onChange={(e) => onChange(def.key, e.target.value)}
               className="flex-1 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono" />
           </div>
@@ -688,7 +689,7 @@ function AudioModAdder({ onAdd, onCancel }: { onAdd: (mod: AudioMod) => void; on
 // ── InspectorSplineLibrary ──────────────────────────────────────────────────
 // Section Spline Library pour l'Inspector (mode Simple, tab Params)
 function InspectorSplineLibrary({ drawSplineNode, onUpdate }: {
-  drawSplineNode: any;
+  drawSplineNode: { data?: GraphNodeData } | null;
   onUpdate: (points: string) => void;
 }) {
   const savedSplines = useGraphStore((s) => s.savedSplines);
@@ -697,7 +698,8 @@ function InspectorSplineLibrary({ drawSplineNode, onUpdate }: {
   const [showSave, setShowSave] = React.useState(false);
   const [splineName, setSplineName] = React.useState('');
 
-  const currentPoints = (drawSplineNode?.data as any)?.params?.points ?? '';
+  const pointsParam = drawSplineNode?.data?.params?.points;
+  const currentPoints = typeof pointsParam === 'string' ? pointsParam : '';
 
   const handleSave = () => {
     const name = splineName.trim() || `Spline ${new Date().toLocaleTimeString()}`;

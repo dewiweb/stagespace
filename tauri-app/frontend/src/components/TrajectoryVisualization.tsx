@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { useGraphStore } from '../store/useGraphStore';
@@ -39,9 +39,12 @@ export const TrajectoryVisualization: React.FC<TrajectoryVisualizationProps> = (
     ? moveSlots.find((s) => s.id === editingSlotId)?.movementId ?? null
     : null;
   // Si un move est sélectionné, n'afficher que son path ; sinon afficher tous
-  const movementsToShow = selectedMovementId
-    ? movements.filter((m) => m.id === selectedMovementId)
-    : movements;
+  // useMemo : identité stable entre renders (le filter sinon crée un tableau
+  // neuf à chaque render → l'effet ci-dessous re-samplerait en boucle).
+  const movementsToShow = useMemo(
+    () => (selectedMovementId ? movements.filter((m) => m.id === selectedMovementId) : movements),
+    [movements, selectedMovementId],
+  );
 
   const macrosKey = `${macros.speed},${macros.scale},${macros.shiftX},${macros.shiftY},${macros.shiftZ},${macros.yaw},${macros.pitch},${macros.roll},${macros.radius_scale},${macros.height_offset}`;
   const movementIdsKey = movementsToShow.map((m) => m.id).join(',');
@@ -156,21 +159,20 @@ export const TrajectoryVisualization: React.FC<TrajectoryVisualizationProps> = (
         cancelRef.current = null;
       }
     };
-  }, [isPlaying, hasMovements, movementIdsKey, animKey, graphCompileVersion, nObjects, macrosKey, sceneRef, objectsRef]);
+  }, [isPlaying, hasMovements, movementIdsKey, animKey, graphCompileVersion, nObjects, macrosKey, movementsToShow, sceneRef, objectsRef]);
 
-  // Cleanup à l'unmount
+  // Cleanup à l'unmount — removeFromParent détache du parent réel (le ref
+  // scene peut avoir été réassigné entre-temps).
   useEffect(() => {
     return () => {
-      const scene = sceneRef.current;
-      if (!scene) return;
       pathLinesRef.current.forEach((l) => {
-        scene.remove(l);
+        l.removeFromParent();
         l.geometry.dispose();
         (l.material as THREE.Material).dispose();
       });
       pathLinesRef.current = [];
     };
-  }, [sceneRef]);
+  }, []);
 
   return null;
 };

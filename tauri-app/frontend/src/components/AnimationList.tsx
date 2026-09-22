@@ -12,7 +12,7 @@ function animIcon(anim: Animation): string {
       'Bouncing', 'Avoidance', 'Spring', 'Follow', 'Swarm', 'VectorField',
       'DrawSpline', 'EvaluateSpline', 'Mix', 'Group', 'Sequence', 'Crossfade'];
     for (const type of engineTypes) {
-      if (anim.graph_json.nodes.some((n: any) => n.data?.type === type)) {
+      if (anim.graph_json.nodes.some((n: { data?: { type?: string } }) => n.data?.type === type)) {
         const preset = SHAPE_PRESETS.find((p) => p.id.toLowerCase() === type.toLowerCase());
         if (preset) return preset.icon;
         return '◆';

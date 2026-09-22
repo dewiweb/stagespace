@@ -214,7 +214,9 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
     let exists = false;
     try {
       exists = localStorage.getItem(key) !== null;
-    } catch {}
+    } catch {
+      // localStorage indisponible (mode privé, quota) — traité comme absent
+    }
     if (!exists) throw new Error(`Graph "${name}" not found`);
     const graphData = safeParseStoredJson<{ nodes: Node[]; edges: Edge[] } | null>(key, null);
     if (!graphData) throw new Error(`Graph "${name}" is corrupted (backup saved)`);

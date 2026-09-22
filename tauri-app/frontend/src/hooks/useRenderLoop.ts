@@ -143,8 +143,12 @@ export function useRenderLoop({
     if (!containerRef.current) return;
     if (sceneRef.current) return; // déjà initialisé
 
+    // Capturer le container une fois — le cleanup doit retirer les DOM de CE
+    // container même si le ref a été réassigné entre-temps.
+    const container = containerRef.current;
+
     // Lire la taille réelle du container au moment de l'init
-    const rect = containerRef.current.getBoundingClientRect();
+    const rect = container.getBoundingClientRect();
     const initW = Math.max(rect.width, 100);
     const initH = Math.max(rect.height, 100);
 
@@ -176,7 +180,7 @@ export function useRenderLoop({
     renderer.domElement.style.left = '0';
     renderer.domElement.style.zIndex = '1';
     // pointerEvents géré dynamiquement par l'effect OrbitControls ci-dessous
-    containerRef.current.appendChild(renderer.domElement);
+    container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
     // CSS2D renderer for labels
@@ -185,7 +189,7 @@ export function useRenderLoop({
     labelRenderer.domElement.style.position = 'absolute';
     labelRenderer.domElement.style.top = '0';
     labelRenderer.domElement.style.pointerEvents = 'none';
-    containerRef.current.appendChild(labelRenderer.domElement);
+    container.appendChild(labelRenderer.domElement);
     labelRendererRef.current = labelRenderer;
 
     // Lights
@@ -566,11 +570,11 @@ export function useRenderLoop({
       }
       renderer.dispose();
       // CSS2DRenderer has no dispose() — just remove the DOM element
-      if (containerRef.current && renderer.domElement) {
-        containerRef.current.removeChild(renderer.domElement);
+      if (renderer.domElement.parentNode === container) {
+        container.removeChild(renderer.domElement);
       }
-      if (containerRef.current && labelRenderer.domElement) {
-        containerRef.current.removeChild(labelRenderer.domElement);
+      if (labelRenderer.domElement.parentNode === container) {
+        container.removeChild(labelRenderer.domElement);
       }
       sceneRef.current = null;
       cameraRef.current = null;

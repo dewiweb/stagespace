@@ -98,7 +98,7 @@ export function useObjects3D({ sceneRef, nObjects, sceneReady }: UseObjects3DPar
         }
       }
     }
-  }, [nObjects, sceneReady]);
+  }, [nObjects, sceneReady, sceneRef]);
 
   return { objectsRef, objectLabelsRef: objectsRef };
 }

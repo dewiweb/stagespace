@@ -3,6 +3,17 @@ import { isValidConnection as isValidConnectionExported } from '../utils/connect
 
 export type ParamType = 'number' | 'boolean' | 'string' | 'vec3' | 'enum' | 'text';
 
+/// Valeur d'un paramètre de node — union des types produits par les ParamDef
+/// (number, booléen, enum/text string, vec3 ou liste d'ids en number[]…)
+export type NodeParamValue = string | number | boolean | number[] | undefined;
+
+/// Shape des `data` portées par les nodes React Flow du graphe
+export interface GraphNodeData {
+  label?: string;
+  type?: NodeType;
+  params?: Record<string, NodeParamValue>;
+}
+
 export interface ParamDef {
   key: string;
   label: string;

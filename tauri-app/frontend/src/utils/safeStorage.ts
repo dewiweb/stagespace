@@ -119,6 +119,8 @@ export function getStorageUsageKB(): number {
         total += key.length + val.length;
       }
     }
-  } catch {}
+  } catch {
+    // localStorage inaccessible — estimation retournée = 0
+  }
   return Math.round(total / 1024);
 }

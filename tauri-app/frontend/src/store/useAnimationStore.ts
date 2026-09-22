@@ -136,7 +136,9 @@ function loadAnimationsFromStorage(): Animation[] {
   let version: string | null = null;
   try {
     version = localStorage.getItem(STORAGE_KEY + '-version');
-  } catch {}
+  } catch {
+    // localStorage indisponible — on repart sur les presets par défaut
+  }
   if (version !== String(STORAGE_VERSION)) {
     // First launch ou version obsolète — seed with default presets
     const defaults = defaultPresets();

@@ -131,7 +131,7 @@ export function useManipulateMode({
         }
       }
     },
-    [manipulateMode, assignMode],
+    [manipulateMode, assignMode, cameraRef, containerRef, handleRef, objectsRef],
   );
 
   const handleManipulateMove = useCallback(
@@ -231,7 +231,7 @@ export function useManipulateMode({
         }
       }
     },
-    [manipulateMode, draggingObject, draggingHandle, macros, setMacros, isPlaying],
+    [manipulateMode, draggingObject, draggingHandle, macros, setMacros, isPlaying, cameraRef, containerRef, handleRef, objectsRef],
   );
 
   const handleManipulateUp = useCallback(
@@ -243,7 +243,9 @@ export function useManipulateMode({
       dragStartPosRef.current = null;
       try {
         (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-      } catch {}
+      } catch {
+        // capture déjà relâchée (sortie de canvas, unmount) — pas bloquant
+      }
     },
     [],
   );

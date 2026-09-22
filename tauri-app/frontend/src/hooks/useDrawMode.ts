@@ -47,7 +47,7 @@ export function useDrawMode({ cameraRef, containerRef }: UseDrawModeParams) {
       }
       return null;
     },
-    [drawZ],
+    [drawZ, cameraRef, containerRef],
   );
 
   // Draw canvas handlers
@@ -92,7 +92,9 @@ export function useDrawMode({ cameraRef, containerRef }: UseDrawModeParams) {
       setIsDrawing(false);
       try {
         (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-      } catch {}
+      } catch {
+        // capture déjà relâchée (sortie de canvas, unmount) — pas bloquant
+      }
       await finalizeDrawing();
     },
     [drawMode, isDrawing, finalizeDrawing],

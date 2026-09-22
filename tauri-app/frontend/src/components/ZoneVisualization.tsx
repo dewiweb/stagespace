@@ -139,17 +139,17 @@ export const ZoneVisualization: React.FC<ZoneVisualizationProps> = ({ sceneRef }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zonesKey, sceneRef]);
 
-  // Cleanup à l'unmount
+  // Cleanup à l'unmount — removeFromParent détache du parent réel (le ref
+  // scene peut avoir été réassigné entre-temps).
   useEffect(() => {
     return () => {
-      const scene = sceneRef.current;
-      if (scene && groupRef.current) {
-        scene.remove(groupRef.current);
+      if (groupRef.current) {
+        groupRef.current.removeFromParent();
         disposeObject(groupRef.current);
         groupRef.current = null;
       }
     };
-  }, [sceneRef]);
+  }, []);
 
   return null;
 };

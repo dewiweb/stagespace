@@ -4,7 +4,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { useGraphStore } from '../store/useGraphStore';
 import { MacrosPanel } from './MacrosPanel';
-import { DebugPerfOverlay, debugPerf } from './DebugPerfOverlay';
+import { DebugPerfOverlay } from './DebugPerfOverlay';
+import { debugPerf } from '../utils/debugPerf';
 
 // Exposer debugPerf sur window pour le render loop et le listener IPC
 (window as any).__debugPerf = debugPerf;

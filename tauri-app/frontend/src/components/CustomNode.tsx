@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
-import { PARAM_SCHEMA, getCategoryColor, type ParamDef } from './nodeParamSchema';
+import { PARAM_SCHEMA, getCategoryColor, type ParamDef, type NodeParamValue } from './nodeParamSchema';
 import { isSourceNode, isTerminalNode, isBinaryComposite, getInputPorts } from '../utils/connectionRules';
 
 const AUDIO_NODE_TYPES = new Set(['BPM', 'AudioAmplitude', 'AudioSpectrum', 'AudioAmplitudeFalloff']);
@@ -10,7 +10,7 @@ const AUDIO_NODE_TYPES = new Set(['BPM', 'AudioAmplitude', 'AudioSpectrum', 'Aud
 interface CustomNodeData {
   label: string;
   type: NodeType;
-  params: Record<string, any>;
+  params: Record<string, NodeParamValue>;
 }
 
 const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
@@ -43,7 +43,7 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
   const audioMid = audioState?.amplitude?.mid ?? null;
   const audioHigh = audioState?.amplitude?.high ?? null;
 
-  const handleChange = useCallback((key: string, value: any) => {
+  const handleChange = useCallback((key: string, value: NodeParamValue) => {
     if (isGlobalNode) {
       updateGlobalNodeData(id, { params: { ...data.params, [key]: value } });
       return; // pushGlobalGraph (debounced) gère la propagation backend
@@ -66,7 +66,7 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
             step={def.step ?? 0.1}
             min={def.min}
             max={def.max}
-            value={value ?? 0}
+            value={typeof value === 'number' ? value : 0}
             onChange={(e) => handleChange(def.key, parseFloat(e.target.value) || 0)}
             className="w-full px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none"
           />
@@ -74,17 +74,17 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
       case 'boolean':
         return (
           <button
-            onClick={() => handleChange(def.key, !value)}
-            className={`relative w-9 h-5 rounded-full transition-colors ${value ? 'bg-blue-600' : 'bg-gray-700'}`}
+            onClick={() => handleChange(def.key, value !== true)}
+            className={`relative w-9 h-5 rounded-full transition-colors ${value === true ? 'bg-blue-600' : 'bg-gray-700'}`}
             aria-label={def.label}
           >
-            <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${value ? 'translate-x-4' : ''}`} />
+            <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${value === true ? 'translate-x-4' : ''}`} />
           </button>
         );
       case 'enum':
         return (
           <select
-            value={value ?? ''}
+            value={typeof value === 'string' ? value : ''}
             onChange={(e) => handleChange(def.key, e.target.value)}
             className="w-full px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none"
           >
@@ -115,7 +115,7 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
         return (
           <input
             type="text"
-            value={value ?? ''}
+            value={typeof value === 'string' ? value : ''}
             onChange={(e) => handleChange(def.key, e.target.value)}
             className="w-full px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
           />
@@ -302,7 +302,7 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
             </div>
           )}
           {data.type === 'DrawSpline' && (
-            <SplineLibraryControls nodeId={id} currentPoints={data.params?.points ?? ''} />
+            <SplineLibraryControls nodeId={id} currentPoints={typeof data.params?.points === 'string' ? data.params.points : ''} />
           )}
         </div>
       )}
@@ -310,7 +310,7 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
       {/* DrawSpline quand collapsed : bibliothèque toujours visible */}
       {data.type === 'DrawSpline' && !expanded && (
         <div className="px-3 py-1.5 border-t border-gray-700">
-          <SplineLibraryControls nodeId={id} currentPoints={data.params?.points ?? ''} />
+          <SplineLibraryControls nodeId={id} currentPoints={typeof data.params?.points === 'string' ? data.params.points : ''} />
         </div>
       )}
 

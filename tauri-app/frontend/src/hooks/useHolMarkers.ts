@@ -65,7 +65,7 @@ export function useHolMarkers({ sceneRef, cameraRef, holProject }: UseHolMarkers
       scene.add(label);
       holLabelsRef.current.push(label);
     });
-  }, [holProject]);
+  }, [holProject, sceneRef, cameraRef]);
 
   return { holMarkersRef, holLabelsRef };
 }
