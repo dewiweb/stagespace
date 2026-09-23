@@ -290,6 +290,45 @@ mod tests {
         assert!(format!("{err:?}").contains("plugin registry"));
     }
 
+    /// Charge le vrai bundle `.ssx` du plugin exemple (compilé wasm32 par le
+    /// SDK) — lemniscate à t=0,i=0 : phase=0 → x=scale, y=z=0.
+    #[test]
+    fn real_ssx_fixture_executes() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/lemniscate.ssx");
+        let mut reg = PluginRegistry::new().expect("registry");
+        reg.register_bundle(std::path::Path::new(path))
+            .expect("load fixture");
+
+        let g = {
+            let mut g = plugin_graph("lemniscate");
+            let plugin = g
+                .nodes
+                .values_mut()
+                .find(|n| n.node_type == NodeType::Plugin)
+                .expect("plugin node");
+            plugin.params = json!({"plugin_id": "lemniscate", "scale": 2.0});
+            g
+        };
+        let reg = Arc::new(Mutex::new(reg));
+        let f = Compiler::compile_with_live_inputs(
+            &g,
+            LiveInputs {
+                plugins: Some(reg),
+                ..Default::default()
+            },
+        )
+        .expect("compile");
+
+        let p0 = f(0.0, 0);
+        assert!((p0.x - 2.0).abs() < 1e-9, "x should be scale=2, got {}", p0.x);
+        assert!(p0.y.abs() < 1e-9 && p0.z.abs() < 1e-9);
+
+        // t>0 → la figure-∞ bouge (x diminue, z devient non-nul)
+        let p1 = f(0.5, 0);
+        assert!(p1.x.abs() < 2.0, "should move along the curve");
+        assert!(p1.iter().all(|v| v.is_finite()));
+    }
+
     #[test]
     fn plugin_node_unknown_id_fails_at_compile() {
         let reg = registry_with("echo", ECHO_WAT);

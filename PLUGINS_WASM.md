@@ -17,19 +17,14 @@ compile). 17 tests plugins verts, contrats TS générés.
    cues ; `PluginManifest`/`PluginKind`/`PluginParamDef`/`PluginRegistryReport`
    exportés ts-rs. Note : erreurs rapportées dans le report (toasts frontend)
    plutôt qu'en events — suffisant tant que le scan est déclenché par l'UI.
-2. **Phase 5 — SDK** : crate `plugin-sdk/` (macro `#[stagespace_plugin]`
-   générant les 3 exports + parse params JSON → struct), CLI `stagespace-pack`
-   (`module.wasm` + `manifest.json` → `.ssx` + validation), exemple
-   `lemniscate` compilé `wasm32-unknown-unknown` — permet de tester la Phase 3
-   sur un vrai plugin, pas seulement du WAT.
-3. **Phase 4 — Frontend dynamique** : slice `usePluginStore` (fetch au boot +
+2. **Phase 4 — Frontend dynamique** : slice `usePluginStore` (fetch au boot +
    reload), palette "Plugins" avec un item par plugin chargé (nom réel +
    `plugin_id` pré-rempli), `NodeParamsPanel` merge
    `PARAM_SCHEMA['Plugin']` + schema du manifeste (`NodeParamField` rend déjà
    tous les types génériquement), label du node = nom du plugin dans
    `CustomNode`.
-4. **Phase 6/7** — tests E2E (fixture `.ssx` précompilée committée), docs
-   `CONTRIBUTING.md`, section plugins dans `AGENTS.md`.
+3. **Phase 6/7 restants** — plugin dans le pool `MATH` du fuzzer génératif,
+   test `list_plugins` tauri, docs `CONTRIBUTING.md` + `AGENTS.md`.
 
 Règle transversale : **ABI v1 = engines uniquement**. Modifier/composite
 demandent de passer la closure upstream au guest → ABI v2, hors scope.
@@ -191,22 +186,33 @@ refactorisation ultérieure optionnelle ; Phase 1 ajoute seulement l'arm
       — `NodeParamField` rend déjà tout génériquement, aucun nouveau composant
 - [ ] Icône `icon.svg` du bundle dans la palette (optionnel MVP)
 
-### Phase 5 — SDK invité (`stagespace-plugin-sdk`)
+### Phase 5 — SDK invité (`stagespace-plugin-sdk`) — ✅ livré
 
-- [ ] Nouveau crate workspace `plugin-sdk/` (rlib, cible wasm32)
-- [ ] Macro `#[stagespace_plugin]` : génère `plugin_alloc/position/free`,
-      parse params JSON → struct typée, `Vec3` de retour
-- [ ] Crate `stagespace-pack` (CLI) : `pack module.wasm manifest.json → .ssx`
-      + validation du manifeste côté auteur
-- [ ] Plugin d'exemple `examples/lemniscate` documenté de bout en bout
+- [x] Crate `plugin-sdk/` (rlib minimal — `serde_json` seul, zéro dep native)
+      + macro `stagespace_plugin!(fn)` (macro déclarative, pas de proc-macro
+      crate) générant les exports ABI : `plugin_params_ptr`,
+      `plugin_result_ptr`, `plugin_position` — buffers statiques 64 KB/24 B,
+      params désérialisés en `serde_json::Value` + helpers `get_f64`/`get_bool`/
+      `get_str` avec défauts
+- [x] CLI `stagespace-pack` (binaire du même crate, feature-gated `packer` →
+      `zip` optionnel pour ne pas compiler du C dans le graphe wasm32) :
+      `stagespace-pack manifest.json module.wasm -o out.ssx` + `--check`
+- [x] Exemple `plugin-examples/lemniscate/` (figure-∞, params scale/aspect/
+      speed) compilé `wasm32-unknown-unknown`, packagé `lemniscate.ssx`,
+      documenté dans `plugin-sdk/README.md` + README dédié
+- [x] Pipeline prouvé de bout en bout : `real_ssx_fixture_executes` charge le
+      `.ssx` committé (`rust-engines/tests/fixtures/`) via `PluginRegistry` →
+      `compile_with_live_inputs` → positions correctes, params JSON reçus
 
 ### Phase 6 — Tests
 
-- [ ] **rust-engines** : modules WAT inline (`wasmtime` feature `wat`) —
+- [x] **rust-engines** : modules WAT inline (`wasmtime` feature `wat`) —
       pas besoin du toolchain wasm32 en CI. Cas : position correcte, params
       JSON lus, trap → zero + pas de panic, fuel épuisé → zero, manifeste
-      invalide → erreur propre, `abi_version` incompatible → refus
-- [ ] **compiler_tests** : graphe `Objects→Plugin→Output` compile et échantillonne
+      invalide → erreur propre, `abi_version` incompatible → refus (Phase 1)
+- [x] **Fixture `.ssx` réelle** committée (`tests/fixtures/lemniscate.ssx`) —
+      pipeline SDK→wasm→registry→compile→sample testé en CI sans toolchain
+- [x] **compiler_tests** : graphe `Objects→Plugin→Output` compile et échantillonne
 - [ ] **validator_tests** : Plugin accepté comme engine, rejeté comme cible
       de modifier upstream invalide
 - [ ] **generative_graph_tests** : `Plugin` dans le pool `MATH` (avec un

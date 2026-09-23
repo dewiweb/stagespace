@@ -1,0 +1,19 @@
+[package]
+name = "stagespace-plugin-sdk"
+version = "0.1.0"
+edition = "2021"
+description = "SDK for STAGESPACE WASM plugins (.ssx) — guest-side exports + packer CLI"
+
+[dependencies]
+serde_json = "1.0"
+# zip n'est requis que par le binaire `stagespace-pack` — optionnel pour que
+# les crates invités (wasm32-unknown-unknown) ne compilent pas le C (xz2…).
+zip = { version = "2", optional = true }
+
+[features]
+packer = ["dep:zip"]
+
+[[bin]]
+name = "stagespace-pack"
+path = "src/bin/stagespace-pack.rs"
+required-features = ["packer"]

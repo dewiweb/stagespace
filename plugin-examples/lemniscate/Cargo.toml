@@ -1,0 +1,18 @@
+[package]
+name = "lemniscate"
+version = "1.0.0"
+edition = "2021"
+description = "STAGESPACE plugin exemple — lemniscate de Bernoulli (figure-∞)"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+stagespace-plugin-sdk = { path = "../../plugin-sdk" }
+serde_json = "1.0"
+
+[profile.release]
+# Petit binaire wasm : strip + optimise taille
+lto = true
+opt-level = "s"
+panic = "abort"

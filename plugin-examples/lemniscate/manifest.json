@@ -1,0 +1,44 @@
+{
+  "id": "lemniscate",
+  "name": "Lemniscate",
+  "version": "1.0.0",
+  "author": "STAGESPACE",
+  "abi_version": 1,
+  "kind": "engine",
+  "category": "Plugins",
+  "description": "Figure-∞ horizontale (lemniscate de Bernoulli), objets déphasés le long de la courbe",
+  "ports": { "inputs": ["input", "duration"], "outputs": ["trajectory"] },
+  "params": [
+    {
+      "key": "scale",
+      "type": "number",
+      "default": 1.0,
+      "min": 0.1,
+      "max": 10.0,
+      "step": 0.1,
+      "label": "Scale",
+      "live": true
+    },
+    {
+      "key": "aspect",
+      "type": "number",
+      "default": 1.4142,
+      "min": 0.1,
+      "max": 4.0,
+      "step": 0.01,
+      "label": "Aspect",
+      "live": true
+    },
+    {
+      "key": "speed",
+      "type": "number",
+      "default": 1.0,
+      "min": -5.0,
+      "max": 5.0,
+      "step": 0.05,
+      "label": "Speed",
+      "live": true
+    }
+  ],
+  "capabilities": []
+}
