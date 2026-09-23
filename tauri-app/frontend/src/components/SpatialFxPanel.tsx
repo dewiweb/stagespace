@@ -95,10 +95,32 @@ export default function SpatialFxPanel() {
     refreshSpatialFx();
   }, [refreshSpatialFx]);
 
+  // Validation live de la zone — le bouton Add reste grisé tant que le
+  // centre est invalide ou qu'aucun canal valide n'est saisi ; le hint
+  // sous le bouton dit exactement ce qui manque.
+  const zoneCenterValid = parseVec3(zA) !== null;
+  const zoneChannels = parseChannelsSpec(zChannels);
+  // Le backend rejette les noms de canaux inconnus (SpatialChannel::from_str)
+  const KNOWN_CHANNELS = SPATIAL_CHANNELS.map((c) => c.toLowerCase());
+  const unknownChannels = Object.keys(zoneChannels).filter((k) => !KNOWN_CHANNELS.includes(k));
+  const zoneChannelsValid =
+    Object.keys(zoneChannels).length > 0 && unknownChannels.length === 0;
+  const zoneHint = !zoneCenterValid
+    ? zShape === 'sphere'
+      ? 'center invalide — format x,y,z (ex: 0,0,0)'
+      : 'min invalide — format x,y,z'
+    : zChannels.trim() === ''
+      ? 'channels requis — ex: spread=1 ou gain=-3'
+      : !zoneChannelsValid
+        ? unknownChannels.length > 0
+          ? `canal inconnu '${unknownChannels[0]}' — ${KNOWN_CHANNELS.join('|')}`
+          : 'aucun canal valide — format nom=valeur (ex: spread=1)'
+        : null;
+
   const handleAddZone = async () => {
     const a = parseVec3(zA);
     const channels = parseChannelsSpec(zChannels);
-    if (!a || Object.keys(channels).length === 0) return;
+    if (!a || !zoneChannelsValid) return;
     try {
       await addZone({
         shape: zShape,
@@ -223,11 +245,19 @@ export default function SpatialFxPanel() {
           />
           <button
             onClick={handleAddZone}
-            disabled={!parseVec3(zA) || Object.keys(parseChannelsSpec(zChannels)).length === 0}
+            disabled={!zoneCenterValid || !zoneChannelsValid}
             className="w-full py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white text-xs rounded font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Add Zone
           </button>
+          {zoneHint && (
+            <div className="text-amber-500/90 text-[10px] font-mono px-0.5">{zoneHint}</div>
+          )}
+          {!zoneHint && zoneChannelsValid && (
+            <div className="text-green-500/80 text-[10px] font-mono px-0.5">
+              → {describeChannels(zoneChannels)}
+            </div>
+          )}
         </div>
         {zones.length === 0 ? (
           <div className="text-gray-600 text-[11px] text-center py-2 bg-gray-800/30 rounded border border-gray-700/30">
