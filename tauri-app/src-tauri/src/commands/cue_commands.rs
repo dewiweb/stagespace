@@ -221,6 +221,10 @@ pub(crate) fn recall_cue_inner(cue: Cue, sh: crate::commands::state::Shared) -> 
 
         merge_rt.swap_post_process_fn(post_process_fn);
         merge_rt.set_graph_effects(effects.zones, effects.modulations);
+        // Idem update_global_graph : un node Merge peut fixer la stratégie.
+        if let Some(strategy) = effects.strategy {
+            merge_rt.set_merge_strategy(strategy);
+        }
     }
 
     // 2. Désactiver les moves qui ne sont pas dans active_move_ids

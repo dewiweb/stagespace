@@ -29,3 +29,15 @@ pub fn compile_graph_with_audio_and_overrides(
     Compiler::compile_with_audio_and_overrides(graph, audio_state, overrides)
         .map_err(|e| format!("Compilation failed: {e:?}"))
 }
+
+/// Compile un Graph avec audio + cache des valeurs OSC reçues.
+/// Sans ça, les nodes `OSCInput` produisent un cercle statique.
+pub fn compile_graph_with_audio_osc(
+    graph: &Graph,
+    audio_state: Arc<Mutex<AudioState>>,
+    overrides: AudioParamOverrides,
+    osc_values: stagespace_engines::OscValueMap,
+) -> Result<PositionFn, String> {
+    Compiler::compile_with_audio_osc(graph, audio_state, overrides, osc_values)
+        .map_err(|e| format!("Compilation failed: {e:?}"))
+}

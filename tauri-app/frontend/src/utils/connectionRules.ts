@@ -17,6 +17,10 @@ const ENGINE_TYPES: NodeType[] = [
   'DrawSpline', 'EvaluateSpline', 'TrimSpline', 'OffsetSpline',
   // BPM et AudioAmplitude sont des engines dans le validateur Rust (pas des sources)
   'BPM', 'AudioAmplitude',
+  // AudioSpectrum/OSCInput sont compilés comme des engines produisant des
+  // positions — les connecter aux falloffs était décoratif (aucune donnée
+  // transportée) et bloquait le port 'input' pour Objects.
+  'AudioSpectrum', 'OSCInput',
 ];
 
 const PHYSICS_TYPES: NodeType[] = [
@@ -43,9 +47,6 @@ const FALLOFF_LIMITED_TARGETS: NodeType[] = ['Scale', 'Rotate', 'Offset'];
 
 const COMPOSITE_TYPES: NodeType[] = ['Mix', 'Group', 'Sequence', 'Crossfade'];
 
-// Sources pures : ne peuvent aller QUE vers les falloffs
-const SOURCE_TYPES: NodeType[] = ['AudioSpectrum', 'OSCInput'];
-
 // Composites que les modifiers peuvent cibler (PAS Sequence — Rust ne l'autorise pas)
 const MODIFIER_COMPOSITE_TARGETS: NodeType[] = ['Mix', 'Group', 'Crossfade'];
 
@@ -55,7 +56,6 @@ const isFalloffRich = (t: NodeType) => FALLOFF_RICH_TYPES.includes(t);
 const isFalloffLimited = (t: NodeType) => FALLOFF_LIMITED_TYPES.includes(t);
 const isModifier = (t: NodeType) => MODIFIER_TYPES.includes(t);
 const isComposite = (t: NodeType) => COMPOSITE_TYPES.includes(t);
-const isSource = (t: NodeType) => SOURCE_TYPES.includes(t);
 
 /**
  * Retourne true si une connexion from → to est valide.
@@ -135,11 +135,6 @@ export function isValidConnection(from: NodeType, to: NodeType): boolean {
     return to === 'Output' || isComposite(to);
   }
 
-  // Sources pures (AudioSpectrum, OSCInput) → falloffs uniquement
-  if (isSource(from)) {
-    return isFalloffRich(to) || isFalloffLimited(to);
-  }
-
   return false;
 }
 
@@ -152,8 +147,6 @@ export function getInputPorts(type: NodeType): string[] {
     // Sources pures / terminaux sans entrée
     case 'Objects':
     case 'Duration':
-    case 'AudioSpectrum':
-    case 'OSCInput':
     case 'Input':
     case 'MoveRef':
     case 'Merge':
@@ -165,6 +158,8 @@ export function getInputPorts(type: NodeType): string[] {
     case 'Pendulum': case 'RoseCurve': case 'Helix': case 'Wave': case 'CustomTrajectory':
     case 'Bouncing': case 'Spring': case 'Follow': case 'Swarm': case 'Avoidance': case 'VectorField':
     case 'BPM': case 'AudioAmplitude':
+    // Engines comme les autres : Objects/Duration peuvent les alimenter.
+    case 'AudioSpectrum': case 'OSCInput':
     case 'DrawSpline':
     case 'TimeFalloff': case 'PointDistanceFalloff': case 'DirectionalFalloff': case 'AudioAmplitudeFalloff':
       return ['input', 'duration'];

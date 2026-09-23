@@ -1,7 +1,7 @@
 //! Hot-swap de graphs : update_move_graph_merged (sub-graph) + update_global_graph (post-process)
 
 use crate::commands::state::Shared;
-use crate::graph::compilation::compile_graph_with_audio_and_overrides;
+use crate::graph::compilation::compile_graph_with_audio_osc;
 use crate::graph::parser::build_graph_from_json;
 use crate::AppState;
 use tauri::State;
@@ -41,8 +41,9 @@ pub async fn update_move_graph_merged(
         let graph = build_graph_from_json(&graph_json, &audio_state).map_err(IpcError::from)?;
         drop(audio_state);
 
+        let osc_values = lock_or_recover(&sh.osc_receiver).address_values_handle();
         let compiled =
-            compile_graph_with_audio_and_overrides(&graph, sh.audio_state.clone(), overrides)
+            compile_graph_with_audio_osc(&graph, sh.audio_state.clone(), overrides, osc_values)
                 .map_err(IpcError::from)?;
 
         // Ré-application sous lock, avec check de génération — le move a pu être
@@ -143,6 +144,11 @@ pub async fn update_global_graph(
         let merge_rt = lock_or_recover(&sh.merge_runtime);
         merge_rt.swap_post_process_fn(post_process_fn);
         merge_rt.set_graph_effects(effects.zones, effects.modulations);
+        // Le node Merge peut déclarer la stratégie de résolution de conflit
+        // (param `strategy`) — appliquée à chaque push du graphe global.
+        if let Some(strategy) = effects.strategy {
+            merge_rt.set_merge_strategy(strategy);
+        }
 
         Ok(())
     })

@@ -14,6 +14,18 @@ use std::time::Instant;
 /// la trajectoire en temps réel sans recompilation.
 pub type AudioParamOverrides = Arc<Mutex<HashMap<String, f64>>>;
 
+/// Dernières valeurs OSC reçues par adresse — partagées avec l'OscReceiver,
+/// lues à chaque frame par les engines OSCInput via la closure compilée.
+pub type OscValueMap = Arc<Mutex<HashMap<String, Vec<f64>>>>;
+
+/// Entrées live disponibles pendant l'évaluation d'une frame —
+/// audio state (BPM/amplitude/spectre) + dernières valeurs OSC reçues.
+#[derive(Clone, Default)]
+pub struct LiveInputs {
+    pub audio: Option<Arc<Mutex<AudioState>>>,
+    pub osc_values: Option<OscValueMap>,
+}
+
 /// Erreur de compilation
 #[derive(Debug, Clone)]
 pub enum CompilationError {
@@ -40,7 +52,7 @@ pub struct Compiler;
 impl Compiler {
     /// Compile un graphe en une fonction composite
     pub fn compile(graph: &Graph) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(graph, None)
+        Self::compile_inner(graph, None, None)
     }
 
     /// Compile un graphe avec accès à l'audio state temps réel
@@ -50,7 +62,7 @@ impl Compiler {
         graph: &Graph,
         audio_state: Arc<Mutex<AudioState>>,
     ) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(graph, Some(audio_state))
+        Self::compile_inner(graph, Some(audio_state), None)
     }
 
     /// Compile un graphe avec audio state + overrides de paramètres audio
@@ -62,13 +74,31 @@ impl Compiler {
         audio_state: Arc<Mutex<AudioState>>,
         _overrides: AudioParamOverrides,
     ) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(graph, Some(audio_state))
+        Self::compile_inner(graph, Some(audio_state), None)
+    }
+
+    /// Compile un graphe avec audio state + cache des valeurs OSC reçues.
+    /// Les nodes `OSCInput` lisent `extra["osc_value"]` depuis la map
+    /// (clé = param `address` du node) à chaque frame — sans ça le node
+    /// produit un cercle statique.
+    pub fn compile_with_audio_osc(
+        graph: &Graph,
+        audio_state: Arc<Mutex<AudioState>>,
+        _overrides: AudioParamOverrides,
+        osc_values: OscValueMap,
+    ) -> Result<CompiledFunction, CompilationError> {
+        Self::compile_inner(graph, Some(audio_state), Some(osc_values))
     }
 
     fn compile_inner(
         graph: &Graph,
         audio_state: Option<Arc<Mutex<AudioState>>>,
+        osc_values: Option<OscValueMap>,
     ) -> Result<CompiledFunction, CompilationError> {
+        let live = LiveInputs {
+            audio: audio_state,
+            osc_values,
+        };
         let start = Instant::now();
         log_graph_compilation(graph.nodes.len(), graph.edges.len());
 
@@ -100,7 +130,7 @@ impl Compiler {
             let inputs = graph.get_inputs(output_node.id);
             let node_id = inputs.first().ok_or(CompilationError::OutputNotConnected)?;
             let node = Self::node_ref(graph, *node_id)?;
-            let result = Self::compile_node(graph, node, &audio_state);
+            let result = Self::compile_node(graph, node, &live);
             if result.is_ok() {
                 let duration_ms = start.elapsed().as_millis();
                 log_compilation_success(duration_ms);
@@ -116,7 +146,7 @@ impl Compiler {
             let inputs = graph.get_inputs(output_node.id);
             let node_id = inputs.first().ok_or(CompilationError::OutputNotConnected)?;
             let node = Self::node_ref(graph, *node_id)?;
-            let compiled = Self::compile_node(graph, node, &audio_state)?;
+            let compiled = Self::compile_node(graph, node, &live)?;
 
             // Parser track_range : "0-11" ou "12-22"
             let track_range = output_node
@@ -170,13 +200,13 @@ impl Compiler {
     fn compile_node(
         graph: &Graph,
         node: &Node,
-        audio: &Option<Arc<Mutex<AudioState>>>,
+        live: &LiveInputs,
     ) -> Result<CompiledFunction, CompilationError> {
         match node.node_type {
-            NodeType::Mix => Self::compile_mix(graph, node, audio),
-            NodeType::Group => Self::compile_group(graph, node, audio),
-            NodeType::Sequence => Self::compile_sequence(graph, node, audio),
-            NodeType::Crossfade => Self::compile_crossfade(graph, node, audio),
+            NodeType::Mix => Self::compile_mix(graph, node, live),
+            NodeType::Group => Self::compile_group(graph, node, live),
+            NodeType::Sequence => Self::compile_sequence(graph, node, live),
+            NodeType::Crossfade => Self::compile_crossfade(graph, node, live),
             NodeType::Scale
             | NodeType::Rotate
             | NodeType::Offset
@@ -184,8 +214,8 @@ impl Compiler {
             | NodeType::Mirror
             | NodeType::Clamp
             | NodeType::LFO
-            | NodeType::Jitter => Self::compile_modifier(graph, node, audio),
-            _ => Self::compile_engine(graph, node, audio),
+            | NodeType::Jitter => Self::compile_modifier(graph, node, live),
+            _ => Self::compile_engine(graph, node, live),
         }
     }
 
@@ -193,7 +223,7 @@ impl Compiler {
     fn compile_modifier(
         graph: &Graph,
         node: &Node,
-        audio: &Option<Arc<Mutex<AudioState>>>,
+        live: &LiveInputs,
     ) -> Result<CompiledFunction, CompilationError> {
         let inputs = graph.get_inputs(node.id);
         let upstream_id = inputs.first().ok_or_else(|| {
@@ -204,7 +234,7 @@ impl Compiler {
             ))
         })?;
         let upstream_node = Self::node_ref(graph, *upstream_id)?;
-        let upstream_fn = Self::compile_node(graph, upstream_node, audio)?;
+        let upstream_fn = Self::compile_node(graph, upstream_node, live)?;
         let node_type = node.node_type.clone();
 
         match node_type {
@@ -385,7 +415,7 @@ impl Compiler {
     fn compile_mix(
         graph: &Graph,
         node: &Node,
-        audio: &Option<Arc<Mutex<AudioState>>>,
+        live: &LiveInputs,
     ) -> Result<CompiledFunction, CompilationError> {
         let (node_a, node_b) = Self::binary_inputs(graph, node, "Mix")?;
 
@@ -396,8 +426,8 @@ impl Compiler {
             .unwrap_or(0.5)
             .clamp(0.0, 1.0);
 
-        let func_a = Self::compile_node(graph, node_a, audio)?;
-        let func_b = Self::compile_node(graph, node_b, audio)?;
+        let func_a = Self::compile_node(graph, node_a, live)?;
+        let func_b = Self::compile_node(graph, node_b, live)?;
 
         Ok(Box::new(move |t: f64, object_index: usize| {
             let pos_a = func_a(t, object_index);
@@ -410,15 +440,15 @@ impl Compiler {
     fn compile_group(
         graph: &Graph,
         node: &Node,
-        audio: &Option<Arc<Mutex<AudioState>>>,
+        live: &LiveInputs,
     ) -> Result<CompiledFunction, CompilationError> {
         let (node_a, node_b) = Self::binary_inputs(graph, node, "Group")?;
 
         // n_objects de la branche A détermine la frontière entre les deux groupes
         let n_objects_a = Self::resolve_n_objects(graph, node_a)?;
 
-        let func_a = Self::compile_node(graph, node_a, audio)?;
-        let func_b = Self::compile_node(graph, node_b, audio)?;
+        let func_a = Self::compile_node(graph, node_a, live)?;
+        let func_b = Self::compile_node(graph, node_b, live)?;
 
         Ok(Box::new(move |t: f64, object_index: usize| {
             if object_index < n_objects_a {
@@ -433,7 +463,7 @@ impl Compiler {
     fn compile_sequence(
         graph: &Graph,
         node: &Node,
-        audio: &Option<Arc<Mutex<AudioState>>>,
+        live: &LiveInputs,
     ) -> Result<CompiledFunction, CompilationError> {
         let (node_a, node_b) = Self::binary_inputs(graph, node, "Sequence")?;
 
@@ -446,8 +476,8 @@ impl Compiler {
             )));
         }
 
-        let func_a = Self::compile_node(graph, node_a, audio)?;
-        let func_b = Self::compile_node(graph, node_b, audio)?;
+        let func_a = Self::compile_node(graph, node_a, live)?;
+        let func_b = Self::compile_node(graph, node_b, live)?;
 
         Ok(Box::new(move |t: f64, object_index: usize| {
             if t < duration_a {
@@ -463,7 +493,7 @@ impl Compiler {
     fn compile_crossfade(
         graph: &Graph,
         node: &Node,
-        audio: &Option<Arc<Mutex<AudioState>>>,
+        live: &LiveInputs,
     ) -> Result<CompiledFunction, CompilationError> {
         let (node_a, node_b) = Self::binary_inputs(graph, node, "Crossfade")?;
 
@@ -481,8 +511,8 @@ impl Compiler {
             .unwrap_or(1.0)
             .min(duration_a * 0.5); // Le fade ne peut pas dépasser la moitié de A
 
-        let func_a = Self::compile_node(graph, node_a, audio)?;
-        let func_b = Self::compile_node(graph, node_b, audio)?;
+        let func_a = Self::compile_node(graph, node_a, live)?;
+        let func_b = Self::compile_node(graph, node_b, live)?;
 
         Ok(Box::new(move |t: f64, object_index: usize| {
             let fade_start = duration_a - fade_duration;
@@ -568,7 +598,7 @@ impl Compiler {
     fn compile_engine(
         graph: &Graph,
         node: &Node,
-        audio: &Option<Arc<Mutex<AudioState>>>,
+        live: &LiveInputs,
     ) -> Result<CompiledFunction, CompilationError> {
         let node_type = node.node_type.clone();
         let params = Self::extract_params(graph, node)?;
@@ -633,15 +663,49 @@ impl Compiler {
         };
 
         // Construire la closure selon le type d'engine
-        let has_audio = audio.is_some() && is_audio_engine;
+        let has_audio = live.audio.is_some() && is_audio_engine;
+
+        // Engine OSC — injecte la dernière valeur reçue à l'adresse du node
+        // (extra["osc_value"]) à chaque frame. Sans cache branché, le node
+        // retombe sur son cercle statique — comportement inchangé.
+        let osc_values = if node_type == NodeType::OSCInput {
+            live.osc_values.clone()
+        } else {
+            None
+        };
 
         if has_audio {
             // Engine audio — injecte les valeurs audio live dans params.extra
-            let audio_arc = audio.as_ref().expect("checked by has_audio").clone();
+            let audio_arc = live.audio.as_ref().expect("checked by has_audio").clone();
             Ok(Box::new(move |t: f64, object_index: usize| {
                 let mut live_params = params.clone();
                 if let Some(map) = live_params.extra.as_object_mut() {
                     inject_audio_values(map, &audio_arc);
+                }
+                engine.position(t, object_index, &live_params)
+            }))
+        } else if let Some(values) = osc_values {
+            let address = params
+                .extra
+                .get("address")
+                .and_then(|v| v.as_str())
+                .unwrap_or("*")
+                .to_string();
+            Ok(Box::new(move |t: f64, object_index: usize| {
+                let mut live_params = params.clone();
+                {
+                    let guard = values.lock().unwrap_or_else(|e| e.into_inner());
+                    if let Some(v) = guard.get(address.as_str()) {
+                        // Scalaire → valeur unique ; multi-arg → array (XYZ direct)
+                        let injected = if v.len() == 1 {
+                            serde_json::json!(v[0])
+                        } else {
+                            serde_json::json!(v)
+                        };
+                        if let Some(map) = live_params.extra.as_object_mut() {
+                            map.insert("osc_value".to_string(), injected);
+                        }
+                    }
                 }
                 engine.position(t, object_index, &live_params)
             }))

@@ -112,11 +112,27 @@ fn compile_scale(node: &Node) -> Result<TransformFn, PostProcessCompileError> {
 }
 
 fn compile_rotate(node: &Node) -> Result<TransformFn, PostProcessCompileError> {
-    let _default_yaw = get_param_f64_or(node, "yaw", 0.0);
-    let _default_pitch = get_param_f64_or(node, "pitch", 0.0);
-    let _default_roll = get_param_f64_or(node, "roll", 0.0);
+    // Le schema UI partagé expose angleX/Y/Z (radians, convention sub-graph) ;
+    // le graph global documente yaw/pitch/roll (degrés, convention macros).
+    // On accepte les deux : la clé canonique prime, l'alias radian est
+    // converti en degrés.
+    let alias_deg = |k: &str| {
+        node.params
+            .get(k)
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0)
+            .to_degrees()
+    };
+    let default_yaw = get_param_f64_or(node, "yaw", alias_deg("angleY"));
+    let default_pitch = get_param_f64_or(node, "pitch", alias_deg("angleX"));
+    let default_roll = get_param_f64_or(node, "roll", alias_deg("angleZ"));
     Ok(Box::new(move |ctx, positions| {
-        let (yaw, pitch, roll) = ctx.macros.get_rotation();
+        // Macros prioritaires quand non nulles — sinon les params du node
+        // servent de valeur (même pattern que Scale/Offset).
+        let (my, mp, mr) = ctx.macros.get_rotation();
+        let yaw = if my != 0.0 { my } else { default_yaw };
+        let pitch = if mp != 0.0 { mp } else { default_pitch };
+        let roll = if mr != 0.0 { mr } else { default_roll };
         let has_rotation = yaw != 0.0 || pitch != 0.0 || roll != 0.0;
         if !has_rotation {
             return positions;
@@ -155,9 +171,14 @@ fn compile_offset(node: &Node) -> Result<TransformFn, PostProcessCompileError> {
 }
 
 fn compile_radius_scale(node: &Node) -> Result<TransformFn, PostProcessCompileError> {
-    let _default = get_param_f64_or(node, "radius_scale", 1.0);
+    let default = get_param_f64_or(node, "radius_scale", 1.0);
     Ok(Box::new(move |ctx, positions| {
-        let radius_scale = ctx.macros.get_radius_scale();
+        let macro_val = ctx.macros.get_radius_scale();
+        let radius_scale = if (macro_val - 1.0).abs() > 1e-10 {
+            macro_val
+        } else {
+            default
+        };
         if (radius_scale - 1.0).abs() <= 1e-10 {
             return positions;
         }
@@ -170,9 +191,14 @@ fn compile_radius_scale(node: &Node) -> Result<TransformFn, PostProcessCompileEr
 }
 
 fn compile_height_offset(node: &Node) -> Result<TransformFn, PostProcessCompileError> {
-    let _default = get_param_f64_or(node, "height_offset", 0.0);
+    let default = get_param_f64_or(node, "height_offset", 0.0);
     Ok(Box::new(move |ctx, positions| {
-        let height_offset = ctx.macros.get_height_offset();
+        let macro_val = ctx.macros.get_height_offset();
+        let height_offset = if macro_val.abs() > 1e-10 {
+            macro_val
+        } else {
+            default
+        };
         if height_offset.abs() <= 1e-10 {
             return positions;
         }

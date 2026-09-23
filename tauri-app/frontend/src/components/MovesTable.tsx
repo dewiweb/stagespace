@@ -67,6 +67,32 @@ export default function MovesTable() {
   const playingCount = moveSlots.filter((s) => s.movementId).length;
   const stoppedCount = moveSlots.length - playingCount;
 
+  // Tracks contestées : partagées par ≥2 slots playing. Le MergeRuntime
+  // les arbitre selon la stratégie (Settings → Merge) — sans indicateur,
+  // un slot perdant semble "ne produire aucun mouvement".
+  const contestedBySlot = React.useMemo(() => {
+    const trackOwners = new Map<number, string[]>();
+    for (const s of moveSlots) {
+      if (!s.movementId) continue;
+      for (const t of s.trackIds) {
+        const owners = trackOwners.get(t) ?? [];
+        owners.push(s.id);
+        trackOwners.set(t, owners);
+      }
+    }
+    const result = new Map<string, number[]>();
+    for (const [track, owners] of trackOwners) {
+      if (owners.length > 1) {
+        for (const slotId of owners) {
+          const list = result.get(slotId) ?? [];
+          list.push(track);
+          result.set(slotId, list);
+        }
+      }
+    }
+    return result;
+  }, [moveSlots]);
+
   // ─── Track Picker (modal inline) ───
   const [editingTracksFor, setEditingTracksFor] = React.useState<string | null>(null);
   const [tempTrackIds, setTempTrackIds] = React.useState<number[]>([]);
@@ -347,6 +373,14 @@ export default function MovesTable() {
                         {slot.trackIds.slice(0, 4).join(',')}
                         {slot.trackIds.length > 4 && `+${slot.trackIds.length - 4}`}
                       </div>
+                      {(contestedBySlot.get(slot.id)?.length ?? 0) > 0 && (
+                        <div
+                          className="text-[9px] font-mono text-amber-400 mt-0.5"
+                          title={`Contested tracks ${contestedBySlot.get(slot.id)!.join(', ')} — shared with another playing move, resolved by merge strategy (Settings → Merge)`}
+                        >
+                          ⚠ shared {contestedBySlot.get(slot.id)!.join(',')}
+                        </div>
+                      )}
                     </td>
 
                     {/* Setlist (★ add/remove + ordre) */}

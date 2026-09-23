@@ -16,6 +16,22 @@ pub enum MergeStrategy {
     Priority,
 }
 
+impl std::str::FromStr for MergeStrategy {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "override" => Ok(MergeStrategy::Override),
+            "crossfade" => Ok(MergeStrategy::Crossfade),
+            "blend" => Ok(MergeStrategy::Blend),
+            "priority" => Ok(MergeStrategy::Priority),
+            _ => Err(format!(
+                "Unknown merge strategy: {s} (override|crossfade|blend|priority)"
+            )),
+        }
+    }
+}
+
 /// État d'un move actif dans le MergeRuntime
 #[derive(Debug, Clone)]
 pub struct MoveState {

@@ -140,7 +140,11 @@ const slots = [
 //     Zone + Velocity câblés dans la chaîne (effets extraits par le backend,
 //     transform identité dans la chaîne elle-même). ───
 
-const gInput = gNode('Input', { x: 50, y: 250 });
+// Merge en tête de chaîne (source équivalente à Input) — son param
+// `strategy` est lu par le backend et appliqué au MergeRuntime :
+// 'crossfade' fait que le cue Superposition blende les moves plutôt
+// que de laisser le dernier activé tout écraser (override).
+const gInput = gNode('Merge', { x: 50, y: 250 }, { strategy: 'crossfade' });
 const gManual = gNode('ManualPosition', { x: 210, y: 250 });
 const gRadius = gNode('RadiusScale', { x: 380, y: 250 }, { radius_scale: 1.0 });
 const gHeight = gNode('HeightOffset', { x: 550, y: 250 }, { height_offset: 0.0 });

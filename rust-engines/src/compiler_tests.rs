@@ -264,6 +264,125 @@ mod tests {
         }
     }
 
+    /// OSCInput est un engine live : la dernière valeur reçue à l'adresse
+    /// du node est injectée à chaque frame via la OscValueMap partagée.
+    #[test]
+    fn test_compile_osc_input_live_values() {
+        use crate::audio::AudioState;
+        use std::collections::HashMap;
+        use std::sync::{Arc, Mutex};
+
+        let make_graph = || {
+            let mut graph = Graph::new();
+            let objects = Node::with_params(NodeType::Objects, serde_json::json!({"n_objects": 1}));
+            let duration =
+                Node::with_params(NodeType::Duration, serde_json::json!({"duration": 4.0}));
+            let osc = Node::with_params(
+                NodeType::OSCInput,
+                serde_json::json!({"address": "/track/1/xyz", "radius": 1.0}),
+            );
+            let output = Node::new(NodeType::Output);
+            let (id_o, id_d, id_s, id_out) = (objects.id, duration.id, osc.id, output.id);
+            graph.add_node(objects);
+            graph.add_node(duration);
+            graph.add_node(osc);
+            graph.add_node(output);
+            for (from, to, to_port) in [
+                (id_o, id_s, "input"),
+                (id_d, id_s, "duration"),
+                (id_s, id_out, "input"),
+            ] {
+                graph.add_edge(Edge {
+                    from,
+                    to,
+                    from_port: "output".to_string(),
+                    to_port: to_port.to_string(),
+                });
+            }
+            graph
+        };
+
+        let audio = Arc::new(Mutex::new(AudioState::new()));
+        let overrides: crate::compiler::AudioParamOverrides = Arc::new(Mutex::new(HashMap::new()));
+        let osc_values: crate::compiler::OscValueMap = Arc::new(Mutex::new(HashMap::new()));
+
+        // 1. Sans valeur reçue → fallback cercle statique (x=radius à l'objet 0)
+        let func = Compiler::compile_with_audio_osc(
+            &make_graph(),
+            audio.clone(),
+            overrides.clone(),
+            osc_values.clone(),
+        )
+        .expect("compile");
+        let pos = func(0.0, 0);
+        assert!((pos.x - 1.0).abs() < 1e-9, "fallback circle: {pos:?}");
+
+        // 2. Valeur vectorielle → position XYZ directe
+        osc_values
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert("/track/1/xyz".to_string(), vec![3.0, 4.0, 5.0]);
+        let func = Compiler::compile_with_audio_osc(
+            &make_graph(),
+            audio.clone(),
+            overrides.clone(),
+            osc_values.clone(),
+        )
+        .expect("compile");
+        let pos = func(0.0, 0);
+        assert!(
+            (pos.x - 3.0).abs() < 1e-9 && (pos.y - 4.0).abs() < 1e-9 && (pos.z - 5.0).abs() < 1e-9,
+            "vector value: {pos:?}"
+        );
+
+        // 3. Valeur scalaire → angle sur cercle (1.0 → angle π → x=-radius)
+        osc_values
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert("/track/1/xyz".to_string(), vec![1.0]);
+        let func = Compiler::compile_with_audio_osc(&make_graph(), audio, overrides, osc_values)
+            .expect("compile");
+        let pos = func(0.0, 0);
+        assert!((pos.x + 1.0).abs() < 1e-9, "scalar→angle: {pos:?}");
+    }
+
+    /// AudioSpectrum compile comme un engine : Objects/Duration résolvent
+    /// n_objects/duration via les edges (ports input/duration).
+    #[test]
+    fn test_compile_audio_spectrum_with_objects_duration() {
+        for node_type in [NodeType::AudioSpectrum, NodeType::OSCInput] {
+            let mut graph = Graph::new();
+            let objects = Node::with_params(NodeType::Objects, serde_json::json!({"n_objects": 2}));
+            let duration =
+                Node::with_params(NodeType::Duration, serde_json::json!({"duration": 4.0}));
+            let engine = Node::with_params(node_type.clone(), serde_json::json!({}));
+            let output = Node::new(NodeType::Output);
+            let (id_o, id_d, id_e, id_out) = (objects.id, duration.id, engine.id, output.id);
+            graph.add_node(objects);
+            graph.add_node(duration);
+            graph.add_node(engine);
+            graph.add_node(output);
+            for (from, to, to_port) in [
+                (id_o, id_e, "input"),
+                (id_d, id_e, "duration"),
+                (id_e, id_out, "input"),
+            ] {
+                graph.add_edge(Edge {
+                    from,
+                    to,
+                    from_port: "output".to_string(),
+                    to_port: to_port.to_string(),
+                });
+            }
+            let result = Compiler::compile(&graph);
+            assert!(
+                result.is_ok(),
+                "Failed to compile {node_type:?}: {:?}",
+                result.err()
+            );
+        }
+    }
+
     // Mix/Group/Sequence sont testés dans les tests d'intégration de lib.rs
     // (test_sound_engineer_mix_circle_figure8, test_sound_engineer_group_partition,
     //  test_sound_engineer_sequence_circle_spiral)

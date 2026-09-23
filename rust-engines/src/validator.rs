@@ -250,6 +250,11 @@ impl Validator {
             | NodeType::Linear | NodeType::Oscillation | NodeType::PerlinNoise | NodeType::Formation
             | NodeType::Converge | NodeType::Pendulum | NodeType::RoseCurve | NodeType::Helix
             | NodeType::CustomTrajectory | NodeType::BPM | NodeType::AudioAmplitude | NodeType::Wave
+            // AudioSpectrum/OSCInput sont des engines compilés produisant des
+            // positions — pas des sources décoratives : ils atteignent Output
+            // comme tout autre moteur. (Auparavant limités aux falloffs, des
+            // edges qui ne transportaient aucune donnée.)
+            | NodeType::AudioSpectrum | NodeType::OSCInput
             | NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline => {
                 matches!(to_type,
                     NodeType::Output | NodeType::Mix | NodeType::Group | NodeType::Sequence | NodeType::Crossfade |
@@ -309,15 +314,6 @@ impl Validator {
                     | NodeType::Zone | NodeType::Velocity)
             }
 
-            // Sources
-            NodeType::AudioSpectrum | NodeType::OSCInput => {
-                matches!(
-                    to_type,
-                    NodeType::TimeFalloff | NodeType::AudioAmplitudeFalloff
-                        | NodeType::DirectionalFalloff | NodeType::PointDistanceFalloff
-                )
-            }
-
             // Structurels
             NodeType::Objects => {
                 matches!(to_type, NodeType::Circular | NodeType::Elliptical | NodeType::Spiral | NodeType::Lissajous | NodeType::Figure8
@@ -326,6 +322,7 @@ impl Validator {
                     | NodeType::Spring | NodeType::Follow | NodeType::Swarm | NodeType::Avoidance | NodeType::VectorField
                     | NodeType::CustomTrajectory | NodeType::Wave
                     | NodeType::BPM | NodeType::AudioAmplitude
+                    | NodeType::AudioSpectrum | NodeType::OSCInput
                     | NodeType::DrawSpline | NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline
                     // Les falloffs sont des engines autonomes — ils résolvent n_objects
                     // via l'edge Objects comme les autres moteurs.
@@ -338,6 +335,7 @@ impl Validator {
                     | NodeType::Pendulum | NodeType::RoseCurve | NodeType::Helix
                     | NodeType::CustomTrajectory | NodeType::Wave
                     | NodeType::BPM | NodeType::AudioAmplitude
+                    | NodeType::AudioSpectrum | NodeType::OSCInput
                     | NodeType::Bouncing | NodeType::Spring | NodeType::Follow | NodeType::Swarm | NodeType::Avoidance | NodeType::VectorField
                     | NodeType::DrawSpline | NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline
                     // Les falloffs ont un port 'duration' — sinon le paramètre
@@ -442,8 +440,6 @@ impl Validator {
             // Sources / terminaux : aucune entrée
             NodeType::Objects
             | NodeType::Duration
-            | NodeType::AudioSpectrum
-            | NodeType::OSCInput
             | NodeType::Input
             | NodeType::MoveRef
             | NodeType::Merge => &[],
@@ -472,6 +468,10 @@ impl Validator {
             | NodeType::Wave
             | NodeType::BPM
             | NodeType::AudioAmplitude
+            // AudioSpectrum/OSCInput sont des engines : Objects/Duration
+            // peuvent les alimenter comme les autres moteurs.
+            | NodeType::AudioSpectrum
+            | NodeType::OSCInput
             | NodeType::TimeFalloff
             | NodeType::PointDistanceFalloff
             | NodeType::DirectionalFalloff

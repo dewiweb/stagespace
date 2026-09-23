@@ -320,6 +320,10 @@ pub struct OscInStatsSnapshot {
 struct Shared {
     mappings: Arc<RwLock<HashMap<String, OscMapping>>>,
     last_values: Arc<Mutex<HashMap<String, Vec<f64>>>>,
+    /// Dernière valeur reçue par adresse OSC brute — lu par les nodes
+    /// `OSCInput` du graphe (indépendant des mappings : une adresse peut
+    /// alimenter le graphe sans être routée vers une destination).
+    last_by_address: Arc<Mutex<HashMap<String, Vec<f64>>>>,
     smooth_state: Arc<Mutex<HashMap<String, Vec<f64>>>>,
     targets: Arc<RwLock<OscInTargets>>,
     in_enabled: Arc<AtomicBool>,
@@ -359,6 +363,7 @@ impl OscReceiver {
             shared: Shared {
                 mappings: Arc::new(RwLock::new(HashMap::new())),
                 last_values: Arc::new(Mutex::new(HashMap::new())),
+                last_by_address: Arc::new(Mutex::new(HashMap::new())),
                 smooth_state: Arc::new(Mutex::new(HashMap::new())),
                 targets: Arc::new(RwLock::new(OscInTargets::default())),
                 in_enabled: Arc::new(AtomicBool::new(true)),
@@ -591,6 +596,18 @@ impl OscReceiver {
         self.shared.last_values.lock().ok()?.get(key).cloned()
     }
 
+    /// Handle partagé sur le cache des dernières valeurs — utilisé par le
+    /// compilateur pour brancher les nodes `OSCInput` sur les valeurs live.
+    pub fn values_handle(&self) -> Arc<Mutex<HashMap<String, Vec<f64>>>> {
+        self.shared.last_values.clone()
+    }
+
+    /// Handle partagé sur les dernières valeurs par adresse brute — à passer
+    /// au compiler (`compile_with_audio_osc`) pour alimenter les OSCInput.
+    pub fn address_values_handle(&self) -> Arc<Mutex<HashMap<String, Vec<f64>>>> {
+        self.shared.last_by_address.clone()
+    }
+
     /// Retourne toutes les dernières valeurs
     pub fn get_all_values(&self) -> HashMap<String, Vec<f64>> {
         self.shared
@@ -752,6 +769,19 @@ fn dispatch_message(addr: &str, args: Vec<f64>, shared: &Shared) {
     }
 
     let max_objects = shared.max_objects.load(Ordering::Relaxed) as usize;
+
+    // Cache par adresse brute pour les nodes OSCInput — écrit avant le
+    // matching des mappings : une adresse alimente le graphe même sans
+    // mapping configuré. Même borne mémoire que le feedback.
+    {
+        let mut lv = shared
+            .last_by_address
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if lv.len() < MAX_FEEDBACK_KEYS || lv.contains_key(addr) {
+            lv.insert(addr.to_string(), args.clone());
+        }
+    }
 
     // Itération sous read lock — pas de clone de la map par message.
     // Pas de risque de deadlock : rien dans la boucle n'acquiert

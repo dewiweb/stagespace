@@ -5,6 +5,13 @@ import { toast } from '../utils/toast-helpers';
 import Modal from './ui/Modal';
 import { Settings, ListOrdered } from 'lucide-react';
 
+const MERGE_STRATEGIES = [
+  { value: 'override', label: 'Override — strongest fade wins', hint: 'Latest/fading-in move takes contested tracks' },
+  { value: 'crossfade', label: 'Crossfade — weighted blend', hint: 'Positions mixed by fade × weight' },
+  { value: 'blend', label: 'Blend — weighted average', hint: 'All active moves contribute' },
+  { value: 'priority', label: 'Priority — highest priority wins', hint: 'set_move_priority decides per track' },
+];
+
 const OSC_PROFILES = [
   { value: 'holophonix', label: 'Holophonix' },
   { value: 'iem', label: 'IEM MultiEncoder' },
@@ -27,6 +34,8 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const setManualOscIds = useGraphStore((s) => s.setManualOscIds);
   const selectedAudioDeviceId = useGraphStore((s) => s.selectedAudioDeviceId);
   const setSelectedAudioDeviceId = useGraphStore((s) => s.setSelectedAudioDeviceId);
+  const mergeStrategy = useGraphStore((s) => s.mergeStrategy);
+  const setMergeStrategy = useGraphStore((s) => s.setMergeStrategy);
 
   const [oscIdsStr, setOscIdsStr] = React.useState(manualOscIds.join(','));
   const [audioDevices, setAudioDevices] = React.useState<MediaDeviceInfo[]>([]);
@@ -203,6 +212,26 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 {oscInStatus}
               </p>
             )}
+          </section>
+
+          {/* ─── Merge ─── */}
+          <section>
+            <h3 className="text-gray-400 text-[11px] font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+              <span className="text-amber-400">⇄</span> Merge
+            </h3>
+            <p className="text-gray-600 text-[10px] mb-3">
+              How contested tracks resolve when several playing moves target the same track.
+              A Merge node in the global graph can also set this — last writer wins.
+            </p>
+            <select
+              value={mergeStrategy}
+              onChange={(e) => setMergeStrategy(e.target.value)}
+              className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none"
+            >
+              {MERGE_STRATEGIES.map((s) => (
+                <option key={s.value} value={s.value} title={s.hint}>{s.label}</option>
+              ))}
+            </select>
           </section>
 
           {/* ─── Track IDs ─── */}

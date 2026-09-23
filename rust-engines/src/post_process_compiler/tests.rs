@@ -603,6 +603,44 @@ fn test_extract_graph_effects_empty_and_invalid() {
 }
 
 #[test]
+fn test_extract_graph_effects_merge_strategy() {
+    use crate::merge_runtime::MergeStrategy;
+
+    // Merge avec strategy explicite → extraite
+    let graph = make_graph(
+        vec![
+            (NodeType::Merge, serde_json::json!({"strategy": "blend"})),
+            (NodeType::Scale, serde_json::json!({"scale": 1.0})),
+            (NodeType::Output, serde_json::json!({})),
+        ],
+        vec![(0, 1), (1, 2)],
+    );
+    let effects = extract_graph_effects(&graph).unwrap();
+    assert_eq!(effects.strategy, Some(MergeStrategy::Blend));
+
+    // Merge sans param → None : la stratégie courante est conservée
+    let graph = make_graph(
+        vec![
+            (NodeType::Merge, serde_json::json!({})),
+            (NodeType::Output, serde_json::json!({})),
+        ],
+        vec![(0, 1)],
+    );
+    let effects = extract_graph_effects(&graph).unwrap();
+    assert_eq!(effects.strategy, None);
+
+    // Strategy invalide → erreur (pas de fallback silencieux)
+    let graph = make_graph(
+        vec![
+            (NodeType::Merge, serde_json::json!({"strategy": "bogus"})),
+            (NodeType::Output, serde_json::json!({})),
+        ],
+        vec![(0, 1)],
+    );
+    assert!(extract_graph_effects(&graph).is_err());
+}
+
+#[test]
 fn test_compile_graph_with_zone_velocity_passthrough() {
     // Zone/Velocity dans la chaîne : pass-through pour les positions,
     // la compilation du graphe complet reste valide.

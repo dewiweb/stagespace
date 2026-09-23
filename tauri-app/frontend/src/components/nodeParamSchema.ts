@@ -630,7 +630,7 @@ export const NODE_DESCRIPTIONS: Partial<Record<NodeType, string>> = {
   ManualPosition: "Override manuel de positions — lit les drag 3D. Pour positionnement à la main",
   Zone: "Région spatiale (sphere/box) qui tire les canaux des objets vers des valeurs cibles — gain/spread/etc. varient avec la position. Pass-through : ne modifie pas les positions",
   Velocity: "Modulation cinématique — speed/accel/jerk/angvel d'un objet → canal spatial. angvel = vitesse angulaire °/s autour du listener (borne perceptuelle). Pass-through : ne modifie pas les positions",
-  MoveRef: "Référence un sub-graph (move) par ID. Source — produit les positions du move référencé. Double-clic pour éditer le sub-graph",
+  MoveRef: "Source alternative à Input — reçoit les positions mergées. Note : le filtrage par move_id n'est pas encore implémenté (le paramètre est ignoré)",
   Merge: "Node Merge — représente le MergeRuntime. Produit les positions mergées de tous les moves actifs. Strategy: override/crossfade/blend/priority",
 };
 

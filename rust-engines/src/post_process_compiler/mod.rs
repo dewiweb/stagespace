@@ -44,6 +44,9 @@ pub struct GraphEffects {
     pub zones: Vec<Zone>,
     /// Modulations cinématiques déclarées par les nodes `Velocity`
     pub modulations: Vec<ChannelModulation>,
+    /// Stratégie de merge déclarée par un node `Merge` (param `strategy`)
+    /// — None si absent : la stratégie courante est conservée.
+    pub strategy: Option<crate::merge_runtime::MergeStrategy>,
 }
 
 /// Extrait les effets déclarés dans le graph global (nodes Zone/Velocity).
@@ -66,6 +69,17 @@ pub fn extract_graph_effects(graph: &Graph) -> Result<GraphEffects, PostProcessC
                     PostProcessCompileError::InvalidParameter(format!("Velocity node: {e}"))
                 })?;
                 effects.modulations.push(m);
+            }
+            NodeType::Merge => {
+                // Param `strategy` du node Merge — documenté dans le node mais
+                // jamais lu auparavant. Appliqué au MergeRuntime par l'appelant.
+                if let Some(s) = node.params.get("strategy").and_then(|v| v.as_str()) {
+                    use std::str::FromStr;
+                    let strat = crate::merge_runtime::MergeStrategy::from_str(s).map_err(|e| {
+                        PostProcessCompileError::InvalidParameter(format!("Merge node: {e}"))
+                    })?;
+                    effects.strategy = Some(strat);
+                }
             }
             _ => {}
         }

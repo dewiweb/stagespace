@@ -37,6 +37,11 @@ export interface MovementSlice {
   refreshMovements: () => Promise<void>;
   /// Charge le graphe sauvegardé d'un movement dans l'éditeur (pour le [edit])
   loadMovementGraph: (movementId: string) => void;
+  /// Stratégie de résolution quand plusieurs moves actifs ciblent la même
+  /// track (override|crossfade|blend|priority). Un node Merge du graphe
+  /// global peut aussi la fixer — le dernier écrivain gagne.
+  mergeStrategy: string;
+  setMergeStrategy: (strategy: string) => Promise<void>;
 }
 
 type MovementStore = MovementSlice & {
@@ -192,6 +197,18 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
       get().setEdges(JSON.parse(JSON.stringify(saved.edges)));
       // Persister vers le slot en édition — sinon le graphe chargé est perdu
       (get() as any).autoSaveToEditingSlot?.();
+    }
+  },
+
+  mergeStrategy: 'override',
+  setMergeStrategy: async (strategy) => {
+    try {
+      await invoke('set_merge_strategy', { strategy });
+      set({ mergeStrategy: strategy });
+    } catch (e) {
+      console.error('Failed to set merge strategy:', e);
+      toast.error(`Merge strategy failed: ${e}`);
+      throw e;
     }
   },
 });

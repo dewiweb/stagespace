@@ -4,7 +4,7 @@
   "savedAt": 0,
   "nodes": [
     {
-      "id": "Objects-1790143594900-0",
+      "id": "Objects-1790146965542-0",
       "type": "custom",
       "position": {
         "x": 50,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "Duration-1790143594900-1",
+      "id": "Duration-1790146965542-1",
       "type": "custom",
       "position": {
         "x": 50,
@@ -34,7 +34,7 @@
       }
     },
     {
-      "id": "Circular-1790143594900-2",
+      "id": "Circular-1790146965542-2",
       "type": "custom",
       "position": {
         "x": 300,
@@ -53,7 +53,7 @@
       }
     },
     {
-      "id": "Output-1790143594900-3",
+      "id": "Output-1790146965542-3",
       "type": "custom",
       "position": {
         "x": 750,
@@ -68,9 +68,9 @@
   ],
   "edges": [
     {
-      "id": "e-Objects-1790143594900-0-Circular-1790143594900-2-output-input",
-      "source": "Objects-1790143594900-0",
-      "target": "Circular-1790143594900-2",
+      "id": "e-Objects-1790146965542-0-Circular-1790146965542-2-output-input",
+      "source": "Objects-1790146965542-0",
+      "target": "Circular-1790146965542-2",
       "sourceHandle": "output",
       "targetHandle": "input",
       "markerEnd": {
@@ -78,9 +78,9 @@
       }
     },
     {
-      "id": "e-Duration-1790143594900-1-Circular-1790143594900-2-output-duration",
-      "source": "Duration-1790143594900-1",
-      "target": "Circular-1790143594900-2",
+      "id": "e-Duration-1790146965542-1-Circular-1790146965542-2-output-duration",
+      "source": "Duration-1790146965542-1",
+      "target": "Circular-1790146965542-2",
       "sourceHandle": "output",
       "targetHandle": "duration",
       "markerEnd": {
@@ -88,9 +88,9 @@
       }
     },
     {
-      "id": "e-Circular-1790143594900-2-Output-1790143594900-3-output-input",
-      "source": "Circular-1790143594900-2",
-      "target": "Output-1790143594900-3",
+      "id": "e-Circular-1790146965542-2-Output-1790146965542-3-output-input",
+      "source": "Circular-1790146965542-2",
+      "target": "Output-1790146965542-3",
       "sourceHandle": "output",
       "targetHandle": "input",
       "markerEnd": {
@@ -101,16 +101,18 @@
   "globalGraph": {
     "nodes": [
       {
-        "id": "input-global-demo-0",
+        "id": "merge-global-demo-0",
         "type": "custom",
         "position": {
           "x": 50,
           "y": 250
         },
         "data": {
-          "label": "Input",
-          "type": "Input",
-          "params": {}
+          "label": "Merge",
+          "type": "Merge",
+          "params": {
+            "strategy": "crossfade"
+          }
         }
       },
       {
@@ -287,8 +289,8 @@
     ],
     "edges": [
       {
-        "id": "input-global-demo-0-manualposition-global-demo-1",
-        "source": "input-global-demo-0",
+        "id": "merge-global-demo-0-manualposition-global-demo-1",
+        "source": "merge-global-demo-0",
         "target": "manualposition-global-demo-1",
         "sourceHandle": "output",
         "targetHandle": "input"
@@ -365,7 +367,7 @@
       "graphJson": {
         "nodes": [
           {
-            "id": "Objects-1790143594900-0",
+            "id": "Objects-1790146965542-0",
             "type": "custom",
             "position": {
               "x": 50,
@@ -380,7 +382,7 @@
             }
           },
           {
-            "id": "Duration-1790143594900-1",
+            "id": "Duration-1790146965542-1",
             "type": "custom",
             "position": {
               "x": 50,
@@ -395,7 +397,7 @@
             }
           },
           {
-            "id": "Circular-1790143594900-2",
+            "id": "Circular-1790146965542-2",
             "type": "custom",
             "position": {
               "x": 300,
@@ -414,7 +416,7 @@
             }
           },
           {
-            "id": "Output-1790143594900-3",
+            "id": "Output-1790146965542-3",
             "type": "custom",
             "position": {
               "x": 750,
@@ -429,9 +431,9 @@
         ],
         "edges": [
           {
-            "id": "e-Objects-1790143594900-0-Circular-1790143594900-2-output-input",
-            "source": "Objects-1790143594900-0",
-            "target": "Circular-1790143594900-2",
+            "id": "e-Objects-1790146965542-0-Circular-1790146965542-2-output-input",
+            "source": "Objects-1790146965542-0",
+            "target": "Circular-1790146965542-2",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -439,9 +441,9 @@
             }
           },
           {
-            "id": "e-Duration-1790143594900-1-Circular-1790143594900-2-output-duration",
-            "source": "Duration-1790143594900-1",
-            "target": "Circular-1790143594900-2",
+            "id": "e-Duration-1790146965542-1-Circular-1790146965542-2-output-duration",
+            "source": "Duration-1790146965542-1",
+            "target": "Circular-1790146965542-2",
             "sourceHandle": "output",
             "targetHandle": "duration",
             "markerEnd": {
@@ -449,9 +451,9 @@
             }
           },
           {
-            "id": "e-Circular-1790143594900-2-Output-1790143594900-3-output-input",
-            "source": "Circular-1790143594900-2",
-            "target": "Output-1790143594900-3",
+            "id": "e-Circular-1790146965542-2-Output-1790146965542-3-output-input",
+            "source": "Circular-1790146965542-2",
+            "target": "Output-1790146965542-3",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -515,7 +517,7 @@
       "graphJson": {
         "nodes": [
           {
-            "id": "Objects-1790143594900-4",
+            "id": "Objects-1790146965542-4",
             "type": "custom",
             "position": {
               "x": 50,
@@ -530,7 +532,7 @@
             }
           },
           {
-            "id": "Duration-1790143594900-5",
+            "id": "Duration-1790146965542-5",
             "type": "custom",
             "position": {
               "x": 50,
@@ -545,7 +547,7 @@
             }
           },
           {
-            "id": "Spiral-1790143594900-6",
+            "id": "Spiral-1790146965542-6",
             "type": "custom",
             "position": {
               "x": 300,
@@ -565,7 +567,7 @@
             }
           },
           {
-            "id": "Output-1790143594900-7",
+            "id": "Output-1790146965542-7",
             "type": "custom",
             "position": {
               "x": 750,
@@ -580,9 +582,9 @@
         ],
         "edges": [
           {
-            "id": "e-Objects-1790143594900-4-Spiral-1790143594900-6-output-input",
-            "source": "Objects-1790143594900-4",
-            "target": "Spiral-1790143594900-6",
+            "id": "e-Objects-1790146965542-4-Spiral-1790146965542-6-output-input",
+            "source": "Objects-1790146965542-4",
+            "target": "Spiral-1790146965542-6",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -590,9 +592,9 @@
             }
           },
           {
-            "id": "e-Duration-1790143594900-5-Spiral-1790143594900-6-output-duration",
-            "source": "Duration-1790143594900-5",
-            "target": "Spiral-1790143594900-6",
+            "id": "e-Duration-1790146965542-5-Spiral-1790146965542-6-output-duration",
+            "source": "Duration-1790146965542-5",
+            "target": "Spiral-1790146965542-6",
             "sourceHandle": "output",
             "targetHandle": "duration",
             "markerEnd": {
@@ -600,9 +602,9 @@
             }
           },
           {
-            "id": "e-Spiral-1790143594900-6-Output-1790143594900-7-output-input",
-            "source": "Spiral-1790143594900-6",
-            "target": "Output-1790143594900-7",
+            "id": "e-Spiral-1790146965542-6-Output-1790146965542-7-output-input",
+            "source": "Spiral-1790146965542-6",
+            "target": "Output-1790146965542-7",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -654,7 +656,7 @@
       "graphJson": {
         "nodes": [
           {
-            "id": "Objects-1790143594900-8",
+            "id": "Objects-1790146965542-8",
             "type": "custom",
             "position": {
               "x": 50,
@@ -669,7 +671,7 @@
             }
           },
           {
-            "id": "Duration-1790143594900-9",
+            "id": "Duration-1790146965542-9",
             "type": "custom",
             "position": {
               "x": 50,
@@ -684,7 +686,7 @@
             }
           },
           {
-            "id": "Follow-1790143594900-10",
+            "id": "Follow-1790146965542-10",
             "type": "custom",
             "position": {
               "x": 300,
@@ -711,7 +713,7 @@
             }
           },
           {
-            "id": "Output-1790143594900-11",
+            "id": "Output-1790146965542-11",
             "type": "custom",
             "position": {
               "x": 750,
@@ -726,9 +728,9 @@
         ],
         "edges": [
           {
-            "id": "e-Objects-1790143594900-8-Follow-1790143594900-10-output-input",
-            "source": "Objects-1790143594900-8",
-            "target": "Follow-1790143594900-10",
+            "id": "e-Objects-1790146965542-8-Follow-1790146965542-10-output-input",
+            "source": "Objects-1790146965542-8",
+            "target": "Follow-1790146965542-10",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -736,9 +738,9 @@
             }
           },
           {
-            "id": "e-Duration-1790143594900-9-Follow-1790143594900-10-output-duration",
-            "source": "Duration-1790143594900-9",
-            "target": "Follow-1790143594900-10",
+            "id": "e-Duration-1790146965542-9-Follow-1790146965542-10-output-duration",
+            "source": "Duration-1790146965542-9",
+            "target": "Follow-1790146965542-10",
             "sourceHandle": "output",
             "targetHandle": "duration",
             "markerEnd": {
@@ -746,9 +748,9 @@
             }
           },
           {
-            "id": "e-Follow-1790143594900-10-Output-1790143594900-11-output-input",
-            "source": "Follow-1790143594900-10",
-            "target": "Output-1790143594900-11",
+            "id": "e-Follow-1790146965542-10-Output-1790146965542-11-output-input",
+            "source": "Follow-1790146965542-10",
+            "target": "Output-1790146965542-11",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -800,7 +802,7 @@
       "graphJson": {
         "nodes": [
           {
-            "id": "Objects-1790143594900-12",
+            "id": "Objects-1790146965542-12",
             "type": "custom",
             "position": {
               "x": 50,
@@ -815,7 +817,7 @@
             }
           },
           {
-            "id": "Duration-1790143594900-13",
+            "id": "Duration-1790146965543-13",
             "type": "custom",
             "position": {
               "x": 50,
@@ -830,7 +832,7 @@
             }
           },
           {
-            "id": "AudioAmplitudeFalloff-1790143594900-14",
+            "id": "AudioAmplitudeFalloff-1790146965543-14",
             "type": "custom",
             "position": {
               "x": 300,
@@ -850,7 +852,7 @@
             }
           },
           {
-            "id": "Output-1790143594900-15",
+            "id": "Output-1790146965543-15",
             "type": "custom",
             "position": {
               "x": 750,
@@ -863,7 +865,7 @@
             }
           },
           {
-            "id": "Rotate-1790143594900-16",
+            "id": "Rotate-1790146965543-16",
             "type": "custom",
             "position": {
               "x": 480,
@@ -882,9 +884,9 @@
         ],
         "edges": [
           {
-            "id": "e-Objects-1790143594900-12-AudioAmplitudeFalloff-1790143594900-14-output-input",
-            "source": "Objects-1790143594900-12",
-            "target": "AudioAmplitudeFalloff-1790143594900-14",
+            "id": "e-Objects-1790146965542-12-AudioAmplitudeFalloff-1790146965543-14-output-input",
+            "source": "Objects-1790146965542-12",
+            "target": "AudioAmplitudeFalloff-1790146965543-14",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -892,9 +894,9 @@
             }
           },
           {
-            "id": "e-Duration-1790143594900-13-AudioAmplitudeFalloff-1790143594900-14-output-duration",
-            "source": "Duration-1790143594900-13",
-            "target": "AudioAmplitudeFalloff-1790143594900-14",
+            "id": "e-Duration-1790146965543-13-AudioAmplitudeFalloff-1790146965543-14-output-duration",
+            "source": "Duration-1790146965543-13",
+            "target": "AudioAmplitudeFalloff-1790146965543-14",
             "sourceHandle": "output",
             "targetHandle": "duration",
             "markerEnd": {
@@ -902,9 +904,9 @@
             }
           },
           {
-            "id": "e-AudioAmplitudeFalloff-1790143594900-14-Rotate-1790143594900-16-output-input",
-            "source": "AudioAmplitudeFalloff-1790143594900-14",
-            "target": "Rotate-1790143594900-16",
+            "id": "e-AudioAmplitudeFalloff-1790146965543-14-Rotate-1790146965543-16-output-input",
+            "source": "AudioAmplitudeFalloff-1790146965543-14",
+            "target": "Rotate-1790146965543-16",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -912,9 +914,9 @@
             }
           },
           {
-            "id": "e-Rotate-1790143594900-16-Output-1790143594900-15-output-input",
-            "source": "Rotate-1790143594900-16",
-            "target": "Output-1790143594900-15",
+            "id": "e-Rotate-1790146965543-16-Output-1790146965543-15-output-input",
+            "source": "Rotate-1790146965543-16",
+            "target": "Output-1790146965543-15",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -986,7 +988,7 @@
       "graphJson": {
         "nodes": [
           {
-            "id": "Objects-1790143594900-17",
+            "id": "Objects-1790146965543-17",
             "type": "custom",
             "position": {
               "x": 50,
@@ -1001,7 +1003,7 @@
             }
           },
           {
-            "id": "Duration-1790143594900-18",
+            "id": "Duration-1790146965543-18",
             "type": "custom",
             "position": {
               "x": 50,
@@ -1016,7 +1018,7 @@
             }
           },
           {
-            "id": "DrawSpline-1790143594900-19",
+            "id": "DrawSpline-1790146965543-19",
             "type": "custom",
             "position": {
               "x": 300,
@@ -1032,7 +1034,7 @@
             }
           },
           {
-            "id": "EvaluateSpline-1790143594900-20",
+            "id": "EvaluateSpline-1790146965543-20",
             "type": "custom",
             "position": {
               "x": 550,
@@ -1051,7 +1053,7 @@
             }
           },
           {
-            "id": "Output-1790143594900-21",
+            "id": "Output-1790146965543-21",
             "type": "custom",
             "position": {
               "x": 800,
@@ -1066,9 +1068,9 @@
         ],
         "edges": [
           {
-            "id": "e-Objects-1790143594900-17-EvaluateSpline-1790143594900-20-output-input",
-            "source": "Objects-1790143594900-17",
-            "target": "EvaluateSpline-1790143594900-20",
+            "id": "e-Objects-1790146965543-17-EvaluateSpline-1790146965543-20-output-input",
+            "source": "Objects-1790146965543-17",
+            "target": "EvaluateSpline-1790146965543-20",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -1076,9 +1078,9 @@
             }
           },
           {
-            "id": "e-Duration-1790143594900-18-EvaluateSpline-1790143594900-20-output-duration",
-            "source": "Duration-1790143594900-18",
-            "target": "EvaluateSpline-1790143594900-20",
+            "id": "e-Duration-1790146965543-18-EvaluateSpline-1790146965543-20-output-duration",
+            "source": "Duration-1790146965543-18",
+            "target": "EvaluateSpline-1790146965543-20",
             "sourceHandle": "output",
             "targetHandle": "duration",
             "markerEnd": {
@@ -1086,9 +1088,9 @@
             }
           },
           {
-            "id": "e-DrawSpline-1790143594900-19-EvaluateSpline-1790143594900-20-output-spline",
-            "source": "DrawSpline-1790143594900-19",
-            "target": "EvaluateSpline-1790143594900-20",
+            "id": "e-DrawSpline-1790146965543-19-EvaluateSpline-1790146965543-20-output-spline",
+            "source": "DrawSpline-1790146965543-19",
+            "target": "EvaluateSpline-1790146965543-20",
             "sourceHandle": "output",
             "targetHandle": "spline",
             "markerEnd": {
@@ -1096,9 +1098,9 @@
             }
           },
           {
-            "id": "e-EvaluateSpline-1790143594900-20-Output-1790143594900-21-output-input",
-            "source": "EvaluateSpline-1790143594900-20",
-            "target": "Output-1790143594900-21",
+            "id": "e-EvaluateSpline-1790146965543-20-Output-1790146965543-21-output-input",
+            "source": "EvaluateSpline-1790146965543-20",
+            "target": "Output-1790146965543-21",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -1174,7 +1176,7 @@
       "graph": {
         "nodes": [
           {
-            "id": "Objects-1790143594900-0",
+            "id": "Objects-1790146965542-0",
             "type": "custom",
             "position": {
               "x": 50,
@@ -1189,7 +1191,7 @@
             }
           },
           {
-            "id": "Duration-1790143594900-1",
+            "id": "Duration-1790146965542-1",
             "type": "custom",
             "position": {
               "x": 50,
@@ -1204,7 +1206,7 @@
             }
           },
           {
-            "id": "Circular-1790143594900-2",
+            "id": "Circular-1790146965542-2",
             "type": "custom",
             "position": {
               "x": 300,
@@ -1223,7 +1225,7 @@
             }
           },
           {
-            "id": "Output-1790143594900-3",
+            "id": "Output-1790146965542-3",
             "type": "custom",
             "position": {
               "x": 750,
@@ -1238,9 +1240,9 @@
         ],
         "edges": [
           {
-            "id": "e-Objects-1790143594900-0-Circular-1790143594900-2-output-input",
-            "source": "Objects-1790143594900-0",
-            "target": "Circular-1790143594900-2",
+            "id": "e-Objects-1790146965542-0-Circular-1790146965542-2-output-input",
+            "source": "Objects-1790146965542-0",
+            "target": "Circular-1790146965542-2",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -1248,9 +1250,9 @@
             }
           },
           {
-            "id": "e-Duration-1790143594900-1-Circular-1790143594900-2-output-duration",
-            "source": "Duration-1790143594900-1",
-            "target": "Circular-1790143594900-2",
+            "id": "e-Duration-1790146965542-1-Circular-1790146965542-2-output-duration",
+            "source": "Duration-1790146965542-1",
+            "target": "Circular-1790146965542-2",
             "sourceHandle": "output",
             "targetHandle": "duration",
             "markerEnd": {
@@ -1258,9 +1260,9 @@
             }
           },
           {
-            "id": "e-Circular-1790143594900-2-Output-1790143594900-3-output-input",
-            "source": "Circular-1790143594900-2",
-            "target": "Output-1790143594900-3",
+            "id": "e-Circular-1790146965542-2-Output-1790146965542-3-output-input",
+            "source": "Circular-1790146965542-2",
+            "target": "Output-1790146965542-3",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -1286,16 +1288,18 @@
       "global_graph": {
         "nodes": [
           {
-            "id": "input-global-demo-0",
+            "id": "merge-global-demo-0",
             "type": "custom",
             "position": {
               "x": 50,
               "y": 250
             },
             "data": {
-              "label": "Input",
-              "type": "Input",
-              "params": {}
+              "label": "Merge",
+              "type": "Merge",
+              "params": {
+                "strategy": "crossfade"
+              }
             }
           },
           {
@@ -1472,8 +1476,8 @@
         ],
         "edges": [
           {
-            "id": "input-global-demo-0-manualposition-global-demo-1",
-            "source": "input-global-demo-0",
+            "id": "merge-global-demo-0-manualposition-global-demo-1",
+            "source": "merge-global-demo-0",
             "target": "manualposition-global-demo-1",
             "sourceHandle": "output",
             "targetHandle": "input"
@@ -1563,7 +1567,7 @@
           "graph_json": {
             "nodes": [
               {
-                "id": "Objects-1790143594900-0",
+                "id": "Objects-1790146965542-0",
                 "type": "custom",
                 "position": {
                   "x": 50,
@@ -1578,7 +1582,7 @@
                 }
               },
               {
-                "id": "Duration-1790143594900-1",
+                "id": "Duration-1790146965542-1",
                 "type": "custom",
                 "position": {
                   "x": 50,
@@ -1593,7 +1597,7 @@
                 }
               },
               {
-                "id": "Circular-1790143594900-2",
+                "id": "Circular-1790146965542-2",
                 "type": "custom",
                 "position": {
                   "x": 300,
@@ -1612,7 +1616,7 @@
                 }
               },
               {
-                "id": "Output-1790143594900-3",
+                "id": "Output-1790146965542-3",
                 "type": "custom",
                 "position": {
                   "x": 750,
@@ -1627,9 +1631,9 @@
             ],
             "edges": [
               {
-                "id": "e-Objects-1790143594900-0-Circular-1790143594900-2-output-input",
-                "source": "Objects-1790143594900-0",
-                "target": "Circular-1790143594900-2",
+                "id": "e-Objects-1790146965542-0-Circular-1790146965542-2-output-input",
+                "source": "Objects-1790146965542-0",
+                "target": "Circular-1790146965542-2",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -1637,9 +1641,9 @@
                 }
               },
               {
-                "id": "e-Duration-1790143594900-1-Circular-1790143594900-2-output-duration",
-                "source": "Duration-1790143594900-1",
-                "target": "Circular-1790143594900-2",
+                "id": "e-Duration-1790146965542-1-Circular-1790146965542-2-output-duration",
+                "source": "Duration-1790146965542-1",
+                "target": "Circular-1790146965542-2",
                 "sourceHandle": "output",
                 "targetHandle": "duration",
                 "markerEnd": {
@@ -1647,9 +1651,9 @@
                 }
               },
               {
-                "id": "e-Circular-1790143594900-2-Output-1790143594900-3-output-input",
-                "source": "Circular-1790143594900-2",
-                "target": "Output-1790143594900-3",
+                "id": "e-Circular-1790146965542-2-Output-1790146965542-3-output-input",
+                "source": "Circular-1790146965542-2",
+                "target": "Output-1790146965542-3",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -1688,7 +1692,7 @@
       "graph": {
         "nodes": [
           {
-            "id": "Objects-1790143594900-0",
+            "id": "Objects-1790146965542-0",
             "type": "custom",
             "position": {
               "x": 50,
@@ -1703,7 +1707,7 @@
             }
           },
           {
-            "id": "Duration-1790143594900-1",
+            "id": "Duration-1790146965542-1",
             "type": "custom",
             "position": {
               "x": 50,
@@ -1718,7 +1722,7 @@
             }
           },
           {
-            "id": "Circular-1790143594900-2",
+            "id": "Circular-1790146965542-2",
             "type": "custom",
             "position": {
               "x": 300,
@@ -1737,7 +1741,7 @@
             }
           },
           {
-            "id": "Output-1790143594900-3",
+            "id": "Output-1790146965542-3",
             "type": "custom",
             "position": {
               "x": 750,
@@ -1752,9 +1756,9 @@
         ],
         "edges": [
           {
-            "id": "e-Objects-1790143594900-0-Circular-1790143594900-2-output-input",
-            "source": "Objects-1790143594900-0",
-            "target": "Circular-1790143594900-2",
+            "id": "e-Objects-1790146965542-0-Circular-1790146965542-2-output-input",
+            "source": "Objects-1790146965542-0",
+            "target": "Circular-1790146965542-2",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -1762,9 +1766,9 @@
             }
           },
           {
-            "id": "e-Duration-1790143594900-1-Circular-1790143594900-2-output-duration",
-            "source": "Duration-1790143594900-1",
-            "target": "Circular-1790143594900-2",
+            "id": "e-Duration-1790146965542-1-Circular-1790146965542-2-output-duration",
+            "source": "Duration-1790146965542-1",
+            "target": "Circular-1790146965542-2",
             "sourceHandle": "output",
             "targetHandle": "duration",
             "markerEnd": {
@@ -1772,9 +1776,9 @@
             }
           },
           {
-            "id": "e-Circular-1790143594900-2-Output-1790143594900-3-output-input",
-            "source": "Circular-1790143594900-2",
-            "target": "Output-1790143594900-3",
+            "id": "e-Circular-1790146965542-2-Output-1790146965542-3-output-input",
+            "source": "Circular-1790146965542-2",
+            "target": "Output-1790146965542-3",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -1800,16 +1804,18 @@
       "global_graph": {
         "nodes": [
           {
-            "id": "input-global-demo-0",
+            "id": "merge-global-demo-0",
             "type": "custom",
             "position": {
               "x": 50,
               "y": 250
             },
             "data": {
-              "label": "Input",
-              "type": "Input",
-              "params": {}
+              "label": "Merge",
+              "type": "Merge",
+              "params": {
+                "strategy": "crossfade"
+              }
             }
           },
           {
@@ -1986,8 +1992,8 @@
         ],
         "edges": [
           {
-            "id": "input-global-demo-0-manualposition-global-demo-1",
-            "source": "input-global-demo-0",
+            "id": "merge-global-demo-0-manualposition-global-demo-1",
+            "source": "merge-global-demo-0",
             "target": "manualposition-global-demo-1",
             "sourceHandle": "output",
             "targetHandle": "input"
@@ -2116,7 +2122,7 @@
           "graph_json": {
             "nodes": [
               {
-                "id": "Objects-1790143594900-0",
+                "id": "Objects-1790146965542-0",
                 "type": "custom",
                 "position": {
                   "x": 50,
@@ -2131,7 +2137,7 @@
                 }
               },
               {
-                "id": "Duration-1790143594900-1",
+                "id": "Duration-1790146965542-1",
                 "type": "custom",
                 "position": {
                   "x": 50,
@@ -2146,7 +2152,7 @@
                 }
               },
               {
-                "id": "Circular-1790143594900-2",
+                "id": "Circular-1790146965542-2",
                 "type": "custom",
                 "position": {
                   "x": 300,
@@ -2165,7 +2171,7 @@
                 }
               },
               {
-                "id": "Output-1790143594900-3",
+                "id": "Output-1790146965542-3",
                 "type": "custom",
                 "position": {
                   "x": 750,
@@ -2180,9 +2186,9 @@
             ],
             "edges": [
               {
-                "id": "e-Objects-1790143594900-0-Circular-1790143594900-2-output-input",
-                "source": "Objects-1790143594900-0",
-                "target": "Circular-1790143594900-2",
+                "id": "e-Objects-1790146965542-0-Circular-1790146965542-2-output-input",
+                "source": "Objects-1790146965542-0",
+                "target": "Circular-1790146965542-2",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -2190,9 +2196,9 @@
                 }
               },
               {
-                "id": "e-Duration-1790143594900-1-Circular-1790143594900-2-output-duration",
-                "source": "Duration-1790143594900-1",
-                "target": "Circular-1790143594900-2",
+                "id": "e-Duration-1790146965542-1-Circular-1790146965542-2-output-duration",
+                "source": "Duration-1790146965542-1",
+                "target": "Circular-1790146965542-2",
                 "sourceHandle": "output",
                 "targetHandle": "duration",
                 "markerEnd": {
@@ -2200,9 +2206,9 @@
                 }
               },
               {
-                "id": "e-Circular-1790143594900-2-Output-1790143594900-3-output-input",
-                "source": "Circular-1790143594900-2",
-                "target": "Output-1790143594900-3",
+                "id": "e-Circular-1790146965542-2-Output-1790146965542-3-output-input",
+                "source": "Circular-1790146965542-2",
+                "target": "Output-1790146965542-3",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -2238,7 +2244,7 @@
           "graph_json": {
             "nodes": [
               {
-                "id": "Objects-1790143594900-4",
+                "id": "Objects-1790146965542-4",
                 "type": "custom",
                 "position": {
                   "x": 50,
@@ -2253,7 +2259,7 @@
                 }
               },
               {
-                "id": "Duration-1790143594900-5",
+                "id": "Duration-1790146965542-5",
                 "type": "custom",
                 "position": {
                   "x": 50,
@@ -2268,7 +2274,7 @@
                 }
               },
               {
-                "id": "Spiral-1790143594900-6",
+                "id": "Spiral-1790146965542-6",
                 "type": "custom",
                 "position": {
                   "x": 300,
@@ -2288,7 +2294,7 @@
                 }
               },
               {
-                "id": "Output-1790143594900-7",
+                "id": "Output-1790146965542-7",
                 "type": "custom",
                 "position": {
                   "x": 750,
@@ -2303,9 +2309,9 @@
             ],
             "edges": [
               {
-                "id": "e-Objects-1790143594900-4-Spiral-1790143594900-6-output-input",
-                "source": "Objects-1790143594900-4",
-                "target": "Spiral-1790143594900-6",
+                "id": "e-Objects-1790146965542-4-Spiral-1790146965542-6-output-input",
+                "source": "Objects-1790146965542-4",
+                "target": "Spiral-1790146965542-6",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -2313,9 +2319,9 @@
                 }
               },
               {
-                "id": "e-Duration-1790143594900-5-Spiral-1790143594900-6-output-duration",
-                "source": "Duration-1790143594900-5",
-                "target": "Spiral-1790143594900-6",
+                "id": "e-Duration-1790146965542-5-Spiral-1790146965542-6-output-duration",
+                "source": "Duration-1790146965542-5",
+                "target": "Spiral-1790146965542-6",
                 "sourceHandle": "output",
                 "targetHandle": "duration",
                 "markerEnd": {
@@ -2323,9 +2329,9 @@
                 }
               },
               {
-                "id": "e-Spiral-1790143594900-6-Output-1790143594900-7-output-input",
-                "source": "Spiral-1790143594900-6",
-                "target": "Output-1790143594900-7",
+                "id": "e-Spiral-1790146965542-6-Output-1790146965542-7-output-input",
+                "source": "Spiral-1790146965542-6",
+                "target": "Output-1790146965542-7",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -2357,7 +2363,7 @@
           "graph_json": {
             "nodes": [
               {
-                "id": "Objects-1790143594900-8",
+                "id": "Objects-1790146965542-8",
                 "type": "custom",
                 "position": {
                   "x": 50,
@@ -2372,7 +2378,7 @@
                 }
               },
               {
-                "id": "Duration-1790143594900-9",
+                "id": "Duration-1790146965542-9",
                 "type": "custom",
                 "position": {
                   "x": 50,
@@ -2387,7 +2393,7 @@
                 }
               },
               {
-                "id": "Follow-1790143594900-10",
+                "id": "Follow-1790146965542-10",
                 "type": "custom",
                 "position": {
                   "x": 300,
@@ -2414,7 +2420,7 @@
                 }
               },
               {
-                "id": "Output-1790143594900-11",
+                "id": "Output-1790146965542-11",
                 "type": "custom",
                 "position": {
                   "x": 750,
@@ -2429,9 +2435,9 @@
             ],
             "edges": [
               {
-                "id": "e-Objects-1790143594900-8-Follow-1790143594900-10-output-input",
-                "source": "Objects-1790143594900-8",
-                "target": "Follow-1790143594900-10",
+                "id": "e-Objects-1790146965542-8-Follow-1790146965542-10-output-input",
+                "source": "Objects-1790146965542-8",
+                "target": "Follow-1790146965542-10",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -2439,9 +2445,9 @@
                 }
               },
               {
-                "id": "e-Duration-1790143594900-9-Follow-1790143594900-10-output-duration",
-                "source": "Duration-1790143594900-9",
-                "target": "Follow-1790143594900-10",
+                "id": "e-Duration-1790146965542-9-Follow-1790146965542-10-output-duration",
+                "source": "Duration-1790146965542-9",
+                "target": "Follow-1790146965542-10",
                 "sourceHandle": "output",
                 "targetHandle": "duration",
                 "markerEnd": {
@@ -2449,9 +2455,9 @@
                 }
               },
               {
-                "id": "e-Follow-1790143594900-10-Output-1790143594900-11-output-input",
-                "source": "Follow-1790143594900-10",
-                "target": "Output-1790143594900-11",
+                "id": "e-Follow-1790146965542-10-Output-1790146965542-11-output-input",
+                "source": "Follow-1790146965542-10",
+                "target": "Output-1790146965542-11",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -2486,7 +2492,7 @@
       "graph": {
         "nodes": [
           {
-            "id": "Objects-1790143594900-12",
+            "id": "Objects-1790146965542-12",
             "type": "custom",
             "position": {
               "x": 50,
@@ -2501,7 +2507,7 @@
             }
           },
           {
-            "id": "Duration-1790143594900-13",
+            "id": "Duration-1790146965543-13",
             "type": "custom",
             "position": {
               "x": 50,
@@ -2516,7 +2522,7 @@
             }
           },
           {
-            "id": "AudioAmplitudeFalloff-1790143594900-14",
+            "id": "AudioAmplitudeFalloff-1790146965543-14",
             "type": "custom",
             "position": {
               "x": 300,
@@ -2536,7 +2542,7 @@
             }
           },
           {
-            "id": "Output-1790143594900-15",
+            "id": "Output-1790146965543-15",
             "type": "custom",
             "position": {
               "x": 750,
@@ -2549,7 +2555,7 @@
             }
           },
           {
-            "id": "Rotate-1790143594900-16",
+            "id": "Rotate-1790146965543-16",
             "type": "custom",
             "position": {
               "x": 480,
@@ -2568,9 +2574,9 @@
         ],
         "edges": [
           {
-            "id": "e-Objects-1790143594900-12-AudioAmplitudeFalloff-1790143594900-14-output-input",
-            "source": "Objects-1790143594900-12",
-            "target": "AudioAmplitudeFalloff-1790143594900-14",
+            "id": "e-Objects-1790146965542-12-AudioAmplitudeFalloff-1790146965543-14-output-input",
+            "source": "Objects-1790146965542-12",
+            "target": "AudioAmplitudeFalloff-1790146965543-14",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -2578,9 +2584,9 @@
             }
           },
           {
-            "id": "e-Duration-1790143594900-13-AudioAmplitudeFalloff-1790143594900-14-output-duration",
-            "source": "Duration-1790143594900-13",
-            "target": "AudioAmplitudeFalloff-1790143594900-14",
+            "id": "e-Duration-1790146965543-13-AudioAmplitudeFalloff-1790146965543-14-output-duration",
+            "source": "Duration-1790146965543-13",
+            "target": "AudioAmplitudeFalloff-1790146965543-14",
             "sourceHandle": "output",
             "targetHandle": "duration",
             "markerEnd": {
@@ -2588,9 +2594,9 @@
             }
           },
           {
-            "id": "e-AudioAmplitudeFalloff-1790143594900-14-Rotate-1790143594900-16-output-input",
-            "source": "AudioAmplitudeFalloff-1790143594900-14",
-            "target": "Rotate-1790143594900-16",
+            "id": "e-AudioAmplitudeFalloff-1790146965543-14-Rotate-1790146965543-16-output-input",
+            "source": "AudioAmplitudeFalloff-1790146965543-14",
+            "target": "Rotate-1790146965543-16",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -2598,9 +2604,9 @@
             }
           },
           {
-            "id": "e-Rotate-1790143594900-16-Output-1790143594900-15-output-input",
-            "source": "Rotate-1790143594900-16",
-            "target": "Output-1790143594900-15",
+            "id": "e-Rotate-1790146965543-16-Output-1790146965543-15-output-input",
+            "source": "Rotate-1790146965543-16",
+            "target": "Output-1790146965543-15",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -2626,16 +2632,18 @@
       "global_graph": {
         "nodes": [
           {
-            "id": "input-global-demo-0",
+            "id": "merge-global-demo-0",
             "type": "custom",
             "position": {
               "x": 50,
               "y": 250
             },
             "data": {
-              "label": "Input",
-              "type": "Input",
-              "params": {}
+              "label": "Merge",
+              "type": "Merge",
+              "params": {
+                "strategy": "crossfade"
+              }
             }
           },
           {
@@ -2812,8 +2820,8 @@
         ],
         "edges": [
           {
-            "id": "input-global-demo-0-manualposition-global-demo-1",
-            "source": "input-global-demo-0",
+            "id": "merge-global-demo-0-manualposition-global-demo-1",
+            "source": "merge-global-demo-0",
             "target": "manualposition-global-demo-1",
             "sourceHandle": "output",
             "targetHandle": "input"
@@ -2903,7 +2911,7 @@
           "graph_json": {
             "nodes": [
               {
-                "id": "Objects-1790143594900-12",
+                "id": "Objects-1790146965542-12",
                 "type": "custom",
                 "position": {
                   "x": 50,
@@ -2918,7 +2926,7 @@
                 }
               },
               {
-                "id": "Duration-1790143594900-13",
+                "id": "Duration-1790146965543-13",
                 "type": "custom",
                 "position": {
                   "x": 50,
@@ -2933,7 +2941,7 @@
                 }
               },
               {
-                "id": "AudioAmplitudeFalloff-1790143594900-14",
+                "id": "AudioAmplitudeFalloff-1790146965543-14",
                 "type": "custom",
                 "position": {
                   "x": 300,
@@ -2953,7 +2961,7 @@
                 }
               },
               {
-                "id": "Output-1790143594900-15",
+                "id": "Output-1790146965543-15",
                 "type": "custom",
                 "position": {
                   "x": 750,
@@ -2966,7 +2974,7 @@
                 }
               },
               {
-                "id": "Rotate-1790143594900-16",
+                "id": "Rotate-1790146965543-16",
                 "type": "custom",
                 "position": {
                   "x": 480,
@@ -2985,9 +2993,9 @@
             ],
             "edges": [
               {
-                "id": "e-Objects-1790143594900-12-AudioAmplitudeFalloff-1790143594900-14-output-input",
-                "source": "Objects-1790143594900-12",
-                "target": "AudioAmplitudeFalloff-1790143594900-14",
+                "id": "e-Objects-1790146965542-12-AudioAmplitudeFalloff-1790146965543-14-output-input",
+                "source": "Objects-1790146965542-12",
+                "target": "AudioAmplitudeFalloff-1790146965543-14",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -2995,9 +3003,9 @@
                 }
               },
               {
-                "id": "e-Duration-1790143594900-13-AudioAmplitudeFalloff-1790143594900-14-output-duration",
-                "source": "Duration-1790143594900-13",
-                "target": "AudioAmplitudeFalloff-1790143594900-14",
+                "id": "e-Duration-1790146965543-13-AudioAmplitudeFalloff-1790146965543-14-output-duration",
+                "source": "Duration-1790146965543-13",
+                "target": "AudioAmplitudeFalloff-1790146965543-14",
                 "sourceHandle": "output",
                 "targetHandle": "duration",
                 "markerEnd": {
@@ -3005,9 +3013,9 @@
                 }
               },
               {
-                "id": "e-AudioAmplitudeFalloff-1790143594900-14-Rotate-1790143594900-16-output-input",
-                "source": "AudioAmplitudeFalloff-1790143594900-14",
-                "target": "Rotate-1790143594900-16",
+                "id": "e-AudioAmplitudeFalloff-1790146965543-14-Rotate-1790146965543-16-output-input",
+                "source": "AudioAmplitudeFalloff-1790146965543-14",
+                "target": "Rotate-1790146965543-16",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -3015,9 +3023,9 @@
                 }
               },
               {
-                "id": "e-Rotate-1790143594900-16-Output-1790143594900-15-output-input",
-                "source": "Rotate-1790143594900-16",
-                "target": "Output-1790143594900-15",
+                "id": "e-Rotate-1790146965543-16-Output-1790146965543-15-output-input",
+                "source": "Rotate-1790146965543-16",
+                "target": "Output-1790146965543-15",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -3056,7 +3064,7 @@
       "graph": {
         "nodes": [
           {
-            "id": "Objects-1790143594900-0",
+            "id": "Objects-1790146965542-0",
             "type": "custom",
             "position": {
               "x": 50,
@@ -3071,7 +3079,7 @@
             }
           },
           {
-            "id": "Duration-1790143594900-1",
+            "id": "Duration-1790146965542-1",
             "type": "custom",
             "position": {
               "x": 50,
@@ -3086,7 +3094,7 @@
             }
           },
           {
-            "id": "Circular-1790143594900-2",
+            "id": "Circular-1790146965542-2",
             "type": "custom",
             "position": {
               "x": 300,
@@ -3105,7 +3113,7 @@
             }
           },
           {
-            "id": "Output-1790143594900-3",
+            "id": "Output-1790146965542-3",
             "type": "custom",
             "position": {
               "x": 750,
@@ -3120,9 +3128,9 @@
         ],
         "edges": [
           {
-            "id": "e-Objects-1790143594900-0-Circular-1790143594900-2-output-input",
-            "source": "Objects-1790143594900-0",
-            "target": "Circular-1790143594900-2",
+            "id": "e-Objects-1790146965542-0-Circular-1790146965542-2-output-input",
+            "source": "Objects-1790146965542-0",
+            "target": "Circular-1790146965542-2",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -3130,9 +3138,9 @@
             }
           },
           {
-            "id": "e-Duration-1790143594900-1-Circular-1790143594900-2-output-duration",
-            "source": "Duration-1790143594900-1",
-            "target": "Circular-1790143594900-2",
+            "id": "e-Duration-1790146965542-1-Circular-1790146965542-2-output-duration",
+            "source": "Duration-1790146965542-1",
+            "target": "Circular-1790146965542-2",
             "sourceHandle": "output",
             "targetHandle": "duration",
             "markerEnd": {
@@ -3140,9 +3148,9 @@
             }
           },
           {
-            "id": "e-Circular-1790143594900-2-Output-1790143594900-3-output-input",
-            "source": "Circular-1790143594900-2",
-            "target": "Output-1790143594900-3",
+            "id": "e-Circular-1790146965542-2-Output-1790146965542-3-output-input",
+            "source": "Circular-1790146965542-2",
+            "target": "Output-1790146965542-3",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -3168,16 +3176,18 @@
       "global_graph": {
         "nodes": [
           {
-            "id": "input-global-demo-0",
+            "id": "merge-global-demo-0",
             "type": "custom",
             "position": {
               "x": 50,
               "y": 250
             },
             "data": {
-              "label": "Input",
-              "type": "Input",
-              "params": {}
+              "label": "Merge",
+              "type": "Merge",
+              "params": {
+                "strategy": "crossfade"
+              }
             }
           },
           {
@@ -3354,8 +3364,8 @@
         ],
         "edges": [
           {
-            "id": "input-global-demo-0-manualposition-global-demo-1",
-            "source": "input-global-demo-0",
+            "id": "merge-global-demo-0-manualposition-global-demo-1",
+            "source": "merge-global-demo-0",
             "target": "manualposition-global-demo-1",
             "sourceHandle": "output",
             "targetHandle": "input"
@@ -3446,7 +3456,7 @@
           "graph_json": {
             "nodes": [
               {
-                "id": "Objects-1790143594900-0",
+                "id": "Objects-1790146965542-0",
                 "type": "custom",
                 "position": {
                   "x": 50,
@@ -3461,7 +3471,7 @@
                 }
               },
               {
-                "id": "Duration-1790143594900-1",
+                "id": "Duration-1790146965542-1",
                 "type": "custom",
                 "position": {
                   "x": 50,
@@ -3476,7 +3486,7 @@
                 }
               },
               {
-                "id": "Circular-1790143594900-2",
+                "id": "Circular-1790146965542-2",
                 "type": "custom",
                 "position": {
                   "x": 300,
@@ -3495,7 +3505,7 @@
                 }
               },
               {
-                "id": "Output-1790143594900-3",
+                "id": "Output-1790146965542-3",
                 "type": "custom",
                 "position": {
                   "x": 750,
@@ -3510,9 +3520,9 @@
             ],
             "edges": [
               {
-                "id": "e-Objects-1790143594900-0-Circular-1790143594900-2-output-input",
-                "source": "Objects-1790143594900-0",
-                "target": "Circular-1790143594900-2",
+                "id": "e-Objects-1790146965542-0-Circular-1790146965542-2-output-input",
+                "source": "Objects-1790146965542-0",
+                "target": "Circular-1790146965542-2",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -3520,9 +3530,9 @@
                 }
               },
               {
-                "id": "e-Duration-1790143594900-1-Circular-1790143594900-2-output-duration",
-                "source": "Duration-1790143594900-1",
-                "target": "Circular-1790143594900-2",
+                "id": "e-Duration-1790146965542-1-Circular-1790146965542-2-output-duration",
+                "source": "Duration-1790146965542-1",
+                "target": "Circular-1790146965542-2",
                 "sourceHandle": "output",
                 "targetHandle": "duration",
                 "markerEnd": {
@@ -3530,9 +3540,9 @@
                 }
               },
               {
-                "id": "e-Circular-1790143594900-2-Output-1790143594900-3-output-input",
-                "source": "Circular-1790143594900-2",
-                "target": "Output-1790143594900-3",
+                "id": "e-Circular-1790146965542-2-Output-1790146965542-3-output-input",
+                "source": "Circular-1790146965542-2",
+                "target": "Output-1790146965542-3",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -3568,7 +3578,7 @@
           "graph_json": {
             "nodes": [
               {
-                "id": "Objects-1790143594900-12",
+                "id": "Objects-1790146965542-12",
                 "type": "custom",
                 "position": {
                   "x": 50,
@@ -3583,7 +3593,7 @@
                 }
               },
               {
-                "id": "Duration-1790143594900-13",
+                "id": "Duration-1790146965543-13",
                 "type": "custom",
                 "position": {
                   "x": 50,
@@ -3598,7 +3608,7 @@
                 }
               },
               {
-                "id": "AudioAmplitudeFalloff-1790143594900-14",
+                "id": "AudioAmplitudeFalloff-1790146965543-14",
                 "type": "custom",
                 "position": {
                   "x": 300,
@@ -3618,7 +3628,7 @@
                 }
               },
               {
-                "id": "Output-1790143594900-15",
+                "id": "Output-1790146965543-15",
                 "type": "custom",
                 "position": {
                   "x": 750,
@@ -3631,7 +3641,7 @@
                 }
               },
               {
-                "id": "Rotate-1790143594900-16",
+                "id": "Rotate-1790146965543-16",
                 "type": "custom",
                 "position": {
                   "x": 480,
@@ -3650,9 +3660,9 @@
             ],
             "edges": [
               {
-                "id": "e-Objects-1790143594900-12-AudioAmplitudeFalloff-1790143594900-14-output-input",
-                "source": "Objects-1790143594900-12",
-                "target": "AudioAmplitudeFalloff-1790143594900-14",
+                "id": "e-Objects-1790146965542-12-AudioAmplitudeFalloff-1790146965543-14-output-input",
+                "source": "Objects-1790146965542-12",
+                "target": "AudioAmplitudeFalloff-1790146965543-14",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -3660,9 +3670,9 @@
                 }
               },
               {
-                "id": "e-Duration-1790143594900-13-AudioAmplitudeFalloff-1790143594900-14-output-duration",
-                "source": "Duration-1790143594900-13",
-                "target": "AudioAmplitudeFalloff-1790143594900-14",
+                "id": "e-Duration-1790146965543-13-AudioAmplitudeFalloff-1790146965543-14-output-duration",
+                "source": "Duration-1790146965543-13",
+                "target": "AudioAmplitudeFalloff-1790146965543-14",
                 "sourceHandle": "output",
                 "targetHandle": "duration",
                 "markerEnd": {
@@ -3670,9 +3680,9 @@
                 }
               },
               {
-                "id": "e-AudioAmplitudeFalloff-1790143594900-14-Rotate-1790143594900-16-output-input",
-                "source": "AudioAmplitudeFalloff-1790143594900-14",
-                "target": "Rotate-1790143594900-16",
+                "id": "e-AudioAmplitudeFalloff-1790146965543-14-Rotate-1790146965543-16-output-input",
+                "source": "AudioAmplitudeFalloff-1790146965543-14",
+                "target": "Rotate-1790146965543-16",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -3680,9 +3690,9 @@
                 }
               },
               {
-                "id": "e-Rotate-1790143594900-16-Output-1790143594900-15-output-input",
-                "source": "Rotate-1790143594900-16",
-                "target": "Output-1790143594900-15",
+                "id": "e-Rotate-1790146965543-16-Output-1790146965543-15-output-input",
+                "source": "Rotate-1790146965543-16",
+                "target": "Output-1790146965543-15",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {

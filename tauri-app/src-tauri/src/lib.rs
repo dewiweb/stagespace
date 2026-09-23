@@ -365,3 +365,7 @@ mod tests;
 #[cfg(test)]
 #[path = "tests/recall_tests.rs"]
 mod recall_test_file;
+
+#[cfg(test)]
+#[path = "tests/example_show_tests.rs"]
+mod example_show_test_file;
