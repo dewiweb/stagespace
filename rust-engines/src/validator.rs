@@ -159,7 +159,7 @@ impl Validator {
 
         // 4. Vérifier la compatibilité des types + arité des ports
         Self::validate_type_compatibility(graph, &mut errors);
-        Self::validate_input_arity(graph, &mut errors);
+        Self::validate_input_arity(graph, context, &mut errors);
 
         // 5. Vérifier la compatibilité des comptages (sub-graph uniquement —
         //    le graph global n'a pas de node Objects pour définir n_objects)
@@ -518,7 +518,15 @@ impl Validator {
     /// - au plus 1 edge par port d'entrée nommé (deux edges sur "input" sont
     ///   silencieusement réduits à un par le compiler — erreur ici)
     /// - les composites binaires exigent exactement 2 entrées
-    fn validate_input_arity(graph: &Graph, errors: &mut Vec<ValidationError>) {
+    /// - Output et les modifiers exigent au moins 1 entrée (sinon le compile
+    ///   échoue tard avec OutputNotConnected / MissingParameter)
+    /// - chaque engine doit pouvoir résoudre n_objects (param propre ou
+    ///   edge Objects direct — même convention que Compiler::resolve_n_objects)
+    fn validate_input_arity(
+        graph: &Graph,
+        context: GraphContext,
+        errors: &mut Vec<ValidationError>,
+    ) {
         for node in graph.nodes.values() {
             let incoming: Vec<&crate::graph::Edge> =
                 graph.edges.iter().filter(|e| e.to == node.id).collect();
@@ -548,6 +556,47 @@ impl Validator {
                     "{:?} requires exactly 2 trajectory inputs, got {}",
                     node.node_type,
                     incoming.len()
+                )));
+            }
+
+            // Output et les modifiers exigent une entrée — sinon le compile
+            // échoue tard (OutputNotConnected / MissingParameter).
+            if matches!(
+                node.node_type,
+                NodeType::Output
+                    | NodeType::Scale
+                    | NodeType::Rotate
+                    | NodeType::Offset
+                    | NodeType::PhaseShift
+                    | NodeType::Mirror
+                    | NodeType::Clamp
+                    | NodeType::LFO
+                    | NodeType::Jitter
+            ) && incoming.is_empty()
+            {
+                errors.push(ValidationError::InvalidConnection(format!(
+                    "{:?} requires a trajectory input, got 0",
+                    node.node_type
+                )));
+            }
+
+            // Chaque engine doit résoudre n_objects avec la même convention
+            // que le compiler : param propre, sinon edge direct depuis un
+            // node Objects. Sans les deux, MissingParameter au compile.
+            if context == GraphContext::SubGraph
+                && Self::has_input_port(&node.node_type, "duration")
+                && node
+                    .params
+                    .get("n_objects")
+                    .and_then(|v| v.as_u64())
+                    .is_none()
+                && !incoming.iter().any(|e| {
+                    matches!(graph.nodes.get(&e.from), Some(n) if n.node_type == NodeType::Objects)
+                })
+            {
+                errors.push(ValidationError::InvalidConnection(format!(
+                    "{:?} has no Objects input and no n_objects parameter",
+                    node.node_type
                 )));
             }
         }

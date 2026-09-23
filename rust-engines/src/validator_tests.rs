@@ -754,4 +754,185 @@ mod tests {
             "VectorField → Scale should be rejected (physics engines feed Output/composites only)"
         );
     }
+
+    #[test]
+    fn test_output_without_input_rejected() {
+        // Output non connecté passait la validation et échouait tard au
+        // compile avec OutputNotConnected — l'arité le détecte maintenant.
+        let mut graph = Graph::new();
+        let objects = Node::with_params(NodeType::Objects, serde_json::json!({"n_objects": 4}));
+        let duration = Node::with_params(NodeType::Duration, serde_json::json!({"duration": 4.0}));
+        let circular = Node::with_params(NodeType::Circular, serde_json::json!({"n_objects": 4}));
+        let output = Node::new(NodeType::Output);
+
+        let id_objects = objects.id;
+        let id_duration = duration.id;
+        let id_circular = circular.id;
+        graph.add_node(objects);
+        graph.add_node(duration);
+        graph.add_node(circular);
+        graph.add_node(output);
+
+        graph.add_edge(Edge {
+            from: id_objects,
+            to: id_circular,
+            from_port: "output".to_string(),
+            to_port: "input".to_string(),
+        });
+        graph.add_edge(Edge {
+            from: id_duration,
+            to: id_circular,
+            from_port: "output".to_string(),
+            to_port: "duration".to_string(),
+        });
+
+        let result = Validator::validate(&graph);
+        assert!(result.is_err());
+        if let Err(errors) = result {
+            assert!(errors.iter().any(|e| matches!(
+                e,
+                ValidationError::InvalidConnection(msg) if msg.contains("Output requires")
+            )));
+        }
+    }
+
+    #[test]
+    fn test_modifier_without_input_rejected() {
+        // Un Scale sans entrée échouait tard au compile (MissingParameter).
+        let mut graph = Graph::new();
+        let objects = Node::with_params(NodeType::Objects, serde_json::json!({"n_objects": 4}));
+        let duration = Node::with_params(NodeType::Duration, serde_json::json!({"duration": 4.0}));
+        let circular = Node::with_params(NodeType::Circular, serde_json::json!({"n_objects": 4}));
+        let scale = Node::new(NodeType::Scale);
+        let output = Node::new(NodeType::Output);
+
+        let id_objects = objects.id;
+        let id_duration = duration.id;
+        let id_circular = circular.id;
+        let id_output = output.id;
+        graph.add_node(objects);
+        graph.add_node(duration);
+        graph.add_node(circular);
+        graph.add_node(scale);
+        graph.add_node(output);
+
+        graph.add_edge(Edge {
+            from: id_objects,
+            to: id_circular,
+            from_port: "output".to_string(),
+            to_port: "input".to_string(),
+        });
+        graph.add_edge(Edge {
+            from: id_duration,
+            to: id_circular,
+            from_port: "output".to_string(),
+            to_port: "duration".to_string(),
+        });
+        graph.add_edge(Edge {
+            from: id_circular,
+            to: id_output,
+            from_port: "output".to_string(),
+            to_port: "input".to_string(),
+        });
+
+        let result = Validator::validate(&graph);
+        assert!(result.is_err());
+        if let Err(errors) = result {
+            assert!(errors.iter().any(|e| matches!(
+                e,
+                ValidationError::InvalidConnection(msg) if msg.contains("Scale requires")
+            )));
+        }
+    }
+
+    #[test]
+    fn test_engine_without_objects_or_param_rejected() {
+        // Spiral sans edge Objects ni param n_objects : n_objects non
+        // résoluble → MissingParameter tardif au compile. Détecté ici.
+        let mut graph = Graph::new();
+        let objects = Node::with_params(NodeType::Objects, serde_json::json!({"n_objects": 4}));
+        let duration = Node::with_params(NodeType::Duration, serde_json::json!({"duration": 4.0}));
+        let circular = Node::with_params(NodeType::Circular, serde_json::json!({"n_objects": 4}));
+        let spiral = Node::new(NodeType::Spiral);
+        let output = Node::new(NodeType::Output);
+
+        let id_objects = objects.id;
+        let id_duration = duration.id;
+        let id_circular = circular.id;
+        let id_output = output.id;
+        graph.add_node(objects);
+        graph.add_node(duration);
+        graph.add_node(circular);
+        graph.add_node(spiral);
+        graph.add_node(output);
+
+        graph.add_edge(Edge {
+            from: id_duration,
+            to: id_circular,
+            from_port: "output".to_string(),
+            to_port: "duration".to_string(),
+        });
+
+        graph.add_edge(Edge {
+            from: id_objects,
+            to: id_circular,
+            from_port: "output".to_string(),
+            to_port: "input".to_string(),
+        });
+        graph.add_edge(Edge {
+            from: id_circular,
+            to: id_output,
+            from_port: "output".to_string(),
+            to_port: "input".to_string(),
+        });
+
+        let result = Validator::validate(&graph);
+        assert!(result.is_err());
+        if let Err(errors) = result {
+            assert!(errors.iter().any(|e| matches!(
+                e,
+                ValidationError::InvalidConnection(msg) if msg.contains("Spiral has no Objects input")
+            )));
+        }
+    }
+
+    #[test]
+    fn test_engine_resolves_n_objects_via_edge() {
+        // Cas positif : engine sans param mais alimenté par Objects → valide.
+        let mut graph = Graph::new();
+        let objects = Node::with_params(NodeType::Objects, serde_json::json!({"n_objects": 4}));
+        let duration = Node::with_params(NodeType::Duration, serde_json::json!({"duration": 4.0}));
+        let spiral = Node::new(NodeType::Spiral);
+        let output = Node::new(NodeType::Output);
+
+        let id_objects = objects.id;
+        let id_duration = duration.id;
+        let id_spiral = spiral.id;
+        let id_output = output.id;
+        graph.add_node(objects);
+        graph.add_node(duration);
+        graph.add_node(spiral);
+        graph.add_node(output);
+
+        graph.add_edge(Edge {
+            from: id_objects,
+            to: id_spiral,
+            from_port: "output".to_string(),
+            to_port: "input".to_string(),
+        });
+        graph.add_edge(Edge {
+            from: id_duration,
+            to: id_spiral,
+            from_port: "output".to_string(),
+            to_port: "duration".to_string(),
+        });
+        graph.add_edge(Edge {
+            from: id_spiral,
+            to: id_output,
+            from_port: "output".to_string(),
+            to_port: "input".to_string(),
+        });
+
+        assert!(Validator::validate(&graph).is_ok());
+    }
 }
