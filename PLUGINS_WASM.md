@@ -1,20 +1,22 @@
 # PLUGINS_WASM.md — Système de plugins WASM pour nodes custom
 
 Branche : `feat/wasm-plugins`
-Statut : **Phase 1 livrée** (`3527441`) — runtime host fonctionnel : manifeste,
-loader `.ssx`, registry wasmtime (fuel), `PluginEngine`, `NodeType::Plugin`,
-wiring validator/compiler/frontend minimal. 14 tests WAT verts.
+Statut : **Phases 1+3 livrées** (`3527441`, `343b73d`) — runtime host
+fonctionnel + intégration Tauri (registry dans AppState, commands
+`list_plugins`/`reload_plugins`, `compile_graph_live` = chemin unique de
+compile). 17 tests plugins verts, contrats TS générés.
 
 ## Prochaines étapes (ordre recommandé)
 
-1. **Phase 3 — Tauri** : rendre les plugins chargeables dans l'app réelle.
-   `AppState.plugin_registry: Arc<PluginRegistry>` construit au boot via
-   `scan_dir(<app_data_dir>/plugins/)` ; commands `list_plugins` /
-   `reload_plugins` ; events `plugin-error` → toasts ; **tous les call sites
-   de compile basculent sur `compile_with_live_inputs`** (`activate_move`,
-   `update_global_graph`, `sample_graph`, cue respawn) — sans ça un graphe
-   contenant un node Plugin échoue avec "requires a plugin registry" ;
-   `#[derive(TS)]` sur `PluginManifest` + `npm run contracts`.
+1. ~~**Phase 3 — Tauri**~~ ✅ `343b73d` : `AppState.plugin_registry`
+   (`Arc<Mutex>`) + `plugins_dir` (`<data_dir>/com.stagespace.studio/plugins/`,
+   créé + scanné au boot, erreurs non fatales) ; commands `list_plugins` /
+   `reload_plugins` → `PluginRegistryReport { manifests, errors, plugins_dir }` ;
+   **`compile_graph_live(graph, &Shared)`** = chemin unique (audio + OSC +
+   plugins) pour `activate_move`, `update_move_graph_merged` et le respawn de
+   cues ; `PluginManifest`/`PluginKind`/`PluginParamDef`/`PluginRegistryReport`
+   exportés ts-rs. Note : erreurs rapportées dans le report (toasts frontend)
+   plutôt qu'en events — suffisant tant que le scan est déclenché par l'UI.
 2. **Phase 5 — SDK** : crate `plugin-sdk/` (macro `#[stagespace_plugin]`
    générant les 3 exports + parse params JSON → struct), CLI `stagespace-pack`
    (`module.wasm` + `manifest.json` → `.ssx` + validation), exemple
@@ -160,14 +162,18 @@ tel quel en v1 — le registry unifié `NodeImpl::{Native,Wasm}` est une
 refactorisation ultérieure optionnelle ; Phase 1 ajoute seulement l'arm
 `NodeType::Plugin` qui consulte le registry.
 
-### Phase 3 — Tauri (src-tauri)
+### Phase 3 — Tauri (src-tauri) — ✅ `343b73d`
 
-- [ ] `AppState.plugin_registry: Arc<PluginRegistry>`
-- [ ] Dossier plugins : `<app_data_dir>/plugins/` (tauri `path()` API)
-- [ ] Commands : `list_plugins() -> Vec<PluginManifest>` (scan + erreurs),
-      `reload_plugins()` (re-scan, utilisé après ajout de fichier)
-- [ ] Events : `plugin-error` (toast au chargement raté)
-- [ ] ts-rs : `PluginManifest` exporté → `npm run contracts`
+- [x] `AppState.plugin_registry: Option<Arc<Mutex<PluginRegistry>>>` +
+      `plugins_dir` — construits dans `.manage` (pas d'AppHandle →
+      `dirs::data_dir()` + identifier `com.stagespace.studio`)
+- [x] `Shared.plugin_registry` propagé aux call sites de compile
+- [x] `compile_graph_live(graph, &Shared)` — audio + OSC + plugins, utilisé
+      par `activate_move`, `update_move_graph_merged`, respawn de cues
+- [x] Commands : `list_plugins` / `reload_plugins` → `PluginRegistryReport`
+      (manifestes + erreurs formatées + chemin du dossier)
+- [x] ts-rs : `PluginManifest`/`PluginKind`/`PluginParamDef`/
+      `PluginRegistryReport` exportés → contrats régénérés
 
 ### Phase 4 — Frontend
 
