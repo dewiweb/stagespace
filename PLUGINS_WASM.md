@@ -1,7 +1,36 @@
 # PLUGINS_WASM.md — Système de plugins WASM pour nodes custom
 
 Branche : `feat/wasm-plugins`
-Statut : **design approuvé — implémentation non commencée**
+Statut : **Phase 1 livrée** (`3527441`) — runtime host fonctionnel : manifeste,
+loader `.ssx`, registry wasmtime (fuel), `PluginEngine`, `NodeType::Plugin`,
+wiring validator/compiler/frontend minimal. 14 tests WAT verts.
+
+## Prochaines étapes (ordre recommandé)
+
+1. **Phase 3 — Tauri** : rendre les plugins chargeables dans l'app réelle.
+   `AppState.plugin_registry: Arc<PluginRegistry>` construit au boot via
+   `scan_dir(<app_data_dir>/plugins/)` ; commands `list_plugins` /
+   `reload_plugins` ; events `plugin-error` → toasts ; **tous les call sites
+   de compile basculent sur `compile_with_live_inputs`** (`activate_move`,
+   `update_global_graph`, `sample_graph`, cue respawn) — sans ça un graphe
+   contenant un node Plugin échoue avec "requires a plugin registry" ;
+   `#[derive(TS)]` sur `PluginManifest` + `npm run contracts`.
+2. **Phase 5 — SDK** : crate `plugin-sdk/` (macro `#[stagespace_plugin]`
+   générant les 3 exports + parse params JSON → struct), CLI `stagespace-pack`
+   (`module.wasm` + `manifest.json` → `.ssx` + validation), exemple
+   `lemniscate` compilé `wasm32-unknown-unknown` — permet de tester la Phase 3
+   sur un vrai plugin, pas seulement du WAT.
+3. **Phase 4 — Frontend dynamique** : slice `usePluginStore` (fetch au boot +
+   reload), palette "Plugins" avec un item par plugin chargé (nom réel +
+   `plugin_id` pré-rempli), `NodeParamsPanel` merge
+   `PARAM_SCHEMA['Plugin']` + schema du manifeste (`NodeParamField` rend déjà
+   tous les types génériquement), label du node = nom du plugin dans
+   `CustomNode`.
+4. **Phase 6/7** — tests E2E (fixture `.ssx` précompilée committée), docs
+   `CONTRIBUTING.md`, section plugins dans `AGENTS.md`.
+
+Règle transversale : **ABI v1 = engines uniquement**. Modifier/composite
+demandent de passer la closure upstream au guest → ABI v2, hors scope.
 
 > Objectif : permettre à des développeurs tiers d'étendre la palette de nodes
 > STAGESPACE sans recompiler l'app, via des modules WebAssembly packagés dans
@@ -98,23 +127,28 @@ le runtime.
 
 ## 3. Plan d'implémentation par phases
 
-### Phase 1 — Runtime host (rust-engines)
+### Phase 1 — Runtime host (rust-engines) — ✅ `3527441`
 
-- [ ] `Cargo.toml` : `wasmtime` (feature `fuel`), `zip` (manifest extraction)
-- [ ] `src/plugins/manifest.rs` — `PluginManifest` (serde) + validation
-      (champs requis, `abi_version`, kinds, param types)
-- [ ] `src/plugins/loader.rs` — `load_bundle(path) -> Result<Plugin>`
-      (zip → manifest valide → `wasmtime::Module` précompilé)
-- [ ] `src/plugins/registry.rs` — `PluginRegistry` : scan d'un dossier,
-      `HashMap<id, Plugin>`, erreurs collectées sans bloquer les autres
-- [ ] `src/engines/plugin.rs` — `PluginEngine` implémente `Engine` :
-      wrapper wasmtime `Instance` + `Store` (fuel), traduction params JSON
-- [ ] `src/graph.rs` — `NodeType::Plugin`
-- [ ] `src/compiler.rs` — arm `NodeType::Plugin => PluginEngine::new(plugin_id)`
-      ; erreur `InvalidParameter` si `plugin_id` absent/inconnu du registry
-- [ ] `src/validator.rs` — `Plugin` traité comme engine : ports
-      `input`+`duration`, alimente Output/composites/modifiers, exige
-      Objects+Duration (gratuit via `graph_has_engines`)
+- [x] `Cargo.toml` : `wasmtime` v38 (fuel activé via `Config`), `zip` v2.4
+- [x] `src/plugins/manifest.rs` — `PluginManifest` (serde) + validation
+      (id, `abi_version ≤ HOST_ABI_VERSION`, kinds, types de params)
+- [x] `src/plugins/loader.rs` — `load_bundle`/`load_bundle_bytes`
+      (zip → manifeste validé → `wasmtime::Module` + check exports ABI)
+- [x] `src/plugins/registry.rs` — `PluginRegistry` : `scan_dir`,
+      `register_wasm` (tests/embarqués), erreurs collectées non fatales
+- [x] `src/plugins/wasm_engine.rs` — `PluginEngine` implémente `Engine` :
+      Store mutex-guardé, buffers statiques, fuel 100k/appel, trap→zeros,
+      premier erreur loguée via `log_plugin_error`
+- [x] `src/graph.rs` — `NodeType::Plugin` (wire `"Plugin"`)
+- [x] `src/compiler.rs` — arm `NodeType::Plugin` résolvant `params.plugin_id`
+      via `LiveInputs.plugins` ; `compile_with_live_inputs` publique
+- [x] `src/validator.rs` — `Plugin` traité comme engine : ports
+      `input`+`duration`, alimente Output/composites/modifiers, sub-graph
+      only, arité n_objects automatique
+- [x] Frontend minimal : union `'Plugin'`, `connectionRules`, catégorie
+      "Plugins", schema `plugin_id`
+- [x] 14 tests WAT inline (`plugin_tests.rs`) : positions, trap→zero,
+      fuel, roundtrip `.ssx`, intégration validate+compile+sample
 
 ### Phase 2 — Registry dans le compilateur
 
