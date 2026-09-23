@@ -38,6 +38,8 @@ mod compiler_tests;
 #[cfg(test)]
 mod config_tests;
 #[cfg(test)]
+mod generative_graph_tests;
+#[cfg(test)]
 mod graph_tests;
 #[cfg(test)]
 mod integration_tests;

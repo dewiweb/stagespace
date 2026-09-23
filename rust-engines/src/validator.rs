@@ -618,22 +618,56 @@ impl Validator {
                 .unwrap_or(1) as usize;
 
             // Résolution identique au compiler (resolve_n_objects) : param
-            // propre → Objects amont → défaut = le n_objects global du graphe.
-            // Un `unwrap_or(1)` signalait les composites (Mix/Sequence) comme
-            // "1 objet" dès que leur param n_objects n'était pas explicité.
-            let effective_n_objects = |node: &Node| -> usize {
-                node.params
-                    .get("n_objects")
-                    .and_then(|v| v.as_u64())
-                    .or_else(|| {
-                        graph
-                            .get_inputs(node.id)
-                            .iter()
-                            .filter_map(|id| graph.nodes.get(id))
-                            .find(|n| n.node_type == NodeType::Objects)
-                            .and_then(|n| n.params.get("n_objects").and_then(|v| v.as_u64()))
-                    })
-                    .unwrap_or(n_objects as u64) as usize
+            // propre → Objects amont → propagation à travers modifiers
+            // (entrée unique) et composites (Group somme a+b, les autres
+            // délèguent à input_a) → défaut = le n_objects global du graphe.
+            fn effective_n_objects(graph: &Graph, node: &Node, fallback: u64, depth: usize) -> u64 {
+                if depth > 64 {
+                    return fallback;
+                }
+                if let Some(v) = node.params.get("n_objects").and_then(|v| v.as_u64()) {
+                    return v;
+                }
+                let inputs = graph.get_inputs(node.id);
+                if let Some(v) = inputs
+                    .iter()
+                    .filter_map(|id| graph.nodes.get(id))
+                    .find(|n| n.node_type == NodeType::Objects)
+                    .and_then(|n| n.params.get("n_objects").and_then(|v| v.as_u64()))
+                {
+                    return v;
+                }
+                match node.node_type {
+                    NodeType::Scale
+                    | NodeType::Rotate
+                    | NodeType::Offset
+                    | NodeType::PhaseShift
+                    | NodeType::Mirror
+                    | NodeType::Clamp
+                    | NodeType::LFO
+                    | NodeType::Jitter => inputs
+                        .first()
+                        .and_then(|id| graph.nodes.get(id))
+                        .map(|n| effective_n_objects(graph, n, fallback, depth + 1))
+                        .unwrap_or(fallback),
+                    NodeType::Group => graph
+                        .get_binary_inputs(node.id)
+                        .iter()
+                        .take(2)
+                        .filter_map(|id| graph.nodes.get(id))
+                        .map(|n| effective_n_objects(graph, n, fallback, depth + 1))
+                        .sum(),
+                    NodeType::Mix | NodeType::Sequence | NodeType::Crossfade => graph
+                        .get_binary_inputs(node.id)
+                        .first()
+                        .and_then(|id| graph.nodes.get(id))
+                        .map(|n| effective_n_objects(graph, n, fallback, depth + 1))
+                        .unwrap_or(fallback),
+                    _ => fallback,
+                }
+            }
+            let resolve = |node: &Node| -> usize {
+                effective_n_objects(graph, node, n_objects as u64, 0) as usize
             };
 
             // Vérifier que tous les moteurs ont le même n_objects
@@ -685,8 +719,8 @@ impl Validator {
                             let node_b = graph.nodes.get(&inputs[1]);
 
                             if let (Some(na), Some(nb)) = (node_a, node_b) {
-                                let n_a = effective_n_objects(na);
-                                let n_b = effective_n_objects(nb);
+                                let n_a = resolve(na);
+                                let n_b = resolve(nb);
 
                                 if n_a != n_b {
                                     errors.push(ValidationError::CountMismatch(format!(
@@ -704,8 +738,8 @@ impl Validator {
                             let node_b = graph.nodes.get(&inputs[1]);
 
                             if let (Some(na), Some(nb)) = (node_a, node_b) {
-                                let n_a = effective_n_objects(na);
-                                let n_b = effective_n_objects(nb);
+                                let n_a = resolve(na);
+                                let n_b = resolve(nb);
 
                                 if n_a != n_b {
                                     errors.push(ValidationError::CountMismatch(format!(
