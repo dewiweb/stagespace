@@ -3,7 +3,7 @@ import { X, Check } from 'lucide-react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
-import { PARAM_SCHEMA, getCategoryColor, type ParamDef, type NodeParamValue } from './nodeParamSchema';
+import { PARAM_SCHEMA, getCategoryColor, pluginNodeSchema, type ParamDef, type NodeParamValue } from './nodeParamSchema';
 import { isSourceNode, isTerminalNode, isBinaryComposite, getInputPorts } from '../utils/connectionRules';
 
 const AUDIO_NODE_TYPES = new Set(['BPM', 'AudioAmplitude', 'AudioSpectrum', 'AudioAmplitudeFalloff']);
@@ -23,7 +23,17 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
   const isGlobalNode = useGlobalGraphStore((s) => s.nodes.some((n) => n.id === id));
   const updateGlobalNodeData = useGlobalGraphStore((s) => s.updateNodeData);
   const color = getCategoryColor(data.type);
-  const schema = PARAM_SCHEMA[data.type] ?? [];
+  // Plugin : le schema vient du manifeste (résolu via params.plugin_id) et
+  // le label affiché est le nom déclaré — sinon les tables statiques.
+  const isPluginNode = data.type === 'Plugin';
+  const pluginId = isPluginNode ? (data.params?.plugin_id as string | undefined) : undefined;
+  const pluginManifest = useGraphStore((s) =>
+    isPluginNode ? (s.plugins.find((m) => m.id === pluginId) ?? null) : null
+  );
+  const schema = isPluginNode
+    ? pluginNodeSchema(data.params, pluginManifest ? [pluginManifest] : [])
+    : (PARAM_SCHEMA[data.type] ?? []);
+  const displayLabel = isPluginNode ? (pluginManifest?.name ?? data.label) : data.label;
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const hasInput = !isSourceNode(data.type);
@@ -212,7 +222,7 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
               <span className="text-red-400 text-[10px] font-bold tracking-wider">LIVE</span>
             </span>
           )}
-          <span className="text-white text-sm font-semibold truncate">{data.label}</span>
+          <span className="text-white text-sm font-semibold truncate">{displayLabel}</span>
         </div>
         {schema.length > 0 && (
           <button

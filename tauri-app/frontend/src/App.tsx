@@ -126,6 +126,10 @@ function App() {
       state.applyShapePreset('circle', 8);
     }
 
+    // Registry plugins WASM — manifestes pour la palette dynamique et les
+    // labels/params des nodes Plugin. Non bloquant : erreur → toast + vide.
+    void useGraphStore.getState().fetchPlugins();
+
     // Récupérer la liste des moves actifs côté backend (survit à un refresh UI)
     // puis sync les slots (nettoyer les movementIds stale)
     state.refreshMovements().then(() => {

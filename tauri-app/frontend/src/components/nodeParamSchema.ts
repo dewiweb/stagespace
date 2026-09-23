@@ -1,5 +1,6 @@
 import { NodeType } from '../store/useGraphStore';
 import { isValidConnection as isValidConnectionExported } from '../utils/connectionRules';
+import type { PluginManifest } from '../types/generated/PluginManifest';
 
 export type ParamType = 'number' | 'boolean' | 'string' | 'vec3' | 'enum' | 'text';
 
@@ -698,3 +699,43 @@ export const ENGINE_TYPES = new Set([
 /// Nodes qui ont leur propre surface dédiée — exclus des chips de params
 /// (évite les doublons de contrôle : n_objects → Tracks, duration → Lecture).
 export const NON_PARAM_NODES = new Set(['Objects', 'Duration', 'Output']);
+
+// ── Plugins WASM ────────────────────────────────────────────────────────────
+
+/// Params dynamiques d'un plugin — `params[]` du manifeste mappé vers
+/// `ParamDef` (mêmes types : number/boolean/enum/vec3/text/string, rendus
+/// génériquement par NodeParamField et les inputs inline de CustomNode).
+export function pluginParamDefs(manifest: PluginManifest | null | undefined): ParamDef[] {
+  if (!manifest) return [];
+  return manifest.params.map((p) => ({
+    key: p.key,
+    label: p.label ?? p.key,
+    type: p.type as ParamType,
+    options: p.options ?? undefined,
+    min: p.min ?? undefined,
+    max: p.max ?? undefined,
+    step: p.step ?? undefined,
+  }));
+}
+
+/// Schema complet d'un node Plugin : `plugin_id` statique + params du
+/// manifeste résolu via `plugin_id`. Manifeste absent (plugin désinstallé,
+/// pas encore chargé) → seul `plugin_id` est éditable.
+export function pluginNodeSchema(
+  params: Record<string, NodeParamValue> | undefined,
+  manifests: PluginManifest[],
+): ParamDef[] {
+  const pid = params?.plugin_id;
+  const manifest = typeof pid === 'string' ? manifests.find((m) => m.id === pid) : undefined;
+  return [...(PARAM_SCHEMA['Plugin'] ?? []), ...pluginParamDefs(manifest)];
+}
+
+/// Params initiaux d'un node Plugin créé depuis la palette : plugin_id +
+/// defaults déclarés par le manifeste.
+export function pluginDefaultParams(manifest: PluginManifest): Record<string, NodeParamValue> {
+  const params: Record<string, NodeParamValue> = { plugin_id: manifest.id };
+  for (const p of manifest.params) {
+    params[p.key] = (p.default ?? undefined) as NodeParamValue;
+  }
+  return params;
+}

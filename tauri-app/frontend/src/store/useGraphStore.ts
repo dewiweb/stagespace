@@ -26,6 +26,7 @@ import { createOscConfigSlice, type OscConfigSlice } from './slices/oscConfigSli
 import { createSplineLibrarySlice, type SplineLibrarySlice } from './slices/splineLibrarySlice';
 import { createSpatialFxSlice, type SpatialFxSlice } from './slices/spatialFxSlice';
 import { createInteractionModesSlice, type InteractionModesSlice } from './slices/interactionModesSlice';
+import { createPluginSlice, type PluginSlice } from './slices/pluginSlice';
 import { SHAPE_PRESETS } from '../utils/shapePresets';
 import { toast } from '../utils/toast-helpers';
 import { safeSetItem } from '../utils/safeStorage';
@@ -49,7 +50,7 @@ interface GraphState
   extends PerfSlice, AudioSlice, OscSlice, PersistenceSlice,
     MacrosSlice, HolProjectSlice, DrawModeSlice,
     MovementSlice, MoveSlotsSlice, OscConfigSlice, SplineLibrarySlice, SpatialFxSlice,
-    InteractionModesSlice {
+    InteractionModesSlice, PluginSlice {
   // React Flow state (single source of truth)
   nodes: Node[];
   edges: Edge[];
@@ -184,6 +185,7 @@ export const useGraphStore = create<GraphState>()((...a) => {
   ...createSplineLibrarySlice(...a),
   ...createSpatialFxSlice(...a),
   ...createInteractionModesSlice(...a),
+  ...createPluginSlice(...a),
 
   // Graphe par défaut — preset Circle pour que l'app ne démarre jamais vide
   ...(() => {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Slider } from './ui/Slider';
-import { PARAM_SCHEMA, ENGINE_TYPES, NON_PARAM_NODES, type NodeParamValue, type GraphNodeData, type ParamDef } from './nodeParamSchema';
+import { PARAM_SCHEMA, ENGINE_TYPES, NON_PARAM_NODES, pluginNodeSchema, type NodeParamValue, type GraphNodeData, type ParamDef } from './nodeParamSchema';
+import { useGraphStore } from '../store/useGraphStore';
 import type { NodeType } from '../store/types/index';
 import type { Node } from 'reactflow';
 
@@ -37,8 +38,14 @@ export const NodeParamsPanel: React.FC<{
   React.useEffect(() => { setParamNodeId(null); }, [resetKey]);
   const paramNode = paramNodes.find((n) => n.id === paramNodeId) ?? defaultParamNode;
   const paramNodeType = (paramNode?.data as GraphNodeData | undefined)?.type as NodeType | undefined;
-  const paramSchema = paramNodeType ? PARAM_SCHEMA[paramNodeType] ?? [] : [];
   const paramNodeParams = ((paramNode?.data as GraphNodeData | undefined)?.params ?? {}) as Record<string, NodeParamValue>;
+  // Plugin : schema = plugin_id statique + params du manifeste résolu
+  // (registry backend via le store) — rien d'autre à toucher, NodeParamField
+  // rend les types du manifeste génériquement.
+  const plugins = useGraphStore((s) => s.plugins);
+  const paramSchema = paramNodeType === 'Plugin'
+    ? pluginNodeSchema(paramNodeParams, plugins)
+    : (paramNodeType ? PARAM_SCHEMA[paramNodeType] ?? [] : []);
 
   if (paramNodes.length === 0 || !paramNode) {
     return (
@@ -54,9 +61,20 @@ export const NodeParamsPanel: React.FC<{
       <div className="flex flex-wrap gap-1 pb-1">
         {paramNodes.map((n, i) => {
           const t = (n.data as GraphNodeData)?.type ?? '?';
-          // Indice d'occurrence si plusieurs nodes du même type
-          const sameType = paramNodes.filter((o) => (o.data as GraphNodeData)?.type === t);
-          const occ = sameType.length > 1 ? sameType.indexOf(n) + 1 : 0;
+          // Plugin : le chip affiche le nom du manifeste, pas le type conteneur
+          const pid = (n.data as GraphNodeData)?.params?.plugin_id;
+          const chipLabel = t === 'Plugin' && typeof pid === 'string'
+            ? (plugins.find((m) => m.id === pid)?.name ?? pid)
+            : t;
+          // Indice d'occurrence si plusieurs nodes du même label affiché
+          const sameLabel = paramNodes.filter((o) => {
+            const ot = (o.data as GraphNodeData)?.type ?? '?';
+            const opid = (o.data as GraphNodeData)?.params?.plugin_id;
+            return ot === 'Plugin' && typeof opid === 'string'
+              ? (plugins.find((m) => m.id === opid)?.name ?? opid) === chipLabel
+              : ot === chipLabel;
+          });
+          const occ = sameLabel.length > 1 ? sameLabel.indexOf(n) + 1 : 0;
           const active = paramNode.id === n.id;
           return (
             <button
@@ -69,7 +87,7 @@ export const NodeParamsPanel: React.FC<{
               }`}
               title={`Node ${i + 1} — params`}
             >
-              {t}{occ > 0 ? ` ${occ}` : ''}
+              {chipLabel}{occ > 0 ? ` ${occ}` : ''}
             </button>
           );
         })}

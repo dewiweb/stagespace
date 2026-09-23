@@ -17,8 +17,9 @@ import 'reactflow/dist/style.css';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import CustomNode from './CustomNode';
-import { NODE_CATEGORIES, NODE_COLORS, NODE_DESCRIPTIONS, getCategoryColor, getDefaultParams, getValidTargetTypes, GLOBAL_ONLY_NODES, SUB_ONLY_NODES } from './nodeParamSchema';
+import { NODE_CATEGORIES, NODE_COLORS, NODE_DESCRIPTIONS, getCategoryColor, getDefaultParams, getValidTargetTypes, pluginDefaultParams, GLOBAL_ONLY_NODES, SUB_ONLY_NODES } from './nodeParamSchema';
 import { isValidConnection } from '../utils/connectionRules';
+import type { PluginManifest } from '../types/generated/PluginManifest';
 
 const nodeTypes: NodeTypes = { custom: CustomNode };
 
@@ -29,6 +30,15 @@ const createNode = (type: NodeType, position: { x: number; y: number }): Node =>
   data: { label: type, type, params: getDefaultParams(type) },
 });
 
+/// Node Plugin pré-rempli depuis un manifeste : plugin_id + defaults
+/// déclarés par le plugin, label = nom affiché du manifeste.
+const createPluginNode = (manifest: PluginManifest, position: { x: number; y: number }): Node => ({
+  id: `Plugin-${manifest.id}-${Date.now()}`,
+  type: 'custom',
+  position,
+  data: { label: manifest.name, type: 'Plugin' as NodeType, params: pluginDefaultParams(manifest) },
+});
+
 export const NodeEditor: React.FC = () => {
   const nodes = useGraphStore((s) => s.nodes);
   const edges = useGraphStore((s) => s.edges);
@@ -36,7 +46,7 @@ export const NodeEditor: React.FC = () => {
   const onEdgesChange = useGraphStore((s) => s.onEdgesChange);
   const onConnect = useGraphStore((s) => s.onConnect);
   const addNode = useGraphStore((s) => s.addNode);
-  const [hoveredPaletteNode, setHoveredPaletteNode] = useState<NodeType | null>(null);
+  const [hoveredPaletteNode, setHoveredPaletteNode] = useState<string | null>(null);
   const [connectingFrom, setConnectingFrom] = useState<NodeType | null>(null);
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set());
 
@@ -61,6 +71,18 @@ export const NodeEditor: React.FC = () => {
   // Moves actifs (pour highlight les MoveRef dont le move est actif)
   const movements = useGraphStore((s) => s.movements);
   const activeMoveIds = useMemo(() => new Set(movements.map((m) => m.id)), [movements]);
+
+  // Plugins WASM — manifestes chargés via le registry backend. Fetch lazy
+  // au premier mount de l'éditeur (App fetch aussi au boot).
+  const plugins = useGraphStore((s) => s.plugins);
+  const pluginErrors = useGraphStore((s) => s.pluginErrors);
+  const pluginsDir = useGraphStore((s) => s.pluginsDir);
+  const pluginsLoaded = useGraphStore((s) => s.pluginsLoaded);
+  const fetchPlugins = useGraphStore((s) => s.fetchPlugins);
+  const reloadPlugins = useGraphStore((s) => s.reloadPlugins);
+  useEffect(() => {
+    if (!pluginsLoaded) void fetchPlugins();
+  }, [pluginsLoaded, fetchPlugins]);
 
   // Les nodes/edges affichés dépendent du tab actif
   const displayNodes = activeTab === 'global' ? globalNodes : nodes;
@@ -122,6 +144,15 @@ export const NodeEditor: React.FC = () => {
       }
     },
     [addNode, displayNodes.length, activeTab, globalNodes, setGlobalNodes],
+  );
+
+  // Plugin = sub-graph only (SUB_ONLY_NODES) → toujours dans le store sub.
+  const addPluginNode = useCallback(
+    (manifest: PluginManifest) => {
+      const offset = nodes.length * 30;
+      addNode(createPluginNode(manifest, { x: 250 + offset, y: 150 + offset }));
+    },
+    [addNode, nodes.length],
   );
 
   // Validation visuelle des connexions — empêche de connecter des nodes incompatibles
@@ -314,6 +345,78 @@ export const NodeEditor: React.FC = () => {
                         )}
                       </div>
                     ))}
+                  </div>
+                )}
+                {/* Plugins WASM — un item par manifeste chargé dans le
+                    registry backend (sub-graph uniquement : 'Plugin' est
+                    SUB_ONLY → la catégorie est vide en tab global). */}
+                {!isCollapsed && cat.label === 'Plugins' && activeTab === 'sub' && (
+                  <div className="space-y-0.5">
+                    {plugins.map((m) => (
+                      <div
+                        key={m.id}
+                        className="relative"
+                        onMouseEnter={() => setHoveredPaletteNode(`plugin:${m.id}`)}
+                        onMouseLeave={() => setHoveredPaletteNode(null)}
+                      >
+                        <button
+                          onClick={() => addPluginNode(m)}
+                          className="w-full text-left px-2.5 py-1.5 text-white text-xs rounded transition-all hover:translate-x-0.5 flex items-center gap-2"
+                          style={{ background: 'transparent' }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = (NODE_COLORS.yellow ?? '#ca8a04') + '20';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'transparent';
+                          }}
+                        >
+                          <span
+                            className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                            style={{ background: NODE_COLORS.yellow }}
+                          />
+                          <span className="truncate">{m.name}</span>
+                          <span className="text-gray-600 text-[9px] ml-auto flex-shrink-0">v{m.version}</span>
+                        </button>
+                        {hoveredPaletteNode === `plugin:${m.id}` && (
+                          <div className="absolute left-full top-0 ml-2 z-50 w-64 p-2.5 bg-gray-900 border border-gray-700 rounded-lg shadow-xl text-gray-300 text-[10px] leading-relaxed pointer-events-none">
+                            <div className="text-white font-semibold text-[11px] mb-1" style={{ color: NODE_COLORS.yellow }}>
+                              {m.name} <span className="text-gray-500 font-normal">v{m.version}</span>
+                            </div>
+                            {m.description ?? 'Plugin WASM externe'}
+                            {m.author && (
+                              <div className="mt-1 text-gray-500">par {m.author}</div>
+                            )}
+                            <div className="mt-1 text-gray-600 font-mono">id: {m.id}</div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {pluginsLoaded && plugins.length === 0 && (
+                      <div className="px-2.5 py-1 text-gray-600 text-[10px] leading-snug">
+                        Aucun plugin chargé
+                        {pluginsDir && (
+                          <div className="font-mono text-gray-700 break-all mt-0.5" title={pluginsDir}>
+                            {pluginsDir}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {pluginErrors.map((e, i) => (
+                      <div
+                        key={i}
+                        className="px-2.5 text-red-400/80 text-[9px] font-mono truncate"
+                        title={e}
+                      >
+                        ⚠ {e}
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => void reloadPlugins()}
+                      className="w-full text-left px-2.5 py-1 text-gray-500 hover:text-yellow-400 text-[10px] rounded transition-colors"
+                      title="Re-scanner le dossier plugins"
+                    >
+                      ↻ Rescan plugins
+                    </button>
                   </div>
                 )}
               </div>

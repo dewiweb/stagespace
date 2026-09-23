@@ -17,14 +17,9 @@ compile). 17 tests plugins verts, contrats TS générés.
    cues ; `PluginManifest`/`PluginKind`/`PluginParamDef`/`PluginRegistryReport`
    exportés ts-rs. Note : erreurs rapportées dans le report (toasts frontend)
    plutôt qu'en events — suffisant tant que le scan est déclenché par l'UI.
-2. **Phase 4 — Frontend dynamique** : slice `usePluginStore` (fetch au boot +
-   reload), palette "Plugins" avec un item par plugin chargé (nom réel +
-   `plugin_id` pré-rempli), `NodeParamsPanel` merge
-   `PARAM_SCHEMA['Plugin']` + schema du manifeste (`NodeParamField` rend déjà
-   tous les types génériquement), label du node = nom du plugin dans
-   `CustomNode`.
-3. **Phase 6/7 restants** — plugin dans le pool `MATH` du fuzzer génératif,
-   test `list_plugins` tauri, docs `CONTRIBUTING.md` + `AGENTS.md`.
+2. **Phase 6/7 restants** — plugin dans le pool `MATH` du fuzzer génératif,
+   test `list_plugins` tauri, import `.ssx` depuis l'UI (dialog → copie dans
+   le dossier + rescan), docs `CONTRIBUTING.md` + `AGENTS.md`, icône bundle.
 
 Règle transversale : **ABI v1 = engines uniquement**. Modifier/composite
 demandent de passer la closure upstream au guest → ABI v2, hors scope.
@@ -170,20 +165,25 @@ refactorisation ultérieure optionnelle ; Phase 1 ajoute seulement l'arm
 - [x] ts-rs : `PluginManifest`/`PluginKind`/`PluginParamDef`/
       `PluginRegistryReport` exportés → contrats régénérés
 
-### Phase 4 — Frontend
+### Phase 4 — Frontend — ✅ livré
 
-- [ ] `store/types/index.ts` : `'Plugin'` dans l'union `NodeType`
-- [ ] `utils/connectionRules.ts` : `Plugin` = règles engine
-      (`getInputPorts` → `['input','duration']`, `isValidConnection` miroir)
-- [ ] `nodeParamSchema.ts` : catégorie "Plugins" + entrée générique
-      `Plugin` (params de base : `plugin_id` en select des plugins chargés)
-- [ ] `stores/plugins.ts` (slice Zustand) : `usePluginStore` fetch
-      `list_plugins` au boot + sur `reload`
-- [ ] `NodeEditor.tsx` : palette — sous-catégorie dynamique, un item par
-      plugin du registry (`plugin_id` pré-rempli au drop)
-- [ ] `NodeParamsPanel` : pour les nodes `Plugin`, schema =
-      `PARAM_SCHEMA['Plugin']` de base **+** `pluginStore.schema(plugin_id)`
-      — `NodeParamField` rend déjà tout génériquement, aucun nouveau composant
+- [x] `store/types/index.ts` : `'Plugin'` dans l'union `NodeType` (Phase 1)
+- [x] `utils/connectionRules.ts` : `Plugin` = règles engine (Phase 1)
+- [x] `nodeParamSchema.ts` : catégorie "Plugins" + `PARAM_SCHEMA['Plugin']`
+      + helpers `pluginParamDefs`/`pluginNodeSchema`/`pluginDefaultParams`
+      (manifeste → `ParamDef`, defaults depuis `params[].default`)
+- [x] `slices/pluginSlice.ts` dans `useGraphStore` : `plugins`/`pluginErrors`/
+      `pluginsDir`/`pluginsLoaded`, `fetchPlugins` (boot dans App + lazy au
+      mount du NodeEditor), `reloadPlugins` (toasts + erreurs de scan)
+- [x] `NodeEditor.tsx` : catégorie "Plugins" dynamique — un item par
+      manifeste (nom + version + tooltip description/auteur), création de
+      node pré-remplie (`plugin_id` + defaults), hint du dossier plugins
+      quand vide, erreurs de scan affichées, bouton ↻ Rescan ; l'item
+      générique `Plugin` reste pour saisie manuelle de `plugin_id`
+- [x] `NodeParamsPanel` : schema Plugin = `plugin_id` + defs du manifeste ;
+      chips affichent le nom du plugin (avec occurrence indexée)
+- [x] `CustomNode` : label = nom du manifeste (fallback `data.label`),
+      params inline mergés dans le node expandé
 - [ ] Icône `icon.svg` du bundle dans la palette (optionnel MVP)
 
 ### Phase 5 — SDK invité (`stagespace-plugin-sdk`) — ✅ livré
