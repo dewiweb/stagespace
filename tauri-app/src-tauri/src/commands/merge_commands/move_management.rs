@@ -8,7 +8,7 @@
 
 use crate::commands::error::IpcError;
 use crate::commands::state::{lock_or_recover, Shared};
-use crate::graph::compilation::compile_graph_with_audio_osc;
+use crate::graph::compilation::compile_graph_live;
 use crate::graph::parser::build_graph_from_json;
 use crate::{AppState, Movement, MAX_MOVEMENTS};
 use serde::Deserialize;
@@ -263,17 +263,14 @@ fn spawn_move_inner(spec: MoveSpec, sh: &Shared, abort_on_recall: bool) -> Resul
     // chaque frame sans propagation par polling (une seule source de vérité).
     let runtime = Runtime::new_with_audio_state(sh.audio_state.clone());
 
-    // 3. Compiler avec audio + overrides + cache des valeurs OSC reçues
-    //    (nodes OSCInput lisent extra["osc_value"] live — sans handle ils
-    //    produisent un cercle statique).
-    let overrides = runtime.audio_param_overrides();
-    let osc_values = lock_or_recover(&sh.osc_receiver).address_values_handle();
-    let compiled =
-        compile_graph_with_audio_osc(&graph, sh.audio_state.clone(), overrides, osc_values)
-            .map_err(|e| {
-                eprintln!("[ACTIVATE-ERROR] compile_graph failed: {e}");
-                e
-            })?;
+    // 3. Compiler avec toutes les entrées live : audio, valeurs OSC reçues
+    //    (nodes OSCInput lisent extra["osc_value"] — sans handle ils
+    //    produisent un cercle statique) et registry de plugins WASM
+    //    (nodes Plugin → params.plugin_id).
+    let compiled = compile_graph_live(&graph, sh).map_err(|e| {
+        eprintln!("[ACTIVATE-ERROR] compile_graph failed: {e}");
+        e
+    })?;
 
     // 4. Configurer le worker
     runtime.set_preview_mode(spec.is_preview);

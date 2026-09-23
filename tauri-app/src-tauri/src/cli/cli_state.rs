@@ -68,6 +68,7 @@ impl CliState {
             merge_runtime,
             recall_in_progress: Arc::new(AtomicBool::new(false)),
             osc_receiver: Arc::new(Mutex::new(osc_receiver)),
+            plugin_registry: None,
         };
 
         Ok(Self {

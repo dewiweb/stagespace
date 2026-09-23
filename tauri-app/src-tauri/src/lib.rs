@@ -4,7 +4,7 @@
 use serde::Serialize;
 use stagespace_engines::{
     init_logging, AudioCaptureManager, AudioState, MergeRuntime, OscReceiver, OscSender,
-    PresetManager, Runtime,
+    PluginRegistry, PresetManager, Runtime,
 };
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU64};
@@ -39,6 +39,7 @@ use commands::osc::{
 };
 use commands::overrides::{clear_all_overrides, set_object_override};
 use commands::playback::set_macro;
+use commands::plugins::{list_plugins, reload_plugins};
 use commands::presets::{preset_delete, preset_list, preset_load, preset_save};
 use commands::sampling::{
     frontend_log, get_perf_stats, sample_movement_trajectories, sample_movement_trajectory,
@@ -70,6 +71,11 @@ pub struct AppState {
     pub audio_capture: Arc<Mutex<AudioCaptureManager>>,
     /// Flag pour arrêter le poller audio proprement à la fermeture
     pub audio_poller_shutdown: Arc<AtomicBool>,
+    /// Registry des plugins WASM — None si wasmtime n'a pas pu s'initialiser.
+    /// Mutex : `reload_plugins` re-scanne in-place sans stopper le runtime.
+    pub plugin_registry: Option<Arc<Mutex<stagespace_engines::PluginRegistry>>>,
+    /// Dossier des bundles `.ssx` (`<app_data_dir>/plugins/`).
+    pub plugins_dir: Option<std::path::PathBuf>,
 }
 
 /// Un movement = un runtime indépendant avec ses propres tracks et mode (preview/live)
@@ -148,6 +154,33 @@ pub fn run() {
                     eprintln!("[FATAL] MergeRuntime: no UDP port available — exiting");
                     std::process::exit(1);
                 });
+            // Plugins WASM — dossier `<data_dir>/com.stagespace.studio/plugins/`
+            // (même racine que l'app_data_dir Tauri : identifier de
+            // tauri.conf.json). Un plugin cassé n'empêche pas les autres —
+            // erreurs collectées dans le registry, visibles via list_plugins.
+            let plugins_dir =
+                dirs::data_dir().map(|d| d.join("com.stagespace.studio").join("plugins"));
+            if let Some(dir) = &plugins_dir {
+                let _ = std::fs::create_dir_all(dir);
+            }
+            let plugin_registry = match PluginRegistry::new() {
+                Ok(mut reg) => {
+                    if let Some(dir) = &plugins_dir {
+                        let n = reg.scan_dir(dir);
+                        if n > 0 {
+                            eprintln!("[PLUGINS] {n} plugin(s) loaded from {}", dir.display());
+                        }
+                        for (path, err) in reg.errors() {
+                            eprintln!("[PLUGINS-ERROR] {}: {err}", path.display());
+                        }
+                    }
+                    Some(Arc::new(Mutex::new(reg)))
+                }
+                Err(e) => {
+                    eprintln!("[PLUGINS-ERROR] wasmtime init failed: {e}");
+                    None
+                }
+            };
             AppState {
                 audio_state,
                 osc_receiver: Arc::new(Mutex::new(OscReceiver::new(8001))),
@@ -160,6 +193,8 @@ pub fn run() {
                 recall_in_progress: Arc::new(std::sync::atomic::AtomicBool::new(false)),
                 audio_capture: Arc::new(Mutex::new(AudioCaptureManager::new())),
                 audio_poller_shutdown: Arc::new(AtomicBool::new(false)),
+                plugin_registry,
+                plugins_dir,
             }
         })
         .on_window_event(|window, event| {
@@ -348,6 +383,9 @@ pub fn run() {
             store_cue,
             recall_cue,
             frontend_log,
+            // Plugins WASM (bundles .ssx dans <data_dir>/plugins/)
+            list_plugins,
+            reload_plugins,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

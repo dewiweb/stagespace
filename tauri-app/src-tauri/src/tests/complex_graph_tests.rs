@@ -31,6 +31,7 @@ mod complex_graph_tests {
             merge_runtime: Arc::new(Mutex::new(merge)),
             recall_in_progress: Arc::new(AtomicBool::new(false)),
             osc_receiver: Arc::new(Mutex::new(OscReceiver::new(0))),
+            plugin_registry: None,
         }
     }
 

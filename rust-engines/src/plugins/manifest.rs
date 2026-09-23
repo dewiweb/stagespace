@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 /// Version de l'ABI host ↔ invité supportée par ce build.
 /// Bump quand la signature `plugin_position` ou le layout des buffers change.
@@ -11,20 +12,25 @@ pub const MAX_PARAMS_BYTES: usize = 64 * 1024;
 /// Catégorie de node fournie par le plugin.
 /// v1 : engines purs uniquement (modifier/composite = ABI v2 — un modifier
 /// exigerait de passer la closure upstream en mémoire wasm).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
+#[ts(export)]
 pub enum PluginKind {
     Engine,
 }
 
 /// Déclaration d'un paramètre exposé par le plugin — mêmes types que
 /// `ParamDef` côté frontend (`NodeParamField` rend ces types génériquement).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct PluginParamDef {
     pub key: String,
     #[serde(rename = "type")]
     pub param_type: String,
+    /// Valeur par défaut — `serde_json::Value` car le type dépend de
+    /// `param_type` (number/boolean/string/[f64;3]).
     #[serde(default)]
+    #[ts(type = "unknown")]
     pub default: serde_json::Value,
     #[serde(default)]
     pub min: Option<f64>,
@@ -41,7 +47,8 @@ pub struct PluginParamDef {
 }
 
 /// Manifeste `manifest.json` d'un bundle `.ssx`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct PluginManifest {
     pub id: String,
     pub name: String,

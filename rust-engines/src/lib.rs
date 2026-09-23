@@ -60,7 +60,7 @@ pub use audio::{
 pub use audio_capture::{AudioCaptureError, AudioCaptureManager, AudioDeviceInfo, BpmDetector};
 pub use bpm::BpmTracker;
 pub use compiler::{
-    AudioParamOverrides, CompilationError, CompiledFunction, Compiler, OscValueMap,
+    AudioParamOverrides, CompilationError, CompiledFunction, Compiler, LiveInputs, OscValueMap,
 };
 pub use config::{AudioConfig, Config, GraphConfig, OscConfig, RuntimeConfig};
 pub use cuelist::{Cue, CuelistManager, MacroSnapshot, MoveSnapshot, SpatialMacroSnapshot};

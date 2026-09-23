@@ -1,7 +1,7 @@
 //! Hot-swap de graphs : update_move_graph_merged (sub-graph) + update_global_graph (post-process)
 
 use crate::commands::state::Shared;
-use crate::graph::compilation::compile_graph_with_audio_osc;
+use crate::graph::compilation::compile_graph_live;
 use crate::graph::parser::build_graph_from_json;
 use crate::AppState;
 use tauri::State;
@@ -26,25 +26,20 @@ pub async fn update_move_graph_merged(
     tauri::async_runtime::spawn_blocking(move || {
         // Snapshot court sous le lock — la compilation (lourde) se fait ensuite
         // SANS tenir `movements`, sinon tout edit live gèle stop/panic/recall.
-        let (generation, overrides) = {
+        let generation = {
             let movements = lock_or_recover(&sh.movements);
             let movement = movements.get(&movement_id).ok_or_else(|| {
                 IpcError::not_found(format!("Movement '{movement_id}' not found"))
             })?;
-            (
-                movement.generation,
-                movement.runtime.audio_param_overrides(),
-            )
+            movement.generation
         };
 
         let audio_state = lock_or_recover(&sh.audio_state);
         let graph = build_graph_from_json(&graph_json, &audio_state).map_err(IpcError::from)?;
         drop(audio_state);
 
-        let osc_values = lock_or_recover(&sh.osc_receiver).address_values_handle();
-        let compiled =
-            compile_graph_with_audio_osc(&graph, sh.audio_state.clone(), overrides, osc_values)
-                .map_err(IpcError::from)?;
+        // Compile avec toutes les entrées live (audio + OSC reçus + plugins).
+        let compiled = compile_graph_live(&graph, &sh).map_err(IpcError::from)?;
 
         // Ré-application sous lock, avec check de génération — le move a pu être
         // stoppé puis respawné pendant la compile : dans ce cas on applique au

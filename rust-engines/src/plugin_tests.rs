@@ -14,7 +14,7 @@ mod tests {
     use crate::validator::Validator;
     use serde_json::json;
     use std::io::{Cursor, Write};
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
 
     /// Plugin de test minimal : écrit (t, i, params_len) dans le buffer
     /// résultat — prouve le passage des scalaires ET du JSON de params.
@@ -64,11 +64,11 @@ mod tests {
         }
     }
 
-    fn registry_with(id: &str, wat: &str) -> Arc<PluginRegistry> {
+    fn registry_with(id: &str, wat: &str) -> Arc<Mutex<PluginRegistry>> {
         let mut reg = PluginRegistry::new().expect("registry");
         reg.register_wasm(manifest(id), wat.as_bytes())
             .expect("register");
-        Arc::new(reg)
+        Arc::new(Mutex::new(reg))
     }
 
     fn engine_params() -> EngineParams {
@@ -127,6 +127,7 @@ mod tests {
     #[test]
     fn wasm_engine_computes_positions() {
         let reg = registry_with("echo", ECHO_WAT);
+        let reg = reg.lock().unwrap_or_else(|e| e.into_inner());
         let plugin = reg.get("echo").expect("plugin");
         let engine = PluginEngine::new(plugin, reg.wasm_engine()).expect("engine");
         let params = engine_params();
@@ -141,6 +142,7 @@ mod tests {
     #[test]
     fn wasm_engine_trap_returns_zero_not_panic() {
         let reg = registry_with("trapper", TRAP_WAT);
+        let reg = reg.lock().unwrap_or_else(|e| e.into_inner());
         let plugin = reg.get("trapper").expect("plugin");
         let engine = PluginEngine::new(plugin, reg.wasm_engine()).expect("engine");
         let p = engine.position(1.0, 0, &engine_params());
@@ -153,6 +155,7 @@ mod tests {
     #[test]
     fn wasm_engine_infinite_loop_killed_by_fuel() {
         let reg = registry_with("loopy", INFINITE_WAT);
+        let reg = reg.lock().unwrap_or_else(|e| e.into_inner());
         let plugin = reg.get("loopy").expect("plugin");
         let engine = PluginEngine::new(plugin, reg.wasm_engine()).expect("engine");
         let start = std::time::Instant::now();
@@ -168,6 +171,7 @@ mod tests {
     fn wasm_engine_rejects_missing_exports() {
         let wat = r#"(module (memory (export "memory") 1))"#;
         let reg = registry_with("bare", wat);
+        let reg = reg.lock().unwrap_or_else(|e| e.into_inner());
         let plugin = reg.get("bare").expect("plugin");
         match PluginEngine::new(plugin, reg.wasm_engine()) {
             Ok(_) => panic!("missing exports should fail"),

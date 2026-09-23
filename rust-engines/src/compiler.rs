@@ -26,7 +26,10 @@ pub type OscValueMap = Arc<Mutex<HashMap<String, Vec<f64>>>>;
 pub struct LiveInputs {
     pub audio: Option<Arc<Mutex<AudioState>>>,
     pub osc_values: Option<OscValueMap>,
-    pub plugins: Option<Arc<PluginRegistry>>,
+    /// Mutex car le registry peut être rechargé en live (`reload_plugins`) —
+    /// les closures déjà compilées gardent leur `Arc<Plugin>` snapshot,
+    /// les nouvelles compilations voient les plugins à jour.
+    pub plugins: Option<Arc<Mutex<PluginRegistry>>>,
 }
 
 /// Erreur de compilation
@@ -106,7 +109,7 @@ impl Compiler {
         graph: &Graph,
         audio_state: Option<Arc<Mutex<AudioState>>>,
         osc_values: Option<OscValueMap>,
-        plugins: Option<Arc<PluginRegistry>>,
+        plugins: Option<Arc<Mutex<PluginRegistry>>>,
     ) -> Result<CompiledFunction, CompilationError> {
         let live = LiveInputs {
             audio: audio_state,
@@ -775,12 +778,13 @@ impl Compiler {
                     .get("plugin_id")
                     .and_then(|v| v.as_str())
                     .unwrap_or_default();
-                let registry = live.plugins.as_ref().ok_or_else(|| {
+                let registry_arc = live.plugins.as_ref().ok_or_else(|| {
                     CompilationError::InvalidParameter(
                         "Plugin node requires a plugin registry (use compile_with_live_inputs)"
                             .to_string(),
                     )
                 })?;
+                let registry = registry_arc.lock().unwrap_or_else(|e| e.into_inner());
                 let plugin = registry.get(plugin_id).ok_or_else(|| {
                     CompilationError::InvalidParameter(format!(
                         "unknown plugin_id '{plugin_id}' — plugin absent du dossier plugins/ ou erreur de chargement"

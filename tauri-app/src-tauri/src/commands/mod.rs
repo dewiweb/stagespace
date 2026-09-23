@@ -8,6 +8,7 @@ pub mod network;
 pub mod osc;
 pub mod overrides;
 pub mod playback;
+pub mod plugins;
 pub mod presets;
 pub mod sampling;
 pub mod state;

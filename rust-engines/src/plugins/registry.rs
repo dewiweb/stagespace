@@ -33,7 +33,9 @@ impl PluginRegistry {
 
     /// Scanne un dossier et charge tous les `.ssx` trouvés.
     /// Retourne le nombre de plugins chargés. Dossier absent = Ok(0).
+    /// `errors()` reflète les erreurs du dernier scan (remise à zéro).
     pub fn scan_dir(&mut self, dir: &Path) -> usize {
+        self.load_errors.clear();
         let entries = match std::fs::read_dir(dir) {
             Ok(e) => e,
             Err(_) => return 0,

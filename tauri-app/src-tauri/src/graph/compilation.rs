@@ -1,4 +1,7 @@
-use stagespace_engines::{AudioParamOverrides, AudioState, Compiler, Graph, PositionFn};
+use crate::commands::state::{lock_or_recover, Shared};
+use stagespace_engines::{
+    AudioParamOverrides, AudioState, Compiler, Graph, LiveInputs, PositionFn,
+};
 use std::sync::{Arc, Mutex};
 
 /// Compile un Graph en PositionFn — wrapper autour de Compiler::compile
@@ -39,5 +42,21 @@ pub fn compile_graph_with_audio_osc(
     osc_values: stagespace_engines::OscValueMap,
 ) -> Result<PositionFn, String> {
     Compiler::compile_with_audio_osc(graph, audio_state, overrides, osc_values)
+        .map_err(|e| format!("Compilation failed: {e:?}"))
+}
+
+/// Compile un graphe avec toutes les entrées live : audio state, cache des
+/// valeurs OSC reçues et registry de plugins WASM. **Chemin de production** —
+/// activate_move / update_move_graph / respawn de cue doivent passer par ici
+/// pour que les nodes `Plugin` résolvent leur `plugin_id` (sinon le compile
+/// échoue avec "requires a plugin registry").
+pub fn compile_graph_live(graph: &Graph, sh: &Shared) -> Result<PositionFn, String> {
+    let osc_values = lock_or_recover(&sh.osc_receiver).address_values_handle();
+    let live = LiveInputs {
+        audio: Some(sh.audio_state.clone()),
+        osc_values: Some(osc_values),
+        plugins: sh.plugin_registry.clone(),
+    };
+    Compiler::compile_with_live_inputs(graph, live)
         .map_err(|e| format!("Compilation failed: {e:?}"))
 }
