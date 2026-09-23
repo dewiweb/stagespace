@@ -19,6 +19,7 @@ import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import CustomNode from './CustomNode';
 import { NODE_CATEGORIES, NODE_COLORS, NODE_DESCRIPTIONS, getCategoryColor, getDefaultParams, getValidTargetTypes, pluginDefaultParams, GLOBAL_ONLY_NODES, SUB_ONLY_NODES } from './nodeParamSchema';
 import { isValidConnection } from '../utils/connectionRules';
+import { open } from '@tauri-apps/plugin-dialog';
 import type { PluginManifest } from '../types/generated/PluginManifest';
 
 const nodeTypes: NodeTypes = { custom: CustomNode };
@@ -80,6 +81,7 @@ export const NodeEditor: React.FC = () => {
   const pluginsLoaded = useGraphStore((s) => s.pluginsLoaded);
   const fetchPlugins = useGraphStore((s) => s.fetchPlugins);
   const reloadPlugins = useGraphStore((s) => s.reloadPlugins);
+  const importPlugin = useGraphStore((s) => s.importPlugin);
   useEffect(() => {
     if (!pluginsLoaded) void fetchPlugins();
   }, [pluginsLoaded, fetchPlugins]);
@@ -410,6 +412,19 @@ export const NodeEditor: React.FC = () => {
                         ⚠ {e}
                       </div>
                     ))}
+                    <button
+                      onClick={async () => {
+                        const selected = await open({
+                          filters: [{ name: 'STAGESPACE plugin', extensions: ['ssx'] }],
+                          multiple: false,
+                        });
+                        if (typeof selected === 'string') void importPlugin(selected);
+                      }}
+                      className="w-full text-left px-2.5 py-1 text-gray-500 hover:text-yellow-400 text-[10px] rounded transition-colors"
+                      title="Importer un bundle .ssx (copie + rescan)"
+                    >
+                      + Import .ssx…
+                    </button>
                     <button
                       onClick={() => void reloadPlugins()}
                       className="w-full text-left px-2.5 py-1 text-gray-500 hover:text-yellow-400 text-[10px] rounded transition-colors"

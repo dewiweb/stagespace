@@ -39,7 +39,7 @@ use commands::osc::{
 };
 use commands::overrides::{clear_all_overrides, set_object_override};
 use commands::playback::set_macro;
-use commands::plugins::{list_plugins, reload_plugins};
+use commands::plugins::{import_plugin, list_plugins, reload_plugins};
 use commands::presets::{preset_delete, preset_list, preset_load, preset_save};
 use commands::sampling::{
     frontend_log, get_perf_stats, sample_movement_trajectories, sample_movement_trajectory,
@@ -386,6 +386,7 @@ pub fn run() {
             // Plugins WASM (bundles .ssx dans <data_dir>/plugins/)
             list_plugins,
             reload_plugins,
+            import_plugin,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

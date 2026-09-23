@@ -60,3 +60,36 @@ pub async fn reload_plugins(state: State<'_, AppState>) -> Result<PluginRegistry
     }
     Ok(current_report(&state))
 }
+
+/// Importe un bundle `.ssx` : copie dans le dossier plugins + rescan.
+/// Un bundle invalide n'échoue pas l'import — il est copié puis rapporté
+/// dans `errors` du report (comme tout `.ssx` cassé du dossier), ce qui
+/// permet à l'utilisateur de voir pourquoi son fichier est refusé.
+#[tauri::command]
+pub async fn import_plugin(
+    source_path: String,
+    state: State<'_, AppState>,
+) -> Result<PluginRegistryReport, IpcError> {
+    let dir = state
+        .plugins_dir
+        .as_ref()
+        .ok_or_else(|| IpcError::internal("Plugin directory unavailable".to_string()))?;
+    let src = std::path::Path::new(&source_path);
+    if src.extension().and_then(|e| e.to_str()) != Some("ssx") {
+        return Err(IpcError::validation(
+            "Expected a .ssx plugin bundle".to_string(),
+        ));
+    }
+    let file_name = src
+        .file_name()
+        .ok_or_else(|| IpcError::validation("Invalid plugin path".to_string()))?;
+    // file_name ne peut pas contenir de séparateur → pas de traversal.
+    let dest = dir.join(file_name);
+    std::fs::copy(src, &dest).map_err(|e| IpcError::io(format!("Failed to copy plugin: {e}")))?;
+
+    if let Some(registry) = &state.plugin_registry {
+        let mut reg = lock_or_recover(registry);
+        reg.scan_dir(dir);
+    }
+    Ok(current_report(&state))
+}

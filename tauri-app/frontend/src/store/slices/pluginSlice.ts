@@ -25,6 +25,9 @@ export interface PluginSlice {
   pluginsLoaded: boolean;
   fetchPlugins: () => Promise<void>;
   reloadPlugins: () => Promise<void>;
+  /// Copie un `.ssx` choisi via dialog dans le dossier plugins + rescan.
+  /// Un bundle invalide n'échoue pas : copié puis rapporté dans pluginErrors.
+  importPlugin: (sourcePath: string) => Promise<void>;
 }
 
 export const createPluginSlice: StateCreator<
@@ -70,6 +73,27 @@ export const createPluginSlice: StateCreator<
       }
     } catch (e) {
       toast.error('Plugin reload failed: ' + e);
+    }
+  },
+
+  importPlugin: async (sourcePath) => {
+    try {
+      const r = await safeInvoke<PluginRegistryReport>('import_plugin', {
+        sourcePath,
+      });
+      set({
+        plugins: r.manifests,
+        pluginErrors: r.errors,
+        pluginsDir: r.plugins_dir,
+        pluginsLoaded: true,
+      });
+      if (r.errors.length > 0) {
+        toast.warning('Plugin imported with errors — see palette');
+      } else {
+        toast.success('Plugin imported');
+      }
+    } catch (e) {
+      toast.error('Plugin import failed: ' + e);
     }
   },
 });

@@ -69,6 +69,36 @@ describe('reloadPlugins', () => {
   });
 });
 
+describe('importPlugin', () => {
+  it('invokes import_plugin with the chosen path and refreshes state', async () => {
+    setInvokeResponse('import_plugin', report);
+    await useGraphStore.getState().importPlugin('/downloads/lemniscate.ssx');
+    const s = useGraphStore.getState();
+    expect(s.plugins).toHaveLength(1);
+    expect(
+      getInvokeCalls().some(
+        (c) => c.cmd === 'import_plugin' && c.args?.sourcePath === '/downloads/lemniscate.ssx',
+      ),
+    ).toBe(true);
+  });
+
+  it('surfaces bundle errors without throwing', async () => {
+    setInvokeResponse('import_plugin', {
+      ...report,
+      manifests: [],
+      errors: ['/plugins/bad.ssx: abi_version 2 not supported'],
+    });
+    await useGraphStore.getState().importPlugin('/x/bad.ssx');
+    expect(useGraphStore.getState().pluginErrors).toHaveLength(1);
+  });
+
+  it('reports backend failure via toast, no crash', async () => {
+    setInvokeResponse('import_plugin', new Error('copy failed'));
+    await useGraphStore.getState().importPlugin('/x/a.ssx');
+    expect(useGraphStore.getState().plugins).toEqual([]);
+  });
+});
+
 describe('pluginParamDefs / pluginDefaultParams / pluginNodeSchema', () => {
   it('maps manifest params to ParamDef with fallbacks', () => {
     const defs = pluginParamDefs(lemniscateManifest);
