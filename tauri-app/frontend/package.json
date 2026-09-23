@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "contracts": "bash ../../scripts/gen_contracts.sh",
+    "generate:example": "vite-node scripts/generate-example-show.ts",
     "test:watch": "vitest"
   },
   "dependencies": {
