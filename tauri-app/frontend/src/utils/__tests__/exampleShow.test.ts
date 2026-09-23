@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+// Import ?raw (vite/client) — pas de node:fs/__dirname, absents du tsconfig.
+import rawHfg from '../../../../../examples/full-feature-show.hfg?raw';
 import { isValidConnection, getInputPorts } from '../connectionRules';
 import type { NodeType } from '../../store/useGraphStore';
 import {
@@ -16,8 +16,7 @@ import type { Node, Edge } from 'reactflow';
 /// Charge examples/full-feature-show.hfg (repo root) et vérifie que le show
 /// est chargeable : enveloppe v2, graphes valides (règles de connexion,
 /// ports, arité), cohérence slots/tracks/cues.
-const HFG_PATH = resolve(__dirname, '../../../../../examples/full-feature-show.hfg');
-const raw = JSON.parse(readFileSync(HFG_PATH, 'utf-8'));
+const raw = JSON.parse(rawHfg);
 
 const nodeType = (n: Node) => (n.data as { type?: NodeType }).type as NodeType;
 

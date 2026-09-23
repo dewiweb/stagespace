@@ -158,8 +158,7 @@ export function getInputPorts(type: NodeType): string[] {
     case 'Pendulum': case 'RoseCurve': case 'Helix': case 'Wave': case 'CustomTrajectory':
     case 'Bouncing': case 'Spring': case 'Follow': case 'Swarm': case 'Avoidance': case 'VectorField':
     case 'BPM': case 'AudioAmplitude':
-    // Engines comme les autres : Objects/Duration peuvent les alimenter.
-    case 'AudioSpectrum': case 'OSCInput':
+    case 'AudioSpectrum': case 'OSCInput': // engines : Objects/Duration peuvent les alimenter
     case 'DrawSpline':
     case 'TimeFalloff': case 'PointDistanceFalloff': case 'DirectionalFalloff': case 'AudioAmplitudeFalloff':
       return ['input', 'duration'];
