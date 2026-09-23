@@ -269,12 +269,11 @@ fn spawn_move_inner(spec: MoveSpec, sh: &Shared, abort_on_recall: bool) -> Resul
     let overrides = runtime.audio_param_overrides();
     let osc_values = lock_or_recover(&sh.osc_receiver).address_values_handle();
     let compiled =
-        compile_graph_with_audio_osc(&graph, sh.audio_state.clone(), overrides, osc_values).map_err(
-            |e| {
+        compile_graph_with_audio_osc(&graph, sh.audio_state.clone(), overrides, osc_values)
+            .map_err(|e| {
                 eprintln!("[ACTIVATE-ERROR] compile_graph failed: {e}");
                 e
-            },
-        )?;
+            })?;
 
     // 4. Configurer le worker
     runtime.set_preview_mode(spec.is_preview);

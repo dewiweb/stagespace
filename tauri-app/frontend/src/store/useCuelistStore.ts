@@ -19,6 +19,10 @@ interface CuelistState {
   storeCue: (cue: StoreCueRequest) => Promise<CueData>;
   recallCue: (cueId: string) => Promise<void>;
   deleteCue: (cueId: string) => void;
+  /// Met à jour un cue en place (fade_duration éditable post-store) —
+  /// la cuelist vit côté frontend (localStorage), le backend n'en garde
+  /// pas de copie.
+  updateCue: (cue: CueData) => void;
   goToNextCue: () => Promise<void>;
   goToPreviousCue: () => Promise<void>;
 }
@@ -112,6 +116,12 @@ export const useCuelistStore = create<CuelistState>((set, get) => ({
     }
     set({ cues: filtered, currentCueIndex: newIndex });
     saveToStorage(filtered);
+  },
+
+  updateCue: (cue) => {
+    const cues = get().cues.map((c) => (c.id === cue.id ? cue : c));
+    set({ cues });
+    saveToStorage(cues);
   },
 
   goToNextCue: async () => {

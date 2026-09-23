@@ -9,8 +9,12 @@ mod example_show_tests {
     use std::sync::{Arc, Mutex};
 
     fn load_show() -> serde_json::Value {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/full-feature-show.hfg");
-        let text = std::fs::read_to_string(path).expect("example .hfg missing — run npm run generate:example");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../examples/full-feature-show.hfg"
+        );
+        let text = std::fs::read_to_string(path)
+            .expect("example .hfg missing — run npm run generate:example");
         serde_json::from_str(&text).expect("invalid .hfg JSON")
     }
 
@@ -35,8 +39,11 @@ mod example_show_tests {
         let mut report = Vec::new();
         for slot in show["slots"].as_array().expect("slots") {
             let name = slot["name"].as_str().unwrap();
-            let graph = build_graph_from_json(&slot["graphJson"], &audio.lock().unwrap_or_else(|e| e.into_inner()))
-                .unwrap_or_else(|e| panic!("{name}: graph build failed: {e}"));
+            let graph = build_graph_from_json(
+                &slot["graphJson"],
+                &audio.lock().unwrap_or_else(|e| e.into_inner()),
+            )
+            .unwrap_or_else(|e| panic!("{name}: graph build failed: {e}"));
             let f = compile_graph_with_audio(&graph, audio.clone())
                 .unwrap_or_else(|e| panic!("{name}: compile failed: {e}"));
             let n = slot["trackIds"].as_array().unwrap().len();

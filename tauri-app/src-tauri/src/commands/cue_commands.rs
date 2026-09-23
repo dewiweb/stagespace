@@ -61,12 +61,13 @@ pub async fn store_cue(
 ) -> Result<Cue, IpcError> {
     // Capturer l'état runtime réel du backend (P1-P4) — l'engine détient la
     // vérité, le frontend ne voit qu'une partie de cet état.
-    let (object_channels, channel_modulations, zones) = {
+    let (object_channels, channel_modulations, zones, per_track_depths) = {
         let merge_rt = lock_or_recover(&state.merge_runtime);
         (
             merge_rt.object_channels(),
             merge_rt.modulations(),
             merge_rt.zones(),
+            merge_rt.track_depths(),
         )
     };
     let osc_mappings = lock_or_recover(&state.osc_receiver).list_mappings();
@@ -115,7 +116,9 @@ pub async fn store_cue(
         cue_number: request.cue_number,
         global_graph: request.global_graph,
         active_move_ids: request.active_move_ids,
-        per_track_depths: request.per_track_depths,
+        // Capturé depuis le runtime (comme zones/channels) — le champ de la
+        // request était toujours [] côté frontend.
+        per_track_depths,
         manual_positions: request.manual_positions,
         spatial_macros: request.spatial_macros,
         object_channels: Some(object_channels),
@@ -227,11 +230,17 @@ pub(crate) fn recall_cue_inner(cue: Cue, sh: crate::commands::state::Shared) -> 
         }
     }
 
-    // 2. Désactiver les moves qui ne sont pas dans active_move_ids
+    // 2. Désactiver les moves absents du cue. Quand le cue porte des
+    //    snapshots (Phase 5), `moves` est la vérité backend — un move spawné
+    //    entre le poll frontend et le store y figure, alors qu'il manquerait
+    //    dans active_move_ids (killed-then-respawned au lieu de continuer).
     {
         let movements = lock_or_recover(&sh.movements);
-        let active_ids: std::collections::HashSet<&str> =
-            cue.active_move_ids.iter().map(|s| s.as_str()).collect();
+        let active_ids: std::collections::HashSet<&str> = if cue.moves.is_empty() {
+            cue.active_move_ids.iter().map(|s| s.as_str()).collect()
+        } else {
+            cue.moves.iter().map(|s| s.id.as_str()).collect()
+        };
 
         let to_deactivate: Vec<String> = movements
             .keys()

@@ -311,6 +311,16 @@ impl MergeRuntime {
         *self.track_depths.write().unwrap_or_else(|e| e.into_inner()) = Arc::new(depths);
     }
 
+    /// Depths par track courantes — snapshoté par store_cue (le runtime
+    /// détient la vérité, pas le frontend).
+    pub fn track_depths(&self) -> Vec<f64> {
+        self.track_depths
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .clone()
+    }
+
     /// Définit la stratégie de merge
     pub fn set_merge_strategy(&self, strategy: MergeStrategy) {
         *self

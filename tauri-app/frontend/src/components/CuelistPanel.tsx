@@ -12,10 +12,12 @@ export const CuelistPanel: React.FC = () => {
   const storeCue = useCuelistStore((s) => s.storeCue);
   const recallCue = useCuelistStore((s) => s.recallCue);
   const deleteCue = useCuelistStore((s) => s.deleteCue);
+  const updateCue = useCuelistStore((s) => s.updateCue);
   const goToNextCue = useCuelistStore((s) => s.goToNextCue);
   const goToPreviousCue = useCuelistStore((s) => s.goToPreviousCue);
 
   const [newCueName, setNewCueName] = useState('');
+  const [newCueFade, setNewCueFade] = useState(0.5);
   // Confirmation avant delete — un cue supprimé n'est pas récupérable et
   // le bouton ✕ est adjacent au recall (un misclick live coûte le cue).
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
@@ -71,7 +73,7 @@ export const CuelistPanel: React.FC = () => {
         height_offset: macros.height_offset ?? 0.0,
       },
       track_indices: slot?.trackIds ?? [],
-      fade_duration: 0.5,
+      fade_duration: newCueFade,
       cue_number: null,
       global_graph: globalGraphJson,
       active_move_ids: activeMoveIds,
@@ -126,6 +128,15 @@ export const CuelistPanel: React.FC = () => {
           placeholder="Nom du cue..."
           className="flex-1 px-2 py-1 text-[11px] bg-gray-900 border border-gray-700 rounded text-white placeholder-gray-600 focus:outline-none focus:border-purple-500"
         />
+        <input
+          type="number"
+          min={0}
+          step={0.1}
+          value={newCueFade}
+          onChange={(e) => setNewCueFade(Math.max(0, Number(e.target.value) || 0))}
+          title="Durée du crossfade au recall (s)"
+          className="w-14 px-1.5 py-1 text-[11px] bg-gray-900 border border-gray-700 rounded text-white text-right font-mono focus:outline-none focus:border-purple-500"
+        />
         <button
           onClick={handleStoreCue}
           disabled={!newCueName.trim()}
@@ -167,11 +178,35 @@ export const CuelistPanel: React.FC = () => {
                   <div className="text-white text-[11px] font-medium truncate">
                     {cue.name}
                   </div>
-                  {cue.active_move_ids.length > 0 && (
-                    <div className="text-gray-600 text-[10px] truncate">
-                      {cue.active_move_ids.length} move(s)
-                    </div>
-                  )}
+                  <div className="text-gray-600 text-[10px] truncate flex items-center gap-1.5">
+                    {cue.active_move_ids.length > 0 && (
+                      <span>{cue.active_move_ids.length} move(s)</span>
+                    )}
+                    {cue.id === armedCueId ? (
+                      <label
+                        className="flex items-center gap-1 text-amber-400"
+                        onClick={(e) => e.stopPropagation()}
+                        onDoubleClick={(e) => e.stopPropagation()}
+                      >
+                        fade
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.1}
+                          defaultValue={cue.fade_duration}
+                          key={`${cue.id}-${cue.fade_duration}`}
+                          onChange={(e) => {
+                            const v = Math.max(0, Number(e.target.value));
+                            if (!isNaN(v)) updateCue({ ...cue, fade_duration: v });
+                          }}
+                          className="w-12 px-1 py-0 bg-gray-900 border border-amber-700/60 rounded text-amber-300 text-right font-mono focus:outline-none"
+                        />
+                        s
+                      </label>
+                    ) : (
+                      <span>· {cue.fade_duration}s</span>
+                    )}
+                  </div>
                 </div>
                 <button
                   onClick={(e) => {

@@ -176,6 +176,73 @@ mod recall_tests {
         }
     }
 
+    /// Quand le cue porte des snapshots (Phase 5), `moves` est la vérité :
+    /// un move running listé dans `moves` mais absent d'`active_move_ids`
+    /// (race poll frontend) doit CONTINUER — pas kill-then-respawn.
+    #[test]
+    fn test_recall_keeps_running_move_listed_in_moves_not_in_active_ids() {
+        use crate::commands::merge_commands::{
+            parse_direction, parse_loop_mode, spawn_move_for_recall, MoveSpec,
+        };
+        let sh = make_shared();
+        {
+            let mr = sh.merge_runtime.lock().unwrap();
+            mr.set_osc_ids(vec![7]);
+        }
+        // Spawn initial via le même chemin que le recall
+        let spec = MoveSpec {
+            id: "mv-live".to_string(),
+            name: "Live".to_string(),
+            graph_json: circular_graph(),
+            osc_ids: vec![7],
+            track_indices: vec![0],
+            is_preview: false,
+            origin: None,
+            duration: 4.0,
+            loop_mode: parse_loop_mode("loop"),
+            direction: parse_direction("forward"),
+            fade: None,
+            speed: None,
+            spatial_macros: None,
+            animation_state: None,
+        };
+        spawn_move_for_recall(spec, &sh).expect("initial spawn");
+        let gen_before = sh.movements.lock().unwrap()["mv-live"].generation;
+
+        // Cue : le move est dans `moves` mais PAS dans active_move_ids.
+        let mut cue = make_cue();
+        cue.active_move_ids = vec![];
+        cue.moves = vec![stagespace_engines::MoveSnapshot {
+            id: "mv-live".to_string(),
+            name: "Live".to_string(),
+            graph_json: circular_graph(),
+            osc_ids: vec![7],
+            track_indices: vec![0],
+            is_preview: false,
+            origin: None,
+            duration: 4.0,
+            loop_mode: "loop".to_string(),
+            direction: "forward".to_string(),
+            animation_state: None,
+            fade_in: 0.0,
+            fade_out: 0.0,
+        }];
+        recall_cue_inner(cue, sh.clone()).expect("recall");
+
+        let mv = sh.movements.lock().unwrap();
+        let m = mv.get("mv-live").expect("move still present");
+        assert_eq!(
+            m.generation, gen_before,
+            "le move doit continuer (même worker), pas être respawné"
+        );
+        assert!(m.runtime.is_running());
+        drop(mv);
+        let m = sh.movements.lock().unwrap().remove("mv-live");
+        if let Some(m) = m {
+            m.runtime.stop();
+        }
+    }
+
     #[test]
     fn test_is_playing_requires_worker_and_merge() {
         let sh = make_shared();
