@@ -109,8 +109,11 @@ export default function MovesTable() {
   // récupérable (l'undo ne couvre pas removeMoveSlot).
   const [pendingDeleteSlot, setPendingDeleteSlot] = React.useState<{ id: string; name: string } | null>(null);
 
-  // Templates basiques pour le dropdown
-  const basicTemplates = SHAPE_PRESETS.filter((p) => p.category === 'basic' || p.category === 'composite');
+  // Templates basiques pour le dropdown — trajectoires simples + layers,
+  // on exclut physics/spline/reactive (réglages spécifiques, moins "one-click")
+  const basicTemplates = SHAPE_PRESETS.filter((p) =>
+    ['orbits', 'gestures', 'shaped', 'transitions', 'layers'].includes(p.category),
+  );
 
   // Setlist info
   const nextSetlistSlotId = currentSetlistIndex >= 0 && currentSetlistIndex + 1 < setlistOrder.length

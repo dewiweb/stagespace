@@ -6,7 +6,7 @@ export interface ShapePreset {
   name: string;
   icon: string;
   description: string;
-  category: 'basic' | 'modifier' | 'composite' | 'spline' | 'physics' | 'audio';
+  category: 'orbits' | 'gestures' | 'shaped' | 'transitions' | 'physics' | 'layers' | 'spline' | 'reactive';
   build: (nObjects: number) => { nodes: Node[]; edges: Edge[] };
 }
 
@@ -108,14 +108,14 @@ const binaryComposite = (
 
 export const SHAPE_PRESETS: ShapePreset[] = [
 
-  // ═══════════════ BASIC ═══════════════
+  // ═══════════════ ORBITS · GESTURES · TRANSITIONS ═══════════════
 
   {
     id: 'circle',
     name: 'Circle',
     icon: '◯',
     description: 'Circular orbit around center',
-    category: 'basic',
+    category: 'orbits',
     build: (n) => baseFlow('Circular', { n_objects: n, radius: 2.0, speed: 1.0, plane: 'xz', phase_offset: true }, n),
   },
   {
@@ -123,7 +123,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Ellipse',
     icon: '⬭',
     description: 'Elliptical orbit with independent axes',
-    category: 'basic',
+    category: 'orbits',
     build: (n) => baseFlow('Elliptical', { n_objects: n, a: 3.0, b: 1.5, speed: 1.0, plane: 'xz', phase_offset: true }, n),
   },
   {
@@ -131,7 +131,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Spiral',
     icon: '🌀',
     description: 'Spiral that expands/contracts over time',
-    category: 'basic',
+    category: 'orbits',
     build: (n) => baseFlow('Spiral', { n_objects: n, radius: 0.5, speed: 1.0, expansion: 1.0, plane: 'xz', phase_offset: true }, n, 6.0),
   },
   {
@@ -139,7 +139,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Figure 8',
     icon: '∞',
     description: 'Lemniscate / figure-8 pattern',
-    category: 'basic',
+    category: 'orbits',
     build: (n) => baseFlow('Figure8', { n_objects: n, scale: 2.5, speed: 1.0, plane: 'xz', phase_offset: true }, n),
   },
   {
@@ -147,7 +147,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Lissajous',
     icon: '✦',
     description: 'Lissajous curve (3:2 harmonic ratio)',
-    category: 'basic',
+    category: 'orbits',
     build: (n) => baseFlow('Lissajous', { n_objects: n, a: 3.0, b: 2.0, delta: 1.5708, scale: 2.0, phase_offset: true }, n, 8.0),
   },
   {
@@ -155,7 +155,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Helix',
     icon: '🧬',
     description: '3D helix with vertical movement',
-    category: 'basic',
+    category: 'orbits',
     build: (n) => baseFlow('Helix', { n_objects: n, radius: 2.0, height: 3.0, turns: 2.0, speed: 1.0, phase_offset: true }, n, 6.0),
   },
   {
@@ -163,7 +163,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Rose',
     icon: '✿',
     description: 'Rose curve with 4 petals',
-    category: 'basic',
+    category: 'orbits',
     build: (n) => baseFlow('RoseCurve', { n_objects: n, radius: 2.5, n_petals: 4, speed: 1.0, plane: 'xy', phase_offset: true }, n, 8.0),
   },
   {
@@ -171,7 +171,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Linear',
     icon: '─',
     description: 'Linear interpolation back-and-forth',
-    category: 'basic',
+    category: 'gestures',
     build: (n) => baseFlow('Linear', { n_objects: n, start: [-2.5, 0, 0], end: [2.5, 0, 0] }, n),
   },
   {
@@ -179,7 +179,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Wave',
     icon: '〰',
     description: 'Traveling wave across objects (stadium wave)',
-    category: 'basic',
+    category: 'gestures',
     build: (n) => baseFlow('Wave', { n_objects: n, amplitude: 1.5, frequency: 1.0, speed: 1.0, axis: 'y', spread: 4.0, phase_offset: true }, n, 4.0),
   },
   {
@@ -187,7 +187,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Oscillation',
     icon: '∿',
     description: 'Sinusoidal sway on one axis — gentle periodic breathing',
-    category: 'basic',
+    category: 'gestures',
     build: (n) => baseFlow('Oscillation', { n_objects: n, amplitude: 1.5, frequency: 1.0, axis: 'y', phase_offset: true }, n),
   },
   {
@@ -195,7 +195,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Pendulum',
     icon: '◠',
     description: 'Gravity swing with damping — natural decelerating arc',
-    category: 'basic',
+    category: 'gestures',
     build: (n) => baseFlow('Pendulum', { n_objects: n, length: 2.0, gravity: 9.81, initial_angle: 0.7, damping: 0.03, phase_offset: true }, n, 6.0),
   },
   {
@@ -203,7 +203,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Perlin Drift',
     icon: '≈',
     description: 'Perlin noise wander — organic non-repeating drift',
-    category: 'basic',
+    category: 'gestures',
     build: (n) => baseFlow('PerlinNoise', { n_objects: n, intensity: 1.2, smoothness: 0.5, seed: 42 }, n, 8.0),
   },
   {
@@ -211,7 +211,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Formation',
     icon: '▦',
     description: 'Static grid formation with slow rotation — held positions',
-    category: 'basic',
+    category: 'gestures',
     build: (n) => baseFlow('Formation', { n_objects: n, shape: 'grid', radius: 2.0, rotate: 0.15, elevation: 0.0 }, n),
   },
   {
@@ -219,7 +219,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Orbit Fade-In',
     icon: '◎',
     description: 'Orbit radius grows from center over time — eased intro effect',
-    category: 'basic',
+    category: 'transitions',
     build: (n) => baseFlow('TimeFalloff', { start_time: 0.0, end_time: 2.5, radius: 2.5, curve: 'ease_out', plane: 'xz' }, n, 6.0),
   },
   {
@@ -227,18 +227,18 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Gravity Well',
     icon: '◉',
     description: 'Eccentric orbit — collapses toward origin opposite the attractor point',
-    category: 'basic',
+    category: 'transitions',
     build: (n) => baseFlow('PointDistanceFalloff', { center: [2.0, 0, 0], max_distance: 4.0, radius: 2.0, curve: 'ease_in_out', plane: 'xz' }, n, 5.0),
   },
 
-  // ═══════════════ MODIFIERS ═══════════════
+  // ═══════════════ SHAPED (engine + modifiers) ═══════════════
 
   {
     id: 'circle-rotate',
     name: 'Circle + Rotate',
     icon: '↻',
     description: 'Circle with rotation modifier — tilted orbit',
-    category: 'modifier',
+    category: 'shaped',
     build: (n) => baseFlow('Circular',
       { n_objects: n, radius: 2.0, speed: 1.0, plane: 'xz', phase_offset: true }, n, 4.0,
       [{ type: 'Rotate', position: { x: 480, y: 180 }, params: { angleX: 0.5, angleY: 0, angleZ: 0.3 } }],
@@ -249,7 +249,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Circle + Offset',
     icon: '⇄',
     description: 'Circle shifted in space — off-center orbit',
-    category: 'modifier',
+    category: 'shaped',
     build: (n) => baseFlow('Circular',
       { n_objects: n, radius: 1.5, speed: 1.0, plane: 'xz', phase_offset: true }, n, 4.0,
       [{ type: 'Offset', position: { x: 480, y: 180 }, params: { x: 2.0, y: 0, z: 1.0 } }],
@@ -260,7 +260,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Circle + Scale',
     icon: '⤢',
     description: 'Circle scaled non-uniformly — stretched orbit',
-    category: 'modifier',
+    category: 'shaped',
     build: (n) => baseFlow('Circular',
       { n_objects: n, radius: 1.5, speed: 1.0, plane: 'xz', phase_offset: true }, n, 4.0,
       [{ type: 'Scale', position: { x: 480, y: 180 }, params: { x: 1.5, y: 1.0, z: 0.5 } }],
@@ -271,7 +271,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Circle + LFO',
     icon: '∿',
     description: 'Circle with LFO breathing effect on Y axis',
-    category: 'modifier',
+    category: 'shaped',
     build: (n) => baseFlow('Circular',
       { n_objects: n, radius: 2.0, speed: 1.0, plane: 'xz', phase_offset: true }, n, 4.0,
       [{ type: 'LFO', position: { x: 480, y: 180 }, params: { waveform: 'sine', frequency: 0.5, amplitude: 0.8, axis: 'y', phase: 0 } }],
@@ -282,7 +282,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Circle + Mirror',
     icon: '⇋',
     description: 'Circle mirrored across XZ plane — symmetrical Y',
-    category: 'modifier',
+    category: 'shaped',
     build: (n) => baseFlow('Circular',
       { n_objects: n, radius: 2.0, speed: 1.0, plane: 'xy', phase_offset: true }, n, 4.0,
       [{ type: 'Mirror', position: { x: 480, y: 180 }, params: { plane: 'xz', offset: 0.0 } }],
@@ -293,7 +293,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Circle + PhaseShift',
     icon: '⇶',
     description: 'Circle with phase shift — wave-like cascade between objects',
-    category: 'modifier',
+    category: 'shaped',
     build: (n) => baseFlow('Circular',
       { n_objects: n, radius: 2.0, speed: 1.0, plane: 'xz', phase_offset: false }, n, 4.0,
       [{ type: 'PhaseShift', position: { x: 480, y: 180 }, params: { shift: 0.1 } }],
@@ -304,7 +304,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Circle + Jitter',
     icon: '✲',
     description: 'Circle with organic noise — less mechanical movement',
-    category: 'modifier',
+    category: 'shaped',
     build: (n) => baseFlow('Circular',
       { n_objects: n, radius: 2.0, speed: 1.0, plane: 'xz', phase_offset: true }, n, 4.0,
       [{ type: 'Jitter', position: { x: 480, y: 180 }, params: { intensity: 0.3, frequency: 2.0, seed: 42 } }],
@@ -315,7 +315,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Circle + Clamp',
     icon: '⬚',
     description: 'Circle constrained to a bounding box — safety for venue limits',
-    category: 'modifier',
+    category: 'shaped',
     build: (n) => baseFlow('Circular',
       { n_objects: n, radius: 3.0, speed: 1.0, plane: 'xz', phase_offset: true }, n, 4.0,
       [{ type: 'Clamp', position: { x: 480, y: 180 }, params: { min_x: -2, max_x: 2, min_y: -2, max_y: 2, min_z: -2, max_z: 2 } }],
@@ -326,7 +326,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Modifier Chain',
     icon: '🔗',
     description: 'Circle → Rotate → Offset → Output — chained modifiers',
-    category: 'modifier',
+    category: 'shaped',
     build: (n) => baseFlow('Circular',
       { n_objects: n, radius: 1.5, speed: 1.0, plane: 'xz', phase_offset: true }, n, 4.0,
       [
@@ -340,21 +340,21 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Side Sweep',
     icon: '◐',
     description: 'One-sided motion — objects on the +X side animate, others hold; tilted',
-    category: 'modifier',
+    category: 'transitions',
     build: (n) => baseFlow('DirectionalFalloff',
       { direction: [1, 0, 0], max_distance: 3.0, radius: 2.0, curve: 'ease_in_out', plane: 'xz' }, n, 4.0,
       [{ type: 'Rotate', position: { x: 480, y: 180 }, params: { angleX: 0, angleY: 0, angleZ: 0.35 } }],
     ),
   },
 
-  // ═══════════════ COMPOSITES ═══════════════
+  // ═══════════════ LAYERS (composites) ═══════════════
 
   {
     id: 'mix-circle-figure8',
     name: 'Mix: Circle + Fig8',
     icon: '⊕',
     description: 'Blend circle and figure-8 with Mix node (50% each)',
-    category: 'composite',
+    category: 'layers',
     build: (n) => binaryComposite('Mix', { blend: 0.5 },
       'Circular', { n_objects: n, radius: 2.0, speed: 1.0, plane: 'xz', phase_offset: true },
       'Figure8', { n_objects: n, scale: 2.0, speed: 1.0, plane: 'xz', phase_offset: true },
@@ -366,7 +366,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Mix: Circle + Spiral',
     icon: '⊕',
     description: 'Blend circle and spiral — orbit that breathes',
-    category: 'composite',
+    category: 'layers',
     build: (n) => binaryComposite('Mix', { blend: 0.3 },
       'Circular', { n_objects: n, radius: 2.0, speed: 1.0, plane: 'xz', phase_offset: true },
       'Spiral', { n_objects: n, radius: 0.5, speed: 1.0, expansion: 1.0, plane: 'xz', phase_offset: true },
@@ -378,7 +378,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Sequence: Circle→Spiral',
     icon: '→',
     description: 'Circle for 4s, then spiral — temporal chaining (hard cut)',
-    category: 'composite',
+    category: 'layers',
     build: (n) => binaryComposite('Sequence', {},
       'Circular', { n_objects: n, radius: 2.0, speed: 1.0, plane: 'xz', phase_offset: true },
       'Spiral', { n_objects: n, radius: 0.5, speed: 1.0, expansion: 1.0, plane: 'xz', phase_offset: true },
@@ -390,7 +390,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Crossfade: Circle⇄Spiral',
     icon: '⇆',
     description: 'Circle then spiral with 1s smooth crossfade transition',
-    category: 'composite',
+    category: 'layers',
     build: (n) => binaryComposite('Crossfade', { fade_duration: 1.0 },
       'Circular', { n_objects: n, radius: 2.0, speed: 1.0, plane: 'xz', phase_offset: true },
       'Spiral', { n_objects: n, radius: 0.5, speed: 1.0, expansion: 1.0, plane: 'xz', phase_offset: true },
@@ -402,7 +402,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Group: Circle + Linear',
     icon: '⊞',
     description: 'First half on circle, second half on linear — partition tracks',
-    category: 'composite',
+    category: 'layers',
     build: (n) => binaryComposite('Group', {},
       'Circular', { n_objects: Math.ceil(n / 2), radius: 2.0, speed: 1.0, plane: 'xz', phase_offset: true },
       'Linear', { n_objects: Math.floor(n / 2), start: [-2, 0, 0], end: [2, 0, 0] },
@@ -414,7 +414,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Mix: Order + Chaos',
     icon: '⊕',
     description: 'Blend a stable orbit with flocking — controlled disorder (70% circle)',
-    category: 'composite',
+    category: 'layers',
     build: (n) => binaryComposite('Mix', { blend: 0.7 },
       'Circular', { n_objects: n, radius: 2.0, speed: 1.0, plane: 'xz', phase_offset: true },
       'Swarm', { n_objects: n, separation: 0.3, alignment: 0.5, cohesion: 0.3, max_speed: 0.4, seed: 42 },
@@ -426,7 +426,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Crossfade: Pursuit⇄Orbit',
     icon: '⇆',
     description: 'Chase then settle into circling — pursuit crossfades to orbit',
-    category: 'composite',
+    category: 'layers',
     build: (n) => binaryComposite('Crossfade', { fade_duration: 1.5 },
       'Follow', { n_objects: n, mode: 'pursue', speed: 1.5, distance: 0.4, lookahead: 0.5, responsiveness: 0.12,
         target_radius: 1.5, target_speed: 0.5, init_radius: 1.0, bounds: 3.0, containment: 0.5, seed: 42 },
@@ -582,7 +582,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Converge',
     icon: '⊙',
     description: 'Objects converge from outer radius to center with easing',
-    category: 'physics',
+    category: 'transitions',
     build: (n) => baseFlow('Converge',
       { n_objects: n, start_radius: 3.0, end_radius: 0.5, easing: 'ease_in_out' }, n, 4.0),
   },
@@ -641,14 +641,14 @@ export const SHAPE_PRESETS: ShapePreset[] = [
         container_size: 2.0, seed: 42 }, n, 8.0),
   },
 
-  // ═══════════════ AUDIO ═══════════════
+  // ═══════════════ REACTIVE (audio) ═══════════════
 
   {
     id: 'bpm-circle',
     name: 'BPM Sync',
     icon: '🎵',
     description: 'Circle synchronized to detected BPM',
-    category: 'audio',
+    category: 'reactive',
     build: (n) => baseFlow('BPM',
       { n_objects: n, bpm: 120, radius: 2.0, plane: 'xz' }, n, 4.0),
   },
@@ -657,7 +657,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Audio Reactive',
     icon: '🔊',
     description: 'Circle whose radius reacts to audio amplitude',
-    category: 'audio',
+    category: 'reactive',
     build: (n) => baseFlow('AudioAmplitude',
       { n_objects: n, amplitude: 0.5, radius: 1.5, band: 'rms', plane: 'xz' }, n, 4.0),
   },
@@ -666,7 +666,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     name: 'Bass Pulse',
     icon: '💓',
     description: 'Orbit radius breathes with the bass band — tilted audio-driven pulse',
-    category: 'audio',
+    category: 'reactive',
     build: (n) => baseFlow('AudioAmplitudeFalloff',
       { band: 'bass', min_val: 0.15, max_val: 1.0, curve: 'ease_out', radius: 2.5, plane: 'xz' }, n, 4.0,
       [{ type: 'Rotate', position: { x: 480, y: 180 }, params: { angleX: 0.25, angleY: 0, angleZ: 0 } }],

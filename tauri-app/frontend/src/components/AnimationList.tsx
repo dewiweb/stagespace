@@ -24,15 +24,17 @@ function animIcon(anim: Animation): string {
 }
 
 const CATEGORY_LABELS: Record<ShapePreset['category'], { label: string; color: string }> = {
-  basic: { label: 'Basic', color: 'text-blue-400' },
-  modifier: { label: 'Modifiers', color: 'text-pink-400' },
-  composite: { label: 'Composite', color: 'text-purple-400' },
-  spline: { label: 'Splines', color: 'text-cyan-400' },
+  orbits: { label: 'Orbits', color: 'text-blue-400' },
+  gestures: { label: 'Gestures', color: 'text-sky-400' },
+  shaped: { label: 'Shaped', color: 'text-pink-400' },
+  transitions: { label: 'Transitions', color: 'text-amber-400' },
   physics: { label: 'Physics', color: 'text-green-400' },
-  audio: { label: 'Audio', color: 'text-yellow-400' },
+  layers: { label: 'Layers', color: 'text-purple-400' },
+  spline: { label: 'Splines', color: 'text-cyan-400' },
+  reactive: { label: 'Reactive', color: 'text-yellow-400' },
 };
 
-const CATEGORY_ORDER: ShapePreset['category'][] = ['basic', 'modifier', 'composite', 'spline', 'physics', 'audio'];
+const CATEGORY_ORDER: ShapePreset['category'][] = ['orbits', 'gestures', 'shaped', 'transitions', 'physics', 'layers', 'spline', 'reactive'];
 
 export default function AnimationList() {
   const animations = useAnimationStore((s) => s.animations);
@@ -46,7 +48,7 @@ export default function AnimationList() {
   const editingSlotId = useGraphStore((s) => s.editingSlotId);
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editName, setEditName] = React.useState('');
-  const [collapsedCats, setCollapsedCats] = React.useState<Set<string>>(new Set(['modifier', 'composite', 'spline', 'physics', 'audio']));
+  const [collapsedCats, setCollapsedCats] = React.useState<Set<string>>(new Set(['shaped', 'transitions', 'physics', 'layers', 'spline', 'reactive']));
 
   const startRename = (anim: Animation) => {
     setEditingId(anim.id);
