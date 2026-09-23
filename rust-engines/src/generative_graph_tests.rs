@@ -9,11 +9,45 @@
 //! validator.
 #[cfg(test)]
 mod tests {
-    use crate::compiler::Compiler;
+    use crate::compiler::{CompilationError, CompiledFunction, Compiler};
     use crate::graph::{Edge, Graph, Node, NodeId, NodeType};
     use crate::merge_runtime::{merge_positions, MergeStrategy};
+    use crate::plugins::PluginRegistry;
     use crate::rng::SimpleRng;
     use crate::validator::Validator;
+    use crate::LiveInputs;
+    use std::path::Path;
+    use std::sync::{Arc, Mutex, OnceLock};
+
+    /// Registry partagé contenant le plugin `lemniscate` (fixture `.ssx`
+    /// compilée wasm32, committée) — permet d'inclure `NodeType::Plugin`
+    /// dans le pool MATH : chaque graphe contenant un Plugin est compilé
+    /// avec `LiveInputs.plugins`.
+    fn fuzz_registry() -> Arc<Mutex<PluginRegistry>> {
+        static REG: OnceLock<Arc<Mutex<PluginRegistry>>> = OnceLock::new();
+        REG.get_or_init(|| {
+            let mut r = PluginRegistry::new().expect("registry");
+            r.register_bundle(Path::new(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/fixtures/lemniscate.ssx"
+            )))
+            .expect("lemniscate fixture");
+            Arc::new(Mutex::new(r))
+        })
+        .clone()
+    }
+
+    /// Compile avec le registry plugin — tous les graphes générés passent
+    /// par le chemin live (celui de la production via `compile_graph_live`).
+    fn compile(graph: &Graph) -> Result<CompiledFunction, CompilationError> {
+        Compiler::compile_with_live_inputs(
+            graph,
+            LiveInputs {
+                plugins: Some(fuzz_registry()),
+                ..Default::default()
+            },
+        )
+    }
 
     /// Engines non-physique : peuvent alimenter modifiers, composites, Output.
     const MATH: &[NodeType] = &[
@@ -38,6 +72,8 @@ mod tests {
         NodeType::TimeFalloff,
         NodeType::PointDistanceFalloff,
         NodeType::DrawSpline,
+        // Plugin WASM — lemniscate du registry fixture (plugin_id fixe).
+        NodeType::Plugin,
     ];
 
     /// Engines physique : Output et composites uniquement (pas de modifiers).
@@ -122,6 +158,8 @@ mod tests {
                 | NodeType::Helix
                 | NodeType::PerlinNoise
                 | NodeType::Swarm
+                // lemniscate avec params par défaut : phase dépend de t
+                | NodeType::Plugin
         )
     }
 
@@ -161,6 +199,7 @@ mod tests {
         /// Crée un node engine feuille (Objects + Duration câblés).
         fn leaf(&mut self, node_type: NodeType) -> NodeId {
             let params = match node_type {
+                NodeType::Plugin => serde_json::json!({ "plugin_id": "lemniscate" }),
                 NodeType::DrawSpline => {
                     let n_pts = 3 + (self.rng.rand() * 3.0) as usize;
                     let pts: Vec<Vec<f64>> = (0..n_pts)
@@ -331,8 +370,7 @@ mod tests {
                 if let Err(errors) = Validator::validate(&graph) {
                     panic!("generated graph failed validation ({tag}): {errors:?}");
                 }
-                let f = Compiler::compile(&graph)
-                    .unwrap_or_else(|e| panic!("compile failed ({tag}): {e:?}"));
+                let f = compile(&graph).unwrap_or_else(|e| panic!("compile failed ({tag}): {e:?}"));
 
                 // Finitude + déterminisme sur plusieurs t et objets. On
                 // échantillonne au-delà de n_objects : Group étend l'espace
@@ -388,7 +426,7 @@ mod tests {
                 let (graph, n_objects, ..) = build_graph(seed * 131 + m * 17 + 3, 3);
                 Validator::validate(&graph)
                     .unwrap_or_else(|e| panic!("seed={seed} move={m}: {e:?}"));
-                let f = Compiler::compile(&graph)
+                let f = compile(&graph)
                     .unwrap_or_else(|e| panic!("seed={seed} move={m} compile: {e:?}"));
 
                 let positions: Vec<(usize, nalgebra::Vector3<f64>)> = (0..n_objects)
@@ -485,7 +523,7 @@ mod tests {
             if valid {
                 // Un graphe muté encore valide doit compiler sans panic ;
                 // les positions doivent rester finies.
-                if let Ok(f) = Compiler::compile(&graph) {
+                if let Ok(f) = compile(&graph) {
                     for t in [0.0, 2.5] {
                         for i in 0..n_objects.max(8) {
                             let p = f(t, i);

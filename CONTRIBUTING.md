@@ -109,6 +109,27 @@ npm run lint       # eslint
 5. Ajouter le type dans le parser de graphe (`tauri-app/src-tauri/src/graph/`)
 6. Ajouter le nœud dans le frontend (`nodeParamSchema.ts`, `NodeType` dans `store/types/`)
 
+## Ajouter un nœud sans modifier l'app — plugins WASM (`.ssx`)
+
+Les développeurs tiers peuvent créer des nodes WASM packagés en bundle `.ssx`
+(zip : `manifest.json` + `module.wasm`) — chargés au runtime, sandboxés
+(fuel wasmtime, traps → position zero, pas d'imports host), sans recompiler
+STAGESPACE. Voir `PLUGINS_WASM.md` pour l'architecture et `plugin-sdk/README.md`
+pour le guide auteur complet. En résumé :
+
+```bash
+# 1. Crate cdylib, cible wasm32-unknown-unknown, dep stagespace-plugin-sdk
+# 2. fn position(t, i, n, d, params) -> (x, y, z) + stagespace_plugin!(position);
+# 3. manifest.json (id, abi_version: 1, kind: "engine", params[])
+cargo build --release --target wasm32-unknown-unknown
+stagespace-pack manifest.json target/wasm32-unknown-unknown/release/mon.wasm -o mon.ssx
+# 4. Installer via la palette "Plugins" → "+ Import .ssx…" dans l'app,
+#    ou copier dans <data_dir>/com.stagespace.studio/plugins/ puis Rescan
+```
+
+Exemple complet : `plugin-examples/lemniscate/`. ABI v1 = engines
+uniquement (modifiers/composites → ABI v2 future).
+
 ## Ajouter une nouvelle fonctionnalité
 
 1. Ouvrir une issue pour discuter de la fonctionnalité

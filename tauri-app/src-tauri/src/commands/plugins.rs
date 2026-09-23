@@ -6,7 +6,8 @@ use crate::commands::error::IpcError;
 use crate::commands::state::lock_or_recover;
 use crate::AppState;
 use serde::Serialize;
-use stagespace_engines::PluginManifest;
+use stagespace_engines::{PluginManifest, PluginRegistry};
+use std::sync::{Arc, Mutex};
 use tauri::State;
 use ts_rs::TS;
 
@@ -22,8 +23,11 @@ pub struct PluginRegistryReport {
     pub plugins_dir: Option<String>,
 }
 
-fn current_report(state: &AppState) -> PluginRegistryReport {
-    let (manifests, errors) = match &state.plugin_registry {
+fn registry_report(
+    registry: Option<&Arc<Mutex<PluginRegistry>>>,
+    plugins_dir: Option<&std::path::PathBuf>,
+) -> PluginRegistryReport {
+    let (manifests, errors) = match registry {
         Some(registry) => {
             let reg = lock_or_recover(registry);
             (
@@ -39,8 +43,12 @@ fn current_report(state: &AppState) -> PluginRegistryReport {
     PluginRegistryReport {
         manifests,
         errors,
-        plugins_dir: state.plugins_dir.as_ref().map(|d| d.display().to_string()),
+        plugins_dir: plugins_dir.map(|d| d.display().to_string()),
     }
+}
+
+fn current_report(state: &AppState) -> PluginRegistryReport {
+    registry_report(state.plugin_registry.as_ref(), state.plugins_dir.as_ref())
 }
 
 /// Liste les plugins chargés + erreurs du dernier scan.
@@ -92,4 +100,46 @@ pub async fn import_plugin(
         reg.scan_dir(dir);
     }
     Ok(current_report(&state))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Dossier fixture : un `.ssx` valide (lemniscate compilé par le SDK,
+    /// committé dans rust-engines) + un bundle cassé → le report liste le
+    /// plugin et l'erreur sans échouer.
+    #[test]
+    fn registry_report_lists_plugins_and_errors() {
+        let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../rust-engines/tests/fixtures/lemniscate.ssx");
+        assert!(fixture.exists(), "fixture .ssx manquante: {fixture:?}");
+
+        let dir = std::env::temp_dir().join(format!("ssx-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        std::fs::copy(&fixture, dir.join("lemniscate.ssx")).expect("copy fixture");
+        std::fs::write(dir.join("broken.ssx"), b"not a zip").expect("write broken");
+
+        let mut reg = PluginRegistry::new().expect("registry");
+        reg.scan_dir(&dir);
+        let reg = Arc::new(Mutex::new(reg));
+
+        let report = registry_report(Some(&reg), Some(&dir));
+        assert_eq!(report.manifests.len(), 1);
+        assert_eq!(report.manifests[0].id, "lemniscate");
+        assert_eq!(report.errors.len(), 1);
+        assert!(report.errors[0].contains("broken.ssx"));
+        assert!(report.plugins_dir.is_some());
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Registry absent (wasmtime indisponible) → report vide mais sain.
+    #[test]
+    fn registry_report_handles_missing_registry() {
+        let report = registry_report(None, None);
+        assert!(report.manifests.is_empty());
+        assert!(report.errors.is_empty());
+        assert!(report.plugins_dir.is_none());
+    }
 }

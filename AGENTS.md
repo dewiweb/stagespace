@@ -10,6 +10,9 @@ Architecture: Rust engines + Tauri shell + React/TypeScript frontend.
 ```
 stagespace/
 ├── rust-engines/          # Core Rust library (engines, runtime, compiler, merge)
+│   └── src/plugins/       # WASM plugin host (.ssx bundles, wasmtime, registry)
+├── plugin-sdk/            # Guest SDK + stagespace-pack CLI (.ssx packer)
+├── plugin-examples/       # Example plugins (lemniscate — wasm32-unknown-unknown)
 ├── tauri-app/
 │   ├── src-tauri/         # Tauri backend (Rust commands, AppState, IPC)
 │   └── frontend/          # React + TypeScript + Vite frontend

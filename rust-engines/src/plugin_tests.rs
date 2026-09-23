@@ -320,7 +320,11 @@ mod tests {
         .expect("compile");
 
         let p0 = f(0.0, 0);
-        assert!((p0.x - 2.0).abs() < 1e-9, "x should be scale=2, got {}", p0.x);
+        assert!(
+            (p0.x - 2.0).abs() < 1e-9,
+            "x should be scale=2, got {}",
+            p0.x
+        );
         assert!(p0.y.abs() < 1e-9 && p0.z.abs() < 1e-9);
 
         // t>0 → la figure-∞ bouge (x diminue, z devient non-nul)
