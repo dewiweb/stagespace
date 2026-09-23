@@ -31,7 +31,7 @@ stagespace/
 cd rust-engines
 cargo build              # Build
 cargo test --lib         # Run tests (381 tests, incl. ts-rs export tests)
-cargo clippy --lib --all-targets -- -D warnings  # Lint
+cargo clippy --all-targets -- -D warnings  # Lint (CI: --all-targets inclut tests/benches)
 cargo fmt -- --check     # Format check
 ```
 
@@ -41,7 +41,7 @@ cargo fmt -- --check     # Format check
 cd tauri-app/src-tauri
 cargo build              # Build
 cargo test --lib         # Run tests (37 tests)
-cargo clippy --lib -- -D warnings  # Lint
+cargo clippy --all-targets -- -D warnings  # Lint (CI: --all-targets inclut tests)
 ```
 
 ### CLI (workflow testing tool)
@@ -76,9 +76,9 @@ npx tsc -b               # Type check (build mode — `tsc --noEmit` is vacuous 
 
 ```bash
 # Rust
-cd rust-engines && cargo test --lib && cargo clippy --lib -- -D warnings && cargo fmt -- --check
+cd rust-engines && cargo test --lib && cargo clippy --all-targets -- -D warnings && cargo fmt -- --check
 # Tauri
-cd ../tauri-app/src-tauri && cargo test --lib && cargo clippy --lib -- -D warnings
+cd ../tauri-app/src-tauri && cargo test --lib && cargo clippy --all-targets -- -D warnings
 # Frontend
 cd ../frontend && npm test && npx tsc -b && npm run build
 ```

@@ -200,9 +200,12 @@ mod complex_graph_tests {
         assert!((xz - 3.0).abs() < 1e-9, "norme xz après rot+offset: {p:?}");
     }
 
+    /// Frames capturées : (object_id, [x, y, z]) par envoi.
+    type FrameLog = Arc<Mutex<Vec<(u32, [f64; 3])>>>;
+
     /// Sink de capture — enregistre chaque frame mergée (post-process incluse).
     struct RecordingSink {
-        frames: Arc<Mutex<Vec<(u32, [f64; 3])>>>,
+        frames: FrameLog,
     }
     impl PositionSink for RecordingSink {
         fn send_state(
@@ -231,7 +234,7 @@ mod complex_graph_tests {
     #[test]
     fn test_complex_graph_end_to_end_through_merge() {
         let sh = make_shared();
-        let frames: Arc<Mutex<Vec<(u32, [f64; 3])>>> = Arc::new(Mutex::new(Vec::new()));
+        let frames: FrameLog = Arc::new(Mutex::new(Vec::new()));
 
         {
             let mr = sh.merge_runtime.lock().unwrap();
@@ -335,7 +338,7 @@ mod complex_graph_tests {
 
         // Cleanup : stopper les workers
         let mv = sh.movements.lock().unwrap();
-        for (_, m) in mv.iter() {
+        for m in mv.values() {
             m.runtime.stop();
         }
     }
