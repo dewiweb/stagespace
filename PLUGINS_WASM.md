@@ -235,12 +235,27 @@ refactorisation ultérieure optionnelle ; Phase 1 ajoute seulement l'arm
 
 | Risque | Mitigation |
 |---|---|
-| Boucle infinie dans le plugin | `fuel` wasmtime — budget fini par appel, trap contrôlé |
-| Panic/crash plugin | Traps wasmtime — jamais de UB host, position zero + log |
-| Allocation hostiles | `plugin_alloc` borné (cap `params_len`, ex. 64 KB) |
-| Appel lent (> frame budget) | fuel + timing check, log `plugin-slow` au-delà de ~500 µs |
-| I/O depuis le plugin | Pas de WASI — aucun import host exposé en v1 |
+| Boucle infinie dans le plugin | `fuel` wasmtime — 100k instr./appel, posé **avant** `Instance::new` (les sections `start` sont bornées aussi), reset par appel, fail-fast si le moteur n'a pas `consume_fuel` |
+| Panic/crash plugin | Traps wasmtime — jamais de UB host, position zero + log une fois |
+| `memory.grow` hostile | `StoreLimits` : 32 MiB mémoire linéaire, 10k éléments de table, 1 mémoire par instance — le fuel ne borne PAS le grow |
+| Déclaration mémoire hostile | Rejet au load : shared / memory64 / minimum > 512 pages (32 MiB) |
+| Zip bomb | Caps de décompression : fichier `.ssx` ≤ 64 MB, `manifest.json` ≤ 256 KB, `module.wasm` ≤ 16 MB — lecture via `take()` bornée |
+| Import destructeur | `import_plugin` : src == dest détecté par `canonicalize` (la copie est sautée, jamais de troncature), taille bornée, `file_name` seul (pas de traversal) |
+| Scan bloquant | `spawn_blocking` pour scan/import — la compilation wasmtime ne tourne jamais sur l'executor async |
+| Allocation hostiles | Buffers ABI statiques, cap `params_len` 64 KB |
+| I/O depuis le plugin | Pas de WASI, **zéro import** — tout module déclarant un import est rejeté au load |
 | Plugin malveillant | Sandbox wasm = code non fiable sans accès système ; signature/checksum de bundles = phase ultérieure |
+
+### Cycle de vie du registry
+
+- `scan_dir` **réconcilie** : un `.ssx` supprimé désenregistre son plugin au
+  rescan (désinstallation effective sans redémarrage)
+- Deux fichiers déclarant le même `manifest.id` → erreur collectée
+  ("duplicate plugin id"), first-wins déterministe par ordre alphabétique
+- **Snapshot semantics** : les moves déjà compilés conservent leur
+  `Arc<Plugin>` — un rescan n'affecte que les compilations futures
+- `register_wasm` (tests / futurs embarqués) applique la même validation
+  de module que les bundles fichier
 
 ## 5. Hors scope (v1 plugins)
 
@@ -249,8 +264,8 @@ refactorisation ultérieure optionnelle ; Phase 1 ajoute seulement l'arm
   faisable mais ABI v2)
 - ❌ Host functions (`log`, `audio`, `osc_in`) — `capabilities` réservé
 - ❌ Marketplace / signature / sandboxing renforcé
-- ❌ Hot-reload d'un plugin en cours de playback (re-scan = redémarrage
-  ou recall de cue)
+- ❌ Hot-reload d'un plugin en cours de playback (un rescan n'affecte que
+  les compilations futures — les moves actifs gardent leur snapshot)
 
 ## 6. Effort estimé
 

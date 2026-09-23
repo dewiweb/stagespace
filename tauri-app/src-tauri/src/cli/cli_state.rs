@@ -69,6 +69,7 @@ impl CliState {
             recall_in_progress: Arc::new(AtomicBool::new(false)),
             osc_receiver: Arc::new(Mutex::new(osc_receiver)),
             plugin_registry: None,
+            plugins_dir: None,
         };
 
         Ok(Self {

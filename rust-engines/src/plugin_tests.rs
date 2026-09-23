@@ -170,11 +170,21 @@ mod tests {
     #[test]
     fn wasm_engine_rejects_missing_exports() {
         let wat = r#"(module (memory (export "memory") 1))"#;
-        let reg = registry_with("bare", wat);
-        let reg = reg.lock().unwrap_or_else(|e| e.into_inner());
-        let plugin = reg.get("bare").expect("plugin");
+        // Couche 1 : rejet au register (validate_module).
+        let mut reg = PluginRegistry::new().expect("registry");
+        match reg.register_wasm(manifest("bare"), wat.as_bytes()) {
+            Ok(_) => panic!("missing exports should fail at register"),
+            Err(e) => assert!(e.to_string().contains("plugin_params_ptr")),
+        }
+        // Couche 2 : PluginEngine::new revérifie (Plugin construit à la main).
+        let module = wasmtime::Module::new(reg.wasm_engine(), wat.as_bytes()).expect("module");
+        let plugin = Arc::new(crate::plugins::Plugin {
+            manifest: manifest("bare"),
+            module,
+            origin: None,
+        });
         match PluginEngine::new(plugin, reg.wasm_engine()) {
-            Ok(_) => panic!("missing exports should fail"),
+            Ok(_) => panic!("missing exports should fail at instantiate"),
             Err(e) => assert!(e.to_string().contains("plugin_params_ptr")),
         }
     }
@@ -348,5 +358,174 @@ mod tests {
             Err(e) => e,
         };
         assert!(format!("{err:?}").contains("nonexistent"));
+    }
+
+    // ---------- Durcissements host (review) ----------
+
+    /// Module déclarant un import : l'ABI v1 n'accorde aucune fonction host —
+    /// rejet au load, pas à la première instanciation.
+    #[test]
+    fn module_with_imports_rejected_at_load() {
+        let wat = r#"
+(module
+  (import "env" "host_fn" (func))
+  (memory (export "memory") 1)
+  (func (export "plugin_params_ptr") (result i32) (i32.const 1024))
+  (func (export "plugin_result_ptr") (result i32) (i32.const 0))
+  (func (export "plugin_position") (param f64 i32 i32 f64 i32)))
+"#;
+        let mut reg = PluginRegistry::new().expect("registry");
+        match reg.register_wasm(manifest("imported"), wat.as_bytes()) {
+            Ok(_) => panic!("module with imports should be rejected"),
+            Err(e) => assert!(e.to_string().contains("import"), "{e}"),
+        }
+    }
+
+    /// Mémoire minimum au-delà du cap rejetée au load — un `(memory N)` énorme
+    /// commiterait la RAM host à l'instanciation.
+    #[test]
+    fn module_with_huge_memory_rejected() {
+        let wat = r#"
+(module
+  (memory (export "memory") 600)
+  (func (export "plugin_params_ptr") (result i32) (i32.const 1024))
+  (func (export "plugin_result_ptr") (result i32) (i32.const 0))
+  (func (export "plugin_position") (param f64 i32 i32 f64 i32)))
+"#;
+        let bytes = make_ssx(
+            &serde_json::to_string(&manifest("fatmem")).unwrap(),
+            wat.as_bytes(),
+        );
+        let reg = PluginRegistry::new().expect("registry");
+        match load_bundle_bytes(reg.wasm_engine(), &bytes) {
+            Ok(_) => panic!("huge memory should be rejected"),
+            Err(e) => assert!(e.to_string().contains("memory"), "{e}"),
+        }
+    }
+
+    /// `memory.grow` au-delà du StoreLimits retourne -1 (pas de commit) —
+    /// le plugin le voit dans son résultat : prouve que le limiter borne le
+    /// grow, pas seulement la déclaration initiale.
+    #[test]
+    fn memory_grow_beyond_limit_denied() {
+        let wat = r#"
+(module
+  (memory (export "memory") 1)
+  (func (export "plugin_params_ptr") (result i32) (i32.const 1024))
+  (func (export "plugin_result_ptr") (result i32) (i32.const 0))
+  (func (export "plugin_position") (param f64 i32 i32 f64 i32)
+    (f64.store (i32.const 0)
+      (f64.convert_i32_s (memory.grow (i32.const 600))))))
+"#;
+        let reg = registry_with("greedy", wat);
+        let reg = reg.lock().unwrap_or_else(|e| e.into_inner());
+        let plugin = reg.get("greedy").expect("plugin");
+        let engine = PluginEngine::new(plugin, reg.wasm_engine()).expect("engine");
+        let p = engine.position(0.0, 0, &engine_params());
+        assert_eq!(p.x, -1.0, "memory.grow must be denied (-1), got {}", p.x);
+    }
+
+    /// Section `start` : le fuel est posé AVANT l'instanciation — une init
+    /// bornée s'exécute, une boucle infinie en start trap (pas de gel).
+    #[test]
+    fn start_section_bounded_by_fuel() {
+        // start qui boucle ~10k fois : sous le budget → instancie OK.
+        let ok_wat = r#"
+(module
+  (memory (export "memory") 1)
+  (func (export "plugin_params_ptr") (result i32) (i32.const 1024))
+  (func (export "plugin_result_ptr") (result i32) (i32.const 0))
+  (func (export "plugin_position") (param f64 i32 i32 f64 i32))
+  (func $init (local $i i32)
+    (loop $l
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br_if $l (i32.lt_s (local.get $i) (i32.const 10000)))))
+  (start $init))
+"#;
+        let mut reg = PluginRegistry::new().expect("registry");
+        reg.register_wasm(manifest("initok"), ok_wat.as_bytes())
+            .expect("bounded start should instantiate");
+        let plugin = reg.get("initok").expect("plugin");
+        assert!(PluginEngine::new(plugin, reg.wasm_engine()).is_ok());
+
+        // start en boucle infinie : le fuel le tue à l'instanciation —
+        // erreur, jamais de gel.
+        let bad_wat = r#"
+(module
+  (memory (export "memory") 1)
+  (func (export "plugin_params_ptr") (result i32) (i32.const 1024))
+  (func (export "plugin_result_ptr") (result i32) (i32.const 0))
+  (func (export "plugin_position") (param f64 i32 i32 f64 i32))
+  (func $init (loop (br 0)))
+  (start $init))
+"#;
+        let mut reg2 = PluginRegistry::new().expect("registry");
+        reg2.register_wasm(manifest("initbad"), bad_wat.as_bytes())
+            .expect("registers (start runs at instantiate, not load)");
+        let plugin2 = reg2.get("initbad").expect("plugin");
+        assert!(
+            PluginEngine::new(plugin2, reg2.wasm_engine()).is_err(),
+            "infinite start must be killed by fuel"
+        );
+    }
+
+    /// Zip bomb : manifest.json déclaré géant → lecture cappée → JSON
+    /// tronqué → erreur de manifeste, pas d'allocation non bornée.
+    #[test]
+    fn oversized_manifest_rejected() {
+        let mut buf = Cursor::new(Vec::new());
+        {
+            let mut zip = zip::ZipWriter::new(&mut buf);
+            // Stored = pas de compression → la taille écrite est réelle.
+            let opts = zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Stored);
+            zip.start_file("manifest.json", opts).unwrap();
+            let big = vec![b' '; 512 * 1024]; // 512 KB > cap 256 KB
+            zip.write_all(&big).unwrap();
+            zip.start_file("module.wasm", opts).unwrap();
+            zip.write_all(ECHO_WAT.as_bytes()).unwrap();
+            zip.finish().unwrap();
+        }
+        let reg = PluginRegistry::new().expect("registry");
+        assert!(load_bundle_bytes(reg.wasm_engine(), &buf.into_inner()).is_err());
+    }
+
+    /// scan_dir : un fichier supprimé désenregistre son plugin au rescan ;
+    /// deux fichiers déclarant le même id → erreur "duplicate", first-wins.
+    #[test]
+    fn scan_dir_reconciles_removals_and_duplicates() {
+        let dir = std::env::temp_dir().join(format!("ssx-scan-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let manifest_a = serde_json::to_string(&manifest("dup")).unwrap();
+        std::fs::write(
+            dir.join("a.ssx"),
+            make_ssx(&manifest_a, ECHO_WAT.as_bytes()),
+        )
+        .expect("write a");
+        std::fs::write(
+            dir.join("b.ssx"),
+            make_ssx(&manifest_a, ECHO_WAT.as_bytes()),
+        )
+        .expect("write b");
+
+        let mut reg = PluginRegistry::new().expect("registry");
+        let loaded = reg.scan_dir(&dir);
+        assert_eq!(loaded, 1, "first file wins, second is a duplicate");
+        assert_eq!(reg.manifests().len(), 1);
+        assert!(
+            reg.errors().iter().any(|(_, e)| e.contains("duplicate")),
+            "duplicate id should be reported: {:?}",
+            reg.errors()
+        );
+
+        // Suppression du fichier → rescan retire le plugin.
+        std::fs::remove_file(dir.join("a.ssx")).expect("rm a");
+        std::fs::remove_file(dir.join("b.ssx")).expect("rm b");
+        let loaded = reg.scan_dir(&dir);
+        assert_eq!(loaded, 0);
+        assert!(reg.manifests().is_empty(), "deleted plugin must unregister");
+        assert!(reg.get("dup").is_none());
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

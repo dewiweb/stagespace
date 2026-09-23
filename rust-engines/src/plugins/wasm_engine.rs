@@ -5,7 +5,7 @@ use crate::engines::{finite_or_zero, Engine, EngineParams};
 use nalgebra::Vector3;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use wasmtime::{Instance, Memory, Store, TypedFunc};
+use wasmtime::{Instance, Memory, Store, StoreLimits, StoreLimitsBuilder, TypedFunc};
 
 /// Budget de fuel par appel `plugin_position` — ~100k instructions wasm,
 /// très au-delà de tout calcul de trajectoire légitime, mais suffisamment
@@ -13,14 +13,35 @@ use wasmtime::{Instance, Memory, Store, TypedFunc};
 /// le worker 60 FPS.
 const FUEL_BUDGET: u64 = 100_000;
 
+/// Ressources bornées par instance — le fuel ne protège PAS la mémoire :
+/// `memory.grow` est une instruction unique. Un `.ssx` malveillant ne doit
+/// pas pouvoir commiter des GiB de RAM host. 32 MiB de mémoire linéaire et
+/// 10k éléments de table sont très au-delà des besoins ABI (buffers
+/// statiques ~64 KB).
+fn store_limits() -> StoreLimits {
+    StoreLimitsBuilder::new()
+        .memory_size(32 << 20)
+        .table_elements(10_000)
+        .instances(1)
+        .tables(4)
+        .memories(1)
+        .build()
+}
+
 /// État wasmtime d'une instance de plugin — le `Store` n'est pas `Sync`,
 /// d'où le Mutex (les appels `position` d'un même node sont séquentiels).
 struct InstanceState {
-    store: Store<()>,
+    store: Store<StoreLimits>,
     memory: Memory,
     params_ptr: TypedFunc<(), i32>,
     result_ptr: TypedFunc<(), i32>,
     position: TypedFunc<(f64, i32, i32, f64, i32), ()>,
+    /// Cache des appels statiques ABI : ptrs des buffers + JSON des params.
+    /// `params.extra` est capturé figé par la closure compilée — on ne
+    /// re-sérialise que si le contenu change (comparaison Value << serialize).
+    params_cache: Option<(serde_json::Value, Vec<u8>)>,
+    params_offset: Option<usize>,
+    result_offset: Option<usize>,
 }
 
 /// Engine adossé à un plugin WASM — implémente le trait `Engine` standard,
@@ -38,7 +59,18 @@ pub struct PluginEngine {
 impl PluginEngine {
     /// Instancie le module du plugin et vérifie les signatures ABI v1.
     pub fn new(plugin: Arc<Plugin>, engine: &wasmtime::Engine) -> Result<Self, PluginError> {
-        let mut store = Store::new(engine, ());
+        let mut store = Store::new(engine, store_limits());
+        store.limiter(|s| s);
+
+        // Fail-fast : si l'engine n'a pas `consume_fuel`, set_fuel renvoie
+        // Err — sans fuel une boucle infinie invité gèlerait le worker
+        // pour toujours. Mieux vaut refuser l'instanciation.
+        store
+            .set_fuel(FUEL_BUDGET)
+            .map_err(|e| PluginError::Runtime(format!("fuel unavailable: {e}")))?;
+
+        // Instance::new exécute la section `start` si présente — elle
+        // consomme le fuel posé ci-dessus (bornée comme tout autre appel).
         let instance = Instance::new(&mut store, &plugin.module, &[])
             .map_err(|e| PluginError::Runtime(e.to_string()))?;
 
@@ -63,6 +95,9 @@ impl PluginEngine {
                 params_ptr,
                 result_ptr,
                 position,
+                params_cache: None,
+                params_offset: None,
+                result_offset: None,
             }),
             error_logged: AtomicBool::new(false),
         })
@@ -86,34 +121,54 @@ impl Engine for PluginEngine {
         // frame ne doit pas empêcher les frames suivantes.
         let _ = st.store.set_fuel(FUEL_BUDGET);
 
-        let params_json = match serde_json::to_vec(&params.extra) {
-            Ok(v) => v,
-            Err(e) => {
-                self.log_once(&format!("params serialization failed: {e}"));
-                return Vector3::zeros();
-            }
+        // params.extra est figé à la compile → JSON sérialisé une fois,
+        // réutilisé tant que le contenu est identique (compare << serialize).
+        let cache_hit = matches!(&st.params_cache, Some((c, _)) if *c == params.extra);
+        if !cache_hit {
+            let bytes = match serde_json::to_vec(&params.extra) {
+                Ok(v) => v,
+                Err(e) => {
+                    self.log_once(&format!("params serialization failed: {e}"));
+                    return Vector3::zeros();
+                }
+            };
+            st.params_cache = Some((params.extra.clone(), bytes));
+        }
+        let params_json: &[u8] = match &st.params_cache {
+            Some((_, b)) => b,
+            // Inatteignable : une sérialisation Ok a toujours rempli le cache.
+            None => return Vector3::zeros(),
         };
         if params_json.len() > MAX_PARAMS_BYTES {
             self.log_once("params JSON exceeds 64KB buffer");
             return Vector3::zeros();
         }
+        let params_len = params_json.len();
 
-        let params_ptr = match st.params_ptr.call(&mut st.store, ()) {
-            Ok(p) if p >= 0 => p as usize,
-            Ok(_) => {
-                self.log_once("plugin_params_ptr returned negative offset");
-                return Vector3::zeros();
-            }
-            Err(e) => {
-                self.log_once(&format!("plugin_params_ptr trapped: {e}"));
-                return Vector3::zeros();
-            }
+        // Les ptrs des buffers statiques sont constants par ABI — résolus
+        // une fois puis réutilisés (évite 2 calls wasm par sample).
+        let params_ptr = match st.params_offset {
+            Some(p) => p,
+            None => match st.params_ptr.call(&mut st.store, ()) {
+                Ok(p) if p >= 0 => {
+                    st.params_offset = Some(p as usize);
+                    p as usize
+                }
+                Ok(_) => {
+                    self.log_once("plugin_params_ptr returned negative offset");
+                    return Vector3::zeros();
+                }
+                Err(e) => {
+                    self.log_once(&format!("plugin_params_ptr trapped: {e}"));
+                    return Vector3::zeros();
+                }
+            },
         };
-        if params_ptr + params_json.len() > st.memory.data_size(&st.store) {
+        if params_ptr + params_len > st.memory.data_size(&st.store) {
             self.log_once("params buffer overflows wasm memory");
             return Vector3::zeros();
         }
-        if let Err(e) = st.memory.write(&mut st.store, params_ptr, &params_json) {
+        if let Err(e) = st.memory.write(&mut st.store, params_ptr, params_json) {
             self.log_once(&format!("params write failed: {e}"));
             return Vector3::zeros();
         }
@@ -125,7 +180,7 @@ impl Engine for PluginEngine {
                 object_index as i32,
                 params.n_objects as i32,
                 params.duration,
-                params_json.len() as i32,
+                params_len as i32,
             ),
         );
         if let Err(e) = call {
@@ -133,12 +188,18 @@ impl Engine for PluginEngine {
             return Vector3::zeros();
         }
 
-        let result_ptr = match st.result_ptr.call(&mut st.store, ()) {
-            Ok(p) if p >= 0 => p as usize,
-            _ => {
-                self.log_once("plugin_result_ptr failed");
-                return Vector3::zeros();
-            }
+        let result_ptr = match st.result_offset {
+            Some(p) => p,
+            None => match st.result_ptr.call(&mut st.store, ()) {
+                Ok(p) if p >= 0 => {
+                    st.result_offset = Some(p as usize);
+                    p as usize
+                }
+                _ => {
+                    self.log_once("plugin_result_ptr failed");
+                    return Vector3::zeros();
+                }
+            },
         };
         let mut buf = [0u8; 24];
         if st.memory.read(&st.store, result_ptr, &mut buf).is_err() {
