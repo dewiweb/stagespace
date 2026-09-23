@@ -1,4 +1,4 @@
-use crate::graph::{Graph, NodeId, NodeType};
+use crate::graph::{Graph, Node, NodeId, NodeType};
 use std::collections::HashSet;
 use std::fmt;
 
@@ -568,6 +568,25 @@ impl Validator {
                 .and_then(|v| v.as_u64())
                 .unwrap_or(1) as usize;
 
+            // Résolution identique au compiler (resolve_n_objects) : param
+            // propre → Objects amont → défaut = le n_objects global du graphe.
+            // Un `unwrap_or(1)` signalait les composites (Mix/Sequence) comme
+            // "1 objet" dès que leur param n_objects n'était pas explicité.
+            let effective_n_objects = |node: &Node| -> usize {
+                node.params
+                    .get("n_objects")
+                    .and_then(|v| v.as_u64())
+                    .or_else(|| {
+                        graph
+                            .get_inputs(node.id)
+                            .iter()
+                            .filter_map(|id| graph.nodes.get(id))
+                            .find(|n| n.node_type == NodeType::Objects)
+                            .and_then(|n| n.params.get("n_objects").and_then(|v| v.as_u64()))
+                    })
+                    .unwrap_or(n_objects as u64) as usize
+            };
+
             // Vérifier que tous les moteurs ont le même n_objects
             for node in graph.nodes.values() {
                 match node.node_type {
@@ -617,16 +636,8 @@ impl Validator {
                             let node_b = graph.nodes.get(&inputs[1]);
 
                             if let (Some(na), Some(nb)) = (node_a, node_b) {
-                                let n_a =
-                                    na.params
-                                        .get("n_objects")
-                                        .and_then(|v| v.as_u64())
-                                        .unwrap_or(1) as usize;
-                                let n_b =
-                                    nb.params
-                                        .get("n_objects")
-                                        .and_then(|v| v.as_u64())
-                                        .unwrap_or(1) as usize;
+                                let n_a = effective_n_objects(na);
+                                let n_b = effective_n_objects(nb);
 
                                 if n_a != n_b {
                                     errors.push(ValidationError::CountMismatch(format!(
@@ -644,16 +655,8 @@ impl Validator {
                             let node_b = graph.nodes.get(&inputs[1]);
 
                             if let (Some(na), Some(nb)) = (node_a, node_b) {
-                                let n_a =
-                                    na.params
-                                        .get("n_objects")
-                                        .and_then(|v| v.as_u64())
-                                        .unwrap_or(1) as usize;
-                                let n_b =
-                                    nb.params
-                                        .get("n_objects")
-                                        .and_then(|v| v.as_u64())
-                                        .unwrap_or(1) as usize;
+                                let n_a = effective_n_objects(na);
+                                let n_b = effective_n_objects(nb);
 
                                 if n_a != n_b {
                                     errors.push(ValidationError::CountMismatch(format!(

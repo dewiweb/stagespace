@@ -369,3 +369,7 @@ mod recall_test_file;
 #[cfg(test)]
 #[path = "tests/example_show_tests.rs"]
 mod example_show_test_file;
+
+#[cfg(test)]
+#[path = "tests/complex_graph_tests.rs"]
+mod complex_graph_test_file;
