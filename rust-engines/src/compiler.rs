@@ -2,6 +2,7 @@ use crate::audio::AudioState;
 use crate::engines::{Engine, EngineParams, MAX_OBJECTS};
 use crate::graph::{Graph, Node, NodeId, NodeType};
 use crate::logging::{log_compilation_error, log_compilation_success, log_graph_compilation};
+use crate::plugins::PluginRegistry;
 use crate::validator::Validator;
 use nalgebra::Vector3;
 use std::collections::HashMap;
@@ -19,11 +20,13 @@ pub type AudioParamOverrides = Arc<Mutex<HashMap<String, f64>>>;
 pub type OscValueMap = Arc<Mutex<HashMap<String, Vec<f64>>>>;
 
 /// Entrées live disponibles pendant l'évaluation d'une frame —
-/// audio state (BPM/amplitude/spectre) + dernières valeurs OSC reçues.
+/// audio state (BPM/amplitude/spectre) + dernières valeurs OSC reçues
+/// + registry des plugins WASM (résolution de `params.plugin_id`).
 #[derive(Clone, Default)]
 pub struct LiveInputs {
     pub audio: Option<Arc<Mutex<AudioState>>>,
     pub osc_values: Option<OscValueMap>,
+    pub plugins: Option<Arc<PluginRegistry>>,
 }
 
 /// Erreur de compilation
@@ -52,7 +55,7 @@ pub struct Compiler;
 impl Compiler {
     /// Compile un graphe en une fonction composite
     pub fn compile(graph: &Graph) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(graph, None, None)
+        Self::compile_inner(graph, None, None, None)
     }
 
     /// Compile un graphe avec accès à l'audio state temps réel
@@ -62,7 +65,7 @@ impl Compiler {
         graph: &Graph,
         audio_state: Arc<Mutex<AudioState>>,
     ) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(graph, Some(audio_state), None)
+        Self::compile_inner(graph, Some(audio_state), None, None)
     }
 
     /// Compile un graphe avec audio state + overrides de paramètres audio
@@ -74,7 +77,16 @@ impl Compiler {
         audio_state: Arc<Mutex<AudioState>>,
         _overrides: AudioParamOverrides,
     ) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(graph, Some(audio_state), None)
+        Self::compile_inner(graph, Some(audio_state), None, None)
+    }
+
+    /// Compile un graphe avec un ensemble complet d'entrées live —
+    /// audio, valeurs OSC reçues, registry de plugins WASM.
+    pub fn compile_with_live_inputs(
+        graph: &Graph,
+        live: LiveInputs,
+    ) -> Result<CompiledFunction, CompilationError> {
+        Self::compile_inner(graph, live.audio, live.osc_values, live.plugins)
     }
 
     /// Compile un graphe avec audio state + cache des valeurs OSC reçues.
@@ -87,17 +99,19 @@ impl Compiler {
         _overrides: AudioParamOverrides,
         osc_values: OscValueMap,
     ) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(graph, Some(audio_state), Some(osc_values))
+        Self::compile_inner(graph, Some(audio_state), Some(osc_values), None)
     }
 
     fn compile_inner(
         graph: &Graph,
         audio_state: Option<Arc<Mutex<AudioState>>>,
         osc_values: Option<OscValueMap>,
+        plugins: Option<Arc<PluginRegistry>>,
     ) -> Result<CompiledFunction, CompilationError> {
         let live = LiveInputs {
             audio: audio_state,
             osc_values,
+            plugins,
         };
         let start = Instant::now();
         log_graph_compilation(graph.nodes.len(), graph.edges.len());
@@ -753,6 +767,33 @@ impl Compiler {
             NodeType::EvaluateSpline => Box::new(crate::engines::spline::EvaluateSpline),
             NodeType::TrimSpline => Box::new(crate::engines::spline::TrimSpline),
             NodeType::OffsetSpline => Box::new(crate::engines::spline::OffsetSpline),
+            // Plugin WASM — résolution via params.plugin_id dans le registry.
+            // Sans registry branché (compile() simple) : erreur explicite.
+            NodeType::Plugin => {
+                let plugin_id = params
+                    .extra
+                    .get("plugin_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default();
+                let registry = live.plugins.as_ref().ok_or_else(|| {
+                    CompilationError::InvalidParameter(
+                        "Plugin node requires a plugin registry (use compile_with_live_inputs)"
+                            .to_string(),
+                    )
+                })?;
+                let plugin = registry.get(plugin_id).ok_or_else(|| {
+                    CompilationError::InvalidParameter(format!(
+                        "unknown plugin_id '{plugin_id}' — plugin absent du dossier plugins/ ou erreur de chargement"
+                    ))
+                })?;
+                Box::new(
+                    crate::plugins::PluginEngine::new(plugin, registry.wasm_engine()).map_err(
+                        |e| {
+                            CompilationError::InvalidParameter(format!("plugin '{plugin_id}': {e}"))
+                        },
+                    )?,
+                )
+            }
             _ => return Err(CompilationError::InvalidNodeType(node_type)),
         };
 

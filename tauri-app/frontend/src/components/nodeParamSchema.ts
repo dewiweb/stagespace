@@ -325,6 +325,10 @@ export const PARAM_SCHEMA: Partial<Record<NodeType, ParamDef[]>> = {
     { key: 'address', label: 'OSC Address', type: 'text' },
     { key: 'radius', label: 'Radius', type: 'number', step: 0.1 },
   ],
+  // Plugin WASM — plugin_id désigne le bundle chargé (registry) ; les params
+  // spécifiques du plugin sont déclarés par son manifeste (Phase 4 : schema
+  // dynamique mergé depuis le registry).
+  Plugin: [{ key: 'plugin_id', label: 'Plugin ID', type: 'text' }],
 
   // Global (Post-process) nodes
   Input: [],
@@ -391,6 +395,10 @@ export const NODE_CATEGORIES: { label: string; color: string; types: NodeType[] 
   { label: 'Global (Post-process)', color: 'cyan', types: ['RadiusScale', 'HeightOffset', 'PerTrackDepth', 'Barycenter', 'AudioFalloff', 'ManualPosition', 'Zone', 'Velocity', 'MoveRef', 'Merge'] },
   { label: 'Composite', color: 'purple', types: ['Mix', 'Group', 'Sequence', 'Crossfade'] },
   { label: 'Sources', color: 'yellow', types: ['BPM', 'AudioAmplitude', 'AudioSpectrum', 'OSCInput'] },
+  // Plugins WASM (bundles .ssx) — le node générique 'Plugin' désigne le
+  // plugin via son param plugin_id ; la palette dynamique par plugin arrive
+  // en Phase 4 (registry list_plugins).
+  { label: 'Plugins', color: 'yellow', types: ['Plugin'] },
 ];
 
 /// Catégories disponibles pour le graph global (post-processing).
@@ -413,6 +421,7 @@ export const SUB_GRAPH_CATEGORIES: string[] = [
   'Modifiers',
   'Composite',
   'Sources',
+  'Plugins',
 ];
 
 /// Nodes exclus du sub-graph (global-only)
@@ -441,6 +450,8 @@ export const SUB_ONLY_NODES: Set<NodeType> = new Set([
   'TimeFalloff', 'PointDistanceFalloff', 'DirectionalFalloff', 'AudioAmplitudeFalloff',
   // Sources
   'BPM', 'AudioAmplitude', 'AudioSpectrum', 'OSCInput',
+  // Plugin WASM : engine de sub-graph uniquement
+  'Plugin',
   // Modifiers sub-graph only (pas compilables en post-process)
   'PhaseShift', 'LFO', 'Jitter',
   // Composites binaires (le global graph est une chaîne linéaire)
@@ -497,6 +508,7 @@ export function getDefaultParams(type: NodeType): Record<string, any> {
     Duration: { duration: 4.0 },
     Output: { track_range: '0-' },
     Circular: { radius: 1.5, speed: 1.0, plane: 'xz', phase_offset: true },
+    Plugin: { plugin_id: '' },
     Spiral: { radius: 0.5, speed: 1.0, expansion: 1.0, plane: 'xz' },
     Lissajous: { a: 1.5, b: 1.5, delta: Math.PI / 2, scale: 1.0 },
     Figure8: { scale: 1.5, speed: 1.0, plane: 'xz' },
@@ -620,6 +632,7 @@ export const NODE_DESCRIPTIONS: Partial<Record<NodeType, string>> = {
   AudioAmplitude: "Amplitude audio module le radius d'un cercle",
   AudioSpectrum: "Bande FFT du spectre audio → position",
   OSCInput: "Reçoit une valeur OSC (scalar→angle, array→XYZ) et la convertit en position",
+  Plugin: "Engine WASM externe (bundle .ssx) — plugin_id désigne le plugin chargé",
   // Global (Post-process)
   Input: "Point d'entrée du graph global — représente les positions mergées de tous les moves",
   RadiusScale: "Scaling radial par rapport à l'origin (radius_scale). Global — appliqué après merge",
@@ -679,6 +692,7 @@ export const ENGINE_TYPES = new Set([
   'Bouncing', 'Avoidance', 'Spring', 'Follow', 'Swarm', 'VectorField',
   'DrawSpline', 'EvaluateSpline', 'TrimSpline', 'OffsetSpline',
   'Mix', 'Group', 'Sequence', 'Crossfade',
+  'Plugin',
 ]);
 
 /// Nodes qui ont leur propre surface dédiée — exclus des chips de params

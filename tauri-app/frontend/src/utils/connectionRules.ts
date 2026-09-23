@@ -21,6 +21,8 @@ const ENGINE_TYPES: NodeType[] = [
   // positions — les connecter aux falloffs était décoratif (aucune donnée
   // transportée) et bloquait le port 'input' pour Objects.
   'AudioSpectrum', 'OSCInput',
+  // Plugin WASM (bundle .ssx) : engine générique, ports input+duration
+  'Plugin',
 ];
 
 const PHYSICS_TYPES: NodeType[] = [
@@ -159,6 +161,7 @@ export function getInputPorts(type: NodeType): string[] {
     case 'Bouncing': case 'Spring': case 'Follow': case 'Swarm': case 'Avoidance': case 'VectorField':
     case 'BPM': case 'AudioAmplitude':
     case 'AudioSpectrum': case 'OSCInput': // engines : Objects/Duration peuvent les alimenter
+    case 'Plugin': // engine WASM générique — même arité que les engines
     case 'DrawSpline':
     case 'TimeFalloff': case 'PointDistanceFalloff': case 'DirectionalFalloff': case 'AudioAmplitudeFalloff':
       return ['input', 'duration'];

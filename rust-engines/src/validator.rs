@@ -238,6 +238,7 @@ impl Validator {
                     | NodeType::OffsetSpline
                     | NodeType::AudioSpectrum
                     | NodeType::OSCInput
+                    | NodeType::Plugin
             )
         })
     }
@@ -254,7 +255,7 @@ impl Validator {
             // positions — pas des sources décoratives : ils atteignent Output
             // comme tout autre moteur. (Auparavant limités aux falloffs, des
             // edges qui ne transportaient aucune donnée.)
-            | NodeType::AudioSpectrum | NodeType::OSCInput
+            | NodeType::AudioSpectrum | NodeType::OSCInput | NodeType::Plugin
             | NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline => {
                 matches!(to_type,
                     NodeType::Output | NodeType::Mix | NodeType::Group | NodeType::Sequence | NodeType::Crossfade |
@@ -322,7 +323,7 @@ impl Validator {
                     | NodeType::Spring | NodeType::Follow | NodeType::Swarm | NodeType::Avoidance | NodeType::VectorField
                     | NodeType::CustomTrajectory | NodeType::Wave
                     | NodeType::BPM | NodeType::AudioAmplitude
-                    | NodeType::AudioSpectrum | NodeType::OSCInput
+                    | NodeType::AudioSpectrum | NodeType::OSCInput | NodeType::Plugin
                     | NodeType::DrawSpline | NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline
                     // Les falloffs sont des engines autonomes — ils résolvent n_objects
                     // via l'edge Objects comme les autres moteurs.
@@ -335,7 +336,7 @@ impl Validator {
                     | NodeType::Pendulum | NodeType::RoseCurve | NodeType::Helix
                     | NodeType::CustomTrajectory | NodeType::Wave
                     | NodeType::BPM | NodeType::AudioAmplitude
-                    | NodeType::AudioSpectrum | NodeType::OSCInput
+                    | NodeType::AudioSpectrum | NodeType::OSCInput | NodeType::Plugin
                     | NodeType::Bouncing | NodeType::Spring | NodeType::Follow | NodeType::Swarm | NodeType::Avoidance | NodeType::VectorField
                     | NodeType::DrawSpline | NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline
                     // Les falloffs ont un port 'duration' — sinon le paramètre
@@ -476,7 +477,9 @@ impl Validator {
             | NodeType::PointDistanceFalloff
             | NodeType::DirectionalFalloff
             | NodeType::AudioAmplitudeFalloff
-            | NodeType::DrawSpline => &["input", "duration"],
+            | NodeType::DrawSpline
+            // Plugin WASM : engine générique — ports input+duration
+            | NodeType::Plugin => &["input", "duration"],
 
             // Modificateurs : une seule entrée
             NodeType::Scale
@@ -823,6 +826,8 @@ fn is_subgraph_only_node(node_type: &NodeType) -> bool {
             | NodeType::AudioSpectrum
             | NodeType::OSCInput
             | NodeType::Wave
+            // Plugin WASM : engine de sub-graph uniquement
+            | NodeType::Plugin
             // Modifiers/compilables uniquement dans un sub-graph : absents de
             // is_post_process_node → un graph global les accepterait à la
             // validation puis échouerait à la compile.

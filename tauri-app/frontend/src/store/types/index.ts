@@ -13,7 +13,8 @@ export type NodeType =
   | 'Zone' | 'Velocity'
   | 'MoveRef' | 'Merge'
   | 'BPM' | 'AudioAmplitude' | 'AudioSpectrum' | 'OSCInput'
-  | 'Mix' | 'Group' | 'Sequence' | 'Crossfade';
+  | 'Mix' | 'Group' | 'Sequence' | 'Crossfade'
+  | 'Plugin';
 
 export type AppStatus = 'idle' | 'compiling' | 'compiled' | 'playing' | 'error';
 

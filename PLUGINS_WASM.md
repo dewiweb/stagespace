@@ -9,10 +9,23 @@ Statut : **design approuvé — implémentation non commencée**
 
 ## 1. Principes directeurs
 
-- **Le plugin n'est pas un nouveau `NodeType`** — c'est un node conteneur
-  générique `NodeType::Plugin` dont le comportement vit dans les params
-  (`plugin_id` + params déclarés par le plugin). Le graphe, les `.hfg`, les
-  cues et les snapshots traversent sans changement de format.
+- **Registry unifié, deux backends** — le compiler ne dispatche plus via un
+  `match NodeType` figé mais via un `NodeRegistry` :
+  ```rust
+  enum NodeImpl {
+      Native(Box<dyn Engine>),  // built-ins actuels, inchangés
+      Wasm(PluginEngine),       // plugins .ssx
+  }
+  ```
+  Les built-ins sont *enregistrés* au boot (pas recompilés en wasm — sinon
+  dépendance circulaire au build + ABI v2 obligatoire pour les modifiers).
+  Dogfooding réel : si le registry marche pour les built-ins, il marche pour
+  les plugins. Migration vers wasm possible plus tard sans changer l'archi.
+- **Le plugin est un node conteneur `NodeType::Plugin`** — `params.plugin_id`
+  désigne le plugin ; les autres params sont ceux déclarés par le manifeste.
+  `NodeType` reste `Copy` (un variant `Custom(String)` le tuerait), le format
+  `.hfg`/cues/snapshots est inchangé. L'UI affiche le nom du plugin via le
+  registry, pas le type brut.
 - **Le manifeste est la source de vérité UI** — le plugin déclare ses params
   (schema) et ses ports ; `NodeParamsPanel` est déjà schema-driven
   (`ParamDef[]`), il suffit de brancher le registry dessus.
@@ -64,21 +77,24 @@ lemniscate.ssx
 
 ### 2.2 ABI v1 (contrat host ↔ invité)
 
-Cible `wasm32-unknown-unknown`, pas de WASI. Mémoire linéaire partagée :
+Cible `wasm32-unknown-unknown`, pas de WASI. Buffers **statiques** en mémoire
+linéaire — pas d'alloc/free côté invité (SDK trivial, tests WAT sans
+allocateur) :
 
 ```rust
-// Exporté par le plugin
-fn plugin_alloc(len: u32) -> u32;                        // alloue params JSON
-fn plugin_position(t: f64, i: u32, n: u32, d: f64,
-                  params_ptr: u32, params_len: u32) -> u32; // → ptr vers [f64;3]
-fn plugin_free(ptr: u32, len: u32);
+// Exportés par le plugin
+fn plugin_params_ptr() -> i32;   // buffer ≥ 64 KB réservé dans .data
+fn plugin_result_ptr() -> i32;   // buffer 24 bytes ([f64;3]) dans .data
+fn plugin_position(t: f64, i: i32, n: i32, d: f64, params_len: i32);
+// + export "memory"
 ```
 
-Host : sérialise `params` JSON → `plugin_alloc` → écrit en mémoire linéaire →
-appelle `plugin_position` → lit 24 bytes `[x,y,z]` → `finite_or_zero` →
-`plugin_free`. Trap wasmtime → position zero + erreur loguée (jamais de
-propagation au worker 60 FPS). `fuel` activé : budget par appel, un plugin en
-boucle infinie consomme son fuel et trap au lieu de geler le runtime.
+Host : sérialise `params` JSON (cap 64 KB) → écrit à `params_ptr` → appelle
+`plugin_position` → lit 24 bytes à `result_ptr` → `finite_or_zero`. Buffers
+sûrs car le `Store` wasmtime est `Mutex`-guardé par node (accès séquentiel).
+Trap → position zero + erreur loguée (jamais de propagation au worker 60 FPS).
+`fuel` activé : budget par appel, une boucle infinie trap au lieu de geler
+le runtime.
 
 ## 3. Plan d'implémentation par phases
 
@@ -102,12 +118,13 @@ boucle infinie consomme son fuel et trap au lieu de geler le runtime.
 
 ### Phase 2 — Registry dans le compilateur
 
-Le compiler doit résoudre `plugin_id` → `Plugin` à la compile. Deux options :
-- (a) `Compiler::new(graph, plugin_registry: &PluginRegistry)` — propre,
-  signature changeante mais interne
-- (b) registry global `OnceLock` — simple mais global mutable, test-hostile
-→ **(a)** : passer une référence registry dans `compile_graph` et les call
-sites src-tauri (`activate_move`, `update_global_graph`, `sample_graph`).
+`Compiler` reçoit `plugins: Option<Arc<PluginRegistry>>` (builder
+`.with_plugin_registry()`, défaut `None` → les nodes `Plugin` échouent à la
+compile avec `InvalidParameter("plugin_id inconnu ou absent")`). Call sites
+src-tauri mis à jour en Phase 3. Le `match` actuel de `compile_engine` reste
+tel quel en v1 — le registry unifié `NodeImpl::{Native,Wasm}` est une
+refactorisation ultérieure optionnelle ; Phase 1 ajoute seulement l'arm
+`NodeType::Plugin` qui consulte le registry.
 
 ### Phase 3 — Tauri (src-tauri)
 

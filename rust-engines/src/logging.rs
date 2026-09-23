@@ -55,3 +55,9 @@ pub fn log_osc_message(address: &str, data_len: usize) {
 pub fn log_osc_error(error: &str) {
     warn!(error, "OSC error occurred");
 }
+
+/// Erreur d'exécution d'un plugin WASM (trap, fuel, buffer) — loguée une
+/// seule fois par instance (le caller rate-limite via `error_logged`).
+pub fn log_plugin_error(plugin_id: &str, error: &str) {
+    warn!(plugin_id, error, "WASM plugin error");
+}

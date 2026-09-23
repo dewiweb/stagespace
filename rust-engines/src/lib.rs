@@ -18,6 +18,7 @@ pub mod node_params;
 pub mod osc_receiver;
 pub mod osc_sender;
 pub mod patch;
+pub mod plugins;
 pub mod position_buffer;
 pub mod position_sink;
 pub mod post_process_compiler;
@@ -43,6 +44,8 @@ mod generative_graph_tests;
 mod graph_tests;
 #[cfg(test)]
 mod integration_tests;
+#[cfg(test)]
+mod plugin_tests;
 #[cfg(test)]
 mod validator_tests;
 
@@ -72,7 +75,8 @@ pub use hol_parser::{aed_to_xyz, parse_hol_project, HolTrack};
 pub use kinematics::{ChannelModulation, KinematicSource, KinematicState};
 pub use logging::{
     init_logging, log_compilation_error, log_compilation_success, log_graph_compilation,
-    log_osc_error, log_osc_message, log_playback_start, log_playback_stop, log_runtime_init,
+    log_osc_error, log_osc_message, log_playback_start, log_playback_stop, log_plugin_error,
+    log_runtime_init,
 };
 pub use merge_runtime::{MergeRuntime, MergeStrategy, MoveState};
 pub use modulator::{ModulationSlot, Modulator, Waveform};
@@ -82,6 +86,7 @@ pub use osc_receiver::{
 };
 pub use osc_sender::{OscProfile, OscSender, SpatialChannel, SpatialChannels};
 pub use patch::{AudioObject, ObjectGroup, PatchManager};
+pub use plugins::{PluginEngine, PluginError, PluginManifest, PluginRegistry};
 pub use position_buffer::{IndexedPosition, PositionBuffer};
 pub use position_sink::{OscSink, PositionSink, SendReport};
 pub use post_process_compiler::{

@@ -125,6 +125,12 @@ pub enum NodeType {
     AudioAmplitude,
     AudioSpectrum,
     OSCInput,
+
+    /// Node conteneur pour les plugins WASM (bundles .ssx).
+    /// `params.plugin_id` désigne le plugin dans le PluginRegistry ;
+    /// les autres params sont ceux déclarés par son manifeste.
+    /// Comportement : engine de sub-graph (ports input+duration).
+    Plugin,
 }
 
 /// Un nœud dans le graphe
