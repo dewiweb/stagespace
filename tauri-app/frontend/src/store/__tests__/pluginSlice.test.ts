@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useGraphStore, resetStore } from './testHelpers';
 import { setInvokeResponse, clearInvokeCalls, getInvokeCalls } from '../../test/setup';
-import { pluginParamDefs, pluginDefaultParams, pluginNodeSchema } from '../../components/nodeParamSchema';
+import { pluginParamDefs, pluginDefaultParams, pluginNodeSchema, pluginParamsOnSwitch } from '../../components/nodeParamSchema';
 import type { PluginManifest } from '../../types/generated/PluginManifest';
 
 const lemniscateManifest: PluginManifest = {
@@ -115,13 +115,41 @@ describe('pluginParamDefs / pluginDefaultParams / pluginNodeSchema', () => {
     expect(p.speed).toBe(1.0);
   });
 
-  it('pluginNodeSchema returns plugin_id only when manifest unknown', () => {
+  it('pluginNodeSchema renders plugin_id as enum over loaded manifests', () => {
+    const schema = pluginNodeSchema({ plugin_id: 'lemniscate' }, [lemniscateManifest]);
+    expect(schema[0]).toMatchObject({
+      key: 'plugin_id',
+      type: 'enum',
+      options: ['lemniscate'],
+    });
+  });
+
+  it('pluginNodeSchema keeps a stale plugin_id selectable (uninstalled plugin)', () => {
     const schema = pluginNodeSchema({ plugin_id: 'missing' }, [lemniscateManifest]);
+    expect(schema[0]).toMatchObject({ type: 'enum' });
+    expect(schema[0].options).toContain('missing');
+    expect(schema[0].options).toContain('lemniscate');
+  });
+
+  it('pluginNodeSchema falls back to free text when no plugins loaded', () => {
+    const schema = pluginNodeSchema({}, []);
     expect(schema).toEqual([{ key: 'plugin_id', label: 'Plugin ID', type: 'text' }]);
   });
 
   it('pluginNodeSchema merges manifest params after plugin_id', () => {
     const schema = pluginNodeSchema({ plugin_id: 'lemniscate' }, [lemniscateManifest]);
     expect(schema.map((d) => d.key)).toEqual(['plugin_id', 'scale', 'speed']);
+  });
+
+  it('pluginParamsOnSwitch backfills defaults without clobbering set values', () => {
+    const merged = pluginParamsOnSwitch(lemniscateManifest, {
+      plugin_id: 'lemniscate',
+      scale: 3.5,
+      old_param: 42,
+    });
+    expect(merged.scale).toBe(3.5); // valeur saisie préservée
+    expect(merged.speed).toBe(1.0); // default du manifeste backfillé
+    expect(merged.old_param).toBe(42); // clé héritée conservée
+    expect(pluginParamsOnSwitch(undefined, { a: 1 })).toEqual({ a: 1 });
   });
 });

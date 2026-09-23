@@ -3,7 +3,7 @@ import { X, Check } from 'lucide-react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
-import { PARAM_SCHEMA, getCategoryColor, pluginNodeSchema, type ParamDef, type NodeParamValue } from './nodeParamSchema';
+import { PARAM_SCHEMA, getCategoryColor, pluginNodeSchema, pluginParamsOnSwitch, type ParamDef, type NodeParamValue } from './nodeParamSchema';
 import { isSourceNode, isTerminalNode, isBinaryComposite, getInputPorts } from '../utils/connectionRules';
 
 const AUDIO_NODE_TYPES = new Set(['BPM', 'AudioAmplitude', 'AudioSpectrum', 'AudioAmplitudeFalloff']);
@@ -27,9 +27,14 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
   // le label affiché est le nom déclaré — sinon les tables statiques.
   const isPluginNode = data.type === 'Plugin';
   const pluginId = isPluginNode ? (data.params?.plugin_id as string | undefined) : undefined;
-  const pluginManifest = useGraphStore((s) =>
-    isPluginNode ? (s.plugins.find((m) => m.id === pluginId) ?? null) : null
-  );
+  const plugins = useGraphStore((s) => s.plugins);
+  const pluginsLoaded = useGraphStore((s) => s.pluginsLoaded);
+  const pluginManifest = isPluginNode
+    ? (plugins.find((m) => m.id === pluginId) ?? null)
+    : null;
+  // Plugin désinstallé (ou .hfg d'une autre machine) — badge persistant,
+  // plus visible qu'un toast éphémère à chaque édition.
+  const pluginMissing = isPluginNode && pluginsLoaded && !pluginManifest;
   const schema = isPluginNode
     ? pluginNodeSchema(data.params, pluginManifest ? [pluginManifest] : [])
     : (PARAM_SCHEMA[data.type] ?? []);
@@ -55,16 +60,26 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
   const audioHigh = audioState?.amplitude?.high ?? null;
 
   const handleChange = useCallback((key: string, value: NodeParamValue) => {
+    let params = { ...data.params, [key]: value };
+    // Switch de plugin : backfill des defaults du nouveau manifeste pour
+    // les clés absentes (les clés propres à l'ancien plugin restent,
+    // ignorées par le host).
+    if (isPluginNode && key === 'plugin_id' && typeof value === 'string') {
+      params = pluginParamsOnSwitch(
+        plugins.find((m) => m.id === value),
+        params,
+      );
+    }
     if (isGlobalNode) {
-      updateGlobalNodeData(id, { params: { ...data.params, [key]: value } });
+      updateGlobalNodeData(id, { params });
       return; // pushGlobalGraph (debounced) gère la propagation backend
     }
-    updateNodeData(id, { params: { ...data.params, [key]: value } });
+    updateNodeData(id, { params });
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       useGraphStore.getState().updateGraphLive();
     }, 150);
-  }, [id, data.params, updateNodeData, isGlobalNode, updateGlobalNodeData]);
+  }, [id, data.params, updateNodeData, isGlobalNode, updateGlobalNodeData, isPluginNode, plugins]);
 
   const renderInput = (def: ParamDef) => {
     const value = data.params?.[def.key];
@@ -223,6 +238,14 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
             </span>
           )}
           <span className="text-white text-sm font-semibold truncate">{displayLabel}</span>
+          {pluginMissing && (
+            <span
+              className="flex-shrink-0 px-1 py-px rounded bg-red-900/60 text-red-300 text-[9px] font-bold tracking-wide"
+              title={`Plugin '${pluginId ?? ''}' non chargé — .ssx absent du dossier plugins`}
+            >
+              MISSING
+            </span>
+          )}
         </div>
         {schema.length > 0 && (
           <button

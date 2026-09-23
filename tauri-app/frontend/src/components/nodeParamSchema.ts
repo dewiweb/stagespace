@@ -718,16 +718,24 @@ export function pluginParamDefs(manifest: PluginManifest | null | undefined): Pa
   }));
 }
 
-/// Schema complet d'un node Plugin : `plugin_id` statique + params du
-/// manifeste résolu via `plugin_id`. Manifeste absent (plugin désinstallé,
-/// pas encore chargé) → seul `plugin_id` est éditable.
+/// Schema complet d'un node Plugin : `plugin_id` en select (ids du
+/// registry) + params du manifeste résolu. Un `plugin_id` pointant vers un
+/// plugin désinstallé reste dans les options — un show `.hfg` peut
+/// référencer un plugin absent, il faut pouvoir voir/conserver sa valeur.
+/// Sans aucun plugin chargé ni id → fallback texte libre.
 export function pluginNodeSchema(
   params: Record<string, NodeParamValue> | undefined,
   manifests: PluginManifest[],
 ): ParamDef[] {
   const pid = params?.plugin_id;
   const manifest = typeof pid === 'string' ? manifests.find((m) => m.id === pid) : undefined;
-  return [...(PARAM_SCHEMA['Plugin'] ?? []), ...pluginParamDefs(manifest)];
+  const options = manifests.map((m) => m.id);
+  if (typeof pid === 'string' && !options.includes(pid)) options.unshift(pid);
+  const idField: ParamDef =
+    options.length > 0
+      ? { key: 'plugin_id', label: 'Plugin', type: 'enum', options }
+      : { key: 'plugin_id', label: 'Plugin ID', type: 'text' };
+  return [idField, ...pluginParamDefs(manifest)];
 }
 
 /// Params initiaux d'un node Plugin créé depuis la palette : plugin_id +
@@ -736,6 +744,24 @@ export function pluginDefaultParams(manifest: PluginManifest): Record<string, No
   const params: Record<string, NodeParamValue> = { plugin_id: manifest.id };
   for (const p of manifest.params) {
     params[p.key] = (p.default ?? undefined) as NodeParamValue;
+  }
+  return params;
+}
+
+/// Switch de plugin sur un node existant : backfill des defaults du
+/// nouveau manifeste pour les clés absentes. Les params déjà saisis sont
+/// préservés (les clés propres à l'ancien plugin restent — ignorées par
+/// le host qui ne lit que ses clés déclarées).
+export function pluginParamsOnSwitch(
+  manifest: PluginManifest | undefined,
+  existing: Record<string, NodeParamValue>,
+): Record<string, NodeParamValue> {
+  if (!manifest) return existing;
+  const params = { ...existing };
+  for (const p of manifest.params) {
+    if (params[p.key] === undefined) {
+      params[p.key] = (p.default ?? undefined) as NodeParamValue;
+    }
   }
   return params;
 }

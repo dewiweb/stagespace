@@ -1,6 +1,6 @@
 import React from 'react';
 import { Slider } from './ui/Slider';
-import { PARAM_SCHEMA, ENGINE_TYPES, NON_PARAM_NODES, pluginNodeSchema, type NodeParamValue, type GraphNodeData, type ParamDef } from './nodeParamSchema';
+import { PARAM_SCHEMA, ENGINE_TYPES, NON_PARAM_NODES, pluginNodeSchema, pluginParamsOnSwitch, type NodeParamValue, type GraphNodeData, type ParamDef } from './nodeParamSchema';
 import { useGraphStore } from '../store/useGraphStore';
 import type { NodeType } from '../store/types/index';
 import type { Node } from 'reactflow';
@@ -43,9 +43,14 @@ export const NodeParamsPanel: React.FC<{
   // (registry backend via le store) — rien d'autre à toucher, NodeParamField
   // rend les types du manifeste génériquement.
   const plugins = useGraphStore((s) => s.plugins);
+  const pluginsLoaded = useGraphStore((s) => s.pluginsLoaded);
   const paramSchema = paramNodeType === 'Plugin'
     ? pluginNodeSchema(paramNodeParams, plugins)
     : (paramNodeType ? PARAM_SCHEMA[paramNodeType] ?? [] : []);
+  // Plugin désinstallé : warning persistant (pas un toast éphémère).
+  const selectedPid = paramNodeParams.plugin_id;
+  const pluginMissing = paramNodeType === 'Plugin' && pluginsLoaded
+    && !(typeof selectedPid === 'string' && plugins.some((m) => m.id === selectedPid));
 
   if (paramNodes.length === 0 || !paramNode) {
     return (
@@ -61,11 +66,16 @@ export const NodeParamsPanel: React.FC<{
       <div className="flex flex-wrap gap-1 pb-1">
         {paramNodes.map((n, i) => {
           const t = (n.data as GraphNodeData)?.type ?? '?';
-          // Plugin : le chip affiche le nom du manifeste, pas le type conteneur
+          // Plugin : le chip affiche le nom du manifeste, pas le type
+          // conteneur ; ⚠ si le plugin n'est plus chargé dans le registry.
           const pid = (n.data as GraphNodeData)?.params?.plugin_id;
+          const manifest = t === 'Plugin' && typeof pid === 'string'
+            ? plugins.find((m) => m.id === pid)
+            : undefined;
           const chipLabel = t === 'Plugin' && typeof pid === 'string'
-            ? (plugins.find((m) => m.id === pid)?.name ?? pid)
+            ? (manifest?.name ?? pid)
             : t;
+          const chipMissing = t === 'Plugin' && pluginsLoaded && !manifest;
           // Indice d'occurrence si plusieurs nodes du même label affiché
           const sameLabel = paramNodes.filter((o) => {
             const ot = (o.data as GraphNodeData)?.type ?? '?';
@@ -87,7 +97,7 @@ export const NodeParamsPanel: React.FC<{
               }`}
               title={`Node ${i + 1} — params`}
             >
-              {chipLabel}{occ > 0 ? ` ${occ}` : ''}
+              {chipLabel}{occ > 0 ? ` ${occ}` : ''}{chipMissing ? ' ⚠' : ''}
             </button>
           );
         })}
@@ -102,10 +112,23 @@ export const NodeParamsPanel: React.FC<{
             def={d}
             value={paramNodeParams[d.key]}
             live={live}
-            onChange={(v) => onParam(paramNode.id, d.key, v, paramNodeParams)}
+            onChange={(v) => {
+              // Switch de plugin : backfill des defaults du nouveau
+              // manifeste dans les params propagés au store.
+              let base = paramNodeParams;
+              if (paramNodeType === 'Plugin' && d.key === 'plugin_id' && typeof v === 'string') {
+                base = pluginParamsOnSwitch(plugins.find((m) => m.id === v), base);
+              }
+              onParam(paramNode.id, d.key, v, base);
+            }}
           />
         ))}
       </div>
+      {pluginMissing && (
+        <div className="text-red-400/90 text-[10px] font-mono pt-1">
+          ⚠ Plugin '{typeof selectedPid === 'string' && selectedPid ? selectedPid : '?'}' non chargé — installez le .ssx ou choisissez un autre plugin.
+        </div>
+      )}
     </div>
   );
 };
