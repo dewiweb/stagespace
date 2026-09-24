@@ -41,10 +41,12 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
   const displayLabel = isPluginNode ? (pluginManifest?.name ?? data.label) : data.label;
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const pluginKind = pluginManifest?.kind;
   const hasInput = !isSourceNode(data.type);
   const hasOutput = !isTerminalNode(data.type);
-  const isBinary = isBinaryComposite(data.type);
-  const inputPorts = getInputPorts(data.type);
+  const isBinary = isBinaryComposite(data.type)
+    || (isPluginNode && pluginKind === 'composite');
+  const inputPorts = getInputPorts(data.type, pluginKind);
 
   // Audio live indicator — pour les nodes audio, afficher les valeurs live
   // Optimisation: seuls les nodes audio se re-subscribe à audioState (60fps)

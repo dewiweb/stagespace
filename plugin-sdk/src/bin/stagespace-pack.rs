@@ -14,8 +14,9 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::process::exit;
 
-const HOST_ABI_VERSION: u32 = 1;
+const HOST_ABI_VERSION: u32 = 2;
 const VALID_TYPES: &[&str] = &["number", "boolean", "enum", "vec3", "text", "string"];
+const VALID_KINDS: &[&str] = &["engine", "modifier", "composite"];
 const WASM_MAGIC: &[u8; 4] = b"\0asm";
 const MAX_BUNDLE_BYTES: u64 = 64 * 1024 * 1024;
 
@@ -68,8 +69,19 @@ fn validate_manifest(m: &ManifestCheck) -> Result<(), String> {
             m.abi_version
         ));
     }
-    if m.kind != "engine" {
-        return Err("kind must be \"engine\" (ABI v1)".into());
+    if !VALID_KINDS.contains(&m.kind.as_str()) {
+        return Err(format!(
+            "kind '{}' unknown (expected one of {VALID_KINDS:?})",
+            m.kind
+        ));
+    }
+    // Aligné sur le host : modifier/composite exigent abi_version 2
+    // (le buffer plugin_inputs_ptr n'existe pas en v1).
+    if m.abi_version == 1 && m.kind != "engine" {
+        return Err(format!(
+            "kind '{}' requires abi_version 2 (v1 = engines only)",
+            m.kind
+        ));
     }
     let mut seen = std::collections::HashSet::new();
     for p in &m.params {

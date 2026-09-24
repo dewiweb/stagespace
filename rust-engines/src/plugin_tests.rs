@@ -39,6 +39,38 @@ mod tests {
     unreachable))
 "#;
 
+    /// Modifier ABI v2 : result = input × 2. Lit le buffer inputs à 2048.
+    const DOUBLE_WAT: &str = r#"
+(module
+  (memory (export "memory") 1)
+  (func (export "plugin_params_ptr") (result i32) (i32.const 1024))
+  (func (export "plugin_result_ptr") (result i32) (i32.const 0))
+  (func (export "plugin_inputs_ptr") (result i32) (i32.const 2048))
+  (func (export "plugin_position") (param f64 i32 i32 f64 i32)
+    (f64.store (i32.const 0)
+      (f64.mul (f64.load (i32.const 2048)) (f64.const 2)))
+    (f64.store (i32.const 8)
+      (f64.mul (f64.load (i32.const 2056)) (f64.const 2)))
+    (f64.store (i32.const 16)
+      (f64.mul (f64.load (i32.const 2064)) (f64.const 2)))))
+"#;
+
+    /// Composite ABI v2 : result = input_a + input_b (a à 2048, b à 2072).
+    const ADD_WAT: &str = r#"
+(module
+  (memory (export "memory") 1)
+  (func (export "plugin_params_ptr") (result i32) (i32.const 1024))
+  (func (export "plugin_result_ptr") (result i32) (i32.const 0))
+  (func (export "plugin_inputs_ptr") (result i32) (i32.const 2048))
+  (func (export "plugin_position") (param f64 i32 i32 f64 i32)
+    (f64.store (i32.const 0)
+      (f64.add (f64.load (i32.const 2048)) (f64.load (i32.const 2072))))
+    (f64.store (i32.const 8)
+      (f64.add (f64.load (i32.const 2056)) (f64.load (i32.const 2080))))
+    (f64.store (i32.const 16)
+      (f64.add (f64.load (i32.const 2064)) (f64.load (i32.const 2088))))))
+"#;
+
     /// Plugin en boucle infinie — doit être tué par le fuel, pas geler.
     const INFINITE_WAT: &str = r#"
 (module
@@ -49,18 +81,28 @@ mod tests {
     (loop (br 0))))
 "#;
 
+    /// Manifeste ABI v1 (engine pur — pas de buffer inputs requis).
     fn manifest(id: &str) -> PluginManifest {
         PluginManifest {
             id: id.to_string(),
             name: format!("Test {id}"),
             version: "1.0.0".to_string(),
             author: None,
-            abi_version: HOST_ABI_VERSION,
+            abi_version: 1,
             kind: PluginKind::Engine,
             category: None,
             description: None,
             params: vec![],
             capabilities: vec![],
+        }
+    }
+
+    /// Manifeste ABI v2 — modifier/composite exigent `plugin_inputs_ptr`.
+    fn manifest_v2(id: &str, kind: PluginKind) -> PluginManifest {
+        PluginManifest {
+            abi_version: 2,
+            kind,
+            ..manifest(id)
         }
     }
 
@@ -264,6 +306,192 @@ mod tests {
             to_port: "input".to_string(),
         });
         g
+    }
+
+    /// Graphe modifier : Objects→engine(plugin echo)→modifier→Output.
+    /// `engine_id` = plugin engine upstream (echo), `mod_id` = plugin modifier.
+    fn modifier_graph(engine_id: &str, mod_id: &str) -> Graph {
+        let mut g = Graph::new();
+        let objects = Node::with_params(NodeType::Objects, json!({"n_objects": 4}));
+        let duration = Node::with_params(NodeType::Duration, json!({"duration": 10.0}));
+        let engine = Node::with_params(NodeType::Plugin, json!({"plugin_id": engine_id}));
+        let modifier = Node::with_params(NodeType::Plugin, json!({"plugin_id": mod_id}));
+        let output = Node::new(NodeType::Output);
+        let (id_o, id_d, id_e, id_m, id_out) =
+            (objects.id, duration.id, engine.id, modifier.id, output.id);
+        for n in [objects, duration, engine, modifier, output] {
+            g.add_node(n);
+        }
+        let edge = |from, to, port: &str| Edge {
+            from,
+            to,
+            from_port: "output".to_string(),
+            to_port: port.to_string(),
+        };
+        g.add_edge(edge(id_o, id_e, "input"));
+        g.add_edge(edge(id_d, id_e, "duration"));
+        g.add_edge(edge(id_e, id_m, "input"));
+        g.add_edge(edge(id_m, id_out, "input"));
+        g
+    }
+
+    /// Graphe composite : deux engines echo → plugin composite → Output.
+    fn composite_graph(comp_id: &str) -> Graph {
+        let mut g = Graph::new();
+        let objects = Node::with_params(NodeType::Objects, json!({"n_objects": 4}));
+        let duration = Node::with_params(NodeType::Duration, json!({"duration": 10.0}));
+        let ea = Node::with_params(NodeType::Plugin, json!({"plugin_id": "echo"}));
+        let eb = Node::with_params(NodeType::Plugin, json!({"plugin_id": "echo"}));
+        let comp = Node::with_params(NodeType::Plugin, json!({"plugin_id": comp_id}));
+        let output = Node::new(NodeType::Output);
+        let (id_o, id_d, id_a, id_b, id_c, id_out) =
+            (objects.id, duration.id, ea.id, eb.id, comp.id, output.id);
+        for n in [objects, duration, ea, eb, comp, output] {
+            g.add_node(n);
+        }
+        let edge = |from, to, port: &str| Edge {
+            from,
+            to,
+            from_port: "output".to_string(),
+            to_port: port.to_string(),
+        };
+        g.add_edge(edge(id_o, id_a, "input"));
+        g.add_edge(edge(id_d, id_a, "duration"));
+        g.add_edge(edge(id_o, id_b, "input"));
+        g.add_edge(edge(id_d, id_b, "duration"));
+        g.add_edge(edge(id_a, id_c, "input_a"));
+        g.add_edge(edge(id_b, id_c, "input_b"));
+        g.add_edge(edge(id_c, id_out, "input"));
+        g
+    }
+
+    /// Registry multi-plugins pour les graphes modifier/composite.
+    fn registry_all(entries: &[(&str, PluginManifest, &str)]) -> Arc<Mutex<PluginRegistry>> {
+        let mut reg = PluginRegistry::new().expect("registry");
+        for (_, m, wat) in entries {
+            reg.register_wasm(m.clone(), wat.as_bytes())
+                .expect("register");
+        }
+        Arc::new(Mutex::new(reg))
+    }
+
+    fn compile_with(
+        graph: &Graph,
+        reg: Arc<Mutex<PluginRegistry>>,
+    ) -> crate::compiler::CompiledFunction {
+        Compiler::compile_with_live_inputs(
+            graph,
+            LiveInputs {
+                plugins: Some(reg),
+                ..Default::default()
+            },
+        )
+        .expect("compile")
+    }
+
+    #[test]
+    fn modifier_plugin_doubles_upstream() {
+        let reg = registry_all(&[
+            ("echo", manifest("echo"), ECHO_WAT),
+            (
+                "double",
+                manifest_v2("double", PluginKind::Modifier),
+                DOUBLE_WAT,
+            ),
+        ]);
+        let g = modifier_graph("echo", "double");
+        let f = compile_with(&g, reg);
+        // echo(t=1.5, i=2) = (1.5, 2, len) → double = (3, 4, 2·len)
+        let p = f(1.5, 2);
+        assert_eq!(p.x, 3.0, "modifier should see upstream x and double it");
+        assert_eq!(p.y, 4.0);
+        assert!(p.z > 0.0);
+    }
+
+    #[test]
+    fn composite_plugin_sums_two_inputs() {
+        let reg = registry_all(&[
+            ("echo", manifest("echo"), ECHO_WAT),
+            (
+                "adder",
+                manifest_v2("adder", PluginKind::Composite),
+                ADD_WAT,
+            ),
+        ]);
+        let g = composite_graph("adder");
+        let f = compile_with(&g, reg);
+        // echo(1.0, 0) = (1,0,len) sur les deux branches → (2,0,2·len)
+        let p = f(1.0, 0);
+        assert_eq!(p.x, 2.0, "composite should sum a+b: {:?}", p);
+        assert_eq!(p.y, 0.0);
+    }
+
+    #[test]
+    fn modifier_plugin_without_upstream_fails() {
+        let reg = registry_all(&[(
+            "double",
+            manifest_v2("double", PluginKind::Modifier),
+            DOUBLE_WAT,
+        )]);
+        // Graphe : Objects→modifier (Objects n'est pas une trajectoire)
+        let mut g = Graph::new();
+        let objects = Node::with_params(NodeType::Objects, json!({"n_objects": 4}));
+        let modifier = Node::with_params(NodeType::Plugin, json!({"plugin_id": "double"}));
+        let output = Node::new(NodeType::Output);
+        let (id_o, id_m, id_out) = (objects.id, modifier.id, output.id);
+        for n in [objects, modifier, output] {
+            g.add_node(n);
+        }
+        let edge = |from, to, port: &str| Edge {
+            from,
+            to,
+            from_port: "output".to_string(),
+            to_port: port.to_string(),
+        };
+        g.add_edge(edge(id_o, id_m, "input")); // Objects→modifier : invalide
+        g.add_edge(edge(id_m, id_out, "input"));
+        match Compiler::compile_with_live_inputs(
+            &g,
+            LiveInputs {
+                plugins: Some(reg),
+                ..Default::default()
+            },
+        ) {
+            Ok(_) => panic!("modifier without trajectory input should fail"),
+            Err(e) => {
+                let s = format!("{e:?}");
+                assert!(
+                    s.contains("trajectory") || s.contains("InvalidConnection"),
+                    "unexpected: {s}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn v2_module_without_inputs_ptr_rejected() {
+        let wat = r#"
+(module
+  (memory (export "memory") 1)
+  (func (export "plugin_params_ptr") (result i32) (i32.const 1024))
+  (func (export "plugin_result_ptr") (result i32) (i32.const 0))
+  (func (export "plugin_position") (param f64 i32 i32 f64 i32)))
+"#;
+        let mut reg = PluginRegistry::new().expect("registry");
+        match reg.register_wasm(
+            manifest_v2("noinputs", PluginKind::Modifier),
+            wat.as_bytes(),
+        ) {
+            Ok(_) => panic!("v2 module without plugin_inputs_ptr should be rejected"),
+            Err(e) => assert!(e.to_string().contains("plugin_inputs_ptr"), "{e}"),
+        }
+    }
+
+    #[test]
+    fn manifest_v1_rejects_modifier_kind() {
+        let mut m = manifest_v2("x", PluginKind::Modifier);
+        m.abi_version = 1;
+        assert!(m.validate().unwrap_err().contains("abi_version 2"));
     }
 
     #[test]

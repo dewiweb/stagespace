@@ -59,6 +59,18 @@ impl Validator {
 
     /// Valide un graphe complet avec un contexte explicite (sub-graph ou global).
     pub fn validate_with_context(graph: &Graph, context: GraphContext) -> ValidationResult {
+        Self::validate_with_plugin_kinds(graph, context, &std::collections::HashMap::new())
+    }
+
+    /// Validation kind-aware : `plugin_kinds` associe chaque node Plugin à
+    /// son `PluginKind` résolu dans le registry (compiler). Sans entrée
+    /// pour un node Plugin, les règles restent permissives (superset des
+    /// ports) — l'arité exacte est garantie au compile.
+    pub(crate) fn validate_with_plugin_kinds(
+        graph: &Graph,
+        context: GraphContext,
+        plugin_kinds: &std::collections::HashMap<crate::graph::NodeId, crate::plugins::PluginKind>,
+    ) -> ValidationResult {
         let mut errors = Vec::new();
 
         // 0. Vérifier que les nodes sont compatibles avec le contexte
@@ -143,7 +155,11 @@ impl Validator {
                             "self-loop on {:?} is not allowed",
                             from_node.node_type
                         )));
-                    } else if !Self::is_valid_connection(&from_node.node_type, &to_node.node_type) {
+                    } else if !Self::is_valid_connection(
+                        &from_node.node_type,
+                        &to_node.node_type,
+                        plugin_kinds.get(&to_node.id).copied(),
+                    ) {
                         errors.push(ValidationError::InvalidConnection(format!(
                             "{:?} -> {:?}",
                             from_node.node_type, to_node.node_type
@@ -158,8 +174,8 @@ impl Validator {
         }
 
         // 4. Vérifier la compatibilité des types + arité des ports
-        Self::validate_type_compatibility(graph, &mut errors);
-        Self::validate_input_arity(graph, context, &mut errors);
+        Self::validate_type_compatibility(graph, &mut errors, plugin_kinds);
+        Self::validate_input_arity(graph, context, &mut errors, plugin_kinds);
 
         // 5. Vérifier la compatibilité des comptages (sub-graph uniquement —
         //    le graph global n'a pas de node Objects pour définir n_objects)
@@ -243,8 +259,99 @@ impl Validator {
         })
     }
 
+    /// Un type produit une trajectoire connectable à un modifier natif —
+    /// mirror des arms ci-dessous dont les cibles incluent les modifiers.
+    fn feeds_modifier(t: &NodeType) -> bool {
+        matches!(
+            t,
+            NodeType::Circular
+                | NodeType::Elliptical
+                | NodeType::Spiral
+                | NodeType::Lissajous
+                | NodeType::Figure8
+                | NodeType::Linear
+                | NodeType::Oscillation
+                | NodeType::PerlinNoise
+                | NodeType::Formation
+                | NodeType::Converge
+                | NodeType::Pendulum
+                | NodeType::RoseCurve
+                | NodeType::Helix
+                | NodeType::CustomTrajectory
+                | NodeType::BPM
+                | NodeType::AudioAmplitude
+                | NodeType::Wave
+                | NodeType::AudioSpectrum
+                | NodeType::OSCInput
+                | NodeType::EvaluateSpline
+                | NodeType::TrimSpline
+                | NodeType::OffsetSpline
+                | NodeType::DrawSpline
+                | NodeType::TimeFalloff
+                | NodeType::PointDistanceFalloff
+                | NodeType::DirectionalFalloff
+                | NodeType::AudioAmplitudeFalloff
+                | NodeType::Scale
+                | NodeType::Rotate
+                | NodeType::Offset
+                | NodeType::PhaseShift
+                | NodeType::Mirror
+                | NodeType::Clamp
+                | NodeType::LFO
+                | NodeType::Jitter
+                | NodeType::MoveRef
+                | NodeType::Plugin
+        )
+    }
+
+    /// Un type produit une trajectoire connectable à un composite natif —
+    /// feeds_modifier + physics + composites, moins les falloffs limités
+    /// (DirectionalFalloff/AudioAmplitudeFalloff ne ciblent que des
+    /// modifiers natifs).
+    fn feeds_composite(t: &NodeType) -> bool {
+        (Self::feeds_modifier(t)
+            || matches!(
+                t,
+                NodeType::Bouncing
+                    | NodeType::Spring
+                    | NodeType::Follow
+                    | NodeType::Swarm
+                    | NodeType::Avoidance
+                    | NodeType::VectorField
+                    | NodeType::Mix
+                    | NodeType::Group
+                    | NodeType::Sequence
+                    | NodeType::Crossfade
+            ))
+            && !matches!(
+                t,
+                NodeType::DirectionalFalloff | NodeType::AudioAmplitudeFalloff
+            )
+    }
+
     /// Vérifie si une connexion entre deux types de nœuds est valide
-    fn is_valid_connection(from_type: &NodeType, to_type: &NodeType) -> bool {
+    fn is_valid_connection(
+        from_type: &NodeType,
+        to_type: &NodeType,
+        to_plugin_kind: Option<crate::plugins::PluginKind>,
+    ) -> bool {
+        // Plugin WASM : le kind du manifeste détermine qui peut l'alimenter.
+        // Kind inconnu (registry non branché) → permissif ; l'arité exacte
+        // est garantie au compile.
+        if *to_type == NodeType::Plugin {
+            use crate::plugins::PluginKind as K;
+            return match to_plugin_kind {
+                Some(K::Engine) => {
+                    matches!(from_type, NodeType::Objects | NodeType::Duration)
+                }
+                Some(K::Modifier) => Self::feeds_modifier(from_type),
+                Some(K::Composite) => Self::feeds_composite(from_type),
+                None => {
+                    matches!(from_type, NodeType::Objects | NodeType::Duration)
+                        || Self::feeds_composite(from_type)
+                }
+            };
+        }
         match from_type {
             // Moteurs peuvent connecter à Output, Mix, Group, Sequence, Crossfade, modifiers
             NodeType::Circular | NodeType::Elliptical | NodeType::Spiral | NodeType::Lissajous | NodeType::Figure8
@@ -387,7 +494,11 @@ impl Validator {
     }
 
     /// Vérifie que les noms de ports utilisés par les edges existent pour les types connectés.
-    fn validate_type_compatibility(graph: &Graph, errors: &mut Vec<ValidationError>) {
+    fn validate_type_compatibility(
+        graph: &Graph,
+        errors: &mut Vec<ValidationError>,
+        plugin_kinds: &std::collections::HashMap<crate::graph::NodeId, crate::plugins::PluginKind>,
+    ) {
         for edge in &graph.edges {
             let from_node = match graph.nodes.get(&edge.from) {
                 Some(n) => n,
@@ -407,7 +518,11 @@ impl Validator {
             }
 
             // Le port d'entrée cible doit exister pour le type cible.
-            if !Self::has_input_port(&to_node.node_type, &edge.to_port) {
+            if !Self::has_input_port(
+                &to_node.node_type,
+                &edge.to_port,
+                plugin_kinds.get(&to_node.id).copied(),
+            ) {
                 errors.push(ValidationError::TypeMismatch(format!(
                     "{:?} has no input port '{}', connected from {:?}",
                     to_node.node_type, edge.to_port, from_node.node_type
@@ -436,7 +551,25 @@ impl Validator {
     }
 
     /// Indique si un type de nœud expose un port d'entrée avec ce nom.
-    fn has_input_port(node_type: &NodeType, port: &str) -> bool {
+    /// `plugin_kind` : kind résolu du manifeste pour les nodes Plugin —
+    /// engine → input+duration, modifier → input, composite → input_a/b.
+    /// Kind inconnu → superset permissif.
+    fn has_input_port(
+        node_type: &NodeType,
+        port: &str,
+        plugin_kind: Option<crate::plugins::PluginKind>,
+    ) -> bool {
+        // Plugin : ports dictés par le kind du manifeste (ABI v2).
+        if *node_type == NodeType::Plugin {
+            use crate::plugins::PluginKind as K;
+            let inputs: &[&str] = match plugin_kind {
+                Some(K::Engine) => &["input", "duration"],
+                Some(K::Modifier) => &["input"],
+                Some(K::Composite) => &["input", "input_a", "input_b"],
+                None => &["input", "input_a", "input_b", "duration"],
+            };
+            return inputs.contains(&port);
+        }
         let inputs: &[&str] = match node_type {
             // Sources / terminaux : aucune entrée
             NodeType::Objects
@@ -477,9 +610,7 @@ impl Validator {
             | NodeType::PointDistanceFalloff
             | NodeType::DirectionalFalloff
             | NodeType::AudioAmplitudeFalloff
-            | NodeType::DrawSpline
-            // Plugin WASM : engine générique — ports input+duration
-            | NodeType::Plugin => &["input", "duration"],
+            | NodeType::DrawSpline => &["input", "duration"],
 
             // Modificateurs : une seule entrée
             NodeType::Scale
@@ -513,6 +644,9 @@ impl Validator {
             NodeType::Mix | NodeType::Group | NodeType::Sequence | NodeType::Crossfade => {
                 &["input", "input_a", "input_b"]
             }
+
+            // Traités dans le early-return kind-aware ci-dessus.
+            NodeType::Plugin => &[],
         };
         inputs.contains(&port)
     }
@@ -529,6 +663,7 @@ impl Validator {
         graph: &Graph,
         context: GraphContext,
         errors: &mut Vec<ValidationError>,
+        plugin_kinds: &std::collections::HashMap<crate::graph::NodeId, crate::plugins::PluginKind>,
     ) {
         for node in graph.nodes.values() {
             let incoming: Vec<&crate::graph::Edge> =
@@ -583,11 +718,57 @@ impl Validator {
                 )));
             }
 
+            // Plugin kind-aware : modifier/composite exigent leurs entrées
+            // trajectoire (hors carriers Objects/Duration) ; un engine
+            // plugin n'en accepte aucune — une edge trajectoire vers un
+            // engine serait silencieusement ignorée au compile.
+            if node.node_type == NodeType::Plugin {
+                use crate::plugins::PluginKind as K;
+                let kind = plugin_kinds.get(&node.id).copied();
+                let traj_count = incoming
+                    .iter()
+                    .filter(|e| matches!(e.to_port.as_str(), "input" | "input_a" | "input_b"))
+                    .filter(|e| {
+                        !matches!(
+                            graph.nodes.get(&e.from).map(|n| &n.node_type),
+                            Some(NodeType::Objects) | Some(NodeType::Duration)
+                        )
+                    })
+                    .count();
+                match kind {
+                    Some(K::Modifier) if traj_count == 0 => {
+                        errors.push(ValidationError::InvalidConnection(
+                            "Plugin (modifier) requires 1 trajectory input, got 0".to_string(),
+                        ));
+                    }
+                    Some(K::Composite) if traj_count != 2 => {
+                        errors.push(ValidationError::InvalidConnection(format!(
+                            "Plugin (composite) requires exactly 2 trajectory inputs, got {traj_count}"
+                        )));
+                    }
+                    Some(K::Engine) if traj_count > 0 => {
+                        errors.push(ValidationError::InvalidConnection(format!(
+                            "Plugin (engine) takes no trajectory input, got {traj_count}"
+                        )));
+                    }
+                    _ => {}
+                }
+            }
+
             // Chaque engine doit résoudre n_objects avec la même convention
             // que le compiler : param propre, sinon edge direct depuis un
             // node Objects. Sans les deux, MissingParameter au compile.
+            // Plugin modifier/composite : n_objects propage depuis
+            // l'upstream (pas de port 'duration' → règle déjà court-circuitée).
             if context == GraphContext::SubGraph
-                && Self::has_input_port(&node.node_type, "duration")
+                && !(node.node_type == NodeType::Plugin
+                    && plugin_kinds.get(&node.id).copied()
+                        != Some(crate::plugins::PluginKind::Engine))
+                && Self::has_input_port(
+                    &node.node_type,
+                    "duration",
+                    plugin_kinds.get(&node.id).copied(),
+                )
                 && node
                     .params
                     .get("n_objects")
@@ -664,6 +845,28 @@ impl Validator {
                         .get_binary_inputs(node.id)
                         .first()
                         .and_then(|id| graph.nodes.get(id))
+                        .map(|n| effective_n_objects(graph, n, fallback, depth + 1))
+                        .unwrap_or(fallback),
+                    // Plugin : modifier/composite propagent depuis l'entrée
+                    // trajectoire (input_a en priorité, sinon 'input') — les
+                    // carriers Objects/Duration sont déjà résolus au-dessus.
+                    NodeType::Plugin => graph
+                        .edges
+                        .iter()
+                        .filter(|e| e.to == node.id)
+                        .filter(|e| matches!(e.to_port.as_str(), "input_a" | "input" | "input_b"))
+                        .filter(|e| {
+                            !matches!(
+                                graph.nodes.get(&e.from).map(|n| &n.node_type),
+                                Some(NodeType::Objects) | Some(NodeType::Duration)
+                            )
+                        })
+                        .min_by_key(|e| match e.to_port.as_str() {
+                            "input_a" => 0,
+                            "input" => 1,
+                            _ => 2,
+                        })
+                        .and_then(|e| graph.nodes.get(&e.from))
                         .map(|n| effective_n_objects(graph, n, fallback, depth + 1))
                         .unwrap_or(fallback),
                     _ => fallback,

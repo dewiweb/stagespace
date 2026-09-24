@@ -1,7 +1,7 @@
 # PLUGINS_WASM.md — Système de plugins WASM pour nodes custom
 
 Branche : `feat/wasm-plugins`
-Statut : **Phases 1+3 livrées** (`3527441`, `343b73d`) — runtime host
+Statut : **Phases 1+3+4+5 livrées + ABI v2** — runtime host
 fonctionnel + intégration Tauri (registry dans AppState, commands
 `list_plugins`/`reload_plugins`, `compile_graph_live` = chemin unique de
 compile). 17 tests plugins verts, contrats TS générés.
@@ -21,8 +21,10 @@ compile). 17 tests plugins verts, contrats TS générés.
    test `list_plugins` tauri, import `.ssx` depuis l'UI (dialog → copie dans
    le dossier + rescan), docs `CONTRIBUTING.md` + `AGENTS.md`, icône bundle.
 
-Règle transversale : **ABI v1 = engines uniquement**. Modifier/composite
-demandent de passer la closure upstream au guest → ABI v2, hors scope.
+Règle transversale : **ABI v1 = engines uniquement** ; **ABI v2** ajoute
+`kind: "modifier" | "composite"` — l'upstream est passé au guest via un
+buffer mémoire (`plugin_inputs_ptr`), pas de host-callback (l'invité
+reste sans imports). Livré — voir §2.3.
 
 > Objectif : permettre à des développeurs tiers d'étendre la palette de nodes
 > STAGESPACE sans recompiler l'app, via des modules WebAssembly packagés dans
@@ -90,8 +92,8 @@ lemniscate.ssx
 }
 ```
 
-- `abi_version` : gate de compatibilité — l'host refuse `abi_version > HOST_ABI`.
-- `kind` : `engine` (MVP) ; `modifier` | `composite` en phase ultérieure.
+- `abi_version` : gate de compatibilité — l'host refuse `abi_version > HOST_ABI` (=2).
+- `kind` : `engine` (abi 1+), `modifier` | `composite` (abi 2 requis — refusés en v1).
 - `params[]` : mêmes types que `ParamDef` frontend (`number`, `boolean`,
   `enum`, `vec3`, `text`) — rendu direct par `NodeParamField` existant.
 - `capabilities` : deny par défaut ; futur `audio`, `osc_in`.
@@ -116,6 +118,32 @@ sûrs car le `Store` wasmtime est `Mutex`-guardé par node (accès séquentiel).
 Trap → position zero + erreur loguée (jamais de propagation au worker 60 FPS).
 `fuel` activé : budget par appel, une boucle infinie trap au lieu de geler
 le runtime.
+
+### 2.3 ABI v2 — modifier / composite
+
+ABI v2 ajoute un export et réutilise `plugin_position` inchangée :
+
+```rust
+fn plugin_inputs_ptr() -> i32;   // buffer 48 bytes ([f64;6]) dans .data — REQUIS si abi_version ≥ 2
+```
+
+Avant chaque `plugin_position`, l'host écrit la/les position(s) upstream de
+l'objet courant dans le buffer : slot 0 (indices 0..3) = `input`/`input_a`,
+slot 1 (indices 3..6) = `input_b`. Le guest les lit en mémoire linéaire —
+zéro host-callback, l'invité reste sans imports.
+
+| `kind` | Ports du node | Inputs écrits | Sémantique |
+|---|---|---|---|
+| `engine` | `input` (Objects), `duration` | — | source `f(t)` |
+| `modifier` | `input` (trajectoire) | 1 | wrap l'upstream (comme `Scale`) |
+| `composite` | `input_a`, `input_b` | 2 | combine 2 upstreams (comme `Mix`) |
+
+Le validator est kind-aware (map `NodeId → PluginKind` résolue par le
+compiler depuis le registry) : arité trajectoire (modifier=1,
+composite=2), compatibilité `n_objects`, propagation de durée suivent les
+règles des nodes natifs homonymes. Kind inconnu → superset permissif
+(l'arité exacte est garantie au compile). SDK : `stagespace_plugin_modifier!`
+et `stagespace_plugin_composite!` génèrent le buffer inputs + l'export.
 
 ## 3. Plan d'implémentation par phases
 
@@ -259,9 +287,7 @@ refactorisation ultérieure optionnelle ; Phase 1 ajoute seulement l'arm
 
 ## 5. Hors scope (v1 plugins)
 
-- ❌ `kind: "modifier" | "composite"` — ABI v1 = engines purs uniquement
-  (un modifier exigerait de passer la closure upstream en mémoire wasm —
-  faisable mais ABI v2)
+- ✅ `kind: "modifier" | "composite"` — livré via ABI v2 (§2.3)
 - ❌ Host functions (`log`, `audio`, `osc_in`) — `capabilities` réservé
 - ❌ Marketplace / signature / sandboxing renforcé
 - ❌ Hot-reload d'un plugin en cours de playback (un rescan n'affecte que

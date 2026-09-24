@@ -25,6 +25,10 @@ const REQUIRED_EXPORTS: &[&str] = &[
     "plugin_position",
 ];
 
+/// Export additionnel de l'ABI v2 — buffer où le host écrit les positions
+/// upstream (`n_inputs × 24` bytes) avant chaque `plugin_position`.
+const EXPORT_INPUTS_PTR: &str = "plugin_inputs_ptr";
+
 /// Taille max du fichier `.ssx` sur disque — un plugin de trajectoire est
 /// typiquement < 1 MB ; 64 MB laisse très large sans permettre un fichier
 /// arbitrairement gros (copy/read non bornés = DoS).
@@ -94,7 +98,7 @@ pub fn load_bundle_bytes(
         v
     };
 
-    let module = validate_module(engine, &wasm_bytes)?;
+    let module = validate_module(engine, &wasm_bytes, manifest.abi_version)?;
 
     Ok(Arc::new(Plugin {
         manifest,
@@ -114,16 +118,17 @@ pub fn load_bundle_bytes(
 pub fn validate_module(
     engine: &wasmtime::Engine,
     wasm_bytes: &[u8],
+    abi_version: u32,
 ) -> Result<wasmtime::Module, PluginError> {
     let module =
         wasmtime::Module::new(engine, wasm_bytes).map_err(|e| PluginError::Wasm(e.to_string()))?;
 
-    // ABI v1 = zéro import : le sandbox est total (aucune fonction host).
+    // ABI = zéro import : le sandbox est total (aucune fonction host).
     // Un module demandant un import échouerait à chaque instanciation —
     // rejet au load pour une erreur claire dès le scan.
     if let Some(import) = module.imports().next() {
         return Err(PluginError::Wasm(format!(
-            "module imports are not allowed in ABI v1 (found '{}' in '{}')",
+            "module imports are not allowed (found '{}' in '{}')",
             import.name(),
             import.module()
         )));
@@ -133,9 +138,14 @@ pub fn validate_module(
     for required in REQUIRED_EXPORTS {
         if !export_names.contains(required) {
             return Err(PluginError::MissingExport(format!(
-                "'{required}' (ABI v1 requires: {REQUIRED_EXPORTS:?})"
+                "'{required}' (ABI requires: {REQUIRED_EXPORTS:?})"
             )));
         }
+    }
+    if abi_version >= 2 && !export_names.contains(&EXPORT_INPUTS_PTR) {
+        return Err(PluginError::MissingExport(format!(
+            "'{EXPORT_INPUTS_PTR}' (required by abi_version 2)"
+        )));
     }
 
     for export in module.exports() {

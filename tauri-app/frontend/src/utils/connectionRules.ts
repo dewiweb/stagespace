@@ -1,4 +1,5 @@
 import type { NodeType } from '../store/useGraphStore';
+import type { PluginKind } from '../types/generated/PluginKind';
 
 /**
  * Règles de connexion — mirror exact du validateur Rust (validator.rs is_valid_connection)
@@ -59,11 +60,51 @@ const isFalloffLimited = (t: NodeType) => FALLOFF_LIMITED_TYPES.includes(t);
 const isModifier = (t: NodeType) => MODIFIER_TYPES.includes(t);
 const isComposite = (t: NodeType) => COMPOSITE_TYPES.includes(t);
 
+// ─── Helpers Plugin (ABI v2) — mirror de validator.rs::feeds_modifier /
+// feeds_composite. Listes explicites : les catégories frontend ci-dessus
+// sont plus larges que les arms Rust (post-process, Zone/Velocity…). ───
+
+const FEEDS_MODIFIER_TYPES: NodeType[] = [
+  'Circular', 'Elliptical', 'Spiral', 'Lissajous', 'Figure8',
+  'Linear', 'Oscillation', 'PerlinNoise', 'Formation', 'Converge',
+  'Pendulum', 'RoseCurve', 'Helix', 'CustomTrajectory', 'BPM',
+  'AudioAmplitude', 'Wave', 'AudioSpectrum', 'OSCInput',
+  'EvaluateSpline', 'TrimSpline', 'OffsetSpline', 'DrawSpline',
+  'TimeFalloff', 'PointDistanceFalloff',
+  'DirectionalFalloff', 'AudioAmplitudeFalloff',
+  'Scale', 'Rotate', 'Offset', 'PhaseShift',
+  'Mirror', 'Clamp', 'LFO', 'Jitter',
+  'MoveRef', 'Plugin',
+];
+
+const FEEDS_COMPOSITE_EXTRA: NodeType[] = [
+  'Bouncing', 'Spring', 'Follow', 'Swarm', 'Avoidance', 'VectorField',
+  'Mix', 'Group', 'Sequence', 'Crossfade',
+];
+
+const feedsModifier = (t: NodeType) => FEEDS_MODIFIER_TYPES.includes(t);
+const feedsComposite = (t: NodeType) =>
+  (feedsModifier(t) || FEEDS_COMPOSITE_EXTRA.includes(t)) &&
+  !isFalloffLimited(t);
+
 /**
  * Retourne true si une connexion from → to est valide.
  * Mirror EXACT de validator.rs::is_valid_connection
  */
-export function isValidConnection(from: NodeType, to: NodeType): boolean {
+export function isValidConnection(
+  from: NodeType,
+  to: NodeType,
+  toPluginKind?: PluginKind,
+): boolean {
+  // Plugin WASM cible : le kind du manifeste détermine qui peut l'alimenter
+  // (mirror de validator.rs). Kind inconnu → superset permissif.
+  if (to === 'Plugin') {
+    if (toPluginKind === 'engine') return from === 'Objects' || from === 'Duration';
+    if (toPluginKind === 'modifier') return feedsModifier(from);
+    if (toPluginKind === 'composite') return feedsComposite(from);
+    return from === 'Objects' || from === 'Duration' || feedsComposite(from);
+  }
+
   // Output n'a pas de sortie
   if (from === 'Output') return false;
 
@@ -144,7 +185,15 @@ export function isValidConnection(from: NodeType, to: NodeType): boolean {
  * Retourne les ports d'entrée valides pour un type de node.
  * Mirror de validator.rs::has_input_port
  */
-export function getInputPorts(type: NodeType): string[] {
+export function getInputPorts(type: NodeType, pluginKind?: PluginKind): string[] {
+  // Plugin WASM : ports dictés par le kind du manifeste (ABI v2) —
+  // mirror de validator.rs::has_input_port. Kind inconnu → superset.
+  if (type === 'Plugin') {
+    if (pluginKind === 'engine') return ['input', 'duration'];
+    if (pluginKind === 'modifier') return ['input'];
+    if (pluginKind === 'composite') return ['input', 'input_a', 'input_b'];
+    return ['input', 'input_a', 'input_b', 'duration'];
+  }
   switch (type) {
     // Sources pures / terminaux sans entrée
     case 'Objects':
@@ -161,7 +210,6 @@ export function getInputPorts(type: NodeType): string[] {
     case 'Bouncing': case 'Spring': case 'Follow': case 'Swarm': case 'Avoidance': case 'VectorField':
     case 'BPM': case 'AudioAmplitude':
     case 'AudioSpectrum': case 'OSCInput': // engines : Objects/Duration peuvent les alimenter
-    case 'Plugin': // engine WASM générique — même arité que les engines
     case 'DrawSpline':
     case 'TimeFalloff': case 'PointDistanceFalloff': case 'DirectionalFalloff': case 'AudioAmplitudeFalloff':
       return ['input', 'duration'];

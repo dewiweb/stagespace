@@ -102,13 +102,19 @@ export const NodeEditor: React.FC = () => {
         return {
           ...n,
           className: [
-            connectingFrom && !isValidConnection(connectingFrom, nodeType) ? 'rf-node-invalid-target' : '',
+            connectingFrom && !isValidConnection(
+              connectingFrom,
+              nodeType,
+              nodeType === 'Plugin'
+                ? plugins.find((m) => m.id === (n.data as any)?.params?.plugin_id)?.kind
+                : undefined,
+            ) ? 'rf-node-invalid-target' : '',
             isMoveActive ? 'rf-node-moveref-active' : '',
           ].filter(Boolean).join(' '),
           style: isMoveActive ? { ...n.style, boxShadow: '0 0 8px 2px rgba(34, 197, 94, 0.6)' } : n.style,
         };
       }),
-    [displayNodes, connectingFrom, activeMoveIds],
+    [displayNodes, connectingFrom, activeMoveIds, plugins],
   );
 
   // Pour le tab global, on utilise des handlers locaux (pas le store global)
@@ -168,8 +174,13 @@ export const NodeEditor: React.FC = () => {
       const toType = (targetNode.data as any)?.type as NodeType;
       if (!fromType || !toType) return false;
 
+      // Plugin cible : le kind du manifeste dicte les règles (ABI v2)
+      const toPluginKind = toType === 'Plugin'
+        ? plugins.find((m) => m.id === (targetNode.data as any)?.params?.plugin_id)?.kind
+        : undefined;
+
       // Vérifier la compatibilité des types
-      if (!isValidConnection(fromType, toType)) return false;
+      if (!isValidConnection(fromType, toType, toPluginKind)) return false;
 
       // Vérifier la compatibilité des ports
       const targetPort = connection.targetHandle;
@@ -178,7 +189,7 @@ export const NodeEditor: React.FC = () => {
 
       return true;
     },
-    [displayNodes],
+    [displayNodes, plugins],
   );
 
   // Track le type du node source quand on commence une connexion
@@ -377,6 +388,14 @@ export const NodeEditor: React.FC = () => {
                             style={{ background: NODE_COLORS.yellow }}
                           />
                           <span className="truncate">{m.name}</span>
+                          {m.kind !== 'engine' && (
+                            <span
+                              className="text-[8px] font-bold tracking-wide flex-shrink-0 px-1 rounded bg-sky-900/60 text-sky-300"
+                              title={m.kind === 'modifier' ? 'Modifier : wrap une trajectoire (port input)' : 'Composite : combine 2 trajectoires (ports A/B)'}
+                            >
+                              {m.kind === 'modifier' ? 'MOD' : '2IN'}
+                            </span>
+                          )}
                           <span className="text-gray-600 text-[9px] ml-auto flex-shrink-0">v{m.version}</span>
                         </button>
                         {hoveredPaletteNode === `plugin:${m.id}` && (

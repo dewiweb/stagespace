@@ -119,8 +119,16 @@ impl Compiler {
         let start = Instant::now();
         log_graph_compilation(graph.nodes.len(), graph.edges.len());
 
+        // Kinds des nodes Plugin résolus dans le registry — le validator
+        // en a besoin pour appliquer les règles engine/modifier/composite.
+        let plugin_kinds = Self::resolve_plugin_kinds(graph, &live);
+
         // 1. Valider le graphe
-        if let Err(errors) = Validator::validate(graph) {
+        if let Err(errors) = Validator::validate_with_plugin_kinds(
+            graph,
+            crate::validator::GraphContext::SubGraph,
+            &plugin_kinds,
+        ) {
             let error_msg = errors
                 .iter()
                 .map(|e| format!("{e:?}"))
@@ -232,7 +240,155 @@ impl Compiler {
             | NodeType::Clamp
             | NodeType::LFO
             | NodeType::Jitter => Self::compile_modifier(graph, node, live),
+            // Plugin : le kind du manifeste décide du chemin de compile —
+            // engine (f(t) pur), modifier (wrap 1 upstream) ou composite
+            // (combine 2 upstreams).
+            NodeType::Plugin => Self::compile_plugin(graph, node, live),
             _ => Self::compile_engine(graph, node, live),
+        }
+    }
+
+    /// Résout le `Arc<Plugin>` d'un node Plugin via `params.plugin_id` —
+    /// erreur claire si registry absent ou id inconnu.
+    fn resolve_plugin(
+        node: &Node,
+        live: &LiveInputs,
+    ) -> Result<Arc<crate::plugins::Plugin>, CompilationError> {
+        let plugin_id = node
+            .params
+            .get("plugin_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
+        let registry_arc = live.plugins.as_ref().ok_or_else(|| {
+            CompilationError::InvalidParameter(
+                "Plugin node requires a plugin registry (use compile_with_live_inputs)".to_string(),
+            )
+        })?;
+        let registry = registry_arc.lock().unwrap_or_else(|e| e.into_inner());
+        registry.get(plugin_id).ok_or_else(|| {
+            CompilationError::InvalidParameter(format!(
+                "unknown plugin_id '{plugin_id}' — plugin absent du dossier plugins/ ou erreur de chargement"
+            ))
+        })
+    }
+
+    /// Kinds des nodes Plugin du graphe, résolus dans le registry —
+    /// utilisé par le validator pour appliquer les règles par kind.
+    /// Les ids inconnus n'entrent pas dans la map : le compile échouera
+    /// ensuite avec l'erreur explicite de `resolve_plugin`.
+    fn resolve_plugin_kinds(
+        graph: &Graph,
+        live: &LiveInputs,
+    ) -> std::collections::HashMap<crate::graph::NodeId, crate::plugins::PluginKind> {
+        let mut kinds = std::collections::HashMap::new();
+        let Some(registry_arc) = live.plugins.as_ref() else {
+            return kinds;
+        };
+        let registry = registry_arc.lock().unwrap_or_else(|e| e.into_inner());
+        for node in graph.nodes.values() {
+            if node.node_type != NodeType::Plugin {
+                continue;
+            }
+            if let Some(id) = node.params.get("plugin_id").and_then(|v| v.as_str()) {
+                if let Some(p) = registry.get(id) {
+                    kinds.insert(node.id, p.manifest.kind);
+                }
+            }
+        }
+        kinds
+    }
+
+    /// Entrées trajectoire d'un node Plugin, ordonnées par port
+    /// (`input_a`, puis `input`, puis `input_b`) — hors carriers
+    /// Objects/Duration qui ne transportent pas de positions.
+    fn plugin_trajectory_inputs(graph: &Graph, node: &Node) -> Vec<crate::graph::NodeId> {
+        let mut edges: Vec<&crate::graph::Edge> = graph
+            .edges
+            .iter()
+            .filter(|e| e.to == node.id)
+            .filter(|e| matches!(e.to_port.as_str(), "input" | "input_a" | "input_b"))
+            .filter(|e| {
+                !matches!(
+                    graph.nodes.get(&e.from).map(|n| &n.node_type),
+                    Some(NodeType::Objects) | Some(NodeType::Duration)
+                )
+            })
+            .collect();
+        edges.sort_by_key(|e| match e.to_port.as_str() {
+            "input_a" => 0,
+            "input" => 1,
+            _ => 2,
+        });
+        edges.iter().map(|e| e.from).collect()
+    }
+
+    /// Compile un node Plugin selon le kind de son manifeste.
+    fn compile_plugin(
+        graph: &Graph,
+        node: &Node,
+        live: &LiveInputs,
+    ) -> Result<CompiledFunction, CompilationError> {
+        use crate::plugins::PluginKind;
+        let plugin = Self::resolve_plugin(node, live)?;
+        let plugin_id = plugin.manifest.id.clone();
+        let wasm_engine = {
+            let registry = live
+                .plugins
+                .as_ref()
+                .expect("registry checked by resolve_plugin")
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            registry.wasm_engine().clone()
+        };
+
+        match plugin.manifest.kind {
+            // Engine : déléguer à compile_engine — il re-résout le plugin
+            // (HashMap + clone d'Arc, compile-time seulement) et gère les
+            // conventions Objects/Duration/n_objects des engines.
+            PluginKind::Engine => Self::compile_engine(graph, node, live),
+            PluginKind::Modifier => {
+                let inputs = Self::plugin_trajectory_inputs(graph, node);
+                let upstream_id = inputs.first().ok_or_else(|| {
+                    CompilationError::MissingParameter(format!(
+                        "plugin '{plugin_id}' (modifier) requires 1 trajectory input, got {}",
+                        inputs.len()
+                    ))
+                })?;
+                let upstream_node = Self::node_ref(graph, *upstream_id)?;
+                let upstream_fn = Self::compile_node(graph, upstream_node, live)?;
+                let engine =
+                    crate::plugins::PluginEngine::new(plugin, &wasm_engine).map_err(|e| {
+                        CompilationError::InvalidParameter(format!("plugin '{plugin_id}': {e}"))
+                    })?;
+                // extract_params résout n_objects/duration (propagation
+                // upstream) et les injecte dans extra — même convention
+                // que les engines natifs.
+                let params = Self::extract_params(graph, node)?;
+                Ok(Box::new(move |t, i| {
+                    engine.eval(t, i, &params, &[upstream_fn(t, i)])
+                }))
+            }
+            PluginKind::Composite => {
+                let inputs = Self::plugin_trajectory_inputs(graph, node);
+                if inputs.len() != 2 {
+                    return Err(CompilationError::MissingParameter(format!(
+                        "plugin '{plugin_id}' (composite) requires 2 trajectory inputs, got {}",
+                        inputs.len()
+                    )));
+                }
+                let node_a = Self::node_ref(graph, inputs[0])?;
+                let node_b = Self::node_ref(graph, inputs[1])?;
+                let func_a = Self::compile_node(graph, node_a, live)?;
+                let func_b = Self::compile_node(graph, node_b, live)?;
+                let engine =
+                    crate::plugins::PluginEngine::new(plugin, &wasm_engine).map_err(|e| {
+                        CompilationError::InvalidParameter(format!("plugin '{plugin_id}': {e}"))
+                    })?;
+                let params = Self::extract_params(graph, node)?;
+                Ok(Box::new(move |t, i| {
+                    engine.eval(t, i, &params, &[func_a(t, i), func_b(t, i)])
+                }))
+            }
         }
     }
 
@@ -640,6 +796,17 @@ impl Compiler {
                 let input_node = Self::node_ref(graph, *first)?;
                 Self::resolve_n_objects_depth(graph, input_node, depth + 1)
             }
+            // Plugin modifier/composite : propage depuis l'entrée
+            // trajectoire (Objects/Duration déjà résolus plus haut pour
+            // les engines).
+            NodeType::Plugin => {
+                let traj = Self::plugin_trajectory_inputs(graph, node);
+                let first = traj
+                    .first()
+                    .ok_or_else(|| CompilationError::MissingParameter("n_objects".to_string()))?;
+                let input_node = Self::node_ref(graph, *first)?;
+                Self::resolve_n_objects_depth(graph, input_node, depth + 1)
+            }
             _ => Err(CompilationError::MissingParameter("n_objects".to_string())),
         }
     }
@@ -701,6 +868,13 @@ impl Compiler {
                     .map(|n| Self::resolve_duration_depth(graph, n, depth + 1))
                     .fold(0.0, f64::max)
             }
+            // Plugin modifier/composite : durée propagée depuis la
+            // première entrée trajectoire (sémantique modifier).
+            NodeType::Plugin => Self::plugin_trajectory_inputs(graph, node)
+                .first()
+                .and_then(|id| graph.nodes.get(id))
+                .map(|n| Self::resolve_duration_depth(graph, n, depth + 1))
+                .unwrap_or(DEFAULT_DURATION),
             _ => DEFAULT_DURATION,
         }
     }

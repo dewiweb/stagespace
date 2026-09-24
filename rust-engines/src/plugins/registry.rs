@@ -116,8 +116,8 @@ impl PluginRegistry {
     ) -> Result<(), PluginError> {
         manifest.validate().map_err(PluginError::Manifest)?;
         // Même validation que les bundles .ssx : zéro import, exports
-        // requis, mémoire bornée.
-        let module = super::loader::validate_module(&self.engine, wasm)?;
+        // requis (dont plugin_inputs_ptr pour abi_version 2), mémoire bornée.
+        let module = super::loader::validate_module(&self.engine, wasm, manifest.abi_version)?;
         self.plugins.insert(
             manifest.id.clone(),
             Arc::new(Plugin {

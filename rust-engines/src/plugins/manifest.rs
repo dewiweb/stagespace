@@ -2,21 +2,39 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 /// Version de l'ABI host ↔ invité supportée par ce build.
-/// Bump quand la signature `plugin_position` ou le layout des buffers change.
-pub const HOST_ABI_VERSION: u32 = 1;
+/// v1 : `plugin_position` + buffers params/result (engines purs).
+/// v2 : + `plugin_inputs_ptr` — buffer de `n_inputs × 24` bytes écrit par le
+/// host avant chaque appel (positions upstream pour modifier/composite).
+pub const HOST_ABI_VERSION: u32 = 2;
 
 /// Taille max du JSON de params écrit dans le buffer statique du plugin.
 /// Le plugin doit réserver un buffer `plugin_params_ptr` ≥ cette taille.
 pub const MAX_PARAMS_BYTES: usize = 64 * 1024;
 
-/// Catégorie de node fournie par le plugin.
-/// v1 : engines purs uniquement (modifier/composite = ABI v2 — un modifier
-/// exigerait de passer la closure upstream en mémoire wasm).
+/// Catégorie de node fournie par le plugin — détermine les ports du node
+/// et le nombre d'entrées trajectoire écrites dans le buffer inputs.
+/// `Engine`/`Modifier`/`Composite` suivent la sémantique des nodes natifs
+/// homonymes (engine = source f(t), modifier = wrap 1 upstream, composite
+/// = combine 2 upstreams).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 #[ts(export)]
 pub enum PluginKind {
     Engine,
+    Modifier,
+    Composite,
+}
+
+impl PluginKind {
+    /// Nombre de positions upstream `[f64;3]` écrites dans le buffer
+    /// `plugin_inputs_ptr` avant chaque `plugin_position` (ABI v2).
+    pub fn n_inputs(self) -> usize {
+        match self {
+            Self::Engine => 0,
+            Self::Modifier => 1,
+            Self::Composite => 2,
+        }
+    }
 }
 
 /// Déclaration d'un paramètre exposé par le plugin — mêmes types que
@@ -93,6 +111,13 @@ impl PluginManifest {
             return Err(format!(
                 "abi_version {} not supported (host ABI = {})",
                 self.abi_version, HOST_ABI_VERSION
+            ));
+        }
+        // ABI v1 n'a pas de buffer inputs — modifier/composite exigent v2.
+        if self.abi_version == 1 && self.kind != PluginKind::Engine {
+            return Err(format!(
+                "kind '{:?}' requires abi_version 2 (v1 = engines only)",
+                self.kind
             ));
         }
 
