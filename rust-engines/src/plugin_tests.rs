@@ -571,6 +571,60 @@ mod tests {
         assert!(p1.iter().all(|v| v.is_finite()));
     }
 
+    /// Le bundle `.ssx` réel du plugin modifier `wobble` (ABI v2, compilé
+    /// Rust→wasm32 via le SDK) wrap une trajectoire upstream — pipeline
+    /// complet : bundle → registry → compile → positions.
+    #[test]
+    fn real_ssx_modifier_fixture_executes() {
+        let mut reg = PluginRegistry::new().expect("registry");
+        reg.register_wasm(manifest("echo"), ECHO_WAT.as_bytes())
+            .expect("echo");
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/wobble.ssx");
+        reg.register_bundle(std::path::Path::new(path))
+            .expect("load wobble fixture");
+
+        // Objects→echo→wobble→Output ; freq=0 → phase = 2π·i/n (n=4),
+        // wobble ajoute amp·(cosφ, 0, sinφ) à la position echo (t, i, len).
+        let mut g = modifier_graph("echo", "wobble");
+        let wobble = g
+            .nodes
+            .values_mut()
+            .find(|n| n.params.get("plugin_id").and_then(|v| v.as_str()) == Some("wobble"))
+            .expect("wobble node");
+        wobble.params = json!({"plugin_id": "wobble", "amp": 1.0, "freq": 0.0});
+
+        let reg = Arc::new(Mutex::new(reg));
+        let f = Compiler::compile_with_live_inputs(
+            &g,
+            LiveInputs {
+                plugins: Some(reg),
+                ..Default::default()
+            },
+        )
+        .expect("compile");
+
+        // obj 0 : φ=0 → x = echo.x + amp = 1, z inchangé
+        let p0 = f(0.0, 0);
+        assert!(
+            (p0.x - 1.0).abs() < 1e-9,
+            "obj0 x = echo.x+amp, got {}",
+            p0.x
+        );
+        assert!(p0.y.abs() < 1e-9);
+        // obj 1 : φ=π/2 → x ≈ echo.x = 0, z = echo.z + amp
+        let p1 = f(0.0, 1);
+        assert!(p1.x.abs() < 1e-9, "obj1 x ≈ echo.x, got {}", p1.x);
+        assert!((p1.y - 1.0).abs() < 1e-9);
+        assert!((p1.z - p0.z - 1.0).abs() < 1e-9, "obj1 z = echo.z+amp");
+        // obj 2 : φ=π → x = echo.x - amp = -1
+        let p2 = f(0.0, 2);
+        assert!(
+            (p2.x + 1.0).abs() < 1e-9,
+            "obj2 x = echo.x-amp, got {}",
+            p2.x
+        );
+    }
+
     #[test]
     fn plugin_node_unknown_id_fails_at_compile() {
         let reg = registry_with("echo", ECHO_WAT);
