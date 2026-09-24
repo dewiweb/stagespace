@@ -625,6 +625,84 @@ mod tests {
         );
     }
 
+    /// Le bundle `.ssx` réel du plugin composite `morph` (ABI v2) blend
+    /// deux upstreams — prouve les 2 slots du buffer inputs et la
+    /// composition plugin→plugin (lemniscate.ssx alimente input_b).
+    #[test]
+    fn real_ssx_composite_fixture_executes() {
+        let mut reg = PluginRegistry::new().expect("registry");
+        reg.register_wasm(manifest("echo"), ECHO_WAT.as_bytes())
+            .expect("echo");
+        let fixtures = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
+        reg.register_bundle(
+            std::path::Path::new(fixtures)
+                .join("lemniscate.ssx")
+                .as_path(),
+        )
+        .expect("load lemniscate fixture");
+        reg.register_bundle(std::path::Path::new(fixtures).join("morph.ssx").as_path())
+            .expect("load morph fixture");
+
+        // echo → input_a, lemniscate → input_b, morph → Output.
+        let mut g = Graph::new();
+        let objects = Node::with_params(NodeType::Objects, json!({"n_objects": 4}));
+        let duration = Node::with_params(NodeType::Duration, json!({"duration": 10.0}));
+        let ea = Node::with_params(NodeType::Plugin, json!({"plugin_id": "echo"}));
+        let eb = Node::with_params(
+            NodeType::Plugin,
+            json!({"plugin_id": "lemniscate", "scale": 2.0}),
+        );
+        let morph = Node::with_params(NodeType::Plugin, json!({"plugin_id": "morph", "w": 0.25}));
+        let output = Node::new(NodeType::Output);
+        let (id_o, id_d, id_a, id_b, id_m, id_out) =
+            (objects.id, duration.id, ea.id, eb.id, morph.id, output.id);
+        for n in [objects, duration, ea, eb, morph, output] {
+            g.add_node(n);
+        }
+        let edge = |from, to, port: &str| Edge {
+            from,
+            to,
+            from_port: "output".to_string(),
+            to_port: port.to_string(),
+        };
+        g.add_edge(edge(id_o, id_a, "input"));
+        g.add_edge(edge(id_d, id_a, "duration"));
+        g.add_edge(edge(id_o, id_b, "input"));
+        g.add_edge(edge(id_d, id_b, "duration"));
+        g.add_edge(edge(id_a, id_m, "input_a"));
+        g.add_edge(edge(id_b, id_m, "input_b"));
+        g.add_edge(edge(id_m, id_out, "input"));
+
+        let reg = Arc::new(Mutex::new(reg));
+        let f = Compiler::compile_with_live_inputs(
+            &g,
+            LiveInputs {
+                plugins: Some(reg),
+                ..Default::default()
+            },
+        )
+        .expect("compile");
+
+        // t=0 : echo = (0, i, len) ; lemniscate scale=2, n=4 →
+        //   obj 0 : (2,0,0) ; obj 2 : (-2,0,0).
+        // morph w=0.25 → 0.75·a + 0.25·b.
+        // Un swap de slots donnerait x = 0.75·b.x — détecté ici.
+        let p0 = f(0.0, 0);
+        assert!((p0.x - 0.5).abs() < 1e-9, "obj0 x = 0.25·2, got {}", p0.x);
+        assert!(p0.y.abs() < 1e-9);
+        let p2 = f(0.0, 2);
+        assert!(
+            (p2.x + 0.5).abs() < 1e-9,
+            "obj2 x = 0.25·(-2), got {}",
+            p2.x
+        );
+        assert!(
+            (p2.y - 1.5).abs() < 1e-9,
+            "obj2 y = 0.75·2 + 0.25·0, got {}",
+            p2.y
+        );
+    }
+
     #[test]
     fn plugin_node_unknown_id_fails_at_compile() {
         let reg = registry_with("echo", ECHO_WAT);

@@ -1,0 +1,24 @@
+{
+  "id": "morph",
+  "name": "Morph",
+  "version": "1.0.0",
+  "author": "STAGESPACE",
+  "abi_version": 2,
+  "kind": "composite",
+  "category": "Plugins",
+  "description": "Blend paramétrique entre deux trajectoires : result = a·(1−w) + b·w — exemple ABI v2 composite",
+  "ports": { "inputs": ["input_a", "input_b"], "outputs": ["trajectory"] },
+  "params": [
+    {
+      "key": "w",
+      "type": "number",
+      "default": 0.5,
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.01,
+      "label": "Blend A→B",
+      "live": true
+    }
+  ],
+  "capabilities": []
+}
