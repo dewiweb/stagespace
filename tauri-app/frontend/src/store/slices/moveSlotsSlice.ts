@@ -951,7 +951,7 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
 
   goToNextMove: async () => {
     const { setlistOrder, currentSetlistIndex, moveSlots } = get();
-    if (setlistOrder.length === 0) return 'Setlist vide — ajoute des moves à la setlist';
+    if (setlistOrder.length === 0) return 'Empty setlist — add moves to the setlist';
 
     const nextIndex = currentSetlistIndex + 1;
     if (nextIndex >= setlistOrder.length) return 'Fin de la setlist atteinte';

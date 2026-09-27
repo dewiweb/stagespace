@@ -2,7 +2,7 @@ import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
 import { toast } from '../utils/toast-helpers';
 import { open, save } from '@tauri-apps/plugin-dialog';
-import { FolderInput, Settings, Undo2, Redo2, Save, FolderOpen, TriangleAlert } from 'lucide-react';
+import { FolderInput, Settings, Undo2, Redo2, Save, FolderOpen, TriangleAlert, CircleHelp } from 'lucide-react';
 import { SettingsModal } from './SettingsModal';
 
 export const Toolbar: React.FC = () => {
@@ -107,6 +107,7 @@ export const Toolbar: React.FC = () => {
         <button
           onClick={handleImportHol}
           className="px-3 py-1.5 text-xs font-medium rounded bg-blue-700 hover:bg-blue-600 text-white transition-colors flex items-center gap-1.5"
+          title="Import a Holophonix project — discovers track IDs, names, colors, positions"
         >
           <FolderInput size={13} /> Import .hol
         </button>
@@ -126,6 +127,7 @@ export const Toolbar: React.FC = () => {
           title={`OSC → ${oscAddress}:${oscPort} (${oscProfile}) — Settings`}
         >
           <Settings size={13} />
+          <span className="text-gray-500 text-[9px] uppercase tracking-wider">OSC out</span>
           <span className="text-gray-500 font-mono text-[10px]">{oscAddress}:{oscPort}</span>
           <span className="text-gray-600 text-[10px]">{oscProfile}</span>
         </button>
@@ -181,13 +183,26 @@ export const Toolbar: React.FC = () => {
         {/* Spacer */}
         <div className="flex-1" />
 
+        {/* Help — cheatsheet raccourcis live (même contenu que la touche ?) */}
+        <button
+          onClick={() => {
+            import('../store/useAnimationStore').then(({ useAnimationStore }) => {
+              useAnimationStore.getState().setShortcutsOpen(true);
+            });
+          }}
+          className="px-2 py-1.5 text-xs font-medium rounded bg-gray-800 text-gray-400 hover:text-white transition-colors"
+          title="Keyboard shortcuts (?)"
+        >
+          <CircleHelp size={14} />
+        </button>
+
         {/* PANIC — arrêt d'urgence, toujours visible et accessible.
             Jamais replié dans un panel : c'est le seul contrôle qui doit
             survivre à tous les états de l'UI (Esc = même action). */}
         <button
           onClick={() => { panic(); }}
           className="px-3 py-1.5 text-xs font-bold rounded bg-red-800 hover:bg-red-700 text-white border border-red-600 transition-colors tracking-wider"
-          title="PANIC (Esc) — stoppe tous les moves et renvoie les positions d'origine"
+          title="PANIC (Esc) — stops all moves and sends origin positions"
         >
           ◼ PANIC
         </button>

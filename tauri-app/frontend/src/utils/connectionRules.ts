@@ -182,6 +182,63 @@ export function isValidConnection(
 }
 
 /**
+ * Explains why a from → to connection is refused, for user feedback.
+ * Returns null when the connection is valid. Derived from the same
+ * category tables as isValidConnection — keep both in sync.
+ */
+export function connectionRejectionReason(
+  from: NodeType,
+  to: NodeType,
+  toPluginKind?: PluginKind,
+): string | null {
+  if (isValidConnection(from, to, toPluginKind)) return null;
+
+  if (from === 'Output') return 'Output is a terminal — it has no output port.';
+
+  if (to === 'Plugin' && toPluginKind === 'engine')
+    return 'Plugin engines only accept Objects / Duration inputs.';
+  if (to === 'Plugin' && toPluginKind === 'modifier' && !feedsModifier(from))
+    return `Plugin modifiers take one trajectory input — ${from} can't feed one.`;
+  if (to === 'Plugin' && toPluginKind === 'composite' && !feedsComposite(from))
+    return `Plugin composites take two trajectory inputs — ${from} can't feed one.`;
+
+  if (from === 'Objects' || from === 'Duration')
+    return `${from} only feeds engines, physics and falloffs.`;
+
+  if (from === 'Input' || from === 'Merge')
+    return `${from} (global graph) feeds modifiers / post-process and Output only.`;
+
+  if (from === 'MoveRef' && to === 'Sequence')
+    return 'MoveRef cannot feed Sequence — use Mix, Group or Crossfade.';
+
+  if (isFalloffLimited(from))
+    return `${from} only feeds Scale / Rotate / Offset.`;
+
+  if (isPhysics(from) && isModifier(to))
+    return 'Physics nodes feed Output or composites — not modifiers.';
+
+  if (isModifier(from) && to === 'Sequence')
+    return 'Modifiers cannot feed Sequence — use Mix, Group or Crossfade.';
+
+  if (from === 'DrawSpline')
+    return 'DrawSpline feeds spline nodes, Output, composites and modifiers.';
+
+  return `${from} cannot connect to ${to}.`;
+}
+
+/**
+ * Port-level rejection — isValidConnection is type-only; the editor also
+ * gates by target handle (duration port, spline port…).
+ */
+export function portRejectionReason(from: NodeType, targetPort: string | null | undefined): string | null {
+  if (from === 'Duration' && targetPort !== 'duration')
+    return 'Duration can only connect to a duration port.';
+  if (from === 'Objects' && targetPort !== 'input' && targetPort !== 'input_a' && targetPort !== 'input_b')
+    return 'Objects can only connect to a trajectory input port.';
+  return null;
+}
+
+/**
  * Retourne les ports d'entrée valides pour un type de node.
  * Mirror de validator.rs::has_input_port
  */

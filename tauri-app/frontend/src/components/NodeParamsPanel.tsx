@@ -59,7 +59,7 @@ export const NodeParamsPanel: React.FC<{
   if (paramNodes.length === 0 || !paramNode) {
     return (
       <div className="text-gray-600 text-[10px] py-1">
-        {emptyHint ?? 'Aucun node paramétrable dans ce graphe.'}
+        {emptyHint ?? 'No parametric node in this graph.'}
       </div>
     );
   }
@@ -131,12 +131,12 @@ export const NodeParamsPanel: React.FC<{
       </div>
       {pluginMissing && (
         <div className="text-red-400/90 text-[10px] font-mono pt-1">
-          ⚠ Plugin '{selectedPid as string}' non chargé — installez le .ssx ou choisissez un autre plugin.
+          ⚠ Plugin '{selectedPid as string}' not loaded — install the .ssx or pick another plugin.
         </div>
       )}
       {pluginUnset && (
         <div className="text-gray-500 text-[10px] font-mono pt-1">
-          Aucun plugin sélectionné — choisissez plugin_id ci-dessus ou importez un .ssx.
+          No plugin selected — pick plugin_id above or import a .ssx.
         </div>
       )}
     </div>

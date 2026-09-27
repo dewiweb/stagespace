@@ -280,9 +280,9 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
       {movements.length === 0 && editingSlotId === null && !manipulateMode && !drawMode && (
         <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
           <div className="text-center bg-gray-900/70 backdrop-blur rounded-xl px-6 py-4 border border-gray-700/40">
-            <div className="text-gray-300 text-xs font-medium">Aucun move en cours</div>
+            <div className="text-gray-300 text-xs font-medium">No move running</div>
             <div className="text-gray-500 text-[10px] mt-1.5 leading-relaxed">
-              <span className="text-gray-400">+ Move</span> crée un slot · un <span className="text-gray-400">template</span> le remplit · <span className="text-gray-400">▶</span> le lance
+              <span className="text-gray-400">+ Move</span> creates a slot · a <span className="text-gray-400">template</span> fills it · <span className="text-gray-400">▶</span> launches it
             </div>
           </div>
         </div>

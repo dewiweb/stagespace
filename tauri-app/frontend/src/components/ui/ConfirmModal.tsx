@@ -14,7 +14,7 @@ interface ConfirmModalProps {
 export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   title,
   message,
-  confirmLabel = 'Supprimer',
+  confirmLabel = 'Delete',
   onConfirm,
   onCancel,
 }) => (

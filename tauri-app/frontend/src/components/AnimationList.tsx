@@ -130,7 +130,7 @@ export default function AnimationList() {
 
         {/* ═══ EN COURS D'ÉDITION ═══ */}
         <div className="px-2 pb-2">
-          <div className="text-gray-500 text-[10px] uppercase tracking-wider mb-1 px-1">En cours d'édition</div>
+          <div className="text-gray-500 text-[10px] uppercase tracking-wider mb-1 px-1">Editing</div>
           <div className="flex items-center gap-2 px-2 py-1.5 bg-blue-900/30 rounded border border-blue-700/40">
             <span className="text-base">{animIcon(current)}</span>
             {editingId === current.id ? (
@@ -169,11 +169,11 @@ export default function AnimationList() {
 
         {/* ═══ BIBLIOTHÈQUE (presets utilisateur — chargés dans le slot sélectionné) ═══ */}
         <div className="p-2 space-y-1">
-          <div className="text-gray-500 text-[10px] uppercase tracking-wider mb-1 px-1">Bibliothèque</div>
+          <div className="text-gray-500 text-[10px] uppercase tracking-wider mb-1 px-1">Library</div>
           {animations.length === 0 ? (
             <div className="text-gray-600 text-[10px] text-center py-4 bg-gray-800/30 rounded border border-gray-700/30">
-              Aucun graphe sauvegardé
-              <div className="text-gray-700 text-[10px] mt-1">Clique Sauvegarder pour ajouter</div>
+              No saved graph
+              <div className="text-gray-700 text-[10px] mt-1">Click Save to add</div>
             </div>
           ) : (
             animations.map((anim) => {
@@ -228,7 +228,7 @@ export default function AnimationList() {
         <div className="text-gray-700 text-[10px] text-center py-2 px-2">
           Templates &amp; bibliothèque = presets appliqués au slot sélectionné
           <div className="mt-0.5">
-            {editingSlotId ? 'Chargement → écrit dans le slot en édition' : 'Sélectionnez un slot (Moves) pour appliquer'}
+            {editingSlotId ? 'Loading → writes into the editing slot' : 'Select a slot (Moves) to apply'}
             {' '}· double-clic pour renommer
           </div>
         </div>

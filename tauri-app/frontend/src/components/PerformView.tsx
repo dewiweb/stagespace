@@ -170,7 +170,7 @@ export const PerformView: React.FC = () => {
                         ? 'bg-red-800/80 hover:bg-red-700 text-red-200'
                         : 'bg-green-800/80 hover:bg-green-700 text-green-200'
                     }`}
-                    title={isPlaying ? 'Stop ce move' : 'Lancer (en layer — les autres continuent)'}
+                    title={isPlaying ? 'Stop this move' : 'Launch (layered — others keep running)'}
                   >
                     {isPlaying ? <Square size={11} fill="currentColor" /> : <Play size={11} fill="currentColor" />}
                   </button>
@@ -208,7 +208,7 @@ export const PerformView: React.FC = () => {
             })}
             {orderedSlots.length === 0 && (
               <div className="px-3 py-6 text-center text-gray-600 text-[11px]">
-                Aucun move — quitter Perform (header) pour en créer.
+                No moves — leave Perform (header) to create some.
               </div>
             )}
           </div>
@@ -349,13 +349,13 @@ const LiveDrawer: React.FC = () => {
         <div className="w-px h-6 bg-stagespace-border mx-1 flex-shrink-0" />
 
         {scopeBtn('params', <><SlidersHorizontal size={12} className="inline -mt-0.5" /> Params</>, true,
-          'Params des nodes du graphe du move sélectionné')}
+          'Node params of the selected move graph')}
         {scopeBtn('playback', <><Play size={12} className="inline -mt-0.5" /> Playback</>, true,
-          'Lecture du move sélectionné (speed, direction, loop, fades)')}
+          'Playback of the selected move (speed, direction, loop, fades)')}
         {scopeBtn('tracks', <><ListOrdered size={12} className="inline -mt-0.5" /> Tracks</>, true,
-          'Assignation tracks + depth/phase du move sélectionné')}
+          'Track assignment + depth/phase of the selected move')}
         {scopeBtn('audio', <><AudioLines size={12} className="inline -mt-0.5" /> Audio</>, true,
-          'Mods audio-réactifs du move sélectionné')}
+          'Audio-reactive mods of the selected move')}
         {scopeBtn('global', <><Globe size={12} className="inline -mt-0.5" /> Global</>, false,
           'Macros globales — affectent TOUS les moves live (merge)')}
 
@@ -365,14 +365,14 @@ const LiveDrawer: React.FC = () => {
           </span>
         )}
         {!slot && playingSlots.length > 0 && (
-          <span className="text-gray-600 text-[10px] ml-2">tap un chip pour éditer un move</span>
+          <span className="text-gray-600 text-[10px] ml-2">tap a chip to edit a move</span>
         )}
         {slot && (
           <span className="text-indigo-400/70 text-[10px] ml-2 flex items-center gap-1.5">
             édition : {slot.name}
             {slot.movementId
               ? <span className={`px-1 rounded ${slot.isPreview ? 'bg-cyan-900 text-cyan-300' : 'bg-green-900 text-green-300'}`}>{slot.isPreview ? 'PREV' : 'LIVE'}</span>
-              : <span className="text-gray-600">(stoppé)</span>}
+              : <span className="text-gray-600">(stopped)</span>}
           </span>
         )}
       </div>
@@ -495,7 +495,7 @@ const LiveDrawer: React.FC = () => {
             live={!!slot.movementId}
             resetKey={editingSlotId}
             onParam={setNodeParam}
-            emptyHint="Aucun node paramétrable dans ce graphe — voir Playback / Tracks."
+            emptyHint="No parametric node in this graph — see Playback / Tracks."
           />
         </div>
       )}

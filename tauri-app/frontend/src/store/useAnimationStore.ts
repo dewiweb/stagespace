@@ -80,6 +80,9 @@ interface AnimationStore {
   // Overlay DEBUG PERF sur le canvas 3D — opt-in (outil dev, pas prod)
   debugPerfVisible: boolean;
   setDebugPerfVisible: (on: boolean) => void;
+  // Overlay raccourcis clavier (`?` key / bouton Toolbar)
+  shortcutsOpen: boolean;
+  setShortcutsOpen: (on: boolean) => void;
 
   // Actions
   setCurrent: (anim: Animation) => void;
@@ -119,7 +122,7 @@ function defaultAnimation(): Animation {
   };
   return {
     id: `anim-${Date.now()}`,
-    name: 'Nouvelle animation',
+    name: 'New animation',
     speed: 1.0,
     duration: 4.0,
     direction: 'forward',
@@ -260,6 +263,8 @@ export const useAnimationStore = create<AnimationStore>((set, get) => {
   setPerformMode: (on) => set({ performMode: on }),
   debugPerfVisible: false,
   setDebugPerfVisible: (on) => set({ debugPerfVisible: on }),
+  shortcutsOpen: false,
+  setShortcutsOpen: (on) => set({ shortcutsOpen: on }),
 
   setCurrent: (anim) => set({ current: anim }),
 
@@ -392,7 +397,7 @@ export const useAnimationStore = create<AnimationStore>((set, get) => {
     }
 
     if (oscIds.length === 0) {
-      alert('Aucune track disponible.\nImportez un .hol (Toolbar → Import) ou ajoutez des tracks manuelles.');
+      alert('No track available.\nImport a .hol (Toolbar → Import) or add manual tracks.');
       return null;
     }
 

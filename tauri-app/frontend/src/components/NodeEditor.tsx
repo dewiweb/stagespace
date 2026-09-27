@@ -18,7 +18,8 @@ import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import CustomNode from './CustomNode';
 import { NODE_CATEGORIES, NODE_COLORS, NODE_DESCRIPTIONS, getCategoryColor, getDefaultParams, getValidTargetTypes, pluginDefaultParams, GLOBAL_ONLY_NODES, SUB_ONLY_NODES } from './nodeParamSchema';
-import { isValidConnection } from '../utils/connectionRules';
+import { isValidConnection, connectionRejectionReason, portRejectionReason } from '../utils/connectionRules';
+import { toast } from '../utils/toast-helpers';
 import { open } from '@tauri-apps/plugin-dialog';
 import type { PluginManifest } from '../types/generated/PluginManifest';
 
@@ -45,7 +46,7 @@ export const NodeEditor: React.FC = () => {
   const edges = useGraphStore((s) => s.edges);
   const onNodesChange = useGraphStore((s) => s.onNodesChange);
   const onEdgesChange = useGraphStore((s) => s.onEdgesChange);
-  const onConnect = useGraphStore((s) => s.onConnect);
+  const storeConnect = useGraphStore((s) => s.onConnect);
   const addNode = useGraphStore((s) => s.addNode);
   const [hoveredPaletteNode, setHoveredPaletteNode] = useState<string | null>(null);
   const [connectingFrom, setConnectingFrom] = useState<NodeType | null>(null);
@@ -129,10 +130,21 @@ export const NodeEditor: React.FC = () => {
     setGlobalEdges(updated);
   }, [globalEdges, setGlobalEdges]);
 
+  // Un drop qui se termine sur un node sans créer d'edge = connexion refusée.
+  // onConnect est appelé avant onConnectEnd quand le drop réussit — le flag
+  // permet de distinguer "refusé" de "annulé sur le canvas" (pas de toast).
+  const connectedThisDrop = React.useRef(false);
+
   const handleGlobalConnect = useCallback((connection: Connection) => {
+    connectedThisDrop.current = true;
     const newEdge = { ...connection, id: `${connection.source}-${connection.target}`, markerEnd: { type: MarkerType.ArrowClosed } };
     setGlobalEdges([...globalEdges, newEdge as Edge]);
   }, [globalEdges, setGlobalEdges]);
+
+  const handleConnect = useCallback((connection: Connection) => {
+    connectedThisDrop.current = true;
+    storeConnect(connection);
+  }, [storeConnect]);
 
   // Auto-push du graph global quand il change (debounce)
   useEffect(() => {
@@ -194,6 +206,7 @@ export const NodeEditor: React.FC = () => {
 
   // Track le type du node source quand on commence une connexion
   const onConnectStart = useCallback((_: any, params: OnConnectStartParams) => {
+    connectedThisDrop.current = false;
     const sourceNode = displayNodes.find((n) => n.id === params.nodeId);
     if (sourceNode) {
       const fromType = (sourceNode.data as any)?.type as NodeType;
@@ -201,9 +214,30 @@ export const NodeEditor: React.FC = () => {
     }
   }, [displayNodes]);
 
-  const onConnectEnd = useCallback(() => {
+  const onConnectEnd = useCallback((event: any) => {
+    const fromType = connectingFrom;
     setConnectingFrom(null);
-  }, []);
+    // Drop réussi → onConnect a tourné. Drop sur le canvas → annulation
+    // volontaire, pas de toast. Drop sur un node incompatible → expliquer
+    // pourquoi la connexion est refusée (sinon échec silencieux).
+    if (connectedThisDrop.current || !fromType) return;
+    const el = event.target as HTMLElement | null;
+    const targetNodeEl = el?.closest?.('.react-flow__node') as HTMLElement | null;
+    const targetId = targetNodeEl?.dataset?.id;
+    if (!targetId) return;
+    const targetNode = displayNodes.find((n) => n.id === targetId);
+    const toType = (targetNode?.data as any)?.type as NodeType | undefined;
+    if (!toType) return;
+    const toPluginKind = toType === 'Plugin'
+      ? plugins.find((m) => m.id === (targetNode?.data as any)?.params?.plugin_id)?.kind
+      : undefined;
+    const handleEl = el?.closest?.('.react-flow__handle') as HTMLElement | null;
+    const targetPort = handleEl?.dataset?.handleid ?? null;
+    const reason =
+      portRejectionReason(fromType, targetPort) ??
+      connectionRejectionReason(fromType, toType, toPluginKind);
+    if (reason) toast.warning(reason);
+  }, [connectingFrom, displayNodes, plugins]);
 
   // Double-clic sur un node MoveRef → sélectionner le move et switcher vers le tab sub-graph
   const onNodeDoubleClick = useCallback((_: any, node: Node) => {
@@ -261,14 +295,14 @@ export const NodeEditor: React.FC = () => {
             <button
               onClick={() => resetToDefault()}
               className="px-2 py-0.5 text-[10px] bg-gray-800 hover:bg-gray-700 text-gray-300 rounded"
-              title="Reset au graph global par défaut"
+              title="Reset to the default global graph"
             >
               ↺ Reset
             </button>
             <button
               onClick={() => pushGlobalGraph()}
               className="px-2 py-0.5 text-[10px] bg-cyan-800 hover:bg-cyan-700 text-cyan-200 rounded"
-              title="Compiler et pousser au backend"
+              title="Compile and push to the backend"
             >
               ↑ Push
             </button>
@@ -391,7 +425,7 @@ export const NodeEditor: React.FC = () => {
                           {m.kind !== 'engine' && (
                             <span
                               className="text-[8px] font-bold tracking-wide flex-shrink-0 px-1 rounded bg-sky-900/60 text-sky-300"
-                              title={m.kind === 'modifier' ? 'Modifier : wrap une trajectoire (port input)' : 'Composite : combine 2 trajectoires (ports A/B)'}
+                              title={m.kind === 'modifier' ? 'Modifier: wraps one trajectory (input port)' : 'Composite: combines 2 trajectories (A/B ports)'}
                             >
                               {m.kind === 'modifier' ? 'MOD' : '2IN'}
                             </span>
@@ -403,9 +437,9 @@ export const NodeEditor: React.FC = () => {
                             <div className="text-white font-semibold text-[11px] mb-1" style={{ color: NODE_COLORS.yellow }}>
                               {m.name} <span className="text-gray-500 font-normal">v{m.version}</span>
                             </div>
-                            {m.description ?? 'Plugin WASM externe'}
+                            {m.description ?? 'External WASM plugin'}
                             {m.author && (
-                              <div className="mt-1 text-gray-500">par {m.author}</div>
+                              <div className="mt-1 text-gray-500">by {m.author}</div>
                             )}
                             <div className="mt-1 text-gray-600 font-mono">id: {m.id}</div>
                           </div>
@@ -414,7 +448,7 @@ export const NodeEditor: React.FC = () => {
                     ))}
                     {pluginsLoaded && plugins.length === 0 && (
                       <div className="px-2.5 py-1 text-gray-600 text-[10px] leading-snug">
-                        Aucun plugin chargé
+                        No plugin loaded
                         {pluginsDir && (
                           <div className="font-mono text-gray-700 break-all mt-0.5" title={pluginsDir}>
                             {pluginsDir}
@@ -440,14 +474,14 @@ export const NodeEditor: React.FC = () => {
                         if (typeof selected === 'string') void importPlugin(selected);
                       }}
                       className="w-full text-left px-2.5 py-1 text-gray-500 hover:text-yellow-400 text-[10px] rounded transition-colors"
-                      title="Importer un bundle .ssx (copie + rescan)"
+                      title="Import a .ssx bundle (copy + rescan)"
                     >
                       + Import .ssx…
                     </button>
                     <button
                       onClick={() => void reloadPlugins()}
                       className="w-full text-left px-2.5 py-1 text-gray-500 hover:text-yellow-400 text-[10px] rounded transition-colors"
-                      title="Re-scanner le dossier plugins"
+                      title="Rescan the plugins folder"
                     >
                       ↻ Rescan plugins
                     </button>
@@ -477,7 +511,7 @@ export const NodeEditor: React.FC = () => {
           edges={displayEdges}
           onNodesChange={activeTab === 'global' ? handleGlobalNodesChange : onNodesChange}
           onEdgesChange={activeTab === 'global' ? handleGlobalEdgesChange : onEdgesChange}
-          onConnect={activeTab === 'global' ? handleGlobalConnect : onConnect}
+          onConnect={activeTab === 'global' ? handleGlobalConnect : handleConnect}
           onConnectStart={onConnectStart}
           onConnectEnd={onConnectEnd}
           onNodeDoubleClick={onNodeDoubleClick}

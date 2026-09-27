@@ -55,6 +55,16 @@ export function useLiveShortcuts() {
       if (isTextField || target.tagName === 'BUTTON') return;
       // Un handler plus spécifique a déjà consommé la touche
       if (e.defaultPrevented) return;
+      // `?` toggle l'aide — avant le guard modal pour permettre de fermer
+      // le panneau de shortcuts avec la même touche.
+      if (e.key === '?' && !e.repeat) {
+        e.preventDefault();
+        import('../store/useAnimationStore').then(({ useAnimationStore }) => {
+          const s = useAnimationStore.getState();
+          s.setShortcutsOpen(!s.shortcutsOpen);
+        });
+        return;
+      }
       // Un modal/picker est ouvert → aucun autre raccourci live
       if (isModalOpen()) return;
       // Maintenir la touche ne doit pas spammer GO/play

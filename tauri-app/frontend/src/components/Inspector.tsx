@@ -227,7 +227,7 @@ export default function Inspector() {
                     : 'bg-green-900/60 text-green-300 border border-green-700/50 animate-pulse'
                 }`}
                 title={editingSlot?.isPreview
-                  ? 'Ce move tourne en preview — les edits sont appliqués en direct (pas d\'OSC out)'
+                  ? 'This move runs in preview — edits apply live (no OSC out)'
                   : 'ON AIR — les edits de ce panneau partent au renderer en direct'}
               >
                 <span className={`w-1.5 h-1.5 rounded-full ${editingSlot?.isPreview ? 'bg-cyan-400' : 'bg-green-400'}`} />
@@ -238,7 +238,7 @@ export default function Inspector() {
         ) : (
           <div className="w-full text-gray-500 text-sm font-semibold flex items-center gap-2">
             <span className="text-gray-600">Global</span>
-            <span className="text-[10px] text-gray-700 font-normal">— sélectionnez un move pour l'éditer</span>
+            <span className="text-[10px] text-gray-700 font-normal">— select a move to edit it</span>
           </div>
         )}
       </div>
@@ -264,7 +264,7 @@ export default function Inspector() {
                       key={slot.id}
                       onClick={() => selectSlotForEditing(slot.id)}
                       className="w-full flex items-center gap-2 px-2 py-1.5 rounded border bg-gray-800/40 border-gray-700/40 hover:border-gray-600 hover:bg-gray-800/60 transition-all text-left"
-                      title="Sélectionner ce move pour l'éditer"
+                      title="Select this move to edit it"
                     >
                       <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
                         slot.movementId
@@ -285,7 +285,7 @@ export default function Inspector() {
             {/* MACROS — runtime controls globaux (affectent tous les moves) */}
             <Section title="Macros" icon={<Zap size={12} />} defaultOpen={true}
               badge={activeMovementIds.length > 0 ? `${activeMovementIds.length} live` : undefined}>
-              <Slider label="Échelle" value={macros.scale} min={0} max={4} step={0.05}
+              <Slider label="Scale" value={macros.scale} min={0} max={4} step={0.05}
                 onChange={(v) => handleMacro('scale', v)} accent="purple" />
               <Slider label="Shift X" value={macros.shiftX} min={-5} max={5} step={0.1}
                 onChange={(v) => handleMacro('shiftX', v)} accent="purple" />
@@ -303,7 +303,7 @@ export default function Inspector() {
                 onChange={(v) => handleMacro('radius_scale', v)} unit="x" accent="purple" />
               <Slider label="Height" value={macros.height_offset} min={-5} max={5} step={0.1}
                 onChange={(v) => handleMacro('height_offset', v)} unit="m" accent="purple" />
-              <div className="text-gray-600 text-[10px] pt-1">Macros globales — appliquées à tous les moves actifs</div>
+              <div className="text-gray-600 text-[10px] pt-1">Global macros — applied to all active moves</div>
             </Section>
 
             {/* AUDIO — mods audio-reactifs globaux */}
@@ -335,13 +335,13 @@ export default function Inspector() {
                       ))}
                     </div>
                   ) : (
-                    <div className="text-gray-600 text-[10px] py-1">Ce node n'a pas de paramètres</div>
+                    <div className="text-gray-600 text-[10px] py-1">This node has no parameters</div>
                   )}
                 </>
               ) : (
                 <div className="text-gray-600 text-[10px] py-2 text-center">
                   Sélectionnez un node dans le graphe
-                  <div className="text-gray-700 text-[10px] mt-1">Cliquez sur un node pour éditer ses params</div>
+                  <div className="text-gray-700 text-[10px] mt-1">Click a node to edit its params</div>
                 </div>
               )}
             </Section>
@@ -351,7 +351,7 @@ export default function Inspector() {
               badge={activeMovementIds.length > 0 ? `${activeMovementIds.length} live` : undefined}>
               <Slider label="Vitesse" value={macros.speed} min={0} max={4} step={0.05}
                 onChange={(v) => handleMacro('speed', v)} unit="x" accent="purple" />
-              <Slider label="Échelle" value={macros.scale} min={0} max={4} step={0.05}
+              <Slider label="Scale" value={macros.scale} min={0} max={4} step={0.05}
                 onChange={(v) => handleMacro('scale', v)} accent="purple" />
               <Slider label="Shift X" value={macros.shiftX} min={-5} max={5} step={0.1}
                 onChange={(v) => handleMacro('shiftX', v)} accent="purple" />
@@ -369,7 +369,7 @@ export default function Inspector() {
                 onChange={(v) => handleMacro('radius_scale', v)} unit="x" accent="purple" />
               <Slider label="Height" value={macros.height_offset} min={-5} max={5} step={0.1}
                 onChange={(v) => handleMacro('height_offset', v)} unit="m" accent="purple" />
-              <div className="text-gray-600 text-[10px] pt-1">Macros = transformations runtime appliquées à tous les moves actifs</div>
+              <div className="text-gray-600 text-[10px] pt-1">Macros = runtime transforms applied to all active moves</div>
             </Section>
           </>
         ) : (
@@ -387,7 +387,7 @@ export default function Inspector() {
                 onParam={(nodeId, key, v, params) =>
                   updateNodeData(nodeId, { params: { ...params, [key]: v } })
                 }
-                emptyHint="Aucun node paramétrable — choisissez un template dans le panneau gauche."
+                emptyHint="No parametric node — pick a template in the left panel."
               />
 
               {/* Spline Library — visible quand le graphe contient un DrawSpline */}
@@ -405,7 +405,7 @@ export default function Inspector() {
 
             {/* PERFORM — duration, direction, loop, fade */}
             <Section title="Perform" icon={<Play size={12} />}>
-              <Slider label="Durée" value={current.duration} min={0.5} max={30} step={0.5} onChange={(v) => updateCurrent({ duration: v })} unit="s" />
+              <Slider label="Duration" value={current.duration} min={0.5} max={30} step={0.5} onChange={(v) => updateCurrent({ duration: v })} unit="s" />
               <div className="flex gap-1 pt-1">
                 {(['forward', 'backward', 'ping_pong'] as const).map((d) => (
                   <button key={d} onClick={() => updateCurrent({ direction: d })}
@@ -429,7 +429,7 @@ export default function Inspector() {
             {/* MACROS — speed, scale, shift, rotation (unifié avec Expert) */}
             <Section title="Macros" icon={<Zap size={12} />}>
               <Slider label="Vitesse" value={current.speed} min={0} max={4} step={0.05} onChange={(v) => handleTransform('speed', v)} unit="x" accent="purple" />
-              <Slider label="Échelle" value={current.scale} min={0} max={4} step={0.05} onChange={(v) => handleTransform('scale', v)} accent="purple" />
+              <Slider label="Scale" value={current.scale} min={0} max={4} step={0.05} onChange={(v) => handleTransform('scale', v)} accent="purple" />
               <Slider label="Shift X" value={current.offset_x} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_x', v)} accent="purple" />
               <Slider label="Shift Y" value={current.offset_y} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_y', v)} accent="purple" />
               <Slider label="Shift Z" value={current.offset_z} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_z', v)} accent="purple" />
@@ -478,7 +478,7 @@ export default function Inspector() {
                 />
               ) : (
                 <div className="text-center py-3">
-                  <div className="text-gray-600 text-[10px] mb-1">Aucune track disponible</div>
+                  <div className="text-gray-600 text-[10px] mb-1">No track available</div>
                   <div className="text-gray-700 text-[10px]">Import .hol ou ajoutez des tracks manuelles</div>
                 </div>
               )}
@@ -488,7 +488,7 @@ export default function Inspector() {
             <>
               <Slider label="Spread" value={current.phase_spread} min={0} max={1} step={0.05}
                 onChange={(v) => updateCurrent({ phase_spread: v })} accent="cyan" />
-              <div className="text-gray-600 text-[10px] -mt-1">Décalage de phase entre tracks (effet chasing)</div>
+              <div className="text-gray-600 text-[10px] -mt-1">Phase offset between tracks (chasing effect)</div>
             </>
           )}
           {centroid && (
@@ -528,7 +528,7 @@ export default function Inspector() {
                   <button
                     onClick={(e) => { e.stopPropagation(); stopMovement(mv.id); }}
                     className="text-red-400 hover:text-red-300 text-[10px] px-1 flex-shrink-0"
-                    title="Stop immédiat"
+                    title="Immediate stop"
                   ><Square size={10} fill="currentColor" /></button>
                 </div>
               );
@@ -543,7 +543,7 @@ export default function Inspector() {
         )}
         <div className={`flex gap-1.5 transition-all ${flashClass}`}>
           <div className="flex-1 py-2 bg-gray-800/40 text-gray-500 text-[10px] rounded-lg text-center flex items-center justify-center border border-gray-700/30">
-            Lancer via MovesTable ▶
+            Launch via MovesTable ▶
           </div>
           <button
             onClick={() => panic()}
@@ -593,7 +593,7 @@ function InspectorSplineLibrary({ drawSplineNode, onUpdate }: {
     <div className="mt-3 pt-2 border-t border-gray-700/50 space-y-2">
       <div className="flex items-center gap-2">
         <span className="text-cyan-400 text-[10px] font-mono font-semibold">SPLINE LIBRARY</span>
-        <span className="text-gray-600 text-[10px]">{savedSplines.length} sauvée{savedSplines.length > 1 ? 's' : ''}</span>
+        <span className="text-gray-600 text-[10px]">{savedSplines.length} saved</span>
       </div>
 
       {/* Charger depuis la bibliothèque */}
@@ -603,7 +603,7 @@ function InspectorSplineLibrary({ drawSplineNode, onUpdate }: {
           defaultValue=""
           className="w-full px-2 py-1.5 bg-gray-900 text-cyan-300 text-[10px] font-mono rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
         >
-          <option value="" disabled>↳ Charger une spline...</option>
+          <option value="" disabled>↳ Load a spline...</option>
           {savedSplines.map((s) => (
             <option key={s.id} value={s.id}>{s.name}</option>
           ))}
@@ -618,12 +618,12 @@ function InspectorSplineLibrary({ drawSplineNode, onUpdate }: {
               <button
                 onClick={() => onUpdate(s.points)}
                 className="text-gray-400 hover:text-cyan-300 font-mono truncate flex-1 text-left"
-                title="Charger cette spline"
+                title="Load this spline"
               >{s.name}</button>
               <button
                 onClick={() => deleteSpline(s.id)}
                 className="text-red-500 hover:text-red-400 px-1 flex-shrink-0"
-                title="Supprimer"
+                title="Delete"
               ><X size={11} /></button>
             </div>
           ))}
@@ -652,7 +652,7 @@ function InspectorSplineLibrary({ drawSplineNode, onUpdate }: {
           onClick={() => setShowSave(true)}
           className="w-full text-[10px] text-cyan-400 hover:text-cyan-300 border border-cyan-800/60 hover:border-cyan-600 rounded py-1.5 transition-colors"
         >
-          + Sauvegarder cette spline
+          + Save this spline
         </button>
       )}
     </div>

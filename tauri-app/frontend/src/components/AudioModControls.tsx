@@ -41,12 +41,12 @@ export function AudioModAdder({ onAdd, onCancel }: { onAdd: (mod: AudioMod) => v
           <option value="roll">Roll</option>
         </select>
       </div>
-      <Slider label="Intensité" value={amount} min={0} max={2} step={0.05}
+      <Slider label="Intensity" value={amount} min={0} max={2} step={0.05}
         onChange={setAmount} accent="cyan" decimals={2} />
       <div className="flex gap-1.5">
         <button onClick={() => onAdd({ source, target, amount, base_value: 0, smoothing: 0.3 })}
           className="flex-1 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-[10px] rounded font-medium">
-          Ajouter
+          Add
         </button>
         <button onClick={onCancel}
           className="px-2 py-1.5 bg-gray-800 text-gray-400 hover:text-white text-[10px] rounded">
@@ -70,7 +70,7 @@ export function AudioModList() {
     <div className="space-y-1.5">
       {current.audio_mods.length === 0 && !showAdd && (
         <div className="text-gray-600 text-[10px] py-1">
-          Aucun mod audio. Cliquez « + Ajouter » pour créer un mapping audio.
+          No audio mod. Click « + Add » to create an audio mapping.
         </div>
       )}
       {current.audio_mods.map((mod, i) => (
@@ -81,7 +81,7 @@ export function AudioModList() {
             </span>
             <button onClick={() => removeAudioMod(i)} className="text-red-400 text-[10px]"><X size={11} /></button>
           </div>
-          <Slider label="Intensité" value={mod.amount} min={0} max={2} step={0.05}
+          <Slider label="Intensity" value={mod.amount} min={0} max={2} step={0.05}
             onChange={(v) => {
               const mods = [...current.audio_mods];
               mods[i] = { ...mod, amount: v };
@@ -100,7 +100,7 @@ export function AudioModList() {
       ) : (
         <button onClick={() => setShowAdd(true)}
           className="w-full py-1.5 bg-cyan-900/40 hover:bg-cyan-800/60 text-cyan-300 text-[10px] rounded font-medium">
-          + Ajouter un mod audio
+          + Add audio mod
         </button>
       )}
     </div>

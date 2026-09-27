@@ -244,7 +244,7 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
           {pluginMissing && (
             <span
               className="flex-shrink-0 px-1 py-px rounded bg-red-900/60 text-red-300 text-[9px] font-bold tracking-wide"
-              title={`Plugin '${pluginId ?? ''}' non chargé — .ssx absent du dossier plugins`}
+              title={`Plugin '${pluginId ?? ''}' not loaded — .ssx missing from the plugins folder`}
             >
               MISSING
             </span>
@@ -479,7 +479,7 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
           defaultValue=""
           className="w-full px-2 py-1 bg-gray-900 text-cyan-300 text-[10px] font-mono rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
         >
-          <option value="" disabled>Charger une spline...</option>
+          <option value="" disabled>Load a spline...</option>
           {savedSplines.map((s) => (
             <option key={s.id} value={s.id}>{s.name}</option>
           ))}
@@ -495,7 +495,7 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
               <button
                 onClick={() => handleDelete(s.id)}
                 className="text-red-500 hover:text-red-400 px-1"
-                title="Supprimer"
+                title="Delete"
               ><X size={10} /></button>
             </div>
           ))}
@@ -530,7 +530,7 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
           onClick={() => setShowSave(true)}
           className="w-full text-[10px] text-cyan-400 hover:text-cyan-300 border border-cyan-800 hover:border-cyan-600 rounded py-1"
         >
-          + Sauvegarder cette spline
+          + Save this spline
         </button>
       )}
     </div>

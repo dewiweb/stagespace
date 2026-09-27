@@ -24,7 +24,7 @@ describe('MovesTable — rendering', () => {
   it('renders empty state with "+ Move" button', () => {
     render(<MovesTable />);
     expect(screen.getByText('+ Move')).toBeInTheDocument();
-    expect(screen.getByText(/Aucun move configuré/i)).toBeInTheDocument();
+    expect(screen.getByText(/No move configured/i)).toBeInTheDocument();
   });
 
   it('renders header with "Moves" title', () => {
@@ -90,7 +90,7 @@ describe('MovesTable — slot display', () => {
     const slot = makeSlot({ id: 'slot-1', movementId: null });
     useGraphStore.setState({ moveSlots: [slot] } as any);
     render(<MovesTable />);
-    expect(screen.getByText('1 prêt')).toBeInTheDocument();
+    expect(screen.getByText('1 ready')).toBeInTheDocument();
   });
 });
 
@@ -99,7 +99,7 @@ describe('MovesTable — play/stop', () => {
     const slot = makeSlot({ id: 'slot-1', movementId: null });
     useGraphStore.setState({ moveSlots: [slot] } as any);
     render(<MovesTable />);
-    const playBtn = screen.getByTitle(/Lancer en live/i);
+    const playBtn = screen.getByTitle(/Launch live/i);
     fireEvent.click(playBtn);
     await new Promise((r) => setTimeout(r, 100));
     const calls = getInvokeCalls();
@@ -110,7 +110,7 @@ describe('MovesTable — play/stop', () => {
     const slot = makeSlot({ id: 'slot-1', movementId: 'mv-1' });
     useGraphStore.setState({ moveSlots: [slot] } as any);
     render(<MovesTable />);
-    const stopBtn = screen.getByTitle(/Stop immédiat/i);
+    const stopBtn = screen.getByTitle(/Immediate stop/i);
     fireEvent.click(stopBtn);
     await new Promise((r) => setTimeout(r, 100));
     const calls = getInvokeCalls();
@@ -134,7 +134,7 @@ describe('MovesTable — setlist', () => {
     const slot = makeSlot({ id: 'slot-1' });
     useGraphStore.setState({ moveSlots: [slot], setlistOrder: [] } as any);
     render(<MovesTable />);
-    const starBtn = screen.getByTitle(/Ajouter à la setlist/i);
+    const starBtn = screen.getByTitle(/Add to the show setlist/i);
     fireEvent.click(starBtn);
     expect((useGraphStore.getState() as any).setlistOrder).toContain('slot-1');
   });
@@ -191,11 +191,11 @@ describe('MovesTable — remove slot', () => {
     const slot = makeSlot({ id: 'slot-1', name: 'To Remove' });
     useGraphStore.setState({ moveSlots: [slot] } as any);
     render(<MovesTable />);
-    const removeBtn = screen.getByTitle(/Supprimer ce slot/i);
+    const removeBtn = screen.getByTitle(/Delete this slot/i);
     fireEvent.click(removeBtn);
     // Le slot n'est pas supprimé tant que le modal n'est pas confirmé
     expect((useGraphStore.getState() as any).moveSlots).toHaveLength(1);
-    fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     expect((useGraphStore.getState() as any).moveSlots).toHaveLength(0);
   });
 
@@ -203,7 +203,7 @@ describe('MovesTable — remove slot', () => {
     const slot = makeSlot({ id: 'slot-1', name: 'To Remove' });
     useGraphStore.setState({ moveSlots: [slot] } as any);
     render(<MovesTable />);
-    fireEvent.click(screen.getByTitle(/Supprimer ce slot/i));
+    fireEvent.click(screen.getByTitle(/Delete this slot/i));
     fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
     expect((useGraphStore.getState() as any).moveSlots).toHaveLength(1);
   });

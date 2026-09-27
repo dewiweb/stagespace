@@ -11,6 +11,8 @@ import TabPanel from './components/TabPanel';
 import Toolbar from './components/Toolbar';
 import ToastContainer from './components/ToastContainer';
 import PerformView from './components/PerformView';
+import WelcomeModal, { shouldShowWelcome } from './components/WelcomeModal';
+import ShortcutsModal from './components/ShortcutsModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Workflow, ChevronRight, ChevronDown, PanelRightClose, PanelLeftClose, PanelLeftOpen, PanelRightOpen, Maximize2, Minimize2, Activity } from 'lucide-react';
 import { useLiveShortcuts, usePerfStatsPolling } from './hooks/useLiveShortcuts';
@@ -27,6 +29,7 @@ function App() {
   const setPerformMode = useAnimationStore((s) => s.setPerformMode);
   const debugPerfVisible = useAnimationStore((s) => s.debugPerfVisible);
   const setDebugPerfVisible = useAnimationStore((s) => s.setDebugPerfVisible);
+  const shortcutsOpen = useAnimationStore((s) => s.shortcutsOpen);
   const oscInPort = useGraphStore((s) => s.oscInPort);
   const [leftCollapsed, setLeftCollapsed] = React.useState(false);
   const [rightCollapsed, setRightCollapsed] = React.useState(false);
@@ -42,6 +45,8 @@ function App() {
   // Sections collapsibles du panneau gauche
   const [graphsExpanded, setGraphsExpanded] = React.useState(true);
   const [movesExpanded, setMovesExpanded] = React.useState(true);
+  // Premier lancement : proposer le show d'exemple bundle (évalué une fois)
+  const [showWelcome, setShowWelcome] = React.useState(shouldShowWelcome);
 
   // Listen to movement positions (multi-runtime)
   useMovementPositionsListener();
@@ -185,7 +190,7 @@ function App() {
             className={`px-3 py-1 text-xs font-bold rounded transition-all flex items-center gap-1.5 ${
               performMode ? 'bg-green-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
             }`}
-            title="Mode Perform — surface live : setlist, GO, panic, params live à la demande. L'édition est masquée."
+            title="Perform mode — live surface: setlist, GO, panic, on-demand live params. Editing is hidden."
           >
             {performMode ? '◉ Perform' : '◎ Edit'}
           </button>
@@ -195,7 +200,7 @@ function App() {
               className={`px-3 py-1 text-xs font-bold rounded transition-all flex items-center gap-1.5 ${
                 showExpert ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
               }`}
-              title="Mode Expert — éditeur de graphe avancé (nodes, connexions, custom trajectories)"
+              title="Expert mode — advanced graph editor (nodes, connections, custom trajectories)"
             >
               <Workflow size={12} />
               {showExpert ? 'Expert' : 'Simple'}
@@ -224,7 +229,7 @@ function App() {
           <button
             onClick={() => setLeftCollapsed(false)}
             className="w-7 border-r border-stagespace-border bg-stagespace-panel flex flex-col items-center pt-3 flex-shrink-0 hover:bg-gray-800 transition-colors group"
-            title="Afficher le panneau Show / Templates"
+            title="Show the Show / Templates panel"
           >
             <PanelLeftOpen size={13} className="text-gray-500 group-hover:text-white" />
             <span className="text-gray-600 text-[10px] mt-2 writing-vertical" style={{ writingMode: 'vertical-rl' }}>Moves</span>
@@ -235,7 +240,7 @@ function App() {
             <button
               onClick={() => setLeftCollapsed(true)}
               className="absolute -right-3 top-2 z-20 w-6 h-6 bg-stagespace-panel border border-stagespace-border rounded-full flex items-center justify-center text-gray-500 hover:text-white hover:bg-gray-800 transition-colors text-xs"
-              title="Masquer le panneau"
+              title="Collapse the panel"
             >
               <PanelLeftClose size={11} />
             </button>
@@ -246,7 +251,7 @@ function App() {
                 <button
                   onClick={() => setMovesExpanded(!movesExpanded)}
                   className="text-gray-400 hover:text-white text-[10px] w-4"
-                  title={movesExpanded ? "Réduire" : "Agrandir"}
+                  title={movesExpanded ? "Collapse" : "Expand"}
                 >{movesExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}</button>
                 <span className="text-gray-400 text-[10px] uppercase tracking-wider font-medium">Show</span>
               </div>
@@ -264,7 +269,7 @@ function App() {
                 <button
                   onClick={() => setGraphsExpanded(!graphsExpanded)}
                   className="text-gray-400 hover:text-white text-[10px] w-4"
-                  title={graphsExpanded ? "Réduire" : "Agrandir"}
+                  title={graphsExpanded ? "Collapse" : "Expand"}
                 >{graphsExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}</button>
                 <span className="text-gray-400 text-[10px] uppercase tracking-wider font-medium">Templates</span>
               </div>
@@ -279,7 +284,7 @@ function App() {
           <div
             onMouseDown={startLeftResize}
             className="w-1.5 flex-shrink-0 bg-stagespace-border hover:bg-blue-500/50 cursor-col-resize transition-colors relative group"
-            title="Glisser pour redimensionner"
+            title="Drag to resize"
           >
             <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-stagespace-border group-hover:bg-blue-500" />
           </div>
@@ -296,7 +301,7 @@ function App() {
             <div className="h-9 border-b border-stagespace-border flex items-center px-3 flex-shrink-0 gap-2">
               <span className="text-gray-300 text-xs font-medium">Expert — Node Editor</span>
               <div className="flex-1" />
-              <span className="text-gray-500 text-[10px]">Lancer via MovesTable ▶</span>
+              <span className="text-gray-500 text-[10px]">Launch via MovesTable ▶</span>
               <button
                 onClick={() => {
                   const { nodes, edges } = useGraphStore.getState();
@@ -308,7 +313,7 @@ function App() {
                   setShowExpert(false);
                 }}
                 className="px-2 py-0.5 text-[10px] bg-purple-700 hover:bg-purple-600 text-white rounded font-medium"
-                title="Sauvegarder le graphe comme animation Custom"
+                title="Save the graph as a Custom animation"
               >
                 ★ Save
               </button>
@@ -325,7 +330,7 @@ function App() {
               <button
                 onClick={() => setDebugPerfVisible(!debugPerfVisible)}
                 className={`p-1 rounded transition-colors ${debugPerfVisible ? 'text-cyan-400 bg-cyan-900/30' : 'text-gray-600 hover:text-gray-400'}`}
-                title="Overlay DEBUG PERF (fps render/IPC, stutter) — outil dev"
+                title="DEBUG PERF overlay (render/IPC fps, stutter) — dev tool"
               >
                 <Activity size={12} />
               </button>
@@ -350,7 +355,7 @@ function App() {
                 onMouseDown={startExpertResize}
                 onDoubleClick={() => setExpertSplit(0.5)}
                 className="w-1.5 flex-shrink-0 bg-stagespace-border hover:bg-purple-500/50 cursor-col-resize transition-colors relative group"
-                title="Glisser pour redimensionner · double-clic = 50/50"
+                title="Drag to resize · double-click = 50/50"
               >
                 <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-stagespace-border group-hover:bg-purple-500" />
               </div>
@@ -365,14 +370,14 @@ function App() {
                   <button
                     onClick={() => setDebugPerfVisible(!debugPerfVisible)}
                     className={`p-1 rounded transition-colors ${debugPerfVisible ? 'text-cyan-400 bg-cyan-900/30' : 'text-gray-600 hover:text-gray-400'}`}
-                    title="Overlay DEBUG PERF — outil dev"
+                    title="DEBUG PERF overlay — dev tool"
                   >
                     <Activity size={11} />
                   </button>
                   <button
                     onClick={() => setExpertSplit(expertSplit > 0.7 ? 0.5 : 0.78)}
                     className="text-gray-500 hover:text-white px-1"
-                    title={expertSplit > 0.7 ? 'Rétablir le split 50/50' : 'Agrandir le node editor'}
+                    title={expertSplit > 0.7 ? 'Restore 50/50 split' : 'Enlarge the node editor'}
                   >
                     {expertSplit > 0.7 ? <Minimize2 size={11} /> : <Maximize2 size={11} />}
                   </button>
@@ -392,7 +397,7 @@ function App() {
           <button
             onClick={() => setRightCollapsed(false)}
             className="w-7 border-l border-stagespace-border bg-stagespace-panel flex flex-col items-center pt-3 flex-shrink-0 hover:bg-gray-800 transition-colors group"
-            title="Afficher l'Inspector"
+            title="Show the Inspector"
           >
             <PanelRightOpen size={13} className="text-gray-500 group-hover:text-white" />
             <span className="text-gray-600 text-[10px] mt-2" style={{ writingMode: 'vertical-rl' }}>Inspector</span>
@@ -403,7 +408,7 @@ function App() {
             <div
               onMouseDown={startRightResize}
               className="w-1.5 flex-shrink-0 bg-stagespace-border hover:bg-blue-500/50 cursor-col-resize transition-colors relative group"
-              title="Glisser pour redimensionner"
+              title="Drag to resize"
             >
               <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-stagespace-border group-hover:bg-blue-500" />
             </div>
@@ -411,7 +416,7 @@ function App() {
             <button
               onClick={() => setRightCollapsed(true)}
               className="absolute -left-3 top-2 z-20 w-6 h-6 bg-stagespace-panel border border-stagespace-border rounded-full flex items-center justify-center text-gray-500 hover:text-white hover:bg-gray-800 transition-colors text-xs"
-              title="Masquer l'Inspector"
+              title="Hide the Inspector"
             >
               <PanelRightClose size={11} />
             </button>
@@ -433,6 +438,12 @@ function App() {
 
       {/* Toast notifications — erreurs backend, alerts OSC, etc. */}
       <ToastContainer />
+
+      {/* Premier lancement — show d'exemple ou départ vide */}
+      {showWelcome && <WelcomeModal onClose={() => setShowWelcome(false)} />}
+
+      {/* Aide raccourcis — `?` key ou bouton Toolbar */}
+      {shortcutsOpen && <ShortcutsModal />}
     </div>
   );
 }

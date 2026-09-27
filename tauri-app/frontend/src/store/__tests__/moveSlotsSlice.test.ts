@@ -278,7 +278,7 @@ describe('moveSetlistItem', () => {
 describe('goToNextMove', () => {
   it('returns error message on empty setlist', async () => {
     const result = await useGraphStore.getState().goToNextMove();
-    expect(result).toContain('Setlist vide');
+    expect(result).toContain('Empty setlist');
   });
 
   it('returns error message at end of setlist', async () => {
