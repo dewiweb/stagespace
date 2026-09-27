@@ -918,9 +918,13 @@ impl Compiler {
             NodeType::Follow => Box::new(crate::engines::follow::Follow),
             NodeType::Swarm => Box::new(crate::engines::swarm::Swarm),
             NodeType::VectorField => Box::new(crate::engines::vector_field::VectorField),
-            NodeType::CustomTrajectory => {
-                Box::new(crate::engines::custom_trajectory::CustomTrajectory)
-            }
+            // Expressions précompilées en AST borné (audit B3) — les
+            // erreurs de parse/longueur/profondeur échouent la compile
+            // avec InvalidParameter au lieu d'un re-parse à chaque tick.
+            NodeType::CustomTrajectory => Box::new(
+                crate::engines::custom_trajectory::CustomTrajectory::new(&params)
+                    .map_err(CompilationError::InvalidParameter)?,
+            ),
             NodeType::Wave => Box::new(crate::engines::wave::Wave),
             NodeType::BPM => Box::new(crate::engines::bpm::BpmEngine),
             NodeType::AudioAmplitude => {

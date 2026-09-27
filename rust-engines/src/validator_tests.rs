@@ -935,4 +935,113 @@ mod tests {
 
         assert!(Validator::validate(&graph).is_ok());
     }
+
+    // ── Bornes dures anti-blackout (audit B2) ────────────────────────
+
+    fn chain_graph(n: usize) -> Graph {
+        let mut graph = Graph::new();
+        let mut ids = Vec::new();
+        for _ in 0..n {
+            let node = Node::new(NodeType::Scale);
+            ids.push(node.id);
+            graph.add_node(node);
+        }
+        for w in ids.windows(2) {
+            graph.add_edge(Edge {
+                from: w[0],
+                to: w[1],
+                from_port: "output".to_string(),
+                to_port: "input".to_string(),
+            });
+        }
+        graph
+    }
+
+    fn has_too_complex(result: &Result<(), Vec<ValidationError>>, needle: &str) -> bool {
+        match result {
+            Err(errors) => errors.iter().any(|e| {
+                matches!(
+                    e,
+                    ValidationError::TooComplex(msg) if msg.contains(needle)
+                )
+            }),
+            Ok(()) => false,
+        }
+    }
+
+    #[test]
+    fn test_complexity_max_nodes() {
+        let mut graph = Graph::new();
+        for _ in 0..=crate::validator::MAX_GRAPH_NODES {
+            graph.add_node(Node::new(NodeType::Scale));
+        }
+        let result = Validator::validate(&graph);
+        assert!(has_too_complex(&result, "nodes"));
+    }
+
+    #[test]
+    fn test_complexity_max_edges() {
+        let mut graph = Graph::new();
+        let a = Node::new(NodeType::Scale);
+        let b = Node::new(NodeType::Scale);
+        let (id_a, id_b) = (a.id, b.id);
+        graph.add_node(a);
+        graph.add_node(b);
+        for _ in 0..=crate::validator::MAX_GRAPH_EDGES {
+            graph.add_edge(Edge {
+                from: id_a,
+                to: id_b,
+                from_port: "output".to_string(),
+                to_port: "input".to_string(),
+            });
+        }
+        let result = Validator::validate(&graph);
+        assert!(has_too_complex(&result, "edges"));
+    }
+
+    #[test]
+    fn test_complexity_max_depth() {
+        // Chaîne plus profonde que MAX_DAG_DEPTH → rejet (le compile et
+        // l'éval sont récursifs : sans borne = stack overflow = abort).
+        let graph = chain_graph(crate::validator::MAX_DAG_DEPTH + 2);
+        let result = Validator::validate(&graph);
+        assert!(has_too_complex(&result, "depth"));
+    }
+
+    #[test]
+    fn test_complexity_path_explosion() {
+        // Chaque niveau duplique le sous-graphe (Mix(a,a) par 2 edges sur
+        // le même parent) : 2^20 chemins → sans borne, compile_node
+        // compilerait ~1M de fois le nœud racine.
+        let mut graph = Graph::new();
+        let leaf = Node::new(NodeType::Circular);
+        let mut prev = leaf.id;
+        graph.add_node(leaf);
+        for _ in 0..20 {
+            let mix = Node::new(NodeType::Mix);
+            let id = mix.id;
+            graph.add_node(mix);
+            for port in ["input_a", "input_b"] {
+                graph.add_edge(Edge {
+                    from: prev,
+                    to: id,
+                    from_port: "output".to_string(),
+                    to_port: port.to_string(),
+                });
+            }
+            prev = id;
+        }
+        let result = Validator::validate(&graph);
+        assert!(has_too_complex(&result, "path"));
+    }
+
+    #[test]
+    fn test_complexity_reasonable_graph_accepted() {
+        // Une chaîne de 100 modifiers reste sous les bornes — pas de
+        // TooComplex (d'autres erreurs de validation peuvent exister,
+        // elles ne sont pas l'objet du test).
+        let graph = chain_graph(100);
+        let result = Validator::validate(&graph);
+        assert!(!has_too_complex(&result, ""));
+    }
 }

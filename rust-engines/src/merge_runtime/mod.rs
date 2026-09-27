@@ -141,7 +141,23 @@ pub struct MergeRuntime {
     /// Modulations déclarées dans le graph global (nodes `Velocity`) —
     /// évaluées avant les règles manuelles (priorité aux manuelles).
     graph_modulations: Arc<RwLock<Arc<Vec<ChannelModulation>>>>,
+    /// Moves retirés pour worker stale (audit C5) — le merge ne peut pas
+    /// arrêter le worker lui-même (le `Runtime` vit dans la couche
+    /// commands Tauri) ; il publie `(id, Arc<PositionBuffer>)` ici et le
+    /// superviseur backend draine la file pour `runtime.stop()` +
+    /// nettoyage `movements`. L'Arc permet au superviseur un test
+    /// `ptr_eq` : si l'id a été réutilisé par un move plus récent, son
+    /// buffer diffère → on ne tue pas le nouveau move. Sans ce mécanisme
+    /// un worker zombie tournait à 100 % CPU indéfiniment.
+    stale_kill_ids: StaleKillQueue,
 }
+
+/// Entrée de la file stale-kill (audit C5) : id du move + Arc du
+/// PositionBuffer observé gelé — l'Arc sert de preuve d'identité
+/// (`ptr_eq`) pour ne pas tuer un move réutilisant le même id.
+pub type StaleKill = (String, Arc<PositionBuffer>);
+/// File partagée merge → superviseur backend.
+type StaleKillQueue = Arc<Mutex<Vec<StaleKill>>>;
 
 impl MergeRuntime {
     /// Crée un nouveau MergeRuntime
@@ -200,6 +216,7 @@ impl MergeRuntime {
             zones: Arc::new(RwLock::new(Arc::new(Vec::new()))),
             graph_zones: Arc::new(RwLock::new(Arc::new(Vec::new()))),
             graph_modulations: Arc::new(RwLock::new(Arc::new(Vec::new()))),
+            stale_kill_ids: Arc::new(Mutex::new(Vec::new())),
         })
     }
 
@@ -610,6 +627,38 @@ impl MergeRuntime {
             .any(|s| s.is_active)
     }
 
+    /// Enfile un stale-kill — utilisé par la boucle merge interne.
+    /// `#[doc(hidden)]` : exposé pour les tests du superviseur Tauri.
+    #[doc(hidden)]
+    pub fn enqueue_stale_kill(&self, move_id: String, buffer: Arc<PositionBuffer>) {
+        Self::enqueue_stale_kill_into(&self.stale_kill_ids, move_id, buffer);
+    }
+
+    fn enqueue_stale_kill_into(
+        queue: &StaleKillQueue,
+        move_id: String,
+        buffer: Arc<PositionBuffer>,
+    ) {
+        queue
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push((move_id, buffer));
+    }
+
+    /// Draine la file des moves retirés pour worker stale (audit C5).
+    /// Appelé par le superviseur backend qui détient les `Runtime` des
+    /// workers — lui seul peut faire `stop()` + nettoyage `movements`.
+    /// L'`Arc<PositionBuffer>` permet un test `ptr_eq` pour ne jamais
+    /// tuer un move plus récent ayant réutilisé le même id.
+    pub fn drain_stale_kills(&self) -> Vec<StaleKill> {
+        std::mem::take(
+            &mut *self
+                .stale_kill_ids
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()),
+        )
+    }
+
     /// Démarre un fade in pour un move (utilisé au recall pour un crossfade doux)
     pub fn start_fade_in(&self, move_id: &str, fade_duration: f64) {
         if let Some(state) = self
@@ -778,6 +827,7 @@ impl MergeRuntime {
         let kinematic_smoothing_arc = self.kinematic_smoothing.clone();
         let graph_zones_arc = self.graph_zones.clone();
         let graph_modulations_arc = self.graph_modulations.clone();
+        let stale_kill_ids = self.stale_kill_ids.clone();
 
         let handle = std::thread::spawn(move || {
             let mut start = Instant::now();
@@ -870,6 +920,17 @@ impl MergeRuntime {
                             ));
                             state.is_active = false;
                             moves_to_remove.push(move_id.clone());
+                            // Audit C5 : publier l'ID + le buffer (test
+                            // d'identité côté superviseur) pour arrêter
+                            // réellement le thread worker — sinon il
+                            // tourne à 100 % CPU après son retrait.
+                            if let Some(buf) = buffers.get(move_id) {
+                                Self::enqueue_stale_kill_into(
+                                    &stale_kill_ids,
+                                    move_id.clone(),
+                                    buf.clone(),
+                                );
+                            }
                             continue;
                         }
                         snapshots.push((

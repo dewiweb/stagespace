@@ -24,6 +24,9 @@ pub enum ValidationError {
     CountMismatch(String),
     /// Node présent dans un contexte où il n'a pas de sens (sub-graph vs global)
     ContextIncompatible(String),
+    /// Graphe trop grand/profond — rejeté avant toute traversée récursive
+    /// (un stack overflow = abort du process entier, cf. audit B2).
+    TooComplex(String),
 }
 
 impl fmt::Display for ValidationError {
@@ -39,12 +42,27 @@ impl fmt::Display for ValidationError {
             ValidationError::ContextIncompatible(msg) => {
                 write!(f, "context incompatible: {msg}")
             }
+            ValidationError::TooComplex(msg) => write!(f, "graph too complex: {msg}"),
         }
     }
 }
 
 /// Résultat de validation
 pub type ValidationResult = Result<(), Vec<ValidationError>>;
+
+/// Bornes dures anti-DoS / anti-stack-overflow (audit B2). Le compile
+/// (`compile_node`) et l'évaluation de la closure compilée sont récursifs
+/// en profondeur de DAG ; un stack overflow tue le process entier
+/// (SIGSEGV — catch_unwind ne peut pas l'intercepter). Tout graphe
+/// dépassant ces bornes est rejeté avant toute traversée.
+pub const MAX_GRAPH_NODES: usize = 512;
+pub const MAX_GRAPH_EDGES: usize = 4096;
+pub const MAX_DAG_DEPTH: usize = 128;
+/// Borne sur l'expansion DAG→arbre : `compile_node` n'a pas de
+/// mémoïsation — un node partagé par K parents est compilé et évalué
+/// K fois (Mix(a,a) à chaque niveau → 2^profondeur). Le compte de
+/// chemins sature à cette valeur → rejet au lieu d'exploser.
+pub const MAX_EXPANDED_PATHS: u64 = 8192;
 
 /// Validateur de graphe
 pub struct Validator;
@@ -72,6 +90,11 @@ impl Validator {
         plugin_kinds: &std::collections::HashMap<crate::graph::NodeId, crate::plugins::PluginKind>,
     ) -> ValidationResult {
         let mut errors = Vec::new();
+
+        // -1. Bornes dures AVANT toute traversée récursive (has_cycle est
+        // itératif mais le compile/éval downstream ne le sont pas —
+        // stack overflow = abort du process, cf. audit B2).
+        Self::check_complexity(graph, &mut errors);
 
         // 0. Vérifier que les nodes sont compatibles avec le contexte
         Self::validate_context_compatibility(graph, context, &mut errors);
@@ -191,6 +214,88 @@ impl Validator {
     }
 
     /// Vérifie qu'aucun node n'est présent dans un contexte où il n'a pas de sens.
+    /// Bornes dures sur la taille et la profondeur du graphe — passent
+    /// avant tout le reste. Entièrement itératif (Kahn) : safe même sur
+    /// un graphe cyclique (les nœuds dans le cycle restent à degré > 0 et
+    /// ne contribuent ni profondeur ni chemins — le cycle est signalé
+    /// par has_cycle juste après).
+    fn check_complexity(graph: &Graph, errors: &mut Vec<ValidationError>) {
+        if graph.nodes.len() > MAX_GRAPH_NODES {
+            errors.push(ValidationError::TooComplex(format!(
+                "{} nodes (max {MAX_GRAPH_NODES})",
+                graph.nodes.len()
+            )));
+        }
+        if graph.edges.len() > MAX_GRAPH_EDGES {
+            errors.push(ValidationError::TooComplex(format!(
+                "{} edges (max {MAX_GRAPH_EDGES})",
+                graph.edges.len()
+            )));
+        }
+        if graph.nodes.is_empty() {
+            return;
+        }
+
+        // Ordre topologique (Kahn) → profondeur max du DAG + nombre de
+        // chemins saturé. paths[v] = somme des chemins des parents — la
+        // valeur exacte du nombre de fois que compile_node compilerait v.
+        let mut indegree: std::collections::HashMap<crate::graph::NodeId, usize> =
+            std::collections::HashMap::with_capacity(graph.nodes.len());
+        for e in &graph.edges {
+            if graph.nodes.contains_key(&e.from) && graph.nodes.contains_key(&e.to) {
+                *indegree.entry(e.to).or_insert(0) += 1;
+            }
+        }
+        let mut queue: std::collections::VecDeque<crate::graph::NodeId> = graph
+            .nodes
+            .keys()
+            .filter(|id| !indegree.contains_key(id))
+            .copied()
+            .collect();
+        let mut depth: std::collections::HashMap<crate::graph::NodeId, usize> =
+            std::collections::HashMap::with_capacity(graph.nodes.len());
+        let mut paths: std::collections::HashMap<crate::graph::NodeId, u64> =
+            std::collections::HashMap::with_capacity(graph.nodes.len());
+        let mut max_depth = 0usize;
+        let mut total_paths: u64 = 0;
+        while let Some(id) = queue.pop_front() {
+            let d = *depth.get(&id).unwrap_or(&0);
+            let p = *paths.get(&id).unwrap_or(&1);
+            if d > max_depth {
+                max_depth = d;
+            }
+            total_paths = total_paths.saturating_add(p);
+            if max_depth > MAX_DAG_DEPTH && total_paths > MAX_EXPANDED_PATHS {
+                break; // les deux bornes saturées — plus rien à mesurer
+            }
+            for succ in graph.get_outputs(id) {
+                let nd = d + 1;
+                let e = depth.entry(succ).or_insert(0);
+                if nd > *e {
+                    *e = nd;
+                }
+                let pe = paths.entry(succ).or_insert(0);
+                *pe = pe.saturating_add(p).min(MAX_EXPANDED_PATHS + 1);
+                if let Some(deg) = indegree.get_mut(&succ) {
+                    *deg -= 1;
+                    if *deg == 0 {
+                        queue.push_back(succ);
+                    }
+                }
+            }
+        }
+        if max_depth > MAX_DAG_DEPTH {
+            errors.push(ValidationError::TooComplex(format!(
+                "DAG depth {max_depth} (max {MAX_DAG_DEPTH})"
+            )));
+        }
+        if total_paths > MAX_EXPANDED_PATHS {
+            errors.push(ValidationError::TooComplex(format!(
+                "expanded path count exceeds {MAX_EXPANDED_PATHS} (shared sub-DAGs multiply compile work)"
+            )));
+        }
+    }
+
     fn validate_context_compatibility(
         graph: &Graph,
         context: GraphContext,

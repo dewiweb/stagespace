@@ -15,6 +15,24 @@ pub fn build_graph_from_json(
         .and_then(|v| v.as_array())
         .ok_or("Missing 'edges' array")?;
 
+    // Bornes à la frontière IPC (audit B2) — rejet avant de construire le
+    // Graph : le validator applique les mêmes limites, mais un payload
+    // géant ne doit même pas être matérialisé.
+    if nodes.len() > stagespace_engines::validator::MAX_GRAPH_NODES {
+        return Err(format!(
+            "Graph too large: {} nodes (max {})",
+            nodes.len(),
+            stagespace_engines::validator::MAX_GRAPH_NODES
+        ));
+    }
+    if edges.len() > stagespace_engines::validator::MAX_GRAPH_EDGES {
+        return Err(format!(
+            "Graph too large: {} edges (max {})",
+            edges.len(),
+            stagespace_engines::validator::MAX_GRAPH_EDGES
+        ));
+    }
+
     let mut graph = Graph::new();
     let mut id_map: HashMap<String, NodeId> = HashMap::new();
 

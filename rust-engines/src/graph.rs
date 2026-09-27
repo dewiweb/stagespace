@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::hash::Hash;
 use uuid::Uuid;
 
@@ -259,42 +259,39 @@ impl Graph {
             .collect()
     }
 
-    /// Détection de cycles (DFS avec marquage GRAY/BLACK)
+    /// Détection de cycles — épluchage de Kahn **itératif** (audit B2 :
+    /// un graphe très profond faisait déborder la pile du DFS récursif —
+    /// stack overflow = abort du process, non rattrapable par
+    /// catch_unwind). Il reste un cycle ssi des nœuds n'ont jamais atteint
+    /// un degré entrant nul.
     pub fn has_cycle(&self) -> bool {
-        let mut visited = HashSet::new();
-        let mut rec_stack = HashSet::new();
-
-        for &node_id in self.nodes.keys() {
-            if !visited.contains(&node_id) && self.dfs_cycle(node_id, &mut visited, &mut rec_stack)
-            {
-                return true;
+        // in-degrees (arêtes vers des nœuds présents uniquement)
+        let mut indegree: HashMap<NodeId, usize> = HashMap::with_capacity(self.nodes.len());
+        for e in &self.edges {
+            if self.nodes.contains_key(&e.from) && self.nodes.contains_key(&e.to) {
+                *indegree.entry(e.to).or_insert(0) += 1;
             }
         }
-
-        false
-    }
-
-    fn dfs_cycle(
-        &self,
-        node_id: NodeId,
-        visited: &mut HashSet<NodeId>,
-        rec_stack: &mut HashSet<NodeId>,
-    ) -> bool {
-        visited.insert(node_id);
-        rec_stack.insert(node_id);
-
-        for neighbor in self.get_outputs(node_id) {
-            if !visited.contains(&neighbor) {
-                if self.dfs_cycle(neighbor, visited, rec_stack) {
-                    return true;
+        // Sources = nœuds sans entrée — on les retire au fur et à mesure.
+        let mut queue: Vec<NodeId> = self
+            .nodes
+            .keys()
+            .filter(|id| !indegree.contains_key(id))
+            .copied()
+            .collect();
+        let mut removed = 0usize;
+        while let Some(id) = queue.pop() {
+            removed += 1;
+            for neighbor in self.get_outputs(id) {
+                if let Some(d) = indegree.get_mut(&neighbor) {
+                    *d -= 1;
+                    if *d == 0 {
+                        queue.push(neighbor);
+                    }
                 }
-            } else if rec_stack.contains(&neighbor) {
-                return true;
             }
         }
-
-        rec_stack.remove(&node_id);
-        false
+        removed < self.nodes.len()
     }
 }
 

@@ -392,3 +392,53 @@ fn test_fresh_move_survives_stale_grace() {
         "un move frais (jamais écrit) doit survivre à la grace période"
     );
 }
+
+#[test]
+fn test_stale_kill_publishes_id_and_buffer() {
+    // Audit C5 : un move dont le worker est mort (buffer gelé après une
+    // première écriture) doit être retiré ET publié dans la file
+    // stale_kill — le superviseur backend en a besoin pour arrêter le
+    // thread worker (sinon zombie CPU à 100 %).
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 300.0).unwrap();
+    let buffer = Arc::new(PositionBuffer::new());
+    // Une première écriture pour sortir de la grace "fresh" — puis gel.
+    buffer.write(vec![(0, nalgebra::Vector3::new(1.0, 0.0, 0.0))]);
+    rt.register_move(
+        "zombie".to_string(),
+        buffer.clone(),
+        vec![1],
+        vec![0],
+        false,
+    );
+    rt.start().unwrap();
+
+    // 30 frames stale à 300 FPS ≈ 100 ms — on poll jusqu'à 3 s.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    let kills = loop {
+        let k = rt.drain_stale_kills();
+        if !k.is_empty() {
+            break k;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "stale-kill jamais publié"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    };
+    rt.stop();
+
+    assert_eq!(kills.len(), 1);
+    assert_eq!(kills[0].0, "zombie");
+    // L'Arc publié est le buffer du move — le superviseur fera ptr_eq
+    // contre le runtime pour ne pas tuer un id réutilisé.
+    assert!(Arc::ptr_eq(&kills[0].1, &buffer));
+    assert!(
+        !rt.has_move("zombie"),
+        "le move stale doit être retiré du merge"
+    );
+    assert!(
+        rt.drain_stale_kills().is_empty(),
+        "la file doit être drainée"
+    );
+}

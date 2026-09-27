@@ -88,6 +88,38 @@ mod tests {
     }
 
     #[test]
+    fn test_cycle_detection_deep_graph_no_stack_overflow() {
+        // Audit B2 : l'ancien DFS récursif débordait la pile sur un graphe
+        // très profond (stack overflow = abort du process). L'épluchage de
+        // Kahn est itératif — 10 000 nœuds chaînés + back-edge doivent
+        // passer sans crash.
+        let mut graph = Graph::new();
+        let mut ids = Vec::new();
+        for _ in 0..10_000 {
+            let node = Node::new(NodeType::Scale);
+            ids.push(node.id);
+            graph.add_node(node);
+        }
+        for w in ids.windows(2) {
+            graph.add_edge(Edge {
+                from: w[0],
+                to: w[1],
+                from_port: "output".to_string(),
+                to_port: "input".to_string(),
+            });
+        }
+        assert!(!graph.has_cycle());
+        // Cycle au fond de la chaîne
+        graph.add_edge(Edge {
+            from: *ids.last().unwrap(),
+            to: ids[0],
+            from_port: "output".to_string(),
+            to_port: "input".to_string(),
+        });
+        assert!(graph.has_cycle());
+    }
+
+    #[test]
     fn test_get_inputs_outputs() {
         let mut graph = Graph::new();
         let node1 = Node::new(NodeType::Circular);

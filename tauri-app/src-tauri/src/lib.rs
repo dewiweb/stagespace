@@ -13,6 +13,7 @@ use tauri::{AppHandle, Manager, State};
 
 pub mod commands;
 pub mod graph;
+pub mod supervisor;
 use commands::animation::{launch_animation, update_animation_state};
 use commands::audio::{
     get_audio_state, list_audio_devices, start_audio_capture, start_audio_poller,
@@ -71,6 +72,9 @@ pub struct AppState {
     pub audio_capture: Arc<Mutex<AudioCaptureManager>>,
     /// Flag pour arrêter le poller audio proprement à la fermeture
     pub audio_poller_shutdown: Arc<AtomicBool>,
+    /// Flag pour arrêter le superviseur backend (watchdog merge + kill
+    /// des workers zombies — audits C5/C7) à la fermeture de l'app.
+    pub supervisor_shutdown: Arc<AtomicBool>,
     /// Registry des plugins WASM — None si wasmtime n'a pas pu s'initialiser.
     /// Mutex : `reload_plugins` re-scanne in-place sans stopper le runtime.
     pub plugin_registry: Option<Arc<Mutex<stagespace_engines::PluginRegistry>>>,
@@ -193,6 +197,7 @@ pub fn run() {
                 recall_in_progress: Arc::new(std::sync::atomic::AtomicBool::new(false)),
                 audio_capture: Arc::new(Mutex::new(AudioCaptureManager::new())),
                 audio_poller_shutdown: Arc::new(AtomicBool::new(false)),
+                supervisor_shutdown: Arc::new(AtomicBool::new(false)),
                 plugin_registry,
                 plugins_dir,
             }
@@ -226,9 +231,12 @@ pub fn run() {
                     let capture = lock_or_recover(&state.audio_capture);
                     capture.stop();
                 }
-                // Arrêter le poller audio
+                // Arrêter le poller audio et le superviseur backend
                 state
                     .audio_poller_shutdown
+                    .store(true, std::sync::atomic::Ordering::SeqCst);
+                state
+                    .supervisor_shutdown
                     .store(true, std::sync::atomic::Ordering::SeqCst);
                 eprintln!("[INFO] All movements stopped on window close");
             }
@@ -273,6 +281,16 @@ pub fn run() {
                 let state: &AppState = &app.state();
                 start_audio_poller(app_handle, state);
                 eprintln!("[INFO] Audio state poller started");
+            }
+
+            // Démarrer le superviseur backend (audits C5/C7) — kill des
+            // workers zombies + restart du merge sans dépendre du polling
+            // frontend. Une webview gelée ne peut plus provoquer de
+            // blackout OSC définitif.
+            {
+                let state: &AppState = &app.state();
+                supervisor::start(state);
+                eprintln!("[INFO] Backend supervisor started");
             }
 
             // Sur Linux WebKitGTK : autoriser getUserMedia (microphone)
@@ -412,3 +430,7 @@ mod example_show_test_file;
 #[cfg(test)]
 #[path = "tests/complex_graph_tests.rs"]
 mod complex_graph_test_file;
+
+#[cfg(test)]
+#[path = "tests/supervisor_tests.rs"]
+mod supervisor_test_file;

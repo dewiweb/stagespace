@@ -407,7 +407,6 @@ mod tests {
 
     #[test]
     fn test_custom_trajectory() {
-        let engine = custom_trajectory::CustomTrajectory;
         let params = create_params(
             1,
             4.0,
@@ -420,6 +419,7 @@ mod tests {
                 }
             }),
         );
+        let engine = custom_trajectory::CustomTrajectory::new(&params).expect("valid");
 
         let pos = engine.position(0.0, 0, &params);
         // Parser simplifié: on vérifie juste que ça compile et retourne quelque chose
@@ -428,7 +428,6 @@ mod tests {
 
     #[test]
     fn test_custom_trajectory_arithmetic_and_vars() {
-        let engine = custom_trajectory::CustomTrajectory;
         let params = create_params(
             4,
             8.0,
@@ -437,6 +436,7 @@ mod tests {
                 "equations": { "x": "2*t + i*0.5", "y": "d/2", "z": "n" }
             }),
         );
+        let engine = custom_trajectory::CustomTrajectory::new(&params).expect("valid");
         // t=1, i=3, d=8, n=4 → x=2+1.5=3.5, y=4, z=4
         let pos = engine.position(1.0, 3, &params);
         assert!((pos.x - 3.5).abs() < 1e-9);
@@ -446,7 +446,6 @@ mod tests {
 
     #[test]
     fn test_custom_trajectory_functions_radians() {
-        let engine = custom_trajectory::CustomTrajectory;
         let params = create_params(
             1,
             4.0,
@@ -454,6 +453,7 @@ mod tests {
                 "equations": { "x": "sin(pi/2)", "y": "sqrt(4)", "z": "max(1, 3)" }
             }),
         );
+        let engine = custom_trajectory::CustomTrajectory::new(&params).expect("valid");
         let pos = engine.position(0.0, 0, &params);
         assert!((pos.x - 1.0).abs() < 1e-9); // sin(pi/2) en radians = 1
         assert!((pos.y - 2.0).abs() < 1e-9); // sqrt fonctionne (n'est pas clobber par 't')
@@ -462,10 +462,10 @@ mod tests {
 
     #[test]
     fn test_custom_trajectory_string_equations() {
-        let engine = custom_trajectory::CustomTrajectory;
         // Format legacy frontend : string "x,y,z" — le split ignore les
         // virgules dans les appels de fonction.
         let params = create_params(1, 4.0, json!({ "equations": "min(t,2), 0.3, abs(-1)" }));
+        let engine = custom_trajectory::CustomTrajectory::new(&params).expect("valid");
         let pos = engine.position(5.0, 0, &params);
         assert!((pos.x - 2.0).abs() < 1e-9);
         assert!((pos.y - 0.3).abs() < 1e-9);
@@ -474,23 +474,47 @@ mod tests {
 
     #[test]
     fn test_custom_trajectory_invalid_and_nan() {
-        let engine = custom_trajectory::CustomTrajectory;
+        // NaN/inf à l'évaluation → 0, jamais propagé en OSC
         let params = create_params(
             1,
             4.0,
             json!({
-                "equations": { "x": "sqrt(-1)", "y": "1/0", "z": "t**" }
+                "equations": { "x": "sqrt(-1)", "y": "1/0", "z": "0*t" }
             }),
         );
+        let engine = custom_trajectory::CustomTrajectory::new(&params).expect("valid");
         let pos = engine.position(1.0, 0, &params);
-        // NaN/inf/expressions invalides → 0, jamais propagé en OSC
         assert!(pos.x.is_finite() && pos.y.is_finite() && pos.z.is_finite());
         assert_eq!(pos, Vector3::zeros());
+
+        // Expression malformée → rejet propre à la construction (audit B3)
+        let bad = create_params(1, 4.0, json!({ "equations": { "x": "t**" } }));
+        assert!(custom_trajectory::CustomTrajectory::new(&bad).is_err());
+    }
+
+    #[test]
+    fn test_custom_trajectory_bounds() {
+        // Expression trop longue → Err (audit B3)
+        let long_expr = "t+".repeat(3000) + "1";
+        let params = create_params(1, 4.0, json!({ "equations": { "x": long_expr } }));
+        assert!(custom_trajectory::CustomTrajectory::new(&params).is_err());
+
+        // Parenthèses imbriquées au-delà de MAX_EXPR_DEPTH → Err propre,
+        // pas de stack overflow
+        let deep = "(".repeat(5000) + "t" + &")".repeat(5000);
+        let params = create_params(1, 4.0, json!({ "equations": { "x": deep } }));
+        assert!(custom_trajectory::CustomTrajectory::new(&params).is_err());
+
+        // Fonction inconnue → Err ; variable inconnue → tolérée (0)
+        let params = create_params(1, 4.0, json!({ "equations": { "x": "bogus(t)" } }));
+        assert!(custom_trajectory::CustomTrajectory::new(&params).is_err());
+        let params = create_params(1, 4.0, json!({ "equations": { "x": "bogusvar + 1" } }));
+        let engine = custom_trajectory::CustomTrajectory::new(&params).expect("valid");
+        assert!((engine.position(0.0, 0, &params).x - 1.0).abs() < 1e-9);
     }
 
     #[test]
     fn test_custom_trajectory_polar() {
-        let engine = custom_trajectory::CustomTrajectory;
         let params = create_params(
             1,
             4.0,
@@ -499,6 +523,7 @@ mod tests {
                 "equations": { "azimuth": "0", "elevation": "0", "distance": "2" }
             }),
         );
+        let engine = custom_trajectory::CustomTrajectory::new(&params).expect("valid");
         let pos = engine.position(0.0, 0, &params);
         // azim=0, elev=0, dist=2 → front (+Y) convention
         assert!((pos.y - 2.0).abs() < 1e-9);

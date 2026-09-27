@@ -17,7 +17,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { Workflow, ChevronRight, ChevronDown, PanelRightClose, PanelLeftClose, PanelLeftOpen, PanelRightOpen, Maximize2, Minimize2, Activity } from 'lucide-react';
 import { useLiveShortcuts, usePerfStatsPolling } from './hooks/useLiveShortcuts';
 import { prepareGraphForSave } from './components/nodeParamSchema';
-import { useGraphStore, useMovementPositionsListener, useAudioErrorListener, useCueRecallListener } from './store/useGraphStore';
+import { useGraphStore, useMovementPositionsListener, useAudioErrorListener, useCueRecallListener, useSupervisorListener } from './store/useGraphStore';
 import { useAnimationStore } from './store/useAnimationStore';
 
 function App() {
@@ -55,6 +55,9 @@ function App() {
   useAudioErrorListener();
   // Surface les recalls partiels (moves qui n'ont pas respawné).
   useCueRecallListener();
+  // Events du superviseur backend : worker zombie arrêté, merge thread
+  // redémarré de lui-même (le frontend n'est plus dans la boucle de vie).
+  useSupervisorListener();
   // Raccourcis live (Esc=panic, Enter=GO, Shift+Enter=recall) + polling perf —
   // au niveau App : ils doivent fonctionner aussi en mode Perform (le Toolbar
   // et sa stack se démontent).

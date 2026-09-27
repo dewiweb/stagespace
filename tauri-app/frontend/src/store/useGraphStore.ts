@@ -532,6 +532,32 @@ export const useCueRecallListener = () => {
   }, [refreshMovements]);
 };
 
+// ── Supervisor listener — events du watchdog backend (audits C5/C7) :
+// worker zombie arrêté, merge thread redémarré sans le frontend.
+export const useSupervisorListener = () => {
+  React.useEffect(() => {
+    const unStale = listen<string>('move-stale-killed', (event) => {
+      toast.warning(
+        `Move "${event.payload}" was stopped — its engine worker froze. Check graph complexity.`,
+      );
+    });
+    const unRestart = listen('merge-restarted', () => {
+      toast.warning('Output engine restarted automatically after a crash — playback resumed.');
+    });
+    const unRestartFailed = listen<string>('merge-restart-failed', (event) => {
+      toast.error(
+        `Output engine failed to restart — OSC output is DOWN: ${event.payload}`,
+        0,
+      );
+    });
+    return () => {
+      unStale.then((fn) => fn()).catch(() => {});
+      unRestart.then((fn) => fn()).catch(() => {});
+      unRestartFailed.then((fn) => fn()).catch(() => {});
+    };
+  }, []);
+};
+
 // ── Global positions listener — écoute l'event global-positions du MergeRuntime ──
 // Une seule source de positions (déjà mergées + transformées), au lieu de N events par movement.
 export const useMovementPositionsListener = () => {

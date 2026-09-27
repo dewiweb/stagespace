@@ -344,4 +344,42 @@ mod complex_graph_tests {
             m.runtime.stop();
         }
     }
+
+    // ── Bornes IPC du parser (audit B2) — un graphe géant est rejeté
+    // avant même de construire le Graph Rust.
+    #[test]
+    fn test_parser_rejects_oversized_graphs() {
+        let audio = AudioState::new();
+        let make_node = |i: usize| {
+            serde_json::json!({
+                "id": format!("n{i}"), "type": "custom",
+                "position": {"x": 0, "y": 0},
+                "data": {"label": "Scale", "type": "Scale", "params": {}}
+            })
+        };
+
+        // > MAX_GRAPH_NODES nœuds → Err avant construction
+        let nodes: Vec<serde_json::Value> = (0..=stagespace_engines::validator::MAX_GRAPH_NODES)
+            .map(make_node)
+            .collect();
+        let json = serde_json::json!({ "nodes": nodes, "edges": [] });
+        let err = build_graph_from_json(&json, &audio).unwrap_err();
+        assert!(err.contains("nodes"), "erreur attendue sur nodes: {err}");
+
+        // > MAX_GRAPH_EDGES edges → Err
+        let edges: Vec<serde_json::Value> = (0..=stagespace_engines::validator::MAX_GRAPH_EDGES)
+            .map(|i| {
+                serde_json::json!({
+                    "id": format!("e{i}"), "source": "a", "target": "b",
+                    "sourceHandle": "output", "targetHandle": "input"
+                })
+            })
+            .collect();
+        let json = serde_json::json!({
+            "nodes": [make_node(0), make_node(1)],
+            "edges": edges,
+        });
+        let err = build_graph_from_json(&json, &audio).unwrap_err();
+        assert!(err.contains("edges"), "erreur attendue sur edges: {err}");
+    }
 }

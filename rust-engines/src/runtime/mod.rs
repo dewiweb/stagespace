@@ -122,6 +122,17 @@ impl Runtime {
         *buf = Some(buffer);
     }
 
+    /// Accès au `Arc<PositionBuffer>` pour le test d'identité `ptr_eq` —
+    /// utilisé par le superviseur backend (audit C5) pour vérifier qu'un
+    /// stale-kill vise bien le worker de ce runtime et pas un move plus
+    /// récent ayant réutilisé le même id.
+    pub fn position_buffer_arc(&self) -> Option<Arc<PositionBuffer>> {
+        self.position_buffer
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
     /// Définit l'origin (isobarycentre des tracks ciblées)
     /// La trajectoire est centrée sur ce point : pos_final = (pos * scale * rot) + origin + shift
     pub fn set_origin(&self, origin: nalgebra::Vector3<f64>) {
