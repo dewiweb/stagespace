@@ -213,6 +213,12 @@ export const Toolbar: React.FC = () => {
           <span className="text-[11px] text-gray-400 font-medium">{statusLabel}</span>
         </div>
 
+        {/* Version — synchronisée avec package.json/tauri.conf.json via
+            le define Vite (utile pour les rapports de bug en prod) */}
+        <span className="text-[9px] text-gray-700 font-mono select-none" title="STAGESPACE version">
+          v{__APP_VERSION__}
+        </span>
+
         {/* Performance overlay — visible quand des movements tournent */}
         {activeMovements > 0 && perfStats && (
           <div className="flex items-center gap-2 px-2 py-0.5 bg-gray-900/80 rounded border border-gray-700/50 text-[10px] font-mono">

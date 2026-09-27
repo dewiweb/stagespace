@@ -17,6 +17,7 @@ import 'reactflow/dist/style.css';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import CustomNode from './CustomNode';
+import { QuickAddModal } from './QuickAddModal';
 import { NODE_CATEGORIES, NODE_COLORS, NODE_DESCRIPTIONS, getCategoryColor, getDefaultParams, getValidTargetTypes, pluginDefaultParams, GLOBAL_ONLY_NODES, SUB_ONLY_NODES } from './nodeParamSchema';
 import { isValidConnection, connectionRejectionReason, portRejectionReason, spliceRejectionReason } from '../utils/connectionRules';
 import { presetsUsingType } from '../utils/shapePresets';
@@ -58,6 +59,8 @@ export const NodeEditor: React.FC = () => {
   // Clic-droit node → menu "Open example" (help patches Pd/plugdata :
   // la doc est un graphe runnable, pas du texte).
   const [nodeMenu, setNodeMenu] = useState<{ x: number; y: number; nodeType: NodeType } | null>(null);
+  // Quick-add (Ctrl+K / double-clic canvas) — palette searchable.
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
 
   // Tab: "sub" = graph du slot édité, "global" = graph global (post-processing)
   const [activeTab, setActiveTab] = useState<'sub' | 'global'>('sub');
@@ -343,6 +346,49 @@ export const NodeEditor: React.FC = () => {
     toast.info(`Loaded example '${presetName}' (${nodeType}) — Ctrl+Z to undo`);
   }, [nodes, applyShapePreset]);
 
+  // Quick-add : Ctrl/Cmd+K dans l'éditeur (pas pendant la saisie dans un
+  // champ). Le double-clic sur le pane est géré via onDoubleClick du wrapper.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.key === 'k' && (e.ctrlKey || e.metaKey))) return;
+      const el = e.target as HTMLElement | null;
+      if (el?.closest('input, textarea, select, [contenteditable]')) return;
+      e.preventDefault();
+      setQuickAddOpen(true);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
+  const onPaneDoubleClick = useCallback((e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('.react-flow__node')) return;
+    setQuickAddOpen(true);
+  }, []);
+
+  /// Types proposés par la quick-add — mêmes filtres que la palette.
+  const allowedTypes = useMemo(
+    () =>
+      NODE_CATEGORIES.flatMap((cat) =>
+        activeTab === 'global'
+          ? cat.types.filter((t) => !SUB_ONLY_NODES.has(t))
+          : cat.types.filter((t) => !GLOBAL_ONLY_NODES.has(t)),
+      ),
+    [activeTab],
+  );
+
+  // Edge activity (plugdata) : les edges s'animent quand le graphe qu'on
+  // édite tourne — sub : le slot édité a un move actif ; global : n'importe
+  // quel move actif (le post-process tourne dès qu'un move joue).
+  const editedSlotLive = useMemo(() => {
+    const slot = moveSlots.find((s) => s.id === editingSlotId);
+    return !!slot?.movementId;
+  }, [moveSlots, editingSlotId]);
+  const edgesLive = activeTab === 'sub' ? editedSlotLive : movements.length > 0;
+  const decoratedEdges = useMemo(
+    () => displayEdges.map((e) => ({ ...e, animated: edgesLive })),
+    [displayEdges, edgesLive],
+  );
+
   const toggleCat = (label: string) => {
     setCollapsedCats((prev) => {
       const next = new Set(prev);
@@ -600,7 +646,7 @@ export const NodeEditor: React.FC = () => {
       <div className="flex-1 bg-stagespace-bg relative">
         <ReactFlow
           nodes={decoratedNodes}
-          edges={displayEdges}
+          edges={decoratedEdges}
           onNodesChange={activeTab === 'global' ? handleGlobalNodesChange : onNodesChange}
           onEdgesChange={activeTab === 'global' ? handleGlobalEdgesChange : onEdgesChange}
           onConnect={activeTab === 'global' ? handleGlobalConnect : handleConnect}
@@ -611,6 +657,7 @@ export const NodeEditor: React.FC = () => {
           onNodeClick={() => setNodeMenu(null)}
           onPaneClick={() => setNodeMenu(null)}
           onMoveStart={() => setNodeMenu(null)}
+          onDoubleClick={onPaneDoubleClick}
           isValidConnection={checkValidConnection}
           nodeTypes={nodeTypes}
           fitView
@@ -641,6 +688,16 @@ export const NodeEditor: React.FC = () => {
               )}
             </div>
           </div>
+        )}
+
+        {quickAddOpen && (
+          <QuickAddModal
+            types={allowedTypes}
+            plugins={activeTab === 'sub' ? plugins : []}
+            onAddType={addNodeByType}
+            onAddPlugin={addPluginNode}
+            onClose={() => setQuickAddOpen(false)}
+          />
         )}
 
         {/* Menu clic-droit — exemples runnables utilisant ce type de node.

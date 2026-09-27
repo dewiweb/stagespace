@@ -12,6 +12,7 @@ const SHORTCUTS: { keys: string; action: string }[] = [
   { keys: 'Esc', action: 'PANIC — stop all moves, send origin positions' },
   { keys: 'Ctrl+Z', action: 'Undo graph edit' },
   { keys: 'Ctrl+Y / Ctrl+Shift+Z', action: 'Redo graph edit' },
+  { keys: 'Ctrl+K', action: 'Quick-add node — searchable palette (also: double-click the canvas)' },
   { keys: '?', action: 'This shortcuts panel' },
 ];
 
