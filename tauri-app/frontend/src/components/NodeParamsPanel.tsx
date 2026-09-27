@@ -48,9 +48,13 @@ export const NodeParamsPanel: React.FC<{
     ? pluginNodeSchema(paramNodeParams, plugins)
     : (paramNodeType ? PARAM_SCHEMA[paramNodeType] ?? [] : []);
   // Plugin désinstallé : warning persistant (pas un toast éphémère).
+  // plugin_id vide = non configuré, pas cassé.
   const selectedPid = paramNodeParams.plugin_id;
   const pluginMissing = paramNodeType === 'Plugin' && pluginsLoaded
-    && !(typeof selectedPid === 'string' && plugins.some((m) => m.id === selectedPid));
+    && typeof selectedPid === 'string' && selectedPid.length > 0
+    && !plugins.some((m) => m.id === selectedPid);
+  const pluginUnset = paramNodeType === 'Plugin' && pluginsLoaded
+    && !(typeof selectedPid === 'string' && selectedPid.length > 0);
 
   if (paramNodes.length === 0 || !paramNode) {
     return (
@@ -75,7 +79,8 @@ export const NodeParamsPanel: React.FC<{
           const chipLabel = t === 'Plugin' && typeof pid === 'string'
             ? (manifest?.name ?? pid)
             : t;
-          const chipMissing = t === 'Plugin' && pluginsLoaded && !manifest;
+          const chipMissing = t === 'Plugin' && pluginsLoaded
+            && typeof pid === 'string' && pid.length > 0 && !manifest;
           // Indice d'occurrence si plusieurs nodes du même label affiché
           const sameLabel = paramNodes.filter((o) => {
             const ot = (o.data as GraphNodeData)?.type ?? '?';
@@ -126,7 +131,12 @@ export const NodeParamsPanel: React.FC<{
       </div>
       {pluginMissing && (
         <div className="text-red-400/90 text-[10px] font-mono pt-1">
-          ⚠ Plugin '{typeof selectedPid === 'string' && selectedPid ? selectedPid : '?'}' non chargé — installez le .ssx ou choisissez un autre plugin.
+          ⚠ Plugin '{selectedPid as string}' non chargé — installez le .ssx ou choisissez un autre plugin.
+        </div>
+      )}
+      {pluginUnset && (
+        <div className="text-gray-500 text-[10px] font-mono pt-1">
+          Aucun plugin sélectionné — choisissez plugin_id ci-dessus ou importez un .ssx.
         </div>
       )}
     </div>

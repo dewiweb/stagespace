@@ -33,8 +33,9 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
     ? (plugins.find((m) => m.id === pluginId) ?? null)
     : null;
   // Plugin désinstallé (ou .hfg d'une autre machine) — badge persistant,
-  // plus visible qu'un toast éphémère à chaque édition.
-  const pluginMissing = isPluginNode && pluginsLoaded && !pluginManifest;
+  // plus visible qu'un toast éphémère à chaque édition. Un plugin_id vide
+  // est juste "non configuré", pas cassé.
+  const pluginMissing = isPluginNode && pluginsLoaded && !!pluginId && !pluginManifest;
   const schema = isPluginNode
     ? pluginNodeSchema(data.params, pluginManifest ? [pluginManifest] : [])
     : (PARAM_SCHEMA[data.type] ?? []);
