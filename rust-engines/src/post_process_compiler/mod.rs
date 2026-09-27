@@ -47,6 +47,14 @@ pub struct GraphEffects {
     /// Stratégie de merge déclarée par un node `Merge` (param `strategy`)
     /// — None si absent : la stratégie courante est conservée.
     pub strategy: Option<crate::merge_runtime::MergeStrategy>,
+    /// Un node `Barycenter` est présent : le merge recalcule `origin`
+    /// chaque frame = isobarycentre des `track_positions` (pivot des
+    /// transforms qui suivent). Sans le node, l'origin vient de l'app.
+    pub barycenter: bool,
+    /// Un node `MoveRef` avec `move_id` non vide : la chaîne de
+    /// post-processing ne reçoit que les positions de CE move au lieu du
+    /// merge de tous les moves (audit T2 — le param était décoratif).
+    pub move_ref: Option<String>,
 }
 
 /// Extrait les effets déclarés dans le graph global (nodes Zone/Velocity).
@@ -79,6 +87,21 @@ pub fn extract_graph_effects(graph: &Graph) -> Result<GraphEffects, PostProcessC
                         PostProcessCompileError::InvalidParameter(format!("Merge node: {e}"))
                     })?;
                     effects.strategy = Some(strat);
+                }
+            }
+            NodeType::Barycenter => {
+                effects.barycenter = true;
+            }
+            NodeType::MoveRef => {
+                // `move_id` vide = fallback sur le merge complet (comme
+                // Input) — le param n'est plus décoratif.
+                if let Some(id) = node
+                    .params
+                    .get("move_id")
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.is_empty())
+                {
+                    effects.move_ref = Some(id.to_string());
                 }
             }
             _ => {}

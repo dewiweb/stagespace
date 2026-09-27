@@ -269,20 +269,20 @@ fn test_set_graph_effects_replaces_in_block() {
     .unwrap();
 
     // Premier set : 1 zone + 1 modulation
-    rt.set_graph_effects(vec![zone.clone()], vec![rule]);
+    rt.set_graph_effects(vec![zone.clone()], vec![rule], false, None);
     let (z, m) = rt.graph_effects();
     assert_eq!(z.len(), 1);
     assert_eq!(m.len(), 1);
 
     // Deuxième set : remplace en bloc (update du graphe sans effets → vide)
-    rt.set_graph_effects(Vec::new(), Vec::new());
+    rt.set_graph_effects(Vec::new(), Vec::new(), false, None);
     let (z, m) = rt.graph_effects();
     assert!(z.is_empty());
     assert!(m.is_empty());
 
     // Les effets manuels ne sont pas touchés par set_graph_effects
     rt.add_zone(zone);
-    rt.set_graph_effects(Vec::new(), Vec::new());
+    rt.set_graph_effects(Vec::new(), Vec::new(), false, None);
     assert_eq!(rt.zones().len(), 1);
 }
 
@@ -440,5 +440,120 @@ fn test_stale_kill_publishes_id_and_buffer() {
     assert!(
         rt.drain_stale_kills().is_empty(),
         "la file doit être drainée"
+    );
+}
+
+/// Sink de test qui capture la dernière position reçue par object_id.
+#[derive(Clone)]
+struct CaptureSink(Arc<std::sync::Mutex<std::collections::HashMap<u32, nalgebra::Vector3<f64>>>>);
+impl crate::position_sink::PositionSink for CaptureSink {
+    fn send_state(
+        &mut self,
+        object_id: u32,
+        position: nalgebra::Vector3<f64>,
+        _channels: Option<&crate::osc_sender::SpatialChannels>,
+    ) -> crate::position_sink::SendReport {
+        self.0
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(object_id, position);
+        crate::position_sink::SendReport {
+            sent: 1,
+            errors: 0,
+            refused: 0,
+        }
+    }
+    fn describe(&self) -> String {
+        "capture://test".to_string()
+    }
+}
+
+/// Écrit en continu dans un buffer — imite un worker vivant (sinon le
+/// stale-kill retire le move en 30 frames).
+fn spawn_writer(
+    buffer: &Arc<PositionBuffer>,
+    idx: usize,
+    pos: nalgebra::Vector3<f64>,
+    frames: usize,
+) -> std::thread::JoinHandle<()> {
+    let b = buffer.clone();
+    std::thread::spawn(move || {
+        for _ in 0..frames {
+            b.write(vec![(idx, pos)]);
+            std::thread::sleep(std::time::Duration::from_millis(4));
+        }
+    })
+}
+
+#[test]
+fn test_moveref_selects_single_move_positions() {
+    // Audit T2 : MoveRef.move_id doit filtrer la source du post-process.
+    // Deux moves actifs, move_ref = "m2" → seul le track de m2 émet.
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    let captured = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+    rt.set_sink(Box::new(CaptureSink(captured.clone())));
+    rt.set_osc_ids(vec![1, 2]);
+    rt.set_graph_effects(Vec::new(), Vec::new(), false, Some("m2".to_string()));
+
+    let b1 = Arc::new(PositionBuffer::new());
+    let b2 = Arc::new(PositionBuffer::new());
+    rt.register_move("m1".to_string(), b1.clone(), vec![1], vec![0], false);
+    rt.register_move("m2".to_string(), b2.clone(), vec![2], vec![1], false);
+    let w1 = spawn_writer(&b1, 0, nalgebra::Vector3::new(1.0, 0.0, 0.0), 150);
+    let w2 = spawn_writer(&b2, 0, nalgebra::Vector3::new(9.0, 9.0, 9.0), 150);
+    rt.start().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    rt.stop();
+    w1.join().unwrap();
+    w2.join().unwrap();
+
+    let map = captured.lock().unwrap_or_else(|e| e.into_inner());
+    assert!(
+        !map.contains_key(&1),
+        "le track de m1 ne doit pas émettre quand MoveRef=m2: {map:?}"
+    );
+    assert_eq!(
+        map.get(&2).copied(),
+        Some(nalgebra::Vector3::new(9.0, 9.0, 9.0)),
+        "seul le track de m2 doit émettre sa position: {map:?}"
+    );
+}
+
+#[test]
+fn test_barycenter_recomputes_pivot() {
+    // Audit T2 : le node Barycenter recalcule l'origin = isobarycentre
+    // des track_positions chaque frame. Avec scale=2 macro : pos (4,0,0)
+    // pivotée autour de (3,0,0) → (5,0,0) ; autour de l'origin fixe
+    // (0,0,0) → (8,0,0) — le test distingue les deux.
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    let captured = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+    rt.set_sink(Box::new(CaptureSink(captured.clone())));
+    rt.set_osc_ids(vec![1]);
+    rt.set_track_positions({
+        let mut m = std::collections::HashMap::new();
+        m.insert(1u32, [2.0, 0.0, 0.0]);
+        m.insert(2u32, [4.0, 0.0, 0.0]);
+        m
+    });
+    rt.macros().set_scale(2.0);
+    // Barycenter actif via les effets du graph global
+    rt.set_graph_effects(Vec::new(), Vec::new(), true, None);
+
+    let b = Arc::new(PositionBuffer::new());
+    rt.register_move("m1".to_string(), b.clone(), vec![1], vec![0], false);
+    let w = spawn_writer(&b, 0, nalgebra::Vector3::new(4.0, 0.0, 0.0), 150);
+    rt.start().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    rt.stop();
+    w.join().unwrap();
+
+    let map = captured.lock().unwrap_or_else(|e| e.into_inner());
+    let pos = map.get(&1).copied().expect("aucune position capturée");
+    // pivot = isobarycentre (3,0,0) : 3 + (4-3)*2 = 5
+    assert!(
+        (pos.x - 5.0).abs() < 1e-6,
+        "barycenter doit pivoter autour de (3,0,0): {pos:?}"
     );
 }

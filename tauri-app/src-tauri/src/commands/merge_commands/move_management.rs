@@ -77,6 +77,9 @@ pub struct MoveSpec {
 }
 
 /// Macros spatiales initiales d'un worker (système Animation).
+/// Scope = `MacroScope::PerMove` : appliquées par le worker en espace
+/// local ; les macros live `set_macro` (`MacroScope::Global`) restent
+/// au merge — ne jamais pousser la même valeur aux deux (transform ×2).
 pub struct SpatialMacroInit {
     pub scale: f64,
     pub shift: (f64, f64, f64),

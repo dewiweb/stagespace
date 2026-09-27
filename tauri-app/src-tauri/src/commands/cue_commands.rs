@@ -223,7 +223,12 @@ pub(crate) fn recall_cue_inner(cue: Cue, sh: crate::commands::state::Shared) -> 
             .map_err(|e| format!("Failed to compile global graph: {e:?}"))?;
 
         merge_rt.swap_post_process_fn(post_process_fn);
-        merge_rt.set_graph_effects(effects.zones, effects.modulations);
+        merge_rt.set_graph_effects(
+            effects.zones,
+            effects.modulations,
+            effects.barycenter,
+            effects.move_ref,
+        );
         // Idem update_global_graph : un node Merge peut fixer la stratégie.
         if let Some(strategy) = effects.strategy {
             merge_rt.set_merge_strategy(strategy);

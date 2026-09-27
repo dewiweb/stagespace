@@ -238,17 +238,13 @@ impl TrajectorySampler {
         let radius_scale = msnap.radius_scale;
         let height_offset = msnap.height_offset;
 
-        // Précalculer la matrice de rotation si rotation non-nulle
-        let has_rotation = yaw != 0.0 || pitch != 0.0 || roll != 0.0;
-        let rot_matrix = if has_rotation {
-            use nalgebra::Rotation3;
-            let ry = Rotation3::from_axis_angle(&nalgebra::Vector3::y_axis(), yaw.to_radians());
-            let rx = Rotation3::from_axis_angle(&nalgebra::Vector3::x_axis(), pitch.to_radians());
-            let rz = Rotation3::from_axis_angle(&nalgebra::Vector3::z_axis(), roll.to_radians());
-            Some(rz * rx * ry)
-        } else {
-            None
-        };
+        // Matrice de rotation — ordre canonique `euler_rotation` (X→Y→Z,
+        // unifié avec le modifier sub-graph et le post-process global).
+        let rot_matrix = crate::spatial_transform::euler_rotation(
+            pitch.to_radians(),
+            yaw.to_radians(),
+            roll.to_radians(),
+        );
 
         let mut samples = Vec::with_capacity(n_samples);
         // Origin du move : appliquée comme dans le playback loop (mode worker)
@@ -533,26 +529,13 @@ impl Runtime {
                 // Origin du move (ancre monde de la trajectoire) — lue à
                 // chaque frame pour refléter un set_origin en cours de jeu.
                 let move_origin = *origin_arc.lock().unwrap_or_else(|e| e.into_inner());
-                // Précalculer la matrice de rotation si rotation non-nulle
-                let has_rotation = eff_yaw != 0.0 || eff_pitch != 0.0 || eff_roll != 0.0;
-                let rot_matrix = if has_rotation {
-                    use nalgebra::Rotation3;
-                    let ry = Rotation3::from_axis_angle(
-                        &nalgebra::Vector3::y_axis(),
-                        eff_yaw.to_radians(),
-                    );
-                    let rx = Rotation3::from_axis_angle(
-                        &nalgebra::Vector3::x_axis(),
-                        eff_pitch.to_radians(),
-                    );
-                    let rz = Rotation3::from_axis_angle(
-                        &nalgebra::Vector3::z_axis(),
-                        eff_roll.to_radians(),
-                    );
-                    Some(rz * rx * ry)
-                } else {
-                    None
-                };
+                // Matrice de rotation — ordre canonique `euler_rotation`
+                // (X→Y→Z), identique au modifier sub-graph et au merge.
+                let rot_matrix = crate::spatial_transform::euler_rotation(
+                    eff_pitch.to_radians(),
+                    eff_yaw.to_radians(),
+                    eff_roll.to_radians(),
+                );
                 let positions: Vec<(usize, nalgebra::Vector3<f64>)> = {
                     let fn_ref = position_fn_arc.lock().unwrap_or_else(|e| e.into_inner());
                     let ovr = overrides.lock();
@@ -801,10 +784,12 @@ fn move_transform(
     } else {
         pos
     };
-    // scale → rotation
-    let pos = pos * scale;
+    // scale → rotation — primitives canoniques `spatial_transform` en
+    // espace local (pivot = centre de la trajectoire = origine du repère)
+    let zero = nalgebra::Vector3::zeros();
+    let pos = crate::spatial_transform::pivot_scale(pos, zero, nalgebra::Vector3::repeat(scale));
     let pos = if let Some(rot) = rot_matrix {
-        rot * pos
+        crate::spatial_transform::pivot_rotate(pos, zero, rot)
     } else {
         pos
     };

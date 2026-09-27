@@ -27,8 +27,11 @@ pub struct SetMacroRequest {
     pub height_offset: Option<f64>,
 }
 
-/// Macros globales du MergeRuntime — appliquées au merge de tous les moves
-/// (le réglage survit aux stop/start individuels).
+/// Macros globales du MergeRuntime — `MacroScope::Global` : appliquées
+/// au merge de tous les moves en espace monde (le réglage survit aux
+/// stop/start individuels). Le scope per-move (`SpatialMacroInit`) est
+/// réservé au seed des workers au lancement — les deux scopes ne doivent
+/// jamais porter la même valeur (transform ×2).
 #[tauri::command]
 pub async fn set_macro(
     request: SetMacroRequest,

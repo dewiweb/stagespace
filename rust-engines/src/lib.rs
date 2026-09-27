@@ -25,6 +25,7 @@ pub mod post_process_compiler;
 pub mod presets;
 pub mod rng;
 pub mod runtime;
+pub mod spatial_transform;
 pub mod validator;
 pub mod zones;
 

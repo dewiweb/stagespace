@@ -138,7 +138,12 @@ pub async fn update_global_graph(
 
         let merge_rt = lock_or_recover(&sh.merge_runtime);
         merge_rt.swap_post_process_fn(post_process_fn);
-        merge_rt.set_graph_effects(effects.zones, effects.modulations);
+        merge_rt.set_graph_effects(
+            effects.zones,
+            effects.modulations,
+            effects.barycenter,
+            effects.move_ref,
+        );
         // Le node Merge peut déclarer la stratégie de résolution de conflit
         // (param `strategy`) — appliquée à chaque push du graphe global.
         if let Some(strategy) = effects.strategy {
