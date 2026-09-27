@@ -1,4 +1,5 @@
 import React from 'react';
+import { Pin } from 'lucide-react';
 import { Slider } from './ui/Slider';
 import { PARAM_SCHEMA, ENGINE_TYPES, NON_PARAM_NODES, pluginNodeSchema, pluginParamsOnSwitch, type NodeParamValue, type GraphNodeData, type ParamDef } from './nodeParamSchema';
 import { useGraphStore } from '../store/useGraphStore';
@@ -12,14 +13,21 @@ import type { Node } from 'reactflow';
  *
  * `resetKey` : change de valeur → la sélection de chip retombe sur le node
  * engine par défaut (ex. changement de slot édité).
+ *
+ * `performMode` (drawer Params de Perform) : si le node a des params épinglés
+ * (`data.pinned`), seuls ceux-là sont affichés — pattern "Present" des
+ * patchers (plugdata/Pd GOP) : la surface live est un sous-ensemble choisi.
+ * Sans pin → tous les params restent accessibles (édition live à la demande).
+ * En mode édition, chaque champ a un toggle pin 📌 qui alimente `pinned`.
  */
 export const NodeParamsPanel: React.FC<{
   nodes: Node[];
   live: boolean;
   resetKey?: string | null;
+  performMode?: boolean;
   onParam: (nodeId: string, key: string, value: NodeParamValue, params: Record<string, NodeParamValue>) => void;
   emptyHint?: React.ReactNode;
-}> = ({ nodes, live, resetKey, onParam, emptyHint }) => {
+}> = ({ nodes, live, resetKey, performMode, onParam, emptyHint }) => {
   // Nodes paramétrables du graphe — chacun devient un chip.
   const paramNodes = React.useMemo(
     () =>
@@ -47,6 +55,20 @@ export const NodeParamsPanel: React.FC<{
   const paramSchema = paramNodeType === 'Plugin'
     ? pluginNodeSchema(paramNodeParams, plugins)
     : (paramNodeType ? PARAM_SCHEMA[paramNodeType] ?? [] : []);
+  // Pin-to-Perform : `pinned` vit dans node.data (UI-only, persisté .hfg).
+  // Le toggle passe par updateNodeData — merge profond sur params inchangé
+  // car `pinned` est un champ data à part entière (pas une clé de params).
+  const updateNodeData = useGraphStore((s) => s.updateNodeData);
+  const pinned = ((paramNode?.data as GraphNodeData | undefined)?.pinned ?? []) as string[];
+  const pinnedSet = React.useMemo(() => new Set(pinned), [pinned]);
+  const visibleSchema = performMode && pinned.length > 0
+    ? paramSchema.filter((d) => pinnedSet.has(d.key))
+    : paramSchema;
+  const togglePin = (key: string) => {
+    if (!paramNode) return;
+    const next = pinned.includes(key) ? pinned.filter((k) => k !== key) : [...pinned, key];
+    updateNodeData(paramNode.id, { pinned: next.length > 0 ? next : undefined });
+  };
   // Plugin désinstallé : warning persistant (pas un toast éphémère).
   // plugin_id vide = non configuré, pas cassé.
   const selectedPid = paramNodeParams.plugin_id;
@@ -91,44 +113,77 @@ export const NodeParamsPanel: React.FC<{
           });
           const occ = sameLabel.length > 1 ? sameLabel.indexOf(n) + 1 : 0;
           const active = paramNode.id === n.id;
+          const nodeHasPins = (((n.data as GraphNodeData)?.pinned) ?? []).length > 0;
           return (
             <button
               key={n.id}
               onClick={() => setParamNodeId(n.id)}
-              className={`px-2 py-1 rounded text-[10px] font-medium transition-colors ${
+              className={`px-2 py-1 rounded text-[10px] font-medium transition-colors inline-flex items-center gap-1 ${
                 active
                   ? 'bg-cyan-700 text-white'
                   : 'bg-gray-800 text-gray-400 hover:text-white border border-gray-700'
               }`}
               title={`Node ${i + 1} — params`}
             >
+              {nodeHasPins && <Pin size={8} className="text-cyan-400 flex-shrink-0" />}
               {chipLabel}{occ > 0 ? ` ${occ}` : ''}{chipMissing ? ' ⚠' : ''}
             </button>
           );
         })}
       </div>
+      {performMode && pinned.length > 0 && (
+        <div className="text-cyan-500/80 text-[9px] font-mono">
+          {visibleSchema.length} pinned parameter{visibleSchema.length > 1 ? 's' : ''} — pin/unpin in Edit mode
+        </div>
+      )}
       <div
         className="grid gap-x-4 gap-y-2.5"
         style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(11rem, 1fr))' }}
       >
-        {paramSchema.map((d) => (
-          <NodeParamField
-            key={d.key}
-            def={d}
-            value={paramNodeParams[d.key]}
-            live={live}
-            onChange={(v) => {
-              // Switch de plugin : backfill des defaults du nouveau
-              // manifeste dans les params propagés au store.
-              let base = paramNodeParams;
-              if (paramNodeType === 'Plugin' && d.key === 'plugin_id' && typeof v === 'string') {
-                base = pluginParamsOnSwitch(plugins.find((m) => m.id === v), base);
-              }
-              onParam(paramNode.id, d.key, v, base);
-            }}
-          />
-        ))}
+        {visibleSchema.map((d) => {
+          const field = (
+            <NodeParamField
+              def={d}
+              value={paramNodeParams[d.key]}
+              live={live}
+              onChange={(v) => {
+                // Switch de plugin : backfill des defaults du nouveau
+                // manifeste dans les params propagés au store.
+                let base = paramNodeParams;
+                if (paramNodeType === 'Plugin' && d.key === 'plugin_id' && typeof v === 'string') {
+                  base = pluginParamsOnSwitch(plugins.find((m) => m.id === v), base);
+                }
+                onParam(paramNode.id, d.key, v, base);
+              }}
+            />
+          );
+          // Mode Perform : pas de toggle pin — la surface est curatée ailleurs.
+          if (performMode) return <React.Fragment key={d.key}>{field}</React.Fragment>;
+          return (
+            <div key={d.key} className="flex items-start gap-1">
+              <button
+                onClick={() => togglePin(d.key)}
+                className={`mt-1.5 flex-shrink-0 transition-colors ${
+                  pinnedSet.has(d.key)
+                    ? 'text-cyan-400 hover:text-cyan-300'
+                    : 'text-gray-700 hover:text-gray-500'
+                }`}
+                title={pinnedSet.has(d.key)
+                  ? 'Unpin — remove from Perform surface'
+                  : 'Pin to Perform — show in the Perform params drawer'}
+              >
+                <Pin size={10} />
+              </button>
+              <div className="flex-1 min-w-0">{field}</div>
+            </div>
+          );
+        })}
       </div>
+      {performMode && pinned.length > 0 && visibleSchema.length === 0 && (
+        <div className="text-gray-600 text-[10px]">
+          Pinned parameters no longer exist on this node — unpin them in Edit mode.
+        </div>
+      )}
       {pluginMissing && (
         <div className="text-red-400/90 text-[10px] font-mono pt-1">
           ⚠ Plugin '{selectedPid as string}' not loaded — install the .ssx or pick another plugin.

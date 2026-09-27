@@ -59,6 +59,9 @@ interface GraphState
   onConnect: (connection: Connection) => void;
   addNode: (node: Node) => void;
   removeNode: (id: string) => void;
+  /// Autopatch : remplace `oldEdgeId` par `edgeIn` (source→node) + `edgeOut`
+  /// (node→target) et ajoute le node — atomique, une seule entrée d'historique.
+  insertNodeOnEdge: (node: Node, oldEdgeId: string, edgeIn: Edge, edgeOut: Edge) => void;
   updateNodeData: (id: string, data: Partial<Record<string, any>>) => void;
   setNodes: (nodes: Node[]) => void;
   setEdges: (edges: Edge[]) => void;
@@ -218,6 +221,18 @@ export const useGraphStore = create<GraphState>()((...a) => {
   addNode: (node) => {
     get().pushHistory();
     set((s) => ({ nodes: [...s.nodes, node] }));
+    autoSaveToEditingSlot();
+  },
+  insertNodeOnEdge: (node, oldEdgeId, edgeIn, edgeOut) => {
+    get().pushHistory();
+    set((s) => ({
+      nodes: [...s.nodes, node],
+      edges: [
+        ...s.edges.filter((e) => e.id !== oldEdgeId),
+        edgeIn,
+        edgeOut,
+      ],
+    }));
     autoSaveToEditingSlot();
   },
   removeNode: (id) => {

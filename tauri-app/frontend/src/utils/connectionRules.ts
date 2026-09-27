@@ -239,6 +239,36 @@ export function portRejectionReason(from: NodeType, targetPort: string | null | 
 }
 
 /**
+ * Autopatch (inspiration plugdata) : insertion d'un node sur une edge existante
+ * — `A → B` + palette click sur `M` devient `A → M → B`. La règle compose les
+ * tables ci-dessus : M doit accepter une entrée trajectoire sur 'input', être
+ * alimentable par A, et pouvoir alimenter B. Retourne null si le splice est
+ * valide, sinon une explication (EN) pour le toast.
+ */
+export function spliceRejectionReason(
+  from: NodeType,
+  to: NodeType,
+  inserted: NodeType,
+  insertedPluginKind: PluginKind | undefined,
+  targetHandle: string | null | undefined,
+  toPluginKind?: PluginKind,
+): string | null {
+  if (targetHandle === 'duration' || targetHandle === 'spline')
+    return `a ${targetHandle} connection can't take an inserted node.`;
+  // Composites (2 entrées) : 'input' est un alias legacy d'input_a — insérer
+  // sur une seule edge laisserait input_b pendante → graphe invalide.
+  if (isBinaryComposite(inserted) || insertedPluginKind === 'composite')
+    return `${inserted} needs two inputs — connect its A/B ports manually.`;
+  if (!getInputPorts(inserted, insertedPluginKind).includes('input'))
+    return `${inserted} can't be inserted mid-chain — it has no trajectory input port.`;
+  if (!isValidConnection(from, inserted, insertedPluginKind))
+    return `${from} can't feed ${inserted}.`;
+  if (!isValidConnection(inserted, to, toPluginKind))
+    return `${inserted} can't feed ${to}.`;
+  return null;
+}
+
+/**
  * Retourne les ports d'entrée valides pour un type de node.
  * Mirror de validator.rs::has_input_port
  */

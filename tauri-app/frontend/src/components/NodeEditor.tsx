@@ -18,10 +18,12 @@ import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import CustomNode from './CustomNode';
 import { NODE_CATEGORIES, NODE_COLORS, NODE_DESCRIPTIONS, getCategoryColor, getDefaultParams, getValidTargetTypes, pluginDefaultParams, GLOBAL_ONLY_NODES, SUB_ONLY_NODES } from './nodeParamSchema';
-import { isValidConnection, connectionRejectionReason, portRejectionReason } from '../utils/connectionRules';
+import { isValidConnection, connectionRejectionReason, portRejectionReason, spliceRejectionReason } from '../utils/connectionRules';
+import { presetsUsingType } from '../utils/shapePresets';
 import { toast } from '../utils/toast-helpers';
 import { open } from '@tauri-apps/plugin-dialog';
 import type { PluginManifest } from '../types/generated/PluginManifest';
+import type { PluginKind } from '../types/generated/PluginKind';
 
 const nodeTypes: NodeTypes = { custom: CustomNode };
 
@@ -48,9 +50,14 @@ export const NodeEditor: React.FC = () => {
   const onEdgesChange = useGraphStore((s) => s.onEdgesChange);
   const storeConnect = useGraphStore((s) => s.onConnect);
   const addNode = useGraphStore((s) => s.addNode);
+  const insertNodeOnEdge = useGraphStore((s) => s.insertNodeOnEdge);
+  const applyShapePreset = useGraphStore((s) => s.applyShapePreset);
   const [hoveredPaletteNode, setHoveredPaletteNode] = useState<string | null>(null);
   const [connectingFrom, setConnectingFrom] = useState<NodeType | null>(null);
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set());
+  // Clic-droit node → menu "Open example" (help patches Pd/plugdata :
+  // la doc est un graphe runnable, pas du texte).
+  const [nodeMenu, setNodeMenu] = useState<{ x: number; y: number; nodeType: NodeType } | null>(null);
 
   // Tab: "sub" = graph du slot édité, "global" = graph global (post-processing)
   const [activeTab, setActiveTab] = useState<'sub' | 'global'>('sub');
@@ -153,26 +160,89 @@ export const NodeEditor: React.FC = () => {
     return () => clearTimeout(timer);
   }, [globalNodes, globalEdges, activeTab, pushGlobalGraph]);
 
+  // Autopatch (plugdata) : une edge sélectionnée + clic palette = insertion
+  // du node dans la chaîne (`A → B` devient `A → M → B`). Une seule edge
+  // sélectionnée — plusieurs = sélection ambiguë, ajout simple.
+  const selectedEdges = displayEdges.filter((e) => e.selected);
+  const selectedEdge = selectedEdges.length === 1 ? selectedEdges[0] : null;
+
+  /// Tente d'insérer `newNode` sur l'edge sélectionnée. Retourne true si le
+  /// splice a eu lieu ; false → l'appelant pose le node normalement.
+  const trySpliceOnEdge = useCallback(
+    (newNode: Node, insertedType: NodeType, insertedKind?: PluginKind): boolean => {
+      if (!selectedEdge) return false;
+      const sourceNode = displayNodes.find((n) => n.id === selectedEdge.source);
+      const targetNode = displayNodes.find((n) => n.id === selectedEdge.target);
+      const fromType = (sourceNode?.data as any)?.type as NodeType | undefined;
+      const toType = (targetNode?.data as any)?.type as NodeType | undefined;
+      if (!fromType || !toType) return false;
+      const toKind = toType === 'Plugin'
+        ? plugins.find((m) => m.id === (targetNode?.data as any)?.params?.plugin_id)?.kind
+        : undefined;
+      const reason = spliceRejectionReason(
+        fromType, toType, insertedType, insertedKind, selectedEdge.targetHandle, toKind,
+      );
+      if (reason) {
+        toast.warning(`Can't insert on the selected edge — ${reason}`);
+        return false;
+      }
+      // Position : milieu du segment source→target.
+      newNode.position = {
+        x: ((sourceNode?.position.x ?? 200) + (targetNode?.position.x ?? 400)) / 2,
+        y: ((sourceNode?.position.y ?? 100) + (targetNode?.position.y ?? 300)) / 2,
+      };
+      const arrow = { type: MarkerType.ArrowClosed };
+      const edgeIn: Edge = {
+        id: `e-${selectedEdge.source}-${newNode.id}-in`,
+        source: selectedEdge.source,
+        sourceHandle: selectedEdge.sourceHandle ?? 'output',
+        target: newNode.id,
+        targetHandle: 'input',
+        markerEnd: arrow,
+      };
+      const edgeOut: Edge = {
+        id: `e-${newNode.id}-${selectedEdge.target}-out`,
+        source: newNode.id,
+        sourceHandle: 'output',
+        target: selectedEdge.target,
+        targetHandle: selectedEdge.targetHandle ?? 'input',
+        markerEnd: arrow,
+      };
+      if (activeTab === 'global') {
+        setGlobalNodes([...globalNodes, newNode]);
+        setGlobalEdges([...globalEdges.filter((e) => e.id !== selectedEdge.id), edgeIn, edgeOut]);
+      } else {
+        insertNodeOnEdge(newNode, selectedEdge.id, edgeIn, edgeOut);
+      }
+      toast.success(`Inserted ${(newNode.data as any)?.label ?? insertedType} into the chain`);
+      return true;
+    },
+    [selectedEdge, displayNodes, plugins, activeTab, globalNodes, globalEdges, setGlobalNodes, setGlobalEdges, insertNodeOnEdge],
+  );
+
   const addNodeByType = useCallback(
     (type: NodeType) => {
       const offset = displayNodes.length * 30;
       const newNode = createNode(type, { x: 250 + offset, y: 150 + offset });
+      if (trySpliceOnEdge(newNode, type)) return;
       if (activeTab === 'global') {
         setGlobalNodes([...globalNodes, newNode]);
       } else {
         addNode(newNode);
       }
     },
-    [addNode, displayNodes.length, activeTab, globalNodes, setGlobalNodes],
+    [addNode, displayNodes.length, activeTab, globalNodes, setGlobalNodes, trySpliceOnEdge],
   );
 
   // Plugin = sub-graph only (SUB_ONLY_NODES) → toujours dans le store sub.
   const addPluginNode = useCallback(
     (manifest: PluginManifest) => {
       const offset = nodes.length * 30;
-      addNode(createPluginNode(manifest, { x: 250 + offset, y: 150 + offset }));
+      const newNode = createPluginNode(manifest, { x: 250 + offset, y: 150 + offset });
+      if (trySpliceOnEdge(newNode, 'Plugin', manifest.kind)) return;
+      addNode(newNode);
     },
-    [addNode, nodes.length],
+    [addNode, nodes.length, trySpliceOnEdge],
   );
 
   // Validation visuelle des connexions — empêche de connecter des nodes incompatibles
@@ -255,6 +325,24 @@ export const NodeEditor: React.FC = () => {
     setActiveTab('sub');
   }, []);
 
+  // Runnable help — les presets sont des graphes complets chargeables ;
+  // on charge celui qui utilise le type du node cliqué. Undoable (pushHistory
+  // dans applyShapePreset) — le toast le rappelle.
+  const onNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
+    event.preventDefault();
+    const nodeType = (node.data as any)?.type as NodeType | undefined;
+    if (!nodeType) return;
+    setNodeMenu({ x: event.clientX, y: event.clientY, nodeType });
+  }, []);
+
+  const openExampleFor = useCallback((nodeType: NodeType, presetId: string, presetName: string) => {
+    setNodeMenu(null);
+    const objectsNode = nodes.find((n) => (n.data as any)?.type === 'Objects');
+    const nObjects = Number((objectsNode?.data as any)?.params?.n_objects) || 8;
+    applyShapePreset(presetId, nObjects);
+    toast.info(`Loaded example '${presetName}' (${nodeType}) — Ctrl+Z to undo`);
+  }, [nodes, applyShapePreset]);
+
   const toggleCat = (label: string) => {
     setCollapsedCats((prev) => {
       const next = new Set(prev);
@@ -315,7 +403,11 @@ export const NodeEditor: React.FC = () => {
       <div className="w-60 bg-stagespace-panel border-r border-stagespace-border overflow-y-auto flex-shrink-0">
         <div className="px-3 py-3 border-b border-stagespace-border sticky top-0 bg-stagespace-panel z-10">
           <h3 className="text-white font-semibold text-sm">Nodes</h3>
-          <p className="text-gray-500 text-[11px] mt-0.5">Click to add · Hover for info</p>
+          <p className="text-gray-500 text-[11px] mt-0.5">
+            {selectedEdge
+              ? 'Edge selected — click a modifier to insert it into the chain'
+              : 'Click to add · Hover for info'}
+          </p>
         </div>
 
         <div className="p-2 space-y-2">
@@ -515,6 +607,10 @@ export const NodeEditor: React.FC = () => {
           onConnectStart={onConnectStart}
           onConnectEnd={onConnectEnd}
           onNodeDoubleClick={onNodeDoubleClick}
+          onNodeContextMenu={onNodeContextMenu}
+          onNodeClick={() => setNodeMenu(null)}
+          onPaneClick={() => setNodeMenu(null)}
+          onMoveStart={() => setNodeMenu(null)}
           isValidConnection={checkValidConnection}
           nodeTypes={nodeTypes}
           fitView
@@ -544,6 +640,44 @@ export const NodeEditor: React.FC = () => {
                 <div className="text-gray-700 text-[10px] mt-2">Start with: Objects → Duration → Circular → Output</div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Menu clic-droit — exemples runnables utilisant ce type de node.
+            Sub-graph only : les presets construisent des graphes de slot. */}
+        {nodeMenu && (
+          <div
+            className="fixed z-[100] w-56 bg-gray-900 border border-gray-700 rounded-lg shadow-xl overflow-hidden"
+            style={{ left: nodeMenu.x, top: nodeMenu.y }}
+          >
+            <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-800">
+              {nodeMenu.nodeType} — runnable examples
+            </div>
+            {activeTab !== 'sub' ? (
+              <div className="px-3 py-2 text-[10px] text-gray-500">
+                Examples load into the sub-graph — switch to the Sub-graph tab first.
+              </div>
+            ) : presetsUsingType(nodeMenu.nodeType).length === 0 ? (
+              <div className="px-3 py-2 text-[10px] text-gray-500">
+                No runnable example uses {nodeMenu.nodeType} yet.
+              </div>
+            ) : (
+              <div className="max-h-48 overflow-y-auto">
+                {presetsUsingType(nodeMenu.nodeType).slice(0, 6).map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => openExampleFor(nodeMenu.nodeType, p.id, p.name)}
+                    className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-cyan-900/40 hover:text-white transition-colors"
+                    title={p.description}
+                  >
+                    {p.icon} {p.name}
+                  </button>
+                ))}
+                <div className="px-3 py-1.5 text-[9px] text-gray-600 border-t border-gray-800">
+                  Loads into the edited slot — Ctrl+Z to undo.
+                </div>
+              </div>
+            )}
           </div>
         )}
 

@@ -494,6 +494,7 @@ const LiveDrawer: React.FC = () => {
             nodes={nodes}
             live={!!slot.movementId}
             resetKey={editingSlotId}
+            performMode
             onParam={setNodeParam}
             emptyHint="No parametric node in this graph — see Playback / Tracks."
           />

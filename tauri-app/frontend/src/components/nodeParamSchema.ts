@@ -13,6 +13,11 @@ export interface GraphNodeData {
   label?: string;
   type?: NodeType;
   params?: Record<string, NodeParamValue>;
+  /// Param keys pinned for Perform mode (patcher's "Present"/GOP pattern :
+  /// la surface live = sous-ensemble choisi du schema, pas le schema entier).
+  /// UI-only — le parser backend n'extrait que type/params, `pinned` ne
+  /// quitte jamais le frontend (persisté via le .hfg).
+  pinned?: string[];
 }
 
 export interface ParamDef {
