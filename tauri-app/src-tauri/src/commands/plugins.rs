@@ -86,10 +86,7 @@ const MAX_IMPORT_BYTES: u64 = 64 * 1024 * 1024;
 /// traversal), et **src == dest** (l'utilisateur a choisi un `.ssx` déjà
 /// dans le dossier plugins) → la copie est sautée, sinon `fs::copy`
 /// tronquerait le fichier AVANT de le lire.
-fn install_bundle(
-    src: &std::path::Path,
-    dir: &std::path::Path,
-) -> Result<(), IpcError> {
+fn install_bundle(src: &std::path::Path, dir: &std::path::Path) -> Result<(), IpcError> {
     let file_name = src
         .file_name()
         .ok_or_else(|| IpcError::validation("Invalid plugin path".to_string()))?;
@@ -108,8 +105,7 @@ fn install_bundle(
     let dest = dir.join(file_name);
     // canonicalize résout les ./.. et symlinks pour la comparaison. Si dest
     // n'existe pas encore (cas normal) → chemins différents → copie.
-    let same_file =
-        std::fs::canonicalize(src).ok() == std::fs::canonicalize(&dest).ok();
+    let same_file = std::fs::canonicalize(src).ok() == std::fs::canonicalize(&dest).ok();
     if !same_file {
         std::fs::copy(src, &dest)
             .map_err(|e| IpcError::io(format!("Failed to copy plugin: {e}")))?;
@@ -221,7 +217,10 @@ mod tests {
         install_bundle(&file, &dir).expect("install");
 
         let content = std::fs::read(&file).expect("read");
-        assert_eq!(content, b"zip-content", "same-file import must not truncate");
+        assert_eq!(
+            content, b"zip-content",
+            "same-file import must not truncate"
+        );
 
         std::fs::remove_dir_all(&dir).ok();
     }
