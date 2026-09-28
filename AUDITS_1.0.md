@@ -370,3 +370,201 @@ Périmètre : `tauri-app/frontend/src`. Références : DAW/consoles live (QLab, 
 4. Perform typo : NEXT `text-2xl`, slot names `text-base`, LIVE `text-lg`, cue rows `py-3` — cible lisible 2 m.
 5. PANIC identité unique (Lucide `OctagonX`+label, `ring-2`), jamais inerte, flash overlay rouge bref.
 6. Tout EN, strings extraites.
+
+---
+
+# §4 — Audit architecture UI (agencement, layouts, fenêtres)
+
+> Audit structurel — distinct de §3 qui listait les défauts ponctuels.
+> Ici : la **pertinence des agencements** face aux workflows réels
+> (préparation vs exploitation live).
+
+## Cartographie actuelle
+
+### Mode Edit (préparation)
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│ HEADER (48px)  logo · status dot · [Perform] toggle · [Expert]      │
+├──────────────────────────────────────────────────────────────────────┤
+│ TOOLBAR (36px)  .hol · OSC chip → Settings · undo/redo · save/load  │
+│                 · help · PANIC · status · version · perf band        │
+├────────┬──────────────────────────────────────────────┬──────────────┤
+│ LEFT   │ CENTER                                       │ RIGHT        │
+│ 256px  │ ┌─ NodeEditor (expert, split 50%) ─────────┐ │ 288px        │
+│        │ │ tabs Sub/Global · palette w-60 · canvas  │ │ ┌──────────┐ │
+│ SHOW   │ └──────────────────────────────────────────┘ │ │ AudioPan │ │
+│  Moves │ ┌─ Scene3D (toujours monté) ────────────────┐│ │  max-40% │ │
+│  Cues  │ │ canvas + overlays ad-hoc (z-10..z-30)    ││ ├──────────┤ │
+│  FX    │ └──────────────────────────────────────────┘│ │          │ │
+│────────│                                              │ │ Inspector│ │
+│TEMPLATES│                                             │ │ (Sections│ │
+│ (h-80  │                                              │ │  ×~8)    │ │
+│  fixe) │                                              │ │          │ │
+└────────┴──────────────────────────────────────────────┴─┴──────────┴──┘
+        ↕ 5 zones redimensionnables (left, right, split expert, expand×2)
+```
+
+### Mode Perform (exploitation)
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│ TOPBAR (60px)  status+slots+recall │ NEXT set name │ GO 180px │PANIC│
+├──────────┬───────────────────────────────────────────────────────────┤
+│ LEFT w-72│ CENTER — Scene3D (seul survivant du mode Edit)            │
+│ ┌──────┐ │                                                           │
+│ │MOVES │ │                                                           │
+│ │list  │ │                                                           │
+│ ├──────┤ │                                                           │
+│ │CUES  │ │                                                           │
+│ │h-56  │ │                                                           │
+│ └──────┘ │                                                           │
+├──────────┴───────────────────────────────────────────────────────────┤
+│ LIVEDRAWER (≤42vh)  chips Params/Audio/Global + scope drawers        │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+## Verdict global
+
+**Les os sont bons** — le modèle 3-colonnes (library | canvas | inspector) est
+la convention prouvée des DAW et node-editors pro (TouchDesigner, Blender,
+Pd/plugdata), et Perform est une surface réduite volontairement hostile aux
+actions destructives : c'est la bonne intuition. **Mais 6 choix
+d'architecture vont contre l'usage réel en show.**
+
+## 🔴 Faux-plis structurels
+
+### A1 — Pas de StatusBar : l'information vitale est éclatée en 4 endroits
+
+- Header : dot + statut (`statusColor`/`statusLabel`, `App.tsx:172`)
+- Toolbar : label + perf band (`Toolbar.tsx:211-235`)
+- Perform : autre implémentation de dot + perf (`PerformView.tsx:204-262`)
+- Erreurs : bandeau sous Toolbar uniquement → **invisible en Perform**
+
+Résultat : une info vitale (merge mort, erreur play, FPS qui s'effondre)
+n'existe que dans les composants que Perform **démonte**. Le modèle pro =
+une StatusBar **persistante en bas de fenêtre, montée dans App** (console
+de monitoring : statut moteur + FPS/OSC/CPU + dernier événement erreur) —
+survivant à tous les modes. C'est le pattern Resolume/QLab.
+
+**Fix** : composant `StatusBar` partagé `App.tsx`, mode Edit et Perform —
+résout U5/U6/U10 d'un coup. Le topbar Perform garde le contexte *setlist*,
+la statusbar garde le contexte *moteur*.
+
+### A2 — PANIC : deux implémentations, deux glyphos, deux tailles — et inerte
+
+- `Toolbar.tsx:202-208` : `◼ PANIC` `text-xs` — discret
+- `PerformView.tsx:335-345` : `■ PANIC` `text-sm`, **plus petit que GO**
+  (`text-lg font-black` 180px), et `if (isRecalling) return;` = muet
+  pendant ~1s de recall — exactement le moment où on en a besoin
+- `Esc` : troisième chemin (qui lui, panique pendant un recall)
+
+Sur une console de show, l'arrêt d'urgence est le **contrôle le plus
+proéminent de la surface** — équivalent du champignon. Ici il est au mieux
+un pair de GO, au pire un fantôme.
+
+**Fix** : composant `PanicButton` unique (Lucide `OctagonX` + ring rouge +
+≥ GO en proéminence), utilisé par les deux modes, **jamais inerte**
+(panic doit pouvoir s'empiler sur un recall — le backend est idempotent),
+flash overlay rouge bref au trigger.
+
+### A3 — `.live-mode` : le mécanisme "lisible à 2 m" existe mais n'est jamais branché
+
+`index.css:134-162` définit l'agrandissement typo/boutons pour le live —
+aucun composant n'applique la classe. Le mode Perform est donc rendu en
+`text-[10-11px]` = la même densité que l'édition de graphe, illisible à
+distance d'opérateur.
+
+**Fix** : `className="live-mode"` sur le root `PerformView` (+ vérifier que
+les `!important` couvrent les classes Tailwind réelles) — quick win massif.
+
+### A4 — Perform : la setlist n'est pas une *vue* — c'est un attribut
+
+`PerformView.tsx:507` — l'ordre de la setlist est un petit badge `set N`
+dans les lignes de moves. Il n'y a **pas de flux visuel** : le nom du next
+est dans le header à 400px du bouton GO, la progression n'est visible que
+par `x/y` en `text-[10px]`. En live, la question est *"où en est le show,
+qu'est-ce qui part au prochain GO"* — l'UI répond par des miettes.
+
+**Fix** : zone setlist dédiée (colonne gauche ou bandeau vertical) —
+liste ordonnée, item courant en proéminence, **next affiché sur/au-dessus
+du GO** comme sur les consoles lumière/QLab.
+
+### A5 — La colonne droite : AudioPanel écrase Inspector de façon permanente
+
+`App.tsx:424-438` — AudioPanel est une zone fixe `max-h-40%` au-dessus de
+l'Inspector. Or AudioPanel est un panneau de **config/monitoring**
+(input device, spectrum) tandis qu'Inspector est le **panneau de travail**
+(params du slot/node sélectionné, track grid, macros — ~8 sections
+collapsibles). En pratique : un panneau consultatif occupe jusqu'à 40%
+de la hauteur de l'outil principal, de façon permanente.
+
+**Fix** : AudioPanel devient une section collapsible (ou un onglet) de la
+colonne droite — pas un tenant fixe. L'Inspector récupère la hauteur
+quand l'audio n'est pas manipulé.
+
+### A6 — Palette du NodeEditor vs QuickAddModal : deux mécanismes concurrents
+
+`NodeEditor.tsx:447` — la palette est une colonne fixe `w-60` (240px)
+*à l'intérieur* du panneau éditeur. En split expert 50% sur un écran
+1280px, le canvas React Flow n'a plus que ~200px utiles. Depuis T4 le
+`QuickAddModal` (Ctrl+K, searchable, filtré par tab) couvre le même besoin
+en mieux — la palette reste justifiée uniquement par la découvrabilité
+initiale (hover → description).
+
+**Fix** : palette repliable (icône rail ~40px collapsed par défaut en
+expert), ou remplacée par QuickAdd + un premier-run onboarding. Le canvas
+passe de ~200px à ~600px utiles.
+
+## 🟠 Incohérences d'agencement
+
+| # | Finding | Fichier |
+|---|---|---|
+| A7 | **Left "Show" vs "Templates"** : Templates (AnimationList) = *comment on crée* les moves ; la section se compresse en `h-80` fixe alors que Moves/Cues/FX ont les onglets. Sur petit écran les Templates mangent la liste de moves. → sections proportionnelles flex, pas fixe | `App.tsx:280-299` |
+| A8 | **Inspector change d'identité selon le mode** (slot params en simple / node params en expert) mais AudioPanel au-dessus non — contexte visuel contradictoire dans la même colonne | `Inspector.tsx`, `App.tsx:427` |
+| A9 | **z-index ad-hoc** : toasts `z-9999`, modals `z-50`, context menu `z-[100]`, tooltips palette `z-50`, overlays Scene3D `z-10/15/20/30`, banner autopatch `z-50`. Aucune échelle nommée — le premier conflit de superposition sera un bug invisible | tout le front |
+| A10 | **`editingSlotId` = 2 sémantiques** : "graphe du NodeEditor" en Edit, "slot dont le drawer affiche les params" en Perform. Couplage implicite entre modes — un reset d'editing en Edit change la sélection Perform sans que l'utilisateur l'ait demandé | `useGraphStore`, `PerformView.tsx:44` |
+| A11 | **Overlays Scene3D empilés à la main** : draw canvas z-10, manipulate z-15, ModeButtons/MacrosPanel/indicateur moves/empty-state/DebugPerf en z-20-30 absolus — 8 couches absolues sans registre central | `Scene3D.tsx:216-291` |
+| A12 | **Pas de surface "console"** : monitoring OSC par move, état par engine, trafic réseau — éclaté entre perfStats du header, chips Scene3D, toasts. Un panneau Monitor (ou onglet) consoliderait le diagnostic live | absent |
+| A13 | **Toolbar PANIC + PerformView PANIC dupliqués** — 2 implémentations, même en corrigeant A2 il faut un composant unique pour que la sémantique ne diverge plus | `Toolbar.tsx`, `PerformView.tsx` |
+
+## 🟡 Fenêtre unique — le plafond atteint
+
+Tout tient dans une fenêtre Tauri (header + toolbar + 3 colonnes +
+drawer). À 1080p ça passe ; le pattern pro pour le live serait un
+**"Stage view" détachable** : Scene3D plein-écran + status minimal sur
+un 2e écran (Resolume output monitor, SPAT Room view). Via Tauri,
+`WebviewWindow` séparé écoutant les mêmes stores — à cibler post-v1.
+
+## ✅ Ce qui est déjà bien architecturé — ne pas casser
+
+- **Scene3D toujours monté** au même point du DOM — pas de reset WebGL
+  au resize ou au switch de mode (`App.tsx:367` commentaire explicite)
+- **modalGuard stack** — Esc dans un modal ne panique jamais ; la
+  mécanique d'overlay est saine
+- **Perform = surface hostile aux actions destructives** — pas de node
+  editor, pas de config OSC, pas de delete — bon instinct
+- **Toasts `z-9999` role=alert assertive** — survivent à tous les modes
+- **Palette → descriptions au hover, autopatch, quick-add** — la
+  découvrabilité des nodes est déjà au niveau pro
+- **Empty-state canvas explicite** ("+ Move · template · ▶") — onboarding
+  in-context
+
+## Synthèse §4
+
+| Priorité | Item | Effort |
+|---|---|---|
+| 🔴 | A3 `.live-mode` branché — lisibilité 2 m | Trivial |
+| 🔴 | A2 `PanicButton` unique jamais inerte | Faible |
+| 🔴 | A1 `StatusBar` partagée Edit/Perform | Moyen |
+| 🔴 | A4 setlist = vue dédiée + next sur GO | Moyen |
+| 🟠 | A5 AudioPanel → collapsible | Faible |
+| 🟠 | A6 palette → rail/quick-add | Moyen |
+| 🟠 | A7 Templates proportionnel | Faible |
+| 🟠 | A9 tokens z-index | Faible |
+| 🟡 | A12 console Monitor | Post-v1 |
+| 🟡 | Stage view détachable | Post-v1 |
+
+Ces items s'ajoutent à la tranche **T4** existante (PANIC/contrastes/
+StatusBar) — A1-A4 en sont les fondations, A5-A7 les ajustements de
+densité qui ne cassent pas la structure actuelle.
