@@ -559,6 +559,7 @@ fn build_catalog() -> Vec<NodeSpec> {
                 ns("separation", "Separation", 0.1).d(0.3),
                 ns("alignment", "Alignment", 0.1).d(0.5),
                 ns("cohesion", "Cohesion", 0.1).d(0.3),
+                ns("neighbor_radius", "Neighbor Radius", 0.1).d(0.5),
                 ns("max_speed", "Max Speed", 0.1).d(0.5),
                 ns("seed", "Seed", 1.0).d(42),
             ],
@@ -668,6 +669,8 @@ fn build_catalog() -> Vec<NodeSpec> {
                 v3("direction", "Direction").d([0.0, 0.0, 1.0]),
                 ns("max_distance", "Max Distance", 0.1).d(1.0),
                 enm("curve", "Curve", EASING).d("linear"),
+                ns("radius", "Radius", 0.1).d(1.0),
+                enm("plane", "Plane", PLANE).d("xz"),
             ],
         ),
         spec(
@@ -678,6 +681,8 @@ fn build_catalog() -> Vec<NodeSpec> {
                 ns("min_val", "Min", 0.01).d(0.0),
                 ns("max_val", "Max", 0.01).d(1.0),
                 enm("curve", "Curve", EASING).d("linear"),
+                ns("radius", "Radius", 0.1).d(1.0),
+                enm("plane", "Plane", PLANE).d("xz"),
             ],
         ),
         // ── Modifiers ──
@@ -863,6 +868,8 @@ fn build_catalog() -> Vec<NodeSpec> {
             vec![
                 enm("band", "Band", BAND).d("bass"),
                 ns("radius", "Radius", 0.1).d(1.0),
+                nrange("n_bands", "Bands", 1.0, 1.0, 64.0).d(8),
+                enm("plane", "Plane", PLANE).d("xz"),
             ],
         ),
         spec(
@@ -871,6 +878,10 @@ fn build_catalog() -> Vec<NodeSpec> {
             vec![
                 txt("address", "OSC Address").d("/track/1/xyz"),
                 ns("radius", "Radius", 0.1).d(1.0),
+                ns("scale", "Scale", 0.1).d(1.0),
+                ns("offset_x", "Offset X", 0.1).d(0.0),
+                ns("offset_y", "Offset Y", 0.1).d(0.0),
+                ns("offset_z", "Offset Z", 0.1).d(0.0),
             ],
         ),
         // ── Plugin WASM ──

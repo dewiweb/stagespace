@@ -10,7 +10,8 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SHAPE_PRESETS } from '../src/utils/shapePresets';
-import { isValidConnection, getInputPorts } from '../src/utils/connectionRules';
+import { isValidConnection, getInputPorts, specOf } from '../src/utils/connectionRules';
+import type { NodeType } from '../src/store/useGraphStore';
 import type { Node, Edge } from 'reactflow';
 
 const OUT = fileURLToPath(new URL('../../../examples/full-feature-show.hfg', import.meta.url));
@@ -43,7 +44,7 @@ const gEdge = (from: Node, to: Node): Edge => ({
 
 const nodeType = (n: Node) => (n.data as { type: string }).type;
 
-function validateGraph(name: string, nodes: Node[], edges: Edge[]) {
+function validateGraph(name: string, nodes: Node[], edges: Edge[], scope: 'sub' | 'global' = 'sub') {
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const usedInputs = new Map<string, Set<string>>();
   for (const e of edges) {
@@ -66,6 +67,37 @@ function validateGraph(name: string, nodes: Node[], edges: Edge[]) {
     used.add(th);
     usedInputs.set(key, used);
   }
+  for (const n of nodes) validateParams(name, n, scope);
+}
+
+// ─── Validation des paramètres contre le NodeSpec (anti-dérive) ───
+//
+// Clés volontairement hors-ParamSpec : elles sont lues par le backend mais
+// ne sont pas des params éditables — l'allowlist rend la dérive visible au
+// lieu de la laisser pourrir en silence dans le .hfg.
+const EXTRA_PARAMS_SUB = new Set(['n_objects']); // fallback resolve_n_objects_depth
+const EXTRA_PARAMS_GLOBAL: Record<string, Set<string>> = {
+  // Graphe global : Rotate documente yaw/pitch/roll en degrés (convention
+  // macros) et Scale accepte `scale` uniforme — voir post_process_compiler.
+  Rotate: new Set(['yaw', 'pitch', 'roll']),
+  Scale: new Set(['scale']),
+};
+
+function validateParams(label: string, n: Node, scope: 'sub' | 'global') {
+  const type = nodeType(n) as NodeType;
+  const spec = specOf(type); // throw si type inconnu — dérive de catalogue
+  const declared = new Set(spec.params.map((p) => p.key));
+  const allowed = new Set(EXTRA_PARAMS_SUB);
+  if (scope === 'global') {
+    for (const k of EXTRA_PARAMS_GLOBAL[type] ?? []) allowed.add(k);
+  }
+  for (const key of Object.keys(n.data.params ?? {})) {
+    if (!declared.has(key) && !allowed.has(key)) {
+      throw new Error(
+        `${label}: param '${key}' on ${type} not in NodeSpec — stale key or missing ParamSpec`,
+      );
+    }
+  }
 }
 
 // ─── Slot graphs (depuis les presets — graphes déjà éprouvés) ───
@@ -75,12 +107,14 @@ const spiralGraph = preset('spiral', 2);
 const pursuitGraph = preset('pursuit', 2);
 const bassGraph = preset('bass-pulse', 4);
 const splineGraph = preset('spline-evaluate', 4);
+const crossfadeGraph = preset('crossfade-pursuit-orbit', 2);
 
 validateGraph('slot-orbit', orbitGraph.nodes, orbitGraph.edges);
 validateGraph('slot-spiral', spiralGraph.nodes, spiralGraph.edges);
 validateGraph('slot-pursuit', pursuitGraph.nodes, pursuitGraph.edges);
 validateGraph('slot-bass', bassGraph.nodes, bassGraph.edges);
 validateGraph('slot-spline', splineGraph.nodes, splineGraph.edges);
+validateGraph('slot-crossfade', crossfadeGraph.nodes, crossfadeGraph.edges);
 
 const defaultMacros = () => ({
   speed: 1, scale: 1, shiftX: 0, shiftY: 0, shiftZ: 0, yaw: 0, pitch: 0, roll: 0,
@@ -134,6 +168,17 @@ const slots = [
     fadeIn: 1.0, fadeOut: 1.0, phaseSpread: 0,
     assignments: assignments([5, 6, 7, 8]), audioMods: [],
   },
+  {
+    // Composite Crossfade + deux modes Follow (pursue → orbit) — démontre la
+    // composition de trajectoires, cœur du moteur nodal. Partage tracks 7-8
+    // avec Pursuit : le merge résout le conflit si les deux tournent.
+    id: 'slot-crossfade', name: 'Pursuit⇄Orbit', graphJson: crossfadeGraph,
+    templateId: 'crossfade-pursuit-orbit', trackIds: [7, 8], movementId: null,
+    isPreview: false, macros: defaultMacros(), fadeDuration: 1.5,
+    loopMode: 'loop', direction: 'forward',
+    fadeIn: 0.5, fadeOut: 0.5, phaseSpread: 0,
+    assignments: assignments([7, 8]), audioMods: [],
+  },
 ];
 
 // ─── Graphe global : chaîne Input → post-process → Output, avec nodes
@@ -169,7 +214,7 @@ const globalEdges = [
   gEdge(gRotate, gOffset), gEdge(gOffset, gZone), gEdge(gZone, gVel),
   gEdge(gVel, gOutput),
 ];
-validateGraph('global', globalNodes, globalEdges);
+validateGraph('global', globalNodes, globalEdges, 'global');
 const globalGraph = { nodes: globalNodes, edges: globalEdges };
 
 // ─── Cues : snapshots cohérents — jamais deux moves sur la même track ───
@@ -197,6 +242,7 @@ const moveSnap = (slot: (typeof slots)[number], mvId: string) => ({
 const cues = [
   {
     id: 'cue-ouverture', name: 'Ouverture', description: 'Orbite seule — les 4 premières tracks',
+    schema_version: 1,
     graph: orbitGraph, timestamp: 0,
     macros: macroSnapshot,
     track_indices: [],
@@ -215,6 +261,7 @@ const cues = [
   },
   {
     id: 'cue-ensemble', name: 'Ensemble', description: 'Orbite + spirale + poursuite — les 8 tracks',
+    schema_version: 1,
     graph: orbitGraph, timestamp: 0,
     macros: macroSnapshot,
     track_indices: [],
@@ -246,6 +293,7 @@ const cues = [
   },
   {
     id: 'cue-bass', name: 'Bass Drop', description: 'Bass Pulse seul — réactif audio sur tracks 1-4',
+    schema_version: 1,
     graph: bassGraph, timestamp: 0,
     macros: { ...macroSnapshot, speed: 1.2 },
     track_indices: [],
@@ -264,6 +312,7 @@ const cues = [
   },
   {
     id: 'cue-superposition', name: 'Superposition',
+    schema_version: 1,
     description: 'Orbit + Bass Pulse sur les mêmes tracks 1-4 — exerce la résolution de conflit du merge (stratégie Override : le fade effectif le plus haut gagne)',
     graph: orbitGraph, timestamp: 0,
     macros: macroSnapshot,

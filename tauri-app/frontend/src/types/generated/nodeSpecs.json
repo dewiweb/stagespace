@@ -1410,6 +1410,16 @@
         "default_json": "0.3"
       },
       {
+        "key": "neighbor_radius",
+        "label": "Neighbor Radius",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "0.5"
+      },
+      {
         "key": "max_speed",
         "label": "Max Speed",
         "kind": "number",
@@ -2150,6 +2160,30 @@
         "min": null,
         "max": null,
         "default_json": "\"linear\""
+      },
+      {
+        "key": "radius",
+        "label": "Radius",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "1.0"
+      },
+      {
+        "key": "plane",
+        "label": "Plane",
+        "kind": "enum",
+        "options": [
+          "xz",
+          "xy",
+          "yz"
+        ],
+        "step": null,
+        "min": null,
+        "max": null,
+        "default_json": "\"xz\""
       }
     ]
   },
@@ -2217,6 +2251,30 @@
         "min": null,
         "max": null,
         "default_json": "\"linear\""
+      },
+      {
+        "key": "radius",
+        "label": "Radius",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "1.0"
+      },
+      {
+        "key": "plane",
+        "label": "Plane",
+        "kind": "enum",
+        "options": [
+          "xz",
+          "xy",
+          "yz"
+        ],
+        "step": null,
+        "min": null,
+        "max": null,
+        "default_json": "\"xz\""
       }
     ]
   },
@@ -3233,6 +3291,30 @@
         "min": null,
         "max": null,
         "default_json": "1.0"
+      },
+      {
+        "key": "n_bands",
+        "label": "Bands",
+        "kind": "number",
+        "options": null,
+        "step": 1.0,
+        "min": 1.0,
+        "max": 64.0,
+        "default_json": "8"
+      },
+      {
+        "key": "plane",
+        "label": "Plane",
+        "kind": "enum",
+        "options": [
+          "xz",
+          "xy",
+          "yz"
+        ],
+        "step": null,
+        "min": null,
+        "max": null,
+        "default_json": "\"xz\""
       }
     ]
   },
@@ -3270,6 +3352,46 @@
         "min": null,
         "max": null,
         "default_json": "1.0"
+      },
+      {
+        "key": "scale",
+        "label": "Scale",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "1.0"
+      },
+      {
+        "key": "offset_x",
+        "label": "Offset X",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "0.0"
+      },
+      {
+        "key": "offset_y",
+        "label": "Offset Y",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "0.0"
+      },
+      {
+        "key": "offset_z",
+        "label": "Offset Z",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "0.0"
       }
     ]
   },
