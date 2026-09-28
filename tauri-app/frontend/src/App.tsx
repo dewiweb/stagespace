@@ -9,6 +9,7 @@ import Inspector from './components/Inspector';
 import AudioPanel from './components/AudioPanel';
 import TabPanel from './components/TabPanel';
 import Toolbar from './components/Toolbar';
+import StatusBar from './components/StatusBar';
 import ToastContainer from './components/ToastContainer';
 import PerformView from './components/PerformView';
 import WelcomeModal, { shouldShowWelcome } from './components/WelcomeModal';
@@ -21,8 +22,6 @@ import { useGraphStore, useMovementPositionsListener, useAudioErrorListener, use
 import { useAnimationStore } from './store/useAnimationStore';
 
 function App() {
-  const status = useGraphStore((s) => s.status);
-  const movements = useGraphStore((s) => s.movements);
   const showExpert = useAnimationStore((s) => s.showExpert);
   const setShowExpert = useAnimationStore((s) => s.setShowExpert);
   const performMode = useAnimationStore((s) => s.performMode);
@@ -45,6 +44,9 @@ function App() {
   // Sections collapsibles du panneau gauche
   const [graphsExpanded, setGraphsExpanded] = React.useState(true);
   const [movesExpanded, setMovesExpanded] = React.useState(true);
+  // AudioPanel = monitoring/config — collapsible pour rendre la hauteur à
+  // l'Inspector (outil de travail principal de la colonne droite).
+  const [audioExpanded, setAudioExpanded] = React.useState(true);
   // Premier lancement : proposer le show d'exemple bundle (évalué une fois)
   const [showWelcome, setShowWelcome] = React.useState(shouldShowWelcome);
 
@@ -158,19 +160,6 @@ function App() {
     { id: 'fx', label: 'FX', content: <SpatialFxPanel /> },
   ];
 
-  const activeCount = movements.length;
-  const statusColor =
-    activeCount > 0 ? 'bg-green-500' :
-    status === 'compiling' ? 'bg-yellow-500 animate-pulse' :
-    status === 'error' ? 'bg-red-500' :
-    'bg-gray-600';
-
-  const statusLabel =
-    activeCount > 0 ? `${activeCount} live` :
-    status === 'compiling' ? 'Compiling' :
-    status === 'error' ? 'Error' :
-    'Idle';
-
   return (
     <div className="w-screen h-screen flex flex-col bg-stagespace-bg overflow-hidden">
       {/* Header */}
@@ -183,11 +172,6 @@ function App() {
           <span className="text-gray-600 text-[11px] ml-1 italic">Play the space</span>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            <div className={`w-2 h-2 rounded-full ${statusColor}`} />
-            <span className="text-gray-400 text-[11px] font-medium">{statusLabel}</span>
-          </div>
-          <div className="w-px h-4 bg-stagespace-border" />
           <button
             onClick={() => setPerformMode(!performMode)}
             className={`px-3 py-1 text-xs font-bold rounded transition-all flex items-center gap-1.5 ${
@@ -242,7 +226,7 @@ function App() {
           <div style={{ width: leftWidth }} className="border-r border-stagespace-border flex flex-col bg-stagespace-panel flex-shrink-0 relative">
             <button
               onClick={() => setLeftCollapsed(true)}
-              className="absolute -right-3 top-2 z-20 w-6 h-6 bg-stagespace-panel border border-stagespace-border rounded-full flex items-center justify-center text-gray-500 hover:text-white hover:bg-gray-800 transition-colors text-xs"
+              className="absolute -right-3 top-2 z-overlay w-6 h-6 bg-stagespace-panel border border-stagespace-border rounded-full flex items-center justify-center text-gray-500 hover:text-white hover:bg-gray-800 transition-colors text-xs"
               title="Collapse the panel"
             >
               <PanelLeftClose size={11} />
@@ -264,10 +248,10 @@ function App() {
                 </div>
               )}
             </div>
-            {/* Section 2: Templates (AnimationList) — secondaire, hauteur bornée.
-                Le "+" qui créait un slot vivait ici — redondant avec "+ Move"
-                de la MovesTable, il a été retiré de l'header interne. */}
-            <div className={`${graphsExpanded ? 'h-80' : 'flex-shrink-0'} flex flex-col border-t border-stagespace-border ${movesExpanded ? '' : 'flex-1'}`}>
+            {/* Section 2: Templates (AnimationList) — secondaire. Partage
+                proportionnel avec Show (flex-1 chacun) au lieu d'une hauteur
+                fixe : sur petit écran aucune section n'écrase l'autre. */}
+            <div className={`${graphsExpanded ? 'flex-1' : 'flex-shrink-0'} flex flex-col min-h-0 border-t border-stagespace-border`}>
               <div className="flex items-center gap-1 px-3 py-1.5 border-b border-stagespace-border flex-shrink-0 bg-gray-900/30">
                 <button
                   onClick={() => setGraphsExpanded(!graphsExpanded)}
@@ -418,14 +402,28 @@ function App() {
             <div style={{ width: rightWidth }} className="border-l border-stagespace-border flex-shrink-0 relative flex flex-col">
             <button
               onClick={() => setRightCollapsed(true)}
-              className="absolute -left-3 top-2 z-20 w-6 h-6 bg-stagespace-panel border border-stagespace-border rounded-full flex items-center justify-center text-gray-500 hover:text-white hover:bg-gray-800 transition-colors text-xs"
+              className="absolute -left-3 top-2 z-overlay w-6 h-6 bg-stagespace-panel border border-stagespace-border rounded-full flex items-center justify-center text-gray-500 hover:text-white hover:bg-gray-800 transition-colors text-xs"
               title="Hide the Inspector"
             >
               <PanelRightClose size={11} />
             </button>
-            {/* Audio Panel — compact, en haut */}
-            <div className="flex-shrink-0 max-h-[40%] overflow-y-auto border-b border-stagespace-border">
-              <AudioPanel />
+            {/* Audio Panel — collapsible : c'est du monitoring/config, pas
+                l'outil de travail. Replié il laisse toute la hauteur à
+                l'Inspector (params du slot/node, TrackGrid, macros). */}
+            <div className="flex-shrink-0 flex flex-col border-b border-stagespace-border max-h-[40%]">
+              <button
+                onClick={() => setAudioExpanded(!audioExpanded)}
+                className="flex items-center gap-1 px-3 py-1.5 flex-shrink-0 bg-gray-900/30 hover:bg-gray-800/40 transition-colors"
+                title={audioExpanded ? 'Collapse audio monitoring' : 'Expand audio monitoring'}
+              >
+                {audioExpanded ? <ChevronDown size={11} className="text-gray-400" /> : <ChevronRight size={11} className="text-gray-400" />}
+                <span className="text-gray-400 text-[10px] uppercase tracking-wider font-medium">Audio IN</span>
+              </button>
+              {audioExpanded && (
+                <div className="overflow-y-auto min-h-0">
+                  <AudioPanel />
+                </div>
+              )}
             </div>
             {/* Inspector — prend le reste de l'espace */}
             <div className="flex-1 overflow-y-auto">
@@ -438,6 +436,11 @@ function App() {
       </div>
         </>
       )}
+
+      {/* StatusBar — monitoring moteur persistant, visible dans TOUS les
+          modes (Edit et Perform). Le statut/FPS/erreurs ne dépendent plus
+          des composants démontés par le mode live. */}
+      <StatusBar />
 
       {/* Toast notifications — erreurs backend, alerts OSC, etc. */}
       <ToastContainer />

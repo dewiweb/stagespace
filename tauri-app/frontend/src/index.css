@@ -131,28 +131,46 @@ body {
   box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.3);
 }
 
-/* ─── Live Mode — UI agrandie pour conditions de spectacle ─── */
+/* ─── Live Mode — UI agrandie pour conditions de spectacle ───
+   Appliqué sur le root de PerformView : lisibilité à distance
+   d'opérateur (~2 m). Ne PAS ajouter de finesse — tout doit rester
+   scannable en un coup d'œil. */
 .live-mode {
-  font-size: 14px;
+  font-size: 15px;
 }
 
 /* En Live Mode, les boutons et textes sont plus grands */
 .live-mode button {
-  font-size: 13px;
+  font-size: 14px;
   padding-top: 0.5rem;
   padding-bottom: 0.5rem;
 }
 
-.live-mode .text-\[10px\] {
+.live-mode .text-\[9px\] {
   font-size: 12px !important;
 }
 
-.live-mode .text-\[11px\] {
+.live-mode .text-\[10px\] {
   font-size: 13px !important;
 }
 
-.live-mode .text-xs {
+.live-mode .text-\[11px\] {
   font-size: 14px !important;
+}
+
+.live-mode .text-xs {
+  font-size: 15px !important;
+}
+
+.live-mode .text-sm {
+  font-size: 16px !important;
+}
+
+/* Contrastes live — les gris de décoration (gray-600/700) sont illisibles
+   à distance ; en live tout texte informatif doit être ≥ gray-400. */
+.live-mode .text-gray-600,
+.live-mode .text-gray-700 {
+  color: #9ca3af !important; /* gray-400 */
 }
 
 /* Les boutons de transport sont encore plus grands en Live Mode */

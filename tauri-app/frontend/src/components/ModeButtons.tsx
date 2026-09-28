@@ -32,7 +32,7 @@ export const ModeButtons: React.FC<ModeButtonsProps> = ({
 
   return (
     <>
-      <div className="absolute bottom-2 left-2 z-20 flex gap-1">
+      <div className="absolute bottom-2 left-2 z-overlay flex gap-1">
         <button
           onClick={() => setManipulateMode(!manipulateMode)}
           className={`px-2.5 py-1 text-[10px] rounded font-medium transition-colors ${
@@ -52,7 +52,7 @@ export const ModeButtons: React.FC<ModeButtonsProps> = ({
         )}
       </div>
       {manipulateMode && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 bg-gray-900/90 backdrop-blur rounded-lg px-3 py-1.5 border border-blue-600/50">
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-overlay bg-gray-900/90 backdrop-blur rounded-lg px-3 py-1.5 border border-blue-600/50">
           <span className="text-blue-400 text-[10px] font-medium">
             <Move3d size={11} className="inline -mt-0.5" /> Manipulate — drag handle: move · shift+drag: rotate · scroll: scale · drag object: override
           </span>

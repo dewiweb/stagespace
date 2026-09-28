@@ -2,18 +2,15 @@ import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
 import { toast } from '../utils/toast-helpers';
 import { open, save } from '@tauri-apps/plugin-dialog';
-import { FolderInput, Settings, Undo2, Redo2, Save, FolderOpen, TriangleAlert, CircleHelp } from 'lucide-react';
+import { FolderInput, Settings, Undo2, Redo2, Save, FolderOpen, CircleHelp } from 'lucide-react';
 import { SettingsModal } from './SettingsModal';
+import { PanicButton } from './ui/PanicButton';
 
 export const Toolbar: React.FC = () => {
   // Sélecteurs granulaires — un full-store subscribe re-renderait la Toolbar
   // à chaque frame (movementPositions écrit à 60fps).
-  const movements = useGraphStore((s) => s.movements);
-  const status = useGraphStore((s) => s.status);
   const compileError = useGraphStore((s) => s.compileError);
   const playError = useGraphStore((s) => s.playError);
-  const clearCompileError = useGraphStore((s) => s.clearCompileError);
-  const clearPlayError = useGraphStore((s) => s.clearPlayError);
   const nodes = useGraphStore((s) => s.nodes);
   const saveGraphToFile = useGraphStore((s) => s.saveGraphToFile);
   const loadGraphFromFile = useGraphStore((s) => s.loadGraphFromFile);
@@ -23,16 +20,12 @@ export const Toolbar: React.FC = () => {
   const redo = useGraphStore((s) => s.redo);
   const canUndo = useGraphStore((s) => s.canUndo);
   const canRedo = useGraphStore((s) => s.canRedo);
-  const panic = useGraphStore((s) => s.panic);
-  const perfStats = useGraphStore((s) => s.perfStats);
   const oscAddress = useGraphStore((s) => s.oscAddress);
   const oscPort = useGraphStore((s) => s.oscPort);
   const oscProfile = useGraphStore((s) => s.oscProfile);
 
   const [showSettings, setShowSettings] = React.useState(false);
 
-  const hasError = !!(compileError || playError);
-  const activeMovements = movements.length;
   const hasGraph = nodes.length > 0;
 
   // Les raccourcis live (Esc panic, Enter GO, …) et le polling perfStats sont
@@ -85,20 +78,6 @@ export const Toolbar: React.FC = () => {
       toast.error(`Import .hol failed: ${e}`);
     }
   };
-
-  const statusColor =
-    activeMovements > 0 ? 'bg-green-500' :
-    status === 'compiling' ? 'bg-yellow-500 animate-pulse' :
-    status === 'error' ? 'bg-red-500' :
-    status === 'compiled' ? 'bg-blue-500' :
-    'bg-gray-600';
-
-  const statusLabel =
-    activeMovements > 0 ? `${activeMovements} movement${activeMovements > 1 ? 's' : ''}` :
-    status === 'compiling' ? 'Compiling' :
-    status === 'error' ? 'Error' :
-    status === 'compiled' ? 'Compiled' :
-    'Idle';
 
   return (
     <div className="flex flex-col border-b border-stagespace-border bg-stagespace-panel">
@@ -170,17 +149,8 @@ export const Toolbar: React.FC = () => {
           <FolderOpen size={14} />
         </button>
 
-        {/* Error badge */}
-        {hasError && (
-          <button
-            onClick={() => { clearCompileError(); clearPlayError(); }}
-            className="px-2 py-1 text-[11px] font-medium rounded bg-red-900/50 text-red-400 border border-red-700/50 hover:bg-red-900/70 transition-colors"
-          >
-            <TriangleAlert size={11} className="inline -mt-0.5" /> Error — dismiss
-          </button>
-        )}
-
-        {/* Spacer */}
+        {/* Spacer — la StatusBar (bas de fenêtre) porte statut, perf,
+            erreurs et version ; la Toolbar ne garde que les actions. */}
         <div className="flex-1" />
 
         {/* Help — cheatsheet raccourcis live (même contenu que la touche ?) */}
@@ -199,40 +169,8 @@ export const Toolbar: React.FC = () => {
         {/* PANIC — arrêt d'urgence, toujours visible et accessible.
             Jamais replié dans un panel : c'est le seul contrôle qui doit
             survivre à tous les états de l'UI (Esc = même action). */}
-        <button
-          onClick={() => { panic(); }}
-          className="px-3 py-1.5 text-xs font-bold rounded bg-red-800 hover:bg-red-700 text-white border border-red-600 transition-colors tracking-wider"
-          title="PANIC (Esc) — stops all moves and sends origin positions"
-        >
-          ◼ PANIC
-        </button>
+        <PanicButton />
 
-        {/* Status indicator */}
-        <div className="flex items-center gap-1.5 px-2 py-0.5">
-          <span className={`w-2 h-2 rounded-full ${statusColor}`} />
-          <span className="text-[11px] text-gray-400 font-medium">{statusLabel}</span>
-        </div>
-
-        {/* Version — synchronisée avec package.json/tauri.conf.json via
-            le define Vite (utile pour les rapports de bug en prod) */}
-        <span className="text-[9px] text-gray-700 font-mono select-none" title="STAGESPACE version">
-          v{__APP_VERSION__}
-        </span>
-
-        {/* Performance overlay — visible quand des movements tournent */}
-        {activeMovements > 0 && perfStats && (
-          <div className="flex items-center gap-2 px-2 py-0.5 bg-gray-900/80 rounded border border-gray-700/50 text-[10px] font-mono">
-            <span className={perfStats.fps >= 55 ? 'text-green-400' : perfStats.fps >= 30 ? 'text-yellow-400' : 'text-red-400'}>
-              {perfStats.fps.toFixed(0)} FPS
-            </span>
-            <span className="text-gray-500">·</span>
-            <span className="text-cyan-400">{perfStats.oscRate.toFixed(0)} OSC/s</span>
-            <span className="text-gray-500">·</span>
-            <span className={perfStats.cpuPercent < 50 ? 'text-gray-400' : 'text-yellow-400'}>
-              {perfStats.cpuPercent.toFixed(0)}% CPU
-            </span>
-          </div>
-        )}
       </div>
 
       {/* Error detail */}

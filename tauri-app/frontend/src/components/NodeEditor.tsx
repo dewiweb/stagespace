@@ -23,6 +23,7 @@ import { isValidConnection, connectionRejectionReason, portRejectionReason, spli
 import { presetsUsingType } from '../utils/shapePresets';
 import { toast } from '../utils/toast-helpers';
 import { open } from '@tauri-apps/plugin-dialog';
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import type { PluginManifest } from '../types/generated/PluginManifest';
 import type { PluginKind } from '../types/generated/PluginKind';
 
@@ -61,6 +62,9 @@ export const NodeEditor: React.FC = () => {
   const [nodeMenu, setNodeMenu] = useState<{ x: number; y: number; nodeType: NodeType } | null>(null);
   // Quick-add (Ctrl+K / double-clic canvas) — palette searchable.
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  // Palette repliable — QuickAdd couvre l'ajout rapide ; la palette sert
+  // la découverte. Repliée elle rend ~220px au canvas en split expert.
+  const [paletteCollapsed, setPaletteCollapsed] = useState(false);
 
   // Tab: "sub" = graph du slot édité, "global" = graph global (post-processing)
   const [activeTab, setActiveTab] = useState<'sub' | 'global'>('sub');
@@ -445,15 +449,44 @@ export const NodeEditor: React.FC = () => {
       </div>
 
       <div className="flex-1 flex min-h-0">
-      {/* Node Palette */}
+      {/* Node Palette — repliable en rail : QuickAdd (Ctrl+K / double-clic)
+          couvre l'ajout rapide ; la palette sert surtout à la découverte.
+          Repliée, le canvas récupère ~220px en split expert. */}
+      {paletteCollapsed ? (
+        <div className="w-9 bg-stagespace-panel border-r border-stagespace-border flex-shrink-0 flex flex-col items-center pt-2 gap-2">
+          <button
+            onClick={() => setPaletteCollapsed(false)}
+            className="w-6 h-6 rounded bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white flex items-center justify-center"
+            title="Show the node palette"
+          >
+            <PanelLeftOpen size={12} />
+          </button>
+          <button
+            onClick={() => setQuickAddOpen(true)}
+            className="w-6 h-6 rounded bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white flex items-center justify-center text-xs font-bold"
+            title="Quick-add node (Ctrl+K)"
+          >
+            +
+          </button>
+        </div>
+      ) : (
       <div className="w-60 bg-stagespace-panel border-r border-stagespace-border overflow-y-auto flex-shrink-0">
-        <div className="px-3 py-3 border-b border-stagespace-border sticky top-0 bg-stagespace-panel z-10">
-          <h3 className="text-white font-semibold text-sm">Nodes</h3>
-          <p className="text-gray-500 text-[11px] mt-0.5">
-            {selectedEdge
-              ? 'Edge selected — click a modifier to insert it into the chain'
-              : 'Click to add · Hover for info'}
-          </p>
+        <div className="px-3 py-3 border-b border-stagespace-border sticky top-0 bg-stagespace-panel z-raised flex items-start gap-2">
+          <div className="flex-1">
+            <h3 className="text-white font-semibold text-sm">Nodes</h3>
+            <p className="text-gray-500 text-[11px] mt-0.5">
+              {selectedEdge
+                ? 'Edge selected — click a modifier to insert it into the chain'
+                : 'Click to add · Ctrl+K quick-add · Hover for info'}
+            </p>
+          </div>
+          <button
+            onClick={() => setPaletteCollapsed(true)}
+            className="w-5 h-5 rounded text-gray-500 hover:text-white hover:bg-gray-800 flex items-center justify-center flex-shrink-0"
+            title="Collapse the palette — Ctrl+K stays available"
+          >
+            <PanelLeftClose size={11} />
+          </button>
         </div>
 
         <div className="p-2 space-y-2">
@@ -507,7 +540,7 @@ export const NodeEditor: React.FC = () => {
                         </button>
                         {/* Tooltip description */}
                         {hoveredPaletteNode === type && NODE_DESCRIPTIONS[type] && (
-                          <div className="absolute left-full top-0 ml-2 z-50 w-64 p-2.5 bg-gray-900 border border-gray-700 rounded-lg shadow-xl text-gray-300 text-[10px] leading-relaxed pointer-events-none">
+                          <div className="absolute left-full top-0 ml-2 z-popover w-64 p-2.5 bg-gray-900 border border-gray-700 rounded-lg shadow-xl text-gray-300 text-[10px] leading-relaxed pointer-events-none">
                             <div className="text-white font-semibold text-[11px] mb-1" style={{ color: getCategoryColor(type) }}>{type}</div>
                             {NODE_DESCRIPTIONS[type]}
                             {/* Show valid targets */}
@@ -571,7 +604,7 @@ export const NodeEditor: React.FC = () => {
                           <span className="text-gray-600 text-[9px] ml-auto flex-shrink-0">v{m.version}</span>
                         </button>
                         {hoveredPaletteNode === `plugin:${m.id}` && (
-                          <div className="absolute left-full top-0 ml-2 z-50 w-64 p-2.5 bg-gray-900 border border-gray-700 rounded-lg shadow-xl text-gray-300 text-[10px] leading-relaxed pointer-events-none">
+                          <div className="absolute left-full top-0 ml-2 z-popover w-64 p-2.5 bg-gray-900 border border-gray-700 rounded-lg shadow-xl text-gray-300 text-[10px] leading-relaxed pointer-events-none">
                             <div className="text-white font-semibold text-[11px] mb-1" style={{ color: NODE_COLORS.yellow }}>
                               {m.name} <span className="text-gray-500 font-normal">v{m.version}</span>
                             </div>
@@ -641,6 +674,7 @@ export const NodeEditor: React.FC = () => {
           </div>
         </div>
       </div>
+      )}
 
       {/* Canvas */}
       <div className="flex-1 bg-stagespace-bg relative">
@@ -704,7 +738,7 @@ export const NodeEditor: React.FC = () => {
             Sub-graph only : les presets construisent des graphes de slot. */}
         {nodeMenu && (
           <div
-            className="fixed z-[100] w-56 bg-gray-900 border border-gray-700 rounded-lg shadow-xl overflow-hidden"
+            className="fixed z-menu w-56 bg-gray-900 border border-gray-700 rounded-lg shadow-xl overflow-hidden"
             style={{ left: nodeMenu.x, top: nodeMenu.y }}
           >
             <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-800">
@@ -740,7 +774,7 @@ export const NodeEditor: React.FC = () => {
 
         {/* Connecting hint badge */}
         {connectingFrom && (
-          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-50 px-3 py-1.5 bg-blue-900/80 border border-blue-600 rounded-lg text-blue-200 text-[11px] font-medium pointer-events-none">
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-popover px-3 py-1.5 bg-blue-900/80 border border-blue-600 rounded-lg text-blue-200 text-[11px] font-medium pointer-events-none">
             Connecting from <span className="text-white font-bold">{connectingFrom}</span> — drag to a valid target
           </div>
         )}

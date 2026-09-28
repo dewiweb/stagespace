@@ -50,9 +50,9 @@ describe('Toolbar — rendering', () => {
     expect(screen.getByText(/Import \.hol/i)).toBeInTheDocument();
   });
 
-  it('shows status indicator with Idle label', () => {
+  it('renders the shared PANIC button (never folded into a panel)', () => {
     render(<Toolbar />);
-    expect(screen.getByText('Idle')).toBeInTheDocument();
+    expect(screen.getByTitle(/PANIC \(Esc\)/i)).toBeInTheDocument();
   });
 
   it('renders Save and Load show buttons', () => {
@@ -83,18 +83,19 @@ describe('Toolbar — status', () => {
       movements: [{ id: 'mv-1' }, { id: 'mv-2' }] as any,
     } as any);
     render(<Toolbar />);
-    // Status indicator should show "2 movements"
-    expect(screen.getByText(/2 movements/i)).toBeInTheDocument();
+    // Le statut vit dans la StatusBar — la Toolbar reste fonctionnelle.
+    expect(screen.getByText(/Import \.hol/i)).toBeInTheDocument();
   });
 
-  it('renders with compile error without crashing', () => {
+  it('shows the compile error detail band when compileError is set', () => {
     useGraphStore.setState({
       compileError: 'Syntax error',
       movements: [] as any,
     } as any);
     render(<Toolbar />);
-    // Error badge should be visible
-    expect(screen.getByText(/Error — dismiss/i)).toBeInTheDocument();
+    // Le bandeau de détail reste dans la Toolbar (contexte édition) ;
+    // la pill dismissible vit dans la StatusBar.
+    expect(screen.getByText(/Syntax error/i)).toBeInTheDocument();
   });
 });
 
@@ -115,23 +116,13 @@ describe('Toolbar — settings modal', () => {
 });
 
 describe('Toolbar — error dismiss', () => {
-  it('shows error badge when compileError is set', () => {
+  it('shows error detail band when compileError is set', () => {
     useGraphStore.setState({
       compileError: 'Test error',
       movements: [] as any,
     } as any);
     render(<Toolbar />);
-    expect(screen.getByText(/Error — dismiss/i)).toBeInTheDocument();
-  });
-
-  it('dismisses error on click', () => {
-    useGraphStore.setState({
-      compileError: 'Test error',
-      movements: [] as any,
-    } as any);
-    render(<Toolbar />);
-    fireEvent.click(screen.getByText(/Error — dismiss/i));
-    expect((useGraphStore.getState() as any).compileError).toBeNull();
+    expect(screen.getByText(/Test error/i)).toBeInTheDocument();
   });
 });
 
@@ -159,23 +150,5 @@ describe('Toolbar — keyboard shortcuts', () => {
   });
 });
 
-describe('Toolbar — performance overlay', () => {
-  it('shows perf stats when movements are active', () => {
-    useGraphStore.setState({
-      movements: [{ id: 'mv-1' }] as any,
-      perfStats: { fps: 60, oscRate: 480, latencyMs: 1.5, cpuPercent: 5 },
-    } as any);
-    render(<Toolbar />);
-    expect(screen.getByText('60 FPS')).toBeInTheDocument();
-    expect(screen.getByText('480 OSC/s')).toBeInTheDocument();
-  });
-
-  it('hides perf stats when no movements', () => {
-    useGraphStore.setState({
-      movements: [] as any,
-      perfStats: { fps: 60, oscRate: 480, latencyMs: 1.5, cpuPercent: 5 },
-    } as any);
-    render(<Toolbar />);
-    expect(screen.queryByText('60 FPS')).not.toBeInTheDocument();
-  });
-});
+// Perf stats, statut moteur, erreurs dismissibles → StatusBar.test.tsx
+// (la StatusBar partagée a absorbé ces responsabilités).

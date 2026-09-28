@@ -193,7 +193,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   return (
     <div ref={containerRef} style={{ width, height, overflow: 'hidden', position: 'relative' }}>
       {webglFailed && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-900/90 z-30 p-4">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-900/90 z-raised p-4">
           <TriangleAlert size={32} className="text-amber-400" />
           <div className="text-white text-sm font-medium">WebGL unavailable</div>
           <div className="text-gray-400 text-[11px] text-center max-w-xs">
@@ -246,7 +246,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
       {/* Interaction layer — manipulate seulement (assign via TrackGrid) */}
       {manipulateMode && (
         <div
-          className="absolute inset-0 z-[15]"
+          className="absolute inset-0 z-overlay"
           style={{
             cursor: draggingHandle || draggingObject !== null ? 'grabbing' : 'grab',
           }}
@@ -259,7 +259,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
       )}
       {/* Active movements indicator — bottom right */}
       {movements.length > 0 && (
-        <div className="absolute bottom-2 right-2 z-20 bg-gray-900/80 backdrop-blur rounded-lg px-2 py-1 border border-gray-700/50 flex items-center gap-1.5">
+        <div className="absolute bottom-2 right-2 z-overlay bg-gray-900/80 backdrop-blur rounded-lg px-2 py-1 border border-gray-700/50 flex items-center gap-1.5">
           <span className="text-gray-500 text-[10px] font-mono">MOVEMENTS</span>
           {movements.map((mv, idx) => (
             <span
