@@ -75,7 +75,7 @@ pub fn cmd_activate_move(args: &[&str]) -> Result<String, String> {
         spatial_macros: None,
         animation_state: None,
     };
-    spawn_move(spec, &state.shared)?;
+    spawn_move(spec, &state.shared).map_err(|e| e.to_string())?;
 
     let mode = if is_preview { "preview" } else { "live" };
     Ok(format!("Move '{name}' activated (id={move_id}, tracks={track_str}, mode={mode}, duration={duration}s)"))

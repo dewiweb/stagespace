@@ -20,7 +20,7 @@ pub async fn set_spatial_channel(
     value: f64,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
-    let ch = SpatialChannel::from_str(&channel)?;
+    let ch = SpatialChannel::from_str(&channel).map_err(IpcError::validation)?;
     let merge_rt = lock_or_recover(&state.merge_runtime);
     merge_rt.set_object_channel(object_index, ch, value);
     Ok(())
@@ -34,7 +34,7 @@ pub async fn clear_spatial_channel(
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
     let ch = match channel {
-        Some(c) => Some(SpatialChannel::from_str(&c)?),
+        Some(c) => Some(SpatialChannel::from_str(&c).map_err(IpcError::validation)?),
         None => None,
     };
     let merge_rt = lock_or_recover(&state.merge_runtime);
@@ -99,8 +99,8 @@ pub async fn add_channel_modulation(
     state: State<'_, AppState>,
 ) -> Result<usize, IpcError> {
     let mut rule = ChannelModulation::new(
-        KinematicSource::from_str(&params.source)?,
-        SpatialChannel::from_str(&params.channel)?,
+        KinematicSource::from_str(&params.source).map_err(IpcError::validation)?,
+        SpatialChannel::from_str(&params.channel).map_err(IpcError::validation)?,
         params.scale,
     );
     rule.offset = params.offset.unwrap_or(0.0);
@@ -179,7 +179,9 @@ pub async fn add_zone(params: ZoneParams, state: State<'_, AppState>) -> Result<
         },
         "box" => ZoneShape::Box {
             min: params.a,
-            max: params.b.ok_or("Box zone requires 'b' (max corner)")?,
+            max: params
+                .b
+                .ok_or_else(|| IpcError::validation("Box zone requires 'b' (max corner)"))?,
         },
         s => {
             return Err(IpcError::validation(format!(
@@ -189,7 +191,10 @@ pub async fn add_zone(params: ZoneParams, state: State<'_, AppState>) -> Result<
     };
     let mut channels = SpatialChannels::default();
     for (name, value) in &params.channels {
-        channels.set(SpatialChannel::from_str(name)?, *value);
+        channels.set(
+            SpatialChannel::from_str(name).map_err(IpcError::validation)?,
+            *value,
+        );
     }
     if channels.is_empty() {
         return Err(IpcError::validation("Zone requires at least one channel"));

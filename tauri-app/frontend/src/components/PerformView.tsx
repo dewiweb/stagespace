@@ -32,7 +32,7 @@ export const PerformView: React.FC = () => {
   const pendingPlays = useGraphStore((s) => s.pendingPlays);
   const isRecalling = useCuelistStore((s) => s.isRecalling);
 
-  const [goFeedback, setGoFeedback] = React.useState<string | null>(null);
+  const [goFeedback, setGoFeedback] = React.useState<{ ok: boolean; message: string } | null>(null);
 
   const playingCount = moveSlots.filter((s) => s.movementId).length;
 
@@ -53,11 +53,9 @@ export const PerformView: React.FC = () => {
   const armedPlaying = !!armedSlot?.movementId || (armedSlot ? pendingPlays.includes(armedSlot.id) : false);
 
   const handleGO = async () => {
-    const msg = await goToNextMove();
-    if (msg) {
-      setGoFeedback(msg.startsWith('GO:') ? `ok:${msg}` : `err:${msg}`);
-      setTimeout(() => setGoFeedback(null), 3000);
-    }
+    const res = await goToNextMove();
+    setGoFeedback(res);
+    setTimeout(() => setGoFeedback(null), 3000);
   };
 
   // Deux collections distinctes : la setlist est une VUE ordonnée (le flux
@@ -168,10 +166,10 @@ export const PerformView: React.FC = () => {
           {goFeedback && (
             <span
               className={`text-sm font-bold animate-pulse truncate ${
-                goFeedback.startsWith('ok:') ? 'text-green-400' : 'text-red-400'
+                goFeedback.ok ? 'text-green-400' : 'text-red-400'
               }`}
             >
-              {goFeedback.slice(4)}
+              {goFeedback.message}
             </span>
           )}
         </div>

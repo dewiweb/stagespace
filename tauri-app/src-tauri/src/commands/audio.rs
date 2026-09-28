@@ -25,7 +25,7 @@ pub async fn start_audio_capture(
     })
     .await
     .map_err(|e| IpcError::internal(format!("Audio capture task failed: {e}")))?
-    .map_err(IpcError::from)
+    .map_err(IpcError::io)
 }
 
 #[tauri::command]

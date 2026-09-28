@@ -455,7 +455,8 @@ pub fn cmd_osc_validate(args: &[&str]) -> Result<String, String> {
         spatial_macros: None,
         animation_state: None,
     };
-    stagespace_tauri::commands::merge_commands::spawn_move(spec, &state.shared)?;
+    stagespace_tauri::commands::merge_commands::spawn_move(spec, &state.shared)
+        .map_err(|e| e.to_string())?;
 
     // 4. Attendre la durée du test
     std::thread::sleep(std::time::Duration::from_secs_f64(duration));

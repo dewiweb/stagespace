@@ -156,8 +156,7 @@ pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), IpcE
         .clone();
     let result = tauri::async_runtime::spawn_blocking(move || recall_cue_inner(cue, sh))
         .await
-        .map_err(|e| IpcError::internal(format!("Cue recall task failed: {e}")))?
-        .map_err(IpcError::from);
+        .map_err(|e| IpcError::internal(format!("Cue recall task failed: {e}")))?;
     // Le recall tue/respawn des moves (même partiellement en cas d'échec) —
     // l'UI doit resynchroniser sa liste sinon elle affiche des zombies.
     if let Some(h) = handle {
@@ -166,7 +165,10 @@ pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), IpcE
     result
 }
 
-pub(crate) fn recall_cue_inner(cue: Cue, sh: crate::commands::state::Shared) -> Result<(), String> {
+pub(crate) fn recall_cue_inner(
+    cue: Cue,
+    sh: crate::commands::state::Shared,
+) -> Result<(), IpcError> {
     // Anti-recall concurrent : si un recall est déjà en cours, refuser
     if sh
         .recall_in_progress
@@ -178,7 +180,9 @@ pub(crate) fn recall_cue_inner(cue: Cue, sh: crate::commands::state::Shared) -> 
         )
         .is_err()
     {
-        return Err("A cue recall is already in progress — please wait.".to_string());
+        return Err(IpcError::busy(
+            "A cue recall is already in progress — please wait.".to_string(),
+        ));
     }
 
     // Garantir que le flag est remis à false quoi qu'il arrive
@@ -209,10 +213,10 @@ pub(crate) fn recall_cue_inner(cue: Cue, sh: crate::commands::state::Shared) -> 
         };
 
         let graph = build_graph_from_json(global_graph, &audio_state)
-            .map_err(|e| format!("Failed to parse global graph: {e}"))?;
+            .map_err(|e| IpcError::validation(format!("Failed to parse global graph: {e}")))?;
 
         let effects = stagespace_engines::extract_graph_effects(&graph)
-            .map_err(|e| format!("Failed to extract graph effects: {e:?}"))?;
+            .map_err(|e| IpcError::validation(format!("Failed to extract graph effects: {e:?}")))?;
 
         let merge_rt = lock_or_recover(&sh.merge_runtime);
         let macros = merge_rt.macros();
@@ -220,7 +224,7 @@ pub(crate) fn recall_cue_inner(cue: Cue, sh: crate::commands::state::Shared) -> 
         let compile_params = stagespace_engines::PostProcessCompileParams { graph, macros };
 
         let post_process_fn = stagespace_engines::compile_post_process(compile_params)
-            .map_err(|e| format!("Failed to compile global graph: {e:?}"))?;
+            .map_err(|e| IpcError::validation(format!("Failed to compile global graph: {e:?}")))?;
 
         merge_rt.swap_post_process_fn(post_process_fn);
         merge_rt.set_graph_effects(

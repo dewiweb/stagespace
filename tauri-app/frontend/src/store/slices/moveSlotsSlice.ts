@@ -61,6 +61,13 @@ function buildGraphForSlot(templateId: string, nTracks: number): { nodes: Node[]
 /// MoveSlot — un move = une configuration persistante (graphe + tracks + macros)
 /// Tout est un Move. Certains moves sont dans la setlist (l'ordre du spectacle).
 /// Un Move peut être lancé indépendamment (live) ou rappelé via GO (spectacle).
+/// Résultat typé d'un GO setlist — fini le sniffing du préfixe "GO:"
+/// côté appelants (useLiveShortcuts, MovesTable, PerformView).
+export interface GoResult {
+  ok: boolean;
+  message: string;
+}
+
 export interface MoveSlot {
   id: string;
   name: string;
@@ -195,7 +202,7 @@ export interface MoveSlotsSlice {
   removeFromSetlist: (slotId: string) => void;
   moveSetlistItem: (index: number, direction: 'up' | 'down') => void;
   /// GO = stoppe tous les moves actifs + lance le prochain move de la setlist
-  goToNextMove: () => Promise<string | null>;
+  goToNextMove: () => Promise<GoResult>;
 
   // ─── Sync ───
   syncSlotMovements: () => void;
@@ -951,14 +958,20 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
 
   goToNextMove: async () => {
     const { setlistOrder, currentSetlistIndex, moveSlots } = get();
-    if (setlistOrder.length === 0) return 'Empty setlist — add moves to the setlist';
+    if (setlistOrder.length === 0) {
+      return { ok: false, message: 'Empty setlist — add moves to the setlist' };
+    }
 
     const nextIndex = currentSetlistIndex + 1;
-    if (nextIndex >= setlistOrder.length) return 'Fin de la setlist atteinte';
+    if (nextIndex >= setlistOrder.length) {
+      return { ok: false, message: 'Fin de la setlist atteinte' };
+    }
 
     const nextSlotId = setlistOrder[nextIndex];
     const nextSlot = moveSlots.find((s) => s.id === nextSlotId);
-    if (!nextSlot) return `Move "${nextSlotId}" introuvable`;
+    if (!nextSlot) {
+      return { ok: false, message: `Move "${nextSlotId}" introuvable` };
+    }
 
     // 1. Stopper tous les moves actifs avec fade
     //    Le backend attend la fin du fade avant de résoudre la promesse
@@ -970,21 +983,21 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
 
     // 2. Ne pas avancer si le slot cible a une activation en cours (anti double-GO)
     if (get().pendingPlays.includes(nextSlotId)) {
-      return `Move "${nextSlot.name}" is already activating — wait`;
+      return { ok: false, message: `Move "${nextSlot.name}" is already activating — wait` };
     }
 
     // 3. Lancer le prochain move — n'avancer l'index QUE sur succès,
     //    sinon le GO suivant skipperait un move jamais lancé.
     const ok = await get().playSlot(nextSlotId);
     if (!ok) {
-      return `GO FAILED: "${nextSlot.name}" did not start (see error above)`;
+      return { ok: false, message: `GO FAILED: "${nextSlot.name}" did not start (see error above)` };
     }
 
     // 4. Avancer l'index
     set({ currentSetlistIndex: nextIndex });
 
     const total = setlistOrder.length;
-    return `GO: "${nextSlot.name}" (${nextIndex + 1}/${total})`;
+    return { ok: true, message: `GO: "${nextSlot.name}" (${nextIndex + 1}/${total})` };
   },
 
   syncSlotMovements: () => {

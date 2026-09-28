@@ -101,7 +101,8 @@ mod recall_tests {
         sh.recall_in_progress
             .store(true, std::sync::atomic::Ordering::SeqCst);
         let err = recall_cue_inner(make_cue(), sh.clone()).unwrap_err();
-        assert!(err.contains("already in progress"), "err: {err}");
+        assert_eq!(err.code, "busy");
+        assert!(err.message.contains("already in progress"), "err: {err}");
         assert!(sh
             .recall_in_progress
             .load(std::sync::atomic::Ordering::SeqCst));

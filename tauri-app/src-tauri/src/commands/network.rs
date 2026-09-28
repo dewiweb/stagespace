@@ -13,10 +13,9 @@ pub async fn discover_osc_targets() -> Result<Vec<serde_json::Value>, IpcError> 
     tauri::async_runtime::spawn_blocking(discover_osc_targets_blocking)
         .await
         .map_err(|e| IpcError::internal(format!("Discovery task failed: {e}")))?
-        .map_err(IpcError::from)
 }
 
-fn discover_osc_targets_blocking() -> Result<Vec<serde_json::Value>, String> {
+fn discover_osc_targets_blocking() -> Result<Vec<serde_json::Value>, IpcError> {
     let mut targets: Vec<serde_json::Value> = Vec::new();
 
     // 1. Résoudre holophonix.local via DNS

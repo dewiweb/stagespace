@@ -85,10 +85,10 @@ export function useLiveShortcuts() {
         // layerés, il fait la transition de scène prévue.
         e.preventDefault();
         const gs = useGraphStore.getState();
-        (gs as any).goToNextMove().then((msg: string | null) => {
+        (gs as any).goToNextMove().then((res: { ok: boolean; message: string }) => {
           // Un GO qui ne démarre rien (fin de setlist, activation échouée)
           // doit être visible — sinon silence en live.
-          if (msg && !msg.startsWith('GO:')) toast.warning(msg);
+          if (!res.ok) toast.warning(res.message);
         });
       } else if (e.key === 'Enter' && e.shiftKey) {
         // RECALL = cue suivant — kill + respawn du snapshot complet.

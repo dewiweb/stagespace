@@ -35,11 +35,12 @@ pub async fn update_move_graph_merged(
         };
 
         let audio_state = lock_or_recover(&sh.audio_state);
-        let graph = build_graph_from_json(&graph_json, &audio_state).map_err(IpcError::from)?;
+        let graph =
+            build_graph_from_json(&graph_json, &audio_state).map_err(IpcError::validation)?;
         drop(audio_state);
 
         // Compile avec toutes les entrées live (audio + OSC reçus + plugins).
-        let compiled = compile_graph_live(&graph, &sh).map_err(IpcError::from)?;
+        let compiled = compile_graph_live(&graph, &sh).map_err(IpcError::validation)?;
 
         // Ré-application sous lock, avec check de génération — le move a pu être
         // stoppé puis respawné pendant la compile : dans ce cas on applique au

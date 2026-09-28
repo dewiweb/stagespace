@@ -15,7 +15,7 @@ pub async fn osc_add_mapping(
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
     let receiver = lock_or_recover(&state.osc_receiver);
-    receiver.add_mapping(mapping).map_err(IpcError::from)
+    receiver.add_mapping(mapping).map_err(IpcError::validation)
 }
 
 #[tauri::command]

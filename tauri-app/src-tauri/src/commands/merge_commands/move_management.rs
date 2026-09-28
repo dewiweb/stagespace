@@ -188,18 +188,22 @@ impl Drop for PendingGuard {
 ///   (pas de move fantôme qui streamerait dans le vide) ;
 /// - si un recall de cue est en cours, l'activation est abandonnée avant
 ///   l'insertion (le recall est l'autorité sur la liste des moves).
-pub fn spawn_move(spec: MoveSpec, sh: &Shared) -> Result<String, String> {
+pub fn spawn_move(spec: MoveSpec, sh: &Shared) -> Result<String, IpcError> {
     spawn_move_inner(spec, sh, true)
 }
 
 /// Variante pour `recall_cue` : pendant un recall, `recall_in_progress` est
 /// posé par le recall lui-même — le check "abort if recall in progress" ne
 /// s'applique pas (le recall EST l'autorité sur la liste des moves).
-pub fn spawn_move_for_recall(spec: MoveSpec, sh: &Shared) -> Result<String, String> {
+pub fn spawn_move_for_recall(spec: MoveSpec, sh: &Shared) -> Result<String, IpcError> {
     spawn_move_inner(spec, sh, false)
 }
 
-fn spawn_move_inner(spec: MoveSpec, sh: &Shared, abort_on_recall: bool) -> Result<String, String> {
+fn spawn_move_inner(
+    spec: MoveSpec,
+    sh: &Shared,
+    abort_on_recall: bool,
+) -> Result<String, IpcError> {
     let id = spec.id.clone();
     eprintln!(
         "[ACTIVATE] id={} name={} tracks={:?}",
@@ -211,14 +215,14 @@ fn spawn_move_inner(spec: MoveSpec, sh: &Shared, abort_on_recall: bool) -> Resul
         let mut pending = lock_or_recover(&sh.pending_move_ids);
         let movements = lock_or_recover(&sh.movements);
         if pending.contains(&id) || movements.contains_key(&id) {
-            return Err(format!(
+            return Err(IpcError::conflict(format!(
                 "Move '{id}' is already active or being activated — pick another id"
-            ));
+            )));
         }
         if movements.len() + pending.len() >= MAX_MOVEMENTS {
-            return Err(format!(
+            return Err(IpcError::validation(format!(
                 "Maximum {MAX_MOVEMENTS} movements reached — stop some first"
-            ));
+            )));
         }
         pending.insert(id.clone());
     }
@@ -234,19 +238,19 @@ fn spawn_move_inner(spec: MoveSpec, sh: &Shared, abort_on_recall: bool) -> Resul
     //     mapperait les positions sur une track inexistante.
     if !spec.track_indices.is_empty() {
         if spec.track_indices.len() != spec.osc_ids.len() {
-            return Err(format!(
+            return Err(IpcError::validation(format!(
                 "Move '{id}': track_indices.len()={} != osc_ids.len()={} — \
                  le merge skipperait ce move (silent)",
                 spec.track_indices.len(),
                 spec.osc_ids.len()
-            ));
+            )));
         }
         let global_len = lock_or_recover(&sh.merge_runtime).osc_ids().len();
         if let Some(&bad) = spec.track_indices.iter().find(|&&i| i >= global_len) {
-            return Err(format!(
+            return Err(IpcError::validation(format!(
                 "Move '{id}': track_index {bad} hors de la liste OSC globale \
                  ({global_len} entrées) — mapping stale, re-sélectionner les tracks"
-            ));
+            )));
         }
     }
 
@@ -255,7 +259,7 @@ fn spawn_move_inner(spec: MoveSpec, sh: &Shared, abort_on_recall: bool) -> Resul
         let audio_state = lock_or_recover(&sh.audio_state);
         build_graph_from_json(&spec.graph_json, &audio_state).map_err(|e| {
             eprintln!("[ACTIVATE-ERROR] build_graph_from_json failed: {e}");
-            e
+            IpcError::validation(e)
         })?
     };
 
@@ -272,7 +276,7 @@ fn spawn_move_inner(spec: MoveSpec, sh: &Shared, abort_on_recall: bool) -> Resul
     //    (nodes Plugin → params.plugin_id).
     let compiled = compile_graph_live(&graph, sh).map_err(|e| {
         eprintln!("[ACTIVATE-ERROR] compile_graph failed: {e}");
-        e
+        IpcError::validation(e)
     })?;
 
     // 4. Configurer le worker
@@ -324,7 +328,7 @@ fn spawn_move_inner(spec: MoveSpec, sh: &Shared, abort_on_recall: bool) -> Resul
             },
             spec.osc_ids.clone(),
         )
-        .map_err(|e| format!("Worker playback failed: {e}"))?;
+        .map_err(|e| IpcError::internal(format!("Worker playback failed: {e}")))?;
 
     // 7. Un recall en cours est l'autorité sur la liste des moves —
     //    abandonner proprement plutôt que de ré-introduire un move que le
@@ -332,7 +336,9 @@ fn spawn_move_inner(spec: MoveSpec, sh: &Shared, abort_on_recall: bool) -> Resul
     //    lui-même (spawn_move_for_recall → abort_on_recall = false).
     if abort_on_recall && sh.recall_in_progress.load(Ordering::SeqCst) {
         runtime.stop();
-        return Err("Cue recall in progress — activation aborted".to_string());
+        return Err(IpcError::busy(
+            "Cue recall in progress — activation aborted".to_string(),
+        ));
     }
 
     // 8. Enregistrer le movement — le check recall est refait SOUS le lock :
@@ -344,7 +350,9 @@ fn spawn_move_inner(spec: MoveSpec, sh: &Shared, abort_on_recall: bool) -> Resul
         if abort_on_recall && sh.recall_in_progress.load(Ordering::SeqCst) {
             drop(movements);
             runtime.stop();
-            return Err("Cue recall in progress — activation aborted".to_string());
+            return Err(IpcError::busy(
+                "Cue recall in progress — activation aborted".to_string(),
+            ));
         }
         movements.insert(
             id.clone(),
@@ -410,7 +418,9 @@ fn spawn_move_inner(spec: MoveSpec, sh: &Shared, abort_on_recall: bool) -> Resul
                 if let Some(movement) = movement {
                     movement.runtime.stop();
                 }
-                return Err(format!("Failed to start MergeRuntime: {e}"));
+                return Err(IpcError::internal(format!(
+                    "Failed to start MergeRuntime: {e}"
+                )));
             }
         }
     }
@@ -458,7 +468,6 @@ pub async fn activate_move(
     tauri::async_runtime::spawn_blocking(move || spawn_move(spec, &sh))
         .await
         .map_err(|e| IpcError::internal(format!("Task join error: {e}")))?
-        .map_err(IpcError::from)
 }
 
 /// Retire un move du merge + de la map + stoppe son worker, en vérifiant la
@@ -502,7 +511,7 @@ fn deactivate_move_immediate_arc(
     movements: &Arc<Mutex<HashMap<String, Movement>>>,
     pending: &Arc<Mutex<std::collections::HashSet<String>>>,
     app_handle: &Arc<Mutex<Option<AppHandle>>>,
-) -> Result<String, String> {
+) -> Result<String, IpcError> {
     if !remove_move_checked(movement_id, generation, merge_runtime, movements, pending) {
         return Ok(format!("Move '{movement_id}' already gone"));
     }
@@ -565,8 +574,7 @@ pub async fn deactivate_move(
             )
         })
         .await
-        .map_err(|e| IpcError::internal(format!("Task join error: {e}")))?
-        .map_err(IpcError::from);
+        .map_err(|e| IpcError::internal(format!("Task join error: {e}")))?;
     }
 
     // 4. Attendre la fin du fade dans un thread séparé. Le sleeper vérifie la

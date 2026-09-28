@@ -73,7 +73,7 @@ pub async fn set_move_speed(
     let movements = lock_or_recover(&state.movements);
     let movement = movements
         .get(&movement_id)
-        .ok_or_else(|| format!("Movement '{movement_id}' not found"))?;
+        .ok_or_else(|| IpcError::not_found(format!("Movement '{movement_id}' not found")))?;
     movement.runtime.macros().set_speed(speed);
     Ok(())
 }
@@ -173,7 +173,7 @@ pub async fn set_move_playback_mode(
     let movements = lock_or_recover(&state.movements);
     let movement = movements
         .get(&movement_id)
-        .ok_or_else(|| format!("Movement '{movement_id}' not found"))?;
+        .ok_or_else(|| IpcError::not_found(format!("Movement '{movement_id}' not found")))?;
     if let Some(lm) = loop_mode {
         let mode = match lm.as_str() {
             "oneshot" => LoopMode::OneShot,

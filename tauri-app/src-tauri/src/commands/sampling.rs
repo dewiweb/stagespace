@@ -73,14 +73,14 @@ pub async fn sample_movement_trajectories(
     n_samples: usize,
     duration: f64,
     state: State<'_, AppState>,
-) -> Result<Vec<SampledPath>, String> {
+) -> Result<Vec<SampledPath>, IpcError> {
     // Capturer le sampler + les track_indices puis relâcher le lock AVANT
     // d'échantillonner (pas de lock pendant l'évaluation).
     let (sampler, track_indices) = {
         let movements = lock_or_recover(&state.movements);
         let mv = movements
             .get(&movement_id)
-            .ok_or_else(|| format!("Movement '{movement_id}' not found"))?;
+            .ok_or_else(|| IpcError::not_found(format!("Movement '{movement_id}' not found")))?;
         (mv.runtime.sampler(), mv.track_indices.clone())
     };
     let mr = lock_or_recover(&state.merge_runtime);
@@ -116,14 +116,14 @@ pub async fn sample_movement_trajectory(
     n_samples: usize,
     duration: f64,
     state: State<'_, AppState>,
-) -> Result<Vec<(f64, f64, f64, f64)>, String> {
+) -> Result<Vec<(f64, f64, f64, f64)>, IpcError> {
     // 1. Capturer le sampler puis relâcher le lock movements AVANT de
     //    sampler (idem sample_trajectory : pas de lock pendant l'évaluation).
     let sampler = {
         let movements = lock_or_recover(&state.movements);
         movements
             .get(&movement_id)
-            .ok_or_else(|| format!("Movement '{movement_id}' not found"))?
+            .ok_or_else(|| IpcError::not_found(format!("Movement '{movement_id}' not found")))?
             .runtime
             .sampler()
     };

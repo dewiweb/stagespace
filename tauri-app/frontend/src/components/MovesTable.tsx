@@ -130,7 +130,7 @@ export default function MovesTable() {
   });
 
   // ─── GO feedback ───
-  const [goFeedback, setGoFeedback] = React.useState<string | null>(null);
+  const [goFeedback, setGoFeedback] = React.useState<{ ok: boolean; message: string } | null>(null);
   // Confirmation avant delete — le slot contient graphe+tracks+macros, non
   // récupérable (l'undo ne couvre pas removeMoveSlot).
   const [pendingDeleteSlot, setPendingDeleteSlot] = React.useState<{ id: string; name: string } | null>(null);
@@ -150,12 +150,9 @@ export default function MovesTable() {
   const nextSetlistSlot = nextSetlistSlotId ? moveSlots.find((s) => s.id === nextSetlistSlotId) : null;
 
   const handleGO = async () => {
-    const msg = await goToNextMove();
-    if (msg) {
-      // "GO:" préfixe = succès ; tout le reste est un message d'échec/blocage.
-      setGoFeedback(msg.startsWith('GO:') ? `ok:${msg}` : `err:${msg}`);
-      setTimeout(() => setGoFeedback(null), 3000);
-    }
+    const res = await goToNextMove();
+    setGoFeedback(res);
+    setTimeout(() => setGoFeedback(null), 3000);
   };
 
   return (
@@ -237,8 +234,8 @@ export default function MovesTable() {
             </button>
           </div>
           {goFeedback && (
-            <div className={`text-[10px] mt-1 text-center animate-pulse ${goFeedback.startsWith('ok:') ? 'text-green-400' : 'text-red-400 font-bold'}`}>
-              {goFeedback.slice(4)}
+            <div className={`text-[10px] mt-1 text-center animate-pulse ${goFeedback.ok ? 'text-green-400' : 'text-red-400 font-bold'}`}>
+              {goFeedback.message}
             </div>
           )}
         </div>

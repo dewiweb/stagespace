@@ -67,40 +67,6 @@ impl IpcError {
             message: message.into(),
         }
     }
-
-    /// Classifie un message d'erreur legacy — frontière entre les helpers
-    /// internes `String` et le contrat IPC typé. Heuristique volontairement
-    /// conservative : en cas de doute → `internal`.
-    pub fn classify(message: &str) -> Self {
-        let m = message.to_lowercase();
-        let code = if m.contains("not found") || m.contains("unknown") || m.contains("no cue") {
-            "not_found"
-        } else if m.contains("already") || m.contains("duplicate") || m.contains("generation") {
-            "conflict"
-        } else if m.contains("in progress") || m.contains("busy") {
-            "busy"
-        } else if m.contains("failed to read")
-            || m.contains("failed to write")
-            || m.contains("network")
-            || m.contains("socket")
-            || m.contains("bind")
-            || m.contains("connect")
-        {
-            "io"
-        } else if m.contains("invalid")
-            || m.contains("usage:")
-            || m.contains("missing")
-            || m.contains("maximum")
-        {
-            "validation"
-        } else {
-            "internal"
-        };
-        Self {
-            code,
-            message: message.to_string(),
-        }
-    }
 }
 
 impl std::fmt::Display for IpcError {
@@ -111,37 +77,9 @@ impl std::fmt::Display for IpcError {
 
 impl std::error::Error for IpcError {}
 
-/// Conversion à la frontière : un `Err(format!(...))` legacy devient un
-/// IpcError classifié — permet de migrer les signatures de commands sans
-/// réécrire chaque site d'erreur interne.
-impl From<String> for IpcError {
-    fn from(message: String) -> Self {
-        Self::classify(&message)
-    }
-}
-
-impl From<&str> for IpcError {
-    fn from(message: &str) -> Self {
-        Self::classify(message)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn classify_maps_known_patterns() {
-        assert_eq!(IpcError::classify("Move 'x' not found").code, "not_found");
-        assert_eq!(
-            IpcError::classify("Move 'x' is already active").code,
-            "conflict"
-        );
-        assert_eq!(IpcError::classify("Cue recall in progress").code, "busy");
-        assert_eq!(IpcError::classify("Failed to read file").code, "io");
-        assert_eq!(IpcError::classify("Invalid port").code, "validation");
-        assert_eq!(IpcError::classify("something exploded").code, "internal");
-    }
 
     #[test]
     fn serializes_as_typed_object() {
