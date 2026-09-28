@@ -3,6 +3,7 @@ import { X, Check } from 'lucide-react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
+import { useSignalGraphStore } from '../store/useSignalGraphStore';
 import { PARAM_SCHEMA, getCategoryColor, pluginNodeSchema, pluginParamsOnSwitch, type ParamDef, type NodeParamValue } from './nodeParamSchema';
 import { isSourceNode, isTerminalNode, isBinaryComposite, getInputPorts } from '../utils/connectionRules';
 
@@ -22,6 +23,10 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
   // (le pushGlobalGraph debounced du NodeEditor propage au backend)
   const isGlobalNode = useGlobalGraphStore((s) => s.nodes.some((n) => n.id === id));
   const updateGlobalNodeData = useGlobalGraphStore((s) => s.updateNodeData);
+  // Idem pour le graph signal (modulation) — sans ça les edits de params
+  // tombaient dans le store move (id inconnu → drop silencieux).
+  const isSignalNode = useSignalGraphStore((s) => s.nodes.some((n) => n.id === id));
+  const updateSignalNodeData = useSignalGraphStore((s) => s.updateNodeData);
   const color = getCategoryColor(data.type);
   // Plugin : le schema vient du manifeste (résolu via params.plugin_id) et
   // le label affiché est le nom déclaré — sinon les tables statiques.
@@ -77,12 +82,16 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
       updateGlobalNodeData(id, { params });
       return; // pushGlobalGraph (debounced) gère la propagation backend
     }
+    if (isSignalNode) {
+      updateSignalNodeData(id, { params });
+      return; // pushSignalGraph (debounced) gère la propagation backend
+    }
     updateNodeData(id, { params });
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       useGraphStore.getState().updateGraphLive();
     }, 150);
-  }, [id, data.params, updateNodeData, isGlobalNode, updateGlobalNodeData, isPluginNode, plugins]);
+  }, [id, data.params, updateNodeData, isGlobalNode, updateGlobalNodeData, isSignalNode, updateSignalNodeData, isPluginNode, plugins]);
 
   const renderInput = (def: ParamDef) => {
     const value = data.params?.[def.key];
