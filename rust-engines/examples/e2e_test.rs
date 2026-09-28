@@ -196,7 +196,7 @@ fn main() {
         extra: serde_json::json!({}),
     };
     runtime
-        .play_compiled(compiled, params, osc_ids)
+        .play_compiled(compiled.into(), params, osc_ids)
         .expect("play");
     println!("[5] Playback lancé — écoute OSC 1s...");
 
@@ -291,7 +291,7 @@ fn main() {
         extra: serde_json::json!({}),
     };
     runtime2
-        .play_compiled(compiled2, params2, osc_ids2)
+        .play_compiled(compiled2.into(), params2, osc_ids2)
         .expect("play2");
     println!("Playback avec audio mod (bass=0.8 → radius) lancé...");
 

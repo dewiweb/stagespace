@@ -17,7 +17,7 @@ export const DrawModeOverlay: React.FC = () => {
   return (
     <>
       {/* Z slider overlay */}
-      <div className="absolute top-2 left-2 z-20 bg-gray-900/80 backdrop-blur rounded-lg p-2 border border-orange-600/50 flex items-center gap-2">
+      <div className="absolute top-2 left-2 z-overlay bg-gray-900/80 backdrop-blur rounded-lg p-2 border border-orange-600/50 flex items-center gap-2">
         <span className="text-orange-400 text-[10px] font-mono">Z</span>
         <Slider
           layout="bare" min={-3} max={3} step={0.1} value={drawZ}
@@ -40,7 +40,7 @@ export const DrawModeOverlay: React.FC = () => {
         </button>
       </div>
       {/* Instructions */}
-      <div className="absolute top-2 right-2 z-20 bg-gray-900/80 backdrop-blur rounded-lg px-3 py-1.5 border border-orange-600/50">
+      <div className="absolute top-2 right-2 z-overlay bg-gray-900/80 backdrop-blur rounded-lg px-3 py-1.5 border border-orange-600/50">
         <span className="text-orange-400 text-[10px] font-medium">
           <Pencil size={11} className="inline -mt-0.5" /> Draw mode — click & drag on the scene
         </span>

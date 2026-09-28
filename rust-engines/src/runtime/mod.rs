@@ -11,7 +11,6 @@ use std::time::{Duration, Instant};
 
 mod config;
 mod macros;
-mod overrides;
 mod perf;
 #[cfg(test)]
 mod tests;
@@ -19,7 +18,6 @@ mod types;
 
 pub use config::*;
 pub use macros::*;
-pub use overrides::*;
 pub use perf::*;
 pub use types::*;
 
@@ -33,7 +31,6 @@ pub struct Runtime {
     macros: Arc<MacroState>,
     config: Arc<RuntimeConfig>,
     perf: Arc<PerfMonitor>,
-    overrides: OverrideManager,
     /// Origin = isobarycentre des tracks ciblées — la trajectoire est centrée dessus
     origin: Arc<Mutex<nalgebra::Vector3<f64>>>,
     /// Animation state — depth + phase_offset par track + audio mods
@@ -72,14 +69,14 @@ impl Runtime {
     /// frame (plus de copies synchronisées par polling, plus de lag de 100ms).
     pub fn new_with_audio_state(audio_state: Arc<Mutex<AudioState>>) -> Self {
         // Runtime démarre avec une fonction identité — sera hot-swappée avant play
-        let initial_fn: PositionFn = Box::new(|_t, _i| nalgebra::Vector3::zeros());
+        let initial_fn: PositionFn = Arc::new(|_t, _i| nalgebra::Vector3::zeros());
         Runtime {
             running: Arc::new(AtomicBool::new(false)),
             position_fn: Arc::new(Mutex::new(initial_fn)),
             macros: Arc::new(MacroState::new()),
             config: Arc::new(RuntimeConfig::new()),
             perf: Arc::new(PerfMonitor::new()),
-            overrides: OverrideManager::new(),
+
             origin: Arc::new(Mutex::new(nalgebra::Vector3::zeros())),
             animation_state: Arc::new(Mutex::new(None)),
             audio_state,
@@ -120,6 +117,17 @@ impl Runtime {
             .lock()
             .unwrap_or_else(|e| e.into_inner());
         *buf = Some(buffer);
+    }
+
+    /// Accès au `Arc<PositionBuffer>` pour le test d'identité `ptr_eq` —
+    /// utilisé par le superviseur backend (audit C5) pour vérifier qu'un
+    /// stale-kill vise bien le worker de ce runtime et pas un move plus
+    /// récent ayant réutilisé le même id.
+    pub fn position_buffer_arc(&self) -> Option<Arc<PositionBuffer>> {
+        self.position_buffer
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     /// Définit l'origin (isobarycentre des tracks ciblées)
@@ -173,7 +181,9 @@ impl Runtime {
         self.audio_state.clone()
     }
 
-    /// Hot-swap la fonction de position — pour cue recall sans arrêter le playback
+    /// Hot-swap la fonction de position — pour cue recall sans arrêter le playback.
+    /// Jamais d'attente sur un frame en cours : le worker clone l'Arc sous un
+    /// lock de nanosecondes puis évalue sans lock (audit I8).
     pub fn swap_position_fn(&self, new_fn: PositionFn) {
         let mut old = self.position_fn.lock().unwrap_or_else(|e| e.into_inner());
         *old = new_fn;
@@ -227,47 +237,42 @@ impl TrajectorySampler {
         let radius_scale = msnap.radius_scale;
         let height_offset = msnap.height_offset;
 
-        // Précalculer la matrice de rotation si rotation non-nulle
-        let has_rotation = yaw != 0.0 || pitch != 0.0 || roll != 0.0;
-        let rot_matrix = if has_rotation {
-            use nalgebra::Rotation3;
-            let ry = Rotation3::from_axis_angle(&nalgebra::Vector3::y_axis(), yaw.to_radians());
-            let rx = Rotation3::from_axis_angle(&nalgebra::Vector3::x_axis(), pitch.to_radians());
-            let rz = Rotation3::from_axis_angle(&nalgebra::Vector3::z_axis(), roll.to_radians());
-            Some(rz * rx * ry)
-        } else {
-            None
-        };
+        // Matrice de rotation — ordre canonique `euler_rotation` (X→Y→Z,
+        // unifié avec le modifier sub-graph et le post-process global).
+        let rot_matrix = crate::spatial_transform::euler_rotation(
+            pitch.to_radians(),
+            yaw.to_radians(),
+            roll.to_radians(),
+        );
 
         let mut samples = Vec::with_capacity(n_samples);
         // Origin du move : appliquée comme dans le playback loop (mode worker)
         // pour que les samples soient en world-space, cohérents avec le buffer.
         let origin = *self.origin.lock().unwrap_or_else(|e| e.into_inner());
-        // Lock par chunks : tenir `position_fn` pendant tout le sampling
-        // affame le worker live → stale-kill par le merge au-delà de ~0.5s.
-        const SAMPLE_CHUNK: usize = 512;
-        for chunk_start in (0..n_samples).step_by(SAMPLE_CHUNK) {
-            let chunk_end = (chunk_start + SAMPLE_CHUNK).min(n_samples);
-            {
-                let fn_ref = self.position_fn.lock().unwrap_or_else(|e| e.into_inner());
-                for i in chunk_start..chunk_end {
-                    let t = (i as f64 / (n_samples - 1).max(1) as f64) * duration;
-                    let pos = fn_ref(t, object_index);
-                    // Même chaîne que le worker : radius_scale → height_offset →
-                    // (fade=1) → scale → rotation → + origin + shift
-                    let pos_final = move_transform(
-                        pos,
-                        origin,
-                        scale,
-                        shift,
-                        rot_matrix.as_ref(),
-                        radius_scale,
-                        height_offset,
-                        1.0,
-                    );
-                    samples.push((t, pos_final.x, pos_final.y, pos_final.z));
-                }
-            }
+        // PositionFn = Arc — clone sous un lock de ~ns puis évaluation SANS
+        // lock : un sampling de 10k points n'affame plus le worker live
+        // (audit I8 — avant : Mutex tenu par chunks de 512).
+        let fn_arc = self
+            .position_fn
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        for i in 0..n_samples {
+            let t = (i as f64 / (n_samples - 1).max(1) as f64) * duration;
+            let pos = fn_arc(t, object_index);
+            // Même chaîne que le worker : radius_scale → height_offset →
+            // (fade=1) → scale → rotation → + origin + shift
+            let pos_final = move_transform(
+                pos,
+                origin,
+                scale,
+                shift,
+                rot_matrix.as_ref(),
+                radius_scale,
+                height_offset,
+                1.0,
+            );
+            samples.push((t, pos_final.x, pos_final.y, pos_final.z));
         }
         samples
     }
@@ -343,7 +348,7 @@ impl Runtime {
         let macros = self.macros.clone();
         let config = self.config.clone();
         let perf = self.perf.clone();
-        let overrides = self.overrides.clone();
+
         let origin_arc = self.origin.clone();
         let anim_state_arc = self.animation_state.clone();
         let audio_state_arc = self.audio_state.clone();
@@ -522,37 +527,26 @@ impl Runtime {
                 // Origin du move (ancre monde de la trajectoire) — lue à
                 // chaque frame pour refléter un set_origin en cours de jeu.
                 let move_origin = *origin_arc.lock().unwrap_or_else(|e| e.into_inner());
-                // Précalculer la matrice de rotation si rotation non-nulle
-                let has_rotation = eff_yaw != 0.0 || eff_pitch != 0.0 || eff_roll != 0.0;
-                let rot_matrix = if has_rotation {
-                    use nalgebra::Rotation3;
-                    let ry = Rotation3::from_axis_angle(
-                        &nalgebra::Vector3::y_axis(),
-                        eff_yaw.to_radians(),
-                    );
-                    let rx = Rotation3::from_axis_angle(
-                        &nalgebra::Vector3::x_axis(),
-                        eff_pitch.to_radians(),
-                    );
-                    let rz = Rotation3::from_axis_angle(
-                        &nalgebra::Vector3::z_axis(),
-                        eff_roll.to_radians(),
-                    );
-                    Some(rz * rx * ry)
-                } else {
-                    None
-                };
+                // Matrice de rotation — ordre canonique `euler_rotation`
+                // (X→Y→Z), identique au modifier sub-graph et au merge.
+                let rot_matrix = crate::spatial_transform::euler_rotation(
+                    eff_pitch.to_radians(),
+                    eff_yaw.to_radians(),
+                    eff_roll.to_radians(),
+                );
                 let positions: Vec<(usize, nalgebra::Vector3<f64>)> = {
-                    let fn_ref = position_fn_arc.lock().unwrap_or_else(|e| e.into_inner());
-                    let ovr = overrides.lock();
+                    // Clone d'Arc sous un lock de ~ns (audit I8) — l'évaluation
+                    // de toute la frame se fait SANS tenir le mutex : swap/
+                    // recall/sample ne sont plus retardés par un frame lent.
+                    let fn_ref = position_fn_arc
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .clone();
                     osc_ids
                         .iter()
                         .enumerate()
                         .map(|(obj_idx, &_osc_id)| {
-                            // Si un override existe pour cet objet, l'utiliser
-                            let raw_pos = if let Some(override_pos) = ovr.get(&obj_idx) {
-                                *override_pos
-                            } else {
+                            let raw_pos = {
                                 // Appliquer le phase_offset pour cette track
                                 let phase_off =
                                     track_phase_offsets.get(obj_idx).copied().unwrap_or(0.0);
@@ -651,15 +645,6 @@ impl Runtime {
     pub fn get_perf_stats(&self) -> PerfStats {
         self.perf.get_stats()
     }
-    pub fn set_override(&self, obj_index: usize, pos: nalgebra::Vector3<f64>) {
-        self.overrides.set(obj_index, pos);
-    }
-    pub fn clear_override(&self, obj_index: usize) {
-        self.overrides.clear(obj_index);
-    }
-    pub fn clear_all_overrides(&self) {
-        self.overrides.clear_all();
-    }
     pub fn set_preview_mode(&self, enabled: bool) {
         self.config.set_preview_mode(enabled);
     }
@@ -673,12 +658,10 @@ impl Runtime {
     }
 
     /// Recall d'un cue avec crossfade — hot-swap la position_fn avec interpolation
-    /// `from_fn` = fonction actuelle, `to_fn` = fonction du cue cible
-    /// `fade_duration` = durée du crossfade en secondes (0 = instantané)
+    /// `to_fn` = fonction du cue cible ; `fade_duration` = durée du crossfade
+    /// en secondes (0 = instantané). PositionFn = Arc — l'ancienne fonction
+    /// est clonée sous le lock, jamais de placeholder visible.
     pub fn recall_cue(&self, to_fn: PositionFn, fade_duration: f64) {
-        // Tout le swap se fait sous UN SEUL hold du lock : un frame live ne
-        // peut jamais évaluer le placeholder zeros (sinon tous les tracks
-        // sauteraient à l'origine pendant ~16ms à chaque cue fade).
         let mut guard = self.position_fn.lock().unwrap_or_else(|e| e.into_inner());
         if fade_duration <= 0.0 {
             // Recall instantané
@@ -686,14 +669,9 @@ impl Runtime {
             return;
         }
 
-        // On ne peut pas cloner Box<dyn Fn> : on prend ownership de l'ancienne
-        // fn via mem::replace, puis on ré-assigne immédiatement le crossfade
-        // sous le même guard — le placeholder n'est jamais visible.
-        let placeholder: PositionFn = Box::new(|_t, _i| nalgebra::Vector3::zeros());
-        let from_fn = std::mem::replace(&mut *guard, placeholder);
-
+        let from_fn = guard.clone();
         let fade_start = Instant::now();
-        *guard = Box::new(move |t, i| {
+        *guard = Arc::new(move |t, i| {
             let elapsed = fade_start.elapsed().as_secs_f64();
             if elapsed >= fade_duration {
                 to_fn(t, i)
@@ -790,10 +768,12 @@ fn move_transform(
     } else {
         pos
     };
-    // scale → rotation
-    let pos = pos * scale;
+    // scale → rotation — primitives canoniques `spatial_transform` en
+    // espace local (pivot = centre de la trajectoire = origine du repère)
+    let zero = nalgebra::Vector3::zeros();
+    let pos = crate::spatial_transform::pivot_scale(pos, zero, nalgebra::Vector3::repeat(scale));
     let pos = if let Some(rot) = rot_matrix {
-        rot * pos
+        crate::spatial_transform::pivot_rotate(pos, zero, rot)
     } else {
         pos
     };

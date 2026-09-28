@@ -1,7 +1,7 @@
 //! Hot-swap de graphs : update_move_graph_merged (sub-graph) + update_global_graph (post-process)
 
 use crate::commands::state::Shared;
-use crate::graph::compilation::compile_graph_with_audio_osc;
+use crate::graph::compilation::compile_graph_live;
 use crate::graph::parser::build_graph_from_json;
 use crate::AppState;
 use tauri::State;
@@ -13,7 +13,7 @@ use crate::commands::error::IpcError;
 #[tauri::command]
 pub async fn update_move_graph_merged(
     movement_id: String,
-    graph_json: serde_json::Value,
+    graph_json: stagespace_engines::GraphJson,
     fade_duration: Option<f64>,
     duration: Option<f64>,
     osc_ids: Option<Vec<u32>>,
@@ -26,25 +26,21 @@ pub async fn update_move_graph_merged(
     tauri::async_runtime::spawn_blocking(move || {
         // Snapshot court sous le lock — la compilation (lourde) se fait ensuite
         // SANS tenir `movements`, sinon tout edit live gèle stop/panic/recall.
-        let (generation, overrides) = {
+        let generation = {
             let movements = lock_or_recover(&sh.movements);
             let movement = movements.get(&movement_id).ok_or_else(|| {
                 IpcError::not_found(format!("Movement '{movement_id}' not found"))
             })?;
-            (
-                movement.generation,
-                movement.runtime.audio_param_overrides(),
-            )
+            movement.generation
         };
 
         let audio_state = lock_or_recover(&sh.audio_state);
-        let graph = build_graph_from_json(&graph_json, &audio_state).map_err(IpcError::from)?;
+        let graph =
+            build_graph_from_json(&graph_json, &audio_state).map_err(IpcError::validation)?;
         drop(audio_state);
 
-        let osc_values = lock_or_recover(&sh.osc_receiver).address_values_handle();
-        let compiled =
-            compile_graph_with_audio_osc(&graph, sh.audio_state.clone(), overrides, osc_values)
-                .map_err(IpcError::from)?;
+        // Compile avec toutes les entrées live (audio + OSC reçus + plugins).
+        let compiled = compile_graph_live(&graph, &sh).map_err(IpcError::validation)?;
 
         // Ré-application sous lock, avec check de génération — le move a pu être
         // stoppé puis respawné pendant la compile : dans ce cas on applique au
@@ -54,15 +50,23 @@ pub async fn update_move_graph_merged(
             IpcError::conflict(format!("Movement '{movement_id}' stopped during recompile"))
         })?;
         if movement.generation != generation {
-            eprintln!(
-                "[WARN] update_move_graph_merged: '{movement_id}' respawned during \
-                 compile — applying to the new worker anyway"
-            );
+            // Le graphe a été compilé pour l'ANCIEN contexte (n_objects,
+            // tracks) — l'appliquer au worker respawné donnerait des objets
+            // muets ou des agents fantômes, silencieusement (audit I13).
+            // On refuse : le frontend peut relancer l'edit.
+            return Err(IpcError::conflict(format!(
+                "Movement '{movement_id}' was respawned during compile — retry the edit"
+            )));
         }
 
         // Hot-swap la duration si fournie — ET le snapshot, sinon store_cue
         // capture la durée d'avant l'edit et recall_cue la ressuscite.
         if let Some(dur) = duration {
+            if !dur.is_finite() || dur <= 0.0 {
+                return Err(IpcError::validation(
+                    "duration must be a finite positive number",
+                ));
+            }
             movement.runtime.set_duration(dur);
             movement.duration = dur;
         }
@@ -94,6 +98,11 @@ pub async fn update_move_graph_merged(
         }
 
         let fade = fade_duration.unwrap_or(0.3);
+        if !fade.is_finite() || fade < 0.0 {
+            return Err(IpcError::validation(
+                "fade_duration must be a finite non-negative number",
+            ));
+        }
         // IMPORTANT: recall_cue (swap position_fn) AVANT set_osc_ids.
         movement.runtime.recall_cue(compiled, fade);
         if let Some(ref ids) = osc_ids {
@@ -109,7 +118,7 @@ pub async fn update_move_graph_merged(
 /// Compile et hot-swap le graph global (post-processing)
 #[tauri::command]
 pub async fn update_global_graph(
-    graph_json: serde_json::Value,
+    graph_json: stagespace_engines::GraphJson,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
     let sh = Shared::from_state(&state);
@@ -143,7 +152,12 @@ pub async fn update_global_graph(
 
         let merge_rt = lock_or_recover(&sh.merge_runtime);
         merge_rt.swap_post_process_fn(post_process_fn);
-        merge_rt.set_graph_effects(effects.zones, effects.modulations);
+        merge_rt.set_graph_effects(
+            effects.zones,
+            effects.modulations,
+            effects.barycenter,
+            effects.move_ref,
+        );
         // Le node Merge peut déclarer la stratégie de résolution de conflit
         // (param `strategy`) — appliquée à chaque push du graphe global.
         if let Some(strategy) = effects.strategy {

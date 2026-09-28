@@ -6,7 +6,7 @@ use crate::AppState;
 use stagespace_engines::{LoopMode, MergeStrategy, PlayDirection};
 use tauri::State;
 
-use super::lock_or_recover;
+use super::{lock_or_recover, require_finite, require_finite_vec3};
 
 /// Définit la stratégie de merge
 #[tauri::command]
@@ -37,6 +37,23 @@ pub async fn set_global_macro(
     request: SetMacroRequest,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
+    if let Some(v) = request.scale {
+        require_finite("scale", v)?;
+    }
+    for (name, v) in [
+        ("shiftX", request.shiftX),
+        ("shiftY", request.shiftY),
+        ("shiftZ", request.shiftZ),
+        ("yaw", request.yaw),
+        ("pitch", request.pitch),
+        ("roll", request.roll),
+        ("radius_scale", request.radius_scale),
+        ("height_offset", request.height_offset),
+    ] {
+        if let Some(v) = v {
+            require_finite(name, v)?;
+        }
+    }
     let merge_rt = lock_or_recover(&state.merge_runtime);
     let macros = merge_rt.macros();
     if let Some(s) = request.scale {
@@ -73,8 +90,11 @@ pub async fn set_move_speed(
     let movements = lock_or_recover(&state.movements);
     let movement = movements
         .get(&movement_id)
-        .ok_or_else(|| format!("Movement '{movement_id}' not found"))?;
-    movement.runtime.macros().set_speed(speed);
+        .ok_or_else(|| IpcError::not_found(format!("Movement '{movement_id}' not found")))?;
+    movement
+        .runtime
+        .macros()
+        .set_speed(require_finite("speed", speed)?);
     Ok(())
 }
 
@@ -94,7 +114,7 @@ pub async fn set_move_weight(
         }
     }
     let merge_rt = lock_or_recover(&state.merge_runtime);
-    merge_rt.set_move_weight(&movement_id, weight);
+    merge_rt.set_move_weight(&movement_id, require_finite("weight", weight)?);
     Ok(())
 }
 
@@ -124,6 +144,9 @@ pub async fn set_track_depths(
     depths: Vec<f64>,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
+    for (i, d) in depths.iter().enumerate() {
+        require_finite(&format!("depths[{i}]"), *d)?;
+    }
     let merge_rt = lock_or_recover(&state.merge_runtime);
     merge_rt.set_track_depths(depths);
     Ok(())
@@ -135,6 +158,7 @@ pub async fn set_global_origin(
     origin: [f64; 3],
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
+    let origin = require_finite_vec3("origin", origin)?;
     let merge_rt = lock_or_recover(&state.merge_runtime);
     merge_rt.set_origin(nalgebra::Vector3::new(origin[0], origin[1], origin[2]));
     Ok(())
@@ -173,7 +197,7 @@ pub async fn set_move_playback_mode(
     let movements = lock_or_recover(&state.movements);
     let movement = movements
         .get(&movement_id)
-        .ok_or_else(|| format!("Movement '{movement_id}' not found"))?;
+        .ok_or_else(|| IpcError::not_found(format!("Movement '{movement_id}' not found")))?;
     if let Some(lm) = loop_mode {
         let mode = match lm.as_str() {
             "oneshot" => LoopMode::OneShot,

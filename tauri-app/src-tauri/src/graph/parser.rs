@@ -1,46 +1,61 @@
-use stagespace_engines::{AudioState, Edge, Graph, Node, NodeId, NodeType};
+use stagespace_engines::{AudioState, Edge, Graph, GraphJson, Node, NodeId, NodeType};
 use std::collections::HashMap;
 
-/// Helper : conversion graphe frontend → Rust Graph
+/// Helper : conversion graphe frontend → Rust Graph.
+/// `graph_json` est le contrat wire typé (`GraphJson`) — la désérialisation a
+/// déjà validé la structure (id/source/target présents).
+///
+/// `build_graph_from_value` est la porte d'entrée test/legacy pour les
+/// payloads déjà matérialisés en `Value` (fixtures `json!`).
 pub fn build_graph_from_json(
-    graph_json: &serde_json::Value,
+    graph_json: &GraphJson,
     audio_state: &AudioState,
 ) -> Result<Graph, String> {
-    let nodes = graph_json
-        .get("nodes")
-        .and_then(|v| v.as_array())
-        .ok_or("Missing 'nodes' array")?;
-    let edges = graph_json
-        .get("edges")
-        .and_then(|v| v.as_array())
-        .ok_or("Missing 'edges' array")?;
+    graph_json.check_version()?;
+
+    let nodes = &graph_json.nodes;
+    let edges = &graph_json.edges;
+
+    // Bornes à la frontière IPC (audit B2) — rejet avant de construire le
+    // Graph : le validator applique les mêmes limites, mais un payload
+    // géant ne doit même pas être matérialisé.
+    if nodes.len() > stagespace_engines::validator::MAX_GRAPH_NODES {
+        return Err(format!(
+            "Graph too large: {} nodes (max {})",
+            nodes.len(),
+            stagespace_engines::validator::MAX_GRAPH_NODES
+        ));
+    }
+    if edges.len() > stagespace_engines::validator::MAX_GRAPH_EDGES {
+        return Err(format!(
+            "Graph too large: {} edges (max {})",
+            edges.len(),
+            stagespace_engines::validator::MAX_GRAPH_EDGES
+        ));
+    }
 
     let mut graph = Graph::new();
     let mut id_map: HashMap<String, NodeId> = HashMap::new();
 
     for node in nodes {
-        let frontend_id = node
-            .get("id")
-            .and_then(|v| v.as_str())
-            .ok_or("Missing node id")?
-            .to_string();
+        let frontend_id = node.id.clone();
 
         // Priorité: data.type (le vrai type d'engine) > type (peut être "custom" en React Flow)
         let type_str = node
-            .get("data")
-            .and_then(|d| d.get("type"))
-            .and_then(|v| v.as_str())
-            .or_else(|| node.get("type").and_then(|v| v.as_str()))
+            .data
+            .node_type
+            .as_deref()
+            .or(node.rf_type.as_deref())
             .ok_or("Missing node type")?;
 
         let node_type: NodeType = serde_json::from_value(serde_json::json!(type_str))
             .map_err(|e| format!("Invalid node type '{type_str}': {e}"))?;
 
-        let mut params = node
-            .get("data")
-            .and_then(|d| d.get("params"))
-            .cloned()
-            .unwrap_or_else(|| serde_json::json!({}));
+        let mut params = if node.data.params.is_null() {
+            serde_json::json!({})
+        } else {
+            node.data.params.clone()
+        };
 
         // Injecter les valeurs audio
         if type_str == "BPM" {
@@ -78,15 +93,9 @@ pub fn build_graph_from_json(
             }
         }
 
-        let pos = node.get("position");
-        let x = pos
-            .and_then(|p| p.get("x"))
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.0) as f32;
-        let y = pos
-            .and_then(|p| p.get("y"))
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.0) as f32;
+        let pos = node.position.as_ref();
+        let x = pos.map(|p| p.x).unwrap_or(0.0) as f32;
+        let y = pos.map(|p| p.y).unwrap_or(0.0) as f32;
 
         let new_id = NodeId::new();
         id_map.insert(frontend_id, new_id);
@@ -99,30 +108,20 @@ pub fn build_graph_from_json(
     }
 
     for edge in edges {
-        let source = edge
-            .get("source")
-            .and_then(|v| v.as_str())
-            .ok_or("Missing edge source")?;
-        let target = edge
-            .get("target")
-            .and_then(|v| v.as_str())
-            .ok_or("Missing edge target")?;
         let from = *id_map
-            .get(source)
-            .ok_or_else(|| format!("Unknown source node id: {source}"))?;
+            .get(edge.source.as_str())
+            .ok_or_else(|| format!("Unknown source node id: {}", edge.source))?;
         let to = *id_map
-            .get(target)
-            .ok_or_else(|| format!("Unknown target node id: {target}"))?;
+            .get(edge.target.as_str())
+            .ok_or_else(|| format!("Unknown target node id: {}", edge.target))?;
         let from_port = edge
-            .get("sourceHandle")
-            .and_then(|v| v.as_str())
-            .unwrap_or("output")
-            .to_string();
+            .sourceHandle
+            .clone()
+            .unwrap_or_else(|| "output".to_string());
         let to_port = edge
-            .get("targetHandle")
-            .and_then(|v| v.as_str())
-            .unwrap_or("input")
-            .to_string();
+            .targetHandle
+            .clone()
+            .unwrap_or_else(|| "input".to_string());
         graph.add_edge(Edge {
             from,
             to,
@@ -182,4 +181,15 @@ pub fn build_graph_from_json(
     }
 
     Ok(graph)
+}
+
+/// Compat test/legacy : désérialise un `Value` en `GraphJson` puis parse.
+/// Les chemins de production passent par `build_graph_from_json` directement.
+pub fn build_graph_from_value(
+    graph_json: &serde_json::Value,
+    audio_state: &AudioState,
+) -> Result<Graph, String> {
+    let typed: GraphJson = serde_json::from_value(graph_json.clone())
+        .map_err(|e| format!("Invalid graph payload: {e}"))?;
+    build_graph_from_json(&typed, audio_state)
 }

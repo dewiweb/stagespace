@@ -322,13 +322,26 @@ fi
 # (pursue/evade/orbit/arrive), figure8, pendulum, perlin, bouncing, etc.
 # ═══════════════════════════════════════════════════════════════
 echo "── Test 20: Template sweep (tous les templates + alias follow) ──"
+
+# Les templates plugin (plugin:<id>, wobble, morph) nécessitent les bundles
+# .ssx — le CLI scanne <data_dir>/com.stagespace.studio/plugins/ au boot.
+# On y dépose les fixtures commitées de rust-engines (vrais .ssx).
+PLUGINS_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/com.stagespace.studio/plugins"
+mkdir -p "$PLUGINS_DIR"
+cp "$SCRIPT_DIR/../../../rust-engines/tests/fixtures/"*.ssx "$PLUGINS_DIR/"
+
 run_cli "templates"
 # Les ids sont la 1re colonne des lignes commençant par une minuscule
 TEMPLATE_IDS=$(echo "$OUT" | awk '/^[a-z]/ {print $1}')
+# 'plugin:<id>' est un placeholder — on le remplace par le vrai bundle chargé
+TEMPLATE_IDS="${TEMPLATE_IDS//plugin:<id>/plugin:lemniscate}"
 # Les alias de follow ne sont pas listés par `templates` — on les ajoute
 TEMPLATE_IDS="$TEMPLATE_IDS pursue evade orbit arrive"
 for t in $TEMPLATE_IDS; do
-    run_cli "activate-move $t --tracks 1-3; sample --move $t-1 --obj 0 --samples 3 --duration 2; stop-all"
+    # L'id du move sanitise le template name (':' → '-') : plugin:lemniscate
+    # → plugin-lemniscate-1
+    move_name="$(echo "$t" | tr ':' '-')"
+    run_cli "activate-move $t --tracks 1-3; sample --move $move_name-1 --obj 0 --samples 3 --duration 2; stop-all"
     if [ "$CLI_RC" -eq 0 ] \
         && echo "$OUT" | grep -q "activated" \
         && echo "$OUT" | grep -q "0.000," \

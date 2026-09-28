@@ -95,7 +95,7 @@ fn bench_perlin_noise(c: &mut Criterion) {
 }
 
 fn bench_swarm(c: &mut Criterion) {
-    let engine = swarm::Swarm;
+    let engine = swarm::Swarm::default();
     let params = EngineParams {
         n_objects: 9,
         duration: 4.0,

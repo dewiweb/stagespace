@@ -1,3 +1,4 @@
+use crate::graph_json::GraphJson;
 use crate::kinematics::ChannelModulation;
 use crate::osc_receiver::OscMapping;
 use crate::osc_sender::SpatialChannels;
@@ -6,16 +7,25 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use ts_rs::TS;
 
+/// Version courante du schéma Cue. Cues sans le champ = legacy (0).
+pub const CUE_SCHEMA_VERSION: u32 = 1;
+
 /// Cue - snapshot complet d'un moment du spectacle
 /// Contient le graphe + les macros + les tracks ciblées + le fade
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct Cue {
     pub id: String,
+    /// Version du schéma — le backend rejette les cues d'une version future.
+    #[serde(default)]
+    #[ts(optional)]
+    #[ts(type = "number | null")]
+    pub schema_version: Option<u32>,
     pub name: String,
     pub description: String,
-    #[ts(type = "unknown")]
-    pub graph: serde_json::Value,
+    /// Sub-graph du move principal (contrat `GraphJson` — legacy accepté,
+    /// version rejetée si > courante au recall).
+    pub graph: GraphJson,
     pub timestamp: f64,
     /// Macros au moment du store (speed, scale, shift, rotation)
     #[serde(default)]
@@ -34,8 +44,7 @@ pub struct Cue {
     /// Graph global (post-processing) au moment du store.
     /// Si présent, sera hot-swappé lors du recall.
     #[serde(default)]
-    #[ts(type = "unknown | null")]
-    pub global_graph: Option<serde_json::Value>,
+    pub global_graph: Option<GraphJson>,
 
     /// IDs des moves actifs au moment du store.
     /// Lors du recall : désactive les moves non listés, active ceux listés.
@@ -93,8 +102,8 @@ pub struct MoveSnapshot {
     /// Nom affiché
     pub name: String,
     /// Sub-graph JSON (nodes/edges) — recompilé au recall
-    #[ts(type = "unknown")]
-    pub graph_json: serde_json::Value,
+    #[serde(default)]
+    pub graph_json: GraphJson,
     /// OSC ids ciblés par le move
     #[serde(default)]
     pub osc_ids: Vec<u32>,
@@ -266,9 +275,10 @@ mod tests {
         let mut manager = CuelistManager::new();
         let cue = Cue {
             id: "cue1".to_string(),
+            schema_version: None,
             name: "Test Cue".to_string(),
             description: "Test".to_string(),
-            graph: serde_json::json!({}),
+            graph: serde_json::from_value(serde_json::json!({})).unwrap(),
             timestamp: 0.0,
             macros: None,
             track_indices: vec![],
@@ -294,9 +304,10 @@ mod tests {
         let mut manager = CuelistManager::new();
         let cue = Cue {
             id: "cue1".to_string(),
+            schema_version: None,
             name: "Test Cue".to_string(),
             description: "Test".to_string(),
-            graph: serde_json::json!({}),
+            graph: serde_json::from_value(serde_json::json!({})).unwrap(),
             timestamp: 0.0,
             macros: None,
             track_indices: vec![],
@@ -326,9 +337,10 @@ mod tests {
 
         let cue = Cue {
             id: "cue-ext".to_string(),
+            schema_version: None,
             name: "Extended Cue".to_string(),
             description: "Test with Phase 3 fields".to_string(),
-            graph: serde_json::json!({"nodes": []}),
+            graph: serde_json::from_value(serde_json::json!({"nodes": []})).unwrap(),
             timestamp: 12345.0,
             macros: Some(MacroSnapshot {
                 speed: 1.5,
@@ -343,7 +355,12 @@ mod tests {
             track_indices: vec![0, 1, 2],
             fade_duration: 1.0,
             cue_number: Some("1.1".to_string()),
-            global_graph: Some(serde_json::json!({"nodes": [{"type": "RadiusScale"}]})),
+            global_graph: Some(
+                serde_json::from_value(
+                    serde_json::json!({"nodes": [{"id": "g1", "type": "RadiusScale"}]}),
+                )
+                .unwrap(),
+            ),
             active_move_ids: vec!["move-a".to_string(), "move-b".to_string()],
             per_track_depths: vec![0.5, 1.0, 1.5],
             manual_positions: manual_pos,
@@ -392,9 +409,10 @@ mod tests {
 
         let cue = Cue {
             id: "p4".to_string(),
+            schema_version: None,
             name: "Phase4".to_string(),
             description: String::new(),
-            graph: serde_json::json!({}),
+            graph: serde_json::from_value(serde_json::json!({})).unwrap(),
             timestamp: 0.0,
             macros: None,
             track_indices: vec![],
@@ -483,9 +501,10 @@ mod tests {
         let mut manager = CuelistManager::new();
         let cue = Cue {
             id: "cue1".to_string(),
+            schema_version: None,
             name: "Test Cue".to_string(),
             description: "Test".to_string(),
-            graph: serde_json::json!({}),
+            graph: serde_json::from_value(serde_json::json!({})).unwrap(),
             timestamp: 0.0,
             macros: None,
             track_indices: vec![],
@@ -512,9 +531,10 @@ mod tests {
         let mut manager = CuelistManager::new();
         let cue = Cue {
             id: "cue1".to_string(),
+            schema_version: None,
             name: "Test Cue".to_string(),
             description: "Test".to_string(),
-            graph: serde_json::json!({}),
+            graph: serde_json::from_value(serde_json::json!({})).unwrap(),
             timestamp: 0.0,
             macros: None,
             track_indices: vec![],
@@ -542,9 +562,10 @@ mod tests {
         let mut manager = CuelistManager::new();
         let cue = Cue {
             id: "cue1".to_string(),
+            schema_version: None,
             name: "Test Cue".to_string(),
             description: "Test".to_string(),
-            graph: serde_json::json!({}),
+            graph: serde_json::from_value(serde_json::json!({})).unwrap(),
             timestamp: 0.0,
             macros: None,
             track_indices: vec![],
@@ -571,9 +592,10 @@ mod tests {
         let mut manager = CuelistManager::new();
         let cue = Cue {
             id: "cue1".to_string(),
+            schema_version: None,
             name: "Test Cue".to_string(),
             description: "Test".to_string(),
-            graph: serde_json::json!({}),
+            graph: serde_json::from_value(serde_json::json!({})).unwrap(),
             timestamp: 0.0,
             macros: None,
             track_indices: vec![],
@@ -594,9 +616,10 @@ mod tests {
 
         let updated = Cue {
             id: "cue1".to_string(),
+            schema_version: None,
             name: "Updated Cue".to_string(),
             description: "Updated".to_string(),
-            graph: serde_json::json!({}),
+            graph: serde_json::from_value(serde_json::json!({})).unwrap(),
             timestamp: 1.0,
             macros: None,
             track_indices: vec![],
@@ -624,9 +647,10 @@ mod tests {
         let mut manager = CuelistManager::new();
         let cue = Cue {
             id: "cue1".to_string(),
+            schema_version: None,
             name: "Test Cue".to_string(),
             description: "Test".to_string(),
-            graph: serde_json::json!({}),
+            graph: serde_json::from_value(serde_json::json!({})).unwrap(),
             timestamp: 0.0,
             macros: None,
             track_indices: vec![],

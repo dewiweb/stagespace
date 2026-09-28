@@ -11,6 +11,15 @@ export default {
           accent: '#3b82f6',
         },
       },
+      // Échelle de z-index nommée — fini les z-10/z-50/z-[9999] ad hoc.
+      // Tout nouvel overlay DOIT utiliser un token, pas un nombre.
+      zIndex: {
+        overlay: '20', // overlays dans le canvas 3D (mode UI, indicateurs)
+        raised: '30',  // headers sticky de palette, debug overlay
+        popover: '50', // tooltips, modals, dropdowns
+        menu: '70',    // menus contextuels (au-dessus des modals)
+        toast: '9999', // toasts + flash panic — toujours au sommet
+      },
     },
   },
   plugins: [],

@@ -278,7 +278,8 @@ describe('moveSetlistItem', () => {
 describe('goToNextMove', () => {
   it('returns error message on empty setlist', async () => {
     const result = await useGraphStore.getState().goToNextMove();
-    expect(result).toContain('Setlist vide');
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('Empty setlist');
   });
 
   it('returns error message at end of setlist', async () => {
@@ -288,7 +289,8 @@ describe('goToNextMove', () => {
       moveSlots: [makeSlot({ id: 'slot-1' })],
     } as any);
     const result = await useGraphStore.getState().goToNextMove();
-    expect(result).toContain('Fin de la setlist');
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('Fin de la setlist');
   });
 
   it('returns error if next slot not found', async () => {
@@ -298,7 +300,8 @@ describe('goToNextMove', () => {
       moveSlots: [makeSlot({ id: 'slot-1' })],
     } as any);
     const result = await useGraphStore.getState().goToNextMove();
-    expect(result).toContain('introuvable');
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('introuvable');
   });
 });
 

@@ -4,7 +4,7 @@
 use serde::Serialize;
 use stagespace_engines::{
     init_logging, AudioCaptureManager, AudioState, MergeRuntime, OscReceiver, OscSender,
-    PresetManager, Runtime,
+    PluginRegistry, PresetManager, Runtime,
 };
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU64};
@@ -13,6 +13,7 @@ use tauri::{AppHandle, Manager, State};
 
 pub mod commands;
 pub mod graph;
+pub mod supervisor;
 use commands::animation::{launch_animation, update_animation_state};
 use commands::audio::{
     get_audio_state, list_audio_devices, start_audio_capture, start_audio_poller,
@@ -37,12 +38,11 @@ use commands::osc::{
     osc_in_stats, osc_list_mappings, osc_remove_mapping, osc_set_in_enabled, osc_suppress_in,
     send_osc_position, set_osc_output, set_osc_receiver_port,
 };
-use commands::overrides::{clear_all_overrides, set_object_override};
 use commands::playback::set_macro;
+use commands::plugins::{import_plugin, list_plugins, reload_plugins};
 use commands::presets::{preset_delete, preset_list, preset_load, preset_save};
 use commands::sampling::{
     frontend_log, get_perf_stats, sample_movement_trajectories, sample_movement_trajectory,
-    sample_trajectory,
 };
 use commands::state::lock_or_recover;
 
@@ -70,6 +70,14 @@ pub struct AppState {
     pub audio_capture: Arc<Mutex<AudioCaptureManager>>,
     /// Flag pour arrêter le poller audio proprement à la fermeture
     pub audio_poller_shutdown: Arc<AtomicBool>,
+    /// Flag pour arrêter le superviseur backend (watchdog merge + kill
+    /// des workers zombies — audits C5/C7) à la fermeture de l'app.
+    pub supervisor_shutdown: Arc<AtomicBool>,
+    /// Registry des plugins WASM — None si wasmtime n'a pas pu s'initialiser.
+    /// Mutex : `reload_plugins` re-scanne in-place sans stopper le runtime.
+    pub plugin_registry: Option<Arc<Mutex<stagespace_engines::PluginRegistry>>>,
+    /// Dossier des bundles `.ssx` (`<app_data_dir>/plugins/`).
+    pub plugins_dir: Option<std::path::PathBuf>,
 }
 
 /// Un movement = un runtime indépendant avec ses propres tracks et mode (preview/live)
@@ -83,7 +91,7 @@ pub struct Movement {
     pub is_preview: bool,
     pub track_indices: Vec<usize>, // indices des tracks dans le .hol
     /// Sub-graph JSON utilisé à l'activation — snapshot pour les cues
-    pub graph_json: serde_json::Value,
+    pub graph_json: stagespace_engines::GraphJson,
     /// Durée du move (secondes)
     pub duration: f64,
     /// Loop mode sérialisé : "loop" | "oneshot"
@@ -148,6 +156,33 @@ pub fn run() {
                     eprintln!("[FATAL] MergeRuntime: no UDP port available — exiting");
                     std::process::exit(1);
                 });
+            // Plugins WASM — dossier `<data_dir>/com.stagespace.studio/plugins/`
+            // (même racine que l'app_data_dir Tauri : identifier de
+            // tauri.conf.json). Un plugin cassé n'empêche pas les autres —
+            // erreurs collectées dans le registry, visibles via list_plugins.
+            let plugins_dir =
+                dirs::data_dir().map(|d| d.join("com.stagespace.studio").join("plugins"));
+            if let Some(dir) = &plugins_dir {
+                let _ = std::fs::create_dir_all(dir);
+            }
+            let plugin_registry = match PluginRegistry::new() {
+                Ok(mut reg) => {
+                    if let Some(dir) = &plugins_dir {
+                        let n = reg.scan_dir(dir);
+                        if n > 0 {
+                            eprintln!("[PLUGINS] {n} plugin(s) loaded from {}", dir.display());
+                        }
+                        for (path, err) in reg.errors() {
+                            eprintln!("[PLUGINS-ERROR] {}: {err}", path.display());
+                        }
+                    }
+                    Some(Arc::new(Mutex::new(reg)))
+                }
+                Err(e) => {
+                    eprintln!("[PLUGINS-ERROR] wasmtime init failed: {e}");
+                    None
+                }
+            };
             AppState {
                 audio_state,
                 osc_receiver: Arc::new(Mutex::new(OscReceiver::new(8001))),
@@ -160,6 +195,9 @@ pub fn run() {
                 recall_in_progress: Arc::new(std::sync::atomic::AtomicBool::new(false)),
                 audio_capture: Arc::new(Mutex::new(AudioCaptureManager::new())),
                 audio_poller_shutdown: Arc::new(AtomicBool::new(false)),
+                supervisor_shutdown: Arc::new(AtomicBool::new(false)),
+                plugin_registry,
+                plugins_dir,
             }
         })
         .on_window_event(|window, event| {
@@ -191,9 +229,12 @@ pub fn run() {
                     let capture = lock_or_recover(&state.audio_capture);
                     capture.stop();
                 }
-                // Arrêter le poller audio
+                // Arrêter le poller audio et le superviseur backend
                 state
                     .audio_poller_shutdown
+                    .store(true, std::sync::atomic::Ordering::SeqCst);
+                state
+                    .supervisor_shutdown
                     .store(true, std::sync::atomic::Ordering::SeqCst);
                 eprintln!("[INFO] All movements stopped on window close");
             }
@@ -238,6 +279,16 @@ pub fn run() {
                 let state: &AppState = &app.state();
                 start_audio_poller(app_handle, state);
                 eprintln!("[INFO] Audio state poller started");
+            }
+
+            // Démarrer le superviseur backend (audits C5/C7) — kill des
+            // workers zombies + restart du merge sans dépendre du polling
+            // frontend. Une webview gelée ne peut plus provoquer de
+            // blackout OSC définitif.
+            {
+                let state: &AppState = &app.state();
+                supervisor::start(state);
+                eprintln!("[INFO] Backend supervisor started");
             }
 
             // Sur Linux WebKitGTK : autoriser getUserMedia (microphone)
@@ -296,10 +347,7 @@ pub fn run() {
             load_graph_from_file,
             send_osc_position,
             get_perf_stats,
-            set_object_override,
-            clear_all_overrides,
             discover_osc_targets,
-            sample_trajectory,
             sample_movement_trajectories,
             sample_movement_trajectory,
             launch_animation,
@@ -348,6 +396,10 @@ pub fn run() {
             store_cue,
             recall_cue,
             frontend_log,
+            // Plugins WASM (bundles .ssx dans <data_dir>/plugins/)
+            list_plugins,
+            reload_plugins,
+            import_plugin,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -373,3 +425,7 @@ mod example_show_test_file;
 #[cfg(test)]
 #[path = "tests/complex_graph_tests.rs"]
 mod complex_graph_test_file;
+
+#[cfg(test)]
+#[path = "tests/supervisor_tests.rs"]
+mod supervisor_test_file;

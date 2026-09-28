@@ -541,6 +541,124 @@ Note historique : le "trigger plane + threshold de réarmement" de Mathews
 (1970) est le premier anti-rebond gestuel documenté — nous avons le même
 mécanisme dans les falloffs/triggers.
 
+### 3.11 Les patchers temps réel — Pure Data, plugdata, Max
+
+**Le trou de la passe précédente** : l'HCI gestuelle a été couverte, mais
+pas le précédent d'interaction le plus direct — l'environnement de
+patching visuel temps réel utilisable *en performance*. C'est exactement
+ce que STAGESPACE est : un graphe nodal dont la surface d'exécution reste
+vivante.
+
+#### Pure Data (Puckette 1996→) — ce qui a été inventé de durable
+
+- **L'objet comme unité** : `[name arg1 arg2]` — création par frappe, args
+  inline dans la boîte, inlets gauche=hot/autres=cold. La palette +
+  l'inspecteur de STAGESPACE en sont l'équivalent structuré (args → params
+  typés dans le panneau).
+- **Deux domaines visuellement distincts** : cordes messages (control) vs
+  cordes signal `~` — épaisseur/couleur différentes. Notre équivalent à
+  exploiter : différencier les edges trajectory / duration / spline.
+- **Abstractions + subpatches** : un fichier .pd est un objet réutilisable
+  (`$0` scope local, `$1..n` args de création). Nos templates/`Custom`
+  animations = proto-abstractions — le gap est "sélection → abstraction
+  palette" et les args d'instanciation.
+- **Graph-On-Parent** : une région du subpatch expose ses objets GUI sur
+  le parent — la *surface de performance est construite depuis la même
+  toile*. Antérieur exact de notre Perform "params à la demande".
+- **Help patches** : clic-droit → Help ouvre un patch **exécutable** qui
+  documente l'objet. La documentation est un graphe, pas du texte.
+- **Format texte** : le patch se copie-colle sur un forum — la culture de
+  partage de Pd tient à ça. `.hfg` JSON est diffable mais pas "pasteable"
+  dans l'UI.
+- **deken** : package manager d'externals intégré (Pd ≥0.47). Faiblesse
+  connue : signatures GPG non vérifiées — notre durcissement host WASM
+  (fuel, StoreLimits, zéro import) est déjà plus strict.
+- **`[send]`/`[receive]` sans fil** : bus nommés qui désencombrent les
+  grosses toiles. Chez nous : OSC mappings + MoveRef (et `move_id`
+  décoratif — voir l'audit nodes).
+- **Edit/Run (Ctrl+E)** : en Run seuls les objets GUI répondent — le patch
+  est l'instrument. = notre Perform mode.
+
+#### plugdata (Schoen, JUCE, AGPL) — la modernisation UX, point par point
+
+plugdata est la référence "comment rendre un patcher pro en 2024" :
+
+- **Trois modes** : Edit / Run / **Present** — Present n'affiche que les
+  objets *marqués pour présentation* (GOP formalisé en vue). Gap direct :
+  notre Perform affiche tout le schema du node sélectionné ; un flag
+  "pin to Perform" par param produirait une surface curée.
+- **Sidebar** : inspector avec 3 modes (auto/pinned/hidden), console,
+  doc browser, panneau params DAW.
+- **Palette flottante** (Ctrl+[), catégorisée, **palettes custom** —
+  l'utilisateur épingle ses objets fréquents.
+- **Autopatching** : déposer un objet *sur une connexion* l'insère dans la
+  chaîne ; Ctrl+K connecte les objets sélectionnés ; Ctrl+D duplique en
+  gardant les connexions. Pour nous, le modifier-on-edge-drop est le cas
+  idéal : Circular→Output + drop Scale = Circular→Scale→Output.
+- **Connection activity display** (v0.9) : les cordes s'animent quand des
+  données passent — la toile *vit* pendant l'exécution. Nos edges sont
+  statiques ; pulser les edges du graphe du move actif est un feedback
+  live naturel.
+- **Cordes segmentées avec flèches aux coudes**, devant/derrière togglable.
+- **Command input** : envoyer un message à l'objet sélectionné sans
+  créer de message box.
+- **F1 = référence objet, F2 = help patch runnable**. Notre équivalent
+  immédiat : clic-droit sur un node → "Open example" charge le template
+  `shapePresets` qui l'utilise (le contenu existe déjà).
+- **patch store** (v0.9.2) + deken redesigné : distribution communautaire
+  intégrée. Notre `.ssx` + import UI = deken local ; un store/registry
+  distant est l'extension naturelle (avec trust — voir §plugins).
+- **Heavy/hvcc** : le patch compile vers C++/VST/OWL/WASM. Même direction
+  que nous (patch → code compilé) — notre compiler→f(t) fait déjà ça en
+  interne ; l'*export* n'a pas de sens pour un moteur OSC.
+- **Mode plugin** : le patch tourne en VST3/AU/CLAP/LV2 dans la DAW,
+  `[param]` exposés à l'automation, état sauvé avec le projet. Non
+  applicable tel quel (on émet des positions, pas de l'audio) — mais la
+  leçon "l'app accepte de vivre *dans* l'hôte de production" rejoint la
+  roadmap OSCQuery/MCP : être pilotable est notre "plugin mode".
+
+#### Max — le frère commercial
+
+- **pattr/snapshot system** : états nommés rappelables ≈ nos cues.
+- **Presentation mode** : précédent direct du Present de plugdata.
+- **poly~** : multi-instance d'un patch ≈ nos slots concurrents.
+
+#### Cartographie sur l'existant
+
+```
+DÉJÀ COUVERT                              GAP IDENTIFIÉ
+  Edit/Perform ≈ Edit/Run ✓                 Present/pin-to-Perform curé
+  Inspector typé ≈ inspector ✓              Autopatch : drop node sur edge
+  Palette catégorisée + hover ✓             Quick-add (recherche au canvas)
+  Highlight cibles + toast rejet ✓          Edges animées (activité)
+  Minimap, undo/redo, tabs ✓                Edge color-code par port
+  .ssx + import UI ≈ deken local ✓          Help runnable (template par node)
+  PANIC ≈ safety limiter ✓                  Store communautaire .ssx/.hfg
+  Cues ≈ pattr/snapshots ✓                  Save-sélection → abstraction
+  Slots ≈ poly~ ✓                           Ctrl+D garde les connexions
+```
+
+#### Enseignements pour STAGESPACE
+
+1. **Le Perform doit devenir "curable"** — GOP/Present prouvent que la
+   surface live est un sous-ensemble *choisi* du graphe, pas le schema
+   complet. Notre demande "params à la demande" converge : un pin par
+   param suffit.
+2. **Autopatch modifier-on-edge** — le geste le plus rentable : nos
+   modifiers sont précisément faits pour s'insérer dans une chaîne.
+3. **Quick-add** — le pattern Pd/Blender/plugdata est universel :
+   double-clic canvas → frappe → Enter. La palette souris seule est un
+   goulot connu des patchers.
+4. **Edges vivantes** — activity display = feedback temps réel gratuit
+   (on a déjà les positions à 60Hz côté runtime).
+5. **La doc = un graphe** — F2/help-patch : nos templates existent, il
+   manque le lien node → "ouvrir un exemple qui l'utilise".
+6. **Cordes typées** — colorer trajectory/duration/spline clarifie la
+   lecture (Pd le fait depuis 1996 entre control et signal).
+7. **Le store est une suite, pas une v1** — deken→patch store montre le
+   chemin : local d'abord, distant ensuite, signature obligatoire avant
+   le distant (deken le sait et ne le fait pas — on peut faire mieux).
+
 ---
 
 ## PARTIE IV — Écosystème de production : show control, co-création, live coding
@@ -692,6 +810,15 @@ plus un orchestrateur ouvert et renderer-agnostic prend de la valeur.
 - Canaux étendus : spread/distance/gain/presence (modèle ToscA)
 - Node `PerceptualVelocity` (°/s autour du listener — psychoacoustique)
 
+**Court terme — interaction (enseignements patchers, §3.11) :**
+- Autopatch : drop d'un modifier sur une edge → insertion dans la chaîne
+- Quick-add : double-clic canvas / touche → recherche de node → Enter
+- Help runnable : clic-droit node → "Open example" (shapePresets)
+- Pin-to-Perform : flag par param → surface Perform curée (GOP/Present)
+- Edge color-code par type de port (trajectory/duration/spline)
+- Edges animées quand le graphe du move actif produit (connection
+  activity de plugdata)
+
 **Moyen terme — effets et interop :**
 - Node `Zone` (SFFX contrôle-side)
 - Node `Proximity` (relationnels)
@@ -707,6 +834,9 @@ plus un orchestrateur ouvert et renderer-agnostic prend de la valeur.
 
 **Long terme — écosystème :**
 - Plugin VST3 ou API embedding (modèle ToscA/Wwise)
+- Store communautaire .ssx/.hfg (deken → patch store : signature avant
+  distribution — §3.11)
+- Abstractions : save-sélection → item de palette paramétrable (§3.11)
 - WebSocket/REST → TouchDesigner ; pont Strudel/live coding
 - Node `VirtualMic` (paradigme ViMiC — composer l'écoute)
 - Node `DescriptorField` (trajectoire dans l'espace des descripteurs —
@@ -812,6 +942,15 @@ découvrable (OSCQuery/manifest) est l'investissement défensif.
 - Simple Sync OSC : cnmat.berkeley.edu (2015)
 - Freed timetags : opensoundcontrol.stanford.edu/files/freed-timetags.pdf
 - OSC timestamps : cnmat.berkeley.edu (2008)
+
+### Patchers temps réel
+- Pure Data : puredata.info — Puckette, CMJ 21(3) 1997 + ICMC 1996
+- plugdata : plugdata.org — github.com/plugdata-team/plugdata (JUCE, AGPL)
+- deken : github.com/pure-data/deken (package manager externals)
+- Heavy/hvcc : github.com/Wasted-Audio/hvcc (patch → C++/VST/OWL/WASM)
+- ELSE : github.com/porres/pd-else — Cyclone : port Max pour Pd
+- Max/MSP (pattr, presentation mode, poly~) : cycling74.com
+- TouchDesigner : derivative.ca — vvvv : vvvv.org
 
 ### HCI
 - libmapper : idmil.org/project/libmapper, github libmapper

@@ -15,7 +15,7 @@ pub async fn osc_add_mapping(
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
     let receiver = lock_or_recover(&state.osc_receiver);
-    receiver.add_mapping(mapping).map_err(IpcError::from)
+    receiver.add_mapping(mapping).map_err(IpcError::validation)
 }
 
 #[tauri::command]
@@ -189,6 +189,12 @@ pub async fn send_osc_position(
     z: f64,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
+    // Un NaN/inf passerait direct à l'encodage OSC (ce chemin — panic
+    // button — ne transite pas par la sanitize du merge loop).
+    if ![x, y, z].iter().all(|v| v.is_finite()) {
+        return Err(IpcError::validation("position must be finite"));
+    }
+
     // Anti-loop : ignorer les echoes OSC IN pendant le panic
     lock_or_recover(&state.osc_receiver).suppress_ms(200);
 

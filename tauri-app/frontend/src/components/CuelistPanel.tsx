@@ -4,6 +4,7 @@ import { useCuelistStore } from '../store/useCuelistStore';
 import { useGraphStore } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import { ConfirmModal } from './ui/ConfirmModal';
+import { toast } from '../utils/toast-helpers';
 
 export const CuelistPanel: React.FC = () => {
   const cues = useCuelistStore((s) => s.cues);
@@ -86,6 +87,7 @@ export const CuelistPanel: React.FC = () => {
       setNewCueName('');
     } catch (e) {
       console.error('[storeCue] Failed:', e);
+      toast.error(`Cue not saved: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
 
@@ -101,7 +103,7 @@ export const CuelistPanel: React.FC = () => {
           onClick={() => goToPreviousCue()}
           disabled={currentCueIndex <= 0 || isRecalling}
           className="px-1.5 py-0.5 text-[10px] bg-gray-800 hover:bg-gray-700 text-gray-300 rounded disabled:opacity-30"
-          title="Cue précédent"
+          title="Previous cue"
         >
           ◀
         </button>
@@ -112,7 +114,7 @@ export const CuelistPanel: React.FC = () => {
           onClick={() => goToNextCue()}
           disabled={currentCueIndex + 1 >= cues.length || isRecalling}
           className="px-1.5 py-0.5 text-[10px] bg-purple-800 hover:bg-purple-700 text-purple-200 rounded disabled:opacity-30"
-          title="Cue suivant — RECALL : remplace toute la scène (kill + respawn). GO setlist = Enter."
+          title="Next cue — RECALL replaces the whole scene (kill + respawn). Setlist GO = Enter."
         >
           RECALL ▶
         </button>
@@ -125,7 +127,7 @@ export const CuelistPanel: React.FC = () => {
           value={newCueName}
           onChange={(e) => setNewCueName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleStoreCue()}
-          placeholder="Nom du cue..."
+          placeholder="Cue name..."
           className="flex-1 px-2 py-1 text-[11px] bg-gray-900 border border-gray-700 rounded text-white placeholder-gray-600 focus:outline-none focus:border-purple-500"
         />
         <input
@@ -134,7 +136,7 @@ export const CuelistPanel: React.FC = () => {
           step={0.1}
           value={newCueFade}
           onChange={(e) => setNewCueFade(Math.max(0, Number(e.target.value) || 0))}
-          title="Durée du crossfade au recall (s)"
+          title="Crossfade duration on recall (s)"
           className="w-14 px-1.5 py-1 text-[11px] bg-gray-900 border border-gray-700 rounded text-white text-right font-mono focus:outline-none focus:border-purple-500"
         />
         <button
@@ -150,7 +152,7 @@ export const CuelistPanel: React.FC = () => {
       <div className="flex-1 overflow-y-auto">
         {cues.length === 0 ? (
           <div className="px-3 py-4 text-center text-gray-600 text-[11px]">
-            Aucun cue. Stockez l'état actuel avec ★ Store.
+            No cue. Store the current state with ★ Store.
           </div>
         ) : (
           <div className="divide-y divide-stagespace-border">
@@ -169,7 +171,7 @@ export const CuelistPanel: React.FC = () => {
                   setArmedCueId(null);
                   recallCue(cue.id);
                 }}
-                title={idx === currentCueIndex ? 'Cue courant' : 'Clic = armer · double-clic = RECALL (remplace toute la scène)'}
+                title={idx === currentCueIndex ? 'Current cue' : 'Click = arm · double-click = RECALL (replaces the whole scene)'}
               >
                 <span className="text-gray-500 text-[10px] tabular-nums w-6">
                   {idx + 1}
@@ -214,7 +216,7 @@ export const CuelistPanel: React.FC = () => {
                     setPendingDelete({ id: cue.id, name: cue.name });
                   }}
                   className="text-gray-600 hover:text-red-400 text-[10px] px-1"
-                  title="Supprimer"
+                  title="Delete"
                 >
                   <X size={11} />
                 </button>
@@ -226,12 +228,12 @@ export const CuelistPanel: React.FC = () => {
 
       {pendingDelete && (
         <ConfirmModal
-          title="Supprimer le cue"
+          title="Delete the cue"
           message={
             <>
-              Supprimer <span className="text-white font-semibold">« {pendingDelete.name} »</span> ?
+              Delete <span className="text-white font-semibold">« {pendingDelete.name} »</span> ?
               <br />
-              <span className="text-gray-500">Action définitive — le cue n'est pas récupérable.</span>
+              <span className="text-gray-500">Permanent — the cue cannot be recovered.</span>
             </>
           }
           onConfirm={() => {

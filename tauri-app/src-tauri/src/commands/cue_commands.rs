@@ -29,8 +29,7 @@ pub struct StoreCueRequest {
     pub name: String,
     pub description: String,
     /// Sub-graph du move (graph_json)
-    #[ts(type = "unknown")]
-    pub graph: serde_json::Value,
+    pub graph: stagespace_engines::GraphJson,
     /// Macros per-move (speed, scale, shift, rotation)
     pub macros: Option<MacroSnapshot>,
     /// Macros spatiales étendues (radius_scale, height_offset)
@@ -43,8 +42,7 @@ pub struct StoreCueRequest {
     pub cue_number: Option<String>,
     // ─── Phase 3 : champs étendus ───
     /// Graph global (post-processing)
-    #[ts(type = "unknown | null")]
-    pub global_graph: Option<serde_json::Value>,
+    pub global_graph: Option<stagespace_engines::GraphJson>,
     /// IDs des moves actifs
     pub active_move_ids: Vec<String>,
     /// Profondeurs par track
@@ -71,6 +69,28 @@ pub async fn store_cue(
         )
     };
     let osc_mappings = lock_or_recover(&state.osc_receiver).list_mappings();
+
+    // Validation frontière : NaN/inf dans un snapshot → valeurs pourries
+    // réinjectées au recall (fade NaN, positions NaN, depths NaN).
+    if !request.fade_duration.is_finite() || request.fade_duration < 0.0 {
+        return Err(IpcError::validation(
+            "fade_duration must be a finite non-negative number",
+        ));
+    }
+    for (track, pos) in &request.manual_positions {
+        if !pos.iter().all(|v| v.is_finite()) {
+            return Err(IpcError::validation(format!(
+                "manual_positions[{track}] must be finite"
+            )));
+        }
+    }
+    for (i, d) in request.per_track_depths.iter().enumerate() {
+        if !d.is_finite() {
+            return Err(IpcError::validation(format!(
+                "per_track_depths[{i}] must be finite"
+            )));
+        }
+    }
 
     // Phase 5 : snapshot complet de chaque move actif — assez pour que
     // `recall_cue` puisse les recréer seul (graph, tracks, loop, direction).
@@ -103,6 +123,7 @@ pub async fn store_cue(
 
     let cue = Cue {
         id: uuid::Uuid::new_v4().to_string(),
+        schema_version: Some(stagespace_engines::CUE_SCHEMA_VERSION),
         name: request.name,
         description: request.description,
         graph: request.graph,
@@ -156,8 +177,7 @@ pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), IpcE
         .clone();
     let result = tauri::async_runtime::spawn_blocking(move || recall_cue_inner(cue, sh))
         .await
-        .map_err(|e| IpcError::internal(format!("Cue recall task failed: {e}")))?
-        .map_err(IpcError::from);
+        .map_err(|e| IpcError::internal(format!("Cue recall task failed: {e}")))?;
     // Le recall tue/respawn des moves (même partiellement en cas d'échec) —
     // l'UI doit resynchroniser sa liste sinon elle affiche des zombies.
     if let Some(h) = handle {
@@ -166,7 +186,21 @@ pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), IpcE
     result
 }
 
-pub(crate) fn recall_cue_inner(cue: Cue, sh: crate::commands::state::Shared) -> Result<(), String> {
+pub(crate) fn recall_cue_inner(
+    cue: Cue,
+    sh: crate::commands::state::Shared,
+) -> Result<(), IpcError> {
+    // Versioning du contrat : un cue écrit par une version future pourrait
+    // porter des champs que ce backend ignore — échec explicite plutôt
+    // qu'un recall partiel silencieux.
+    if cue.schema_version.unwrap_or(0) > stagespace_engines::CUE_SCHEMA_VERSION {
+        return Err(IpcError::validation(format!(
+            "Cue '{}' uses schema_version {} > supported {} — written by a newer version",
+            cue.name,
+            cue.schema_version.unwrap_or(0),
+            stagespace_engines::CUE_SCHEMA_VERSION
+        )));
+    }
     // Anti-recall concurrent : si un recall est déjà en cours, refuser
     if sh
         .recall_in_progress
@@ -178,7 +212,9 @@ pub(crate) fn recall_cue_inner(cue: Cue, sh: crate::commands::state::Shared) -> 
         )
         .is_err()
     {
-        return Err("A cue recall is already in progress — please wait.".to_string());
+        return Err(IpcError::busy(
+            "A cue recall is already in progress — please wait.".to_string(),
+        ));
     }
 
     // Garantir que le flag est remis à false quoi qu'il arrive
@@ -209,10 +245,10 @@ pub(crate) fn recall_cue_inner(cue: Cue, sh: crate::commands::state::Shared) -> 
         };
 
         let graph = build_graph_from_json(global_graph, &audio_state)
-            .map_err(|e| format!("Failed to parse global graph: {e}"))?;
+            .map_err(|e| IpcError::validation(format!("Failed to parse global graph: {e}")))?;
 
         let effects = stagespace_engines::extract_graph_effects(&graph)
-            .map_err(|e| format!("Failed to extract graph effects: {e:?}"))?;
+            .map_err(|e| IpcError::validation(format!("Failed to extract graph effects: {e:?}")))?;
 
         let merge_rt = lock_or_recover(&sh.merge_runtime);
         let macros = merge_rt.macros();
@@ -220,10 +256,15 @@ pub(crate) fn recall_cue_inner(cue: Cue, sh: crate::commands::state::Shared) -> 
         let compile_params = stagespace_engines::PostProcessCompileParams { graph, macros };
 
         let post_process_fn = stagespace_engines::compile_post_process(compile_params)
-            .map_err(|e| format!("Failed to compile global graph: {e:?}"))?;
+            .map_err(|e| IpcError::validation(format!("Failed to compile global graph: {e:?}")))?;
 
         merge_rt.swap_post_process_fn(post_process_fn);
-        merge_rt.set_graph_effects(effects.zones, effects.modulations);
+        merge_rt.set_graph_effects(
+            effects.zones,
+            effects.modulations,
+            effects.barycenter,
+            effects.move_ref,
+        );
         // Idem update_global_graph : un node Merge peut fixer la stratégie.
         if let Some(strategy) = effects.strategy {
             merge_rt.set_merge_strategy(strategy);
@@ -326,13 +367,19 @@ pub(crate) fn recall_cue_inner(cue: Cue, sh: crate::commands::state::Shared) -> 
         if let Some(ref mods) = cue.channel_modulations {
             merge_rt.clear_modulations();
             for rule in mods {
-                merge_rt.add_modulation(rule.clone());
+                // Un cue au-delà du cap tronque au lieu d'échouer le recall
+                // entier — les 64 premières règles suffisent en pratique.
+                if merge_rt.add_modulation(rule.clone()).is_err() {
+                    break;
+                }
             }
         }
         if let Some(ref zs) = cue.zones {
             merge_rt.clear_zones();
             for z in zs {
-                merge_rt.add_zone(z.clone());
+                if merge_rt.add_zone(z.clone()).is_err() {
+                    break;
+                }
             }
         }
     }

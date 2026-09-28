@@ -25,6 +25,8 @@ thiserror = "1.0"
 cpal = "0.15"
 realfft = "3.3"
 ts-rs = "10"
+wasmtime = "38"
+zip = "2"
 
 [dev-dependencies]
 criterion = "0.5"

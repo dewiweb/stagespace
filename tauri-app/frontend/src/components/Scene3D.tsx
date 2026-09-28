@@ -193,7 +193,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   return (
     <div ref={containerRef} style={{ width, height, overflow: 'hidden', position: 'relative' }}>
       {webglFailed && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-900/90 z-30 p-4">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-900/90 z-raised p-4">
           <TriangleAlert size={32} className="text-amber-400" />
           <div className="text-white text-sm font-medium">WebGL unavailable</div>
           <div className="text-gray-400 text-[11px] text-center max-w-xs">
@@ -246,7 +246,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
       {/* Interaction layer — manipulate seulement (assign via TrackGrid) */}
       {manipulateMode && (
         <div
-          className="absolute inset-0 z-[15]"
+          className="absolute inset-0 z-overlay"
           style={{
             cursor: draggingHandle || draggingObject !== null ? 'grabbing' : 'grab',
           }}
@@ -259,7 +259,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
       )}
       {/* Active movements indicator — bottom right */}
       {movements.length > 0 && (
-        <div className="absolute bottom-2 right-2 z-20 bg-gray-900/80 backdrop-blur rounded-lg px-2 py-1 border border-gray-700/50 flex items-center gap-1.5">
+        <div className="absolute bottom-2 right-2 z-overlay bg-gray-900/80 backdrop-blur rounded-lg px-2 py-1 border border-gray-700/50 flex items-center gap-1.5">
           <span className="text-gray-500 text-[10px] font-mono">MOVEMENTS</span>
           {movements.map((mv, idx) => (
             <span
@@ -280,9 +280,9 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
       {movements.length === 0 && editingSlotId === null && !manipulateMode && !drawMode && (
         <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
           <div className="text-center bg-gray-900/70 backdrop-blur rounded-xl px-6 py-4 border border-gray-700/40">
-            <div className="text-gray-300 text-xs font-medium">Aucun move en cours</div>
+            <div className="text-gray-300 text-xs font-medium">No move running</div>
             <div className="text-gray-500 text-[10px] mt-1.5 leading-relaxed">
-              <span className="text-gray-400">+ Move</span> crée un slot · un <span className="text-gray-400">template</span> le remplit · <span className="text-gray-400">▶</span> le lance
+              <span className="text-gray-400">+ Move</span> creates a slot · a <span className="text-gray-400">template</span> fills it · <span className="text-gray-400">▶</span> launches it
             </div>
           </div>
         </div>

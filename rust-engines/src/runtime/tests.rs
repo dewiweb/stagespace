@@ -24,7 +24,7 @@ fn test_loop_mode() {
 #[test]
 fn test_hot_swap_position_fn() {
     let rt = Runtime::new();
-    rt.swap_position_fn(Box::new(|t, i| nalgebra::Vector3::new(t, i as f64, 0.0)));
+    rt.swap_position_fn(Arc::new(|t, i| nalgebra::Vector3::new(t, i as f64, 0.0)));
     let fn_ref = rt.position_fn.lock().unwrap_or_else(|e| e.into_inner());
     let pos = fn_ref(1.5, 3);
     assert!((pos.x - 1.5).abs() < 1e-10);
@@ -48,7 +48,7 @@ fn test_runtime_play_compiled() {
     };
     let osc_ids = vec![1, 2, 3];
 
-    let position_fn = Box::new(move |t: f64, _obj_idx: usize| {
+    let position_fn = Arc::new(move |t: f64, _obj_idx: usize| {
         let angle = 2.0 * std::f64::consts::PI * t / duration;
         let radius = 1.0;
         nalgebra::Vector3::new(radius * angle.cos(), 0.0, radius * angle.sin())
@@ -75,7 +75,7 @@ fn test_play_compiled_requires_buffer() {
     // refuser plutôt que de tourner dans le vide, et rester stoppable.
     let rt = Runtime::new();
     let result = rt.play_compiled(
-        Box::new(|_, _| nalgebra::Vector3::zeros()),
+        Arc::new(|_, _| nalgebra::Vector3::zeros()),
         test_params(1.0),
         vec![1],
     );
@@ -84,7 +84,7 @@ fn test_play_compiled_requires_buffer() {
     // Le runtime reste utilisable après le refus
     rt.set_position_buffer(Arc::new(PositionBuffer::new()));
     rt.play_compiled(
-        Box::new(|_, _| nalgebra::Vector3::zeros()),
+        Arc::new(|_, _| nalgebra::Vector3::zeros()),
         test_params(1.0),
         vec![1],
     )
@@ -108,13 +108,13 @@ fn test_play_compiled_rejects_second_spawn() {
     // indépendantes.
     let rt = test_runtime();
     rt.play_compiled(
-        Box::new(|_, _| nalgebra::Vector3::zeros()),
+        Arc::new(|_, _| nalgebra::Vector3::zeros()),
         test_params(10.0),
         vec![1],
     )
     .unwrap();
     let again = rt.play_compiled(
-        Box::new(|_, _| nalgebra::Vector3::zeros()),
+        Arc::new(|_, _| nalgebra::Vector3::zeros()),
         test_params(10.0),
         vec![1],
     );
@@ -122,7 +122,7 @@ fn test_play_compiled_rejects_second_spawn() {
     rt.stop();
     // Après stop, un nouveau play est accepté
     rt.play_compiled(
-        Box::new(|_, _| nalgebra::Vector3::zeros()),
+        Arc::new(|_, _| nalgebra::Vector3::zeros()),
         test_params(10.0),
         vec![1],
     )
@@ -137,7 +137,7 @@ fn test_one_shot_exit_clears_running() {
     let rt = test_runtime();
     rt.set_loop_mode(LoopMode::OneShot);
     rt.play_compiled(
-        Box::new(|_, _| nalgebra::Vector3::zeros()),
+        Arc::new(|_, _| nalgebra::Vector3::zeros()),
         test_params(0.05),
         vec![1],
     )
@@ -157,7 +157,7 @@ fn test_drop_joins_worker() {
         let rt = test_runtime();
         let running = rt.running.clone();
         rt.play_compiled(
-            Box::new(|_, _| nalgebra::Vector3::zeros()),
+            Arc::new(|_, _| nalgebra::Vector3::zeros()),
             test_params(60.0),
             vec![1],
         )
@@ -174,8 +174,8 @@ fn test_recall_cue_never_exposes_placeholder() {
     // Régression : entre mem::replace et swap_position_fn, un frame live
     // évaluait le placeholder zeros → tous les tracks sautaient à l'origine.
     let rt = test_runtime();
-    rt.swap_position_fn(Box::new(|_, _| nalgebra::Vector3::new(1.0, 0.0, 0.0)));
-    rt.recall_cue(Box::new(|_, _| nalgebra::Vector3::new(3.0, 0.0, 0.0)), 0.3);
+    rt.swap_position_fn(Arc::new(|_, _| nalgebra::Vector3::new(1.0, 0.0, 0.0)));
+    rt.recall_cue(Arc::new(|_, _| nalgebra::Vector3::new(3.0, 0.0, 0.0)), 0.3);
 
     // Juste après le recall : le crossfade est installé — jamais zeros.
     // blend ≈ 0 → proche de la fn source (x=1), borné par [1, 3].
@@ -198,8 +198,8 @@ fn test_recall_cue_never_exposes_placeholder() {
 #[test]
 fn test_recall_cue_instant() {
     let rt = test_runtime();
-    rt.swap_position_fn(Box::new(|_, _| nalgebra::Vector3::new(1.0, 0.0, 0.0)));
-    rt.recall_cue(Box::new(|_, _| nalgebra::Vector3::new(5.0, 0.0, 0.0)), 0.0);
+    rt.swap_position_fn(Arc::new(|_, _| nalgebra::Vector3::new(1.0, 0.0, 0.0)));
+    rt.recall_cue(Arc::new(|_, _| nalgebra::Vector3::new(5.0, 0.0, 0.0)), 0.0);
     let guard = rt.position_fn.lock().unwrap_or_else(|e| e.into_inner());
     assert!((guard(0.0, 0).x - 5.0).abs() < 1e-10);
 }
@@ -214,7 +214,7 @@ fn test_negative_speed_clamps_t_to_zero() {
     let seen = Arc::new(Mutex::new(Vec::new()));
     let seen2 = seen.clone();
     rt.play_compiled(
-        Box::new(move |t, _| {
+        Arc::new(move |t, _| {
             seen2.lock().unwrap().push(t);
             nalgebra::Vector3::zeros()
         }),
@@ -271,7 +271,7 @@ fn test_worker_applies_move_transform() {
     rt.macros().set_scale(2.0);
     rt.macros().set_shift(0.0, 1.0, 0.0);
     rt.play_compiled(
-        Box::new(|_, _| nalgebra::Vector3::new(1.0, 0.0, 0.0)),
+        Arc::new(|_, _| nalgebra::Vector3::new(1.0, 0.0, 0.0)),
         test_params(60.0),
         vec![1],
     )
@@ -300,7 +300,7 @@ fn test_worker_fade_collapses_toward_origin() {
     rt.set_origin(nalgebra::Vector3::new(5.0, 0.0, 0.0));
     rt.set_fade(0.2, 0.0);
     rt.play_compiled(
-        Box::new(|_, _| nalgebra::Vector3::new(1.0, 0.0, 0.0)),
+        Arc::new(|_, _| nalgebra::Vector3::new(1.0, 0.0, 0.0)),
         test_params(60.0),
         vec![1],
     )

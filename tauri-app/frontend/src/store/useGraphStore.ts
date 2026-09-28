@@ -26,6 +26,7 @@ import { createOscConfigSlice, type OscConfigSlice } from './slices/oscConfigSli
 import { createSplineLibrarySlice, type SplineLibrarySlice } from './slices/splineLibrarySlice';
 import { createSpatialFxSlice, type SpatialFxSlice } from './slices/spatialFxSlice';
 import { createInteractionModesSlice, type InteractionModesSlice } from './slices/interactionModesSlice';
+import { createPluginSlice, type PluginSlice } from './slices/pluginSlice';
 import { SHAPE_PRESETS } from '../utils/shapePresets';
 import { toast } from '../utils/toast-helpers';
 import { safeSetItem } from '../utils/safeStorage';
@@ -49,7 +50,7 @@ interface GraphState
   extends PerfSlice, AudioSlice, OscSlice, PersistenceSlice,
     MacrosSlice, HolProjectSlice, DrawModeSlice,
     MovementSlice, MoveSlotsSlice, OscConfigSlice, SplineLibrarySlice, SpatialFxSlice,
-    InteractionModesSlice {
+    InteractionModesSlice, PluginSlice {
   // React Flow state (single source of truth)
   nodes: Node[];
   edges: Edge[];
@@ -58,6 +59,9 @@ interface GraphState
   onConnect: (connection: Connection) => void;
   addNode: (node: Node) => void;
   removeNode: (id: string) => void;
+  /// Autopatch : remplace `oldEdgeId` par `edgeIn` (source→node) + `edgeOut`
+  /// (node→target) et ajoute le node — atomique, une seule entrée d'historique.
+  insertNodeOnEdge: (node: Node, oldEdgeId: string, edgeIn: Edge, edgeOut: Edge) => void;
   updateNodeData: (id: string, data: Partial<Record<string, any>>) => void;
   setNodes: (nodes: Node[]) => void;
   setEdges: (edges: Edge[]) => void;
@@ -184,6 +188,7 @@ export const useGraphStore = create<GraphState>()((...a) => {
   ...createSplineLibrarySlice(...a),
   ...createSpatialFxSlice(...a),
   ...createInteractionModesSlice(...a),
+  ...createPluginSlice(...a),
 
   // Graphe par défaut — preset Circle pour que l'app ne démarre jamais vide
   ...(() => {
@@ -216,6 +221,18 @@ export const useGraphStore = create<GraphState>()((...a) => {
   addNode: (node) => {
     get().pushHistory();
     set((s) => ({ nodes: [...s.nodes, node] }));
+    autoSaveToEditingSlot();
+  },
+  insertNodeOnEdge: (node, oldEdgeId, edgeIn, edgeOut) => {
+    get().pushHistory();
+    set((s) => ({
+      nodes: [...s.nodes, node],
+      edges: [
+        ...s.edges.filter((e) => e.id !== oldEdgeId),
+        edgeIn,
+        edgeOut,
+      ],
+    }));
     autoSaveToEditingSlot();
   },
   removeNode: (id) => {
@@ -488,7 +505,14 @@ export const useAudioErrorListener = () => {
       lastAudioErrorAt = now;
       toast.error(`Audio capture failed: ${message}`);
     });
-    return () => { unlisten.then((fn) => fn()).catch(() => {}); };
+    const unlistenRecovered = listen('audio-recovered', () => {
+      lastAudioError = '';
+      toast.success('Audio capture recovered');
+    });
+    return () => {
+      unlisten.then((fn) => fn()).catch(() => {});
+      unlistenRecovered.then((fn) => fn()).catch(() => {});
+    };
   }, []);
 };
 
@@ -513,6 +537,32 @@ export const useCueRecallListener = () => {
     );
     return () => { unlisten.then((fn) => fn()).catch(() => {}); };
   }, [refreshMovements]);
+};
+
+// ── Supervisor listener — events du watchdog backend (audits C5/C7) :
+// worker zombie arrêté, merge thread redémarré sans le frontend.
+export const useSupervisorListener = () => {
+  React.useEffect(() => {
+    const unStale = listen<string>('move-stale-killed', (event) => {
+      toast.warning(
+        `Move "${event.payload}" was stopped — its engine worker froze. Check graph complexity.`,
+      );
+    });
+    const unRestart = listen('merge-restarted', () => {
+      toast.warning('Output engine restarted automatically after a crash — playback resumed.');
+    });
+    const unRestartFailed = listen<string>('merge-restart-failed', (event) => {
+      toast.error(
+        `Output engine failed to restart — OSC output is DOWN: ${event.payload}`,
+        0,
+      );
+    });
+    return () => {
+      unStale.then((fn) => fn()).catch(() => {});
+      unRestart.then((fn) => fn()).catch(() => {});
+      unRestartFailed.then((fn) => fn()).catch(() => {});
+    };
+  }, []);
 };
 
 // ── Global positions listener — écoute l'event global-positions du MergeRuntime ──

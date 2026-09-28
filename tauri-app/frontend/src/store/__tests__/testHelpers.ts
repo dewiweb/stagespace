@@ -38,6 +38,10 @@ export function resetStore() {
     oscAddress: '127.0.0.1',
     oscPort: 9999,
     oscProfile: 'holophonix',
+    plugins: [],
+    pluginErrors: [],
+    pluginsDir: null,
+    pluginsLoaded: false,
   } as any);
   localStorage.clear();
   clearInvokeCalls();

@@ -9,39 +9,53 @@ import Inspector from './components/Inspector';
 import AudioPanel from './components/AudioPanel';
 import TabPanel from './components/TabPanel';
 import Toolbar from './components/Toolbar';
+import StatusBar from './components/StatusBar';
 import ToastContainer from './components/ToastContainer';
 import PerformView from './components/PerformView';
+import WelcomeModal, { shouldShowWelcome } from './components/WelcomeModal';
+import ShortcutsModal from './components/ShortcutsModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Workflow, ChevronRight, ChevronDown, PanelRightClose, PanelLeftClose, PanelLeftOpen, PanelRightOpen, Maximize2, Minimize2, Activity } from 'lucide-react';
 import { useLiveShortcuts, usePerfStatsPolling } from './hooks/useLiveShortcuts';
 import { prepareGraphForSave } from './components/nodeParamSchema';
-import { useGraphStore, useMovementPositionsListener, useAudioErrorListener, useCueRecallListener } from './store/useGraphStore';
+import { usePersistedState } from './utils/usePersistedState';
+import { useGraphStore, useMovementPositionsListener, useAudioErrorListener, useCueRecallListener, useSupervisorListener } from './store/useGraphStore';
 import { useAnimationStore } from './store/useAnimationStore';
 
 function App() {
-  const status = useGraphStore((s) => s.status);
-  const movements = useGraphStore((s) => s.movements);
   const showExpert = useAnimationStore((s) => s.showExpert);
   const setShowExpert = useAnimationStore((s) => s.setShowExpert);
   const performMode = useAnimationStore((s) => s.performMode);
   const setPerformMode = useAnimationStore((s) => s.setPerformMode);
   const debugPerfVisible = useAnimationStore((s) => s.debugPerfVisible);
   const setDebugPerfVisible = useAnimationStore((s) => s.setDebugPerfVisible);
+  const shortcutsOpen = useAnimationStore((s) => s.shortcutsOpen);
   const oscInPort = useGraphStore((s) => s.oscInPort);
-  const [leftCollapsed, setLeftCollapsed] = React.useState(false);
-  const [rightCollapsed, setRightCollapsed] = React.useState(false);
-  // Largeur redimensionnable du panneau droit (Inspector)
-  const [rightWidth, setRightWidth] = React.useState(288); // 72 * 4px = 288px par défaut
-  // Largeur redimensionnable du panneau gauche (Graphes + Moves)
-  const [leftWidth, setLeftWidth] = React.useState(256); // 64 * 4px = 256px par défaut
+  // Layout persisté — l'opérateur retrouve son workspace au prochain
+  // lancement (safeStorage : quota/corruption gérés).
+  const [leftCollapsed, setLeftCollapsed] = usePersistedState<boolean>('ss-layout-leftCollapsed', false);
+  const [rightCollapsed, setRightCollapsed] = usePersistedState<boolean>('ss-layout-rightCollapsed', false);
+  const [rightWidth, setRightWidth] = usePersistedState<number>('ss-layout-rightWidth', 288);
+  const [leftWidth, setLeftWidth] = usePersistedState<number>('ss-layout-leftWidth', 256);
   const resizingRef = React.useRef(false);
   const resizingSideRef = React.useRef<'left' | 'right' | 'expert'>('right');
   // Ratio NodeEditor/Scene3D en mode Expert (0.5 = moitié/moitié)
-  const [expertSplit, setExpertSplit] = React.useState(0.5);
+  const [expertSplit, setExpertSplit] = usePersistedState<number>('ss-layout-expertSplit', 0.5);
   const centerColRef = React.useRef<HTMLDivElement | null>(null);
+  // Focus éditeur : les panneaux latéraux se retirent et le NodeEditor
+  // prend toute la rangée — la navigation dans le graphe est le besoin
+  // premier en Expert (Scene3D reste monté, masqué).
+  const [editorFocus, setEditorFocus] = React.useState(false);
+  // Focus réellement actif : editorFocus n'a de sens qu'en mode Expert.
+  const focusActive = showExpert && editorFocus;
   // Sections collapsibles du panneau gauche
-  const [graphsExpanded, setGraphsExpanded] = React.useState(true);
-  const [movesExpanded, setMovesExpanded] = React.useState(true);
+  const [graphsExpanded, setGraphsExpanded] = usePersistedState<boolean>('ss-layout-graphsExpanded', true);
+  const [movesExpanded, setMovesExpanded] = usePersistedState<boolean>('ss-layout-movesExpanded', true);
+  // AudioPanel = monitoring/config — collapsible pour rendre la hauteur à
+  // l'Inspector (outil de travail principal de la colonne droite).
+  const [audioExpanded, setAudioExpanded] = usePersistedState<boolean>('ss-layout-audioExpanded', true);
+  // Premier lancement : proposer le show d'exemple bundle (évalué une fois)
+  const [showWelcome, setShowWelcome] = React.useState(shouldShowWelcome);
 
   // Listen to movement positions (multi-runtime)
   useMovementPositionsListener();
@@ -50,6 +64,9 @@ function App() {
   useAudioErrorListener();
   // Surface les recalls partiels (moves qui n'ont pas respawné).
   useCueRecallListener();
+  // Events du superviseur backend : worker zombie arrêté, merge thread
+  // redémarré de lui-même (le frontend n'est plus dans la boucle de vie).
+  useSupervisorListener();
   // Raccourcis live (Esc=panic, Enter=GO, Shift+Enter=recall) + polling perf —
   // au niveau App : ils doivent fonctionner aussi en mode Perform (le Toolbar
   // et sa stack se démontent).
@@ -103,6 +120,11 @@ function App() {
     document.body.style.userSelect = 'none';
   };
 
+  // Le focus éditeur n'a de sens qu'en Expert — sortir du mode l'annule.
+  React.useEffect(() => {
+    if (!showExpert && editorFocus) setEditorFocus(false);
+  }, [showExpert, editorFocus]);
+
   const startExpertResize = (e: React.MouseEvent) => {
     e.preventDefault();
     resizingRef.current = true;
@@ -126,6 +148,10 @@ function App() {
       state.applyShapePreset('circle', 8);
     }
 
+    // Registry plugins WASM — manifestes pour la palette dynamique et les
+    // labels/params des nodes Plugin. Non bloquant : erreur → toast + vide.
+    void useGraphStore.getState().fetchPlugins();
+
     // Récupérer la liste des moves actifs côté backend (survit à un refresh UI)
     // puis sync les slots (nettoyer les movementIds stale)
     state.refreshMovements().then(() => {
@@ -146,19 +172,6 @@ function App() {
     { id: 'fx', label: 'FX', content: <SpatialFxPanel /> },
   ];
 
-  const activeCount = movements.length;
-  const statusColor =
-    activeCount > 0 ? 'bg-green-500' :
-    status === 'compiling' ? 'bg-yellow-500 animate-pulse' :
-    status === 'error' ? 'bg-red-500' :
-    'bg-gray-600';
-
-  const statusLabel =
-    activeCount > 0 ? `${activeCount} live` :
-    status === 'compiling' ? 'Compiling' :
-    status === 'error' ? 'Error' :
-    'Idle';
-
   return (
     <div className="w-screen h-screen flex flex-col bg-stagespace-bg overflow-hidden">
       {/* Header */}
@@ -171,19 +184,17 @@ function App() {
           <span className="text-gray-600 text-[11px] ml-1 italic">Play the space</span>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            <div className={`w-2 h-2 rounded-full ${statusColor}`} />
-            <span className="text-gray-400 text-[11px] font-medium">{statusLabel}</span>
-          </div>
-          <div className="w-px h-4 bg-stagespace-border" />
           <button
             onClick={() => setPerformMode(!performMode)}
             className={`px-3 py-1 text-xs font-bold rounded transition-all flex items-center gap-1.5 ${
               performMode ? 'bg-green-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
             }`}
-            title="Mode Perform — surface live : setlist, GO, panic, params live à la demande. L'édition est masquée."
+            title={performMode
+              ? 'Leave Perform — back to editing'
+              : 'Perform mode — live surface: setlist, GO, panic, on-demand live params'}
           >
-            {performMode ? '◉ Perform' : '◎ Edit'}
+            <span className={`w-1.5 h-1.5 rounded-full ${performMode ? 'bg-white animate-pulse' : 'bg-gray-600'}`} />
+            PERFORM
           </button>
           {!performMode && (
             <button
@@ -191,7 +202,7 @@ function App() {
               className={`px-3 py-1 text-xs font-bold rounded transition-all flex items-center gap-1.5 ${
                 showExpert ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
               }`}
-              title="Mode Expert — éditeur de graphe avancé (nodes, connexions, custom trajectories)"
+              title="Expert mode — advanced graph editor (nodes, connections, custom trajectories)"
             >
               <Workflow size={12} />
               {showExpert ? 'Expert' : 'Simple'}
@@ -215,12 +226,14 @@ function App() {
           ne doit pas démonter Toolbar/ToastContainer — panic Esc doit survivre) */}
       <div className="flex-1 flex overflow-hidden">
         <ErrorBoundary zone="Left panel">
-        {/* Colonne gauche : AnimationList + onglets secondaires (collapsible + redimensionnable) */}
-        {leftCollapsed ? (
+        {/* Colonne gauche : AnimationList + onglets secondaires (collapsible +
+            redimensionnable). En editorFocus elle se retire entièrement —
+            l'état collapse des deux côtés est préservé pour la restauration. */}
+        {!focusActive && (leftCollapsed ? (
           <button
             onClick={() => setLeftCollapsed(false)}
             className="w-7 border-r border-stagespace-border bg-stagespace-panel flex flex-col items-center pt-3 flex-shrink-0 hover:bg-gray-800 transition-colors group"
-            title="Afficher le panneau Show / Templates"
+            title="Show the Show / Templates panel"
           >
             <PanelLeftOpen size={13} className="text-gray-500 group-hover:text-white" />
             <span className="text-gray-600 text-[10px] mt-2 writing-vertical" style={{ writingMode: 'vertical-rl' }}>Moves</span>
@@ -230,8 +243,8 @@ function App() {
           <div style={{ width: leftWidth }} className="border-r border-stagespace-border flex flex-col bg-stagespace-panel flex-shrink-0 relative">
             <button
               onClick={() => setLeftCollapsed(true)}
-              className="absolute -right-3 top-2 z-20 w-6 h-6 bg-stagespace-panel border border-stagespace-border rounded-full flex items-center justify-center text-gray-500 hover:text-white hover:bg-gray-800 transition-colors text-xs"
-              title="Masquer le panneau"
+              className="absolute -right-3 top-2 z-overlay w-6 h-6 bg-stagespace-panel border border-stagespace-border rounded-full flex items-center justify-center text-gray-500 hover:text-white hover:bg-gray-800 transition-colors text-xs"
+              title="Collapse the panel"
             >
               <PanelLeftClose size={11} />
             </button>
@@ -242,7 +255,7 @@ function App() {
                 <button
                   onClick={() => setMovesExpanded(!movesExpanded)}
                   className="text-gray-400 hover:text-white text-[10px] w-4"
-                  title={movesExpanded ? "Réduire" : "Agrandir"}
+                  title={movesExpanded ? "Collapse" : "Expand"}
                 >{movesExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}</button>
                 <span className="text-gray-400 text-[10px] uppercase tracking-wider font-medium">Show</span>
               </div>
@@ -252,15 +265,15 @@ function App() {
                 </div>
               )}
             </div>
-            {/* Section 2: Templates (AnimationList) — secondaire, hauteur bornée.
-                Le "+" qui créait un slot vivait ici — redondant avec "+ Move"
-                de la MovesTable, il a été retiré de l'header interne. */}
-            <div className={`${graphsExpanded ? 'h-80' : 'flex-shrink-0'} flex flex-col border-t border-stagespace-border ${movesExpanded ? '' : 'flex-1'}`}>
+            {/* Section 2: Templates (AnimationList) — secondaire. Partage
+                proportionnel avec Show (flex-1 chacun) au lieu d'une hauteur
+                fixe : sur petit écran aucune section n'écrase l'autre. */}
+            <div className={`${graphsExpanded ? 'flex-1' : 'flex-shrink-0'} flex flex-col min-h-0 border-t border-stagespace-border`}>
               <div className="flex items-center gap-1 px-3 py-1.5 border-b border-stagespace-border flex-shrink-0 bg-gray-900/30">
                 <button
                   onClick={() => setGraphsExpanded(!graphsExpanded)}
                   className="text-gray-400 hover:text-white text-[10px] w-4"
-                  title={graphsExpanded ? "Réduire" : "Agrandir"}
+                  title={graphsExpanded ? "Collapse" : "Expand"}
                 >{graphsExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}</button>
                 <span className="text-gray-400 text-[10px] uppercase tracking-wider font-medium">Templates</span>
               </div>
@@ -275,12 +288,12 @@ function App() {
           <div
             onMouseDown={startLeftResize}
             className="w-1.5 flex-shrink-0 bg-stagespace-border hover:bg-blue-500/50 cursor-col-resize transition-colors relative group"
-            title="Glisser pour redimensionner"
+            title="Drag to resize"
           >
             <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-stagespace-border group-hover:bg-blue-500" />
           </div>
           </>
-        )}
+        ))}
 
         </ErrorBoundary>
 
@@ -291,8 +304,21 @@ function App() {
           {showExpert ? (
             <div className="h-9 border-b border-stagespace-border flex items-center px-3 flex-shrink-0 gap-2">
               <span className="text-gray-300 text-xs font-medium">Expert — Node Editor</span>
+              <button
+                onClick={() => setEditorFocus(!editorFocus)}
+                className={`px-2 py-0.5 text-[10px] rounded font-medium flex items-center gap-1 transition-colors ${
+                  editorFocus
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-800 text-gray-400 hover:text-white'
+                }`}
+                title={editorFocus
+                  ? 'Exit focus — restore side panels and 3D preview'
+                  : 'Focus — hide side panels and 3D preview, editor takes the full row'}
+              >
+                {editorFocus ? <Minimize2 size={11} /> : <Maximize2 size={11} />}
+                Focus
+              </button>
               <div className="flex-1" />
-              <span className="text-gray-500 text-[10px]">Lancer via MovesTable ▶</span>
               <button
                 onClick={() => {
                   const { nodes, edges } = useGraphStore.getState();
@@ -304,7 +330,7 @@ function App() {
                   setShowExpert(false);
                 }}
                 className="px-2 py-0.5 text-[10px] bg-purple-700 hover:bg-purple-600 text-white rounded font-medium"
-                title="Sauvegarder le graphe comme animation Custom"
+                title="Save the graph as a Custom animation"
               >
                 ★ Save
               </button>
@@ -318,14 +344,16 @@ function App() {
                 <span className="text-gray-300 text-xs font-medium">Canvas</span>
               </div>
               <div className="flex-1" />
-              <button
-                onClick={() => setDebugPerfVisible(!debugPerfVisible)}
-                className={`p-1 rounded transition-colors ${debugPerfVisible ? 'text-cyan-400 bg-cyan-900/30' : 'text-gray-600 hover:text-gray-400'}`}
-                title="Overlay DEBUG PERF (fps render/IPC, stutter) — outil dev"
-              >
-                <Activity size={12} />
-              </button>
-              <span className="text-gray-600 text-[10px]">orbit: drag · zoom: scroll</span>
+              {import.meta.env.DEV && (
+                <button
+                  onClick={() => setDebugPerfVisible(!debugPerfVisible)}
+                  className={`p-1 rounded transition-colors ${debugPerfVisible ? 'text-cyan-400 bg-cyan-900/30' : 'text-gray-500 hover:text-gray-300'}`}
+                  title="DEBUG PERF overlay (render/IPC fps, stutter) — dev tool"
+                >
+                  <Activity size={12} />
+                </button>
+              )}
+              <span className="text-gray-500 text-[10px]">orbit: drag · zoom: scroll</span>
             </div>
           )}
 
@@ -333,42 +361,46 @@ function App() {
           <div ref={centerColRef} className="flex-1 flex min-h-0">
             {showExpert && (
               <div
-                style={{ width: `${expertSplit * 100}%` }}
-                className="min-w-[280px] border-r border-stagespace-border flex-shrink-0"
+                style={focusActive ? undefined : { width: `${expertSplit * 100}%` }}
+                className={`min-w-[280px] ${focusActive ? 'flex-1' : 'border-r border-stagespace-border flex-shrink-0'}`}
               >
                 <NodeEditor />
               </div>
             )}
             {/* Splitter Expert — poignée de redimensionnement NodeEditor/3D.
                 Scene3D reste monté (jamais démonté : la scène se réinitialise). */}
-            {showExpert && (
+            {showExpert && !focusActive && (
               <div
                 onMouseDown={startExpertResize}
                 onDoubleClick={() => setExpertSplit(0.5)}
                 className="w-1.5 flex-shrink-0 bg-stagespace-border hover:bg-purple-500/50 cursor-col-resize transition-colors relative group"
-                title="Glisser pour redimensionner · double-clic = 50/50"
+                title="Drag to resize · double-click = 50/50"
               >
                 <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-stagespace-border group-hover:bg-purple-500" />
               </div>
             )}
-            {/* Scene3D toujours rendu au même endroit — pas de unmount/remount */}
-            <div className="flex-1 min-w-[200px] flex flex-col">
+            {/* Scene3D toujours rendu au même endroit — pas de unmount/remount.
+                En focus il est masqué (display:none) mais monté : le contexte
+                WebGL et la scène survivent à l'entrée/sortie du focus. */}
+            <div className={`flex-1 min-w-[200px] flex flex-col ${focusActive ? 'hidden' : ''}`}>
               {showExpert && (
                 <div className="h-7 border-b border-stagespace-border flex items-center px-2 bg-stagespace-panel flex-shrink-0">
                   <span className="text-gray-400 text-[10px] font-medium">3D Preview</span>
-                  <span className="text-gray-600 text-[10px] ml-2">orbit: drag · zoom: scroll</span>
+                  <span className="text-gray-500 text-[10px] ml-2">orbit: drag · zoom: scroll</span>
                   <div className="flex-1" />
-                  <button
-                    onClick={() => setDebugPerfVisible(!debugPerfVisible)}
-                    className={`p-1 rounded transition-colors ${debugPerfVisible ? 'text-cyan-400 bg-cyan-900/30' : 'text-gray-600 hover:text-gray-400'}`}
-                    title="Overlay DEBUG PERF — outil dev"
-                  >
-                    <Activity size={11} />
-                  </button>
+                  {import.meta.env.DEV && (
+                    <button
+                      onClick={() => setDebugPerfVisible(!debugPerfVisible)}
+                      className={`p-1 rounded transition-colors ${debugPerfVisible ? 'text-cyan-400 bg-cyan-900/30' : 'text-gray-500 hover:text-gray-300'}`}
+                      title="DEBUG PERF overlay — dev tool"
+                    >
+                      <Activity size={11} />
+                    </button>
+                  )}
                   <button
                     onClick={() => setExpertSplit(expertSplit > 0.7 ? 0.5 : 0.78)}
                     className="text-gray-500 hover:text-white px-1"
-                    title={expertSplit > 0.7 ? 'Rétablir le split 50/50' : 'Agrandir le node editor'}
+                    title={expertSplit > 0.7 ? 'Restore 50/50 split' : 'Enlarge the node editor'}
                   >
                     {expertSplit > 0.7 ? <Minimize2 size={11} /> : <Maximize2 size={11} />}
                   </button>
@@ -384,11 +416,11 @@ function App() {
 
         {/* Colonne droite : Inspector (collapsible + redimensionnable) */}
         <ErrorBoundary zone="Inspector">
-        {rightCollapsed ? (
+        {!focusActive && (rightCollapsed ? (
           <button
             onClick={() => setRightCollapsed(false)}
             className="w-7 border-l border-stagespace-border bg-stagespace-panel flex flex-col items-center pt-3 flex-shrink-0 hover:bg-gray-800 transition-colors group"
-            title="Afficher l'Inspector"
+            title="Show the Inspector"
           >
             <PanelRightOpen size={13} className="text-gray-500 group-hover:text-white" />
             <span className="text-gray-600 text-[10px] mt-2" style={{ writingMode: 'vertical-rl' }}>Inspector</span>
@@ -399,21 +431,35 @@ function App() {
             <div
               onMouseDown={startRightResize}
               className="w-1.5 flex-shrink-0 bg-stagespace-border hover:bg-blue-500/50 cursor-col-resize transition-colors relative group"
-              title="Glisser pour redimensionner"
+              title="Drag to resize"
             >
               <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-stagespace-border group-hover:bg-blue-500" />
             </div>
             <div style={{ width: rightWidth }} className="border-l border-stagespace-border flex-shrink-0 relative flex flex-col">
             <button
               onClick={() => setRightCollapsed(true)}
-              className="absolute -left-3 top-2 z-20 w-6 h-6 bg-stagespace-panel border border-stagespace-border rounded-full flex items-center justify-center text-gray-500 hover:text-white hover:bg-gray-800 transition-colors text-xs"
-              title="Masquer l'Inspector"
+              className="absolute -left-3 top-2 z-overlay w-6 h-6 bg-stagespace-panel border border-stagespace-border rounded-full flex items-center justify-center text-gray-500 hover:text-white hover:bg-gray-800 transition-colors text-xs"
+              title="Hide the Inspector"
             >
               <PanelRightClose size={11} />
             </button>
-            {/* Audio Panel — compact, en haut */}
-            <div className="flex-shrink-0 max-h-[40%] overflow-y-auto border-b border-stagespace-border">
-              <AudioPanel />
+            {/* Audio Panel — collapsible : c'est du monitoring/config, pas
+                l'outil de travail. Replié il laisse toute la hauteur à
+                l'Inspector (params du slot/node, TrackGrid, macros). */}
+            <div className="flex-shrink-0 flex flex-col border-b border-stagespace-border max-h-[40%]">
+              <button
+                onClick={() => setAudioExpanded(!audioExpanded)}
+                className="flex items-center gap-1 px-3 py-1.5 flex-shrink-0 bg-gray-900/30 hover:bg-gray-800/40 transition-colors"
+                title={audioExpanded ? 'Collapse audio monitoring' : 'Expand audio monitoring'}
+              >
+                {audioExpanded ? <ChevronDown size={11} className="text-gray-400" /> : <ChevronRight size={11} className="text-gray-400" />}
+                <span className="text-gray-400 text-[10px] uppercase tracking-wider font-medium">Audio IN</span>
+              </button>
+              {audioExpanded && (
+                <div className="overflow-y-auto min-h-0">
+                  <AudioPanel />
+                </div>
+              )}
             </div>
             {/* Inspector — prend le reste de l'espace */}
             <div className="flex-1 overflow-y-auto">
@@ -421,14 +467,25 @@ function App() {
             </div>
           </div>
           </>
-        )}
+        ))}
         </ErrorBoundary>
       </div>
         </>
       )}
 
+      {/* StatusBar — monitoring moteur persistant, visible dans TOUS les
+          modes (Edit et Perform). Le statut/FPS/erreurs ne dépendent plus
+          des composants démontés par le mode live. */}
+      <StatusBar />
+
       {/* Toast notifications — erreurs backend, alerts OSC, etc. */}
       <ToastContainer />
+
+      {/* Premier lancement — show d'exemple ou départ vide */}
+      {showWelcome && <WelcomeModal onClose={() => setShowWelcome(false)} />}
+
+      {/* Aide raccourcis — `?` key ou bouton Toolbar */}
+      {shortcutsOpen && <ShortcutsModal />}
     </div>
   );
 }

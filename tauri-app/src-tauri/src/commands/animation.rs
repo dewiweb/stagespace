@@ -74,8 +74,7 @@ pub async fn launch_animation(
     let sh = Shared::from_state(&state);
     tauri::async_runtime::spawn_blocking(move || spawn_move(spec, &sh))
         .await
-        .map_err(|e| IpcError::internal(format!("Task join error: {e}")))?
-        .map_err(IpcError::from)?;
+        .map_err(|e| IpcError::internal(format!("Task join error: {e}")))??;
 
     Ok(movement_id)
 }

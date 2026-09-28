@@ -1,6 +1,7 @@
-use crate::engines::{finite_or_zero, sim_steps, Engine, EngineParams};
+use crate::engines::{finite_or_zero, sim_window, Engine, EngineParams, SIM_REWIND_EPS};
 use crate::rng::SimpleRng;
 use nalgebra::Vector3;
+use std::sync::Mutex;
 
 /// Follow-the-leader étendu — steering behaviors (Reynolds).
 ///
@@ -18,8 +19,35 @@ use nalgebra::Vector3;
 ///
 /// Le déplacement passe par un vecteur vitesse lissé (`responsiveness` =
 /// 1 → instantané, valeurs basses → inertie lourde), capé à `speed`.
-/// Déterministe : re-simulation depuis t=0, RNG seedé par objet.
-pub struct Follow;
+///
+/// Audit B1 : état par objet mis en cache (`Mutex`) — l'appel n'intègre
+/// que la fenêtre `[sim_t → t]` de l'objet requis (lazy per-agent), au
+/// lieu de re-simuler depuis t=0 à chaque frame. Seek arrière → reset
+/// de l'agent + re-simulation (déterministe : même séquence → mêmes
+/// positions).
+pub struct Follow {
+    cache: Mutex<FollowCache>,
+}
+
+#[derive(Default)]
+struct FollowCache {
+    /// État par objet — chacun avance à son propre rythme de requêtes.
+    agents: Vec<FollowAgent>,
+}
+
+struct FollowAgent {
+    sim_t: f64,
+    pos: Vector3<f64>,
+    vel: Vector3<f64>,
+}
+
+impl Default for Follow {
+    fn default() -> Self {
+        Self {
+            cache: Mutex::new(FollowCache::default()),
+        }
+    }
+}
 
 #[derive(Clone, Copy, PartialEq)]
 enum Mode {
@@ -82,26 +110,54 @@ impl Engine for Follow {
             .and_then(|v| v.as_i64())
             .unwrap_or(42) as u64;
 
-        // RNG par objet — positions initiales distinctes
-        let mut rng = SimpleRng::new(seed.wrapping_mul(31).wrapping_add(object_index as u64));
-        let mut pos = Vector3::new(
-            rng.uniform(-init_radius, init_radius),
-            rng.uniform(-init_radius, init_radius),
-            rng.uniform(0.0, init_radius * 0.2),
-        );
-        let mut vel = Vector3::zeros();
+        // object_index peut dépasser n_objects (hot-swap) : l'agent est
+        // créé à la demande plutôt que de paniquer.
+        let queried = object_index;
+        let mut c = self.cache.lock().unwrap_or_else(|e| e.into_inner());
+        while c.agents.len() <= queried {
+            let idx = c.agents.len();
+            // RNG par objet — positions initiales distinctes
+            let mut rng = SimpleRng::new(seed.wrapping_mul(31).wrapping_add(idx as u64));
+            c.agents.push(FollowAgent {
+                sim_t: 0.0,
+                pos: Vector3::new(
+                    rng.uniform(-init_radius, init_radius),
+                    rng.uniform(-init_radius, init_radius),
+                    rng.uniform(0.0, init_radius * 0.2),
+                ),
+                vel: Vector3::zeros(),
+            });
+        }
+        let a = &mut c.agents[queried];
+        // Seek arrière → reset de l'agent puis fenêtre [0 → t].
+        if t < a.sim_t - SIM_REWIND_EPS {
+            let idx = queried;
+            let mut rng = SimpleRng::new(seed.wrapping_mul(31).wrapping_add(idx as u64));
+            *a = FollowAgent {
+                sim_t: 0.0,
+                pos: Vector3::new(
+                    rng.uniform(-init_radius, init_radius),
+                    rng.uniform(-init_radius, init_radius),
+                    rng.uniform(0.0, init_radius * 0.2),
+                ),
+                vel: Vector3::zeros(),
+            };
+        }
 
         // Phase par objet pour la répartition sur l'anneau en mode orbit
         let orbit_phase = if params.n_objects > 1 {
-            2.0 * std::f64::consts::PI * object_index as f64 / params.n_objects as f64
+            2.0 * std::f64::consts::PI * queried as f64 / params.n_objects as f64
         } else {
             0.0
         };
 
-        let (n_steps, dt) = sim_steps(t, params.fps);
+        let (n_steps, dt, new_t) = sim_window(a.sim_t, t, params.fps, 1);
+        let sim_t0 = a.sim_t;
 
         for step in 0..n_steps {
-            let tau = step as f64 * dt;
+            // tau absolu du pas = temps simulé couvert + offset dans la fenêtre
+            // (la cible animée dépend du temps absolu, pas du compteur local).
+            let tau = sim_t0 + step as f64 * dt;
             let target = target_at(tau, target_radius, target_speed, target_z, params.duration);
             let predicted = target_at(
                 tau + lookahead,
@@ -110,7 +166,7 @@ impl Engine for Follow {
                 target_z,
                 params.duration,
             );
-            let diff = target - pos;
+            let diff = target - a.pos;
             let dist = diff.norm();
 
             let desired = match mode {
@@ -122,7 +178,7 @@ impl Engine for Follow {
                     }
                 }
                 Mode::Pursue => {
-                    let d = predicted - pos;
+                    let d = predicted - a.pos;
                     let dn = d.norm();
                     if dn > 1e-9 {
                         d / dn * speed
@@ -131,7 +187,7 @@ impl Engine for Follow {
                     }
                 }
                 Mode::Evade => {
-                    let d = pos - predicted;
+                    let d = a.pos - predicted;
                     let dn = d.norm();
                     if dn > 1e-9 {
                         d / dn * speed
@@ -148,7 +204,7 @@ impl Engine for Follow {
                         target.y + distance * (orbit_phase + omega * tau).sin(),
                         target.z,
                     );
-                    (ring - pos) * (containment * 4.0).max(1.0)
+                    (ring - a.pos) * (containment * 4.0).max(1.0)
                 }
                 Mode::Arrive => {
                     if dist > 1e-9 {
@@ -164,24 +220,26 @@ impl Engine for Follow {
                 }
             };
 
-            vel += (desired - vel) * responsiveness;
-            let vn = vel.norm();
+            a.vel += (desired - a.vel) * responsiveness;
+            let vn = a.vel.norm();
             if vn > speed {
-                vel *= speed / vn;
+                a.vel *= speed / vn;
             }
-            pos += vel * dt;
+            a.pos += a.vel * dt;
 
             // Confinement doux (surtout utile en evade) — les 3 axes, sinon
             // un evade fuit verticalement sans borne (z s'échappe à ~speed/s).
             if mode == Mode::Evade {
                 for axis in 0..3 {
-                    let over = pos[axis].abs() - bounds;
+                    let over = a.pos[axis].abs() - bounds;
                     if over > 0.0 {
-                        pos[axis] -= over * containment.min(1.0) * pos[axis].signum();
+                        a.pos[axis] -= over * containment.min(1.0) * a.pos[axis].signum();
                     }
                 }
             }
         }
+        a.sim_t = new_t;
+        let pos = a.pos;
 
         finite_or_zero(pos)
     }
@@ -230,7 +288,7 @@ mod tests {
 
     #[test]
     fn follow_converges_to_standoff_distance() {
-        let e = Follow;
+        let e = Follow::default();
         // speed > vitesse tangentielle de la cible (0.5·2π·0.5/4 ≈ 0.39)
         let p = params(
             json!({"mode": "follow", "distance": 0.2, "speed": 1.5,
@@ -247,7 +305,7 @@ mod tests {
 
     #[test]
     fn objects_have_distinct_trajectories() {
-        let e = Follow;
+        let e = Follow::default();
         let p = params(json!({"seed": 7}), 4);
         let a = e.position(0.5, 0, &p);
         let b = e.position(0.5, 1, &p);
@@ -259,7 +317,7 @@ mod tests {
 
     #[test]
     fn pursue_leads_the_target() {
-        let e = Follow;
+        let e = Follow::default();
         let p = params(
             json!({"mode": "pursue", "speed": 2.0, "lookahead": 0.5, "init_radius": 0.1}),
             1,
@@ -278,7 +336,7 @@ mod tests {
 
     #[test]
     fn evade_stays_away_from_target() {
-        let e = Follow;
+        let e = Follow::default();
         let p = params(
             json!({"mode": "evade", "speed": 1.0, "lookahead": 0.3, "init_radius": 0.2,
                    "bounds": 1.0, "containment": 1.0}),
@@ -295,7 +353,7 @@ mod tests {
 
     #[test]
     fn orbit_keeps_ring_distance() {
-        let e = Follow;
+        let e = Follow::default();
         let p = params(
             json!({"mode": "orbit", "distance": 0.4, "speed": 1.5,
                    "orbit_speed": 0.3, "target_speed": 0.5,
@@ -315,7 +373,7 @@ mod tests {
 
     #[test]
     fn arrive_decelerates_near_target() {
-        let e = Follow;
+        let e = Follow::default();
         let p = params(
             json!({"mode": "arrive", "speed": 2.0, "arrive_radius": 0.5,
                    "init_radius": 0.05}),
@@ -333,7 +391,7 @@ mod tests {
 
     #[test]
     fn deterministic_same_inputs() {
-        let e = Follow;
+        let e = Follow::default();
         let p = params(json!({"mode": "orbit", "seed": 99}), 3);
         let a = e.position(1.5, 2, &p);
         let b = e.position(1.5, 2, &p);

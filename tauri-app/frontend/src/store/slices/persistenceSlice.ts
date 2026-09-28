@@ -27,6 +27,9 @@ export interface PersistenceSlice {
   // Persistence sur disque (Tauri IPC) — .hfg = show complet depuis v2
   saveGraphToFile: (filePath: string) => Promise<void>;
   loadGraphFromFile: (filePath: string) => Promise<void>;
+  /// Applique une enveloppe show déjà chargée (welcome screen, tests) —
+  /// même chemin que loadGraphFromFile sans la lecture fichier.
+  loadShowEnvelope: (envelope: ShowFileEnvelope) => Promise<void>;
 }
 
 // Le slice accède aux autres slices via get() — type étendu du store
@@ -85,7 +88,7 @@ interface SpatialFxData {
   kinematicSmoothing?: number;
 }
 
-interface ShowFileEnvelope {
+export interface ShowFileEnvelope {
   format?: string;
   version?: number;
   savedAt?: number;
@@ -296,15 +299,24 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
   },
 
   loadGraphFromFile: async (filePath) => {
+    // Live-safety : refuser avant l'IPC — pas de lecture fichier inutile.
+    if (get().movements.length > 0) {
+      toast.warning('Cannot load a show during playback — stop all moves first.');
+      throw new Error('Cannot load show during playback');
+    }
+    const raw = await invoke<ShowFileEnvelope>('load_graph_from_file', { filePath });
+    await get().loadShowEnvelope(raw);
+  },
+
+  loadShowEnvelope: async (raw) => {
     // Live-safety : charger un show remplace slots, cues, config OSC et
     // spatial FX — refuser pendant le playback plutôt que corrompre
     // l'état de moves en cours.
     if (get().movements.length > 0) {
       toast.warning('Cannot load a show during playback — stop all moves first.');
-      throw new Error('Cannot load show file during playback');
+      throw new Error('Cannot load show during playback');
     }
 
-    const raw = await invoke<ShowFileEnvelope>('load_graph_from_file', { filePath });
     const version = validateShowFile(raw);
     validateSections(raw);
 

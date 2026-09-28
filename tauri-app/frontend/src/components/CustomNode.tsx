@@ -3,7 +3,7 @@ import { X, Check } from 'lucide-react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
-import { PARAM_SCHEMA, getCategoryColor, type ParamDef, type NodeParamValue } from './nodeParamSchema';
+import { PARAM_SCHEMA, getCategoryColor, pluginNodeSchema, pluginParamsOnSwitch, type ParamDef, type NodeParamValue } from './nodeParamSchema';
 import { isSourceNode, isTerminalNode, isBinaryComposite, getInputPorts } from '../utils/connectionRules';
 
 const AUDIO_NODE_TYPES = new Set(['BPM', 'AudioAmplitude', 'AudioSpectrum', 'AudioAmplitudeFalloff']);
@@ -23,13 +23,31 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
   const isGlobalNode = useGlobalGraphStore((s) => s.nodes.some((n) => n.id === id));
   const updateGlobalNodeData = useGlobalGraphStore((s) => s.updateNodeData);
   const color = getCategoryColor(data.type);
-  const schema = PARAM_SCHEMA[data.type] ?? [];
+  // Plugin : le schema vient du manifeste (résolu via params.plugin_id) et
+  // le label affiché est le nom déclaré — sinon les tables statiques.
+  const isPluginNode = data.type === 'Plugin';
+  const pluginId = isPluginNode ? (data.params?.plugin_id as string | undefined) : undefined;
+  const plugins = useGraphStore((s) => s.plugins);
+  const pluginsLoaded = useGraphStore((s) => s.pluginsLoaded);
+  const pluginManifest = isPluginNode
+    ? (plugins.find((m) => m.id === pluginId) ?? null)
+    : null;
+  // Plugin désinstallé (ou .hfg d'une autre machine) — badge persistant,
+  // plus visible qu'un toast éphémère à chaque édition. Un plugin_id vide
+  // est juste "non configuré", pas cassé.
+  const pluginMissing = isPluginNode && pluginsLoaded && !!pluginId && !pluginManifest;
+  const schema = isPluginNode
+    ? pluginNodeSchema(data.params, pluginManifest ? [pluginManifest] : [])
+    : (PARAM_SCHEMA[data.type] ?? []);
+  const displayLabel = isPluginNode ? (pluginManifest?.name ?? data.label) : data.label;
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const pluginKind = pluginManifest?.kind;
   const hasInput = !isSourceNode(data.type);
   const hasOutput = !isTerminalNode(data.type);
-  const isBinary = isBinaryComposite(data.type);
-  const inputPorts = getInputPorts(data.type);
+  const isBinary = isBinaryComposite(data.type)
+    || (isPluginNode && pluginKind === 'composite');
+  const inputPorts = getInputPorts(data.type, pluginKind);
 
   // Audio live indicator — pour les nodes audio, afficher les valeurs live
   // Optimisation: seuls les nodes audio se re-subscribe à audioState (60fps)
@@ -45,16 +63,26 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
   const audioHigh = audioState?.amplitude?.high ?? null;
 
   const handleChange = useCallback((key: string, value: NodeParamValue) => {
+    let params = { ...data.params, [key]: value };
+    // Switch de plugin : backfill des defaults du nouveau manifeste pour
+    // les clés absentes (les clés propres à l'ancien plugin restent,
+    // ignorées par le host).
+    if (isPluginNode && key === 'plugin_id' && typeof value === 'string') {
+      params = pluginParamsOnSwitch(
+        plugins.find((m) => m.id === value),
+        params,
+      );
+    }
     if (isGlobalNode) {
-      updateGlobalNodeData(id, { params: { ...data.params, [key]: value } });
+      updateGlobalNodeData(id, { params });
       return; // pushGlobalGraph (debounced) gère la propagation backend
     }
-    updateNodeData(id, { params: { ...data.params, [key]: value } });
+    updateNodeData(id, { params });
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       useGraphStore.getState().updateGraphLive();
     }, 150);
-  }, [id, data.params, updateNodeData, isGlobalNode, updateGlobalNodeData]);
+  }, [id, data.params, updateNodeData, isGlobalNode, updateGlobalNodeData, isPluginNode, plugins]);
 
   const renderInput = (def: ParamDef) => {
     const value = data.params?.[def.key];
@@ -212,7 +240,15 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
               <span className="text-red-400 text-[10px] font-bold tracking-wider">LIVE</span>
             </span>
           )}
-          <span className="text-white text-sm font-semibold truncate">{data.label}</span>
+          <span className="text-white text-sm font-semibold truncate">{displayLabel}</span>
+          {pluginMissing && (
+            <span
+              className="flex-shrink-0 px-1 py-px rounded bg-red-900/60 text-red-300 text-[9px] font-bold tracking-wide"
+              title={`Plugin '${pluginId ?? ''}' not loaded — .ssx missing from the plugins folder`}
+            >
+              MISSING
+            </span>
+          )}
         </div>
         {schema.length > 0 && (
           <button
@@ -443,7 +479,7 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
           defaultValue=""
           className="w-full px-2 py-1 bg-gray-900 text-cyan-300 text-[10px] font-mono rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
         >
-          <option value="" disabled>Charger une spline...</option>
+          <option value="" disabled>Load a spline...</option>
           {savedSplines.map((s) => (
             <option key={s.id} value={s.id}>{s.name}</option>
           ))}
@@ -459,7 +495,7 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
               <button
                 onClick={() => handleDelete(s.id)}
                 className="text-red-500 hover:text-red-400 px-1"
-                title="Supprimer"
+                title="Delete"
               ><X size={10} /></button>
             </div>
           ))}
@@ -486,7 +522,7 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
           <button
             onClick={() => setShowSave(false)}
             className="text-gray-500 hover:text-gray-400 text-[10px] px-2"
-            title="Annuler"
+            title="Cancel"
           ><X size={10} /></button>
         </div>
       ) : (
@@ -494,7 +530,7 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
           onClick={() => setShowSave(true)}
           className="w-full text-[10px] text-cyan-400 hover:text-cyan-300 border border-cyan-800 hover:border-cyan-600 rounded py-1"
         >
-          + Sauvegarder cette spline
+          + Save this spline
         </button>
       )}
     </div>

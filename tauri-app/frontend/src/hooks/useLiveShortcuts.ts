@@ -55,6 +55,16 @@ export function useLiveShortcuts() {
       if (isTextField || target.tagName === 'BUTTON') return;
       // Un handler plus spécifique a déjà consommé la touche
       if (e.defaultPrevented) return;
+      // `?` toggle l'aide — avant le guard modal pour permettre de fermer
+      // le panneau de shortcuts avec la même touche.
+      if (e.key === '?' && !e.repeat) {
+        e.preventDefault();
+        import('../store/useAnimationStore').then(({ useAnimationStore }) => {
+          const s = useAnimationStore.getState();
+          s.setShortcutsOpen(!s.shortcutsOpen);
+        });
+        return;
+      }
       // Un modal/picker est ouvert → aucun autre raccourci live
       if (isModalOpen()) return;
       // Maintenir la touche ne doit pas spammer GO/play
@@ -75,10 +85,10 @@ export function useLiveShortcuts() {
         // layerés, il fait la transition de scène prévue.
         e.preventDefault();
         const gs = useGraphStore.getState();
-        (gs as any).goToNextMove().then((msg: string | null) => {
+        (gs as any).goToNextMove().then((res: { ok: boolean; message: string }) => {
           // Un GO qui ne démarre rien (fin de setlist, activation échouée)
           // doit être visible — sinon silence en live.
-          if (msg && !msg.startsWith('GO:')) toast.warning(msg);
+          if (!res.ok) toast.warning(res.message);
         });
       } else if (e.key === 'Enter' && e.shiftKey) {
         // RECALL = cue suivant — kill + respawn du snapshot complet.
@@ -146,6 +156,7 @@ export function usePerfStatsPolling() {
         cpuPercent: 0,
         oscErrorRate: 0,
         oscRefusedRate: 0,
+        oscSuspended: false,
         isRunning: false,
         threadDied: false,
         mergeFrames: 0,

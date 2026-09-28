@@ -10,6 +10,9 @@ Architecture: Rust engines + Tauri shell + React/TypeScript frontend.
 ```
 stagespace/
 ├── rust-engines/          # Core Rust library (engines, runtime, compiler, merge)
+│   └── src/plugins/       # WASM plugin host (.ssx bundles, wasmtime, registry)
+├── plugin-sdk/            # Guest SDK + stagespace-pack CLI (.ssx packer)
+├── plugin-examples/       # Example plugins (lemniscate — wasm32-unknown-unknown)
 ├── tauri-app/
 │   ├── src-tauri/         # Tauri backend (Rust commands, AppState, IPC)
 │   └── frontend/          # React + TypeScript + Vite frontend
@@ -30,7 +33,7 @@ stagespace/
 ```bash
 cd rust-engines
 cargo build              # Build
-cargo test --lib         # Run tests (381 tests, incl. ts-rs export tests)
+cargo test --lib         # Run tests (459 tests, incl. ts-rs export tests)
 cargo clippy --all-targets -- -D warnings  # Lint (CI: --all-targets inclut tests/benches)
 cargo fmt -- --check     # Format check
 ```
@@ -40,7 +43,7 @@ cargo fmt -- --check     # Format check
 ```bash
 cd tauri-app/src-tauri
 cargo build              # Build
-cargo test --lib         # Run tests (37 tests)
+cargo test --lib         # Run tests (52 tests)
 cargo clippy --all-targets -- -D warnings  # Lint (CI: --all-targets inclut tests)
 ```
 
@@ -66,7 +69,7 @@ cd tauri-app/frontend
 npm install              # Install deps
 npm run dev              # Dev server (Vite)
 npm run build            # Production build (tsc + vite build)
-npm test                 # Run tests (188 tests, vitest)
+npm test                 # Run tests (352 tests, vitest)
 npm run contracts        # Regenerate TS types from Rust (ts-rs → src/types/generated/)
 npm run test:watch       # Watch mode
 npx tsc -b               # Type check (build mode — `tsc --noEmit` is vacuous on the solution-style root tsconfig)
@@ -78,7 +81,7 @@ npx tsc -b               # Type check (build mode — `tsc --noEmit` is vacuous 
 # Rust
 cd rust-engines && cargo test --lib && cargo clippy --all-targets -- -D warnings && cargo fmt -- --check
 # Tauri
-cd ../tauri-app/src-tauri && cargo test --lib && cargo clippy --all-targets -- -D warnings
+cd ../tauri-app/src-tauri && cargo test --lib && cargo clippy --all-targets -- -D warnings && cargo fmt -- --check
 # Frontend
 cd ../frontend && npm test && npx tsc -b && npm run build
 ```
@@ -118,11 +121,11 @@ CI fails if the committed files drift from the Rust sources.
 
 | Suite | Count |
 |-------|-------|
-| Rust engines | 381 |
-| Tauri backend | 37 |
-| Frontend (vitest) | 188 |
+| Rust engines | 459 |
+| Tauri backend | 52 |
+| Frontend (vitest) | 352 |
 | E2E CLI | 122 |
-| **Total** | **728** |
+| **Total** | **985** |
 
 ## Live Show Safety Features
 

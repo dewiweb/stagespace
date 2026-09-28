@@ -1,4 +1,5 @@
 import React from 'react';
+import { X } from 'lucide-react';
 import { useModalGuard } from '../../utils/modalGuard';
 
 /// Shell modal partagé — overlay, fermeture clic-dehors + Esc (via le
@@ -61,7 +62,7 @@ export const Modal: React.FC<ModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-popover flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onClick={closeOnOverlay ? onClose : undefined}
       role="dialog"
       aria-modal="true"
@@ -77,10 +78,10 @@ export const Modal: React.FC<ModalProps> = ({
             <h2 className="text-white font-semibold text-sm">{title}</h2>
             <button
               onClick={onClose}
-              className="text-gray-500 hover:text-white text-lg leading-none"
+              className="text-gray-500 hover:text-white leading-none p-0.5 rounded hover:bg-gray-800 transition-colors"
               aria-label="Close"
             >
-              ✕
+              <X size={16} />
             </button>
           </div>
         )}

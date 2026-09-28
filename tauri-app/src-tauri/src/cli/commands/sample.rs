@@ -97,11 +97,12 @@ pub fn cmd_perf(_args: &[&str]) -> Result<String, String> {
         .lock()
         .unwrap_or_else(|e| e.into_inner());
     let out = format!(
-        "MergeRuntime:\n  fps: {:.1}\n  osc_rate: {:.1}\n  latency_ms: {:.2}\n  cpu_percent: {:.1}\n  active_moves: {}\n  osc_ids: {}\n",
+        "MergeRuntime:\n  fps: {:.1}\n  osc_rate: {:.1}\n  latency_ms: {:.2}\n  cpu_percent: {:.1}\n  osc_suspended: {}\n  active_moves: {}\n  osc_ids: {}\n",
         stats.fps,
         stats.osc_rate,
         stats.latency_ms,
         stats.cpu_percent,
+        stats.osc_suspended,
         movements.len(),
         merge_rt.osc_ids().len()
     );

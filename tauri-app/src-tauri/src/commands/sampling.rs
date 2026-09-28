@@ -52,35 +52,6 @@ pub async fn get_perf_stats(state: State<'_, AppState>) -> Result<PerfStatsRespo
     })
 }
 
-/// Échantillonne la trajectoire compilée pour la visualiser dans la 3D
-/// Retourne N points (t, x, y, z) pour un objet donné
-#[tauri::command]
-pub async fn sample_trajectory(
-    object_index: usize,
-    n_samples: usize,
-    duration: f64,
-    state: State<'_, AppState>,
-) -> Result<Vec<(f64, f64, f64, f64)>, String> {
-    // Le graphe "expert" tourne comme worker (graph-main / graph-preview).
-    // On capture un sampler detaché et on RELÂCHE le lock movements AVANT
-    // d'échantillonner — sinon stop-all/recall attendent des milliers
-    // d'évaluations.
-    let sampler = {
-        let movements = lock_or_recover(&state.movements);
-        movements
-            .get("graph-main")
-            .or_else(|| movements.get("graph-preview"))
-            .map(|m| m.runtime.sampler())
-    };
-    // Clamp : un n_samples non borné (bug frontend ou IPC malveillant)
-    // allouerait des GB et gèlerait les commands d'urgence.
-    let n = n_samples.clamp(2, 10_000);
-    Ok(match sampler {
-        Some(s) => s.sample(object_index, n, duration.max(0.1)),
-        None => vec![],
-    })
-}
-
 /// Un chemin samplé d'une track d'un move — retourné par
 /// `sample_movement_trajectories` (batch : 1 invoke pour tout le move
 /// au lieu de N invokes séquentiels côté frontend).
@@ -102,14 +73,14 @@ pub async fn sample_movement_trajectories(
     n_samples: usize,
     duration: f64,
     state: State<'_, AppState>,
-) -> Result<Vec<SampledPath>, String> {
+) -> Result<Vec<SampledPath>, IpcError> {
     // Capturer le sampler + les track_indices puis relâcher le lock AVANT
     // d'échantillonner (pas de lock pendant l'évaluation).
     let (sampler, track_indices) = {
         let movements = lock_or_recover(&state.movements);
         let mv = movements
             .get(&movement_id)
-            .ok_or_else(|| format!("Movement '{movement_id}' not found"))?;
+            .ok_or_else(|| IpcError::not_found(format!("Movement '{movement_id}' not found")))?;
         (mv.runtime.sampler(), mv.track_indices.clone())
     };
     let mr = lock_or_recover(&state.merge_runtime);
@@ -145,14 +116,14 @@ pub async fn sample_movement_trajectory(
     n_samples: usize,
     duration: f64,
     state: State<'_, AppState>,
-) -> Result<Vec<(f64, f64, f64, f64)>, String> {
+) -> Result<Vec<(f64, f64, f64, f64)>, IpcError> {
     // 1. Capturer le sampler puis relâcher le lock movements AVANT de
     //    sampler (idem sample_trajectory : pas de lock pendant l'évaluation).
     let sampler = {
         let movements = lock_or_recover(&state.movements);
         movements
             .get(&movement_id)
-            .ok_or_else(|| format!("Movement '{movement_id}' not found"))?
+            .ok_or_else(|| IpcError::not_found(format!("Movement '{movement_id}' not found")))?
             .runtime
             .sampler()
     };

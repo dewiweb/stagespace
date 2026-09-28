@@ -75,7 +75,7 @@ pub fn cmd_activate_move(args: &[&str]) -> Result<String, String> {
         spatial_macros: None,
         animation_state: None,
     };
-    spawn_move(spec, &state.shared)?;
+    spawn_move(spec, &state.shared).map_err(|e| e.to_string())?;
 
     let mode = if is_preview { "preview" } else { "live" };
     Ok(format!("Move '{name}' activated (id={move_id}, tracks={track_str}, mode={mode}, duration={duration}s)"))
@@ -426,7 +426,7 @@ pub fn cmd_mod_add(args: &[&str]) -> Result<String, String> {
         .merge_runtime
         .lock()
         .unwrap_or_else(|e| e.into_inner());
-    let idx = merge_rt.add_modulation(rule);
+    let idx = merge_rt.add_modulation(rule)?;
     Ok(format!(
         "Modulation #{} added: {} → {} (scale {}, offset {}, range [{}..{}]{})",
         idx,
@@ -597,7 +597,7 @@ pub fn cmd_zone_add(args: &[&str]) -> Result<String, String> {
         .merge_runtime
         .lock()
         .unwrap_or_else(|e| e.into_inner());
-    let idx = merge_rt.add_zone(zone);
+    let idx = merge_rt.add_zone(zone)?;
     Ok(format!("Zone #{idx} added"))
 }
 

@@ -93,20 +93,41 @@ fn get_param_array_f64(node: &Node, key: &str) -> Vec<f64> {
 // ─── Compilations des nodes ───
 
 fn compile_scale(node: &Node) -> Result<TransformFn, PostProcessCompileError> {
-    let default_scale = get_param_f64_or(node, "scale", 1.0);
+    // Audit T2 : le schema UI partagé envoie `x`/`y`/`z` (per-axe, comme
+    // le modifier sub-graph) — l'ancienne impl ne lisait que `scale`
+    // (scalaire) → les params étaient silencieusement ignorés. On accepte
+    // les deux : `x/y/z` primer s'ils sont présents, sinon `scale` est
+    // pris comme scale uniforme (rétro-compat des .hfg existants).
+    let has_axes = node.params.get("x").is_some()
+        || node.params.get("y").is_some()
+        || node.params.get("z").is_some();
+    let axes = Vector3::new(
+        get_param_f64_or(node, "x", 1.0),
+        get_param_f64_or(node, "y", 1.0),
+        get_param_f64_or(node, "z", 1.0),
+    );
+    let uniform = get_param_f64_or(node, "scale", 1.0);
     Ok(Box::new(move |ctx, positions| {
-        // Si le MacroState a un scale != 1.0, l'utiliser ; sinon utiliser le param du node
+        // Macro prioritaire quand ≠ 1.0 (même pattern que Rotate/Offset) —
+        // elle prend le dessus comme scale uniforme live.
         let macro_scale = ctx.macros.get_scale();
-        let scale = if (macro_scale - 1.0).abs() > 1e-10 {
-            macro_scale
+        let scale_vec = if (macro_scale - 1.0).abs() > 1e-10 {
+            Vector3::new(macro_scale, macro_scale, macro_scale)
+        } else if has_axes {
+            axes
         } else {
-            default_scale
+            Vector3::new(uniform, uniform, uniform)
         };
         // Positions world-space : le scale pivote autour de l'origin globale
         let origin = ctx.origin;
         positions
             .into_iter()
-            .map(|(idx, pos)| (idx, origin + (pos - origin) * scale))
+            .map(|(idx, pos)| {
+                (
+                    idx,
+                    crate::spatial_transform::pivot_scale(pos, origin, scale_vec),
+                )
+            })
             .collect()
     }))
 }
@@ -133,20 +154,27 @@ fn compile_rotate(node: &Node) -> Result<TransformFn, PostProcessCompileError> {
         let yaw = if my != 0.0 { my } else { default_yaw };
         let pitch = if mp != 0.0 { mp } else { default_pitch };
         let roll = if mr != 0.0 { mr } else { default_roll };
-        let has_rotation = yaw != 0.0 || pitch != 0.0 || roll != 0.0;
-        if !has_rotation {
+        // Ordre canonique `spatial_transform::euler_rotation` (X→Y→Z),
+        // unifié avec le modifier sub-graph et le post-process par défaut
+        // — l'ancien ordre rz*rx*ry divergeait, les rotations ne
+        // commutent pas (audit T2 : triple implémentation des transforms).
+        let Some(rot) = crate::spatial_transform::euler_rotation(
+            pitch.to_radians(),
+            yaw.to_radians(),
+            roll.to_radians(),
+        ) else {
             return positions;
-        }
-        use nalgebra::Rotation3;
-        let ry = Rotation3::from_axis_angle(&nalgebra::Vector3::y_axis(), yaw.to_radians());
-        let rx = Rotation3::from_axis_angle(&nalgebra::Vector3::x_axis(), pitch.to_radians());
-        let rz = Rotation3::from_axis_angle(&nalgebra::Vector3::z_axis(), roll.to_radians());
-        let rot = rz * rx * ry;
+        };
         // Positions world-space : rotation autour de l'origin globale
         let origin = ctx.origin;
         positions
             .into_iter()
-            .map(|(idx, pos)| (idx, origin + rot * (pos - origin)))
+            .map(|(idx, pos)| {
+                (
+                    idx,
+                    crate::spatial_transform::pivot_rotate(pos, origin, &rot),
+                )
+            })
             .collect()
     }))
 }
@@ -185,7 +213,16 @@ fn compile_radius_scale(node: &Node) -> Result<TransformFn, PostProcessCompileEr
         let origin = ctx.origin;
         positions
             .into_iter()
-            .map(|(idx, pos)| (idx, origin + (pos - origin) * radius_scale))
+            .map(|(idx, pos)| {
+                (
+                    idx,
+                    crate::spatial_transform::pivot_scale(
+                        pos,
+                        origin,
+                        Vector3::repeat(radius_scale),
+                    ),
+                )
+            })
             .collect()
     }))
 }
@@ -226,18 +263,23 @@ fn compile_per_track_depth(node: &Node) -> Result<TransformFn, PostProcessCompil
             .into_iter()
             .map(|(idx, pos)| {
                 let depth = depths.get(idx).copied().unwrap_or(1.0);
-                (idx, origin + (pos - origin) * depth)
+                (
+                    idx,
+                    crate::spatial_transform::pivot_scale(pos, origin, Vector3::repeat(depth)),
+                )
             })
             .collect()
     }))
 }
 
 fn compile_barycenter(_node: &Node) -> Result<TransformFn, PostProcessCompileError> {
-    // Le node Barycenter calcule l'origin depuis les track_positions
-    // et l'utilise comme centre pour les transformations ultérieures.
-    // Il ne modifie pas les positions lui-même — il met à jour l'origin.
-    // Note : dans l'architecture actuelle, l'origin est déjà calculée
-    // par l'app et passée dans le contexte. Ce node est un no-op pour l'instant.
+    // Barycenter n'est plus un no-op : `extract_graph_effects` remonte
+    // `effects.barycenter = true` et le merge recalcule `ctx.origin`
+    // chaque frame = isobarycentre des track_positions — les transforms
+    // qui suivent (Scale, Rotate, RadiusScale…) pivotent autour du
+    // centre réel du groupe, pas de l'origin figée au launch.
+    // Dans la chaîne il est pass-through : il agit sur le pivot, pas sur
+    // les positions.
     Ok(Box::new(|_ctx, positions| positions))
 }
 
@@ -263,7 +305,12 @@ fn compile_audio_falloff(node: &Node) -> Result<TransformFn, PostProcessCompileE
         match target.as_str() {
             "scale" => positions
                 .into_iter()
-                .map(|(idx, pos)| (idx, origin + (pos - origin) * factor))
+                .map(|(idx, pos)| {
+                    (
+                        idx,
+                        crate::spatial_transform::pivot_scale(pos, origin, Vector3::repeat(factor)),
+                    )
+                })
                 .collect(),
             "height" => {
                 let offset = (amplitude - 0.5) * amount;
@@ -296,24 +343,42 @@ fn compile_manual_position(_node: &Node) -> Result<TransformFn, PostProcessCompi
 }
 
 fn compile_mirror(node: &Node) -> Result<TransformFn, PostProcessCompileError> {
-    let axis = node
+    // Audit T2 : l'ancienne impl lisait `axis` (x/y/z) alors que le schema
+    // UI partagé envoie `plane` (xy/xz/yz) + `offset` — le node miroir
+    // global était silencieusement cassé (toujours "x"). Le schema
+    // canonique est celui du modifier sub-graph : plane + offset, via
+    // `modifiers::mirror`. `axis` reste accepté en alias legacy :
+    // axis "x" ⇔ plane "yz" (réflexion de x), "y" ⇔ "xz", "z" ⇔ "xy".
+    let plane = node
         .params
-        .get("axis")
+        .get("plane")
         .and_then(|v| v.as_str())
-        .unwrap_or("x")
-        .to_string();
+        .map(str::to_string)
+        .or_else(|| {
+            node.params
+                .get("axis")
+                .and_then(|v| v.as_str())
+                .map(|a| match a {
+                    "x" => "yz".to_string(),
+                    "y" => "xz".to_string(),
+                    "z" => "xy".to_string(),
+                    other => other.to_string(),
+                })
+        })
+        .unwrap_or_else(|| "xz".to_string());
+    let offset = get_param_f64_or(node, "offset", 0.0);
     Ok(Box::new(move |ctx, positions| {
-        // Positions world-space : le miroir pivote autour de l'origin globale
+        // Positions world-space : le plan du miroir pivote autour de
+        // l'origin globale (offset relatif à l'origin).
         let origin = ctx.origin;
-        let mirror = |pos: Vector3<f64>| match axis.as_str() {
-            "x" => Vector3::new(-pos.x, pos.y, pos.z),
-            "y" => Vector3::new(pos.x, -pos.y, pos.z),
-            "z" => Vector3::new(pos.x, pos.y, -pos.z),
-            _ => pos,
-        };
         positions
             .into_iter()
-            .map(|(idx, pos)| (idx, origin + mirror(pos - origin)))
+            .map(|(idx, pos)| {
+                (
+                    idx,
+                    crate::spatial_transform::pivot_mirror(pos, origin, &plane, offset),
+                )
+            })
             .collect()
     }))
 }

@@ -1,0 +1,34 @@
+{
+  "id": "wobble",
+  "name": "Wobble",
+  "version": "1.0.0",
+  "author": "STAGESPACE",
+  "abi_version": 2,
+  "kind": "modifier",
+  "category": "Plugins",
+  "description": "Oscillation circulaire (xz) autour de la trajectoire upstream — exemple ABI v2 modifier",
+  "ports": { "inputs": ["input"], "outputs": ["trajectory"] },
+  "params": [
+    {
+      "key": "amp",
+      "type": "number",
+      "default": 0.5,
+      "min": 0.0,
+      "max": 5.0,
+      "step": 0.05,
+      "label": "Amplitude",
+      "live": true
+    },
+    {
+      "key": "freq",
+      "type": "number",
+      "default": 2.0,
+      "min": 0.0,
+      "max": 20.0,
+      "step": 0.1,
+      "label": "Fréquence (Hz)",
+      "live": true
+    }
+  ],
+  "capabilities": []
+}

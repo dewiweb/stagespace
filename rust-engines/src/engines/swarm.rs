@@ -2,9 +2,13 @@
 //!
 //! Simulation 3D : les agents démarrent sur un cercle du plan xy (z=0) avec des
 //! vitesses aléatoires faibles, puis interagissent. Tous les agents sont
-//! intégrés à chaque pas (vrai flocking, pas de voisins figés) — la fonction
-//! reste pure : re-simulation déterministe depuis t=0 à chaque appel, RNG
-//! seedé identiquement quel que soit l'objet interrogé. Coût O(n²·steps).
+//! intégrés à chaque pas (vrai flocking, pas de voisins figés).
+//!
+//! Audit B1 : l'état simulé est mis en cache (`Mutex`) — chaque appel n'intègre
+//! que la fenêtre `[sim_t → t]` au lieu de re-simuler depuis t=0. Le coût par
+//! frame passe de O(n³·t) à O(n²·Δframe). Un seek arrière (t < sim_t, sampling
+//! arbitraire) reset l'état et re-simule — le résultat reste déterministe
+//! (même séquence d'appels → mêmes positions ; RNG seedé à l'init).
 //!
 //! Params (extra) :
 //!   separation        poids de la répulsion à courte portée      (défaut 0.3)
@@ -14,12 +18,70 @@
 //!   max_speed         vitesse max, unités/s                      (défaut 0.5)
 //!   seed              graine RNG                                 (défaut 42)
 
-use crate::engines::{finite_or_zero, sim_steps_n2, Engine, EngineParams, MAX_OBJECTS};
+use crate::engines::{
+    finite_or_zero, sim_window, Engine, EngineParams, MAX_OBJECTS, SIM_REWIND_EPS,
+};
 use crate::rng::SimpleRng;
 use nalgebra::Vector3;
 use std::f64::consts::TAU;
+use std::sync::Mutex;
 
-pub struct Swarm;
+/// État simulé du troupeau — conservé entre appels (audit B1).
+struct SwarmCache {
+    /// Temps déjà couvert par l'intégration.
+    sim_t: f64,
+    n_objects: usize,
+    positions: Vec<Vector3<f64>>,
+    velocities: Vec<Vector3<f64>>,
+    /// Buffer d'accélérations réutilisé à chaque pas (snapshot des forces
+    /// avant mise à jour → intégration symplectique cohérente).
+    acc: Vec<Vector3<f64>>,
+}
+
+impl Default for SwarmCache {
+    fn default() -> Self {
+        Self {
+            sim_t: f64::INFINITY, // force le premier init (t < sim_t)
+            n_objects: 0,
+            positions: Vec::new(),
+            velocities: Vec::new(),
+            acc: Vec::new(),
+        }
+    }
+}
+
+impl SwarmCache {
+    /// Init : cercle xy + vitesses aléatoires — toutes les valeurs sont
+    /// tirées dans l'ordre des agents pour que la simulation ne dépende
+    /// pas de l'objet interrogé.
+    fn init(&mut self, n_objects: usize, seed: u64) {
+        let mut rng = SimpleRng::new(seed);
+        self.sim_t = 0.0;
+        self.n_objects = n_objects;
+        self.positions.clear();
+        self.velocities.clear();
+        self.positions.reserve(n_objects);
+        self.velocities.reserve(n_objects);
+        for i in 0..n_objects {
+            let a = TAU * i as f64 / n_objects as f64;
+            self.positions
+                .push(Vector3::new(0.6 * a.cos(), 0.6 * a.sin(), 0.0));
+            self.velocities.push(Vector3::new(
+                rng.uniform(-0.1, 0.1),
+                rng.uniform(-0.1, 0.1),
+                0.0,
+            ));
+        }
+        self.acc.clear();
+        self.acc.resize(n_objects, Vector3::zeros());
+    }
+}
+
+/// Engine à état — `Default` produit un cache vide (premier appel = init).
+#[derive(Default)]
+pub struct Swarm {
+    cache: Mutex<SwarmCache>,
+}
 
 impl Engine for Swarm {
     fn position(&self, t: f64, object_index: usize, params: &EngineParams) -> Vector3<f64> {
@@ -68,32 +130,19 @@ impl Engine for Swarm {
             .min(MAX_OBJECTS);
         let queried = object_index.min(n_objects - 1);
 
-        let (n_steps, dt) = sim_steps_n2(t, params.fps, n_objects);
-
-        let mut rng = SimpleRng::new(seed);
-
-        // Init : cercle xy + vitesses aléatoires — toutes les valeurs sont
-        // tirées dans l'ordre des agents pour que la simulation ne dépende pas
-        // de l'objet interrogé.
-        let mut all_positions: Vec<Vector3<f64>> = Vec::with_capacity(n_objects);
-        let mut all_velocities: Vec<Vector3<f64>> = Vec::with_capacity(n_objects);
-        for i in 0..n_objects {
-            let a = TAU * i as f64 / n_objects as f64;
-            all_positions.push(Vector3::new(0.6 * a.cos(), 0.6 * a.sin(), 0.0));
-            all_velocities.push(Vector3::new(
-                rng.uniform(-0.1, 0.1),
-                rng.uniform(-0.1, 0.1),
-                0.0,
-            ));
+        let mut c = self.cache.lock().unwrap_or_else(|e| e.into_inner());
+        // Seek arrière (sampling arbitraire) ou changement de population →
+        // reset + re-simulation depuis t=0 via la fenêtre [0 → t].
+        if c.n_objects != n_objects || t < c.sim_t - SIM_REWIND_EPS {
+            c.init(n_objects, seed);
         }
 
-        // Buffer d'accélérations réutilisé à chaque pas (snapshot des forces
-        // avant mise à jour → intégration symplectique cohérente).
-        let mut acc: Vec<Vector3<f64>> = vec![Vector3::zeros(); n_objects];
+        let cost = (n_objects as u64).saturating_mul(n_objects as u64);
+        let (n_steps, dt, new_t) = sim_window(c.sim_t, t, params.fps, cost);
 
         for _ in 0..n_steps {
             for i in 0..n_objects {
-                let pos_i = all_positions[i];
+                let pos_i = c.positions[i];
                 let mut sep = Vector3::zeros();
                 let mut align = Vector3::zeros();
                 let mut coh = Vector3::zeros();
@@ -103,7 +152,7 @@ impl Engine for Swarm {
                     if j == i {
                         continue;
                     }
-                    let diff = pos_i - all_positions[j];
+                    let diff = pos_i - c.positions[j];
                     let dist = diff.norm();
 
                     if dist < separation {
@@ -111,8 +160,8 @@ impl Engine for Swarm {
                     }
 
                     if dist < neighbor_radius {
-                        align += all_velocities[j];
-                        coh += all_positions[j];
+                        align += c.velocities[j];
+                        coh += c.positions[j];
                         neighbors += 1;
                     }
                 }
@@ -123,24 +172,25 @@ impl Engine for Swarm {
                     coh = (coh - pos_i) * 0.1;
                 }
 
-                acc[i] = sep * separation + align * alignment + coh * cohesion;
+                c.acc[i] = sep * separation + align * alignment + coh * cohesion;
             }
 
             for i in 0..n_objects {
                 // Kick d'accélération normalisé au pas nominal (60 Hz) :
                 // sans ça la dynamique dépend du param fps (2× les steps =
                 // 2× plus de kicks par seconde simulée).
-                let mut vel = all_velocities[i] + acc[i] * (dt * 60.0);
+                let mut vel = c.velocities[i] + c.acc[i] * (dt * 60.0);
                 let speed = vel.norm();
                 if speed > max_speed {
                     vel *= max_speed / speed;
                 }
-                all_velocities[i] = vel;
-                all_positions[i] = (all_positions[i] + vel * dt).map(|v| v.clamp(-1.0, 1.0));
+                c.velocities[i] = vel;
+                c.positions[i] = (c.positions[i] + vel * dt).map(|v| v.clamp(-1.0, 1.0));
             }
         }
+        c.sim_t = new_t;
 
-        finite_or_zero(all_positions[queried])
+        finite_or_zero(c.positions[queried])
     }
 
     fn name(&self) -> &str {
@@ -166,7 +216,7 @@ mod tests {
     fn swarm_all_agents_move() {
         // Régression : les voisins n'étaient jamais intégrés (fantômes figés
         // sur le cercle initial). Tous les agents doivent bouger.
-        let e = Swarm;
+        let e = Swarm::default();
         let p = params(4, json!({"seed": 42}));
         for i in 0..4 {
             let init = e.position(0.0, i, &p);
@@ -183,7 +233,7 @@ mod tests {
         // Avec des voisins réellement intégrés, une forte cohésion rapproche
         // le groupe : le diamètre du nuage doit rester borné (les agents ne
         // dérivent pas indépendamment vers les coins du [-1,1]³).
-        let e = Swarm;
+        let e = Swarm::default();
         let p = params(
             6,
             json!({"separation": 0.1, "alignment": 0.0, "cohesion": 1.0,
@@ -205,7 +255,7 @@ mod tests {
     fn swarm_separation_keeps_agents_apart() {
         // Séparation forte : aucun couple d'agents ne doit s'effondrer l'un
         // sur l'autre.
-        let e = Swarm;
+        let e = Swarm::default();
         let p = params(
             8,
             json!({"separation": 0.9, "alignment": 0.0, "cohesion": 0.0,
@@ -229,7 +279,7 @@ mod tests {
         // Régression : all_positions[object_index] paniquait quand
         // object_index >= n_objects (hot-swap d'osc_id → snap à l'origine
         // via catch_unwind).
-        let e = Swarm;
+        let e = Swarm::default();
         let p = params(4, json!({}));
         let pos = e.position(1.0, 10, &p);
         assert!(pos.iter().all(|v| v.is_finite()));
@@ -237,18 +287,60 @@ mod tests {
 
     #[test]
     fn swarm_deterministic() {
-        let e = Swarm;
+        // Deux engines frais, même séquence d'appels → mêmes positions.
+        // (La re-simulation bit-exacte n'est plus garantie : l'état est
+        // incrémental — la déterminisme est défini sur la séquence.)
+        let a = Swarm::default();
+        let b = Swarm::default();
         let p = params(4, json!({"seed": 99}));
         for i in 0..4 {
-            assert_eq!(e.position(1.5, i, &p), e.position(1.5, i, &p));
+            assert_eq!(a.position(1.5, i, &p), b.position(1.5, i, &p));
         }
     }
 
     #[test]
     fn swarm_negative_t_gives_initial_positions() {
-        let e = Swarm;
+        let e = Swarm::default();
         let p = params(4, json!({"seed": 42}));
         let pos = e.position(-1.0, 0, &p);
         assert_eq!(pos, e.position(0.0, 0, &p));
+    }
+
+    #[test]
+    fn swarm_incremental_matches_single_window() {
+        // B1 : une marche frame par frame (90 fenêtres d'un pas) doit
+        // rejoindre le même état qu'une fenêtre unique de 90 pas passant
+        // par le même chemin de cache — c'est l'invariant qui compte : le
+        // stepping incrémental conserve la trajectoire.
+        let inc = Swarm::default();
+        let single = Swarm::default();
+        let p = params(6, json!({"seed": 7}));
+        for f in 0..=90 {
+            let t = f as f64 / 60.0;
+            for i in 0..6 {
+                inc.position(t, i, &p);
+            }
+        }
+        for i in 0..6 {
+            single.position(1.5, i, &p);
+        }
+        for i in 0..6 {
+            let a = inc.position(1.5, i, &p);
+            let b = single.position(1.5, i, &p);
+            assert_eq!(a, b, "agent {i}: incrémental {a:?} ≠ fenêtre unique {b:?}");
+        }
+    }
+
+    #[test]
+    fn swarm_backward_seek_resets_and_resimulates() {
+        // t < sim_t → reset : un appel arrière ne doit ni paniquer ni
+        // retourner l'état futur.
+        let e = Swarm::default();
+        let p = params(4, json!({"seed": 42}));
+        let far = e.position(2.0, 0, &p);
+        let back = e.position(0.5, 0, &p);
+        let fresh = Swarm::default().position(0.5, 0, &p);
+        assert_eq!(back, fresh, "seek arrière doit re-simuler depuis t=0");
+        assert_ne!(back, far);
     }
 }

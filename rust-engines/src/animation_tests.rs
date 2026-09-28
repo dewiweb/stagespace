@@ -337,7 +337,8 @@ mod tests {
             fps: 60.0,
             extra: json!({}),
         };
-        let result = runtime.play_compiled(compiled.unwrap(), params, osc_ids);
+        let result =
+            runtime.play_compiled(std::sync::Arc::from(compiled.unwrap()), params, osc_ids);
         assert!(result.is_ok(), "Playback failed: {result:?}");
         assert!(runtime.is_running());
 
@@ -390,7 +391,7 @@ mod tests {
             fps: 60.0,
             extra: json!({}),
         };
-        let result = runtime.play_compiled(compiled, params, osc_ids);
+        let result = runtime.play_compiled(std::sync::Arc::from(compiled), params, osc_ids);
         assert!(
             result.is_ok(),
             "Playback with audio mods failed: {result:?}"

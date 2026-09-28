@@ -1,5 +1,5 @@
 use super::types::PerfStats;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 /// Monitor de performance — stats lock-free via atomics (bits de f64)
 pub struct PerfMonitor {
@@ -9,6 +9,7 @@ pub struct PerfMonitor {
     cpu: AtomicU64,
     osc_error_rate: AtomicU64,
     osc_refused_rate: AtomicU64,
+    osc_suspended: AtomicBool,
 }
 
 impl Default for PerfMonitor {
@@ -26,7 +27,13 @@ impl PerfMonitor {
             cpu: AtomicU64::new(0),
             osc_error_rate: AtomicU64::new(0),
             osc_refused_rate: AtomicU64::new(0),
+            osc_suspended: AtomicBool::new(false),
         }
+    }
+
+    /// État du circuit-breaker OSC (true = sends suspendus, sonde @1Hz).
+    pub fn set_osc_suspended(&self, suspended: bool) {
+        self.osc_suspended.store(suspended, Ordering::Relaxed);
     }
 
     pub fn update(&self, fps: f64, osc_rate: f64, latency_ms: f64, cpu: f64) {
@@ -61,6 +68,7 @@ impl PerfMonitor {
             cpu_percent: f64::from_bits(self.cpu.load(Ordering::Relaxed)),
             osc_error_rate: f64::from_bits(self.osc_error_rate.load(Ordering::Relaxed)),
             osc_refused_rate: f64::from_bits(self.osc_refused_rate.load(Ordering::Relaxed)),
+            osc_suspended: self.osc_suspended.load(Ordering::Relaxed),
         }
     }
 }

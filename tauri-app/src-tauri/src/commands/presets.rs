@@ -30,7 +30,7 @@ pub async fn preset_delete(name: String, state: State<'_, AppState>) -> Result<(
     let mut presets = lock_or_recover(&state.presets);
     presets
         .delete(&name)
-        .map_err(|e| IpcError::from(e.to_string()))
+        .map_err(|e| IpcError::io(e.to_string()))
 }
 
 #[tauri::command]

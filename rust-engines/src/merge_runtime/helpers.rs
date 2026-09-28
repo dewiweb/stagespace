@@ -136,17 +136,14 @@ pub fn default_post_process_fn() -> PostProcessFn {
         let height_offset = ctx.macros.get_height_offset();
         let origin = ctx.origin;
 
-        // Précalculer la matrice de rotation
-        let has_rotation = yaw != 0.0 || pitch != 0.0 || roll != 0.0;
-        let rot_matrix = if has_rotation {
-            use nalgebra::Rotation3;
-            let ry = Rotation3::from_axis_angle(&nalgebra::Vector3::y_axis(), yaw.to_radians());
-            let rx = Rotation3::from_axis_angle(&nalgebra::Vector3::x_axis(), pitch.to_radians());
-            let rz = Rotation3::from_axis_angle(&nalgebra::Vector3::z_axis(), roll.to_radians());
-            Some(rz * rx * ry)
-        } else {
-            None
-        };
+        // Matrice de rotation — ordre canonique `spatial_transform::euler_rotation`
+        // (X→Y→Z, unifié avec le modifier sub-graph depuis T2).
+        let rot_matrix = crate::spatial_transform::euler_rotation(
+            pitch.to_radians(),
+            yaw.to_radians(),
+            roll.to_radians(),
+        );
+        let scale_vec = nalgebra::Vector3::new(scale, scale, scale);
 
         positions
             .iter()
@@ -182,9 +179,10 @@ pub fn default_post_process_fn() -> PostProcessFn {
                 let pos_with_depth = origin + (pos_with_height - origin) * depth;
 
                 // scale → rotation (pivots à l'origin) → shift
-                let pos_scaled = origin + (pos_with_depth - origin) * scale;
+                let pos_scaled =
+                    crate::spatial_transform::pivot_scale(pos_with_depth, origin, scale_vec);
                 let pos_rotated = if let Some(ref rot) = rot_matrix {
-                    origin + rot * (pos_scaled - origin)
+                    crate::spatial_transform::pivot_rotate(pos_scaled, origin, rot)
                 } else {
                     pos_scaled
                 };

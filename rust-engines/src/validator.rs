@@ -24,6 +24,9 @@ pub enum ValidationError {
     CountMismatch(String),
     /// Node présent dans un contexte où il n'a pas de sens (sub-graph vs global)
     ContextIncompatible(String),
+    /// Graphe trop grand/profond — rejeté avant toute traversée récursive
+    /// (un stack overflow = abort du process entier, cf. audit B2).
+    TooComplex(String),
 }
 
 impl fmt::Display for ValidationError {
@@ -39,12 +42,27 @@ impl fmt::Display for ValidationError {
             ValidationError::ContextIncompatible(msg) => {
                 write!(f, "context incompatible: {msg}")
             }
+            ValidationError::TooComplex(msg) => write!(f, "graph too complex: {msg}"),
         }
     }
 }
 
 /// Résultat de validation
 pub type ValidationResult = Result<(), Vec<ValidationError>>;
+
+/// Bornes dures anti-DoS / anti-stack-overflow (audit B2). Le compile
+/// (`compile_node`) et l'évaluation de la closure compilée sont récursifs
+/// en profondeur de DAG ; un stack overflow tue le process entier
+/// (SIGSEGV — catch_unwind ne peut pas l'intercepter). Tout graphe
+/// dépassant ces bornes est rejeté avant toute traversée.
+pub const MAX_GRAPH_NODES: usize = 512;
+pub const MAX_GRAPH_EDGES: usize = 4096;
+pub const MAX_DAG_DEPTH: usize = 128;
+/// Borne sur l'expansion DAG→arbre : `compile_node` n'a pas de
+/// mémoïsation — un node partagé par K parents est compilé et évalué
+/// K fois (Mix(a,a) à chaque niveau → 2^profondeur). Le compte de
+/// chemins sature à cette valeur → rejet au lieu d'exploser.
+pub const MAX_EXPANDED_PATHS: u64 = 8192;
 
 /// Validateur de graphe
 pub struct Validator;
@@ -59,7 +77,24 @@ impl Validator {
 
     /// Valide un graphe complet avec un contexte explicite (sub-graph ou global).
     pub fn validate_with_context(graph: &Graph, context: GraphContext) -> ValidationResult {
+        Self::validate_with_plugin_kinds(graph, context, &std::collections::HashMap::new())
+    }
+
+    /// Validation kind-aware : `plugin_kinds` associe chaque node Plugin à
+    /// son `PluginKind` résolu dans le registry (compiler). Sans entrée
+    /// pour un node Plugin, les règles restent permissives (superset des
+    /// ports) — l'arité exacte est garantie au compile.
+    pub(crate) fn validate_with_plugin_kinds(
+        graph: &Graph,
+        context: GraphContext,
+        plugin_kinds: &std::collections::HashMap<crate::graph::NodeId, crate::plugins::PluginKind>,
+    ) -> ValidationResult {
         let mut errors = Vec::new();
+
+        // -1. Bornes dures AVANT toute traversée récursive (has_cycle est
+        // itératif mais le compile/éval downstream ne le sont pas —
+        // stack overflow = abort du process, cf. audit B2).
+        Self::check_complexity(graph, &mut errors);
 
         // 0. Vérifier que les nodes sont compatibles avec le contexte
         Self::validate_context_compatibility(graph, context, &mut errors);
@@ -143,7 +178,11 @@ impl Validator {
                             "self-loop on {:?} is not allowed",
                             from_node.node_type
                         )));
-                    } else if !Self::is_valid_connection(&from_node.node_type, &to_node.node_type) {
+                    } else if !Self::is_valid_connection(
+                        &from_node.node_type,
+                        &to_node.node_type,
+                        plugin_kinds.get(&to_node.id).copied(),
+                    ) {
                         errors.push(ValidationError::InvalidConnection(format!(
                             "{:?} -> {:?}",
                             from_node.node_type, to_node.node_type
@@ -158,8 +197,8 @@ impl Validator {
         }
 
         // 4. Vérifier la compatibilité des types + arité des ports
-        Self::validate_type_compatibility(graph, &mut errors);
-        Self::validate_input_arity(graph, context, &mut errors);
+        Self::validate_type_compatibility(graph, &mut errors, plugin_kinds);
+        Self::validate_input_arity(graph, context, &mut errors, plugin_kinds);
 
         // 5. Vérifier la compatibilité des comptages (sub-graph uniquement —
         //    le graph global n'a pas de node Objects pour définir n_objects)
@@ -175,6 +214,88 @@ impl Validator {
     }
 
     /// Vérifie qu'aucun node n'est présent dans un contexte où il n'a pas de sens.
+    /// Bornes dures sur la taille et la profondeur du graphe — passent
+    /// avant tout le reste. Entièrement itératif (Kahn) : safe même sur
+    /// un graphe cyclique (les nœuds dans le cycle restent à degré > 0 et
+    /// ne contribuent ni profondeur ni chemins — le cycle est signalé
+    /// par has_cycle juste après).
+    fn check_complexity(graph: &Graph, errors: &mut Vec<ValidationError>) {
+        if graph.nodes.len() > MAX_GRAPH_NODES {
+            errors.push(ValidationError::TooComplex(format!(
+                "{} nodes (max {MAX_GRAPH_NODES})",
+                graph.nodes.len()
+            )));
+        }
+        if graph.edges.len() > MAX_GRAPH_EDGES {
+            errors.push(ValidationError::TooComplex(format!(
+                "{} edges (max {MAX_GRAPH_EDGES})",
+                graph.edges.len()
+            )));
+        }
+        if graph.nodes.is_empty() {
+            return;
+        }
+
+        // Ordre topologique (Kahn) → profondeur max du DAG + nombre de
+        // chemins saturé. paths[v] = somme des chemins des parents — la
+        // valeur exacte du nombre de fois que compile_node compilerait v.
+        let mut indegree: std::collections::HashMap<crate::graph::NodeId, usize> =
+            std::collections::HashMap::with_capacity(graph.nodes.len());
+        for e in &graph.edges {
+            if graph.nodes.contains_key(&e.from) && graph.nodes.contains_key(&e.to) {
+                *indegree.entry(e.to).or_insert(0) += 1;
+            }
+        }
+        let mut queue: std::collections::VecDeque<crate::graph::NodeId> = graph
+            .nodes
+            .keys()
+            .filter(|id| !indegree.contains_key(id))
+            .copied()
+            .collect();
+        let mut depth: std::collections::HashMap<crate::graph::NodeId, usize> =
+            std::collections::HashMap::with_capacity(graph.nodes.len());
+        let mut paths: std::collections::HashMap<crate::graph::NodeId, u64> =
+            std::collections::HashMap::with_capacity(graph.nodes.len());
+        let mut max_depth = 0usize;
+        let mut total_paths: u64 = 0;
+        while let Some(id) = queue.pop_front() {
+            let d = *depth.get(&id).unwrap_or(&0);
+            let p = *paths.get(&id).unwrap_or(&1);
+            if d > max_depth {
+                max_depth = d;
+            }
+            total_paths = total_paths.saturating_add(p);
+            if max_depth > MAX_DAG_DEPTH && total_paths > MAX_EXPANDED_PATHS {
+                break; // les deux bornes saturées — plus rien à mesurer
+            }
+            for succ in graph.get_outputs(id) {
+                let nd = d + 1;
+                let e = depth.entry(succ).or_insert(0);
+                if nd > *e {
+                    *e = nd;
+                }
+                let pe = paths.entry(succ).or_insert(0);
+                *pe = pe.saturating_add(p).min(MAX_EXPANDED_PATHS + 1);
+                if let Some(deg) = indegree.get_mut(&succ) {
+                    *deg -= 1;
+                    if *deg == 0 {
+                        queue.push_back(succ);
+                    }
+                }
+            }
+        }
+        if max_depth > MAX_DAG_DEPTH {
+            errors.push(ValidationError::TooComplex(format!(
+                "DAG depth {max_depth} (max {MAX_DAG_DEPTH})"
+            )));
+        }
+        if total_paths > MAX_EXPANDED_PATHS {
+            errors.push(ValidationError::TooComplex(format!(
+                "expanded path count exceeds {MAX_EXPANDED_PATHS} (shared sub-DAGs multiply compile work)"
+            )));
+        }
+    }
+
     fn validate_context_compatibility(
         graph: &Graph,
         context: GraphContext,
@@ -238,155 +359,57 @@ impl Validator {
                     | NodeType::OffsetSpline
                     | NodeType::AudioSpectrum
                     | NodeType::OSCInput
+                    | NodeType::Plugin
             )
         })
     }
 
-    /// Vérifie si une connexion entre deux types de nœuds est valide
-    fn is_valid_connection(from_type: &NodeType, to_type: &NodeType) -> bool {
-        match from_type {
-            // Moteurs peuvent connecter à Output, Mix, Group, Sequence, Crossfade, modifiers
-            NodeType::Circular | NodeType::Elliptical | NodeType::Spiral | NodeType::Lissajous | NodeType::Figure8
-            | NodeType::Linear | NodeType::Oscillation | NodeType::PerlinNoise | NodeType::Formation
-            | NodeType::Converge | NodeType::Pendulum | NodeType::RoseCurve | NodeType::Helix
-            | NodeType::CustomTrajectory | NodeType::BPM | NodeType::AudioAmplitude | NodeType::Wave
-            // AudioSpectrum/OSCInput sont des engines compilés produisant des
-            // positions — pas des sources décoratives : ils atteignent Output
-            // comme tout autre moteur. (Auparavant limités aux falloffs, des
-            // edges qui ne transportaient aucune donnée.)
-            | NodeType::AudioSpectrum | NodeType::OSCInput
-            | NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline => {
-                matches!(to_type,
-                    NodeType::Output | NodeType::Mix | NodeType::Group | NodeType::Sequence | NodeType::Crossfade |
-                    NodeType::Scale | NodeType::Rotate | NodeType::Offset | NodeType::PhaseShift
-                    | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
-                )
-            }
+    /// Un type produit une trajectoire connectable à un modifier natif —
+    /// dérivé du `NodeSpec` (node_spec.rs), anciennement une liste explicite.
+    fn feeds_modifier(t: &NodeType) -> bool {
+        crate::node_spec::node_spec(t).feeds_modifier()
+    }
 
-            // DrawSpline = source de données spline, peut alimenter EvaluateSpline/TrimSpline/OffsetSpline
-            // ou les mêmes cibles que les moteurs
-            NodeType::DrawSpline => {
-                matches!(to_type,
-                    NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline |
-                    NodeType::Output | NodeType::Mix | NodeType::Group | NodeType::Sequence | NodeType::Crossfade |
-                    NodeType::Scale | NodeType::Rotate | NodeType::Offset | NodeType::PhaseShift
-                    | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
-                )
-            }
+    /// Un type produit une trajectoire connectable à un composite natif —
+    /// feeds_modifier + physics + composites, moins les falloffs limités.
+    fn feeds_composite(t: &NodeType) -> bool {
+        crate::node_spec::node_spec(t).feeds_composite()
+    }
 
-            // Falloffs implémentés
-            NodeType::TimeFalloff | NodeType::PointDistanceFalloff => {
-                matches!(to_type,
-                    NodeType::Output | NodeType::Mix | NodeType::Group | NodeType::Sequence | NodeType::Crossfade |
-                    NodeType::Scale | NodeType::Rotate | NodeType::Offset | NodeType::PhaseShift
-                    | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
-                )
-            }
-
-            // Moteurs physique
-            NodeType::Bouncing | NodeType::Spring | NodeType::Follow | NodeType::Swarm | NodeType::Avoidance | NodeType::VectorField => {
-                matches!(
-                    to_type,
-                    NodeType::Output | NodeType::Mix | NodeType::Group | NodeType::Sequence | NodeType::Crossfade
-                )
-            }
-
-            // Splines : DrawSpline est une source (pas d'input), les autres sont des moteurs
-            // (déjà couverts par le match des moteurs ci-dessus)
-
-            // Falloffs
-            NodeType::DirectionalFalloff | NodeType::AudioAmplitudeFalloff => {
-                matches!(to_type, NodeType::Scale | NodeType::Rotate | NodeType::Offset)
-            }
-
-            // Modificateurs
-            NodeType::Scale | NodeType::Rotate | NodeType::Offset | NodeType::PhaseShift
-            | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
-            // Post-processing nodes (graph global)
-            | NodeType::RadiusScale | NodeType::HeightOffset | NodeType::PerTrackDepth
-            | NodeType::Barycenter | NodeType::AudioFalloff | NodeType::ManualPosition
-            | NodeType::Zone | NodeType::Velocity => {
-                matches!(to_type, NodeType::Output | NodeType::Mix | NodeType::Group | NodeType::Crossfade
-                    | NodeType::Scale | NodeType::Rotate | NodeType::Offset | NodeType::PhaseShift
-                    | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
-                    | NodeType::RadiusScale | NodeType::HeightOffset | NodeType::PerTrackDepth
-                    | NodeType::Barycenter | NodeType::AudioFalloff | NodeType::ManualPosition
-                    | NodeType::Zone | NodeType::Velocity)
-            }
-
-            // Structurels
-            NodeType::Objects => {
-                matches!(to_type, NodeType::Circular | NodeType::Elliptical | NodeType::Spiral | NodeType::Lissajous | NodeType::Figure8
-                    | NodeType::Linear | NodeType::Oscillation | NodeType::Formation | NodeType::PerlinNoise | NodeType::Converge
-                    | NodeType::Pendulum | NodeType::RoseCurve | NodeType::Helix | NodeType::Bouncing
-                    | NodeType::Spring | NodeType::Follow | NodeType::Swarm | NodeType::Avoidance | NodeType::VectorField
-                    | NodeType::CustomTrajectory | NodeType::Wave
-                    | NodeType::BPM | NodeType::AudioAmplitude
-                    | NodeType::AudioSpectrum | NodeType::OSCInput
-                    | NodeType::DrawSpline | NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline
-                    // Les falloffs sont des engines autonomes — ils résolvent n_objects
-                    // via l'edge Objects comme les autres moteurs.
-                    | NodeType::TimeFalloff | NodeType::PointDistanceFalloff
-                    | NodeType::DirectionalFalloff | NodeType::AudioAmplitudeFalloff)
-            }
-            NodeType::Duration => {
-                matches!(to_type, NodeType::Circular | NodeType::Elliptical | NodeType::Spiral | NodeType::Lissajous | NodeType::Figure8
-                    | NodeType::Linear | NodeType::Oscillation | NodeType::Formation | NodeType::PerlinNoise | NodeType::Converge
-                    | NodeType::Pendulum | NodeType::RoseCurve | NodeType::Helix
-                    | NodeType::CustomTrajectory | NodeType::Wave
-                    | NodeType::BPM | NodeType::AudioAmplitude
-                    | NodeType::AudioSpectrum | NodeType::OSCInput
-                    | NodeType::Bouncing | NodeType::Spring | NodeType::Follow | NodeType::Swarm | NodeType::Avoidance | NodeType::VectorField
-                    | NodeType::DrawSpline | NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline
-                    // Les falloffs ont un port 'duration' — sinon le paramètre
-                    // resterait figé à sa valeur par défaut.
-                    | NodeType::TimeFalloff | NodeType::PointDistanceFalloff
-                    | NodeType::DirectionalFalloff | NodeType::AudioAmplitudeFalloff)
-            }
-            NodeType::Output => false, // Output n'a pas de sortie
-            // Input (graph global) : peut connecter vers n'importe quel post-process node
-            NodeType::Input => {
-                matches!(to_type,
-                    NodeType::Scale | NodeType::Rotate | NodeType::Offset | NodeType::PhaseShift
-                    | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
-                    | NodeType::RadiusScale | NodeType::HeightOffset | NodeType::PerTrackDepth
-                    | NodeType::Barycenter | NodeType::AudioFalloff | NodeType::ManualPosition
-                    | NodeType::Zone | NodeType::Velocity
-                    | NodeType::Output
-                )
-            }
-            // MoveRef : source qui produit des positions (comme un engine).
-            // Peut connecter vers les post-process nodes, Output, et composites.
-            NodeType::MoveRef => {
-                matches!(to_type,
-                    NodeType::Scale | NodeType::Rotate | NodeType::Offset | NodeType::PhaseShift
-                    | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
-                    | NodeType::RadiusScale | NodeType::HeightOffset | NodeType::PerTrackDepth
-                    | NodeType::Barycenter | NodeType::AudioFalloff | NodeType::ManualPosition
-                    | NodeType::Zone | NodeType::Velocity
-                    | NodeType::Output | NodeType::Mix | NodeType::Group | NodeType::Crossfade
-                )
-            }
-            // Merge : équivalent à Input (représente le MergeRuntime).
-            NodeType::Merge => {
-                matches!(to_type,
-                    NodeType::Scale | NodeType::Rotate | NodeType::Offset | NodeType::PhaseShift
-                    | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
-                    | NodeType::RadiusScale | NodeType::HeightOffset | NodeType::PerTrackDepth
-                    | NodeType::Barycenter | NodeType::AudioFalloff | NodeType::ManualPosition
-                    | NodeType::Zone | NodeType::Velocity
-                    | NodeType::Output
-                )
-            }
-            NodeType::Mix | NodeType::Group | NodeType::Sequence | NodeType::Crossfade => {
-                // Composites peuvent connecter à Output ou à d'autres composites
-                matches!(to_type, NodeType::Output | NodeType::Mix | NodeType::Group | NodeType::Sequence | NodeType::Crossfade)
-            }
+    /// Vérifie si une connexion entre deux types de nœuds est valide —
+    /// délégué au `Feeds` déclaratif du `NodeSpec` (node_spec.rs).
+    fn is_valid_connection(
+        from_type: &NodeType,
+        to_type: &NodeType,
+        to_plugin_kind: Option<crate::plugins::PluginKind>,
+    ) -> bool {
+        use crate::node_spec::node_spec;
+        // Plugin WASM : le kind du manifeste détermine qui peut l'alimenter.
+        // Kind inconnu (registry non branché) → permissif ; l'arité exacte
+        // est garantie au compile.
+        if *to_type == NodeType::Plugin {
+            use crate::plugins::PluginKind as K;
+            return match to_plugin_kind {
+                Some(K::Engine) => {
+                    matches!(from_type, NodeType::Objects | NodeType::Duration)
+                }
+                Some(K::Modifier) => Self::feeds_modifier(from_type),
+                Some(K::Composite) => Self::feeds_composite(from_type),
+                None => {
+                    matches!(from_type, NodeType::Objects | NodeType::Duration)
+                        || Self::feeds_composite(from_type)
+                }
+            };
         }
+        node_spec(from_type).can_feed(node_spec(to_type))
     }
 
     /// Vérifie que les noms de ports utilisés par les edges existent pour les types connectés.
-    fn validate_type_compatibility(graph: &Graph, errors: &mut Vec<ValidationError>) {
+    fn validate_type_compatibility(
+        graph: &Graph,
+        errors: &mut Vec<ValidationError>,
+        plugin_kinds: &std::collections::HashMap<crate::graph::NodeId, crate::plugins::PluginKind>,
+    ) {
         for edge in &graph.edges {
             let from_node = match graph.nodes.get(&edge.from) {
                 Some(n) => n,
@@ -406,7 +429,11 @@ impl Validator {
             }
 
             // Le port d'entrée cible doit exister pour le type cible.
-            if !Self::has_input_port(&to_node.node_type, &edge.to_port) {
+            if !Self::has_input_port(
+                &to_node.node_type,
+                &edge.to_port,
+                plugin_kinds.get(&to_node.id).copied(),
+            ) {
                 errors.push(ValidationError::TypeMismatch(format!(
                     "{:?} has no input port '{}', connected from {:?}",
                     to_node.node_type, edge.to_port, from_node.node_type
@@ -423,95 +450,40 @@ impl Validator {
         }
     }
 
-    /// Indique si un type de nœud expose un port de sortie avec ce nom.
+    /// Indique si un type de nœud expose un port de sortie avec ce nom —
+    /// dérivé de `NodeSpec::outputs` (Output est le seul terminal).
     fn has_output_port(node_type: &NodeType, port: &str) -> bool {
-        match node_type {
-            // Output est terminal : il n'a pas de sortie.
-            NodeType::Output => false,
-            // Tous les autres nœuds émettent actuellement sur un seul port "output".
-            _ if port == "output" => true,
-            _ => false,
-        }
+        crate::node_spec::node_spec(node_type)
+            .outputs
+            .iter()
+            .any(|p| p == port)
     }
 
     /// Indique si un type de nœud expose un port d'entrée avec ce nom.
-    fn has_input_port(node_type: &NodeType, port: &str) -> bool {
-        let inputs: &[&str] = match node_type {
-            // Sources / terminaux : aucune entrée
-            NodeType::Objects
-            | NodeType::Duration
-            | NodeType::Input
-            | NodeType::MoveRef
-            | NodeType::Merge => &[],
-
-            // Moteurs : entrée générale + durée depuis un nœud Duration
-            NodeType::Circular
-            | NodeType::Elliptical
-            | NodeType::Spiral
-            | NodeType::Lissajous
-            | NodeType::Figure8
-            | NodeType::Linear
-            | NodeType::Oscillation
-            | NodeType::Formation
-            | NodeType::PerlinNoise
-            | NodeType::Converge
-            | NodeType::Pendulum
-            | NodeType::RoseCurve
-            | NodeType::Helix
-            | NodeType::Bouncing
-            | NodeType::Spring
-            | NodeType::Follow
-            | NodeType::Swarm
-            | NodeType::Avoidance
-            | NodeType::VectorField
-            | NodeType::CustomTrajectory
-            | NodeType::Wave
-            | NodeType::BPM
-            | NodeType::AudioAmplitude
-            // AudioSpectrum/OSCInput sont des engines : Objects/Duration
-            // peuvent les alimenter comme les autres moteurs.
-            | NodeType::AudioSpectrum
-            | NodeType::OSCInput
-            | NodeType::TimeFalloff
-            | NodeType::PointDistanceFalloff
-            | NodeType::DirectionalFalloff
-            | NodeType::AudioAmplitudeFalloff
-            | NodeType::DrawSpline => &["input", "duration"],
-
-            // Modificateurs : une seule entrée
-            NodeType::Scale
-            | NodeType::Rotate
-            | NodeType::Offset
-            | NodeType::PhaseShift
-            | NodeType::Mirror
-            | NodeType::Clamp
-            | NodeType::LFO
-            | NodeType::Jitter
-            | NodeType::RadiusScale
-            | NodeType::HeightOffset
-            | NodeType::PerTrackDepth
-            | NodeType::Barycenter
-            | NodeType::AudioFalloff
-            | NodeType::ManualPosition
-            | NodeType::Zone
-            | NodeType::Velocity
-            | NodeType::Output => &["input"],
-
-            // Splines : input (trajectoire/objets) + spline (données depuis
-            // DrawSpline) + duration. Sans le port 'spline' dédié, DrawSpline
-            // et Objects se disputent 'input' → arité invalide.
-            NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline => {
-                &["input", "duration", "spline"]
-            }
-
-            // Composites binaires : acceptent input, input_a, input_b
-            // (input_a/input_b sont les ports visuels A/B ; le compiler
-            // résout A/B par nom de port via Graph::get_binary_inputs)
-            NodeType::Mix | NodeType::Group | NodeType::Sequence | NodeType::Crossfade => {
-                &["input", "input_a", "input_b"]
-            }
-        };
-        inputs.contains(&port)
+    /// `plugin_kind` : kind résolu du manifeste pour les nodes Plugin —
+    /// engine → input+duration, modifier → input, composite → input_a/b.
+    /// Kind inconnu → superset permissif.
+    fn has_input_port(
+        node_type: &NodeType,
+        port: &str,
+        plugin_kind: Option<crate::plugins::PluginKind>,
+    ) -> bool {
+        // Plugin : ports dictés par le kind du manifeste (ABI v2).
+        if *node_type == NodeType::Plugin {
+            use crate::plugins::PluginKind as K;
+            let inputs: &[&str] = match plugin_kind {
+                Some(K::Engine) => &["input", "duration"],
+                Some(K::Modifier) => &["input"],
+                Some(K::Composite) => &["input", "input_a", "input_b"],
+                None => &["input", "input_a", "input_b", "duration"],
+            };
+            return inputs.contains(&port);
+        }
+        // Natifs : ports déclarés dans le NodeSpec (node_spec.rs).
+        crate::node_spec::node_spec(node_type)
+            .inputs
+            .iter()
+            .any(|p| p == port)
     }
 
     /// Vérifie l'arité des entrées :
@@ -526,6 +498,7 @@ impl Validator {
         graph: &Graph,
         context: GraphContext,
         errors: &mut Vec<ValidationError>,
+        plugin_kinds: &std::collections::HashMap<crate::graph::NodeId, crate::plugins::PluginKind>,
     ) {
         for node in graph.nodes.values() {
             let incoming: Vec<&crate::graph::Edge> =
@@ -580,11 +553,57 @@ impl Validator {
                 )));
             }
 
+            // Plugin kind-aware : modifier/composite exigent leurs entrées
+            // trajectoire (hors carriers Objects/Duration) ; un engine
+            // plugin n'en accepte aucune — une edge trajectoire vers un
+            // engine serait silencieusement ignorée au compile.
+            if node.node_type == NodeType::Plugin {
+                use crate::plugins::PluginKind as K;
+                let kind = plugin_kinds.get(&node.id).copied();
+                let traj_count = incoming
+                    .iter()
+                    .filter(|e| matches!(e.to_port.as_str(), "input" | "input_a" | "input_b"))
+                    .filter(|e| {
+                        !matches!(
+                            graph.nodes.get(&e.from).map(|n| &n.node_type),
+                            Some(NodeType::Objects) | Some(NodeType::Duration)
+                        )
+                    })
+                    .count();
+                match kind {
+                    Some(K::Modifier) if traj_count == 0 => {
+                        errors.push(ValidationError::InvalidConnection(
+                            "Plugin (modifier) requires 1 trajectory input, got 0".to_string(),
+                        ));
+                    }
+                    Some(K::Composite) if traj_count != 2 => {
+                        errors.push(ValidationError::InvalidConnection(format!(
+                            "Plugin (composite) requires exactly 2 trajectory inputs, got {traj_count}"
+                        )));
+                    }
+                    Some(K::Engine) if traj_count > 0 => {
+                        errors.push(ValidationError::InvalidConnection(format!(
+                            "Plugin (engine) takes no trajectory input, got {traj_count}"
+                        )));
+                    }
+                    _ => {}
+                }
+            }
+
             // Chaque engine doit résoudre n_objects avec la même convention
             // que le compiler : param propre, sinon edge direct depuis un
             // node Objects. Sans les deux, MissingParameter au compile.
+            // Plugin modifier/composite : n_objects propage depuis
+            // l'upstream (pas de port 'duration' → règle déjà court-circuitée).
             if context == GraphContext::SubGraph
-                && Self::has_input_port(&node.node_type, "duration")
+                && !(node.node_type == NodeType::Plugin
+                    && plugin_kinds.get(&node.id).copied()
+                        != Some(crate::plugins::PluginKind::Engine))
+                && Self::has_input_port(
+                    &node.node_type,
+                    "duration",
+                    plugin_kinds.get(&node.id).copied(),
+                )
                 && node
                     .params
                     .get("n_objects")
@@ -663,6 +682,28 @@ impl Validator {
                         .and_then(|id| graph.nodes.get(id))
                         .map(|n| effective_n_objects(graph, n, fallback, depth + 1))
                         .unwrap_or(fallback),
+                    // Plugin : modifier/composite propagent depuis l'entrée
+                    // trajectoire (input_a en priorité, sinon 'input') — les
+                    // carriers Objects/Duration sont déjà résolus au-dessus.
+                    NodeType::Plugin => graph
+                        .edges
+                        .iter()
+                        .filter(|e| e.to == node.id)
+                        .filter(|e| matches!(e.to_port.as_str(), "input_a" | "input" | "input_b"))
+                        .filter(|e| {
+                            !matches!(
+                                graph.nodes.get(&e.from).map(|n| &n.node_type),
+                                Some(NodeType::Objects) | Some(NodeType::Duration)
+                            )
+                        })
+                        .min_by_key(|e| match e.to_port.as_str() {
+                            "input_a" => 0,
+                            "input" => 1,
+                            _ => 2,
+                        })
+                        .and_then(|e| graph.nodes.get(&e.from))
+                        .map(|n| effective_n_objects(graph, n, fallback, depth + 1))
+                        .unwrap_or(fallback),
                     _ => fallback,
                 }
             }
@@ -708,6 +749,22 @@ impl Validator {
                             errors.push(ValidationError::CountMismatch(format!(
                                 "Objects has {} but {:?} has {}",
                                 n_objects, node.node_type, node_n_objects
+                            )));
+                        }
+
+                        // T3 : les engines à interaction mutuelle coûtent
+                        // O(n²) par pas de simulation — au-delà de
+                        // MAX_INTERACTION_AGENTS un frame à 60 FPS ne tient
+                        // plus. Refus à la validation plutôt qu'un lag live.
+                        if matches!(node.node_type, NodeType::Swarm | NodeType::Avoidance)
+                            && node_n_objects > crate::engines::MAX_INTERACTION_AGENTS
+                        {
+                            errors.push(ValidationError::TooComplex(format!(
+                                "{:?} with {} agents exceeds the O(n²) per-step budget \
+                                 (max {} interaction agents)",
+                                node.node_type,
+                                node_n_objects,
+                                crate::engines::MAX_INTERACTION_AGENTS
                             )));
                         }
                     }
@@ -762,78 +819,13 @@ impl Validator {
 
 /// Vrai si le node n'a de sens que dans le graph global (post-processing).
 fn is_global_only_node(node_type: &NodeType) -> bool {
-    matches!(
-        node_type,
-        NodeType::Input
-            | NodeType::MoveRef
-            | NodeType::Merge
-            | NodeType::RadiusScale
-            | NodeType::HeightOffset
-            | NodeType::PerTrackDepth
-            | NodeType::Barycenter
-            | NodeType::AudioFalloff
-            | NodeType::ManualPosition
-            | NodeType::Zone
-            | NodeType::Velocity
-    )
+    crate::node_spec::node_spec(node_type).scope == crate::node_spec::NodeScope::GlobalOnly
 }
 
 /// Vrai si le node n'a de sens que dans un sub-graph (mouvement).
+/// Dérivé de `NodeSpec::scope` — inclut les modifiers non compilables en
+/// post-process (PhaseShift/LFO/Jitter) et les composites binaires (le
+/// graph global est une chaîne linéaire, pas de sémantique A/B).
 fn is_subgraph_only_node(node_type: &NodeType) -> bool {
-    matches!(
-        node_type,
-        // Structurels sub-graph
-        NodeType::Objects
-            | NodeType::Duration
-            // Moteurs math
-            | NodeType::Circular
-            | NodeType::Elliptical
-            | NodeType::Spiral
-            | NodeType::Lissajous
-            | NodeType::Figure8
-            | NodeType::Linear
-            | NodeType::Oscillation
-            | NodeType::Formation
-            | NodeType::PerlinNoise
-            | NodeType::Converge
-            | NodeType::Pendulum
-            | NodeType::RoseCurve
-            | NodeType::Helix
-            // Moteurs physique
-            | NodeType::Bouncing
-            | NodeType::Spring
-            | NodeType::Follow
-            | NodeType::Swarm
-            | NodeType::Avoidance
-            | NodeType::VectorField
-            // Splines
-            | NodeType::DrawSpline
-            | NodeType::EvaluateSpline
-            | NodeType::TrimSpline
-            | NodeType::OffsetSpline
-            | NodeType::CustomTrajectory
-            // Falloffs
-            | NodeType::TimeFalloff
-            | NodeType::PointDistanceFalloff
-            | NodeType::DirectionalFalloff
-            | NodeType::AudioAmplitudeFalloff
-            // Sources
-            | NodeType::BPM
-            | NodeType::AudioAmplitude
-            | NodeType::AudioSpectrum
-            | NodeType::OSCInput
-            | NodeType::Wave
-            // Modifiers/compilables uniquement dans un sub-graph : absents de
-            // is_post_process_node → un graph global les accepterait à la
-            // validation puis échouerait à la compile.
-            | NodeType::PhaseShift
-            | NodeType::LFO
-            | NodeType::Jitter
-            // Composites binaires : le graph global est une chaîne linéaire
-            // (pas de sémantique A/B en post-processing).
-            | NodeType::Mix
-            | NodeType::Group
-            | NodeType::Sequence
-            | NodeType::Crossfade
-    )
+    crate::node_spec::node_spec(node_type).scope == crate::node_spec::NodeScope::SubOnly
 }

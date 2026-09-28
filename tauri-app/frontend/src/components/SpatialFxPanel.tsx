@@ -202,7 +202,7 @@ export default function SpatialFxPanel() {
               onChange={(e) => setZFalloff(e.target.value)}
               placeholder="falloff"
               className={inputCls}
-              title="Falloff width (transition douce au-delà du bord)"
+              title="Falloff width (soft transition beyond the edge)"
             />
           </div>
           <input
@@ -321,7 +321,7 @@ export default function SpatialFxPanel() {
                 onChange={(e) => setMListener(e.target.value)}
                 placeholder="listener x,y,z"
                 className={`${inputCls} font-mono`}
-                title="Position du point d'écoute — la vitesse angulaire est mesurée autour de ce point (°/s)"
+                title="Listener point position — angular speed is measured around this point (°/s)"
               />
             </div>
           )}
@@ -339,7 +339,7 @@ export default function SpatialFxPanel() {
               onChange={(e) => setSmoothing(e.target.value)}
               placeholder="0.5"
               className={`${inputCls} font-mono`}
-              title="Lissage cinématique [0, 0.99] — 0 = brut, élevé = très lissé"
+              title="Kinematic smoothing [0, 0.99] — 0 = raw, high = heavily smoothed"
             />
             <button
               onClick={() => {

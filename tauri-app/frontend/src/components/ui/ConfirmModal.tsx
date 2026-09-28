@@ -1,8 +1,9 @@
 import React from 'react';
 import { Modal } from './Modal';
 
-/// Modal de confirmation pour les actions destructives (delete cue/slot).
-/// Enter = confirmer, Esc/clic-dehors = annuler (via Modal + modalGuard).
+/// Confirmation modal for destructive actions (delete cue/slot).
+/// Focus lands on Cancel (first focusable) so a stray Enter cancels —
+/// safe default for destructive ops. Esc/click-outside = cancel.
 interface ConfirmModalProps {
   title: string;
   message: React.ReactNode;
@@ -14,7 +15,7 @@ interface ConfirmModalProps {
 export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   title,
   message,
-  confirmLabel = 'Supprimer',
+  confirmLabel = 'Delete',
   onConfirm,
   onCancel,
 }) => (
@@ -26,7 +27,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
           onClick={onCancel}
           className="flex-1 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-[11px] rounded font-medium"
         >
-          Annuler
+          Cancel
         </button>
         <button
           onClick={onConfirm}

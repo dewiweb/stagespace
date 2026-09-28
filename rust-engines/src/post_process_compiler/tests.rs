@@ -668,3 +668,116 @@ fn test_compile_graph_with_zone_velocity_passthrough() {
     );
     assert_eq!(out, positions, "Zone/Velocity must not modify positions");
 }
+
+// ── Audit T2 : clés du schema UI unifiées sub-graph/global ────────────
+
+/// Le schema UI envoie x/y/z (comme le modifier sub-graph) — avant T2 le
+/// post-process ne lisait que `scale` et les paramètres étaient ignorés.
+#[test]
+fn test_compile_scale_node_per_axis() {
+    let graph = make_graph(
+        vec![
+            (NodeType::Input, serde_json::json!({})),
+            (
+                NodeType::Scale,
+                serde_json::json!({"x": 2.0, "y": 3.0, "z": 0.5}),
+            ),
+            (NodeType::Output, serde_json::json!({})),
+        ],
+        vec![(0, 1), (1, 2)],
+    );
+    let positions = vec![(0, nalgebra::Vector3::new(1.0, 1.0, 1.0))];
+    let result = run_test(graph, positions, HashMap::new(), nalgebra::Vector3::zeros());
+    assert!((result[0].1.x - 2.0).abs() < 1e-10);
+    assert!((result[0].1.y - 3.0).abs() < 1e-10);
+    assert!((result[0].1.z - 0.5).abs() < 1e-10);
+}
+
+/// Mirror global : le schema canonique est `plane` (xy/xz/yz) + `offset`
+/// — l'ancienne impl lisait `axis` et cassait silencieusement. Le legacy
+/// `axis` reste accepté en alias.
+#[test]
+fn test_compile_mirror_plane_schema() {
+    let graph = make_graph(
+        vec![
+            (NodeType::Input, serde_json::json!({})),
+            (
+                NodeType::Mirror,
+                serde_json::json!({"plane": "yz", "offset": 1.0}),
+            ),
+            (NodeType::Output, serde_json::json!({})),
+        ],
+        vec![(0, 1), (1, 2)],
+    );
+    // plan yz à offset 1 dans le repère origin : x' = 2*1 - x
+    let positions = vec![(0, nalgebra::Vector3::new(4.0, 5.0, 6.0))];
+    let result = run_test(graph, positions, HashMap::new(), nalgebra::Vector3::zeros());
+    assert!((result[0].1.x - (-2.0)).abs() < 1e-10);
+    assert!((result[0].1.y - 5.0).abs() < 1e-10);
+    assert!((result[0].1.z - 6.0).abs() < 1e-10);
+
+    // Alias legacy : axis "x" ⇔ plane "yz" (offset 0)
+    let graph = make_graph(
+        vec![
+            (NodeType::Input, serde_json::json!({})),
+            (NodeType::Mirror, serde_json::json!({"axis": "x"})),
+            (NodeType::Output, serde_json::json!({})),
+        ],
+        vec![(0, 1), (1, 2)],
+    );
+    let positions = vec![(0, nalgebra::Vector3::new(4.0, 5.0, 6.0))];
+    let result = run_test(graph, positions, HashMap::new(), nalgebra::Vector3::zeros());
+    assert!((result[0].1.x - (-4.0)).abs() < 1e-10);
+}
+
+/// Ordre de rotation unifié avec le modifier sub-graph : X puis Y puis Z
+/// (rot = rz·ry·rx). pitch=90° puis yaw=90° sur +X : pitch ne change pas
+/// +X, yaw l'envoie sur -Z. L'ancien ordre (rz·rx·ry) donnait +Y.
+#[test]
+fn test_compile_rotate_unified_order() {
+    let graph = make_graph(
+        vec![
+            (NodeType::Input, serde_json::json!({})),
+            (
+                NodeType::Rotate,
+                serde_json::json!({"yaw": 90.0, "pitch": 90.0, "roll": 0.0}),
+            ),
+            (NodeType::Output, serde_json::json!({})),
+        ],
+        vec![(0, 1), (1, 2)],
+    );
+    let positions = vec![(0, nalgebra::Vector3::new(1.0, 0.0, 0.0))];
+    let result = run_test(graph, positions, HashMap::new(), nalgebra::Vector3::zeros());
+    assert!((result[0].1.x).abs() < 1e-10, "x={}", result[0].1.x);
+    assert!((result[0].1.y).abs() < 1e-10, "y={}", result[0].1.y);
+    assert!((result[0].1.z + 1.0).abs() < 1e-10, "z={}", result[0].1.z);
+}
+
+/// extract_graph_effects remonte Barycenter et MoveRef.move_id — ils
+/// n'étaient pas lus du tout (audit T2).
+#[test]
+fn test_extract_effects_barycenter_and_moveref() {
+    let graph = make_graph(
+        vec![
+            (NodeType::MoveRef, serde_json::json!({"move_id": "slot-2"})),
+            (NodeType::Barycenter, serde_json::json!({})),
+            (NodeType::Output, serde_json::json!({})),
+        ],
+        vec![(0, 1), (1, 2)],
+    );
+    let effects = extract_graph_effects(&graph).unwrap();
+    assert!(effects.barycenter);
+    assert_eq!(effects.move_ref.as_deref(), Some("slot-2"));
+
+    // MoveRef sans move_id → None (fallback merge complet)
+    let graph = make_graph(
+        vec![
+            (NodeType::MoveRef, serde_json::json!({"move_id": ""})),
+            (NodeType::Output, serde_json::json!({})),
+        ],
+        vec![(0, 1)],
+    );
+    let effects = extract_graph_effects(&graph).unwrap();
+    assert!(!effects.barycenter);
+    assert!(effects.move_ref.is_none());
+}

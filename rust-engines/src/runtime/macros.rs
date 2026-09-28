@@ -1,5 +1,28 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
+/// Portée d'une macro spatiale (audit T2 — le scope était implicite :
+/// `launch_animation` poussait les macros au worker, `playSlot` au merge,
+/// et le frontend devait neutraliser manuellement pour éviter un
+/// transform ×2. La propriété n'existait que dans des commentaires).
+///
+/// Contrat :
+/// - `PerMove` : macros du worker (`Runtime::macros()`), seedées une
+///   fois au lancement via `SpatialMacroInit` / `SpatialMacroSnapshot`
+///   (valeurs du cue). Appliquées en espace local par `move_transform`.
+/// - `Global` : macros du merge (`MergeRuntime::macros()`), pilotées en
+///   live par `set_macro`. Appliquées en espace monde par le post-process
+///   (par défaut ou chaîne compilée du graph global).
+///
+/// Un même paramètre ne doit être piloté que par UN scope — pousser la
+/// même valeur aux deux produit un transform doublé.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MacroScope {
+    /// Macros du merge — live, globales, tous les moves.
+    Global,
+    /// Macros d'un worker — seedées au lancement, propres au move.
+    PerMove,
+}
+
 /// Macros temps réel — lues à chaque frame, modifiables sans recompilation
 ///
 /// Les macros sont des transformations POST-engine appliquées par le runtime.

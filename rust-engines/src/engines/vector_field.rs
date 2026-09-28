@@ -10,9 +10,12 @@
 //!   pos += vel·dt
 //!
 //! Le mouvement résultant est perpétuel et organique : rien ne se répète,
-//! contrairement aux orbites. Comme `swarm`, le moteur reste une fonction pure
-//! de `t` — la trajectoire est re-simulée déterministement depuis t=0 à chaque
-//! appel (RNG seedé, init déterministe). Coût O(t·fps) par objet.
+//! contrairement aux orbites.
+//!
+//! Audit B1 : état par objet mis en cache (`Mutex`, RNG compris — son stream
+//! est consommé à chaque pas) — l'appel n'intègre que la fenêtre
+//! `[sim_t → t]` de l'objet requis. Seek arrière → reset + re-sim
+//! (déterministe : même séquence d'appels → mêmes positions).
 //!
 //! Params (extra) :
 //!   field        "vortex" | "sink" | "source" | "flow" | "noise" | "drawn"
@@ -37,12 +40,44 @@
 //!   z_drift      dérive verticale, unités/s                       (défaut 0.0)
 //!   seed         graine RNG (wander, noise, init random)          (défaut 42)
 
-use crate::engines::{finite_or_zero, Engine, EngineParams};
+use crate::engines::{finite_or_zero, sim_window, Engine, EngineParams, SIM_REWIND_EPS};
 use crate::rng::SimpleRng;
 use nalgebra::{Vector2, Vector3};
 use std::f64::consts::TAU;
+use std::sync::Mutex;
 
-pub struct VectorField;
+/// Engine à état — `Default` produit un cache vide (premier appel = init).
+#[derive(Default)]
+pub struct VectorField {
+    cache: Mutex<VectorFieldCache>,
+}
+
+#[derive(Default)]
+struct VectorFieldCache {
+    /// État par objet — le RNG est conservé car son stream est consommé
+    /// à chaque pas (wander). Intégration lazy par objet requis.
+    agents: Vec<VectorFieldAgent>,
+}
+
+struct VectorFieldAgent {
+    sim_t: f64,
+    pos: Vector2<f64>,
+    vel: Vector2<f64>,
+    rng: SimpleRng,
+}
+
+/// État initial déterministe d'un objet (layout + RNG seedé par index).
+fn init_agent(object_index: usize, n_objects: usize, cfg: &Config) -> VectorFieldAgent {
+    VectorFieldAgent {
+        sim_t: 0.0,
+        pos: initial_position2(object_index, n_objects, cfg),
+        vel: Vector2::zeros(),
+        rng: SimpleRng::new(
+            cfg.seed
+                .wrapping_add((object_index as u64).wrapping_mul(0x9E3779B97F4A7C15)),
+        ),
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FieldKind {
@@ -395,46 +430,50 @@ fn initial_position2(i: usize, n: usize, cfg: &Config) -> Vector2<f64> {
 impl Engine for VectorField {
     fn position(&self, t: f64, object_index: usize, params: &EngineParams) -> Vector3<f64> {
         let cfg = Config::from_params(params);
-        let mut pos = initial_position2(object_index, params.n_objects, &cfg);
         // z en forme close : le champ est 2D, la hauteur dérive linéairement.
         let z = cfg.z_init + cfg.z_drift * t.max(0.0);
 
-        let mut vel = Vector2::zeros();
-        // Pattern de référence + cap partagé (MAX_SIM_STEPS) — au-delà le dt
-        // est dilaté pour couvrir t sans geler une frame.
-        let (n_steps, dt) = crate::engines::sim_steps(t, params.fps);
-        // RNG par objet : la composante wander diverge entre objets mais reste
-        // reproductible pour un seed donné.
-        let mut rng = SimpleRng::new(
-            cfg.seed
-                .wrapping_add((object_index as u64).wrapping_mul(0x9E3779B97F4A7C15)),
-        );
+        // Lazy per-agent : créé à la demande, intégré seul — un
+        // object_index hors n_objects (hot-swap) est géré sans paniquer.
+        let mut c = self.cache.lock().unwrap_or_else(|e| e.into_inner());
+        while c.agents.len() <= object_index {
+            let idx = c.agents.len();
+            c.agents.push(init_agent(idx, params.n_objects, &cfg));
+        }
+        let a = &mut c.agents[object_index];
+        if t < a.sim_t - SIM_REWIND_EPS {
+            *a = init_agent(object_index, params.n_objects, &cfg);
+        }
+
+        let (n_steps, dt, new_t) = sim_window(a.sim_t, t, params.fps, 1);
 
         let k = cfg.responsiveness;
         for _ in 0..n_steps {
             // Steering inertiel : vel poursuit le champ
-            let target = field_velocity(pos, &cfg);
-            vel = vel * (1.0 - k) + target * k;
+            let target = field_velocity(a.pos, &cfg);
+            a.vel = a.vel * (1.0 - k) + target * k;
 
             if cfg.wander > 0.0 {
-                vel.x += rng.uniform(-cfg.wander, cfg.wander);
-                vel.y += rng.uniform(-cfg.wander, cfg.wander);
+                a.vel.x += a.rng.uniform(-cfg.wander, cfg.wander);
+                a.vel.y += a.rng.uniform(-cfg.wander, cfg.wander);
             }
 
             // Containment doux : rappel proportionnel au dépassement des bounds
-            let dc = pos - cfg.center;
+            let dc = a.pos - cfg.center;
             let r = dc.norm();
             if r > cfg.bounds && cfg.containment > 0.0 {
-                vel -= dc / r * (r - cfg.bounds) * cfg.containment;
+                a.vel -= dc / r * (r - cfg.bounds) * cfg.containment;
             }
 
-            let speed = vel.norm();
+            let speed = a.vel.norm();
             if speed > cfg.max_speed {
-                vel *= cfg.max_speed / speed;
+                a.vel *= cfg.max_speed / speed;
             }
 
-            pos += vel * dt;
+            a.pos += a.vel * dt;
         }
+        a.sim_t = new_t;
+        let pos = a.pos;
 
         finite_or_zero(Vector3::new(pos.x, pos.y, z))
     }
@@ -460,7 +499,7 @@ mod tests {
 
     #[test]
     fn vortex_stays_bounded_and_moves() {
-        let e = VectorField;
+        let e = VectorField::default();
         let p = params(
             4,
             json!({"field": "vortex", "strength": 0.5, "radius": 0.6,
@@ -476,7 +515,7 @@ mod tests {
 
     #[test]
     fn sink_converges_toward_center() {
-        let e = VectorField;
+        let e = VectorField::default();
         let p = params(
             4,
             json!({"field": "sink", "strength": 0.8, "radius": 0.5,
@@ -495,7 +534,7 @@ mod tests {
 
     #[test]
     fn flow_translates_objects() {
-        let e = VectorField;
+        let e = VectorField::default();
         let p = params(
             2,
             json!({"field": "flow", "strength": 0.5, "direction": [1.0, 0.0],
@@ -510,7 +549,7 @@ mod tests {
 
     #[test]
     fn source_pushes_objects_outward() {
-        let e = VectorField;
+        let e = VectorField::default();
         let p = params(
             4,
             json!({"field": "source", "strength": 0.8, "radius": 0.4,
@@ -526,7 +565,7 @@ mod tests {
 
     #[test]
     fn noise_field_is_deterministic_and_bounded() {
-        let e = VectorField;
+        let e = VectorField::default();
         let p = params(
             4,
             json!({"field": "noise", "strength": 0.5, "noise_scale": 1.5,
@@ -540,7 +579,7 @@ mod tests {
 
     #[test]
     fn wander_makes_objects_diverge() {
-        let e = VectorField;
+        let e = VectorField::default();
         let p = params(
             4,
             json!({"field": "vortex", "wander": 0.3, "init": "point",
@@ -554,7 +593,7 @@ mod tests {
 
     #[test]
     fn deterministic_for_same_seed() {
-        let e = VectorField;
+        let e = VectorField::default();
         let p = params(4, json!({"wander": 0.5, "seed": 99}));
         for i in 0..4 {
             assert_eq!(e.position(3.0, i, &p), e.position(3.0, i, &p));
@@ -563,7 +602,7 @@ mod tests {
 
     #[test]
     fn z_drift_is_closed_form() {
-        let e = VectorField;
+        let e = VectorField::default();
         let p = params(
             1,
             json!({"field": "flow", "strength": 0.0, "z_init": 0.5, "z_drift": 0.1}),
@@ -575,7 +614,7 @@ mod tests {
     #[test]
     fn drawn_single_vector_dominates() {
         // Un seul vecteur placé → le champ suit ce vecteur partout
-        let e = VectorField;
+        let e = VectorField::default();
         let p = params(
             1,
             json!({"field": "drawn", "points": [[0.0, 0.0, 0.5, 0.0]],
@@ -591,7 +630,7 @@ mod tests {
     #[test]
     fn drawn_opposite_vectors_cancel_at_midpoint() {
         // Deux vecteurs opposés → le champ au milieu s'annule
-        let e = VectorField;
+        let e = VectorField::default();
         let p = params(
             2,
             json!({"field": "drawn",
@@ -607,7 +646,7 @@ mod tests {
     #[test]
     fn drawn_string_form_parsed() {
         // Forme string "x,y,vx,vy; ..." (champ text de l'éditeur)
-        let e = VectorField;
+        let e = VectorField::default();
         let p = params(
             1,
             json!({"field": "drawn", "points": "0,0,0.4,0",
@@ -620,7 +659,7 @@ mod tests {
 
     #[test]
     fn t_zero_returns_initial_layout() {
-        let e = VectorField;
+        let e = VectorField::default();
         let p = params(4, json!({"init": "circle", "init_radius": 0.5}));
         let pos = e.position(0.0, 0, &p);
         assert!((pos.x - 0.5).abs() < 1e-9);

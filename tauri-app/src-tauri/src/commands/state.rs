@@ -32,6 +32,10 @@ pub struct Shared {
     pub merge_runtime: Arc<Mutex<MergeRuntime>>,
     pub recall_in_progress: Arc<AtomicBool>,
     pub osc_receiver: Arc<Mutex<OscReceiver>>,
+    /// Registry des plugins WASM — None si wasmtime n'a pas pu s'initialiser.
+    pub plugin_registry: Option<Arc<Mutex<stagespace_engines::PluginRegistry>>>,
+    /// Dossier des bundles `.ssx` — nécessaire aux commands spawn_blocking.
+    pub plugins_dir: Option<std::path::PathBuf>,
 }
 
 impl Shared {
@@ -45,6 +49,8 @@ impl Shared {
             merge_runtime: state.merge_runtime.clone(),
             recall_in_progress: state.recall_in_progress.clone(),
             osc_receiver: state.osc_receiver.clone(),
+            plugin_registry: state.plugin_registry.clone(),
+            plugins_dir: state.plugins_dir.clone(),
         }
     }
 }

@@ -27,15 +27,18 @@ mod recall_tests {
             merge_runtime: Arc::new(Mutex::new(merge)),
             recall_in_progress: Arc::new(AtomicBool::new(false)),
             osc_receiver: Arc::new(Mutex::new(OscReceiver::new(0))),
+            plugin_registry: None,
+            plugins_dir: None,
         }
     }
 
     fn make_cue() -> Cue {
         Cue {
             id: "cue-1".to_string(),
+            schema_version: None,
             name: "Test".to_string(),
             description: String::new(),
-            graph: serde_json::json!({}),
+            graph: stagespace_engines::GraphJson::default(),
             timestamp: 0.0,
             macros: None,
             track_indices: vec![],
@@ -62,7 +65,7 @@ mod recall_tests {
             osc_ids: vec![1],
             is_preview: false,
             track_indices: vec![0],
-            graph_json: serde_json::json!({}),
+            graph_json: stagespace_engines::GraphJson::default(),
             duration: 4.0,
             loop_mode: "loop".to_string(),
             direction: "forward".to_string(),
@@ -99,7 +102,8 @@ mod recall_tests {
         sh.recall_in_progress
             .store(true, std::sync::atomic::Ordering::SeqCst);
         let err = recall_cue_inner(make_cue(), sh.clone()).unwrap_err();
-        assert!(err.contains("already in progress"), "err: {err}");
+        assert_eq!(err.code, "busy");
+        assert!(err.message.contains("already in progress"), "err: {err}");
         assert!(sh
             .recall_in_progress
             .load(std::sync::atomic::Ordering::SeqCst));
@@ -143,7 +147,7 @@ mod recall_tests {
         cue.moves = vec![stagespace_engines::MoveSnapshot {
             id: "mv-a".to_string(),
             name: "A".to_string(),
-            graph_json: circular_graph(),
+            graph_json: serde_json::from_value(circular_graph()).unwrap(),
             osc_ids: vec![7],
             track_indices: vec![0],
             is_preview: false,
@@ -193,7 +197,7 @@ mod recall_tests {
         let spec = MoveSpec {
             id: "mv-live".to_string(),
             name: "Live".to_string(),
-            graph_json: circular_graph(),
+            graph_json: serde_json::from_value(circular_graph()).unwrap(),
             osc_ids: vec![7],
             track_indices: vec![0],
             is_preview: false,
@@ -215,7 +219,7 @@ mod recall_tests {
         cue.moves = vec![stagespace_engines::MoveSnapshot {
             id: "mv-live".to_string(),
             name: "Live".to_string(),
-            graph_json: circular_graph(),
+            graph_json: serde_json::from_value(circular_graph()).unwrap(),
             osc_ids: vec![7],
             track_indices: vec![0],
             is_preview: false,

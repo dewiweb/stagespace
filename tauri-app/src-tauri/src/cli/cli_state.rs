@@ -5,7 +5,7 @@
 //! chemins de spawn/stop. `app_handle` est `None` en headless : les events
 //! Tauri sont simplement skipés.
 
-use stagespace_engines::{AudioState, MergeRuntime, OscReceiver, OscSender};
+use stagespace_engines::{AudioState, MergeRuntime, OscReceiver, OscSender, PluginRegistry};
 use stagespace_tauri::commands::state::Shared;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU64};
@@ -59,6 +59,32 @@ impl CliState {
                 .osc_in_targets(),
         );
 
+        // Plugins WASM — même convention de dossier que l'app Tauri
+        // (`<data_dir>/com.stagespace.studio/plugins/`), scanné au boot.
+        // Sans registry, un graphe avec node Plugin échoue au compile.
+        let plugins_dir = dirs::data_dir().map(|d| d.join("com.stagespace.studio").join("plugins"));
+        if let Some(dir) = &plugins_dir {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let plugin_registry = match PluginRegistry::new() {
+            Ok(mut reg) => {
+                if let Some(dir) = &plugins_dir {
+                    let n = reg.scan_dir(dir);
+                    if n > 0 {
+                        eprintln!("[PLUGINS] {n} plugin(s) loaded from {}", dir.display());
+                    }
+                    for (path, err) in reg.errors() {
+                        eprintln!("[PLUGINS-ERROR] {}: {err}", path.display());
+                    }
+                }
+                Some(Arc::new(Mutex::new(reg)))
+            }
+            Err(e) => {
+                eprintln!("[PLUGINS-ERROR] wasmtime init failed: {e}");
+                None
+            }
+        };
+
         let shared = Shared {
             audio_state,
             app_handle: Arc::new(Mutex::new(None)),
@@ -68,6 +94,8 @@ impl CliState {
             merge_runtime,
             recall_in_progress: Arc::new(AtomicBool::new(false)),
             osc_receiver: Arc::new(Mutex::new(osc_receiver)),
+            plugin_registry,
+            plugins_dir,
         };
 
         Ok(Self {

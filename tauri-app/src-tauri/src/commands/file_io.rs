@@ -44,7 +44,7 @@ pub async fn import_hol_project(
     // "#RRGGBB" et "r g b a", xyz groupé ou x/y/z séparés, fallback AED→XYZ.
     let (hol_tracks, warnings) =
         stagespace_engines::hol_parser::parse_hol_project_with_warnings(&content)
-            .map_err(IpcError::from)?;
+            .map_err(IpcError::validation)?;
 
     let tracks = hol_tracks
         .into_iter()

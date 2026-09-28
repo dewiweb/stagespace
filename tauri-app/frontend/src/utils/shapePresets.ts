@@ -673,3 +673,18 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     ),
   },
 ];
+
+/// Help runnable (inspiration help-patches Pd/plugdata) : presets qui utilisent
+/// un type de node donné — pour le menu "Open example" du clic-droit node.
+/// Le graphe est construit (n fixe, les types ne dépendent pas de n) et les
+/// types collectés. Résultat memoizé par type — build appelé une fois par type.
+const _presetsByType = new Map<string, ShapePreset[]>();
+export function presetsUsingType(nodeType: string): ShapePreset[] {
+  let hit = _presetsByType.get(nodeType);
+  if (hit) return hit;
+  hit = SHAPE_PRESETS.filter((p) =>
+    p.build(4).nodes.some((n) => (n.data as { type?: string })?.type === nodeType),
+  );
+  _presetsByType.set(nodeType, hit);
+  return hit;
+}

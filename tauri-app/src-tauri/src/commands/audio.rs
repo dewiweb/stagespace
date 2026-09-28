@@ -25,7 +25,7 @@ pub async fn start_audio_capture(
     })
     .await
     .map_err(|e| IpcError::internal(format!("Audio capture task failed: {e}")))?
-    .map_err(IpcError::from)
+    .map_err(IpcError::io)
 }
 
 #[tauri::command]
@@ -93,10 +93,14 @@ pub fn start_audio_poller(app_handle: tauri::AppHandle, state: &AppState) {
 
                 // Consommer les erreurs du device (débranché, stream mort…) —
                 // sans ça l'UI n'est jamais notifiée d'une capture tombée.
+                // `audio-recovered` suit l'auto-reconnexion réussie.
                 {
                     let capture = audio_capture.lock().unwrap_or_else(|e| e.into_inner());
                     if let Some(err) = capture.take_error() {
                         let _ = app_handle.emit("audio-error", err);
+                    }
+                    if capture.take_recovered() {
+                        let _ = app_handle.emit("audio-recovered", ());
                     }
                 }
 

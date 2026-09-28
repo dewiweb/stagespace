@@ -28,16 +28,16 @@ function colorForIndex(i: number, total: number) {
 }
 
 /// Patterns de sélection rapides
-type SelectionPattern = 'all' | 'none' | 'even' | 'odd' | 'first_half' | 'second_half' | 'pairs' | 'inverse';
+type SelectionPattern = 'all' | 'none' | 'even' | 'odd' | 'first_half' | 'second_half' | 'inverse';
 
-const PATTERNS: { id: SelectionPattern; label: string; icon: string; title: string }[] = [
-  { id: 'all', label: 'All', icon: '◉', title: 'Tout sélectionner (100%)' },
-  { id: 'none', label: 'None', icon: '○', title: 'Tout désélectionner' },
-  { id: 'even', label: '1 sur 2', icon: '⫼', title: 'Sélectionner un sur deux (indices pairs)' },
-  { id: 'odd', label: 'Impairs', icon: '⫻', title: 'Sélectionner un sur deux (indices impairs)' },
-  { id: 'inverse', label: 'Inverse', icon: '⇄', title: 'Inverser la sélection courante' },
-  { id: 'first_half', label: '1ère moitié', icon: '◀', title: 'Première moitié' },
-  { id: 'second_half', label: '2ème moitié', icon: '▶', title: 'Deuxième moitié' },
+const PATTERNS: { id: SelectionPattern; label: string; title: string }[] = [
+  { id: 'all', label: 'All', title: 'Select all (100%)' },
+  { id: 'none', label: 'None', title: 'Deselect all' },
+  { id: 'even', label: '1 of 2', title: 'Select every other track (even indices)' },
+  { id: 'odd', label: 'Odd', title: 'Select every other track (odd indices)' },
+  { id: 'inverse', label: 'Inverse', title: 'Invert current selection' },
+  { id: 'first_half', label: '1st half', title: 'First half' },
+  { id: 'second_half', label: '2nd half', title: 'Second half' },
 ];
 
 export const TrackGrid: React.FC<TrackGridProps> = ({
@@ -64,7 +64,7 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
         deselectAllTracks();
         break;
       case 'even':
-        // Sélectionner un sur deux (indices pairs)
+        // Select every other track (even indices)
         deselectAllTracks();
         ids.filter((_, i) => i % 2 === 0).forEach((id) => {
           toggleTrackSelection(id);
@@ -72,7 +72,7 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
         });
         break;
       case 'odd':
-        // Sélectionner un sur deux (indices impairs)
+        // Select every other track (odd indices)
         deselectAllTracks();
         ids.filter((_, i) => i % 2 === 1).forEach((id) => {
           toggleTrackSelection(id);
@@ -237,7 +237,7 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
       {/* Track details — la track survolée ou sélectionnée */}
       {assignedCount > 0 && showDepth && (
         <div className="text-gray-500 text-[10px] text-center">
-          Cliquez une track pour l'affecter · Glissez le slider pour le depth
+          Click a track to assign it · drag the slider for depth
         </div>
       )}
     </div>

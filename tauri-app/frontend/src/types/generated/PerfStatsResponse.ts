@@ -15,4 +15,9 @@ oscErrorRate: number,
  * typiquement : aucun listener sur le port cible, ICMP port-unreachable).
  * Sous-ensemble de osc_error_rate, distinct du packet loss réseau.
  */
-oscRefusedRate: number, };
+oscRefusedRate: number, 
+/**
+ * Circuit-breaker OSC ouvert — sends suspendus (merge + preview
+ * continuent), sonde de reconnexion à 1 Hz. Renderer down.
+ */
+oscSuspended: boolean, };

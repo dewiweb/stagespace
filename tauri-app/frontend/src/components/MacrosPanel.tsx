@@ -40,7 +40,7 @@ export const MacrosPanel: React.FC<MacrosPanelProps> = ({ isPlaying, hasMovement
 
 
   return (
-    <div className="absolute top-2 left-2 z-20 bg-gray-900/90 backdrop-blur rounded-lg p-3 border border-blue-600/50 flex flex-col gap-2 min-w-[200px]">
+    <div className="absolute top-2 left-2 z-overlay bg-gray-900/90 backdrop-blur rounded-lg p-3 border border-blue-600/50 flex flex-col gap-2 min-w-[200px]">
       <div className="flex items-center gap-2">
         <span className="text-blue-400 text-[11px] font-semibold">Manipulate</span>
         {shouldPush && <span className="text-green-400 text-[10px]">LIVE</span>}
@@ -52,7 +52,9 @@ export const MacrosPanel: React.FC<MacrosPanelProps> = ({ isPlaying, hasMovement
       </div>
       {shouldPush && (
         <button
-          onClick={() => invoke('clear_all_overrides').catch(console.error)}
+          // Les overrides du drag 3D vivent dans le merge (manual_positions),
+          // pas dans l'ancienne map runtime.overrides — supprimée.
+          onClick={() => invoke('clear_all_manual_positions').catch(console.error)}
           className="text-[10px] text-orange-400 hover:text-orange-300 bg-gray-800 hover:bg-gray-700 rounded py-1 transition-colors border border-gray-700"
         >
           Clear All Overrides

@@ -1,207 +1,227 @@
 import type { NodeType } from '../store/useGraphStore';
+import type { NodeSpec } from '../types/generated/NodeSpec';
+import type { NodeCategory } from '../types/generated/NodeCategory';
+import type { PluginKind } from '../types/generated/PluginKind';
+import SPECS_JSON from '../types/generated/nodeSpecs.json';
 
 /**
- * Règles de connexion — mirror exact du validateur Rust (validator.rs is_valid_connection)
- * Utilisé par React Flow pour empêcher visuellement les connexions invalides.
- *
- * IMPORTANT : Toute modification ici doit être reflétée dans validator.rs et vice-versa.
+ * Règles de connexion — dérivées du catalogue déclaratif Rust (node_spec.rs),
+ * sérialisé dans `types/generated/nodeSpecs.json` par `npm run contracts`.
+ * La logique ci-dessous est le mirror structurel de `NodeSpec::can_feed` /
+ * `feeds_modifier` / `feeds_composite` — les *données* ne sont plus dupliquées.
  */
 
-// ─── Catégories de nodes ───
+export const NODE_SPECS: NodeSpec[] = SPECS_JSON as unknown as NodeSpec[];
+const SPEC_BY_TYPE = new Map<NodeType, NodeSpec>(NODE_SPECS.map((s) => [s.node_type, s]));
 
-// Moteurs math + splines : acceptent Objects + Duration en input, peuvent aller vers Output/composites/modifiers
-const ENGINE_TYPES: NodeType[] = [
-  'Circular', 'Elliptical', 'Spiral', 'Lissajous', 'Figure8',
-  'Linear', 'Oscillation', 'Formation', 'PerlinNoise', 'Converge',
-  'Pendulum', 'RoseCurve', 'Helix', 'Wave', 'CustomTrajectory',
-  'DrawSpline', 'EvaluateSpline', 'TrimSpline', 'OffsetSpline',
-  // BPM et AudioAmplitude sont des engines dans le validateur Rust (pas des sources)
-  'BPM', 'AudioAmplitude',
-  // AudioSpectrum/OSCInput sont compilés comme des engines produisant des
-  // positions — les connecter aux falloffs était décoratif (aucune donnée
-  // transportée) et bloquait le port 'input' pour Objects.
-  'AudioSpectrum', 'OSCInput',
-];
+/// Spec d'un type de node — le catalogue couvre tous les variants de NodeType.
+export function specOf(type: NodeType): NodeSpec {
+  const s = SPEC_BY_TYPE.get(type);
+  if (!s) throw new Error(`Missing NodeSpec for ${type}`);
+  return s;
+}
 
-const PHYSICS_TYPES: NodeType[] = [
-  'Bouncing', 'Spring', 'Follow', 'Swarm', 'Avoidance', 'VectorField',
-];
+const catIs = (to: NodeSpec, c: NodeCategory) => to.category === c;
+const COMPOSITE_NON_SEQ: NodeType[] = ['Mix', 'Group', 'Crossfade'];
 
-// Falloffs "riches" : peuvent aller vers Output, composites, modifiers (comme les engines)
-const FALLOFF_RICH_TYPES: NodeType[] = ['TimeFalloff', 'PointDistanceFalloff'];
+function canFeedTrajectory(to: NodeSpec): boolean {
+  return to.node_type === 'Output' || catIs(to, 'Composite') || catIs(to, 'Modifier');
+}
 
-// Falloffs "limités" : ne peuvent aller que vers Scale, Rotate, Offset
-const FALLOFF_LIMITED_TYPES: NodeType[] = ['DirectionalFalloff', 'AudioAmplitudeFalloff'];
+/// Mirror de NodeSpec::can_feed (validator Rust).
+function canFeed(from: NodeSpec, to: NodeSpec): boolean {
+  switch (from.feeds) {
+    case 'Terminal':
+      return false;
+    case 'EngineInputs':
+      return to.inputs.includes('duration');
+    case 'Trajectory':
+      return canFeedTrajectory(to);
+    case 'SplineAndTrajectory':
+      return to.inputs.includes('spline') || canFeedTrajectory(to);
+    case 'TrajectoryComposites':
+      return to.node_type === 'Output' || catIs(to, 'Composite');
+    case 'BasicModifiers':
+      return to.falloff_target;
+    case 'ModifierChain':
+    case 'MoveRefChain':
+      return (
+        to.node_type === 'Output' ||
+        catIs(to, 'Modifier') ||
+        catIs(to, 'PostProcess') ||
+        COMPOSITE_NON_SEQ.includes(to.node_type)
+      );
+    case 'Composites':
+      return to.node_type === 'Output' || catIs(to, 'Composite');
+    case 'PostProcess':
+      return to.node_type === 'Output' || catIs(to, 'Modifier') || catIs(to, 'PostProcess');
+  }
+}
 
-const MODIFIER_TYPES: NodeType[] = [
-  'Scale', 'Rotate', 'Offset', 'PhaseShift',
-  'Mirror', 'Clamp', 'LFO', 'Jitter',
-  // Post-process nodes (graph global)
-  'RadiusScale', 'HeightOffset', 'PerTrackDepth', 'Barycenter', 'AudioFalloff', 'ManualPosition',
-  // Déclarations d'effets graph-natives (pass-through dans la chaîne)
-  'Zone', 'Velocity',
-];
+/// Mirror de NodeSpec::feeds_modifier — pour cibles Plugin kind=modifier.
+function feedsModifier(t: NodeType): boolean {
+  const s = specOf(t);
+  switch (s.feeds) {
+    case 'Trajectory':
+    case 'SplineAndTrajectory':
+    case 'BasicModifiers':
+    case 'MoveRefChain':
+      return true;
+    case 'ModifierChain':
+      return s.category === 'Modifier';
+    default:
+      return false;
+  }
+}
 
-// Modifiers qui peuvent recevoir des falloffs limités (DirectionalFalloff, AudioAmplitudeFalloff)
-const FALLOFF_LIMITED_TARGETS: NodeType[] = ['Scale', 'Rotate', 'Offset'];
-
-const COMPOSITE_TYPES: NodeType[] = ['Mix', 'Group', 'Sequence', 'Crossfade'];
-
-// Composites que les modifiers peuvent cibler (PAS Sequence — Rust ne l'autorise pas)
-const MODIFIER_COMPOSITE_TARGETS: NodeType[] = ['Mix', 'Group', 'Crossfade'];
-
-const isEngine = (t: NodeType) => ENGINE_TYPES.includes(t);
-const isPhysics = (t: NodeType) => PHYSICS_TYPES.includes(t);
-const isFalloffRich = (t: NodeType) => FALLOFF_RICH_TYPES.includes(t);
-const isFalloffLimited = (t: NodeType) => FALLOFF_LIMITED_TYPES.includes(t);
-const isModifier = (t: NodeType) => MODIFIER_TYPES.includes(t);
-const isComposite = (t: NodeType) => COMPOSITE_TYPES.includes(t);
+/// Mirror de NodeSpec::feeds_composite — pour cibles Plugin kind=composite.
+function feedsComposite(t: NodeType): boolean {
+  const s = specOf(t);
+  switch (s.feeds) {
+    case 'Trajectory':
+    case 'SplineAndTrajectory':
+    case 'TrajectoryComposites':
+    case 'Composites':
+    case 'MoveRefChain':
+      return true;
+    case 'ModifierChain':
+      return s.category === 'Modifier';
+    default:
+      return false;
+  }
+}
 
 /**
  * Retourne true si une connexion from → to est valide.
- * Mirror EXACT de validator.rs::is_valid_connection
+ * Mirror de validator.rs::is_valid_connection — la matrice vit dans le
+ * catalogue Rust, le frontend n'évalue que les règles.
  */
-export function isValidConnection(from: NodeType, to: NodeType): boolean {
-  // Output n'a pas de sortie
-  if (from === 'Output') return false;
-
-  // Input (graph global) → post-process nodes + Output
-  if (from === 'Input') {
-    return isModifier(to) || to === 'Output';
+export function isValidConnection(
+  from: NodeType,
+  to: NodeType,
+  toPluginKind?: PluginKind,
+): boolean {
+  // Plugin WASM cible : le kind du manifeste détermine qui peut l'alimenter
+  // (mirror de validator.rs). Kind inconnu → superset permissif.
+  if (to === 'Plugin') {
+    if (toPluginKind === 'engine') return from === 'Objects' || from === 'Duration';
+    if (toPluginKind === 'modifier') return feedsModifier(from);
+    if (toPluginKind === 'composite') return feedsComposite(from);
+    return from === 'Objects' || from === 'Duration' || feedsComposite(from);
   }
 
-  // MoveRef : source qui produit des positions. Peut connecter vers post-process, Output,
-  // composites — sauf Sequence (Rust ne l'autorise pas pour MoveRef).
-  if (from === 'MoveRef') {
-    return isModifier(to) || to === 'Output' || MODIFIER_COMPOSITE_TARGETS.includes(to);
-  }
-
-  // Merge : équivalent à Input (représente le MergeRuntime).
-  if (from === 'Merge') {
-    return isModifier(to) || to === 'Output';
-  }
-
-  // Objects → engines + physics + splines + falloffs (engines autonomes)
-  // (pas DrawSpline qui est une source)
-  if (from === 'Objects') {
-    return isEngine(to) || isPhysics(to) || isFalloffRich(to) || isFalloffLimited(to);
-  }
-
-  // Duration → engines + physics + falloffs (port 'duration' déclaré)
-  if (from === 'Duration') {
-    return isEngine(to) || isPhysics(to) || isFalloffRich(to) || isFalloffLimited(to);
-  }
-
-  // DrawSpline : source de données spline → nodes spline (port 'spline')
-  // + mêmes cibles qu'un engine (Output, composites, modifiers).
-  if (from === 'DrawSpline') {
-    return (
-      to === 'EvaluateSpline' ||
-      to === 'TrimSpline' ||
-      to === 'OffsetSpline' ||
-      to === 'Output' ||
-      isComposite(to) ||
-      isModifier(to)
-    );
-  }
-
-  // Engines (math + splines + BPM + AudioAmplitude) → Output, composites, modifiers
-  if (isEngine(from)) {
-    return to === 'Output' || isComposite(to) || isModifier(to);
-  }
-
-  // Falloffs riches (TimeFalloff, PointDistanceFalloff) → Output, composites, modifiers
-  if (isFalloffRich(from)) {
-    return to === 'Output' || isComposite(to) || isModifier(to);
-  }
-
-  // Falloffs limités (DirectionalFalloff, AudioAmplitudeFalloff) → Scale, Rotate, Offset uniquement
-  if (isFalloffLimited(from)) {
-    return FALLOFF_LIMITED_TARGETS.includes(to);
-  }
-
-  // Physics → Output, composites (pas modifiers)
-  if (isPhysics(from)) {
-    return to === 'Output' || isComposite(to);
-  }
-
-  // Modifiers → Output, Mix, Group, Crossfade, autres modifiers (PAS Sequence)
-  if (isModifier(from)) {
-    return to === 'Output' || MODIFIER_COMPOSITE_TARGETS.includes(to) || isModifier(to);
-  }
-
-  // Composites → Output, autres composites
-  if (isComposite(from)) {
-    return to === 'Output' || isComposite(to);
-  }
-
-  return false;
+  return canFeed(specOf(from), specOf(to));
 }
 
 /**
- * Retourne les ports d'entrée valides pour un type de node.
- * Mirror de validator.rs::has_input_port
+ * Explains why a from → to connection is refused, for user feedback.
+ * Returns null when the connection is valid.
  */
-export function getInputPorts(type: NodeType): string[] {
-  switch (type) {
-    // Sources pures / terminaux sans entrée
-    case 'Objects':
-    case 'Duration':
-    case 'Input':
-    case 'MoveRef':
-    case 'Merge':
-      return [];
+export function connectionRejectionReason(
+  from: NodeType,
+  to: NodeType,
+  toPluginKind?: PluginKind,
+): string | null {
+  if (isValidConnection(from, to, toPluginKind)) return null;
 
-    // Engines + physics + falloffs + BPM/AudioAmplitude : input + duration
-    case 'Circular': case 'Elliptical': case 'Spiral': case 'Lissajous': case 'Figure8':
-    case 'Linear': case 'Oscillation': case 'Formation': case 'PerlinNoise': case 'Converge':
-    case 'Pendulum': case 'RoseCurve': case 'Helix': case 'Wave': case 'CustomTrajectory':
-    case 'Bouncing': case 'Spring': case 'Follow': case 'Swarm': case 'Avoidance': case 'VectorField':
-    case 'BPM': case 'AudioAmplitude':
-    case 'AudioSpectrum': case 'OSCInput': // engines : Objects/Duration peuvent les alimenter
-    case 'DrawSpline':
-    case 'TimeFalloff': case 'PointDistanceFalloff': case 'DirectionalFalloff': case 'AudioAmplitudeFalloff':
-      return ['input', 'duration'];
+  if (from === 'Output') return 'Output is a terminal — it has no output port.';
 
-    // Splines eval/trim/offset : input (trajectoire) + spline (DrawSpline) + duration
-    case 'EvaluateSpline': case 'TrimSpline': case 'OffsetSpline':
-      return ['input', 'duration', 'spline'];
+  if (to === 'Plugin' && toPluginKind === 'engine')
+    return 'Plugin engines only accept Objects / Duration inputs.';
+  if (to === 'Plugin' && toPluginKind === 'modifier' && !feedsModifier(from))
+    return `Plugin modifiers take one trajectory input — ${from} can't feed one.`;
+  if (to === 'Plugin' && toPluginKind === 'composite' && !feedsComposite(from))
+    return `Plugin composites take two trajectory inputs — ${from} can't feed one.`;
 
-    // Modifiers, Output : une seule entrée
-    case 'Scale': case 'Rotate': case 'Offset': case 'PhaseShift':
-    case 'Mirror': case 'Clamp': case 'LFO': case 'Jitter':
-    case 'RadiusScale': case 'HeightOffset': case 'PerTrackDepth':
-    case 'Barycenter': case 'AudioFalloff': case 'ManualPosition':
-    case 'Zone': case 'Velocity':
-    case 'Output':
-      return ['input'];
+  const feeds = specOf(from).feeds;
 
-    // Composites binaires : 2 entrées (A et B)
-    case 'Mix': case 'Group': case 'Sequence': case 'Crossfade':
-      return ['input_a', 'input_b'];
+  if (feeds === 'EngineInputs')
+    return `${from} only feeds engines, physics and falloffs.`;
 
-    default:
-      return [];
-  }
+  if (feeds === 'PostProcess')
+    return `${from} (global graph) feeds modifiers / post-process and Output only.`;
+
+  if (from === 'MoveRef' && to === 'Sequence')
+    return 'MoveRef cannot feed Sequence — use Mix, Group or Crossfade.';
+
+  if (feeds === 'BasicModifiers')
+    return `${from} only feeds Scale / Rotate / Offset.`;
+
+  if (feeds === 'TrajectoryComposites' && specOf(to).category === 'Modifier')
+    return 'Physics nodes feed Output or composites — not modifiers.';
+
+  if ((feeds === 'ModifierChain' || feeds === 'MoveRefChain') && to === 'Sequence')
+    return 'Modifiers cannot feed Sequence — use Mix, Group or Crossfade.';
+
+  if (feeds === 'SplineAndTrajectory')
+    return 'DrawSpline feeds spline nodes, Output, composites and modifiers.';
+
+  return `${from} cannot connect to ${to}.`;
 }
 
 /**
- * Retourne les ports de sortie valides pour un type de node.
- * Mirror de validator.rs::has_output_port
+ * Port-level rejection — isValidConnection is type-only; the editor also
+ * gates by target handle (duration port, spline port…).
+ */
+export function portRejectionReason(from: NodeType, targetPort: string | null | undefined): string | null {
+  if (from === 'Duration' && targetPort !== 'duration')
+    return 'Duration can only connect to a duration port.';
+  if (from === 'Objects' && targetPort !== 'input' && targetPort !== 'input_a' && targetPort !== 'input_b')
+    return 'Objects can only connect to a trajectory input port.';
+  return null;
+}
+
+/**
+ * Autopatch (inspiration plugdata) : insertion d'un node sur une edge existante
+ * — `A → B` + palette click sur `M` devient `A → M → B`. La règle compose les
+ * specs : M doit accepter une entrée trajectoire sur 'input', être
+ * alimentable par A, et pouvoir alimenter B. Retourne null si le splice est
+ * valide, sinon une explication (EN) pour le toast.
+ */
+export function spliceRejectionReason(
+  from: NodeType,
+  to: NodeType,
+  inserted: NodeType,
+  insertedPluginKind: PluginKind | undefined,
+  targetHandle: string | null | undefined,
+  toPluginKind?: PluginKind,
+): string | null {
+  if (targetHandle === 'duration' || targetHandle === 'spline')
+    return `a ${targetHandle} connection can't take an inserted node.`;
+  // Composites (2 entrées) : 'input' est un alias legacy d'input_a — insérer
+  // sur une seule edge laisserait input_b pendante → graphe invalide.
+  if (isBinaryComposite(inserted) || insertedPluginKind === 'composite')
+    return `${inserted} needs two inputs — connect its A/B ports manually.`;
+  if (!getInputPorts(inserted, insertedPluginKind).includes('input'))
+    return `${inserted} can't be inserted mid-chain — it has no trajectory input port.`;
+  if (!isValidConnection(from, inserted, insertedPluginKind))
+    return `${from} can't feed ${inserted}.`;
+  if (!isValidConnection(inserted, to, toPluginKind))
+    return `${inserted} can't feed ${to}.`;
+  return null;
+}
+
+/**
+ * Retourne les ports d'entrée valides pour un type de node —
+ * `NodeSpec::inputs` (Plugin : superset restreint par le kind du manifeste,
+ * mirror de validator.rs::has_input_port).
+ */
+export function getInputPorts(type: NodeType, pluginKind?: PluginKind): string[] {
+  if (type === 'Plugin') {
+    if (pluginKind === 'engine') return ['input', 'duration'];
+    if (pluginKind === 'modifier') return ['input'];
+    if (pluginKind === 'composite') return ['input', 'input_a', 'input_b'];
+    return ['input', 'input_a', 'input_b', 'duration'];
+  }
+  return [...specOf(type).inputs];
+}
+
+/**
+ * Retourne les ports de sortie valides pour un type de node —
+ * `NodeSpec::outputs` (Output est le seul terminal).
  */
 function getOutputPorts(type: NodeType): string[] {
-  switch (type) {
-    case 'Output':
-      return []; // Output n'a pas de sortie
-
-    case 'Objects':
-    case 'Duration':
-      return ['output'];
-
-    // Engines, physics, falloffs, modifiers, composites, sources, splines
-    default:
-      return ['output'];
-  }
+  return [...specOf(type).outputs];
 }
 
 /**
@@ -219,8 +239,10 @@ export function isTerminalNode(type: NodeType): boolean {
 }
 
 /**
- * Retourne true si le node est un composite binaire (2 inputs).
+ * Retourne true si le node est un composite binaire natif (2 inputs A/B) —
+ * par catégorie : le superset de ports de Plugin contient input_a/b sans
+ * que le node soit forcément composite (le kind du manifeste décide).
  */
 export function isBinaryComposite(type: NodeType): boolean {
-  return type === 'Mix' || type === 'Group' || type === 'Sequence' || type === 'Crossfade';
+  return specOf(type).category === 'Composite';
 }

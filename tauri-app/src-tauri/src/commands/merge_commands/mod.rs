@@ -36,6 +36,26 @@ pub use move_management::{
     spawn_move_for_recall, MoveSpec, SpatialMacroInit,
 };
 
+/// Validation frontière : un f64 NaN/inf arrivé par IPC ne doit jamais
+/// atteindre le merge thread (`f64::clamp` panique sur NaN → un param
+/// pourri tuerait le thread entier, catch_unwind ou pas). Rejet propre.
+fn require_finite(name: &str, v: f64) -> Result<f64, super::error::IpcError> {
+    if v.is_finite() {
+        Ok(v)
+    } else {
+        Err(super::error::IpcError::validation(format!(
+            "{name} must be finite (got {v})"
+        )))
+    }
+}
+
+fn require_finite_vec3(name: &str, v: [f64; 3]) -> Result<[f64; 3], super::error::IpcError> {
+    for (i, c) in v.iter().enumerate() {
+        require_finite(&format!("{name}[{i}]"), *c)?;
+    }
+    Ok(v)
+}
+
 fn default_duration() -> f64 {
     4.0
 }

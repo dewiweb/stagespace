@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Square, Globe, SlidersHorizontal, ListOrdered, AudioLines } from 'lucide-react';
+import { Play, Square, Globe, SlidersHorizontal, ListOrdered, AudioLines, Pin } from 'lucide-react';
 import { TrackGrid } from './TrackGrid';
 import { AudioModList } from './AudioModControls';
 import Scene3D from './Scene3D';
@@ -10,7 +10,7 @@ import { useAnimationStore } from '../store/useAnimationStore';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { type NodeParamValue } from './nodeParamSchema';
 import { NodeParamsPanel } from './NodeParamsPanel';
-import { toast } from '../utils/toast-helpers';
+import { PanicButton } from './ui/PanicButton';
 
 /// ── PERFORM VIEW ──
 /// Surface live réduite : setlist + cues + canvas + params live à la demande.
@@ -29,12 +29,10 @@ export const PerformView: React.FC = () => {
   const playSlot = useGraphStore((s) => s.playSlot);
   const stopSlot = useGraphStore((s) => s.stopSlot);
   const goToNextMove = useGraphStore((s) => s.goToNextMove);
-  const panic = useGraphStore((s) => s.panic);
   const pendingPlays = useGraphStore((s) => s.pendingPlays);
-  const perfStats = useGraphStore((s) => s.perfStats);
   const isRecalling = useCuelistStore((s) => s.isRecalling);
 
-  const [goFeedback, setGoFeedback] = React.useState<string | null>(null);
+  const [goFeedback, setGoFeedback] = React.useState<{ ok: boolean; message: string } | null>(null);
 
   const playingCount = moveSlots.filter((s) => s.movementId).length;
 
@@ -48,167 +46,203 @@ export const PerformView: React.FC = () => {
     ? moveSlots.find((s) => s.id === nextSetlistSlotId)
     : null;
 
+  // Slot armé (tap dans la liste) — la cible du transport PLAY/STOP.
+  const armedSlot = editingSlotId
+    ? moveSlots.find((s) => s.id === editingSlotId) ?? null
+    : null;
+  const armedPlaying = !!armedSlot?.movementId || (armedSlot ? pendingPlays.includes(armedSlot.id) : false);
+
   const handleGO = async () => {
-    const msg = await goToNextMove();
-    if (msg) {
-      setGoFeedback(msg.startsWith('GO:') ? `ok:${msg}` : `err:${msg}`);
-      setTimeout(() => setGoFeedback(null), 3000);
-    }
+    const res = await goToNextMove();
+    setGoFeedback(res);
+    setTimeout(() => setGoFeedback(null), 3000);
   };
 
-  // Ordre d'affichage : setlist d'abord (dans l'ordre), puis les autres slots
-  const orderedSlots = [
-    ...setlistOrder.map((id) => moveSlots.find((s) => s.id === id)).filter(Boolean),
-    ...moveSlots.filter((s) => !setlistOrder.includes(s.id)),
-  ] as typeof moveSlots;
+  // Deux collections distinctes : la setlist est une VUE ordonnée (le flux
+  // du show), les layers sont des slots ad-hoc joués en parallèle.
+  const setlistSlots = setlistOrder
+    .map((id) => moveSlots.find((s) => s.id === id))
+    .filter(Boolean) as typeof moveSlots;
+  const layerSlots = moveSlots.filter((s) => !setlistOrder.includes(s.id));
+
+  // Row partagée setlist/layers — même interactions (tap = params, ▶/■ = layer)
+  const renderSlotRow = (slot: (typeof moveSlots)[number]) => {
+    const isPlaying = !!slot.movementId || pendingPlays.includes(slot.id);
+    const isSelected = editingSlotId === slot.id;
+    const setlistIdx = setlistOrder.indexOf(slot.id);
+    const isCurrentSetlist = setlistIdx === currentSetlistIndex;
+    const isNextSetlist = setlistIdx === currentSetlistIndex + 1
+      || (currentSetlistIndex < 0 && setlistIdx === 0);
+    return (
+      <div
+        key={slot.id}
+        onClick={() => selectSlotForEditing(isSelected ? null : slot.id)}
+        title="Live params of this move"
+        className={`group flex items-center gap-2 px-3 py-2.5 cursor-pointer border-b border-gray-800/40 transition-colors ${
+          isSelected
+            ? 'bg-indigo-900/30 ring-1 ring-inset ring-indigo-600/60'
+            : isCurrentSetlist
+              ? 'bg-purple-900/20 hover:bg-purple-900/30'
+              : isPlaying
+                ? 'bg-green-900/10 hover:bg-green-900/20'
+                : 'hover:bg-gray-800/30'
+        }`}
+      >
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (isPlaying) stopSlot(slot.id);
+            else playSlot(slot.id);
+          }}
+          className={`w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0 transition-colors active:scale-95 ${
+            isPlaying
+              ? 'bg-red-800/80 hover:bg-red-700 text-red-200'
+              : 'bg-green-800/80 hover:bg-green-700 text-green-200'
+          }`}
+          title={isPlaying ? 'Stop this move' : 'Launch (layered — others keep running)'}
+        >
+          {isPlaying ? <Square size={11} fill="currentColor" /> : <Play size={11} fill="currentColor" />}
+        </button>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-white text-xs font-medium truncate">{slot.name}</span>
+            {isPlaying && (
+              <span
+                className={`text-[10px] px-1 rounded ${
+                  slot.isPreview ? 'bg-cyan-900 text-cyan-300' : 'bg-green-900 text-green-300'
+                }`}
+              >
+                {slot.isPreview ? 'PREV' : 'LIVE'}
+              </span>
+            )}
+          </div>
+          <div className="text-gray-500 text-[10px]">
+            {slot.trackIds.length} trk
+          </div>
+        </div>
+        {isCurrentSetlist && (
+          <span className="text-purple-400 text-[10px] font-bold flex-shrink-0" title="Current setlist">◉ NOW</span>
+        )}
+        {isNextSetlist && !isCurrentSetlist && (
+          <span className="text-green-400/80 text-[10px] font-bold flex-shrink-0" title="Prochain GO">→ NEXT</span>
+        )}
+        <SlidersHorizontal
+          size={12}
+          className={`flex-shrink-0 ${isSelected ? 'text-indigo-300' : 'text-gray-600 group-hover:text-gray-400'}`}
+        />
+      </div>
+    );
+  };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-stagespace-bg">
-      {/* ═══ Top bar — statut + GO + PANIC ═══ */}
-      <div className="h-14 flex items-center gap-4 px-4 border-b border-stagespace-border bg-stagespace-panel flex-shrink-0">
-        <div className="flex items-center gap-2">
+    <div className="live-mode flex-1 flex flex-col overflow-hidden bg-stagespace-bg">
+      {/* ═══ Top bar — contexte setlist + transport ═══
+          Les métriques moteur (FPS/OSC/CPU) vivent dans la StatusBar
+          partagée en bas — ici on ne garde que le contexte du show. */}
+      <div className="h-16 flex items-center gap-4 px-4 border-b border-stagespace-border bg-stagespace-panel flex-shrink-0">
+        <div className="flex items-center gap-2.5">
           <div
-            className={`w-3 h-3 rounded-full ${
+            className={`w-4 h-4 rounded-full ${
               playingCount > 0 ? 'bg-green-500 animate-pulse' : 'bg-gray-600'
             }`}
           />
-          <span className="text-white text-sm font-bold tabular-nums">
+          <span className="text-white text-lg font-black tabular-nums tracking-wide">
             {playingCount > 0 ? `${playingCount} LIVE` : 'IDLE'}
           </span>
-          {perfStats && playingCount > 0 && (
-            <span
-              className={`text-[10px] font-mono ${
-                perfStats.oscErrorRate > 0.05
-                  ? 'text-red-400'
-                  : 'text-gray-500'
-              }`}
-            >
-              {perfStats.oscRate.toFixed(0)} osc/s
-            </span>
-          )}
         </div>
 
-        <div className="w-px h-6 bg-stagespace-border" />
+        <div className="w-px h-8 bg-stagespace-border" />
 
-        {/* Setlist position + next */}
+        {/* Position setlist + feedback GO */}
         <div className="flex items-center gap-3 min-w-0 flex-1">
-          <span className="text-gray-500 text-[10px] uppercase tracking-wider flex-shrink-0">
+          <span className="text-gray-400 text-xs uppercase tracking-wider flex-shrink-0">
             Setlist {currentSetlistIndex + 1}/{setlistOrder.length}
           </span>
-          <div className="min-w-0">
-            <div className="text-gray-500 text-[10px]">next</div>
-            <div className="text-white text-sm font-semibold truncate">
-              {nextSetlistSlot?.name ?? '—'}
-            </div>
-          </div>
+          {isRecalling && (
+            <span className="text-purple-400 text-xs font-bold animate-pulse flex-shrink-0">
+              RECALLING…
+            </span>
+          )}
           {goFeedback && (
             <span
-              className={`text-[10px] animate-pulse ${
-                goFeedback.startsWith('ok:') ? 'text-green-400' : 'text-red-400 font-bold'
+              className={`text-sm font-bold animate-pulse truncate ${
+                goFeedback.ok ? 'text-green-400' : 'text-red-400'
               }`}
             >
-              {goFeedback.slice(4)}
+              {goFeedback.message}
             </span>
           )}
         </div>
 
+        {/* PLAY/STOP — transport du slot armé (tap dans la liste).
+            Symétrique au GO : GO avance la setlist, PLAY démarre ou
+            stoppe le move sélectionné — sans gros bouton, jouer un layer
+            demandait de viser un ▶ de 36px dans une rangée. (Space) */}
+        <button
+          onClick={() => {
+            if (!armedSlot) return;
+            if (armedPlaying) stopSlot(armedSlot.id);
+            else playSlot(armedSlot.id);
+          }}
+          disabled={!armedSlot}
+          className={`px-6 py-1.5 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 text-left min-w-[140px] text-white ${
+            armedPlaying
+              ? 'bg-red-600 hover:bg-red-500'
+              : 'bg-indigo-600 hover:bg-indigo-500'
+          }`}
+          title={armedSlot
+            ? `${armedPlaying ? 'Stop' : 'Play'} "${armedSlot.name}" — layered, autres moves continuent (Space)`
+            : 'Tap a move in the list to arm it, then play/stop it here (Space)'}
+        >
+          <div className="text-lg font-black leading-tight">
+            {armedPlaying ? 'STOP ■' : 'PLAY ▶'}
+          </div>
+          <div className={`text-[11px] font-medium truncate leading-tight ${armedPlaying ? 'text-red-100/80' : 'text-indigo-100/80'}`}>
+            {armedSlot ? armedSlot.name : 'tap a move'}
+          </div>
+        </button>
+
+        {/* GO — affiche sa cible comme sur une console de show :
+            l'opérateur sait ce qui part avant d'appuyer. */}
         <button
           onClick={handleGO}
           disabled={!nextSetlistSlotId}
-          className="px-8 py-2.5 bg-green-600 hover:bg-green-500 text-white text-lg font-black rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95"
+          className="px-6 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 text-left min-w-[160px]"
           title="GO : prochain move de la setlist (Enter) — RECALL cue = Shift+Enter"
         >
-          GO ▶
+          <div className="text-lg font-black leading-tight">GO ▶</div>
+          <div className="text-[11px] font-medium text-green-100/80 truncate leading-tight">
+            {nextSetlistSlot ? nextSetlistSlot.name : 'end of setlist'}
+          </div>
         </button>
-        <button
-          onClick={() => {
-            if (isRecalling) return;
-            panic();
-            toast.warning('PANIC — all moves stopped');
-          }}
-          className="px-5 py-2.5 bg-red-700 hover:bg-red-600 text-white text-sm font-black rounded-lg transition-colors active:scale-95"
-          title="PANIC : stop tout + positions d'origine (Esc)"
-        >
-          ■ PANIC
-        </button>
+        <PanicButton size="lg" />
       </div>
 
       {/* ═══ Corps : setlist | canvas ═══ */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Colonne gauche : moves (layers) + cues */}
+        {/* Colonne gauche : SETLIST (flux du show) + LAYERS (ad-hoc) + cues */}
         <div className="w-72 flex-shrink-0 border-r border-stagespace-border flex flex-col bg-stagespace-panel min-h-0">
           <div className="flex-1 overflow-y-auto min-h-0">
-            <div className="px-3 py-2 text-gray-500 text-[10px] uppercase tracking-wider border-b border-stagespace-border">
-              Moves — tap = params · <Play size={9} className="inline -mt-0.5" /> = layer
+            <div className="px-3 py-2 text-gray-400 text-[10px] uppercase tracking-wider border-b border-stagespace-border bg-purple-950/20">
+              Setlist — GO avance ici
             </div>
-            {orderedSlots.map((slot) => {
-              const isPlaying = !!slot.movementId || pendingPlays.includes(slot.id);
-              const isSelected = editingSlotId === slot.id;
-              const setlistIdx = setlistOrder.indexOf(slot.id);
-              const isCurrentSetlist = setlistIdx === currentSetlistIndex;
-              return (
-                <div
-                  key={slot.id}
-                  onClick={() => selectSlotForEditing(isSelected ? null : slot.id)}
-                  title="Params live de ce move"
-                  className={`group flex items-center gap-2 px-3 py-2.5 cursor-pointer border-b border-gray-800/40 transition-colors ${
-                    isSelected
-                      ? 'bg-indigo-900/30 ring-1 ring-inset ring-indigo-600/60'
-                      : isPlaying
-                        ? 'bg-green-900/10 hover:bg-green-900/20'
-                        : 'hover:bg-gray-800/30'
-                  }`}
-                >
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (isPlaying) stopSlot(slot.id);
-                      else playSlot(slot.id);
-                    }}
-                    className={`w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0 transition-colors active:scale-95 ${
-                      isPlaying
-                        ? 'bg-red-800/80 hover:bg-red-700 text-red-200'
-                        : 'bg-green-800/80 hover:bg-green-700 text-green-200'
-                    }`}
-                    title={isPlaying ? 'Stop ce move' : 'Lancer (en layer — les autres continuent)'}
-                  >
-                    {isPlaying ? <Square size={11} fill="currentColor" /> : <Play size={11} fill="currentColor" />}
-                  </button>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-white text-xs font-medium truncate">{slot.name}</span>
-                      {isPlaying && (
-                        <span
-                          className={`text-[10px] px-1 rounded ${
-                            slot.isPreview ? 'bg-cyan-900 text-cyan-300' : 'bg-green-900 text-green-300'
-                          }`}
-                        >
-                          {slot.isPreview ? 'PREV' : 'LIVE'}
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-gray-600 text-[10px]">
-                      {slot.trackIds.length} trk
-                      {setlistIdx >= 0 && (
-                        <span className={isCurrentSetlist ? 'text-purple-400' : ''}>
-                          {' '}· set {setlistIdx + 1}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {isCurrentSetlist && (
-                    <span className="text-purple-400 text-[10px] font-bold" title="Setlist courante">●</span>
-                  )}
-                  <SlidersHorizontal
-                    size={12}
-                    className={`flex-shrink-0 ${isSelected ? 'text-indigo-300' : 'text-gray-700 group-hover:text-gray-500'}`}
-                  />
+            {setlistSlots.map(renderSlotRow)}
+            {setlistSlots.length === 0 && (
+              <div className="px-3 py-4 text-gray-600 text-[11px] italic">
+                Empty setlist — add moves to the setlist in Edit mode.
+              </div>
+            )}
+            {layerSlots.length > 0 && (
+              <>
+                <div className="px-3 py-2 text-gray-400 text-[10px] uppercase tracking-wider border-b border-stagespace-border">
+                  Layers — <Play size={9} className="inline -mt-0.5" /> joue en parallèle
                 </div>
-              );
-            })}
-            {orderedSlots.length === 0 && (
+                {layerSlots.map(renderSlotRow)}
+              </>
+            )}
+            {moveSlots.length === 0 && (
               <div className="px-3 py-6 text-center text-gray-600 text-[11px]">
-                Aucun move — quitter Perform (header) pour en créer.
+                No moves — leave Perform (header) to create some.
               </div>
             )}
           </div>
@@ -326,7 +360,7 @@ const LiveDrawer: React.FC = () => {
                 ? 'bg-indigo-600 text-white'
                 : 'bg-gray-800 text-gray-400 hover:text-white border border-gray-700'
             }`}
-            title="Vue d'ensemble — toutes les tracks de tous les moves"
+            title="Overview — all tracks of all moves"
           >
             All
           </button>
@@ -340,7 +374,7 @@ const LiveDrawer: React.FC = () => {
                 ? 'bg-indigo-600 text-white'
                 : 'bg-green-900/40 text-green-300 hover:bg-green-800/50 border border-green-800/50'
             }`}
-            title="Params live de ce move"
+            title="Live params of this move"
           >
             {s.isPreview ? '◌' : '●'} {s.name}
           </button>
@@ -349,30 +383,31 @@ const LiveDrawer: React.FC = () => {
         <div className="w-px h-6 bg-stagespace-border mx-1 flex-shrink-0" />
 
         {scopeBtn('params', <><SlidersHorizontal size={12} className="inline -mt-0.5" /> Params</>, true,
-          'Params des nodes du graphe du move sélectionné')}
+          'Node params of the selected move graph')}
         {scopeBtn('playback', <><Play size={12} className="inline -mt-0.5" /> Playback</>, true,
-          'Lecture du move sélectionné (speed, direction, loop, fades)')}
+          'Playback of the selected move (speed, direction, loop, fades)')}
         {scopeBtn('tracks', <><ListOrdered size={12} className="inline -mt-0.5" /> Tracks</>, true,
-          'Assignation tracks + depth/phase du move sélectionné')}
+          'Track assignment + depth/phase of the selected move')}
         {scopeBtn('audio', <><AudioLines size={12} className="inline -mt-0.5" /> Audio</>, true,
-          'Mods audio-réactifs du move sélectionné')}
+          'Audio-reactive mods of the selected move')}
         {scopeBtn('global', <><Globe size={12} className="inline -mt-0.5" /> Global</>, false,
           'Macros globales — affectent TOUS les moves live (merge)')}
 
         {!slot && playingSlots.length === 0 && (
           <span className="text-gray-600 text-[10px] ml-2">
-            tap un move pour ses params · <Play size={9} className="inline -mt-0.5" /> = layer live
+            tap a move for its params · <Play size={9} className="inline -mt-0.5" /> = layer live
+            {' · '}<Pin size={9} className="inline -mt-0.5" /> in Edit = curate this surface
           </span>
         )}
         {!slot && playingSlots.length > 0 && (
-          <span className="text-gray-600 text-[10px] ml-2">tap un chip pour éditer un move</span>
+          <span className="text-gray-600 text-[10px] ml-2">tap a chip to edit a move</span>
         )}
         {slot && (
           <span className="text-indigo-400/70 text-[10px] ml-2 flex items-center gap-1.5">
-            édition : {slot.name}
+            editing: {slot.name}
             {slot.movementId
               ? <span className={`px-1 rounded ${slot.isPreview ? 'bg-cyan-900 text-cyan-300' : 'bg-green-900 text-green-300'}`}>{slot.isPreview ? 'PREV' : 'LIVE'}</span>
-              : <span className="text-gray-600">(stoppé)</span>}
+              : <span className="text-gray-600">(stopped)</span>}
           </span>
         )}
       </div>
@@ -494,8 +529,9 @@ const LiveDrawer: React.FC = () => {
             nodes={nodes}
             live={!!slot.movementId}
             resetKey={editingSlotId}
+            performMode
             onParam={setNodeParam}
-            emptyHint="Aucun node paramétrable dans ce graphe — voir Playback / Tracks."
+            emptyHint="No parametric node in this graph — see Playback / Tracks."
           />
         </div>
       )}

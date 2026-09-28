@@ -42,9 +42,14 @@ use std::time::{Duration, Instant};
 
 /// Callback de position partageable — `Arc` (pas `Box`) pour que le merge
 /// thread puisse cloner le handle sous un lock très court puis appeler le
-/// callback HORS du lock (l'emit Tauri sérialise tout le monde JSON — il ne
-/// doit pas être fait sous le mutex).
+/// callback HORS du lock.
 type SharedPositionCallback = Arc<dyn Fn(f64, Vec<(usize, nalgebra::Vector3<f64>)>) + Send + Sync>;
+
+/// Canal vers le pump thread de preview — `SyncSender` borné : le merge
+/// `try_send` et droppe la frame si le pump est occupé à sérialiser
+/// (audit I10 — l'emit Tauri fait ~60 Ko/s de JSON par frame à 1024
+/// objets ; hors du thread temps réel, le merge ne paie qu'un move).
+type PreviewSender = std::sync::mpsc::SyncSender<(f64, Vec<(usize, nalgebra::Vector3<f64>)>)>;
 
 /// Sink de sortie partagé avec le merge thread — `set_sink`/`set_osc_target`
 /// en cours de route swappe le transport atomiquement sous un seul lock.
@@ -109,8 +114,10 @@ pub struct MergeRuntime {
     merge_strategy: Arc<RwLock<MergeStrategy>>,
     /// Performance monitor global
     perf: Arc<PerfMonitor>,
-    /// Callback de position (un seul event pour le 3D preview)
-    position_callback: Arc<Mutex<Option<SharedPositionCallback>>>,
+    /// Canal borné vers le pump thread qui invoque le callback de position
+    /// (un seul event pour le 3D preview). La sérialisation JSON de l'emit
+    /// Tauri se fait là-bas, pas sur le thread merge.
+    position_callback: Arc<Mutex<Option<PreviewSender>>>,
     /// Sink de sortie (OSC par défaut, tout PositionSink injectable)
     sink: SharedSink,
     /// FPS cible
@@ -141,7 +148,31 @@ pub struct MergeRuntime {
     /// Modulations déclarées dans le graph global (nodes `Velocity`) —
     /// évaluées avant les règles manuelles (priorité aux manuelles).
     graph_modulations: Arc<RwLock<Arc<Vec<ChannelModulation>>>>,
+    /// Node `Barycenter` du graph global : l'origin passée au ctx est
+    /// recalculée chaque frame = isobarycentre des `track_positions`
+    /// (audit T2 — le node était un no-op silencieux).
+    barycenter_pivot: Arc<AtomicBool>,
+    /// Node `MoveRef` avec `move_id` non vide : la chaîne post-process ne
+    /// reçoit que les positions de ce move au lieu du merge complet
+    /// (audit T2 — le param était décoratif).
+    move_ref_id: Arc<RwLock<Option<String>>>,
+    /// Moves retirés pour worker stale (audit C5) — le merge ne peut pas
+    /// arrêter le worker lui-même (le `Runtime` vit dans la couche
+    /// commands Tauri) ; il publie `(id, Arc<PositionBuffer>)` ici et le
+    /// superviseur backend draine la file pour `runtime.stop()` +
+    /// nettoyage `movements`. L'Arc permet au superviseur un test
+    /// `ptr_eq` : si l'id a été réutilisé par un move plus récent, son
+    /// buffer diffère → on ne tue pas le nouveau move. Sans ce mécanisme
+    /// un worker zombie tournait à 100 % CPU indéfiniment.
+    stale_kill_ids: StaleKillQueue,
 }
+
+/// Entrée de la file stale-kill (audit C5) : id du move + Arc du
+/// PositionBuffer observé gelé — l'Arc sert de preuve d'identité
+/// (`ptr_eq`) pour ne pas tuer un move réutilisant le même id.
+pub type StaleKill = (String, Arc<PositionBuffer>);
+/// File partagée merge → superviseur backend.
+type StaleKillQueue = Arc<Mutex<Vec<StaleKill>>>;
 
 impl MergeRuntime {
     /// Crée un nouveau MergeRuntime
@@ -200,18 +231,31 @@ impl MergeRuntime {
             zones: Arc::new(RwLock::new(Arc::new(Vec::new()))),
             graph_zones: Arc::new(RwLock::new(Arc::new(Vec::new()))),
             graph_modulations: Arc::new(RwLock::new(Arc::new(Vec::new()))),
+            barycenter_pivot: Arc::new(AtomicBool::new(false)),
+            move_ref_id: Arc::new(RwLock::new(None)),
+            stale_kill_ids: Arc::new(Mutex::new(Vec::new())),
         })
     }
 
-    /// Définit le callback de position (pour le 3D preview)
+    /// Définit le callback de position (pour le 3D preview). Le callback
+    /// tourne sur un pump thread dédié alimenté par un canal borné à 2
+    /// messages : le merge thread ne paie qu'un `try_send` (drop si plein)
+    /// au lieu de la sérialisation JSON complète par frame (audit I10).
+    /// Réassigner le callback remplace le sender → l'ancien pump voit son
+    /// rx déconnecté et sort proprement.
     pub fn set_position_callback(&self, callback: PositionCallback) {
-        let mut cb = self
+        let cb: SharedPositionCallback = Arc::from(callback);
+        let (tx, rx) =
+            std::sync::mpsc::sync_channel::<(f64, Vec<(usize, nalgebra::Vector3<f64>)>)>(2);
+        std::thread::spawn(move || {
+            while let Ok((t, positions)) = rx.recv() {
+                cb(t, positions);
+            }
+        });
+        *self
             .position_callback
             .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        // Box → Arc : le merge thread clone le handle sous lock court
-        // et émet l'event hors du lock.
-        *cb = Some(Arc::from(callback));
+            .unwrap_or_else(|e| e.into_inner()) = Some(tx);
     }
 
     /// Reconfigure la destination OSC (adresse + port + sender).
@@ -429,16 +473,28 @@ impl MergeRuntime {
     /// Ajoute une règle de modulation cinématique (source → canal spatial).
     /// Retourne l'index de la règle (pour suppression).
     /// Copy-on-write : le merge thread ne voit qu'un snapshot Arc par frame.
-    pub fn add_modulation(&self, rule: ChannelModulation) -> usize {
+    /// Nombre max de règles de modulation cinématique (audit I12) — chaque
+    /// règle coûte une mesure par objet par frame ; au-delà le runtime est
+    /// mal configuré, pas en train de faire de l'art.
+    pub const MAX_MODULATIONS: usize = 64;
+
+    pub fn add_modulation(&self, rule: ChannelModulation) -> Result<usize, String> {
         let mut guard = self
             .channel_modulations
             .write()
             .unwrap_or_else(|e| e.into_inner());
+        if guard.len() >= Self::MAX_MODULATIONS {
+            return Err(format!(
+                "channel modulations capped at {} (current: {})",
+                Self::MAX_MODULATIONS,
+                guard.len()
+            ));
+        }
         let mut rules = (**guard).clone();
         rules.push(rule);
         let index = rules.len() - 1;
         *guard = Arc::new(rules);
-        index
+        Ok(index)
     }
 
     /// Supprime une règle de modulation par index
@@ -476,21 +532,37 @@ impl MergeRuntime {
 
     /// Définit le lissage cinématique [0, 1) — 0 = brut, 0.9 = très lissé
     pub fn set_kinematic_smoothing(&self, smoothing: f64) {
+        // NaN ferait paniquer clamp ici et plus bas (défense en profondeur :
+        // l'IPC valide déjà, mais CLI/tests passent par ce setter).
+        if !smoothing.is_finite() {
+            return;
+        }
         *self
             .kinematic_smoothing
             .write()
             .unwrap_or_else(|e| e.into_inner()) = smoothing.clamp(0.0, 0.99);
     }
 
+    /// Nombre max de zones d'effet (audit I12) — chaque zone évalue une
+    /// influence par objet par frame.
+    pub const MAX_ZONES: usize = 64;
+
     /// Ajoute une zone d'effet spatial. Retourne l'index de la zone.
     /// Copy-on-write : snapshot Arc par frame dans le merge thread.
-    pub fn add_zone(&self, zone: crate::zones::Zone) -> usize {
+    pub fn add_zone(&self, zone: crate::zones::Zone) -> Result<usize, String> {
         let mut guard = self.zones.write().unwrap_or_else(|e| e.into_inner());
+        if guard.len() >= Self::MAX_ZONES {
+            return Err(format!(
+                "zones capped at {} (current: {})",
+                Self::MAX_ZONES,
+                guard.len()
+            ));
+        }
         let mut zones = (**guard).clone();
         zones.push(zone);
         let index = zones.len() - 1;
         *guard = Arc::new(zones);
-        index
+        Ok(index)
     }
 
     /// Supprime une zone par index
@@ -525,12 +597,16 @@ impl MergeRuntime {
         &self,
         zones: Vec<crate::zones::Zone>,
         modulations: Vec<ChannelModulation>,
+        barycenter: bool,
+        move_ref: Option<String>,
     ) {
         *self.graph_zones.write().unwrap_or_else(|e| e.into_inner()) = Arc::new(zones);
         *self
             .graph_modulations
             .write()
             .unwrap_or_else(|e| e.into_inner()) = Arc::new(modulations);
+        self.barycenter_pivot.store(barycenter, Ordering::SeqCst);
+        *self.move_ref_id.write().unwrap_or_else(|e| e.into_inner()) = move_ref;
     }
 
     /// Récupère les effets déclarés par le graph global (pour debug/listing)
@@ -608,6 +684,38 @@ impl MergeRuntime {
             .unwrap_or_else(|e| e.into_inner())
             .values()
             .any(|s| s.is_active)
+    }
+
+    /// Enfile un stale-kill — utilisé par la boucle merge interne.
+    /// `#[doc(hidden)]` : exposé pour les tests du superviseur Tauri.
+    #[doc(hidden)]
+    pub fn enqueue_stale_kill(&self, move_id: String, buffer: Arc<PositionBuffer>) {
+        Self::enqueue_stale_kill_into(&self.stale_kill_ids, move_id, buffer);
+    }
+
+    fn enqueue_stale_kill_into(
+        queue: &StaleKillQueue,
+        move_id: String,
+        buffer: Arc<PositionBuffer>,
+    ) {
+        queue
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push((move_id, buffer));
+    }
+
+    /// Draine la file des moves retirés pour worker stale (audit C5).
+    /// Appelé par le superviseur backend qui détient les `Runtime` des
+    /// workers — lui seul peut faire `stop()` + nettoyage `movements`.
+    /// L'`Arc<PositionBuffer>` permet un test `ptr_eq` pour ne jamais
+    /// tuer un move plus récent ayant réutilisé le même id.
+    pub fn drain_stale_kills(&self) -> Vec<StaleKill> {
+        std::mem::take(
+            &mut *self
+                .stale_kill_ids
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()),
+        )
     }
 
     /// Démarre un fade in pour un move (utilisé au recall pour un crossfade doux)
@@ -778,6 +886,9 @@ impl MergeRuntime {
         let kinematic_smoothing_arc = self.kinematic_smoothing.clone();
         let graph_zones_arc = self.graph_zones.clone();
         let graph_modulations_arc = self.graph_modulations.clone();
+        let barycenter_pivot_arc = self.barycenter_pivot.clone();
+        let move_ref_id_arc = self.move_ref_id.clone();
+        let stale_kill_ids = self.stale_kill_ids.clone();
 
         let handle = std::thread::spawn(move || {
             let mut start = Instant::now();
@@ -788,9 +899,24 @@ impl MergeRuntime {
             let mut osc_since_perf = 0u64;
             let mut osc_errors_perf = 0u64;
             let mut osc_refused_perf = 0u64;
+            // Circuit-breaker OSC (C6) : si >50 % des paquets reviennent en
+            // ECONNREFUSED sur 2 fenêtres de perf consécutives (~1 s), la
+            // destination est morte — on suspend les sends (le merge et le
+            // preview continuent) et on sonde à 1 Hz via l'état réel du
+            // premier objet. Une sonde réussie referme le circuit ; si la
+            // panne persiste les fenêtres refused re-tripent naturellement.
+            // Sans ça : 30 000 encodages/s + sends perdus indéfiniment, et
+            // le sweep de PANIC retardé d'autant.
+            let mut osc_circuit_open = false;
+            let mut osc_bad_windows = 0u32;
+            let mut last_probe = Instant::now() - Duration::from_secs(1);
             // États cinématiques par objet — thread-local, aucun lock.
             // Mesurés sur les positions finales (post-merge + post-process).
             let mut kinematic_states: HashMap<usize, KinematicState> = HashMap::new();
+            // Moves déjà warnés pour un mismatch track_indices/positions —
+            // rate-limit : 1 log par move par épisode (audit I11).
+            let mut mismatch_warned: std::collections::HashSet<String> =
+                std::collections::HashSet::new();
             let mut prev_frame: Option<Instant> = None;
             let mut prev_t: Option<f64> = None;
 
@@ -870,6 +996,17 @@ impl MergeRuntime {
                             ));
                             state.is_active = false;
                             moves_to_remove.push(move_id.clone());
+                            // Audit C5 : publier l'ID + le buffer (test
+                            // d'identité côté superviseur) pour arrêter
+                            // réellement le thread worker — sinon il
+                            // tourne à 100 % CPU après son retrait.
+                            if let Some(buf) = buffers.get(move_id) {
+                                Self::enqueue_stale_kill_into(
+                                    &stale_kill_ids,
+                                    move_id.clone(),
+                                    buf.clone(),
+                                );
+                            }
                             continue;
                         }
                         snapshots.push((
@@ -902,19 +1039,32 @@ impl MergeRuntime {
                         }
                         let global_positions: Vec<(usize, nalgebra::Vector3<f64>)> =
                             if track_indices.is_empty() {
+                                mismatch_warned.remove(move_id.as_str());
                                 positions.clone()
-                            } else if track_indices.len() == positions.len() {
+                            } else {
+                                // Fenêtre de mismatch (routing non atomique
+                                // pendant hot-swap) : avant, le move entier
+                                // était sauté à chaque frame + warn×60/s.
+                                // On clip à min(len) — un sous-ensemble qui
+                                // bouge vaut mieux qu'un move muet — et on
+                                // ne log qu'une fois par épisode.
+                                if track_indices.len() != positions.len() {
+                                    if mismatch_warned.insert(move_id.clone()) {
+                                        crate::logging::log_osc_error(&format!(
+                                            "MergeRuntime: move {} partially merged — track_indices.len()={} != positions.len()={} (clipped, further warnings suppressed)",
+                                            move_id, track_indices.len(), positions.len()
+                                        ));
+                                    }
+                                } else {
+                                    mismatch_warned.remove(move_id.as_str());
+                                }
+                                let n = track_indices.len().min(positions.len());
                                 positions
                                     .iter()
+                                    .take(n)
                                     .enumerate()
                                     .map(|(local_idx, (_, pos))| (track_indices[local_idx], *pos))
                                     .collect()
-                            } else {
-                                crate::logging::log_osc_error(&format!(
-                                    "MergeRuntime: move {} skipped — track_indices.len()={} != positions.len()={} (invariant violé)",
-                                    move_id, track_indices.len(), positions.len()
-                                ));
-                                continue;
                             };
                         if *is_preview {
                             preview_positions.extend(global_positions);
@@ -969,6 +1119,27 @@ impl MergeRuntime {
                 // merge_positions trie ses candidats par move_id → déterministe.
                 let merged = merge_positions(&move_positions, strategy);
 
+                // MoveRef (audit T2) : un node MoveRef avec `move_id`
+                // déclaré dans le graph global remplace la source — la
+                // chaîne post-process ne reçoit que les positions de ce
+                // move. Move absent → positions vides (pas de fallback
+                // silencieux sur le merge complet : le graphe demande
+                // explicitement ce move).
+                let merged = {
+                    let move_ref = move_ref_id_arc
+                        .read()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .clone();
+                    match move_ref {
+                        Some(ref id) => move_positions
+                            .iter()
+                            .find(|e| &e.0 == id)
+                            .map(|e| e.4.clone())
+                            .unwrap_or_default(),
+                        None => merged,
+                    }
+                };
+
                 // 4. Post-processing via le graph global compilé (PostProcessFn)
                 // Snapshots Arc sous locks courts, puis tout hors lock.
                 let origin = *origin_arc.lock().unwrap_or_else(|e| e.into_inner());
@@ -980,6 +1151,21 @@ impl MergeRuntime {
                     .read()
                     .unwrap_or_else(|e| e.into_inner())
                     .clone();
+                // Barycenter (audit T2) : le node recalcule le pivot =
+                // isobarycentre des track_positions à chaque frame — les
+                // transforms pivotent autour du centre réel du groupe.
+                let origin =
+                    if barycenter_pivot_arc.load(Ordering::SeqCst) && !track_positions.is_empty() {
+                        let n = track_positions.len() as f64;
+                        track_positions
+                            .values()
+                            .fold(nalgebra::Vector3::zeros(), |acc, p| {
+                                acc + nalgebra::Vector3::new(p[0], p[1], p[2])
+                            })
+                            / n
+                    } else {
+                        origin
+                    };
                 let manual_positions = manual_positions_arc
                     .read()
                     .unwrap_or_else(|e| e.into_inner())
@@ -1093,31 +1279,54 @@ impl MergeRuntime {
                     .clone();
                 {
                     let mut sink_guard = sink_arc.lock().unwrap_or_else(|e| e.into_inner());
-                    for (obj_idx, pos) in &transformed {
-                        if let Some(&osc_id) = osc_ids.get(*obj_idx) {
-                            // Canaux effectifs = statiques + modulés (modulation
-                            // prioritaire sur les canaux qu'elle cible) + zones
-                            // (blend par influence, prioritaires sur le reste)
-                            let has_zones = crate::zones::any_zone_applies(&zones, *obj_idx, pos);
-                            let effective: Option<SpatialChannels> = match (
-                                object_channels.get(obj_idx),
-                                modulated_channels.get(obj_idx),
-                                has_zones,
-                            ) {
-                                (None, None, false) => None,
-                                (s, m, _) => {
-                                    let mut eff = s.copied().unwrap_or_default();
-                                    if let Some(mc) = m {
-                                        eff.overlay(mc);
-                                    }
-                                    crate::zones::apply_zones(&zones, *obj_idx, pos, &mut eff);
-                                    Some(eff)
+                    if osc_circuit_open {
+                        // Circuit ouvert : une sonde par seconde — un vrai
+                        // send_state du premier objet (donnée utile si le
+                        // renderer est revenu entre-temps).
+                        if last_probe.elapsed() >= Duration::from_secs(1) {
+                            last_probe = Instant::now();
+                            if let Some(&(obj_idx, pos)) =
+                                transformed.iter().find(|(i, _)| osc_ids.get(*i).is_some())
+                            {
+                                let report = sink_guard.send_state(osc_ids[obj_idx], pos, None);
+                                if report.sent > 0 && report.refused == 0 && report.errors == 0 {
+                                    osc_circuit_open = false;
+                                    osc_bad_windows = 0;
+                                    crate::logging::log_osc_error(
+                                        "OSC circuit CLOSED — renderer reachable again",
+                                    );
                                 }
-                            };
-                            let report = sink_guard.send_state(osc_id, *pos, effective.as_ref());
-                            osc_since_perf += report.sent as u64;
-                            osc_errors_perf += report.errors as u64;
-                            osc_refused_perf += report.refused as u64;
+                            }
+                        }
+                    } else {
+                        for (obj_idx, pos) in &transformed {
+                            if let Some(&osc_id) = osc_ids.get(*obj_idx) {
+                                // Canaux effectifs = statiques + modulés (modulation
+                                // prioritaire sur les canaux qu'elle cible) + zones
+                                // (blend par influence, prioritaires sur le reste)
+                                let has_zones =
+                                    crate::zones::any_zone_applies(&zones, *obj_idx, pos);
+                                let effective: Option<SpatialChannels> = match (
+                                    object_channels.get(obj_idx),
+                                    modulated_channels.get(obj_idx),
+                                    has_zones,
+                                ) {
+                                    (None, None, false) => None,
+                                    (s, m, _) => {
+                                        let mut eff = s.copied().unwrap_or_default();
+                                        if let Some(mc) = m {
+                                            eff.overlay(mc);
+                                        }
+                                        crate::zones::apply_zones(&zones, *obj_idx, pos, &mut eff);
+                                        Some(eff)
+                                    }
+                                };
+                                let report =
+                                    sink_guard.send_state(osc_id, *pos, effective.as_ref());
+                                osc_since_perf += report.sent as u64;
+                                osc_errors_perf += report.errors as u64;
+                                osc_refused_perf += report.refused as u64;
+                            }
                         }
                     }
                 }
@@ -1127,13 +1336,14 @@ impl MergeRuntime {
                 // Parité : les positions preview passent par le MÊME post-process
                 // que le live — sinon le 3D ment sur ce que l'OSC enverrait si le
                 // move passait live (scale/rotate/origin du graph global).
-                // Le handle Arc est cloné sous un lock très court, l'emit
-                // (sérialisation JSON complète) se fait HORS du lock.
+                // Le sender est cloné sous un lock très court — la sériali-
+                // sation JSON de l'emit se fait sur le pump thread. Le post-
+                // process du preview reste ici (il doit refléter le live).
                 let cb = position_callback
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .clone();
-                if let Some(callback) = cb {
+                if let Some(tx) = cb {
                     let preview_transformed: Vec<(usize, nalgebra::Vector3<f64>)> =
                         if preview_positions.is_empty() {
                             Vec::new()
@@ -1148,7 +1358,10 @@ impl MergeRuntime {
                         };
                     let mut display = transformed.clone();
                     display.extend(preview_transformed);
-                    callback(t_real, display);
+                    // try_send borné : si le pump est encore occupé à
+                    // sérialiser la frame précédente, on droppe — preview
+                    // dégradé (≈20-30 Hz) plutôt que merge retardé.
+                    let _ = tx.try_send((t_real, display));
                 }
 
                 // 7. Perf monitor — agrégation des erreurs OSC (1 log max par
@@ -1181,6 +1394,24 @@ impl MergeRuntime {
                             osc_refused_perf
                         ));
                     }
+                    // Circuit-breaker : 2 fenêtres de 500 ms à >50 % refused
+                    // = renderer mort → suspendre les sends (sonde à 1 Hz).
+                    if !osc_circuit_open {
+                        if total_osc > 0 && refused_rate > 0.5 {
+                            osc_bad_windows += 1;
+                            if osc_bad_windows >= 2 {
+                                osc_circuit_open = true;
+                                // Sonde quasi-immédiate à la prochaine frame.
+                                last_probe = Instant::now() - Duration::from_secs(1);
+                                crate::logging::log_osc_error(
+                                    "OSC circuit OPEN — target unreachable, suspending sends (probe @1Hz)",
+                                );
+                            }
+                        } else {
+                            osc_bad_windows = 0;
+                        }
+                    }
+                    perf.set_osc_suspended(osc_circuit_open);
                     perf.update_with_error_rate(
                         fps_actual,
                         osc_rate,
@@ -1247,8 +1478,10 @@ impl MergeRuntime {
                         .lock()
                         .unwrap_or_else(|e| e.into_inner())
                         .clone();
-                    if let Some(callback) = cb {
-                        callback(0.0, Vec::new());
+                    if let Some(tx) = cb {
+                        // send (bloquant borné) plutôt que try_send : la frame
+                        // de parking DOIT passer — le pump est en général vide.
+                        let _ = tx.send((0.0, Vec::new()));
                     }
                     break;
                 }

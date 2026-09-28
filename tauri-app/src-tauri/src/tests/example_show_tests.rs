@@ -4,7 +4,7 @@
 #[allow(clippy::uninlined_format_args)]
 mod example_show_tests {
     use crate::graph::compilation::compile_graph_with_audio;
-    use crate::graph::parser::build_graph_from_json;
+    use crate::graph::parser::build_graph_from_value;
     use stagespace_engines::AudioState;
     use std::sync::{Arc, Mutex};
 
@@ -39,7 +39,7 @@ mod example_show_tests {
         let mut report = Vec::new();
         for slot in show["slots"].as_array().expect("slots") {
             let name = slot["name"].as_str().unwrap();
-            let graph = build_graph_from_json(
+            let graph = build_graph_from_value(
                 &slot["graphJson"],
                 &audio.lock().unwrap_or_else(|e| e.into_inner()),
             )
