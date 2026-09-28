@@ -5,10 +5,28 @@ import type { AudioMod, AudioModSource, AudioModTarget } from '../store/useAnima
 import { useAnimationStore } from '../store/useAnimationStore';
 import { audioSourceLabel, audioTargetLabel } from '../utils/audioModLabels';
 
+// Le delta audio = amount × valeur (dans l'unité native de la macro).
+// Pour yaw/pitch/roll l'unité est le DEGRÉ : un amount de 2 ne donne
+// qu'un swing de ±2° — imperceptible. Les cibles rotation ont donc
+// une plage d'intensité en degrés (jusqu'à 360° de swing).
+const ROTATION_TARGETS: ReadonlySet<AudioModTarget> = new Set(['yaw', 'pitch', 'roll']);
+
+const amountRange = (target: AudioModTarget) =>
+  ROTATION_TARGETS.has(target)
+    ? { max: 360, step: 1, decimals: 0 }
+    : { max: 2, step: 0.05, decimals: 2 };
+
 export function AudioModAdder({ onAdd, onCancel }: { onAdd: (mod: AudioMod) => void; onCancel: () => void }) {
   const [source, setSource] = React.useState<AudioModSource>('amplitude_bass');
   const [target, setTarget] = React.useState<AudioModTarget>('radius_scale');
   const [amount, setAmount] = React.useState(0.5);
+
+  // Défaut sensé au changement de cible : 90° pour une rotation
+  // (0.5 serait imperceptible), 0.5 sinon.
+  const onTargetChange = (t: AudioModTarget) => {
+    setTarget(t);
+    setAmount(ROTATION_TARGETS.has(t) ? 90 : 0.5);
+  };
 
   return (
     <div className="bg-gray-800/80 rounded p-2 space-y-2 border border-cyan-900/40">
@@ -27,7 +45,7 @@ export function AudioModAdder({ onAdd, onCancel }: { onAdd: (mod: AudioMod) => v
       <div>
         <div className="text-gray-400 text-[10px] mb-0.5">Target (macro)</div>
         <select value={typeof target === 'string' ? target : 'radius_scale'}
-          onChange={(e) => setTarget(e.target.value as AudioModTarget)}
+          onChange={(e) => onTargetChange(e.target.value as AudioModTarget)}
           className="w-full bg-gray-900 text-white text-[10px] rounded px-1.5 py-1 border border-gray-700">
           <option value="radius_scale">Radius Scale</option>
           <option value="height_offset">Height Offset</option>
@@ -41,8 +59,9 @@ export function AudioModAdder({ onAdd, onCancel }: { onAdd: (mod: AudioMod) => v
           <option value="roll">Roll</option>
         </select>
       </div>
-      <Slider label="Intensity" value={amount} min={0} max={2} step={0.05}
-        onChange={setAmount} accent="cyan" decimals={2} />
+      <Slider label={`Intensity${ROTATION_TARGETS.has(target) ? ' (deg)' : ''}`}
+        value={amount} min={0} {...amountRange(target)}
+        onChange={setAmount} accent="cyan" />
       <div className="flex gap-1.5">
         <button onClick={() => onAdd({ source, target, amount, base_value: 0, smoothing: 0.3 })}
           className="flex-1 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-[10px] rounded font-medium">
@@ -81,7 +100,8 @@ export function AudioModList() {
             </span>
             <button onClick={() => removeAudioMod(i)} className="text-red-400 text-[10px]"><X size={11} /></button>
           </div>
-          <Slider label="Intensity" value={mod.amount} min={0} max={2} step={0.05}
+          <Slider label={`Intensity${ROTATION_TARGETS.has(mod.target) ? ' (deg)' : ''}`}
+            value={mod.amount} min={0} {...amountRange(mod.target)}
             onChange={(v) => {
               const mods = [...current.audio_mods];
               mods[i] = { ...mod, amount: v };
