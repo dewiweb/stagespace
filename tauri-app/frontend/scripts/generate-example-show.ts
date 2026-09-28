@@ -108,13 +108,24 @@ const pursuitGraph = preset('pursuit', 2);
 const bassGraph = preset('bass-pulse', 4);
 const splineGraph = preset('spline-evaluate', 4);
 const crossfadeGraph = preset('crossfade-pursuit-orbit', 2);
+// ── Complexité étendue : chaque catégorie du moteur est exercée ──
+const mixGraph = preset('mix-order-chaos', 2);          // Mix + Swarm (physics)
+const sequenceGraph = preset('sequence-circle-spiral', 2); // Sequence temporelle
+const fadeinGraph = preset('orbit-fade-in', 2);          // TimeFalloff
+const gravityGraph = preset('gravity-well', 2);          // PointDistanceFalloff
+const sweepGraph = preset('side-sweep', 2);              // DirectionalFalloff + Rotate
+const chainGraph = preset('modifier-chain', 2);          // Rotate → Offset
+const bpmGraph = preset('bpm-circle', 2);                // Source BPM (audio)
+const vectorGraph = preset('vectorfield', 2);            // VectorField (exotique)
 
-validateGraph('slot-orbit', orbitGraph.nodes, orbitGraph.edges);
-validateGraph('slot-spiral', spiralGraph.nodes, spiralGraph.edges);
-validateGraph('slot-pursuit', pursuitGraph.nodes, pursuitGraph.edges);
-validateGraph('slot-bass', bassGraph.nodes, bassGraph.edges);
-validateGraph('slot-spline', splineGraph.nodes, splineGraph.edges);
-validateGraph('slot-crossfade', crossfadeGraph.nodes, crossfadeGraph.edges);
+const slotGraphs: [string, { nodes: Node[]; edges: Edge[] }][] = [
+  ['slot-orbit', orbitGraph], ['slot-spiral', spiralGraph], ['slot-pursuit', pursuitGraph],
+  ['slot-bass', bassGraph], ['slot-spline', splineGraph], ['slot-crossfade', crossfadeGraph],
+  ['slot-mix', mixGraph], ['slot-sequence', sequenceGraph], ['slot-fadein', fadeinGraph],
+  ['slot-gravity', gravityGraph], ['slot-sidesweep', sweepGraph], ['slot-chain', chainGraph],
+  ['slot-bpm', bpmGraph], ['slot-vectorfield', vectorGraph],
+];
+for (const [name, g] of slotGraphs) validateGraph(name, g.nodes, g.edges);
 
 const defaultMacros = () => ({
   speed: 1, scale: 1, shiftX: 0, shiftY: 0, shiftZ: 0, yaw: 0, pitch: 0, roll: 0,
@@ -177,6 +188,81 @@ const slots = [
     isPreview: false, macros: defaultMacros(), fadeDuration: 1.5,
     loopMode: 'loop', direction: 'forward',
     fadeIn: 0.5, fadeOut: 0.5, phaseSpread: 0,
+    assignments: assignments([7, 8]), audioMods: [],
+  },
+  // ── Complexité étendue : une catégorie du moteur par slot ──
+  {
+    // Mix composite : blend Circular (70%) + Swarm (boids) — layers + physics
+    id: 'slot-mix', name: 'Order + Chaos', graphJson: mixGraph,
+    templateId: 'mix-order-chaos', trackIds: [1, 2], movementId: null,
+    isPreview: false, macros: defaultMacros(), fadeDuration: 2.0,
+    loopMode: 'loop', direction: 'forward',
+    fadeIn: 1.0, fadeOut: 1.0, phaseSpread: 0,
+    assignments: assignments([1, 2]), audioMods: [],
+  },
+  {
+    // Sequence composite : Circle 4s puis Spiral — chaînage temporel
+    id: 'slot-sequence', name: 'Circle→Spiral', graphJson: sequenceGraph,
+    templateId: 'sequence-circle-spiral', trackIds: [3, 4], movementId: null,
+    isPreview: false, macros: defaultMacros(), fadeDuration: 2.0,
+    loopMode: 'loop', direction: 'backward',
+    fadeIn: 0.5, fadeOut: 0.5, phaseSpread: 0,
+    assignments: assignments([3, 4]), audioMods: [],
+  },
+  {
+    // TimeFalloff : orbite qui s'ouvre depuis le centre — intro temporelle
+    id: 'slot-fadein', name: 'Orbit Fade-In', graphJson: fadeinGraph,
+    templateId: 'orbit-fade-in', trackIds: [5, 6], movementId: null,
+    isPreview: false, macros: defaultMacros(), fadeDuration: 1.5,
+    loopMode: 'loop', direction: 'forward',
+    fadeIn: 0.5, fadeOut: 0.5, phaseSpread: 0,
+    assignments: assignments([5, 6]), audioMods: [],
+  },
+  {
+    // PointDistanceFalloff : orbite excentrique qui s'effondre loin
+    // de l'attracteur — falloff spatial
+    id: 'slot-gravity', name: 'Gravity Well', graphJson: gravityGraph,
+    templateId: 'gravity-well', trackIds: [7, 8], movementId: null,
+    isPreview: false, macros: defaultMacros(), fadeDuration: 1.5,
+    loopMode: 'loop', direction: 'ping_pong',
+    fadeIn: 0.5, fadeOut: 0.5, phaseSpread: 0,
+    assignments: assignments([7, 8]), audioMods: [],
+  },
+  {
+    // DirectionalFalloff + Rotate : seul le côté +X bouge — falloff orienté
+    id: 'slot-sidesweep', name: 'Side Sweep', graphJson: sweepGraph,
+    templateId: 'side-sweep', trackIds: [1, 2], movementId: null,
+    isPreview: false, macros: defaultMacros(), fadeDuration: 1.0,
+    loopMode: 'loop', direction: 'forward',
+    fadeIn: 0.5, fadeOut: 0.5, phaseSpread: 0,
+    assignments: assignments([1, 2]), audioMods: [],
+  },
+  {
+    // Chaîne de modifiers : Circle → Rotate → Offset — transform pipeline
+    id: 'slot-chain', name: 'Modifier Chain', graphJson: chainGraph,
+    templateId: 'modifier-chain', trackIds: [3, 4], movementId: null,
+    isPreview: false, macros: defaultMacros(), fadeDuration: 1.0,
+    loopMode: 'loop', direction: 'forward',
+    fadeIn: 0.5, fadeOut: 0.5, phaseSpread: 0.5,
+    assignments: assignments([3, 4]), audioMods: [],
+  },
+  {
+    // Source BPM : cercle synchronisé au tempo détecté (audio → moteur)
+    id: 'slot-bpm', name: 'BPM Circle', graphJson: bpmGraph,
+    templateId: 'bpm-circle', trackIds: [5, 6], movementId: null,
+    isPreview: false, macros: defaultMacros(), fadeDuration: 1.0,
+    loopMode: 'loop', direction: 'forward',
+    fadeIn: 0.5, fadeOut: 0.5, phaseSpread: 0,
+    assignments: assignments([5, 6]), audioMods: [],
+  },
+  {
+    // VectorField : champ de vecteurs → mouvement — l'engine le plus
+    // exotique du catalogue
+    id: 'slot-vectorfield', name: 'Vector Field', graphJson: vectorGraph,
+    templateId: 'vectorfield', trackIds: [7, 8], movementId: null,
+    isPreview: false, macros: defaultMacros(), fadeDuration: 2.0,
+    loopMode: 'loop', direction: 'forward',
+    fadeIn: 1.0, fadeOut: 1.0, phaseSpread: 0,
     assignments: assignments([7, 8]), audioMods: [],
   },
 ];
@@ -330,6 +416,89 @@ const cues = [
     zones: null,
     moves: [moveSnap(slots[0], 'mv-orbit'), moveSnap(slots[3], 'mv-bass')],
   },
+  {
+    id: 'cue-layers', name: 'Layers',
+    schema_version: 1,
+    description: 'Mix + Sequence + TimeFalloff — les trois composites en un cue',
+    graph: mixGraph, timestamp: 0,
+    macros: macroSnapshot,
+    track_indices: [],
+    fade_duration: 2.5,
+    cue_number: '5',
+    global_graph: globalGraph,
+    active_move_ids: ['mv-mix', 'mv-sequence', 'mv-fadein'],
+    per_track_depths: [],
+    manual_positions: {},
+    spatial_macros: spatialMacroSnapshot,
+    object_channels: null,
+    channel_modulations: null,
+    osc_mappings: null,
+    zones: null,
+    moves: [
+      moveSnap(slots[6], 'mv-mix'),
+      moveSnap(slots[7], 'mv-sequence'),
+      moveSnap(slots[8], 'mv-fadein'),
+    ],
+  },
+  {
+    id: 'cue-fields', name: 'Fields',
+    schema_version: 1,
+    description: 'DirectionalFalloff + Modifier Chain + PointDistance — falloffs spatiaux et transforms',
+    graph: sweepGraph, timestamp: 0,
+    macros: macroSnapshot,
+    track_indices: [],
+    fade_duration: 2.0,
+    cue_number: '6',
+    global_graph: globalGraph,
+    active_move_ids: ['mv-sidesweep', 'mv-chain', 'mv-gravity'],
+    per_track_depths: [],
+    manual_positions: {},
+    spatial_macros: spatialMacroSnapshot,
+    object_channels: null,
+    channel_modulations: null,
+    osc_mappings: null,
+    zones: null,
+    moves: [
+      moveSnap(slots[10], 'mv-sidesweep'),
+      moveSnap(slots[11], 'mv-chain'),
+      moveSnap(slots[9], 'mv-gravity'),
+    ],
+  },
+  {
+    id: 'cue-finale', name: 'Finale',
+    schema_version: 1,
+    description: 'BPM Circle + Vector Field — audio source et engine exotique. ' +
+      'Snapshot complet : per_track_depths, manual_positions et osc_mappings restaurés',
+    graph: bpmGraph, timestamp: 0,
+    macros: { ...macroSnapshot, speed: 1.1 },
+    track_indices: [],
+    fade_duration: 3.0,
+    cue_number: '7',
+    global_graph: globalGraph,
+    active_move_ids: ['mv-bpm', 'mv-vectorfield'],
+    // Profondeur par track dégressive — exerce PerTrackDepth + restore cue
+    per_track_depths: [1.0, 0.9, 0.8, 0.7, 1.0, 0.9, 0.8, 0.7],
+    // Un objet repositionné manuellement (drag 3D) capturé dans le cue
+    manual_positions: { 2: [1.5, 0.0, -1.0] },
+    spatial_macros: spatialMacroSnapshot,
+    object_channels: null,
+    channel_modulations: null,
+    // Mapping OSC IN restauré au recall — macro yaw (speed est exclu des
+    // macros OSC IN : per-move, pas global — voir MacroTarget)
+    osc_mappings: [
+      {
+        address: '/stagespace/macro/yaw',
+        destination: { kind: 'macro', name: 'yaw' },
+        transform: { scale: 1, offset: 0, min: -3.14, max: 3.14, smooth: 0.3, deadzone: 0 },
+        enabled: true,
+      },
+    ],
+    zones: null,
+    moves: [
+      moveSnap(slots[12], 'mv-bpm'),
+      moveSnap(slots[13], 'mv-vectorfield'),
+    ],
+  },
 ];
 
 // ─── Enveloppe .hfg v2 ───
@@ -379,6 +548,12 @@ const envelope = {
         object: null, source: 'AngularSpeed', channel: 'Presence',
         scale: 0.1, offset: 0.2, min: null, max: 1, listener: [0, 0, 0],
       },
+      {
+        // Modulation par-objet (index 2 = 3e track) : les à-coups (jerk) de
+        // cet objet seul creusent son gain — règle ciblée, pas globale.
+        object: 2, source: 'Jerk', channel: 'Gain',
+        scale: -0.4, offset: 0, min: -6, max: 0, listener: [0, 0, 0],
+      },
     ],
     objectChannels: {
       0: { gain: -1.5 },
@@ -407,6 +582,22 @@ const envelope = {
       address: '/track/*/spread',
       destination: { kind: 'channel', channel: 'Spread', object: '*' },
       transform: { scale: 1, offset: 0, min: 0, max: 1, smooth: 0.2, deadzone: 0.01 },
+      enabled: true,
+    },
+    {
+      // Position manuelle par OSC : array [x,y,z] → position de l'objet 0
+      // (démontre la destination 'position' — override direct du mix)
+      address: '/track/1/position',
+      destination: { kind: 'position', object: 0 },
+      transform: { scale: 1, offset: 0, min: -10, max: 10, smooth: 0.1, deadzone: 0 },
+      enabled: true,
+    },
+    {
+      // Handler passif : la dernière valeur reçue est exposée sous le nom
+      // 'fader_master' (lisible par les nodes OSCInput / future logique)
+      address: '/controller/fader1',
+      destination: { kind: 'handler', name: 'fader_master' },
+      transform: { scale: 1, offset: 0, min: 0, max: 1, smooth: 0, deadzone: 0.005 },
       enabled: true,
     },
   ],

@@ -4,7 +4,7 @@
   "savedAt": 0,
   "nodes": [
     {
-      "id": "Objects-1790607882743-0",
+      "id": "Objects-1790609213106-0",
       "type": "custom",
       "position": {
         "x": 50,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "Duration-1790607882743-1",
+      "id": "Duration-1790609213106-1",
       "type": "custom",
       "position": {
         "x": 50,
@@ -34,7 +34,7 @@
       }
     },
     {
-      "id": "Circular-1790607882743-2",
+      "id": "Circular-1790609213106-2",
       "type": "custom",
       "position": {
         "x": 300,
@@ -53,7 +53,7 @@
       }
     },
     {
-      "id": "Output-1790607882743-3",
+      "id": "Output-1790609213106-3",
       "type": "custom",
       "position": {
         "x": 750,
@@ -68,9 +68,9 @@
   ],
   "edges": [
     {
-      "id": "e-Objects-1790607882743-0-Circular-1790607882743-2-output-input",
-      "source": "Objects-1790607882743-0",
-      "target": "Circular-1790607882743-2",
+      "id": "e-Objects-1790609213106-0-Circular-1790609213106-2-output-input",
+      "source": "Objects-1790609213106-0",
+      "target": "Circular-1790609213106-2",
       "sourceHandle": "output",
       "targetHandle": "input",
       "markerEnd": {
@@ -78,9 +78,9 @@
       }
     },
     {
-      "id": "e-Duration-1790607882743-1-Circular-1790607882743-2-output-duration",
-      "source": "Duration-1790607882743-1",
-      "target": "Circular-1790607882743-2",
+      "id": "e-Duration-1790609213106-1-Circular-1790609213106-2-output-duration",
+      "source": "Duration-1790609213106-1",
+      "target": "Circular-1790609213106-2",
       "sourceHandle": "output",
       "targetHandle": "duration",
       "markerEnd": {
@@ -88,9 +88,9 @@
       }
     },
     {
-      "id": "e-Circular-1790607882743-2-Output-1790607882743-3-output-input",
-      "source": "Circular-1790607882743-2",
-      "target": "Output-1790607882743-3",
+      "id": "e-Circular-1790609213106-2-Output-1790609213106-3-output-input",
+      "source": "Circular-1790609213106-2",
+      "target": "Output-1790609213106-3",
       "sourceHandle": "output",
       "targetHandle": "input",
       "markerEnd": {
@@ -367,7 +367,7 @@
       "graphJson": {
         "nodes": [
           {
-            "id": "Objects-1790607882743-0",
+            "id": "Objects-1790609213106-0",
             "type": "custom",
             "position": {
               "x": 50,
@@ -382,7 +382,7 @@
             }
           },
           {
-            "id": "Duration-1790607882743-1",
+            "id": "Duration-1790609213106-1",
             "type": "custom",
             "position": {
               "x": 50,
@@ -397,7 +397,7 @@
             }
           },
           {
-            "id": "Circular-1790607882743-2",
+            "id": "Circular-1790609213106-2",
             "type": "custom",
             "position": {
               "x": 300,
@@ -416,7 +416,7 @@
             }
           },
           {
-            "id": "Output-1790607882743-3",
+            "id": "Output-1790609213106-3",
             "type": "custom",
             "position": {
               "x": 750,
@@ -431,9 +431,9 @@
         ],
         "edges": [
           {
-            "id": "e-Objects-1790607882743-0-Circular-1790607882743-2-output-input",
-            "source": "Objects-1790607882743-0",
-            "target": "Circular-1790607882743-2",
+            "id": "e-Objects-1790609213106-0-Circular-1790609213106-2-output-input",
+            "source": "Objects-1790609213106-0",
+            "target": "Circular-1790609213106-2",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -441,9 +441,9 @@
             }
           },
           {
-            "id": "e-Duration-1790607882743-1-Circular-1790607882743-2-output-duration",
-            "source": "Duration-1790607882743-1",
-            "target": "Circular-1790607882743-2",
+            "id": "e-Duration-1790609213106-1-Circular-1790609213106-2-output-duration",
+            "source": "Duration-1790609213106-1",
+            "target": "Circular-1790609213106-2",
             "sourceHandle": "output",
             "targetHandle": "duration",
             "markerEnd": {
@@ -451,9 +451,9 @@
             }
           },
           {
-            "id": "e-Circular-1790607882743-2-Output-1790607882743-3-output-input",
-            "source": "Circular-1790607882743-2",
-            "target": "Output-1790607882743-3",
+            "id": "e-Circular-1790609213106-2-Output-1790609213106-3-output-input",
+            "source": "Circular-1790609213106-2",
+            "target": "Output-1790609213106-3",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -517,7 +517,7 @@
       "graphJson": {
         "nodes": [
           {
-            "id": "Objects-1790607882743-4",
+            "id": "Objects-1790609213106-4",
             "type": "custom",
             "position": {
               "x": 50,
@@ -532,7 +532,7 @@
             }
           },
           {
-            "id": "Duration-1790607882743-5",
+            "id": "Duration-1790609213106-5",
             "type": "custom",
             "position": {
               "x": 50,
@@ -547,7 +547,7 @@
             }
           },
           {
-            "id": "Spiral-1790607882743-6",
+            "id": "Spiral-1790609213106-6",
             "type": "custom",
             "position": {
               "x": 300,
@@ -567,7 +567,7 @@
             }
           },
           {
-            "id": "Output-1790607882743-7",
+            "id": "Output-1790609213106-7",
             "type": "custom",
             "position": {
               "x": 750,
@@ -582,9 +582,9 @@
         ],
         "edges": [
           {
-            "id": "e-Objects-1790607882743-4-Spiral-1790607882743-6-output-input",
-            "source": "Objects-1790607882743-4",
-            "target": "Spiral-1790607882743-6",
+            "id": "e-Objects-1790609213106-4-Spiral-1790609213106-6-output-input",
+            "source": "Objects-1790609213106-4",
+            "target": "Spiral-1790609213106-6",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -592,9 +592,9 @@
             }
           },
           {
-            "id": "e-Duration-1790607882743-5-Spiral-1790607882743-6-output-duration",
-            "source": "Duration-1790607882743-5",
-            "target": "Spiral-1790607882743-6",
+            "id": "e-Duration-1790609213106-5-Spiral-1790609213106-6-output-duration",
+            "source": "Duration-1790609213106-5",
+            "target": "Spiral-1790609213106-6",
             "sourceHandle": "output",
             "targetHandle": "duration",
             "markerEnd": {
@@ -602,9 +602,9 @@
             }
           },
           {
-            "id": "e-Spiral-1790607882743-6-Output-1790607882743-7-output-input",
-            "source": "Spiral-1790607882743-6",
-            "target": "Output-1790607882743-7",
+            "id": "e-Spiral-1790609213106-6-Output-1790609213106-7-output-input",
+            "source": "Spiral-1790609213106-6",
+            "target": "Output-1790609213106-7",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -656,7 +656,7 @@
       "graphJson": {
         "nodes": [
           {
-            "id": "Objects-1790607882743-8",
+            "id": "Objects-1790609213106-8",
             "type": "custom",
             "position": {
               "x": 50,
@@ -671,7 +671,7 @@
             }
           },
           {
-            "id": "Duration-1790607882743-9",
+            "id": "Duration-1790609213106-9",
             "type": "custom",
             "position": {
               "x": 50,
@@ -686,7 +686,7 @@
             }
           },
           {
-            "id": "Follow-1790607882743-10",
+            "id": "Follow-1790609213106-10",
             "type": "custom",
             "position": {
               "x": 300,
@@ -713,7 +713,7 @@
             }
           },
           {
-            "id": "Output-1790607882743-11",
+            "id": "Output-1790609213106-11",
             "type": "custom",
             "position": {
               "x": 750,
@@ -728,9 +728,9 @@
         ],
         "edges": [
           {
-            "id": "e-Objects-1790607882743-8-Follow-1790607882743-10-output-input",
-            "source": "Objects-1790607882743-8",
-            "target": "Follow-1790607882743-10",
+            "id": "e-Objects-1790609213106-8-Follow-1790609213106-10-output-input",
+            "source": "Objects-1790609213106-8",
+            "target": "Follow-1790609213106-10",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -738,9 +738,9 @@
             }
           },
           {
-            "id": "e-Duration-1790607882743-9-Follow-1790607882743-10-output-duration",
-            "source": "Duration-1790607882743-9",
-            "target": "Follow-1790607882743-10",
+            "id": "e-Duration-1790609213106-9-Follow-1790609213106-10-output-duration",
+            "source": "Duration-1790609213106-9",
+            "target": "Follow-1790609213106-10",
             "sourceHandle": "output",
             "targetHandle": "duration",
             "markerEnd": {
@@ -748,9 +748,9 @@
             }
           },
           {
-            "id": "e-Follow-1790607882743-10-Output-1790607882743-11-output-input",
-            "source": "Follow-1790607882743-10",
-            "target": "Output-1790607882743-11",
+            "id": "e-Follow-1790609213106-10-Output-1790609213106-11-output-input",
+            "source": "Follow-1790609213106-10",
+            "target": "Output-1790609213106-11",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -802,7 +802,7 @@
       "graphJson": {
         "nodes": [
           {
-            "id": "Objects-1790607882743-12",
+            "id": "Objects-1790609213106-12",
             "type": "custom",
             "position": {
               "x": 50,
@@ -817,7 +817,7 @@
             }
           },
           {
-            "id": "Duration-1790607882743-13",
+            "id": "Duration-1790609213106-13",
             "type": "custom",
             "position": {
               "x": 50,
@@ -832,7 +832,7 @@
             }
           },
           {
-            "id": "AudioAmplitudeFalloff-1790607882743-14",
+            "id": "AudioAmplitudeFalloff-1790609213106-14",
             "type": "custom",
             "position": {
               "x": 300,
@@ -852,7 +852,7 @@
             }
           },
           {
-            "id": "Output-1790607882743-15",
+            "id": "Output-1790609213106-15",
             "type": "custom",
             "position": {
               "x": 750,
@@ -865,7 +865,7 @@
             }
           },
           {
-            "id": "Rotate-1790607882743-16",
+            "id": "Rotate-1790609213106-16",
             "type": "custom",
             "position": {
               "x": 480,
@@ -884,9 +884,9 @@
         ],
         "edges": [
           {
-            "id": "e-Objects-1790607882743-12-AudioAmplitudeFalloff-1790607882743-14-output-input",
-            "source": "Objects-1790607882743-12",
-            "target": "AudioAmplitudeFalloff-1790607882743-14",
+            "id": "e-Objects-1790609213106-12-AudioAmplitudeFalloff-1790609213106-14-output-input",
+            "source": "Objects-1790609213106-12",
+            "target": "AudioAmplitudeFalloff-1790609213106-14",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -894,9 +894,9 @@
             }
           },
           {
-            "id": "e-Duration-1790607882743-13-AudioAmplitudeFalloff-1790607882743-14-output-duration",
-            "source": "Duration-1790607882743-13",
-            "target": "AudioAmplitudeFalloff-1790607882743-14",
+            "id": "e-Duration-1790609213106-13-AudioAmplitudeFalloff-1790609213106-14-output-duration",
+            "source": "Duration-1790609213106-13",
+            "target": "AudioAmplitudeFalloff-1790609213106-14",
             "sourceHandle": "output",
             "targetHandle": "duration",
             "markerEnd": {
@@ -904,9 +904,9 @@
             }
           },
           {
-            "id": "e-AudioAmplitudeFalloff-1790607882743-14-Rotate-1790607882743-16-output-input",
-            "source": "AudioAmplitudeFalloff-1790607882743-14",
-            "target": "Rotate-1790607882743-16",
+            "id": "e-AudioAmplitudeFalloff-1790609213106-14-Rotate-1790609213106-16-output-input",
+            "source": "AudioAmplitudeFalloff-1790609213106-14",
+            "target": "Rotate-1790609213106-16",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -914,9 +914,9 @@
             }
           },
           {
-            "id": "e-Rotate-1790607882743-16-Output-1790607882743-15-output-input",
-            "source": "Rotate-1790607882743-16",
-            "target": "Output-1790607882743-15",
+            "id": "e-Rotate-1790609213106-16-Output-1790609213106-15-output-input",
+            "source": "Rotate-1790609213106-16",
+            "target": "Output-1790609213106-15",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -988,7 +988,7 @@
       "graphJson": {
         "nodes": [
           {
-            "id": "Objects-1790607882743-17",
+            "id": "Objects-1790609213106-17",
             "type": "custom",
             "position": {
               "x": 50,
@@ -1003,7 +1003,7 @@
             }
           },
           {
-            "id": "Duration-1790607882743-18",
+            "id": "Duration-1790609213106-18",
             "type": "custom",
             "position": {
               "x": 50,
@@ -1018,7 +1018,7 @@
             }
           },
           {
-            "id": "DrawSpline-1790607882743-19",
+            "id": "DrawSpline-1790609213106-19",
             "type": "custom",
             "position": {
               "x": 300,
@@ -1034,7 +1034,7 @@
             }
           },
           {
-            "id": "EvaluateSpline-1790607882743-20",
+            "id": "EvaluateSpline-1790609213106-20",
             "type": "custom",
             "position": {
               "x": 550,
@@ -1053,7 +1053,7 @@
             }
           },
           {
-            "id": "Output-1790607882743-21",
+            "id": "Output-1790609213106-21",
             "type": "custom",
             "position": {
               "x": 800,
@@ -1068,9 +1068,9 @@
         ],
         "edges": [
           {
-            "id": "e-Objects-1790607882743-17-EvaluateSpline-1790607882743-20-output-input",
-            "source": "Objects-1790607882743-17",
-            "target": "EvaluateSpline-1790607882743-20",
+            "id": "e-Objects-1790609213106-17-EvaluateSpline-1790609213106-20-output-input",
+            "source": "Objects-1790609213106-17",
+            "target": "EvaluateSpline-1790609213106-20",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -1078,9 +1078,9 @@
             }
           },
           {
-            "id": "e-Duration-1790607882743-18-EvaluateSpline-1790607882743-20-output-duration",
-            "source": "Duration-1790607882743-18",
-            "target": "EvaluateSpline-1790607882743-20",
+            "id": "e-Duration-1790609213106-18-EvaluateSpline-1790609213106-20-output-duration",
+            "source": "Duration-1790609213106-18",
+            "target": "EvaluateSpline-1790609213106-20",
             "sourceHandle": "output",
             "targetHandle": "duration",
             "markerEnd": {
@@ -1088,9 +1088,9 @@
             }
           },
           {
-            "id": "e-DrawSpline-1790607882743-19-EvaluateSpline-1790607882743-20-output-spline",
-            "source": "DrawSpline-1790607882743-19",
-            "target": "EvaluateSpline-1790607882743-20",
+            "id": "e-DrawSpline-1790609213106-19-EvaluateSpline-1790609213106-20-output-spline",
+            "source": "DrawSpline-1790609213106-19",
+            "target": "EvaluateSpline-1790609213106-20",
             "sourceHandle": "output",
             "targetHandle": "spline",
             "markerEnd": {
@@ -1098,9 +1098,9 @@
             }
           },
           {
-            "id": "e-EvaluateSpline-1790607882743-20-Output-1790607882743-21-output-input",
-            "source": "EvaluateSpline-1790607882743-20",
-            "target": "Output-1790607882743-21",
+            "id": "e-EvaluateSpline-1790609213106-20-Output-1790609213106-21-output-input",
+            "source": "EvaluateSpline-1790609213106-20",
+            "target": "Output-1790609213106-21",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -1164,7 +1164,7 @@
       "graphJson": {
         "nodes": [
           {
-            "id": "Objects-1790607882743-22",
+            "id": "Objects-1790609213106-22",
             "type": "custom",
             "position": {
               "x": 50,
@@ -1179,7 +1179,7 @@
             }
           },
           {
-            "id": "Duration-1790607882743-23",
+            "id": "Duration-1790609213106-23",
             "type": "custom",
             "position": {
               "x": 50,
@@ -1194,7 +1194,7 @@
             }
           },
           {
-            "id": "Follow-1790607882743-24",
+            "id": "Follow-1790609213106-24",
             "type": "custom",
             "position": {
               "x": 300,
@@ -1220,7 +1220,7 @@
             }
           },
           {
-            "id": "Follow-1790607882743-25",
+            "id": "Follow-1790609213106-25",
             "type": "custom",
             "position": {
               "x": 300,
@@ -1247,7 +1247,7 @@
             }
           },
           {
-            "id": "Crossfade-1790607882743-26",
+            "id": "Crossfade-1790609213106-26",
             "type": "custom",
             "position": {
               "x": 580,
@@ -1262,7 +1262,7 @@
             }
           },
           {
-            "id": "Output-1790607882743-27",
+            "id": "Output-1790609213106-27",
             "type": "custom",
             "position": {
               "x": 820,
@@ -1277,9 +1277,9 @@
         ],
         "edges": [
           {
-            "id": "e-Objects-1790607882743-22-Follow-1790607882743-24-output-input",
-            "source": "Objects-1790607882743-22",
-            "target": "Follow-1790607882743-24",
+            "id": "e-Objects-1790609213106-22-Follow-1790609213106-24-output-input",
+            "source": "Objects-1790609213106-22",
+            "target": "Follow-1790609213106-24",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -1287,9 +1287,9 @@
             }
           },
           {
-            "id": "e-Objects-1790607882743-22-Follow-1790607882743-25-output-input",
-            "source": "Objects-1790607882743-22",
-            "target": "Follow-1790607882743-25",
+            "id": "e-Objects-1790609213106-22-Follow-1790609213106-25-output-input",
+            "source": "Objects-1790609213106-22",
+            "target": "Follow-1790609213106-25",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -1297,9 +1297,9 @@
             }
           },
           {
-            "id": "e-Duration-1790607882743-23-Follow-1790607882743-24-output-duration",
-            "source": "Duration-1790607882743-23",
-            "target": "Follow-1790607882743-24",
+            "id": "e-Duration-1790609213106-23-Follow-1790609213106-24-output-duration",
+            "source": "Duration-1790609213106-23",
+            "target": "Follow-1790609213106-24",
             "sourceHandle": "output",
             "targetHandle": "duration",
             "markerEnd": {
@@ -1307,9 +1307,9 @@
             }
           },
           {
-            "id": "e-Duration-1790607882743-23-Follow-1790607882743-25-output-duration",
-            "source": "Duration-1790607882743-23",
-            "target": "Follow-1790607882743-25",
+            "id": "e-Duration-1790609213106-23-Follow-1790609213106-25-output-duration",
+            "source": "Duration-1790609213106-23",
+            "target": "Follow-1790609213106-25",
             "sourceHandle": "output",
             "targetHandle": "duration",
             "markerEnd": {
@@ -1317,9 +1317,9 @@
             }
           },
           {
-            "id": "e-Follow-1790607882743-24-Crossfade-1790607882743-26-output-input_a",
-            "source": "Follow-1790607882743-24",
-            "target": "Crossfade-1790607882743-26",
+            "id": "e-Follow-1790609213106-24-Crossfade-1790609213106-26-output-input_a",
+            "source": "Follow-1790609213106-24",
+            "target": "Crossfade-1790609213106-26",
             "sourceHandle": "output",
             "targetHandle": "input_a",
             "markerEnd": {
@@ -1327,9 +1327,9 @@
             }
           },
           {
-            "id": "e-Follow-1790607882743-25-Crossfade-1790607882743-26-output-input_b",
-            "source": "Follow-1790607882743-25",
-            "target": "Crossfade-1790607882743-26",
+            "id": "e-Follow-1790609213106-25-Crossfade-1790609213106-26-output-input_b",
+            "source": "Follow-1790609213106-25",
+            "target": "Crossfade-1790609213106-26",
             "sourceHandle": "output",
             "targetHandle": "input_b",
             "markerEnd": {
@@ -1337,9 +1337,9 @@
             }
           },
           {
-            "id": "e-Crossfade-1790607882743-26-Output-1790607882743-27-output-input",
-            "source": "Crossfade-1790607882743-26",
-            "target": "Output-1790607882743-27",
+            "id": "e-Crossfade-1790609213106-26-Output-1790609213106-27-output-input",
+            "source": "Crossfade-1790609213106-26",
+            "target": "Output-1790609213106-27",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -1384,28 +1384,438 @@
         }
       ],
       "audioMods": []
-    }
-  ],
-  "setlistOrder": [
-    "slot-orbit",
-    "slot-spiral",
-    "slot-pursuit",
-    "slot-bass",
-    "slot-spline",
-    "slot-crossfade"
-  ],
-  "currentSetlistIndex": -1,
-  "editingSlotId": "slot-orbit",
-  "cues": [
+    },
     {
-      "id": "cue-ouverture",
-      "name": "Ouverture",
-      "description": "Orbite seule — les 4 premières tracks",
-      "schema_version": 1,
-      "graph": {
+      "id": "slot-mix",
+      "name": "Order + Chaos",
+      "graphJson": {
         "nodes": [
           {
-            "id": "Objects-1790607882743-0",
+            "id": "Objects-1790609213106-28",
+            "type": "custom",
+            "position": {
+              "x": 50,
+              "y": 300
+            },
+            "data": {
+              "label": "Objects",
+              "type": "Objects",
+              "params": {
+                "n_objects": 2
+              }
+            }
+          },
+          {
+            "id": "Duration-1790609213106-29",
+            "type": "custom",
+            "position": {
+              "x": 50,
+              "y": 120
+            },
+            "data": {
+              "label": "Duration",
+              "type": "Duration",
+              "params": {
+                "duration": 8
+              }
+            }
+          },
+          {
+            "id": "Circular-1790609213106-30",
+            "type": "custom",
+            "position": {
+              "x": 300,
+              "y": 80
+            },
+            "data": {
+              "label": "Circular",
+              "type": "Circular",
+              "params": {
+                "n_objects": 2,
+                "radius": 2,
+                "speed": 1,
+                "plane": "xz",
+                "phase_offset": true
+              }
+            }
+          },
+          {
+            "id": "Swarm-1790609213106-31",
+            "type": "custom",
+            "position": {
+              "x": 300,
+              "y": 320
+            },
+            "data": {
+              "label": "Swarm",
+              "type": "Swarm",
+              "params": {
+                "n_objects": 2,
+                "separation": 0.3,
+                "alignment": 0.5,
+                "cohesion": 0.3,
+                "max_speed": 0.4,
+                "seed": 42
+              }
+            }
+          },
+          {
+            "id": "Mix-1790609213106-32",
+            "type": "custom",
+            "position": {
+              "x": 580,
+              "y": 200
+            },
+            "data": {
+              "label": "Mix",
+              "type": "Mix",
+              "params": {
+                "blend": 0.7
+              }
+            }
+          },
+          {
+            "id": "Output-1790609213106-33",
+            "type": "custom",
+            "position": {
+              "x": 820,
+              "y": 200
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e-Objects-1790609213106-28-Circular-1790609213106-30-output-input",
+            "source": "Objects-1790609213106-28",
+            "target": "Circular-1790609213106-30",
+            "sourceHandle": "output",
+            "targetHandle": "input",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Objects-1790609213106-28-Swarm-1790609213106-31-output-input",
+            "source": "Objects-1790609213106-28",
+            "target": "Swarm-1790609213106-31",
+            "sourceHandle": "output",
+            "targetHandle": "input",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Duration-1790609213106-29-Circular-1790609213106-30-output-duration",
+            "source": "Duration-1790609213106-29",
+            "target": "Circular-1790609213106-30",
+            "sourceHandle": "output",
+            "targetHandle": "duration",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Duration-1790609213106-29-Swarm-1790609213106-31-output-duration",
+            "source": "Duration-1790609213106-29",
+            "target": "Swarm-1790609213106-31",
+            "sourceHandle": "output",
+            "targetHandle": "duration",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Circular-1790609213106-30-Mix-1790609213106-32-output-input_a",
+            "source": "Circular-1790609213106-30",
+            "target": "Mix-1790609213106-32",
+            "sourceHandle": "output",
+            "targetHandle": "input_a",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Swarm-1790609213106-31-Mix-1790609213106-32-output-input_b",
+            "source": "Swarm-1790609213106-31",
+            "target": "Mix-1790609213106-32",
+            "sourceHandle": "output",
+            "targetHandle": "input_b",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Mix-1790609213106-32-Output-1790609213106-33-output-input",
+            "source": "Mix-1790609213106-32",
+            "target": "Output-1790609213106-33",
+            "sourceHandle": "output",
+            "targetHandle": "input",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          }
+        ]
+      },
+      "templateId": "mix-order-chaos",
+      "trackIds": [
+        1,
+        2
+      ],
+      "movementId": null,
+      "isPreview": false,
+      "macros": {
+        "speed": 1,
+        "scale": 1,
+        "shiftX": 0,
+        "shiftY": 0,
+        "shiftZ": 0,
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "fadeDuration": 2,
+      "loopMode": "loop",
+      "direction": "forward",
+      "fadeIn": 1,
+      "fadeOut": 1,
+      "phaseSpread": 0,
+      "assignments": [
+        {
+          "track_id": 1,
+          "depth": 1,
+          "phase_offset": 0
+        },
+        {
+          "track_id": 2,
+          "depth": 1,
+          "phase_offset": 0
+        }
+      ],
+      "audioMods": []
+    },
+    {
+      "id": "slot-sequence",
+      "name": "Circle→Spiral",
+      "graphJson": {
+        "nodes": [
+          {
+            "id": "Objects-1790609213106-34",
+            "type": "custom",
+            "position": {
+              "x": 50,
+              "y": 300
+            },
+            "data": {
+              "label": "Objects",
+              "type": "Objects",
+              "params": {
+                "n_objects": 2
+              }
+            }
+          },
+          {
+            "id": "Duration-1790609213106-35",
+            "type": "custom",
+            "position": {
+              "x": 50,
+              "y": 120
+            },
+            "data": {
+              "label": "Duration",
+              "type": "Duration",
+              "params": {
+                "duration": 4
+              }
+            }
+          },
+          {
+            "id": "Circular-1790609213106-36",
+            "type": "custom",
+            "position": {
+              "x": 300,
+              "y": 80
+            },
+            "data": {
+              "label": "Circular",
+              "type": "Circular",
+              "params": {
+                "n_objects": 2,
+                "radius": 2,
+                "speed": 1,
+                "plane": "xz",
+                "phase_offset": true
+              }
+            }
+          },
+          {
+            "id": "Spiral-1790609213106-37",
+            "type": "custom",
+            "position": {
+              "x": 300,
+              "y": 320
+            },
+            "data": {
+              "label": "Spiral",
+              "type": "Spiral",
+              "params": {
+                "n_objects": 2,
+                "radius": 0.5,
+                "speed": 1,
+                "expansion": 1,
+                "plane": "xz",
+                "phase_offset": true
+              }
+            }
+          },
+          {
+            "id": "Sequence-1790609213106-38",
+            "type": "custom",
+            "position": {
+              "x": 580,
+              "y": 200
+            },
+            "data": {
+              "label": "Sequence",
+              "type": "Sequence",
+              "params": {}
+            }
+          },
+          {
+            "id": "Output-1790609213106-39",
+            "type": "custom",
+            "position": {
+              "x": 820,
+              "y": 200
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e-Objects-1790609213106-34-Circular-1790609213106-36-output-input",
+            "source": "Objects-1790609213106-34",
+            "target": "Circular-1790609213106-36",
+            "sourceHandle": "output",
+            "targetHandle": "input",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Objects-1790609213106-34-Spiral-1790609213106-37-output-input",
+            "source": "Objects-1790609213106-34",
+            "target": "Spiral-1790609213106-37",
+            "sourceHandle": "output",
+            "targetHandle": "input",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Duration-1790609213106-35-Circular-1790609213106-36-output-duration",
+            "source": "Duration-1790609213106-35",
+            "target": "Circular-1790609213106-36",
+            "sourceHandle": "output",
+            "targetHandle": "duration",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Duration-1790609213106-35-Spiral-1790609213106-37-output-duration",
+            "source": "Duration-1790609213106-35",
+            "target": "Spiral-1790609213106-37",
+            "sourceHandle": "output",
+            "targetHandle": "duration",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Circular-1790609213106-36-Sequence-1790609213106-38-output-input_a",
+            "source": "Circular-1790609213106-36",
+            "target": "Sequence-1790609213106-38",
+            "sourceHandle": "output",
+            "targetHandle": "input_a",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Spiral-1790609213106-37-Sequence-1790609213106-38-output-input_b",
+            "source": "Spiral-1790609213106-37",
+            "target": "Sequence-1790609213106-38",
+            "sourceHandle": "output",
+            "targetHandle": "input_b",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Sequence-1790609213106-38-Output-1790609213106-39-output-input",
+            "source": "Sequence-1790609213106-38",
+            "target": "Output-1790609213106-39",
+            "sourceHandle": "output",
+            "targetHandle": "input",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          }
+        ]
+      },
+      "templateId": "sequence-circle-spiral",
+      "trackIds": [
+        3,
+        4
+      ],
+      "movementId": null,
+      "isPreview": false,
+      "macros": {
+        "speed": 1,
+        "scale": 1,
+        "shiftX": 0,
+        "shiftY": 0,
+        "shiftZ": 0,
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "fadeDuration": 2,
+      "loopMode": "loop",
+      "direction": "backward",
+      "fadeIn": 0.5,
+      "fadeOut": 0.5,
+      "phaseSpread": 0,
+      "assignments": [
+        {
+          "track_id": 3,
+          "depth": 1,
+          "phase_offset": 0
+        },
+        {
+          "track_id": 4,
+          "depth": 1,
+          "phase_offset": 0
+        }
+      ],
+      "audioMods": []
+    },
+    {
+      "id": "slot-fadein",
+      "name": "Orbit Fade-In",
+      "graphJson": {
+        "nodes": [
+          {
+            "id": "Objects-1790609213106-40",
             "type": "custom",
             "position": {
               "x": 50,
@@ -1415,12 +1825,292 @@
               "label": "Objects",
               "type": "Objects",
               "params": {
-                "n_objects": 4
+                "n_objects": 2
               }
             }
           },
           {
-            "id": "Duration-1790607882743-1",
+            "id": "Duration-1790609213106-41",
+            "type": "custom",
+            "position": {
+              "x": 50,
+              "y": 80
+            },
+            "data": {
+              "label": "Duration",
+              "type": "Duration",
+              "params": {
+                "duration": 6
+              }
+            }
+          },
+          {
+            "id": "TimeFalloff-1790609213106-42",
+            "type": "custom",
+            "position": {
+              "x": 300,
+              "y": 180
+            },
+            "data": {
+              "label": "TimeFalloff",
+              "type": "TimeFalloff",
+              "params": {
+                "start_time": 0,
+                "end_time": 2.5,
+                "radius": 2.5,
+                "curve": "ease_out",
+                "plane": "xz"
+              }
+            }
+          },
+          {
+            "id": "Output-1790609213106-43",
+            "type": "custom",
+            "position": {
+              "x": 750,
+              "y": 180
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e-Objects-1790609213106-40-TimeFalloff-1790609213106-42-output-input",
+            "source": "Objects-1790609213106-40",
+            "target": "TimeFalloff-1790609213106-42",
+            "sourceHandle": "output",
+            "targetHandle": "input",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Duration-1790609213106-41-TimeFalloff-1790609213106-42-output-duration",
+            "source": "Duration-1790609213106-41",
+            "target": "TimeFalloff-1790609213106-42",
+            "sourceHandle": "output",
+            "targetHandle": "duration",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-TimeFalloff-1790609213106-42-Output-1790609213106-43-output-input",
+            "source": "TimeFalloff-1790609213106-42",
+            "target": "Output-1790609213106-43",
+            "sourceHandle": "output",
+            "targetHandle": "input",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          }
+        ]
+      },
+      "templateId": "orbit-fade-in",
+      "trackIds": [
+        5,
+        6
+      ],
+      "movementId": null,
+      "isPreview": false,
+      "macros": {
+        "speed": 1,
+        "scale": 1,
+        "shiftX": 0,
+        "shiftY": 0,
+        "shiftZ": 0,
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "fadeDuration": 1.5,
+      "loopMode": "loop",
+      "direction": "forward",
+      "fadeIn": 0.5,
+      "fadeOut": 0.5,
+      "phaseSpread": 0,
+      "assignments": [
+        {
+          "track_id": 5,
+          "depth": 1,
+          "phase_offset": 0
+        },
+        {
+          "track_id": 6,
+          "depth": 1,
+          "phase_offset": 0
+        }
+      ],
+      "audioMods": []
+    },
+    {
+      "id": "slot-gravity",
+      "name": "Gravity Well",
+      "graphJson": {
+        "nodes": [
+          {
+            "id": "Objects-1790609213106-44",
+            "type": "custom",
+            "position": {
+              "x": 50,
+              "y": 250
+            },
+            "data": {
+              "label": "Objects",
+              "type": "Objects",
+              "params": {
+                "n_objects": 2
+              }
+            }
+          },
+          {
+            "id": "Duration-1790609213106-45",
+            "type": "custom",
+            "position": {
+              "x": 50,
+              "y": 80
+            },
+            "data": {
+              "label": "Duration",
+              "type": "Duration",
+              "params": {
+                "duration": 5
+              }
+            }
+          },
+          {
+            "id": "PointDistanceFalloff-1790609213106-46",
+            "type": "custom",
+            "position": {
+              "x": 300,
+              "y": 180
+            },
+            "data": {
+              "label": "PointDistanceFalloff",
+              "type": "PointDistanceFalloff",
+              "params": {
+                "center": [
+                  2,
+                  0,
+                  0
+                ],
+                "max_distance": 4,
+                "radius": 2,
+                "curve": "ease_in_out",
+                "plane": "xz"
+              }
+            }
+          },
+          {
+            "id": "Output-1790609213106-47",
+            "type": "custom",
+            "position": {
+              "x": 750,
+              "y": 180
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e-Objects-1790609213106-44-PointDistanceFalloff-1790609213106-46-output-input",
+            "source": "Objects-1790609213106-44",
+            "target": "PointDistanceFalloff-1790609213106-46",
+            "sourceHandle": "output",
+            "targetHandle": "input",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Duration-1790609213106-45-PointDistanceFalloff-1790609213106-46-output-duration",
+            "source": "Duration-1790609213106-45",
+            "target": "PointDistanceFalloff-1790609213106-46",
+            "sourceHandle": "output",
+            "targetHandle": "duration",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-PointDistanceFalloff-1790609213106-46-Output-1790609213106-47-output-input",
+            "source": "PointDistanceFalloff-1790609213106-46",
+            "target": "Output-1790609213106-47",
+            "sourceHandle": "output",
+            "targetHandle": "input",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          }
+        ]
+      },
+      "templateId": "gravity-well",
+      "trackIds": [
+        7,
+        8
+      ],
+      "movementId": null,
+      "isPreview": false,
+      "macros": {
+        "speed": 1,
+        "scale": 1,
+        "shiftX": 0,
+        "shiftY": 0,
+        "shiftZ": 0,
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "fadeDuration": 1.5,
+      "loopMode": "loop",
+      "direction": "ping_pong",
+      "fadeIn": 0.5,
+      "fadeOut": 0.5,
+      "phaseSpread": 0,
+      "assignments": [
+        {
+          "track_id": 7,
+          "depth": 1,
+          "phase_offset": 0
+        },
+        {
+          "track_id": 8,
+          "depth": 1,
+          "phase_offset": 0
+        }
+      ],
+      "audioMods": []
+    },
+    {
+      "id": "slot-sidesweep",
+      "name": "Side Sweep",
+      "graphJson": {
+        "nodes": [
+          {
+            "id": "Objects-1790609213106-48",
+            "type": "custom",
+            "position": {
+              "x": 50,
+              "y": 250
+            },
+            "data": {
+              "label": "Objects",
+              "type": "Objects",
+              "params": {
+                "n_objects": 2
+              }
+            }
+          },
+          {
+            "id": "Duration-1790609213106-49",
             "type": "custom",
             "position": {
               "x": 50,
@@ -1435,7 +2125,686 @@
             }
           },
           {
-            "id": "Circular-1790607882743-2",
+            "id": "DirectionalFalloff-1790609213106-50",
+            "type": "custom",
+            "position": {
+              "x": 300,
+              "y": 180
+            },
+            "data": {
+              "label": "DirectionalFalloff",
+              "type": "DirectionalFalloff",
+              "params": {
+                "direction": [
+                  1,
+                  0,
+                  0
+                ],
+                "max_distance": 3,
+                "radius": 2,
+                "curve": "ease_in_out",
+                "plane": "xz"
+              }
+            }
+          },
+          {
+            "id": "Output-1790609213106-51",
+            "type": "custom",
+            "position": {
+              "x": 750,
+              "y": 180
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          },
+          {
+            "id": "Rotate-1790609213106-52",
+            "type": "custom",
+            "position": {
+              "x": 480,
+              "y": 180
+            },
+            "data": {
+              "label": "Rotate",
+              "type": "Rotate",
+              "params": {
+                "angleX": 0,
+                "angleY": 0,
+                "angleZ": 0.35
+              }
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e-Objects-1790609213106-48-DirectionalFalloff-1790609213106-50-output-input",
+            "source": "Objects-1790609213106-48",
+            "target": "DirectionalFalloff-1790609213106-50",
+            "sourceHandle": "output",
+            "targetHandle": "input",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Duration-1790609213106-49-DirectionalFalloff-1790609213106-50-output-duration",
+            "source": "Duration-1790609213106-49",
+            "target": "DirectionalFalloff-1790609213106-50",
+            "sourceHandle": "output",
+            "targetHandle": "duration",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-DirectionalFalloff-1790609213106-50-Rotate-1790609213106-52-output-input",
+            "source": "DirectionalFalloff-1790609213106-50",
+            "target": "Rotate-1790609213106-52",
+            "sourceHandle": "output",
+            "targetHandle": "input",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Rotate-1790609213106-52-Output-1790609213106-51-output-input",
+            "source": "Rotate-1790609213106-52",
+            "target": "Output-1790609213106-51",
+            "sourceHandle": "output",
+            "targetHandle": "input",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          }
+        ]
+      },
+      "templateId": "side-sweep",
+      "trackIds": [
+        1,
+        2
+      ],
+      "movementId": null,
+      "isPreview": false,
+      "macros": {
+        "speed": 1,
+        "scale": 1,
+        "shiftX": 0,
+        "shiftY": 0,
+        "shiftZ": 0,
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "fadeDuration": 1,
+      "loopMode": "loop",
+      "direction": "forward",
+      "fadeIn": 0.5,
+      "fadeOut": 0.5,
+      "phaseSpread": 0,
+      "assignments": [
+        {
+          "track_id": 1,
+          "depth": 1,
+          "phase_offset": 0
+        },
+        {
+          "track_id": 2,
+          "depth": 1,
+          "phase_offset": 0
+        }
+      ],
+      "audioMods": []
+    },
+    {
+      "id": "slot-chain",
+      "name": "Modifier Chain",
+      "graphJson": {
+        "nodes": [
+          {
+            "id": "Objects-1790609213106-53",
+            "type": "custom",
+            "position": {
+              "x": 50,
+              "y": 250
+            },
+            "data": {
+              "label": "Objects",
+              "type": "Objects",
+              "params": {
+                "n_objects": 2
+              }
+            }
+          },
+          {
+            "id": "Duration-1790609213106-54",
+            "type": "custom",
+            "position": {
+              "x": 50,
+              "y": 80
+            },
+            "data": {
+              "label": "Duration",
+              "type": "Duration",
+              "params": {
+                "duration": 4
+              }
+            }
+          },
+          {
+            "id": "Circular-1790609213106-55",
+            "type": "custom",
+            "position": {
+              "x": 300,
+              "y": 180
+            },
+            "data": {
+              "label": "Circular",
+              "type": "Circular",
+              "params": {
+                "n_objects": 2,
+                "radius": 1.5,
+                "speed": 1,
+                "plane": "xz",
+                "phase_offset": true
+              }
+            }
+          },
+          {
+            "id": "Output-1790609213106-56",
+            "type": "custom",
+            "position": {
+              "x": 750,
+              "y": 180
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          },
+          {
+            "id": "Rotate-1790609213106-57",
+            "type": "custom",
+            "position": {
+              "x": 480,
+              "y": 180
+            },
+            "data": {
+              "label": "Rotate",
+              "type": "Rotate",
+              "params": {
+                "angleX": 0.3,
+                "angleY": 0,
+                "angleZ": 0.2
+              }
+            }
+          },
+          {
+            "id": "Offset-1790609213106-58",
+            "type": "custom",
+            "position": {
+              "x": 660,
+              "y": 180
+            },
+            "data": {
+              "label": "Offset",
+              "type": "Offset",
+              "params": {
+                "x": 1.5,
+                "y": 0.5,
+                "z": 0
+              }
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e-Objects-1790609213106-53-Circular-1790609213106-55-output-input",
+            "source": "Objects-1790609213106-53",
+            "target": "Circular-1790609213106-55",
+            "sourceHandle": "output",
+            "targetHandle": "input",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Duration-1790609213106-54-Circular-1790609213106-55-output-duration",
+            "source": "Duration-1790609213106-54",
+            "target": "Circular-1790609213106-55",
+            "sourceHandle": "output",
+            "targetHandle": "duration",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Circular-1790609213106-55-Rotate-1790609213106-57-output-input",
+            "source": "Circular-1790609213106-55",
+            "target": "Rotate-1790609213106-57",
+            "sourceHandle": "output",
+            "targetHandle": "input",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Rotate-1790609213106-57-Offset-1790609213106-58-output-input",
+            "source": "Rotate-1790609213106-57",
+            "target": "Offset-1790609213106-58",
+            "sourceHandle": "output",
+            "targetHandle": "input",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Offset-1790609213106-58-Output-1790609213106-56-output-input",
+            "source": "Offset-1790609213106-58",
+            "target": "Output-1790609213106-56",
+            "sourceHandle": "output",
+            "targetHandle": "input",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          }
+        ]
+      },
+      "templateId": "modifier-chain",
+      "trackIds": [
+        3,
+        4
+      ],
+      "movementId": null,
+      "isPreview": false,
+      "macros": {
+        "speed": 1,
+        "scale": 1,
+        "shiftX": 0,
+        "shiftY": 0,
+        "shiftZ": 0,
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "fadeDuration": 1,
+      "loopMode": "loop",
+      "direction": "forward",
+      "fadeIn": 0.5,
+      "fadeOut": 0.5,
+      "phaseSpread": 0.5,
+      "assignments": [
+        {
+          "track_id": 3,
+          "depth": 1,
+          "phase_offset": 0
+        },
+        {
+          "track_id": 4,
+          "depth": 1,
+          "phase_offset": 0
+        }
+      ],
+      "audioMods": []
+    },
+    {
+      "id": "slot-bpm",
+      "name": "BPM Circle",
+      "graphJson": {
+        "nodes": [
+          {
+            "id": "Objects-1790609213106-59",
+            "type": "custom",
+            "position": {
+              "x": 50,
+              "y": 250
+            },
+            "data": {
+              "label": "Objects",
+              "type": "Objects",
+              "params": {
+                "n_objects": 2
+              }
+            }
+          },
+          {
+            "id": "Duration-1790609213106-60",
+            "type": "custom",
+            "position": {
+              "x": 50,
+              "y": 80
+            },
+            "data": {
+              "label": "Duration",
+              "type": "Duration",
+              "params": {
+                "duration": 4
+              }
+            }
+          },
+          {
+            "id": "BPM-1790609213106-61",
+            "type": "custom",
+            "position": {
+              "x": 300,
+              "y": 180
+            },
+            "data": {
+              "label": "BPM",
+              "type": "BPM",
+              "params": {
+                "n_objects": 2,
+                "bpm": 120,
+                "radius": 2,
+                "plane": "xz"
+              }
+            }
+          },
+          {
+            "id": "Output-1790609213106-62",
+            "type": "custom",
+            "position": {
+              "x": 750,
+              "y": 180
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e-Objects-1790609213106-59-BPM-1790609213106-61-output-input",
+            "source": "Objects-1790609213106-59",
+            "target": "BPM-1790609213106-61",
+            "sourceHandle": "output",
+            "targetHandle": "input",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Duration-1790609213106-60-BPM-1790609213106-61-output-duration",
+            "source": "Duration-1790609213106-60",
+            "target": "BPM-1790609213106-61",
+            "sourceHandle": "output",
+            "targetHandle": "duration",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-BPM-1790609213106-61-Output-1790609213106-62-output-input",
+            "source": "BPM-1790609213106-61",
+            "target": "Output-1790609213106-62",
+            "sourceHandle": "output",
+            "targetHandle": "input",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          }
+        ]
+      },
+      "templateId": "bpm-circle",
+      "trackIds": [
+        5,
+        6
+      ],
+      "movementId": null,
+      "isPreview": false,
+      "macros": {
+        "speed": 1,
+        "scale": 1,
+        "shiftX": 0,
+        "shiftY": 0,
+        "shiftZ": 0,
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "fadeDuration": 1,
+      "loopMode": "loop",
+      "direction": "forward",
+      "fadeIn": 0.5,
+      "fadeOut": 0.5,
+      "phaseSpread": 0,
+      "assignments": [
+        {
+          "track_id": 5,
+          "depth": 1,
+          "phase_offset": 0
+        },
+        {
+          "track_id": 6,
+          "depth": 1,
+          "phase_offset": 0
+        }
+      ],
+      "audioMods": []
+    },
+    {
+      "id": "slot-vectorfield",
+      "name": "Vector Field",
+      "graphJson": {
+        "nodes": [
+          {
+            "id": "Objects-1790609213106-63",
+            "type": "custom",
+            "position": {
+              "x": 50,
+              "y": 250
+            },
+            "data": {
+              "label": "Objects",
+              "type": "Objects",
+              "params": {
+                "n_objects": 2
+              }
+            }
+          },
+          {
+            "id": "Duration-1790609213106-64",
+            "type": "custom",
+            "position": {
+              "x": 50,
+              "y": 80
+            },
+            "data": {
+              "label": "Duration",
+              "type": "Duration",
+              "params": {
+                "duration": 8
+              }
+            }
+          },
+          {
+            "id": "VectorField-1790609213106-65",
+            "type": "custom",
+            "position": {
+              "x": 300,
+              "y": 180
+            },
+            "data": {
+              "label": "VectorField",
+              "type": "VectorField",
+              "params": {
+                "n_objects": 2,
+                "field": "vortex",
+                "strength": 0.5,
+                "center": [
+                  0,
+                  0,
+                  0
+                ],
+                "radius": 0.6,
+                "swirl": 0,
+                "direction": [
+                  1,
+                  0,
+                  0
+                ],
+                "noise_scale": 1.5,
+                "wander": 0.15,
+                "responsiveness": 0.08,
+                "max_speed": 1,
+                "bounds": 2.5,
+                "containment": 0.5,
+                "init": "circle",
+                "init_radius": 1.2,
+                "z_init": 0,
+                "z_drift": 0,
+                "seed": 42
+              }
+            }
+          },
+          {
+            "id": "Output-1790609213106-66",
+            "type": "custom",
+            "position": {
+              "x": 750,
+              "y": 180
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e-Objects-1790609213106-63-VectorField-1790609213106-65-output-input",
+            "source": "Objects-1790609213106-63",
+            "target": "VectorField-1790609213106-65",
+            "sourceHandle": "output",
+            "targetHandle": "input",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Duration-1790609213106-64-VectorField-1790609213106-65-output-duration",
+            "source": "Duration-1790609213106-64",
+            "target": "VectorField-1790609213106-65",
+            "sourceHandle": "output",
+            "targetHandle": "duration",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-VectorField-1790609213106-65-Output-1790609213106-66-output-input",
+            "source": "VectorField-1790609213106-65",
+            "target": "Output-1790609213106-66",
+            "sourceHandle": "output",
+            "targetHandle": "input",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          }
+        ]
+      },
+      "templateId": "vectorfield",
+      "trackIds": [
+        7,
+        8
+      ],
+      "movementId": null,
+      "isPreview": false,
+      "macros": {
+        "speed": 1,
+        "scale": 1,
+        "shiftX": 0,
+        "shiftY": 0,
+        "shiftZ": 0,
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "fadeDuration": 2,
+      "loopMode": "loop",
+      "direction": "forward",
+      "fadeIn": 1,
+      "fadeOut": 1,
+      "phaseSpread": 0,
+      "assignments": [
+        {
+          "track_id": 7,
+          "depth": 1,
+          "phase_offset": 0
+        },
+        {
+          "track_id": 8,
+          "depth": 1,
+          "phase_offset": 0
+        }
+      ],
+      "audioMods": []
+    }
+  ],
+  "setlistOrder": [
+    "slot-orbit",
+    "slot-spiral",
+    "slot-pursuit",
+    "slot-bass",
+    "slot-spline",
+    "slot-crossfade",
+    "slot-mix",
+    "slot-sequence",
+    "slot-fadein",
+    "slot-gravity",
+    "slot-sidesweep",
+    "slot-chain",
+    "slot-bpm",
+    "slot-vectorfield"
+  ],
+  "currentSetlistIndex": -1,
+  "editingSlotId": "slot-orbit",
+  "cues": [
+    {
+      "id": "cue-ouverture",
+      "name": "Ouverture",
+      "description": "Orbite seule — les 4 premières tracks",
+      "schema_version": 1,
+      "graph": {
+        "nodes": [
+          {
+            "id": "Objects-1790609213106-0",
+            "type": "custom",
+            "position": {
+              "x": 50,
+              "y": 250
+            },
+            "data": {
+              "label": "Objects",
+              "type": "Objects",
+              "params": {
+                "n_objects": 4
+              }
+            }
+          },
+          {
+            "id": "Duration-1790609213106-1",
+            "type": "custom",
+            "position": {
+              "x": 50,
+              "y": 80
+            },
+            "data": {
+              "label": "Duration",
+              "type": "Duration",
+              "params": {
+                "duration": 4
+              }
+            }
+          },
+          {
+            "id": "Circular-1790609213106-2",
             "type": "custom",
             "position": {
               "x": 300,
@@ -1454,7 +2823,7 @@
             }
           },
           {
-            "id": "Output-1790607882743-3",
+            "id": "Output-1790609213106-3",
             "type": "custom",
             "position": {
               "x": 750,
@@ -1469,9 +2838,9 @@
         ],
         "edges": [
           {
-            "id": "e-Objects-1790607882743-0-Circular-1790607882743-2-output-input",
-            "source": "Objects-1790607882743-0",
-            "target": "Circular-1790607882743-2",
+            "id": "e-Objects-1790609213106-0-Circular-1790609213106-2-output-input",
+            "source": "Objects-1790609213106-0",
+            "target": "Circular-1790609213106-2",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -1479,9 +2848,9 @@
             }
           },
           {
-            "id": "e-Duration-1790607882743-1-Circular-1790607882743-2-output-duration",
-            "source": "Duration-1790607882743-1",
-            "target": "Circular-1790607882743-2",
+            "id": "e-Duration-1790609213106-1-Circular-1790609213106-2-output-duration",
+            "source": "Duration-1790609213106-1",
+            "target": "Circular-1790609213106-2",
             "sourceHandle": "output",
             "targetHandle": "duration",
             "markerEnd": {
@@ -1489,9 +2858,9 @@
             }
           },
           {
-            "id": "e-Circular-1790607882743-2-Output-1790607882743-3-output-input",
-            "source": "Circular-1790607882743-2",
-            "target": "Output-1790607882743-3",
+            "id": "e-Circular-1790609213106-2-Output-1790609213106-3-output-input",
+            "source": "Circular-1790609213106-2",
+            "target": "Output-1790609213106-3",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -1796,7 +3165,7 @@
           "graph_json": {
             "nodes": [
               {
-                "id": "Objects-1790607882743-0",
+                "id": "Objects-1790609213106-0",
                 "type": "custom",
                 "position": {
                   "x": 50,
@@ -1811,7 +3180,7 @@
                 }
               },
               {
-                "id": "Duration-1790607882743-1",
+                "id": "Duration-1790609213106-1",
                 "type": "custom",
                 "position": {
                   "x": 50,
@@ -1826,7 +3195,7 @@
                 }
               },
               {
-                "id": "Circular-1790607882743-2",
+                "id": "Circular-1790609213106-2",
                 "type": "custom",
                 "position": {
                   "x": 300,
@@ -1845,7 +3214,7 @@
                 }
               },
               {
-                "id": "Output-1790607882743-3",
+                "id": "Output-1790609213106-3",
                 "type": "custom",
                 "position": {
                   "x": 750,
@@ -1860,9 +3229,9 @@
             ],
             "edges": [
               {
-                "id": "e-Objects-1790607882743-0-Circular-1790607882743-2-output-input",
-                "source": "Objects-1790607882743-0",
-                "target": "Circular-1790607882743-2",
+                "id": "e-Objects-1790609213106-0-Circular-1790609213106-2-output-input",
+                "source": "Objects-1790609213106-0",
+                "target": "Circular-1790609213106-2",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -1870,9 +3239,9 @@
                 }
               },
               {
-                "id": "e-Duration-1790607882743-1-Circular-1790607882743-2-output-duration",
-                "source": "Duration-1790607882743-1",
-                "target": "Circular-1790607882743-2",
+                "id": "e-Duration-1790609213106-1-Circular-1790609213106-2-output-duration",
+                "source": "Duration-1790609213106-1",
+                "target": "Circular-1790609213106-2",
                 "sourceHandle": "output",
                 "targetHandle": "duration",
                 "markerEnd": {
@@ -1880,9 +3249,9 @@
                 }
               },
               {
-                "id": "e-Circular-1790607882743-2-Output-1790607882743-3-output-input",
-                "source": "Circular-1790607882743-2",
-                "target": "Output-1790607882743-3",
+                "id": "e-Circular-1790609213106-2-Output-1790609213106-3-output-input",
+                "source": "Circular-1790609213106-2",
+                "target": "Output-1790609213106-3",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -1922,7 +3291,7 @@
       "graph": {
         "nodes": [
           {
-            "id": "Objects-1790607882743-0",
+            "id": "Objects-1790609213106-0",
             "type": "custom",
             "position": {
               "x": 50,
@@ -1937,7 +3306,7 @@
             }
           },
           {
-            "id": "Duration-1790607882743-1",
+            "id": "Duration-1790609213106-1",
             "type": "custom",
             "position": {
               "x": 50,
@@ -1952,7 +3321,7 @@
             }
           },
           {
-            "id": "Circular-1790607882743-2",
+            "id": "Circular-1790609213106-2",
             "type": "custom",
             "position": {
               "x": 300,
@@ -1971,7 +3340,7 @@
             }
           },
           {
-            "id": "Output-1790607882743-3",
+            "id": "Output-1790609213106-3",
             "type": "custom",
             "position": {
               "x": 750,
@@ -1986,9 +3355,9 @@
         ],
         "edges": [
           {
-            "id": "e-Objects-1790607882743-0-Circular-1790607882743-2-output-input",
-            "source": "Objects-1790607882743-0",
-            "target": "Circular-1790607882743-2",
+            "id": "e-Objects-1790609213106-0-Circular-1790609213106-2-output-input",
+            "source": "Objects-1790609213106-0",
+            "target": "Circular-1790609213106-2",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -1996,9 +3365,9 @@
             }
           },
           {
-            "id": "e-Duration-1790607882743-1-Circular-1790607882743-2-output-duration",
-            "source": "Duration-1790607882743-1",
-            "target": "Circular-1790607882743-2",
+            "id": "e-Duration-1790609213106-1-Circular-1790609213106-2-output-duration",
+            "source": "Duration-1790609213106-1",
+            "target": "Circular-1790609213106-2",
             "sourceHandle": "output",
             "targetHandle": "duration",
             "markerEnd": {
@@ -2006,9 +3375,9 @@
             }
           },
           {
-            "id": "e-Circular-1790607882743-2-Output-1790607882743-3-output-input",
-            "source": "Circular-1790607882743-2",
-            "target": "Output-1790607882743-3",
+            "id": "e-Circular-1790609213106-2-Output-1790609213106-3-output-input",
+            "source": "Circular-1790609213106-2",
+            "target": "Output-1790609213106-3",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -2352,7 +3721,7 @@
           "graph_json": {
             "nodes": [
               {
-                "id": "Objects-1790607882743-0",
+                "id": "Objects-1790609213106-0",
                 "type": "custom",
                 "position": {
                   "x": 50,
@@ -2367,7 +3736,7 @@
                 }
               },
               {
-                "id": "Duration-1790607882743-1",
+                "id": "Duration-1790609213106-1",
                 "type": "custom",
                 "position": {
                   "x": 50,
@@ -2382,7 +3751,7 @@
                 }
               },
               {
-                "id": "Circular-1790607882743-2",
+                "id": "Circular-1790609213106-2",
                 "type": "custom",
                 "position": {
                   "x": 300,
@@ -2401,7 +3770,7 @@
                 }
               },
               {
-                "id": "Output-1790607882743-3",
+                "id": "Output-1790609213106-3",
                 "type": "custom",
                 "position": {
                   "x": 750,
@@ -2416,9 +3785,9 @@
             ],
             "edges": [
               {
-                "id": "e-Objects-1790607882743-0-Circular-1790607882743-2-output-input",
-                "source": "Objects-1790607882743-0",
-                "target": "Circular-1790607882743-2",
+                "id": "e-Objects-1790609213106-0-Circular-1790609213106-2-output-input",
+                "source": "Objects-1790609213106-0",
+                "target": "Circular-1790609213106-2",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -2426,9 +3795,9 @@
                 }
               },
               {
-                "id": "e-Duration-1790607882743-1-Circular-1790607882743-2-output-duration",
-                "source": "Duration-1790607882743-1",
-                "target": "Circular-1790607882743-2",
+                "id": "e-Duration-1790609213106-1-Circular-1790609213106-2-output-duration",
+                "source": "Duration-1790609213106-1",
+                "target": "Circular-1790609213106-2",
                 "sourceHandle": "output",
                 "targetHandle": "duration",
                 "markerEnd": {
@@ -2436,9 +3805,9 @@
                 }
               },
               {
-                "id": "e-Circular-1790607882743-2-Output-1790607882743-3-output-input",
-                "source": "Circular-1790607882743-2",
-                "target": "Output-1790607882743-3",
+                "id": "e-Circular-1790609213106-2-Output-1790609213106-3-output-input",
+                "source": "Circular-1790609213106-2",
+                "target": "Output-1790609213106-3",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -2474,7 +3843,7 @@
           "graph_json": {
             "nodes": [
               {
-                "id": "Objects-1790607882743-4",
+                "id": "Objects-1790609213106-4",
                 "type": "custom",
                 "position": {
                   "x": 50,
@@ -2489,7 +3858,7 @@
                 }
               },
               {
-                "id": "Duration-1790607882743-5",
+                "id": "Duration-1790609213106-5",
                 "type": "custom",
                 "position": {
                   "x": 50,
@@ -2504,7 +3873,7 @@
                 }
               },
               {
-                "id": "Spiral-1790607882743-6",
+                "id": "Spiral-1790609213106-6",
                 "type": "custom",
                 "position": {
                   "x": 300,
@@ -2524,7 +3893,7 @@
                 }
               },
               {
-                "id": "Output-1790607882743-7",
+                "id": "Output-1790609213106-7",
                 "type": "custom",
                 "position": {
                   "x": 750,
@@ -2539,9 +3908,9 @@
             ],
             "edges": [
               {
-                "id": "e-Objects-1790607882743-4-Spiral-1790607882743-6-output-input",
-                "source": "Objects-1790607882743-4",
-                "target": "Spiral-1790607882743-6",
+                "id": "e-Objects-1790609213106-4-Spiral-1790609213106-6-output-input",
+                "source": "Objects-1790609213106-4",
+                "target": "Spiral-1790609213106-6",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -2549,9 +3918,9 @@
                 }
               },
               {
-                "id": "e-Duration-1790607882743-5-Spiral-1790607882743-6-output-duration",
-                "source": "Duration-1790607882743-5",
-                "target": "Spiral-1790607882743-6",
+                "id": "e-Duration-1790609213106-5-Spiral-1790609213106-6-output-duration",
+                "source": "Duration-1790609213106-5",
+                "target": "Spiral-1790609213106-6",
                 "sourceHandle": "output",
                 "targetHandle": "duration",
                 "markerEnd": {
@@ -2559,9 +3928,9 @@
                 }
               },
               {
-                "id": "e-Spiral-1790607882743-6-Output-1790607882743-7-output-input",
-                "source": "Spiral-1790607882743-6",
-                "target": "Output-1790607882743-7",
+                "id": "e-Spiral-1790609213106-6-Output-1790609213106-7-output-input",
+                "source": "Spiral-1790609213106-6",
+                "target": "Output-1790609213106-7",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -2593,7 +3962,7 @@
           "graph_json": {
             "nodes": [
               {
-                "id": "Objects-1790607882743-8",
+                "id": "Objects-1790609213106-8",
                 "type": "custom",
                 "position": {
                   "x": 50,
@@ -2608,7 +3977,7 @@
                 }
               },
               {
-                "id": "Duration-1790607882743-9",
+                "id": "Duration-1790609213106-9",
                 "type": "custom",
                 "position": {
                   "x": 50,
@@ -2623,7 +3992,7 @@
                 }
               },
               {
-                "id": "Follow-1790607882743-10",
+                "id": "Follow-1790609213106-10",
                 "type": "custom",
                 "position": {
                   "x": 300,
@@ -2650,7 +4019,7 @@
                 }
               },
               {
-                "id": "Output-1790607882743-11",
+                "id": "Output-1790609213106-11",
                 "type": "custom",
                 "position": {
                   "x": 750,
@@ -2665,9 +4034,9 @@
             ],
             "edges": [
               {
-                "id": "e-Objects-1790607882743-8-Follow-1790607882743-10-output-input",
-                "source": "Objects-1790607882743-8",
-                "target": "Follow-1790607882743-10",
+                "id": "e-Objects-1790609213106-8-Follow-1790609213106-10-output-input",
+                "source": "Objects-1790609213106-8",
+                "target": "Follow-1790609213106-10",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -2675,9 +4044,9 @@
                 }
               },
               {
-                "id": "e-Duration-1790607882743-9-Follow-1790607882743-10-output-duration",
-                "source": "Duration-1790607882743-9",
-                "target": "Follow-1790607882743-10",
+                "id": "e-Duration-1790609213106-9-Follow-1790609213106-10-output-duration",
+                "source": "Duration-1790609213106-9",
+                "target": "Follow-1790609213106-10",
                 "sourceHandle": "output",
                 "targetHandle": "duration",
                 "markerEnd": {
@@ -2685,9 +4054,9 @@
                 }
               },
               {
-                "id": "e-Follow-1790607882743-10-Output-1790607882743-11-output-input",
-                "source": "Follow-1790607882743-10",
-                "target": "Output-1790607882743-11",
+                "id": "e-Follow-1790609213106-10-Output-1790609213106-11-output-input",
+                "source": "Follow-1790609213106-10",
+                "target": "Output-1790609213106-11",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -2723,7 +4092,7 @@
       "graph": {
         "nodes": [
           {
-            "id": "Objects-1790607882743-12",
+            "id": "Objects-1790609213106-12",
             "type": "custom",
             "position": {
               "x": 50,
@@ -2738,7 +4107,7 @@
             }
           },
           {
-            "id": "Duration-1790607882743-13",
+            "id": "Duration-1790609213106-13",
             "type": "custom",
             "position": {
               "x": 50,
@@ -2753,7 +4122,7 @@
             }
           },
           {
-            "id": "AudioAmplitudeFalloff-1790607882743-14",
+            "id": "AudioAmplitudeFalloff-1790609213106-14",
             "type": "custom",
             "position": {
               "x": 300,
@@ -2773,7 +4142,7 @@
             }
           },
           {
-            "id": "Output-1790607882743-15",
+            "id": "Output-1790609213106-15",
             "type": "custom",
             "position": {
               "x": 750,
@@ -2786,7 +4155,7 @@
             }
           },
           {
-            "id": "Rotate-1790607882743-16",
+            "id": "Rotate-1790609213106-16",
             "type": "custom",
             "position": {
               "x": 480,
@@ -2805,9 +4174,9 @@
         ],
         "edges": [
           {
-            "id": "e-Objects-1790607882743-12-AudioAmplitudeFalloff-1790607882743-14-output-input",
-            "source": "Objects-1790607882743-12",
-            "target": "AudioAmplitudeFalloff-1790607882743-14",
+            "id": "e-Objects-1790609213106-12-AudioAmplitudeFalloff-1790609213106-14-output-input",
+            "source": "Objects-1790609213106-12",
+            "target": "AudioAmplitudeFalloff-1790609213106-14",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -2815,9 +4184,9 @@
             }
           },
           {
-            "id": "e-Duration-1790607882743-13-AudioAmplitudeFalloff-1790607882743-14-output-duration",
-            "source": "Duration-1790607882743-13",
-            "target": "AudioAmplitudeFalloff-1790607882743-14",
+            "id": "e-Duration-1790609213106-13-AudioAmplitudeFalloff-1790609213106-14-output-duration",
+            "source": "Duration-1790609213106-13",
+            "target": "AudioAmplitudeFalloff-1790609213106-14",
             "sourceHandle": "output",
             "targetHandle": "duration",
             "markerEnd": {
@@ -2825,9 +4194,9 @@
             }
           },
           {
-            "id": "e-AudioAmplitudeFalloff-1790607882743-14-Rotate-1790607882743-16-output-input",
-            "source": "AudioAmplitudeFalloff-1790607882743-14",
-            "target": "Rotate-1790607882743-16",
+            "id": "e-AudioAmplitudeFalloff-1790609213106-14-Rotate-1790609213106-16-output-input",
+            "source": "AudioAmplitudeFalloff-1790609213106-14",
+            "target": "Rotate-1790609213106-16",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -2835,9 +4204,9 @@
             }
           },
           {
-            "id": "e-Rotate-1790607882743-16-Output-1790607882743-15-output-input",
-            "source": "Rotate-1790607882743-16",
-            "target": "Output-1790607882743-15",
+            "id": "e-Rotate-1790609213106-16-Output-1790609213106-15-output-input",
+            "source": "Rotate-1790609213106-16",
+            "target": "Output-1790609213106-15",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -3142,7 +4511,7 @@
           "graph_json": {
             "nodes": [
               {
-                "id": "Objects-1790607882743-12",
+                "id": "Objects-1790609213106-12",
                 "type": "custom",
                 "position": {
                   "x": 50,
@@ -3157,7 +4526,7 @@
                 }
               },
               {
-                "id": "Duration-1790607882743-13",
+                "id": "Duration-1790609213106-13",
                 "type": "custom",
                 "position": {
                   "x": 50,
@@ -3172,7 +4541,7 @@
                 }
               },
               {
-                "id": "AudioAmplitudeFalloff-1790607882743-14",
+                "id": "AudioAmplitudeFalloff-1790609213106-14",
                 "type": "custom",
                 "position": {
                   "x": 300,
@@ -3192,7 +4561,7 @@
                 }
               },
               {
-                "id": "Output-1790607882743-15",
+                "id": "Output-1790609213106-15",
                 "type": "custom",
                 "position": {
                   "x": 750,
@@ -3205,7 +4574,7 @@
                 }
               },
               {
-                "id": "Rotate-1790607882743-16",
+                "id": "Rotate-1790609213106-16",
                 "type": "custom",
                 "position": {
                   "x": 480,
@@ -3224,9 +4593,9 @@
             ],
             "edges": [
               {
-                "id": "e-Objects-1790607882743-12-AudioAmplitudeFalloff-1790607882743-14-output-input",
-                "source": "Objects-1790607882743-12",
-                "target": "AudioAmplitudeFalloff-1790607882743-14",
+                "id": "e-Objects-1790609213106-12-AudioAmplitudeFalloff-1790609213106-14-output-input",
+                "source": "Objects-1790609213106-12",
+                "target": "AudioAmplitudeFalloff-1790609213106-14",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -3234,9 +4603,9 @@
                 }
               },
               {
-                "id": "e-Duration-1790607882743-13-AudioAmplitudeFalloff-1790607882743-14-output-duration",
-                "source": "Duration-1790607882743-13",
-                "target": "AudioAmplitudeFalloff-1790607882743-14",
+                "id": "e-Duration-1790609213106-13-AudioAmplitudeFalloff-1790609213106-14-output-duration",
+                "source": "Duration-1790609213106-13",
+                "target": "AudioAmplitudeFalloff-1790609213106-14",
                 "sourceHandle": "output",
                 "targetHandle": "duration",
                 "markerEnd": {
@@ -3244,9 +4613,9 @@
                 }
               },
               {
-                "id": "e-AudioAmplitudeFalloff-1790607882743-14-Rotate-1790607882743-16-output-input",
-                "source": "AudioAmplitudeFalloff-1790607882743-14",
-                "target": "Rotate-1790607882743-16",
+                "id": "e-AudioAmplitudeFalloff-1790609213106-14-Rotate-1790609213106-16-output-input",
+                "source": "AudioAmplitudeFalloff-1790609213106-14",
+                "target": "Rotate-1790609213106-16",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -3254,9 +4623,9 @@
                 }
               },
               {
-                "id": "e-Rotate-1790607882743-16-Output-1790607882743-15-output-input",
-                "source": "Rotate-1790607882743-16",
-                "target": "Output-1790607882743-15",
+                "id": "e-Rotate-1790609213106-16-Output-1790609213106-15-output-input",
+                "source": "Rotate-1790609213106-16",
+                "target": "Output-1790609213106-15",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -3296,7 +4665,7 @@
       "graph": {
         "nodes": [
           {
-            "id": "Objects-1790607882743-0",
+            "id": "Objects-1790609213106-0",
             "type": "custom",
             "position": {
               "x": 50,
@@ -3311,7 +4680,7 @@
             }
           },
           {
-            "id": "Duration-1790607882743-1",
+            "id": "Duration-1790609213106-1",
             "type": "custom",
             "position": {
               "x": 50,
@@ -3326,7 +4695,7 @@
             }
           },
           {
-            "id": "Circular-1790607882743-2",
+            "id": "Circular-1790609213106-2",
             "type": "custom",
             "position": {
               "x": 300,
@@ -3345,7 +4714,7 @@
             }
           },
           {
-            "id": "Output-1790607882743-3",
+            "id": "Output-1790609213106-3",
             "type": "custom",
             "position": {
               "x": 750,
@@ -3360,9 +4729,9 @@
         ],
         "edges": [
           {
-            "id": "e-Objects-1790607882743-0-Circular-1790607882743-2-output-input",
-            "source": "Objects-1790607882743-0",
-            "target": "Circular-1790607882743-2",
+            "id": "e-Objects-1790609213106-0-Circular-1790609213106-2-output-input",
+            "source": "Objects-1790609213106-0",
+            "target": "Circular-1790609213106-2",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -3370,9 +4739,9 @@
             }
           },
           {
-            "id": "e-Duration-1790607882743-1-Circular-1790607882743-2-output-duration",
-            "source": "Duration-1790607882743-1",
-            "target": "Circular-1790607882743-2",
+            "id": "e-Duration-1790609213106-1-Circular-1790609213106-2-output-duration",
+            "source": "Duration-1790609213106-1",
+            "target": "Circular-1790609213106-2",
             "sourceHandle": "output",
             "targetHandle": "duration",
             "markerEnd": {
@@ -3380,9 +4749,9 @@
             }
           },
           {
-            "id": "e-Circular-1790607882743-2-Output-1790607882743-3-output-input",
-            "source": "Circular-1790607882743-2",
-            "target": "Output-1790607882743-3",
+            "id": "e-Circular-1790609213106-2-Output-1790609213106-3-output-input",
+            "source": "Circular-1790609213106-2",
+            "target": "Output-1790609213106-3",
             "sourceHandle": "output",
             "targetHandle": "input",
             "markerEnd": {
@@ -3688,7 +5057,7 @@
           "graph_json": {
             "nodes": [
               {
-                "id": "Objects-1790607882743-0",
+                "id": "Objects-1790609213106-0",
                 "type": "custom",
                 "position": {
                   "x": 50,
@@ -3703,7 +5072,7 @@
                 }
               },
               {
-                "id": "Duration-1790607882743-1",
+                "id": "Duration-1790609213106-1",
                 "type": "custom",
                 "position": {
                   "x": 50,
@@ -3718,7 +5087,7 @@
                 }
               },
               {
-                "id": "Circular-1790607882743-2",
+                "id": "Circular-1790609213106-2",
                 "type": "custom",
                 "position": {
                   "x": 300,
@@ -3737,7 +5106,7 @@
                 }
               },
               {
-                "id": "Output-1790607882743-3",
+                "id": "Output-1790609213106-3",
                 "type": "custom",
                 "position": {
                   "x": 750,
@@ -3752,9 +5121,9 @@
             ],
             "edges": [
               {
-                "id": "e-Objects-1790607882743-0-Circular-1790607882743-2-output-input",
-                "source": "Objects-1790607882743-0",
-                "target": "Circular-1790607882743-2",
+                "id": "e-Objects-1790609213106-0-Circular-1790609213106-2-output-input",
+                "source": "Objects-1790609213106-0",
+                "target": "Circular-1790609213106-2",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -3762,9 +5131,9 @@
                 }
               },
               {
-                "id": "e-Duration-1790607882743-1-Circular-1790607882743-2-output-duration",
-                "source": "Duration-1790607882743-1",
-                "target": "Circular-1790607882743-2",
+                "id": "e-Duration-1790609213106-1-Circular-1790609213106-2-output-duration",
+                "source": "Duration-1790609213106-1",
+                "target": "Circular-1790609213106-2",
                 "sourceHandle": "output",
                 "targetHandle": "duration",
                 "markerEnd": {
@@ -3772,9 +5141,9 @@
                 }
               },
               {
-                "id": "e-Circular-1790607882743-2-Output-1790607882743-3-output-input",
-                "source": "Circular-1790607882743-2",
-                "target": "Output-1790607882743-3",
+                "id": "e-Circular-1790609213106-2-Output-1790609213106-3-output-input",
+                "source": "Circular-1790609213106-2",
+                "target": "Output-1790609213106-3",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -3810,7 +5179,7 @@
           "graph_json": {
             "nodes": [
               {
-                "id": "Objects-1790607882743-12",
+                "id": "Objects-1790609213106-12",
                 "type": "custom",
                 "position": {
                   "x": 50,
@@ -3825,7 +5194,7 @@
                 }
               },
               {
-                "id": "Duration-1790607882743-13",
+                "id": "Duration-1790609213106-13",
                 "type": "custom",
                 "position": {
                   "x": 50,
@@ -3840,7 +5209,7 @@
                 }
               },
               {
-                "id": "AudioAmplitudeFalloff-1790607882743-14",
+                "id": "AudioAmplitudeFalloff-1790609213106-14",
                 "type": "custom",
                 "position": {
                   "x": 300,
@@ -3860,7 +5229,7 @@
                 }
               },
               {
-                "id": "Output-1790607882743-15",
+                "id": "Output-1790609213106-15",
                 "type": "custom",
                 "position": {
                   "x": 750,
@@ -3873,7 +5242,7 @@
                 }
               },
               {
-                "id": "Rotate-1790607882743-16",
+                "id": "Rotate-1790609213106-16",
                 "type": "custom",
                 "position": {
                   "x": 480,
@@ -3892,9 +5261,9 @@
             ],
             "edges": [
               {
-                "id": "e-Objects-1790607882743-12-AudioAmplitudeFalloff-1790607882743-14-output-input",
-                "source": "Objects-1790607882743-12",
-                "target": "AudioAmplitudeFalloff-1790607882743-14",
+                "id": "e-Objects-1790609213106-12-AudioAmplitudeFalloff-1790609213106-14-output-input",
+                "source": "Objects-1790609213106-12",
+                "target": "AudioAmplitudeFalloff-1790609213106-14",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -3902,9 +5271,9 @@
                 }
               },
               {
-                "id": "e-Duration-1790607882743-13-AudioAmplitudeFalloff-1790607882743-14-output-duration",
-                "source": "Duration-1790607882743-13",
-                "target": "AudioAmplitudeFalloff-1790607882743-14",
+                "id": "e-Duration-1790609213106-13-AudioAmplitudeFalloff-1790609213106-14-output-duration",
+                "source": "Duration-1790609213106-13",
+                "target": "AudioAmplitudeFalloff-1790609213106-14",
                 "sourceHandle": "output",
                 "targetHandle": "duration",
                 "markerEnd": {
@@ -3912,9 +5281,9 @@
                 }
               },
               {
-                "id": "e-AudioAmplitudeFalloff-1790607882743-14-Rotate-1790607882743-16-output-input",
-                "source": "AudioAmplitudeFalloff-1790607882743-14",
-                "target": "Rotate-1790607882743-16",
+                "id": "e-AudioAmplitudeFalloff-1790609213106-14-Rotate-1790609213106-16-output-input",
+                "source": "AudioAmplitudeFalloff-1790609213106-14",
+                "target": "Rotate-1790609213106-16",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -3922,9 +5291,9 @@
                 }
               },
               {
-                "id": "e-Rotate-1790607882743-16-Output-1790607882743-15-output-input",
-                "source": "Rotate-1790607882743-16",
-                "target": "Output-1790607882743-15",
+                "id": "e-Rotate-1790609213106-16-Output-1790609213106-15-output-input",
+                "source": "Rotate-1790609213106-16",
+                "target": "Output-1790609213106-15",
                 "sourceHandle": "output",
                 "targetHandle": "input",
                 "markerEnd": {
@@ -3953,6 +5322,2534 @@
           "animation_state": null,
           "fade_in": 0.5,
           "fade_out": 0.5
+        }
+      ]
+    },
+    {
+      "id": "cue-layers",
+      "name": "Layers",
+      "schema_version": 1,
+      "description": "Mix + Sequence + TimeFalloff — les trois composites en un cue",
+      "graph": {
+        "nodes": [
+          {
+            "id": "Objects-1790609213106-28",
+            "type": "custom",
+            "position": {
+              "x": 50,
+              "y": 300
+            },
+            "data": {
+              "label": "Objects",
+              "type": "Objects",
+              "params": {
+                "n_objects": 2
+              }
+            }
+          },
+          {
+            "id": "Duration-1790609213106-29",
+            "type": "custom",
+            "position": {
+              "x": 50,
+              "y": 120
+            },
+            "data": {
+              "label": "Duration",
+              "type": "Duration",
+              "params": {
+                "duration": 8
+              }
+            }
+          },
+          {
+            "id": "Circular-1790609213106-30",
+            "type": "custom",
+            "position": {
+              "x": 300,
+              "y": 80
+            },
+            "data": {
+              "label": "Circular",
+              "type": "Circular",
+              "params": {
+                "n_objects": 2,
+                "radius": 2,
+                "speed": 1,
+                "plane": "xz",
+                "phase_offset": true
+              }
+            }
+          },
+          {
+            "id": "Swarm-1790609213106-31",
+            "type": "custom",
+            "position": {
+              "x": 300,
+              "y": 320
+            },
+            "data": {
+              "label": "Swarm",
+              "type": "Swarm",
+              "params": {
+                "n_objects": 2,
+                "separation": 0.3,
+                "alignment": 0.5,
+                "cohesion": 0.3,
+                "max_speed": 0.4,
+                "seed": 42
+              }
+            }
+          },
+          {
+            "id": "Mix-1790609213106-32",
+            "type": "custom",
+            "position": {
+              "x": 580,
+              "y": 200
+            },
+            "data": {
+              "label": "Mix",
+              "type": "Mix",
+              "params": {
+                "blend": 0.7
+              }
+            }
+          },
+          {
+            "id": "Output-1790609213106-33",
+            "type": "custom",
+            "position": {
+              "x": 820,
+              "y": 200
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e-Objects-1790609213106-28-Circular-1790609213106-30-output-input",
+            "source": "Objects-1790609213106-28",
+            "target": "Circular-1790609213106-30",
+            "sourceHandle": "output",
+            "targetHandle": "input",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Objects-1790609213106-28-Swarm-1790609213106-31-output-input",
+            "source": "Objects-1790609213106-28",
+            "target": "Swarm-1790609213106-31",
+            "sourceHandle": "output",
+            "targetHandle": "input",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Duration-1790609213106-29-Circular-1790609213106-30-output-duration",
+            "source": "Duration-1790609213106-29",
+            "target": "Circular-1790609213106-30",
+            "sourceHandle": "output",
+            "targetHandle": "duration",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Duration-1790609213106-29-Swarm-1790609213106-31-output-duration",
+            "source": "Duration-1790609213106-29",
+            "target": "Swarm-1790609213106-31",
+            "sourceHandle": "output",
+            "targetHandle": "duration",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Circular-1790609213106-30-Mix-1790609213106-32-output-input_a",
+            "source": "Circular-1790609213106-30",
+            "target": "Mix-1790609213106-32",
+            "sourceHandle": "output",
+            "targetHandle": "input_a",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Swarm-1790609213106-31-Mix-1790609213106-32-output-input_b",
+            "source": "Swarm-1790609213106-31",
+            "target": "Mix-1790609213106-32",
+            "sourceHandle": "output",
+            "targetHandle": "input_b",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Mix-1790609213106-32-Output-1790609213106-33-output-input",
+            "source": "Mix-1790609213106-32",
+            "target": "Output-1790609213106-33",
+            "sourceHandle": "output",
+            "targetHandle": "input",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          }
+        ]
+      },
+      "timestamp": 0,
+      "macros": {
+        "speed": 1,
+        "scale": 1,
+        "shift_x": 0,
+        "shift_y": 0,
+        "shift_z": 0,
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "track_indices": [],
+      "fade_duration": 2.5,
+      "cue_number": "5",
+      "global_graph": {
+        "nodes": [
+          {
+            "id": "merge-global-demo-0",
+            "type": "custom",
+            "position": {
+              "x": 50,
+              "y": 250
+            },
+            "data": {
+              "label": "Merge",
+              "type": "Merge",
+              "params": {
+                "strategy": "crossfade"
+              }
+            }
+          },
+          {
+            "id": "manualposition-global-demo-1",
+            "type": "custom",
+            "position": {
+              "x": 210,
+              "y": 250
+            },
+            "data": {
+              "label": "ManualPosition",
+              "type": "ManualPosition",
+              "params": {}
+            }
+          },
+          {
+            "id": "radiusscale-global-demo-2",
+            "type": "custom",
+            "position": {
+              "x": 380,
+              "y": 250
+            },
+            "data": {
+              "label": "RadiusScale",
+              "type": "RadiusScale",
+              "params": {
+                "radius_scale": 1
+              }
+            }
+          },
+          {
+            "id": "heightoffset-global-demo-3",
+            "type": "custom",
+            "position": {
+              "x": 550,
+              "y": 250
+            },
+            "data": {
+              "label": "HeightOffset",
+              "type": "HeightOffset",
+              "params": {
+                "height_offset": 0
+              }
+            }
+          },
+          {
+            "id": "pertrackdepth-global-demo-4",
+            "type": "custom",
+            "position": {
+              "x": 720,
+              "y": 250
+            },
+            "data": {
+              "label": "PerTrackDepth",
+              "type": "PerTrackDepth",
+              "params": {
+                "depths": []
+              }
+            }
+          },
+          {
+            "id": "scale-global-demo-5",
+            "type": "custom",
+            "position": {
+              "x": 890,
+              "y": 250
+            },
+            "data": {
+              "label": "Scale",
+              "type": "Scale",
+              "params": {
+                "scale": 1
+              }
+            }
+          },
+          {
+            "id": "rotate-global-demo-6",
+            "type": "custom",
+            "position": {
+              "x": 1060,
+              "y": 250
+            },
+            "data": {
+              "label": "Rotate",
+              "type": "Rotate",
+              "params": {
+                "yaw": 0,
+                "pitch": 0,
+                "roll": 0
+              }
+            }
+          },
+          {
+            "id": "offset-global-demo-7",
+            "type": "custom",
+            "position": {
+              "x": 1230,
+              "y": 250
+            },
+            "data": {
+              "label": "Offset",
+              "type": "Offset",
+              "params": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            }
+          },
+          {
+            "id": "zone-global-demo-8",
+            "type": "custom",
+            "position": {
+              "x": 1400,
+              "y": 250
+            },
+            "data": {
+              "label": "Zone",
+              "type": "Zone",
+              "params": {
+                "shape": "sphere",
+                "center": [
+                  0,
+                  0,
+                  0
+                ],
+                "radius": 2.5,
+                "falloff": 0.8,
+                "channels": {
+                  "spread": 1
+                },
+                "enabled": true
+              }
+            }
+          },
+          {
+            "id": "velocity-global-demo-9",
+            "type": "custom",
+            "position": {
+              "x": 1570,
+              "y": 250
+            },
+            "data": {
+              "label": "Velocity",
+              "type": "Velocity",
+              "params": {
+                "source": "speed",
+                "channel": "spread",
+                "scale": 0.12,
+                "offset": 0,
+                "min": 0,
+                "max": 1,
+                "listener": [
+                  0,
+                  0,
+                  0
+                ]
+              }
+            }
+          },
+          {
+            "id": "output-global-demo-10",
+            "type": "custom",
+            "position": {
+              "x": 1740,
+              "y": 250
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "merge-global-demo-0-manualposition-global-demo-1",
+            "source": "merge-global-demo-0",
+            "target": "manualposition-global-demo-1",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          },
+          {
+            "id": "manualposition-global-demo-1-radiusscale-global-demo-2",
+            "source": "manualposition-global-demo-1",
+            "target": "radiusscale-global-demo-2",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          },
+          {
+            "id": "radiusscale-global-demo-2-heightoffset-global-demo-3",
+            "source": "radiusscale-global-demo-2",
+            "target": "heightoffset-global-demo-3",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          },
+          {
+            "id": "heightoffset-global-demo-3-pertrackdepth-global-demo-4",
+            "source": "heightoffset-global-demo-3",
+            "target": "pertrackdepth-global-demo-4",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          },
+          {
+            "id": "pertrackdepth-global-demo-4-scale-global-demo-5",
+            "source": "pertrackdepth-global-demo-4",
+            "target": "scale-global-demo-5",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          },
+          {
+            "id": "scale-global-demo-5-rotate-global-demo-6",
+            "source": "scale-global-demo-5",
+            "target": "rotate-global-demo-6",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          },
+          {
+            "id": "rotate-global-demo-6-offset-global-demo-7",
+            "source": "rotate-global-demo-6",
+            "target": "offset-global-demo-7",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          },
+          {
+            "id": "offset-global-demo-7-zone-global-demo-8",
+            "source": "offset-global-demo-7",
+            "target": "zone-global-demo-8",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          },
+          {
+            "id": "zone-global-demo-8-velocity-global-demo-9",
+            "source": "zone-global-demo-8",
+            "target": "velocity-global-demo-9",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          },
+          {
+            "id": "velocity-global-demo-9-output-global-demo-10",
+            "source": "velocity-global-demo-9",
+            "target": "output-global-demo-10",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          }
+        ]
+      },
+      "active_move_ids": [
+        "mv-mix",
+        "mv-sequence",
+        "mv-fadein"
+      ],
+      "per_track_depths": [],
+      "manual_positions": {},
+      "spatial_macros": {
+        "radius_scale": 1,
+        "height_offset": 0
+      },
+      "object_channels": null,
+      "channel_modulations": null,
+      "osc_mappings": null,
+      "zones": null,
+      "moves": [
+        {
+          "id": "mv-mix",
+          "name": "Order + Chaos",
+          "graph_json": {
+            "nodes": [
+              {
+                "id": "Objects-1790609213106-28",
+                "type": "custom",
+                "position": {
+                  "x": 50,
+                  "y": 300
+                },
+                "data": {
+                  "label": "Objects",
+                  "type": "Objects",
+                  "params": {
+                    "n_objects": 2
+                  }
+                }
+              },
+              {
+                "id": "Duration-1790609213106-29",
+                "type": "custom",
+                "position": {
+                  "x": 50,
+                  "y": 120
+                },
+                "data": {
+                  "label": "Duration",
+                  "type": "Duration",
+                  "params": {
+                    "duration": 8
+                  }
+                }
+              },
+              {
+                "id": "Circular-1790609213106-30",
+                "type": "custom",
+                "position": {
+                  "x": 300,
+                  "y": 80
+                },
+                "data": {
+                  "label": "Circular",
+                  "type": "Circular",
+                  "params": {
+                    "n_objects": 2,
+                    "radius": 2,
+                    "speed": 1,
+                    "plane": "xz",
+                    "phase_offset": true
+                  }
+                }
+              },
+              {
+                "id": "Swarm-1790609213106-31",
+                "type": "custom",
+                "position": {
+                  "x": 300,
+                  "y": 320
+                },
+                "data": {
+                  "label": "Swarm",
+                  "type": "Swarm",
+                  "params": {
+                    "n_objects": 2,
+                    "separation": 0.3,
+                    "alignment": 0.5,
+                    "cohesion": 0.3,
+                    "max_speed": 0.4,
+                    "seed": 42
+                  }
+                }
+              },
+              {
+                "id": "Mix-1790609213106-32",
+                "type": "custom",
+                "position": {
+                  "x": 580,
+                  "y": 200
+                },
+                "data": {
+                  "label": "Mix",
+                  "type": "Mix",
+                  "params": {
+                    "blend": 0.7
+                  }
+                }
+              },
+              {
+                "id": "Output-1790609213106-33",
+                "type": "custom",
+                "position": {
+                  "x": 820,
+                  "y": 200
+                },
+                "data": {
+                  "label": "Output",
+                  "type": "Output",
+                  "params": {}
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "e-Objects-1790609213106-28-Circular-1790609213106-30-output-input",
+                "source": "Objects-1790609213106-28",
+                "target": "Circular-1790609213106-30",
+                "sourceHandle": "output",
+                "targetHandle": "input",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              },
+              {
+                "id": "e-Objects-1790609213106-28-Swarm-1790609213106-31-output-input",
+                "source": "Objects-1790609213106-28",
+                "target": "Swarm-1790609213106-31",
+                "sourceHandle": "output",
+                "targetHandle": "input",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              },
+              {
+                "id": "e-Duration-1790609213106-29-Circular-1790609213106-30-output-duration",
+                "source": "Duration-1790609213106-29",
+                "target": "Circular-1790609213106-30",
+                "sourceHandle": "output",
+                "targetHandle": "duration",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              },
+              {
+                "id": "e-Duration-1790609213106-29-Swarm-1790609213106-31-output-duration",
+                "source": "Duration-1790609213106-29",
+                "target": "Swarm-1790609213106-31",
+                "sourceHandle": "output",
+                "targetHandle": "duration",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              },
+              {
+                "id": "e-Circular-1790609213106-30-Mix-1790609213106-32-output-input_a",
+                "source": "Circular-1790609213106-30",
+                "target": "Mix-1790609213106-32",
+                "sourceHandle": "output",
+                "targetHandle": "input_a",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              },
+              {
+                "id": "e-Swarm-1790609213106-31-Mix-1790609213106-32-output-input_b",
+                "source": "Swarm-1790609213106-31",
+                "target": "Mix-1790609213106-32",
+                "sourceHandle": "output",
+                "targetHandle": "input_b",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              },
+              {
+                "id": "e-Mix-1790609213106-32-Output-1790609213106-33-output-input",
+                "source": "Mix-1790609213106-32",
+                "target": "Output-1790609213106-33",
+                "sourceHandle": "output",
+                "targetHandle": "input",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              }
+            ]
+          },
+          "osc_ids": [
+            1,
+            2
+          ],
+          "track_indices": [
+            0,
+            1
+          ],
+          "is_preview": false,
+          "origin": null,
+          "duration": 4,
+          "loop_mode": "loop",
+          "direction": "forward",
+          "animation_state": null,
+          "fade_in": 1,
+          "fade_out": 1
+        },
+        {
+          "id": "mv-sequence",
+          "name": "Circle→Spiral",
+          "graph_json": {
+            "nodes": [
+              {
+                "id": "Objects-1790609213106-34",
+                "type": "custom",
+                "position": {
+                  "x": 50,
+                  "y": 300
+                },
+                "data": {
+                  "label": "Objects",
+                  "type": "Objects",
+                  "params": {
+                    "n_objects": 2
+                  }
+                }
+              },
+              {
+                "id": "Duration-1790609213106-35",
+                "type": "custom",
+                "position": {
+                  "x": 50,
+                  "y": 120
+                },
+                "data": {
+                  "label": "Duration",
+                  "type": "Duration",
+                  "params": {
+                    "duration": 4
+                  }
+                }
+              },
+              {
+                "id": "Circular-1790609213106-36",
+                "type": "custom",
+                "position": {
+                  "x": 300,
+                  "y": 80
+                },
+                "data": {
+                  "label": "Circular",
+                  "type": "Circular",
+                  "params": {
+                    "n_objects": 2,
+                    "radius": 2,
+                    "speed": 1,
+                    "plane": "xz",
+                    "phase_offset": true
+                  }
+                }
+              },
+              {
+                "id": "Spiral-1790609213106-37",
+                "type": "custom",
+                "position": {
+                  "x": 300,
+                  "y": 320
+                },
+                "data": {
+                  "label": "Spiral",
+                  "type": "Spiral",
+                  "params": {
+                    "n_objects": 2,
+                    "radius": 0.5,
+                    "speed": 1,
+                    "expansion": 1,
+                    "plane": "xz",
+                    "phase_offset": true
+                  }
+                }
+              },
+              {
+                "id": "Sequence-1790609213106-38",
+                "type": "custom",
+                "position": {
+                  "x": 580,
+                  "y": 200
+                },
+                "data": {
+                  "label": "Sequence",
+                  "type": "Sequence",
+                  "params": {}
+                }
+              },
+              {
+                "id": "Output-1790609213106-39",
+                "type": "custom",
+                "position": {
+                  "x": 820,
+                  "y": 200
+                },
+                "data": {
+                  "label": "Output",
+                  "type": "Output",
+                  "params": {}
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "e-Objects-1790609213106-34-Circular-1790609213106-36-output-input",
+                "source": "Objects-1790609213106-34",
+                "target": "Circular-1790609213106-36",
+                "sourceHandle": "output",
+                "targetHandle": "input",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              },
+              {
+                "id": "e-Objects-1790609213106-34-Spiral-1790609213106-37-output-input",
+                "source": "Objects-1790609213106-34",
+                "target": "Spiral-1790609213106-37",
+                "sourceHandle": "output",
+                "targetHandle": "input",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              },
+              {
+                "id": "e-Duration-1790609213106-35-Circular-1790609213106-36-output-duration",
+                "source": "Duration-1790609213106-35",
+                "target": "Circular-1790609213106-36",
+                "sourceHandle": "output",
+                "targetHandle": "duration",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              },
+              {
+                "id": "e-Duration-1790609213106-35-Spiral-1790609213106-37-output-duration",
+                "source": "Duration-1790609213106-35",
+                "target": "Spiral-1790609213106-37",
+                "sourceHandle": "output",
+                "targetHandle": "duration",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              },
+              {
+                "id": "e-Circular-1790609213106-36-Sequence-1790609213106-38-output-input_a",
+                "source": "Circular-1790609213106-36",
+                "target": "Sequence-1790609213106-38",
+                "sourceHandle": "output",
+                "targetHandle": "input_a",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              },
+              {
+                "id": "e-Spiral-1790609213106-37-Sequence-1790609213106-38-output-input_b",
+                "source": "Spiral-1790609213106-37",
+                "target": "Sequence-1790609213106-38",
+                "sourceHandle": "output",
+                "targetHandle": "input_b",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              },
+              {
+                "id": "e-Sequence-1790609213106-38-Output-1790609213106-39-output-input",
+                "source": "Sequence-1790609213106-38",
+                "target": "Output-1790609213106-39",
+                "sourceHandle": "output",
+                "targetHandle": "input",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              }
+            ]
+          },
+          "osc_ids": [
+            3,
+            4
+          ],
+          "track_indices": [
+            2,
+            3
+          ],
+          "is_preview": false,
+          "origin": null,
+          "duration": 4,
+          "loop_mode": "loop",
+          "direction": "backward",
+          "animation_state": null,
+          "fade_in": 0.5,
+          "fade_out": 0.5
+        },
+        {
+          "id": "mv-fadein",
+          "name": "Orbit Fade-In",
+          "graph_json": {
+            "nodes": [
+              {
+                "id": "Objects-1790609213106-40",
+                "type": "custom",
+                "position": {
+                  "x": 50,
+                  "y": 250
+                },
+                "data": {
+                  "label": "Objects",
+                  "type": "Objects",
+                  "params": {
+                    "n_objects": 2
+                  }
+                }
+              },
+              {
+                "id": "Duration-1790609213106-41",
+                "type": "custom",
+                "position": {
+                  "x": 50,
+                  "y": 80
+                },
+                "data": {
+                  "label": "Duration",
+                  "type": "Duration",
+                  "params": {
+                    "duration": 6
+                  }
+                }
+              },
+              {
+                "id": "TimeFalloff-1790609213106-42",
+                "type": "custom",
+                "position": {
+                  "x": 300,
+                  "y": 180
+                },
+                "data": {
+                  "label": "TimeFalloff",
+                  "type": "TimeFalloff",
+                  "params": {
+                    "start_time": 0,
+                    "end_time": 2.5,
+                    "radius": 2.5,
+                    "curve": "ease_out",
+                    "plane": "xz"
+                  }
+                }
+              },
+              {
+                "id": "Output-1790609213106-43",
+                "type": "custom",
+                "position": {
+                  "x": 750,
+                  "y": 180
+                },
+                "data": {
+                  "label": "Output",
+                  "type": "Output",
+                  "params": {}
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "e-Objects-1790609213106-40-TimeFalloff-1790609213106-42-output-input",
+                "source": "Objects-1790609213106-40",
+                "target": "TimeFalloff-1790609213106-42",
+                "sourceHandle": "output",
+                "targetHandle": "input",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              },
+              {
+                "id": "e-Duration-1790609213106-41-TimeFalloff-1790609213106-42-output-duration",
+                "source": "Duration-1790609213106-41",
+                "target": "TimeFalloff-1790609213106-42",
+                "sourceHandle": "output",
+                "targetHandle": "duration",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              },
+              {
+                "id": "e-TimeFalloff-1790609213106-42-Output-1790609213106-43-output-input",
+                "source": "TimeFalloff-1790609213106-42",
+                "target": "Output-1790609213106-43",
+                "sourceHandle": "output",
+                "targetHandle": "input",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              }
+            ]
+          },
+          "osc_ids": [
+            5,
+            6
+          ],
+          "track_indices": [
+            4,
+            5
+          ],
+          "is_preview": false,
+          "origin": null,
+          "duration": 4,
+          "loop_mode": "loop",
+          "direction": "forward",
+          "animation_state": null,
+          "fade_in": 0.5,
+          "fade_out": 0.5
+        }
+      ]
+    },
+    {
+      "id": "cue-fields",
+      "name": "Fields",
+      "schema_version": 1,
+      "description": "DirectionalFalloff + Modifier Chain + PointDistance — falloffs spatiaux et transforms",
+      "graph": {
+        "nodes": [
+          {
+            "id": "Objects-1790609213106-48",
+            "type": "custom",
+            "position": {
+              "x": 50,
+              "y": 250
+            },
+            "data": {
+              "label": "Objects",
+              "type": "Objects",
+              "params": {
+                "n_objects": 2
+              }
+            }
+          },
+          {
+            "id": "Duration-1790609213106-49",
+            "type": "custom",
+            "position": {
+              "x": 50,
+              "y": 80
+            },
+            "data": {
+              "label": "Duration",
+              "type": "Duration",
+              "params": {
+                "duration": 4
+              }
+            }
+          },
+          {
+            "id": "DirectionalFalloff-1790609213106-50",
+            "type": "custom",
+            "position": {
+              "x": 300,
+              "y": 180
+            },
+            "data": {
+              "label": "DirectionalFalloff",
+              "type": "DirectionalFalloff",
+              "params": {
+                "direction": [
+                  1,
+                  0,
+                  0
+                ],
+                "max_distance": 3,
+                "radius": 2,
+                "curve": "ease_in_out",
+                "plane": "xz"
+              }
+            }
+          },
+          {
+            "id": "Output-1790609213106-51",
+            "type": "custom",
+            "position": {
+              "x": 750,
+              "y": 180
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          },
+          {
+            "id": "Rotate-1790609213106-52",
+            "type": "custom",
+            "position": {
+              "x": 480,
+              "y": 180
+            },
+            "data": {
+              "label": "Rotate",
+              "type": "Rotate",
+              "params": {
+                "angleX": 0,
+                "angleY": 0,
+                "angleZ": 0.35
+              }
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e-Objects-1790609213106-48-DirectionalFalloff-1790609213106-50-output-input",
+            "source": "Objects-1790609213106-48",
+            "target": "DirectionalFalloff-1790609213106-50",
+            "sourceHandle": "output",
+            "targetHandle": "input",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Duration-1790609213106-49-DirectionalFalloff-1790609213106-50-output-duration",
+            "source": "Duration-1790609213106-49",
+            "target": "DirectionalFalloff-1790609213106-50",
+            "sourceHandle": "output",
+            "targetHandle": "duration",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-DirectionalFalloff-1790609213106-50-Rotate-1790609213106-52-output-input",
+            "source": "DirectionalFalloff-1790609213106-50",
+            "target": "Rotate-1790609213106-52",
+            "sourceHandle": "output",
+            "targetHandle": "input",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Rotate-1790609213106-52-Output-1790609213106-51-output-input",
+            "source": "Rotate-1790609213106-52",
+            "target": "Output-1790609213106-51",
+            "sourceHandle": "output",
+            "targetHandle": "input",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          }
+        ]
+      },
+      "timestamp": 0,
+      "macros": {
+        "speed": 1,
+        "scale": 1,
+        "shift_x": 0,
+        "shift_y": 0,
+        "shift_z": 0,
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "track_indices": [],
+      "fade_duration": 2,
+      "cue_number": "6",
+      "global_graph": {
+        "nodes": [
+          {
+            "id": "merge-global-demo-0",
+            "type": "custom",
+            "position": {
+              "x": 50,
+              "y": 250
+            },
+            "data": {
+              "label": "Merge",
+              "type": "Merge",
+              "params": {
+                "strategy": "crossfade"
+              }
+            }
+          },
+          {
+            "id": "manualposition-global-demo-1",
+            "type": "custom",
+            "position": {
+              "x": 210,
+              "y": 250
+            },
+            "data": {
+              "label": "ManualPosition",
+              "type": "ManualPosition",
+              "params": {}
+            }
+          },
+          {
+            "id": "radiusscale-global-demo-2",
+            "type": "custom",
+            "position": {
+              "x": 380,
+              "y": 250
+            },
+            "data": {
+              "label": "RadiusScale",
+              "type": "RadiusScale",
+              "params": {
+                "radius_scale": 1
+              }
+            }
+          },
+          {
+            "id": "heightoffset-global-demo-3",
+            "type": "custom",
+            "position": {
+              "x": 550,
+              "y": 250
+            },
+            "data": {
+              "label": "HeightOffset",
+              "type": "HeightOffset",
+              "params": {
+                "height_offset": 0
+              }
+            }
+          },
+          {
+            "id": "pertrackdepth-global-demo-4",
+            "type": "custom",
+            "position": {
+              "x": 720,
+              "y": 250
+            },
+            "data": {
+              "label": "PerTrackDepth",
+              "type": "PerTrackDepth",
+              "params": {
+                "depths": []
+              }
+            }
+          },
+          {
+            "id": "scale-global-demo-5",
+            "type": "custom",
+            "position": {
+              "x": 890,
+              "y": 250
+            },
+            "data": {
+              "label": "Scale",
+              "type": "Scale",
+              "params": {
+                "scale": 1
+              }
+            }
+          },
+          {
+            "id": "rotate-global-demo-6",
+            "type": "custom",
+            "position": {
+              "x": 1060,
+              "y": 250
+            },
+            "data": {
+              "label": "Rotate",
+              "type": "Rotate",
+              "params": {
+                "yaw": 0,
+                "pitch": 0,
+                "roll": 0
+              }
+            }
+          },
+          {
+            "id": "offset-global-demo-7",
+            "type": "custom",
+            "position": {
+              "x": 1230,
+              "y": 250
+            },
+            "data": {
+              "label": "Offset",
+              "type": "Offset",
+              "params": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            }
+          },
+          {
+            "id": "zone-global-demo-8",
+            "type": "custom",
+            "position": {
+              "x": 1400,
+              "y": 250
+            },
+            "data": {
+              "label": "Zone",
+              "type": "Zone",
+              "params": {
+                "shape": "sphere",
+                "center": [
+                  0,
+                  0,
+                  0
+                ],
+                "radius": 2.5,
+                "falloff": 0.8,
+                "channels": {
+                  "spread": 1
+                },
+                "enabled": true
+              }
+            }
+          },
+          {
+            "id": "velocity-global-demo-9",
+            "type": "custom",
+            "position": {
+              "x": 1570,
+              "y": 250
+            },
+            "data": {
+              "label": "Velocity",
+              "type": "Velocity",
+              "params": {
+                "source": "speed",
+                "channel": "spread",
+                "scale": 0.12,
+                "offset": 0,
+                "min": 0,
+                "max": 1,
+                "listener": [
+                  0,
+                  0,
+                  0
+                ]
+              }
+            }
+          },
+          {
+            "id": "output-global-demo-10",
+            "type": "custom",
+            "position": {
+              "x": 1740,
+              "y": 250
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "merge-global-demo-0-manualposition-global-demo-1",
+            "source": "merge-global-demo-0",
+            "target": "manualposition-global-demo-1",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          },
+          {
+            "id": "manualposition-global-demo-1-radiusscale-global-demo-2",
+            "source": "manualposition-global-demo-1",
+            "target": "radiusscale-global-demo-2",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          },
+          {
+            "id": "radiusscale-global-demo-2-heightoffset-global-demo-3",
+            "source": "radiusscale-global-demo-2",
+            "target": "heightoffset-global-demo-3",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          },
+          {
+            "id": "heightoffset-global-demo-3-pertrackdepth-global-demo-4",
+            "source": "heightoffset-global-demo-3",
+            "target": "pertrackdepth-global-demo-4",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          },
+          {
+            "id": "pertrackdepth-global-demo-4-scale-global-demo-5",
+            "source": "pertrackdepth-global-demo-4",
+            "target": "scale-global-demo-5",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          },
+          {
+            "id": "scale-global-demo-5-rotate-global-demo-6",
+            "source": "scale-global-demo-5",
+            "target": "rotate-global-demo-6",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          },
+          {
+            "id": "rotate-global-demo-6-offset-global-demo-7",
+            "source": "rotate-global-demo-6",
+            "target": "offset-global-demo-7",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          },
+          {
+            "id": "offset-global-demo-7-zone-global-demo-8",
+            "source": "offset-global-demo-7",
+            "target": "zone-global-demo-8",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          },
+          {
+            "id": "zone-global-demo-8-velocity-global-demo-9",
+            "source": "zone-global-demo-8",
+            "target": "velocity-global-demo-9",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          },
+          {
+            "id": "velocity-global-demo-9-output-global-demo-10",
+            "source": "velocity-global-demo-9",
+            "target": "output-global-demo-10",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          }
+        ]
+      },
+      "active_move_ids": [
+        "mv-sidesweep",
+        "mv-chain",
+        "mv-gravity"
+      ],
+      "per_track_depths": [],
+      "manual_positions": {},
+      "spatial_macros": {
+        "radius_scale": 1,
+        "height_offset": 0
+      },
+      "object_channels": null,
+      "channel_modulations": null,
+      "osc_mappings": null,
+      "zones": null,
+      "moves": [
+        {
+          "id": "mv-sidesweep",
+          "name": "Side Sweep",
+          "graph_json": {
+            "nodes": [
+              {
+                "id": "Objects-1790609213106-48",
+                "type": "custom",
+                "position": {
+                  "x": 50,
+                  "y": 250
+                },
+                "data": {
+                  "label": "Objects",
+                  "type": "Objects",
+                  "params": {
+                    "n_objects": 2
+                  }
+                }
+              },
+              {
+                "id": "Duration-1790609213106-49",
+                "type": "custom",
+                "position": {
+                  "x": 50,
+                  "y": 80
+                },
+                "data": {
+                  "label": "Duration",
+                  "type": "Duration",
+                  "params": {
+                    "duration": 4
+                  }
+                }
+              },
+              {
+                "id": "DirectionalFalloff-1790609213106-50",
+                "type": "custom",
+                "position": {
+                  "x": 300,
+                  "y": 180
+                },
+                "data": {
+                  "label": "DirectionalFalloff",
+                  "type": "DirectionalFalloff",
+                  "params": {
+                    "direction": [
+                      1,
+                      0,
+                      0
+                    ],
+                    "max_distance": 3,
+                    "radius": 2,
+                    "curve": "ease_in_out",
+                    "plane": "xz"
+                  }
+                }
+              },
+              {
+                "id": "Output-1790609213106-51",
+                "type": "custom",
+                "position": {
+                  "x": 750,
+                  "y": 180
+                },
+                "data": {
+                  "label": "Output",
+                  "type": "Output",
+                  "params": {}
+                }
+              },
+              {
+                "id": "Rotate-1790609213106-52",
+                "type": "custom",
+                "position": {
+                  "x": 480,
+                  "y": 180
+                },
+                "data": {
+                  "label": "Rotate",
+                  "type": "Rotate",
+                  "params": {
+                    "angleX": 0,
+                    "angleY": 0,
+                    "angleZ": 0.35
+                  }
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "e-Objects-1790609213106-48-DirectionalFalloff-1790609213106-50-output-input",
+                "source": "Objects-1790609213106-48",
+                "target": "DirectionalFalloff-1790609213106-50",
+                "sourceHandle": "output",
+                "targetHandle": "input",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              },
+              {
+                "id": "e-Duration-1790609213106-49-DirectionalFalloff-1790609213106-50-output-duration",
+                "source": "Duration-1790609213106-49",
+                "target": "DirectionalFalloff-1790609213106-50",
+                "sourceHandle": "output",
+                "targetHandle": "duration",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              },
+              {
+                "id": "e-DirectionalFalloff-1790609213106-50-Rotate-1790609213106-52-output-input",
+                "source": "DirectionalFalloff-1790609213106-50",
+                "target": "Rotate-1790609213106-52",
+                "sourceHandle": "output",
+                "targetHandle": "input",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              },
+              {
+                "id": "e-Rotate-1790609213106-52-Output-1790609213106-51-output-input",
+                "source": "Rotate-1790609213106-52",
+                "target": "Output-1790609213106-51",
+                "sourceHandle": "output",
+                "targetHandle": "input",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              }
+            ]
+          },
+          "osc_ids": [
+            1,
+            2
+          ],
+          "track_indices": [
+            0,
+            1
+          ],
+          "is_preview": false,
+          "origin": null,
+          "duration": 4,
+          "loop_mode": "loop",
+          "direction": "forward",
+          "animation_state": null,
+          "fade_in": 0.5,
+          "fade_out": 0.5
+        },
+        {
+          "id": "mv-chain",
+          "name": "Modifier Chain",
+          "graph_json": {
+            "nodes": [
+              {
+                "id": "Objects-1790609213106-53",
+                "type": "custom",
+                "position": {
+                  "x": 50,
+                  "y": 250
+                },
+                "data": {
+                  "label": "Objects",
+                  "type": "Objects",
+                  "params": {
+                    "n_objects": 2
+                  }
+                }
+              },
+              {
+                "id": "Duration-1790609213106-54",
+                "type": "custom",
+                "position": {
+                  "x": 50,
+                  "y": 80
+                },
+                "data": {
+                  "label": "Duration",
+                  "type": "Duration",
+                  "params": {
+                    "duration": 4
+                  }
+                }
+              },
+              {
+                "id": "Circular-1790609213106-55",
+                "type": "custom",
+                "position": {
+                  "x": 300,
+                  "y": 180
+                },
+                "data": {
+                  "label": "Circular",
+                  "type": "Circular",
+                  "params": {
+                    "n_objects": 2,
+                    "radius": 1.5,
+                    "speed": 1,
+                    "plane": "xz",
+                    "phase_offset": true
+                  }
+                }
+              },
+              {
+                "id": "Output-1790609213106-56",
+                "type": "custom",
+                "position": {
+                  "x": 750,
+                  "y": 180
+                },
+                "data": {
+                  "label": "Output",
+                  "type": "Output",
+                  "params": {}
+                }
+              },
+              {
+                "id": "Rotate-1790609213106-57",
+                "type": "custom",
+                "position": {
+                  "x": 480,
+                  "y": 180
+                },
+                "data": {
+                  "label": "Rotate",
+                  "type": "Rotate",
+                  "params": {
+                    "angleX": 0.3,
+                    "angleY": 0,
+                    "angleZ": 0.2
+                  }
+                }
+              },
+              {
+                "id": "Offset-1790609213106-58",
+                "type": "custom",
+                "position": {
+                  "x": 660,
+                  "y": 180
+                },
+                "data": {
+                  "label": "Offset",
+                  "type": "Offset",
+                  "params": {
+                    "x": 1.5,
+                    "y": 0.5,
+                    "z": 0
+                  }
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "e-Objects-1790609213106-53-Circular-1790609213106-55-output-input",
+                "source": "Objects-1790609213106-53",
+                "target": "Circular-1790609213106-55",
+                "sourceHandle": "output",
+                "targetHandle": "input",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              },
+              {
+                "id": "e-Duration-1790609213106-54-Circular-1790609213106-55-output-duration",
+                "source": "Duration-1790609213106-54",
+                "target": "Circular-1790609213106-55",
+                "sourceHandle": "output",
+                "targetHandle": "duration",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              },
+              {
+                "id": "e-Circular-1790609213106-55-Rotate-1790609213106-57-output-input",
+                "source": "Circular-1790609213106-55",
+                "target": "Rotate-1790609213106-57",
+                "sourceHandle": "output",
+                "targetHandle": "input",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              },
+              {
+                "id": "e-Rotate-1790609213106-57-Offset-1790609213106-58-output-input",
+                "source": "Rotate-1790609213106-57",
+                "target": "Offset-1790609213106-58",
+                "sourceHandle": "output",
+                "targetHandle": "input",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              },
+              {
+                "id": "e-Offset-1790609213106-58-Output-1790609213106-56-output-input",
+                "source": "Offset-1790609213106-58",
+                "target": "Output-1790609213106-56",
+                "sourceHandle": "output",
+                "targetHandle": "input",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              }
+            ]
+          },
+          "osc_ids": [
+            3,
+            4
+          ],
+          "track_indices": [
+            2,
+            3
+          ],
+          "is_preview": false,
+          "origin": null,
+          "duration": 4,
+          "loop_mode": "loop",
+          "direction": "forward",
+          "animation_state": null,
+          "fade_in": 0.5,
+          "fade_out": 0.5
+        },
+        {
+          "id": "mv-gravity",
+          "name": "Gravity Well",
+          "graph_json": {
+            "nodes": [
+              {
+                "id": "Objects-1790609213106-44",
+                "type": "custom",
+                "position": {
+                  "x": 50,
+                  "y": 250
+                },
+                "data": {
+                  "label": "Objects",
+                  "type": "Objects",
+                  "params": {
+                    "n_objects": 2
+                  }
+                }
+              },
+              {
+                "id": "Duration-1790609213106-45",
+                "type": "custom",
+                "position": {
+                  "x": 50,
+                  "y": 80
+                },
+                "data": {
+                  "label": "Duration",
+                  "type": "Duration",
+                  "params": {
+                    "duration": 5
+                  }
+                }
+              },
+              {
+                "id": "PointDistanceFalloff-1790609213106-46",
+                "type": "custom",
+                "position": {
+                  "x": 300,
+                  "y": 180
+                },
+                "data": {
+                  "label": "PointDistanceFalloff",
+                  "type": "PointDistanceFalloff",
+                  "params": {
+                    "center": [
+                      2,
+                      0,
+                      0
+                    ],
+                    "max_distance": 4,
+                    "radius": 2,
+                    "curve": "ease_in_out",
+                    "plane": "xz"
+                  }
+                }
+              },
+              {
+                "id": "Output-1790609213106-47",
+                "type": "custom",
+                "position": {
+                  "x": 750,
+                  "y": 180
+                },
+                "data": {
+                  "label": "Output",
+                  "type": "Output",
+                  "params": {}
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "e-Objects-1790609213106-44-PointDistanceFalloff-1790609213106-46-output-input",
+                "source": "Objects-1790609213106-44",
+                "target": "PointDistanceFalloff-1790609213106-46",
+                "sourceHandle": "output",
+                "targetHandle": "input",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              },
+              {
+                "id": "e-Duration-1790609213106-45-PointDistanceFalloff-1790609213106-46-output-duration",
+                "source": "Duration-1790609213106-45",
+                "target": "PointDistanceFalloff-1790609213106-46",
+                "sourceHandle": "output",
+                "targetHandle": "duration",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              },
+              {
+                "id": "e-PointDistanceFalloff-1790609213106-46-Output-1790609213106-47-output-input",
+                "source": "PointDistanceFalloff-1790609213106-46",
+                "target": "Output-1790609213106-47",
+                "sourceHandle": "output",
+                "targetHandle": "input",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              }
+            ]
+          },
+          "osc_ids": [
+            7,
+            8
+          ],
+          "track_indices": [
+            6,
+            7
+          ],
+          "is_preview": false,
+          "origin": null,
+          "duration": 4,
+          "loop_mode": "loop",
+          "direction": "ping_pong",
+          "animation_state": null,
+          "fade_in": 0.5,
+          "fade_out": 0.5
+        }
+      ]
+    },
+    {
+      "id": "cue-finale",
+      "name": "Finale",
+      "schema_version": 1,
+      "description": "BPM Circle + Vector Field — audio source et engine exotique. Snapshot complet : per_track_depths, manual_positions et osc_mappings restaurés",
+      "graph": {
+        "nodes": [
+          {
+            "id": "Objects-1790609213106-59",
+            "type": "custom",
+            "position": {
+              "x": 50,
+              "y": 250
+            },
+            "data": {
+              "label": "Objects",
+              "type": "Objects",
+              "params": {
+                "n_objects": 2
+              }
+            }
+          },
+          {
+            "id": "Duration-1790609213106-60",
+            "type": "custom",
+            "position": {
+              "x": 50,
+              "y": 80
+            },
+            "data": {
+              "label": "Duration",
+              "type": "Duration",
+              "params": {
+                "duration": 4
+              }
+            }
+          },
+          {
+            "id": "BPM-1790609213106-61",
+            "type": "custom",
+            "position": {
+              "x": 300,
+              "y": 180
+            },
+            "data": {
+              "label": "BPM",
+              "type": "BPM",
+              "params": {
+                "n_objects": 2,
+                "bpm": 120,
+                "radius": 2,
+                "plane": "xz"
+              }
+            }
+          },
+          {
+            "id": "Output-1790609213106-62",
+            "type": "custom",
+            "position": {
+              "x": 750,
+              "y": 180
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e-Objects-1790609213106-59-BPM-1790609213106-61-output-input",
+            "source": "Objects-1790609213106-59",
+            "target": "BPM-1790609213106-61",
+            "sourceHandle": "output",
+            "targetHandle": "input",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-Duration-1790609213106-60-BPM-1790609213106-61-output-duration",
+            "source": "Duration-1790609213106-60",
+            "target": "BPM-1790609213106-61",
+            "sourceHandle": "output",
+            "targetHandle": "duration",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          },
+          {
+            "id": "e-BPM-1790609213106-61-Output-1790609213106-62-output-input",
+            "source": "BPM-1790609213106-61",
+            "target": "Output-1790609213106-62",
+            "sourceHandle": "output",
+            "targetHandle": "input",
+            "markerEnd": {
+              "type": "arrowclosed"
+            }
+          }
+        ]
+      },
+      "timestamp": 0,
+      "macros": {
+        "speed": 1.1,
+        "scale": 1,
+        "shift_x": 0,
+        "shift_y": 0,
+        "shift_z": 0,
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "track_indices": [],
+      "fade_duration": 3,
+      "cue_number": "7",
+      "global_graph": {
+        "nodes": [
+          {
+            "id": "merge-global-demo-0",
+            "type": "custom",
+            "position": {
+              "x": 50,
+              "y": 250
+            },
+            "data": {
+              "label": "Merge",
+              "type": "Merge",
+              "params": {
+                "strategy": "crossfade"
+              }
+            }
+          },
+          {
+            "id": "manualposition-global-demo-1",
+            "type": "custom",
+            "position": {
+              "x": 210,
+              "y": 250
+            },
+            "data": {
+              "label": "ManualPosition",
+              "type": "ManualPosition",
+              "params": {}
+            }
+          },
+          {
+            "id": "radiusscale-global-demo-2",
+            "type": "custom",
+            "position": {
+              "x": 380,
+              "y": 250
+            },
+            "data": {
+              "label": "RadiusScale",
+              "type": "RadiusScale",
+              "params": {
+                "radius_scale": 1
+              }
+            }
+          },
+          {
+            "id": "heightoffset-global-demo-3",
+            "type": "custom",
+            "position": {
+              "x": 550,
+              "y": 250
+            },
+            "data": {
+              "label": "HeightOffset",
+              "type": "HeightOffset",
+              "params": {
+                "height_offset": 0
+              }
+            }
+          },
+          {
+            "id": "pertrackdepth-global-demo-4",
+            "type": "custom",
+            "position": {
+              "x": 720,
+              "y": 250
+            },
+            "data": {
+              "label": "PerTrackDepth",
+              "type": "PerTrackDepth",
+              "params": {
+                "depths": []
+              }
+            }
+          },
+          {
+            "id": "scale-global-demo-5",
+            "type": "custom",
+            "position": {
+              "x": 890,
+              "y": 250
+            },
+            "data": {
+              "label": "Scale",
+              "type": "Scale",
+              "params": {
+                "scale": 1
+              }
+            }
+          },
+          {
+            "id": "rotate-global-demo-6",
+            "type": "custom",
+            "position": {
+              "x": 1060,
+              "y": 250
+            },
+            "data": {
+              "label": "Rotate",
+              "type": "Rotate",
+              "params": {
+                "yaw": 0,
+                "pitch": 0,
+                "roll": 0
+              }
+            }
+          },
+          {
+            "id": "offset-global-demo-7",
+            "type": "custom",
+            "position": {
+              "x": 1230,
+              "y": 250
+            },
+            "data": {
+              "label": "Offset",
+              "type": "Offset",
+              "params": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            }
+          },
+          {
+            "id": "zone-global-demo-8",
+            "type": "custom",
+            "position": {
+              "x": 1400,
+              "y": 250
+            },
+            "data": {
+              "label": "Zone",
+              "type": "Zone",
+              "params": {
+                "shape": "sphere",
+                "center": [
+                  0,
+                  0,
+                  0
+                ],
+                "radius": 2.5,
+                "falloff": 0.8,
+                "channels": {
+                  "spread": 1
+                },
+                "enabled": true
+              }
+            }
+          },
+          {
+            "id": "velocity-global-demo-9",
+            "type": "custom",
+            "position": {
+              "x": 1570,
+              "y": 250
+            },
+            "data": {
+              "label": "Velocity",
+              "type": "Velocity",
+              "params": {
+                "source": "speed",
+                "channel": "spread",
+                "scale": 0.12,
+                "offset": 0,
+                "min": 0,
+                "max": 1,
+                "listener": [
+                  0,
+                  0,
+                  0
+                ]
+              }
+            }
+          },
+          {
+            "id": "output-global-demo-10",
+            "type": "custom",
+            "position": {
+              "x": 1740,
+              "y": 250
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "merge-global-demo-0-manualposition-global-demo-1",
+            "source": "merge-global-demo-0",
+            "target": "manualposition-global-demo-1",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          },
+          {
+            "id": "manualposition-global-demo-1-radiusscale-global-demo-2",
+            "source": "manualposition-global-demo-1",
+            "target": "radiusscale-global-demo-2",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          },
+          {
+            "id": "radiusscale-global-demo-2-heightoffset-global-demo-3",
+            "source": "radiusscale-global-demo-2",
+            "target": "heightoffset-global-demo-3",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          },
+          {
+            "id": "heightoffset-global-demo-3-pertrackdepth-global-demo-4",
+            "source": "heightoffset-global-demo-3",
+            "target": "pertrackdepth-global-demo-4",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          },
+          {
+            "id": "pertrackdepth-global-demo-4-scale-global-demo-5",
+            "source": "pertrackdepth-global-demo-4",
+            "target": "scale-global-demo-5",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          },
+          {
+            "id": "scale-global-demo-5-rotate-global-demo-6",
+            "source": "scale-global-demo-5",
+            "target": "rotate-global-demo-6",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          },
+          {
+            "id": "rotate-global-demo-6-offset-global-demo-7",
+            "source": "rotate-global-demo-6",
+            "target": "offset-global-demo-7",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          },
+          {
+            "id": "offset-global-demo-7-zone-global-demo-8",
+            "source": "offset-global-demo-7",
+            "target": "zone-global-demo-8",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          },
+          {
+            "id": "zone-global-demo-8-velocity-global-demo-9",
+            "source": "zone-global-demo-8",
+            "target": "velocity-global-demo-9",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          },
+          {
+            "id": "velocity-global-demo-9-output-global-demo-10",
+            "source": "velocity-global-demo-9",
+            "target": "output-global-demo-10",
+            "sourceHandle": "output",
+            "targetHandle": "input"
+          }
+        ]
+      },
+      "active_move_ids": [
+        "mv-bpm",
+        "mv-vectorfield"
+      ],
+      "per_track_depths": [
+        1,
+        0.9,
+        0.8,
+        0.7,
+        1,
+        0.9,
+        0.8,
+        0.7
+      ],
+      "manual_positions": {
+        "2": [
+          1.5,
+          0,
+          -1
+        ]
+      },
+      "spatial_macros": {
+        "radius_scale": 1,
+        "height_offset": 0
+      },
+      "object_channels": null,
+      "channel_modulations": null,
+      "osc_mappings": [
+        {
+          "address": "/stagespace/macro/yaw",
+          "destination": {
+            "kind": "macro",
+            "name": "yaw"
+          },
+          "transform": {
+            "scale": 1,
+            "offset": 0,
+            "min": -3.14,
+            "max": 3.14,
+            "smooth": 0.3,
+            "deadzone": 0
+          },
+          "enabled": true
+        }
+      ],
+      "zones": null,
+      "moves": [
+        {
+          "id": "mv-bpm",
+          "name": "BPM Circle",
+          "graph_json": {
+            "nodes": [
+              {
+                "id": "Objects-1790609213106-59",
+                "type": "custom",
+                "position": {
+                  "x": 50,
+                  "y": 250
+                },
+                "data": {
+                  "label": "Objects",
+                  "type": "Objects",
+                  "params": {
+                    "n_objects": 2
+                  }
+                }
+              },
+              {
+                "id": "Duration-1790609213106-60",
+                "type": "custom",
+                "position": {
+                  "x": 50,
+                  "y": 80
+                },
+                "data": {
+                  "label": "Duration",
+                  "type": "Duration",
+                  "params": {
+                    "duration": 4
+                  }
+                }
+              },
+              {
+                "id": "BPM-1790609213106-61",
+                "type": "custom",
+                "position": {
+                  "x": 300,
+                  "y": 180
+                },
+                "data": {
+                  "label": "BPM",
+                  "type": "BPM",
+                  "params": {
+                    "n_objects": 2,
+                    "bpm": 120,
+                    "radius": 2,
+                    "plane": "xz"
+                  }
+                }
+              },
+              {
+                "id": "Output-1790609213106-62",
+                "type": "custom",
+                "position": {
+                  "x": 750,
+                  "y": 180
+                },
+                "data": {
+                  "label": "Output",
+                  "type": "Output",
+                  "params": {}
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "e-Objects-1790609213106-59-BPM-1790609213106-61-output-input",
+                "source": "Objects-1790609213106-59",
+                "target": "BPM-1790609213106-61",
+                "sourceHandle": "output",
+                "targetHandle": "input",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              },
+              {
+                "id": "e-Duration-1790609213106-60-BPM-1790609213106-61-output-duration",
+                "source": "Duration-1790609213106-60",
+                "target": "BPM-1790609213106-61",
+                "sourceHandle": "output",
+                "targetHandle": "duration",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              },
+              {
+                "id": "e-BPM-1790609213106-61-Output-1790609213106-62-output-input",
+                "source": "BPM-1790609213106-61",
+                "target": "Output-1790609213106-62",
+                "sourceHandle": "output",
+                "targetHandle": "input",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              }
+            ]
+          },
+          "osc_ids": [
+            5,
+            6
+          ],
+          "track_indices": [
+            4,
+            5
+          ],
+          "is_preview": false,
+          "origin": null,
+          "duration": 4,
+          "loop_mode": "loop",
+          "direction": "forward",
+          "animation_state": null,
+          "fade_in": 0.5,
+          "fade_out": 0.5
+        },
+        {
+          "id": "mv-vectorfield",
+          "name": "Vector Field",
+          "graph_json": {
+            "nodes": [
+              {
+                "id": "Objects-1790609213106-63",
+                "type": "custom",
+                "position": {
+                  "x": 50,
+                  "y": 250
+                },
+                "data": {
+                  "label": "Objects",
+                  "type": "Objects",
+                  "params": {
+                    "n_objects": 2
+                  }
+                }
+              },
+              {
+                "id": "Duration-1790609213106-64",
+                "type": "custom",
+                "position": {
+                  "x": 50,
+                  "y": 80
+                },
+                "data": {
+                  "label": "Duration",
+                  "type": "Duration",
+                  "params": {
+                    "duration": 8
+                  }
+                }
+              },
+              {
+                "id": "VectorField-1790609213106-65",
+                "type": "custom",
+                "position": {
+                  "x": 300,
+                  "y": 180
+                },
+                "data": {
+                  "label": "VectorField",
+                  "type": "VectorField",
+                  "params": {
+                    "n_objects": 2,
+                    "field": "vortex",
+                    "strength": 0.5,
+                    "center": [
+                      0,
+                      0,
+                      0
+                    ],
+                    "radius": 0.6,
+                    "swirl": 0,
+                    "direction": [
+                      1,
+                      0,
+                      0
+                    ],
+                    "noise_scale": 1.5,
+                    "wander": 0.15,
+                    "responsiveness": 0.08,
+                    "max_speed": 1,
+                    "bounds": 2.5,
+                    "containment": 0.5,
+                    "init": "circle",
+                    "init_radius": 1.2,
+                    "z_init": 0,
+                    "z_drift": 0,
+                    "seed": 42
+                  }
+                }
+              },
+              {
+                "id": "Output-1790609213106-66",
+                "type": "custom",
+                "position": {
+                  "x": 750,
+                  "y": 180
+                },
+                "data": {
+                  "label": "Output",
+                  "type": "Output",
+                  "params": {}
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "e-Objects-1790609213106-63-VectorField-1790609213106-65-output-input",
+                "source": "Objects-1790609213106-63",
+                "target": "VectorField-1790609213106-65",
+                "sourceHandle": "output",
+                "targetHandle": "input",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              },
+              {
+                "id": "e-Duration-1790609213106-64-VectorField-1790609213106-65-output-duration",
+                "source": "Duration-1790609213106-64",
+                "target": "VectorField-1790609213106-65",
+                "sourceHandle": "output",
+                "targetHandle": "duration",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              },
+              {
+                "id": "e-VectorField-1790609213106-65-Output-1790609213106-66-output-input",
+                "source": "VectorField-1790609213106-65",
+                "target": "Output-1790609213106-66",
+                "sourceHandle": "output",
+                "targetHandle": "input",
+                "markerEnd": {
+                  "type": "arrowclosed"
+                }
+              }
+            ]
+          },
+          "osc_ids": [
+            7,
+            8
+          ],
+          "track_indices": [
+            6,
+            7
+          ],
+          "is_preview": false,
+          "origin": null,
+          "duration": 4,
+          "loop_mode": "loop",
+          "direction": "forward",
+          "animation_state": null,
+          "fade_in": 1,
+          "fade_out": 1
         }
       ]
     }
@@ -4027,6 +7924,20 @@
         "offset": 0.2,
         "min": null,
         "max": 1,
+        "listener": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "object": 2,
+        "source": "Jerk",
+        "channel": "Gain",
+        "scale": -0.4,
+        "offset": 0,
+        "min": -6,
+        "max": 0,
         "listener": [
           0,
           0,
@@ -4140,6 +8051,38 @@
         "max": 1,
         "smooth": 0.2,
         "deadzone": 0.01
+      },
+      "enabled": true
+    },
+    {
+      "address": "/track/1/position",
+      "destination": {
+        "kind": "position",
+        "object": 0
+      },
+      "transform": {
+        "scale": 1,
+        "offset": 0,
+        "min": -10,
+        "max": 10,
+        "smooth": 0.1,
+        "deadzone": 0
+      },
+      "enabled": true
+    },
+    {
+      "address": "/controller/fader1",
+      "destination": {
+        "kind": "handler",
+        "name": "fader_master"
+      },
+      "transform": {
+        "scale": 1,
+        "offset": 0,
+        "min": 0,
+        "max": 1,
+        "smooth": 0,
+        "deadzone": 0.005
       },
       "enabled": true
     }

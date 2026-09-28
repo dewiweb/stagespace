@@ -173,16 +173,21 @@ describe('loadGraphFromFile — full-feature-show.hfg', () => {
     expect(oscPush?.args?.address).toBe('127.0.0.1');
     expect(oscPush?.args?.profile).toBe('holophonix');
 
-    // Spatial FX replayés : clear + 2 zones + 2 modulations + channels + smoothing
+    // Spatial FX replayés : clear + 2 zones + 3 modulations + channels + smoothing
     expect(getInvokeCalls().some((c) => c.cmd === 'clear_zones')).toBe(true);
     expect(getInvokeCalls().filter((c) => c.cmd === 'add_zone')).toHaveLength(2);
-    expect(getInvokeCalls().filter((c) => c.cmd === 'add_channel_modulation')).toHaveLength(2);
+    expect(getInvokeCalls().filter((c) => c.cmd === 'add_channel_modulation')).toHaveLength(3);
+    // Modulation par-objet (object: 2 → Jerk→Gain) présente dans le replay
+    const objMod = getInvokeCalls()
+      .filter((c) => c.cmd === 'add_channel_modulation')
+      .find((c) => c.args?.params?.object_index === 2);
+    expect(objMod?.args?.params?.source).toBe('jerk');
     expect(getInvokeCalls().filter((c) => c.cmd === 'set_spatial_channel')).toHaveLength(2);
     expect(getInvokeCalls().some((c) => c.cmd === 'set_kinematic_smoothing')).toBe(true);
 
-    // OSC IN mappings replayés
+    // OSC IN mappings replayés (macro, channel wildcard, position, handler)
     expect(getInvokeCalls().some((c) => c.cmd === 'osc_clear_mappings')).toBe(true);
-    expect(getInvokeCalls().filter((c) => c.cmd === 'osc_add_mapping')).toHaveLength(2);
+    expect(getInvokeCalls().filter((c) => c.cmd === 'osc_add_mapping')).toHaveLength(4);
 
     // Macros globales
     expect(s.macros.radius_scale).toBe(1);
