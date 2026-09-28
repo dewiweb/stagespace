@@ -117,13 +117,14 @@ const sweepGraph = preset('side-sweep', 2);              // DirectionalFalloff +
 const chainGraph = preset('modifier-chain', 2);          // Rotate → Offset
 const bpmGraph = preset('bpm-circle', 2);                // Source BPM (audio)
 const vectorGraph = preset('vectorfield', 2);            // VectorField (exotique)
+const groupGraph = preset('group-circle-linear', 4);     // Group : partition de tracks
 
 const slotGraphs: [string, { nodes: Node[]; edges: Edge[] }][] = [
   ['slot-orbit', orbitGraph], ['slot-spiral', spiralGraph], ['slot-pursuit', pursuitGraph],
   ['slot-bass', bassGraph], ['slot-spline', splineGraph], ['slot-crossfade', crossfadeGraph],
   ['slot-mix', mixGraph], ['slot-sequence', sequenceGraph], ['slot-fadein', fadeinGraph],
   ['slot-gravity', gravityGraph], ['slot-sidesweep', sweepGraph], ['slot-chain', chainGraph],
-  ['slot-bpm', bpmGraph], ['slot-vectorfield', vectorGraph],
+  ['slot-bpm', bpmGraph], ['slot-vectorfield', vectorGraph], ['slot-group', groupGraph],
 ];
 for (const [name, g] of slotGraphs) validateGraph(name, g.nodes, g.edges);
 
@@ -264,6 +265,16 @@ const slots = [
     loopMode: 'loop', direction: 'forward',
     fadeIn: 1.0, fadeOut: 1.0, phaseSpread: 0,
     assignments: assignments([7, 8]), audioMods: [],
+  },
+  {
+    // Group : partitionne les tracks — moitié cercle, moitié linéaire.
+    // Le composite qui gère des n_objects différents par branche.
+    id: 'slot-group', name: 'Split Ensemble', graphJson: groupGraph,
+    templateId: 'group-circle-linear', trackIds: [1, 2, 3, 4], movementId: null,
+    isPreview: false, macros: defaultMacros(), fadeDuration: 2.0,
+    loopMode: 'loop', direction: 'forward',
+    fadeIn: 1.0, fadeOut: 1.0, phaseSpread: 0,
+    assignments: assignments([1, 2, 3, 4]), audioMods: [],
   },
 ];
 
