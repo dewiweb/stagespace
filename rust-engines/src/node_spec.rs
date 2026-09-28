@@ -33,7 +33,7 @@ pub enum NodeCategory {
     Spline,
     Falloff,
     /// Modifiers compilables en sub-graph ET en post-process (Scope::Both)
-    /// ou sub-only (PhaseShift/LFO/Jitter)
+    /// ou sub-only (PhaseShift)
     Modifier,
     /// Post-process du graph global — chaîne linéaire après merge
     PostProcess,
@@ -739,7 +739,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::LFO, C::Modifier, S::SubOnly, F::ModifierChain, MOD_IN, false,
+            NodeType::LFO, C::Modifier, S::Both, F::ModifierChain, MOD_IN, false,
             "Adds an oscillation (sine/triangle/square/saw) on an axis. Breathing effect",
             vec![
                 enm("waveform", "Waveform", &["sine", "triangle", "square", "sawtooth"]).d("sine"),
@@ -750,7 +750,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::Jitter, C::Modifier, S::SubOnly, F::ModifierChain, MOD_IN, false,
+            NodeType::Jitter, C::Modifier, S::Both, F::ModifierChain, MOD_IN, false,
             "Adds smooth organic noise. Makes a movement less mechanical",
             vec![
                 nmin("intensity", "Intensity", 0.05, 0.0).d(0.2),

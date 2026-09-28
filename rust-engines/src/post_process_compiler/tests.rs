@@ -781,3 +781,113 @@ fn test_extract_effects_barycenter_and_moveref() {
     assert!(!effects.barycenter);
     assert!(effects.move_ref.is_none());
 }
+
+/// LFO en post-process : l'oscillation anime les positions mergées dans
+/// le temps (ctx.t). Régression — LFO était SubOnly et rejeté du graph
+/// global alors que le ctx transporte t.
+#[test]
+fn test_lfo_oscillates_in_global_graph() {
+    let graph = make_graph(
+        vec![
+            (NodeType::Input, serde_json::json!({})),
+            (
+                NodeType::LFO,
+                serde_json::json!({
+                    "waveform": "sine", "frequency": 1.0,
+                    "amplitude": 0.5, "axis": "y", "phase": 0.0
+                }),
+            ),
+            (NodeType::Output, serde_json::json!({})),
+        ],
+        vec![(0, 1), (1, 2)],
+    );
+    let macros = Arc::new(MacroState::new());
+    let f = compile_post_process(PostProcessCompileParams { graph, macros }).unwrap();
+
+    let positions = vec![(0, nalgebra::Vector3::new(1.0, 0.0, 0.0))];
+    let eval = |t: f64| {
+        let m = MacroState::new();
+        let audio = AudioState::new();
+        let tp = HashMap::new();
+        let mp = HashMap::new();
+        let td: Vec<f64> = vec![];
+        let ctx = PostProcessContext {
+            t,
+            macros: &m,
+            audio_state: &audio,
+            track_positions: &tp,
+            manual_positions: &mp,
+            origin: nalgebra::Vector3::zeros(),
+            track_depths: &td,
+        };
+        f(&ctx, positions.clone())
+    };
+
+    // sine(2π·t) : t=0 → 0, t=0.25 → +0.5, t=0.75 → −0.5 sur Y
+    assert!((eval(0.0)[0].1.y).abs() < 1e-10);
+    assert!((eval(0.25)[0].1.y - 0.5).abs() < 1e-10);
+    assert!((eval(0.75)[0].1.y + 0.5).abs() < 1e-10);
+    // x/z inchangés
+    assert!((eval(0.25)[0].1.x - 1.0).abs() < 1e-10);
+}
+
+/// Jitter en post-process : bruit déterministe par track (idx = seed-stable),
+/// positions non statiques dans le temps.
+#[test]
+fn test_jitter_in_global_graph() {
+    let graph = make_graph(
+        vec![
+            (NodeType::Input, serde_json::json!({})),
+            (
+                NodeType::Jitter,
+                serde_json::json!({"intensity": 0.3, "frequency": 2.0, "seed": 7.0}),
+            ),
+            (NodeType::Output, serde_json::json!({})),
+        ],
+        vec![(0, 1), (1, 2)],
+    );
+    let macros = Arc::new(MacroState::new());
+    let f = compile_post_process(PostProcessCompileParams { graph, macros }).unwrap();
+
+    let positions = vec![
+        (0, nalgebra::Vector3::new(1.0, 0.0, 0.0)),
+        (3, nalgebra::Vector3::new(2.0, 0.0, 0.0)),
+    ];
+    let eval = |t: f64| {
+        let m = MacroState::new();
+        let audio = AudioState::new();
+        let tp = HashMap::new();
+        let mp = HashMap::new();
+        let td: Vec<f64> = vec![];
+        let ctx = PostProcessContext {
+            t,
+            macros: &m,
+            audio_state: &audio,
+            track_positions: &tp,
+            manual_positions: &mp,
+            origin: nalgebra::Vector3::zeros(),
+            track_depths: &td,
+        };
+        f(&ctx, positions.clone())
+    };
+
+    let a1 = eval(1.0);
+    let b1 = eval(1.0);
+    assert_eq!(a1, b1, "jitter must be deterministic at same t");
+    let a2 = eval(1.37);
+    assert_ne!(a1, a2, "jitter must vary with t");
+    // Bruit par objet : deux tracks différentes → offsets différents
+    assert_ne!(
+        a1[0].1 - nalgebra::Vector3::new(1.0, 0.0, 0.0),
+        a1[1].1 - nalgebra::Vector3::new(2.0, 0.0, 0.0),
+        "per-object seeds must decorrelate tracks"
+    );
+}
+
+/// is_post_process_node reconnaît LFO/Jitter (sinon la chaîne s'arrête
+/// sur eux et ils échouent en InvalidNode).
+#[test]
+fn test_lfo_jitter_are_post_process_nodes() {
+    assert!(is_post_process_node(&NodeType::LFO));
+    assert!(is_post_process_node(&NodeType::Jitter));
+}

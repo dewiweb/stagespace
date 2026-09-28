@@ -824,7 +824,7 @@ fn is_global_only_node(node_type: &NodeType) -> bool {
 
 /// Vrai si le node n'a de sens que dans un sub-graph (mouvement).
 /// Dérivé de `NodeSpec::scope` — inclut les modifiers non compilables en
-/// post-process (PhaseShift/LFO/Jitter) et les composites binaires (le
+/// post-process (PhaseShift agit sur le temps) et les composites binaires (le
 /// graph global est une chaîne linéaire, pas de sémantique A/B).
 fn is_subgraph_only_node(node_type: &NodeType) -> bool {
     crate::node_spec::node_spec(node_type).scope == crate::node_spec::NodeScope::SubOnly

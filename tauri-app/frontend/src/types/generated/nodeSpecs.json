@@ -2561,7 +2561,7 @@
   {
     "node_type": "LFO",
     "category": "Modifier",
-    "scope": "SubOnly",
+    "scope": "Both",
     "feeds": "ModifierChain",
     "inputs": [
       "input"
@@ -2637,7 +2637,7 @@
   {
     "node_type": "Jitter",
     "category": "Modifier",
-    "scope": "SubOnly",
+    "scope": "Both",
     "feeds": "ModifierChain",
     "inputs": [
       "input"

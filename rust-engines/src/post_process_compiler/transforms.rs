@@ -31,6 +31,8 @@ pub(crate) fn is_post_process_node(node_type: &NodeType) -> bool {
             | NodeType::ManualPosition
             | NodeType::Mirror
             | NodeType::Clamp
+            | NodeType::LFO
+            | NodeType::Jitter
             | NodeType::Zone
             | NodeType::Velocity
     )
@@ -55,6 +57,8 @@ fn compile_transform_node(node: &Node) -> Result<TransformFn, PostProcessCompile
         NodeType::ManualPosition => compile_manual_position(node),
         NodeType::Mirror => compile_mirror(node),
         NodeType::Clamp => compile_clamp(node),
+        NodeType::LFO => compile_lfo(node),
+        NodeType::Jitter => compile_jitter(node),
         // Déclarations d'effets — extraites par `extract_graph_effects`,
         // pass-through dans la chaîne de positions.
         NodeType::Zone | NodeType::Velocity => Ok(Box::new(|_ctx, positions| positions)),
@@ -402,6 +406,60 @@ fn compile_clamp(node: &Node) -> Result<TransformFn, PostProcessCompileError> {
         positions
             .into_iter()
             .map(|(idx, pos)| (idx, crate::engines::modifiers::clamp(pos, lo, hi)))
+            .collect()
+    }))
+}
+
+fn compile_lfo(node: &Node) -> Result<TransformFn, PostProcessCompileError> {
+    // Même sémantique que le modifier sub-graph — l'oscillation s'applique
+    // ici aux positions MERGÉES (tous les moves) avec ctx.t = temps du
+    // MergeRuntime. Cas d'usage : offset global animé, "breathing" de toute
+    // la scène.
+    let waveform = node
+        .params
+        .get("waveform")
+        .and_then(|v| v.as_str())
+        .unwrap_or("sine")
+        .to_string();
+    let frequency = get_param_f64_or(node, "frequency", 0.5);
+    let amplitude = get_param_f64_or(node, "amplitude", 0.5);
+    let axis = node
+        .params
+        .get("axis")
+        .and_then(|v| v.as_str())
+        .unwrap_or("y")
+        .to_string();
+    let phase = get_param_f64_or(node, "phase", 0.0);
+    Ok(Box::new(move |ctx, positions| {
+        positions
+            .into_iter()
+            .map(|(idx, pos)| {
+                (
+                    idx,
+                    crate::engines::modifiers::lfo(
+                        pos, ctx.t, &waveform, frequency, amplitude, &axis, phase,
+                    ),
+                )
+            })
+            .collect()
+    }))
+}
+
+fn compile_jitter(node: &Node) -> Result<TransformFn, PostProcessCompileError> {
+    // Bruit par objet (idx = track_index global → seed stable par track),
+    // déterministe comme en sub-graph.
+    let intensity = get_param_f64_or(node, "intensity", 0.2);
+    let frequency = get_param_f64_or(node, "frequency", 2.0);
+    let seed = get_param_f64_or(node, "seed", 42.0);
+    Ok(Box::new(move |ctx, positions| {
+        positions
+            .into_iter()
+            .map(|(idx, pos)| {
+                (
+                    idx,
+                    crate::engines::modifiers::jitter(pos, ctx.t, idx, intensity, frequency, seed),
+                )
+            })
             .collect()
     }))
 }
