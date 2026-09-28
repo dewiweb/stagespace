@@ -46,6 +46,12 @@ export const PerformView: React.FC = () => {
     ? moveSlots.find((s) => s.id === nextSetlistSlotId)
     : null;
 
+  // Slot armé (tap dans la liste) — la cible du transport PLAY/STOP.
+  const armedSlot = editingSlotId
+    ? moveSlots.find((s) => s.id === editingSlotId) ?? null
+    : null;
+  const armedPlaying = !!armedSlot?.movementId || (armedSlot ? pendingPlays.includes(armedSlot.id) : false);
+
   const handleGO = async () => {
     const msg = await goToNextMove();
     if (msg) {
@@ -169,6 +175,34 @@ export const PerformView: React.FC = () => {
             </span>
           )}
         </div>
+
+        {/* PLAY/STOP — transport du slot armé (tap dans la liste).
+            Symétrique au GO : GO avance la setlist, PLAY démarre ou
+            stoppe le move sélectionné — sans gros bouton, jouer un layer
+            demandait de viser un ▶ de 36px dans une rangée. (Space) */}
+        <button
+          onClick={() => {
+            if (!armedSlot) return;
+            if (armedPlaying) stopSlot(armedSlot.id);
+            else playSlot(armedSlot.id);
+          }}
+          disabled={!armedSlot}
+          className={`px-6 py-1.5 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 text-left min-w-[140px] text-white ${
+            armedPlaying
+              ? 'bg-red-600 hover:bg-red-500'
+              : 'bg-indigo-600 hover:bg-indigo-500'
+          }`}
+          title={armedSlot
+            ? `${armedPlaying ? 'Stop' : 'Play'} "${armedSlot.name}" — layered, autres moves continuent (Space)`
+            : 'Tap a move in the list to arm it, then play/stop it here (Space)'}
+        >
+          <div className="text-lg font-black leading-tight">
+            {armedPlaying ? 'STOP ■' : 'PLAY ▶'}
+          </div>
+          <div className={`text-[11px] font-medium truncate leading-tight ${armedPlaying ? 'text-red-100/80' : 'text-indigo-100/80'}`}>
+            {armedSlot ? armedSlot.name : 'tap a move'}
+          </div>
+        </button>
 
         {/* GO — affiche sa cible comme sur une console de show :
             l'opérateur sait ce qui part avant d'appuyer. */}
