@@ -4,6 +4,7 @@ import { useCuelistStore } from '../store/useCuelistStore';
 import { useGraphStore } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import { ConfirmModal } from './ui/ConfirmModal';
+import { toast } from '../utils/toast-helpers';
 
 export const CuelistPanel: React.FC = () => {
   const cues = useCuelistStore((s) => s.cues);
@@ -86,6 +87,7 @@ export const CuelistPanel: React.FC = () => {
       setNewCueName('');
     } catch (e) {
       console.error('[storeCue] Failed:', e);
+      toast.error(`Cue not saved: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
 

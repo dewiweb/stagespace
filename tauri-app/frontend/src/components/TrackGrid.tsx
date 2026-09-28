@@ -28,16 +28,16 @@ function colorForIndex(i: number, total: number) {
 }
 
 /// Patterns de sélection rapides
-type SelectionPattern = 'all' | 'none' | 'even' | 'odd' | 'first_half' | 'second_half' | 'pairs' | 'inverse';
+type SelectionPattern = 'all' | 'none' | 'even' | 'odd' | 'first_half' | 'second_half' | 'inverse';
 
-const PATTERNS: { id: SelectionPattern; label: string; icon: string; title: string }[] = [
-  { id: 'all', label: 'All', icon: '◉', title: 'Select all (100%)' },
-  { id: 'none', label: 'None', icon: '○', title: 'Deselect all' },
-  { id: 'even', label: '1 of 2', icon: '⫼', title: 'Select every other track (even indices)' },
-  { id: 'odd', label: 'Odd', icon: '⫻', title: 'Select every other track (odd indices)' },
-  { id: 'inverse', label: 'Inverse', icon: '⇄', title: 'Invert current selection' },
-  { id: 'first_half', label: '1st half', icon: '◀', title: 'First half' },
-  { id: 'second_half', label: '2nd half', icon: '▶', title: 'Second half' },
+const PATTERNS: { id: SelectionPattern; label: string; title: string }[] = [
+  { id: 'all', label: 'All', title: 'Select all (100%)' },
+  { id: 'none', label: 'None', title: 'Deselect all' },
+  { id: 'even', label: '1 of 2', title: 'Select every other track (even indices)' },
+  { id: 'odd', label: 'Odd', title: 'Select every other track (odd indices)' },
+  { id: 'inverse', label: 'Inverse', title: 'Invert current selection' },
+  { id: 'first_half', label: '1st half', title: 'First half' },
+  { id: 'second_half', label: '2nd half', title: 'Second half' },
 ];
 
 export const TrackGrid: React.FC<TrackGridProps> = ({

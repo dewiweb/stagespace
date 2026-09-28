@@ -163,7 +163,7 @@ export default function AnimationList() {
           </div>
           <button onClick={saveAnimation}
             className="w-full mt-1.5 py-1.5 bg-purple-700 hover:bg-purple-600 text-white text-[10px] rounded font-medium transition-colors">
-            ★ Sauvegarder dans ma bibliothèque
+            ★ Save to my library
           </button>
         </div>
 
@@ -226,7 +226,7 @@ export default function AnimationList() {
 
         {/* Hint */}
         <div className="text-gray-500 text-[10px] text-center py-2 px-2">
-          Templates &amp; bibliothèque = presets appliqués au slot sélectionné
+          Templates &amp; library = presets applied to the selected slot
           <div className="mt-0.5">
             {editingSlotId ? 'Loading → writes into the editing slot' : 'Select a slot (Moves) to apply'}
             {' '}· double-clic pour renommer

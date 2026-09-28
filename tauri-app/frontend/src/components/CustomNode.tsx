@@ -522,7 +522,7 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
           <button
             onClick={() => setShowSave(false)}
             className="text-gray-500 hover:text-gray-400 text-[10px] px-2"
-            title="Annuler"
+            title="Cancel"
           ><X size={10} /></button>
         </div>
       ) : (

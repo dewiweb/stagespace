@@ -432,8 +432,9 @@ export const NodeEditor: React.FC = () => {
           className={`px-2 py-0.5 text-[10px] rounded font-medium transition-colors ${
             activeTab === 'sub' ? 'bg-purple-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
           }`}
+          title="Move graph — trajectory for the slot being edited"
         >
-          Sub-graph
+          Move graph
         </button>
         {activeTab === 'sub' && editingSlotName && (
           <span className="text-gray-400 text-[10px] truncate max-w-[120px]">
@@ -445,8 +446,9 @@ export const NodeEditor: React.FC = () => {
           className={`px-2 py-0.5 text-[10px] rounded font-medium transition-colors ${
             activeTab === 'global' ? 'bg-cyan-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
           }`}
+          title="Master FX — post-processing applied to ALL live moves"
         >
-          Global
+          Master FX
         </button>
         {activeTab === 'global' && (
           <>
@@ -772,7 +774,7 @@ export const NodeEditor: React.FC = () => {
             </div>
             {activeTab !== 'sub' ? (
               <div className="px-3 py-2 text-[10px] text-gray-500">
-                Examples load into the sub-graph — switch to the Sub-graph tab first.
+                Examples load into a move graph — switch to the Move graph tab first.
               </div>
             ) : presetsUsingType(nodeMenu.nodeType).length === 0 ? (
               <div className="px-3 py-2 text-[10px] text-gray-500">

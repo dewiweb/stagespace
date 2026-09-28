@@ -169,7 +169,7 @@ export const NodeParamsPanel: React.FC<{
                 className={`mt-1.5 flex-shrink-0 transition-colors ${
                   pinnedSet.has(d.key)
                     ? 'text-cyan-400 hover:text-cyan-300'
-                    : 'text-gray-500 hover:text-gray-500'
+                    : 'text-gray-500 hover:text-gray-200'
                 }`}
                 title={pinnedSet.has(d.key)
                   ? 'Unpin — remove from Perform surface'

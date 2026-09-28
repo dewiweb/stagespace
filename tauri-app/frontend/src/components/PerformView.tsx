@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Square, Globe, SlidersHorizontal, ListOrdered, AudioLines } from 'lucide-react';
+import { Play, Square, Globe, SlidersHorizontal, ListOrdered, AudioLines, Pin } from 'lucide-react';
 import { TrackGrid } from './TrackGrid';
 import { AudioModList } from './AudioModControls';
 import Scene3D from './Scene3D';
@@ -121,7 +121,7 @@ export const PerformView: React.FC = () => {
           </div>
         </div>
         {isCurrentSetlist && (
-          <span className="text-purple-400 text-[10px] font-bold flex-shrink-0" title="Setlist courante">◉ NOW</span>
+          <span className="text-purple-400 text-[10px] font-bold flex-shrink-0" title="Current setlist">◉ NOW</span>
         )}
         {isNextSetlist && !isCurrentSetlist && (
           <span className="text-green-400/80 text-[10px] font-bold flex-shrink-0" title="Prochain GO">→ NEXT</span>
@@ -360,7 +360,7 @@ const LiveDrawer: React.FC = () => {
                 ? 'bg-indigo-600 text-white'
                 : 'bg-gray-800 text-gray-400 hover:text-white border border-gray-700'
             }`}
-            title="Vue d'ensemble — toutes les tracks de tous les moves"
+            title="Overview — all tracks of all moves"
           >
             All
           </button>
@@ -395,7 +395,8 @@ const LiveDrawer: React.FC = () => {
 
         {!slot && playingSlots.length === 0 && (
           <span className="text-gray-600 text-[10px] ml-2">
-            tap un move pour ses params · <Play size={9} className="inline -mt-0.5" /> = layer live
+            tap a move for its params · <Play size={9} className="inline -mt-0.5" /> = layer live
+            {' · '}<Pin size={9} className="inline -mt-0.5" /> in Edit = curate this surface
           </span>
         )}
         {!slot && playingSlots.length > 0 && (
@@ -403,7 +404,7 @@ const LiveDrawer: React.FC = () => {
         )}
         {slot && (
           <span className="text-indigo-400/70 text-[10px] ml-2 flex items-center gap-1.5">
-            édition : {slot.name}
+            editing: {slot.name}
             {slot.movementId
               ? <span className={`px-1 rounded ${slot.isPreview ? 'bg-cyan-900 text-cyan-300' : 'bg-green-900 text-green-300'}`}>{slot.isPreview ? 'PREV' : 'LIVE'}</span>
               : <span className="text-gray-600">(stopped)</span>}

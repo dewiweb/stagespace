@@ -204,7 +204,7 @@ describe('MovesTable — remove slot', () => {
     useGraphStore.setState({ moveSlots: [slot] } as any);
     render(<MovesTable />);
     fireEvent.click(screen.getByTitle(/Delete this slot/i));
-    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect((useGraphStore.getState() as any).moveSlots).toHaveLength(1);
   });
 });

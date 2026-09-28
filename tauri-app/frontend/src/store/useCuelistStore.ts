@@ -126,15 +126,20 @@ export const useCuelistStore = create<CuelistState>((set, get) => ({
 
   goToNextCue: async () => {
     const { cues, currentCueIndex } = get();
-    if (currentCueIndex + 1 >= cues.length) return;
+    if (currentCueIndex + 1 >= cues.length) {
+      toast.info(cues.length === 0 ? 'No cues in list' : 'End of cue list');
+      return;
+    }
     const nextCue = cues[currentCueIndex + 1];
     await get().recallCue(nextCue.id);
   },
 
   goToPreviousCue: async () => {
-    const { currentCueIndex } = get();
-    if (currentCueIndex <= 0) return;
-    const cues = get().cues;
+    const { cues, currentCueIndex } = get();
+    if (currentCueIndex <= 0) {
+      toast.info(cues.length === 0 ? 'No cues in list' : 'Already at first cue');
+      return;
+    }
     const prevCue = cues[currentCueIndex - 1];
     await get().recallCue(prevCue.id);
   },

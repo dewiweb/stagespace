@@ -48,6 +48,8 @@ export default function Inspector() {
   const deselectAllTracks = useGraphStore((s) => s.deselectAllTracks);
   const manualOscIds = useGraphStore((s) => s.manualOscIds);
   const panic = useGraphStore((s) => s.panic);
+  const playSlot = useGraphStore((s) => s.playSlot);
+  const stopSlot = useGraphStore((s) => s.stopSlot);
   const stopAllMovements = useGraphStore((s) => s.stopAllMovements);
   const stopMovement = useGraphStore((s) => s.stopMovement);
   const stopMovementWithFade = useGraphStore((s) => s.stopMovementWithFade);
@@ -349,7 +351,7 @@ export default function Inspector() {
             {/* MACROS — runtime controls appliqués à tous les moves */}
             <Section title="Macros" icon={<Zap size={12} />} defaultOpen={true}
               badge={activeMovementIds.length > 0 ? `${activeMovementIds.length} live` : undefined}>
-              <Slider label="Vitesse" value={macros.speed} min={0} max={4} step={0.05}
+              <Slider label="Speed" value={macros.speed} min={0} max={4} step={0.05}
                 onChange={(v) => handleMacro('speed', v)} unit="x" accent="purple" />
               <Slider label="Scale" value={macros.scale} min={0} max={4} step={0.05}
                 onChange={(v) => handleMacro('scale', v)} accent="purple" />
@@ -428,7 +430,7 @@ export default function Inspector() {
 
             {/* MACROS — speed, scale, shift, rotation (unifié avec Expert) */}
             <Section title="Macros" icon={<Zap size={12} />}>
-              <Slider label="Vitesse" value={current.speed} min={0} max={4} step={0.05} onChange={(v) => handleTransform('speed', v)} unit="x" accent="purple" />
+              <Slider label="Speed" value={current.speed} min={0} max={4} step={0.05} onChange={(v) => handleTransform('speed', v)} unit="x" accent="purple" />
               <Slider label="Scale" value={current.scale} min={0} max={4} step={0.05} onChange={(v) => handleTransform('scale', v)} accent="purple" />
               <Slider label="Shift X" value={current.offset_x} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_x', v)} accent="purple" />
               <Slider label="Shift Y" value={current.offset_y} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_y', v)} accent="purple" />
@@ -542,9 +544,21 @@ export default function Inspector() {
           </div>
         )}
         <div className={`flex gap-1.5 transition-all ${flashClass}`}>
-          <div className="flex-1 py-2 bg-gray-800/40 text-gray-500 text-[10px] rounded-lg text-center flex items-center justify-center border border-gray-700/30">
-            Launch via MovesTable ▶
-          </div>
+          <button
+            onClick={() => editingSlot && (editingIsLive ? stopSlot(editingSlot.id) : playSlot(editingSlot.id))}
+            disabled={!hasEditingSlot}
+            className={`flex-1 py-2 text-[11px] rounded-lg font-bold transition-colors flex items-center justify-center gap-1.5 border ${
+              editingIsLive
+                ? 'bg-red-900/60 hover:bg-red-800/70 text-red-100 border-red-700/50'
+                : hasEditingSlot
+                  ? 'bg-indigo-700 hover:bg-indigo-600 text-white border-indigo-500/50'
+                  : 'bg-gray-800/40 text-gray-500 border-gray-700/30 cursor-not-allowed'
+            }`}
+            title={hasEditingSlot ? `${editingIsLive ? 'Stop' : 'Play'} "${editingSlot?.name}" (Space)` : 'Select a slot in Moves first'}
+          >
+            {editingIsLive ? <Square size={11} fill="currentColor" /> : <Play size={11} fill="currentColor" />}
+            {editingIsLive ? 'STOP' : 'PLAY'}{editingSlot ? ` · ${editingSlot.name}` : ''}
+          </button>
           <button
             onClick={() => panic()}
             className="px-2 py-2.5 bg-red-800 hover:bg-red-700 text-white text-[11px] rounded-lg font-bold border border-red-500/50 transition-colors"
@@ -643,9 +657,9 @@ function InspectorSplineLibrary({ drawSplineNode, onUpdate }: {
             className="flex-1 px-2 py-1.5 bg-gray-900 text-white text-[10px] rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
           />
           <button onClick={handleSave}
-            className="text-green-400 hover:text-green-300 text-xs px-2" title="Confirmer"><Check size={12} /></button>
+            className="text-green-400 hover:text-green-300 text-xs px-2" title="Confirm"><Check size={12} /></button>
           <button onClick={() => setShowSave(false)}
-            className="text-gray-500 hover:text-gray-400 text-xs px-2" title="Annuler"><X size={12} /></button>
+            className="text-gray-500 hover:text-gray-400 text-xs px-2" title="Cancel"><X size={12} /></button>
         </div>
       ) : (
         <button

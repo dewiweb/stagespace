@@ -388,11 +388,11 @@ export default function MovesTable() {
                             onClick={() => moveSetlistItem(setlistIdx, 'up')}
                             disabled={setlistIdx === 0}
                             className="text-gray-500 hover:text-white text-[10px] disabled:opacity-20"
-                            title="Monter dans la setlist"
+                            title="Move up in setlist"
                           >▲</button>
                           <span className={`text-[10px] font-mono font-bold w-4 ${
                             isCurrentSetlist ? 'text-green-400' : 'text-yellow-400'
-                          }`} title={isCurrentSetlist ? 'Move courant' : `Position ${setlistIdx + 1}`}>
+                          }`} title={isCurrentSetlist ? 'Current move' : `Position ${setlistIdx + 1}`}>
                             {setlistIdx + 1}
                           </span>
                           <button
@@ -535,7 +535,7 @@ export default function MovesTable() {
               <button
                 onClick={() => setEditingTracksFor(null)}
                 className="px-4 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-400 text-[11px] rounded"
-              >Annuler</button>
+              >Cancel</button>
             </div>
           </div>
         </Modal>
