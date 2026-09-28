@@ -158,6 +158,13 @@ pub struct Animation {
     #[serde(default)]
     pub audio_mods: Vec<AudioMod>,
 
+    /// Graph de modulation per-move (domaine signal) — produit des deltas
+    /// additifs sur les macros du move (speed, scale, offset_*, yaw…),
+    /// évalué par le worker à chaque frame et mergé dans
+    /// `audio_param_overrides`. Sérialisé avec l'animation (`.hfg`).
+    #[serde(default)]
+    pub signal_graph: Option<crate::graph_json::GraphJson>,
+
     // ── Graphe expert (toujours présent — remplace shape/shape_params)
     #[serde(default)]
     pub graph_json: crate::graph_json::GraphJson,
@@ -206,6 +213,7 @@ impl Default for Animation {
             assignments: Vec::new(),
             phase_spread: 0.0,
             audio_mods: Vec::new(),
+            signal_graph: None,
             graph_json: default_graph_json(),
             fade_in: default_fade(),
             fade_out: default_fade(),

@@ -263,6 +263,7 @@ mod complex_graph_tests {
                     speed: None,
                     spatial_macros: None,
                     animation_state: None,
+                    signal_graph: None,
                 }
             };
 

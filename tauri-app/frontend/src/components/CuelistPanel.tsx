@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { useGraphStore } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
+import { useSignalGraphStore } from '../store/useSignalGraphStore';
 import { ConfirmModal } from './ui/ConfirmModal';
 import { toast } from '../utils/toast-helpers';
 
@@ -37,14 +38,17 @@ export const CuelistPanel: React.FC = () => {
   const manualPositions = useGraphStore((s) => s.manualPositions);
   const globalNodes = useGlobalGraphStore((s) => s.nodes);
   const globalEdges = useGlobalGraphStore((s) => s.edges);
+  const signalNodes = useSignalGraphStore((s) => s.nodes);
+  const signalEdges = useSignalGraphStore((s) => s.edges);
 
   const handleStoreCue = async () => {
     if (!newCueName.trim()) return;
     const slot = moveSlots.find((s) => s.id === editingSlotId);
     const graphJson = { nodes, edges };
 
-    // Récupérer le graph global
+    // Récupérer le graph global + le graph de modulation (domaine signal)
     const globalGraphJson = { nodes: globalNodes, edges: globalEdges };
+    const signalGraphJson = { nodes: signalNodes, edges: signalEdges };
 
     // IDs des moves actifs
     const activeMoveIds = movements.map((m) => m.id);
@@ -77,6 +81,7 @@ export const CuelistPanel: React.FC = () => {
       fade_duration: newCueFade,
       cue_number: null,
       global_graph: globalGraphJson,
+      signal_graph: signalGraphJson,
       active_move_ids: activeMoveIds,
       per_track_depths: [],
       manual_positions: manualPosMap,

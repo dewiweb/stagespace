@@ -42,6 +42,9 @@ pub enum NodeCategory {
     /// BPM/AudioAmplitude/AudioSpectrum/OSCInput — engines réactifs
     Source,
     Plugin,
+    /// Domaine signal (graph de modulation) — valeurs scalaires f64,
+    /// PAS des trajectoires. Sources, ops et terminal SignalOut.
+    Signal,
 }
 
 /// Contexte(s) de graphe où le node est autorisé.
@@ -54,6 +57,9 @@ pub enum NodeScope {
     GlobalOnly,
     /// Les deux contextes
     Both,
+    /// Graph de modulation (signal) uniquement — domaine scalaire,
+    /// incompatible avec les graphes de trajectoire.
+    SignalOnly,
 }
 
 /// Règle de ciblage : quels types de nodes cet output peut alimenter.
@@ -89,6 +95,9 @@ pub enum Feeds {
     Composites,
     /// Input/Merge → modifiers + post-process + Output
     PostProcess,
+    /// Signal graph → nodes `NodeCategory::Signal` uniquement (le domaine
+    /// scalaire est hermétique : pas de connexion vers la trajectoire).
+    Signal,
 }
 
 /// Type de paramètre UI — aligné sur `ParamType` frontend et les types de
@@ -183,6 +192,7 @@ impl NodeSpec {
                     || cat(NodeCategory::Modifier)
                     || cat(NodeCategory::PostProcess)
             }
+            Feeds::Signal => cat(NodeCategory::Signal),
         }
     }
 
@@ -892,6 +902,125 @@ fn build_catalog() -> Vec<NodeSpec> {
             "External WASM plugin (.ssx bundle) — plugin_id selects the loaded plugin",
             vec![txt("plugin_id", "Plugin ID").d("")],
         ),
+        // ── Signal graph — sources ──
+        spec(
+            NodeType::SignalConst, C::Signal, S::SignalOnly, F::Signal, NO_IN, false,
+            "Constant value — bridge for manual live control (UI slider → param). Modulation graph source",
+            vec![ns("value", "Value", 0.1).d(0.0)],
+        ),
+        spec(
+            NodeType::SignalTime, C::Signal, S::SignalOnly, F::Signal, NO_IN, false,
+            "Elapsed time as signal — ramps, periodic patterns. wrap=0 → unbounded",
+            vec![
+                ns("rate", "Rate", 0.1).d(1.0),
+                nmin("wrap", "Wrap (s, 0=none)", 0.1, 0.0).d(0.0),
+            ],
+        ),
+        spec(
+            NodeType::SignalLfo, C::Signal, S::SignalOnly, F::Signal, NO_IN, false,
+            "Low-frequency oscillator — periodic macro animation. The classic 'animate anything'",
+            vec![
+                enm("waveform", "Waveform", &["sine", "triangle", "square", "sawtooth", "random"]).d("sine"),
+                nmin("frequency", "Frequency (Hz)", 0.01, 0.0).d(0.5),
+                ns("amplitude", "Amplitude", 0.1).d(1.0),
+                ns("center", "Center", 0.1).d(0.0),
+                ns("phase", "Phase (rad)", 0.1).d(0.0),
+            ],
+        ),
+        spec(
+            NodeType::SignalAudio, C::Signal, S::SignalOnly, F::Signal, NO_IN, false,
+            "Audio source → signal (rms/bass/mid/high/bpm/FFT band). Music-reactive macros",
+            vec![
+                enm("band", "Band", &["rms", "bass", "mid", "high", "bpm", "spectrum"]).d("rms"),
+                nrange("index", "FFT Band Index", 1.0, 0.0, 63.0).d(0),
+                nrange("smoothing", "Smoothing", 0.01, 0.0, 0.95).d(0.0),
+            ],
+        ),
+        spec(
+            NodeType::SignalOsc, C::Signal, S::SignalOnly, F::Signal, NO_IN, false,
+            "Incoming OSC value → signal. External controllers (faders, sensors)",
+            vec![
+                txt("name", "Handler Name").d("fader1"),
+                nrange("index", "Arg Index", 1.0, 0.0, 7.0).d(0),
+            ],
+        ),
+        spec(
+            NodeType::SignalRandom, C::Signal, S::SignalOnly, F::Signal, NO_IN, false,
+            "Smooth deterministic noise — organic drift. Sum of incommensurate sinusoids",
+            vec![
+                nmin("rate", "Rate", 0.01, 0.0).d(0.5),
+                ns("amplitude", "Amplitude", 0.1).d(1.0),
+                ns("seed", "Seed", 1.0).d(1.0),
+            ],
+        ),
+        // ── Signal graph — opérateurs ──
+        spec(
+            NodeType::SignalMath, C::Signal, S::SignalOnly, F::Signal, &["a", "b"], false,
+            "Scalar math — combine signals. Unconnected inputs fall back to params a/b",
+            vec![
+                enm("op", "Op", &["add", "sub", "mul", "div", "min", "max", "pow", "abs", "neg", "mod"]).d("add"),
+                ns("a", "A (fallback)", 0.1).d(0.0),
+                ns("b", "B (fallback)", 0.1).d(1.0),
+            ],
+        ),
+        spec(
+            NodeType::SignalMap, C::Signal, S::SignalOnly, F::Signal, &["signal"], false,
+            "Linear remap in_min..in_max → out_min..out_max, optional clamp",
+            vec![
+                ns("in_min", "In Min", 0.1).d(0.0),
+                ns("in_max", "In Max", 0.1).d(1.0),
+                ns("out_min", "Out Min", 0.1).d(0.0),
+                ns("out_max", "Out Max", 0.1).d(1.0),
+                boolean("clamp", "Clamp").d(true),
+            ],
+        ),
+        spec(
+            NodeType::SignalClamp, C::Signal, S::SignalOnly, F::Signal, &["signal"], false,
+            "Clamp signal to [min, max] — safety bound before MacroOut",
+            vec![
+                ns("min", "Min", 0.1).d(0.0),
+                ns("max", "Max", 0.1).d(1.0),
+            ],
+        ),
+        spec(
+            NodeType::SignalMix, C::Signal, S::SignalOnly, F::Signal, &["a", "b", "factor"], false,
+            "Crossfade between two signals (factor 0=A, 1=B) — factor can itself be a signal",
+            vec![nrange("factor", "Factor", 0.01, 0.0, 1.0).d(0.5)],
+        ),
+        // ── Signal graph — nodes à état ──
+        spec(
+            NodeType::SignalSlew, C::Signal, S::SignalOnly, F::Signal, &["signal"], false,
+            "Slew rate limiter — asymmetric physical smoothing (rise/fall units per second)",
+            vec![
+                nmin("rise_rate", "Rise (u/s, 0=unlimited)", 0.1, 0.0).d(0.0),
+                nmin("fall_rate", "Fall (u/s, 0=unlimited)", 0.1, 0.0).d(0.0),
+            ],
+        ),
+        spec(
+            NodeType::SignalEnvelope, C::Signal, S::SignalOnly, F::Signal, &["signal"], false,
+            "Envelope follower — retention factors per frame (small=fast, big=slow). Audio punch → macro",
+            vec![
+                nrange("attack", "Attack (low=fast)", 0.01, 0.0, 1.0).d(0.2),
+                nrange("release", "Release (high=slow)", 0.01, 0.0, 1.0).d(0.95),
+            ],
+        ),
+        spec(
+            NodeType::SignalThreshold, C::Signal, S::SignalOnly, F::Signal, &["signal"], false,
+            "Hysteresis gate — 1 above threshold, 0 below threshold-hysteresis, holds between",
+            vec![
+                ns("threshold", "Threshold", 0.01).d(0.5),
+                nmin("hysteresis", "Hysteresis", 0.01, 0.0).d(0.05),
+            ],
+        ),
+        // ── Signal graph — terminal ──
+        spec(
+            NodeType::SignalOut, C::Signal, S::SignalOnly, F::Terminal, &["signal"], false,
+            "Modulation sink — writes signal as ADDITIVE delta on a macro (panel/OSC/cue base + delta). speed only applies per-move",
+            vec![
+                enm("target", "Target", &["speed", "scale", "shift_x", "shift_y", "shift_z", "yaw", "pitch", "roll", "radius_scale", "height_offset"]).d("yaw"),
+                ns("amount", "Amount", 0.1).d(1.0),
+            ],
+        ),
     ]
 }
 
@@ -996,6 +1125,20 @@ mod tests {
             NodeType::AudioSpectrum,
             NodeType::OSCInput,
             NodeType::Plugin,
+            NodeType::SignalConst,
+            NodeType::SignalTime,
+            NodeType::SignalLfo,
+            NodeType::SignalAudio,
+            NodeType::SignalOsc,
+            NodeType::SignalRandom,
+            NodeType::SignalMath,
+            NodeType::SignalMap,
+            NodeType::SignalClamp,
+            NodeType::SignalMix,
+            NodeType::SignalSlew,
+            NodeType::SignalEnvelope,
+            NodeType::SignalThreshold,
+            NodeType::SignalOut,
         ];
         assert_eq!(all_node_specs().len(), ALL.len(), "catalog size drift");
         for t in ALL {

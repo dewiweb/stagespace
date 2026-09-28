@@ -115,6 +115,46 @@ pub async fn update_move_graph_merged(
     .map_err(|e| IpcError::internal(format!("Task join error: {e}")))?
 }
 
+/// Compile et hot-swap le graph de modulation (domaine signal → deltas
+/// de macros). `movement_id = None` → scope global (MergeRuntime) ;
+/// `Some(id)` → scope per-move (worker du move). Dans les deux cas le
+/// swap est atomique : la frame suivante évalue la nouvelle SignalFn.
+/// La validation `GraphContext::Signal` rejette tout node non-signal.
+#[tauri::command]
+pub async fn update_signal_graph(
+    graph_json: stagespace_engines::GraphJson,
+    movement_id: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<String, IpcError> {
+    let sh = Shared::from_state(&state);
+    tauri::async_runtime::spawn_blocking(move || {
+        let audio_state = lock_or_recover(&sh.audio_state);
+        let graph = build_graph_from_json(&graph_json, &audio_state)
+            .map_err(|e| IpcError::validation(format!("Failed to parse signal graph: {e}")))?;
+        drop(audio_state);
+
+        let signal_fn = stagespace_engines::compile_signal_graph(&graph)
+            .map_err(|e| IpcError::validation(format!("Failed to compile signal graph: {e:?}")))?;
+
+        match movement_id {
+            None => {
+                lock_or_recover(&sh.merge_runtime).swap_signal_fn(signal_fn);
+                Ok("Global signal graph hot-swapped".to_string())
+            }
+            Some(id) => {
+                let movements = lock_or_recover(&sh.movements);
+                let movement = movements
+                    .get(&id)
+                    .ok_or_else(|| IpcError::not_found(format!("Movement '{id}' not found")))?;
+                movement.runtime.swap_signal_fn(signal_fn);
+                Ok(format!("Signal graph hot-swapped on move '{id}'"))
+            }
+        }
+    })
+    .await
+    .map_err(|e| IpcError::internal(format!("Task join error: {e}")))?
+}
+
 /// Compile et hot-swap le graph global (post-processing)
 #[tauri::command]
 pub async fn update_global_graph(

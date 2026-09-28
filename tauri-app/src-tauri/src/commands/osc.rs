@@ -135,11 +135,17 @@ pub async fn set_osc_receiver_port(port: u16, state: State<'_, AppState>) -> Res
         .map_err(|e| IpcError::io(format!("Failed to start OSC receiver on port {port}: {e}")))?;
 
     // Succès : stopper l'ancien et swapper
-    {
+    let new_address_handle = {
         let mut receiver = lock_or_recover(&state.osc_receiver);
         receiver.stop();
+        let handle = new_receiver.address_values_handle();
         *receiver = new_receiver;
-    }
+        handle
+    };
+    // Re-brancher le cache OSC du signal graph sur le NOUVEAU receiver —
+    // l'ancien handle pointe sur un map mort (les nodes SignalOsc liraient
+    // des valeurs figées en silence).
+    lock_or_recover(&state.merge_runtime).set_osc_values_handle(new_address_handle);
     eprintln!("[INFO] OSC receiver now listening on port {port}");
     Ok(())
 }

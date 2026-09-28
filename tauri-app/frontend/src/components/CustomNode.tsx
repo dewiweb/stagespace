@@ -197,12 +197,18 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
     const hasDurationPort = inputPorts.includes('duration');
     // Nodes spline (Evaluate/Trim/Offset) : port 'spline' dédié pour DrawSpline
     const hasSplinePort = inputPorts.includes('spline');
+    // Domaine signal : les ports multi-entrées (a/b/factor…) sont rendus à
+    // gauche sous leurs propres ids — le premier reste le handle principal
+    // en haut ('signal' ou 'a'), comme 'input' pour les trajectoires.
+    const mainPorts = inputPorts.filter((p) => p !== 'duration' && p !== 'spline');
+    const mainPort = mainPorts[0] ?? 'input';
+    const extraPorts = mainPorts.slice(1);
     return (
       <>
         <Handle
           type="target"
           position={Position.Top}
-          id="input"
+          id={mainPort}
           className="!w-3 !h-3 !bg-gray-400"
         />
         {hasDurationPort && (
@@ -223,6 +229,17 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
             className="!w-2.5 !h-2.5 !bg-emerald-500"
           />
         )}
+        {extraPorts.map((p, i) => (
+          <Handle
+            key={p}
+            type="target"
+            position={Position.Left}
+            id={p}
+            style={{ top: `${((i + 1) / (extraPorts.length + 1)) * 100}%` }}
+            className="!w-2.5 !h-2.5 !bg-amber-400"
+            title={p}
+          />
+        ))}
       </>
     );
   };
@@ -300,6 +317,18 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
         <div className="flex justify-between px-1 py-0.5 text-[10px] text-gray-500 font-mono">
           <span className="text-blue-400">A</span>
           <span className="text-purple-400">B</span>
+        </div>
+      )}
+
+      {/* Signal multi-ports (a/b/factor…) : labels des handles latéraux
+          — composites exclus (leur label A/B est déjà rendu au-dessus). */}
+      {!isBinary && inputPorts.filter((p) => p !== 'duration' && p !== 'spline').length > 1 && (
+        <div className="flex gap-2 px-1 py-0.5 text-[10px] text-gray-500 font-mono">
+          {inputPorts
+            .filter((p) => p !== 'duration' && p !== 'spline')
+            .map((p, i) => (
+              <span key={p} className={i === 0 ? 'text-gray-400' : 'text-amber-400'}>{p}</span>
+            ))}
         </div>
       )}
 

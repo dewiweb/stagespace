@@ -45,6 +45,7 @@ mod recall_tests {
             fade_duration: 0.0,
             cue_number: None,
             global_graph: None,
+            signal_graph: None,
             active_move_ids: vec![],
             per_track_depths: vec![],
             manual_positions: HashMap::new(),
@@ -66,6 +67,7 @@ mod recall_tests {
             is_preview: false,
             track_indices: vec![0],
             graph_json: stagespace_engines::GraphJson::default(),
+            signal_graph: None,
             duration: 4.0,
             loop_mode: "loop".to_string(),
             direction: "forward".to_string(),
@@ -148,6 +150,7 @@ mod recall_tests {
             id: "mv-a".to_string(),
             name: "A".to_string(),
             graph_json: serde_json::from_value(circular_graph()).unwrap(),
+            signal_graph: None,
             osc_ids: vec![7],
             track_indices: vec![0],
             is_preview: false,
@@ -209,6 +212,7 @@ mod recall_tests {
             speed: None,
             spatial_macros: None,
             animation_state: None,
+            signal_graph: None,
         };
         spawn_move_for_recall(spec, &sh).expect("initial spawn");
         let gen_before = sh.movements.lock().unwrap()["mv-live"].generation;
@@ -220,6 +224,7 @@ mod recall_tests {
             id: "mv-live".to_string(),
             name: "Live".to_string(),
             graph_json: serde_json::from_value(circular_graph()).unwrap(),
+            signal_graph: None,
             osc_ids: vec![7],
             track_indices: vec![0],
             is_preview: false,

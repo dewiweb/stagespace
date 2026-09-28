@@ -27,6 +27,7 @@ pub mod post_process_compiler;
 pub mod presets;
 pub mod rng;
 pub mod runtime;
+pub mod signal_compiler;
 pub mod spatial_transform;
 pub mod validator;
 pub mod zones;
@@ -107,6 +108,10 @@ pub use rng::SimpleRng;
 pub use runtime::{
     LoopMode, MacroState, PerfStats, PlayDirection, PositionFn, PostProcessContext, PostProcessFn,
     Runtime,
+};
+pub use signal_compiler::{
+    compile_signal_graph, empty_signal_fn, macro_with_deltas, SignalCompileError, SignalCtx,
+    SignalDeltas, SignalFn,
 };
 pub use validator::{ValidationError, ValidationResult, Validator};
 pub use zones::{apply_zones, Zone, ZoneShape};

@@ -97,6 +97,8 @@ export interface ShowFileEnvelope {
   edges: Edge[];
   // v2 : show complet
   globalGraph?: { nodes: Node[]; edges: Edge[] };
+  /// Graph de modulation global (domaine signal → deltas de macros)
+  signalGraph?: { nodes: Node[]; edges: Edge[] };
   slots?: MoveSlot[];
   setlistOrder?: string[];
   currentSetlistIndex?: number;
@@ -241,8 +243,10 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
     // Le graphe global et les cues vivent dans des stores séparés —
     // import dynamique pour éviter les cycles d'import.
     const { useGlobalGraphStore } = await import('../useGlobalGraphStore');
+    const { useSignalGraphStore } = await import('../useSignalGraphStore');
     const { useCuelistStore } = await import('../useCuelistStore');
     const globalStore = useGlobalGraphStore.getState();
+    const signalStore = useSignalGraphStore.getState();
     const cueStore = useCuelistStore.getState();
 
     // OSC IN mappings : sérialisables — sinon ils sont perdus au load.
@@ -261,6 +265,7 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
       nodes: s.nodes,
       edges: s.edges,
       globalGraph: { nodes: globalStore.nodes, edges: globalStore.edges },
+      signalGraph: { nodes: signalStore.nodes, edges: signalStore.edges },
       // Strip runtime state : movementId n'a de sens que pendant la session —
       // un slot rechargé afficherait un fantôme "playing".
       slots: s.moveSlots.map((sl) => ({ ...sl, movementId: null })),
@@ -462,6 +467,25 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
         useGlobalGraphStore.setState({ nodes: prevNodes, edges: prevEdges });
         await useGlobalGraphStore.getState().pushGlobalGraph().catch(() => {});
         toast.error(`Show loaded but global graph failed to apply: ${e}`);
+      }
+    }
+
+    // 5b. Graph de modulation (domaine signal) — même pattern restore+push.
+    const { useSignalGraphStore } = await import('../useSignalGraphStore');
+    if (raw.signalGraph) {
+      const prevNodes = useSignalGraphStore.getState().nodes;
+      const prevEdges = useSignalGraphStore.getState().edges;
+      useSignalGraphStore.setState({
+        nodes: raw.signalGraph.nodes,
+        edges: raw.signalGraph.edges,
+      });
+      try {
+        await useSignalGraphStore.getState().pushSignalGraph();
+      } catch (e) {
+        console.error('Failed to push restored signal graph:', e);
+        useSignalGraphStore.setState({ nodes: prevNodes, edges: prevEdges });
+        await useSignalGraphStore.getState().pushSignalGraph().catch(() => {});
+        toast.error(`Show loaded but signal graph failed to apply: ${e}`);
       }
     }
 

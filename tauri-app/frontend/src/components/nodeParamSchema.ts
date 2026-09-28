@@ -66,6 +66,7 @@ const CATEGORY_META: { category: NodeCategory; label: string; color: string }[] 
   { category: 'Composite', label: 'Composite', color: 'purple' },
   { category: 'Source', label: 'Sources', color: 'yellow' },
   { category: 'Plugin', label: 'Plugins', color: 'yellow' },
+  { category: 'Signal', label: 'Signal (Modulation)', color: 'amber' },
 ];
 
 export const NODE_CATEGORIES: { label: string; color: string; types: NodeType[] }[] =
@@ -85,6 +86,12 @@ export const SUB_ONLY_NODES: Set<NodeType> = new Set(
   NODE_SPECS.filter((s) => s.scope === 'SubOnly').map((s) => s.node_type),
 );
 
+/// Nodes du domaine signal (graph de modulation) — scope dédié : ils ne
+/// vivent que dans le tab Mods/Signal et sont cachés des tabs move/global.
+export const SIGNAL_ONLY_NODES: Set<NodeType> = new Set(
+  NODE_SPECS.filter((s) => s.scope === 'SignalOnly').map((s) => s.node_type),
+);
+
 export const NODE_COLORS: Record<string, string> = {
   gray: '#4b5563',
   blue: '#2563eb',
@@ -94,6 +101,7 @@ export const NODE_COLORS: Record<string, string> = {
   orange: '#ea580c',
   cyan: '#0891b2',
   pink: '#db2777',
+  amber: '#f59e0b',
 };
 
 const CATEGORY_COLOR: Record<NodeCategory, string> = Object.fromEntries(

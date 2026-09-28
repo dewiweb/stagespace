@@ -165,6 +165,17 @@ pub struct MergeRuntime {
     /// buffer diffère → on ne tue pas le nouveau move. Sans ce mécanisme
     /// un worker zombie tournait à 100 % CPU indéfiniment.
     stale_kill_ids: StaleKillQueue,
+    /// Graph de modulation compilé (domaine signal) — produit des DELTAS
+    /// de macros par frame, appliqués de façon additive sur un clone
+    /// effectif des macros (la base panel/OSC/cue n'est jamais écrasée).
+    /// Mutex (pas RwLock) : `SignalFn` est `FnMut` — les nodes à état
+    /// mutent à chaque eval. Hot-swappable via `update_signal_graph`.
+    signal_fn: Arc<Mutex<crate::signal_compiler::SignalFn>>,
+    /// Dernières valeurs OSC reçues (`OscReceiver::address_values_handle`)
+    /// — source des nodes `SignalOsc`. L'Arc interne est re-pointé via
+    /// `set_osc_values_handle` quand le receiver est recréé (rebind port).
+    /// Vide tant que le receiver n'est pas branché (les nodes lisent 0.0).
+    osc_values: crate::signal_compiler::SignalOscSource,
 }
 
 /// Entrée de la file stale-kill (audit C5) : id du move + Arc du
@@ -234,6 +245,8 @@ impl MergeRuntime {
             barycenter_pivot: Arc::new(AtomicBool::new(false)),
             move_ref_id: Arc::new(RwLock::new(None)),
             stale_kill_ids: Arc::new(Mutex::new(Vec::new())),
+            signal_fn: Arc::new(Mutex::new(crate::signal_compiler::empty_signal_fn())),
+            osc_values: Arc::new(RwLock::new(Arc::new(Mutex::new(HashMap::new())))),
         })
     }
 
@@ -374,6 +387,21 @@ impl MergeRuntime {
     }
 
     /// Hot-swap la fonction de post-processing (graph global)
+    /// Hot-swap du graph de modulation (domaine signal → deltas de macros).
+    /// Le merge l'évalue à chaque frame et applique les deltas de façon
+    /// ADDITIVE sur un clone effectif des macros (couche sans conflit —
+    /// les écritures directes panel/OSC/cue restent la base).
+    pub fn swap_signal_fn(&self, new_fn: crate::signal_compiler::SignalFn) {
+        *self.signal_fn.lock().unwrap_or_else(|e| e.into_inner()) = new_fn;
+    }
+
+    /// Branche le cache des valeurs OSC reçues (source des nodes
+    /// `SignalOsc`) — appelé au démarrage et après chaque rebind du
+    /// receiver avec `OscReceiver::address_values_handle()`.
+    pub fn set_osc_values_handle(&self, handle: crate::compiler::OscValueMap) {
+        *self.osc_values.write().unwrap_or_else(|e| e.into_inner()) = handle;
+    }
+
     pub fn swap_post_process_fn(&self, new_fn: PostProcessFn) {
         *self
             .post_process_fn
@@ -889,6 +917,8 @@ impl MergeRuntime {
         let barycenter_pivot_arc = self.barycenter_pivot.clone();
         let move_ref_id_arc = self.move_ref_id.clone();
         let stale_kill_ids = self.stale_kill_ids.clone();
+        let signal_fn_arc = self.signal_fn.clone();
+        let osc_values_arc = self.osc_values.clone();
 
         let handle = std::thread::spawn(move || {
             let mut start = Instant::now();
@@ -1175,9 +1205,36 @@ impl MergeRuntime {
                     .unwrap_or_else(|e| e.into_inner())
                     .clone();
 
+                // Signal graph : évalue la `SignalFn` compilée → deltas
+                // additifs appliqués sur un clone effectif des macros.
+                // La base (panel/OSC/cue) n'est jamais écrasée — couche
+                // additive pure, les transforms lisent `ctx.macros` sans
+                // changement.
+                let eff_macros = {
+                    let mut signal = signal_fn_arc.lock().unwrap_or_else(|e| e.into_inner());
+                    let deltas = {
+                        let osc_map = osc_values_arc
+                            .read()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .clone();
+                        let osc_vals = osc_map.lock().unwrap_or_else(|e| e.into_inner());
+                        (*signal)(&crate::signal_compiler::SignalCtx {
+                            t: t_real,
+                            dt,
+                            audio_state: &audio_state,
+                            osc_values: &osc_vals,
+                        })
+                    };
+                    if deltas.is_empty() {
+                        None
+                    } else {
+                        Some(crate::signal_compiler::macro_with_deltas(&macros, &deltas))
+                    }
+                };
+
                 let ctx = PostProcessContext {
                     t: t_real,
-                    macros: &macros,
+                    macros: eff_macros.as_ref().unwrap_or_else(|| macros.as_ref()),
                     audio_state: &audio_state,
                     track_positions: &track_positions,
                     manual_positions: &manual_positions,

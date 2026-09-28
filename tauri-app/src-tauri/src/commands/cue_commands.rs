@@ -43,6 +43,9 @@ pub struct StoreCueRequest {
     // ─── Phase 3 : champs étendus ───
     /// Graph global (post-processing)
     pub global_graph: Option<stagespace_engines::GraphJson>,
+    /// Graph de modulation global (domaine signal → deltas de macros)
+    #[serde(default)]
+    pub signal_graph: Option<stagespace_engines::GraphJson>,
     /// IDs des moves actifs
     pub active_move_ids: Vec<String>,
     /// Profondeurs par track
@@ -104,6 +107,7 @@ pub async fn store_cue(
                     id: m.id.clone(),
                     name: m.name.clone(),
                     graph_json: m.graph_json.clone(),
+                    signal_graph: m.signal_graph.clone(),
                     osc_ids: m.osc_ids.clone(),
                     track_indices: m.track_indices.clone(),
                     is_preview: m.is_preview,
@@ -136,6 +140,7 @@ pub async fn store_cue(
         fade_duration: request.fade_duration,
         cue_number: request.cue_number,
         global_graph: request.global_graph,
+        signal_graph: request.signal_graph,
         active_move_ids: request.active_move_ids,
         // Capturé depuis le runtime (comme zones/channels) — le champ de la
         // request était toujours [] côté frontend.
@@ -269,6 +274,24 @@ pub(crate) fn recall_cue_inner(
         if let Some(strategy) = effects.strategy {
             merge_rt.set_merge_strategy(strategy);
         }
+    }
+
+    // 1b. Idem pour le graph de modulation global (domaine signal → deltas
+    //     de macros) : recompilé + swappé si le cue en porte un.
+    if let Some(ref signal_graph_json) = cue.signal_graph {
+        let audio_state = {
+            let merge_rt = lock_or_recover(&sh.merge_runtime);
+            merge_rt
+                .audio_state_arc()
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone()
+        };
+        let graph = build_graph_from_json(signal_graph_json, &audio_state)
+            .map_err(|e| IpcError::validation(format!("Failed to parse signal graph: {e}")))?;
+        let signal_fn = stagespace_engines::compile_signal_graph(&graph)
+            .map_err(|e| IpcError::validation(format!("Failed to compile signal graph: {e:?}")))?;
+        lock_or_recover(&sh.merge_runtime).swap_signal_fn(signal_fn);
     }
 
     // 2. Désactiver les moves absents du cue. Quand le cue porte des
@@ -440,6 +463,7 @@ pub(crate) fn recall_cue_inner(
                 speed,
                 spatial_macros: None,
                 animation_state: snap.animation_state.clone(),
+                signal_graph: snap.signal_graph.clone(),
             };
             match spawn_move_for_recall(spec, &sh) {
                 Ok(_) => {

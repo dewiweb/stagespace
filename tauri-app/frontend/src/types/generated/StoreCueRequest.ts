@@ -36,6 +36,10 @@ cue_number: string | null,
  */
 global_graph: GraphJson | null, 
 /**
+ * Graph de modulation global (domaine signal → deltas de macros)
+ */
+signal_graph: GraphJson | null, 
+/**
  * IDs des moves actifs
  */
 active_move_ids: Array<string>, 

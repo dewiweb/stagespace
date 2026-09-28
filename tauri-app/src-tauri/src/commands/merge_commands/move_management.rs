@@ -74,6 +74,9 @@ pub struct MoveSpec {
     pub spatial_macros: Option<SpatialMacroInit>,
     /// AnimationState complet (animations — phase offsets + audio mods)
     pub animation_state: Option<AnimationState>,
+    /// Graph de modulation per-move (domaine signal → deltas de macros).
+    /// Compilé au spawn puis swappé sur le worker (`runtime.swap_signal_fn`).
+    pub signal_graph: Option<stagespace_engines::GraphJson>,
 }
 
 /// Macros spatiales initiales d'un worker (système Animation).
@@ -308,6 +311,20 @@ fn spawn_move_inner(
         runtime.set_animation_state(anim_state);
     }
 
+    // Signal graph per-move : branche le cache OSC (source SignalOsc —
+    // l'Arc interne peut être re-pointé après un rebind du receiver) puis
+    // compile + swap la SignalFn (deltas additifs sur les macros du move).
+    runtime.set_osc_values_handle(lock_or_recover(&sh.osc_receiver).address_values_handle());
+    if let Some(ref sig_json) = spec.signal_graph {
+        let audio_state = lock_or_recover(&sh.audio_state);
+        let sig_graph = build_graph_from_json(sig_json, &audio_state)
+            .map_err(|e| IpcError::validation(format!("Signal graph parse failed: {e}")))?;
+        drop(audio_state);
+        let sig_fn = stagespace_engines::compile_signal_graph(&sig_graph)
+            .map_err(|e| IpcError::validation(format!("Signal graph compile failed: {e:?}")))?;
+        runtime.swap_signal_fn(sig_fn);
+    }
+
     // 5. PositionBuffer → mode worker (le merge thread collecte les positions)
     let buffer = Arc::new(PositionBuffer::new());
     runtime.set_position_buffer(buffer.clone());
@@ -364,6 +381,7 @@ fn spawn_move_inner(
                 is_preview: spec.is_preview,
                 track_indices: spec.track_indices.clone(),
                 graph_json: spec.graph_json.clone(),
+                signal_graph: spec.signal_graph.clone(),
                 duration: spec.duration,
                 loop_mode: loop_mode_str,
                 direction: direction_str,
@@ -463,6 +481,10 @@ pub async fn activate_move(
         speed: request.animation.as_ref().map(|a| a.speed),
         spatial_macros: None,
         animation_state,
+        signal_graph: request
+            .animation
+            .as_ref()
+            .and_then(|a| a.signal_graph.clone()),
     };
     let sh = Shared::from_state(&state);
     tauri::async_runtime::spawn_blocking(move || spawn_move(spec, &sh))

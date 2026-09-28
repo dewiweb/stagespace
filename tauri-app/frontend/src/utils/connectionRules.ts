@@ -55,6 +55,10 @@ function canFeed(from: NodeSpec, to: NodeSpec): boolean {
       return to.node_type === 'Output' || catIs(to, 'Composite');
     case 'PostProcess':
       return to.node_type === 'Output' || catIs(to, 'Modifier') || catIs(to, 'PostProcess');
+    case 'Signal':
+      // Domaine signal (modulation) — scalaires f64 entre nodes Signal
+      // uniquement. Aucun edge vers trajectoire/modifier/post-process.
+      return catIs(to, 'Signal');
   }
 }
 

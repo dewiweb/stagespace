@@ -20,6 +20,11 @@ name: string,
  */
 graph_json: GraphJson, 
 /**
+ * Graph de modulation per-move (domaine signal) — recompilé au recall
+ * si présent (`update_signal_graph` hot-swap la `SignalFn`).
+ */
+signal_graph: GraphJson | null, 
+/**
  * OSC ids ciblés par le move
  */
 osc_ids: Array<number>, 
