@@ -5,7 +5,7 @@ use crate::AppState;
 use std::collections::HashMap;
 use tauri::State;
 
-use super::lock_or_recover;
+use super::{lock_or_recover, require_finite_vec3};
 
 /// Définit les positions des tracks .hol (pour Barycenter)
 #[tauri::command]
@@ -13,6 +13,9 @@ pub async fn set_track_positions(
     positions: HashMap<u32, [f64; 3]>,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
+    for (track, pos) in &positions {
+        require_finite_vec3(&format!("positions[{track}]"), *pos)?;
+    }
     let merge_rt = lock_or_recover(&state.merge_runtime);
     merge_rt.set_track_positions(positions);
     Ok(())
@@ -26,7 +29,7 @@ pub async fn set_manual_position(
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
     let merge_rt = lock_or_recover(&state.merge_runtime);
-    merge_rt.set_manual_position(object_index, position);
+    merge_rt.set_manual_position(object_index, require_finite_vec3("position", position)?);
     Ok(())
 }
 

@@ -70,6 +70,28 @@ pub async fn store_cue(
     };
     let osc_mappings = lock_or_recover(&state.osc_receiver).list_mappings();
 
+    // Validation frontière : NaN/inf dans un snapshot → valeurs pourries
+    // réinjectées au recall (fade NaN, positions NaN, depths NaN).
+    if !request.fade_duration.is_finite() || request.fade_duration < 0.0 {
+        return Err(IpcError::validation(
+            "fade_duration must be a finite non-negative number",
+        ));
+    }
+    for (track, pos) in &request.manual_positions {
+        if !pos.iter().all(|v| v.is_finite()) {
+            return Err(IpcError::validation(format!(
+                "manual_positions[{track}] must be finite"
+            )));
+        }
+    }
+    for (i, d) in request.per_track_depths.iter().enumerate() {
+        if !d.is_finite() {
+            return Err(IpcError::validation(format!(
+                "per_track_depths[{i}] must be finite"
+            )));
+        }
+    }
+
     // Phase 5 : snapshot complet de chaque move actif — assez pour que
     // `recall_cue` puisse les recréer seul (graph, tracks, loop, direction).
     let moves: Vec<stagespace_engines::MoveSnapshot> = {

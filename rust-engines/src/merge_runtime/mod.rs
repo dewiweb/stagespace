@@ -503,6 +503,11 @@ impl MergeRuntime {
 
     /// Définit le lissage cinématique [0, 1) — 0 = brut, 0.9 = très lissé
     pub fn set_kinematic_smoothing(&self, smoothing: f64) {
+        // NaN ferait paniquer clamp ici et plus bas (défense en profondeur :
+        // l'IPC valide déjà, mais CLI/tests passent par ce setter).
+        if !smoothing.is_finite() {
+            return;
+        }
         *self
             .kinematic_smoothing
             .write()

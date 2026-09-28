@@ -59,6 +59,11 @@ pub async fn update_move_graph_merged(
         // Hot-swap la duration si fournie — ET le snapshot, sinon store_cue
         // capture la durée d'avant l'edit et recall_cue la ressuscite.
         if let Some(dur) = duration {
+            if !dur.is_finite() || dur <= 0.0 {
+                return Err(IpcError::validation(
+                    "duration must be a finite positive number",
+                ));
+            }
             movement.runtime.set_duration(dur);
             movement.duration = dur;
         }
@@ -90,6 +95,11 @@ pub async fn update_move_graph_merged(
         }
 
         let fade = fade_duration.unwrap_or(0.3);
+        if !fade.is_finite() || fade < 0.0 {
+            return Err(IpcError::validation(
+                "fade_duration must be a finite non-negative number",
+            ));
+        }
         // IMPORTANT: recall_cue (swap position_fn) AVANT set_osc_ids.
         movement.runtime.recall_cue(compiled, fade);
         if let Some(ref ids) = osc_ids {

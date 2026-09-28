@@ -10,7 +10,7 @@ use stagespace_engines::zones::{Zone, ZoneShape};
 use std::str::FromStr;
 use tauri::State;
 
-use super::lock_or_recover;
+use super::{lock_or_recover, require_finite, require_finite_vec3};
 
 /// Définit un canal spatial étendu pour un objet
 #[tauri::command]
@@ -22,7 +22,7 @@ pub async fn set_spatial_channel(
 ) -> Result<(), IpcError> {
     let ch = SpatialChannel::from_str(&channel).map_err(IpcError::validation)?;
     let merge_rt = lock_or_recover(&state.merge_runtime);
-    merge_rt.set_object_channel(object_index, ch, value);
+    merge_rt.set_object_channel(object_index, ch, require_finite("value", value)?);
     Ok(())
 }
 
@@ -101,14 +101,27 @@ pub async fn add_channel_modulation(
     let mut rule = ChannelModulation::new(
         KinematicSource::from_str(&params.source).map_err(IpcError::validation)?,
         SpatialChannel::from_str(&params.channel).map_err(IpcError::validation)?,
-        params.scale,
+        require_finite("scale", params.scale)?,
     );
-    rule.offset = params.offset.unwrap_or(0.0);
-    rule.min = params.min.unwrap_or(f64::NEG_INFINITY);
-    rule.max = params.max.unwrap_or(f64::INFINITY);
+    rule.offset = match params.offset {
+        Some(v) => require_finite("offset", v)?,
+        None => 0.0,
+    };
+    // min/max : inf autorisé (borne absente), NaN interdit — il casserait
+    // le clamp du merge à chaque frame.
+    rule.min = match params.min {
+        Some(v) if !v.is_nan() => v,
+        Some(_) => return Err(IpcError::validation("min must not be NaN")),
+        None => f64::NEG_INFINITY,
+    };
+    rule.max = match params.max {
+        Some(v) if !v.is_nan() => v,
+        Some(_) => return Err(IpcError::validation("max must not be NaN")),
+        None => f64::INFINITY,
+    };
     rule.object = params.object_index;
     if let Some(l) = params.listener {
-        rule.listener = l;
+        rule.listener = require_finite_vec3("listener", l)?;
     }
     let merge_rt = lock_or_recover(&state.merge_runtime);
     Ok(merge_rt.add_modulation(rule))
@@ -145,7 +158,7 @@ pub async fn set_kinematic_smoothing(
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
     let merge_rt = lock_or_recover(&state.merge_runtime);
-    merge_rt.set_kinematic_smoothing(smoothing);
+    merge_rt.set_kinematic_smoothing(require_finite("smoothing", smoothing)?);
     Ok(())
 }
 
@@ -172,16 +185,20 @@ pub struct ZoneParams {
 /// valeurs cibles proportionnellement à l'influence (smoothstep sur falloff).
 #[tauri::command]
 pub async fn add_zone(params: ZoneParams, state: State<'_, AppState>) -> Result<usize, IpcError> {
+    let a = require_finite_vec3("a", params.a)?;
     let shape = match params.shape.to_lowercase().as_str() {
         "sphere" => ZoneShape::Sphere {
-            center: params.a,
-            radius: params.radius.unwrap_or(1.0),
+            center: a,
+            radius: require_finite("radius", params.radius.unwrap_or(1.0))?,
         },
         "box" => ZoneShape::Box {
-            min: params.a,
-            max: params
-                .b
-                .ok_or_else(|| IpcError::validation("Box zone requires 'b' (max corner)"))?,
+            min: a,
+            max: require_finite_vec3(
+                "b",
+                params
+                    .b
+                    .ok_or_else(|| IpcError::validation("Box zone requires 'b' (max corner)"))?,
+            )?,
         },
         s => {
             return Err(IpcError::validation(format!(
@@ -193,7 +210,7 @@ pub async fn add_zone(params: ZoneParams, state: State<'_, AppState>) -> Result<
     for (name, value) in &params.channels {
         channels.set(
             SpatialChannel::from_str(name).map_err(IpcError::validation)?,
-            *value,
+            require_finite(&format!("channel '{name}'"), *value)?,
         );
     }
     if channels.is_empty() {
