@@ -11,7 +11,6 @@ use std::time::{Duration, Instant};
 
 mod config;
 mod macros;
-mod overrides;
 mod perf;
 #[cfg(test)]
 mod tests;
@@ -19,7 +18,6 @@ mod types;
 
 pub use config::*;
 pub use macros::*;
-pub use overrides::*;
 pub use perf::*;
 pub use types::*;
 
@@ -33,7 +31,6 @@ pub struct Runtime {
     macros: Arc<MacroState>,
     config: Arc<RuntimeConfig>,
     perf: Arc<PerfMonitor>,
-    overrides: OverrideManager,
     /// Origin = isobarycentre des tracks ciblées — la trajectoire est centrée dessus
     origin: Arc<Mutex<nalgebra::Vector3<f64>>>,
     /// Animation state — depth + phase_offset par track + audio mods
@@ -79,7 +76,7 @@ impl Runtime {
             macros: Arc::new(MacroState::new()),
             config: Arc::new(RuntimeConfig::new()),
             perf: Arc::new(PerfMonitor::new()),
-            overrides: OverrideManager::new(),
+
             origin: Arc::new(Mutex::new(nalgebra::Vector3::zeros())),
             animation_state: Arc::new(Mutex::new(None)),
             audio_state,
@@ -350,7 +347,7 @@ impl Runtime {
         let macros = self.macros.clone();
         let config = self.config.clone();
         let perf = self.perf.clone();
-        let overrides = self.overrides.clone();
+
         let origin_arc = self.origin.clone();
         let anim_state_arc = self.animation_state.clone();
         let audio_state_arc = self.audio_state.clone();
@@ -538,15 +535,11 @@ impl Runtime {
                 );
                 let positions: Vec<(usize, nalgebra::Vector3<f64>)> = {
                     let fn_ref = position_fn_arc.lock().unwrap_or_else(|e| e.into_inner());
-                    let ovr = overrides.lock();
                     osc_ids
                         .iter()
                         .enumerate()
                         .map(|(obj_idx, &_osc_id)| {
-                            // Si un override existe pour cet objet, l'utiliser
-                            let raw_pos = if let Some(override_pos) = ovr.get(&obj_idx) {
-                                *override_pos
-                            } else {
+                            let raw_pos = {
                                 // Appliquer le phase_offset pour cette track
                                 let phase_off =
                                     track_phase_offsets.get(obj_idx).copied().unwrap_or(0.0);
@@ -644,15 +637,6 @@ impl Runtime {
 
     pub fn get_perf_stats(&self) -> PerfStats {
         self.perf.get_stats()
-    }
-    pub fn set_override(&self, obj_index: usize, pos: nalgebra::Vector3<f64>) {
-        self.overrides.set(obj_index, pos);
-    }
-    pub fn clear_override(&self, obj_index: usize) {
-        self.overrides.clear(obj_index);
-    }
-    pub fn clear_all_overrides(&self) {
-        self.overrides.clear_all();
     }
     pub fn set_preview_mode(&self, enabled: bool) {
         self.config.set_preview_mode(enabled);

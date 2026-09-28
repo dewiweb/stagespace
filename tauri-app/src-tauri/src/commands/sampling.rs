@@ -52,35 +52,6 @@ pub async fn get_perf_stats(state: State<'_, AppState>) -> Result<PerfStatsRespo
     })
 }
 
-/// Échantillonne la trajectoire compilée pour la visualiser dans la 3D
-/// Retourne N points (t, x, y, z) pour un objet donné
-#[tauri::command]
-pub async fn sample_trajectory(
-    object_index: usize,
-    n_samples: usize,
-    duration: f64,
-    state: State<'_, AppState>,
-) -> Result<Vec<(f64, f64, f64, f64)>, String> {
-    // Le graphe "expert" tourne comme worker (graph-main / graph-preview).
-    // On capture un sampler detaché et on RELÂCHE le lock movements AVANT
-    // d'échantillonner — sinon stop-all/recall attendent des milliers
-    // d'évaluations.
-    let sampler = {
-        let movements = lock_or_recover(&state.movements);
-        movements
-            .get("graph-main")
-            .or_else(|| movements.get("graph-preview"))
-            .map(|m| m.runtime.sampler())
-    };
-    // Clamp : un n_samples non borné (bug frontend ou IPC malveillant)
-    // allouerait des GB et gèlerait les commands d'urgence.
-    let n = n_samples.clamp(2, 10_000);
-    Ok(match sampler {
-        Some(s) => s.sample(object_index, n, duration.max(0.1)),
-        None => vec![],
-    })
-}
-
 /// Un chemin samplé d'une track d'un move — retourné par
 /// `sample_movement_trajectories` (batch : 1 invoke pour tout le move
 /// au lieu de N invokes séquentiels côté frontend).

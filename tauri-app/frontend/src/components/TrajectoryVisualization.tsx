@@ -121,33 +121,9 @@ export const TrajectoryVisualization: React.FC<TrajectoryVisualizationProps> = (
             }
             return;
           }
-
-          // Mode legacy (graphe expert) : échantillonner depuis le runtime global
-          const graphNodes = useGraphStore.getState().nodes;
-          const durationNode = graphNodes.find((n) => (n.data as any)?.type === 'Duration');
-          const duration = (durationNode?.data as any)?.params?.duration ?? 4.0;
-
-          for (let i = 0; i < nObjs; i++) {
-            if (cancelled) return;
-            const samples = await invoke<Array<[number, number, number, number]>>('sample_trajectory', {
-              objectIndex: i, nSamples, duration,
-            });
-            if (cancelled || samples.length < 2) continue;
-
-            const points = samples.map((s) => {
-              const [tx, ty, tz] = toThree(s[1], s[2], s[3]);
-              return new THREE.Vector3(tx, ty, tz);
-            });
-            const geo = new THREE.BufferGeometry().setFromPoints(points);
-            const hue = i / nObjs;
-            const mat = new THREE.LineBasicMaterial({
-              color: new THREE.Color().setHSL(hue, 0.7, 0.5),
-              transparent: true, opacity: 0.35,
-            });
-            const line = new THREE.Line(geo, mat);
-            scene.add(line);
-            pathLinesRef.current.push(line);
-          }
+          // Pas de movement actif → rien à tracer (l'ancienne branche
+          // "graph-main" legacy a été retirée : les workers graph-main/
+          // graph-preview n'existent plus, la commande était morte).
         } catch {
           // invoke peut échouer si pas de runtime — silencieux
         }

@@ -52,7 +52,9 @@ export const MacrosPanel: React.FC<MacrosPanelProps> = ({ isPlaying, hasMovement
       </div>
       {shouldPush && (
         <button
-          onClick={() => invoke('clear_all_overrides').catch(console.error)}
+          // Les overrides du drag 3D vivent dans le merge (manual_positions),
+          // pas dans l'ancienne map runtime.overrides — supprimée.
+          onClick={() => invoke('clear_all_manual_positions').catch(console.error)}
           className="text-[10px] text-orange-400 hover:text-orange-300 bg-gray-800 hover:bg-gray-700 rounded py-1 transition-colors border border-gray-700"
         >
           Clear All Overrides

@@ -38,13 +38,11 @@ use commands::osc::{
     osc_in_stats, osc_list_mappings, osc_remove_mapping, osc_set_in_enabled, osc_suppress_in,
     send_osc_position, set_osc_output, set_osc_receiver_port,
 };
-use commands::overrides::{clear_all_overrides, set_object_override};
 use commands::playback::set_macro;
 use commands::plugins::{import_plugin, list_plugins, reload_plugins};
 use commands::presets::{preset_delete, preset_list, preset_load, preset_save};
 use commands::sampling::{
     frontend_log, get_perf_stats, sample_movement_trajectories, sample_movement_trajectory,
-    sample_trajectory,
 };
 use commands::state::lock_or_recover;
 
@@ -349,10 +347,7 @@ pub fn run() {
             load_graph_from_file,
             send_osc_position,
             get_perf_stats,
-            set_object_override,
-            clear_all_overrides,
             discover_osc_targets,
-            sample_trajectory,
             sample_movement_trajectories,
             sample_movement_trajectory,
             launch_animation,
