@@ -50,10 +50,13 @@ pub async fn update_move_graph_merged(
             IpcError::conflict(format!("Movement '{movement_id}' stopped during recompile"))
         })?;
         if movement.generation != generation {
-            eprintln!(
-                "[WARN] update_move_graph_merged: '{movement_id}' respawned during \
-                 compile — applying to the new worker anyway"
-            );
+            // Le graphe a été compilé pour l'ANCIEN contexte (n_objects,
+            // tracks) — l'appliquer au worker respawné donnerait des objets
+            // muets ou des agents fantômes, silencieusement (audit I13).
+            // On refuse : le frontend peut relancer l'edit.
+            return Err(IpcError::conflict(format!(
+                "Movement '{movement_id}' was respawned during compile — retry the edit"
+            )));
         }
 
         // Hot-swap la duration si fournie — ET le snapshot, sinon store_cue

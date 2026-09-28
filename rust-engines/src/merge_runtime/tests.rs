@@ -281,7 +281,7 @@ fn test_set_graph_effects_replaces_in_block() {
     assert!(m.is_empty());
 
     // Les effets manuels ne sont pas touchés par set_graph_effects
-    rt.add_zone(zone);
+    rt.add_zone(zone).unwrap();
     rt.set_graph_effects(Vec::new(), Vec::new(), false, None);
     assert_eq!(rt.zones().len(), 1);
 }

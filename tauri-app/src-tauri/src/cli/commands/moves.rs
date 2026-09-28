@@ -426,7 +426,7 @@ pub fn cmd_mod_add(args: &[&str]) -> Result<String, String> {
         .merge_runtime
         .lock()
         .unwrap_or_else(|e| e.into_inner());
-    let idx = merge_rt.add_modulation(rule);
+    let idx = merge_rt.add_modulation(rule)?;
     Ok(format!(
         "Modulation #{} added: {} → {} (scale {}, offset {}, range [{}..{}]{})",
         idx,
@@ -597,7 +597,7 @@ pub fn cmd_zone_add(args: &[&str]) -> Result<String, String> {
         .merge_runtime
         .lock()
         .unwrap_or_else(|e| e.into_inner());
-    let idx = merge_rt.add_zone(zone);
+    let idx = merge_rt.add_zone(zone)?;
     Ok(format!("Zone #{idx} added"))
 }
 

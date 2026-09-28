@@ -398,13 +398,25 @@ impl OscReceiver {
 
     /// Ajoute un mapping OSC → destination.
     /// Valide l'adresse, la transform et la cohérence wildcard/object.
+    /// Cap à 256 (audit I12) : le dispatch est O(mappings) par message —
+    /// au-delà c'est une mauvaise config, pas un usage réel.
+    pub const MAX_MAPPINGS: usize = 256;
+
     pub fn add_mapping(&self, mapping: OscMapping) -> Result<(), String> {
         validate_mapping(&mapping)?;
-        self.shared
+        let mut mappings = self
+            .shared
             .mappings
             .write()
-            .unwrap_or_else(|e| e.into_inner())
-            .insert(mapping.address.clone(), mapping);
+            .unwrap_or_else(|e| e.into_inner());
+        if !mappings.contains_key(&mapping.address) && mappings.len() >= Self::MAX_MAPPINGS {
+            return Err(format!(
+                "OSC mappings capped at {} (current: {})",
+                Self::MAX_MAPPINGS,
+                mappings.len()
+            ));
+        }
+        mappings.insert(mapping.address.clone(), mapping);
         Ok(())
     }
 
@@ -654,21 +666,22 @@ impl Drop for OscReceiver {
 
 /// Match une adresse contre un pattern. `*` matche exactement un segment
 /// non vide. Retourne les segments capturés par les wildcards (dans l'ordre).
+///
+/// Itérateurs directement sur `split` — zéro allocation pour les mappings
+/// qui ne matchent pas (audit I14 : auparavant 2 Vec<&str> + Vec<String>
+/// alloués PAR mapping PAR message, dont ~tous non-matchants).
 fn match_address(pattern: &str, addr: &str) -> Option<Vec<String>> {
-    let p: Vec<&str> = pattern.split('/').filter(|s| !s.is_empty()).collect();
-    let a: Vec<&str> = addr.split('/').filter(|s| !s.is_empty()).collect();
-    if p.len() != a.len() {
-        return None;
-    }
     let mut captures = Vec::new();
-    for (ps, as_) in p.iter().zip(a.iter()) {
-        if *ps == "*" {
-            captures.push(as_.to_string());
-        } else if ps != as_ {
-            return None;
+    let mut p = pattern.split('/').filter(|s| !s.is_empty());
+    let mut a = addr.split('/').filter(|s| !s.is_empty());
+    loop {
+        match (p.next(), a.next()) {
+            (None, None) => return Some(captures),
+            (Some("*"), Some(seg)) => captures.push(seg.to_string()),
+            (Some(ps), Some(as_)) if ps == as_ => {}
+            _ => return None,
         }
     }
-    Some(captures)
 }
 
 fn is_suppressed(suppress_until: &Mutex<Option<Instant>>) -> bool {
@@ -789,12 +802,13 @@ fn dispatch_message(addr: &str, args: Vec<f64>, shared: &Shared) {
     let mappings_guard = shared.mappings.read().unwrap_or_else(|e| e.into_inner());
 
     for mapping in mappings_guard.values() {
-        let Some(captures) = match_address(&mapping.address, addr) else {
-            continue;
-        };
+        // enabled d'abord : un mapping désactivé ne paie même pas le match.
         if !mapping.enabled {
             continue;
         }
+        let Some(captures) = match_address(&mapping.address, addr) else {
+            continue;
+        };
         shared
             .stats
             .messages_matched

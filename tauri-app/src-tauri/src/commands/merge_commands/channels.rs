@@ -124,7 +124,7 @@ pub async fn add_channel_modulation(
         rule.listener = require_finite_vec3("listener", l)?;
     }
     let merge_rt = lock_or_recover(&state.merge_runtime);
-    Ok(merge_rt.add_modulation(rule))
+    merge_rt.add_modulation(rule).map_err(IpcError::validation)
 }
 
 /// Supprime une règle de modulation par index
@@ -224,7 +224,7 @@ pub async fn add_zone(params: ZoneParams, state: State<'_, AppState>) -> Result<
         enabled: true,
     };
     let merge_rt = lock_or_recover(&state.merge_runtime);
-    Ok(merge_rt.add_zone(zone))
+    merge_rt.add_zone(zone).map_err(IpcError::validation)
 }
 
 /// Supprime une zone par index

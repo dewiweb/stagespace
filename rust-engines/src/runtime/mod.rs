@@ -69,7 +69,7 @@ impl Runtime {
     /// frame (plus de copies synchronisées par polling, plus de lag de 100ms).
     pub fn new_with_audio_state(audio_state: Arc<Mutex<AudioState>>) -> Self {
         // Runtime démarre avec une fonction identité — sera hot-swappée avant play
-        let initial_fn: PositionFn = Box::new(|_t, _i| nalgebra::Vector3::zeros());
+        let initial_fn: PositionFn = Arc::new(|_t, _i| nalgebra::Vector3::zeros());
         Runtime {
             running: Arc::new(AtomicBool::new(false)),
             position_fn: Arc::new(Mutex::new(initial_fn)),
@@ -181,7 +181,9 @@ impl Runtime {
         self.audio_state.clone()
     }
 
-    /// Hot-swap la fonction de position — pour cue recall sans arrêter le playback
+    /// Hot-swap la fonction de position — pour cue recall sans arrêter le playback.
+    /// Jamais d'attente sur un frame en cours : le worker clone l'Arc sous un
+    /// lock de nanosecondes puis évalue sans lock (audit I8).
     pub fn swap_position_fn(&self, new_fn: PositionFn) {
         let mut old = self.position_fn.lock().unwrap_or_else(|e| e.into_inner());
         *old = new_fn;
@@ -247,31 +249,30 @@ impl TrajectorySampler {
         // Origin du move : appliquée comme dans le playback loop (mode worker)
         // pour que les samples soient en world-space, cohérents avec le buffer.
         let origin = *self.origin.lock().unwrap_or_else(|e| e.into_inner());
-        // Lock par chunks : tenir `position_fn` pendant tout le sampling
-        // affame le worker live → stale-kill par le merge au-delà de ~0.5s.
-        const SAMPLE_CHUNK: usize = 512;
-        for chunk_start in (0..n_samples).step_by(SAMPLE_CHUNK) {
-            let chunk_end = (chunk_start + SAMPLE_CHUNK).min(n_samples);
-            {
-                let fn_ref = self.position_fn.lock().unwrap_or_else(|e| e.into_inner());
-                for i in chunk_start..chunk_end {
-                    let t = (i as f64 / (n_samples - 1).max(1) as f64) * duration;
-                    let pos = fn_ref(t, object_index);
-                    // Même chaîne que le worker : radius_scale → height_offset →
-                    // (fade=1) → scale → rotation → + origin + shift
-                    let pos_final = move_transform(
-                        pos,
-                        origin,
-                        scale,
-                        shift,
-                        rot_matrix.as_ref(),
-                        radius_scale,
-                        height_offset,
-                        1.0,
-                    );
-                    samples.push((t, pos_final.x, pos_final.y, pos_final.z));
-                }
-            }
+        // PositionFn = Arc — clone sous un lock de ~ns puis évaluation SANS
+        // lock : un sampling de 10k points n'affame plus le worker live
+        // (audit I8 — avant : Mutex tenu par chunks de 512).
+        let fn_arc = self
+            .position_fn
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        for i in 0..n_samples {
+            let t = (i as f64 / (n_samples - 1).max(1) as f64) * duration;
+            let pos = fn_arc(t, object_index);
+            // Même chaîne que le worker : radius_scale → height_offset →
+            // (fade=1) → scale → rotation → + origin + shift
+            let pos_final = move_transform(
+                pos,
+                origin,
+                scale,
+                shift,
+                rot_matrix.as_ref(),
+                radius_scale,
+                height_offset,
+                1.0,
+            );
+            samples.push((t, pos_final.x, pos_final.y, pos_final.z));
         }
         samples
     }
@@ -534,7 +535,13 @@ impl Runtime {
                     eff_roll.to_radians(),
                 );
                 let positions: Vec<(usize, nalgebra::Vector3<f64>)> = {
-                    let fn_ref = position_fn_arc.lock().unwrap_or_else(|e| e.into_inner());
+                    // Clone d'Arc sous un lock de ~ns (audit I8) — l'évaluation
+                    // de toute la frame se fait SANS tenir le mutex : swap/
+                    // recall/sample ne sont plus retardés par un frame lent.
+                    let fn_ref = position_fn_arc
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .clone();
                     osc_ids
                         .iter()
                         .enumerate()
@@ -651,12 +658,10 @@ impl Runtime {
     }
 
     /// Recall d'un cue avec crossfade — hot-swap la position_fn avec interpolation
-    /// `from_fn` = fonction actuelle, `to_fn` = fonction du cue cible
-    /// `fade_duration` = durée du crossfade en secondes (0 = instantané)
+    /// `to_fn` = fonction du cue cible ; `fade_duration` = durée du crossfade
+    /// en secondes (0 = instantané). PositionFn = Arc — l'ancienne fonction
+    /// est clonée sous le lock, jamais de placeholder visible.
     pub fn recall_cue(&self, to_fn: PositionFn, fade_duration: f64) {
-        // Tout le swap se fait sous UN SEUL hold du lock : un frame live ne
-        // peut jamais évaluer le placeholder zeros (sinon tous les tracks
-        // sauteraient à l'origine pendant ~16ms à chaque cue fade).
         let mut guard = self.position_fn.lock().unwrap_or_else(|e| e.into_inner());
         if fade_duration <= 0.0 {
             // Recall instantané
@@ -664,14 +669,9 @@ impl Runtime {
             return;
         }
 
-        // On ne peut pas cloner Box<dyn Fn> : on prend ownership de l'ancienne
-        // fn via mem::replace, puis on ré-assigne immédiatement le crossfade
-        // sous le même guard — le placeholder n'est jamais visible.
-        let placeholder: PositionFn = Box::new(|_t, _i| nalgebra::Vector3::zeros());
-        let from_fn = std::mem::replace(&mut *guard, placeholder);
-
+        let from_fn = guard.clone();
         let fade_start = Instant::now();
-        *guard = Box::new(move |t, i| {
+        *guard = Arc::new(move |t, i| {
             let elapsed = fade_start.elapsed().as_secs_f64();
             if elapsed >= fade_duration {
                 to_fn(t, i)

@@ -1041,9 +1041,15 @@ impl Compiler {
         let n_objects = Self::resolve_n_objects(graph, node)?;
         let duration = Self::resolve_duration(graph, node);
 
-        if !(duration.is_finite() && duration > 0.0) {
+        // Bornes hautes (audit I12) : duration>24 h ou fps>240 n'ont aucun
+        // cas d'usage réel — un worker à 10 kHz ou une durée d'un an sont
+        // des erreurs de paramétrage, pas des features.
+        const MAX_DURATION: f64 = 86_400.0; // 24 h
+        const MAX_FPS: f64 = 240.0;
+
+        if !(duration.is_finite() && duration > 0.0 && duration <= MAX_DURATION) {
             return Err(CompilationError::InvalidParameter(format!(
-                "duration must be finite and > 0, got {duration}"
+                "duration must be finite and in (0, {MAX_DURATION}], got {duration}"
             )));
         }
 
@@ -1053,9 +1059,9 @@ impl Compiler {
             .and_then(|v| v.as_f64())
             .unwrap_or(DEFAULT_FPS);
 
-        if !(fps.is_finite() && fps > 0.0) {
+        if !(fps.is_finite() && fps > 0.0 && fps <= MAX_FPS) {
             return Err(CompilationError::InvalidParameter(format!(
-                "fps must be finite and > 0, got {fps}"
+                "fps must be finite and in (0, {MAX_FPS}], got {fps}"
             )));
         }
 

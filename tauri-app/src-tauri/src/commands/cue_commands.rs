@@ -367,13 +367,19 @@ pub(crate) fn recall_cue_inner(
         if let Some(ref mods) = cue.channel_modulations {
             merge_rt.clear_modulations();
             for rule in mods {
-                merge_rt.add_modulation(rule.clone());
+                // Un cue au-delà du cap tronque au lieu d'échouer le recall
+                // entier — les 64 premières règles suffisent en pratique.
+                if merge_rt.add_modulation(rule.clone()).is_err() {
+                    break;
+                }
             }
         }
         if let Some(ref zs) = cue.zones {
             merge_rt.clear_zones();
             for z in zs {
-                merge_rt.add_zone(z.clone());
+                if merge_rt.add_zone(z.clone()).is_err() {
+                    break;
+                }
             }
         }
     }

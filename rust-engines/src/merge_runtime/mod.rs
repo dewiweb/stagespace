@@ -42,9 +42,14 @@ use std::time::{Duration, Instant};
 
 /// Callback de position partageable — `Arc` (pas `Box`) pour que le merge
 /// thread puisse cloner le handle sous un lock très court puis appeler le
-/// callback HORS du lock (l'emit Tauri sérialise tout le monde JSON — il ne
-/// doit pas être fait sous le mutex).
+/// callback HORS du lock.
 type SharedPositionCallback = Arc<dyn Fn(f64, Vec<(usize, nalgebra::Vector3<f64>)>) + Send + Sync>;
+
+/// Canal vers le pump thread de preview — `SyncSender` borné : le merge
+/// `try_send` et droppe la frame si le pump est occupé à sérialiser
+/// (audit I10 — l'emit Tauri fait ~60 Ko/s de JSON par frame à 1024
+/// objets ; hors du thread temps réel, le merge ne paie qu'un move).
+type PreviewSender = std::sync::mpsc::SyncSender<(f64, Vec<(usize, nalgebra::Vector3<f64>)>)>;
 
 /// Sink de sortie partagé avec le merge thread — `set_sink`/`set_osc_target`
 /// en cours de route swappe le transport atomiquement sous un seul lock.
@@ -109,8 +114,10 @@ pub struct MergeRuntime {
     merge_strategy: Arc<RwLock<MergeStrategy>>,
     /// Performance monitor global
     perf: Arc<PerfMonitor>,
-    /// Callback de position (un seul event pour le 3D preview)
-    position_callback: Arc<Mutex<Option<SharedPositionCallback>>>,
+    /// Canal borné vers le pump thread qui invoque le callback de position
+    /// (un seul event pour le 3D preview). La sérialisation JSON de l'emit
+    /// Tauri se fait là-bas, pas sur le thread merge.
+    position_callback: Arc<Mutex<Option<PreviewSender>>>,
     /// Sink de sortie (OSC par défaut, tout PositionSink injectable)
     sink: SharedSink,
     /// FPS cible
@@ -230,15 +237,25 @@ impl MergeRuntime {
         })
     }
 
-    /// Définit le callback de position (pour le 3D preview)
+    /// Définit le callback de position (pour le 3D preview). Le callback
+    /// tourne sur un pump thread dédié alimenté par un canal borné à 2
+    /// messages : le merge thread ne paie qu'un `try_send` (drop si plein)
+    /// au lieu de la sérialisation JSON complète par frame (audit I10).
+    /// Réassigner le callback remplace le sender → l'ancien pump voit son
+    /// rx déconnecté et sort proprement.
     pub fn set_position_callback(&self, callback: PositionCallback) {
-        let mut cb = self
+        let cb: SharedPositionCallback = Arc::from(callback);
+        let (tx, rx) =
+            std::sync::mpsc::sync_channel::<(f64, Vec<(usize, nalgebra::Vector3<f64>)>)>(2);
+        std::thread::spawn(move || {
+            while let Ok((t, positions)) = rx.recv() {
+                cb(t, positions);
+            }
+        });
+        *self
             .position_callback
             .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        // Box → Arc : le merge thread clone le handle sous lock court
-        // et émet l'event hors du lock.
-        *cb = Some(Arc::from(callback));
+            .unwrap_or_else(|e| e.into_inner()) = Some(tx);
     }
 
     /// Reconfigure la destination OSC (adresse + port + sender).
@@ -456,16 +473,28 @@ impl MergeRuntime {
     /// Ajoute une règle de modulation cinématique (source → canal spatial).
     /// Retourne l'index de la règle (pour suppression).
     /// Copy-on-write : le merge thread ne voit qu'un snapshot Arc par frame.
-    pub fn add_modulation(&self, rule: ChannelModulation) -> usize {
+    /// Nombre max de règles de modulation cinématique (audit I12) — chaque
+    /// règle coûte une mesure par objet par frame ; au-delà le runtime est
+    /// mal configuré, pas en train de faire de l'art.
+    pub const MAX_MODULATIONS: usize = 64;
+
+    pub fn add_modulation(&self, rule: ChannelModulation) -> Result<usize, String> {
         let mut guard = self
             .channel_modulations
             .write()
             .unwrap_or_else(|e| e.into_inner());
+        if guard.len() >= Self::MAX_MODULATIONS {
+            return Err(format!(
+                "channel modulations capped at {} (current: {})",
+                Self::MAX_MODULATIONS,
+                guard.len()
+            ));
+        }
         let mut rules = (**guard).clone();
         rules.push(rule);
         let index = rules.len() - 1;
         *guard = Arc::new(rules);
-        index
+        Ok(index)
     }
 
     /// Supprime une règle de modulation par index
@@ -514,15 +543,26 @@ impl MergeRuntime {
             .unwrap_or_else(|e| e.into_inner()) = smoothing.clamp(0.0, 0.99);
     }
 
+    /// Nombre max de zones d'effet (audit I12) — chaque zone évalue une
+    /// influence par objet par frame.
+    pub const MAX_ZONES: usize = 64;
+
     /// Ajoute une zone d'effet spatial. Retourne l'index de la zone.
     /// Copy-on-write : snapshot Arc par frame dans le merge thread.
-    pub fn add_zone(&self, zone: crate::zones::Zone) -> usize {
+    pub fn add_zone(&self, zone: crate::zones::Zone) -> Result<usize, String> {
         let mut guard = self.zones.write().unwrap_or_else(|e| e.into_inner());
+        if guard.len() >= Self::MAX_ZONES {
+            return Err(format!(
+                "zones capped at {} (current: {})",
+                Self::MAX_ZONES,
+                guard.len()
+            ));
+        }
         let mut zones = (**guard).clone();
         zones.push(zone);
         let index = zones.len() - 1;
         *guard = Arc::new(zones);
-        index
+        Ok(index)
     }
 
     /// Supprime une zone par index
@@ -873,6 +913,10 @@ impl MergeRuntime {
             // États cinématiques par objet — thread-local, aucun lock.
             // Mesurés sur les positions finales (post-merge + post-process).
             let mut kinematic_states: HashMap<usize, KinematicState> = HashMap::new();
+            // Moves déjà warnés pour un mismatch track_indices/positions —
+            // rate-limit : 1 log par move par épisode (audit I11).
+            let mut mismatch_warned: std::collections::HashSet<String> =
+                std::collections::HashSet::new();
             let mut prev_frame: Option<Instant> = None;
             let mut prev_t: Option<f64> = None;
 
@@ -995,19 +1039,32 @@ impl MergeRuntime {
                         }
                         let global_positions: Vec<(usize, nalgebra::Vector3<f64>)> =
                             if track_indices.is_empty() {
+                                mismatch_warned.remove(move_id.as_str());
                                 positions.clone()
-                            } else if track_indices.len() == positions.len() {
+                            } else {
+                                // Fenêtre de mismatch (routing non atomique
+                                // pendant hot-swap) : avant, le move entier
+                                // était sauté à chaque frame + warn×60/s.
+                                // On clip à min(len) — un sous-ensemble qui
+                                // bouge vaut mieux qu'un move muet — et on
+                                // ne log qu'une fois par épisode.
+                                if track_indices.len() != positions.len() {
+                                    if mismatch_warned.insert(move_id.clone()) {
+                                        crate::logging::log_osc_error(&format!(
+                                            "MergeRuntime: move {} partially merged — track_indices.len()={} != positions.len()={} (clipped, further warnings suppressed)",
+                                            move_id, track_indices.len(), positions.len()
+                                        ));
+                                    }
+                                } else {
+                                    mismatch_warned.remove(move_id.as_str());
+                                }
+                                let n = track_indices.len().min(positions.len());
                                 positions
                                     .iter()
+                                    .take(n)
                                     .enumerate()
                                     .map(|(local_idx, (_, pos))| (track_indices[local_idx], *pos))
                                     .collect()
-                            } else {
-                                crate::logging::log_osc_error(&format!(
-                                    "MergeRuntime: move {} skipped — track_indices.len()={} != positions.len()={} (invariant violé)",
-                                    move_id, track_indices.len(), positions.len()
-                                ));
-                                continue;
                             };
                         if *is_preview {
                             preview_positions.extend(global_positions);
@@ -1279,13 +1336,14 @@ impl MergeRuntime {
                 // Parité : les positions preview passent par le MÊME post-process
                 // que le live — sinon le 3D ment sur ce que l'OSC enverrait si le
                 // move passait live (scale/rotate/origin du graph global).
-                // Le handle Arc est cloné sous un lock très court, l'emit
-                // (sérialisation JSON complète) se fait HORS du lock.
+                // Le sender est cloné sous un lock très court — la sériali-
+                // sation JSON de l'emit se fait sur le pump thread. Le post-
+                // process du preview reste ici (il doit refléter le live).
                 let cb = position_callback
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .clone();
-                if let Some(callback) = cb {
+                if let Some(tx) = cb {
                     let preview_transformed: Vec<(usize, nalgebra::Vector3<f64>)> =
                         if preview_positions.is_empty() {
                             Vec::new()
@@ -1300,7 +1358,10 @@ impl MergeRuntime {
                         };
                     let mut display = transformed.clone();
                     display.extend(preview_transformed);
-                    callback(t_real, display);
+                    // try_send borné : si le pump est encore occupé à
+                    // sérialiser la frame précédente, on droppe — preview
+                    // dégradé (≈20-30 Hz) plutôt que merge retardé.
+                    let _ = tx.try_send((t_real, display));
                 }
 
                 // 7. Perf monitor — agrégation des erreurs OSC (1 log max par
@@ -1417,8 +1478,10 @@ impl MergeRuntime {
                         .lock()
                         .unwrap_or_else(|e| e.into_inner())
                         .clone();
-                    if let Some(callback) = cb {
-                        callback(0.0, Vec::new());
+                    if let Some(tx) = cb {
+                        // send (bloquant borné) plutôt que try_send : la frame
+                        // de parking DOIT passer — le pump est en général vide.
+                        let _ = tx.send((0.0, Vec::new()));
                     }
                     break;
                 }

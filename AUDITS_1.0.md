@@ -14,6 +14,7 @@ Chaque finding référence `fichier:ligne`. Classification : 🔴 bloquant/criti
 | **T4 — UX live** | PANIC jamais inerte + proéminent, `.live-mode` branché, StatusBar partagée, contrastes WCAG, `storeCue` toast | U1-U8, U16 |
 | **T5 — Contrats & hygiène** | `NodeSpec` déclarative unique (source Rust → ts-rs), `graph_json`/`Cue` typés+versionnés, `IpcError` par variant, purge des chemins morts | A3, A4, A7, A9 |
 | **T6 — Robustesse réseau/audio** | Circuit-breaker OSC OUT + bundles, reconnect audio, bornes params (fps/duration/zones) | C6, I12, I15 |
+| **T7 — Déterminisme temps réel** | `PositionFn` = `Arc` (swap sans attente de frame), callback preview sur pump thread borné (JSON hors merge), mismatch track_indices clip + warn×1, hot-swap generation → conflict, caps mappings/zones/modulations, OSC IN sans allocs par non-match | I8, I10, I11, I13, I12, I14 |
 
 ---
 

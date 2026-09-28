@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 /// avec formatage d'erreur uniforme.
 pub fn compile_graph(graph: &Graph) -> Result<PositionFn, String> {
     Compiler::compile(graph).map_err(|e| format!("Compilation failed: {e:?}"))
+        .map(std::sync::Arc::from)
 }
 
 /// Compile un Graph avec accès à l'audio state temps réel
@@ -19,6 +20,7 @@ pub fn compile_graph_with_audio(
 ) -> Result<PositionFn, String> {
     Compiler::compile_with_audio(graph, audio_state)
         .map_err(|e| format!("Compilation failed: {e:?}"))
+        .map(std::sync::Arc::from)
 }
 
 /// Compile un Graph avec audio state + overrides de paramètres audio
@@ -31,6 +33,7 @@ pub fn compile_graph_with_audio_and_overrides(
 ) -> Result<PositionFn, String> {
     Compiler::compile_with_audio_and_overrides(graph, audio_state, overrides)
         .map_err(|e| format!("Compilation failed: {e:?}"))
+        .map(std::sync::Arc::from)
 }
 
 /// Compile un Graph avec audio + cache des valeurs OSC reçues.
@@ -43,6 +46,7 @@ pub fn compile_graph_with_audio_osc(
 ) -> Result<PositionFn, String> {
     Compiler::compile_with_audio_osc(graph, audio_state, overrides, osc_values)
         .map_err(|e| format!("Compilation failed: {e:?}"))
+        .map(std::sync::Arc::from)
 }
 
 /// Compile un graphe avec toutes les entrées live : audio state, cache des
@@ -59,4 +63,5 @@ pub fn compile_graph_live(graph: &Graph, sh: &Shared) -> Result<PositionFn, Stri
     };
     Compiler::compile_with_live_inputs(graph, live)
         .map_err(|e| format!("Compilation failed: {e:?}"))
+        .map(std::sync::Arc::from)
 }

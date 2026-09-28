@@ -1,5 +1,8 @@
 /// Fonction de position compilée — hot-swappable pour cue recall
-pub type PositionFn = Box<dyn Fn(f64, usize) -> nalgebra::Vector3<f64> + Send + Sync>;
+/// Fonction de position compilée — `Arc` (pas `Box`) : clonable à coût
+/// nul pour que le worker évalue la frame SANS tenir le mutex de swap
+/// (audit I8 — sinon recall/sample attendent la fin du frame entier).
+pub type PositionFn = std::sync::Arc<dyn Fn(f64, usize) -> nalgebra::Vector3<f64> + Send + Sync>;
 
 /// Callback appelé à chaque frame avec les positions calculées
 pub type PositionCallback = Box<dyn Fn(f64, Vec<(usize, nalgebra::Vector3<f64>)>) + Send + Sync>;
