@@ -677,6 +677,7 @@ pub async fn get_merge_perf_stats(
         "cpuPercent": perf.cpu_percent,
         "oscErrorRate": perf.osc_error_rate,
         "oscRefusedRate": perf.osc_refused_rate,
+        "oscSuspended": perf.osc_suspended,
         // Liveness du merge thread — perf.fps reste figé à la dernière
         // fenêtre si le thread meurt ; ces compteurs trahissent un blackout.
         "isRunning": merge_rt.is_running(),

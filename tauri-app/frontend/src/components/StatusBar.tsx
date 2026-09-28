@@ -59,6 +59,9 @@ export const StatusBar: React.FC = () => {
           <span className={perfStats.cpuPercent < 50 ? 'text-gray-400' : 'text-yellow-400'}>
             {perfStats.cpuPercent.toFixed(0)}% cpu
           </span>
+          {perfStats.oscSuspended && (
+            <span className="text-orange-400 font-bold animate-pulse">OSC SUSPENDED</span>
+          )}
           {perfStats.threadDied && (
             <span className="text-red-400 font-bold animate-pulse">MERGE DEAD</span>
           )}

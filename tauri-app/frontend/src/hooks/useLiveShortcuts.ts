@@ -156,6 +156,7 @@ export function usePerfStatsPolling() {
         cpuPercent: 0,
         oscErrorRate: 0,
         oscRefusedRate: 0,
+        oscSuspended: false,
         isRunning: false,
         threadDied: false,
         mergeFrames: 0,

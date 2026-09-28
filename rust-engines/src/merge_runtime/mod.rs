@@ -854,6 +854,17 @@ impl MergeRuntime {
             let mut osc_since_perf = 0u64;
             let mut osc_errors_perf = 0u64;
             let mut osc_refused_perf = 0u64;
+            // Circuit-breaker OSC (C6) : si >50 % des paquets reviennent en
+            // ECONNREFUSED sur 2 fenêtres de perf consécutives (~1 s), la
+            // destination est morte — on suspend les sends (le merge et le
+            // preview continuent) et on sonde à 1 Hz via l'état réel du
+            // premier objet. Une sonde réussie referme le circuit ; si la
+            // panne persiste les fenêtres refused re-tripent naturellement.
+            // Sans ça : 30 000 encodages/s + sends perdus indéfiniment, et
+            // le sweep de PANIC retardé d'autant.
+            let mut osc_circuit_open = false;
+            let mut osc_bad_windows = 0u32;
+            let mut last_probe = Instant::now() - Duration::from_secs(1);
             // États cinématiques par objet — thread-local, aucun lock.
             // Mesurés sur les positions finales (post-merge + post-process).
             let mut kinematic_states: HashMap<usize, KinematicState> = HashMap::new();
@@ -1206,31 +1217,54 @@ impl MergeRuntime {
                     .clone();
                 {
                     let mut sink_guard = sink_arc.lock().unwrap_or_else(|e| e.into_inner());
-                    for (obj_idx, pos) in &transformed {
-                        if let Some(&osc_id) = osc_ids.get(*obj_idx) {
-                            // Canaux effectifs = statiques + modulés (modulation
-                            // prioritaire sur les canaux qu'elle cible) + zones
-                            // (blend par influence, prioritaires sur le reste)
-                            let has_zones = crate::zones::any_zone_applies(&zones, *obj_idx, pos);
-                            let effective: Option<SpatialChannels> = match (
-                                object_channels.get(obj_idx),
-                                modulated_channels.get(obj_idx),
-                                has_zones,
-                            ) {
-                                (None, None, false) => None,
-                                (s, m, _) => {
-                                    let mut eff = s.copied().unwrap_or_default();
-                                    if let Some(mc) = m {
-                                        eff.overlay(mc);
-                                    }
-                                    crate::zones::apply_zones(&zones, *obj_idx, pos, &mut eff);
-                                    Some(eff)
+                    if osc_circuit_open {
+                        // Circuit ouvert : une sonde par seconde — un vrai
+                        // send_state du premier objet (donnée utile si le
+                        // renderer est revenu entre-temps).
+                        if last_probe.elapsed() >= Duration::from_secs(1) {
+                            last_probe = Instant::now();
+                            if let Some(&(obj_idx, pos)) =
+                                transformed.iter().find(|(i, _)| osc_ids.get(*i).is_some())
+                            {
+                                let report = sink_guard.send_state(osc_ids[obj_idx], pos, None);
+                                if report.sent > 0 && report.refused == 0 && report.errors == 0 {
+                                    osc_circuit_open = false;
+                                    osc_bad_windows = 0;
+                                    crate::logging::log_osc_error(
+                                        "OSC circuit CLOSED — renderer reachable again",
+                                    );
                                 }
-                            };
-                            let report = sink_guard.send_state(osc_id, *pos, effective.as_ref());
-                            osc_since_perf += report.sent as u64;
-                            osc_errors_perf += report.errors as u64;
-                            osc_refused_perf += report.refused as u64;
+                            }
+                        }
+                    } else {
+                        for (obj_idx, pos) in &transformed {
+                            if let Some(&osc_id) = osc_ids.get(*obj_idx) {
+                                // Canaux effectifs = statiques + modulés (modulation
+                                // prioritaire sur les canaux qu'elle cible) + zones
+                                // (blend par influence, prioritaires sur le reste)
+                                let has_zones =
+                                    crate::zones::any_zone_applies(&zones, *obj_idx, pos);
+                                let effective: Option<SpatialChannels> = match (
+                                    object_channels.get(obj_idx),
+                                    modulated_channels.get(obj_idx),
+                                    has_zones,
+                                ) {
+                                    (None, None, false) => None,
+                                    (s, m, _) => {
+                                        let mut eff = s.copied().unwrap_or_default();
+                                        if let Some(mc) = m {
+                                            eff.overlay(mc);
+                                        }
+                                        crate::zones::apply_zones(&zones, *obj_idx, pos, &mut eff);
+                                        Some(eff)
+                                    }
+                                };
+                                let report =
+                                    sink_guard.send_state(osc_id, *pos, effective.as_ref());
+                                osc_since_perf += report.sent as u64;
+                                osc_errors_perf += report.errors as u64;
+                                osc_refused_perf += report.refused as u64;
+                            }
                         }
                     }
                 }
@@ -1294,6 +1328,24 @@ impl MergeRuntime {
                             osc_refused_perf
                         ));
                     }
+                    // Circuit-breaker : 2 fenêtres de 500 ms à >50 % refused
+                    // = renderer mort → suspendre les sends (sonde à 1 Hz).
+                    if !osc_circuit_open {
+                        if total_osc > 0 && refused_rate > 0.5 {
+                            osc_bad_windows += 1;
+                            if osc_bad_windows >= 2 {
+                                osc_circuit_open = true;
+                                // Sonde quasi-immédiate à la prochaine frame.
+                                last_probe = Instant::now() - Duration::from_secs(1);
+                                crate::logging::log_osc_error(
+                                    "OSC circuit OPEN — target unreachable, suspending sends (probe @1Hz)",
+                                );
+                            }
+                        } else {
+                            osc_bad_windows = 0;
+                        }
+                    }
+                    perf.set_osc_suspended(osc_circuit_open);
                     perf.update_with_error_rate(
                         fps_actual,
                         osc_rate,

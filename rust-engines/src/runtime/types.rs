@@ -73,4 +73,7 @@ pub struct PerfStats {
     /// typiquement : aucun listener sur le port cible, ICMP port-unreachable).
     /// Sous-ensemble de osc_error_rate, distinct du packet loss réseau.
     pub osc_refused_rate: f64,
+    /// Circuit-breaker OSC ouvert — sends suspendus (merge + preview
+    /// continuent), sonde de reconnexion à 1 Hz. Renderer down.
+    pub osc_suspended: bool,
 }
