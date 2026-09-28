@@ -103,7 +103,7 @@ export default function AnimationList() {
                 >
                   <span className="text-[7px] text-gray-600">{isCollapsed ? '▸' : '▾'}</span>
                   <span className={catLabel.color}>{catLabel.label}</span>
-                  <span className="text-gray-700 ml-auto">{group.presets.length}</span>
+                  <span className="text-gray-500 ml-auto">{group.presets.length}</span>
                 </button>
                 {!isCollapsed && (
                   <div className="space-y-0.5 mt-0.5">
@@ -173,7 +173,7 @@ export default function AnimationList() {
           {animations.length === 0 ? (
             <div className="text-gray-600 text-[10px] text-center py-4 bg-gray-800/30 rounded border border-gray-700/30">
               No saved graph
-              <div className="text-gray-700 text-[10px] mt-1">Click Save to add</div>
+              <div className="text-gray-500 text-[10px] mt-1">Click Save to add</div>
             </div>
           ) : (
             animations.map((anim) => {
@@ -225,7 +225,7 @@ export default function AnimationList() {
         </div>
 
         {/* Hint */}
-        <div className="text-gray-700 text-[10px] text-center py-2 px-2">
+        <div className="text-gray-500 text-[10px] text-center py-2 px-2">
           Templates &amp; bibliothèque = presets appliqués au slot sélectionné
           <div className="mt-0.5">
             {editingSlotId ? 'Loading → writes into the editing slot' : 'Select a slot (Moves) to apply'}

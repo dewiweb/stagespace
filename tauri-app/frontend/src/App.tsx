@@ -18,6 +18,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { Workflow, ChevronRight, ChevronDown, PanelRightClose, PanelLeftClose, PanelLeftOpen, PanelRightOpen, Maximize2, Minimize2, Activity } from 'lucide-react';
 import { useLiveShortcuts, usePerfStatsPolling } from './hooks/useLiveShortcuts';
 import { prepareGraphForSave } from './components/nodeParamSchema';
+import { usePersistedState } from './utils/usePersistedState';
 import { useGraphStore, useMovementPositionsListener, useAudioErrorListener, useCueRecallListener, useSupervisorListener } from './store/useGraphStore';
 import { useAnimationStore } from './store/useAnimationStore';
 
@@ -30,16 +31,16 @@ function App() {
   const setDebugPerfVisible = useAnimationStore((s) => s.setDebugPerfVisible);
   const shortcutsOpen = useAnimationStore((s) => s.shortcutsOpen);
   const oscInPort = useGraphStore((s) => s.oscInPort);
-  const [leftCollapsed, setLeftCollapsed] = React.useState(false);
-  const [rightCollapsed, setRightCollapsed] = React.useState(false);
-  // Largeur redimensionnable du panneau droit (Inspector)
-  const [rightWidth, setRightWidth] = React.useState(288); // 72 * 4px = 288px par défaut
-  // Largeur redimensionnable du panneau gauche (Graphes + Moves)
-  const [leftWidth, setLeftWidth] = React.useState(256); // 64 * 4px = 256px par défaut
+  // Layout persisté — l'opérateur retrouve son workspace au prochain
+  // lancement (safeStorage : quota/corruption gérés).
+  const [leftCollapsed, setLeftCollapsed] = usePersistedState('ss-layout-leftCollapsed', false);
+  const [rightCollapsed, setRightCollapsed] = usePersistedState('ss-layout-rightCollapsed', false);
+  const [rightWidth, setRightWidth] = usePersistedState('ss-layout-rightWidth', 288);
+  const [leftWidth, setLeftWidth] = usePersistedState('ss-layout-leftWidth', 256);
   const resizingRef = React.useRef(false);
   const resizingSideRef = React.useRef<'left' | 'right' | 'expert'>('right');
   // Ratio NodeEditor/Scene3D en mode Expert (0.5 = moitié/moitié)
-  const [expertSplit, setExpertSplit] = React.useState(0.5);
+  const [expertSplit, setExpertSplit] = usePersistedState('ss-layout-expertSplit', 0.5);
   const centerColRef = React.useRef<HTMLDivElement | null>(null);
   // Focus éditeur : les panneaux latéraux se retirent et le NodeEditor
   // prend toute la rangée — la navigation dans le graphe est le besoin
@@ -48,11 +49,11 @@ function App() {
   // Focus réellement actif : editorFocus n'a de sens qu'en mode Expert.
   const focusActive = showExpert && editorFocus;
   // Sections collapsibles du panneau gauche
-  const [graphsExpanded, setGraphsExpanded] = React.useState(true);
-  const [movesExpanded, setMovesExpanded] = React.useState(true);
+  const [graphsExpanded, setGraphsExpanded] = usePersistedState('ss-layout-graphsExpanded', true);
+  const [movesExpanded, setMovesExpanded] = usePersistedState('ss-layout-movesExpanded', true);
   // AudioPanel = monitoring/config — collapsible pour rendre la hauteur à
   // l'Inspector (outil de travail principal de la colonne droite).
-  const [audioExpanded, setAudioExpanded] = React.useState(true);
+  const [audioExpanded, setAudioExpanded] = usePersistedState('ss-layout-audioExpanded', true);
   // Premier lancement : proposer le show d'exemple bundle (évalué une fois)
   const [showWelcome, setShowWelcome] = React.useState(shouldShowWelcome);
 
@@ -188,9 +189,12 @@ function App() {
             className={`px-3 py-1 text-xs font-bold rounded transition-all flex items-center gap-1.5 ${
               performMode ? 'bg-green-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
             }`}
-            title="Perform mode — live surface: setlist, GO, panic, on-demand live params. Editing is hidden."
+            title={performMode
+              ? 'Leave Perform — back to editing'
+              : 'Perform mode — live surface: setlist, GO, panic, on-demand live params'}
           >
-            {performMode ? '◉ Perform' : '◎ Edit'}
+            <span className={`w-1.5 h-1.5 rounded-full ${performMode ? 'bg-white animate-pulse' : 'bg-gray-600'}`} />
+            PERFORM
           </button>
           {!performMode && (
             <button
@@ -315,9 +319,6 @@ function App() {
                 Focus
               </button>
               <div className="flex-1" />
-              {!editorFocus && (
-                <span className="text-gray-500 text-[10px]">Launch via MovesTable ▶</span>
-              )}
               <button
                 onClick={() => {
                   const { nodes, edges } = useGraphStore.getState();
@@ -343,14 +344,16 @@ function App() {
                 <span className="text-gray-300 text-xs font-medium">Canvas</span>
               </div>
               <div className="flex-1" />
-              <button
-                onClick={() => setDebugPerfVisible(!debugPerfVisible)}
-                className={`p-1 rounded transition-colors ${debugPerfVisible ? 'text-cyan-400 bg-cyan-900/30' : 'text-gray-600 hover:text-gray-400'}`}
-                title="DEBUG PERF overlay (render/IPC fps, stutter) — dev tool"
-              >
-                <Activity size={12} />
-              </button>
-              <span className="text-gray-600 text-[10px]">orbit: drag · zoom: scroll</span>
+              {import.meta.env.DEV && (
+                <button
+                  onClick={() => setDebugPerfVisible(!debugPerfVisible)}
+                  className={`p-1 rounded transition-colors ${debugPerfVisible ? 'text-cyan-400 bg-cyan-900/30' : 'text-gray-500 hover:text-gray-300'}`}
+                  title="DEBUG PERF overlay (render/IPC fps, stutter) — dev tool"
+                >
+                  <Activity size={12} />
+                </button>
+              )}
+              <span className="text-gray-500 text-[10px]">orbit: drag · zoom: scroll</span>
             </div>
           )}
 
@@ -383,15 +386,17 @@ function App() {
               {showExpert && (
                 <div className="h-7 border-b border-stagespace-border flex items-center px-2 bg-stagespace-panel flex-shrink-0">
                   <span className="text-gray-400 text-[10px] font-medium">3D Preview</span>
-                  <span className="text-gray-600 text-[10px] ml-2">orbit: drag · zoom: scroll</span>
+                  <span className="text-gray-500 text-[10px] ml-2">orbit: drag · zoom: scroll</span>
                   <div className="flex-1" />
-                  <button
-                    onClick={() => setDebugPerfVisible(!debugPerfVisible)}
-                    className={`p-1 rounded transition-colors ${debugPerfVisible ? 'text-cyan-400 bg-cyan-900/30' : 'text-gray-600 hover:text-gray-400'}`}
-                    title="DEBUG PERF overlay — dev tool"
-                  >
-                    <Activity size={11} />
-                  </button>
+                  {import.meta.env.DEV && (
+                    <button
+                      onClick={() => setDebugPerfVisible(!debugPerfVisible)}
+                      className={`p-1 rounded transition-colors ${debugPerfVisible ? 'text-cyan-400 bg-cyan-900/30' : 'text-gray-500 hover:text-gray-300'}`}
+                      title="DEBUG PERF overlay — dev tool"
+                    >
+                      <Activity size={11} />
+                    </button>
+                  )}
                   <button
                     onClick={() => setExpertSplit(expertSplit > 0.7 ? 0.5 : 0.78)}
                     className="text-gray-500 hover:text-white px-1"

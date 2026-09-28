@@ -131,6 +131,22 @@ body {
   box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.3);
 }
 
+/* Edge "insert-target" — edge sélectionnée sur laquelle un clic palette
+   insère un modifier (autopatch). Dash cyan animé : sans ce signal,
+   l'edge gardait le stroke bleu générique et le mode était invisible. */
+.react-flow__edge.rf-edge-insert-target .react-flow__edge-path {
+  stroke: #22d3ee !important;
+  stroke-width: 2 !important;
+  stroke-dasharray: 6 4;
+  animation: dash-flow 0.8s linear infinite;
+}
+
+@keyframes dash-flow {
+  to {
+    stroke-dashoffset: -10;
+  }
+}
+
 /* ─── Live Mode — UI agrandie pour conditions de spectacle ───
    Appliqué sur le root de PerformView : lisibilité à distance
    d'opérateur (~2 m). Ne PAS ajouter de finesse — tout doit rester

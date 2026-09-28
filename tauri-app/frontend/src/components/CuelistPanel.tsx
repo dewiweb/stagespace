@@ -125,7 +125,7 @@ export const CuelistPanel: React.FC = () => {
           value={newCueName}
           onChange={(e) => setNewCueName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleStoreCue()}
-          placeholder="Nom du cue..."
+          placeholder="Cue name..."
           className="flex-1 px-2 py-1 text-[11px] bg-gray-900 border border-gray-700 rounded text-white placeholder-gray-600 focus:outline-none focus:border-purple-500"
         />
         <input

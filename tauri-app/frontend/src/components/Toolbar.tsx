@@ -5,6 +5,7 @@ import { open, save } from '@tauri-apps/plugin-dialog';
 import { FolderInput, Settings, Undo2, Redo2, Save, FolderOpen, CircleHelp } from 'lucide-react';
 import { SettingsModal } from './SettingsModal';
 import { PanicButton } from './ui/PanicButton';
+import { IconButton } from './ui/IconButton';
 
 export const Toolbar: React.FC = () => {
   // Sélecteurs granulaires — un full-store subscribe re-renderait la Toolbar
@@ -115,56 +116,39 @@ export const Toolbar: React.FC = () => {
         <div className="w-px h-5 bg-stagespace-border mx-1" />
 
         {/* Undo/Redo (expert) */}
-        <button
-          onClick={undo}
-          disabled={!canUndo}
-          className="px-2 py-1.5 text-xs font-medium rounded bg-gray-800 text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-          title="Undo (Ctrl+Z)"
-        >
+        <IconButton onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)">
           <Undo2 size={14} />
-        </button>
-        <button
-          onClick={redo}
-          disabled={!canRedo}
-          className="px-2 py-1.5 text-xs font-medium rounded bg-gray-800 text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-          title="Redo (Ctrl+Y)"
-        >
+        </IconButton>
+        <IconButton onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Y)">
           <Redo2 size={14} />
-        </button>
+        </IconButton>
 
         {/* Save / Load show (graphe + slots + cues + OSC + spatial FX) */}
-        <button
-          onClick={handleSaveGraph}
-          disabled={!hasGraph}
-          className="px-2 py-1.5 text-xs font-medium rounded bg-gray-800 text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-          title="Save complete show to .hfg file"
-        >
+        <IconButton onClick={handleSaveGraph} disabled={!hasGraph} title="Save complete show to .hfg file">
           <Save size={14} />
-        </button>
-        <button
+        </IconButton>
+        <IconButton
           onClick={handleLoadGraph}
-          className="px-2 py-1.5 text-xs font-medium rounded bg-gray-800 text-gray-400 hover:text-white transition-colors"
           title="Load show from .hfg file (slots, cues, OSC, FX — blocked during playback)"
         >
           <FolderOpen size={14} />
-        </button>
+        </IconButton>
 
         {/* Spacer — la StatusBar (bas de fenêtre) porte statut, perf,
             erreurs et version ; la Toolbar ne garde que les actions. */}
         <div className="flex-1" />
 
         {/* Help — cheatsheet raccourcis live (même contenu que la touche ?) */}
-        <button
+        <IconButton
           onClick={() => {
             import('../store/useAnimationStore').then(({ useAnimationStore }) => {
               useAnimationStore.getState().setShortcutsOpen(true);
             });
           }}
-          className="px-2 py-1.5 text-xs font-medium rounded bg-gray-800 text-gray-400 hover:text-white transition-colors"
           title="Keyboard shortcuts (?)"
         >
           <CircleHelp size={14} />
-        </button>
+        </IconButton>
 
         {/* PANIC — arrêt d'urgence, toujours visible et accessible.
             Jamais replié dans un panel : c'est le seul contrôle qui doit

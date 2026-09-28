@@ -231,7 +231,7 @@ export default function MovesTable() {
               onClick={handleGO}
               disabled={!nextSetlistSlotId}
               className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm font-bold rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95"
-              title="GO : passe au prochain move de la setlist (crossfade) — Enter. RECALL cue = Shift+Enter."
+              title="GO: advance to the next move in the setlist (crossfade) — Enter. RECALL cue = Shift+Enter."
             >
               GO ▶
             </button>
@@ -323,7 +323,7 @@ export default function MovesTable() {
                         <span
                           onDoubleClick={() => { setRenamingId(slot.id); setTempName(slot.name); }}
                           className="text-white text-[11px] font-medium cursor-text"
-                          title="Double-clic pour renommer"
+                          title="Double-click to rename"
                         >
                           {slot.name}
                         </span>
@@ -407,7 +407,7 @@ export default function MovesTable() {
                           <button
                             onClick={() => removeFromSetlist(slot.id)}
                             className="text-yellow-600 hover:text-yellow-400 text-[10px] ml-0.5"
-                            title="Retirer de la setlist"
+                            title="Remove from setlist"
                           ><X size={11} /></button>
                         </div>
                       ) : (
@@ -497,7 +497,7 @@ export default function MovesTable() {
 
       {/* ═══ Track Picker Modal ═══ */}
       {editingTracksFor && (
-        <Modal title="Tracks du move" onClose={() => setEditingTracksFor(null)}>
+        <Modal title="Move tracks" onClose={() => setEditingTracksFor(null)}>
           <div className="p-4">
             <div className="flex gap-2 mb-3">
               <button

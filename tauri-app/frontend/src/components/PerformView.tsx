@@ -79,7 +79,7 @@ export const PerformView: React.FC = () => {
       <div
         key={slot.id}
         onClick={() => selectSlotForEditing(isSelected ? null : slot.id)}
-        title="Params live de ce move"
+        title="Live params of this move"
         className={`group flex items-center gap-2 px-3 py-2.5 cursor-pointer border-b border-gray-800/40 transition-colors ${
           isSelected
             ? 'bg-indigo-900/30 ring-1 ring-inset ring-indigo-600/60'
@@ -376,7 +376,7 @@ const LiveDrawer: React.FC = () => {
                 ? 'bg-indigo-600 text-white'
                 : 'bg-green-900/40 text-green-300 hover:bg-green-800/50 border border-green-800/50'
             }`}
-            title="Params live de ce move"
+            title="Live params of this move"
           >
             {s.isPreview ? '◌' : '●'} {s.name}
           </button>

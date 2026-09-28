@@ -127,7 +127,7 @@ export const QuickAddModal: React.FC<{
             </button>
           ))}
         </div>
-        <div className="text-gray-700 text-[9px] pt-2">
+        <div className="text-gray-500 text-[9px] pt-2">
           ↑↓ navigate · Enter add · Esc close — inserts into a selected edge.
         </div>
       </div>

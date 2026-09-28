@@ -238,7 +238,7 @@ export default function Inspector() {
         ) : (
           <div className="w-full text-gray-500 text-sm font-semibold flex items-center gap-2">
             <span className="text-gray-600">Global</span>
-            <span className="text-[10px] text-gray-700 font-normal">— select a move to edit it</span>
+            <span className="text-[10px] text-gray-500 font-normal">— select a move to edit it</span>
           </div>
         )}
       </div>
@@ -341,7 +341,7 @@ export default function Inspector() {
               ) : (
                 <div className="text-gray-600 text-[10px] py-2 text-center">
                   Sélectionnez un node dans le graphe
-                  <div className="text-gray-700 text-[10px] mt-1">Click a node to edit its params</div>
+                  <div className="text-gray-500 text-[10px] mt-1">Click a node to edit its params</div>
                 </div>
               )}
             </Section>
@@ -422,8 +422,8 @@ export default function Inspector() {
                   </button>
                 ))}
               </div>
-              <Slider label="Fondu in" value={current.fade_in} min={0} max={5} step={0.1} onChange={(v) => updateCurrent({ fade_in: v })} unit="s" />
-              <Slider label="Fondu out" value={current.fade_out} min={0} max={5} step={0.1} onChange={(v) => updateCurrent({ fade_out: v })} unit="s" />
+              <Slider label="Fade in" value={current.fade_in} min={0} max={5} step={0.1} onChange={(v) => updateCurrent({ fade_in: v })} unit="s" />
+              <Slider label="Fade out" value={current.fade_out} min={0} max={5} step={0.1} onChange={(v) => updateCurrent({ fade_out: v })} unit="s" />
             </Section>
 
             {/* MACROS — speed, scale, shift, rotation (unifié avec Expert) */}
@@ -479,7 +479,7 @@ export default function Inspector() {
               ) : (
                 <div className="text-center py-3">
                   <div className="text-gray-600 text-[10px] mb-1">No track available</div>
-                  <div className="text-gray-700 text-[10px]">Import .hol ou ajoutez des tracks manuelles</div>
+                  <div className="text-gray-500 text-[10px]">Import .hol ou ajoutez des tracks manuelles</div>
                 </div>
               )}
             </div>

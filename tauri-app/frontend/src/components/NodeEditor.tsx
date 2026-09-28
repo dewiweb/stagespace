@@ -388,9 +388,21 @@ export const NodeEditor: React.FC = () => {
     return !!slot?.movementId;
   }, [moveSlots, editingSlotId]);
   const edgesLive = activeTab === 'sub' ? editedSlotLive : movements.length > 0;
+  // Insert-target : l'edge sélectionnée sur laquelle un modifier peut
+  // s'insérer (trajectoire, pas duration/spline) prend un style dash cyan
+  // — l'autopatch doit être découvrable sans lire le hint de palette.
+  const insertableEdgeId =
+    selectedEdge && selectedEdge.targetHandle !== 'duration' && selectedEdge.targetHandle !== 'spline'
+      ? selectedEdge.id
+      : null;
   const decoratedEdges = useMemo(
-    () => displayEdges.map((e) => ({ ...e, animated: edgesLive })),
-    [displayEdges, edgesLive],
+    () =>
+      displayEdges.map((e) => ({
+        ...e,
+        animated: edgesLive,
+        className: e.id === insertableEdgeId ? 'rf-edge-insert-target' : undefined,
+      })),
+    [displayEdges, edgesLive, insertableEdgeId],
   );
 
   const toggleCat = (label: string) => {
@@ -510,7 +522,7 @@ export const NodeEditor: React.FC = () => {
                     style={{ background: NODE_COLORS[cat.color] ?? '#4b5563' }}
                   />
                   {cat.label}
-                  <span className="text-gray-700 ml-auto">{filteredTypes.length}</span>
+                  <span className="text-gray-500 ml-auto">{filteredTypes.length}</span>
                 </button>
                 {!isCollapsed && (
                   <div className="space-y-0.5">
@@ -621,7 +633,7 @@ export const NodeEditor: React.FC = () => {
                       <div className="px-2.5 py-1 text-gray-600 text-[10px] leading-snug">
                         No plugin loaded
                         {pluginsDir && (
-                          <div className="font-mono text-gray-700 break-all mt-0.5" title={pluginsDir}>
+                          <div className="font-mono text-gray-500 break-all mt-0.5" title={pluginsDir}>
                             {pluginsDir}
                           </div>
                         )}
@@ -670,7 +682,7 @@ export const NodeEditor: React.FC = () => {
             <div><span className="text-gray-400 font-semibold">Chain:</span> Engine → Modifier → Output</div>
             <div><span className="text-gray-400 font-semibold">Blend:</span> 2 Engines → Mix → Output</div>
             <div><span className="text-gray-400 font-semibold">Time:</span> 2 Engines → Sequence/Crossfade</div>
-            <div className="pt-1 text-gray-700">Drag from a node's bottom handle to connect. Invalid connections are blocked.</div>
+            <div className="pt-1 text-gray-500">Drag from a node's bottom handle to connect. Invalid connections are blocked.</div>
           </div>
         </div>
       </div>
@@ -714,15 +726,15 @@ export const NodeEditor: React.FC = () => {
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="text-center">
               <div className="text-gray-600 text-sm mb-1">Empty graph</div>
-              <div className="text-gray-700 text-xs">
+              <div className="text-gray-500 text-xs">
                 {activeTab === 'global'
                   ? 'Click nodes in the palette to add them'
                   : 'Click nodes in the palette to add them'}
               </div>
               {activeTab === 'global' ? (
-                <div className="text-gray-700 text-[10px] mt-2">Start with: Input → Scale → Rotate → Offset → Output</div>
+                <div className="text-gray-500 text-[10px] mt-2">Start with: Input → Scale → Rotate → Offset → Output</div>
               ) : (
-                <div className="text-gray-700 text-[10px] mt-2">Start with: Objects → Duration → Circular → Output</div>
+                <div className="text-gray-500 text-[10px] mt-2">Start with: Objects → Duration → Circular → Output</div>
               )}
             </div>
           </div>
