@@ -13,7 +13,7 @@ use crate::commands::error::IpcError;
 #[tauri::command]
 pub async fn update_move_graph_merged(
     movement_id: String,
-    graph_json: serde_json::Value,
+    graph_json: stagespace_engines::GraphJson,
     fade_duration: Option<f64>,
     duration: Option<f64>,
     osc_ids: Option<Vec<u32>>,
@@ -105,7 +105,7 @@ pub async fn update_move_graph_merged(
 /// Compile et hot-swap le graph global (post-processing)
 #[tauri::command]
 pub async fn update_global_graph(
-    graph_json: serde_json::Value,
+    graph_json: stagespace_engines::GraphJson,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
     let sh = Shared::from_state(&state);

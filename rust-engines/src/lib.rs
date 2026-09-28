@@ -9,6 +9,7 @@ pub mod engines;
 pub mod error;
 pub mod falloffs;
 pub mod graph;
+pub mod graph_json;
 pub mod hol_parser;
 pub mod kinematics;
 pub mod logging;
@@ -64,7 +65,9 @@ pub use compiler::{
     AudioParamOverrides, CompilationError, CompiledFunction, Compiler, LiveInputs, OscValueMap,
 };
 pub use config::{AudioConfig, Config, GraphConfig, OscConfig, RuntimeConfig};
-pub use cuelist::{Cue, CuelistManager, MacroSnapshot, MoveSnapshot, SpatialMacroSnapshot};
+pub use cuelist::{
+    Cue, CuelistManager, MacroSnapshot, MoveSnapshot, SpatialMacroSnapshot, CUE_SCHEMA_VERSION,
+};
 pub use engines::{Engine, EngineParams, MAX_OBJECTS};
 pub use error::{Result, StagespaceError};
 pub use falloffs::{
@@ -72,6 +75,10 @@ pub use falloffs::{
     PointDistanceFalloff, TimeFalloff,
 };
 pub use graph::{Edge, Graph, Node, NodeId, NodeType};
+pub use graph_json::{
+    GraphEdgeJson, GraphJson, GraphNodeData, GraphNodeJson, GraphNodePosition,
+    GRAPH_JSON_SCHEMA_VERSION,
+};
 pub use hol_parser::{aed_to_xyz, parse_hol_project, HolTrack};
 pub use kinematics::{ChannelModulation, KinematicSource, KinematicState};
 pub use logging::{

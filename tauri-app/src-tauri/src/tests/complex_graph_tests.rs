@@ -9,7 +9,7 @@ mod complex_graph_tests {
     };
     use crate::commands::state::Shared;
     use crate::graph::compilation::compile_graph_with_audio;
-    use crate::graph::parser::build_graph_from_json;
+    use crate::graph::parser::build_graph_from_value;
     use stagespace_engines::position_sink::{PositionSink, SendReport};
     use stagespace_engines::{
         AudioState, MergeRuntime, OscProfile, OscReceiver, OscSender, SpatialChannels,
@@ -130,7 +130,7 @@ mod complex_graph_tests {
     fn test_complex_move_graph_compiles_and_moves() {
         let audio = Arc::new(Mutex::new(AudioState::new()));
         let graph =
-            build_graph_from_json(&complex_move_graph(), &audio.lock().unwrap()).expect("parse");
+            build_graph_from_value(&complex_move_graph(), &audio.lock().unwrap()).expect("parse");
         let f = compile_graph_with_audio(&graph, audio).expect("compile");
 
         // 6 objets — positions finies, distinctes par objet, mouvantes dans t
@@ -158,7 +158,7 @@ mod complex_graph_tests {
     #[test]
     fn test_complex_global_graph_effects_and_chain() {
         let audio = AudioState::new();
-        let graph = build_graph_from_json(&complex_global_graph(), &audio).expect("parse");
+        let graph = build_graph_from_value(&complex_global_graph(), &audio).expect("parse");
 
         // Effets extraits : strategy blend + 1 zone + 1 modulation
         let effects = stagespace_engines::extract_graph_effects(&graph).expect("effects");
@@ -251,7 +251,7 @@ mod complex_graph_tests {
                 MoveSpec {
                     id: id.to_string(),
                     name: name.to_string(),
-                    graph_json: graph,
+                    graph_json: serde_json::from_value(graph).unwrap(),
                     osc_ids,
                     track_indices: idx,
                     is_preview: false,
@@ -363,7 +363,7 @@ mod complex_graph_tests {
             .map(make_node)
             .collect();
         let json = serde_json::json!({ "nodes": nodes, "edges": [] });
-        let err = build_graph_from_json(&json, &audio).unwrap_err();
+        let err = build_graph_from_value(&json, &audio).unwrap_err();
         assert!(err.contains("nodes"), "erreur attendue sur nodes: {err}");
 
         // > MAX_GRAPH_EDGES edges → Err
@@ -379,7 +379,7 @@ mod complex_graph_tests {
             "nodes": [make_node(0), make_node(1)],
             "edges": edges,
         });
-        let err = build_graph_from_json(&json, &audio).unwrap_err();
+        let err = build_graph_from_value(&json, &audio).unwrap_err();
         assert!(err.contains("edges"), "erreur attendue sur edges: {err}");
     }
 }

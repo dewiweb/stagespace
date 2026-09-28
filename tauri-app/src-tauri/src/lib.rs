@@ -91,7 +91,7 @@ pub struct Movement {
     pub is_preview: bool,
     pub track_indices: Vec<usize>, // indices des tracks dans le .hol
     /// Sub-graph JSON utilisé à l'activation — snapshot pour les cues
-    pub graph_json: serde_json::Value,
+    pub graph_json: stagespace_engines::GraphJson,
     /// Durée du move (secondes)
     pub duration: f64,
     /// Loop mode sérialisé : "loop" | "oneshot"

@@ -25,7 +25,7 @@ use tauri::{AppHandle, Emitter, State};
 pub struct ActivateMoveRequest {
     pub movement_id: String,
     pub name: String,
-    pub graph_json: serde_json::Value,
+    pub graph_json: stagespace_engines::GraphJson,
     pub osc_ids: Vec<u32>,
     pub track_indices: Vec<usize>,
     pub is_preview: bool,
@@ -55,7 +55,7 @@ pub struct ActivateMoveRequest {
 pub struct MoveSpec {
     pub id: String,
     pub name: String,
-    pub graph_json: serde_json::Value,
+    pub graph_json: stagespace_engines::GraphJson,
     pub osc_ids: Vec<u32>,
     pub track_indices: Vec<usize>,
     pub is_preview: bool,

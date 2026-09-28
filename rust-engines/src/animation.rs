@@ -159,8 +159,8 @@ pub struct Animation {
     pub audio_mods: Vec<AudioMod>,
 
     // ── Graphe expert (toujours présent — remplace shape/shape_params)
-    #[serde(default = "default_graph_json")]
-    pub graph_json: serde_json::Value,
+    #[serde(default)]
+    pub graph_json: crate::graph_json::GraphJson,
 
     // ── Fade
     #[serde(default = "default_fade")]
@@ -181,8 +181,8 @@ fn default_scale() -> f64 {
 fn default_fade() -> f64 {
     0.5
 }
-fn default_graph_json() -> serde_json::Value {
-    serde_json::json!({})
+fn default_graph_json() -> crate::graph_json::GraphJson {
+    crate::graph_json::GraphJson::default()
 }
 
 impl Default for Animation {

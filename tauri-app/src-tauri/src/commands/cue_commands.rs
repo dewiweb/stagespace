@@ -29,8 +29,7 @@ pub struct StoreCueRequest {
     pub name: String,
     pub description: String,
     /// Sub-graph du move (graph_json)
-    #[ts(type = "unknown")]
-    pub graph: serde_json::Value,
+    pub graph: stagespace_engines::GraphJson,
     /// Macros per-move (speed, scale, shift, rotation)
     pub macros: Option<MacroSnapshot>,
     /// Macros spatiales étendues (radius_scale, height_offset)
@@ -43,8 +42,7 @@ pub struct StoreCueRequest {
     pub cue_number: Option<String>,
     // ─── Phase 3 : champs étendus ───
     /// Graph global (post-processing)
-    #[ts(type = "unknown | null")]
-    pub global_graph: Option<serde_json::Value>,
+    pub global_graph: Option<stagespace_engines::GraphJson>,
     /// IDs des moves actifs
     pub active_move_ids: Vec<String>,
     /// Profondeurs par track
@@ -103,6 +101,7 @@ pub async fn store_cue(
 
     let cue = Cue {
         id: uuid::Uuid::new_v4().to_string(),
+        schema_version: Some(stagespace_engines::CUE_SCHEMA_VERSION),
         name: request.name,
         description: request.description,
         graph: request.graph,
@@ -169,6 +168,17 @@ pub(crate) fn recall_cue_inner(
     cue: Cue,
     sh: crate::commands::state::Shared,
 ) -> Result<(), IpcError> {
+    // Versioning du contrat : un cue écrit par une version future pourrait
+    // porter des champs que ce backend ignore — échec explicite plutôt
+    // qu'un recall partiel silencieux.
+    if cue.schema_version.unwrap_or(0) > stagespace_engines::CUE_SCHEMA_VERSION {
+        return Err(IpcError::validation(format!(
+            "Cue '{}' uses schema_version {} > supported {} — written by a newer version",
+            cue.name,
+            cue.schema_version.unwrap_or(0),
+            stagespace_engines::CUE_SCHEMA_VERSION
+        )));
+    }
     // Anti-recall concurrent : si un recall est déjà en cours, refuser
     if sh
         .recall_in_progress

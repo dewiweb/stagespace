@@ -9,7 +9,7 @@
 )]
 mod tests {
     use crate::graph;
-    use crate::graph::parser::build_graph_from_json;
+    use crate::graph::parser::build_graph_from_value;
     use stagespace_engines::{
         Animation, AnimationState, AudioMod, AudioState, EngineParams, OscProfile, OscSender,
         PositionFn, Runtime, TrackAssignment,
@@ -56,7 +56,7 @@ mod tests {
     fn test_graph_json_compiles() {
         let graph_json = make_circular_graph_json(4, 2.5, 4.0);
         let audio_state = AudioState::new();
-        let graph = build_graph_from_json(&graph_json, &audio_state);
+        let graph = build_graph_from_value(&graph_json, &audio_state);
         assert!(graph.is_ok(), "Graph build failed: {:?}", graph.err());
 
         let graph = graph.unwrap();
@@ -68,7 +68,7 @@ mod tests {
     fn test_animation_serialization_roundtrip() {
         let mut anim = Animation::default();
         anim.name = "Test".to_string();
-        anim.graph_json = make_circular_graph_json(4, 2.0, 8.0);
+        anim.graph_json = serde_json::from_value(make_circular_graph_json(4, 2.0, 8.0)).unwrap();
         anim.speed = 1.5;
         anim.duration = 8.0;
         anim.scale = 1.2;
@@ -114,7 +114,7 @@ mod tests {
         let mut anim = Animation::default();
         anim.id = "test-1".to_string();
         anim.name = "Test Circle".to_string();
-        anim.graph_json = make_circular_graph_json(2, 2.0, 4.0);
+        anim.graph_json = serde_json::from_value(make_circular_graph_json(2, 2.0, 4.0)).unwrap();
         anim.duration = 4.0;
         anim.speed = 1.0;
         anim.assignments = vec![
@@ -135,7 +135,8 @@ mod tests {
 
         // 1. Construire le graphe à partir du graph_json
         let audio_state = AudioState::new();
-        let graph = build_graph_from_json(&anim.graph_json, &audio_state).expect("graph build");
+        let graph = crate::graph::parser::build_graph_from_json(&anim.graph_json, &audio_state)
+            .expect("graph build");
         let compiled = graph::compilation::compile_graph(&graph).expect("compile");
 
         // 2. Créer le runtime (worker — écrit dans un PositionBuffer)
@@ -282,14 +283,14 @@ mod tests {
     /// Compile un graph_json en PositionFn (panique si erreur)
     fn compile_graph_json(graph_json: &serde_json::Value) -> PositionFn {
         let audio_state = AudioState::new();
-        let graph = build_graph_from_json(graph_json, &audio_state).expect("graph build");
+        let graph = build_graph_from_value(graph_json, &audio_state).expect("graph build");
         graph::compilation::compile_graph(&graph).expect("compile")
     }
 
     /// Tente de compiler et retourne le Result (pour tester les erreurs)
     fn try_compile_graph_json(graph_json: &serde_json::Value) -> Result<PositionFn, String> {
         let audio_state = AudioState::new();
-        let graph = build_graph_from_json(graph_json, &audio_state)?;
+        let graph = build_graph_from_value(graph_json, &audio_state)?;
         graph::compilation::compile_graph(&graph)
     }
 
@@ -697,7 +698,7 @@ mod tests {
 
         // Avec animation state + phase_spread = 1.0
         let mut anim = Animation::default();
-        anim.graph_json = graph_json.clone();
+        anim.graph_json = serde_json::from_value(graph_json.clone()).unwrap();
         anim.phase_spread = 1.0;
         anim.assignments = (0..n)
             .map(|i| TrackAssignment {
@@ -879,7 +880,7 @@ mod tests {
             confidence: 1.0,
             last_beat_time: 0.0,
         });
-        let graph = build_graph_from_json(&graph_json, &audio_state).expect("graph build");
+        let graph = build_graph_from_value(&graph_json, &audio_state).expect("graph build");
 
         // Vérifier que le BPM a été injecté dans les params du node BPM
         let bpm_node = graph
@@ -953,7 +954,7 @@ mod tests {
         // Note: build_graph_from_json force n_objects = objects_n pour tous les engines
         // Donc la validation ne devrait pas échouer — le parser harmonise les comptes
         let audio_state = AudioState::new();
-        let graph = build_graph_from_json(&graph_json, &audio_state);
+        let graph = build_graph_from_value(&graph_json, &audio_state);
         assert!(
             graph.is_ok(),
             "Graph build should succeed (parser harmonizes counts)"
@@ -998,7 +999,7 @@ mod tests {
     fn test_global_graph_builds_and_compiles() {
         let global_json = make_global_graph_json(2.0);
         let audio_state = AudioState::new();
-        let graph = build_graph_from_json(&global_json, &audio_state);
+        let graph = build_graph_from_value(&global_json, &audio_state);
         assert!(
             graph.is_ok(),
             "Global graph build failed: {:?}",
@@ -1025,7 +1026,7 @@ mod tests {
     fn test_global_graph_compiles_to_post_process() {
         let global_json = make_global_graph_json(2.0);
         let audio_state = AudioState::new();
-        let graph = build_graph_from_json(&global_json, &audio_state).unwrap();
+        let graph = build_graph_from_value(&global_json, &audio_state).unwrap();
 
         let macros = std::sync::Arc::new(stagespace_engines::MacroState::new());
         let compile_params = stagespace_engines::PostProcessCompileParams { graph, macros };
@@ -1042,7 +1043,7 @@ mod tests {
     fn test_merge_runtime_hot_swap_post_process() {
         let global_json = make_global_graph_json(2.0);
         let audio_state = AudioState::new();
-        let graph = build_graph_from_json(&global_json, &audio_state).unwrap();
+        let graph = build_graph_from_value(&global_json, &audio_state).unwrap();
 
         let macros = std::sync::Arc::new(stagespace_engines::MacroState::new());
         let compile_params = stagespace_engines::PostProcessCompileParams {
@@ -1078,7 +1079,7 @@ mod tests {
             ]
         });
         let audio_state = AudioState::new();
-        let graph = build_graph_from_json(&global_json, &audio_state);
+        let graph = build_graph_from_value(&global_json, &audio_state);
         assert!(
             graph.is_ok(),
             "Global graph with MoveRef build failed: {:?}",
@@ -1107,7 +1108,7 @@ mod tests {
             ]
         });
         let audio_state = AudioState::new();
-        let graph = build_graph_from_json(&global_json, &audio_state);
+        let graph = build_graph_from_value(&global_json, &audio_state);
         assert!(
             graph.is_ok(),
             "Global graph with Merge build failed: {:?}",
@@ -1133,9 +1134,10 @@ mod tests {
 
         let cue = Cue {
             id: "test-cue".to_string(),
+            schema_version: None,
             name: "Test Cue".to_string(),
             description: "Phase 3 test".to_string(),
-            graph: serde_json::json!({"nodes": []}),
+            graph: stagespace_engines::GraphJson::default(),
             timestamp: 100.0,
             macros: Some(MacroSnapshot {
                 speed: 1.5,
@@ -1150,7 +1152,7 @@ mod tests {
             track_indices: vec![0, 1, 2],
             fade_duration: 1.0,
             cue_number: Some("2.1".to_string()),
-            global_graph: Some(make_global_graph_json(1.5)),
+            global_graph: Some(serde_json::from_value(make_global_graph_json(1.5)).unwrap()),
             active_move_ids: vec!["move-a".to_string(), "move-b".to_string()],
             per_track_depths: vec![0.5, 1.0, 1.5],
             manual_positions: manual_pos,
@@ -1212,13 +1214,13 @@ mod tests {
         // 1. Sub-graph (move) : Objects → Duration → Circular → Output
         let sub_graph_json = make_circular_graph_json(4, 2.0, 8.0);
         let audio_state = AudioState::new();
-        let sub_graph = build_graph_from_json(&sub_graph_json, &audio_state).unwrap();
+        let sub_graph = build_graph_from_value(&sub_graph_json, &audio_state).unwrap();
         let sub_compiled = graph::compilation::compile_graph(&sub_graph);
         assert!(sub_compiled.is_ok(), "Sub-graph compilation failed");
 
         // 2. Global graph : Input → RadiusScale → Output
         let global_json = make_global_graph_json(1.5);
-        let global_graph = build_graph_from_json(&global_json, &audio_state).unwrap();
+        let global_graph = build_graph_from_value(&global_json, &audio_state).unwrap();
 
         let macros = std::sync::Arc::new(stagespace_engines::MacroState::new());
         let compile_params = stagespace_engines::PostProcessCompileParams {

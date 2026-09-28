@@ -16,6 +16,7 @@
 //! }
 
 use serde_json::{json, Value};
+use stagespace_engines::GraphJson;
 
 /// Liste des templates disponibles
 pub fn list_templates() -> Vec<(&'static str, &'static str)> {
@@ -57,8 +58,21 @@ pub fn list_templates() -> Vec<(&'static str, &'static str)> {
     ]
 }
 
-/// Génère le JSON du graphe pour un template donné
+/// Génère le graphe typé pour un template donné — le `Value` interne
+/// (json! est la syntaxe de construction la plus lisible) est validé par
+/// désérialisation dans le contrat `GraphJson` avant de partir.
 pub fn build_template_graph(
+    template: &str,
+    n_objects: usize,
+    duration: f64,
+) -> Result<GraphJson, String> {
+    build_template_graph_value(template, n_objects, duration).and_then(|v| {
+        serde_json::from_value::<GraphJson>(v)
+            .map_err(|e| format!("Internal error: template graph invalid: {e}"))
+    })
+}
+
+fn build_template_graph_value(
     template: &str,
     n_objects: usize,
     duration: f64,
