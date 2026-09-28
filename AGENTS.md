@@ -81,7 +81,7 @@ npx tsc -b               # Type check (build mode — `tsc --noEmit` is vacuous 
 # Rust
 cd rust-engines && cargo test --lib && cargo clippy --all-targets -- -D warnings && cargo fmt -- --check
 # Tauri
-cd ../tauri-app/src-tauri && cargo test --lib && cargo clippy --all-targets -- -D warnings
+cd ../tauri-app/src-tauri && cargo test --lib && cargo clippy --all-targets -- -D warnings && cargo fmt -- --check
 # Frontend
 cd ../frontend && npm test && npx tsc -b && npm run build
 ```

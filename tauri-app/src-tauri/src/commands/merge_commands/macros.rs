@@ -91,7 +91,10 @@ pub async fn set_move_speed(
     let movement = movements
         .get(&movement_id)
         .ok_or_else(|| IpcError::not_found(format!("Movement '{movement_id}' not found")))?;
-    movement.runtime.macros().set_speed(require_finite("speed", speed)?);
+    movement
+        .runtime
+        .macros()
+        .set_speed(require_finite("speed", speed)?);
     Ok(())
 }
 
