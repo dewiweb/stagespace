@@ -288,6 +288,97 @@ fn test_worker_applies_move_transform() {
 }
 
 #[test]
+fn test_worker_applies_signal_deltas() {
+    // Signal graph per-move : `SignalConst → SignalOut(scale, amount=1)` →
+    // delta +1 → scale effective = base(1)+1 = 2 → (1,0,0) sort en (2,0,0).
+    // Les deltas passent par audio_param_overrides — additive à la base.
+    let rt = test_runtime();
+    let buffer = Arc::new(PositionBuffer::new());
+    rt.set_position_buffer(buffer.clone());
+
+    let mut g = crate::graph::Graph::new();
+    let c =
+        crate::graph::Node::with_params(crate::graph::NodeType::SignalConst, json!({"value": 1.0}));
+    let out = crate::graph::Node::with_params(
+        crate::graph::NodeType::SignalOut,
+        json!({"target": "scale", "amount": 1.0}),
+    );
+    g.add_node(c.clone());
+    g.add_node(out.clone());
+    g.add_edge(crate::graph::Edge {
+        from: c.id,
+        to: out.id,
+        from_port: "output".to_string(),
+        to_port: "signal".to_string(),
+    });
+    let signal_fn = crate::signal_compiler::compile_signal_graph(&g).expect("compiles");
+    rt.swap_signal_fn(signal_fn);
+
+    rt.play_compiled(
+        Arc::new(|_, _| nalgebra::Vector3::new(1.0, 0.0, 0.0)),
+        test_params(60.0),
+        vec![1],
+    )
+    .unwrap();
+    std::thread::sleep(Duration::from_millis(80));
+    rt.stop();
+
+    let positions = buffer.read();
+    let p = positions[0].1;
+    assert!(
+        (p.x - 2.0).abs() < 1e-9,
+        "delta scale +1 → x doublé, got {}",
+        p.x
+    );
+    // La macro de base n'est jamais mutée — delta additif seulement.
+    assert!((rt.macros().get_scale() - 1.0).abs() < 1e-9);
+}
+
+#[test]
+fn test_signal_deltas_compose_with_audio_mods() {
+    // Additivité : un delta signal `shift_x +5` + macro base doivent se
+    // composer — le signal n'écrase rien (même couture que les audio mods).
+    let rt = test_runtime();
+    let buffer = Arc::new(PositionBuffer::new());
+    rt.set_position_buffer(buffer.clone());
+    rt.macros().set_shift(10.0, 0.0, 0.0); // base panel/OSC : +10
+
+    let mut g = crate::graph::Graph::new();
+    let c =
+        crate::graph::Node::with_params(crate::graph::NodeType::SignalConst, json!({"value": 5.0}));
+    let out = crate::graph::Node::with_params(
+        crate::graph::NodeType::SignalOut,
+        json!({"target": "shift_x", "amount": 1.0}),
+    );
+    g.add_node(c.clone());
+    g.add_node(out.clone());
+    g.add_edge(crate::graph::Edge {
+        from: c.id,
+        to: out.id,
+        from_port: "output".to_string(),
+        to_port: "signal".to_string(),
+    });
+    rt.swap_signal_fn(crate::signal_compiler::compile_signal_graph(&g).unwrap());
+
+    rt.play_compiled(
+        Arc::new(|_, _| nalgebra::Vector3::zeros()),
+        test_params(60.0),
+        vec![1],
+    )
+    .unwrap();
+    std::thread::sleep(Duration::from_millis(80));
+    rt.stop();
+
+    let p = buffer.read()[0].1;
+    assert!(
+        (p.x - 15.0).abs() < 1e-9,
+        "base shift_x=10 + delta signal=5 → x=15, got {}",
+        p.x
+    );
+    assert!((rt.macros().get_shift().x - 10.0).abs() < 1e-9);
+}
+
+#[test]
 fn test_worker_fade_collapses_toward_origin() {
     // Le fade du move (config.set_fade) doit replier la trajectoire vers
     // l'origin du move pendant le fade_in — pas vers (0,0,0) ni rester

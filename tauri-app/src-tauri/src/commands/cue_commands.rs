@@ -292,6 +292,12 @@ pub(crate) fn recall_cue_inner(
         let signal_fn = stagespace_engines::compile_signal_graph(&graph)
             .map_err(|e| IpcError::validation(format!("Failed to compile signal graph: {e:?}")))?;
         lock_or_recover(&sh.merge_runtime).swap_signal_fn(signal_fn);
+    } else {
+        // Le cue ne porte pas de graph signal → la modulation globale
+        // est reset. Sans ça, la SignalFn du cue précédent survivrait au
+        // recall (deltas stales sur les macros).
+        lock_or_recover(&sh.merge_runtime)
+            .swap_signal_fn(stagespace_engines::signal_compiler::empty_signal_fn());
     }
 
     // 2. Désactiver les moves absents du cue. Quand le cue porte des

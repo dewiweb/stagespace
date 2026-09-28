@@ -252,6 +252,51 @@ mod recall_tests {
         }
     }
 
+    fn signal_graph_json() -> serde_json::Value {
+        serde_json::json!({
+            "nodes": [
+                {"id": "c", "type": "custom", "position": {"x":0,"y":0},
+                 "data": {"label":"SignalConst","type":"SignalConst","params":{"value":7.0}}},
+                {"id": "o", "type": "custom", "position": {"x":0,"y":0},
+                 "data": {"label":"SignalOut","type":"SignalOut","params":{"target":"yaw","amount":2.0}}}
+            ],
+            "edges": [
+                {"id":"e1","source":"c","target":"o","targetHandle":"signal"}
+            ]
+        })
+    }
+
+    #[test]
+    fn test_recall_restores_signal_graph_and_resets_when_absent() {
+        let sh = make_shared();
+        // Cue porteur d'un graph signal → installé dans le merge.
+        let mut cue = make_cue();
+        cue.signal_graph = Some(serde_json::from_value(signal_graph_json()).unwrap());
+        recall_cue_inner(cue, sh.clone()).expect("recall with signal graph");
+        let deltas = sh
+            .merge_runtime
+            .lock()
+            .unwrap()
+            .eval_signal_deltas(0.0, 1.0 / 60.0);
+        assert!(
+            (deltas.get("yaw").copied().unwrap_or(0.0) - 14.0).abs() < 1e-9,
+            "7.0 * 2.0 = 14 attendu sur yaw, got {deltas:?}"
+        );
+
+        // Cue SANS graph signal → reset : la modulation du cue précédent
+        // ne doit pas survivre (deltas stales = macros qui bougent seules).
+        recall_cue_inner(make_cue(), sh.clone()).expect("recall without signal graph");
+        let deltas = sh
+            .merge_runtime
+            .lock()
+            .unwrap()
+            .eval_signal_deltas(0.0, 1.0 / 60.0);
+        assert!(
+            deltas.is_empty(),
+            "un cue sans signal graph doit reset la modulation: {deltas:?}"
+        );
+    }
+
     #[test]
     fn test_is_playing_requires_worker_and_merge() {
         let sh = make_shared();

@@ -5,6 +5,29 @@ use crate::osc_sender::{OscProfile, OscSender};
 use crate::position_buffer::PositionBuffer;
 use std::sync::Arc;
 
+/// Compile un graph signal minimal `SignalConst → SignalOut` — le delta
+/// `value * amount` s'applique à la macro `target` à chaque frame.
+fn const_signal_fn(target: &str, value: f64, amount: f64) -> crate::signal_compiler::SignalFn {
+    let mut g = crate::graph::Graph::new();
+    let c = crate::graph::Node::with_params(
+        crate::graph::NodeType::SignalConst,
+        serde_json::json!({"value": value}),
+    );
+    let out = crate::graph::Node::with_params(
+        crate::graph::NodeType::SignalOut,
+        serde_json::json!({"target": target, "amount": amount}),
+    );
+    g.add_node(c.clone());
+    g.add_node(out.clone());
+    g.add_edge(crate::graph::Edge {
+        from: c.id,
+        to: out.id,
+        from_port: "output".to_string(),
+        to_port: "signal".to_string(),
+    });
+    crate::signal_compiler::compile_signal_graph(&g).expect("signal graph compiles")
+}
+
 #[test]
 fn test_merge_override() {
     let move_a = (
@@ -483,6 +506,56 @@ fn spawn_writer(
             std::thread::sleep(std::time::Duration::from_millis(4));
         }
     })
+}
+
+#[test]
+fn test_signal_fn_eval_and_hot_swap() {
+    // swap_signal_fn installe le graph ; eval_signal_deltas l'expose hors
+    // boucle (diagnostic) ; empty_signal_fn reset proprement.
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+
+    assert!(rt.eval_signal_deltas(0.0, 1.0 / 60.0).is_empty());
+
+    rt.swap_signal_fn(const_signal_fn("yaw", 10.0, 2.0));
+    let d = rt.eval_signal_deltas(0.0, 1.0 / 60.0);
+    assert!((d.get("yaw").copied().unwrap_or(0.0) - 20.0).abs() < 1e-9);
+
+    // Reset — un cue/update sans graph ne doit pas laisser la modulation.
+    rt.swap_signal_fn(crate::signal_compiler::empty_signal_fn());
+    assert!(rt.eval_signal_deltas(0.0, 1.0 / 60.0).is_empty());
+}
+
+#[test]
+fn test_signal_deltas_reach_sink_e2e() {
+    // End-to-end : un delta `scale +1` du graph signal doit doubler les
+    // positions en sortie du merge (scale effective = base 1 + delta 1).
+    // Le transform est lu via le clone effectif — la macro de base reste 1.
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    let captured = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+    rt.set_sink(Box::new(CaptureSink(captured.clone())));
+    rt.set_osc_ids(vec![1]);
+    rt.swap_signal_fn(const_signal_fn("scale", 1.0, 1.0));
+
+    let b = Arc::new(PositionBuffer::new());
+    rt.register_move("m1".to_string(), b.clone(), vec![1], vec![0], false);
+    let w = spawn_writer(&b, 0, nalgebra::Vector3::new(2.0, 0.0, 0.0), 150);
+    rt.start().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    rt.stop();
+    w.join().unwrap();
+
+    let map = captured.lock().unwrap_or_else(|e| e.into_inner());
+    let pos = map.get(&1).copied().expect("aucune position capturée");
+    assert!(
+        (pos.x - 4.0).abs() < 1e-6,
+        "delta scale +1 → position doublée (2→4): {pos:?}"
+    );
+    assert!(
+        (rt.macros().get_scale() - 1.0).abs() < 1e-9,
+        "la macro de base ne doit JAMAIS être mutée par le signal graph"
+    );
 }
 
 #[test]

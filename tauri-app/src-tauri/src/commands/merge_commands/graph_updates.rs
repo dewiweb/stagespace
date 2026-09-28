@@ -120,6 +120,7 @@ pub async fn update_move_graph_merged(
 /// `Some(id)` → scope per-move (worker du move). Dans les deux cas le
 /// swap est atomique : la frame suivante évalue la nouvelle SignalFn.
 /// La validation `GraphContext::Signal` rejette tout node non-signal.
+/// Un graph vide (aucun node) reset la modulation — `empty_signal_fn`.
 #[tauri::command]
 pub async fn update_signal_graph(
     graph_json: stagespace_engines::GraphJson,
@@ -128,13 +129,18 @@ pub async fn update_signal_graph(
 ) -> Result<String, IpcError> {
     let sh = Shared::from_state(&state);
     tauri::async_runtime::spawn_blocking(move || {
-        let audio_state = lock_or_recover(&sh.audio_state);
-        let graph = build_graph_from_json(&graph_json, &audio_state)
-            .map_err(|e| IpcError::validation(format!("Failed to parse signal graph: {e}")))?;
-        drop(audio_state);
+        let signal_fn = if graph_json.nodes.is_empty() {
+            stagespace_engines::signal_compiler::empty_signal_fn()
+        } else {
+            let audio_state = lock_or_recover(&sh.audio_state);
+            let graph = build_graph_from_json(&graph_json, &audio_state)
+                .map_err(|e| IpcError::validation(format!("Failed to parse signal graph: {e}")))?;
+            drop(audio_state);
 
-        let signal_fn = stagespace_engines::compile_signal_graph(&graph)
-            .map_err(|e| IpcError::validation(format!("Failed to compile signal graph: {e:?}")))?;
+            stagespace_engines::compile_signal_graph(&graph).map_err(|e| {
+                IpcError::validation(format!("Failed to compile signal graph: {e:?}"))
+            })?
+        };
 
         match movement_id {
             None => {

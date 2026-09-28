@@ -402,6 +402,30 @@ impl MergeRuntime {
         *self.osc_values.write().unwrap_or_else(|e| e.into_inner()) = handle;
     }
 
+    /// Évalue la `SignalFn` courante hors boucle — diagnostic/test :
+    /// permet de vérifier qu'un recall/hot-swap a bien installé (ou
+    /// reset) le graph de modulation sans démarrer le merge.
+    pub fn eval_signal_deltas(&self, t: f64, dt: f64) -> HashMap<String, f64> {
+        let audio_state = self
+            .audio_state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let osc_map = self
+            .osc_values
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let osc_vals = osc_map.lock().unwrap_or_else(|e| e.into_inner());
+        let mut signal = self.signal_fn.lock().unwrap_or_else(|e| e.into_inner());
+        (*signal)(&crate::signal_compiler::SignalCtx {
+            t,
+            dt,
+            audio_state: &audio_state,
+            osc_values: &osc_vals,
+        })
+    }
+
     pub fn swap_post_process_fn(&self, new_fn: PostProcessFn) {
         *self
             .post_process_fn

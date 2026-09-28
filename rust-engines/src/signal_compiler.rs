@@ -508,8 +508,10 @@ fn compile_node(node: &Node) -> std::result::Result<NodeEval, SignalCompileError
         }
 
         NodeType::SignalEnvelope => {
-            let attack = get_f64(node, "attack", 0.6);
-            let release = get_f64(node, "release", 0.15);
+            // Facteurs de rétention — même convention que les specs/audio
+            // mods : petit = rapide (attack), grand = lent (release).
+            let attack = get_f64(node, "attack", 0.2);
+            let release = get_f64(node, "release", 0.95);
             let mut state = 0.0f64;
             Ok(Box::new(move |ctx, slots, values| {
                 let input = port(slots, values, 0, 0.0);
