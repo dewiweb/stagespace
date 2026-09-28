@@ -909,15 +909,15 @@ impl Compiler {
             NodeType::Formation => Box::new(crate::engines::formation::Formation),
             NodeType::PerlinNoise => Box::new(crate::engines::perlin_noise::PerlinNoise),
             NodeType::Converge => Box::new(crate::engines::converge::Converge),
-            NodeType::Pendulum => Box::new(crate::engines::pendulum::Pendulum),
+            NodeType::Pendulum => Box::new(crate::engines::pendulum::Pendulum::default()),
             NodeType::RoseCurve => Box::new(crate::engines::rose_curve::RoseCurve),
             NodeType::Helix => Box::new(crate::engines::helix::Helix),
-            NodeType::Bouncing => Box::new(crate::engines::bouncing::Bouncing),
-            NodeType::Avoidance => Box::new(crate::engines::avoidance::Avoidance),
-            NodeType::Spring => Box::new(crate::engines::spring::Spring),
-            NodeType::Follow => Box::new(crate::engines::follow::Follow),
-            NodeType::Swarm => Box::new(crate::engines::swarm::Swarm),
-            NodeType::VectorField => Box::new(crate::engines::vector_field::VectorField),
+            NodeType::Bouncing => Box::new(crate::engines::bouncing::Bouncing::default()),
+            NodeType::Avoidance => Box::new(crate::engines::avoidance::Avoidance::default()),
+            NodeType::Spring => Box::new(crate::engines::spring::Spring::default()),
+            NodeType::Follow => Box::new(crate::engines::follow::Follow::default()),
+            NodeType::Swarm => Box::new(crate::engines::swarm::Swarm::default()),
+            NodeType::VectorField => Box::new(crate::engines::vector_field::VectorField::default()),
             // Expressions précompilées en AST borné (audit B3) — les
             // erreurs de parse/longueur/profondeur échouent la compile
             // avec InvalidParameter au lieu d'un re-parse à chaque tick.

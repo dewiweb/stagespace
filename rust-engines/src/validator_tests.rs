@@ -1044,4 +1044,59 @@ mod tests {
         let result = Validator::validate(&graph);
         assert!(!has_too_complex(&result, ""));
     }
+
+    #[test]
+    fn test_interaction_agents_budget() {
+        // T3 : un Swarm/Avoidance à n > MAX_INTERACTION_AGENTS dépasse le
+        // budget O(n²) d'un frame 60 FPS → rejet TooComplex à la validation.
+        let big = crate::engines::MAX_INTERACTION_AGENTS + 1;
+        let ok = crate::engines::MAX_INTERACTION_AGENTS;
+        for n_agents in [big, ok] {
+            let mut graph = Graph::new();
+            let objects = Node::with_params(
+                NodeType::Objects,
+                serde_json::json!({"n_objects": n_agents}),
+            );
+            let duration =
+                Node::with_params(NodeType::Duration, serde_json::json!({"duration": 4.0}));
+            let swarm =
+                Node::with_params(NodeType::Swarm, serde_json::json!({"n_objects": n_agents}));
+            let output = Node::new(NodeType::Output);
+            let (id_o, id_d, id_s, id_out) = (objects.id, duration.id, swarm.id, output.id);
+            graph.add_node(objects);
+            graph.add_node(duration);
+            graph.add_node(swarm);
+            graph.add_node(output);
+            graph.add_edge(Edge {
+                from: id_o,
+                to: id_s,
+                from_port: "output".to_string(),
+                to_port: "input".to_string(),
+            });
+            graph.add_edge(Edge {
+                from: id_d,
+                to: id_s,
+                from_port: "output".to_string(),
+                to_port: "duration".to_string(),
+            });
+            graph.add_edge(Edge {
+                from: id_s,
+                to: id_out,
+                from_port: "output".to_string(),
+                to_port: "input".to_string(),
+            });
+            let result = Validator::validate(&graph);
+            let errors = result.clone().err().unwrap_or_default();
+            let too_complex = errors
+                .iter()
+                .any(|e| matches!(e, ValidationError::TooComplex(_)));
+            assert_eq!(
+                too_complex,
+                n_agents > crate::engines::MAX_INTERACTION_AGENTS,
+                "n={n_agents}: TooComplex attendu={}, erreurs={:?}",
+                n_agents > crate::engines::MAX_INTERACTION_AGENTS,
+                errors
+            );
+        }
+    }
 }

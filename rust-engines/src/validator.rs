@@ -1021,6 +1021,22 @@ impl Validator {
                                 n_objects, node.node_type, node_n_objects
                             )));
                         }
+
+                        // T3 : les engines à interaction mutuelle coûtent
+                        // O(n²) par pas de simulation — au-delà de
+                        // MAX_INTERACTION_AGENTS un frame à 60 FPS ne tient
+                        // plus. Refus à la validation plutôt qu'un lag live.
+                        if matches!(node.node_type, NodeType::Swarm | NodeType::Avoidance)
+                            && node_n_objects > crate::engines::MAX_INTERACTION_AGENTS
+                        {
+                            errors.push(ValidationError::TooComplex(format!(
+                                "{:?} with {} agents exceeds the O(n²) per-step budget \
+                                 (max {} interaction agents)",
+                                node.node_type,
+                                node_n_objects,
+                                crate::engines::MAX_INTERACTION_AGENTS
+                            )));
+                        }
                     }
                     // Mix : les deux entrées doivent avoir le même n_objects
                     NodeType::Mix => {
