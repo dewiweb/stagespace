@@ -505,7 +505,14 @@ export const useAudioErrorListener = () => {
       lastAudioErrorAt = now;
       toast.error(`Audio capture failed: ${message}`);
     });
-    return () => { unlisten.then((fn) => fn()).catch(() => {}); };
+    const unlistenRecovered = listen('audio-recovered', () => {
+      lastAudioError = '';
+      toast.success('Audio capture recovered');
+    });
+    return () => {
+      unlisten.then((fn) => fn()).catch(() => {});
+      unlistenRecovered.then((fn) => fn()).catch(() => {});
+    };
   }, []);
 };
 

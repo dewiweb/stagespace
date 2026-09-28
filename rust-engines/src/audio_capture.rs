@@ -179,11 +179,24 @@ pub struct AudioCaptureManager {
     sample_rate: Arc<Mutex<f64>>,
     /// Thread qui possède le stream cpal (build → play → attente stop → drop)
     capture_thread: Arc<Mutex<Option<std::thread::JoinHandle<()>>>>,
-    /// Canal pour demander l'arrêt au thread de capture
-    stop_tx: Arc<Mutex<Option<std::sync::mpsc::Sender<()>>>>,
+    /// Canal vers le thread de capture : Stop, ou StreamDied remonté par
+    /// le callback d'erreur cpal pour déclencher l'auto-reconnexion.
+    event_tx: Arc<Mutex<Option<std::sync::mpsc::Sender<CaptureEvent>>>>,
     /// Dernière erreur fatale du stream (ex: device débranché) — consommée
     /// par le poller via `take_error()` pour émettre `audio-error` au frontend.
     last_error: Arc<Mutex<Option<String>>>,
+    /// Positionné après une reconnexion réussie — le poller émet
+    /// `audio-recovered` une fois (take_recovered).
+    recovered: Arc<AtomicBool>,
+}
+
+/// Événements vers le thread de capture.
+enum CaptureEvent {
+    /// Arrêt demandé par `stop()` / nouveau `start()`.
+    Stop,
+    /// Le stream cpal est mort (device débranché, erreur fatale) — le
+    /// thread de capture doit le drop puis retenter init_stream en backoff.
+    StreamDied(String),
 }
 
 impl AudioCaptureManager {
@@ -193,8 +206,9 @@ impl AudioCaptureManager {
             running: Arc::new(AtomicBool::new(false)),
             sample_rate: Arc::new(Mutex::new(44100.0)),
             capture_thread: Arc::new(Mutex::new(None)),
-            stop_tx: Arc::new(Mutex::new(None)),
+            event_tx: Arc::new(Mutex::new(None)),
             last_error: Arc::new(Mutex::new(None)),
+            recovered: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -236,31 +250,88 @@ impl AudioCaptureManager {
         let running = self.running.clone();
         let sample_rate_arc = self.sample_rate.clone();
         let last_error_arc = self.last_error.clone();
+        let recovered_arc = self.recovered.clone();
         // Nouvelle tentative = erreur précédente consommée/obsolète
         *self.last_error.lock().unwrap_or_else(|e| e.into_inner()) = None;
         let (init_tx, init_rx) = std::sync::mpsc::channel::<Result<f64, String>>();
-        let (stop_tx, stop_rx) = std::sync::mpsc::channel::<()>();
+        let (event_tx, event_rx) = std::sync::mpsc::channel::<CaptureEvent>();
+        let event_tx_thread = event_tx.clone();
 
         let handle = std::thread::spawn(move || {
-            let result = Self::init_stream(
+            let mut stream = match Self::init_stream(
                 device_id_owned.as_deref(),
                 &running,
                 &shared_state,
-                &last_error_arc,
-            );
-            let (stream, rate) = match result {
-                Ok(ok) => ok,
+                event_tx_thread.clone(),
+            ) {
+                Ok((stream, rate)) => {
+                    *sample_rate_arc.lock().unwrap_or_else(|e| e.into_inner()) = rate;
+                    if init_tx.send(Ok(rate)).is_err() {
+                        return; // l'appelant est parti
+                    }
+                    Some(stream)
+                }
                 Err(e) => {
                     let _ = init_tx.send(Err(e));
                     return;
                 }
             };
-            *sample_rate_arc.lock().unwrap_or_else(|e| e.into_inner()) = rate;
-            if init_tx.send(Ok(rate)).is_err() {
-                return; // l'appelant est parti
+            // Boucle de vie : Stop → sortie ; StreamDied → drop + retries en
+            // backoff (500ms → 5s) tant que la capture reste demandée. Un
+            // device débranché/rebranché se reconnecte tout seul.
+            'outer: loop {
+                match event_rx.recv() {
+                    Err(_) | Ok(CaptureEvent::Stop) => break,
+                    Ok(CaptureEvent::StreamDied(err)) => {
+                        eprintln!("[WARN] Audio stream died: {err} — reconnecting");
+                        drop(stream.take());
+                        // État figé = influence fantôme dans les nodes audio :
+                        // reset à zéro pendant la coupure.
+                        if let Ok(mut s) = shared_state.lock() {
+                            *s = AudioState::new();
+                        }
+                        *last_error_arc.lock().unwrap_or_else(|e| e.into_inner()) = Some(err);
+                        let mut backoff = std::time::Duration::from_millis(500);
+                        loop {
+                            match event_rx.recv_timeout(backoff) {
+                                Err(std::sync::mpsc::RecvTimeoutError::Disconnected)
+                                | Ok(CaptureEvent::Stop) => break 'outer,
+                                // Pas de stream vivant — un second StreamDied
+                                // est impossible, ignorer par robustesse.
+                                Ok(CaptureEvent::StreamDied(_)) => continue,
+                                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                                    match Self::init_stream(
+                                        device_id_owned.as_deref(),
+                                        &running,
+                                        &shared_state,
+                                        event_tx_thread.clone(),
+                                    ) {
+                                        Ok((s, rate)) => {
+                                            stream = Some(s);
+                                            *sample_rate_arc
+                                                .lock()
+                                                .unwrap_or_else(|e| e.into_inner()) = rate;
+                                            *last_error_arc
+                                                .lock()
+                                                .unwrap_or_else(|e| e.into_inner()) = None;
+                                            recovered_arc.store(true, Ordering::SeqCst);
+                                            eprintln!("[INFO] Audio capture reconnected");
+                                            continue 'outer;
+                                        }
+                                        Err(e) => {
+                                            eprintln!(
+                                                "[WARN] Audio reconnect failed: {e} — retrying"
+                                            );
+                                            backoff = (backoff * 2)
+                                                .min(std::time::Duration::from_secs(5));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
-            // Garder le stream vivant jusqu'au stop
-            let _ = stop_rx.recv();
             drop(stream);
         });
 
@@ -268,7 +339,7 @@ impl AudioCaptureManager {
             .capture_thread
             .lock()
             .unwrap_or_else(|e| e.into_inner()) = Some(handle);
-        *self.stop_tx.lock().unwrap_or_else(|e| e.into_inner()) = Some(stop_tx);
+        *self.event_tx.lock().unwrap_or_else(|e| e.into_inner()) = Some(event_tx);
 
         // Attendre le résultat de l'init (borné : ne jamais bloquer l'appelant)
         match init_rx.recv_timeout(std::time::Duration::from_secs(5)) {
@@ -292,7 +363,7 @@ impl AudioCaptureManager {
         device_id: Option<&str>,
         running: &Arc<AtomicBool>,
         shared_state: &Arc<Mutex<AudioState>>,
-        last_error: &Arc<Mutex<Option<String>>>,
+        event_tx: std::sync::mpsc::Sender<CaptureEvent>,
     ) -> Result<(cpal::Stream, f64), String> {
         let host = cpal::default_host();
         let devices: Vec<_> = match host.devices() {
@@ -323,7 +394,7 @@ impl AudioCaptureManager {
                 &supported_config.into(),
                 running,
                 shared_state,
-                last_error,
+                event_tx.clone(),
                 |s: f32| s as f64,
             ),
             SampleFormat::I16 => build_stream_generic(
@@ -331,7 +402,7 @@ impl AudioCaptureManager {
                 &supported_config.into(),
                 running,
                 shared_state,
-                last_error,
+                event_tx.clone(),
                 |s: i16| s as f64 / i16::MAX as f64,
             ),
             SampleFormat::U16 => build_stream_generic(
@@ -339,7 +410,7 @@ impl AudioCaptureManager {
                 &supported_config.into(),
                 running,
                 shared_state,
-                last_error,
+                event_tx.clone(),
                 |s: u16| (s as f64 - u16::MAX as f64 / 2.0) / (u16::MAX as f64 / 2.0),
             ),
             other => return Err(format!("unsupported sample format: {other:?}")),
@@ -362,12 +433,12 @@ impl AudioCaptureManager {
         self.running.store(false, Ordering::SeqCst);
         // Signaler le stop au thread puis attendre la fin (drop du stream)
         if let Some(tx) = self
-            .stop_tx
+            .event_tx
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .take()
         {
-            let _ = tx.send(());
+            let _ = tx.send(CaptureEvent::Stop);
         }
         if let Some(handle) = self
             .capture_thread
@@ -407,6 +478,12 @@ impl AudioCaptureManager {
             .take()
     }
 
+    /// Consomme le flag de reconnexion réussie (une seule notification) —
+    /// le poller émet `audio-recovered` vers le frontend.
+    pub fn take_recovered(&self) -> bool {
+        self.recovered.swap(false, Ordering::SeqCst)
+    }
+
     pub fn sample_rate(&self) -> f64 {
         *self.sample_rate.lock().unwrap_or_else(|e| e.into_inner())
     }
@@ -425,7 +502,7 @@ fn build_stream_generic<S, F>(
     config: &cpal::StreamConfig,
     running: &Arc<AtomicBool>,
     shared_state: &Arc<Mutex<AudioState>>,
-    last_error: &Arc<Mutex<Option<String>>>,
+    event_tx: std::sync::mpsc::Sender<CaptureEvent>,
     convert: F,
 ) -> Result<cpal::Stream, AudioCaptureError>
 where
@@ -441,8 +518,6 @@ where
     let hop_size = fft_size / 2;
     let shared_state = shared_state.clone();
     let running = running.clone();
-    let running_for_err = running.clone();
-    let last_error = last_error.clone();
 
     let mut planner = RealFftPlanner::<f64>::new();
     let r2c = planner.plan_fft_forward(fft_size);
@@ -564,15 +639,11 @@ where
                 }
             }
         },
-        // Erreur stream (ex: device débranché) — surface au frontend :
-        // on marque le manager comme arrêté et on stocke l'erreur pour que
-        // le poller émette `audio-error`. TODO(auto-reconnect): relancer
-        // init_stream sur le même device après un délai — pour l'instant
-        // l'utilisateur doit re-cliquer sur start.
+        // Erreur stream (ex: device débranché) — on notifie le thread de
+        // capture qui drop le stream et retente init_stream en backoff ;
+        // c'est lui qui publie `last_error`/`recovered` pour le poller.
         move |err| {
-            eprintln!("[WARN] Audio stream error (fatal): {err}");
-            *last_error.lock().unwrap_or_else(|e| e.into_inner()) = Some(err.to_string());
-            running_for_err.store(false, Ordering::SeqCst);
+            let _ = event_tx.send(CaptureEvent::StreamDied(err.to_string()));
         },
         None,
     )?;
