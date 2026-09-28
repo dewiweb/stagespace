@@ -365,81 +365,25 @@ impl Validator {
     }
 
     /// Un type produit une trajectoire connectable à un modifier natif —
-    /// mirror des arms ci-dessous dont les cibles incluent les modifiers.
+    /// dérivé du `NodeSpec` (node_spec.rs), anciennement une liste explicite.
     fn feeds_modifier(t: &NodeType) -> bool {
-        matches!(
-            t,
-            NodeType::Circular
-                | NodeType::Elliptical
-                | NodeType::Spiral
-                | NodeType::Lissajous
-                | NodeType::Figure8
-                | NodeType::Linear
-                | NodeType::Oscillation
-                | NodeType::PerlinNoise
-                | NodeType::Formation
-                | NodeType::Converge
-                | NodeType::Pendulum
-                | NodeType::RoseCurve
-                | NodeType::Helix
-                | NodeType::CustomTrajectory
-                | NodeType::BPM
-                | NodeType::AudioAmplitude
-                | NodeType::Wave
-                | NodeType::AudioSpectrum
-                | NodeType::OSCInput
-                | NodeType::EvaluateSpline
-                | NodeType::TrimSpline
-                | NodeType::OffsetSpline
-                | NodeType::DrawSpline
-                | NodeType::TimeFalloff
-                | NodeType::PointDistanceFalloff
-                | NodeType::DirectionalFalloff
-                | NodeType::AudioAmplitudeFalloff
-                | NodeType::Scale
-                | NodeType::Rotate
-                | NodeType::Offset
-                | NodeType::PhaseShift
-                | NodeType::Mirror
-                | NodeType::Clamp
-                | NodeType::LFO
-                | NodeType::Jitter
-                | NodeType::MoveRef
-                | NodeType::Plugin
-        )
+        crate::node_spec::node_spec(t).feeds_modifier()
     }
 
     /// Un type produit une trajectoire connectable à un composite natif —
-    /// feeds_modifier + physics + composites, moins les falloffs limités
-    /// (DirectionalFalloff/AudioAmplitudeFalloff ne ciblent que des
-    /// modifiers natifs).
+    /// feeds_modifier + physics + composites, moins les falloffs limités.
     fn feeds_composite(t: &NodeType) -> bool {
-        (Self::feeds_modifier(t)
-            || matches!(
-                t,
-                NodeType::Bouncing
-                    | NodeType::Spring
-                    | NodeType::Follow
-                    | NodeType::Swarm
-                    | NodeType::Avoidance
-                    | NodeType::VectorField
-                    | NodeType::Mix
-                    | NodeType::Group
-                    | NodeType::Sequence
-                    | NodeType::Crossfade
-            ))
-            && !matches!(
-                t,
-                NodeType::DirectionalFalloff | NodeType::AudioAmplitudeFalloff
-            )
+        crate::node_spec::node_spec(t).feeds_composite()
     }
 
-    /// Vérifie si une connexion entre deux types de nœuds est valide
+    /// Vérifie si une connexion entre deux types de nœuds est valide —
+    /// délégué au `Feeds` déclaratif du `NodeSpec` (node_spec.rs).
     fn is_valid_connection(
         from_type: &NodeType,
         to_type: &NodeType,
         to_plugin_kind: Option<crate::plugins::PluginKind>,
     ) -> bool {
+        use crate::node_spec::node_spec;
         // Plugin WASM : le kind du manifeste détermine qui peut l'alimenter.
         // Kind inconnu (registry non branché) → permissif ; l'arité exacte
         // est garantie au compile.
@@ -457,145 +401,7 @@ impl Validator {
                 }
             };
         }
-        match from_type {
-            // Moteurs peuvent connecter à Output, Mix, Group, Sequence, Crossfade, modifiers
-            NodeType::Circular | NodeType::Elliptical | NodeType::Spiral | NodeType::Lissajous | NodeType::Figure8
-            | NodeType::Linear | NodeType::Oscillation | NodeType::PerlinNoise | NodeType::Formation
-            | NodeType::Converge | NodeType::Pendulum | NodeType::RoseCurve | NodeType::Helix
-            | NodeType::CustomTrajectory | NodeType::BPM | NodeType::AudioAmplitude | NodeType::Wave
-            // AudioSpectrum/OSCInput sont des engines compilés produisant des
-            // positions — pas des sources décoratives : ils atteignent Output
-            // comme tout autre moteur. (Auparavant limités aux falloffs, des
-            // edges qui ne transportaient aucune donnée.)
-            | NodeType::AudioSpectrum | NodeType::OSCInput | NodeType::Plugin
-            | NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline => {
-                matches!(to_type,
-                    NodeType::Output | NodeType::Mix | NodeType::Group | NodeType::Sequence | NodeType::Crossfade |
-                    NodeType::Scale | NodeType::Rotate | NodeType::Offset | NodeType::PhaseShift
-                    | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
-                )
-            }
-
-            // DrawSpline = source de données spline, peut alimenter EvaluateSpline/TrimSpline/OffsetSpline
-            // ou les mêmes cibles que les moteurs
-            NodeType::DrawSpline => {
-                matches!(to_type,
-                    NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline |
-                    NodeType::Output | NodeType::Mix | NodeType::Group | NodeType::Sequence | NodeType::Crossfade |
-                    NodeType::Scale | NodeType::Rotate | NodeType::Offset | NodeType::PhaseShift
-                    | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
-                )
-            }
-
-            // Falloffs implémentés
-            NodeType::TimeFalloff | NodeType::PointDistanceFalloff => {
-                matches!(to_type,
-                    NodeType::Output | NodeType::Mix | NodeType::Group | NodeType::Sequence | NodeType::Crossfade |
-                    NodeType::Scale | NodeType::Rotate | NodeType::Offset | NodeType::PhaseShift
-                    | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
-                )
-            }
-
-            // Moteurs physique
-            NodeType::Bouncing | NodeType::Spring | NodeType::Follow | NodeType::Swarm | NodeType::Avoidance | NodeType::VectorField => {
-                matches!(
-                    to_type,
-                    NodeType::Output | NodeType::Mix | NodeType::Group | NodeType::Sequence | NodeType::Crossfade
-                )
-            }
-
-            // Splines : DrawSpline est une source (pas d'input), les autres sont des moteurs
-            // (déjà couverts par le match des moteurs ci-dessus)
-
-            // Falloffs
-            NodeType::DirectionalFalloff | NodeType::AudioAmplitudeFalloff => {
-                matches!(to_type, NodeType::Scale | NodeType::Rotate | NodeType::Offset)
-            }
-
-            // Modificateurs
-            NodeType::Scale | NodeType::Rotate | NodeType::Offset | NodeType::PhaseShift
-            | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
-            // Post-processing nodes (graph global)
-            | NodeType::RadiusScale | NodeType::HeightOffset | NodeType::PerTrackDepth
-            | NodeType::Barycenter | NodeType::AudioFalloff | NodeType::ManualPosition
-            | NodeType::Zone | NodeType::Velocity => {
-                matches!(to_type, NodeType::Output | NodeType::Mix | NodeType::Group | NodeType::Crossfade
-                    | NodeType::Scale | NodeType::Rotate | NodeType::Offset | NodeType::PhaseShift
-                    | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
-                    | NodeType::RadiusScale | NodeType::HeightOffset | NodeType::PerTrackDepth
-                    | NodeType::Barycenter | NodeType::AudioFalloff | NodeType::ManualPosition
-                    | NodeType::Zone | NodeType::Velocity)
-            }
-
-            // Structurels
-            NodeType::Objects => {
-                matches!(to_type, NodeType::Circular | NodeType::Elliptical | NodeType::Spiral | NodeType::Lissajous | NodeType::Figure8
-                    | NodeType::Linear | NodeType::Oscillation | NodeType::Formation | NodeType::PerlinNoise | NodeType::Converge
-                    | NodeType::Pendulum | NodeType::RoseCurve | NodeType::Helix | NodeType::Bouncing
-                    | NodeType::Spring | NodeType::Follow | NodeType::Swarm | NodeType::Avoidance | NodeType::VectorField
-                    | NodeType::CustomTrajectory | NodeType::Wave
-                    | NodeType::BPM | NodeType::AudioAmplitude
-                    | NodeType::AudioSpectrum | NodeType::OSCInput | NodeType::Plugin
-                    | NodeType::DrawSpline | NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline
-                    // Les falloffs sont des engines autonomes — ils résolvent n_objects
-                    // via l'edge Objects comme les autres moteurs.
-                    | NodeType::TimeFalloff | NodeType::PointDistanceFalloff
-                    | NodeType::DirectionalFalloff | NodeType::AudioAmplitudeFalloff)
-            }
-            NodeType::Duration => {
-                matches!(to_type, NodeType::Circular | NodeType::Elliptical | NodeType::Spiral | NodeType::Lissajous | NodeType::Figure8
-                    | NodeType::Linear | NodeType::Oscillation | NodeType::Formation | NodeType::PerlinNoise | NodeType::Converge
-                    | NodeType::Pendulum | NodeType::RoseCurve | NodeType::Helix
-                    | NodeType::CustomTrajectory | NodeType::Wave
-                    | NodeType::BPM | NodeType::AudioAmplitude
-                    | NodeType::AudioSpectrum | NodeType::OSCInput | NodeType::Plugin
-                    | NodeType::Bouncing | NodeType::Spring | NodeType::Follow | NodeType::Swarm | NodeType::Avoidance | NodeType::VectorField
-                    | NodeType::DrawSpline | NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline
-                    // Les falloffs ont un port 'duration' — sinon le paramètre
-                    // resterait figé à sa valeur par défaut.
-                    | NodeType::TimeFalloff | NodeType::PointDistanceFalloff
-                    | NodeType::DirectionalFalloff | NodeType::AudioAmplitudeFalloff)
-            }
-            NodeType::Output => false, // Output n'a pas de sortie
-            // Input (graph global) : peut connecter vers n'importe quel post-process node
-            NodeType::Input => {
-                matches!(to_type,
-                    NodeType::Scale | NodeType::Rotate | NodeType::Offset | NodeType::PhaseShift
-                    | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
-                    | NodeType::RadiusScale | NodeType::HeightOffset | NodeType::PerTrackDepth
-                    | NodeType::Barycenter | NodeType::AudioFalloff | NodeType::ManualPosition
-                    | NodeType::Zone | NodeType::Velocity
-                    | NodeType::Output
-                )
-            }
-            // MoveRef : source qui produit des positions (comme un engine).
-            // Peut connecter vers les post-process nodes, Output, et composites.
-            NodeType::MoveRef => {
-                matches!(to_type,
-                    NodeType::Scale | NodeType::Rotate | NodeType::Offset | NodeType::PhaseShift
-                    | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
-                    | NodeType::RadiusScale | NodeType::HeightOffset | NodeType::PerTrackDepth
-                    | NodeType::Barycenter | NodeType::AudioFalloff | NodeType::ManualPosition
-                    | NodeType::Zone | NodeType::Velocity
-                    | NodeType::Output | NodeType::Mix | NodeType::Group | NodeType::Crossfade
-                )
-            }
-            // Merge : équivalent à Input (représente le MergeRuntime).
-            NodeType::Merge => {
-                matches!(to_type,
-                    NodeType::Scale | NodeType::Rotate | NodeType::Offset | NodeType::PhaseShift
-                    | NodeType::Mirror | NodeType::Clamp | NodeType::LFO | NodeType::Jitter
-                    | NodeType::RadiusScale | NodeType::HeightOffset | NodeType::PerTrackDepth
-                    | NodeType::Barycenter | NodeType::AudioFalloff | NodeType::ManualPosition
-                    | NodeType::Zone | NodeType::Velocity
-                    | NodeType::Output
-                )
-            }
-            NodeType::Mix | NodeType::Group | NodeType::Sequence | NodeType::Crossfade => {
-                // Composites peuvent connecter à Output ou à d'autres composites
-                matches!(to_type, NodeType::Output | NodeType::Mix | NodeType::Group | NodeType::Sequence | NodeType::Crossfade)
-            }
-        }
+        node_spec(from_type).can_feed(node_spec(to_type))
     }
 
     /// Vérifie que les noms de ports utilisés par les edges existent pour les types connectés.
@@ -644,15 +450,13 @@ impl Validator {
         }
     }
 
-    /// Indique si un type de nœud expose un port de sortie avec ce nom.
+    /// Indique si un type de nœud expose un port de sortie avec ce nom —
+    /// dérivé de `NodeSpec::outputs` (Output est le seul terminal).
     fn has_output_port(node_type: &NodeType, port: &str) -> bool {
-        match node_type {
-            // Output est terminal : il n'a pas de sortie.
-            NodeType::Output => false,
-            // Tous les autres nœuds émettent actuellement sur un seul port "output".
-            _ if port == "output" => true,
-            _ => false,
-        }
+        crate::node_spec::node_spec(node_type)
+            .outputs
+            .iter()
+            .any(|p| p == port)
     }
 
     /// Indique si un type de nœud expose un port d'entrée avec ce nom.
@@ -675,85 +479,11 @@ impl Validator {
             };
             return inputs.contains(&port);
         }
-        let inputs: &[&str] = match node_type {
-            // Sources / terminaux : aucune entrée
-            NodeType::Objects
-            | NodeType::Duration
-            | NodeType::Input
-            | NodeType::MoveRef
-            | NodeType::Merge => &[],
-
-            // Moteurs : entrée générale + durée depuis un nœud Duration
-            NodeType::Circular
-            | NodeType::Elliptical
-            | NodeType::Spiral
-            | NodeType::Lissajous
-            | NodeType::Figure8
-            | NodeType::Linear
-            | NodeType::Oscillation
-            | NodeType::Formation
-            | NodeType::PerlinNoise
-            | NodeType::Converge
-            | NodeType::Pendulum
-            | NodeType::RoseCurve
-            | NodeType::Helix
-            | NodeType::Bouncing
-            | NodeType::Spring
-            | NodeType::Follow
-            | NodeType::Swarm
-            | NodeType::Avoidance
-            | NodeType::VectorField
-            | NodeType::CustomTrajectory
-            | NodeType::Wave
-            | NodeType::BPM
-            | NodeType::AudioAmplitude
-            // AudioSpectrum/OSCInput sont des engines : Objects/Duration
-            // peuvent les alimenter comme les autres moteurs.
-            | NodeType::AudioSpectrum
-            | NodeType::OSCInput
-            | NodeType::TimeFalloff
-            | NodeType::PointDistanceFalloff
-            | NodeType::DirectionalFalloff
-            | NodeType::AudioAmplitudeFalloff
-            | NodeType::DrawSpline => &["input", "duration"],
-
-            // Modificateurs : une seule entrée
-            NodeType::Scale
-            | NodeType::Rotate
-            | NodeType::Offset
-            | NodeType::PhaseShift
-            | NodeType::Mirror
-            | NodeType::Clamp
-            | NodeType::LFO
-            | NodeType::Jitter
-            | NodeType::RadiusScale
-            | NodeType::HeightOffset
-            | NodeType::PerTrackDepth
-            | NodeType::Barycenter
-            | NodeType::AudioFalloff
-            | NodeType::ManualPosition
-            | NodeType::Zone
-            | NodeType::Velocity
-            | NodeType::Output => &["input"],
-
-            // Splines : input (trajectoire/objets) + spline (données depuis
-            // DrawSpline) + duration. Sans le port 'spline' dédié, DrawSpline
-            // et Objects se disputent 'input' → arité invalide.
-            NodeType::EvaluateSpline | NodeType::TrimSpline | NodeType::OffsetSpline => {
-                &["input", "duration", "spline"]
-            }
-
-            // Composites binaires : acceptent input, input_a, input_b
-            // (input_a/input_b sont les ports visuels A/B ; le compiler
-            // résout A/B par nom de port via Graph::get_binary_inputs)
-            NodeType::Mix | NodeType::Group | NodeType::Sequence | NodeType::Crossfade => {
-                &["input", "input_a", "input_b"]
-            }
-
-            // Traités dans le early-return kind-aware ci-dessus.
-            NodeType::Plugin => &[],
-        };
-        inputs.contains(&port)
+        // Natifs : ports déclarés dans le NodeSpec (node_spec.rs).
+        crate::node_spec::node_spec(node_type)
+            .inputs
+            .iter()
+            .any(|p| p == port)
     }
 
     /// Vérifie l'arité des entrées :
@@ -1089,80 +819,13 @@ impl Validator {
 
 /// Vrai si le node n'a de sens que dans le graph global (post-processing).
 fn is_global_only_node(node_type: &NodeType) -> bool {
-    matches!(
-        node_type,
-        NodeType::Input
-            | NodeType::MoveRef
-            | NodeType::Merge
-            | NodeType::RadiusScale
-            | NodeType::HeightOffset
-            | NodeType::PerTrackDepth
-            | NodeType::Barycenter
-            | NodeType::AudioFalloff
-            | NodeType::ManualPosition
-            | NodeType::Zone
-            | NodeType::Velocity
-    )
+    crate::node_spec::node_spec(node_type).scope == crate::node_spec::NodeScope::GlobalOnly
 }
 
 /// Vrai si le node n'a de sens que dans un sub-graph (mouvement).
+/// Dérivé de `NodeSpec::scope` — inclut les modifiers non compilables en
+/// post-process (PhaseShift/LFO/Jitter) et les composites binaires (le
+/// graph global est une chaîne linéaire, pas de sémantique A/B).
 fn is_subgraph_only_node(node_type: &NodeType) -> bool {
-    matches!(
-        node_type,
-        // Structurels sub-graph
-        NodeType::Objects
-            | NodeType::Duration
-            // Moteurs math
-            | NodeType::Circular
-            | NodeType::Elliptical
-            | NodeType::Spiral
-            | NodeType::Lissajous
-            | NodeType::Figure8
-            | NodeType::Linear
-            | NodeType::Oscillation
-            | NodeType::Formation
-            | NodeType::PerlinNoise
-            | NodeType::Converge
-            | NodeType::Pendulum
-            | NodeType::RoseCurve
-            | NodeType::Helix
-            // Moteurs physique
-            | NodeType::Bouncing
-            | NodeType::Spring
-            | NodeType::Follow
-            | NodeType::Swarm
-            | NodeType::Avoidance
-            | NodeType::VectorField
-            // Splines
-            | NodeType::DrawSpline
-            | NodeType::EvaluateSpline
-            | NodeType::TrimSpline
-            | NodeType::OffsetSpline
-            | NodeType::CustomTrajectory
-            // Falloffs
-            | NodeType::TimeFalloff
-            | NodeType::PointDistanceFalloff
-            | NodeType::DirectionalFalloff
-            | NodeType::AudioAmplitudeFalloff
-            // Sources
-            | NodeType::BPM
-            | NodeType::AudioAmplitude
-            | NodeType::AudioSpectrum
-            | NodeType::OSCInput
-            | NodeType::Wave
-            // Plugin WASM : engine de sub-graph uniquement
-            | NodeType::Plugin
-            // Modifiers/compilables uniquement dans un sub-graph : absents de
-            // is_post_process_node → un graph global les accepterait à la
-            // validation puis échouerait à la compile.
-            | NodeType::PhaseShift
-            | NodeType::LFO
-            | NodeType::Jitter
-            // Composites binaires : le graph global est une chaîne linéaire
-            // (pas de sémantique A/B en post-processing).
-            | NodeType::Mix
-            | NodeType::Group
-            | NodeType::Sequence
-            | NodeType::Crossfade
-    )
+    crate::node_spec::node_spec(node_type).scope == crate::node_spec::NodeScope::SubOnly
 }

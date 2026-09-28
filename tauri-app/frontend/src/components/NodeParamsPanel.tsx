@@ -40,7 +40,10 @@ export const NodeParamsPanel: React.FC<{
   const [paramNodeId, setParamNodeId] = React.useState<string | null>(null);
   // Défaut : le premier node engine — sinon le premier node paramétrable.
   const defaultParamNode = React.useMemo(
-    () => paramNodes.find((n) => ENGINE_TYPES.has((n.data as GraphNodeData)?.type ?? '')) ?? paramNodes[0] ?? null,
+    () => paramNodes.find((n) => {
+      const t = (n.data as GraphNodeData)?.type;
+      return !!t && ENGINE_TYPES.has(t);
+    }) ?? paramNodes[0] ?? null,
     [paramNodes],
   );
   React.useEffect(() => { setParamNodeId(null); }, [resetKey]);

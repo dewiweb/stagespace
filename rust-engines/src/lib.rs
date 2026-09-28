@@ -16,6 +16,7 @@ pub mod logging;
 pub mod merge_runtime;
 pub mod modulator;
 pub mod node_params;
+pub mod node_spec;
 pub mod osc_receiver;
 pub mod osc_sender;
 pub mod patch;

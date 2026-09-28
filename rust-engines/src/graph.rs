@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::hash::Hash;
+use ts_rs::TS;
 use uuid::Uuid;
 
 /// Identifiant unique pour un nœud
@@ -24,7 +25,8 @@ impl Default for NodeId {
 }
 
 /// Types de nœuds disponibles
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub enum NodeType {
     // Nœuds structurels
     Objects,
