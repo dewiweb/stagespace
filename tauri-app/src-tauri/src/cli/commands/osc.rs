@@ -56,8 +56,13 @@ pub fn cmd_osc_listen(args: &[&str]) -> Result<String, String> {
                 }
                 last_packet_time = Some(now);
 
-                if let Ok((_, rosc::OscPacket::Message(msg))) = rosc::decoder::decode_udp(&buf[..n])
-                {
+                // send_state émet un bundle par objet (T6a) — on déballe
+                // récursivement pour valider chaque message contenu.
+                let mut msgs = Vec::new();
+                if let Ok((_, packet)) = rosc::decoder::decode_udp(&buf[..n]) {
+                    flatten_packet(&packet, &mut msgs);
+                }
+                for msg in msgs {
                     let args: Vec<String> = msg
                         .args
                         .iter()
@@ -196,6 +201,19 @@ pub fn cmd_osc_listen(args: &[&str]) -> Result<String, String> {
     Ok(out)
 }
 
+/// Déballe un paquet OSC en messages — `send_state` émet un bundle par
+/// objet (T6a) ; le validateur descend récursivement dans les bundles.
+fn flatten_packet(packet: &rosc::OscPacket, out: &mut Vec<rosc::OscMessage>) {
+    match packet {
+        rosc::OscPacket::Message(m) => out.push(m.clone()),
+        rosc::OscPacket::Bundle(b) => {
+            for p in &b.content {
+                flatten_packet(p, out);
+            }
+        }
+    }
+}
+
 /// Extrait le track ID d'une adresse OSC
 pub fn extract_track_id(addr: &str) -> Option<u32> {
     // /track/{id}/xyz, /MultiEncoder/{id}/aed, /source/{id}/xyz, /adm/source/{id}/aed, /object/{id}/xyz
@@ -320,9 +338,11 @@ pub fn cmd_osc_validate(args: &[&str]) -> Result<String, String> {
                         first_packet = Some(now);
                     }
                     last_packet = Some(now);
-                    if let Ok((_, rosc::OscPacket::Message(msg))) =
-                        rosc::decoder::decode_udp(&buf[..n])
-                    {
+                    let mut msgs = Vec::new();
+                    if let Ok((_, packet)) = rosc::decoder::decode_udp(&buf[..n]) {
+                        flatten_packet(&packet, &mut msgs);
+                    }
+                    for msg in msgs {
                         addresses.insert(msg.addr.clone());
                         if let Some(id) = extract_track_id(&msg.addr) {
                             track_ids.insert(id);
