@@ -395,12 +395,21 @@ export const NodeEditor: React.FC = () => {
     selectedEdge && selectedEdge.targetHandle !== 'duration' && selectedEdge.targetHandle !== 'spline'
       ? selectedEdge.id
       : null;
+  // Color-coding par port : une edge vers 'duration' porte un temps, vers
+  // 'spline' une géométrie — visuellement distinctes des edges trajectoire.
+  const portEdgeClass = (handle: string | null | undefined) =>
+    handle === 'duration' ? 'rf-edge-duration' :
+    handle === 'spline' ? 'rf-edge-spline' :
+    '';
   const decoratedEdges = useMemo(
     () =>
       displayEdges.map((e) => ({
         ...e,
         animated: edgesLive,
-        className: e.id === insertableEdgeId ? 'rf-edge-insert-target' : undefined,
+        className: [
+          portEdgeClass(e.targetHandle),
+          e.id === insertableEdgeId ? 'rf-edge-insert-target' : '',
+        ].filter(Boolean).join(' ') || undefined,
       })),
     [displayEdges, edgesLive, insertableEdgeId],
   );
@@ -682,6 +691,7 @@ export const NodeEditor: React.FC = () => {
             <div><span className="text-gray-400 font-semibold">Chain:</span> Engine → Modifier → Output</div>
             <div><span className="text-gray-400 font-semibold">Blend:</span> 2 Engines → Mix → Output</div>
             <div><span className="text-gray-400 font-semibold">Time:</span> 2 Engines → Sequence/Crossfade</div>
+            <div className="pt-1"><span className="text-gray-400 font-semibold">Edges:</span> <span className="text-gray-300">gray</span> trajectory · <span className="text-amber-500">amber dashes</span> duration · <span className="text-violet-400">violet</span> spline</div>
             <div className="pt-1 text-gray-500">Drag from a node's bottom handle to connect. Invalid connections are blocked.</div>
           </div>
         </div>

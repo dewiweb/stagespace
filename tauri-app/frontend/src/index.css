@@ -147,6 +147,19 @@ body {
   }
 }
 
+/* Color-coding par port — une edge 'duration' porte un temps, une edge
+   'spline' une géométrie : elles ne doivent pas ressembler aux edges
+   trajectoire (gris/bleu par défaut). */
+.react-flow__edge.rf-edge-duration .react-flow__edge-path {
+  stroke: #f59e0b !important; /* amber — temps */
+  stroke-dasharray: 2 4;
+}
+
+.react-flow__edge.rf-edge-spline .react-flow__edge-path {
+  stroke: #a78bfa !important; /* violet — géométrie spline */
+  stroke-width: 2;
+}
+
 /* ─── Live Mode — UI agrandie pour conditions de spectacle ───
    Appliqué sur le root de PerformView : lisibilité à distance
    d'opérateur (~2 m). Ne PAS ajouter de finesse — tout doit rester
