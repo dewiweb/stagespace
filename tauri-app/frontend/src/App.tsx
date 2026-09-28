@@ -33,14 +33,14 @@ function App() {
   const oscInPort = useGraphStore((s) => s.oscInPort);
   // Layout persisté — l'opérateur retrouve son workspace au prochain
   // lancement (safeStorage : quota/corruption gérés).
-  const [leftCollapsed, setLeftCollapsed] = usePersistedState('ss-layout-leftCollapsed', false);
-  const [rightCollapsed, setRightCollapsed] = usePersistedState('ss-layout-rightCollapsed', false);
-  const [rightWidth, setRightWidth] = usePersistedState('ss-layout-rightWidth', 288);
-  const [leftWidth, setLeftWidth] = usePersistedState('ss-layout-leftWidth', 256);
+  const [leftCollapsed, setLeftCollapsed] = usePersistedState<boolean>('ss-layout-leftCollapsed', false);
+  const [rightCollapsed, setRightCollapsed] = usePersistedState<boolean>('ss-layout-rightCollapsed', false);
+  const [rightWidth, setRightWidth] = usePersistedState<number>('ss-layout-rightWidth', 288);
+  const [leftWidth, setLeftWidth] = usePersistedState<number>('ss-layout-leftWidth', 256);
   const resizingRef = React.useRef(false);
   const resizingSideRef = React.useRef<'left' | 'right' | 'expert'>('right');
   // Ratio NodeEditor/Scene3D en mode Expert (0.5 = moitié/moitié)
-  const [expertSplit, setExpertSplit] = usePersistedState('ss-layout-expertSplit', 0.5);
+  const [expertSplit, setExpertSplit] = usePersistedState<number>('ss-layout-expertSplit', 0.5);
   const centerColRef = React.useRef<HTMLDivElement | null>(null);
   // Focus éditeur : les panneaux latéraux se retirent et le NodeEditor
   // prend toute la rangée — la navigation dans le graphe est le besoin
@@ -49,11 +49,11 @@ function App() {
   // Focus réellement actif : editorFocus n'a de sens qu'en mode Expert.
   const focusActive = showExpert && editorFocus;
   // Sections collapsibles du panneau gauche
-  const [graphsExpanded, setGraphsExpanded] = usePersistedState('ss-layout-graphsExpanded', true);
-  const [movesExpanded, setMovesExpanded] = usePersistedState('ss-layout-movesExpanded', true);
+  const [graphsExpanded, setGraphsExpanded] = usePersistedState<boolean>('ss-layout-graphsExpanded', true);
+  const [movesExpanded, setMovesExpanded] = usePersistedState<boolean>('ss-layout-movesExpanded', true);
   // AudioPanel = monitoring/config — collapsible pour rendre la hauteur à
   // l'Inspector (outil de travail principal de la colonne droite).
-  const [audioExpanded, setAudioExpanded] = usePersistedState('ss-layout-audioExpanded', true);
+  const [audioExpanded, setAudioExpanded] = usePersistedState<boolean>('ss-layout-audioExpanded', true);
   // Premier lancement : proposer le show d'exemple bundle (évalué une fois)
   const [showWelcome, setShowWelcome] = React.useState(shouldShowWelcome);
 
