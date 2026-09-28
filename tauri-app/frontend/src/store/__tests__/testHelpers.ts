@@ -26,6 +26,8 @@ export function resetStore() {
     canUndo: false,
     canRedo: false,
     isPlaying: false,
+    audioListening: false,
+    audioState: { bpm: null, amplitude: null, spectrum: null },
     status: 'idle',
     movements: [],
     savedGraphs: {},

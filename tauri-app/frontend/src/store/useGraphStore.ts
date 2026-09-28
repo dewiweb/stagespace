@@ -14,7 +14,7 @@ import {
   MarkerType,
 } from 'reactflow';
 import { createPerfSlice, type PerfSlice } from './slices/perfSlice';
-import { createAudioSlice, type AudioSlice } from './slices/audioSlice';
+import { createAudioSlice, type AudioSlice, type AudioState } from './slices/audioSlice';
 import { createOscSlice, type OscSlice } from './slices/oscSlice';
 import { createPersistenceSlice, type PersistenceSlice } from './slices/persistenceSlice';
 import { createMacrosSlice, type MacrosSlice } from './slices/macrosSlice';
@@ -514,6 +514,22 @@ export const useAudioErrorListener = () => {
       unlistenRecovered.then((fn) => fn()).catch(() => {});
     };
   }, []);
+};
+
+// ── Audio state listener — flux `audio-state-update` (amplitude/BPM/spectre).
+// Monté au niveau App, pas dans AudioPanel : le panneau peut être replié,
+// masqué ou absent (Perform) alors que des CustomNode AudioSpectrum affichent
+// encore le spectre. Le listener vit tant que l'app vit.
+export const useAudioStateListener = () => {
+  const setAudioState = useGraphStore((s) => s.setAudioState);
+  React.useEffect(() => {
+    const unlisten = listen<AudioState>('audio-state-update', (event) => {
+      setAudioState(event.payload);
+    });
+    return () => {
+      unlisten.then((fn) => fn()).catch(() => {});
+    };
+  }, [setAudioState]);
 };
 
 // ── Cue recall listener — surface les respawns échoués d'un recall partiel.

@@ -19,7 +19,7 @@ import { Workflow, ChevronRight, ChevronDown, PanelRightClose, PanelLeftClose, P
 import { useLiveShortcuts, usePerfStatsPolling } from './hooks/useLiveShortcuts';
 import { prepareGraphForSave } from './components/nodeParamSchema';
 import { usePersistedState } from './utils/usePersistedState';
-import { useGraphStore, useMovementPositionsListener, useAudioErrorListener, useCueRecallListener, useSupervisorListener } from './store/useGraphStore';
+import { useGraphStore, useMovementPositionsListener, useAudioErrorListener, useAudioStateListener, useCueRecallListener, useSupervisorListener } from './store/useGraphStore';
 import { useAnimationStore } from './store/useAnimationStore';
 
 function App() {
@@ -62,6 +62,9 @@ function App() {
   // Surface les pannes de capture audio (micro mort en show) — monté au niveau
   // App, pas AudioPanel, pour survivre au collapse du panneau droit.
   useAudioErrorListener();
+  // Flux audio-state-update (amplitude/BPM/spectre) — App-level pour la même
+  // raison : les CustomNode AudioSpectrum s'en nourrissent même panneau fermé.
+  useAudioStateListener();
   // Surface les recalls partiels (moves qui n'ont pas respawné).
   useCueRecallListener();
   // Events du superviseur backend : worker zombie arrêté, merge thread

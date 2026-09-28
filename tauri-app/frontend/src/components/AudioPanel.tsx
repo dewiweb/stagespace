@@ -1,6 +1,6 @@
 import React from 'react';
-import { safeInvoke as invoke, safeListen } from '../utils/tauri';
-import { useGraphStore, type AudioState } from '../store/useGraphStore';
+import { safeInvoke as invoke } from '../utils/tauri';
+import { useGraphStore } from '../store/useGraphStore';
 
 interface AudioDevice {
   id: string;
@@ -9,40 +9,30 @@ interface AudioDevice {
 
 export default function AudioPanel() {
   const audioState = useGraphStore((s) => s.audioState);
-  const setAudioState = useGraphStore((s) => s.setAudioState);
   const selectedAudioDeviceId = useGraphStore((s) => s.selectedAudioDeviceId);
   const setSelectedAudioDeviceId = useGraphStore((s) => s.setSelectedAudioDeviceId);
-  const [isListening, setIsListening] = React.useState(false);
+  // Le cycle de vie de la capture vit dans le store (audioListening +
+  // start/stopAudioCapture), pas dans ce composant : le backend capture tant
+  // que l'utilisateur ne stoppe pas explicitement — repli du panneau, volet
+  // droit masqué ou mode Perform ne doivent pas tuer l'entrée audio.
+  const isListening = useGraphStore((s) => s.audioListening);
+  const startAudioCapture = useGraphStore((s) => s.startAudioCapture);
+  const stopAudioCapture = useGraphStore((s) => s.stopAudioCapture);
   const [error, setError] = React.useState<string | null>(null);
   const [audioDevices, setAudioDevices] = React.useState<AudioDevice[]>([]);
   // Replié par défaut : la capture est un usage occasionnel, le panneau ne doit
-  // pas occuper ~40% de la colonne droite en permanence. Le composant reste
-  // monté quand collapsed — les hooks (capture, listeners) continuent de vivre.
+  // pas occuper ~40% de la colonne droite en permanence.
   const [collapsed, setCollapsed] = React.useState(true);
-
-  const stopListening = React.useCallback(async () => {
-    setIsListening(false);
-    try {
-      await invoke('stop_audio_capture', {});
-    } catch (e) {
-      console.error('[AudioPanel] stop_audio_capture failed:', e);
-    }
-    setAudioState({ bpm: null, amplitude: null, spectrum: null });
-  }, [setAudioState]);
 
   const startListening = React.useCallback(async () => {
     setError(null);
     try {
-      await invoke('start_audio_capture', {
-        deviceId: selectedAudioDeviceId,
-      });
-      setIsListening(true);
+      await startAudioCapture();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg ?? 'Failed to start audio capture');
-      setIsListening(false);
     }
-  }, [selectedAudioDeviceId]);
+  }, [startAudioCapture]);
 
   // Charger la liste des devices au montage
   React.useEffect(() => {
@@ -53,32 +43,6 @@ export default function AudioPanel() {
         const msg = e instanceof Error ? e.message : String(e);
         setError(`Audio device listing failed: ${msg}`);
       });
-  }, []);
-
-  // Écouter les mises à jour audio du backend
-  React.useEffect(() => {
-    let unlisten: (() => void) | null = null;
-    let cancelled = false;
-    safeListen<AudioState>('audio-state-update', (event) => {
-      setAudioState(event.payload);
-    }).then((fn) => {
-      if (cancelled) {
-        fn(); // cleanup immédiat si déjà unmounted
-      } else {
-        unlisten = fn;
-      }
-    });
-    return () => {
-      cancelled = true;
-      if (unlisten) unlisten();
-    };
-  }, [setAudioState]);
-
-  // Cleanup à la fermeture — toujours stopper la capture au démontage
-  React.useEffect(() => {
-    return () => {
-      invoke('stop_audio_capture', {}).catch(() => {});
-    };
   }, []);
 
   const amp = audioState.amplitude;
@@ -181,7 +145,7 @@ export default function AudioPanel() {
 
       <div className="mt-auto">
         <button
-          onClick={isListening ? stopListening : startListening}
+          onClick={isListening ? stopAudioCapture : startListening}
           disabled={audioDevices.length === 0}
           className={`w-full py-2 px-3 rounded-lg font-medium text-xs transition-all ${
             isListening
