@@ -695,6 +695,10 @@ export const NodeEditor: React.FC = () => {
           isValidConnection={checkValidConnection}
           nodeTypes={nodeTypes}
           fitView
+          /* minZoom bas : les gros graphes doivent pouvoir se dézoomer
+             largement pour la navigation d'ensemble (défaut 0.5 = bloquant). */
+          minZoom={0.15}
+          maxZoom={2}
           deleteKeyCode={['Delete', 'Backspace']}
           className="!bg-stagespace-bg"
         >

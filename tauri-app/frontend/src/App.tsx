@@ -41,6 +41,12 @@ function App() {
   // Ratio NodeEditor/Scene3D en mode Expert (0.5 = moitié/moitié)
   const [expertSplit, setExpertSplit] = React.useState(0.5);
   const centerColRef = React.useRef<HTMLDivElement | null>(null);
+  // Focus éditeur : les panneaux latéraux se retirent et le NodeEditor
+  // prend toute la rangée — la navigation dans le graphe est le besoin
+  // premier en Expert (Scene3D reste monté, masqué).
+  const [editorFocus, setEditorFocus] = React.useState(false);
+  // Focus réellement actif : editorFocus n'a de sens qu'en mode Expert.
+  const focusActive = showExpert && editorFocus;
   // Sections collapsibles du panneau gauche
   const [graphsExpanded, setGraphsExpanded] = React.useState(true);
   const [movesExpanded, setMovesExpanded] = React.useState(true);
@@ -112,6 +118,11 @@ function App() {
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
   };
+
+  // Le focus éditeur n'a de sens qu'en Expert — sortir du mode l'annule.
+  React.useEffect(() => {
+    if (!showExpert && editorFocus) setEditorFocus(false);
+  }, [showExpert, editorFocus]);
 
   const startExpertResize = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -211,8 +222,10 @@ function App() {
           ne doit pas démonter Toolbar/ToastContainer — panic Esc doit survivre) */}
       <div className="flex-1 flex overflow-hidden">
         <ErrorBoundary zone="Left panel">
-        {/* Colonne gauche : AnimationList + onglets secondaires (collapsible + redimensionnable) */}
-        {leftCollapsed ? (
+        {/* Colonne gauche : AnimationList + onglets secondaires (collapsible +
+            redimensionnable). En editorFocus elle se retire entièrement —
+            l'état collapse des deux côtés est préservé pour la restauration. */}
+        {!focusActive && (leftCollapsed ? (
           <button
             onClick={() => setLeftCollapsed(false)}
             className="w-7 border-r border-stagespace-border bg-stagespace-panel flex flex-col items-center pt-3 flex-shrink-0 hover:bg-gray-800 transition-colors group"
@@ -276,7 +289,7 @@ function App() {
             <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-stagespace-border group-hover:bg-blue-500" />
           </div>
           </>
-        )}
+        ))}
 
         </ErrorBoundary>
 
@@ -287,8 +300,24 @@ function App() {
           {showExpert ? (
             <div className="h-9 border-b border-stagespace-border flex items-center px-3 flex-shrink-0 gap-2">
               <span className="text-gray-300 text-xs font-medium">Expert — Node Editor</span>
+              <button
+                onClick={() => setEditorFocus(!editorFocus)}
+                className={`px-2 py-0.5 text-[10px] rounded font-medium flex items-center gap-1 transition-colors ${
+                  editorFocus
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-800 text-gray-400 hover:text-white'
+                }`}
+                title={editorFocus
+                  ? 'Exit focus — restore side panels and 3D preview'
+                  : 'Focus — hide side panels and 3D preview, editor takes the full row'}
+              >
+                {editorFocus ? <Minimize2 size={11} /> : <Maximize2 size={11} />}
+                Focus
+              </button>
               <div className="flex-1" />
-              <span className="text-gray-500 text-[10px]">Launch via MovesTable ▶</span>
+              {!editorFocus && (
+                <span className="text-gray-500 text-[10px]">Launch via MovesTable ▶</span>
+              )}
               <button
                 onClick={() => {
                   const { nodes, edges } = useGraphStore.getState();
@@ -329,15 +358,15 @@ function App() {
           <div ref={centerColRef} className="flex-1 flex min-h-0">
             {showExpert && (
               <div
-                style={{ width: `${expertSplit * 100}%` }}
-                className="min-w-[280px] border-r border-stagespace-border flex-shrink-0"
+                style={focusActive ? undefined : { width: `${expertSplit * 100}%` }}
+                className={`min-w-[280px] ${focusActive ? 'flex-1' : 'border-r border-stagespace-border flex-shrink-0'}`}
               >
                 <NodeEditor />
               </div>
             )}
             {/* Splitter Expert — poignée de redimensionnement NodeEditor/3D.
                 Scene3D reste monté (jamais démonté : la scène se réinitialise). */}
-            {showExpert && (
+            {showExpert && !focusActive && (
               <div
                 onMouseDown={startExpertResize}
                 onDoubleClick={() => setExpertSplit(0.5)}
@@ -347,8 +376,10 @@ function App() {
                 <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-stagespace-border group-hover:bg-purple-500" />
               </div>
             )}
-            {/* Scene3D toujours rendu au même endroit — pas de unmount/remount */}
-            <div className="flex-1 min-w-[200px] flex flex-col">
+            {/* Scene3D toujours rendu au même endroit — pas de unmount/remount.
+                En focus il est masqué (display:none) mais monté : le contexte
+                WebGL et la scène survivent à l'entrée/sortie du focus. */}
+            <div className={`flex-1 min-w-[200px] flex flex-col ${focusActive ? 'hidden' : ''}`}>
               {showExpert && (
                 <div className="h-7 border-b border-stagespace-border flex items-center px-2 bg-stagespace-panel flex-shrink-0">
                   <span className="text-gray-400 text-[10px] font-medium">3D Preview</span>
@@ -380,7 +411,7 @@ function App() {
 
         {/* Colonne droite : Inspector (collapsible + redimensionnable) */}
         <ErrorBoundary zone="Inspector">
-        {rightCollapsed ? (
+        {!focusActive && (rightCollapsed ? (
           <button
             onClick={() => setRightCollapsed(false)}
             className="w-7 border-l border-stagespace-border bg-stagespace-panel flex flex-col items-center pt-3 flex-shrink-0 hover:bg-gray-800 transition-colors group"
@@ -431,7 +462,7 @@ function App() {
             </div>
           </div>
           </>
-        )}
+        ))}
         </ErrorBoundary>
       </div>
         </>
