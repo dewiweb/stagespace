@@ -33,7 +33,7 @@ export function buildDefaultSignalGraph(): { nodes: Node[]; edges: Edge[] } {
     waveform: 'sine',
     frequency: 0.05,
     amplitude: 1.0,
-    offset: 0.0,
+    center: 0.0,
     phase: 0.0,
   });
   const map = makeNode('SignalMap', { x: 330, y: 200 }, {
