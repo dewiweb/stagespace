@@ -912,7 +912,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             NodeType::SignalTime, C::Signal, S::SignalOnly, F::Signal, NO_IN, false,
             "Elapsed time as signal — ramps, periodic patterns. wrap=0 → unbounded",
             vec![
-                ns("rate", "Rate", 0.1).d(1.0),
+                nrange("rate", "Rate", 0.1, 0.0, 10.0).d(1.0),
                 nmin("wrap", "Wrap (s, 0=none)", 0.1, 0.0).d(0.0),
             ],
         ),
@@ -921,10 +921,10 @@ fn build_catalog() -> Vec<NodeSpec> {
             "Low-frequency oscillator — periodic macro animation. The classic 'animate anything'",
             vec![
                 enm("waveform", "Waveform", &["sine", "triangle", "square", "sawtooth", "random"]).d("sine"),
-                nmin("frequency", "Frequency (Hz)", 0.01, 0.0).d(0.5),
+                nrange("frequency", "Frequency (Hz)", 0.01, 0.0, 10.0).d(0.5),
                 ns("amplitude", "Amplitude", 0.1).d(1.0),
                 ns("center", "Center", 0.1).d(0.0),
-                ns("phase", "Phase (rad)", 0.1).d(0.0),
+                nrange("phase", "Phase (rad)", 0.01, 0.0, std::f64::consts::TAU).d(0.0),
             ],
         ),
         spec(
@@ -948,7 +948,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             NodeType::SignalRandom, C::Signal, S::SignalOnly, F::Signal, NO_IN, false,
             "Smooth deterministic noise — organic drift. Sum of incommensurate sinusoids",
             vec![
-                nmin("rate", "Rate", 0.01, 0.0).d(0.5),
+                nrange("rate", "Rate", 0.01, 0.0, 10.0).d(0.5),
                 ns("amplitude", "Amplitude", 0.1).d(1.0),
                 ns("seed", "Seed", 1.0).d(1.0),
             ],

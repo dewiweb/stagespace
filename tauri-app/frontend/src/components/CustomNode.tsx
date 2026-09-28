@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { X, Check } from 'lucide-react';
 import { Handle, Position, NodeProps } from 'reactflow';
+import { Slider } from './ui/Slider';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import { useSignalGraphStore } from '../store/useSignalGraphStore';
@@ -93,11 +94,31 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
     }, 150);
   }, [id, data.params, updateNodeData, isGlobalNode, updateGlobalNodeData, isSignalNode, updateSignalNodeData, isPluginNode, plugins]);
 
+  const blurOnEnter = (e: React.KeyboardEvent<HTMLElement>) => {
+    if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur();
+  };
+
   const renderInput = (def: ParamDef) => {
     const value = data.params?.[def.key];
 
     switch (def.type) {
       case 'number':
+        // Param borné → slider (plus intuitif qu'un input nu : la plage
+        // est visible d'un coup d'œil, cohérent avec le panel Params).
+        if (typeof def.min === 'number' && typeof def.max === 'number') {
+          return (
+            <Slider
+              label={def.label}
+              value={typeof value === 'number' ? value : 0}
+              min={def.min}
+              max={def.max}
+              step={def.step ?? 0.1}
+              accent="cyan"
+              layout="stack"
+              onChange={(v) => handleChange(def.key, v)}
+            />
+          );
+        }
         return (
           <input
             type="number"
@@ -106,6 +127,7 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
             max={def.max}
             value={typeof value === 'number' ? value : 0}
             onChange={(e) => handleChange(def.key, parseFloat(e.target.value) || 0)}
+            onKeyDown={blurOnEnter}
             className="w-full px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none"
           />
         );
@@ -123,7 +145,14 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
         return (
           <select
             value={typeof value === 'string' ? value : ''}
-            onChange={(e) => handleChange(def.key, e.target.value)}
+            onChange={(e) => {
+              handleChange(def.key, e.target.value);
+              // Rendre le focus : sinon le select garde la main (flèches/
+              // space continuent de changer la valeur au lieu d'agir sur
+              // le canvas — sensation d'être "coincé" dans le dropdown).
+              e.currentTarget.blur();
+            }}
+            onKeyDown={blurOnEnter}
             className="w-full px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none"
           >
             {def.options?.map((opt) => (
@@ -143,6 +172,7 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
                 handleChange(def.key, parsed);
               }
             }}
+            onKeyDown={blurOnEnter}
             className="w-full px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
             placeholder="x, y, z"
           />
@@ -155,6 +185,7 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
             type="text"
             value={typeof value === 'string' ? value : ''}
             onChange={(e) => handleChange(def.key, e.target.value)}
+            onKeyDown={blurOnEnter}
             className="w-full px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
           />
         );

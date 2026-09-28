@@ -3466,8 +3466,8 @@
         "kind": "number",
         "options": null,
         "step": 0.1,
-        "min": null,
-        "max": null,
+        "min": 0.0,
+        "max": 10.0,
         "default_json": "1.0"
       },
       {
@@ -3517,7 +3517,7 @@
         "options": null,
         "step": 0.01,
         "min": 0.0,
-        "max": null,
+        "max": 10.0,
         "default_json": "0.5"
       },
       {
@@ -3545,9 +3545,9 @@
         "label": "Phase (rad)",
         "kind": "number",
         "options": null,
-        "step": 0.1,
-        "min": null,
-        "max": null,
+        "step": 0.01,
+        "min": 0.0,
+        "max": 6.283185307179586,
         "default_json": "0.0"
       }
     ]
@@ -3656,7 +3656,7 @@
         "options": null,
         "step": 0.01,
         "min": 0.0,
-        "max": null,
+        "max": 10.0,
         "default_json": "0.5"
       },
       {
