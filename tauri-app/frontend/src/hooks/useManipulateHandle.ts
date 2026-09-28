@@ -15,8 +15,17 @@ export function useManipulateHandle({ sceneRef, manipulateMode }: UseManipulateH
   const trajectoryLineRef = useRef<THREE.Line | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+    let raf = 0;
+    const syncHandle = () => {
+    if (cancelled) return;
     const scene = sceneRef.current;
-    if (!scene) return;
+    if (!scene) {
+      // Retry à la frame suivante si la scène n'existe pas encore —
+      // même course que useObjects3D/useHolMarkers (StrictMode remount).
+      if (!cancelled) raf = requestAnimationFrame(syncHandle);
+      return;
+    }
 
     // Remove old handle + line
     if (handleRef.current) {
@@ -58,6 +67,12 @@ export function useManipulateHandle({ sceneRef, manipulateMode }: UseManipulateH
     line.computeLineDistances();
     scene.add(line);
     trajectoryLineRef.current = line;
+    };
+    syncHandle();
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+    };
   }, [manipulateMode, sceneRef]);
 
   return { handleRef, trajectoryLineRef };

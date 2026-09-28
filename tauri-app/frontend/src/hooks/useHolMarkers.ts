@@ -21,8 +21,17 @@ export function useHolMarkers({ sceneRef, cameraRef, holProject }: UseHolMarkers
   const holLabelsRef = useRef<CSS2DObject[]>([]);
 
   useEffect(() => {
+    let cancelled = false;
+    let raf = 0;
+    const syncMarkers = () => {
+    if (cancelled) return;
     const scene = sceneRef.current;
-    if (!scene) return;
+    if (!scene) {
+      // Même course que useObjects3D : la scène peut manquer au run
+      // (remount StrictMode, timing d'init) — retry à la frame suivante.
+      if (!cancelled) raf = requestAnimationFrame(syncMarkers);
+      return;
+    }
 
     // Remove old markers (les labels sont enfants des rings — retirés et
     // détachés du DOM par l'event 'removed' propagé aux descendants)
@@ -67,6 +76,12 @@ export function useHolMarkers({ sceneRef, cameraRef, holProject }: UseHolMarkers
       ring.add(label);
       holLabelsRef.current.push(label);
     });
+    };
+    syncMarkers();
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+    };
   }, [holProject, sceneRef, cameraRef]);
 
   return { holMarkersRef, holLabelsRef };

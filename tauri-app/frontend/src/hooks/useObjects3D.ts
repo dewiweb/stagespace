@@ -32,8 +32,19 @@ export function useObjects3D({ sceneRef, nObjects, sceneReady }: UseObjects3DPar
   // et sont nettoyés automatiquement par l'event 'removed' du CSS2DObject.
 
   useEffect(() => {
+    let cancelled = false;
+    let raf = 0;
+    const syncObjects = () => {
+    if (cancelled) return;
     const scene = sceneRef.current;
-    if (!scene) return;
+    if (!scene) {
+      // La scène peut ne pas exister encore (init du render loop, remount
+      // StrictMode, sceneReady désynchronisé) — retenter à la prochaine
+      // frame au lieu d'abandonner : sinon aucun objet n'est jamais créé
+      // et la vue reste figée (positions reçues mais aucun mesh à animer).
+      if (!cancelled) raf = requestAnimationFrame(syncObjects);
+      return;
+    }
 
     const oscIds = useGraphStore.getState().manualOscIds;
     const manualPos = useGraphStore.getState().manualPositions;
@@ -105,6 +116,12 @@ export function useObjects3D({ sceneRef, nObjects, sceneReady }: UseObjects3DPar
         }
       }
     }
+    };
+    syncObjects();
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+    };
   }, [nObjects, sceneReady, sceneRef, holProject]);
 
   return { objectsRef, objectLabelsRef: objectsRef };
