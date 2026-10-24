@@ -7,6 +7,7 @@ interface UseInteractionModesParams {
   rendererRef: MutableRefObject<THREE.WebGLRenderer | null>;
   drawMode: boolean;
   manipulateMode: boolean;
+  assignMode: boolean;
 }
 
 /**
@@ -23,8 +24,9 @@ export function useInteractionModes({
   rendererRef,
   drawMode,
   manipulateMode,
+  assignMode,
 }: UseInteractionModesParams) {
-  const interactMode = drawMode || manipulateMode;
+  const interactMode = drawMode || manipulateMode || assignMode;
   if (controlsRef.current) {
     controlsRef.current.enabled = !interactMode;
   }

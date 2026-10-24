@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
@@ -50,6 +50,8 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   // annuler avant le panic ; mutual exclusion gérée par le slice)
   const manipulateMode = useGraphStore((s) => s.manipulateMode);
   const setManipulateMode = useGraphStore((s) => s.setManipulateMode);
+  const assignMode = useGraphStore((s) => s.assignMode);
+  const setAssignMode = useGraphStore((s) => s.setAssignMode);
 
   // Multi-movement state — movements et movementPositions sont lus via getState()
   // dans useRenderLoop pour éviter 60 re-renders/seconde.
@@ -96,7 +98,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   const { holMarkersRef } = useHolMarkers({ sceneRef, cameraRef, holProject });
   const { objectsRef } = useObjects3D({ sceneRef, nObjects, sceneReady });
   const { handleRef, trajectoryLineRef } = useManipulateHandle({ sceneRef, manipulateMode });
-  useInteractionModes({ controlsRef, rendererRef, drawMode, manipulateMode });
+  useInteractionModes({ controlsRef, rendererRef, drawMode, manipulateMode, assignMode });
 
   // ── Hooks extraits (handlers d'interaction) ──
   const { drawCanvasRef, handleDrawStart, handleDrawMove, handleDrawEnd } =
@@ -116,6 +118,42 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
     handleRef,
     manipulateMode,
   });
+
+  // Assign mode — clic sur un objet 3D = toggle de sa track via la même
+  // source de vérité que la TrackGrid (toggleTrackSelection → sélection +
+  // Objects node + slot en édition). Pas de chemin parallèle : la sélection
+  // ne peut pas diverger entre scène et grille.
+  const handleAssignDown = useCallback(
+    (e: React.PointerEvent) => {
+      const camera = cameraRef.current;
+      const container = containerRef.current;
+      if (!camera || !container) return;
+      const rect = container.getBoundingClientRect();
+      const ndc = new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(ndc, camera);
+      // Même filtre que Manipulate : les tracks cachées par le focus slot
+      // ne doivent pas être assignables.
+      const hits = raycaster.intersectObjects(
+        objectsRef.current.filter((o) => o.visible), true,
+      );
+      if (hits.length === 0) return;
+      let hitObj = hits[0].object as THREE.Mesh;
+      let idx = objectsRef.current.indexOf(hitObj);
+      while (idx < 0 && hitObj.parent) {
+        hitObj = hitObj.parent as THREE.Mesh;
+        idx = objectsRef.current.indexOf(hitObj);
+      }
+      if (idx < 0) return;
+      const s = useGraphStore.getState();
+      const trackId = s.holProject?.tracks[idx]?.id ?? s.manualOscIds[idx] ?? idx + 1;
+      s.toggleTrackSelection(trackId);
+    },
+    [objectsRef],
+  );
 
   // Resize observer — merge du handle resize en un seul effect
   // Met à jour directement les refs Three.js (pas de re-render React)
@@ -215,9 +253,18 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
       )}
       {drawMode && <DrawModeOverlay />}
       {manipulateMode && <MacrosPanel isPlaying={isPlaying} hasMovements={movements.length > 0} />}
+      {assignMode && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-overlay bg-gray-900/90 backdrop-blur rounded-lg px-3 py-1.5 border border-green-600/50">
+          <span className="text-green-400 text-xs font-medium">
+            Assign — click objects to toggle their track for this move
+          </span>
+        </div>
+      )}
       <ModeButtons
         manipulateMode={manipulateMode}
         setManipulateMode={setManipulateMode}
+        assignMode={assignMode}
+        setAssignMode={setAssignMode}
       />
       {/* Trajectory visualization — composant séparé qui gère ses propres lignes */}
       <TrajectoryVisualization
@@ -243,7 +290,14 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
         onPointerUp={handleDrawEnd}
         onPointerCancel={handleDrawEnd}
       />
-      {/* Interaction layer — manipulate seulement (assign via TrackGrid) */}
+      {/* Interaction layer — manipulate ou assign */}
+      {assignMode && (
+        <div
+          className="absolute inset-0 z-overlay"
+          style={{ cursor: 'pointer' }}
+          onPointerDown={handleAssignDown}
+        />
+      )}
       {manipulateMode && (
         <div
           className="absolute inset-0 z-overlay"

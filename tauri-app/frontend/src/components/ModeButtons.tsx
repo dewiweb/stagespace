@@ -1,19 +1,21 @@
 import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
-import { Move3d, Pencil } from 'lucide-react';
+import { Move3d, MousePointerClick, Pencil } from 'lucide-react';
 
 interface ModeButtonsProps {
   manipulateMode: boolean;
   setManipulateMode: (v: boolean) => void;
+  assignMode: boolean;
+  setAssignMode: (v: boolean) => void;
 }
 
 /**
- * Boutons toggle Manipulate / Draw — toujours visibles (sauf en draw mode).
- * Extrait de Scene3D. (L'assignation de tracks se fait dans la TrackGrid —
- * le mode assign 3D a été retiré.)
+ * Boutons toggle Manipulate / Assign / Draw — toujours visibles (sauf en draw mode).
+ * Extrait de Scene3D. L'assign 3D passe par `toggleTrackSelection` — même
+ * source de vérité que la TrackGrid.
  */
 export const ModeButtons: React.FC<ModeButtonsProps> = ({
-  manipulateMode, setManipulateMode,
+  manipulateMode, setManipulateMode, assignMode, setAssignMode,
 }) => {
   const drawMode = useGraphStore((s) => s.drawMode);
   const setDrawMode = useGraphStore((s) => s.setDrawMode);
@@ -40,6 +42,15 @@ export const ModeButtons: React.FC<ModeButtonsProps> = ({
           }`}
         >
           <Move3d size={11} className="inline -mt-0.5" /> Manipulate
+        </button>
+        <button
+          onClick={() => setAssignMode(!assignMode)}
+          className={`px-2.5 py-1 text-xs rounded font-medium transition-colors ${
+            assignMode ? 'bg-green-600 text-white' : 'bg-gray-900/80 text-gray-400 hover:text-white border border-gray-700'
+          }`}
+          title="Assign mode — click objects in the scene to toggle their track"
+        >
+          <MousePointerClick size={11} className="inline -mt-0.5" /> Assign
         </button>
         {hasDrawableNode && (
           <button
