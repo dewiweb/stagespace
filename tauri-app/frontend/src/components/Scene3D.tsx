@@ -22,6 +22,7 @@ import { useInteractionModes } from '../hooks/useInteractionModes';
 import { useDrawMode } from '../hooks/useDrawMode';
 import { useManipulateMode } from '../hooks/useManipulateMode';
 import { useRenderLoop } from '../hooks/useRenderLoop';
+import { fromThree } from '../utils/coords';
 
 interface Scene3DProps {
   width?: string | number;
@@ -52,6 +53,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   const setManipulateMode = useGraphStore((s) => s.setManipulateMode);
   const assignMode = useGraphStore((s) => s.assignMode);
   const setAssignMode = useGraphStore((s) => s.setAssignMode);
+  const zonePlaceMode = useGraphStore((s) => s.zonePlaceMode);
 
   // Multi-movement state — movements et movementPositions sont lus via getState()
   // dans useRenderLoop pour éviter 60 re-renders/seconde.
@@ -98,7 +100,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   const { holMarkersRef } = useHolMarkers({ sceneRef, cameraRef, holProject });
   const { objectsRef } = useObjects3D({ sceneRef, nObjects, sceneReady });
   const { handleRef, trajectoryLineRef } = useManipulateHandle({ sceneRef, manipulateMode });
-  useInteractionModes({ controlsRef, rendererRef, drawMode, manipulateMode, assignMode });
+  useInteractionModes({ controlsRef, rendererRef, drawMode, manipulateMode, assignMode, zonePlaceMode });
 
   // ── Hooks extraits (handlers d'interaction) ──
   const { drawCanvasRef, handleDrawStart, handleDrawMove, handleDrawEnd } =
@@ -153,6 +155,30 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
       s.toggleTrackSelection(trackId);
     },
     [objectsRef],
+  );
+
+  // Zone place mode — clic sur le sol (plan y=0 côté Three = z=0 backend)
+  // → enregistre le centre en coords backend pour le formulaire SpatialFX.
+  const handleZonePlaceDown = useCallback(
+    (e: React.PointerEvent) => {
+      const camera = cameraRef.current;
+      const container = containerRef.current;
+      if (!camera || !container) return;
+      const rect = container.getBoundingClientRect();
+      const ndc = new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(ndc, camera);
+      const pt = new THREE.Vector3();
+      if (!raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), pt)) return;
+      const s = useGraphStore.getState();
+      const [bx, by, bz] = fromThree(pt.x, pt.y, pt.z);
+      s.setPendingZonePoint([bx, by, bz]);
+      s.setZonePlaceMode(false);
+    },
+    [],
   );
 
   // Resize observer — merge du handle resize en un seul effect
@@ -260,6 +286,13 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
           </span>
         </div>
       )}
+      {zonePlaceMode && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-overlay bg-gray-900/90 backdrop-blur rounded-lg px-3 py-1.5 border border-cyan-600/50">
+          <span className="text-cyan-400 text-xs font-medium">
+            Place — click on the floor to set the zone center (Esc to cancel)
+          </span>
+        </div>
+      )}
       <ModeButtons
         manipulateMode={manipulateMode}
         setManipulateMode={setManipulateMode}
@@ -290,7 +323,14 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
         onPointerUp={handleDrawEnd}
         onPointerCancel={handleDrawEnd}
       />
-      {/* Interaction layer — manipulate ou assign */}
+      {/* Interaction layer — manipulate, assign ou place-zone */}
+      {zonePlaceMode && (
+        <div
+          className="absolute inset-0 z-overlay"
+          style={{ cursor: 'crosshair' }}
+          onPointerDown={handleZonePlaceDown}
+        />
+      )}
       {assignMode && (
         <div
           className="absolute inset-0 z-overlay"

@@ -65,6 +65,10 @@ export default function SpatialFxPanel() {
   const setSpatialChannel = useGraphStore((s) => s.setSpatialChannel);
   const clearSpatialChannel = useGraphStore((s) => s.clearSpatialChannel);
   const clearAllSpatialChannels = useGraphStore((s) => s.clearAllSpatialChannels);
+  const zonePlaceMode = useGraphStore((s) => s.zonePlaceMode);
+  const setZonePlaceMode = useGraphStore((s) => s.setZonePlaceMode);
+  const pendingZonePoint = useGraphStore((s) => s.pendingZonePoint);
+  const setPendingZonePoint = useGraphStore((s) => s.setPendingZonePoint);
 
   // ── Zone form state ──
   const [zShape, setZShape] = React.useState<'sphere' | 'box'>('sphere');
@@ -96,6 +100,15 @@ export default function SpatialFxPanel() {
   React.useEffect(() => {
     refreshSpatialFx();
   }, [refreshSpatialFx]);
+
+  // Place-on-scene : le clic au sol (Scene3D → pendingZonePoint, coords
+  // backend) remplit le champ centre/min — placement à la souris, la saisie
+  // manuelle reste possible pour affiner.
+  React.useEffect(() => {
+    if (!pendingZonePoint) return;
+    setZA(pendingZonePoint.map((v) => Math.round(v * 100) / 100).join(','));
+    setPendingZonePoint(null);
+  }, [pendingZonePoint, setPendingZonePoint]);
 
   // Validation live de la zone — le bouton Add reste grisé tant que le
   // centre est invalide ou qu'aucun canal valide n'est saisi ; le hint
@@ -210,13 +223,26 @@ export default function SpatialFxPanel() {
               title="Falloff width (soft transition beyond the edge)"
             />
           </div>
-          <input
-            type="text"
-            value={zA}
-            onChange={(e) => setZA(e.target.value)}
-            placeholder={zShape === 'sphere' ? 'center x,y,z' : 'min x,y,z'}
-            className={`${inputCls} font-mono`}
-          />
+          <div className="flex gap-1.5">
+            <input
+              type="text"
+              value={zA}
+              onChange={(e) => setZA(e.target.value)}
+              placeholder={zShape === 'sphere' ? 'center x,y,z' : 'min x,y,z'}
+              className={`${inputCls} font-mono`}
+            />
+            <button
+              onClick={() => setZonePlaceMode(!zonePlaceMode)}
+              className={`px-2.5 py-1.5 text-xs rounded whitespace-nowrap transition-colors ${
+                zonePlaceMode
+                  ? 'bg-cyan-600 text-white'
+                  : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
+              }`}
+              title="Place the zone center on the 3D scene — then click the floor"
+            >
+              ⌖ Place
+            </button>
+          </div>
           {zShape === 'sphere' ? (
             <input
               type="text"

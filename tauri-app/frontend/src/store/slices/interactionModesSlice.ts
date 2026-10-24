@@ -13,8 +13,15 @@ export interface InteractionModesSlice {
   setManipulateMode: (v: boolean) => void;
   assignMode: boolean;
   setAssignMode: (v: boolean) => void;
-  /// Annule draw/manipulate/assign. Retourne true si un mode était actif
-  /// (Esc consommé — ne doit PAS déclencher le panic).
+  /// Place-on-scene : le panel FX arme le mode, le clic au sol enregistre
+  /// le point (coords backend Z-up) dans `pendingZonePoint` que le panel
+  /// consomme — le centre de la zone se place à la souris, pas au clavier.
+  zonePlaceMode: boolean;
+  setZonePlaceMode: (v: boolean) => void;
+  pendingZonePoint: [number, number, number] | null;
+  setPendingZonePoint: (p: [number, number, number] | null) => void;
+  /// Annule draw/manipulate/assign/zone-place. Retourne true si un mode
+  /// était actif (Esc consommé — ne doit PAS déclencher le panic).
   cancelInteractionModes: () => boolean;
 }
 
@@ -26,11 +33,16 @@ export const createInteractionModesSlice: StateCreator<Store, [], [], Interactio
     set(v ? { manipulateMode: true, drawMode: false, assignMode: false } : { manipulateMode: false }),
   assignMode: false,
   setAssignMode: (v) =>
-    set(v ? { assignMode: true, drawMode: false, manipulateMode: false } : { assignMode: false }),
+    set(v ? { assignMode: true, drawMode: false, manipulateMode: false, zonePlaceMode: false } : { assignMode: false }),
+  zonePlaceMode: false,
+  setZonePlaceMode: (v) =>
+    set(v ? { zonePlaceMode: true, drawMode: false, manipulateMode: false, assignMode: false } : { zonePlaceMode: false }),
+  pendingZonePoint: null,
+  setPendingZonePoint: (p) => set({ pendingZonePoint: p }),
   cancelInteractionModes: () => {
-    const { drawMode, manipulateMode, assignMode } = get();
-    if (!drawMode && !manipulateMode && !assignMode) return false;
-    set({ drawMode: false, manipulateMode: false, assignMode: false });
+    const { drawMode, manipulateMode, assignMode, zonePlaceMode } = get();
+    if (!drawMode && !manipulateMode && !assignMode && !zonePlaceMode) return false;
+    set({ drawMode: false, manipulateMode: false, assignMode: false, zonePlaceMode: false });
     return true;
   },
 });

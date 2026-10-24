@@ -8,6 +8,7 @@ interface UseInteractionModesParams {
   drawMode: boolean;
   manipulateMode: boolean;
   assignMode: boolean;
+  zonePlaceMode: boolean;
 }
 
 /**
@@ -25,8 +26,9 @@ export function useInteractionModes({
   drawMode,
   manipulateMode,
   assignMode,
+  zonePlaceMode,
 }: UseInteractionModesParams) {
-  const interactMode = drawMode || manipulateMode || assignMode;
+  const interactMode = drawMode || manipulateMode || assignMode || zonePlaceMode;
   if (controlsRef.current) {
     controlsRef.current.enabled = !interactMode;
   }
