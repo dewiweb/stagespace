@@ -3,6 +3,7 @@ import type { GraphNode } from '../../components/nodeParamSchema';
 import { safeInvoke as invoke } from '../../utils/tauri';
 import { toast } from '../../utils/toast-helpers';
 import type { HolProject } from '../types/index';
+import { syncObjectsGraphNodes } from './objectsNodeSync';
 
 export interface HolProjectSlice {
   // .hol project import
@@ -197,53 +198,9 @@ export const createHolProjectSlice: StateCreator<HolProjectStore, [], [], HolPro
     return Array.from(s.selectedTrackIds).sort((a, b) => a - b);
   },
   syncObjectsNode: () => {
-    const s = get();
-    const ids = s.getSelectedOscIds();
-    // Même si ids est vide, on met à jour (pour montrer 0 objets si l'utilisateur désélectionne tout)
-    // Mais on ne crée pas de node Objects si la liste est vide et qu'il n'y a pas de node existant
-    if (ids.length === 0 && !s.nodes.find((n) => n.data.type === 'Objects')) return;
-
-    // Types de nodes qui ont un paramètre n_objects à sync avec le node Objects
-    const ENGINE_TYPES = new Set([
-      'Circular', 'Elliptical', 'Spiral', 'Lissajous', 'Figure8',
-      'Linear', 'Oscillation', 'Formation', 'PerlinNoise', 'Converge', 'Pendulum',
-      'RoseCurve', 'Helix', 'Wave', 'CustomTrajectory',
-      'Bouncing', 'Avoidance', 'Spring', 'Follow', 'Swarm', 'VectorField',
-      'DrawSpline', 'EvaluateSpline', 'TrimSpline', 'OffsetSpline',
-      'Mix', 'Group', 'Sequence', 'Crossfade',
-    ]);
-
-    // Trouver le node Objects et mettre à jour n_objects
-    const objectsNode = s.nodes.find((n) => n.data.type === 'Objects');
-    if (objectsNode) {
-      const newParams = { ...(objectsNode.data as any).params, n_objects: ids.length, track_ids: ids };
-      get().updateNodeData(objectsNode.id, { params: newParams });
-    } else {
-      // Créer un node Objects s'il n'existe pas
-      const newId = `objects-${Date.now()}`;
-      get().addNode({
-        id: newId,
-        type: 'custom',
-        position: { x: 50, y: 250 },
-        data: { label: 'Objects', type: 'Objects', params: { n_objects: ids.length, track_ids: ids } },
-      });
-    }
-
-    // Sync n_objects sur tous les nodes engines (évite CountMismatch)
-    // Le node Objects vient d'être mis à jour, on relit les nodes courants
-    const currentNodes = get().nodes;
-    currentNodes.forEach((node) => {
-      const nodeType = node.data.type as string;
-      if (ENGINE_TYPES.has(nodeType)) {
-        const params = node.data.params ?? {};
-        if (params.n_objects !== ids.length) {
-          get().updateNodeData(node.id, { params: { ...params, n_objects: ids.length } });
-        }
-      }
-    });
-
-    // PAS de hot-swap ici — la sélection de tracks ne doit pas affecter
-    // les moves en cours de lecture. Le hot-swap sera déclenché séparément
-    // par updateGraphLive quand l'utilisateur modifie un paramètre du graphe.
+    // Mutation du graphe partagée avec syncObjectsNodeNoHotSwap
+    // (objectsNodeSync.ts) — createIfMissing : ce chemin crée le node
+    // Objects s'il n'existe pas, contrairement au switch de slot.
+    syncObjectsGraphNodes(get, { createIfMissing: true });
   },
 });

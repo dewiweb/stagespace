@@ -5,6 +5,7 @@ import { computeCentroid } from '../utils/geometryUtils';
 import type { Edge } from '@xyflow/react';
 import type { GraphNode } from '../../components/nodeParamSchema';
 import type { HolProject } from '../types/index';
+import { syncObjectsGraphNodes } from './objectsNodeSync';
 import type { Move, TrackAssignment, AudioMod } from '../useMoveEditorStore';
 import { safeSetItem, safeParseStoredJson, debouncedSetItem } from '../../utils/safeStorage';
 import { throttleTrailingKeyed } from '../../utils/throttle';
@@ -118,41 +119,12 @@ function defaultMacros(): MoveMacros {
   return { speed: 1.0, scale: 1.0, shiftX: 0, shiftY: 0, shiftZ: 0, yaw: 0, pitch: 0, roll: 0 };
 }
 
-/// Sync visuel du node Objects SANS hot-swap backend.
-/// Utilisé quand on switch de slot pour édition — on veut juste mettre à jour
-/// l'affichage du node Objects sans affecter les moves en cours de lecture.
+/// Sync visuel du node Objects SANS création — utilisé au switch de slot
+/// pour édition : on met à jour l'affichage du graphe du slot sans créer
+/// de node Objects dans un graphe qui n'en a pas. Partage le cœur avec
+/// syncObjectsNode (objectsNodeSync.ts).
 function syncObjectsNodeNoHotSwap(get: () => any) {
-  const s = get();
-  const ids = Array.from(s.selectedTrackIds as Set<number>).sort((a: number, b: number) => a - b);
-  if (ids.length === 0 && !s.nodes.find((n: any) => n.data.type === 'Objects')) return;
-
-  const ENGINE_TYPES = new Set([
-    'Circular', 'Elliptical', 'Spiral', 'Lissajous', 'Figure8',
-    'Linear', 'Oscillation', 'Formation', 'PerlinNoise', 'Converge', 'Pendulum',
-    'RoseCurve', 'Helix', 'Wave', 'CustomTrajectory',
-    'Bouncing', 'Avoidance', 'Spring', 'Follow', 'Swarm', 'VectorField',
-    'DrawSpline', 'EvaluateSpline', 'TrimSpline', 'OffsetSpline',
-    'Mix', 'Group', 'Sequence', 'Crossfade',
-  ]);
-
-  const objectsNode = s.nodes.find((n: any) => n.data.type === 'Objects');
-  if (objectsNode) {
-    const newParams = { ...(objectsNode.data as any).params, n_objects: ids.length, track_ids: ids };
-    s.updateNodeData(objectsNode.id, { params: newParams });
-  }
-
-  // Sync n_objects sur tous les nodes engines
-  const currentNodes = get().nodes;
-  currentNodes.forEach((node: any) => {
-    const nodeType = node.data.type as string;
-    if (ENGINE_TYPES.has(nodeType)) {
-      const params = node.data.params ?? {};
-      if (params.n_objects !== ids.length) {
-        s.updateNodeData(node.id, { params: { ...params, n_objects: ids.length } });
-      }
-    }
-  });
-  // PAS de hot-swap — on ne veut pas affecter les moves en cours
+  syncObjectsGraphNodes(get);
 }
 
 export interface MoveSlotsSlice {
