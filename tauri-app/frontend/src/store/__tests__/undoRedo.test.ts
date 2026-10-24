@@ -79,7 +79,7 @@ describe('undo', () => {
     // Undo → index goes from 1 to 0, restores graph1 (n_objects=3)
     useGraphStore.getState().undo();
 
-    const obj = useGraphStore.getState().nodes.find((n: any) => (n.data as any)?.type === 'Objects');
+    const obj = useGraphStore.getState().nodes.find((n: any) => n.data.type === 'Objects');
     expect((obj!.data as any).params.n_objects).toBe(3);
   });
 
@@ -120,7 +120,7 @@ describe('redo', () => {
     useGraphStore.getState().redo();
 
     // After redo, we should be back at graph2 (n_objects=5)
-    const obj = useGraphStore.getState().nodes.find((n: any) => (n.data as any)?.type === 'Objects');
+    const obj = useGraphStore.getState().nodes.find((n: any) => n.data.type === 'Objects');
     expect((obj!.data as any).params.n_objects).toBe(5);
   });
 

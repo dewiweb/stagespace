@@ -1,5 +1,5 @@
 import { StateCreator } from 'zustand';
-import { type Node } from '@xyflow/react';
+import type { GraphNode } from '../../components/nodeParamSchema';
 import { simplifyPoints, computeCentroid } from '../utils/geometryUtils';
 import { feLog } from '../../utils/tauri';
 import { toast } from '../../utils/toast-helpers';
@@ -19,7 +19,7 @@ export interface DrawModeSlice {
 
 // finalizeDrawing accède à nodes, edges, isPlaying, updateGraphLive, holProject, manualOscIds via get()
 type DrawModeStore = DrawModeSlice & {
-  nodes: Node[];
+  nodes: GraphNode[];
   edges: any[];
   isPlaying: boolean;
   updateGraphLive: (fadeDuration?: number) => Promise<void>;
@@ -40,7 +40,7 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
 
   finalizeDrawing: async () => {
     const { drawnPoints, nodes, holProject, manualOscIds, selectedTrackIds } = get();
-    feLog(`[DBG-finalize] drawnPoints=${drawnPoints.length} nodes=${nodes.length} types=${nodes.map((n) => (n.data as any)?.type).join(',')}`);
+    feLog(`[DBG-finalize] drawnPoints=${drawnPoints.length} nodes=${nodes.length} types=${nodes.map((n) => n.data.type).join(',')}`);
     if (drawnPoints.length < 3) {
       feLog(`[DBG-finalize] ABORT: not enough points (${drawnPoints.length})`);
       return null;
@@ -67,9 +67,9 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
 
     // Chercher les nodes cibles : DrawSpline (trajectoire) et/ou
     // VectorField field="drawn" (lignes de flux → vecteurs tangents)
-    const drawSplineNode = nodes.find((n) => (n.data as any)?.type === 'DrawSpline');
+    const drawSplineNode = nodes.find((n) => n.data.type === 'DrawSpline');
     const vectorFieldNode = nodes.find(
-      (n) => (n.data as any)?.type === 'VectorField' && (n.data as any)?.params?.field === 'drawn'
+      (n) => n.data.type === 'VectorField' && n.data.params?.field === 'drawn'
     );
     feLog(`[DBG-finalize] drawSplineNode=${drawSplineNode?.id ?? 'NOT FOUND'} vectorFieldNode=${vectorFieldNode?.id ?? 'NOT FOUND'}`);
 
@@ -95,7 +95,7 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
         .map((v) => v.map((c) => +c.toFixed(3)).join(','))
         .join('; ');
       // Append : chaque stroke ajoute une ligne de flux au champ existant
-      const existing = String((vectorFieldNode.data as any)?.params?.points ?? '').trim();
+      const existing = String(vectorFieldNode.data.params?.points ?? '').trim();
       vectorsSpec = existing ? `${existing}; ${strokeSpec}` : strokeSpec;
       feLog(`[DBG-finalize] vectorField vectors=${vectors.length}`);
     }
@@ -104,7 +104,7 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
     set((s) => ({
       nodes: s.nodes.map((n) => {
         if (drawSplineNode && n.id === drawSplineNode.id) {
-          feLog(`[DBG-finalize] updating DrawSpline ${n.id} oldPoints=${((n.data as any)?.params?.points ?? '').slice(0, 80)}...`);
+          feLog(`[DBG-finalize] updating DrawSpline ${n.id} oldPoints=${String(n.data.params?.points ?? '').slice(0, 80)}...`);
           return {
             ...n,
             data: {

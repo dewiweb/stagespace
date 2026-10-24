@@ -20,7 +20,7 @@ import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import { useSignalGraphStore } from '../store/useSignalGraphStore';
 import CustomNode from './CustomNode';
 import { QuickAddModal } from './QuickAddModal';
-import { NODE_CATEGORIES, NODE_COLORS, NODE_DESCRIPTIONS, getCategoryColor, getDefaultParams, getValidTargetTypes, pluginDefaultParams, GLOBAL_ONLY_NODES, SUB_ONLY_NODES, SIGNAL_ONLY_NODES } from './nodeParamSchema';
+import { NODE_CATEGORIES, NODE_COLORS, NODE_DESCRIPTIONS, getCategoryColor, getDefaultParams, getValidTargetTypes, pluginDefaultParams, GLOBAL_ONLY_NODES, SUB_ONLY_NODES, SIGNAL_ONLY_NODES, type GraphNode } from './nodeParamSchema';
 import { isValidConnection, connectionRejectionReason, portRejectionReason, spliceRejectionReason } from '../utils/connectionRules';
 import { presetsUsingType } from '../utils/shapePresets';
 import { toast } from '../utils/toast-helpers';
@@ -123,9 +123,9 @@ export const NodeEditor: React.FC = () => {
   const decoratedNodes = useMemo(
     () =>
       displayNodes.map((n) => {
-        const nodeType = (n.data as any)?.type as NodeType;
+        const nodeType = n.data.type as NodeType;
         const isMoveRef = nodeType === 'MoveRef';
-        const moveId = (n.data as any)?.params?.move_id as string;
+        const moveId = n.data.params?.move_id as string;
         const isMoveActive = isMoveRef && moveId && activeMoveIds.has(moveId);
         return {
           ...n,
@@ -134,7 +134,7 @@ export const NodeEditor: React.FC = () => {
               connectingFrom,
               nodeType,
               nodeType === 'Plugin'
-                ? plugins.find((m) => m.id === (n.data as any)?.params?.plugin_id)?.kind
+                ? plugins.find((m) => m.id === n.data.params?.plugin_id)?.kind
                 : undefined,
             ) ? 'rf-node-invalid-target' : '',
             isMoveActive ? 'rf-node-moveref-active' : '',
@@ -262,7 +262,7 @@ export const NodeEditor: React.FC = () => {
       } else {
         insertNodeOnEdge(newNode, selectedEdge.id, edgeIn, edgeOut);
       }
-      toast.success(`Inserted ${(newNode.data as any)?.label ?? insertedType} into the chain`);
+      toast.success(`Inserted ${newNode.data.label ?? insertedType} into the chain`);
       return true;
     },
     [selectedEdge, displayNodes, plugins, activeTab, globalNodes, globalEdges, setGlobalNodes, setGlobalEdges, signalNodes, signalEdges, setSignalNodes, setSignalEdges, insertNodeOnEdge],
@@ -302,13 +302,13 @@ export const NodeEditor: React.FC = () => {
       const sourceNode = displayNodes.find((n) => n.id === connection.source);
       const targetNode = displayNodes.find((n) => n.id === connection.target);
       if (!sourceNode || !targetNode) return false;
-      const fromType = (sourceNode.data as any)?.type as NodeType;
-      const toType = (targetNode.data as any)?.type as NodeType;
+      const fromType = sourceNode.data.type as NodeType;
+      const toType = targetNode.data.type as NodeType;
       if (!fromType || !toType) return false;
 
       // Plugin cible : le kind du manifeste dicte les règles (ABI v2)
       const toPluginKind = toType === 'Plugin'
-        ? plugins.find((m) => m.id === (targetNode.data as any)?.params?.plugin_id)?.kind
+        ? plugins.find((m) => m.id === targetNode.data.params?.plugin_id)?.kind
         : undefined;
 
       // Vérifier la compatibilité des types
@@ -329,7 +329,7 @@ export const NodeEditor: React.FC = () => {
     connectedThisDrop.current = false;
     const sourceNode = displayNodes.find((n) => n.id === params.nodeId);
     if (sourceNode) {
-      const fromType = (sourceNode.data as any)?.type as NodeType;
+      const fromType = sourceNode.data.type as NodeType;
       setConnectingFrom(fromType);
     }
   }, [displayNodes]);
@@ -360,10 +360,10 @@ export const NodeEditor: React.FC = () => {
   }, [connectingFrom, displayNodes, plugins]);
 
   // Double-clic sur un node MoveRef → sélectionner le move et switcher vers le tab sub-graph
-  const onNodeDoubleClick = useCallback((_: any, node: Node) => {
-    const nodeType = (node.data as any)?.type as NodeType;
+  const onNodeDoubleClick = useCallback((_: any, node: GraphNode) => {
+    const nodeType = node.data.type as NodeType;
     if (nodeType !== 'MoveRef') return;
-    const moveId = (node.data as any)?.params?.move_id as string;
+    const moveId = node.data.params?.move_id as string;
     if (!moveId) return;
     // Sélectionner le slot qui correspond à ce move
     const { moveSlots, selectSlotForEditing } = useGraphStore.getState();
@@ -380,14 +380,14 @@ export const NodeEditor: React.FC = () => {
   // dans applyShapePreset) — le toast le rappelle.
   const onNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
     event.preventDefault();
-    const nodeType = (node.data as any)?.type as NodeType | undefined;
+    const nodeType = node.data.type as NodeType | undefined;
     if (!nodeType) return;
     setNodeMenu({ x: event.clientX, y: event.clientY, nodeType });
   }, []);
 
   const openExampleFor = useCallback((nodeType: NodeType, presetId: string, presetName: string) => {
     setNodeMenu(null);
-    const objectsNode = nodes.find((n) => (n.data as any)?.type === 'Objects');
+    const objectsNode = nodes.find((n) => n.data.type === 'Objects');
     const nObjects = Number((objectsNode?.data as any)?.params?.n_objects) || 8;
     applyShapePreset(presetId, nObjects);
     toast.info(`Loaded example '${presetName}' (${nodeType}) — Ctrl+Z to undo`);
@@ -825,7 +825,7 @@ export const NodeEditor: React.FC = () => {
           <Background color="#1e1e2e" gap={24} />
           <Controls showInteractive={false} />
           <MiniMap
-            nodeColor={(n) => getCategoryColor((n.data as any)?.type ?? '')}
+            nodeColor={(n) => getCategoryColor((n.data.type ?? '') as NodeType)}
             maskColor="rgba(10,10,15,0.7)"
           />
         </ReactFlow>

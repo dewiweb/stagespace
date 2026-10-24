@@ -86,7 +86,7 @@ describe('syncObjectsNode', () => {
     } as any);
     useGraphStore.getState().syncObjectsNode();
 
-    const obj = useGraphStore.getState().nodes.find((n: any) => (n.data as any)?.type === 'Objects');
+    const obj = useGraphStore.getState().nodes.find((n: any) => n.data.type === 'Objects');
     expect((obj!.data as any).params.n_objects).toBe(3);
     expect((obj!.data as any).params.track_ids).toEqual([1, 2, 3]);
   });
@@ -98,7 +98,7 @@ describe('syncObjectsNode', () => {
     } as any);
     useGraphStore.getState().syncObjectsNode();
 
-    const obj = useGraphStore.getState().nodes.find((n: any) => (n.data as any)?.type === 'Objects');
+    const obj = useGraphStore.getState().nodes.find((n: any) => n.data.type === 'Objects');
     expect(obj).toBeDefined();
     expect((obj!.data as any).params.n_objects).toBe(2);
   });

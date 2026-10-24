@@ -1,5 +1,7 @@
 import { create } from 'zustand';
-import { type Node, type Edge, MarkerType } from '@xyflow/react';
+import { type Edge, MarkerType } from '@xyflow/react';
+import type { GraphNode } from '../components/nodeParamSchema';
+import type { NodeType } from '../types/generated/NodeType';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { safeSetItem, safeParseStoredJson } from '../utils/safeStorage';
 
@@ -8,7 +10,7 @@ import { safeSetItem, safeParseStoredJson } from '../utils/safeStorage';
 let nodeCounter = 0;
 const genId = (type: string) => `${type.toLowerCase()}-global-${Date.now()}-${nodeCounter++}`;
 
-const makeNode = (type: string, position: { x: number; y: number }, params: Record<string, any> = {}): Node => ({
+const makeNode = (type: NodeType, position: { x: number; y: number }, params: Record<string, any> = {}): GraphNode => ({
   id: genId(type),
   type: 'custom',
   position,
@@ -28,7 +30,7 @@ const makeEdge = (from: string, to: string, fromPort = 'output', toPort = 'input
 // Reproduit le comportement hardcodé d'avant la Phase 2 :
 // radius_scale → height_offset → per_track_depth → scale → rotate → offset → output
 
-export function buildDefaultGlobalGraph(): { nodes: Node[]; edges: Edge[] } {
+export function buildDefaultGlobalGraph(): { nodes: GraphNode[]; edges: Edge[] } {
   const input = makeNode('Input', { x: 50, y: 250 }, { label: 'Merged Positions' });
   (input.data as any).type = 'Input';
   (input.data as any).label = 'Merged';
@@ -61,11 +63,11 @@ export function buildDefaultGlobalGraph(): { nodes: Node[]; edges: Edge[] } {
 // ─── Store ───
 
 interface GlobalGraphState {
-  nodes: Node[];
+  nodes: GraphNode[];
   edges: Edge[];
   isGlobalGraphEnabled: boolean;
 
-  setNodes: (nodes: Node[]) => void;
+  setNodes: (nodes: GraphNode[]) => void;
   setEdges: (edges: Edge[]) => void;
   updateNodeData: (id: string, data: Partial<Record<string, any>>) => void;
   toggleEnabled: () => void;
@@ -79,11 +81,11 @@ interface GlobalGraphState {
 
 const STORAGE_KEY = 'stagespace-global-graph-v4';
 
-function loadFromStorage(): { nodes: Node[]; edges: Edge[] } | null {
-  const parsed = safeParseStoredJson<{ nodes: Node[]; edges: Edge[] } | null>(STORAGE_KEY, null);
+function loadFromStorage(): { nodes: GraphNode[]; edges: Edge[] } | null {
+  const parsed = safeParseStoredJson<{ nodes: GraphNode[]; edges: Edge[] } | null>(STORAGE_KEY, null);
   if (!parsed?.nodes || !parsed?.edges) return null;
   // Validation : vérifier que tous les edges référencent des nodes existants
-  const nodeIds = new Set(parsed.nodes.map((n: Node) => n.id));
+  const nodeIds = new Set(parsed.nodes.map((n: GraphNode) => n.id));
   const validEdges = parsed.edges.filter(
     (e: Edge) => nodeIds.has(e.source) && nodeIds.has(e.target),
   );
@@ -94,7 +96,7 @@ function loadFromStorage(): { nodes: Node[]; edges: Edge[] } | null {
   return { nodes: parsed.nodes, edges: parsed.edges };
 }
 
-function saveToStorage(nodes: Node[], edges: Edge[]) {
+function saveToStorage(nodes: GraphNode[], edges: Edge[]) {
   safeSetItem(STORAGE_KEY, JSON.stringify({ nodes, edges }));
 }
 
@@ -150,9 +152,9 @@ export const useGlobalGraphStore = create<GlobalGraphState>((set, get) => ({
         type: 'custom',
         position: n.position,
         data: {
-          label: (n.data as any)?.label ?? (n.data as any)?.type ?? '',
-          type: (n.data as any)?.type ?? 'Output',
-          params: (n.data as any)?.params ?? {},
+          label: n.data.label ?? n.data.type ?? '',
+          type: n.data.type ?? 'Output',
+          params: n.data.params ?? {},
         },
       })),
       edges: edges.map((e) => ({

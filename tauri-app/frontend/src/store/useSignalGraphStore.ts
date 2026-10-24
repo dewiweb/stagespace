@@ -1,5 +1,7 @@
 import { create } from 'zustand';
-import { type Node, type Edge, MarkerType } from '@xyflow/react';
+import { type Edge, MarkerType } from '@xyflow/react';
+import type { GraphNode } from '../components/nodeParamSchema';
+import type { NodeType } from '../types/generated/NodeType';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { safeSetItem, safeParseStoredJson } from '../utils/safeStorage';
 
@@ -8,7 +10,7 @@ import { safeSetItem, safeParseStoredJson } from '../utils/safeStorage';
 let nodeCounter = 0;
 const genId = (type: string) => `${type.toLowerCase()}-signal-${Date.now()}-${nodeCounter++}`;
 
-const makeNode = (type: string, position: { x: number; y: number }, params: Record<string, any> = {}): Node => ({
+const makeNode = (type: NodeType, position: { x: number; y: number }, params: Record<string, any> = {}): GraphNode => ({
   id: genId(type),
   type: 'custom',
   position,
@@ -28,7 +30,7 @@ const makeEdge = (from: string, to: string, fromPort = 'output', toPort = 'signa
 // Point de départ minimal : LFO lent → SignalOut sur le yaw global.
 // Démontre le contrat (delta additif, en degrés) sans surprise : ±15°.
 
-export function buildDefaultSignalGraph(): { nodes: Node[]; edges: Edge[] } {
+export function buildDefaultSignalGraph(): { nodes: GraphNode[]; edges: Edge[] } {
   const lfo = makeNode('SignalLfo', { x: 100, y: 200 }, {
     waveform: 'sine',
     frequency: 0.05,
@@ -56,10 +58,10 @@ export function buildDefaultSignalGraph(): { nodes: Node[]; edges: Edge[] } {
 // ─── Store ───
 
 interface SignalGraphState {
-  nodes: Node[];
+  nodes: GraphNode[];
   edges: Edge[];
 
-  setNodes: (nodes: Node[]) => void;
+  setNodes: (nodes: GraphNode[]) => void;
   setEdges: (edges: Edge[]) => void;
   updateNodeData: (id: string, data: Partial<Record<string, any>>) => void;
 
@@ -72,10 +74,10 @@ interface SignalGraphState {
 
 const STORAGE_KEY = 'stagespace-signal-graph-v1';
 
-function loadFromStorage(): { nodes: Node[]; edges: Edge[] } | null {
-  const parsed = safeParseStoredJson<{ nodes: Node[]; edges: Edge[] } | null>(STORAGE_KEY, null);
+function loadFromStorage(): { nodes: GraphNode[]; edges: Edge[] } | null {
+  const parsed = safeParseStoredJson<{ nodes: GraphNode[]; edges: Edge[] } | null>(STORAGE_KEY, null);
   if (!parsed?.nodes || !parsed?.edges) return null;
-  const nodeIds = new Set(parsed.nodes.map((n: Node) => n.id));
+  const nodeIds = new Set(parsed.nodes.map((n: GraphNode) => n.id));
   const validEdges = parsed.edges.filter(
     (e: Edge) => nodeIds.has(e.source) && nodeIds.has(e.target),
   );
@@ -86,7 +88,7 @@ function loadFromStorage(): { nodes: Node[]; edges: Edge[] } | null {
   return { nodes: parsed.nodes, edges: parsed.edges };
 }
 
-function saveToStorage(nodes: Node[], edges: Edge[]) {
+function saveToStorage(nodes: GraphNode[], edges: Edge[]) {
   safeSetItem(STORAGE_KEY, JSON.stringify({ nodes, edges }));
 }
 
@@ -138,9 +140,9 @@ export const useSignalGraphStore = create<SignalGraphState>((set, get) => ({
         type: 'custom',
         position: n.position,
         data: {
-          label: (n.data as any)?.label ?? (n.data as any)?.type ?? '',
-          type: (n.data as any)?.type ?? 'SignalOut',
-          params: (n.data as any)?.params ?? {},
+          label: n.data.label ?? n.data.type ?? '',
+          type: n.data.type ?? 'SignalOut',
+          params: n.data.params ?? {},
         },
       })),
       edges: edges.map((e) => ({

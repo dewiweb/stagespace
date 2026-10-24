@@ -111,7 +111,7 @@ export const ZoneVisualization: React.FC<ZoneVisualizationProps> = ({ sceneRef }
   // Rafraîchit les effets quand le graph global change (params des nodes
   // Zone édités → pushGlobalGraph → nouveaux graph_zones côté backend)
   const globalKey = JSON.stringify(
-    globalNodes.map((n) => [(n.data as any)?.type, (n.data as any)?.params]),
+    globalNodes.map((n) => [n.data.type, n.data.params]),
   );
   useEffect(() => {
     refreshSpatialFx().catch((e) => console.error(e));

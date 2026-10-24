@@ -187,9 +187,9 @@ describe('setSlotTracks', () => {
     useGraphStore.getState().setSlotTracks('slot-1', [1, 2, 3]);
 
     const slot = (useGraphStore.getState() as any).moveSlots[0];
-    const objectsNode = slot.graphJson.nodes.find((n: any) => (n.data as any)?.type === 'Objects');
+    const objectsNode = slot.graphJson.nodes.find((n: any) => n.data.type === 'Objects');
     expect((objectsNode.data as any).params.n_objects).toBe(3);
-    const engineNode = slot.graphJson.nodes.find((n: any) => (n.data as any)?.type === 'Circular');
+    const engineNode = slot.graphJson.nodes.find((n: any) => n.data.type === 'Circular');
     expect((engineNode.data as any).params.n_objects).toBe(3);
   });
 
