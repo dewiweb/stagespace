@@ -241,7 +241,7 @@ export const PerformView: React.FC = () => {
               <button
                 onClick={() => {
                   addMoveSlot();
-                  const last = useGraphStore.getState().moveSlots.at(-1);
+                  const ms = useGraphStore.getState().moveSlots; const last = ms[ms.length - 1];
                   if (last) addToSetlist(last.id);
                 }}
                 className="px-1.5 py-0.5 rounded text-[10px] text-indigo-300 hover:bg-indigo-600/30 hover:text-white transition-colors normal-case"
@@ -272,7 +272,7 @@ export const PerformView: React.FC = () => {
                     addMoveSlot();
                     // Le slot vient d'être pushé — l'ajouter à la setlist
                     // pour que GO/Enter fonctionne tout de suite.
-                    const last = useGraphStore.getState().moveSlots.at(-1);
+                    const ms = useGraphStore.getState().moveSlots; const last = ms[ms.length - 1];
                     if (last) addToSetlist(last.id);
                   }}
                   className="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors"
