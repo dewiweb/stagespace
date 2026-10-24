@@ -491,9 +491,9 @@ export const NodeEditor: React.FC = () => {
           className={`px-2 py-0.5 text-xs rounded font-medium transition-colors ${
             activeTab === 'global' ? 'bg-cyan-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
           }`}
-          title="Master FX — post-processing applied to ALL live moves"
+          title="Global FX — post-processing graph applied to ALL live moves"
         >
-          Master FX
+          Global FX
         </button>
         {activeTab === 'global' && (
           <>
@@ -519,9 +519,9 @@ export const NodeEditor: React.FC = () => {
           className={`px-2 py-0.5 text-xs rounded font-medium transition-colors ${
             activeTab === 'signal' ? 'bg-amber-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
           }`}
-          title="Mods — signal graph modulating macros with additive deltas (LFO, audio, OSC…)"
+          title="Modulation — signal graph modulating macros with additive deltas (LFO, audio, OSC…)"
         >
-          Mods
+          Modulation
         </button>
         {activeTab === 'signal' && (
           <>
