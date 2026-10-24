@@ -82,6 +82,54 @@ export function describeChannels(channels: SpatialChannels): string {
     .join(' ');
 }
 
+/// Zone existante → ZoneParams pour update_zone. Le point `center` devient
+/// le nouveau centre : sphère → center direct ; box → min/max translatés
+/// autour du point, taille préservée. Canaux/falloff/objects inchangés.
+export function zoneToParams(zone: Zone, center: [number, number, number]): ZoneParams {
+  const channels = Object.fromEntries(
+    Object.entries(zone.channels).filter(([, v]) => v !== null && v !== undefined),
+  ) as Record<string, number>;
+  if (zone.shape.shape === 'sphere') {
+    return { shape: 'sphere', a: center, radius: zone.shape.radius, b: null, falloff: zone.falloff, channels, objects: zone.objects ?? null };
+  }
+  const half = (k: number) => (zone.shape.shape === 'box' ? (zone.shape.max[k] - zone.shape.min[k]) / 2 : 0);
+  return {
+    shape: 'box',
+    a: center.map((c, k) => c - half(k)) as [number, number, number],
+    radius: null,
+    b: center.map((c, k) => c + half(k)) as [number, number, number],
+    falloff: zone.falloff,
+    channels,
+    objects: zone.objects ?? null,
+  };
+}
+
+/// Variante avec resize : `radius` pour une sphère, `scale` (facteur sur
+/// les demi-extents) pour une box — utilisé par la molette du mode edit.
+export function zoneToParamsResized(zone: Zone, opts: { radius?: number; scale?: number }): ZoneParams {
+  const channels = Object.fromEntries(
+    Object.entries(zone.channels).filter(([, v]) => v !== null && v !== undefined),
+  ) as Record<string, number>;
+  if (zone.shape.shape === 'sphere') {
+    return { shape: 'sphere', a: zone.shape.center, radius: Math.max(opts.radius ?? zone.shape.radius, 0.1), b: null, falloff: zone.falloff, channels, objects: zone.objects ?? null };
+  }
+  const s = opts.scale ?? 1;
+  const cx = (zone.shape.shape === 'box' ? (zone.shape.min[0] + zone.shape.max[0]) / 2 : 0);
+  const cy = zone.shape.shape === 'box' ? (zone.shape.min[1] + zone.shape.max[1]) / 2 : 0;
+  const cz = zone.shape.shape === 'box' ? (zone.shape.min[2] + zone.shape.max[2]) / 2 : 0;
+  const c = [cx, cy, cz];
+  const half = (k: number) => (zone.shape.shape === 'box' ? Math.max(((zone.shape.max[k] - zone.shape.min[k]) / 2) * s, 0.1) : 0);
+  return {
+    shape: 'box',
+    a: c.map((v, k) => v - half(k)) as [number, number, number],
+    radius: null,
+    b: c.map((v, k) => v + half(k)) as [number, number, number],
+    falloff: zone.falloff,
+    channels,
+    objects: zone.objects ?? null,
+  };
+}
+
 export function describeZoneShape(shape: ZoneShape): string {
   if (shape.shape === 'sphere') {
     return `sphere @(${shape.center.map((v) => v.toFixed(1)).join(',')}) r=${shape.radius}`;

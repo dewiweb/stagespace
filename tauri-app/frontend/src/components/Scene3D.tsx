@@ -22,7 +22,8 @@ import { useInteractionModes } from '../hooks/useInteractionModes';
 import { useDrawMode } from '../hooks/useDrawMode';
 import { useManipulateMode } from '../hooks/useManipulateMode';
 import { useRenderLoop } from '../hooks/useRenderLoop';
-import { fromThree } from '../utils/coords';
+import { fromThree, toThree } from '../utils/coords';
+import { zoneToParams, zoneToParamsResized } from '../store/slices/spatialFxSlice';
 
 interface Scene3DProps {
   width?: string | number;
@@ -54,6 +55,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   const assignMode = useGraphStore((s) => s.assignMode);
   const setAssignMode = useGraphStore((s) => s.setAssignMode);
   const zonePlaceMode = useGraphStore((s) => s.zonePlaceMode);
+  const zoneEditMode = useGraphStore((s) => s.zoneEditMode);
 
   // Multi-movement state — movements et movementPositions sont lus via getState()
   // dans useRenderLoop pour éviter 60 re-renders/seconde.
@@ -100,7 +102,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   const { holMarkersRef } = useHolMarkers({ sceneRef, cameraRef, holProject });
   const { objectsRef } = useObjects3D({ sceneRef, nObjects, sceneReady });
   const { handleRef, trajectoryLineRef } = useManipulateHandle({ sceneRef, manipulateMode });
-  useInteractionModes({ controlsRef, rendererRef, drawMode, manipulateMode, assignMode, zonePlaceMode });
+  useInteractionModes({ controlsRef, rendererRef, drawMode, manipulateMode, assignMode, zonePlaceMode, zoneEditMode });
 
   // ── Hooks extraits (handlers d'interaction) ──
   const { drawCanvasRef, handleDrawStart, handleDrawMove, handleDrawEnd } =
@@ -179,6 +181,101 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
       s.setZonePlaceMode(false);
     },
     [],
+  );
+
+  // Zone edit mode — drag d'un mesh de zone (tagué userData.isZone par
+  // ZoneVisualization) : le centre suit le curseur sur le plan horizontal
+  // à la hauteur de la zone (backend z = three y), resize à la molette.
+  // updateZone throttlé ~30Hz — un invoke par pointermove saturerait l'IPC
+  // (même discipline que le drag d'objets dans useManipulateMode).
+  const draggingZoneRef = useRef<number | null>(null);
+  const lastZoneUpdateRef = useRef(0);
+  const zoneRaycast = useCallback(
+    (e: { clientX: number; clientY: number }): THREE.Raycaster | null => {
+      const camera = cameraRef.current;
+      const container = containerRef.current;
+      if (!camera || !container) return null;
+      const rect = container.getBoundingClientRect();
+      const ndc = new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      const r = new THREE.Raycaster();
+      r.setFromCamera(ndc, camera);
+      return r;
+    },
+    [],
+  );
+  const zoneIndexAt = useCallback(
+    (raycaster: THREE.Raycaster): number | null => {
+      const scene = sceneRef.current;
+      if (!scene) return null;
+      const hits = raycaster.intersectObjects(scene.children, true);
+      for (const h of hits) {
+        let o: THREE.Object3D | null = h.object;
+        while (o && o.userData.isZone !== true) o = o.parent;
+        if (o?.userData.isZone === true) return o.userData.zoneIndex as number;
+      }
+      return null;
+    },
+    [],
+  );
+  const handleZoneEditDown = useCallback(
+    (e: React.PointerEvent) => {
+      const r = zoneRaycast(e);
+      if (!r) return;
+      const idx = zoneIndexAt(r);
+      if (idx !== null) {
+        draggingZoneRef.current = idx;
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      }
+    },
+    [zoneRaycast, zoneIndexAt],
+  );
+  const handleZoneEditMove = useCallback(
+    (e: React.PointerEvent) => {
+      const zi = draggingZoneRef.current;
+      if (zi === null) return;
+      const r = zoneRaycast(e);
+      if (!r) return;
+      const s = useGraphStore.getState();
+      const zone = s.zones[zi];
+      if (!zone) return;
+      // Plan horizontal à la hauteur de la zone — le drag conserve z (up).
+      const centerB = zone.shape.shape === 'sphere'
+        ? zone.shape.center
+        : zone.shape.shape === 'box'
+          ? [(zone.shape.min[0] + zone.shape.max[0]) / 2, (zone.shape.min[1] + zone.shape.max[1]) / 2, (zone.shape.min[2] + zone.shape.max[2]) / 2] as [number, number, number]
+          : [0, 0, 0] as [number, number, number];
+      const [, cy] = toThree(centerB[0], centerB[1], centerB[2]);
+      const pt = new THREE.Vector3();
+      if (!r.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -cy), pt)) return;
+      const now = performance.now();
+      if (now - lastZoneUpdateRef.current < 33) return;
+      lastZoneUpdateRef.current = now;
+      const [bx, by, bz] = fromThree(pt.x, pt.y, pt.z);
+      s.updateZone(zi, zoneToParams(zone, [bx, by, bz]))
+        .catch((err) => console.error('zone drag update failed:', err));
+    },
+    [zoneRaycast],
+  );
+  const handleZoneEditUp = useCallback(() => { draggingZoneRef.current = null; }, []);
+  const handleZoneEditWheel = useCallback(
+    (e: React.WheelEvent) => {
+      const r = zoneRaycast(e);
+      if (!r) return;
+      const zi = zoneIndexAt(r);
+      if (zi === null) return;
+      const s = useGraphStore.getState();
+      const zone = s.zones[zi];
+      if (!zone) return;
+      const dir = e.deltaY < 0 ? 1 : -1;
+      const params = zone.shape.shape === 'sphere'
+        ? zoneToParamsResized(zone, { radius: zone.shape.radius + dir * 0.25 })
+        : zoneToParamsResized(zone, { scale: 1 + dir * 0.05 });
+      s.updateZone(zi, params).catch((err) => console.error('zone resize failed:', err));
+    },
+    [zoneRaycast, zoneIndexAt],
   );
 
   // Resize observer — merge du handle resize en un seul effect
@@ -293,6 +390,13 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
           </span>
         </div>
       )}
+      {zoneEditMode && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-overlay bg-gray-900/90 backdrop-blur rounded-lg px-3 py-1.5 border border-cyan-600/50">
+          <span className="text-cyan-400 text-xs font-medium">
+            Edit zones — drag a zone to move it, scroll over it to resize (Esc to cancel)
+          </span>
+        </div>
+      )}
       <ModeButtons
         manipulateMode={manipulateMode}
         setManipulateMode={setManipulateMode}
@@ -323,7 +427,18 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
         onPointerUp={handleDrawEnd}
         onPointerCancel={handleDrawEnd}
       />
-      {/* Interaction layer — manipulate, assign ou place-zone */}
+      {/* Interaction layer — manipulate, assign, place-zone ou edit-zone */}
+      {zoneEditMode && (
+        <div
+          className="absolute inset-0 z-overlay"
+          style={{ cursor: 'move' }}
+          onPointerDown={handleZoneEditDown}
+          onPointerMove={handleZoneEditMove}
+          onPointerUp={handleZoneEditUp}
+          onPointerCancel={handleZoneEditUp}
+          onWheel={handleZoneEditWheel}
+        />
+      )}
       {zonePlaceMode && (
         <div
           className="absolute inset-0 z-overlay"

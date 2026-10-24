@@ -129,7 +129,17 @@ export const ZoneVisualization: React.FC<ZoneVisualizationProps> = ({ sceneRef }
     }
     const group = new THREE.Group();
     group.name = 'spatial-zones';
-    zones.forEach((z) => buildZoneMeshes(z, MANUAL_COLOR).forEach((m) => group.add(m)));
+    // userData.zoneIndex sur chaque mesh d'une zone MANUELLE — le mode
+    // zone-edit (Scene3D) les raycaste pour drag le centre / resize.
+    // Les zones déclarées dans le graph global ne sont pas éditables ici
+    // (leur source de vérité est le graphe, pas le slice FX).
+    zones.forEach((z, i) =>
+      buildZoneMeshes(z, MANUAL_COLOR).forEach((m) => {
+        m.userData.isZone = true;
+        m.userData.zoneIndex = i;
+        group.add(m);
+      })
+    );
     graphZones.forEach((z) => buildZoneMeshes(z, GRAPH_COLOR).forEach((m) => group.add(m)));
     scene.add(group);
     groupRef.current = group;

@@ -11,7 +11,7 @@ import {
   parseVec3,
   type KinematicSourceName,
   type SpatialChannelName,
-  type ZoneParams,
+  zoneToParams,
 } from '../store/slices/spatialFxSlice';
 
 const inputCls =
@@ -73,6 +73,8 @@ export default function SpatialFxPanel() {
   const zonePlaceTarget = useGraphStore((s) => s.zonePlaceTarget);
   const setZonePlaceTarget = useGraphStore((s) => s.setZonePlaceTarget);
   const updateZone = useGraphStore((s) => s.updateZone);
+  const zoneEditMode = useGraphStore((s) => s.zoneEditMode);
+  const setZoneEditMode = useGraphStore((s) => s.setZoneEditMode);
 
   // ── Zone form state ──
   const [zShape, setZShape] = React.useState<'sphere' | 'box'>('sphere');
@@ -121,30 +123,8 @@ export default function SpatialFxPanel() {
     const zone = zones[zonePlaceTarget];
     setZonePlaceTarget(null);
     if (!zone) return;
-    const channels = Object.fromEntries(
-      Object.entries(zone.channels).filter(([, v]) => v !== null && v !== undefined),
-    ) as Record<string, number>;
-    const params: ZoneParams =
-      zone.shape.shape === 'sphere'
-        ? {
-            shape: 'sphere',
-            a: pt,
-            radius: zone.shape.radius,
-            b: null,
-            falloff: zone.falloff,
-            channels,
-            objects: zone.objects ?? null,
-          }
-        : {
-            shape: 'box',
-            a: pt.map((c, k) => c - (zone.shape.max[k] - zone.shape.min[k]) / 2) as [number, number, number],
-            radius: null,
-            b: pt.map((c, k) => c + (zone.shape.max[k] - zone.shape.min[k]) / 2) as [number, number, number],
-            falloff: zone.falloff,
-            channels,
-            objects: zone.objects ?? null,
-          };
-    updateZone(zonePlaceTarget, params).catch((e) => toast.error(`Zone re-place failed: ${e}`));
+    updateZone(zonePlaceTarget, zoneToParams(zone, pt))
+      .catch((e) => toast.error(`Zone re-place failed: ${e}`));
   }, [pendingZonePoint, zonePlaceTarget, zones, updateZone, setPendingZonePoint, setZonePlaceTarget]);
 
   // Validation live de la zone — le bouton Add reste grisé tant que le
@@ -360,6 +340,19 @@ export default function SpatialFxPanel() {
             </div>
           )}
         </div>
+        {zones.length > 0 && (
+          <button
+            onClick={() => setZoneEditMode(!zoneEditMode)}
+            className={`w-full mb-1.5 py-1.5 text-xs rounded font-medium transition-colors ${
+              zoneEditMode
+                ? 'bg-cyan-600 text-white'
+                : 'bg-gray-800 text-gray-400 hover:text-white border border-gray-700'
+            }`}
+            title="Edit zones on the scene — drag to move, scroll over a zone to resize"
+          >
+            {zoneEditMode ? '✓ Editing on scene — Esc to stop' : '✎ Edit on scene'}
+          </button>
+        )}
         {zones.length === 0 ? (
           <EmptyState
             size="sm"

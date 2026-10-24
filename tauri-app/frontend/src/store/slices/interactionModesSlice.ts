@@ -25,6 +25,11 @@ export interface InteractionModesSlice {
   /// updateZone (édition en place — ordre préservé).
   zonePlaceTarget: number | null;
   setZonePlaceTarget: (i: number | null) => void;
+  /// Édition en place des zones : drag = déplace le centre, molette =
+  /// radius (sphere) / moitié-extent (box). Raycast sur les meshes tagués
+  /// userData.isZone — les zones du graph global ne sont pas concernées.
+  zoneEditMode: boolean;
+  setZoneEditMode: (v: boolean) => void;
   /// Annule draw/manipulate/assign/zone-place. Retourne true si un mode
   /// était actif (Esc consommé — ne doit PAS déclencher le panic).
   cancelInteractionModes: () => boolean;
@@ -46,10 +51,15 @@ export const createInteractionModesSlice: StateCreator<Store, [], [], Interactio
   setPendingZonePoint: (p) => set({ pendingZonePoint: p }),
   zonePlaceTarget: null,
   setZonePlaceTarget: (i) => set({ zonePlaceTarget: i }),
+  zoneEditMode: false,
+  setZoneEditMode: (v) =>
+    set(v
+      ? { zoneEditMode: true, drawMode: false, manipulateMode: false, assignMode: false, zonePlaceMode: false }
+      : { zoneEditMode: false }),
   cancelInteractionModes: () => {
-    const { drawMode, manipulateMode, assignMode, zonePlaceMode } = get();
-    if (!drawMode && !manipulateMode && !assignMode && !zonePlaceMode) return false;
-    set({ drawMode: false, manipulateMode: false, assignMode: false, zonePlaceMode: false });
+    const { drawMode, manipulateMode, assignMode, zonePlaceMode, zoneEditMode } = get();
+    if (!drawMode && !manipulateMode && !assignMode && !zonePlaceMode && !zoneEditMode) return false;
+    set({ drawMode: false, manipulateMode: false, assignMode: false, zonePlaceMode: false, zoneEditMode: false });
     return true;
   },
 });
