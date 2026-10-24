@@ -20,16 +20,16 @@ import { useLiveShortcuts, usePerfStatsPolling } from './hooks/useLiveShortcuts'
 import { prepareGraphForSave } from './components/nodeParamSchema';
 import { usePersistedState } from './utils/usePersistedState';
 import { useGraphStore, useMovementPositionsListener, useAudioErrorListener, useAudioStateListener, useCueRecallListener, useSupervisorListener } from './store/useGraphStore';
-import { useAnimationStore } from './store/useAnimationStore';
+import { useMoveEditorStore } from './store/useMoveEditorStore';
 
 function App() {
-  const showExpert = useAnimationStore((s) => s.showExpert);
-  const setShowExpert = useAnimationStore((s) => s.setShowExpert);
-  const performMode = useAnimationStore((s) => s.performMode);
-  const setPerformMode = useAnimationStore((s) => s.setPerformMode);
-  const debugPerfVisible = useAnimationStore((s) => s.debugPerfVisible);
-  const setDebugPerfVisible = useAnimationStore((s) => s.setDebugPerfVisible);
-  const shortcutsOpen = useAnimationStore((s) => s.shortcutsOpen);
+  const showExpert = useMoveEditorStore((s) => s.showExpert);
+  const setShowExpert = useMoveEditorStore((s) => s.setShowExpert);
+  const performMode = useMoveEditorStore((s) => s.performMode);
+  const setPerformMode = useMoveEditorStore((s) => s.setPerformMode);
+  const debugPerfVisible = useMoveEditorStore((s) => s.debugPerfVisible);
+  const setDebugPerfVisible = useMoveEditorStore((s) => s.setDebugPerfVisible);
+  const shortcutsOpen = useMoveEditorStore((s) => s.shortcutsOpen);
   const oscInPort = useGraphStore((s) => s.oscInPort);
   // Layout persisté — l'opérateur retrouve son workspace au prochain
   // lancement (safeStorage : quota/corruption gérés).
@@ -329,10 +329,10 @@ function App() {
                 onClick={() => {
                   const { nodes, edges } = useGraphStore.getState();
                   const graphJson = prepareGraphForSave(nodes, edges);
-                  useAnimationStore.getState().updateCurrent({
+                  useMoveEditorStore.getState().updateCurrent({
                     graph_json: graphJson,
                   });
-                  useAnimationStore.getState().saveAnimation();
+                  useMoveEditorStore.getState().saveAnimation();
                   setShowExpert(false);
                 }}
                 className="px-2 py-0.5 text-xs bg-purple-700 hover:bg-purple-600 text-white rounded font-medium"

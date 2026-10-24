@@ -6,7 +6,7 @@ import Scene3D from './Scene3D';
 import CuelistPanel from './CuelistPanel';
 import { Slider } from './ui/Slider';
 import { useGraphStore } from '../store/useGraphStore';
-import { useAnimationStore } from '../store/useAnimationStore';
+import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { type NodeParamValue } from './nodeParamSchema';
 import { NodeParamsPanel } from './NodeParamsPanel';
@@ -281,9 +281,9 @@ const LiveDrawer: React.FC = () => {
   const manualOscIds = useGraphStore((s) => s.manualOscIds);
   const nodes = useGraphStore((s) => s.nodes);
   const updateNodeData = useGraphStore((s) => s.updateNodeData);
-  const updateCurrent = useAnimationStore((s) => s.updateCurrent);
-  const updateAssignment = useAnimationStore((s) => s.updateAssignment);
-  const current = useAnimationStore((s) => s.current);
+  const updateCurrent = useMoveEditorStore((s) => s.updateCurrent);
+  const updateAssignment = useMoveEditorStore((s) => s.updateAssignment);
+  const current = useMoveEditorStore((s) => s.current);
 
   const macros = useGraphStore((s) => s.macros);
   const setMacros = useGraphStore((s) => s.setMacros);

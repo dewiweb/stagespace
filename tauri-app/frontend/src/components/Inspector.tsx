@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAnimationStore, Animation } from '../store/useAnimationStore';
+import { useMoveEditorStore, Move } from '../store/useMoveEditorStore';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { TrackGrid } from './TrackGrid';
 import { PARAM_SCHEMA, NODE_DESCRIPTIONS, getCategoryColor, type ParamDef, type NodeParamValue, type GraphNodeData } from './nodeParamSchema';
@@ -32,13 +32,13 @@ import { AudioModList } from './AudioModControls';
 import { Zap, AudioLines, Hexagon, SlidersHorizontal, Play, CircleDot, X, Square, ChevronRight, TriangleAlert, Check } from 'lucide-react';
 
 export default function Inspector() {
-  const showExpert = useAnimationStore((s) => s.showExpert);
-  const current = useAnimationStore((s) => s.current);
-  const updateCurrent = useAnimationStore((s) => s.updateCurrent);
-  const updateAssignment = useAnimationStore((s) => s.updateAssignment);
-  const computeCentroid = useAnimationStore((s) => s.computeCentroid);
-  const activeMovementIds = useAnimationStore((s) => s.activeMovementIds);
-  const launchFlash = useAnimationStore((s) => s.launchFlash);
+  const showExpert = useMoveEditorStore((s) => s.showExpert);
+  const current = useMoveEditorStore((s) => s.current);
+  const updateCurrent = useMoveEditorStore((s) => s.updateCurrent);
+  const updateAssignment = useMoveEditorStore((s) => s.updateAssignment);
+  const computeCentroid = useMoveEditorStore((s) => s.computeCentroid);
+  const activeMovementIds = useMoveEditorStore((s) => s.activeMovementIds);
+  const launchFlash = useMoveEditorStore((s) => s.launchFlash);
 
   // Sélecteurs granulaires — évite les re-renders à 60fps (movementPositions)
   const holProject = useGraphStore((s) => s.holProject);
@@ -102,7 +102,7 @@ export default function Inspector() {
   // ── Macros debounce ──
   const macroDebounce = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Mapping bidirectionnel entre les noms Simple (Animation state) et Expert (Graph store macros)
+  // Mapping bidirectionnel entre les noms Simple (Move state) et Expert (Graph store macros)
   // Simple: scale, offset_x, offset_y, offset_z, yaw, pitch, roll, speed
   // Expert: scale, shiftX,    shiftY,    shiftZ,    yaw, pitch, roll, speed
   const SIMPLE_TO_MACRO: Record<string, string> = {
@@ -116,19 +116,19 @@ export default function Inspector() {
     radius_scale: 'radius_scale', height_offset: 'height_offset',
   };
 
-  // Handler unifié : met à jour les deux stores (Animation + Graph macros) + pousse vers le runtime
+  // Handler unifié : met à jour les deux stores (Move + Graph macros) + pousse vers le runtime
   // Utilisé à la fois par les sliders Transform (Simple) et Macros (Expert)
   const handleUnified = (key: string, value: number, source: 'simple' | 'expert') => {
     if (source === 'simple') {
       // key est un nom Simple (offset_x, scale, yaw, ...)
-      updateCurrent({ [key]: value } as Partial<Animation>);
+      updateCurrent({ [key]: value } as Partial<Move>);
       const macroKey = SIMPLE_TO_MACRO[key];
       if (macroKey) setMacros({ [macroKey]: value } as Partial<MacrosState>);
     } else {
       // key est un nom Expert (shiftX, scale, yaw, ...)
       setMacros({ [key]: value } as Partial<MacrosState>);
       const animKey = MACRO_TO_SIMPLE[key];
-      if (animKey) updateCurrent({ [animKey]: value } as Partial<Animation>);
+      if (animKey) updateCurrent({ [animKey]: value } as Partial<Move>);
     }
     // Toujours pousser vers le runtime (debounced) — c'était manquant pour le mode Simple
     if (macroDebounce.current) clearTimeout(macroDebounce.current);

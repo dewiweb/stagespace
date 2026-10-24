@@ -2,7 +2,7 @@ import { StateCreator } from 'zustand';
 import { safeInvoke as invoke } from '../../utils/tauri';
 import { toast } from '../../utils/toast-helpers';
 import { computeCentroid } from '../utils/geometryUtils';
-import type { Node, Edge } from 'reactflow';
+import type { Node, Edge } from '@xyflow/react';
 import type { MovementInfo, HolProject } from '../types/index';
 
 /// Graphe sauvegardé pour un movement — permet le [edit] (recharger le graphe dans l'éditeur)

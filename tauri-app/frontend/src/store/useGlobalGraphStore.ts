@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { type Node, type Edge, MarkerType } from 'reactflow';
+import { type Node, type Edge, MarkerType } from '@xyflow/react';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { safeSetItem, safeParseStoredJson } from '../utils/safeStorage';
 

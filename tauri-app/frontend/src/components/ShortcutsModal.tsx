@@ -1,6 +1,6 @@
 import React from 'react';
 import Modal from './ui/Modal';
-import { useAnimationStore } from '../store/useAnimationStore';
+import { useMoveEditorStore } from '../store/useMoveEditorStore';
 
 /// Aide raccourcis live — overlay `?` + bouton Toolbar. La liste doit
 /// rester en sync avec hooks/useLiveShortcuts.ts.
@@ -17,7 +17,7 @@ const SHORTCUTS: { keys: string; action: string }[] = [
 ];
 
 export const ShortcutsModal: React.FC = () => {
-  const setOpen = useAnimationStore((s) => s.setShortcutsOpen);
+  const setOpen = useMoveEditorStore((s) => s.setShortcutsOpen);
   return (
     <Modal title="Keyboard shortcuts" onClose={() => setOpen(false)}>
       <div className="px-5 py-4">

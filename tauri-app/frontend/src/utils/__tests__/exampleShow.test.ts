@@ -11,7 +11,7 @@ import {
 } from '../../store/__tests__/testHelpers';
 import { useCuelistStore } from '../../store/useCuelistStore';
 import { useGlobalGraphStore } from '../../store/useGlobalGraphStore';
-import type { Node, Edge } from 'reactflow';
+import type { Node, Edge } from '@xyflow/react';
 
 /// Charge examples/full-feature-show.hfg (repo root) et vérifie que le show
 /// est chargeable : enveloppe v2, graphes valides (règles de connexion,

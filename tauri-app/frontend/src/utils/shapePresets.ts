@@ -1,5 +1,5 @@
-import type { Node, Edge } from 'reactflow';
-import { MarkerType } from 'reactflow';
+import type { Node, Edge } from '@xyflow/react';
+import { MarkerType } from '@xyflow/react';
 
 export interface ShapePreset {
   id: string;

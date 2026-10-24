@@ -1,5 +1,5 @@
 import { StateCreator } from 'zustand';
-import type { Node } from 'reactflow';
+import type { Node } from '@xyflow/react';
 import { safeInvoke as invoke } from '../../utils/tauri';
 import { toast } from '../../utils/toast-helpers';
 import type { HolProject } from '../types/index';

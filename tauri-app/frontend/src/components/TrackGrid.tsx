@@ -1,5 +1,5 @@
 import React from 'react';
-import { TrackAssignment } from '../store/useAnimationStore';
+import { TrackAssignment } from '../store/useMoveEditorStore';
 import EmptyState from './ui/EmptyState';
 
 interface TrackInfo {

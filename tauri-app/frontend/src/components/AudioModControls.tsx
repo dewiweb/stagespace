@@ -1,8 +1,8 @@
 import React from 'react';
 import { X } from 'lucide-react';
 import { Slider } from './ui/Slider';
-import type { AudioMod, AudioModSource, AudioModTarget } from '../store/useAnimationStore';
-import { useAnimationStore } from '../store/useAnimationStore';
+import type { AudioMod, AudioModSource, AudioModTarget } from '../store/useMoveEditorStore';
+import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { audioSourceLabel, audioTargetLabel } from '../utils/audioModLabels';
 
 // Le delta audio = amount × valeur (dans l'unité native de la macro).
@@ -79,10 +79,10 @@ export function AudioModAdder({ onAdd, onCancel }: { onAdd: (mod: AudioMod) => v
 /// Liste éditable des audio mods du `current` (write-through vers le slot
 /// édité + update_animation_state si live). Partagée Inspector / PerformView.
 export function AudioModList() {
-  const current = useAnimationStore((s) => s.current);
-  const updateCurrent = useAnimationStore((s) => s.updateCurrent);
-  const addAudioMod = useAnimationStore((s) => s.addAudioMod);
-  const removeAudioMod = useAnimationStore((s) => s.removeAudioMod);
+  const current = useMoveEditorStore((s) => s.current);
+  const updateCurrent = useMoveEditorStore((s) => s.updateCurrent);
+  const addAudioMod = useMoveEditorStore((s) => s.addAudioMod);
+  const removeAudioMod = useMoveEditorStore((s) => s.removeAudioMod);
   const [showAdd, setShowAdd] = React.useState(false);
 
   return (

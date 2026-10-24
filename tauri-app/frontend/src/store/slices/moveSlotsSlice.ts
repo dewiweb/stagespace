@@ -2,9 +2,9 @@ import { StateCreator } from 'zustand';
 import { safeInvoke as invoke, feLog } from '../../utils/tauri';
 import { toast } from '../../utils/toast-helpers';
 import { computeCentroid } from '../utils/geometryUtils';
-import type { Node, Edge } from 'reactflow';
+import type { Node, Edge } from '@xyflow/react';
 import type { HolProject } from '../types/index';
-import type { Animation, TrackAssignment, AudioMod } from '../useAnimationStore';
+import type { Move, TrackAssignment, AudioMod } from '../useMoveEditorStore';
 import { safeSetItem, safeParseStoredJson, debouncedSetItem } from '../../utils/safeStorage';
 import { throttleTrailingKeyed } from '../../utils/throttle';
 import { SHAPE_PRESETS } from '../../utils/shapePresets';
@@ -282,10 +282,10 @@ function loadSlotsFromStorage(): MoveSlot[] {
   return slots.map(normalizeSlot);
 }
 
-/// Projette un slot en `Animation` — la forme que l'Inspector édite via
+/// Projette un slot en `Move` — la forme que l'Inspector édite via
 /// `current`. La source de vérité reste le slot : `current` est une vue
 /// mutable, write-through vers le slot (updateCurrent → setSlot*).
-function slotToAnimation(raw: MoveSlot): Animation {
+function slotToAnimation(raw: MoveSlot): Move {
   // Défensif : des slots peuvent arriver sans les champs récents (setState
   // direct dans les tests, restaurations partielles) — normalizeSlot backfill.
   const slot = normalizeSlot(raw);
@@ -398,9 +398,9 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
     syncObjectsNodeNoHotSwap(get);
     // Projeter le slot dans `current` — l'Inspector édite `current`, qui est
     // write-through vers ce slot. Import deferred : cycle useGraphStore ↔
-    // useAnimationStore (même pattern que les autres call-sites du store).
-    import('../useAnimationStore').then(({ useAnimationStore }) => {
-      useAnimationStore.getState().setCurrent(slotToAnimation(get().moveSlots.find((s) => s.id === id) ?? slot));
+    // useMoveEditorStore (même pattern que les autres call-sites du store).
+    import('../useMoveEditorStore').then(({ useMoveEditorStore }) => {
+      useMoveEditorStore.getState().setCurrent(slotToAnimation(get().moveSlots.find((s) => s.id === id) ?? slot));
     });
   },
 

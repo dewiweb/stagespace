@@ -12,7 +12,7 @@ import {
   type EdgeChange,
   type Connection,
   MarkerType,
-} from 'reactflow';
+} from '@xyflow/react';
 import { createPerfSlice, type PerfSlice } from './slices/perfSlice';
 import { createAudioSlice, type AudioSlice, type AudioState } from './slices/audioSlice';
 import { createOscSlice, type OscSlice } from './slices/oscSlice';
@@ -293,8 +293,8 @@ export const useGraphStore = create<GraphState>()((...a) => {
 
   updateGraphLive: async (fadeDuration?: number) => {
     const { movements, nodes, edges } = get();
-    const { useAnimationStore } = await import('./useAnimationStore');
-    const { activeMovementIds } = useAnimationStore.getState();
+    const { useMoveEditorStore } = await import('./useMoveEditorStore');
+    const { activeMovementIds } = useMoveEditorStore.getState();
     if (movements.length === 0 && activeMovementIds.length === 0) return;
     const { prepareGraphForSave } = await import('../components/nodeParamSchema');
     const graphData = prepareGraphForSave(nodes, edges);
@@ -366,8 +366,8 @@ export const useGraphStore = create<GraphState>()((...a) => {
       }
 
       // Sync l'animation store
-      import('./useAnimationStore').then(({ useAnimationStore }) => {
-        const animState = useAnimationStore.getState();
+      import('./useMoveEditorStore').then(({ useMoveEditorStore }) => {
+        const animState = useMoveEditorStore.getState();
         animState.setCurrent({
           ...animState.current,
           name: preset.name,

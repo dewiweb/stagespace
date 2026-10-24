@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { useGraphStore } from '../store/useGraphStore';
-import { useAnimationStore } from '../store/useAnimationStore';
+import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { toThree } from '../utils/coords';
 
 
@@ -29,7 +29,7 @@ export const TrajectoryVisualization: React.FC<TrajectoryVisualizationProps> = (
   const movements = useGraphStore((s) => s.movements);
   const editingSlotId = useGraphStore((s) => s.editingSlotId);
   const moveSlots = useGraphStore((s) => s.moveSlots);
-  const currentAnim = useAnimationStore((s) => s.current);
+  const currentAnim = useMoveEditorStore((s) => s.current);
 
   // Trouver le movementId du slot sélectionné
   const selectedMovementId = editingSlotId
