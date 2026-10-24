@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { X, Check } from 'lucide-react';
-import { Handle, Position, NodeProps } from 'reactflow';
+import { Handle, Position, NodeProps, type Node } from '@xyflow/react';
 import { Slider } from './ui/Slider';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
@@ -10,13 +10,15 @@ import { isSourceNode, isTerminalNode, isBinaryComposite, getInputPorts } from '
 
 const AUDIO_NODE_TYPES = new Set(['BPM', 'AudioAmplitude', 'AudioSpectrum', 'AudioAmplitudeFalloff']);
 
-interface CustomNodeData {
+interface CustomNodeData extends Record<string, unknown> {
   label: string;
   type: NodeType;
   params: Record<string, NodeParamValue>;
 }
 
-const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
+type AppNode = Node<CustomNodeData>;
+
+const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
   const [expanded, setExpanded] = useState(false);
   const [trackIdsText, setTrackIdsText] = useState<string | null>(null);
   const updateNodeData = useGraphStore((s) => s.updateNodeData);

@@ -4,7 +4,7 @@ import { Slider } from './ui/Slider';
 import { PARAM_SCHEMA, ENGINE_TYPES, NON_PARAM_NODES, pluginNodeSchema, pluginParamsOnSwitch, type NodeParamValue, type GraphNodeData, type ParamDef } from './nodeParamSchema';
 import { useGraphStore } from '../store/useGraphStore';
 import type { NodeType } from '../store/types/index';
-import type { Node } from 'reactflow';
+import type { Node } from '@xyflow/react';
 
 /**
  * Panneau de params d'un graphe : chips de nodes paramétrables + grille de

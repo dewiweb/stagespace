@@ -1,5 +1,5 @@
 import { StateCreator } from 'zustand';
-import { type Node } from 'reactflow';
+import { type Node } from '@xyflow/react';
 import { simplifyPoints, computeCentroid } from '../utils/geometryUtils';
 import { feLog } from '../../utils/tauri';
 import { toast } from '../../utils/toast-helpers';

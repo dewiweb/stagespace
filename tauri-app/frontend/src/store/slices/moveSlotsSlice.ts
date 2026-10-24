@@ -2,7 +2,7 @@ import { StateCreator } from 'zustand';
 import { safeInvoke as invoke, feLog } from '../../utils/tauri';
 import { toast } from '../../utils/toast-helpers';
 import { computeCentroid } from '../utils/geometryUtils';
-import type { Node, Edge } from 'reactflow';
+import type { Node, Edge } from '@xyflow/react';
 import type { HolProject } from '../types/index';
 import type { Move, TrackAssignment, AudioMod } from '../useMoveEditorStore';
 import { safeSetItem, safeParseStoredJson, debouncedSetItem } from '../../utils/safeStorage';

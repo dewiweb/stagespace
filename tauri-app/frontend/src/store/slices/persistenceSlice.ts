@@ -1,5 +1,5 @@
 import { StateCreator } from 'zustand';
-import type { Node, Edge } from 'reactflow';
+import type { Node, Edge } from '@xyflow/react';
 import { safeInvoke as invoke } from '../../utils/tauri';
 import { safeSetItem, safeParseStoredJson } from '../../utils/safeStorage';
 import { toast } from '../../utils/toast-helpers';

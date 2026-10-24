@@ -12,7 +12,7 @@ import {
   type EdgeChange,
   type Connection,
   MarkerType,
-} from 'reactflow';
+} from '@xyflow/react';
 import { createPerfSlice, type PerfSlice } from './slices/perfSlice';
 import { createAudioSlice, type AudioSlice, type AudioState } from './slices/audioSlice';
 import { createOscSlice, type OscSlice } from './slices/oscSlice';
