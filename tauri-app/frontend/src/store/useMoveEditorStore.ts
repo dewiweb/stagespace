@@ -35,7 +35,7 @@ export interface TrackAssignment {
   phase_offset: number;
 }
 
-export interface Animation {
+export interface Move {
   id: string;
   name: string;
   speed: number;
@@ -62,11 +62,11 @@ export interface Animation {
 
 // ── Store ──
 
-interface AnimationStore {
+interface MoveEditorStore {
   // Liste des animations sauvegardées
-  animations: Animation[];
-  // Animation en cours d'édition dans l'inspector
-  current: Animation;
+  animations: Move[];
+  // Move en cours d'édition dans l'inspector
+  current: Move;
   // IDs des movements actifs
   activeMovementIds: string[];
   launchFlash: number; // timestamp du dernier launch (pour feedback visuel)
@@ -85,14 +85,14 @@ interface AnimationStore {
   setShortcutsOpen: (on: boolean) => void;
 
   // Actions
-  setCurrent: (anim: Animation) => void;
-  updateCurrent: (patch: Partial<Animation>) => void;
+  setCurrent: (anim: Move) => void;
+  updateCurrent: (patch: Partial<Move>) => void;
   updateAssignment: (trackId: number, patch: Partial<TrackAssignment>) => void;
   addAudioMod: (mod: AudioMod) => void;
   removeAudioMod: (index: number) => void;
   saveAnimation: () => Promise<void>;
   deleteAnimation: (id: string) => void;
-  loadAnimation: (anim: Animation) => void;
+  loadAnimation: (anim: Move) => void;
   renameAnimation: (id: string, name: string) => void;
 
   // Launch
@@ -104,7 +104,7 @@ interface AnimationStore {
   getTargetOscIds: () => number[];
 }
 
-function defaultAnimation(): Animation {
+function defaultAnimation(): Move {
   // Graphe par défaut: Circle (Objects → Circular → Output)
   // Construit dynamiquement pour éviter une dépendance circulaire avec shapePresets
   const defaultGraph = {
@@ -143,7 +143,7 @@ function defaultAnimation(): Animation {
 const STORAGE_KEY = 'stagespace-animations';
 const STORAGE_VERSION = 2; // bump quand les presets changent
 
-function loadAnimationsFromStorage(): Animation[] {
+function loadAnimationsFromStorage(): Move[] {
   let version: string | null = null;
   try {
     version = localStorage.getItem(STORAGE_KEY + '-version');
@@ -158,24 +158,24 @@ function loadAnimationsFromStorage(): Animation[] {
     return defaults;
   }
   // Corruption → safeParseStoredJson sauvegarde sous ".corrupt" + toast sticky
-  const parsed = safeParseStoredJson<Animation[] | null>(STORAGE_KEY, null);
+  const parsed = safeParseStoredJson<Move[] | null>(STORAGE_KEY, null);
   return parsed ?? [];
 }
 
-function defaultPresets(): Animation[] {
+function defaultPresets(): Move[] {
   // Les presets sont maintenant des templates de graphs (voir utils/shapePresets.ts)
   // On ne seed plus le localStorage avec des presets hardcoded — les templates sont dans le panneau gauche
   return [];
 }
 
-function saveAnimationsToStorage(animations: Animation[]) {
+function saveAnimationsToStorage(animations: Move[]) {
   safeSetItem(STORAGE_KEY, JSON.stringify(animations));
 }
 
 // Push live de l'animation state — throttlé (voir updateLiveAnimation).
 // Défini au niveau module : un seul throttle pour tout le store.
 let throttledPushAnimationState: () => void = () => {};
-export function _initAnimationThrottle(getState: () => AnimationStore) {
+export function _initAnimationThrottle(getState: () => MoveEditorStore) {
   throttledPushAnimationState = throttleTrailing(() => {
     const { current, activeMovementIds } = getState();
     const gs = useGraphStore.getState();
@@ -208,7 +208,7 @@ export function _initAnimationThrottle(getState: () => AnimationStore) {
 /// vérité pour playSlot — sans ça, les edits de l'Inspector étaient des
 /// dead-writes : jamais lus à l'activation). No-op si aucun slot édité
 /// (édition libre → brouillon pour saveAnimation).
-function syncCurrentToSlot(get: () => AnimationStore, patch: Partial<Animation>) {
+function syncCurrentToSlot(get: () => MoveEditorStore, patch: Partial<Move>) {
   const gs = useGraphStore.getState();
   const slotId = gs.editingSlotId;
   if (!slotId) return;
@@ -249,7 +249,7 @@ function syncCurrentToSlot(get: () => AnimationStore, patch: Partial<Animation>)
   }
 }
 
-export const useMoveEditorStore = create<AnimationStore>((set, get) => {
+export const useMoveEditorStore = create<MoveEditorStore>((set, get) => {
   // Initialise le throttle live-update avec l'accesseur du store
   _initAnimationThrottle(get);
   return {
@@ -341,7 +341,7 @@ export const useMoveEditorStore = create<AnimationStore>((set, get) => {
       graphStore.setEdges(edges);
       set({ current: { ...anim, id: projectedId } });
     } else {
-      // Animation sans graph_json (legacy) — utiliser le graphe par défaut
+      // Move sans graph_json (legacy) — utiliser le graphe par défaut
       const def = defaultAnimation();
       graphStore.setNodes(JSON.parse(JSON.stringify(def.graph_json.nodes)));
       graphStore.setEdges(JSON.parse(JSON.stringify(def.graph_json.edges)));

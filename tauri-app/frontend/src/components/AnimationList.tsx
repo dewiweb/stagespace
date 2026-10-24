@@ -1,12 +1,12 @@
 import React from 'react';
 import { Hexagon, X } from 'lucide-react';
-import { useMoveEditorStore, Animation } from '../store/useMoveEditorStore';
+import { useMoveEditorStore, Move } from '../store/useMoveEditorStore';
 import { useGraphStore } from '../store/useGraphStore';
 import EmptyState from './ui/EmptyState';
 import { SHAPE_PRESETS, type ShapePreset } from '../utils/shapePresets';
 
 // Icône pour une animation — dérivée du node engine principal du graphe
-function animIcon(anim: Animation): string {
+function animIcon(anim: Move): string {
   if (anim.graph_json?.nodes) {
     const engineTypes = ['Circular', 'Elliptical', 'Spiral', 'Lissajous', 'Figure8',
       'Linear', 'Oscillation', 'Formation', 'PerlinNoise', 'Converge', 'Pendulum',
@@ -51,7 +51,7 @@ export default function AnimationList() {
   const [editName, setEditName] = React.useState('');
   const [collapsedCats, setCollapsedCats] = React.useState<Set<string>>(new Set(['shaped', 'transitions', 'physics', 'layers', 'spline', 'reactive']));
 
-  const startRename = (anim: Animation) => {
+  const startRename = (anim: Move) => {
     setEditingId(anim.id);
     setEditName(anim.name);
   };

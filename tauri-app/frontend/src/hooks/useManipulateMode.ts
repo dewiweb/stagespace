@@ -42,7 +42,7 @@ export function useManipulateMode({
   // Refs pour les valeurs lues dans les callbacks — évite les stale closures
   const movementsRef = useRef(movements);
 
-  // Animation store ref — pour la manipulation directe 3D (offset, scale, rotation)
+  // Move store ref — pour la manipulation directe 3D (offset, scale, rotation)
   const animStoreRef = useRef(useMoveEditorStore.getState());
   animStoreRef.current = useMoveEditorStore.getState();
 
