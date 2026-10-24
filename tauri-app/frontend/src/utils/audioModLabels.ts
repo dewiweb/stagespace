@@ -1,4 +1,4 @@
-import type { AudioModSource, AudioModTarget } from '../store/useAnimationStore';
+import type { AudioModSource, AudioModTarget } from '../store/useMoveEditorStore';
 
 export function audioSourceLabel(s: AudioModSource): string {
   if (typeof s === 'string') {

@@ -2,7 +2,7 @@ import { useRef, useState, useCallback, MutableRefObject } from 'react';
 import * as THREE from 'three';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { useGraphStore } from '../store/useGraphStore';
-import { useAnimationStore } from '../store/useAnimationStore';
+import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { throttleTrailingKeyed } from '../utils/throttle';
 import { fromThree } from '../utils/coords';
 
@@ -43,8 +43,8 @@ export function useManipulateMode({
   const movementsRef = useRef(movements);
 
   // Animation store ref — pour la manipulation directe 3D (offset, scale, rotation)
-  const animStoreRef = useRef(useAnimationStore.getState());
-  animStoreRef.current = useAnimationStore.getState();
+  const animStoreRef = useRef(useMoveEditorStore.getState());
+  animStoreRef.current = useMoveEditorStore.getState();
 
   // Sync des refs à chaque render React (cheap — pas d'effet de bord)
   // movementPositions est lu via getState() dans les callbacks pour éviter

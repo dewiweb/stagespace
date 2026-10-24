@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAnimationStore, Animation } from '../store/useAnimationStore';
+import { useMoveEditorStore, Animation } from '../store/useMoveEditorStore';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { TrackGrid } from './TrackGrid';
 import { PARAM_SCHEMA, NODE_DESCRIPTIONS, getCategoryColor, type ParamDef, type NodeParamValue, type GraphNodeData } from './nodeParamSchema';
@@ -32,13 +32,13 @@ import { AudioModList } from './AudioModControls';
 import { Zap, AudioLines, Hexagon, SlidersHorizontal, Play, CircleDot, X, Square, ChevronRight, TriangleAlert, Check } from 'lucide-react';
 
 export default function Inspector() {
-  const showExpert = useAnimationStore((s) => s.showExpert);
-  const current = useAnimationStore((s) => s.current);
-  const updateCurrent = useAnimationStore((s) => s.updateCurrent);
-  const updateAssignment = useAnimationStore((s) => s.updateAssignment);
-  const computeCentroid = useAnimationStore((s) => s.computeCentroid);
-  const activeMovementIds = useAnimationStore((s) => s.activeMovementIds);
-  const launchFlash = useAnimationStore((s) => s.launchFlash);
+  const showExpert = useMoveEditorStore((s) => s.showExpert);
+  const current = useMoveEditorStore((s) => s.current);
+  const updateCurrent = useMoveEditorStore((s) => s.updateCurrent);
+  const updateAssignment = useMoveEditorStore((s) => s.updateAssignment);
+  const computeCentroid = useMoveEditorStore((s) => s.computeCentroid);
+  const activeMovementIds = useMoveEditorStore((s) => s.activeMovementIds);
+  const launchFlash = useMoveEditorStore((s) => s.launchFlash);
 
   // Sélecteurs granulaires — évite les re-renders à 60fps (movementPositions)
   const holProject = useGraphStore((s) => s.holProject);

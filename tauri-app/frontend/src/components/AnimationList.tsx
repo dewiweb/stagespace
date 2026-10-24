@@ -1,6 +1,6 @@
 import React from 'react';
 import { Hexagon, X } from 'lucide-react';
-import { useAnimationStore, Animation } from '../store/useAnimationStore';
+import { useMoveEditorStore, Animation } from '../store/useMoveEditorStore';
 import { useGraphStore } from '../store/useGraphStore';
 import EmptyState from './ui/EmptyState';
 import { SHAPE_PRESETS, type ShapePreset } from '../utils/shapePresets';
@@ -38,12 +38,12 @@ const CATEGORY_LABELS: Record<ShapePreset['category'], { label: string; color: s
 const CATEGORY_ORDER: ShapePreset['category'][] = ['orbits', 'gestures', 'shaped', 'transitions', 'physics', 'layers', 'spline', 'reactive'];
 
 export default function AnimationList() {
-  const animations = useAnimationStore((s) => s.animations);
-  const current = useAnimationStore((s) => s.current);
-  const saveAnimation = useAnimationStore((s) => s.saveAnimation);
-  const deleteAnimation = useAnimationStore((s) => s.deleteAnimation);
-  const loadAnimation = useAnimationStore((s) => s.loadAnimation);
-  const renameAnimation = useAnimationStore((s) => s.renameAnimation);
+  const animations = useMoveEditorStore((s) => s.animations);
+  const current = useMoveEditorStore((s) => s.current);
+  const saveAnimation = useMoveEditorStore((s) => s.saveAnimation);
+  const deleteAnimation = useMoveEditorStore((s) => s.deleteAnimation);
+  const loadAnimation = useMoveEditorStore((s) => s.loadAnimation);
+  const renameAnimation = useMoveEditorStore((s) => s.renameAnimation);
   const applyShapePreset = useGraphStore((s) => s.applyShapePreset);
   const getSelectedOscIds = useGraphStore((s) => s.getSelectedOscIds);
   const editingSlotId = useGraphStore((s) => s.editingSlotId);

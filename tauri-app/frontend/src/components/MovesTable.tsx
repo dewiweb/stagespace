@@ -1,7 +1,7 @@
 import React from 'react';
 import { CircleDot, Play, Square, RefreshCw, Pencil, SlidersHorizontal, X, Star, ChevronDown } from 'lucide-react';
 import { useGraphStore } from '../store/useGraphStore';
-import { useAnimationStore } from '../store/useAnimationStore';
+import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { SHAPE_PRESETS } from '../utils/shapePresets';
 import { useModalGuardOn } from '../utils/modalGuard';
 import Modal from './ui/Modal';
@@ -51,8 +51,8 @@ export default function MovesTable() {
   const selectSlotForEditing = useGraphStore((s) => s.selectSlotForEditing);
   const pendingPlays = useGraphStore((s) => s.pendingPlays);
 
-  const showExpert = useAnimationStore((s) => s.showExpert);
-  const setShowExpert = useAnimationStore((s) => s.setShowExpert);
+  const showExpert = useMoveEditorStore((s) => s.showExpert);
+  const setShowExpert = useMoveEditorStore((s) => s.setShowExpert);
 
   // Sync initial au montage — le polling est remplacé par le listener
   // active-moves-update dans useGraphStore

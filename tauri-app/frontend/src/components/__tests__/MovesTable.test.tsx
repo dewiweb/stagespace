@@ -5,13 +5,13 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import MovesTable from '../MovesTable';
 import { useGraphStore } from '../../store/useGraphStore';
-import { useAnimationStore } from '../../store/useAnimationStore';
+import { useMoveEditorStore } from '../../store/useMoveEditorStore';
 import { resetStore, makeSlot, getInvokeCalls, clearInvokeCalls } from '../../store/__tests__/testHelpers';
 
 beforeEach(() => {
   resetStore();
   // Reset animation store
-  useAnimationStore.setState({
+  useMoveEditorStore.setState({
     animations: [],
     current: null,
     activeMovementIds: [],

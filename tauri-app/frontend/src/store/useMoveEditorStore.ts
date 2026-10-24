@@ -249,7 +249,7 @@ function syncCurrentToSlot(get: () => AnimationStore, patch: Partial<Animation>)
   }
 }
 
-export const useAnimationStore = create<AnimationStore>((set, get) => {
+export const useMoveEditorStore = create<AnimationStore>((set, get) => {
   // Initialise le throttle live-update avec l'accesseur du store
   _initAnimationThrottle(get);
   return {
@@ -481,8 +481,8 @@ export const useAnimationStore = create<AnimationStore>((set, get) => {
 // on dérive activeMovementIds de son résultat au lieu de doubler l'IPC.
 useGraphStore.subscribe((state) => {
   const ids = state.movements.map((m) => m.id);
-  const current = useAnimationStore.getState().activeMovementIds;
+  const current = useMoveEditorStore.getState().activeMovementIds;
   if (ids.length === current.length && ids.every((id, i) => id === current[i])) return;
-  useAnimationStore.setState({ activeMovementIds: ids });
+  useMoveEditorStore.setState({ activeMovementIds: ids });
 });
 

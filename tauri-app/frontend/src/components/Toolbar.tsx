@@ -146,8 +146,8 @@ export const Toolbar: React.FC = () => {
         {/* Help — cheatsheet raccourcis live (même contenu que la touche ?) */}
         <IconButton
           onClick={() => {
-            import('../store/useAnimationStore').then(({ useAnimationStore }) => {
-              useAnimationStore.getState().setShortcutsOpen(true);
+            import('../store/useMoveEditorStore').then(({ useMoveEditorStore }) => {
+              useMoveEditorStore.getState().setShortcutsOpen(true);
             });
           }}
           title="Keyboard shortcuts (?)"

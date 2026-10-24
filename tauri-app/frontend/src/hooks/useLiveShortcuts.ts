@@ -59,8 +59,8 @@ export function useLiveShortcuts() {
       // le panneau de shortcuts avec la même touche.
       if (e.key === '?' && !e.repeat) {
         e.preventDefault();
-        import('../store/useAnimationStore').then(({ useAnimationStore }) => {
-          const s = useAnimationStore.getState();
+        import('../store/useMoveEditorStore').then(({ useMoveEditorStore }) => {
+          const s = useMoveEditorStore.getState();
           s.setShortcutsOpen(!s.shortcutsOpen);
         });
         return;

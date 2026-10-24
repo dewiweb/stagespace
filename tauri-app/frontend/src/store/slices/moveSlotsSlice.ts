@@ -4,7 +4,7 @@ import { toast } from '../../utils/toast-helpers';
 import { computeCentroid } from '../utils/geometryUtils';
 import type { Node, Edge } from 'reactflow';
 import type { HolProject } from '../types/index';
-import type { Animation, TrackAssignment, AudioMod } from '../useAnimationStore';
+import type { Animation, TrackAssignment, AudioMod } from '../useMoveEditorStore';
 import { safeSetItem, safeParseStoredJson, debouncedSetItem } from '../../utils/safeStorage';
 import { throttleTrailingKeyed } from '../../utils/throttle';
 import { SHAPE_PRESETS } from '../../utils/shapePresets';
@@ -398,9 +398,9 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
     syncObjectsNodeNoHotSwap(get);
     // Projeter le slot dans `current` — l'Inspector édite `current`, qui est
     // write-through vers ce slot. Import deferred : cycle useGraphStore ↔
-    // useAnimationStore (même pattern que les autres call-sites du store).
-    import('../useAnimationStore').then(({ useAnimationStore }) => {
-      useAnimationStore.getState().setCurrent(slotToAnimation(get().moveSlots.find((s) => s.id === id) ?? slot));
+    // useMoveEditorStore (même pattern que les autres call-sites du store).
+    import('../useMoveEditorStore').then(({ useMoveEditorStore }) => {
+      useMoveEditorStore.getState().setCurrent(slotToAnimation(get().moveSlots.find((s) => s.id === id) ?? slot));
     });
   },
 
