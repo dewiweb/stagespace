@@ -1,7 +1,6 @@
 import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
 import { toast } from '../utils/toast-helpers';
-import { safeInvoke } from '../utils/tauri';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { FolderInput, Settings, Undo2, Redo2, Save, FolderOpen, CircleHelp } from 'lucide-react';
 import { SettingsModal } from './SettingsModal';
