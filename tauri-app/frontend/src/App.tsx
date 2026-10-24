@@ -190,14 +190,17 @@ function App() {
           <button
             onClick={() => setPerformMode(!performMode)}
             className={`px-3 py-1 text-xs font-bold rounded transition-all flex items-center gap-1.5 ${
-              performMode ? 'bg-green-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+              performMode ? 'bg-gray-800 text-gray-400 hover:text-white' : 'bg-green-700 text-white'
             }`}
             title={performMode
-              ? 'Leave Perform — back to editing'
+              ? 'Atelier — edit moves and graphs (leave the live surface)'
               : 'Perform mode — live surface: setlist, GO, panic, on-demand live params'}
           >
-            <span className={`w-1.5 h-1.5 rounded-full ${performMode ? 'bg-white animate-pulse' : 'bg-gray-600'}`} />
-            PERFORM
+            {performMode ? (
+              <><Workflow size={11} /> Atelier</>
+            ) : (
+              <><span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> PERFORM</>
+            )}
           </button>
           {!performMode && (
             <button
