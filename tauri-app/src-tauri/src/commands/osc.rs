@@ -214,3 +214,20 @@ pub async fn send_osc_position(
         .map_err(|e| IpcError::io(format!("OSC send failed: {e}")))?;
     Ok(())
 }
+
+/// Master arm — « OSC LIVE » global. Gate sur le sink du merge : quand
+/// désarmé, aucun paquet OSC ne part (preview 3D vivante, silence réseau).
+/// Indépendant des flags `is_preview` par move.
+#[tauri::command]
+pub async fn set_osc_armed(armed: bool, state: State<'_, AppState>) -> Result<(), IpcError> {
+    let merge_rt = lock_or_recover(&state.merge_runtime);
+    merge_rt.set_osc_armed(armed);
+    eprintln!("[INFO] OSC master arm: {}", if armed { "ARMED" } else { "DISARMED" });
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_osc_armed(state: State<'_, AppState>) -> Result<bool, IpcError> {
+    let merge_rt = lock_or_recover(&state.merge_runtime);
+    Ok(merge_rt.osc_armed())
+}

@@ -85,6 +85,8 @@ const CATCHUP_FRAME_LIMIT: u128 = 30;
 pub struct MergeRuntime {
     thread: Option<std::thread::JoinHandle<()>>,
     running: Arc<AtomicBool>,
+    /// Master arm (« OSC LIVE ») — gate sur le chemin d'envoi du sink.
+    osc_armed: Arc<AtomicBool>,
     /// Vrai si le merge thread est mort d'un panic contenu (catch_unwind).
     /// Observable : sans lui, un panic tuait le thread pendant que
     /// `running` restait true → blackout OSC silencieux.
@@ -218,6 +220,7 @@ impl MergeRuntime {
         Ok(MergeRuntime {
             thread: None,
             running: Arc::new(AtomicBool::new(false)),
+            osc_armed: Arc::new(AtomicBool::new(true)),
             thread_died: Arc::new(AtomicBool::new(false)),
             merge_frames: Arc::new(AtomicU64::new(0)),
             dropped_positions: Arc::new(AtomicU64::new(0)),
@@ -282,6 +285,18 @@ impl MergeRuntime {
     /// injecter n'importe quel `PositionSink` sans toucher la boucle.
     pub fn set_sink(&self, sink: Box<dyn crate::position_sink::PositionSink>) {
         *self.sink.lock().unwrap_or_else(|e| e.into_inner()) = sink;
+    }
+
+    /// Master arm — « OSC LIVE » global. `false` = silence total : le merge
+    /// continue (preview 3D alive) mais aucun paquet ne part. Indépendant
+    /// des flags `is_preview` par move — c'est l'interrupteur master de
+    /// la console, pas un réglage de move.
+    pub fn set_osc_armed(&self, armed: bool) {
+        self.osc_armed.store(armed, Ordering::SeqCst);
+    }
+
+    pub fn osc_armed(&self) -> bool {
+        self.osc_armed.load(Ordering::SeqCst)
     }
 
     /// Configure la sortie OSC (sink par défaut). Sender + socket swappés
@@ -914,6 +929,7 @@ impl MergeRuntime {
         self.thread_died.store(false, Ordering::SeqCst);
         self.merge_frames.store(0, Ordering::SeqCst);
         let running = self.running.clone();
+        let osc_armed_arc = self.osc_armed.clone();
         let thread_died = self.thread_died.clone();
         let merge_frames = self.merge_frames.clone();
         let dropped_positions = self.dropped_positions.clone();
@@ -1358,7 +1374,10 @@ impl MergeRuntime {
                     .read()
                     .unwrap_or_else(|e| e.into_inner())
                     .clone();
-                {
+                // Master arm : disarmé = silence total, le merge continue
+                // (preview alive) mais aucun paquet ne part — ni les sends
+                // normaux ni la sonde du circuit-breaker.
+                if osc_armed_arc.load(Ordering::SeqCst) {
                     let mut sink_guard = sink_arc.lock().unwrap_or_else(|e| e.into_inner());
                     if osc_circuit_open {
                         // Circuit ouvert : une sonde par seconde — un vrai

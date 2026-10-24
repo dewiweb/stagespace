@@ -1,6 +1,7 @@
 import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
 import { toast } from '../utils/toast-helpers';
+import { safeInvoke } from '../utils/tauri';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { FolderInput, Settings, Undo2, Redo2, Save, FolderOpen, CircleHelp } from 'lucide-react';
 import { SettingsModal } from './SettingsModal';
@@ -11,6 +12,11 @@ export const Toolbar: React.FC = () => {
   // Sélecteurs granulaires — un full-store subscribe re-renderait la Toolbar
   // à chaque frame (movementPositions écrit à 60fps).
   const compileError = useGraphStore((s) => s.compileError);
+  // Master arm — état local, synchronisé au boot avec le backend.
+  const [oscArmed, setOscArmed] = React.useState(true);
+  React.useEffect(() => {
+    safeInvoke<boolean>('get_osc_armed').then(setOscArmed).catch(() => {});
+  }, []);
   const playError = useGraphStore((s) => s.playError);
   const nodes = useGraphStore((s) => s.nodes);
   const saveGraphToFile = useGraphStore((s) => s.saveGraphToFile);
@@ -112,6 +118,33 @@ export const Toolbar: React.FC = () => {
           <span className="text-gray-400 text-xs">{oscProfile}</span>
         </button>
         {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+
+        {/* Master arm — « OSC LIVE » global : disarmé = silence réseau total,
+            le merge et la preview continuent. Interrupteur de console, pas
+            un réglage par move (les badges Live/Preview restent par slot). */}
+        <button
+          onClick={async () => {
+            const next = !oscArmed;
+            setOscArmed(next);
+            try {
+              await safeInvoke('set_osc_armed', { armed: next });
+            } catch (e) {
+              setOscArmed(!next);
+              toast.error(`OSC arm failed: ${e}`);
+            }
+          }}
+          className={`px-2.5 py-1.5 text-xs font-bold rounded transition-colors flex items-center gap-1.5 ${
+            oscArmed
+              ? 'bg-red-900/60 text-red-300 hover:bg-red-800/70 border border-red-700/50'
+              : 'bg-gray-800 text-gray-500 hover:text-gray-300 border border-gray-700'
+          }`}
+          title={oscArmed
+            ? 'OSC LIVE — positions are being sent. Click to mute all OSC output'
+            : 'OSC muted — preview only, nothing is sent. Click to go LIVE'}
+        >
+          <span className={`w-2 h-2 rounded-full ${oscArmed ? 'bg-red-400 animate-pulse' : 'bg-gray-600'}`} />
+          {oscArmed ? 'LIVE' : 'MUTED'}
+        </button>
 
         <div className="w-px h-5 bg-stagespace-border mx-1" />
 
