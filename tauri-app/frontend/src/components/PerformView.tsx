@@ -11,6 +11,7 @@ import { useCuelistStore } from '../store/useCuelistStore';
 import { type NodeParamValue } from './nodeParamSchema';
 import { NodeParamsPanel } from './NodeParamsPanel';
 import { PanicButton } from './ui/PanicButton';
+import { OscArmToggle } from './ui/OscArmToggle';
 
 /// ── PERFORM VIEW ──
 /// Surface live réduite : setlist + cues + canvas + params live à la demande.
@@ -215,6 +216,7 @@ export const PerformView: React.FC = () => {
             {nextSetlistSlot ? nextSetlistSlot.name : 'end of setlist'}
           </div>
         </button>
+        <OscArmToggle />
         <PanicButton size="lg" />
       </div>
 
