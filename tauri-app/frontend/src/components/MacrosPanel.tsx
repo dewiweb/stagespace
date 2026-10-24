@@ -42,10 +42,10 @@ export const MacrosPanel: React.FC<MacrosPanelProps> = ({ isPlaying, hasMovement
   return (
     <div className="absolute top-2 left-2 z-overlay bg-gray-900/90 backdrop-blur rounded-lg p-3 border border-blue-600/50 flex flex-col gap-2 min-w-[200px]">
       <div className="flex items-center gap-2">
-        <span className="text-blue-400 text-[11px] font-semibold">Manipulate</span>
-        {shouldPush && <span className="text-green-400 text-[10px]">LIVE</span>}
+        <span className="text-blue-400 text-xs font-semibold">Manipulate</span>
+        {shouldPush && <span className="text-green-400 text-xs">LIVE</span>}
       </div>
-      <div className="text-gray-500 text-[10px] leading-tight">
+      <div className="text-gray-500 text-xs leading-tight">
         Drag handle = move all<br />
         Drag sphere = move one (override)<br />
         <span className="text-blue-400">Overrides send real OSC</span>
@@ -55,7 +55,7 @@ export const MacrosPanel: React.FC<MacrosPanelProps> = ({ isPlaying, hasMovement
           // Les overrides du drag 3D vivent dans le merge (manual_positions),
           // pas dans l'ancienne map runtime.overrides — supprimée.
           onClick={() => invoke('clear_all_manual_positions').catch(console.error)}
-          className="text-[10px] text-orange-400 hover:text-orange-300 bg-gray-800 hover:bg-gray-700 rounded py-1 transition-colors border border-gray-700"
+          className="text-xs text-orange-400 hover:text-orange-300 bg-gray-800 hover:bg-gray-700 rounded py-1 transition-colors border border-gray-700"
         >
           Clear All Overrides
         </button>
@@ -78,7 +78,7 @@ export const MacrosPanel: React.FC<MacrosPanelProps> = ({ isPlaying, hasMovement
         onChange={(v) => updateMacrosLive({ roll: v })} />
       <button
         onClick={() => updateMacrosLive({ scale: 1.0, shiftX: 0, shiftY: 0, shiftZ: 0, speed: 1.0, yaw: 0, pitch: 0, roll: 0 })}
-        className="text-[10px] text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 rounded py-1 transition-colors"
+        className="text-xs text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 rounded py-1 transition-colors"
       >
         Reset
       </button>

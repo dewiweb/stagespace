@@ -2,11 +2,11 @@ import React from 'react';
 import { X } from 'lucide-react';
 import { toast } from '../utils/toast-helpers';
 import { useGraphStore } from '../store/useGraphStore';
+import EmptyState from './ui/EmptyState';
 import {
   SPATIAL_CHANNELS,
   describeChannels,
   describeZoneShape,
-  parseChannelsSpec,
   parseObjectsSpec,
   parseVec3,
   type KinematicSourceName,
@@ -17,7 +17,7 @@ const inputCls =
   'w-full px-2.5 py-1.5 bg-gray-800 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none';
 const selectCls =
   'w-full px-2 py-1.5 bg-gray-800 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none';
-const removeBtnCls = 'text-red-400 hover:text-red-300 text-[11px] ml-2 flex-shrink-0';
+const removeBtnCls = 'text-red-400 hover:text-red-300 text-xs ml-2 flex-shrink-0';
 
 function Section({
   title,
@@ -33,11 +33,11 @@ function Section({
   return (
     <div>
       <div className="flex items-center justify-between mb-1.5">
-        <h4 className="text-gray-500 text-[10px] font-semibold uppercase tracking-wider">
+        <h4 className="text-gray-500 text-xs font-semibold uppercase tracking-wider">
           {title} ({count})
         </h4>
         {onClear && count > 0 && (
-          <button onClick={onClear} className="text-gray-600 hover:text-red-400 text-[10px]">
+          <button onClick={onClear} className="text-gray-400 hover:text-red-400 text-xs">
             clear all
           </button>
         )}
@@ -72,7 +72,9 @@ export default function SpatialFxPanel() {
   const [zRadius, setZRadius] = React.useState('2');
   const [zB, setZB] = React.useState('1,1,1');
   const [zFalloff, setZFalloff] = React.useState('0.5');
-  const [zChannels, setZChannels] = React.useState('');
+  const [zcName, setZcName] = React.useState<SpatialChannelName>('Gain');
+  const [zcValue, setZcValue] = React.useState('1');
+  const [zChannelRows, setZChannelRows] = React.useState<[SpatialChannelName, number][]>([]);
   const [zObjects, setZObjects] = React.useState('');
 
   // ── Modulation form state ──
@@ -99,27 +101,30 @@ export default function SpatialFxPanel() {
   // centre est invalide ou qu'aucun canal valide n'est saisi ; le hint
   // sous le bouton dit exactement ce qui manque.
   const zoneCenterValid = parseVec3(zA) !== null;
-  const zoneChannels = parseChannelsSpec(zChannels);
-  // Le backend rejette les noms de canaux inconnus (SpatialChannel::from_str)
-  const KNOWN_CHANNELS = SPATIAL_CHANNELS.map((c) => c.toLowerCase());
-  const unknownChannels = Object.keys(zoneChannels).filter((k) => !KNOWN_CHANNELS.includes(k));
-  const zoneChannelsValid =
-    Object.keys(zoneChannels).length > 0 && unknownChannels.length === 0;
+  const zoneChannels = Object.fromEntries(
+    zChannelRows.map(([c, v]) => [c.toLowerCase(), v])
+  );
+  const zoneChannelsValid = zChannelRows.length > 0;
   const zoneHint = !zoneCenterValid
     ? zShape === 'sphere'
-      ? 'center invalide — format x,y,z (ex: 0,0,0)'
-      : 'min invalide — format x,y,z'
-    : zChannels.trim() === ''
-      ? 'channels requis — ex: spread=1 ou gain=-3'
-      : !zoneChannelsValid
-        ? unknownChannels.length > 0
-          ? `canal inconnu '${unknownChannels[0]}' — ${KNOWN_CHANNELS.join('|')}`
-          : 'aucun canal valide — format nom=valeur (ex: spread=1)'
-        : null;
+      ? 'invalid center — format x,y,z (ex: 0,0,0)'
+      : 'invalid min — format x,y,z'
+    : !zoneChannelsValid
+      ? 'add at least one channel (e.g. spread = 1)'
+      : null;
+
+  const handleAddChannelRow = () => {
+    const v = parseFloat(zcValue);
+    if (isNaN(v)) return;
+    setZChannelRows((rows) => {
+      const next = rows.filter(([c]) => c !== zcName);
+      next.push([zcName, v]);
+      return next;
+    });
+  };
 
   const handleAddZone = async () => {
     const a = parseVec3(zA);
-    const channels = parseChannelsSpec(zChannels);
     if (!a || !zoneChannelsValid) return;
     try {
       await addZone({
@@ -128,10 +133,10 @@ export default function SpatialFxPanel() {
         radius: zShape === 'sphere' ? parseFloat(zRadius) || 1 : null,
         b: zShape === 'box' ? parseVec3(zB) : null,
         falloff: parseFloat(zFalloff) || 0,
-        channels,
+        channels: zoneChannels,
         objects: parseObjectsSpec(zObjects),
       });
-      setZChannels('');
+      setZChannelRows([]);
     } catch (e) {
       console.error('Failed to add zone:', e);
       toast.error(`Add zone failed: ${e}`);
@@ -183,7 +188,7 @@ export default function SpatialFxPanel() {
     <div className="p-3 h-full flex flex-col gap-3 overflow-y-auto">
       <div className="flex items-center gap-2">
         <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
-          <span className="text-white text-[10px]">FX</span>
+          <span className="text-white text-xs">FX</span>
         </div>
         <h3 className="text-white font-semibold text-sm">Spatial FX</h3>
       </div>
@@ -229,13 +234,46 @@ export default function SpatialFxPanel() {
               className={`${inputCls} font-mono`}
             />
           )}
-          <input
-            type="text"
-            value={zChannels}
-            onChange={(e) => setZChannels(e.target.value)}
-            placeholder="channels: gain=0,spread=1"
-            className={`${inputCls} font-mono`}
-          />
+          <div className="space-y-1">
+            <label className="text-gray-400 text-xs">Channels affected by the zone</label>
+            <div className="flex gap-1.5">
+              <select value={zcName} onChange={(e) => setZcName(e.target.value as SpatialChannelName)} className={selectCls} title="Spatial channel">
+                {SPATIAL_CHANNELS.map((c) => (
+                  <option key={c} value={c}>{c.toLowerCase()}</option>
+                ))}
+              </select>
+              <input
+                type="text"
+                value={zcValue}
+                onChange={(e) => setZcValue(e.target.value)}
+                placeholder="value"
+                className={`${inputCls} font-mono`}
+                title="Channel value (e.g. spread=1, gain=-3, yaw=45)"
+              />
+              <button
+                onClick={handleAddChannelRow}
+                disabled={isNaN(parseFloat(zcValue))}
+                className="px-2.5 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded whitespace-nowrap disabled:opacity-40"
+                title="Add this channel to the zone"
+              >
+                +
+              </button>
+            </div>
+            {zChannelRows.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {zChannelRows.map(([c, v]) => (
+                  <span key={c} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-cyan-900/40 border border-cyan-800/50 rounded text-cyan-200 text-xs font-mono">
+                    {c.toLowerCase()}={v}
+                    <button
+                      onClick={() => setZChannelRows((rows) => rows.filter(([rc]) => rc !== c))}
+                      className="text-cyan-400 hover:text-red-400"
+                      aria-label={`Remove ${c} channel`}
+                    ><X size={10} /></button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
           <input
             type="text"
             value={zObjects}
@@ -251,26 +289,28 @@ export default function SpatialFxPanel() {
             Add Zone
           </button>
           {zoneHint && (
-            <div className="text-amber-500/90 text-[10px] font-mono px-0.5">{zoneHint}</div>
+            <div className="text-amber-500/90 text-xs font-mono px-0.5">{zoneHint}</div>
           )}
           {!zoneHint && zoneChannelsValid && (
-            <div className="text-green-500/80 text-[10px] font-mono px-0.5">
+            <div className="text-green-500/80 text-xs font-mono px-0.5">
               → {describeChannels(zoneChannels)}
             </div>
           )}
         </div>
         {zones.length === 0 ? (
-          <div className="text-gray-600 text-[11px] text-center py-2 bg-gray-800/30 rounded border border-gray-700/30">
-            No zones
-          </div>
+          <EmptyState
+            size="sm"
+            title="No zones"
+            hint="Add one above to change spatial channels inside a region."
+          />
         ) : (
           <div className="space-y-1">
             {zones.map((zone, i) => (
               <div key={i} className="p-2 bg-gray-800/50 rounded border border-gray-700/50">
                 <div className="flex justify-between items-start">
                   <div className="flex-1 min-w-0">
-                    <div className="text-white text-[11px] font-mono">{describeZoneShape(zone.shape)}</div>
-                    <div className="text-gray-500 text-[10px] truncate">
+                    <div className="text-white text-xs font-mono">{describeZoneShape(zone.shape)}</div>
+                    <div className="text-gray-500 text-xs truncate">
                       {describeChannels(zone.channels)}
                       {zone.falloff > 0 && ` · falloff=${zone.falloff}`}
                       {zone.objects && ` · objs=[${zone.objects.join(',')}]`}
@@ -295,7 +335,7 @@ export default function SpatialFxPanel() {
               <option value="Jerk">jerk</option>
               <option value="AngularSpeed">angvel°/s</option>
             </select>
-            <span className="text-gray-600 self-center text-xs">→</span>
+            <span className="text-gray-400 self-center text-xs">→</span>
             <select value={mChannel} onChange={(e) => setMChannel(e.target.value as SpatialChannelName)} className={selectCls}>
               {SPATIAL_CHANNELS.map((c) => (
                 <option key={c} value={c}>
@@ -355,20 +395,22 @@ export default function SpatialFxPanel() {
           </div>
         </div>
         {modulations.length === 0 ? (
-          <div className="text-gray-600 text-[11px] text-center py-2 bg-gray-800/30 rounded border border-gray-700/30">
-            No modulations
-          </div>
+          <EmptyState
+            size="sm"
+            title="No modulations"
+            hint="Drive a channel from motion (speed → spread, angular speed → yaw…)."
+          />
         ) : (
           <div className="space-y-1">
             {modulations.map((mod, i) => (
               <div key={i} className="p-2 bg-gray-800/50 rounded border border-gray-700/50">
                 <div className="flex justify-between items-start">
                   <div className="flex-1 min-w-0">
-                    <div className="text-white text-[11px] font-mono">
+                    <div className="text-white text-xs font-mono">
                       {mod.source.toLowerCase()} → {mod.channel.toLowerCase()}
                       {mod.object !== null && ` [obj ${mod.object}]`}
                     </div>
-                    <div className="text-gray-500 text-[10px] font-mono truncate">
+                    <div className="text-gray-500 text-xs font-mono truncate">
                       ×{mod.scale}
                       {mod.offset !== 0 && ` +${mod.offset}`}
                       {mod.min !== null && ` min=${mod.min}`}
@@ -410,17 +452,19 @@ export default function SpatialFxPanel() {
           </button>
         </div>
         {channelEntries.length === 0 ? (
-          <div className="text-gray-600 text-[11px] text-center py-2 bg-gray-800/30 rounded border border-gray-700/30">
-            No static channels
-          </div>
+          <EmptyState
+            size="sm"
+            title="No static channels"
+            hint="Pin a channel value on a specific object."
+          />
         ) : (
           <div className="space-y-1">
             {channelEntries.map(([obj, channels]) => (
               <div key={obj} className="p-2 bg-gray-800/50 rounded border border-gray-700/50">
                 <div className="flex justify-between items-start">
                   <div className="flex-1 min-w-0">
-                    <div className="text-white text-[11px] font-mono">obj {obj}</div>
-                    <div className="text-gray-500 text-[10px] font-mono truncate">{describeChannels(channels)}</div>
+                    <div className="text-white text-xs font-mono">obj {obj}</div>
+                    <div className="text-gray-500 text-xs font-mono truncate">{describeChannels(channels)}</div>
                   </div>
                   <button
                     onClick={() => clearSpatialChannel(parseInt(obj, 10)).catch((e) => toast.error(`Spatial FX failed: ${e}`))}
@@ -437,14 +481,14 @@ export default function SpatialFxPanel() {
       {/* ── Graph-declared effects (read-only — gérés via l'éditeur de graphe) ── */}
       {(graphZones.length > 0 || graphModulations.length > 0) && (
         <div>
-          <h4 className="text-gray-500 text-[10px] font-semibold uppercase tracking-wider mb-1.5">
+          <h4 className="text-gray-500 text-xs font-semibold uppercase tracking-wider mb-1.5">
             Graph effects ({graphZones.length + graphModulations.length})
           </h4>
           <div className="space-y-1">
             {graphZones.map((zone, i) => (
               <div key={`z${i}`} className="p-2 bg-cyan-900/20 rounded border border-cyan-800/40">
-                <div className="text-cyan-200 text-[11px] font-mono">{describeZoneShape(zone.shape)}</div>
-                <div className="text-gray-500 text-[10px] truncate">
+                <div className="text-cyan-200 text-xs font-mono">{describeZoneShape(zone.shape)}</div>
+                <div className="text-gray-500 text-xs truncate">
                   {describeChannels(zone.channels)}
                   {zone.falloff > 0 && ` · falloff=${zone.falloff}`}
                   {zone.objects && ` · objs=[${zone.objects.join(',')}]`}
@@ -454,11 +498,11 @@ export default function SpatialFxPanel() {
             ))}
             {graphModulations.map((mod, i) => (
               <div key={`m${i}`} className="p-2 bg-cyan-900/20 rounded border border-cyan-800/40">
-                <div className="text-cyan-200 text-[11px] font-mono">
+                <div className="text-cyan-200 text-xs font-mono">
                   {mod.source.toLowerCase()} → {mod.channel.toLowerCase()}
                   {mod.object !== null && ` [obj ${mod.object}]`}
                 </div>
-                <div className="text-gray-500 text-[10px] font-mono truncate">
+                <div className="text-gray-500 text-xs font-mono truncate">
                   ×{mod.scale}
                   {mod.offset !== 0 && ` +${mod.offset}`}
                   {mod.min !== null && ` min=${mod.min}`}
@@ -467,7 +511,7 @@ export default function SpatialFxPanel() {
               </div>
             ))}
           </div>
-          <p className="text-gray-600 text-[10px] mt-1.5">
+          <p className="text-gray-400 text-xs mt-1.5">
             Declared by Zone/Velocity nodes in the global graph — edit via the node editor (Global tab).
           </p>
         </div>

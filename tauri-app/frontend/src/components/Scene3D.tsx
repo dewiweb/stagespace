@@ -196,7 +196,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-900/90 z-raised p-4">
           <TriangleAlert size={32} className="text-amber-400" />
           <div className="text-white text-sm font-medium">WebGL unavailable</div>
-          <div className="text-gray-400 text-[11px] text-center max-w-xs">
+          <div className="text-gray-400 text-xs text-center max-w-xs">
             GPU acceleration is blocked in this environment (sandboxed WebKit).
             <br />
             The 3D preview needs WebGL. You can still use the node editor, cues, macros, and OSC output.
@@ -260,11 +260,11 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
       {/* Active movements indicator — bottom right */}
       {movements.length > 0 && (
         <div className="absolute bottom-2 right-2 z-overlay bg-gray-900/80 backdrop-blur rounded-lg px-2 py-1 border border-gray-700/50 flex items-center gap-1.5">
-          <span className="text-gray-500 text-[10px] font-mono">MOVEMENTS</span>
+          <span className="text-gray-500 text-xs font-mono">MOVEMENTS</span>
           {movements.map((mv, idx) => (
             <span
               key={mv.id}
-              className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+              className={`text-xs font-mono px-1.5 py-0.5 rounded ${
                 mv.is_preview ? 'bg-cyan-900 text-cyan-400' : 'bg-green-900 text-green-400'
               }`}
               title={`${mv.name} — ${mv.track_count} tracks`}
@@ -281,7 +281,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
         <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
           <div className="text-center bg-gray-900/70 backdrop-blur rounded-xl px-6 py-4 border border-gray-700/40">
             <div className="text-gray-300 text-xs font-medium">No move running</div>
-            <div className="text-gray-500 text-[10px] mt-1.5 leading-relaxed">
+            <div className="text-gray-500 text-xs mt-1.5 leading-relaxed">
               <span className="text-gray-400">+ Move</span> creates a slot · a <span className="text-gray-400">template</span> fills it · <span className="text-gray-400">▶</span> launches it
             </div>
           </div>

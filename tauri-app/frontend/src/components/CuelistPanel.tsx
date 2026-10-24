@@ -5,6 +5,7 @@ import { useGraphStore } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import { useSignalGraphStore } from '../store/useSignalGraphStore';
 import { ConfirmModal } from './ui/ConfirmModal';
+import EmptyState from './ui/EmptyState';
 import { toast } from '../utils/toast-helpers';
 
 export const CuelistPanel: React.FC = () => {
@@ -101,24 +102,24 @@ export const CuelistPanel: React.FC = () => {
       {/* Header */}
       <div className="px-3 py-2 border-b border-stagespace-border flex items-center gap-2">
         <span className="text-gray-300 text-xs font-semibold">Cues</span>
-        <span className="text-gray-600 text-[10px]">{cues.length}</span>
+        <span className="text-gray-400 text-xs">{cues.length}</span>
         <div className="flex-1" />
         {/* GO buttons */}
         <button
           onClick={() => goToPreviousCue()}
           disabled={currentCueIndex <= 0 || isRecalling}
-          className="px-1.5 py-0.5 text-[10px] bg-gray-800 hover:bg-gray-700 text-gray-300 rounded disabled:opacity-30"
+          className="px-1.5 py-0.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 rounded disabled:opacity-30"
           title="Previous cue"
         >
           ◀
         </button>
-        <span className="text-gray-500 text-[10px] tabular-nums">
+        <span className="text-gray-500 text-xs tabular-nums">
           {currentCueIndex + 1}/{cues.length}
         </span>
         <button
           onClick={() => goToNextCue()}
           disabled={currentCueIndex + 1 >= cues.length || isRecalling}
-          className="px-1.5 py-0.5 text-[10px] bg-purple-800 hover:bg-purple-700 text-purple-200 rounded disabled:opacity-30"
+          className="px-1.5 py-0.5 text-xs bg-purple-800 hover:bg-purple-700 text-purple-200 rounded disabled:opacity-30"
           title="Next cue — RECALL replaces the whole scene (kill + respawn). Setlist GO = Enter."
         >
           RECALL ▶
@@ -133,7 +134,7 @@ export const CuelistPanel: React.FC = () => {
           onChange={(e) => setNewCueName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleStoreCue()}
           placeholder="Cue name..."
-          className="flex-1 px-2 py-1 text-[11px] bg-gray-900 border border-gray-700 rounded text-white placeholder-gray-600 focus:outline-none focus:border-purple-500"
+          className="flex-1 px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-white placeholder-gray-600 focus:outline-none focus:border-purple-500"
         />
         <input
           type="number"
@@ -142,12 +143,12 @@ export const CuelistPanel: React.FC = () => {
           value={newCueFade}
           onChange={(e) => setNewCueFade(Math.max(0, Number(e.target.value) || 0))}
           title="Crossfade duration on recall (s)"
-          className="w-14 px-1.5 py-1 text-[11px] bg-gray-900 border border-gray-700 rounded text-white text-right font-mono focus:outline-none focus:border-purple-500"
+          className="w-14 px-1.5 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-white text-right font-mono focus:outline-none focus:border-purple-500"
         />
         <button
           onClick={handleStoreCue}
           disabled={!newCueName.trim()}
-          className="px-2 py-1 text-[10px] bg-purple-700 hover:bg-purple-600 text-white rounded disabled:opacity-30 font-medium"
+          className="px-2 py-1 text-xs bg-purple-700 hover:bg-purple-600 text-white rounded disabled:opacity-30 font-medium"
         >
           ★ Store
         </button>
@@ -156,8 +157,12 @@ export const CuelistPanel: React.FC = () => {
       {/* Cue list */}
       <div className="flex-1 overflow-y-auto">
         {cues.length === 0 ? (
-          <div className="px-3 py-4 text-center text-gray-600 text-[11px]">
-            No cue. Store the current state with ★ Store.
+          <div className="px-3 py-3">
+            <EmptyState
+              size="sm"
+              title="No cues"
+              hint="A cue snapshots all running moves — store one, recall it live (Shift+Enter)."
+            />
           </div>
         ) : (
           <div className="divide-y divide-stagespace-border">
@@ -178,14 +183,14 @@ export const CuelistPanel: React.FC = () => {
                 }}
                 title={idx === currentCueIndex ? 'Current cue' : 'Click = arm · double-click = RECALL (replaces the whole scene)'}
               >
-                <span className="text-gray-500 text-[10px] tabular-nums w-6">
+                <span className="text-gray-500 text-xs tabular-nums w-6">
                   {idx + 1}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <div className="text-white text-[11px] font-medium truncate">
+                  <div className="text-white text-xs font-medium truncate">
                     {cue.name}
                   </div>
-                  <div className="text-gray-600 text-[10px] truncate flex items-center gap-1.5">
+                  <div className="text-gray-400 text-xs truncate flex items-center gap-1.5">
                     {cue.active_move_ids.length > 0 && (
                       <span>{cue.active_move_ids.length} move(s)</span>
                     )}
@@ -220,7 +225,7 @@ export const CuelistPanel: React.FC = () => {
                     e.stopPropagation();
                     setPendingDelete({ id: cue.id, name: cue.name });
                   }}
-                  className="text-gray-600 hover:text-red-400 text-[10px] px-1"
+                  className="text-gray-400 hover:text-red-400 text-xs px-1"
                   title="Delete"
                 >
                   <X size={11} />

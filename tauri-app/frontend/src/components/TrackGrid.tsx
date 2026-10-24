@@ -1,5 +1,6 @@
 import React from 'react';
 import { TrackAssignment } from '../store/useAnimationStore';
+import EmptyState from './ui/EmptyState';
 
 interface TrackInfo {
   id: number;
@@ -116,7 +117,7 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
             key={p.id}
             onClick={() => applyPattern(p.id)}
             title={p.title}
-            className="px-1.5 py-0.5 text-[10px] bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white rounded transition-colors"
+            className="px-1.5 py-0.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white rounded transition-colors"
           >
             {p.label}
           </button>
@@ -127,16 +128,24 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
       <div className="flex items-center gap-2">
         <button
           onClick={() => setShowDepth(!showDepth)}
-          className={`px-1.5 py-0.5 text-[10px] rounded transition-colors ${
+          className={`px-1.5 py-0.5 text-xs rounded transition-colors ${
             showDepth ? 'bg-cyan-700 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
           }`}
         >
           {showDepth ? 'Depth' : 'Select'}
         </button>
-        <span className="text-gray-500 text-[10px] font-mono ml-auto">
+        <span className="text-gray-500 text-xs font-mono ml-auto">
           {assignedCount}/{tracks.length} · Σ={totalDepth.toFixed(1)}
         </span>
       </div>
+
+      {tracks.length === 0 && (
+        <EmptyState
+          size="sm"
+          title="No tracks yet"
+          hint="Import a .hol project (toolbar) to see real track IDs, names and colours — or assign track IDs in the move's params."
+        />
+      )}
 
       {/* Grille de tracks — compact = auto-fill petites cellules (drawer
           Perform pleine largeur) ; sinon 4 colonnes (Inspector étroit) */}
@@ -165,7 +174,7 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
                 {/* Color dot + ID */}
                 <div className="flex items-center gap-1 mb-0.5">
                   <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                  <span className="text-white text-[10px] font-mono">{t.id}</span>
+                  <span className="text-white text-xs font-mono">{t.id}</span>
                 </div>
                 {/* Depth bar — vertical fill */}
                 <div className="relative h-8 bg-gray-900/60 rounded overflow-hidden">
@@ -177,7 +186,7 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
                       opacity: 0.7,
                     }}
                   />
-                  <span className="absolute inset-0 flex items-center justify-center text-[10px] font-mono text-white/80">
+                  <span className="absolute inset-0 flex items-center justify-center text-xs font-mono text-white/80">
                     {Math.round(depth * 100)}
                   </span>
                 </div>
@@ -217,7 +226,7 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
                   opacity: isSelected ? 1.0 : 0.3,
                 }}
               />
-              <span className={`text-[10px] font-mono ${isSelected ? 'text-white' : 'text-gray-600'}`}>
+              <span className={`text-xs font-mono ${isSelected ? 'text-white' : 'text-gray-400'}`}>
                 {t.id}
               </span>
               {/* Depth indicator (mini bar at bottom) */}
@@ -236,7 +245,7 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
 
       {/* Track details — la track survolée ou sélectionnée */}
       {assignedCount > 0 && showDepth && (
-        <div className="text-gray-500 text-[10px] text-center">
+        <div className="text-gray-500 text-xs text-center">
           Click a track to assign it · drag the slider for depth
         </div>
       )}

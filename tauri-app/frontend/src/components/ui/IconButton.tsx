@@ -4,7 +4,7 @@ import React from 'react';
 /// (px-2 py-1.5 text-xs bg-gray-800 …). `variant` = teinte sémantique.
 interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'default' | 'primary' | 'danger' | 'success' | 'warning';
-  /// Taille — 'sm' pour les rows compactes (px-1.5 py-0.5 text-[10px])
+  /// Taille — 'sm' pour les rows compactes (px-1.5 py-0.5 text-xs)
   size?: 'md' | 'sm';
   /// Bouton actif/toggled (teinte pleine au lieu de ghost)
   active?: boolean;
@@ -33,7 +33,7 @@ export const IconButton: React.FC<IconButtonProps> = ({
   className = '',
   ...props
 }) => {
-  const sizing = size === 'sm' ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-1.5 text-xs';
+  const sizing = size === 'sm' ? 'px-1.5 py-0.5 text-xs' : 'px-2 py-1.5 text-xs';
   const color = active ? ACTIVE[variant] : BASE[variant];
   return (
     <button

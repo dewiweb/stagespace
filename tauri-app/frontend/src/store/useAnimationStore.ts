@@ -122,7 +122,7 @@ function defaultAnimation(): Animation {
   };
   return {
     id: `anim-${Date.now()}`,
-    name: 'New animation',
+    name: 'Untitled move',
     speed: 1.0,
     duration: 4.0,
     direction: 'forward',

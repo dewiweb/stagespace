@@ -39,7 +39,7 @@ export const MacroControls: React.FC = () => {
       <div className="flex items-center justify-between">
         <h3 className="text-white font-semibold text-sm">Macro Controls</h3>
         {shouldPush && (
-          <span className="text-green-400 text-[10px] font-medium">LIVE</span>
+          <span className="text-green-400 text-xs font-medium">LIVE</span>
         )}
       </div>
 
@@ -47,7 +47,7 @@ export const MacroControls: React.FC = () => {
       <div className="flex gap-1 p-1 bg-gray-800/50 rounded border border-gray-700/50">
         <button
           onClick={() => handleLoopMode('loop')}
-          className={`flex-1 py-1 text-[10px] rounded font-medium transition-colors ${
+          className={`flex-1 py-1 text-xs rounded font-medium transition-colors ${
             loopMode === 'loop' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
         >
@@ -55,7 +55,7 @@ export const MacroControls: React.FC = () => {
         </button>
         <button
           onClick={() => handleLoopMode('oneshot')}
-          className={`flex-1 py-1 text-[10px] rounded font-medium transition-colors ${
+          className={`flex-1 py-1 text-xs rounded font-medium transition-colors ${
             loopMode === 'oneshot' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
         >
@@ -67,7 +67,7 @@ export const MacroControls: React.FC = () => {
       <div className="flex gap-1 p-1 bg-gray-800/50 rounded border border-gray-700/50">
         <button
           onClick={() => handleDirection('forward')}
-          className={`flex-1 py-1 text-[10px] rounded font-medium transition-colors ${
+          className={`flex-1 py-1 text-xs rounded font-medium transition-colors ${
             direction === 'forward' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
         >
@@ -75,7 +75,7 @@ export const MacroControls: React.FC = () => {
         </button>
         <button
           onClick={() => handleDirection('backward')}
-          className={`flex-1 py-1 text-[10px] rounded font-medium transition-colors ${
+          className={`flex-1 py-1 text-xs rounded font-medium transition-colors ${
             direction === 'backward' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
         >
@@ -83,7 +83,7 @@ export const MacroControls: React.FC = () => {
         </button>
         <button
           onClick={() => handleDirection('ping_pong')}
-          className={`flex-1 py-1 text-[10px] rounded font-medium transition-colors ${
+          className={`flex-1 py-1 text-xs rounded font-medium transition-colors ${
             direction === 'ping_pong' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
         >
@@ -93,7 +93,7 @@ export const MacroControls: React.FC = () => {
 
       {/* Section: Speed & Scale */}
       <div className="space-y-1.5">
-        <div className="text-gray-500 text-[10px] font-semibold uppercase tracking-wider">Motion</div>
+        <div className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Motion</div>
         <Slider
           label="Speed"
           value={macros.speed}
@@ -116,7 +116,7 @@ export const MacroControls: React.FC = () => {
 
       {/* Section: Shift (translate the whole trajectory) */}
       <div className="space-y-1.5">
-        <div className="text-gray-500 text-[10px] font-semibold uppercase tracking-wider">Shift</div>
+        <div className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Shift</div>
         <Slider
           label="Shift X"
           value={macros.shiftX}
@@ -148,7 +148,7 @@ export const MacroControls: React.FC = () => {
 
       {/* Section: Rotation (rotate the whole trajectory) */}
       <div className="space-y-1.5">
-        <div className="text-gray-500 text-[10px] font-semibold uppercase tracking-wider">Rotation</div>
+        <div className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Rotation</div>
         <Slider
           label="Yaw (Y)"
           value={macros.yaw}
@@ -183,7 +183,7 @@ export const MacroControls: React.FC = () => {
 
       <button
         onClick={reset}
-        className="mt-auto py-1.5 text-[11px] text-gray-400 hover:text-white bg-gray-800/50 hover:bg-gray-700 rounded border border-gray-700/50 transition-colors"
+        className="mt-auto py-1.5 text-xs text-gray-400 hover:text-white bg-gray-800/50 hover:bg-gray-700 rounded border border-gray-700/50 transition-colors"
       >
         Reset Macros
       </button>

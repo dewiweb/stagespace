@@ -109,15 +109,15 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
         <div className="px-5 py-4 space-y-5">
           {/* ─── OSC OUT ─── */}
           <section>
-            <h3 className="text-gray-400 text-[11px] font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+            <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
               <span className="text-blue-400">→</span> OSC Output
             </h3>
-            <p className="text-gray-600 text-[10px] mb-3">
+            <p className="text-gray-400 text-xs mb-3">
               Where to send positions (Holophonix, SPAT, IEM, etc.)
             </p>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-gray-500 text-[11px] block mb-1">Host</label>
+                <label className="text-gray-500 text-xs block mb-1">Host</label>
                 <input
                   type="text"
                   value={oscAddress}
@@ -127,7 +127,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 />
               </div>
               <div>
-                <label className="text-gray-500 text-[11px] block mb-1">Port</label>
+                <label className="text-gray-500 text-xs block mb-1">Port</label>
                 <input
                   type="number"
                   value={oscPort}
@@ -136,7 +136,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 />
               </div>
               <div className="col-span-2">
-                <label className="text-gray-500 text-[11px] block mb-1">Profile</label>
+                <label className="text-gray-500 text-xs block mb-1">Profile</label>
                 <select
                   value={oscProfile}
                   onChange={(e) => setOscProfile(e.target.value)}
@@ -155,7 +155,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <button
                 onClick={handleDiscover}
                 disabled={discovering}
-                className="px-3 py-1.5 text-[11px] font-medium rounded bg-cyan-700 hover:bg-cyan-600 text-white transition-colors disabled:opacity-40"
+                className="px-3 py-1.5 text-xs font-medium rounded bg-cyan-700 hover:bg-cyan-600 text-white transition-colors disabled:opacity-40"
               >
                 {discovering ? 'Scanning…' : 'Discover renderers'}
               </button>
@@ -167,7 +167,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                     setOscPort(t.port);
                     setOscProfile(t.profile);
                   }}
-                  className={`px-2 py-1 text-[10px] rounded border transition-colors ${
+                  className={`px-2 py-1 text-xs rounded border transition-colors ${
                     t.source === 'mdns'
                       ? 'bg-green-900/40 border-green-700/50 text-green-400 hover:bg-green-900/60'
                       : t.source === 'scan'
@@ -184,15 +184,15 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
 
           {/* ─── OSC IN ─── */}
           <section>
-            <h3 className="text-gray-400 text-[11px] font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+            <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
               <span className="text-green-400">←</span> OSC Input
             </h3>
-            <p className="text-gray-600 text-[10px] mb-3">
+            <p className="text-gray-400 text-xs mb-3">
               Port to listen for incoming OSC messages (triggers, parameter overrides)
             </p>
             <div className="flex items-end gap-2">
               <div className="flex-1">
-                <label className="text-gray-500 text-[11px] block mb-1">Receiver Port</label>
+                <label className="text-gray-500 text-xs block mb-1">Receiver Port</label>
                 <input
                   type="number"
                   value={oscInPortStr}
@@ -208,7 +208,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               </button>
             </div>
             {oscInStatus && (
-              <p className={`text-[10px] mt-1.5 ${oscInStatus.startsWith('Error') ? 'text-red-400' : 'text-green-400'}`}>
+              <p className={`text-xs mt-1.5 ${oscInStatus.startsWith('Error') ? 'text-red-400' : 'text-green-400'}`}>
                 {oscInStatus}
               </p>
             )}
@@ -216,10 +216,10 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
 
           {/* ─── Merge ─── */}
           <section>
-            <h3 className="text-gray-400 text-[11px] font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+            <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
               <span className="text-amber-400">⇄</span> Merge
             </h3>
-            <p className="text-gray-600 text-[10px] mb-3">
+            <p className="text-gray-400 text-xs mb-3">
               How contested tracks resolve when several playing moves target the same track.
               A Merge node in the global graph can also set this — last writer wins.
             </p>
@@ -236,10 +236,10 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
 
           {/* ─── Track IDs ─── */}
           <section>
-            <h3 className="text-gray-400 text-[11px] font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+            <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
               <ListOrdered size={11} className="text-purple-400" /> Track IDs
             </h3>
-            <p className="text-gray-600 text-[10px] mb-3">
+            <p className="text-gray-400 text-xs mb-3">
               Virtual track IDs when no .hol project is loaded
             </p>
             <input
@@ -253,10 +253,10 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
 
           {/* ─── Audio Input ─── */}
           <section>
-            <h3 className="text-gray-400 text-[11px] font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+            <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
               <span className="text-cyan-400">♪</span> Audio Input
             </h3>
-            <p className="text-gray-600 text-[10px] mb-3">
+            <p className="text-gray-400 text-xs mb-3">
               Microphone / audio interface for audio-reactive trajectories
             </p>
             {audioDevices.length > 0 ? (
@@ -273,7 +273,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 ))}
               </select>
             ) : (
-              <p className="text-gray-600 text-[10px] italic">
+              <p className="text-gray-400 text-xs italic">
                 Start the microphone once to enumerate available devices.
               </p>
             )}

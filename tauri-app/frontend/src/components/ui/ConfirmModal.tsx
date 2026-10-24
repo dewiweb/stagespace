@@ -21,17 +21,17 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
 }) => (
   <Modal title={title} onClose={onCancel} widthClass="max-w-sm">
     <div className="p-4">
-      <div className="text-gray-300 text-[11px] leading-relaxed">{message}</div>
+      <div className="text-gray-300 text-xs leading-relaxed">{message}</div>
       <div className="flex gap-2 mt-4">
         <button
           onClick={onCancel}
-          className="flex-1 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-[11px] rounded font-medium"
+          className="flex-1 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs rounded font-medium"
         >
           Cancel
         </button>
         <button
           onClick={onConfirm}
-          className="flex-1 py-1.5 bg-red-700 hover:bg-red-600 text-white text-[11px] rounded font-bold"
+          className="flex-1 py-1.5 bg-red-700 hover:bg-red-600 text-white text-xs rounded font-bold"
         >
           {confirmLabel}
         </button>

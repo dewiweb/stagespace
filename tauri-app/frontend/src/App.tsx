@@ -53,7 +53,7 @@ function App() {
   const [movesExpanded, setMovesExpanded] = usePersistedState<boolean>('ss-layout-movesExpanded', true);
   // AudioPanel = monitoring/config — collapsible pour rendre la hauteur à
   // l'Inspector (outil de travail principal de la colonne droite).
-  const [audioExpanded, setAudioExpanded] = usePersistedState<boolean>('ss-layout-audioExpanded', true);
+  const [audioExpanded, setAudioExpanded] = usePersistedState<boolean>('ss-layout-audioExpanded', false);
   // Premier lancement : proposer le show d'exemple bundle (évalué une fois)
   const [showWelcome, setShowWelcome] = React.useState(shouldShowWelcome);
 
@@ -184,7 +184,7 @@ function App() {
             <span className="text-white font-bold text-sm">S</span>
           </div>
           <h1 className="text-white font-bold text-base tracking-tight">STAGESPACE</h1>
-          <span className="text-gray-600 text-[11px] ml-1 italic">Play the space</span>
+          <span className="text-gray-400 text-xs ml-1 italic">Play the space</span>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -239,7 +239,7 @@ function App() {
             title="Show the Show / Templates panel"
           >
             <PanelLeftOpen size={13} className="text-gray-500 group-hover:text-white" />
-            <span className="text-gray-600 text-[10px] mt-2 writing-vertical" style={{ writingMode: 'vertical-rl' }}>Moves</span>
+            <span className="text-gray-400 text-xs mt-2 writing-vertical" style={{ writingMode: 'vertical-rl' }}>Moves</span>
           </button>
         ) : (
           <>
@@ -257,10 +257,10 @@ function App() {
               <div className="flex items-center gap-1 px-3 py-1.5 border-b border-stagespace-border flex-shrink-0 bg-gray-900/30">
                 <button
                   onClick={() => setMovesExpanded(!movesExpanded)}
-                  className="text-gray-400 hover:text-white text-[10px] w-4"
+                  className="text-gray-400 hover:text-white text-xs w-4"
                   title={movesExpanded ? "Collapse" : "Expand"}
                 >{movesExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}</button>
-                <span className="text-gray-400 text-[10px] uppercase tracking-wider font-medium">Show</span>
+                <span className="text-gray-400 text-xs uppercase tracking-wider font-medium">Show</span>
               </div>
               {movesExpanded && (
                 <div className="flex-1 min-h-0 overflow-hidden">
@@ -275,10 +275,10 @@ function App() {
               <div className="flex items-center gap-1 px-3 py-1.5 border-b border-stagespace-border flex-shrink-0 bg-gray-900/30">
                 <button
                   onClick={() => setGraphsExpanded(!graphsExpanded)}
-                  className="text-gray-400 hover:text-white text-[10px] w-4"
+                  className="text-gray-400 hover:text-white text-xs w-4"
                   title={graphsExpanded ? "Collapse" : "Expand"}
                 >{graphsExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}</button>
-                <span className="text-gray-400 text-[10px] uppercase tracking-wider font-medium">Templates</span>
+                <span className="text-gray-400 text-xs uppercase tracking-wider font-medium">Templates</span>
               </div>
               {graphsExpanded && (
                 <div className="flex-1 min-h-0 overflow-hidden">
@@ -309,7 +309,7 @@ function App() {
               <span className="text-gray-300 text-xs font-medium">Expert — Node Editor</span>
               <button
                 onClick={() => setEditorFocus(!editorFocus)}
-                className={`px-2 py-0.5 text-[10px] rounded font-medium flex items-center gap-1 transition-colors ${
+                className={`px-2 py-0.5 text-xs rounded font-medium flex items-center gap-1 transition-colors ${
                   editorFocus
                     ? 'bg-purple-600 text-white'
                     : 'bg-gray-800 text-gray-400 hover:text-white'
@@ -332,7 +332,7 @@ function App() {
                   useAnimationStore.getState().saveAnimation();
                   setShowExpert(false);
                 }}
-                className="px-2 py-0.5 text-[10px] bg-purple-700 hover:bg-purple-600 text-white rounded font-medium"
+                className="px-2 py-0.5 text-xs bg-purple-700 hover:bg-purple-600 text-white rounded font-medium"
                 title="Save the graph as a Custom animation"
               >
                 ★ Save
@@ -342,7 +342,7 @@ function App() {
             <div className="h-9 border-b border-stagespace-border flex items-center px-3 bg-stagespace-panel flex-shrink-0">
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 rounded bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                  <span className="text-white text-[10px] font-bold">3D</span>
+                  <span className="text-white text-xs font-bold">3D</span>
                 </div>
                 <span className="text-gray-300 text-xs font-medium">Canvas</span>
               </div>
@@ -356,7 +356,7 @@ function App() {
                   <Activity size={12} />
                 </button>
               )}
-              <span className="text-gray-500 text-[10px]">orbit: drag · zoom: scroll</span>
+              <span className="text-gray-500 text-xs">orbit: drag · zoom: scroll</span>
             </div>
           )}
 
@@ -388,8 +388,8 @@ function App() {
             <div className={`flex-1 min-w-[200px] flex flex-col ${focusActive ? 'hidden' : ''}`}>
               {showExpert && (
                 <div className="h-7 border-b border-stagespace-border flex items-center px-2 bg-stagespace-panel flex-shrink-0">
-                  <span className="text-gray-400 text-[10px] font-medium">3D Preview</span>
-                  <span className="text-gray-500 text-[10px] ml-2">orbit: drag · zoom: scroll</span>
+                  <span className="text-gray-400 text-xs font-medium">3D Preview</span>
+                  <span className="text-gray-500 text-xs ml-2">orbit: drag · zoom: scroll</span>
                   <div className="flex-1" />
                   {import.meta.env.DEV && (
                     <button
@@ -426,7 +426,7 @@ function App() {
             title="Show the Inspector"
           >
             <PanelRightOpen size={13} className="text-gray-500 group-hover:text-white" />
-            <span className="text-gray-600 text-[10px] mt-2" style={{ writingMode: 'vertical-rl' }}>Inspector</span>
+            <span className="text-gray-400 text-xs mt-2" style={{ writingMode: 'vertical-rl' }}>Inspector</span>
           </button>
         ) : (
           <>
@@ -456,7 +456,7 @@ function App() {
                 title={audioExpanded ? 'Collapse audio monitoring' : 'Expand audio monitoring'}
               >
                 {audioExpanded ? <ChevronDown size={11} className="text-gray-400" /> : <ChevronRight size={11} className="text-gray-400" />}
-                <span className="text-gray-400 text-[10px] uppercase tracking-wider font-medium">Audio IN</span>
+                <span className="text-gray-400 text-xs uppercase tracking-wider font-medium">Audio IN</span>
               </button>
               {audioExpanded && (
                 <div className="overflow-y-auto min-h-0">
