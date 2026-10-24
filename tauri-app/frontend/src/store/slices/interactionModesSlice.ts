@@ -20,6 +20,11 @@ export interface InteractionModesSlice {
   setZonePlaceMode: (v: boolean) => void;
   pendingZonePoint: [number, number, number] | null;
   setPendingZonePoint: (p: [number, number, number] | null) => void;
+  /// Cible du place-on-scene : null = le formulaire de nouvelle zone
+  /// (remplit le champ centre), index = re-place la zone existante i via
+  /// updateZone (édition en place — ordre préservé).
+  zonePlaceTarget: number | null;
+  setZonePlaceTarget: (i: number | null) => void;
   /// Annule draw/manipulate/assign/zone-place. Retourne true si un mode
   /// était actif (Esc consommé — ne doit PAS déclencher le panic).
   cancelInteractionModes: () => boolean;
@@ -39,6 +44,8 @@ export const createInteractionModesSlice: StateCreator<Store, [], [], Interactio
     set(v ? { zonePlaceMode: true, drawMode: false, manipulateMode: false, assignMode: false } : { zonePlaceMode: false }),
   pendingZonePoint: null,
   setPendingZonePoint: (p) => set({ pendingZonePoint: p }),
+  zonePlaceTarget: null,
+  setZonePlaceTarget: (i) => set({ zonePlaceTarget: i }),
   cancelInteractionModes: () => {
     const { drawMode, manipulateMode, assignMode, zonePlaceMode } = get();
     if (!drawMode && !manipulateMode && !assignMode && !zonePlaceMode) return false;

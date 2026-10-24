@@ -11,6 +11,7 @@ import {
   parseVec3,
   type KinematicSourceName,
   type SpatialChannelName,
+  type ZoneParams,
 } from '../store/slices/spatialFxSlice';
 
 const inputCls =
@@ -69,6 +70,9 @@ export default function SpatialFxPanel() {
   const setZonePlaceMode = useGraphStore((s) => s.setZonePlaceMode);
   const pendingZonePoint = useGraphStore((s) => s.pendingZonePoint);
   const setPendingZonePoint = useGraphStore((s) => s.setPendingZonePoint);
+  const zonePlaceTarget = useGraphStore((s) => s.zonePlaceTarget);
+  const setZonePlaceTarget = useGraphStore((s) => s.setZonePlaceTarget);
+  const updateZone = useGraphStore((s) => s.updateZone);
 
   // ── Zone form state ──
   const [zShape, setZShape] = React.useState<'sphere' | 'box'>('sphere');
@@ -102,13 +106,46 @@ export default function SpatialFxPanel() {
   }, [refreshSpatialFx]);
 
   // Place-on-scene : le clic au sol (Scene3D → pendingZonePoint, coords
-  // backend) remplit le champ centre/min — placement à la souris, la saisie
-  // manuelle reste possible pour affiner.
+  // backend) — deux cibles : le formulaire de nouvelle zone (remplit le
+  // champ centre) ou le re-place d'une zone existante (updateZone, les
+  // autres params préservés — le point devient le nouveau centre ; pour
+  // une box, min/max sont translatés autour de lui, taille préservée).
   React.useEffect(() => {
     if (!pendingZonePoint) return;
-    setZA(pendingZonePoint.map((v) => Math.round(v * 100) / 100).join(','));
+    const pt = pendingZonePoint.map((v) => Math.round(v * 100) / 100) as [number, number, number];
     setPendingZonePoint(null);
-  }, [pendingZonePoint, setPendingZonePoint]);
+    if (zonePlaceTarget === null) {
+      setZA(pt.join(','));
+      return;
+    }
+    const zone = zones[zonePlaceTarget];
+    setZonePlaceTarget(null);
+    if (!zone) return;
+    const channels = Object.fromEntries(
+      Object.entries(zone.channels).filter(([, v]) => v !== null && v !== undefined),
+    ) as Record<string, number>;
+    const params: ZoneParams =
+      zone.shape.shape === 'sphere'
+        ? {
+            shape: 'sphere',
+            a: pt,
+            radius: zone.shape.radius,
+            b: null,
+            falloff: zone.falloff,
+            channels,
+            objects: zone.objects ?? null,
+          }
+        : {
+            shape: 'box',
+            a: pt.map((c, k) => c - (zone.shape.max[k] - zone.shape.min[k]) / 2) as [number, number, number],
+            radius: null,
+            b: pt.map((c, k) => c + (zone.shape.max[k] - zone.shape.min[k]) / 2) as [number, number, number],
+            falloff: zone.falloff,
+            channels,
+            objects: zone.objects ?? null,
+          };
+    updateZone(zonePlaceTarget, params).catch((e) => toast.error(`Zone re-place failed: ${e}`));
+  }, [pendingZonePoint, zonePlaceTarget, zones, updateZone, setPendingZonePoint, setZonePlaceTarget]);
 
   // Validation live de la zone — le bouton Add reste grisé tant que le
   // centre est invalide ou qu'aucun canal valide n'est saisi ; le hint
@@ -343,6 +380,12 @@ export default function SpatialFxPanel() {
                       {!zone.enabled && ' · disabled'}
                     </div>
                   </div>
+                  <button
+                    onClick={() => { setZonePlaceTarget(i); setZonePlaceMode(true); }}
+                    className={removeBtnCls}
+                    title="Re-place this zone's center on the scene — then click the floor"
+                    aria-label={`Re-place zone ${i}`}
+                  >⌖</button>
                   <button onClick={() => removeZone(i).catch((e) => toast.error(`Spatial FX failed: ${e}`))} className={removeBtnCls} aria-label="Remove zone"><X size={11} /></button>
                 </div>
               </div>

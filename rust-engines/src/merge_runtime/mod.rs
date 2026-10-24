@@ -645,6 +645,22 @@ impl MergeRuntime {
         }
     }
 
+    /// Remplace la zone à `index` — édition en place : l'index est préservé
+    /// (aucun remove+add, la position dans la liste ne bouge pas et les
+    /// autres zones ne dérivent pas). Même pattern copy-on-write que
+    /// remove_zone — snapshot Arc par frame dans le merge thread.
+    pub fn update_zone(&self, index: usize, zone: crate::zones::Zone) -> bool {
+        let mut guard = self.zones.write().unwrap_or_else(|e| e.into_inner());
+        if index < guard.len() {
+            let mut zones = (**guard).clone();
+            zones[index] = zone;
+            *guard = Arc::new(zones);
+            true
+        } else {
+            false
+        }
+    }
+
     /// Efface toutes les zones
     pub fn clear_zones(&self) {
         *self.zones.write().unwrap_or_else(|e| e.into_inner()) = Arc::new(Vec::new());

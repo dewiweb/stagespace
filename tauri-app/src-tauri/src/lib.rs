@@ -30,7 +30,7 @@ use commands::merge_commands::{
     set_global_origin, set_global_osc_ids, set_kinematic_smoothing, set_manual_position,
     set_merge_strategy, set_move_playback_mode, set_move_priority, set_move_speed, set_move_weight,
     set_spatial_channel, set_track_depths, set_track_positions, update_global_graph,
-    update_move_graph_merged, update_signal_graph,
+    update_move_graph_merged, update_signal_graph, update_zone,
 };
 use commands::network::discover_osc_targets;
 use commands::osc::{
@@ -403,6 +403,7 @@ pub fn run() {
             set_kinematic_smoothing,
             // Zones (Phase 4 P4 — effets spatiaux par position)
             add_zone,
+            update_zone,
             remove_zone,
             clear_zones,
             list_zones,

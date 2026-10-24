@@ -181,10 +181,9 @@ pub struct ZoneParams {
     pub objects: Option<Vec<usize>>,
 }
 
-/// Ajoute une zone d'effet spatial : les canaux listés sont tirés vers leurs
-/// valeurs cibles proportionnellement à l'influence (smoothstep sur falloff).
-#[tauri::command]
-pub async fn add_zone(params: ZoneParams, state: State<'_, AppState>) -> Result<usize, IpcError> {
+/// ZoneParams → Zone : parsing partagé par add_zone et update_zone —
+/// une seule validation, pas deux chemins qui pourraient diverger.
+fn build_zone(params: ZoneParams) -> Result<Zone, IpcError> {
     let a = require_finite_vec3("a", params.a)?;
     let shape = match params.shape.to_lowercase().as_str() {
         "sphere" => ZoneShape::Sphere {
@@ -216,15 +215,40 @@ pub async fn add_zone(params: ZoneParams, state: State<'_, AppState>) -> Result<
     if channels.is_empty() {
         return Err(IpcError::validation("Zone requires at least one channel"));
     }
-    let zone = Zone {
+    Ok(Zone {
         shape,
         falloff: params.falloff.unwrap_or(0.0).max(0.0),
         channels,
         objects: params.objects,
         enabled: true,
-    };
+    })
+}
+
+/// Ajoute une zone d'effet spatial : les canaux listés sont tirés vers leurs
+/// valeurs cibles proportionnellement à l'influence (smoothstep sur falloff).
+#[tauri::command]
+pub async fn add_zone(params: ZoneParams, state: State<'_, AppState>) -> Result<usize, IpcError> {
+    let zone = build_zone(params)?;
     let merge_rt = lock_or_recover(&state.merge_runtime);
     merge_rt.add_zone(zone).map_err(IpcError::validation)
+}
+
+/// Remplace la zone à `index` — édition en place : la position dans la
+/// liste est préservée, les autres zones ne dérivent pas. Nécessaire à
+/// l'édition des zones depuis le panel FX (drag sur la scène, form).
+#[tauri::command]
+pub async fn update_zone(
+    index: usize,
+    params: ZoneParams,
+    state: State<'_, AppState>,
+) -> Result<(), IpcError> {
+    let zone = build_zone(params)?;
+    let merge_rt = lock_or_recover(&state.merge_runtime);
+    if merge_rt.update_zone(index, zone) {
+        Ok(())
+    } else {
+        Err(IpcError::not_found(format!("No zone at index {index}")))
+    }
 }
 
 /// Supprime une zone par index

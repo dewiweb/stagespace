@@ -101,6 +101,8 @@ export interface SpatialFxSlice {
   kinematicSmoothing: number;
   refreshSpatialFx: () => Promise<void>;
   addZone: (params: ZoneParams) => Promise<void>;
+  /// Remplace la zone à `index` (édition en place — ordre préservé).
+  updateZone: (index: number, params: ZoneParams) => Promise<void>;
   removeZone: (index: number) => Promise<void>;
   clearZones: () => Promise<void>;
   addModulation: (params: ModulationParams) => Promise<void>;
@@ -150,6 +152,11 @@ export const createSpatialFxSlice: StateCreator<SpatialFxSlice, [], [], SpatialF
 
   addZone: async (params) => {
     await invoke('add_zone', { params });
+    await get().refreshSpatialFx();
+  },
+
+  updateZone: async (index, params) => {
+    await invoke('update_zone', { index, params });
     await get().refreshSpatialFx();
   },
 
