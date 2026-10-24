@@ -222,7 +222,10 @@ pub async fn send_osc_position(
 pub async fn set_osc_armed(armed: bool, state: State<'_, AppState>) -> Result<(), IpcError> {
     let merge_rt = lock_or_recover(&state.merge_runtime);
     merge_rt.set_osc_armed(armed);
-    eprintln!("[INFO] OSC master arm: {}", if armed { "ARMED" } else { "DISARMED" });
+    eprintln!(
+        "[INFO] OSC master arm: {}",
+        if armed { "ARMED" } else { "DISARMED" }
+    );
     Ok(())
 }
 
