@@ -33,6 +33,7 @@ import { Zap, AudioLines, Hexagon, SlidersHorizontal, Play, CircleDot, X, Square
 
 export default function Inspector() {
   const showExpert = useMoveEditorStore((s) => s.showExpert);
+  const performMode = useMoveEditorStore((s) => s.performMode);
   const current = useMoveEditorStore((s) => s.current);
   const updateCurrent = useMoveEditorStore((s) => s.updateCurrent);
   const updateAssignment = useMoveEditorStore((s) => s.updateAssignment);
@@ -405,8 +406,11 @@ export default function Inspector() {
               )}
             </Section>
 
-            {/* PERFORM — duration, direction, loop, fade */}
-            <Section title="Perform" icon={<Play size={12} />}>
+            {/* PERFORM — duration, direction, loop, fade : params AUTHORING
+                (la structure du move) — replié en mode Perform où les
+                contrôles live sont Params (pinned) et Macros. key force le
+                repli à l'entrée/sortie de mode. */}
+            <Section key={`perform-${performMode}`} title="Perform" icon={<Play size={12} />} defaultOpen={!performMode}>
               <Slider label="Duration" value={current.duration} min={0.5} max={30} step={0.5} onChange={(v) => updateCurrent({ duration: v })} unit="s" />
               <div className="flex gap-1 pt-1">
                 {(['forward', 'backward', 'ping_pong'] as const).map((d) => (
@@ -453,9 +457,11 @@ export default function Inspector() {
         </Section>
         )}
 
-        {/* TRACKS — sélection + depth + phase spread (seulement si slot édité) */}
+        {/* TRACKS — sélection + depth + phase spread (seulement si slot édité)
+            Replié en mode Perform : l'assignation se fait aussi par la scène
+            (mode Assign) — le grid reste dispo à la demande. */}
         {hasEditingSlot && (
-        <Section title="Tracks" icon={<CircleDot size={12} />} badge={selectedCount > 0 ? `${selectedCount}/${totalTracks}` : `${totalTracks}`}>
+        <Section key={`tracks-${performMode}`} title="Tracks" icon={<CircleDot size={12} />} defaultOpen={!performMode} badge={selectedCount > 0 ? `${selectedCount}/${totalTracks}` : `${totalTracks}`}>
           {tracks.length > 0 ? (
             <TrackGrid
               tracks={tracks}
