@@ -218,11 +218,11 @@ export const NodeEditor: React.FC = () => {
       if (!selectedEdge) return false;
       const sourceNode = displayNodes.find((n) => n.id === selectedEdge.source);
       const targetNode = displayNodes.find((n) => n.id === selectedEdge.target);
-      const fromType = (sourceNode?.data as any)?.type as NodeType | undefined;
-      const toType = (targetNode?.data as any)?.type as NodeType | undefined;
+      const fromType = sourceNode?.data.type as NodeType | undefined;
+      const toType = targetNode?.data.type as NodeType | undefined;
       if (!fromType || !toType) return false;
       const toKind = toType === 'Plugin'
-        ? plugins.find((m) => m.id === (targetNode?.data as any)?.params?.plugin_id)?.kind
+        ? plugins.find((m) => m.id === targetNode?.data.params?.plugin_id)?.kind
         : undefined;
       const reason = spliceRejectionReason(
         fromType, toType, insertedType, insertedKind, selectedEdge.targetHandle, toKind,
@@ -346,10 +346,10 @@ export const NodeEditor: React.FC = () => {
     const targetId = targetNodeEl?.dataset?.id;
     if (!targetId) return;
     const targetNode = displayNodes.find((n) => n.id === targetId);
-    const toType = (targetNode?.data as any)?.type as NodeType | undefined;
+    const toType = targetNode?.data.type as NodeType | undefined;
     if (!toType) return;
     const toPluginKind = toType === 'Plugin'
-      ? plugins.find((m) => m.id === (targetNode?.data as any)?.params?.plugin_id)?.kind
+      ? plugins.find((m) => m.id === targetNode?.data.params?.plugin_id)?.kind
       : undefined;
     const handleEl = el?.closest?.('.react-flow__handle') as HTMLElement | null;
     const targetPort = handleEl?.dataset?.handleid ?? null;
@@ -388,7 +388,7 @@ export const NodeEditor: React.FC = () => {
   const openExampleFor = useCallback((nodeType: NodeType, presetId: string, presetName: string) => {
     setNodeMenu(null);
     const objectsNode = nodes.find((n) => n.data.type === 'Objects');
-    const nObjects = Number((objectsNode?.data as any)?.params?.n_objects) || 8;
+    const nObjects = Number(objectsNode?.data.params?.n_objects) || 8;
     applyShapePreset(presetId, nObjects);
     toast.info(`Loaded example '${presetName}' (${nodeType}) — Ctrl+Z to undo`);
   }, [nodes, applyShapePreset]);

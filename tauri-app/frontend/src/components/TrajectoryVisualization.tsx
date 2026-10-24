@@ -83,7 +83,7 @@ export const TrajectoryVisualization: React.FC<TrajectoryVisualizationProps> = (
           // (uniquement le move sélectionné si editingSlotId pointe vers un move actif, sinon tous)
           if (hasMovements && movementsToShow.length > 0) {
             const durationNode = useGraphStore.getState().nodes.find((n) => n.data.type === 'Duration');
-            const duration = (durationNode?.data as any)?.params?.duration ?? 4.0;
+            const duration = Number(durationNode?.data.params?.duration ?? 4.0);
             // Échantillonner chaque movement à afficher — UN invoke batché
             // par move (sample_movement_trajectories retourne tous les paths
             // avec leur track_index global). Avant : nObjs invokes séquentiels

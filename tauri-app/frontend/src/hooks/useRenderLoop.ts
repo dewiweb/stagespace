@@ -226,7 +226,7 @@ export function useRenderLoop({
       if (frameNow - renderLastPerf > 2000) {
         const fps = renderFrameCount / ((frameNow - renderLastPerf) / 1000);
         const storeState0 = useGraphStore.getState();
-        const globalPos = (storeState0.movementPositions as any)['global'];
+        const globalPos = storeState0.movementPositions['global'];
         // Mettre à jour l'objet debug (pas de set() React)
         const dp = (window as any).__debugPerf;
         if (dp) {

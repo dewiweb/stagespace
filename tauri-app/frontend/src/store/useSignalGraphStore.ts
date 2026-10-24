@@ -119,9 +119,9 @@ export const useSignalGraphStore = create<SignalGraphState>((set, get) => ({
             data: {
               ...n.data,
               ...data,
-              params: data.params && (n.data as any).params
-                ? { ...(n.data as any).params, ...data.params }
-                : (data.params ?? (n.data as any).params),
+              params: data.params && n.data.params
+                ? { ...n.data.params, ...data.params }
+                : (data.params ?? n.data.params),
             },
           }
         : n,

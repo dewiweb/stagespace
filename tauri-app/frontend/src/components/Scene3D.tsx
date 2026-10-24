@@ -75,7 +75,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   // - le nombre total d'osc_ids uniques across tous les moves actifs
   const nObjects = React.useMemo(() => {
     const objectsNode = nodes.find((n) => n.data.type === 'Objects');
-    const fromGraph = (objectsNode?.data as any)?.params?.n_objects ?? 0;
+    const fromGraph = Number(objectsNode?.data.params?.n_objects ?? 0);
     const fromProject = holProject?.tracks?.length ?? 0;
     // Le nombre d'objets doit couvrir le track_index maximum envoyé par le backend.
     // Les positions sont indexées par track_indices (ex: 0,1,10,11 → il faut au moins 12 meshes).

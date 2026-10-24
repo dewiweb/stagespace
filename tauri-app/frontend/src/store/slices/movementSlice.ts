@@ -54,6 +54,10 @@ type MovementStore = MovementSlice & {
   manualOscIds: number[];
   graphCompileVersion: number;
   refreshMovements: () => Promise<void>;
+  // Undo + auto-save du slot édité — optionnels dans la vue structurelle,
+  // présents sur le store combiné.
+  pushHistory?: () => void;
+  autoSaveToEditingSlot?: () => void;
 };
 
 export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSlice> = (set, get) => ({
@@ -192,12 +196,12 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
         return;
       }
       // pushHistory AVANT de remplacer le graphe (undo ramène au graphe courant)
-      (get() as any).pushHistory?.();
+      get().pushHistory?.();
       // Deep clone pour éviter de modifier le saved par référence
       get().setNodes(JSON.parse(JSON.stringify(saved.nodes)));
       get().setEdges(JSON.parse(JSON.stringify(saved.edges)));
       // Persister vers le slot en édition — sinon le graphe chargé est perdu
-      (get() as any).autoSaveToEditingSlot?.();
+      get().autoSaveToEditingSlot?.();
     }
   },
 

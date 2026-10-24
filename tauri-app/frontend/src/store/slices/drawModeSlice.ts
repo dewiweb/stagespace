@@ -3,7 +3,7 @@ import type { GraphNode } from '../../components/nodeParamSchema';
 import { simplifyPoints, computeCentroid } from '../utils/geometryUtils';
 import { feLog } from '../../utils/tauri';
 import { toast } from '../../utils/toast-helpers';
-import { computeTrackIndices, saveSlotsToStorage } from './moveSlotsSlice';
+import { computeTrackIndices, saveSlotsToStorage, type MoveSlot } from './moveSlotsSlice';
 
 export interface DrawModeSlice {
   // Draw mode (freehand trajectory drawing)
@@ -26,6 +26,10 @@ type DrawModeStore = DrawModeSlice & {
   holProject: any;
   manualOscIds: number[];
   selectedTrackIds: Set<number>;
+  // Dépendances move-slots — sync du graphJson du slot édité après
+  // finalize (sinon selectSlotForEditing recharge les vieux points).
+  editingSlotId: string | null;
+  moveSlots: MoveSlot[];
 };
 
 export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSlice> = (set, get) => ({
@@ -110,7 +114,7 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
             data: {
               ...n.data,
               params: {
-                ...(n.data as any).params,
+                ...n.data.params,
                 points: pointsJson,
               },
             },
@@ -123,7 +127,7 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
             data: {
               ...n.data,
               params: {
-                ...(n.data as any).params,
+                ...n.data.params,
                 points: vectorsSpec,
               },
             },
@@ -140,20 +144,17 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
 
     // Synchroniser slot.graphJson avec les nodes mis à jour
     // (sinon selectSlotForEditing rechargera les vieux points)
-    const editingSlotId = (get() as any).editingSlotId as string | null;
+    const editingSlotId = get().editingSlotId;
     if (editingSlotId) {
       const { nodes: updatedNodes, edges: updatedEdges } = get();
-      const moveSlots = (get() as any).moveSlots as any[] | undefined;
-      if (moveSlots) {
-        const newSlots = moveSlots.map((sl: any) =>
-          sl.id === editingSlotId
-            ? { ...sl, graphJson: { nodes: [...updatedNodes], edges: [...updatedEdges] } }
-            : sl
-        );
-        set({ moveSlots: newSlots } as any);
-        saveSlotsToStorage(newSlots); // persister — sinon le dessin est perdu au reload
-        feLog(`[DBG-finalize] synced slot.graphJson for editingSlotId=${editingSlotId}`);
-      }
+      const newSlots = get().moveSlots.map((sl) =>
+        sl.id === editingSlotId
+          ? { ...sl, graphJson: { nodes: [...updatedNodes], edges: [...updatedEdges] } }
+          : sl
+      );
+      set({ moveSlots: newSlots } as Partial<DrawModeStore>);
+      saveSlotsToStorage(newSlots); // persister — sinon le dessin est perdu au reload
+      feLog(`[DBG-finalize] synced slot.graphJson for editingSlotId=${editingSlotId}`);
     }
 
     // Hot-swap inconditionnel : updateGraphLive self-guard (isPlaying /

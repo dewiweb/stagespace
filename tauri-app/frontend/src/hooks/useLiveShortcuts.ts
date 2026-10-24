@@ -85,7 +85,7 @@ export function useLiveShortcuts() {
         // layerés, il fait la transition de scène prévue.
         e.preventDefault();
         const gs = useGraphStore.getState();
-        (gs as any).goToNextMove().then((res: { ok: boolean; message: string }) => {
+        gs.goToNextMove().then((res: { ok: boolean; message: string }) => {
           // Un GO qui ne démarre rien (fin de setlist, activation échouée)
           // doit être visible — sinon silence en live.
           if (!res.ok) toast.warning(res.message);
@@ -107,17 +107,17 @@ export function useLiveShortcuts() {
         // Space: play/stop the selected (editing) slot
         e.preventDefault();
         const gs = useGraphStore.getState();
-        const slotId = (gs as any).editingSlotId as string | null;
+        const slotId = gs.editingSlotId as string | null;
         if (!slotId) {
           toast.info('No move selected — click a move first');
           return;
         }
-        const slot = (gs as any).moveSlots?.find((s: any) => s.id === slotId);
+        const slot = gs.moveSlots?.find((s) => s.id === slotId);
         if (!slot) return;
         if (slot.movementId) {
-          (gs as any).stopSlot(slotId);
+          gs.stopSlot(slotId);
         } else {
-          (gs as any).playSlot(slotId);
+          gs.playSlot(slotId);
         }
       }
     };

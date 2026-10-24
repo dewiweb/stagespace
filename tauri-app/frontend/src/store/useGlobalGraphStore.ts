@@ -32,8 +32,8 @@ const makeEdge = (from: string, to: string, fromPort = 'output', toPort = 'input
 
 export function buildDefaultGlobalGraph(): { nodes: GraphNode[]; edges: Edge[] } {
   const input = makeNode('Input', { x: 50, y: 250 }, { label: 'Merged Positions' });
-  (input.data as any).type = 'Input';
-  (input.data as any).label = 'Merged';
+  input.data.type = 'Input';
+  input.data.label = 'Merged';
 
   // ManualPosition first — override positions from drag 3D
   const manualPos = makeNode('ManualPosition', { x: 230, y: 250 });
@@ -127,9 +127,9 @@ export const useGlobalGraphStore = create<GlobalGraphState>((set, get) => ({
             data: {
               ...n.data,
               ...data,
-              params: data.params && (n.data as any).params
-                ? { ...(n.data as any).params, ...data.params }
-                : (data.params ?? (n.data as any).params),
+              params: data.params && n.data.params
+                ? { ...n.data.params, ...data.params }
+                : (data.params ?? n.data.params),
             },
           }
         : n,

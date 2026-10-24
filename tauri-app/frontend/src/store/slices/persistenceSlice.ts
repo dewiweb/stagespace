@@ -57,6 +57,11 @@ type PersistenceStore = PersistenceSlice & {
   macros: MacrosState;
   refreshSpatialFx: () => Promise<void>;
   pushMacrosToRuntime: () => Promise<void>;
+  // Internes undo — reset au load (l'historique pointait sur l'ancien show).
+  _history: Array<{ nodes: GraphNode[]; edges: Edge[] }>;
+  _historyIndex: number;
+  canUndo: boolean;
+  canRedo: boolean;
 };
 
 // ─── Enveloppe .hfg ───
@@ -334,7 +339,7 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
       _historyIndex: -1,
       canUndo: false,
       canRedo: false,
-    } as any);
+    });
 
     // v0/v1 : graphe seul — comportement historique
     set({ nodes: raw.nodes, edges: raw.edges });

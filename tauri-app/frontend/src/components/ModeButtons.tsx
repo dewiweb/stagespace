@@ -26,7 +26,7 @@ export const ModeButtons: React.FC<ModeButtonsProps> = ({
       n.data.type === 'TrimSpline' ||
       n.data.type === 'OffsetSpline' ||
       // Champ dessiné : le stroke devient des vecteurs tangents (lignes de flux)
-      (n.data.type === 'VectorField' && (n.data.params as any)?.field === 'drawn')
+      (n.data.type === 'VectorField' && n.data.params?.field === 'drawn')
     )
   );
 
