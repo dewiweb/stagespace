@@ -1,5 +1,5 @@
 import { StateCreator } from 'zustand';
-import type { Node } from '@xyflow/react';
+import type { GraphNode } from '../../components/nodeParamSchema';
 import { safeInvoke as invoke } from '../../utils/tauri';
 import { toast } from '../../utils/toast-helpers';
 import type { HolProject } from '../types/index';
@@ -35,9 +35,9 @@ export interface HolProjectSlice {
 
 // syncObjectsNode accède à nodes, updateNodeData, addNode via get()
 type HolProjectStore = HolProjectSlice & {
-  nodes: Node[];
+  nodes: GraphNode[];
   updateNodeData: (id: string, data: Partial<Record<string, any>>) => void;
-  addNode: (node: Node) => void;
+  addNode: (node: GraphNode) => void;
   // Pour sync inverse : mettre à jour le slot édité quand selectedTrackIds change
   editingSlotId: string | null;
   setSlotTracks: (id: string, trackIds: number[]) => void;
@@ -201,7 +201,7 @@ export const createHolProjectSlice: StateCreator<HolProjectStore, [], [], HolPro
     const ids = s.getSelectedOscIds();
     // Même si ids est vide, on met à jour (pour montrer 0 objets si l'utilisateur désélectionne tout)
     // Mais on ne crée pas de node Objects si la liste est vide et qu'il n'y a pas de node existant
-    if (ids.length === 0 && !s.nodes.find((n) => (n.data as any)?.type === 'Objects')) return;
+    if (ids.length === 0 && !s.nodes.find((n) => n.data.type === 'Objects')) return;
 
     // Types de nodes qui ont un paramètre n_objects à sync avec le node Objects
     const ENGINE_TYPES = new Set([
@@ -214,7 +214,7 @@ export const createHolProjectSlice: StateCreator<HolProjectStore, [], [], HolPro
     ]);
 
     // Trouver le node Objects et mettre à jour n_objects
-    const objectsNode = s.nodes.find((n) => (n.data as any)?.type === 'Objects');
+    const objectsNode = s.nodes.find((n) => n.data.type === 'Objects');
     if (objectsNode) {
       const newParams = { ...(objectsNode.data as any).params, n_objects: ids.length, track_ids: ids };
       get().updateNodeData(objectsNode.id, { params: newParams });
@@ -233,9 +233,9 @@ export const createHolProjectSlice: StateCreator<HolProjectStore, [], [], HolPro
     // Le node Objects vient d'être mis à jour, on relit les nodes courants
     const currentNodes = get().nodes;
     currentNodes.forEach((node) => {
-      const nodeType = (node.data as any)?.type as string;
+      const nodeType = node.data.type as string;
       if (ENGINE_TYPES.has(nodeType)) {
-        const params = (node.data as any)?.params ?? {};
+        const params = node.data.params ?? {};
         if (params.n_objects !== ids.length) {
           get().updateNodeData(node.id, { params: { ...params, n_objects: ids.length } });
         }

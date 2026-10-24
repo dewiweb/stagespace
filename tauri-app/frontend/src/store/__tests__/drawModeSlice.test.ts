@@ -77,7 +77,7 @@ describe('finalizeDrawing', () => {
     expect(result).toBe(drawSplineId);
 
     const nodes = useGraphStore.getState().nodes;
-    const drawSplineNode = nodes.find((n: any) => (n.data as any)?.type === 'DrawSpline');
+    const drawSplineNode = nodes.find((n: any) => n.data.type === 'DrawSpline');
     expect(drawSplineNode).toBeDefined();
     // Les points doivent avoir été mis à jour
     const points = (drawSplineNode!.data as any).params.points;

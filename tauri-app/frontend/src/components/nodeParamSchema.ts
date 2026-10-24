@@ -1,4 +1,5 @@
-import { NodeType } from '../store/useGraphStore';
+import type { NodeType } from '../types/generated/NodeType';
+import type { Node } from '@xyflow/react';
 import { isValidConnection as isValidConnectionExported, NODE_SPECS, specOf } from '../utils/connectionRules';
 import type { NodeCategory } from '../types/generated/NodeCategory';
 import type { ParamSpec } from '../types/generated/ParamSpec';
@@ -11,7 +12,7 @@ export type ParamType = 'number' | 'boolean' | 'string' | 'vec3' | 'enum' | 'tex
 export type NodeParamValue = string | number | boolean | number[] | undefined;
 
 /// Shape des `data` portées par les nodes React Flow du graphe
-export interface GraphNodeData {
+export interface GraphNodeData extends Record<string, unknown> {
   label?: string;
   type?: NodeType;
   params?: Record<string, NodeParamValue>;
@@ -21,6 +22,11 @@ export interface GraphNodeData {
   /// quitte jamais le frontend (persisté via le .hfg).
   pinned?: string[];
 }
+
+/// Node React Flow typé — remplace les accès `n.data.type` par
+/// `n.data.type` : depuis la migration @xyflow/react, `data` est typé via
+/// le paramètre générique de Node<T>.
+export type GraphNode = Node<GraphNodeData>;
 
 export interface ParamDef {
   key: string;

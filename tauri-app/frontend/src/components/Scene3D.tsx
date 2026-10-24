@@ -74,7 +74,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   //   tracks = indices 4-7, il faut le pool entier même si n_objects=4)
   // - le nombre total d'osc_ids uniques across tous les moves actifs
   const nObjects = React.useMemo(() => {
-    const objectsNode = nodes.find((n) => (n.data as any)?.type === 'Objects');
+    const objectsNode = nodes.find((n) => n.data.type === 'Objects');
     const fromGraph = (objectsNode?.data as any)?.params?.n_objects ?? 0;
     const fromProject = holProject?.tracks?.length ?? 0;
     // Le nombre d'objets doit couvrir le track_index maximum envoyé par le backend.

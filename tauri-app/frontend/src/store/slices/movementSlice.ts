@@ -2,12 +2,13 @@ import { StateCreator } from 'zustand';
 import { safeInvoke as invoke } from '../../utils/tauri';
 import { toast } from '../../utils/toast-helpers';
 import { computeCentroid } from '../utils/geometryUtils';
-import type { Node, Edge } from '@xyflow/react';
+import type { Edge } from '@xyflow/react';
+import type { GraphNode } from '../../components/nodeParamSchema';
 import type { MovementInfo, HolProject } from '../types/index';
 
 /// Graphe sauvegardé pour un movement — permet le [edit] (recharger le graphe dans l'éditeur)
 export interface SavedGraph {
-  nodes: Node[];
+  nodes: GraphNode[];
   edges: Edge[];
   trackIndices: number[];
   name: string;
@@ -45,9 +46,9 @@ export interface MovementSlice {
 }
 
 type MovementStore = MovementSlice & {
-  nodes: Node[];
+  nodes: GraphNode[];
   edges: Edge[];
-  setNodes: (nodes: Node[]) => void;
+  setNodes: (nodes: GraphNode[]) => void;
   setEdges: (edges: Edge[]) => void;
   holProject: HolProject | null;
   manualOscIds: number[];

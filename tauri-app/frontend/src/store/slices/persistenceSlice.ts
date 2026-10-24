@@ -1,5 +1,6 @@
 import { StateCreator } from 'zustand';
-import type { Node, Edge } from '@xyflow/react';
+import type { Edge } from '@xyflow/react';
+import type { GraphNode } from '../../components/nodeParamSchema';
 import { safeInvoke as invoke } from '../../utils/tauri';
 import { safeSetItem, safeParseStoredJson } from '../../utils/safeStorage';
 import { toast } from '../../utils/toast-helpers';
@@ -34,7 +35,7 @@ export interface PersistenceSlice {
 
 // Le slice accède aux autres slices via get() — type étendu du store
 type PersistenceStore = PersistenceSlice & {
-  nodes: Node[];
+  nodes: GraphNode[];
   edges: Edge[];
   movements: { id: string }[];
   moveSlots: MoveSlot[];
@@ -93,12 +94,12 @@ export interface ShowFileEnvelope {
   version?: number;
   savedAt?: number;
   // Graphe édité — top-level pour compat v0/v1
-  nodes: Node[];
+  nodes: GraphNode[];
   edges: Edge[];
   // v2 : show complet
-  globalGraph?: { nodes: Node[]; edges: Edge[] };
+  globalGraph?: { nodes: GraphNode[]; edges: Edge[] };
   /// Graph de modulation global (domaine signal → deltas de macros)
-  signalGraph?: { nodes: Node[]; edges: Edge[] };
+  signalGraph?: { nodes: GraphNode[]; edges: Edge[] };
   slots?: MoveSlot[];
   setlistOrder?: string[];
   currentSetlistIndex?: number;
@@ -223,7 +224,7 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
       // localStorage indisponible (mode privé, quota) — traité comme absent
     }
     if (!exists) throw new Error(`Graph "${name}" not found`);
-    const graphData = safeParseStoredJson<{ nodes: Node[]; edges: Edge[] } | null>(key, null);
+    const graphData = safeParseStoredJson<{ nodes: GraphNode[]; edges: Edge[] } | null>(key, null);
     if (!graphData) throw new Error(`Graph "${name}" is corrupted (backup saved)`);
     set({ nodes: graphData.nodes, edges: graphData.edges });
   },

@@ -2,7 +2,8 @@ import { StateCreator } from 'zustand';
 import { safeInvoke as invoke, feLog } from '../../utils/tauri';
 import { toast } from '../../utils/toast-helpers';
 import { computeCentroid } from '../utils/geometryUtils';
-import type { Node, Edge } from '@xyflow/react';
+import type { Edge } from '@xyflow/react';
+import type { GraphNode } from '../../components/nodeParamSchema';
 import type { HolProject } from '../types/index';
 import type { Move, TrackAssignment, AudioMod } from '../useMoveEditorStore';
 import { safeSetItem, safeParseStoredJson, debouncedSetItem } from '../../utils/safeStorage';
@@ -10,8 +11,8 @@ import { throttleTrailingKeyed } from '../../utils/throttle';
 import { SHAPE_PRESETS } from '../../utils/shapePresets';
 
 /// Extrait la duration d'un graphe (node Duration) — fallback 4.0s
-function extractDuration(nodes: Node[]): number {
-  const durNode = nodes.find((n: any) => (n.data as any)?.type === 'Duration');
+function extractDuration(nodes: GraphNode[]): number {
+  const durNode = nodes.find((n: any) => n.data.type === 'Duration');
   return (durNode?.data as any)?.params?.duration ?? 4.0;
 }
 
@@ -51,7 +52,7 @@ export function computeTrackIndices(trackIds: number[], holProject: any, manualO
 /// Construit le graphe d'un slot depuis son templateId.
 /// Utilisé à la création du slot et en fallback dans selectSlotForEditing
 /// (slots persistés avant que graphJson ne soit construit à la création).
-function buildGraphForSlot(templateId: string, nTracks: number): { nodes: Node[]; edges: Edge[] } | null {
+function buildGraphForSlot(templateId: string, nTracks: number): { nodes: GraphNode[]; edges: Edge[] } | null {
   const preset = SHAPE_PRESETS.find((p) => p.id === templateId) ?? SHAPE_PRESETS[0];
   if (!preset) return null;
   const built = preset.build(nTracks);
@@ -72,7 +73,7 @@ export interface MoveSlot {
   id: string;
   name: string;
   /// Graphe sauvegardé pour ce slot (construit depuis un template, puis éditable)
-  graphJson: { nodes: Node[]; edges: Edge[] } | null;
+  graphJson: { nodes: GraphNode[]; edges: Edge[] } | null;
   /// Template d'origine (pour affichage dans l'UI)
   templateId: string;
   /// Track IDs ciblées par ce slot
@@ -123,7 +124,7 @@ function defaultMacros(): MoveMacros {
 function syncObjectsNodeNoHotSwap(get: () => any) {
   const s = get();
   const ids = Array.from(s.selectedTrackIds as Set<number>).sort((a: number, b: number) => a - b);
-  if (ids.length === 0 && !s.nodes.find((n: any) => (n.data as any)?.type === 'Objects')) return;
+  if (ids.length === 0 && !s.nodes.find((n: any) => n.data.type === 'Objects')) return;
 
   const ENGINE_TYPES = new Set([
     'Circular', 'Elliptical', 'Spiral', 'Lissajous', 'Figure8',
@@ -134,7 +135,7 @@ function syncObjectsNodeNoHotSwap(get: () => any) {
     'Mix', 'Group', 'Sequence', 'Crossfade',
   ]);
 
-  const objectsNode = s.nodes.find((n: any) => (n.data as any)?.type === 'Objects');
+  const objectsNode = s.nodes.find((n: any) => n.data.type === 'Objects');
   if (objectsNode) {
     const newParams = { ...(objectsNode.data as any).params, n_objects: ids.length, track_ids: ids };
     s.updateNodeData(objectsNode.id, { params: newParams });
@@ -143,9 +144,9 @@ function syncObjectsNodeNoHotSwap(get: () => any) {
   // Sync n_objects sur tous les nodes engines
   const currentNodes = get().nodes;
   currentNodes.forEach((node: any) => {
-    const nodeType = (node.data as any)?.type as string;
+    const nodeType = node.data.type as string;
     if (ENGINE_TYPES.has(nodeType)) {
-      const params = (node.data as any)?.params ?? {};
+      const params = node.data.params ?? {};
       if (params.n_objects !== ids.length) {
         s.updateNodeData(node.id, { params: { ...params, n_objects: ids.length } });
       }
@@ -213,9 +214,9 @@ type MoveSlotsStore = MoveSlotsSlice & {
   holProject: HolProject | null;
   manualOscIds: number[];
   movements: any[];
-  nodes: Node[];
+  nodes: GraphNode[];
   edges: Edge[];
-  setNodes: (nodes: Node[]) => void;
+  setNodes: (nodes: GraphNode[]) => void;
   setEdges: (edges: Edge[]) => void;
   stopMovement: (movementId: string) => Promise<void>;
   stopMovementWithFade: (movementId: string, fadeDuration: number) => Promise<void>;
@@ -527,8 +528,8 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
         if (graphJson) {
           graphJson = {
             nodes: graphJson.nodes.map((n) => {
-              const nodeType = (n.data as any)?.type as string;
-              const params = (n.data as any)?.params ?? {};
+              const nodeType = n.data.type as string;
+              const params = n.data.params ?? {};
               if (nodeType === 'Objects' || ENGINE_TYPES_WITH_N_OBJECTS.has(nodeType)) {
                 return {
                   ...n,
@@ -645,13 +646,13 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
       const graphData = prepareGraphForSave(graphJson.nodes, graphJson.edges);
       feLog(`[DBG-playSlot] graphJson nodes=${graphJson.nodes.length} edges=${graphJson.edges.length} types=${graphJson.nodes.map((n: any) => n.data?.type).join(',')} isEditing=${isEditing}`);
       // Log spécifique pour les nodes spline
-      const evalNode = graphJson.nodes.find((n: any) => (n.data as any)?.type === 'EvaluateSpline');
-      const drawNode = graphJson.nodes.find((n: any) => (n.data as any)?.type === 'DrawSpline');
+      const evalNode = graphJson.nodes.find((n: any) => n.data.type === 'EvaluateSpline');
+      const drawNode = graphJson.nodes.find((n: any) => n.data.type === 'DrawSpline');
       feLog(`[DBG-playSlot] DrawSpline points=${((drawNode?.data as any)?.params?.points ?? 'NOT SET').slice(0, 120)}`);
       feLog(`[DBG-playSlot] EvaluateSpline points=${((evalNode?.data as any)?.params?.points ?? 'NOT SET').slice(0, 120)}`);
 
       // Lire la duration depuis le node Duration du graphe
-      const durationNode = graphJson.nodes.find((n: any) => (n.data as any)?.type === 'Duration');
+      const durationNode = graphJson.nodes.find((n: any) => n.data.type === 'Duration');
       const duration = (durationNode?.data as any)?.params?.duration ?? 4.0;
 
       const trackIndices = computeTrackIndices(slot.trackIds, holProject, manualOscIds);

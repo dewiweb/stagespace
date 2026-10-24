@@ -4,6 +4,8 @@
 // This file just provides test helpers and re-exports.
 
 import { useGraphStore } from '../useGraphStore';
+import type { GraphNode } from "../../components/nodeParamSchema";
+import type { NodeType } from "../../types/generated/NodeType";
 import { mockAnimState, getInvokeCalls, clearInvokeCalls, setInvokeResponse } from '../../test/setup';
 
 export { useGraphStore, mockAnimState, getInvokeCalls, clearInvokeCalls, setInvokeResponse };
@@ -49,7 +51,7 @@ export function resetStore() {
   clearInvokeCalls();
 }
 
-export function makeNode(id: string, type: string, params: Record<string, any> = {}) {
+export function makeNode(id: string, type: NodeType, params: Record<string, any> = {}): GraphNode {
   return {
     id,
     type: 'custom',

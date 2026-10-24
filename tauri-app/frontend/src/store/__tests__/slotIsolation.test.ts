@@ -169,7 +169,7 @@ describe('syncObjectsNode (no hot-swap)', () => {
     clearInvokeCalls();
     useGraphStore.getState().toggleTrackSelection(6);
 
-    const objectsNode = useGraphStore.getState().nodes.find((n: any) => (n.data as any)?.type === 'Objects');
+    const objectsNode = useGraphStore.getState().nodes.find((n: any) => n.data.type === 'Objects');
     expect((objectsNode!.data as any).params.n_objects).toBe(6);
 
     const calls = getInvokeCalls();

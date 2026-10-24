@@ -82,7 +82,7 @@ export const TrajectoryVisualization: React.FC<TrajectoryVisualizationProps> = (
           // Mode movement (système multi-move) : échantillonner depuis les movements à afficher
           // (uniquement le move sélectionné si editingSlotId pointe vers un move actif, sinon tous)
           if (hasMovements && movementsToShow.length > 0) {
-            const durationNode = useGraphStore.getState().nodes.find((n) => (n.data as any)?.type === 'Duration');
+            const durationNode = useGraphStore.getState().nodes.find((n) => n.data.type === 'Duration');
             const duration = (durationNode?.data as any)?.params?.duration ?? 4.0;
             // Échantillonner chaque movement à afficher — UN invoke batché
             // par move (sample_movement_trajectories retourne tous les paths

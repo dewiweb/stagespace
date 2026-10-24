@@ -6,13 +6,13 @@ import {
   applyNodeChanges,
   applyEdgeChanges,
   addEdge as rfAddEdge,
-  type Node,
   type Edge,
   type NodeChange,
   type EdgeChange,
   type Connection,
   MarkerType,
 } from '@xyflow/react';
+import type { GraphNode } from '../components/nodeParamSchema';
 import { createPerfSlice, type PerfSlice } from './slices/perfSlice';
 import { createAudioSlice, type AudioSlice, type AudioState } from './slices/audioSlice';
 import { createOscSlice, type OscSlice } from './slices/oscSlice';
@@ -52,18 +52,18 @@ interface GraphState
     MovementSlice, MoveSlotsSlice, OscConfigSlice, SplineLibrarySlice, SpatialFxSlice,
     InteractionModesSlice, PluginSlice {
   // React Flow state (single source of truth)
-  nodes: Node[];
+  nodes: GraphNode[];
   edges: Edge[];
   onNodesChange: (changes: NodeChange[]) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
   onConnect: (connection: Connection) => void;
-  addNode: (node: Node) => void;
+  addNode: (node: GraphNode) => void;
   removeNode: (id: string) => void;
   /// Autopatch : remplace `oldEdgeId` par `edgeIn` (source→node) + `edgeOut`
   /// (node→target) et ajoute le node — atomique, une seule entrée d'historique.
-  insertNodeOnEdge: (node: Node, oldEdgeId: string, edgeIn: Edge, edgeOut: Edge) => void;
+  insertNodeOnEdge: (node: GraphNode, oldEdgeId: string, edgeIn: Edge, edgeOut: Edge) => void;
   updateNodeData: (id: string, data: Partial<Record<string, any>>) => void;
-  setNodes: (nodes: Node[]) => void;
+  setNodes: (nodes: GraphNode[]) => void;
   setEdges: (edges: Edge[]) => void;
 
   // Playback / status
@@ -198,7 +198,7 @@ export const useGraphStore = create<GraphState>()((...a) => {
 
   onNodesChange: (changes) => {
     if (changes.some((c) => c.type === 'remove')) pushHistoryForRemoval();
-    set({ nodes: applyNodeChanges(changes, get().nodes) as Node[] });
+    set({ nodes: applyNodeChanges(changes, get().nodes) as GraphNode[] });
     // Auto-save avec debounce (drag = beaucoup de changes)
     debouncedAutoSave();
   },
@@ -317,7 +317,7 @@ export const useGraphStore = create<GraphState>()((...a) => {
 
       if (editingSlotMovementId && allMovementIds.has(editingSlotMovementId)) {
         // Extraire la duration du graphe courant
-        const durNode = nodes.find((n: any) => (n.data as any)?.type === 'Duration');
+        const durNode = nodes.find((n: any) => n.data.type === 'Duration');
         const duration = (durNode?.data as any)?.params?.duration ?? 4.0;
         // Récupérer les osc_ids et track_indices du slot édité
         const editingSlot = moveSlots?.find((s: any) => s.id === editingSlotId);
