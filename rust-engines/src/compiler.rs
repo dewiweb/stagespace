@@ -335,7 +335,7 @@ impl Compiler {
             let registry = live
                 .plugins
                 .as_ref()
-                .expect("registry checked by resolve_plugin")
+                .ok_or_else(|| CompilationError::MissingParameter("plugin registry".into()))?
                 .lock()
                 .unwrap_or_else(|e| e.into_inner());
             registry.wasm_engine().clone()
@@ -993,7 +993,11 @@ impl Compiler {
 
         if has_audio {
             // Engine audio — injecte les valeurs audio live dans params.extra
-            let audio_arc = live.audio.as_ref().expect("checked by has_audio").clone();
+            let audio_arc = live
+                .audio
+                .as_ref()
+                .ok_or_else(|| CompilationError::MissingParameter("audio source".into()))?
+                .clone();
             Ok(Box::new(move |t: f64, object_index: usize| {
                 let mut live_params = params.clone();
                 if let Some(map) = live_params.extra.as_object_mut() {
