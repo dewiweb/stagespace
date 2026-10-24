@@ -5,7 +5,7 @@ import { computeCentroid } from '../utils/geometryUtils';
 import type { Edge } from '@xyflow/react';
 import type { GraphNode } from '../../components/nodeParamSchema';
 import type { HolProject } from '../types/index';
-import { syncObjectsGraphNodes } from './objectsNodeSync';
+import { syncObjectsGraphNodes, OBJECT_ENGINE_TYPES } from './objectsNodeSync';
 import type { Move, TrackAssignment, AudioMod } from '../useMoveEditorStore';
 import { safeSetItem, safeParseStoredJson, debouncedSetItem } from '../../utils/safeStorage';
 import { throttleTrailingKeyed } from '../../utils/throttle';
@@ -13,8 +13,9 @@ import { SHAPE_PRESETS } from '../../utils/shapePresets';
 
 /// Extrait la duration d'un graphe (node Duration) — fallback 4.0s
 function extractDuration(nodes: GraphNode[]): number {
-  const durNode = nodes.find((n: any) => n.data.type === 'Duration');
-  return (durNode?.data as any)?.params?.duration ?? 4.0;
+  const durNode = nodes.find((n) => n.data.type === 'Duration');
+  const d = durNode?.data.params?.duration;
+  return typeof d === 'number' ? d : 4.0;
 }
 
 /// Track IDs déjà signalés comme non résolubles (anti-spam de toasts)
@@ -201,20 +202,22 @@ type MoveSlotsStore = MoveSlotsSlice & {
   // Pour sync selectedTrackIds quand on sélectionne un slot
   setSelectedTrackIds: (ids: Set<number>) => void;
   selectedTrackIds: Set<number>;
+  // Undo/redo — déclarés pour les appels internes (reset au switch de slot,
+  // baseline push). pushHistory optionnel : le slice fonctionne aussi sans.
+  pushHistory?: () => void;
+  _history: Array<{ nodes: GraphNode[]; edges: Edge[] }>;
+  _historyIndex: number;
+  canUndo: boolean;
+  canRedo: boolean;
 };
 
 const SLOTS_STORAGE_KEY = 'stagespace-move-slots';
 const SETLIST_STORAGE_KEY = 'stagespace-move-setlist';
 
-/// Types de nodes qui ont un paramètre n_objects à sync avec le node Objects
-const ENGINE_TYPES_WITH_N_OBJECTS = new Set([
-  'Circular', 'Elliptical', 'Spiral', 'Lissajous', 'Figure8',
-  'Linear', 'Oscillation', 'Formation', 'PerlinNoise', 'Converge', 'Pendulum',
-  'RoseCurve', 'Helix', 'Wave', 'CustomTrajectory',
-  'Bouncing', 'Avoidance', 'Spring', 'Follow', 'Swarm', 'VectorField',
-  'DrawSpline', 'EvaluateSpline', 'TrimSpline', 'OffsetSpline',
-  'Mix', 'Group', 'Sequence', 'Crossfade',
-]);
+/// Types de nodes qui ont un paramètre n_objects à sync avec le node
+/// Objects — alias de la source unique objectsNodeSync.OBJECT_ENGINE_TYPES
+/// (3 copies du même set existaient : holProjectSlice, moveSlotsSlice ×2).
+const ENGINE_TYPES_WITH_N_OBJECTS = OBJECT_ENGINE_TYPES;
 
 /// Movement IDs en cours de fade-out côté backend.
 /// deactivate_move(fade>0) retourne immédiatement mais le move reste dans
@@ -358,10 +361,10 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
     }
     // Reset undo/redo — l'historique appartient au slot précédent.
     // Sans ça, un undo après switch restaurerait le graphe d'un autre slot.
-    set({ _history: [], _historyIndex: -1, canUndo: false, canRedo: false } as any);
+    set({ _history: [], _historyIndex: -1, canUndo: false, canRedo: false });
     // Baseline : le graphe du slot devient l'entrée 0 — sinon le premier
     // edit après un switch n'était jamais undoable (undo bloque à index 0).
-    (get() as any).pushHistory?.();
+    get().pushHistory?.();
     // Sync selectedTrackIds avec les tracks du slot.
     // IMPORTANT: on met à jour selectedTrackIds SANS appeler syncObjectsNode
     // (qui ferait un hot-swap sur TOUS les moves actifs).
@@ -543,7 +546,7 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
       // mais autoSave n'a pas encore tourné).
       const isEditing = get().editingSlotId === id;
       const graphSource = isEditing
-        ? { nodes: (get() as any).nodes, edges: (get() as any).edges }
+        ? { nodes: get().nodes, edges: get().edges }
         : slot.graphJson;
       if (graphSource?.nodes && graphSource?.edges) {
         import('../../components/nodeParamSchema').then(({ prepareGraphForSave }) => {
@@ -607,8 +610,8 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
       // l'auto-save n'a pas forcément encore synchronisé slot.graphJson)
       const isEditing = get().editingSlotId === id;
       if (isEditing) {
-        const currentNodes = (get() as any).nodes;
-        const currentEdges = (get() as any).edges;
+        const currentNodes = get().nodes;
+        const currentEdges = get().edges;
         if (currentNodes?.length > 0) {
           graphJson = { nodes: currentNodes, edges: currentEdges };
         }
@@ -620,12 +623,11 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
       // Log spécifique pour les nodes spline
       const evalNode = graphJson.nodes.find((n: any) => n.data.type === 'EvaluateSpline');
       const drawNode = graphJson.nodes.find((n: any) => n.data.type === 'DrawSpline');
-      feLog(`[DBG-playSlot] DrawSpline points=${((drawNode?.data as any)?.params?.points ?? 'NOT SET').slice(0, 120)}`);
-      feLog(`[DBG-playSlot] EvaluateSpline points=${((evalNode?.data as any)?.params?.points ?? 'NOT SET').slice(0, 120)}`);
+      feLog(`[DBG-playSlot] DrawSpline points=${String(drawNode?.data.params?.points ?? 'NOT SET').slice(0, 120)}`);
+      feLog(`[DBG-playSlot] EvaluateSpline points=${String(evalNode?.data.params?.points ?? 'NOT SET').slice(0, 120)}`);
 
       // Lire la duration depuis le node Duration du graphe
-      const durationNode = graphJson.nodes.find((n: any) => n.data.type === 'Duration');
-      const duration = (durationNode?.data as any)?.params?.duration ?? 4.0;
+      const duration = extractDuration(graphJson.nodes);
 
       const trackIndices = computeTrackIndices(slot.trackIds, holProject, manualOscIds);
       if (trackIndices.length === 0) {
