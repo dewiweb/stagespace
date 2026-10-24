@@ -259,7 +259,9 @@ export const useAnimationStore = create<AnimationStore>((set, get) => {
   launchFlash: 0,
   showExpert: false,
   setShowExpert: (show) => set({ showExpert: show }),
-  performMode: false,
+  // Perform-first : l'app s'ouvre sur la surface de show. Le graphe est
+  // l'atelier — on y entre via « Edit graph » sur un move, pas par défaut.
+  performMode: true,
   setPerformMode: (on) => set({ performMode: on }),
   debugPerfVisible: false,
   setDebugPerfVisible: (on) => set({ debugPerfVisible: on }),
