@@ -474,6 +474,7 @@ pub fn cmd_osc_validate(args: &[&str]) -> Result<String, String> {
         speed: None,
         spatial_macros: None,
         animation_state: None,
+        signal_graph: None,
     };
     stagespace_tauri::commands::merge_commands::spawn_move(spec, &state.shared)
         .map_err(|e| e.to_string())?;

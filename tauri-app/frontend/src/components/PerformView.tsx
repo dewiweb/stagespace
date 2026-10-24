@@ -11,6 +11,7 @@ import { useCuelistStore } from '../store/useCuelistStore';
 import { type NodeParamValue } from './nodeParamSchema';
 import { NodeParamsPanel } from './NodeParamsPanel';
 import { PanicButton } from './ui/PanicButton';
+import { OscArmToggle } from './ui/OscArmToggle';
 
 /// ── PERFORM VIEW ──
 /// Surface live réduite : setlist + cues + canvas + params live à la demande.
@@ -108,7 +109,7 @@ export const PerformView: React.FC = () => {
             <span className="text-white text-xs font-medium truncate">{slot.name}</span>
             {isPlaying && (
               <span
-                className={`text-[10px] px-1 rounded ${
+                className={`text-xs px-1 rounded ${
                   slot.isPreview ? 'bg-cyan-900 text-cyan-300' : 'bg-green-900 text-green-300'
                 }`}
               >
@@ -116,19 +117,19 @@ export const PerformView: React.FC = () => {
               </span>
             )}
           </div>
-          <div className="text-gray-500 text-[10px]">
+          <div className="text-gray-500 text-xs">
             {slot.trackIds.length} trk
           </div>
         </div>
         {isCurrentSetlist && (
-          <span className="text-purple-400 text-[10px] font-bold flex-shrink-0" title="Current setlist">◉ NOW</span>
+          <span className="text-purple-400 text-xs font-bold flex-shrink-0" title="Current setlist">◉ NOW</span>
         )}
         {isNextSetlist && !isCurrentSetlist && (
-          <span className="text-green-400/80 text-[10px] font-bold flex-shrink-0" title="Prochain GO">→ NEXT</span>
+          <span className="text-green-400/80 text-xs font-bold flex-shrink-0" title="Prochain GO">→ NEXT</span>
         )}
         <SlidersHorizontal
           size={12}
-          className={`flex-shrink-0 ${isSelected ? 'text-indigo-300' : 'text-gray-600 group-hover:text-gray-400'}`}
+          className={`flex-shrink-0 ${isSelected ? 'text-indigo-300' : 'text-gray-400 group-hover:text-gray-400'}`}
         />
       </div>
     );
@@ -197,7 +198,7 @@ export const PerformView: React.FC = () => {
           <div className="text-lg font-black leading-tight">
             {armedPlaying ? 'STOP ■' : 'PLAY ▶'}
           </div>
-          <div className={`text-[11px] font-medium truncate leading-tight ${armedPlaying ? 'text-red-100/80' : 'text-indigo-100/80'}`}>
+          <div className={`text-xs font-medium truncate leading-tight ${armedPlaying ? 'text-red-100/80' : 'text-indigo-100/80'}`}>
             {armedSlot ? armedSlot.name : 'tap a move'}
           </div>
         </button>
@@ -211,10 +212,11 @@ export const PerformView: React.FC = () => {
           title="GO : prochain move de la setlist (Enter) — RECALL cue = Shift+Enter"
         >
           <div className="text-lg font-black leading-tight">GO ▶</div>
-          <div className="text-[11px] font-medium text-green-100/80 truncate leading-tight">
+          <div className="text-xs font-medium text-green-100/80 truncate leading-tight">
             {nextSetlistSlot ? nextSetlistSlot.name : 'end of setlist'}
           </div>
         </button>
+        <OscArmToggle />
         <PanicButton size="lg" />
       </div>
 
@@ -223,25 +225,25 @@ export const PerformView: React.FC = () => {
         {/* Colonne gauche : SETLIST (flux du show) + LAYERS (ad-hoc) + cues */}
         <div className="w-72 flex-shrink-0 border-r border-stagespace-border flex flex-col bg-stagespace-panel min-h-0">
           <div className="flex-1 overflow-y-auto min-h-0">
-            <div className="px-3 py-2 text-gray-400 text-[10px] uppercase tracking-wider border-b border-stagespace-border bg-purple-950/20">
+            <div className="px-3 py-2 text-gray-400 text-xs uppercase tracking-wider border-b border-stagespace-border bg-purple-950/20">
               Setlist — GO avance ici
             </div>
             {setlistSlots.map(renderSlotRow)}
             {setlistSlots.length === 0 && (
-              <div className="px-3 py-4 text-gray-600 text-[11px] italic">
+              <div className="px-3 py-4 text-gray-400 text-xs italic">
                 Empty setlist — add moves to the setlist in Edit mode.
               </div>
             )}
             {layerSlots.length > 0 && (
               <>
-                <div className="px-3 py-2 text-gray-400 text-[10px] uppercase tracking-wider border-b border-stagespace-border">
+                <div className="px-3 py-2 text-gray-400 text-xs uppercase tracking-wider border-b border-stagespace-border">
                   Layers — <Play size={9} className="inline -mt-0.5" /> joue en parallèle
                 </div>
                 {layerSlots.map(renderSlotRow)}
               </>
             )}
             {moveSlots.length === 0 && (
-              <div className="px-3 py-6 text-center text-gray-600 text-[11px]">
+              <div className="px-3 py-6 text-center text-gray-400 text-xs">
                 No moves — leave Perform (header) to create some.
               </div>
             )}
@@ -349,13 +351,13 @@ const LiveDrawer: React.FC = () => {
     <div className="flex-shrink-0 border-t border-stagespace-border bg-stagespace-panel">
       {/* Barre : chips des moves live + gros boutons de scope */}
       <div className="flex items-center gap-2 px-3 py-1.5 overflow-x-auto">
-        <span className="text-gray-500 text-[10px] uppercase tracking-wider flex-shrink-0">
+        <span className="text-gray-500 text-xs uppercase tracking-wider flex-shrink-0">
           Live{playingSlots.length > 0 ? ` ${playingSlots.length}` : ''}
         </span>
         {playingSlots.length > 0 && (
           <button
             onClick={() => { selectSlotForEditing(null); setScope(null); }}
-            className={`px-3 py-1 rounded-full text-[11px] font-medium whitespace-nowrap transition-colors ${
+            className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
               !editingSlotId
                 ? 'bg-indigo-600 text-white'
                 : 'bg-gray-800 text-gray-400 hover:text-white border border-gray-700'
@@ -369,7 +371,7 @@ const LiveDrawer: React.FC = () => {
           <button
             key={s.id}
             onClick={() => selectMove(s.id)}
-            className={`px-3 py-1 rounded-full text-[11px] font-medium whitespace-nowrap transition-colors ${
+            className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
               editingSlotId === s.id && scope !== 'global'
                 ? 'bg-indigo-600 text-white'
                 : 'bg-green-900/40 text-green-300 hover:bg-green-800/50 border border-green-800/50'
@@ -394,20 +396,20 @@ const LiveDrawer: React.FC = () => {
           'Macros globales — affectent TOUS les moves live (merge)')}
 
         {!slot && playingSlots.length === 0 && (
-          <span className="text-gray-600 text-[10px] ml-2">
+          <span className="text-gray-400 text-xs ml-2">
             tap a move for its params · <Play size={9} className="inline -mt-0.5" /> = layer live
             {' · '}<Pin size={9} className="inline -mt-0.5" /> in Edit = curate this surface
           </span>
         )}
         {!slot && playingSlots.length > 0 && (
-          <span className="text-gray-600 text-[10px] ml-2">tap a chip to edit a move</span>
+          <span className="text-gray-400 text-xs ml-2">tap a chip to edit a move</span>
         )}
         {slot && (
-          <span className="text-indigo-400/70 text-[10px] ml-2 flex items-center gap-1.5">
+          <span className="text-indigo-400/70 text-xs ml-2 flex items-center gap-1.5">
             editing: {slot.name}
             {slot.movementId
               ? <span className={`px-1 rounded ${slot.isPreview ? 'bg-cyan-900 text-cyan-300' : 'bg-green-900 text-green-300'}`}>{slot.isPreview ? 'PREV' : 'LIVE'}</span>
-              : <span className="text-gray-600">(stopped)</span>}
+              : <span className="text-gray-400">(stopped)</span>}
           </span>
         )}
       </div>
@@ -422,13 +424,13 @@ const LiveDrawer: React.FC = () => {
             <Slider label="Height +" value={macros.height_offset} min={-5} max={5} step={0.1} unit="m" accent="orange" live onChange={(v) => setGlobalMacro('height_offset', v)} />
           </div>
           <div className="flex-shrink-0 w-64 space-y-1">
-            <div className="text-gray-500 text-[10px] uppercase tracking-wider">Shift (global)</div>
+            <div className="text-gray-500 text-xs uppercase tracking-wider">Shift (global)</div>
             <Slider label="X" value={macros.shiftX} min={-10} max={10} step={0.1} unit="m" accent="orange" live onChange={(v) => setGlobalMacro('shiftX', v)} />
             <Slider label="Y" value={macros.shiftY} min={-10} max={10} step={0.1} unit="m" accent="orange" live onChange={(v) => setGlobalMacro('shiftY', v)} />
             <Slider label="Z" value={macros.shiftZ} min={-10} max={10} step={0.1} unit="m" accent="orange" live onChange={(v) => setGlobalMacro('shiftZ', v)} />
           </div>
           <div className="flex-shrink-0 w-64 space-y-1">
-            <div className="text-gray-500 text-[10px] uppercase tracking-wider">Rotation (global)</div>
+            <div className="text-gray-500 text-xs uppercase tracking-wider">Rotation (global)</div>
             <Slider label="Yaw" value={macros.yaw} min={-180} max={180} step={1} unit="°" accent="orange" live onChange={(v) => setGlobalMacro('yaw', v)} />
             <Slider label="Pitch" value={macros.pitch} min={-180} max={180} step={1} unit="°" accent="orange" live onChange={(v) => setGlobalMacro('pitch', v)} />
             <Slider label="Roll" value={macros.roll} min={-180} max={180} step={1} unit="°" accent="orange" live onChange={(v) => setGlobalMacro('roll', v)} />
@@ -441,7 +443,7 @@ const LiveDrawer: React.FC = () => {
         <div className="border-t border-indigo-900/40 px-4 py-2 flex items-start gap-6 overflow-x-auto max-h-[42vh] overflow-y-auto">
           {/* Speed — gros fader du move */}
           <div className="flex-shrink-0 w-64 space-y-1">
-            <div className="text-gray-500 text-[10px] uppercase tracking-wider">Speed</div>
+            <div className="text-gray-500 text-xs uppercase tracking-wider">Speed</div>
             <Slider
               value={slot.macros.speed}
               min={0}
@@ -457,13 +459,13 @@ const LiveDrawer: React.FC = () => {
           {/* Direction + loop — groupes de boutons */}
           <div className="flex-shrink-0 w-56 space-y-2">
             <div>
-              <div className="text-gray-500 text-[10px] uppercase tracking-wider mb-1">Direction</div>
+              <div className="text-gray-500 text-xs uppercase tracking-wider mb-1">Direction</div>
               <div className="flex gap-1">
                 {(['forward', 'backward', 'ping_pong'] as const).map((d) => (
                   <button
                     key={d}
                     onClick={() => setSlotDirection(slot.id, d)}
-                    className={`flex-1 py-1.5 text-[10px] rounded ${
+                    className={`flex-1 py-1.5 text-xs rounded ${
                       slot.direction === d
                         ? 'bg-blue-600 text-white'
                         : 'bg-gray-800 text-gray-500 hover:text-gray-300'
@@ -475,13 +477,13 @@ const LiveDrawer: React.FC = () => {
               </div>
             </div>
             <div>
-              <div className="text-gray-500 text-[10px] uppercase tracking-wider mb-1">Mode</div>
+              <div className="text-gray-500 text-xs uppercase tracking-wider mb-1">Mode</div>
               <div className="flex gap-1">
                 {(['loop', 'oneshot'] as const).map((l) => (
                   <button
                     key={l}
                     onClick={() => setSlotLoopMode(slot.id, l)}
-                    className={`flex-1 py-1.5 text-[10px] rounded ${
+                    className={`flex-1 py-1.5 text-xs rounded ${
                       slot.loopMode === l
                         ? 'bg-blue-600 text-white'
                         : 'bg-gray-800 text-gray-500 hover:text-gray-300'
@@ -495,7 +497,7 @@ const LiveDrawer: React.FC = () => {
           </div>
           {/* Fades de cycle */}
           <div className="flex-shrink-0 w-64 space-y-1">
-            <div className="text-gray-500 text-[10px] uppercase tracking-wider">Fades</div>
+            <div className="text-gray-500 text-xs uppercase tracking-wider">Fades</div>
             <Slider
               label="In"
               value={current.fade_in}
@@ -559,7 +561,7 @@ const LiveDrawer: React.FC = () => {
             updateAssignment={updateAssignment}
           />
           {slot.movementId && (
-            <div className="text-green-700 text-[10px] mt-1">
+            <div className="text-green-700 text-xs mt-1">
               live — toggles appliqués via hot-swap, depth/phase via update_animation_state
             </div>
           )}

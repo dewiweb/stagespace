@@ -3,4 +3,4 @@
 /**
  * Contexte(s) de graphe où le node est autorisé.
  */
-export type NodeScope = "SubOnly" | "GlobalOnly" | "Both";
+export type NodeScope = "SubOnly" | "GlobalOnly" | "Both" | "SignalOnly";

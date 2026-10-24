@@ -85,6 +85,8 @@ const CATCHUP_FRAME_LIMIT: u128 = 30;
 pub struct MergeRuntime {
     thread: Option<std::thread::JoinHandle<()>>,
     running: Arc<AtomicBool>,
+    /// Master arm (« OSC LIVE ») — gate sur le chemin d'envoi du sink.
+    osc_armed: Arc<AtomicBool>,
     /// Vrai si le merge thread est mort d'un panic contenu (catch_unwind).
     /// Observable : sans lui, un panic tuait le thread pendant que
     /// `running` restait true → blackout OSC silencieux.
@@ -165,6 +167,17 @@ pub struct MergeRuntime {
     /// buffer diffère → on ne tue pas le nouveau move. Sans ce mécanisme
     /// un worker zombie tournait à 100 % CPU indéfiniment.
     stale_kill_ids: StaleKillQueue,
+    /// Graph de modulation compilé (domaine signal) — produit des DELTAS
+    /// de macros par frame, appliqués de façon additive sur un clone
+    /// effectif des macros (la base panel/OSC/cue n'est jamais écrasée).
+    /// Mutex (pas RwLock) : `SignalFn` est `FnMut` — les nodes à état
+    /// mutent à chaque eval. Hot-swappable via `update_signal_graph`.
+    signal_fn: Arc<Mutex<crate::signal_compiler::SignalFn>>,
+    /// Dernières valeurs OSC reçues (`OscReceiver::address_values_handle`)
+    /// — source des nodes `SignalOsc`. L'Arc interne est re-pointé via
+    /// `set_osc_values_handle` quand le receiver est recréé (rebind port).
+    /// Vide tant que le receiver n'est pas branché (les nodes lisent 0.0).
+    osc_values: crate::signal_compiler::SignalOscSource,
 }
 
 /// Entrée de la file stale-kill (audit C5) : id du move + Arc du
@@ -207,6 +220,7 @@ impl MergeRuntime {
         Ok(MergeRuntime {
             thread: None,
             running: Arc::new(AtomicBool::new(false)),
+            osc_armed: Arc::new(AtomicBool::new(true)),
             thread_died: Arc::new(AtomicBool::new(false)),
             merge_frames: Arc::new(AtomicU64::new(0)),
             dropped_positions: Arc::new(AtomicU64::new(0)),
@@ -234,6 +248,8 @@ impl MergeRuntime {
             barycenter_pivot: Arc::new(AtomicBool::new(false)),
             move_ref_id: Arc::new(RwLock::new(None)),
             stale_kill_ids: Arc::new(Mutex::new(Vec::new())),
+            signal_fn: Arc::new(Mutex::new(crate::signal_compiler::empty_signal_fn())),
+            osc_values: Arc::new(RwLock::new(Arc::new(Mutex::new(HashMap::new())))),
         })
     }
 
@@ -269,6 +285,18 @@ impl MergeRuntime {
     /// injecter n'importe quel `PositionSink` sans toucher la boucle.
     pub fn set_sink(&self, sink: Box<dyn crate::position_sink::PositionSink>) {
         *self.sink.lock().unwrap_or_else(|e| e.into_inner()) = sink;
+    }
+
+    /// Master arm — « OSC LIVE » global. `false` = silence total : le merge
+    /// continue (preview 3D alive) mais aucun paquet ne part. Indépendant
+    /// des flags `is_preview` par move — c'est l'interrupteur master de
+    /// la console, pas un réglage de move.
+    pub fn set_osc_armed(&self, armed: bool) {
+        self.osc_armed.store(armed, Ordering::SeqCst);
+    }
+
+    pub fn osc_armed(&self) -> bool {
+        self.osc_armed.load(Ordering::SeqCst)
     }
 
     /// Configure la sortie OSC (sink par défaut). Sender + socket swappés
@@ -374,6 +402,45 @@ impl MergeRuntime {
     }
 
     /// Hot-swap la fonction de post-processing (graph global)
+    /// Hot-swap du graph de modulation (domaine signal → deltas de macros).
+    /// Le merge l'évalue à chaque frame et applique les deltas de façon
+    /// ADDITIVE sur un clone effectif des macros (couche sans conflit —
+    /// les écritures directes panel/OSC/cue restent la base).
+    pub fn swap_signal_fn(&self, new_fn: crate::signal_compiler::SignalFn) {
+        *self.signal_fn.lock().unwrap_or_else(|e| e.into_inner()) = new_fn;
+    }
+
+    /// Branche le cache des valeurs OSC reçues (source des nodes
+    /// `SignalOsc`) — appelé au démarrage et après chaque rebind du
+    /// receiver avec `OscReceiver::address_values_handle()`.
+    pub fn set_osc_values_handle(&self, handle: crate::compiler::OscValueMap) {
+        *self.osc_values.write().unwrap_or_else(|e| e.into_inner()) = handle;
+    }
+
+    /// Évalue la `SignalFn` courante hors boucle — diagnostic/test :
+    /// permet de vérifier qu'un recall/hot-swap a bien installé (ou
+    /// reset) le graph de modulation sans démarrer le merge.
+    pub fn eval_signal_deltas(&self, t: f64, dt: f64) -> HashMap<String, f64> {
+        let audio_state = self
+            .audio_state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let osc_map = self
+            .osc_values
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let osc_vals = osc_map.lock().unwrap_or_else(|e| e.into_inner());
+        let mut signal = self.signal_fn.lock().unwrap_or_else(|e| e.into_inner());
+        (*signal)(&crate::signal_compiler::SignalCtx {
+            t,
+            dt,
+            audio_state: &audio_state,
+            osc_values: &osc_vals,
+        })
+    }
+
     pub fn swap_post_process_fn(&self, new_fn: PostProcessFn) {
         *self
             .post_process_fn
@@ -862,6 +929,7 @@ impl MergeRuntime {
         self.thread_died.store(false, Ordering::SeqCst);
         self.merge_frames.store(0, Ordering::SeqCst);
         let running = self.running.clone();
+        let osc_armed_arc = self.osc_armed.clone();
         let thread_died = self.thread_died.clone();
         let merge_frames = self.merge_frames.clone();
         let dropped_positions = self.dropped_positions.clone();
@@ -889,6 +957,8 @@ impl MergeRuntime {
         let barycenter_pivot_arc = self.barycenter_pivot.clone();
         let move_ref_id_arc = self.move_ref_id.clone();
         let stale_kill_ids = self.stale_kill_ids.clone();
+        let signal_fn_arc = self.signal_fn.clone();
+        let osc_values_arc = self.osc_values.clone();
 
         let handle = std::thread::spawn(move || {
             let mut start = Instant::now();
@@ -1175,9 +1245,36 @@ impl MergeRuntime {
                     .unwrap_or_else(|e| e.into_inner())
                     .clone();
 
+                // Signal graph : évalue la `SignalFn` compilée → deltas
+                // additifs appliqués sur un clone effectif des macros.
+                // La base (panel/OSC/cue) n'est jamais écrasée — couche
+                // additive pure, les transforms lisent `ctx.macros` sans
+                // changement.
+                let eff_macros = {
+                    let mut signal = signal_fn_arc.lock().unwrap_or_else(|e| e.into_inner());
+                    let deltas = {
+                        let osc_map = osc_values_arc
+                            .read()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .clone();
+                        let osc_vals = osc_map.lock().unwrap_or_else(|e| e.into_inner());
+                        (*signal)(&crate::signal_compiler::SignalCtx {
+                            t: t_real,
+                            dt,
+                            audio_state: &audio_state,
+                            osc_values: &osc_vals,
+                        })
+                    };
+                    if deltas.is_empty() {
+                        None
+                    } else {
+                        Some(crate::signal_compiler::macro_with_deltas(&macros, &deltas))
+                    }
+                };
+
                 let ctx = PostProcessContext {
                     t: t_real,
-                    macros: &macros,
+                    macros: eff_macros.as_ref().unwrap_or_else(|| macros.as_ref()),
                     audio_state: &audio_state,
                     track_positions: &track_positions,
                     manual_positions: &manual_positions,
@@ -1277,7 +1374,10 @@ impl MergeRuntime {
                     .read()
                     .unwrap_or_else(|e| e.into_inner())
                     .clone();
-                {
+                // Master arm : disarmé = silence total, le merge continue
+                // (preview alive) mais aucun paquet ne part — ni les sends
+                // normaux ni la sonde du circuit-breaker.
+                if osc_armed_arc.load(Ordering::SeqCst) {
                     let mut sink_guard = sink_arc.lock().unwrap_or_else(|e| e.into_inner());
                     if osc_circuit_open {
                         // Circuit ouvert : une sonde par seconde — un vrai

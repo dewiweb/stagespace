@@ -63,16 +63,16 @@ export default function AudioPanel() {
           </div>
         )}
         {isListening && audioState.bpm && (
-          <span className="text-cyan-400 text-[10px] font-mono">{audioState.bpm.bpm.toFixed(0)} BPM</span>
+          <span className="text-cyan-400 text-xs font-mono">{audioState.bpm.bpm.toFixed(0)} BPM</span>
         )}
-        <span className="text-gray-600 text-[10px]">{collapsed ? '▸' : '▾'}</span>
+        <span className="text-gray-400 text-xs">{collapsed ? '▸' : '▾'}</span>
       </button>
 
       {collapsed ? null : (
       <div className="px-3 pb-3 flex flex-col gap-2">
 
       {error && (
-        <div className="p-2 bg-red-950/40 border border-red-800/50 rounded text-red-400 text-[11px]">
+        <div className="p-2 bg-red-950/40 border border-red-800/50 rounded text-red-400 text-xs">
           {error}
         </div>
       )}
@@ -95,10 +95,10 @@ export default function AudioPanel() {
       {/* Status */}
       <div className="p-2.5 bg-gray-800/50 rounded-lg border border-gray-700/50">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-gray-400 text-[11px]">Status</span>
+          <span className="text-gray-400 text-xs">Status</span>
           <div className="flex items-center gap-1.5">
             <div className={`w-1.5 h-1.5 rounded-full ${isListening ? 'bg-green-500 animate-pulse' : 'bg-gray-600'}`} />
-            <span className={`text-[11px] font-medium ${isListening ? 'text-green-400' : 'text-gray-500'}`}>
+            <span className={`text-xs font-medium ${isListening ? 'text-green-400' : 'text-gray-500'}`}>
               {isListening ? 'Active' : 'Inactive'}
             </span>
           </div>
@@ -108,7 +108,7 @@ export default function AudioPanel() {
       {/* Amplitude */}
       {isListening && amp && (
         <div className="space-y-2">
-          <div className="text-gray-400 text-[11px] font-medium uppercase tracking-wide">Amplitude</div>
+          <div className="text-gray-400 text-xs font-medium uppercase tracking-wide">Amplitude</div>
           <Bar label="RMS" value={amp.rms} color="bg-blue-500" />
           <Bar label="Bass" value={amp.bass} color="bg-red-500" />
           <Bar label="Mid" value={amp.mid} color="bg-green-500" />
@@ -120,7 +120,7 @@ export default function AudioPanel() {
       {isListening && audioState.bpm && (
         <div className="p-2.5 bg-gray-800/50 rounded-lg border border-gray-700/50">
           <div className="flex items-center justify-between">
-            <span className="text-gray-400 text-[11px]">BPM</span>
+            <span className="text-gray-400 text-xs">BPM</span>
             <span className="text-white text-lg font-mono font-bold">
               {audioState.bpm.bpm.toFixed(0)}
             </span>
@@ -131,14 +131,14 @@ export default function AudioPanel() {
               style={{ width: `${audioState.bpm.confidence * 100}%` }}
             />
           </div>
-          <div className="text-gray-600 text-[10px] mt-0.5">Confidence {(audioState.bpm.confidence * 100).toFixed(0)}%</div>
+          <div className="text-gray-400 text-xs mt-0.5">Confidence {(audioState.bpm.confidence * 100).toFixed(0)}%</div>
         </div>
       )}
 
       {/* Spectrum */}
       {isListening && audioState.spectrum && (
         <div className="space-y-1.5">
-          <div className="text-gray-400 text-[11px] font-medium uppercase tracking-wide">Spectrum</div>
+          <div className="text-gray-400 text-xs font-medium uppercase tracking-wide">Spectrum</div>
           <SpectrumView spectrum={audioState.spectrum.spectrum} />
         </div>
       )}
@@ -166,14 +166,14 @@ export default function AudioPanel() {
 
 const Bar: React.FC<{ label: string; value: number; color: string }> = ({ label, value, color }) => (
   <div className="flex items-center gap-2">
-    <span className="text-gray-500 text-[11px] w-10">{label}</span>
+    <span className="text-gray-500 text-xs w-10">{label}</span>
     <div className="flex-1 h-2 bg-gray-900 rounded-full overflow-hidden">
       <div
         className={`h-full ${color} transition-all duration-100 rounded-full`}
         style={{ width: `${Math.min(100, value * 100)}%` }}
       />
     </div>
-    <span className="text-gray-400 text-[10px] font-mono w-8 text-right">{(value * 100).toFixed(0)}%</span>
+    <span className="text-gray-400 text-xs font-mono w-8 text-right">{(value * 100).toFixed(0)}%</span>
   </div>
 );
 

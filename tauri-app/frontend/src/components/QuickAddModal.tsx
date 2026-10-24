@@ -92,7 +92,7 @@ export const QuickAddModal: React.FC<{
         />
         <div ref={listRef} className="max-h-64 overflow-y-auto space-y-0.5">
           {items.length === 0 && (
-            <div className="text-gray-600 text-[11px] py-3 text-center">
+            <div className="text-gray-400 text-xs py-3 text-center">
               No node matches '{query}'.
             </div>
           )}
@@ -115,19 +115,19 @@ export const QuickAddModal: React.FC<{
               />
               <span className="font-medium">{it.label}</span>
               {it.kind === 'plugin' && (
-                <span className="text-[9px] px-1 rounded bg-purple-900/60 text-purple-300 font-mono">
+                <span className="text-[11px] px-1 rounded bg-purple-900/60 text-purple-300 font-mono">
                   {KIND_BADGE[it.manifest.kind] ?? it.manifest.kind}
                 </span>
               )}
               {it.hint && (
-                <span className="ml-auto text-[10px] text-gray-600 truncate max-w-[45%]">
+                <span className="ml-auto text-xs text-gray-400 truncate max-w-[45%]">
                   {it.hint}
                 </span>
               )}
             </button>
           ))}
         </div>
-        <div className="text-gray-500 text-[9px] pt-2">
+        <div className="text-gray-500 text-[11px] pt-2">
           ↑↓ navigate · Enter add · Esc close — inserts into a selected edge.
         </div>
       </div>

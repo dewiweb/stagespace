@@ -54,6 +54,14 @@ pub struct Runtime {
     /// Le worker thread lit cette valeur à chaque frame pour savoir
     /// combien de positions calculer.
     osc_ids_arc: Arc<std::sync::RwLock<Vec<u32>>>,
+    /// Graph de modulation per-move (domaine signal) — deltas additifs
+    /// mergés dans `audio_param_overrides` à chaque frame (mêmes clés que
+    /// les audio mods). `FnMut` : nodes à mémoire mutent à l'éval.
+    signal_fn: Arc<Mutex<crate::signal_compiler::SignalFn>>,
+    /// Cache des valeurs OSC reçues (source `SignalOsc`) — l'Arc interne
+    /// est re-pointé via `set_osc_values_handle` si le receiver est
+    /// recréé (il vit dans le receiver, on partage la référence).
+    osc_values: crate::signal_compiler::SignalOscSource,
     /// Handle du thread de playback — join propre dans stop()
     thread_handle: Mutex<Option<std::thread::JoinHandle<()>>>,
 }
@@ -84,6 +92,8 @@ impl Runtime {
             position_buffer: Mutex::new(None),
             duration_ms: Arc::new(std::sync::atomic::AtomicU64::new(4000)),
             osc_ids_arc: Arc::new(std::sync::RwLock::new(Vec::new())),
+            signal_fn: Arc::new(Mutex::new(crate::signal_compiler::empty_signal_fn())),
+            osc_values: Arc::new(std::sync::RwLock::new(Arc::new(Mutex::new(HashMap::new())))),
             thread_handle: Mutex::new(None),
         }
     }
@@ -179,6 +189,20 @@ impl Runtime {
     /// Récupère l'Arc de l'audio state — permet de mettre à jour sans locker state.movements
     pub fn audio_state_arc(&self) -> Arc<Mutex<AudioState>> {
         self.audio_state.clone()
+    }
+
+    /// Hot-swap du graph de modulation per-move (domaine signal → deltas
+    /// de macros). Les deltas se somment dans `audio_param_overrides` —
+    /// couche additive, la base macro n'est jamais écrasée.
+    pub fn swap_signal_fn(&self, new_fn: crate::signal_compiler::SignalFn) {
+        *self.signal_fn.lock().unwrap_or_else(|e| e.into_inner()) = new_fn;
+    }
+
+    /// Branche le cache des valeurs OSC reçues (source des nodes
+    /// `SignalOsc`) — appelé au lancement avec
+    /// `OscReceiver::address_values_handle()`.
+    pub fn set_osc_values_handle(&self, handle: crate::compiler::OscValueMap) {
+        *self.osc_values.write().unwrap_or_else(|e| e.into_inner()) = handle;
     }
 
     /// Hot-swap la fonction de position — pour cue recall sans arrêter le playback.
@@ -353,6 +377,8 @@ impl Runtime {
         let anim_state_arc = self.animation_state.clone();
         let audio_state_arc = self.audio_state.clone();
         let audio_param_overrides_arc = self.audio_param_overrides.clone();
+        let signal_fn_arc = self.signal_fn.clone();
+        let osc_values_arc = self.osc_values.clone();
 
         let handle = std::thread::spawn(move || {
             // RAII : si la closure panique (bug engine, poison critique),
@@ -402,16 +428,49 @@ impl Runtime {
                 // Lire l'animation state (depth + phase_offset par track)
                 let (track_depths, track_phase_offsets, audio_param_overrides) = {
                     let mut anim_guard = anim_state_arc.lock().unwrap_or_else(|e| e.into_inner());
-                    if let Some(ref mut anim_state) = *anim_guard {
-                        let audio = audio_state_arc.lock().unwrap_or_else(|e| e.into_inner());
-                        let audio_params = anim_state.compute_audio_modulated_params(&audio);
+                    let audio = audio_state_arc.lock().unwrap_or_else(|e| e.into_inner());
+                    let mut audio_params = if let Some(ref mut anim_state) = *anim_guard {
+                        anim_state.compute_audio_modulated_params(&audio)
+                    } else {
+                        std::collections::HashMap::new()
+                    };
+                    // Signal graph per-move : deltas additifs mergés dans
+                    // le même map que les audio mods (clés identiques —
+                    // `shift_*` est traduit vers la convention `offset_*`).
+                    {
+                        let mut signal = signal_fn_arc.lock().unwrap_or_else(|e| e.into_inner());
+                        let osc_map = osc_values_arc
+                            .read()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .clone();
+                        let osc_vals = osc_map.lock().unwrap_or_else(|e| e.into_inner());
+                        let deltas = (*signal)(&crate::signal_compiler::SignalCtx {
+                            t: t_real,
+                            dt: frame_duration.as_secs_f64(),
+                            audio_state: &audio,
+                            osc_values: &osc_vals,
+                        });
+                        for (key, d) in deltas {
+                            if !d.is_finite() {
+                                continue;
+                            }
+                            let k: &str = match key.as_str() {
+                                "shift_x" => "offset_x",
+                                "shift_y" => "offset_y",
+                                "shift_z" => "offset_z",
+                                other => other,
+                            };
+                            *audio_params.entry(k.to_string()).or_insert(0.0) += d;
+                        }
+                    }
+                    if let Some(ref anim_state) = *anim_guard {
                         (
                             anim_state.track_depths.clone(),
                             anim_state.track_phase_offsets.clone(),
                             audio_params,
                         )
                     } else {
-                        (Vec::new(), Vec::new(), std::collections::HashMap::new())
+                        (Vec::new(), Vec::new(), audio_params)
                     }
                 };
 

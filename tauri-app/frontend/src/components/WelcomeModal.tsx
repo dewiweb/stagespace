@@ -45,6 +45,21 @@ export const WelcomeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
           The nodal generative trajectory engine for live spatial audio.
           Build trajectory graphs, launch moves on OSC tracks, perform cues.
         </p>
+        {/* Mental model — the app pipeline, never explained elsewhere */}
+        <div className="rounded bg-gray-800/50 border border-gray-700/50 px-3 py-2.5 space-y-1.5">
+          <div className="text-gray-400 text-xs font-semibold uppercase tracking-wider">How it works</div>
+          {[
+            ['Template', 'a trajectory shape (Circle, Spiral, Physics…)'],
+            ['Move', 'a template + assigned tracks + params'],
+            ['Setlist', 'your ordered moves — GO advances through them'],
+            ['Cue', 'a snapshot you recall live (Shift+Enter)'],
+          ].map(([term, def]) => (
+            <div key={term} className="flex gap-2 text-xs leading-snug">
+              <span className="text-cyan-400 font-mono w-14 flex-shrink-0">{term}</span>
+              <span className="text-gray-400">{def}</span>
+            </div>
+          ))}
+        </div>
         <div className="flex gap-2">
           <button
             onClick={loadExample}
@@ -59,7 +74,7 @@ export const WelcomeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
             Start empty
           </button>
         </div>
-        <p className="text-gray-600 text-[10px]">
+        <p className="text-gray-400 text-xs">
           Press <kbd className="px-1 rounded bg-gray-800 border border-gray-700 font-mono">?</kbd> anytime for
           keyboard shortcuts · set your OSC destination in the toolbar.
         </p>

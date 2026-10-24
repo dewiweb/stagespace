@@ -3423,5 +3423,603 @@
         "default_json": "\"\""
       }
     ]
+  },
+  {
+    "node_type": "SignalConst",
+    "category": "Signal",
+    "scope": "SignalOnly",
+    "feeds": "Signal",
+    "inputs": [],
+    "outputs": [
+      "output"
+    ],
+    "falloff_target": false,
+    "description": "Constant value — bridge for manual live control (UI slider → param). Modulation graph source",
+    "params": [
+      {
+        "key": "value",
+        "label": "Value",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "0.0"
+      }
+    ]
+  },
+  {
+    "node_type": "SignalTime",
+    "category": "Signal",
+    "scope": "SignalOnly",
+    "feeds": "Signal",
+    "inputs": [],
+    "outputs": [
+      "output"
+    ],
+    "falloff_target": false,
+    "description": "Elapsed time as signal — ramps, periodic patterns. wrap=0 → unbounded",
+    "params": [
+      {
+        "key": "rate",
+        "label": "Rate",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": 0.0,
+        "max": 10.0,
+        "default_json": "1.0"
+      },
+      {
+        "key": "wrap",
+        "label": "Wrap (s, 0=none)",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": 0.0,
+        "max": null,
+        "default_json": "0.0"
+      }
+    ]
+  },
+  {
+    "node_type": "SignalLfo",
+    "category": "Signal",
+    "scope": "SignalOnly",
+    "feeds": "Signal",
+    "inputs": [],
+    "outputs": [
+      "output"
+    ],
+    "falloff_target": false,
+    "description": "Low-frequency oscillator — periodic macro animation. The classic 'animate anything'",
+    "params": [
+      {
+        "key": "waveform",
+        "label": "Waveform",
+        "kind": "enum",
+        "options": [
+          "sine",
+          "triangle",
+          "square",
+          "sawtooth",
+          "random"
+        ],
+        "step": null,
+        "min": null,
+        "max": null,
+        "default_json": "\"sine\""
+      },
+      {
+        "key": "frequency",
+        "label": "Frequency (Hz)",
+        "kind": "number",
+        "options": null,
+        "step": 0.01,
+        "min": 0.0,
+        "max": 10.0,
+        "default_json": "0.5"
+      },
+      {
+        "key": "amplitude",
+        "label": "Amplitude",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "1.0"
+      },
+      {
+        "key": "center",
+        "label": "Center",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "0.0"
+      },
+      {
+        "key": "phase",
+        "label": "Phase (rad)",
+        "kind": "number",
+        "options": null,
+        "step": 0.01,
+        "min": 0.0,
+        "max": 6.283185307179586,
+        "default_json": "0.0"
+      }
+    ]
+  },
+  {
+    "node_type": "SignalAudio",
+    "category": "Signal",
+    "scope": "SignalOnly",
+    "feeds": "Signal",
+    "inputs": [],
+    "outputs": [
+      "output"
+    ],
+    "falloff_target": false,
+    "description": "Audio source → signal (rms/bass/mid/high/bpm/FFT band). Music-reactive macros",
+    "params": [
+      {
+        "key": "band",
+        "label": "Band",
+        "kind": "enum",
+        "options": [
+          "rms",
+          "bass",
+          "mid",
+          "high",
+          "bpm",
+          "spectrum"
+        ],
+        "step": null,
+        "min": null,
+        "max": null,
+        "default_json": "\"rms\""
+      },
+      {
+        "key": "index",
+        "label": "FFT Band Index",
+        "kind": "number",
+        "options": null,
+        "step": 1.0,
+        "min": 0.0,
+        "max": 63.0,
+        "default_json": "0"
+      },
+      {
+        "key": "smoothing",
+        "label": "Smoothing",
+        "kind": "number",
+        "options": null,
+        "step": 0.01,
+        "min": 0.0,
+        "max": 0.95,
+        "default_json": "0.0"
+      }
+    ]
+  },
+  {
+    "node_type": "SignalOsc",
+    "category": "Signal",
+    "scope": "SignalOnly",
+    "feeds": "Signal",
+    "inputs": [],
+    "outputs": [
+      "output"
+    ],
+    "falloff_target": false,
+    "description": "Incoming OSC value → signal. External controllers (faders, sensors)",
+    "params": [
+      {
+        "key": "name",
+        "label": "Handler Name",
+        "kind": "text",
+        "options": null,
+        "step": null,
+        "min": null,
+        "max": null,
+        "default_json": "\"fader1\""
+      },
+      {
+        "key": "index",
+        "label": "Arg Index",
+        "kind": "number",
+        "options": null,
+        "step": 1.0,
+        "min": 0.0,
+        "max": 7.0,
+        "default_json": "0"
+      }
+    ]
+  },
+  {
+    "node_type": "SignalRandom",
+    "category": "Signal",
+    "scope": "SignalOnly",
+    "feeds": "Signal",
+    "inputs": [],
+    "outputs": [
+      "output"
+    ],
+    "falloff_target": false,
+    "description": "Smooth deterministic noise — organic drift. Sum of incommensurate sinusoids",
+    "params": [
+      {
+        "key": "rate",
+        "label": "Rate",
+        "kind": "number",
+        "options": null,
+        "step": 0.01,
+        "min": 0.0,
+        "max": 10.0,
+        "default_json": "0.5"
+      },
+      {
+        "key": "amplitude",
+        "label": "Amplitude",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "1.0"
+      },
+      {
+        "key": "seed",
+        "label": "Seed",
+        "kind": "number",
+        "options": null,
+        "step": 1.0,
+        "min": null,
+        "max": null,
+        "default_json": "1.0"
+      }
+    ]
+  },
+  {
+    "node_type": "SignalMath",
+    "category": "Signal",
+    "scope": "SignalOnly",
+    "feeds": "Signal",
+    "inputs": [
+      "a",
+      "b"
+    ],
+    "outputs": [
+      "output"
+    ],
+    "falloff_target": false,
+    "description": "Scalar math — combine signals. Unconnected inputs fall back to params a/b",
+    "params": [
+      {
+        "key": "op",
+        "label": "Op",
+        "kind": "enum",
+        "options": [
+          "add",
+          "sub",
+          "mul",
+          "div",
+          "min",
+          "max",
+          "pow",
+          "abs",
+          "neg",
+          "mod"
+        ],
+        "step": null,
+        "min": null,
+        "max": null,
+        "default_json": "\"add\""
+      },
+      {
+        "key": "a",
+        "label": "A (fallback)",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "0.0"
+      },
+      {
+        "key": "b",
+        "label": "B (fallback)",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "1.0"
+      }
+    ]
+  },
+  {
+    "node_type": "SignalMap",
+    "category": "Signal",
+    "scope": "SignalOnly",
+    "feeds": "Signal",
+    "inputs": [
+      "signal"
+    ],
+    "outputs": [
+      "output"
+    ],
+    "falloff_target": false,
+    "description": "Linear remap in_min..in_max → out_min..out_max, optional clamp",
+    "params": [
+      {
+        "key": "in_min",
+        "label": "In Min",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "0.0"
+      },
+      {
+        "key": "in_max",
+        "label": "In Max",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "1.0"
+      },
+      {
+        "key": "out_min",
+        "label": "Out Min",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "0.0"
+      },
+      {
+        "key": "out_max",
+        "label": "Out Max",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "1.0"
+      },
+      {
+        "key": "clamp",
+        "label": "Clamp",
+        "kind": "boolean",
+        "options": null,
+        "step": null,
+        "min": null,
+        "max": null,
+        "default_json": "true"
+      }
+    ]
+  },
+  {
+    "node_type": "SignalClamp",
+    "category": "Signal",
+    "scope": "SignalOnly",
+    "feeds": "Signal",
+    "inputs": [
+      "signal"
+    ],
+    "outputs": [
+      "output"
+    ],
+    "falloff_target": false,
+    "description": "Clamp signal to [min, max] — safety bound before MacroOut",
+    "params": [
+      {
+        "key": "min",
+        "label": "Min",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "0.0"
+      },
+      {
+        "key": "max",
+        "label": "Max",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "1.0"
+      }
+    ]
+  },
+  {
+    "node_type": "SignalMix",
+    "category": "Signal",
+    "scope": "SignalOnly",
+    "feeds": "Signal",
+    "inputs": [
+      "a",
+      "b",
+      "factor"
+    ],
+    "outputs": [
+      "output"
+    ],
+    "falloff_target": false,
+    "description": "Crossfade between two signals (factor 0=A, 1=B) — factor can itself be a signal",
+    "params": [
+      {
+        "key": "factor",
+        "label": "Factor",
+        "kind": "number",
+        "options": null,
+        "step": 0.01,
+        "min": 0.0,
+        "max": 1.0,
+        "default_json": "0.5"
+      }
+    ]
+  },
+  {
+    "node_type": "SignalSlew",
+    "category": "Signal",
+    "scope": "SignalOnly",
+    "feeds": "Signal",
+    "inputs": [
+      "signal"
+    ],
+    "outputs": [
+      "output"
+    ],
+    "falloff_target": false,
+    "description": "Slew rate limiter — asymmetric physical smoothing (rise/fall units per second)",
+    "params": [
+      {
+        "key": "rise_rate",
+        "label": "Rise (u/s, 0=unlimited)",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": 0.0,
+        "max": null,
+        "default_json": "0.0"
+      },
+      {
+        "key": "fall_rate",
+        "label": "Fall (u/s, 0=unlimited)",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": 0.0,
+        "max": null,
+        "default_json": "0.0"
+      }
+    ]
+  },
+  {
+    "node_type": "SignalEnvelope",
+    "category": "Signal",
+    "scope": "SignalOnly",
+    "feeds": "Signal",
+    "inputs": [
+      "signal"
+    ],
+    "outputs": [
+      "output"
+    ],
+    "falloff_target": false,
+    "description": "Envelope follower — retention factors per frame (small=fast, big=slow). Audio punch → macro",
+    "params": [
+      {
+        "key": "attack",
+        "label": "Attack (low=fast)",
+        "kind": "number",
+        "options": null,
+        "step": 0.01,
+        "min": 0.0,
+        "max": 1.0,
+        "default_json": "0.2"
+      },
+      {
+        "key": "release",
+        "label": "Release (high=slow)",
+        "kind": "number",
+        "options": null,
+        "step": 0.01,
+        "min": 0.0,
+        "max": 1.0,
+        "default_json": "0.95"
+      }
+    ]
+  },
+  {
+    "node_type": "SignalThreshold",
+    "category": "Signal",
+    "scope": "SignalOnly",
+    "feeds": "Signal",
+    "inputs": [
+      "signal"
+    ],
+    "outputs": [
+      "output"
+    ],
+    "falloff_target": false,
+    "description": "Hysteresis gate — 1 above threshold, 0 below threshold-hysteresis, holds between",
+    "params": [
+      {
+        "key": "threshold",
+        "label": "Threshold",
+        "kind": "number",
+        "options": null,
+        "step": 0.01,
+        "min": null,
+        "max": null,
+        "default_json": "0.5"
+      },
+      {
+        "key": "hysteresis",
+        "label": "Hysteresis",
+        "kind": "number",
+        "options": null,
+        "step": 0.01,
+        "min": 0.0,
+        "max": null,
+        "default_json": "0.05"
+      }
+    ]
+  },
+  {
+    "node_type": "SignalOut",
+    "category": "Signal",
+    "scope": "SignalOnly",
+    "feeds": "Terminal",
+    "inputs": [
+      "signal"
+    ],
+    "outputs": [],
+    "falloff_target": false,
+    "description": "Modulation sink — writes signal as ADDITIVE delta on a macro (panel/OSC/cue base + delta). speed only applies per-move",
+    "params": [
+      {
+        "key": "target",
+        "label": "Target",
+        "kind": "enum",
+        "options": [
+          "speed",
+          "scale",
+          "shift_x",
+          "shift_y",
+          "shift_z",
+          "yaw",
+          "pitch",
+          "roll",
+          "radius_scale",
+          "height_offset"
+        ],
+        "step": null,
+        "min": null,
+        "max": null,
+        "default_json": "\"yaw\""
+      },
+      {
+        "key": "amount",
+        "label": "Amount",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "1.0"
+      }
+    ]
   }
 ]

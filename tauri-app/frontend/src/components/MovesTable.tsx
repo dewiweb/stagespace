@@ -6,6 +6,7 @@ import { SHAPE_PRESETS } from '../utils/shapePresets';
 import { useModalGuardOn } from '../utils/modalGuard';
 import Modal from './ui/Modal';
 import Slider from './ui/Slider';
+import EmptyState from './ui/EmptyState';
 import ConfirmModal from './ui/ConfirmModal';
 
 /// MovesTable — la table des moves (concept unifié)
@@ -160,14 +161,14 @@ export default function MovesTable() {
       {/* ═══ Header ═══ */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-stagespace-border flex-shrink-0">
         <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center flex-shrink-0">
-          <span className="text-white text-[10px] font-bold">MV</span>
+          <span className="text-white text-xs font-bold">MV</span>
         </div>
         <h3 className="text-white font-semibold text-sm">Moves</h3>
         <div className="flex-1" />
         {moveSlots.length > 0 && (
-          <span className="text-[10px] font-mono text-gray-500">
+          <span className="text-xs font-mono text-gray-500">
             {playingCount > 0 && <span className="text-green-400">{playingCount} live</span>}
-            {playingCount > 0 && stoppedCount > 0 && <span className="text-gray-600"> / </span>}
+            {playingCount > 0 && stoppedCount > 0 && <span className="text-gray-400"> / </span>}
             {stoppedCount > 0 && <span className="text-gray-400">{stoppedCount} ready</span>}
           </span>
         )}
@@ -177,7 +178,7 @@ export default function MovesTable() {
       <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-stagespace-border flex-shrink-0">
         <button
           onClick={addMoveSlot}
-          className="px-2 py-1 bg-indigo-900/50 hover:bg-indigo-800/60 text-indigo-300 text-[10px] rounded font-medium transition-colors border border-indigo-800/40"
+          className="px-2 py-1 bg-indigo-900/50 hover:bg-indigo-800/60 text-indigo-300 text-xs rounded font-medium transition-colors border border-indigo-800/40"
           title="Add a move to the setlist"
         >
           + Move
@@ -187,7 +188,7 @@ export default function MovesTable() {
             <button
               onClick={goAllSlots}
               disabled={stoppedCount === 0}
-              className="px-2 py-1 bg-green-900/50 hover:bg-green-800/60 text-green-300 text-[10px] rounded font-medium transition-colors border border-green-800/40 disabled:opacity-30 disabled:cursor-not-allowed"
+              className="px-2 py-1 bg-green-900/50 hover:bg-green-800/60 text-green-300 text-xs rounded font-medium transition-colors border border-green-800/40 disabled:opacity-30 disabled:cursor-not-allowed"
               title="Launch all stopped moves"
             >
               ▶ GO All
@@ -195,7 +196,7 @@ export default function MovesTable() {
             <button
               onClick={stopAllSlots}
               disabled={playingCount === 0}
-              className="px-2 py-1 bg-red-900/50 hover:bg-red-800/60 text-red-300 text-[10px] rounded font-medium transition-colors border border-red-800/40 disabled:opacity-30 disabled:cursor-not-allowed"
+              className="px-2 py-1 bg-red-900/50 hover:bg-red-800/60 text-red-300 text-xs rounded font-medium transition-colors border border-red-800/40 disabled:opacity-30 disabled:cursor-not-allowed"
               title="Stop all active moves"
             >
               ■ Stop All
@@ -208,18 +209,18 @@ export default function MovesTable() {
       {setlistOrder.length > 0 && (
         <div className="px-3 py-2 border-b border-stagespace-border flex-shrink-0 bg-gray-900/40">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-gray-400 text-[10px] uppercase tracking-wider">Setlist</span>
-            <span className="text-gray-600 text-[10px] font-mono">
+            <span className="text-gray-400 text-xs uppercase tracking-wider">Setlist</span>
+            <span className="text-gray-400 text-xs font-mono">
               {currentSetlistIndex + 1 >= 0 ? `${currentSetlistIndex + 1}/${setlistOrder.length}` : `0/${setlistOrder.length}`}
             </span>
           </div>
           <div className="flex items-center gap-2">
             <div className="flex-1 min-w-0">
-              <div className="text-white text-[11px] font-semibold truncate">
+              <div className="text-white text-xs font-semibold truncate">
                 {nextSetlistSlot?.name ?? '— (fin de setlist)'}
               </div>
               {nextSetlistSlot && (
-                <div className="text-gray-500 text-[10px]">
+                <div className="text-gray-500 text-xs">
                   {nextSetlistSlot.trackIds.length} tracks · fade {nextSetlistSlot.fadeDuration.toFixed(1)}s
                 </div>
               )}
@@ -234,7 +235,7 @@ export default function MovesTable() {
             </button>
           </div>
           {goFeedback && (
-            <div className={`text-[10px] mt-1 text-center animate-pulse ${goFeedback.ok ? 'text-green-400' : 'text-red-400 font-bold'}`}>
+            <div className={`text-xs mt-1 text-center animate-pulse ${goFeedback.ok ? 'text-green-400' : 'text-red-400 font-bold'}`}>
               {goFeedback.message}
             </div>
           )}
@@ -244,24 +245,18 @@ export default function MovesTable() {
       {/* ═══ Table ═══ */}
       <div className="flex-1 overflow-y-auto min-h-0">
         {moveSlots.length === 0 ? (
-          <div className="text-gray-600 text-[11px] text-center py-8 px-4">
-            <div className="text-gray-500 mb-2 text-sm">No move configured</div>
-            <div className="text-gray-600 text-[10px] mb-3">
-              Clique « + Move » pour créer un slot.<br />
-              Chaque slot = un template + des tracks.<br />
-              Lance plusieurs slots en parallèle avec « GO All ».
-            </div>
-            <button
-              onClick={addMoveSlot}
-              className="px-3 py-1.5 bg-indigo-900/50 hover:bg-indigo-800/60 text-indigo-300 text-[11px] rounded font-medium transition-colors border border-indigo-800/40"
-            >
-              + Créer le premier move
-            </button>
+          <div className="px-4 py-4">
+            <EmptyState
+              title="No move configured"
+              hint="A move = a template + tracks. Click + Move to create one — several can run in parallel."
+              actionLabel="+ Create the first move"
+              onAction={addMoveSlot}
+            />
           </div>
         ) : (
-          <table className="w-full text-[10px]">
+          <table className="w-full text-xs">
             <thead className="sticky top-0 bg-stagespace-panel border-b border-stagespace-border">
-              <tr className="text-gray-500 text-[10px] uppercase tracking-wider">
+              <tr className="text-gray-500 text-xs uppercase tracking-wider">
                 <th className="text-left px-2 py-1 w-6">#</th>
                 <th className="text-left px-2 py-1">Nom</th>
                 <th className="text-left px-2 py-1 w-24">Template</th>
@@ -292,7 +287,7 @@ export default function MovesTable() {
                     {/* # — clic pour sélectionner/désélectionner */}
                     <td className="px-2 py-1.5 cursor-pointer"
                         onClick={() => selectSlotForEditing(editingSlotId === slot.id ? null : slot.id)}>
-                      <span className={`text-[10px] font-mono w-5 h-5 rounded flex items-center justify-center ${
+                      <span className={`text-xs font-mono w-5 h-5 rounded flex items-center justify-center ${
                         isPlaying
                           ? (slot.isPreview ? 'bg-cyan-800 text-cyan-300' : 'bg-green-800 text-green-300')
                           : 'bg-gray-800 text-gray-500'
@@ -314,19 +309,19 @@ export default function MovesTable() {
                             if (e.key === 'Enter') { if (tempName.trim()) renameMoveSlot(slot.id, tempName.trim()); setRenamingId(null); }
                             if (e.key === 'Escape') setRenamingId(null);
                           }}
-                          className="bg-gray-900 text-white text-[10px] px-1 py-0.5 rounded border border-indigo-700 w-full"
+                          className="bg-gray-900 text-white text-xs px-1 py-0.5 rounded border border-indigo-700 w-full"
                         />
                       ) : (
                         <span
                           onDoubleClick={() => { setRenamingId(slot.id); setTempName(slot.name); }}
-                          className="text-white text-[11px] font-medium cursor-text"
+                          className="text-white text-xs font-medium cursor-text"
                           title="Double-click to rename"
                         >
                           {slot.name}
                         </span>
                       )}
                       {isPlaying && mv && (
-                        <div className="text-[10px] font-mono text-green-500 mt-0.5">
+                        <div className="text-xs font-mono text-green-500 mt-0.5">
                           {mv.track_count} tracks
                         </div>
                       )}
@@ -340,7 +335,7 @@ export default function MovesTable() {
                           value={slot.templateId}
                           onChange={(e) => { selectSlotForEditing(slot.id); setSlotTemplate(slot.id, e.target.value); setEditingTemplateFor(null); }}
                           onBlur={() => setEditingTemplateFor(null)}
-                          className="bg-gray-900 text-white text-[10px] px-1 py-0.5 rounded border border-indigo-700 w-full"
+                          className="bg-gray-900 text-white text-xs px-1 py-0.5 rounded border border-indigo-700 w-full"
                         >
                           {basicTemplates.map((p) => (
                             <option key={p.id} value={p.id}>{p.name}</option>
@@ -349,7 +344,7 @@ export default function MovesTable() {
                       ) : (
                         <button
                           onClick={() => { selectSlotForEditing(slot.id); setEditingTemplateFor(slot.id); }}
-                          className="text-indigo-300 hover:text-indigo-200 text-[10px] font-mono px-1 py-0.5 rounded hover:bg-indigo-900/30 transition-colors"
+                          className="text-indigo-300 hover:text-indigo-200 text-xs font-mono px-1 py-0.5 rounded hover:bg-indigo-900/30 transition-colors"
                           title="Changer de template"
                         >
                           {preset?.name ?? slot.templateId}
@@ -361,18 +356,18 @@ export default function MovesTable() {
                     <td className="px-2 py-1.5" onClick={() => selectSlotForEditing(slot.id)}>
                       <button
                         onClick={() => { selectSlotForEditing(slot.id); openTrackPicker(slot.id, slot.trackIds); }}
-                        className="text-cyan-300 hover:text-cyan-200 text-[10px] font-mono px-1 py-0.5 rounded hover:bg-cyan-900/30 transition-colors"
+                        className="text-cyan-300 hover:text-cyan-200 text-xs font-mono px-1 py-0.5 rounded hover:bg-cyan-900/30 transition-colors"
                         title="Choisir les tracks"
                       >
                         {slot.trackIds.length}tr
                       </button>
-                      <div className="text-[10px] text-gray-600 mt-0.5 truncate max-w-[80px]">
+                      <div className="text-xs text-gray-400 mt-0.5 truncate max-w-[80px]">
                         {slot.trackIds.slice(0, 4).join(',')}
                         {slot.trackIds.length > 4 && `+${slot.trackIds.length - 4}`}
                       </div>
                       {(contestedBySlot.get(slot.id)?.length ?? 0) > 0 && (
                         <div
-                          className="text-[9px] font-mono text-amber-400 mt-0.5"
+                          className="text-[11px] font-mono text-amber-400 mt-0.5"
                           title={`Contested tracks ${contestedBySlot.get(slot.id)!.join(', ')} — shared with another playing move, resolved by merge strategy (Settings → Merge)`}
                         >
                           ⚠ shared {contestedBySlot.get(slot.id)!.join(',')}
@@ -387,10 +382,10 @@ export default function MovesTable() {
                           <button
                             onClick={() => moveSetlistItem(setlistIdx, 'up')}
                             disabled={setlistIdx === 0}
-                            className="text-gray-500 hover:text-white text-[10px] disabled:opacity-20"
+                            className="text-gray-500 hover:text-white text-xs disabled:opacity-20"
                             title="Move up in setlist"
                           >▲</button>
-                          <span className={`text-[10px] font-mono font-bold w-4 ${
+                          <span className={`text-xs font-mono font-bold w-4 ${
                             isCurrentSetlist ? 'text-green-400' : 'text-yellow-400'
                           }`} title={isCurrentSetlist ? 'Current move' : `Position ${setlistIdx + 1}`}>
                             {setlistIdx + 1}
@@ -398,19 +393,19 @@ export default function MovesTable() {
                           <button
                             onClick={() => moveSetlistItem(setlistIdx, 'down')}
                             disabled={setlistIdx === setlistOrder.length - 1}
-                            className="text-gray-500 hover:text-white text-[10px] disabled:opacity-20"
+                            className="text-gray-500 hover:text-white text-xs disabled:opacity-20"
                             title="Descendre dans la setlist"
                           ><ChevronDown size={11} /></button>
                           <button
                             onClick={() => removeFromSetlist(slot.id)}
-                            className="text-yellow-600 hover:text-yellow-400 text-[10px] ml-0.5"
+                            className="text-yellow-600 hover:text-yellow-400 text-xs ml-0.5"
                             title="Remove from setlist"
                           ><X size={11} /></button>
                         </div>
                       ) : (
                         <button
                           onClick={() => addToSetlist(slot.id)}
-                          className="text-gray-600 hover:text-yellow-400 text-[10px]"
+                          className="text-gray-400 hover:text-yellow-400 text-xs"
                           title="Add to the show setlist"
                         ><Star size={11} /></button>
                       )}
@@ -425,10 +420,10 @@ export default function MovesTable() {
                         <button
                           onClick={(e) => { e.stopPropagation(); toggleSlotPreview(slot.id); }}
                           disabled={!!slot.movementId}
-                          className={`text-[10px] px-1 rounded transition-colors ${
+                          className={`text-xs px-1 rounded transition-colors ${
                             slot.isPreview
                               ? 'bg-cyan-900/50 text-cyan-300 hover:bg-cyan-800/60'
-                              : 'text-gray-600 hover:text-gray-400 hover:bg-gray-800/30'
+                              : 'text-gray-400 hover:text-gray-400 hover:bg-gray-800/30'
                           } disabled:opacity-30 disabled:cursor-not-allowed`}
                           title={slot.movementId
                             ? 'Preview/Live locked while playing — stop the move first'
@@ -438,19 +433,19 @@ export default function MovesTable() {
                           <>
                             <button
                               onClick={(e) => { e.stopPropagation(); stopSlotWithFade(slot.id, 1.0); }}
-                              className="text-yellow-400 hover:text-yellow-300 text-[10px] px-1 rounded hover:bg-yellow-900/30"
+                              className="text-yellow-400 hover:text-yellow-300 text-xs px-1 rounded hover:bg-yellow-900/30"
                               title="Stop avec fade 1s"
                             ><Square size={10} /></button>
                             <button
                               onClick={(e) => { e.stopPropagation(); stopSlot(slot.id); }}
-                              className="text-red-400 hover:text-red-300 text-[10px] px-1 rounded hover:bg-red-900/30"
+                              className="text-red-400 hover:text-red-300 text-xs px-1 rounded hover:bg-red-900/30"
                               title="Immediate stop"
                             ><Square size={10} fill="currentColor" /></button>
                           </>
                         ) : (
                           <button
                             onClick={(e) => { e.stopPropagation(); playSlot(slot.id); }}
-                            className={`text-[10px] px-1.5 rounded hover:bg-green-900/30 font-bold ${
+                            className={`text-xs px-1.5 rounded hover:bg-green-900/30 font-bold ${
                               slot.isPreview ? 'text-cyan-400 hover:text-cyan-300' : 'text-green-400 hover:text-green-300'
                             }`}
                             title={slot.isPreview ? 'Launch in preview (no OSC out)' : 'Launch live (OSC out)'}
@@ -462,24 +457,24 @@ export default function MovesTable() {
                             editSlotGraph(slot.id);
                             if (!showExpert) setShowExpert(true);
                           }}
-                          className={`text-purple-400 hover:text-purple-300 text-[10px] px-1 rounded hover:bg-purple-900/30 ${editingSlotId === slot.id ? 'font-bold ring-1 ring-purple-600/50' : ''}`}
+                          className={`text-purple-400 hover:text-purple-300 text-xs px-1 rounded hover:bg-purple-900/30 ${editingSlotId === slot.id ? 'font-bold ring-1 ring-purple-600/50' : ''}`}
                           title="Edit the graph in the node editor"
                         ><Pencil size={10} /></button>
                         {isPlaying && (
                           <button
                             onClick={(e) => { e.stopPropagation(); saveEditorToSlot(slot.id); }}
-                            className="text-orange-400 hover:text-orange-300 text-[10px] px-1 rounded hover:bg-orange-900/30"
+                            className="text-orange-400 hover:text-orange-300 text-xs px-1 rounded hover:bg-orange-900/30"
                             title="Hot-swap: apply the edited graph to the running move"
                           ><RefreshCw size={10} /></button>
                         )}
                         <button
                           onClick={() => { selectSlotForEditing(slot.id); setEditingMacrosFor(slot.id); }}
-                          className="text-gray-400 hover:text-gray-200 text-[10px] px-1 rounded hover:bg-gray-700/30"
+                          className="text-gray-400 hover:text-gray-200 text-xs px-1 rounded hover:bg-gray-700/30"
                           title="Macros (speed, scale, shift, rotation)"
                         ><SlidersHorizontal size={10} /></button>
                         <button
                           onClick={(e) => { e.stopPropagation(); setPendingDeleteSlot({ id: slot.id, name: slot.name }); }}
-                          className="text-gray-600 hover:text-red-400 text-[10px] px-1 rounded hover:bg-red-900/20"
+                          className="text-gray-400 hover:text-red-400 text-xs px-1 rounded hover:bg-red-900/20"
                           title="Delete this slot"
                         ><X size={11} /></button>
                       </div>
@@ -499,14 +494,14 @@ export default function MovesTable() {
             <div className="flex gap-2 mb-3">
               <button
                 onClick={() => setTempTrackIds([...allTrackIds])}
-                className="text-[10px] px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded"
+                className="text-xs px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded"
               >Tout</button>
               <button
                 onClick={() => setTempTrackIds([])}
-                className="text-[10px] px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded"
+                className="text-xs px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded"
               >None</button>
               <div className="flex-1" />
-              <span className="text-[10px] text-gray-500 self-center">{tempTrackIds.length} selected</span>
+              <span className="text-xs text-gray-500 self-center">{tempTrackIds.length} selected</span>
             </div>
             <div className="grid grid-cols-6 gap-1 max-h-60 overflow-y-auto">
               {allTrackIds.map((id) => (
@@ -517,7 +512,7 @@ export default function MovesTable() {
                       prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]
                     );
                   }}
-                  className={`text-[10px] font-mono px-2 py-1.5 rounded transition-colors ${
+                  className={`text-xs font-mono px-2 py-1.5 rounded transition-colors ${
                     tempTrackIds.includes(id)
                       ? 'bg-indigo-700 text-white'
                       : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
@@ -530,11 +525,11 @@ export default function MovesTable() {
             <div className="flex gap-2 mt-4">
               <button
                 onClick={confirmTrackPicker}
-                className="flex-1 py-1.5 bg-indigo-700 hover:bg-indigo-600 text-white text-[11px] rounded font-medium"
+                className="flex-1 py-1.5 bg-indigo-700 hover:bg-indigo-600 text-white text-xs rounded font-medium"
               >Confirmer</button>
               <button
                 onClick={() => setEditingTracksFor(null)}
-                className="px-4 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-400 text-[11px] rounded"
+                className="px-4 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-400 text-xs rounded"
               >Cancel</button>
             </div>
           </div>
@@ -552,7 +547,7 @@ export default function MovesTable() {
             widthClass="max-w-sm"
           >
             <div className="p-4">
-              <p className="text-gray-500 text-[10px] mb-3">Applied on launch and GO</p>
+              <p className="text-gray-500 text-xs mb-3">Applied on launch and GO</p>
               <div className="space-y-2">
                 {([
                   { key: 'speed', label: 'Speed', min: 0.1, max: 4, step: 0.1 },
@@ -592,7 +587,7 @@ export default function MovesTable() {
               </div>
               <button
                 onClick={() => setEditingMacrosFor(null)}
-                className="w-full mt-4 py-1.5 bg-indigo-700 hover:bg-indigo-600 text-white text-[11px] rounded font-medium"
+                className="w-full mt-4 py-1.5 bg-indigo-700 hover:bg-indigo-600 text-white text-xs rounded font-medium"
               >Close</button>
             </div>
           </Modal>

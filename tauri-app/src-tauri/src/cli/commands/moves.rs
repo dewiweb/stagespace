@@ -74,6 +74,7 @@ pub fn cmd_activate_move(args: &[&str]) -> Result<String, String> {
         speed: None,
         spatial_macros: None,
         animation_state: None,
+        signal_graph: None,
     };
     spawn_move(spec, &state.shared).map_err(|e| e.to_string())?;
 

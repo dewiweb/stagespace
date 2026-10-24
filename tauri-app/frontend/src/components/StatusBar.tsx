@@ -40,7 +40,7 @@ export const StatusBar: React.FC = () => {
     'Idle';
 
   return (
-    <footer className="h-7 flex items-center gap-3 px-3 border-t border-stagespace-border bg-stagespace-panel flex-shrink-0 text-[11px] select-none">
+    <footer className="h-7 flex items-center gap-3 px-3 border-t border-stagespace-border bg-stagespace-panel flex-shrink-0 text-xs select-none">
       {/* Statut moteur */}
       <div className="flex items-center gap-1.5 flex-shrink-0">
         <span className={`w-2 h-2 rounded-full ${statusColor}`} />
@@ -87,7 +87,7 @@ export const StatusBar: React.FC = () => {
       <span className="text-gray-500 font-mono flex-shrink-0" title="OSC output destination">
         → {oscAddress}:{oscPort}
       </span>
-      <span className="text-gray-600 font-mono flex-shrink-0" title="STAGESPACE version">
+      <span className="text-gray-400 font-mono flex-shrink-0" title="STAGESPACE version">
         v{__APP_VERSION__}
       </span>
     </footer>

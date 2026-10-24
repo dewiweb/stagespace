@@ -31,10 +31,10 @@ export function AudioModAdder({ onAdd, onCancel }: { onAdd: (mod: AudioMod) => v
   return (
     <div className="bg-gray-800/80 rounded p-2 space-y-2 border border-cyan-900/40">
       <div>
-        <div className="text-gray-400 text-[10px] mb-0.5">Source</div>
+        <div className="text-gray-400 text-xs mb-0.5">Source</div>
         <select value={typeof source === 'string' ? source : 'spectrum_band'}
           onChange={(e) => setSource(e.target.value as AudioModSource)}
-          className="w-full bg-gray-900 text-white text-[10px] rounded px-1.5 py-1 border border-gray-700">
+          className="w-full bg-gray-900 text-white text-xs rounded px-1.5 py-1 border border-gray-700">
           <option value="bpm">BPM</option>
           <option value="amplitude_rms">Amplitude RMS</option>
           <option value="amplitude_bass">Bass</option>
@@ -43,10 +43,10 @@ export function AudioModAdder({ onAdd, onCancel }: { onAdd: (mod: AudioMod) => v
         </select>
       </div>
       <div>
-        <div className="text-gray-400 text-[10px] mb-0.5">Target (macro)</div>
+        <div className="text-gray-400 text-xs mb-0.5">Target (macro)</div>
         <select value={typeof target === 'string' ? target : 'radius_scale'}
           onChange={(e) => onTargetChange(e.target.value as AudioModTarget)}
-          className="w-full bg-gray-900 text-white text-[10px] rounded px-1.5 py-1 border border-gray-700">
+          className="w-full bg-gray-900 text-white text-xs rounded px-1.5 py-1 border border-gray-700">
           <option value="radius_scale">Radius Scale</option>
           <option value="height_offset">Height Offset</option>
           <option value="speed">Speed</option>
@@ -64,11 +64,11 @@ export function AudioModAdder({ onAdd, onCancel }: { onAdd: (mod: AudioMod) => v
         onChange={setAmount} accent="cyan" />
       <div className="flex gap-1.5">
         <button onClick={() => onAdd({ source, target, amount, base_value: 0, smoothing: 0.3 })}
-          className="flex-1 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-[10px] rounded font-medium">
+          className="flex-1 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-xs rounded font-medium">
           Add
         </button>
         <button onClick={onCancel}
-          className="px-2 py-1.5 bg-gray-800 text-gray-400 hover:text-white text-[10px] rounded">
+          className="px-2 py-1.5 bg-gray-800 text-gray-400 hover:text-white text-xs rounded">
           <X size={11} />
         </button>
       </div>
@@ -88,17 +88,17 @@ export function AudioModList() {
   return (
     <div className="space-y-1.5">
       {current.audio_mods.length === 0 && !showAdd && (
-        <div className="text-gray-600 text-[10px] py-1">
+        <div className="text-gray-400 text-xs py-1">
           No audio mod. Click « + Add » to create an audio mapping.
         </div>
       )}
       {current.audio_mods.map((mod, i) => (
         <div key={i} className="bg-gray-800/60 rounded p-2 space-y-1.5">
           <div className="flex items-center justify-between">
-            <span className="text-cyan-400 text-[10px] font-mono">
+            <span className="text-cyan-400 text-xs font-mono">
               {audioSourceLabel(mod.source)} → {audioTargetLabel(mod.target)}
             </span>
-            <button onClick={() => removeAudioMod(i)} className="text-red-400 text-[10px]"><X size={11} /></button>
+            <button onClick={() => removeAudioMod(i)} className="text-red-400 text-xs"><X size={11} /></button>
           </div>
           <Slider label={`Intensity${ROTATION_TARGETS.has(mod.target) ? ' (deg)' : ''}`}
             value={mod.amount} min={0} {...amountRange(mod.target)}
@@ -119,7 +119,7 @@ export function AudioModList() {
         <AudioModAdder onAdd={(mod) => { addAudioMod(mod); setShowAdd(false); }} onCancel={() => setShowAdd(false)} />
       ) : (
         <button onClick={() => setShowAdd(true)}
-          className="w-full py-1.5 bg-cyan-900/40 hover:bg-cyan-800/60 text-cyan-300 text-[10px] rounded font-medium">
+          className="w-full py-1.5 bg-cyan-900/40 hover:bg-cyan-800/60 text-cyan-300 text-xs rounded font-medium">
           + Add audio mod
         </button>
       )}

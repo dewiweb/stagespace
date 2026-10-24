@@ -3,4 +3,4 @@
 /**
  * Catégorie palette + rôle sémantique grossier du node.
  */
-export type NodeCategory = "Structural" | "MathEngine" | "PhysicsEngine" | "Spline" | "Falloff" | "Modifier" | "PostProcess" | "Composite" | "Source" | "Plugin";
+export type NodeCategory = "Structural" | "MathEngine" | "PhysicsEngine" | "Spline" | "Falloff" | "Modifier" | "PostProcess" | "Composite" | "Source" | "Plugin" | "Signal";

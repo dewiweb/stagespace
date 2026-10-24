@@ -69,6 +69,7 @@ pub async fn launch_animation(
             rotation: (animation.yaw, animation.pitch, animation.roll),
         }),
         animation_state: Some(AnimationState::from_animation(&animation, &osc_ids)),
+        signal_graph: animation.signal_graph.clone(),
     };
 
     let sh = Shared::from_state(&state);
@@ -132,5 +133,22 @@ pub async fn update_animation_state(
     movement
         .runtime
         .set_fade(animation.fade_in, animation.fade_out);
+
+    // Signal graph per-move : recompile + hot-swap si l'animation en porte
+    // un (sinon on neutralise — l'edit retire la modulation).
+    let signal_fn = match &animation.signal_graph {
+        Some(sig_json) => {
+            let audio_state = lock_or_recover(&state.audio_state);
+            let sig_graph = crate::graph::parser::build_graph_from_json(sig_json, &audio_state)
+                .map_err(|e| IpcError::validation(format!("Signal graph parse: {e}")))?;
+            drop(audio_state);
+            stagespace_engines::compile_signal_graph(&sig_graph)
+                .map_err(|e| IpcError::validation(format!("Signal graph compile: {e:?}")))?
+        }
+        None => stagespace_engines::empty_signal_fn(),
+    };
+    movement.runtime.swap_signal_fn(signal_fn);
+    // Sync du snapshot Movement (store_cue le ressortirait stale sinon).
+    movement.signal_graph = animation.signal_graph.clone();
     Ok(())
 }

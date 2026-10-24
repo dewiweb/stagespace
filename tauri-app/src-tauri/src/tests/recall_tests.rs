@@ -45,6 +45,7 @@ mod recall_tests {
             fade_duration: 0.0,
             cue_number: None,
             global_graph: None,
+            signal_graph: None,
             active_move_ids: vec![],
             per_track_depths: vec![],
             manual_positions: HashMap::new(),
@@ -66,6 +67,7 @@ mod recall_tests {
             is_preview: false,
             track_indices: vec![0],
             graph_json: stagespace_engines::GraphJson::default(),
+            signal_graph: None,
             duration: 4.0,
             loop_mode: "loop".to_string(),
             direction: "forward".to_string(),
@@ -148,6 +150,7 @@ mod recall_tests {
             id: "mv-a".to_string(),
             name: "A".to_string(),
             graph_json: serde_json::from_value(circular_graph()).unwrap(),
+            signal_graph: None,
             osc_ids: vec![7],
             track_indices: vec![0],
             is_preview: false,
@@ -209,6 +212,7 @@ mod recall_tests {
             speed: None,
             spatial_macros: None,
             animation_state: None,
+            signal_graph: None,
         };
         spawn_move_for_recall(spec, &sh).expect("initial spawn");
         let gen_before = sh.movements.lock().unwrap()["mv-live"].generation;
@@ -220,6 +224,7 @@ mod recall_tests {
             id: "mv-live".to_string(),
             name: "Live".to_string(),
             graph_json: serde_json::from_value(circular_graph()).unwrap(),
+            signal_graph: None,
             osc_ids: vec![7],
             track_indices: vec![0],
             is_preview: false,
@@ -245,6 +250,51 @@ mod recall_tests {
         if let Some(m) = m {
             m.runtime.stop();
         }
+    }
+
+    fn signal_graph_json() -> serde_json::Value {
+        serde_json::json!({
+            "nodes": [
+                {"id": "c", "type": "custom", "position": {"x":0,"y":0},
+                 "data": {"label":"SignalConst","type":"SignalConst","params":{"value":7.0}}},
+                {"id": "o", "type": "custom", "position": {"x":0,"y":0},
+                 "data": {"label":"SignalOut","type":"SignalOut","params":{"target":"yaw","amount":2.0}}}
+            ],
+            "edges": [
+                {"id":"e1","source":"c","target":"o","targetHandle":"signal"}
+            ]
+        })
+    }
+
+    #[test]
+    fn test_recall_restores_signal_graph_and_resets_when_absent() {
+        let sh = make_shared();
+        // Cue porteur d'un graph signal → installé dans le merge.
+        let mut cue = make_cue();
+        cue.signal_graph = Some(serde_json::from_value(signal_graph_json()).unwrap());
+        recall_cue_inner(cue, sh.clone()).expect("recall with signal graph");
+        let deltas = sh
+            .merge_runtime
+            .lock()
+            .unwrap()
+            .eval_signal_deltas(0.0, 1.0 / 60.0);
+        assert!(
+            (deltas.get("yaw").copied().unwrap_or(0.0) - 14.0).abs() < 1e-9,
+            "7.0 * 2.0 = 14 attendu sur yaw, got {deltas:?}"
+        );
+
+        // Cue SANS graph signal → reset : la modulation du cue précédent
+        // ne doit pas survivre (deltas stales = macros qui bougent seules).
+        recall_cue_inner(make_cue(), sh.clone()).expect("recall without signal graph");
+        let deltas = sh
+            .merge_runtime
+            .lock()
+            .unwrap()
+            .eval_signal_deltas(0.0, 1.0 / 60.0);
+        assert!(
+            deltas.is_empty(),
+            "un cue sans signal graph doit reset la modulation: {deltas:?}"
+        );
     }
 
     #[test]

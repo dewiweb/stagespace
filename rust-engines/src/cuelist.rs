@@ -46,6 +46,11 @@ pub struct Cue {
     #[serde(default)]
     pub global_graph: Option<GraphJson>,
 
+    /// Graph de modulation global (domaine signal → deltas de macros) au
+    /// moment du store. Si présent, recompilé + swappé lors du recall.
+    #[serde(default)]
+    pub signal_graph: Option<GraphJson>,
+
     /// IDs des moves actifs au moment du store.
     /// Lors du recall : désactive les moves non listés, active ceux listés.
     #[serde(default)]
@@ -104,6 +109,10 @@ pub struct MoveSnapshot {
     /// Sub-graph JSON (nodes/edges) — recompilé au recall
     #[serde(default)]
     pub graph_json: GraphJson,
+    /// Graph de modulation per-move (domaine signal) — recompilé au recall
+    /// si présent (`update_signal_graph` hot-swap la `SignalFn`).
+    #[serde(default)]
+    pub signal_graph: Option<GraphJson>,
     /// OSC ids ciblés par le move
     #[serde(default)]
     pub osc_ids: Vec<u32>,
@@ -285,6 +294,7 @@ mod tests {
             fade_duration: 0.5,
             cue_number: None,
             global_graph: None,
+            signal_graph: None,
             active_move_ids: vec![],
             per_track_depths: vec![],
             manual_positions: HashMap::new(),
@@ -314,6 +324,7 @@ mod tests {
             fade_duration: 0.5,
             cue_number: None,
             global_graph: None,
+            signal_graph: None,
             active_move_ids: vec![],
             per_track_depths: vec![],
             manual_positions: HashMap::new(),
@@ -361,6 +372,7 @@ mod tests {
                 )
                 .unwrap(),
             ),
+            signal_graph: None,
             active_move_ids: vec!["move-a".to_string(), "move-b".to_string()],
             per_track_depths: vec![0.5, 1.0, 1.5],
             manual_positions: manual_pos,
@@ -419,6 +431,7 @@ mod tests {
             fade_duration: 0.5,
             cue_number: None,
             global_graph: None,
+            signal_graph: None,
             active_move_ids: vec![],
             per_track_depths: vec![],
             manual_positions: HashMap::new(),
@@ -511,6 +524,7 @@ mod tests {
             fade_duration: 0.5,
             cue_number: None,
             global_graph: None,
+            signal_graph: None,
             active_move_ids: vec![],
             per_track_depths: vec![],
             manual_positions: HashMap::new(),
@@ -541,6 +555,7 @@ mod tests {
             fade_duration: 0.5,
             cue_number: None,
             global_graph: None,
+            signal_graph: None,
             active_move_ids: vec![],
             per_track_depths: vec![],
             manual_positions: HashMap::new(),
@@ -572,6 +587,7 @@ mod tests {
             fade_duration: 0.5,
             cue_number: None,
             global_graph: None,
+            signal_graph: None,
             active_move_ids: vec![],
             per_track_depths: vec![],
             manual_positions: HashMap::new(),
@@ -602,6 +618,7 @@ mod tests {
             fade_duration: 0.5,
             cue_number: None,
             global_graph: None,
+            signal_graph: None,
             active_move_ids: vec![],
             per_track_depths: vec![],
             manual_positions: HashMap::new(),
@@ -626,6 +643,7 @@ mod tests {
             fade_duration: 0.5,
             cue_number: None,
             global_graph: None,
+            signal_graph: None,
             active_move_ids: vec![],
             per_track_depths: vec![],
             manual_positions: HashMap::new(),
@@ -657,6 +675,7 @@ mod tests {
             fade_duration: 0.5,
             cue_number: None,
             global_graph: None,
+            signal_graph: None,
             active_move_ids: vec![],
             per_track_depths: vec![],
             manual_positions: HashMap::new(),

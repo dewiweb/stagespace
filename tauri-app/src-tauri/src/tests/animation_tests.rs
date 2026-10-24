@@ -1153,6 +1153,7 @@ mod tests {
             fade_duration: 1.0,
             cue_number: Some("2.1".to_string()),
             global_graph: Some(serde_json::from_value(make_global_graph_json(1.5)).unwrap()),
+            signal_graph: None,
             active_move_ids: vec!["move-a".to_string(), "move-b".to_string()],
             per_track_depths: vec![0.5, 1.0, 1.5],
             manual_positions: manual_pos,

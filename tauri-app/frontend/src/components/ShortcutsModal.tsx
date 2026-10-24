@@ -26,7 +26,7 @@ export const ShortcutsModal: React.FC = () => {
             {SHORTCUTS.map((s) => (
               <tr key={s.keys} className="border-b border-gray-800/50 last:border-0">
                 <td className="py-1.5 pr-4 whitespace-nowrap">
-                  <kbd className="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-200 font-mono text-[10px]">
+                  <kbd className="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-200 font-mono text-xs">
                     {s.keys}
                   </kbd>
                 </td>
@@ -35,7 +35,7 @@ export const ShortcutsModal: React.FC = () => {
             ))}
           </tbody>
         </table>
-        <p className="text-gray-600 text-[10px] mt-3">
+        <p className="text-gray-400 text-xs mt-3">
           Shortcuts are inactive while typing in a field. Esc closes any open panel before panicking.
         </p>
       </div>

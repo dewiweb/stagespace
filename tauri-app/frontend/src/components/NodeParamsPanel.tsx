@@ -83,7 +83,7 @@ export const NodeParamsPanel: React.FC<{
 
   if (paramNodes.length === 0 || !paramNode) {
     return (
-      <div className="text-gray-600 text-[10px] py-1">
+      <div className="text-gray-400 text-xs py-1">
         {emptyHint ?? 'No parametric node in this graph.'}
       </div>
     );
@@ -121,7 +121,7 @@ export const NodeParamsPanel: React.FC<{
             <button
               key={n.id}
               onClick={() => setParamNodeId(n.id)}
-              className={`px-2 py-1 rounded text-[10px] font-medium transition-colors inline-flex items-center gap-1 ${
+              className={`px-2 py-1 rounded text-xs font-medium transition-colors inline-flex items-center gap-1 ${
                 active
                   ? 'bg-cyan-700 text-white'
                   : 'bg-gray-800 text-gray-400 hover:text-white border border-gray-700'
@@ -135,7 +135,7 @@ export const NodeParamsPanel: React.FC<{
         })}
       </div>
       {performMode && pinned.length > 0 && (
-        <div className="text-cyan-500/80 text-[9px] font-mono">
+        <div className="text-cyan-500/80 text-[11px] font-mono">
           {visibleSchema.length} pinned parameter{visibleSchema.length > 1 ? 's' : ''} — pin/unpin in Edit mode
         </div>
       )}
@@ -183,17 +183,17 @@ export const NodeParamsPanel: React.FC<{
         })}
       </div>
       {performMode && pinned.length > 0 && visibleSchema.length === 0 && (
-        <div className="text-gray-600 text-[10px]">
+        <div className="text-gray-400 text-xs">
           Pinned parameters no longer exist on this node — unpin them in Edit mode.
         </div>
       )}
       {pluginMissing && (
-        <div className="text-red-400/90 text-[10px] font-mono pt-1">
+        <div className="text-red-400/90 text-xs font-mono pt-1">
           ⚠ Plugin '{selectedPid as string}' not loaded — install the .ssx or pick another plugin.
         </div>
       )}
       {pluginUnset && (
-        <div className="text-gray-500 text-[10px] font-mono pt-1">
+        <div className="text-gray-500 text-xs font-mono pt-1">
           No plugin selected — pick plugin_id above or import a .ssx.
         </div>
       )}
@@ -229,7 +229,7 @@ export const NodeParamField: React.FC<{
       }
       return (
         <div className="flex items-center gap-2">
-          <span className="text-gray-400 text-[10px] w-20 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
+          <span className="text-gray-400 text-xs w-20 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
           <input
             type="number"
             step={def.step ?? 0.1}
@@ -244,7 +244,7 @@ export const NodeParamField: React.FC<{
     case 'boolean':
       return (
         <div className="flex items-center gap-2">
-          <span className="text-gray-400 text-[10px] w-20 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
+          <span className="text-gray-400 text-xs w-20 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
           <button
             onClick={() => onChange(value !== true)}
             className={`relative w-9 h-5 rounded-full transition-colors ${value === true ? 'bg-cyan-600' : 'bg-gray-700'}`}
@@ -256,7 +256,7 @@ export const NodeParamField: React.FC<{
     case 'enum':
       return (
         <div className="flex items-center gap-2">
-          <span className="text-gray-400 text-[10px] w-20 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
+          <span className="text-gray-400 text-xs w-20 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
           <select
             value={typeof value === 'string' ? value : ''}
             onChange={(e) => onChange(e.target.value)}
@@ -270,7 +270,7 @@ export const NodeParamField: React.FC<{
       const arr = Array.isArray(value) ? value : [0, 0, 0];
       return (
         <div className="flex items-center gap-2 col-span-2">
-          <span className="text-gray-400 text-[10px] w-20 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
+          <span className="text-gray-400 text-xs w-20 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
           <input
             type="text"
             value={arr.join(', ')}
@@ -288,7 +288,7 @@ export const NodeParamField: React.FC<{
     case 'string':
       return (
         <div className="flex items-center gap-2 col-span-2">
-          <span className="text-gray-400 text-[10px] w-20 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
+          <span className="text-gray-400 text-xs w-20 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
           <input
             type="text"
             value={typeof value === 'string' ? value : ''}

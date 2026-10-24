@@ -135,11 +135,17 @@ pub async fn set_osc_receiver_port(port: u16, state: State<'_, AppState>) -> Res
         .map_err(|e| IpcError::io(format!("Failed to start OSC receiver on port {port}: {e}")))?;
 
     // Succès : stopper l'ancien et swapper
-    {
+    let new_address_handle = {
         let mut receiver = lock_or_recover(&state.osc_receiver);
         receiver.stop();
+        let handle = new_receiver.address_values_handle();
         *receiver = new_receiver;
-    }
+        handle
+    };
+    // Re-brancher le cache OSC du signal graph sur le NOUVEAU receiver —
+    // l'ancien handle pointe sur un map mort (les nodes SignalOsc liraient
+    // des valeurs figées en silence).
+    lock_or_recover(&state.merge_runtime).set_osc_values_handle(new_address_handle);
     eprintln!("[INFO] OSC receiver now listening on port {port}");
     Ok(())
 }
@@ -207,4 +213,24 @@ pub async fn send_osc_position(
         .send_position_now(osc_id, nalgebra::Vector3::new(x, y, z))
         .map_err(|e| IpcError::io(format!("OSC send failed: {e}")))?;
     Ok(())
+}
+
+/// Master arm — « OSC LIVE » global. Gate sur le sink du merge : quand
+/// désarmé, aucun paquet OSC ne part (preview 3D vivante, silence réseau).
+/// Indépendant des flags `is_preview` par move.
+#[tauri::command]
+pub async fn set_osc_armed(armed: bool, state: State<'_, AppState>) -> Result<(), IpcError> {
+    let merge_rt = lock_or_recover(&state.merge_runtime);
+    merge_rt.set_osc_armed(armed);
+    eprintln!(
+        "[INFO] OSC master arm: {}",
+        if armed { "ARMED" } else { "DISARMED" }
+    );
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_osc_armed(state: State<'_, AppState>) -> Result<bool, IpcError> {
+    let merge_rt = lock_or_recover(&state.merge_runtime);
+    Ok(merge_rt.osc_armed())
 }

@@ -56,9 +56,9 @@ describe('MovesTable — add move', () => {
     expect(slots[0].name).toBe('Move 1');
   });
 
-  it('clicking "+ Créer le premier move" in empty state creates a slot', () => {
+  it('clicking "+ Create the first move" in empty state creates a slot', () => {
     render(<MovesTable />);
-    fireEvent.click(screen.getByText('+ Créer le premier move'));
+    fireEvent.click(screen.getByText('+ Create the first move'));
     const slots = (useGraphStore.getState() as any).moveSlots;
     expect(slots).toHaveLength(1);
   });

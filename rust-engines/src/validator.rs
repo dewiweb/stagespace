@@ -12,6 +12,9 @@ use std::fmt;
 pub enum GraphContext {
     SubGraph,
     Global,
+    /// Graph de modulation — domaine scalaire (Signal* nodes uniquement).
+    /// Produit des deltas de macros, pas des positions.
+    Signal,
 }
 
 /// Erreur de validation
@@ -138,13 +141,26 @@ impl Validator {
                     errors.push(ValidationError::MissingRequiredNode(NodeType::Input));
                 }
             }
+            GraphContext::Signal => {
+                // Le terminal du domaine signal est SignalOut — un graph
+                // sans sink compile mais ne produit aucun delta.
+                let has_out = graph
+                    .nodes
+                    .values()
+                    .any(|n| n.node_type == NodeType::SignalOut);
+                if !has_out {
+                    errors.push(ValidationError::MissingRequiredNode(NodeType::SignalOut));
+                }
+            }
         }
 
-        // Output est toujours obligatoire
-        if !graph
-            .nodes
-            .values()
-            .any(|n| n.node_type == NodeType::Output)
+        // Output est obligatoire dans les domaines trajectoire — le graph
+        // signal termine sur SignalOut.
+        if context != GraphContext::Signal
+            && !graph
+                .nodes
+                .values()
+                .any(|n| n.node_type == NodeType::Output)
         {
             errors.push(ValidationError::MissingRequiredNode(NodeType::Output));
         }
@@ -303,17 +319,24 @@ impl Validator {
     ) {
         for node in graph.nodes.values() {
             let incompatible = match context {
-                GraphContext::SubGraph => is_global_only_node(&node.node_type),
-                GraphContext::Global => is_subgraph_only_node(&node.node_type),
+                GraphContext::SubGraph => {
+                    is_global_only_node(&node.node_type) || is_signal_node(&node.node_type)
+                }
+                GraphContext::Global => {
+                    is_subgraph_only_node(&node.node_type) || is_signal_node(&node.node_type)
+                }
+                GraphContext::Signal => !is_signal_node(&node.node_type),
             };
             if incompatible {
+                let allowed = match crate::node_spec::node_spec(&node.node_type).scope {
+                    crate::node_spec::NodeScope::SubOnly => "sub-graph",
+                    crate::node_spec::NodeScope::GlobalOnly => "global",
+                    crate::node_spec::NodeScope::Both => "sub-graph or global",
+                    crate::node_spec::NodeScope::SignalOnly => "signal",
+                };
                 errors.push(ValidationError::ContextIncompatible(format!(
-                    "{:?} is only allowed in {} graphs",
-                    node.node_type,
-                    match context {
-                        GraphContext::SubGraph => "global",
-                        GraphContext::Global => "sub-graph",
-                    }
+                    "{:?} is only allowed in {allowed} graphs",
+                    node.node_type
                 )));
             }
         }
@@ -530,6 +553,14 @@ impl Validator {
                     node.node_type,
                     incoming.len()
                 )));
+            }
+
+            // SignalOut déconnecté = sink mort — le graph compile mais ne
+            // produit rien (même règle qu'Output).
+            if node.node_type == NodeType::SignalOut && incoming.is_empty() {
+                errors.push(ValidationError::InvalidConnection(
+                    "SignalOut requires a signal input, got 0".to_string(),
+                ));
             }
 
             // Output et les modifiers exigent une entrée — sinon le compile
@@ -828,4 +859,9 @@ fn is_global_only_node(node_type: &NodeType) -> bool {
 /// graph global est une chaîne linéaire, pas de sémantique A/B).
 fn is_subgraph_only_node(node_type: &NodeType) -> bool {
     crate::node_spec::node_spec(node_type).scope == crate::node_spec::NodeScope::SubOnly
+}
+
+/// Vrai si le node appartient au domaine signal (scope SignalOnly).
+fn is_signal_node(node_type: &NodeType) -> bool {
+    crate::node_spec::node_spec(node_type).scope == crate::node_spec::NodeScope::SignalOnly
 }

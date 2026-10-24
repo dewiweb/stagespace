@@ -5,6 +5,7 @@ import { open, save } from '@tauri-apps/plugin-dialog';
 import { FolderInput, Settings, Undo2, Redo2, Save, FolderOpen, CircleHelp } from 'lucide-react';
 import { SettingsModal } from './SettingsModal';
 import { PanicButton } from './ui/PanicButton';
+import { OscArmToggle } from './ui/OscArmToggle';
 import { IconButton } from './ui/IconButton';
 
 export const Toolbar: React.FC = () => {
@@ -92,7 +93,7 @@ export const Toolbar: React.FC = () => {
           <FolderInput size={13} /> Import .hol
         </button>
         {holProject && (
-          <span className="text-[11px] text-green-400 font-medium">
+          <span className="text-xs text-green-400 font-medium">
             {holProject.tracks.length} tracks
           </span>
         )}
@@ -107,11 +108,15 @@ export const Toolbar: React.FC = () => {
           title={`OSC → ${oscAddress}:${oscPort} (${oscProfile}) — Settings`}
         >
           <Settings size={13} />
-          <span className="text-gray-500 text-[9px] uppercase tracking-wider">OSC out</span>
-          <span className="text-gray-500 font-mono text-[10px]">{oscAddress}:{oscPort}</span>
-          <span className="text-gray-600 text-[10px]">{oscProfile}</span>
+          <span className="text-gray-500 text-[11px] uppercase tracking-wider">OSC out</span>
+          <span className="text-gray-500 font-mono text-xs">{oscAddress}:{oscPort}</span>
+          <span className="text-gray-400 text-xs">{oscProfile}</span>
         </button>
         {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+
+        {/* Master arm — « OSC LIVE » global (composant partagé, aussi
+            monté dans le header Perform où il sert réellement) */}
+        <OscArmToggle />
 
         <div className="w-px h-5 bg-stagespace-border mx-1" />
 

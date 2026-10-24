@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
@@ -22,6 +22,7 @@ import { useInteractionModes } from '../hooks/useInteractionModes';
 import { useDrawMode } from '../hooks/useDrawMode';
 import { useManipulateMode } from '../hooks/useManipulateMode';
 import { useRenderLoop } from '../hooks/useRenderLoop';
+import { fromThree } from '../utils/coords';
 
 interface Scene3DProps {
   width?: string | number;
@@ -50,6 +51,9 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   // annuler avant le panic ; mutual exclusion gérée par le slice)
   const manipulateMode = useGraphStore((s) => s.manipulateMode);
   const setManipulateMode = useGraphStore((s) => s.setManipulateMode);
+  const assignMode = useGraphStore((s) => s.assignMode);
+  const setAssignMode = useGraphStore((s) => s.setAssignMode);
+  const zonePlaceMode = useGraphStore((s) => s.zonePlaceMode);
 
   // Multi-movement state — movements et movementPositions sont lus via getState()
   // dans useRenderLoop pour éviter 60 re-renders/seconde.
@@ -96,7 +100,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   const { holMarkersRef } = useHolMarkers({ sceneRef, cameraRef, holProject });
   const { objectsRef } = useObjects3D({ sceneRef, nObjects, sceneReady });
   const { handleRef, trajectoryLineRef } = useManipulateHandle({ sceneRef, manipulateMode });
-  useInteractionModes({ controlsRef, rendererRef, drawMode, manipulateMode });
+  useInteractionModes({ controlsRef, rendererRef, drawMode, manipulateMode, assignMode, zonePlaceMode });
 
   // ── Hooks extraits (handlers d'interaction) ──
   const { drawCanvasRef, handleDrawStart, handleDrawMove, handleDrawEnd } =
@@ -116,6 +120,66 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
     handleRef,
     manipulateMode,
   });
+
+  // Assign mode — clic sur un objet 3D = toggle de sa track via la même
+  // source de vérité que la TrackGrid (toggleTrackSelection → sélection +
+  // Objects node + slot en édition). Pas de chemin parallèle : la sélection
+  // ne peut pas diverger entre scène et grille.
+  const handleAssignDown = useCallback(
+    (e: React.PointerEvent) => {
+      const camera = cameraRef.current;
+      const container = containerRef.current;
+      if (!camera || !container) return;
+      const rect = container.getBoundingClientRect();
+      const ndc = new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(ndc, camera);
+      // Même filtre que Manipulate : les tracks cachées par le focus slot
+      // ne doivent pas être assignables.
+      const hits = raycaster.intersectObjects(
+        objectsRef.current.filter((o) => o.visible), true,
+      );
+      if (hits.length === 0) return;
+      let hitObj = hits[0].object as THREE.Mesh;
+      let idx = objectsRef.current.indexOf(hitObj);
+      while (idx < 0 && hitObj.parent) {
+        hitObj = hitObj.parent as THREE.Mesh;
+        idx = objectsRef.current.indexOf(hitObj);
+      }
+      if (idx < 0) return;
+      const s = useGraphStore.getState();
+      const trackId = s.holProject?.tracks[idx]?.id ?? s.manualOscIds[idx] ?? idx + 1;
+      s.toggleTrackSelection(trackId);
+    },
+    [objectsRef],
+  );
+
+  // Zone place mode — clic sur le sol (plan y=0 côté Three = z=0 backend)
+  // → enregistre le centre en coords backend pour le formulaire SpatialFX.
+  const handleZonePlaceDown = useCallback(
+    (e: React.PointerEvent) => {
+      const camera = cameraRef.current;
+      const container = containerRef.current;
+      if (!camera || !container) return;
+      const rect = container.getBoundingClientRect();
+      const ndc = new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(ndc, camera);
+      const pt = new THREE.Vector3();
+      if (!raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), pt)) return;
+      const s = useGraphStore.getState();
+      const [bx, by, bz] = fromThree(pt.x, pt.y, pt.z);
+      s.setPendingZonePoint([bx, by, bz]);
+      s.setZonePlaceMode(false);
+    },
+    [],
+  );
 
   // Resize observer — merge du handle resize en un seul effect
   // Met à jour directement les refs Three.js (pas de re-render React)
@@ -196,7 +260,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-900/90 z-raised p-4">
           <TriangleAlert size={32} className="text-amber-400" />
           <div className="text-white text-sm font-medium">WebGL unavailable</div>
-          <div className="text-gray-400 text-[11px] text-center max-w-xs">
+          <div className="text-gray-400 text-xs text-center max-w-xs">
             GPU acceleration is blocked in this environment (sandboxed WebKit).
             <br />
             The 3D preview needs WebGL. You can still use the node editor, cues, macros, and OSC output.
@@ -215,9 +279,25 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
       )}
       {drawMode && <DrawModeOverlay />}
       {manipulateMode && <MacrosPanel isPlaying={isPlaying} hasMovements={movements.length > 0} />}
+      {assignMode && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-overlay bg-gray-900/90 backdrop-blur rounded-lg px-3 py-1.5 border border-green-600/50">
+          <span className="text-green-400 text-xs font-medium">
+            Assign — click objects to toggle their track for this move
+          </span>
+        </div>
+      )}
+      {zonePlaceMode && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-overlay bg-gray-900/90 backdrop-blur rounded-lg px-3 py-1.5 border border-cyan-600/50">
+          <span className="text-cyan-400 text-xs font-medium">
+            Place — click on the floor to set the zone center (Esc to cancel)
+          </span>
+        </div>
+      )}
       <ModeButtons
         manipulateMode={manipulateMode}
         setManipulateMode={setManipulateMode}
+        assignMode={assignMode}
+        setAssignMode={setAssignMode}
       />
       {/* Trajectory visualization — composant séparé qui gère ses propres lignes */}
       <TrajectoryVisualization
@@ -243,7 +323,21 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
         onPointerUp={handleDrawEnd}
         onPointerCancel={handleDrawEnd}
       />
-      {/* Interaction layer — manipulate seulement (assign via TrackGrid) */}
+      {/* Interaction layer — manipulate, assign ou place-zone */}
+      {zonePlaceMode && (
+        <div
+          className="absolute inset-0 z-overlay"
+          style={{ cursor: 'crosshair' }}
+          onPointerDown={handleZonePlaceDown}
+        />
+      )}
+      {assignMode && (
+        <div
+          className="absolute inset-0 z-overlay"
+          style={{ cursor: 'pointer' }}
+          onPointerDown={handleAssignDown}
+        />
+      )}
       {manipulateMode && (
         <div
           className="absolute inset-0 z-overlay"
@@ -260,11 +354,11 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
       {/* Active movements indicator — bottom right */}
       {movements.length > 0 && (
         <div className="absolute bottom-2 right-2 z-overlay bg-gray-900/80 backdrop-blur rounded-lg px-2 py-1 border border-gray-700/50 flex items-center gap-1.5">
-          <span className="text-gray-500 text-[10px] font-mono">MOVEMENTS</span>
+          <span className="text-gray-500 text-xs font-mono">MOVEMENTS</span>
           {movements.map((mv, idx) => (
             <span
               key={mv.id}
-              className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+              className={`text-xs font-mono px-1.5 py-0.5 rounded ${
                 mv.is_preview ? 'bg-cyan-900 text-cyan-400' : 'bg-green-900 text-green-400'
               }`}
               title={`${mv.name} — ${mv.track_count} tracks`}
@@ -281,7 +375,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
         <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
           <div className="text-center bg-gray-900/70 backdrop-blur rounded-xl px-6 py-4 border border-gray-700/40">
             <div className="text-gray-300 text-xs font-medium">No move running</div>
-            <div className="text-gray-500 text-[10px] mt-1.5 leading-relaxed">
+            <div className="text-gray-500 text-xs mt-1.5 leading-relaxed">
               <span className="text-gray-400">+ Move</span> creates a slot · a <span className="text-gray-400">template</span> fills it · <span className="text-gray-400">▶</span> launches it
             </div>
           </div>

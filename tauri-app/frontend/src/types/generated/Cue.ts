@@ -44,6 +44,11 @@ cue_number: string | null,
  */
 global_graph: GraphJson | null, 
 /**
+ * Graph de modulation global (domaine signal → deltas de macros) au
+ * moment du store. Si présent, recompilé + swappé lors du recall.
+ */
+signal_graph: GraphJson | null, 
+/**
  * IDs des moves actifs au moment du store.
  * Lors du recall : désactive les moves non listés, active ceux listés.
  */

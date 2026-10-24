@@ -2,6 +2,7 @@ import React from 'react';
 import { Hexagon, X } from 'lucide-react';
 import { useAnimationStore, Animation } from '../store/useAnimationStore';
 import { useGraphStore } from '../store/useGraphStore';
+import EmptyState from './ui/EmptyState';
 import { SHAPE_PRESETS, type ShapePreset } from '../utils/shapePresets';
 
 // Icône pour une animation — dérivée du node engine principal du graphe
@@ -90,7 +91,7 @@ export default function AnimationList() {
       <div className="flex-1 overflow-y-auto">
         {/* ═══ TEMPLATES (built-in presets) ═══ */}
         <div className="p-2 space-y-1">
-          <div className="text-gray-500 text-[10px] uppercase tracking-wider mb-1 px-1">Templates</div>
+          <div className="text-gray-500 text-xs uppercase tracking-wider mb-1 px-1">Templates</div>
 
           {presetsByCategory.map((group) => {
             const isCollapsed = collapsedCats.has(group.cat);
@@ -99,9 +100,9 @@ export default function AnimationList() {
               <div key={group.cat}>
                 <button
                   onClick={() => toggleCat(group.cat)}
-                  className="w-full flex items-center gap-1 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wider hover:text-gray-300 transition-colors"
+                  className="w-full flex items-center gap-1 px-1 py-0.5 text-xs font-semibold uppercase tracking-wider hover:text-gray-300 transition-colors"
                 >
-                  <span className="text-[7px] text-gray-600">{isCollapsed ? '▸' : '▾'}</span>
+                  <span className="text-[11px] text-gray-400">{isCollapsed ? '▸' : '▾'}</span>
                   <span className={catLabel.color}>{catLabel.label}</span>
                   <span className="text-gray-500 ml-auto">{group.presets.length}</span>
                 </button>
@@ -115,7 +116,7 @@ export default function AnimationList() {
                         className="w-full text-left flex items-center gap-2 px-2 py-1.5 rounded border transition-all cursor-pointer bg-gray-800/40 border-gray-700/40 hover:border-gray-600 hover:bg-gray-800/60"
                       >
                         <span className="text-sm flex-shrink-0">{preset.icon}</span>
-                        <span className="text-gray-300 text-[11px] flex-1 truncate">{preset.name}</span>
+                        <span className="text-gray-300 text-xs flex-1 truncate">{preset.name}</span>
                       </button>
                     ))}
                   </div>
@@ -130,7 +131,7 @@ export default function AnimationList() {
 
         {/* ═══ EN COURS D'ÉDITION ═══ */}
         <div className="px-2 pb-2">
-          <div className="text-gray-500 text-[10px] uppercase tracking-wider mb-1 px-1">Editing</div>
+          <div className="text-gray-500 text-xs uppercase tracking-wider mb-1 px-1">Editing</div>
           <div className="flex items-center gap-2 px-2 py-1.5 bg-blue-900/30 rounded border border-blue-700/40">
             <span className="text-base">{animIcon(current)}</span>
             {editingId === current.id ? (
@@ -141,40 +142,41 @@ export default function AnimationList() {
                 onBlur={commitRename}
                 onKeyDown={(e) => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setEditingId(null); }}
                 autoFocus
-                className="flex-1 bg-gray-900 text-white text-[11px] rounded px-1 py-0.5 border border-blue-500 outline-none"
+                className="flex-1 bg-gray-900 text-white text-xs rounded px-1 py-0.5 border border-blue-500 outline-none"
               />
             ) : (
               <span
-                className="text-white text-[11px] font-medium flex-1 truncate cursor-text"
+                className="text-white text-xs font-medium flex-1 truncate cursor-text"
                 onDoubleClick={() => startRename(current)}
                 title="Double-clic pour renommer"
               >{current.name}</span>
             )}
             <div className="flex items-center gap-0.5">
               {current.graph_json?.nodes && (
-                <span className="text-purple-400 text-[10px] font-mono bg-purple-900/40 px-1 rounded" title="Graphe custom"><Hexagon size={9} /></span>
+                <span className="text-purple-400 text-xs font-mono bg-purple-900/40 px-1 rounded" title="Graphe custom"><Hexagon size={9} /></span>
               )}
               {current.assignments.length > 0 && (
-                <span className="text-blue-400 text-[10px] font-mono bg-blue-900/40 px-1 rounded" title={`${current.assignments.length} tracks`}>
+                <span className="text-blue-400 text-xs font-mono bg-blue-900/40 px-1 rounded" title={`${current.assignments.length} tracks`}>
                   ◉{current.assignments.length}
                 </span>
               )}
             </div>
           </div>
           <button onClick={saveAnimation}
-            className="w-full mt-1.5 py-1.5 bg-purple-700 hover:bg-purple-600 text-white text-[10px] rounded font-medium transition-colors">
+            className="w-full mt-1.5 py-1.5 bg-purple-700 hover:bg-purple-600 text-white text-xs rounded font-medium transition-colors">
             ★ Save to my library
           </button>
         </div>
 
         {/* ═══ BIBLIOTHÈQUE (presets utilisateur — chargés dans le slot sélectionné) ═══ */}
         <div className="p-2 space-y-1">
-          <div className="text-gray-500 text-[10px] uppercase tracking-wider mb-1 px-1">Library</div>
+          <div className="text-gray-500 text-xs uppercase tracking-wider mb-1 px-1">Library</div>
           {animations.length === 0 ? (
-            <div className="text-gray-600 text-[10px] text-center py-4 bg-gray-800/30 rounded border border-gray-700/30">
-              No saved graph
-              <div className="text-gray-500 text-[10px] mt-1">Click Save to add</div>
-            </div>
+            <EmptyState
+              size="sm"
+              title="No saved graphs"
+              hint="Save the current graph to reuse it across moves."
+            />
           ) : (
             animations.map((anim) => {
               const isCurrent = current.id === anim.id;
@@ -197,27 +199,27 @@ export default function AnimationList() {
                       onKeyDown={(e) => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setEditingId(null); }}
                       onClick={(e) => e.stopPropagation()}
                       autoFocus
-                      className="flex-1 bg-gray-900 text-white text-[11px] rounded px-1 py-0.5 border border-blue-500 outline-none"
+                      className="flex-1 bg-gray-900 text-white text-xs rounded px-1 py-0.5 border border-blue-500 outline-none"
                     />
                   ) : (
                     <span
-                      className="text-white text-[11px] flex-1 truncate"
+                      className="text-white text-xs flex-1 truncate"
                       onDoubleClick={(e) => { e.stopPropagation(); startRename(anim); }}
                       title="Double-clic pour renommer"
                     >{anim.name}</span>
                   )}
                   <div className="flex items-center gap-0.5">
                     {hasGraph && (
-                      <span className="text-purple-400 text-[10px] font-mono bg-purple-900/40 px-1 rounded" title="Graphe custom (node editor)"><Hexagon size={9} /></span>
+                      <span className="text-purple-400 text-xs font-mono bg-purple-900/40 px-1 rounded" title="Graphe custom (node editor)"><Hexagon size={9} /></span>
                     )}
                     {anim.assignments.length > 0 && (
-                      <span className="text-blue-400 text-[10px] font-mono bg-blue-900/40 px-1 rounded" title={`${anim.assignments.length} tracks`}>
+                      <span className="text-blue-400 text-xs font-mono bg-blue-900/40 px-1 rounded" title={`${anim.assignments.length} tracks`}>
                         ◉{anim.assignments.length}
                       </span>
                     )}
                   </div>
                   <button onClick={(e) => { e.stopPropagation(); deleteAnimation(anim.id); }}
-                    className="text-red-400 hover:text-red-300 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"><X size={10} /></button>
+                    className="text-red-400 hover:text-red-300 text-xs opacity-0 group-hover:opacity-100 transition-opacity"><X size={10} /></button>
                 </div>
               );
             })
@@ -225,7 +227,7 @@ export default function AnimationList() {
         </div>
 
         {/* Hint */}
-        <div className="text-gray-500 text-[10px] text-center py-2 px-2">
+        <div className="text-gray-500 text-xs text-center py-2 px-2">
           Templates &amp; library = presets applied to the selected slot
           <div className="mt-0.5">
             {editingSlotId ? 'Loading → writes into the editing slot' : 'Select a slot (Moves) to apply'}

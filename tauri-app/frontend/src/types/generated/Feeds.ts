@@ -5,4 +5,4 @@
  * Évaluée contre le `NodeSpec` de la cible — voir `NodeSpec::accepts_from`
  * et `NodeSpec::feeds_modifier`/`feeds_composite` pour les plugins.
  */
-export type Feeds = "Terminal" | "EngineInputs" | "Trajectory" | "SplineAndTrajectory" | "TrajectoryComposites" | "BasicModifiers" | "ModifierChain" | "MoveRefChain" | "Composites" | "PostProcess";
+export type Feeds = "Terminal" | "EngineInputs" | "Trajectory" | "SplineAndTrajectory" | "TrajectoryComposites" | "BasicModifiers" | "ModifierChain" | "MoveRefChain" | "Composites" | "PostProcess" | "Signal";

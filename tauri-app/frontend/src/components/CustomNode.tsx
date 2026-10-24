@@ -1,8 +1,10 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { X, Check } from 'lucide-react';
 import { Handle, Position, NodeProps } from 'reactflow';
+import { Slider } from './ui/Slider';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
+import { useSignalGraphStore } from '../store/useSignalGraphStore';
 import { PARAM_SCHEMA, getCategoryColor, pluginNodeSchema, pluginParamsOnSwitch, type ParamDef, type NodeParamValue } from './nodeParamSchema';
 import { isSourceNode, isTerminalNode, isBinaryComposite, getInputPorts } from '../utils/connectionRules';
 
@@ -22,6 +24,10 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
   // (le pushGlobalGraph debounced du NodeEditor propage au backend)
   const isGlobalNode = useGlobalGraphStore((s) => s.nodes.some((n) => n.id === id));
   const updateGlobalNodeData = useGlobalGraphStore((s) => s.updateNodeData);
+  // Idem pour le graph signal (modulation) — sans ça les edits de params
+  // tombaient dans le store move (id inconnu → drop silencieux).
+  const isSignalNode = useSignalGraphStore((s) => s.nodes.some((n) => n.id === id));
+  const updateSignalNodeData = useSignalGraphStore((s) => s.updateNodeData);
   const color = getCategoryColor(data.type);
   // Plugin : le schema vient du manifeste (résolu via params.plugin_id) et
   // le label affiché est le nom déclaré — sinon les tables statiques.
@@ -77,18 +83,42 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
       updateGlobalNodeData(id, { params });
       return; // pushGlobalGraph (debounced) gère la propagation backend
     }
+    if (isSignalNode) {
+      updateSignalNodeData(id, { params });
+      return; // pushSignalGraph (debounced) gère la propagation backend
+    }
     updateNodeData(id, { params });
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       useGraphStore.getState().updateGraphLive();
     }, 150);
-  }, [id, data.params, updateNodeData, isGlobalNode, updateGlobalNodeData, isPluginNode, plugins]);
+  }, [id, data.params, updateNodeData, isGlobalNode, updateGlobalNodeData, isSignalNode, updateSignalNodeData, isPluginNode, plugins]);
+
+  const blurOnEnter = (e: React.KeyboardEvent<HTMLElement>) => {
+    if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur();
+  };
 
   const renderInput = (def: ParamDef) => {
     const value = data.params?.[def.key];
 
     switch (def.type) {
       case 'number':
+        // Param borné → slider (plus intuitif qu'un input nu : la plage
+        // est visible d'un coup d'œil, cohérent avec le panel Params).
+        if (typeof def.min === 'number' && typeof def.max === 'number') {
+          return (
+            <Slider
+              label={def.label}
+              value={typeof value === 'number' ? value : 0}
+              min={def.min}
+              max={def.max}
+              step={def.step ?? 0.1}
+              accent="cyan"
+              layout="stack"
+              onChange={(v) => handleChange(def.key, v)}
+            />
+          );
+        }
         return (
           <input
             type="number"
@@ -97,6 +127,7 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
             max={def.max}
             value={typeof value === 'number' ? value : 0}
             onChange={(e) => handleChange(def.key, parseFloat(e.target.value) || 0)}
+            onKeyDown={blurOnEnter}
             className="w-full px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none"
           />
         );
@@ -114,7 +145,14 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
         return (
           <select
             value={typeof value === 'string' ? value : ''}
-            onChange={(e) => handleChange(def.key, e.target.value)}
+            onChange={(e) => {
+              handleChange(def.key, e.target.value);
+              // Rendre le focus : sinon le select garde la main (flèches/
+              // space continuent de changer la valeur au lieu d'agir sur
+              // le canvas — sensation d'être "coincé" dans le dropdown).
+              e.currentTarget.blur();
+            }}
+            onKeyDown={blurOnEnter}
             className="w-full px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none"
           >
             {def.options?.map((opt) => (
@@ -134,6 +172,7 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
                 handleChange(def.key, parsed);
               }
             }}
+            onKeyDown={blurOnEnter}
             className="w-full px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
             placeholder="x, y, z"
           />
@@ -146,6 +185,7 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
             type="text"
             value={typeof value === 'string' ? value : ''}
             onChange={(e) => handleChange(def.key, e.target.value)}
+            onKeyDown={blurOnEnter}
             className="w-full px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
           />
         );
@@ -197,12 +237,18 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
     const hasDurationPort = inputPorts.includes('duration');
     // Nodes spline (Evaluate/Trim/Offset) : port 'spline' dédié pour DrawSpline
     const hasSplinePort = inputPorts.includes('spline');
+    // Domaine signal : les ports multi-entrées (a/b/factor…) sont rendus à
+    // gauche sous leurs propres ids — le premier reste le handle principal
+    // en haut ('signal' ou 'a'), comme 'input' pour les trajectoires.
+    const mainPorts = inputPorts.filter((p) => p !== 'duration' && p !== 'spline');
+    const mainPort = mainPorts[0] ?? 'input';
+    const extraPorts = mainPorts.slice(1);
     return (
       <>
         <Handle
           type="target"
           position={Position.Top}
-          id="input"
+          id={mainPort}
           className="!w-3 !h-3 !bg-gray-400"
         />
         {hasDurationPort && (
@@ -223,6 +269,17 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
             className="!w-2.5 !h-2.5 !bg-emerald-500"
           />
         )}
+        {extraPorts.map((p, i) => (
+          <Handle
+            key={p}
+            type="target"
+            position={Position.Left}
+            id={p}
+            style={{ top: `${((i + 1) / (extraPorts.length + 1)) * 100}%` }}
+            className="!w-2.5 !h-2.5 !bg-amber-400"
+            title={p}
+          />
+        ))}
       </>
     );
   };
@@ -237,13 +294,13 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
           {isAudioNode && audioRms !== null && (
             <span className="flex items-center gap-1 flex-shrink-0">
               <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-              <span className="text-red-400 text-[10px] font-bold tracking-wider">LIVE</span>
+              <span className="text-red-400 text-xs font-bold tracking-wider">LIVE</span>
             </span>
           )}
           <span className="text-white text-sm font-semibold truncate">{displayLabel}</span>
           {pluginMissing && (
             <span
-              className="flex-shrink-0 px-1 py-px rounded bg-red-900/60 text-red-300 text-[9px] font-bold tracking-wide"
+              className="flex-shrink-0 px-1 py-px rounded bg-red-900/60 text-red-300 text-[11px] font-bold tracking-wide"
               title={`Plugin '${pluginId ?? ''}' not loaded — .ssx missing from the plugins folder`}
             >
               MISSING
@@ -265,7 +322,7 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
       {isAudioNode && audioRms !== null && (
         <div className="px-3 py-1.5 bg-gray-900/60 border-b border-gray-700/50 space-y-1">
           {data.type === 'BPM' && audioBpm !== null && (
-            <div className="flex items-center justify-between text-[10px]">
+            <div className="flex items-center justify-between text-xs">
               <span className="text-gray-500">BPM live</span>
               <span className="text-cyan-400 font-mono font-bold">{audioBpm.toFixed(0)}</span>
             </div>
@@ -297,9 +354,21 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
 
       {/* Binary composite labels for A/B inputs */}
       {isBinary && hasInput && (
-        <div className="flex justify-between px-1 py-0.5 text-[10px] text-gray-500 font-mono">
+        <div className="flex justify-between px-1 py-0.5 text-xs text-gray-500 font-mono">
           <span className="text-blue-400">A</span>
           <span className="text-purple-400">B</span>
+        </div>
+      )}
+
+      {/* Signal multi-ports (a/b/factor…) : labels des handles latéraux
+          — composites exclus (leur label A/B est déjà rendu au-dessus). */}
+      {!isBinary && inputPorts.filter((p) => p !== 'duration' && p !== 'spline').length > 1 && (
+        <div className="flex gap-2 px-1 py-0.5 text-xs text-gray-500 font-mono">
+          {inputPorts
+            .filter((p) => p !== 'duration' && p !== 'spline')
+            .map((p, i) => (
+              <span key={p} className={i === 0 ? 'text-gray-400' : 'text-amber-400'}>{p}</span>
+            ))}
         </div>
       )}
 
@@ -308,13 +377,13 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
         <div className="p-3 space-y-2">
           {schema.map((def) => (
             <div key={def.key} className="flex flex-col gap-1">
-              <label className="text-gray-400 text-[11px] font-medium">{def.label}</label>
+              <label className="text-gray-400 text-xs font-medium">{def.label}</label>
               {renderInput(def)}
             </div>
           ))}
           {data.type === 'Objects' && (
             <div className="mt-1 pt-2 border-t border-gray-700">
-              <label className="text-cyan-400 text-[10px] font-mono">Linked Tracks</label>
+              <label className="text-cyan-400 text-xs font-mono">Linked Tracks</label>
               <input
                 type="text"
                 value={trackIdsValue}
@@ -322,17 +391,17 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
                 onBlur={commitTrackIds}
                 onKeyDown={(e) => { if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); } }}
                 placeholder="ex: 1, 2, 3..."
-                className="w-full mt-0.5 px-2 py-1 bg-gray-900 text-cyan-300 text-[10px] font-mono rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
+                className="w-full mt-0.5 px-2 py-1 bg-gray-900 text-cyan-300 text-xs font-mono rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
               />
               {((data.params?.track_ids as number[]) ?? []).length > 0 && (
                 <div className="flex flex-wrap gap-0.5 mt-1">
                   {(data.params.track_ids as number[]).slice(0, 16).map((id: number) => (
-                    <span key={id} className="text-[10px] font-mono px-1 py-0.5 bg-cyan-900/40 text-cyan-400 rounded">
+                    <span key={id} className="text-xs font-mono px-1 py-0.5 bg-cyan-900/40 text-cyan-400 rounded">
                       {id}
                     </span>
                   ))}
                   {(data.params.track_ids as number[]).length > 16 && (
-                    <span className="text-[10px] text-gray-500">+{(data.params.track_ids as number[]).length - 16}</span>
+                    <span className="text-xs text-gray-500">+{(data.params.track_ids as number[]).length - 16}</span>
                   )}
                 </div>
               )}
@@ -354,7 +423,7 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
       {/* Objects quand collapsed : éditeur de tracks toujours visible */}
       {data.type === 'Objects' && !expanded && (
         <div className="px-3 py-1.5 border-t border-gray-700">
-          <label className="text-cyan-400 text-[10px] font-mono">Linked Tracks</label>
+          <label className="text-cyan-400 text-xs font-mono">Linked Tracks</label>
           <input
             type="text"
             value={trackIdsValue}
@@ -362,17 +431,17 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
             onBlur={commitTrackIds}
             onKeyDown={(e) => { if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); } }}
             placeholder="ex: 1, 2, 3..."
-            className="w-full mt-0.5 px-2 py-1 bg-gray-900 text-cyan-300 text-[10px] font-mono rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
+            className="w-full mt-0.5 px-2 py-1 bg-gray-900 text-cyan-300 text-xs font-mono rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
           />
           {((data.params?.track_ids as number[]) ?? []).length > 0 && (
             <div className="flex flex-wrap gap-0.5 mt-1">
               {(data.params.track_ids as number[]).slice(0, 12).map((id: number) => (
-                <span key={id} className="text-[10px] font-mono px-1 py-0.5 bg-cyan-900/40 text-cyan-400 rounded">
+                <span key={id} className="text-xs font-mono px-1 py-0.5 bg-cyan-900/40 text-cyan-400 rounded">
                   {id}
                 </span>
               ))}
               {(data.params.track_ids as number[]).length > 12 && (
-                <span className="text-[10px] text-gray-500">+{(data.params.track_ids as number[]).length - 12}</span>
+                <span className="text-xs text-gray-500">+{(data.params.track_ids as number[]).length - 12}</span>
               )}
             </div>
           )}
@@ -384,7 +453,7 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
         <div className="px-3 py-1.5 border-t border-gray-700">
           {data.params?.track_range ? (
             <>
-              <label className="text-green-400 text-[10px] font-mono">Track Range: {data.params.track_range}</label>
+              <label className="text-green-400 text-xs font-mono">Track Range: {data.params.track_range}</label>
               <div className="flex flex-wrap gap-0.5 mt-1">
                 {(() => {
                   const range = data.params.track_range as string;
@@ -400,7 +469,7 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
                   const ids: number[] = [];
                   for (let i = start; i <= end && i < start + 24; i++) ids.push(i);
                   return ids.map((id) => (
-                    <span key={id} className="text-[10px] font-mono px-1 py-0.5 bg-green-900/40 text-green-400 rounded">
+                    <span key={id} className="text-xs font-mono px-1 py-0.5 bg-green-900/40 text-green-400 rounded">
                       {id}
                     </span>
                   ));
@@ -408,7 +477,7 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
               </div>
             </>
           ) : (
-            <span className="text-gray-500 text-[10px] font-mono">Single output (all tracks)</span>
+            <span className="text-gray-500 text-xs font-mono">Single output (all tracks)</span>
           )}
         </div>
       )}
@@ -423,14 +492,14 @@ const CustomNode: React.FC<NodeProps<CustomNodeData>> = ({ data, id }) => {
 
 const MiniBar: React.FC<{ label: string; value: number; color: string }> = ({ label, value, color }) => (
   <div className="flex items-center gap-1.5">
-    <span className="text-gray-500 text-[10px] w-7">{label}</span>
+    <span className="text-gray-500 text-xs w-7">{label}</span>
     <div className="flex-1 h-1.5 bg-gray-950 rounded-full overflow-hidden">
       <div
         className={`h-full ${color} transition-all duration-75 rounded-full`}
         style={{ width: `${Math.min(100, value * 100)}%` }}
       />
     </div>
-    <span className="text-gray-600 text-[10px] font-mono w-6 text-right">{(value * 100).toFixed(0)}</span>
+    <span className="text-gray-400 text-xs font-mono w-6 text-right">{(value * 100).toFixed(0)}</span>
   </div>
 );
 
@@ -470,14 +539,14 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
 
   return (
     <div className="mt-2 pt-2 border-t border-gray-700 space-y-1.5">
-      <label className="text-cyan-400 text-[10px] font-mono">Spline Library</label>
+      <label className="text-cyan-400 text-xs font-mono">Spline Library</label>
 
       {/* Charger depuis la bibliothèque */}
       {savedSplines.length > 0 && (
         <select
           onChange={handleLoad}
           defaultValue=""
-          className="w-full px-2 py-1 bg-gray-900 text-cyan-300 text-[10px] font-mono rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
+          className="w-full px-2 py-1 bg-gray-900 text-cyan-300 text-xs font-mono rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
         >
           <option value="" disabled>Load a spline...</option>
           {savedSplines.map((s) => (
@@ -490,7 +559,7 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
       {savedSplines.length > 0 && (
         <div className="space-y-0.5 max-h-24 overflow-y-auto">
           {savedSplines.map((s) => (
-            <div key={s.id} className="flex items-center justify-between text-[10px]">
+            <div key={s.id} className="flex items-center justify-between text-xs">
               <span className="text-gray-400 font-mono truncate flex-1">{s.name}</span>
               <button
                 onClick={() => handleDelete(s.id)}
@@ -512,23 +581,23 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
             onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setShowSave(false); }}
             placeholder="Nom de la spline..."
             autoFocus
-            className="flex-1 px-2 py-1 bg-gray-900 text-white text-[10px] rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
+            className="flex-1 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
           />
           <button
             onClick={handleSave}
-            className="text-green-400 hover:text-green-300 text-[10px] px-2"
+            className="text-green-400 hover:text-green-300 text-xs px-2"
             title="Confirmer"
           ><Check size={10} /></button>
           <button
             onClick={() => setShowSave(false)}
-            className="text-gray-500 hover:text-gray-400 text-[10px] px-2"
+            className="text-gray-500 hover:text-gray-400 text-xs px-2"
             title="Cancel"
           ><X size={10} /></button>
         </div>
       ) : (
         <button
           onClick={() => setShowSave(true)}
-          className="w-full text-[10px] text-cyan-400 hover:text-cyan-300 border border-cyan-800 hover:border-cyan-600 rounded py-1"
+          className="w-full text-xs text-cyan-400 hover:text-cyan-300 border border-cyan-800 hover:border-cyan-600 rounded py-1"
         >
           + Save this spline
         </button>

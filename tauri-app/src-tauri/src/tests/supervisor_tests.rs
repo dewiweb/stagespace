@@ -49,6 +49,7 @@ mod supervisor_tests {
             is_preview: false,
             track_indices: vec![0],
             graph_json: stagespace_engines::GraphJson::default(),
+            signal_graph: None,
             duration: 4.0,
             loop_mode: "loop".to_string(),
             direction: "forward".to_string(),

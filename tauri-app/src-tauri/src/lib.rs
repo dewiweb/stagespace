@@ -30,13 +30,13 @@ use commands::merge_commands::{
     set_global_origin, set_global_osc_ids, set_kinematic_smoothing, set_manual_position,
     set_merge_strategy, set_move_playback_mode, set_move_priority, set_move_speed, set_move_weight,
     set_spatial_channel, set_track_depths, set_track_positions, update_global_graph,
-    update_move_graph_merged,
+    update_move_graph_merged, update_signal_graph,
 };
 use commands::network::discover_osc_targets;
 use commands::osc::{
-    get_osc_receiver_port, osc_add_mapping, osc_clear_mappings, osc_get_all_values, osc_get_value,
-    osc_in_stats, osc_list_mappings, osc_remove_mapping, osc_set_in_enabled, osc_suppress_in,
-    send_osc_position, set_osc_output, set_osc_receiver_port,
+    get_osc_armed, get_osc_receiver_port, osc_add_mapping, osc_clear_mappings, osc_get_all_values,
+    osc_get_value, osc_in_stats, osc_list_mappings, osc_remove_mapping, osc_set_in_enabled,
+    osc_suppress_in, send_osc_position, set_osc_armed, set_osc_output, set_osc_receiver_port,
 };
 use commands::playback::set_macro;
 use commands::plugins::{import_plugin, list_plugins, reload_plugins};
@@ -92,6 +92,8 @@ pub struct Movement {
     pub track_indices: Vec<usize>, // indices des tracks dans le .hol
     /// Sub-graph JSON utilisé à l'activation — snapshot pour les cues
     pub graph_json: stagespace_engines::GraphJson,
+    /// Graph de modulation per-move (domaine signal) — snapshot pour les cues
+    pub signal_graph: Option<stagespace_engines::GraphJson>,
     /// Durée du move (secondes)
     pub duration: f64,
     /// Loop mode sérialisé : "loop" | "oneshot"
@@ -263,6 +265,16 @@ pub fn run() {
                     .unwrap_or_else(|e| e.into_inner())
                     .osc_in_targets();
                 receiver.set_targets(targets);
+                // Branche le cache des valeurs OSC sur le merge (source
+                // `SignalOsc` du signal graph — l'Arc interne est
+                // re-pointé si le receiver est recréé sur un autre port).
+                {
+                    let merge_rt = state
+                        .merge_runtime
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner());
+                    merge_rt.set_osc_values_handle(receiver.address_values_handle());
+                }
                 if let Err(e) = receiver.start() {
                     eprintln!(
                         "[WARN] OSC receiver failed to start on port {}: {}",
@@ -337,6 +349,8 @@ pub fn run() {
             osc_in_stats,
             set_osc_receiver_port,
             set_osc_output,
+            set_osc_armed,
+            get_osc_armed,
             get_osc_receiver_port,
             preset_save,
             preset_load,
@@ -370,6 +384,8 @@ pub fn run() {
             list_active_moves,
             // Global graph commands (Phase 2 — post-processing)
             update_global_graph,
+            // Signal graph (domaine modulation → deltas de macros)
+            update_signal_graph,
             set_track_positions,
             set_manual_position,
             clear_manual_position,

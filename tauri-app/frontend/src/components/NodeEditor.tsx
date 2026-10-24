@@ -16,9 +16,10 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
+import { useSignalGraphStore } from '../store/useSignalGraphStore';
 import CustomNode from './CustomNode';
 import { QuickAddModal } from './QuickAddModal';
-import { NODE_CATEGORIES, NODE_COLORS, NODE_DESCRIPTIONS, getCategoryColor, getDefaultParams, getValidTargetTypes, pluginDefaultParams, GLOBAL_ONLY_NODES, SUB_ONLY_NODES } from './nodeParamSchema';
+import { NODE_CATEGORIES, NODE_COLORS, NODE_DESCRIPTIONS, getCategoryColor, getDefaultParams, getValidTargetTypes, pluginDefaultParams, GLOBAL_ONLY_NODES, SUB_ONLY_NODES, SIGNAL_ONLY_NODES } from './nodeParamSchema';
 import { isValidConnection, connectionRejectionReason, portRejectionReason, spliceRejectionReason } from '../utils/connectionRules';
 import { presetsUsingType } from '../utils/shapePresets';
 import { toast } from '../utils/toast-helpers';
@@ -66,8 +67,9 @@ export const NodeEditor: React.FC = () => {
   // la découverte. Repliée elle rend ~220px au canvas en split expert.
   const [paletteCollapsed, setPaletteCollapsed] = useState(false);
 
-  // Tab: "sub" = graph du slot édité, "global" = graph global (post-processing)
-  const [activeTab, setActiveTab] = useState<'sub' | 'global'>('sub');
+  // Tab: "sub" = graph du slot édité, "global" = graph global (post-processing),
+  // "signal" = graph de modulation (domaine scalaire → deltas de macros)
+  const [activeTab, setActiveTab] = useState<'sub' | 'global' | 'signal'>('sub');
 
   // Nom du slot édité (pour l'afficher dans le tab sub-graph)
   const editingSlotId = useGraphStore((s) => s.editingSlotId);
@@ -83,6 +85,14 @@ export const NodeEditor: React.FC = () => {
   const setGlobalEdges = useGlobalGraphStore((s) => s.setEdges);
   const pushGlobalGraph = useGlobalGraphStore((s) => s.pushGlobalGraph);
   const resetToDefault = useGlobalGraphStore((s) => s.resetToDefault);
+
+  // Signal graph store (modulation → deltas de macros)
+  const signalNodes = useSignalGraphStore((s) => s.nodes);
+  const signalEdges = useSignalGraphStore((s) => s.edges);
+  const setSignalNodes = useSignalGraphStore((s) => s.setNodes);
+  const setSignalEdges = useSignalGraphStore((s) => s.setEdges);
+  const pushSignalGraph = useSignalGraphStore((s) => s.pushSignalGraph);
+  const resetSignalToDefault = useSignalGraphStore((s) => s.resetToDefault);
 
   // Moves actifs (pour highlight les MoveRef dont le move est actif)
   const movements = useGraphStore((s) => s.movements);
@@ -102,8 +112,10 @@ export const NodeEditor: React.FC = () => {
   }, [pluginsLoaded, fetchPlugins]);
 
   // Les nodes/edges affichés dépendent du tab actif
-  const displayNodes = activeTab === 'global' ? globalNodes : nodes;
-  const displayEdges = activeTab === 'global' ? globalEdges : edges;
+  const displayNodes =
+    activeTab === 'global' ? globalNodes : activeTab === 'signal' ? signalNodes : nodes;
+  const displayEdges =
+    activeTab === 'global' ? globalEdges : activeTab === 'signal' ? signalEdges : edges;
 
   // Décor des nodes (highlight connexion + MoveRef actif) memoized — sans ça,
   // chaque render recrée tous les objets node et React Flow re-render tout.
@@ -155,6 +167,23 @@ export const NodeEditor: React.FC = () => {
     setGlobalEdges([...globalEdges, newEdge as Edge]);
   }, [globalEdges, setGlobalEdges]);
 
+  // Handlers du tab signal — même pattern que le tab global (store dédié).
+  const handleSignalNodesChange = useCallback((changes: any[]) => {
+    const updated = applyNodeChanges(changes, signalNodes);
+    setSignalNodes(updated);
+  }, [signalNodes, setSignalNodes]);
+
+  const handleSignalEdgesChange = useCallback((changes: any[]) => {
+    const updated = applyEdgeChanges(changes, signalEdges);
+    setSignalEdges(updated);
+  }, [signalEdges, setSignalEdges]);
+
+  const handleSignalConnect = useCallback((connection: Connection) => {
+    connectedThisDrop.current = true;
+    const newEdge = { ...connection, id: `${connection.source}-${connection.target}`, markerEnd: { type: MarkerType.ArrowClosed } };
+    setSignalEdges([...signalEdges, newEdge as Edge]);
+  }, [signalEdges, setSignalEdges]);
+
   const handleConnect = useCallback((connection: Connection) => {
     connectedThisDrop.current = true;
     storeConnect(connection);
@@ -166,6 +195,14 @@ export const NodeEditor: React.FC = () => {
     const timer = setTimeout(() => pushGlobalGraph(), 300);
     return () => clearTimeout(timer);
   }, [globalNodes, globalEdges, activeTab, pushGlobalGraph]);
+
+  // Auto-push du graph signal quand il change (debounce) — la compile
+  // rejette les graphs sans SignalOut : le toast remonte l'erreur.
+  useEffect(() => {
+    if (activeTab !== 'signal') return;
+    const timer = setTimeout(() => pushSignalGraph(), 300);
+    return () => clearTimeout(timer);
+  }, [signalNodes, signalEdges, activeTab, pushSignalGraph]);
 
   // Autopatch (plugdata) : une edge sélectionnée + clic palette = insertion
   // du node dans la chaîne (`A → B` devient `A → M → B`). Une seule edge
@@ -218,13 +255,16 @@ export const NodeEditor: React.FC = () => {
       if (activeTab === 'global') {
         setGlobalNodes([...globalNodes, newNode]);
         setGlobalEdges([...globalEdges.filter((e) => e.id !== selectedEdge.id), edgeIn, edgeOut]);
+      } else if (activeTab === 'signal') {
+        setSignalNodes([...signalNodes, newNode]);
+        setSignalEdges([...signalEdges.filter((e) => e.id !== selectedEdge.id), edgeIn, edgeOut]);
       } else {
         insertNodeOnEdge(newNode, selectedEdge.id, edgeIn, edgeOut);
       }
       toast.success(`Inserted ${(newNode.data as any)?.label ?? insertedType} into the chain`);
       return true;
     },
-    [selectedEdge, displayNodes, plugins, activeTab, globalNodes, globalEdges, setGlobalNodes, setGlobalEdges, insertNodeOnEdge],
+    [selectedEdge, displayNodes, plugins, activeTab, globalNodes, globalEdges, setGlobalNodes, setGlobalEdges, signalNodes, signalEdges, setSignalNodes, setSignalEdges, insertNodeOnEdge],
   );
 
   const addNodeByType = useCallback(
@@ -234,11 +274,13 @@ export const NodeEditor: React.FC = () => {
       if (trySpliceOnEdge(newNode, type)) return;
       if (activeTab === 'global') {
         setGlobalNodes([...globalNodes, newNode]);
+      } else if (activeTab === 'signal') {
+        setSignalNodes([...signalNodes, newNode]);
       } else {
         addNode(newNode);
       }
     },
-    [addNode, displayNodes.length, activeTab, globalNodes, setGlobalNodes, trySpliceOnEdge],
+    [addNode, displayNodes.length, activeTab, globalNodes, setGlobalNodes, signalNodes, setSignalNodes, trySpliceOnEdge],
   );
 
   // Plugin = sub-graph only (SUB_ONLY_NODES) → toujours dans le store sub.
@@ -373,9 +415,11 @@ export const NodeEditor: React.FC = () => {
   const allowedTypes = useMemo(
     () =>
       NODE_CATEGORIES.flatMap((cat) =>
-        activeTab === 'global'
-          ? cat.types.filter((t) => !SUB_ONLY_NODES.has(t))
-          : cat.types.filter((t) => !GLOBAL_ONLY_NODES.has(t)),
+        activeTab === 'signal'
+          ? cat.types.filter((t) => SIGNAL_ONLY_NODES.has(t))
+          : activeTab === 'global'
+            ? cat.types.filter((t) => !SUB_ONLY_NODES.has(t) && !SIGNAL_ONLY_NODES.has(t))
+            : cat.types.filter((t) => !GLOBAL_ONLY_NODES.has(t) && !SIGNAL_ONLY_NODES.has(t)),
       ),
     [activeTab],
   );
@@ -387,7 +431,8 @@ export const NodeEditor: React.FC = () => {
     const slot = moveSlots.find((s) => s.id === editingSlotId);
     return !!slot?.movementId;
   }, [moveSlots, editingSlotId]);
-  const edgesLive = activeTab === 'sub' ? editedSlotLive : movements.length > 0;
+  const edgesLive =
+    activeTab === 'sub' ? editedSlotLive : movements.length > 0;
   // Insert-target : l'edge sélectionnée sur laquelle un modifier peut
   // s'insérer (trajectoire, pas duration/spline) prend un style dash cyan
   // — l'autopatch doit être découvrable sans lire le hint de palette.
@@ -429,7 +474,7 @@ export const NodeEditor: React.FC = () => {
       <div className="h-8 border-b border-stagespace-border flex items-center px-2 gap-1 flex-shrink-0 bg-stagespace-panel">
         <button
           onClick={() => setActiveTab('sub')}
-          className={`px-2 py-0.5 text-[10px] rounded font-medium transition-colors ${
+          className={`px-2 py-0.5 text-xs rounded font-medium transition-colors ${
             activeTab === 'sub' ? 'bg-purple-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
           }`}
           title="Move graph — trajectory for the slot being edited"
@@ -437,32 +482,60 @@ export const NodeEditor: React.FC = () => {
           Move graph
         </button>
         {activeTab === 'sub' && editingSlotName && (
-          <span className="text-gray-400 text-[10px] truncate max-w-[120px]">
+          <span className="text-gray-400 text-xs truncate max-w-[120px]">
             › {editingSlotName}
           </span>
         )}
         <button
           onClick={() => setActiveTab('global')}
-          className={`px-2 py-0.5 text-[10px] rounded font-medium transition-colors ${
+          className={`px-2 py-0.5 text-xs rounded font-medium transition-colors ${
             activeTab === 'global' ? 'bg-cyan-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
           }`}
-          title="Master FX — post-processing applied to ALL live moves"
+          title="Global FX — post-processing graph applied to ALL live moves"
         >
-          Master FX
+          Global FX
         </button>
         {activeTab === 'global' && (
           <>
             <div className="flex-1" />
             <button
               onClick={() => resetToDefault()}
-              className="px-2 py-0.5 text-[10px] bg-gray-800 hover:bg-gray-700 text-gray-300 rounded"
+              className="px-2 py-0.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 rounded"
               title="Reset to the default global graph"
             >
               ↺ Reset
             </button>
             <button
               onClick={() => pushGlobalGraph()}
-              className="px-2 py-0.5 text-[10px] bg-cyan-800 hover:bg-cyan-700 text-cyan-200 rounded"
+              className="px-2 py-0.5 text-xs bg-cyan-800 hover:bg-cyan-700 text-cyan-200 rounded"
+              title="Compile and push to the backend"
+            >
+              ↑ Push
+            </button>
+          </>
+        )}
+        <button
+          onClick={() => setActiveTab('signal')}
+          className={`px-2 py-0.5 text-xs rounded font-medium transition-colors ${
+            activeTab === 'signal' ? 'bg-amber-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+          }`}
+          title="Modulation — signal graph modulating macros with additive deltas (LFO, audio, OSC…)"
+        >
+          Modulation
+        </button>
+        {activeTab === 'signal' && (
+          <>
+            <div className="flex-1" />
+            <button
+              onClick={() => resetSignalToDefault()}
+              className="px-2 py-0.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 rounded"
+              title="Reset to the default signal graph"
+            >
+              ↺ Reset
+            </button>
+            <button
+              onClick={() => pushSignalGraph()}
+              className="px-2 py-0.5 text-xs bg-amber-800 hover:bg-amber-700 text-amber-200 rounded"
               title="Compile and push to the backend"
             >
               ↑ Push
@@ -497,7 +570,7 @@ export const NodeEditor: React.FC = () => {
         <div className="px-3 py-3 border-b border-stagespace-border sticky top-0 bg-stagespace-panel z-raised flex items-start gap-2">
           <div className="flex-1">
             <h3 className="text-white font-semibold text-sm">Nodes</h3>
-            <p className="text-gray-500 text-[11px] mt-0.5">
+            <p className="text-gray-500 text-xs mt-0.5">
               {selectedEdge
                 ? 'Edge selected — click a modifier to insert it into the chain'
                 : 'Click to add · Ctrl+K quick-add · Hover for info'}
@@ -514,10 +587,14 @@ export const NodeEditor: React.FC = () => {
 
         <div className="p-2 space-y-2">
           {NODE_CATEGORIES.map((cat) => {
-            // Filtrer les types selon le tab actif
-            const filteredTypes = activeTab === 'global'
-              ? cat.types.filter((t) => !SUB_ONLY_NODES.has(t))
-              : cat.types.filter((t) => !GLOBAL_ONLY_NODES.has(t));
+            // Filtrer les types selon le tab actif — le domaine signal
+            // (modulation scalaire) est isolé : seuls les nodes Signal dans
+            // le tab Mods, jamais dans les graphes move/global.
+            const filteredTypes = activeTab === 'signal'
+              ? cat.types.filter((t) => SIGNAL_ONLY_NODES.has(t))
+              : activeTab === 'global'
+                ? cat.types.filter((t) => !SUB_ONLY_NODES.has(t) && !SIGNAL_ONLY_NODES.has(t))
+                : cat.types.filter((t) => !GLOBAL_ONLY_NODES.has(t) && !SIGNAL_ONLY_NODES.has(t));
             // Skip la catégorie si elle n'a plus de types après le filtrage
             if (filteredTypes.length === 0) return null;
             const isCollapsed = collapsedCats.has(cat.label);
@@ -525,9 +602,9 @@ export const NodeEditor: React.FC = () => {
               <div key={cat.label}>
                 <button
                   onClick={() => toggleCat(cat.label)}
-                  className="w-full flex items-center gap-1 text-gray-500 text-[10px] font-semibold mb-1 px-1 uppercase tracking-wider hover:text-gray-300 transition-colors"
+                  className="w-full flex items-center gap-1 text-gray-500 text-xs font-semibold mb-1 px-1 uppercase tracking-wider hover:text-gray-300 transition-colors"
                 >
-                  <span className="text-[10px]">{isCollapsed ? '▸' : '▾'}</span>
+                  <span className="text-xs">{isCollapsed ? '▸' : '▾'}</span>
                   <span
                     className="w-1.5 h-1.5 rounded-full flex-shrink-0"
                     style={{ background: NODE_COLORS[cat.color] ?? '#4b5563' }}
@@ -563,8 +640,8 @@ export const NodeEditor: React.FC = () => {
                         </button>
                         {/* Tooltip description */}
                         {hoveredPaletteNode === type && NODE_DESCRIPTIONS[type] && (
-                          <div className="absolute left-full top-0 ml-2 z-popover w-64 p-2.5 bg-gray-900 border border-gray-700 rounded-lg shadow-xl text-gray-300 text-[10px] leading-relaxed pointer-events-none">
-                            <div className="text-white font-semibold text-[11px] mb-1" style={{ color: getCategoryColor(type) }}>{type}</div>
+                          <div className="absolute left-full top-0 ml-2 z-popover w-64 p-2.5 bg-gray-900 border border-gray-700 rounded-lg shadow-xl text-gray-300 text-xs leading-relaxed pointer-events-none">
+                            <div className="text-white font-semibold text-xs mb-1" style={{ color: getCategoryColor(type) }}>{type}</div>
                             {NODE_DESCRIPTIONS[type]}
                             {/* Show valid targets */}
                             {(() => {
@@ -572,12 +649,12 @@ export const NodeEditor: React.FC = () => {
                               if (targets.length === 0) return null;
                               return (
                                 <div className="mt-1.5 pt-1.5 border-t border-gray-700">
-                                  <div className="text-gray-500 text-[10px] uppercase">Can connect to:</div>
-                                  <div className="text-gray-400 text-[10px] mt-0.5 flex flex-wrap gap-1">
+                                  <div className="text-gray-500 text-xs uppercase">Can connect to:</div>
+                                  <div className="text-gray-400 text-xs mt-0.5 flex flex-wrap gap-1">
                                     {targets.slice(0, 8).map((t) => (
                                       <span key={t} className="px-1 py-0.5 bg-gray-800 rounded">{t}</span>
                                     ))}
-                                    {targets.length > 8 && <span className="text-gray-600">+{targets.length - 8}</span>}
+                                    {targets.length > 8 && <span className="text-gray-400">+{targets.length - 8}</span>}
                                   </div>
                                 </div>
                               );
@@ -618,30 +695,30 @@ export const NodeEditor: React.FC = () => {
                           <span className="truncate">{m.name}</span>
                           {m.kind !== 'engine' && (
                             <span
-                              className="text-[8px] font-bold tracking-wide flex-shrink-0 px-1 rounded bg-sky-900/60 text-sky-300"
+                              className="text-[11px] font-bold tracking-wide flex-shrink-0 px-1 rounded bg-sky-900/60 text-sky-300"
                               title={m.kind === 'modifier' ? 'Modifier: wraps one trajectory (input port)' : 'Composite: combines 2 trajectories (A/B ports)'}
                             >
                               {m.kind === 'modifier' ? 'MOD' : '2IN'}
                             </span>
                           )}
-                          <span className="text-gray-600 text-[9px] ml-auto flex-shrink-0">v{m.version}</span>
+                          <span className="text-gray-400 text-[11px] ml-auto flex-shrink-0">v{m.version}</span>
                         </button>
                         {hoveredPaletteNode === `plugin:${m.id}` && (
-                          <div className="absolute left-full top-0 ml-2 z-popover w-64 p-2.5 bg-gray-900 border border-gray-700 rounded-lg shadow-xl text-gray-300 text-[10px] leading-relaxed pointer-events-none">
-                            <div className="text-white font-semibold text-[11px] mb-1" style={{ color: NODE_COLORS.yellow }}>
+                          <div className="absolute left-full top-0 ml-2 z-popover w-64 p-2.5 bg-gray-900 border border-gray-700 rounded-lg shadow-xl text-gray-300 text-xs leading-relaxed pointer-events-none">
+                            <div className="text-white font-semibold text-xs mb-1" style={{ color: NODE_COLORS.yellow }}>
                               {m.name} <span className="text-gray-500 font-normal">v{m.version}</span>
                             </div>
                             {m.description ?? 'External WASM plugin'}
                             {m.author && (
                               <div className="mt-1 text-gray-500">by {m.author}</div>
                             )}
-                            <div className="mt-1 text-gray-600 font-mono">id: {m.id}</div>
+                            <div className="mt-1 text-gray-400 font-mono">id: {m.id}</div>
                           </div>
                         )}
                       </div>
                     ))}
                     {pluginsLoaded && plugins.length === 0 && (
-                      <div className="px-2.5 py-1 text-gray-600 text-[10px] leading-snug">
+                      <div className="px-2.5 py-1 text-gray-400 text-xs leading-snug">
                         No plugin loaded
                         {pluginsDir && (
                           <div className="font-mono text-gray-500 break-all mt-0.5" title={pluginsDir}>
@@ -653,7 +730,7 @@ export const NodeEditor: React.FC = () => {
                     {pluginErrors.map((e, i) => (
                       <div
                         key={i}
-                        className="px-2.5 text-red-400/80 text-[9px] font-mono truncate"
+                        className="px-2.5 text-red-400/80 text-[11px] font-mono truncate"
                         title={e}
                       >
                         ⚠ {e}
@@ -667,14 +744,14 @@ export const NodeEditor: React.FC = () => {
                         });
                         if (typeof selected === 'string') void importPlugin(selected);
                       }}
-                      className="w-full text-left px-2.5 py-1 text-gray-500 hover:text-yellow-400 text-[10px] rounded transition-colors"
+                      className="w-full text-left px-2.5 py-1 text-gray-500 hover:text-yellow-400 text-xs rounded transition-colors"
                       title="Import a .ssx bundle (copy + rescan)"
                     >
                       + Import .ssx…
                     </button>
                     <button
                       onClick={() => void reloadPlugins()}
-                      className="w-full text-left px-2.5 py-1 text-gray-500 hover:text-yellow-400 text-[10px] rounded transition-colors"
+                      className="w-full text-left px-2.5 py-1 text-gray-500 hover:text-yellow-400 text-xs rounded transition-colors"
                       title="Rescan the plugins folder"
                     >
                       ↻ Rescan plugins
@@ -688,7 +765,7 @@ export const NodeEditor: React.FC = () => {
 
         {/* Help footer */}
         <div className="p-3 border-t border-stagespace-border mt-2">
-          <div className="text-gray-600 text-[10px] leading-relaxed space-y-1">
+          <div className="text-gray-400 text-xs leading-relaxed space-y-1">
             <div><span className="text-gray-400 font-semibold">Flow:</span> Objects → Engine → Output</div>
             <div><span className="text-gray-400 font-semibold">Chain:</span> Engine → Modifier → Output</div>
             <div><span className="text-gray-400 font-semibold">Blend:</span> 2 Engines → Mix → Output</div>
@@ -705,9 +782,27 @@ export const NodeEditor: React.FC = () => {
         <ReactFlow
           nodes={decoratedNodes}
           edges={decoratedEdges}
-          onNodesChange={activeTab === 'global' ? handleGlobalNodesChange : onNodesChange}
-          onEdgesChange={activeTab === 'global' ? handleGlobalEdgesChange : onEdgesChange}
-          onConnect={activeTab === 'global' ? handleGlobalConnect : handleConnect}
+          onNodesChange={
+            activeTab === 'global'
+              ? handleGlobalNodesChange
+              : activeTab === 'signal'
+                ? handleSignalNodesChange
+                : onNodesChange
+          }
+          onEdgesChange={
+            activeTab === 'global'
+              ? handleGlobalEdgesChange
+              : activeTab === 'signal'
+                ? handleSignalEdgesChange
+                : onEdgesChange
+          }
+          onConnect={
+            activeTab === 'global'
+              ? handleGlobalConnect
+              : activeTab === 'signal'
+                ? handleSignalConnect
+                : handleConnect
+          }
           onConnectStart={onConnectStart}
           onConnectEnd={onConnectEnd}
           onNodeDoubleClick={onNodeDoubleClick}
@@ -737,16 +832,18 @@ export const NodeEditor: React.FC = () => {
         {displayNodes.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="text-center">
-              <div className="text-gray-600 text-sm mb-1">Empty graph</div>
+              <div className="text-gray-400 text-sm mb-1">Empty graph</div>
               <div className="text-gray-500 text-xs">
                 {activeTab === 'global'
                   ? 'Click nodes in the palette to add them'
                   : 'Click nodes in the palette to add them'}
               </div>
               {activeTab === 'global' ? (
-                <div className="text-gray-500 text-[10px] mt-2">Start with: Input → Scale → Rotate → Offset → Output</div>
+                <div className="text-gray-500 text-xs mt-2">Start with: Input → Scale → Rotate → Offset → Output</div>
+              ) : activeTab === 'signal' ? (
+                <div className="text-gray-500 text-xs mt-2">Start with: SignalLfo → SignalMap → SignalOut</div>
               ) : (
-                <div className="text-gray-500 text-[10px] mt-2">Start with: Objects → Duration → Circular → Output</div>
+                <div className="text-gray-500 text-xs mt-2">Start with: Objects → Duration → Circular → Output</div>
               )}
             </div>
           </div>
@@ -769,15 +866,15 @@ export const NodeEditor: React.FC = () => {
             className="fixed z-menu w-56 bg-gray-900 border border-gray-700 rounded-lg shadow-xl overflow-hidden"
             style={{ left: nodeMenu.x, top: nodeMenu.y }}
           >
-            <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-800">
+            <div className="px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-800">
               {nodeMenu.nodeType} — runnable examples
             </div>
             {activeTab !== 'sub' ? (
-              <div className="px-3 py-2 text-[10px] text-gray-500">
+              <div className="px-3 py-2 text-xs text-gray-500">
                 Examples load into a move graph — switch to the Move graph tab first.
               </div>
             ) : presetsUsingType(nodeMenu.nodeType).length === 0 ? (
-              <div className="px-3 py-2 text-[10px] text-gray-500">
+              <div className="px-3 py-2 text-xs text-gray-500">
                 No runnable example uses {nodeMenu.nodeType} yet.
               </div>
             ) : (
@@ -792,7 +889,7 @@ export const NodeEditor: React.FC = () => {
                     {p.icon} {p.name}
                   </button>
                 ))}
-                <div className="px-3 py-1.5 text-[9px] text-gray-600 border-t border-gray-800">
+                <div className="px-3 py-1.5 text-[11px] text-gray-400 border-t border-gray-800">
                   Loads into the edited slot — Ctrl+Z to undo.
                 </div>
               </div>
@@ -802,7 +899,7 @@ export const NodeEditor: React.FC = () => {
 
         {/* Connecting hint badge */}
         {connectingFrom && (
-          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-popover px-3 py-1.5 bg-blue-900/80 border border-blue-600 rounded-lg text-blue-200 text-[11px] font-medium pointer-events-none">
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-popover px-3 py-1.5 bg-blue-900/80 border border-blue-600 rounded-lg text-blue-200 text-xs font-medium pointer-events-none">
             Connecting from <span className="text-white font-bold">{connectingFrom}</span> — drag to a valid target
           </div>
         )}

@@ -133,6 +133,68 @@ pub enum NodeType {
     /// les autres params sont ceux déclarés par son manifeste.
     /// Comportement : engine de sub-graph (ports input+duration).
     Plugin,
+
+    // ── Signal graph (domaine scalaire — macros & modulation) ──
+    // Les nodes signal produisent/consomment des f64, pas des positions.
+    // Ils ne sont valides que dans un `GraphContext::Signal` et ne peuvent
+    // pas se connecter au domaine trajectoire (règle `Feeds::Signal`).
+
+    // Sources
+    /// Constante éditable — pont live-control (slider UI).
+    /// Param : value.
+    SignalConst,
+    /// Temps absolu `t` (éventuellement modulé).
+    /// Params : rate (multiplicateur), wrap (modulo, 0 = pas de wrap).
+    SignalTime,
+    /// Oscillateur basse fréquence.
+    /// Params : waveform (sine|triangle|square|sawtooth|random),
+    /// frequency (Hz), amplitude, center, phase.
+    SignalLfo,
+    /// Source audio → signal.
+    /// Params : band (rms|bass|mid|high|bpm|spectrum), index (bande FFT),
+    /// smoothing [0,1).
+    SignalAudio,
+    /// Valeur OSC reçue (destination `handler`) → signal.
+    /// Params : name (clé last_values), index (argument, défaut 0).
+    SignalOsc,
+    /// Bruit lisse déterministe (somme de sinusoïdes irrationnelles).
+    /// Params : rate, amplitude, seed.
+    SignalRandom,
+
+    // Opérateurs
+    /// Algèbre binaire/unaire.
+    /// Params : op (add|sub|mul|div|min|max|pow|abs|neg|mod),
+    /// a/b (fallbacks quand l'input correspondant n'est pas connecté).
+    SignalMath,
+    /// Remap linéaire in_min..in_max → out_min..out_max.
+    /// Params : in_min, in_max, out_min, out_max, clamp.
+    SignalMap,
+    /// Borne le signal.
+    /// Params : min, max.
+    SignalClamp,
+    /// Mix a/b selon factor (param ou port).
+    /// Params : factor (fallback si port 'factor' non connecté).
+    SignalMix,
+
+    // Nodes à état (mémoire inter-frames — FnMut)
+    /// Limiteur de vitesse (slew rate) — lissage physique asymétrique.
+    /// Params : rise_rate, fall_rate (unités/s, 0 = illimité).
+    SignalSlew,
+    /// Envelope follower — montée attack / descente release (facteurs
+    /// [0,1) par frame normalisés à dt). Le punch de l'audio-réactif.
+    /// Params : attack, release.
+    SignalEnvelope,
+    /// Bascule hystérésis : 1 si signal > threshold, 0 si < threshold -
+    /// hysteresis, conserve l'état entre les deux.
+    /// Params : threshold, hysteresis.
+    SignalThreshold,
+
+    // Terminal
+    /// Sink : écrit le signal en DELTA additif sur une macro.
+    /// Params : target (speed|scale|shift_x|shift_y|shift_z|yaw|pitch|
+    /// roll|radius_scale|height_offset), amount (multiplicateur).
+    /// `speed` n'a de sens qu'en contexte per-move — ignoré en global.
+    SignalOut,
 }
 
 /// Un nœud dans le graphe
