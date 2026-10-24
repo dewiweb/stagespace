@@ -20,4 +20,9 @@ oscRefusedRate: number,
  * Circuit-breaker OSC ouvert — sends suspendus (merge + preview
  * continuent), sonde de reconnexion à 1 Hz. Renderer down.
  */
-oscSuspended: boolean, };
+oscSuspended: boolean, 
+/**
+ * Durée de travail de la dernière frame de merge (µs) — merge +
+ * sends + perf, hors sleep de pacing. Jauge le coût réel du hot-path.
+ */
+mergeFrameUs: number, };

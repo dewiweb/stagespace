@@ -1196,7 +1196,7 @@ impl MergeRuntime {
                 }
 
                 // 3. Merge : résoudre les conflits par track.
-                // Snapshot Arc — clone d'Arc, pas de copie du Vec.
+                let merge_work_start = Instant::now();
                 let osc_ids = osc_ids_arc
                     .read()
                     .unwrap_or_else(|e| e.into_inner())
@@ -1542,6 +1542,11 @@ impl MergeRuntime {
                     osc_refused_perf = 0;
                     last_perf_update = Instant::now();
                 }
+
+                // Durée de travail réel de la frame (merge + sends + perf) —
+                // exclut le sleep de pacing : c'est le vrai coût hot-path,
+                // exposé dans PerfStats.merge_frame_us.
+                perf.set_merge_frame_us(merge_work_start.elapsed().as_secs_f64() * 1e6);
 
                 // Timing précis + re-ancrage : après un stall (pause debug,
                 // emit bloquant, préemption), on ne burst pas des centaines de

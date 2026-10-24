@@ -153,6 +153,7 @@ export function usePerfStatsPolling() {
         fps: 0,
         oscRate: 0,
         latencyMs: 0,
+        mergeFrameUs: 0,
         cpuPercent: 0,
         oscErrorRate: 0,
         oscRefusedRate: 0,

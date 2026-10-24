@@ -79,4 +79,7 @@ pub struct PerfStats {
     /// Circuit-breaker OSC ouvert — sends suspendus (merge + preview
     /// continuent), sonde de reconnexion à 1 Hz. Renderer down.
     pub osc_suspended: bool,
+    /// Durée de travail de la dernière frame de merge (µs) — merge +
+    /// sends + perf, hors sleep de pacing. Jauge le coût réel du hot-path.
+    pub merge_frame_us: f64,
 }
