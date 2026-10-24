@@ -59,6 +59,14 @@ export const StatusBar: React.FC = () => {
           <span className={perfStats.cpuPercent < 50 ? 'text-gray-400' : 'text-yellow-400'}>
             {perfStats.cpuPercent.toFixed(0)}% cpu
           </span>
+          <span
+            className={perfStats.mergeFrameUs < 2000 ? 'text-gray-400' : perfStats.mergeFrameUs < 8000 ? 'text-yellow-400' : 'text-red-400'}
+            title="Temps de travail réel de la frame merge (µs) — budget 16.6ms"
+          >
+            {perfStats.mergeFrameUs < 1000
+              ? `${perfStats.mergeFrameUs.toFixed(0)}µs`
+              : `${(perfStats.mergeFrameUs / 1000).toFixed(1)}ms`} merge
+          </span>
           {perfStats.oscSuspended && (
             <span className="text-orange-400 font-bold animate-pulse">OSC SUSPENDED</span>
           )}
