@@ -109,6 +109,11 @@ interface GraphState
   canUndo: boolean;
   canRedo: boolean;
   pushHistory: () => void;
+  /// Internes undo/redo — snapshots de graphe + throttle des pushs de
+  /// suppression en rafale. Non exposés aux composants.
+  _history: Array<{ nodes: GraphNode[]; edges: Edge[] }>;
+  _historyIndex: number;
+  _lastRemovalPushAt: number;
 
   /// Persiste le graphe courant dans le slot en cours d'édition.
   /// Exposé pour que les loaders externes (loadMovementGraph, loadAnimation,
@@ -127,19 +132,17 @@ export const useGraphStore = create<GraphState>()((...a) => {
   // slot.graphJson est toujours synchronisé avec l'éditeur.
   // Ne modifie que moveSlots (pas nodes/edges) → pas de boucle.
   function autoSaveToEditingSlot() {
-    const editingSlotId = (get() as any).editingSlotId as string | null;
+    const editingSlotId = get().editingSlotId;
     if (!editingSlotId) return;
-    const { nodes, edges } = get();
-    const moveSlots = (get() as any).moveSlots as any[] | undefined;
-    if (!moveSlots) return;
-    const newSlots = moveSlots.map((sl: any) =>
+    const { nodes, edges, moveSlots } = get();
+    const newSlots = moveSlots.map((sl) =>
       sl.id === editingSlotId
         ? { ...sl, graphJson: { nodes: [...nodes], edges: [...edges] } }
         : sl
     );
     // Sauvegarder dans localStorage (la fonction est dans moveSlotsSlice)
     safeSetItem('stagespace-move-slots', JSON.stringify(newSlots));
-    set({ moveSlots: newSlots } as any);
+    set({ moveSlots: newSlots });
   }
 
   // Debounce pour l'auto-save pendant le drag (onNodesChange/onEdgesChange)
@@ -166,9 +169,9 @@ export const useGraphStore = create<GraphState>()((...a) => {
   // avec le reste du store.
   function pushHistoryForRemoval() {
     const now = Date.now();
-    const last = (get() as any)._lastRemovalPushAt ?? 0;
+    const last = get()._lastRemovalPushAt ?? 0;
     if (now - last <= 100) return;
-    set({ _lastRemovalPushAt: now } as any);
+    set({ _lastRemovalPushAt: now });
     get().pushHistory();
   }
 
@@ -252,25 +255,25 @@ export const useGraphStore = create<GraphState>()((...a) => {
             ...n.data,
             ...data,
             // Deep merge params si les deux existent
-            params: data.params && (n.data as any).params
-              ? { ...(n.data as any).params, ...data.params }
-              : (data.params ?? (n.data as any).params),
+            params: data.params && n.data.params
+              ? { ...n.data.params, ...data.params }
+              : (data.params ?? n.data.params),
           },
         } : n,
       ),
     }));
     // Auto-save + hot-swap si le slot est en lecture
     autoSaveToEditingSlot();
-    const editingSlotId = (get() as any).editingSlotId as string | null;
+    const editingSlotId = get().editingSlotId as string | null;
     if (editingSlotId) {
-      const slot = (get() as any).moveSlots?.find((s: any) => s.id === editingSlotId);
+      const slot = get().moveSlots?.find((s: any) => s.id === editingSlotId);
       if (slot?.movementId) {
         // Hot-swap avec un léger debounce — timer dédié (hotSwapTimer),
         // ne pas réutiliser dragSaveTimer (auto-save ≠ hot-swap).
         if (hotSwapTimer) clearTimeout(hotSwapTimer);
         hotSwapTimer = setTimeout(() => {
           hotSwapTimer = null;
-          (get() as any).updateGraphLive?.(0.3).catch((e: any) => {
+          get().updateGraphLive?.(0.3).catch((e: any) => {
             console.error('[updateNodeData] debounced hot-swap failed:', e);
           });
         }, 200);
@@ -309,8 +312,8 @@ export const useGraphStore = create<GraphState>()((...a) => {
         ...activeMovementIds,
       ]);
 
-      const editingSlotId = (get() as any).editingSlotId as string | null;
-      const moveSlots = (get() as any).moveSlots as Array<{ id: string; movementId: string | null; trackIds?: number[] }> | undefined;
+      const editingSlotId = get().editingSlotId as string | null;
+      const moveSlots = get().moveSlots as Array<{ id: string; movementId: string | null; trackIds?: number[] }> | undefined;
       const editingSlotMovementId = editingSlotId && moveSlots
         ? moveSlots.find((s) => s.id === editingSlotId)?.movementId ?? null
         : null;
@@ -318,12 +321,12 @@ export const useGraphStore = create<GraphState>()((...a) => {
       if (editingSlotMovementId && allMovementIds.has(editingSlotMovementId)) {
         // Extraire la duration du graphe courant
         const durNode = nodes.find((n: any) => n.data.type === 'Duration');
-        const duration = (durNode?.data as any)?.params?.duration ?? 4.0;
+        const duration = durNode?.data?.params?.duration ?? 4.0;
         // Récupérer les osc_ids et track_indices du slot édité
         const editingSlot = moveSlots?.find((s: any) => s.id === editingSlotId);
         const oscIds = editingSlot?.trackIds ?? [];
-        const holProj = (get() as any).holProject;
-        const manualIds = (get() as any).manualOscIds ?? [];
+        const holProj = get().holProject;
+        const manualIds = get().manualOscIds ?? [];
         const trackIndices = computeTrackIndices(oscIds, holProj, manualIds);
         await invoke('update_move_graph_merged', {
           movementId: editingSlotMovementId,
@@ -357,9 +360,9 @@ export const useGraphStore = create<GraphState>()((...a) => {
 
       // Si un slot est sélectionné pour édition, mettre à jour son template + graphe.
       // setSlotTemplate gère aussi le hot-swap si le slot est en lecture.
-      const editingSlotId = (get() as any).editingSlotId as string | null;
+      const editingSlotId = get().editingSlotId as string | null;
       if (editingSlotId) {
-        const { setSlotTemplate } = get() as any;
+        const { setSlotTemplate } = get();
         if (setSlotTemplate) {
           setSlotTemplate(editingSlotId, presetId);
         }
@@ -380,21 +383,22 @@ export const useGraphStore = create<GraphState>()((...a) => {
   },
 
   // ─── Undo/Redo ───
-  _history: [] as Array<{ nodes: any[]; edges: any[] }>,
+  _history: [] as Array<{ nodes: GraphNode[]; edges: Edge[] }>,
   _historyIndex: -1,
+  _lastRemovalPushAt: 0,
   canUndo: false,
   canRedo: false,
   pushHistory: () => {
-    const { nodes, edges, _history, _historyIndex } = get() as any;
+    const { nodes, edges, _history, _historyIndex } = get();
     const snapshot = { nodes: JSON.parse(JSON.stringify(nodes)), edges: JSON.parse(JSON.stringify(edges)) };
     const newHistory = _history.slice(0, _historyIndex + 1);
     newHistory.push(snapshot);
     // Limite à 50 entrées
     if (newHistory.length > 50) newHistory.shift();
-    set({ _history: newHistory, _historyIndex: newHistory.length - 1, canUndo: newHistory.length > 1, canRedo: false } as any);
+    set({ _history: newHistory, _historyIndex: newHistory.length - 1, canUndo: newHistory.length > 1, canRedo: false });
   },
   undo: () => {
-    const { _history, _historyIndex } = get() as any;
+    const { _history, _historyIndex } = get();
     if (_historyIndex <= 0) return;
     const newIdx = _historyIndex - 1;
     const snapshot = _history[newIdx];
@@ -404,7 +408,7 @@ export const useGraphStore = create<GraphState>()((...a) => {
       _historyIndex: newIdx,
       canUndo: newIdx > 0,
       canRedo: true,
-    } as any);
+    });
     // Persister vers le slot en édition — sinon undo serait invisible
     // dans graphJson et perdu à la prochaine sélection de slot.
     autoSaveToEditingSlot();
@@ -413,7 +417,7 @@ export const useGraphStore = create<GraphState>()((...a) => {
     get().updateGraphLive(0.3).catch((e) => console.error('[undo] hot-swap failed:', e));
   },
   redo: () => {
-    const { _history, _historyIndex } = get() as any;
+    const { _history, _historyIndex } = get();
     if (_historyIndex >= _history.length - 1) return;
     const newIdx = _historyIndex + 1;
     const snapshot = _history[newIdx];
@@ -423,7 +427,7 @@ export const useGraphStore = create<GraphState>()((...a) => {
       _historyIndex: newIdx,
       canUndo: true,
       canRedo: newIdx < _history.length - 1,
-    } as any);
+    });
     autoSaveToEditingSlot();
     get().updateGraphLive(0.3).catch((e) => console.error('[redo] hot-swap failed:', e));
   },
