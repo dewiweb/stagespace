@@ -31,6 +31,8 @@ export const PerformView: React.FC = () => {
   const stopSlot = useGraphStore((s) => s.stopSlot);
   const goToNextMove = useGraphStore((s) => s.goToNextMove);
   const pendingPlays = useGraphStore((s) => s.pendingPlays);
+  const addMoveSlot = useGraphStore((s) => s.addMoveSlot);
+  const addToSetlist = useGraphStore((s) => s.addToSetlist);
   const isRecalling = useCuelistStore((s) => s.isRecalling);
 
   const [goFeedback, setGoFeedback] = React.useState<{ ok: boolean; message: string } | null>(null);
@@ -67,7 +69,7 @@ export const PerformView: React.FC = () => {
   const layerSlots = moveSlots.filter((s) => !setlistOrder.includes(s.id));
 
   // Row partagée setlist/layers — même interactions (tap = params, ▶/■ = layer)
-  const renderSlotRow = (slot: (typeof moveSlots)[number]) => {
+  const renderSlotRow = (slot: (typeof moveSlots)[number], showSetlistAdd = false) => {
     const isPlaying = !!slot.movementId || pendingPlays.includes(slot.id);
     const isSelected = editingSlotId === slot.id;
     const setlistIdx = setlistOrder.indexOf(slot.id);
@@ -126,6 +128,15 @@ export const PerformView: React.FC = () => {
         )}
         {isNextSetlist && !isCurrentSetlist && (
           <span className="text-green-400/80 text-xs font-bold flex-shrink-0" title="Prochain GO">→ NEXT</span>
+        )}
+        {showSetlistAdd && (
+          <button
+            onClick={(e) => { e.stopPropagation(); addToSetlist(slot.id); }}
+            className="flex-shrink-0 w-6 h-6 rounded text-gray-400 hover:bg-purple-600/30 hover:text-white text-xs transition-colors"
+            title="Add to setlist (jouable via GO)"
+          >
+            →
+          </button>
         )}
         <SlidersHorizontal
           size={12}
@@ -225,13 +236,24 @@ export const PerformView: React.FC = () => {
         {/* Colonne gauche : SETLIST (flux du show) + LAYERS (ad-hoc) + cues */}
         <div className="w-72 flex-shrink-0 border-r border-stagespace-border flex flex-col bg-stagespace-panel min-h-0">
           <div className="flex-1 overflow-y-auto min-h-0">
-            <div className="px-3 py-2 text-gray-400 text-xs uppercase tracking-wider border-b border-stagespace-border bg-purple-950/20">
-              Setlist — GO avance ici
+            <div className="px-3 py-2 text-gray-400 text-xs uppercase tracking-wider border-b border-stagespace-border bg-purple-950/20 flex items-center justify-between">
+              <span>Setlist — GO avance ici</span>
+              <button
+                onClick={() => {
+                  addMoveSlot();
+                  const last = useGraphStore.getState().moveSlots.at(-1);
+                  if (last) addToSetlist(last.id);
+                }}
+                className="px-1.5 py-0.5 rounded text-[10px] text-indigo-300 hover:bg-indigo-600/30 hover:text-white transition-colors normal-case"
+                title="New move added to the setlist"
+              >
+                + Move
+              </button>
             </div>
-            {setlistSlots.map(renderSlotRow)}
-            {setlistSlots.length === 0 && (
+            {setlistSlots.map((slot) => renderSlotRow(slot))}
+            {setlistSlots.length === 0 && moveSlots.length > 0 && (
               <div className="px-3 py-4 text-gray-400 text-xs italic">
-                Empty setlist — add moves to the setlist in Edit mode.
+                Empty setlist — <span className="text-indigo-300">+ Move</span> creates one, or use → on a layer.
               </div>
             )}
             {layerSlots.length > 0 && (
@@ -239,12 +261,27 @@ export const PerformView: React.FC = () => {
                 <div className="px-3 py-2 text-gray-400 text-xs uppercase tracking-wider border-b border-stagespace-border">
                   Layers — <Play size={9} className="inline -mt-0.5" /> joue en parallèle
                 </div>
-                {layerSlots.map(renderSlotRow)}
+                {layerSlots.map((slot) => renderSlotRow(slot, true))}
               </>
             )}
             {moveSlots.length === 0 && (
-              <div className="px-3 py-6 text-center text-gray-400 text-xs">
-                No moves — leave Perform (header) to create some.
+              <div className="px-3 py-4 space-y-2.5">
+                <p className="text-gray-300 text-xs font-medium">No moves yet</p>
+                <button
+                  onClick={() => {
+                    addMoveSlot();
+                    // Le slot vient d'être pushé — l'ajouter à la setlist
+                    // pour que GO/Enter fonctionne tout de suite.
+                    const last = useGraphStore.getState().moveSlots.at(-1);
+                    if (last) addToSetlist(last.id);
+                  }}
+                  className="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors"
+                >
+                  + Create your first move
+                </button>
+                <p className="text-gray-500 text-[10px] leading-snug">
+                  A circular trajectory on all tracks — press <kbd className="px-1 bg-gray-800 rounded">Space</kbd> or ▶ to launch it, Enter/GO to advance the setlist.
+                </p>
               </div>
             )}
           </div>
