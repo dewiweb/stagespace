@@ -1,6 +1,6 @@
 [package]
 name = "stagespace-engines"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2021"
 license = "MIT"
 description = "Real-time spatial trajectory engine for OSC-controlled audio sources"
