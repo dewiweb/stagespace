@@ -11,6 +11,7 @@ pub struct PerfMonitor {
     osc_refused_rate: AtomicU64,
     osc_suspended: AtomicBool,
     merge_frame_us: AtomicU64,
+    merge_lock_us: AtomicU64,
 }
 
 impl Default for PerfMonitor {
@@ -30,6 +31,7 @@ impl PerfMonitor {
             osc_refused_rate: AtomicU64::new(0),
             osc_suspended: AtomicBool::new(false),
             merge_frame_us: AtomicU64::new(0),
+            merge_lock_us: AtomicU64::new(0),
         }
     }
 
@@ -37,6 +39,12 @@ impl PerfMonitor {
     /// hors sleep de pacing. Appelé une fois par frame par le merge thread.
     pub fn set_merge_frame_us(&self, us: f64) {
         self.merge_frame_us.store(us.to_bits(), Ordering::Relaxed);
+    }
+
+    /// Temps total d'attente en acquisition de locks sur la frame de merge
+    /// (µs) — contention observable du hot-path. Appelé une fois par frame.
+    pub fn set_merge_lock_us(&self, us: f64) {
+        self.merge_lock_us.store(us.to_bits(), Ordering::Relaxed);
     }
 
     /// État du circuit-breaker OSC (true = sends suspendus, sonde @1Hz).
@@ -78,6 +86,7 @@ impl PerfMonitor {
             osc_refused_rate: f64::from_bits(self.osc_refused_rate.load(Ordering::Relaxed)),
             osc_suspended: self.osc_suspended.load(Ordering::Relaxed),
             merge_frame_us: f64::from_bits(self.merge_frame_us.load(Ordering::Relaxed)),
+            merge_lock_us: f64::from_bits(self.merge_lock_us.load(Ordering::Relaxed)),
         }
     }
 }

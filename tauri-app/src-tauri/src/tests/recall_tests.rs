@@ -97,6 +97,45 @@ mod recall_tests {
     }
 
     #[test]
+    fn test_recall_compiles_and_swaps_global_post_process() {
+        let sh = make_shared();
+        let mut cue = make_cue();
+        cue.global_graph = Some(serde_json::from_value(serde_json::json!({
+            "nodes": [
+                {"id":"input", "type":"custom", "position":{"x":0,"y":0},
+                 "data":{"label":"Input", "type":"Input", "params":{}}},
+                {"id":"scale", "type":"custom", "position":{"x":0,"y":0},
+                 "data":{"label":"RadiusScale", "type":"RadiusScale", "params":{"radius_scale":2.0}}},
+                {"id":"output", "type":"custom", "position":{"x":0,"y":0},
+                 "data":{"label":"Output", "type":"Output", "params":{}}}
+            ],
+            "edges": [
+                {"id":"e1", "source":"input", "target":"scale", "sourceHandle":"output", "targetHandle":"input"},
+                {"id":"e2", "source":"scale", "target":"output", "sourceHandle":"output", "targetHandle":"input"}
+            ]
+        })).unwrap());
+        recall_cue_inner(cue, sh.clone()).unwrap();
+        let samples = vec![(0.0, 1.0, 0.0, 2.0)];
+        assert_eq!(
+            sh.merge_runtime
+                .lock()
+                .unwrap()
+                .apply_post_process_to_samples(samples.clone(), 0),
+            vec![(0.0, 2.0, 0.0, 4.0)]
+        );
+        let mut invalid = make_cue();
+        invalid.global_graph = Some(stagespace_engines::GraphJson::default());
+        assert!(recall_cue_inner(invalid, sh.clone()).is_err());
+        assert_eq!(
+            sh.merge_runtime
+                .lock()
+                .unwrap()
+                .apply_post_process_to_samples(samples, 0),
+            vec![(0.0, 2.0, 0.0, 4.0)]
+        );
+    }
+
+    #[test]
     fn test_recall_rejects_concurrent_and_releases_flag() {
         let sh = make_shared();
         // Flag pré-posé → rejet, et le flag appartient à l'autre recall

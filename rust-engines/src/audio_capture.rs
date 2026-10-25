@@ -10,7 +10,7 @@ use cpal::SampleFormat;
 use realfft::RealFftPlanner;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 /// Identifiant d'un périphérique audio
@@ -199,6 +199,83 @@ enum CaptureEvent {
     StreamDied(String),
 }
 
+fn reconnect_device_index(
+    names: impl Iterator<Item = Option<String>>,
+    expected: &str,
+) -> Result<usize, String> {
+    if expected.is_empty() {
+        return Err("Audio input name is empty — cannot identify it safely".into());
+    }
+    let mut matches = names
+        .enumerate()
+        .filter_map(|(index, name)| (name.as_deref() == Some(expected)).then_some(index));
+    let index = matches
+        .next()
+        .ok_or_else(|| format!("Audio input '{expected}' is unavailable"))?;
+    if matches.next().is_some() {
+        return Err(format!(
+            "Audio input '{expected}' is ambiguous — cannot identify it safely"
+        ));
+    }
+    Ok(index)
+}
+
+const CALLBACK_TIMEOUT_MS: u64 = 2_000;
+const CAPTURE_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(250);
+
+struct CaptureHeartbeat {
+    epoch: std::time::Instant,
+    last_callback_ms: AtomicU64,
+    received_data: AtomicBool,
+}
+
+impl CaptureHeartbeat {
+    fn new() -> Self {
+        Self {
+            epoch: std::time::Instant::now(),
+            last_callback_ms: AtomicU64::new(0),
+            received_data: AtomicBool::new(false),
+        }
+    }
+
+    fn reset(&self) {
+        self.last_callback_ms
+            .store(self.now_ms(), Ordering::Relaxed);
+        self.received_data.store(false, Ordering::Release);
+    }
+
+    fn now_ms(&self) -> u64 {
+        self.epoch.elapsed().as_millis() as u64
+    }
+
+    fn record_data(&self) {
+        self.last_callback_ms
+            .store(self.now_ms(), Ordering::Relaxed);
+        self.received_data.store(true, Ordering::Release);
+    }
+
+    fn stalled_at(&self, now_ms: u64) -> bool {
+        now_ms.saturating_sub(self.last_callback_ms.load(Ordering::Relaxed)) >= CALLBACK_TIMEOUT_MS
+    }
+}
+
+fn run_capture_thread(
+    running: &AtomicBool,
+    shared_state: &Mutex<AudioState>,
+    last_error: &Mutex<Option<String>>,
+    recovered: &AtomicBool,
+    task: impl FnOnce(),
+) {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(task));
+    running.store(false, Ordering::SeqCst);
+    *shared_state.lock().unwrap_or_else(|e| e.into_inner()) = AudioState::new();
+    recovered.store(false, Ordering::SeqCst);
+    if result.is_err() {
+        *last_error.lock().unwrap_or_else(|e| e.into_inner()) =
+            Some("Audio capture thread panicked — restart capture".to_string());
+    }
+}
+
 impl AudioCaptureManager {
     pub fn new() -> Self {
         AudioCaptureManager {
@@ -240,10 +317,9 @@ impl AudioCaptureManager {
     /// erreurs remontent encore de façon synchrone à l'appelant.
     pub fn start(&self, device_id: Option<&str>) -> Result<(), AudioCaptureError> {
         // Si déjà en cours, stopper l'ancien stream proprement d'abord
-        if self.running.swap(true, Ordering::SeqCst) {
-            self.stop_internal();
-            self.running.store(true, Ordering::SeqCst);
-        }
+        self.stop_internal();
+        self.running.store(true, Ordering::SeqCst);
+        self.recovered.store(false, Ordering::SeqCst);
 
         let device_id_owned = device_id.map(|s| s.to_string());
         let shared_state = self.shared_state.clone();
@@ -258,81 +334,119 @@ impl AudioCaptureManager {
         let event_tx_thread = event_tx.clone();
 
         let handle = std::thread::spawn(move || {
-            let mut stream = match Self::init_stream(
-                device_id_owned.as_deref(),
+            run_capture_thread(
                 &running,
                 &shared_state,
-                event_tx_thread.clone(),
-            ) {
-                Ok((stream, rate)) => {
-                    *sample_rate_arc.lock().unwrap_or_else(|e| e.into_inner()) = rate;
-                    if init_tx.send(Ok(rate)).is_err() {
-                        return; // l'appelant est parti
-                    }
-                    Some(stream)
-                }
-                Err(e) => {
-                    let _ = init_tx.send(Err(e));
-                    return;
-                }
-            };
-            // Boucle de vie : Stop → sortie ; StreamDied → drop + retries en
-            // backoff (500ms → 5s) tant que la capture reste demandée. Un
-            // device débranché/rebranché se reconnecte tout seul.
-            'outer: loop {
-                match event_rx.recv() {
-                    Err(_) | Ok(CaptureEvent::Stop) => break,
-                    Ok(CaptureEvent::StreamDied(err)) => {
-                        eprintln!("[WARN] Audio stream died: {err} — reconnecting");
-                        drop(stream.take());
-                        // État figé = influence fantôme dans les nodes audio :
-                        // reset à zéro pendant la coupure.
-                        if let Ok(mut s) = shared_state.lock() {
-                            *s = AudioState::new();
+                &last_error_arc,
+                &recovered_arc,
+                || {
+                    let heartbeat = Arc::new(CaptureHeartbeat::new());
+                    let mut awaiting_recovery = false;
+                    let mut device_name = None;
+                    let mut stream = match Self::init_stream(
+                        device_id_owned.as_deref(),
+                        &running,
+                        &shared_state,
+                        event_tx_thread.clone(),
+                        &heartbeat,
+                        &mut device_name,
+                    ) {
+                        Ok((stream, rate)) => {
+                            *sample_rate_arc.lock().unwrap_or_else(|e| e.into_inner()) = rate;
+                            if init_tx.send(Ok(rate)).is_err() {
+                                return; // l'appelant est parti
+                            }
+                            Some(stream)
                         }
-                        *last_error_arc.lock().unwrap_or_else(|e| e.into_inner()) = Some(err);
-                        let mut backoff = std::time::Duration::from_millis(500);
-                        loop {
-                            match event_rx.recv_timeout(backoff) {
-                                Err(std::sync::mpsc::RecvTimeoutError::Disconnected)
-                                | Ok(CaptureEvent::Stop) => break 'outer,
-                                // Pas de stream vivant — un second StreamDied
-                                // est impossible, ignorer par robustesse.
-                                Ok(CaptureEvent::StreamDied(_)) => continue,
-                                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                                    match Self::init_stream(
-                                        device_id_owned.as_deref(),
-                                        &running,
-                                        &shared_state,
-                                        event_tx_thread.clone(),
-                                    ) {
-                                        Ok((s, rate)) => {
-                                            stream = Some(s);
-                                            *sample_rate_arc
-                                                .lock()
-                                                .unwrap_or_else(|e| e.into_inner()) = rate;
-                                            *last_error_arc
-                                                .lock()
-                                                .unwrap_or_else(|e| e.into_inner()) = None;
-                                            recovered_arc.store(true, Ordering::SeqCst);
-                                            eprintln!("[INFO] Audio capture reconnected");
-                                            continue 'outer;
-                                        }
-                                        Err(e) => {
-                                            eprintln!(
+                        Err(e) => {
+                            let _ = init_tx.send(Err(e));
+                            return;
+                        }
+                    };
+                    // Boucle de vie : Stop → sortie ; StreamDied → drop + retries en
+                    // backoff (500ms → 5s) tant que la capture reste demandée. Un
+                    // device débranché/rebranché se reconnecte tout seul.
+                    'outer: loop {
+                        if !running.load(Ordering::SeqCst) {
+                            break;
+                        }
+                        let event = match event_rx.recv_timeout(CAPTURE_POLL_INTERVAL) {
+                            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                                if heartbeat.stalled_at(heartbeat.now_ms()) {
+                                    Ok(CaptureEvent::StreamDied(
+                                        "Audio data callback stalled for 2 seconds".into(),
+                                    ))
+                                } else {
+                                    if awaiting_recovery
+                                        && heartbeat.received_data.load(Ordering::Acquire)
+                                    {
+                                        *last_error_arc.lock().unwrap_or_else(|e| e.into_inner()) =
+                                            None;
+                                        recovered_arc.store(true, Ordering::SeqCst);
+                                        awaiting_recovery = false;
+                                    }
+                                    continue;
+                                }
+                            }
+                            event => event,
+                        };
+                        match event {
+                            Err(_) | Ok(CaptureEvent::Stop) => break,
+                            Ok(CaptureEvent::StreamDied(err)) => {
+                                eprintln!("[WARN] Audio stream died: {err} — reconnecting");
+                                recovered_arc.store(false, Ordering::SeqCst);
+                                // État figé = influence fantôme dans les nodes audio :
+                                // reset à zéro pendant la coupure.
+                                *shared_state.lock().unwrap_or_else(|e| e.into_inner()) =
+                                    AudioState::new();
+                                *last_error_arc.lock().unwrap_or_else(|e| e.into_inner()) =
+                                    Some(err);
+                                drop(stream.take());
+                                *shared_state.lock().unwrap_or_else(|e| e.into_inner()) =
+                                    AudioState::new();
+                                let mut backoff = std::time::Duration::from_millis(500);
+                                loop {
+                                    match event_rx.recv_timeout(backoff) {
+                                        Err(std::sync::mpsc::RecvTimeoutError::Disconnected)
+                                        | Ok(CaptureEvent::Stop) => break 'outer,
+                                        // Pas de stream vivant — un second StreamDied
+                                        // est impossible, ignorer par robustesse.
+                                        Ok(CaptureEvent::StreamDied(_)) => continue,
+                                        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                                            match Self::init_stream(
+                                                device_id_owned.as_deref(),
+                                                &running,
+                                                &shared_state,
+                                                event_tx_thread.clone(),
+                                                &heartbeat,
+                                                &mut device_name,
+                                            ) {
+                                                Ok((s, rate)) => {
+                                                    stream = Some(s);
+                                                    *sample_rate_arc
+                                                        .lock()
+                                                        .unwrap_or_else(|e| e.into_inner()) = rate;
+                                                    awaiting_recovery = true;
+                                                    eprintln!("[INFO] Audio capture reconnected");
+                                                    continue 'outer;
+                                                }
+                                                Err(e) => {
+                                                    eprintln!(
                                                 "[WARN] Audio reconnect failed: {e} — retrying"
                                             );
-                                            backoff = (backoff * 2)
-                                                .min(std::time::Duration::from_secs(5));
+                                                    backoff = (backoff * 2)
+                                                        .min(std::time::Duration::from_secs(5));
+                                                }
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
                     }
-                }
-            }
-            drop(stream);
+                    drop(stream);
+                },
+            );
         });
 
         *self
@@ -364,6 +478,8 @@ impl AudioCaptureManager {
         running: &Arc<AtomicBool>,
         shared_state: &Arc<Mutex<AudioState>>,
         event_tx: std::sync::mpsc::Sender<CaptureEvent>,
+        heartbeat: &Arc<CaptureHeartbeat>,
+        resolved_name: &mut Option<String>,
     ) -> Result<(cpal::Stream, f64), String> {
         let host = cpal::default_host();
         let devices: Vec<_> = match host.devices() {
@@ -371,18 +487,39 @@ impl AudioCaptureManager {
             Err(e) => return Err(e.to_string()),
         };
 
-        let device = match device_id {
-            Some(id) if id != "default" => {
-                let idx: usize = id.parse().map_err(|_| format!("device not found: {id}"))?;
-                devices
-                    .into_iter()
-                    .nth(idx)
-                    .ok_or_else(|| format!("device not found: {id}"))?
+        let device_names: Vec<_> = devices
+            .iter()
+            .map(|device| {
+                device
+                    .default_input_config()
+                    .ok()
+                    .and_then(|_| device.name().ok())
+            })
+            .collect();
+        let device = if let Some(name) = resolved_name.as_deref() {
+            let index = reconnect_device_index(device_names.iter().cloned(), name)?;
+            devices
+                .into_iter()
+                .nth(index)
+                .ok_or_else(|| format!("Audio input '{name}' is unavailable"))?
+        } else {
+            match device_id {
+                Some(id) if id != "default" => {
+                    let idx: usize = id.parse().map_err(|_| format!("device not found: {id}"))?;
+                    devices
+                        .into_iter()
+                        .nth(idx)
+                        .ok_or_else(|| format!("device not found: {id}"))?
+                }
+                _ => host
+                    .default_input_device()
+                    .ok_or_else(|| "no input device".to_string())?,
             }
-            _ => host
-                .default_input_device()
-                .ok_or_else(|| "no input device".to_string())?,
         };
+        let device_name = device
+            .name()
+            .map_err(|e| format!("Cannot identify audio input: {e}"))?;
+        reconnect_device_index(device_names.into_iter(), &device_name)?;
 
         let supported_config = device.default_input_config().map_err(|e| e.to_string())?;
         let sample_rate = supported_config.sample_rate().0 as f64;
@@ -395,6 +532,7 @@ impl AudioCaptureManager {
                 running,
                 shared_state,
                 event_tx.clone(),
+                heartbeat,
                 |s: f32| s as f64,
             ),
             SampleFormat::I16 => build_stream_generic(
@@ -403,6 +541,7 @@ impl AudioCaptureManager {
                 running,
                 shared_state,
                 event_tx.clone(),
+                heartbeat,
                 |s: i16| s as f64 / i16::MAX as f64,
             ),
             SampleFormat::U16 => build_stream_generic(
@@ -411,13 +550,16 @@ impl AudioCaptureManager {
                 running,
                 shared_state,
                 event_tx.clone(),
+                heartbeat,
                 |s: u16| (s as f64 - u16::MAX as f64 / 2.0) / (u16::MAX as f64 / 2.0),
             ),
             other => return Err(format!("unsupported sample format: {other:?}")),
         }
         .map_err(|e| e.to_string())?;
 
+        heartbeat.reset();
         stream.play().map_err(|e| e.to_string())?;
+        *resolved_name = Some(device_name);
         Ok((stream, sample_rate))
     }
 
@@ -503,6 +645,7 @@ fn build_stream_generic<S, F>(
     running: &Arc<AtomicBool>,
     shared_state: &Arc<Mutex<AudioState>>,
     event_tx: std::sync::mpsc::Sender<CaptureEvent>,
+    heartbeat: &Arc<CaptureHeartbeat>,
     convert: F,
 ) -> Result<cpal::Stream, AudioCaptureError>
 where
@@ -518,6 +661,7 @@ where
     let hop_size = fft_size / 2;
     let shared_state = shared_state.clone();
     let running = running.clone();
+    let heartbeat = heartbeat.clone();
 
     let mut planner = RealFftPlanner::<f64>::new();
     let r2c = planner.plan_fft_forward(fft_size);
@@ -536,6 +680,9 @@ where
         move |data: &[S], _: &cpal::InputCallbackInfo| {
             if !running.load(Ordering::SeqCst) {
                 return;
+            }
+            if !data.is_empty() {
+                heartbeat.record_data();
             }
 
             // Mixdown multicanal → mono : moyenne des canaux par frame.
@@ -658,4 +805,118 @@ fn hann_window(size: usize) -> Vec<f64> {
             0.5 * (1.0 - phase.cos())
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reconnect_follows_device_name_after_reordering() {
+        let names = [Some("Other".to_string()), Some("Selected".to_string())];
+        assert_eq!(
+            reconnect_device_index(names.into_iter(), "Selected").unwrap(),
+            1
+        );
+        let names = [Some("Selected".to_string()), Some("Other".to_string())];
+        assert_eq!(
+            reconnect_device_index(names.into_iter(), "Selected").unwrap(),
+            0
+        );
+    }
+
+    #[test]
+    fn reconnect_does_not_fall_back_to_another_input() {
+        let names = [Some("Replacement at old index".to_string())];
+        assert!(reconnect_device_index(names.into_iter(), "Selected").is_err());
+        assert!(reconnect_device_index(std::iter::empty(), "Selected").is_err());
+    }
+
+    #[test]
+    fn reconnect_rejects_ambiguous_device_names() {
+        let names = [
+            Some("Selected".to_string()),
+            None,
+            Some("Selected".to_string()),
+        ];
+        assert!(reconnect_device_index(names.into_iter(), "Selected").is_err());
+    }
+
+    #[test]
+    fn reconnect_rejects_empty_names() {
+        assert!(reconnect_device_index([Some(String::new())].into_iter(), "").is_err());
+    }
+
+    #[test]
+    fn reconnect_ignores_unidentifiable_devices() {
+        let names = [None, Some("Selected".to_string()), None];
+        assert_eq!(
+            reconnect_device_index(names.into_iter(), "Selected").unwrap(),
+            1
+        );
+    }
+
+    #[test]
+    fn heartbeat_detects_missing_first_callback_and_stall() {
+        let heartbeat = CaptureHeartbeat::new();
+        assert!(!heartbeat.stalled_at(CALLBACK_TIMEOUT_MS - 1));
+        assert!(heartbeat.stalled_at(CALLBACK_TIMEOUT_MS));
+        heartbeat.last_callback_ms.store(700, Ordering::Relaxed);
+        assert!(!heartbeat.stalled_at(700 + CALLBACK_TIMEOUT_MS - 1));
+        assert!(heartbeat.stalled_at(700 + CALLBACK_TIMEOUT_MS));
+    }
+
+    #[test]
+    fn heartbeat_tracks_silent_data_and_resets_recovery() {
+        let heartbeat = CaptureHeartbeat::new();
+        heartbeat.record_data();
+        assert!(heartbeat.received_data.load(Ordering::Acquire));
+        assert!(!heartbeat.stalled_at(heartbeat.now_ms()));
+        heartbeat.reset();
+        assert!(!heartbeat.received_data.load(Ordering::Acquire));
+        assert!(!heartbeat.stalled_at(heartbeat.now_ms()));
+    }
+
+    #[test]
+    fn capture_panic_clears_state_and_reports_failure() {
+        let manager = AudioCaptureManager::new();
+        manager.running.store(true, Ordering::SeqCst);
+        manager.recovered.store(true, Ordering::SeqCst);
+        manager.shared_state.lock().unwrap().amplitude = Some(AmplitudeData {
+            rms: 1.0,
+            bass: 1.0,
+            mid: 1.0,
+            high: 1.0,
+        });
+        run_capture_thread(
+            &manager.running,
+            &manager.shared_state,
+            &manager.last_error,
+            &manager.recovered,
+            || {
+                let _guard = manager.shared_state.lock().unwrap();
+                panic!("simulated capture panic");
+            },
+        );
+        assert!(!manager.is_running());
+        assert!(manager.get_state().amplitude.is_none());
+        assert!(!manager.take_recovered());
+        assert!(manager.take_error().unwrap().contains("panicked"));
+        assert!(manager.take_error().is_none());
+    }
+
+    #[test]
+    fn normal_capture_exit_does_not_report_a_panic() {
+        let manager = AudioCaptureManager::new();
+        manager.running.store(true, Ordering::SeqCst);
+        run_capture_thread(
+            &manager.running,
+            &manager.shared_state,
+            &manager.last_error,
+            &manager.recovered,
+            || {},
+        );
+        assert!(!manager.is_running());
+        assert!(manager.take_error().is_none());
+    }
 }

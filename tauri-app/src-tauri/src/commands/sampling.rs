@@ -83,23 +83,27 @@ pub async fn sample_movement_trajectories(
             .ok_or_else(|| IpcError::not_found(format!("Movement '{movement_id}' not found")))?;
         (mv.runtime.sampler(), mv.track_indices.clone())
     };
-    let mr = lock_or_recover(&state.merge_runtime);
-    let n = n_samples.clamp(2, 10_000);
-    let dur = duration.max(0.1);
-    let mut out = Vec::with_capacity(track_indices.len());
-    for (object_index, &track_index) in track_indices.iter().enumerate() {
-        // object_index = index LOCAL du move (0..n_objects) pour le sampler ;
-        // track_index = index GLOBAL (.hol) pour le post-process et le frontend.
-        let raw = sampler.sample(object_index, n, dur);
-        let points = mr.apply_post_process_to_samples(raw, track_index);
-        if points.len() >= 2 {
-            out.push(SampledPath {
-                track_index,
-                points,
-            });
+    let post_process = lock_or_recover(&state.merge_runtime).sample_post_processor();
+    let n = sample_count(n_samples, track_indices.len())?;
+    let dur = sample_duration(duration)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut out = Vec::with_capacity(track_indices.len());
+        for (object_index, &track_index) in track_indices.iter().enumerate() {
+            // object_index = index LOCAL du move (0..n_objects) pour le sampler ;
+            // track_index = index GLOBAL (.hol) pour le post-process et le frontend.
+            let raw = sampler.sample(object_index, n, dur);
+            let points = post_process(raw, track_index);
+            if points.len() >= 2 {
+                out.push(SampledPath {
+                    track_index,
+                    points,
+                });
+            }
         }
-    }
-    Ok(out)
+        out
+    })
+    .await
+    .map_err(|e| IpcError::internal(format!("Sampling task failed: {e}")))
 }
 
 /// Échantillonne la trajectoire d'un movement actif (système Animation)
@@ -127,9 +131,60 @@ pub async fn sample_movement_trajectory(
             .runtime
             .sampler()
     };
-    let raw_samples = sampler.sample(object_index, n_samples.clamp(2, 10_000), duration.max(0.1));
+    let n = sample_count(n_samples, 1)?;
+    let dur = sample_duration(duration)?;
 
     // 2. Appliquer le post-process global (depuis le MergeRuntime)
-    let mr = lock_or_recover(&state.merge_runtime);
-    Ok(mr.apply_post_process_to_samples(raw_samples, object_index))
+    let post_process = lock_or_recover(&state.merge_runtime).sample_post_processor();
+    tauri::async_runtime::spawn_blocking(move || {
+        let raw_samples = sampler.sample(object_index, n, dur);
+        post_process(raw_samples, object_index)
+    })
+    .await
+    .map_err(|e| IpcError::internal(format!("Sampling task failed: {e}")))
+}
+
+const MAX_SAMPLE_POINTS: usize = 131_072;
+
+fn sample_count(requested: usize, tracks: usize) -> Result<usize, IpcError> {
+    if tracks > MAX_SAMPLE_POINTS / 2 {
+        return Err(IpcError::validation("Too many tracks to sample"));
+    }
+    Ok(requested
+        .clamp(2, 10_000)
+        .min(MAX_SAMPLE_POINTS / tracks.max(1)))
+}
+
+fn sample_duration(duration: f64) -> Result<f64, IpcError> {
+    if !duration.is_finite() {
+        return Err(IpcError::validation("Sampling duration must be finite"));
+    }
+    Ok(duration.max(0.1))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sample_budget_bounds_total_points() {
+        for tracks in [0, 1, 8, 1024, MAX_SAMPLE_POINTS / 2] {
+            for requested in [0, 128, 10_000, usize::MAX] {
+                let n = sample_count(requested, tracks).unwrap();
+                assert!((2..=10_000).contains(&n));
+                assert!(n * tracks <= MAX_SAMPLE_POINTS);
+            }
+        }
+        assert!(sample_count(128, MAX_SAMPLE_POINTS / 2 + 1).is_err());
+        assert!(sample_count(128, usize::MAX).is_err());
+    }
+
+    #[test]
+    fn sample_duration_rejects_non_finite_values() {
+        for duration in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(sample_duration(duration).is_err());
+        }
+        assert_eq!(sample_duration(-1.0).unwrap(), 0.1);
+        assert_eq!(sample_duration(4.0).unwrap(), 4.0);
+    }
 }

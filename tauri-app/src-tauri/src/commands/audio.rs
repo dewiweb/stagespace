@@ -6,7 +6,10 @@ use tauri::{Emitter, State};
 
 #[tauri::command]
 pub async fn list_audio_devices() -> Result<Vec<AudioDeviceInfo>, IpcError> {
-    AudioCaptureManager::list_devices().map_err(|e| IpcError::io(e.to_string()))
+    tauri::async_runtime::spawn_blocking(AudioCaptureManager::list_devices)
+        .await
+        .map_err(|e| IpcError::internal(format!("Audio device enumeration failed: {e}")))?
+        .map_err(|e| IpcError::io(e.to_string()))
 }
 
 #[tauri::command]
@@ -30,9 +33,12 @@ pub async fn start_audio_capture(
 
 #[tauri::command]
 pub async fn stop_audio_capture(state: State<'_, AppState>) -> Result<(), IpcError> {
-    let capture = lock_or_recover(&state.audio_capture);
-    capture.stop();
-    Ok(())
+    let capture = state.audio_capture.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        lock_or_recover(&capture).stop();
+    })
+    .await
+    .map_err(|e| IpcError::internal(format!("Audio stop task failed: {e}")))
 }
 
 #[tauri::command]

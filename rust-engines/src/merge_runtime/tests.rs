@@ -29,6 +29,35 @@ fn const_signal_fn(target: &str, value: f64, amount: f64) -> crate::signal_compi
 }
 
 #[test]
+fn sample_post_processor_is_detached_from_merge_and_swap() {
+    let runtime = Arc::new(std::sync::Mutex::new(
+        MergeRuntime::new("127.0.0.1".into(), 8000, OscSender::default(), 60.0).unwrap(),
+    ));
+    let weak = Arc::downgrade(&runtime);
+    runtime
+        .lock()
+        .unwrap()
+        .swap_post_process_fn(Box::new(move |_, positions| {
+            let runtime = weak.upgrade().unwrap();
+            let merge = runtime
+                .try_lock()
+                .expect("sampling must release merge_runtime");
+            assert!(merge.post_process_fn.try_write().is_ok());
+            positions.into_iter().map(|(i, p)| (i, p * 2.0)).collect()
+        }));
+    let post_process = runtime.lock().unwrap().sample_post_processor();
+    runtime
+        .lock()
+        .unwrap()
+        .swap_post_process_fn(Box::new(|_, positions| positions));
+    assert_eq!(
+        post_process(vec![(0.0, 1.0, 2.0, 3.0)], 7),
+        vec![(0.0, 2.0, 4.0, 6.0)]
+    );
+    assert!(post_process(Vec::new(), 7).is_empty());
+}
+
+#[test]
 fn test_merge_override() {
     let move_a = (
         "a".to_string(),

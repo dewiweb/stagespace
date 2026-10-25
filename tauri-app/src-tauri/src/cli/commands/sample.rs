@@ -96,14 +96,21 @@ pub fn cmd_perf(_args: &[&str]) -> Result<String, String> {
         .movements
         .lock()
         .unwrap_or_else(|e| e.into_inner());
+    let lock_pct = if stats.merge_frame_us > 0.0 {
+        stats.merge_lock_us / stats.merge_frame_us * 100.0
+    } else {
+        0.0
+    };
     let out = format!(
-        "MergeRuntime:\n  fps: {:.1}\n  osc_rate: {:.1}\n  latency_ms: {:.2}\n  cpu_percent: {:.1}\n  osc_suspended: {}\n  merge_frame_us: {:.0}\n  active_moves: {}\n  osc_ids: {}\n",
+        "MergeRuntime:\n  fps: {:.1}\n  osc_rate: {:.1}\n  latency_ms: {:.2}\n  cpu_percent: {:.1}\n  osc_suspended: {}\n  merge_frame_us: {:.0}\n  merge_lock_us: {:.1} ({:.1}% of frame)\n  active_moves: {}\n  osc_ids: {}\n",
         stats.fps,
         stats.osc_rate,
         stats.latency_ms,
         stats.cpu_percent,
         stats.osc_suspended,
         stats.merge_frame_us,
+        stats.merge_lock_us,
+        lock_pct,
         movements.len(),
         merge_rt.osc_ids().len()
     );

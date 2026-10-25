@@ -255,14 +255,14 @@ pub(crate) fn recall_cue_inner(
         let effects = stagespace_engines::extract_graph_effects(&graph)
             .map_err(|e| IpcError::validation(format!("Failed to extract graph effects: {e:?}")))?;
 
-        let merge_rt = lock_or_recover(&sh.merge_runtime);
-        let macros = merge_rt.macros();
+        let macros = lock_or_recover(&sh.merge_runtime).macros();
 
         let compile_params = stagespace_engines::PostProcessCompileParams { graph, macros };
 
         let post_process_fn = stagespace_engines::compile_post_process(compile_params)
             .map_err(|e| IpcError::validation(format!("Failed to compile global graph: {e:?}")))?;
 
+        let merge_rt = lock_or_recover(&sh.merge_runtime);
         merge_rt.swap_post_process_fn(post_process_fn);
         merge_rt.set_graph_effects(
             effects.zones,

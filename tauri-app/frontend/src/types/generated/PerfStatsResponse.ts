@@ -25,4 +25,13 @@ oscSuspended: boolean,
  * Durée de travail de la dernière frame de merge (µs) — merge +
  * sends + perf, hors sleep de pacing. Jauge le coût réel du hot-path.
  */
-mergeFrameUs: number, };
+mergeFrameUs: number, 
+/**
+ * Temps total d'attente en acquisition de locks pendant la dernière
+ * frame de merge (µs) — somme des Instant autour de chaque
+ * `.lock()/.read()/.write()` du hot-path (active_moves, move_buffers,
+ * PositionBuffers, osc_ids, zones, object_channels, signal_fn, sink…).
+ * Mesure la contention brute ; le temps passé SOUS lock n'est pas
+ * compté (sauf pour les appels PositionBuffer dont le lock est interne).
+ */
+mergeLockUs: number, };

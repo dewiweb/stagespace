@@ -36,6 +36,12 @@ pub async fn import_hol_project(
             ));
         }
     }
+    tauri::async_runtime::spawn_blocking(move || read_hol_project(file_path))
+        .await
+        .map_err(|e| IpcError::internal(format!("Holophonix import task failed: {e}")))?
+}
+
+fn read_hol_project(file_path: String) -> Result<HolProject, IpcError> {
     let content = std::fs::read_to_string(&file_path)
         .map_err(|e| IpcError::io(format!("Failed to read file: {e}")))?;
 
@@ -64,18 +70,98 @@ pub async fn save_graph_to_file(
     file_path: String,
     graph_json: serde_json::Value,
 ) -> Result<(), IpcError> {
-    let data = serde_json::to_string_pretty(&graph_json)
-        .map_err(|e| IpcError::internal(format!("Failed to serialize: {e}")))?;
-    std::fs::write(&file_path, data)
-        .map_err(|e| IpcError::io(format!("Failed to write file: {e}")))?;
-    Ok(())
+    tauri::async_runtime::spawn_blocking(move || {
+        let data = serde_json::to_string_pretty(&graph_json)
+            .map_err(|e| IpcError::internal(format!("Failed to serialize: {e}")))?;
+        std::fs::write(&file_path, data)
+            .map_err(|e| IpcError::io(format!("Failed to write file: {e}")))?;
+        Ok(())
+    })
+    .await
+    .map_err(|e| IpcError::internal(format!("Graph save task failed: {e}")))?
 }
 
 #[tauri::command]
 pub async fn load_graph_from_file(file_path: String) -> Result<serde_json::Value, IpcError> {
-    let content = std::fs::read_to_string(&file_path)
-        .map_err(|e| IpcError::io(format!("Failed to read file: {e}")))?;
-    let graph: serde_json::Value = serde_json::from_str(&content)
-        .map_err(|e| IpcError::validation(format!("Failed to parse JSON: {e}")))?;
-    Ok(graph)
+    tauri::async_runtime::spawn_blocking(move || {
+        let content = std::fs::read_to_string(&file_path)
+            .map_err(|e| IpcError::io(format!("Failed to read file: {e}")))?;
+        let graph: serde_json::Value = serde_json::from_str(&content)
+            .map_err(|e| IpcError::validation(format!("Failed to parse JSON: {e}")))?;
+        Ok(graph)
+    })
+    .await
+    .map_err(|e| IpcError::internal(format!("Graph load task failed: {e}")))?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_path() -> String {
+        std::env::temp_dir()
+            .join(format!("stagespace-file-{}.json", uuid::Uuid::new_v4()))
+            .to_string_lossy()
+            .into_owned()
+    }
+
+    #[test]
+    fn graph_file_commands_round_trip() {
+        let path = test_path();
+        let graph = serde_json::json!({"nodes": [{"id": "source"}], "edges": []});
+        tauri::async_runtime::block_on(async {
+            save_graph_to_file(path.clone(), graph.clone())
+                .await
+                .unwrap();
+            assert_eq!(load_graph_from_file(path.clone()).await.unwrap(), graph);
+        });
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn graph_file_commands_preserve_error_codes() {
+        let path = test_path();
+        tauri::async_runtime::block_on(async {
+            assert_eq!(
+                load_graph_from_file(path.clone()).await.unwrap_err().code,
+                "io"
+            );
+            let missing_parent = format!("{path}/graph.json");
+            assert_eq!(
+                save_graph_to_file(missing_parent, serde_json::json!({}))
+                    .await
+                    .unwrap_err()
+                    .code,
+                "io"
+            );
+            std::fs::write(&path, "not JSON").unwrap();
+            assert_eq!(
+                load_graph_from_file(path.clone()).await.unwrap_err().code,
+                "validation"
+            );
+        });
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn hol_import_preserves_tracks_and_errors() {
+        let path = test_path();
+        assert_eq!(read_hol_project(path.clone()).unwrap_err().code, "io");
+        std::fs::write(&path, "not JSON").unwrap();
+        assert_eq!(
+            read_hol_project(path.clone()).unwrap_err().code,
+            "validation"
+        );
+        std::fs::write(
+            &path,
+            r#"{"ae":["/track/2/name Test","/track/2/xyz 1 2 3"]}"#,
+        )
+        .unwrap();
+        let project = read_hol_project(path.clone()).unwrap();
+        assert_eq!(project.tracks.len(), 1);
+        assert_eq!(project.tracks[0].id, 2);
+        assert_eq!(project.tracks[0].name, "Test");
+        assert_eq!(project.tracks[0].position, [1.0, 2.0, 3.0]);
+        std::fs::remove_file(path).unwrap();
+    }
 }

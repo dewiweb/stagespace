@@ -63,6 +63,29 @@ type SharedSink = Arc<Mutex<Box<dyn crate::position_sink::PositionSink>>>;
 /// remplacent l'Arc interne, les readers clonent l'Arc (snapshot cheap).
 type SharedTrackPositions = Arc<RwLock<Arc<HashMap<u32, [f64; 3]>>>>;
 
+pub type TrajectorySamples = Vec<(f64, f64, f64, f64)>;
+
+/// Chronomètre l'acquisition d'un lock du hot-path (attente de contention —
+/// le temps passé SOUS le guard n'est pas compté). `$acq` doit évaluer au
+/// guard/handle ; les nanosecondes d'attente sont cumulées dans `$wait`
+/// (total par frame → `PerfStats.merge_lock_us`) et, quand le profiling par
+/// site est activé (`STAGESPACE_LOCK_PROF=1`), dans `$sites` pour un dump
+/// périodique sur stderr. Pour les `PositionBuffer` (lock interne), on
+/// chronomètre l'appel entier — la copie sous lock est ~ns, donc la mesure
+/// reste essentiellement de l'attente.
+macro_rules! timed_lock {
+    ($wait:ident, $sites:ident, $profiling:expr, $site:literal, $acq:expr) => {{
+        let __lock_start = Instant::now();
+        let __guard = $acq;
+        let __ns = __lock_start.elapsed().as_nanos() as u64;
+        $wait += __ns;
+        if $profiling {
+            *$sites.entry($site).or_insert(0) += __ns;
+        }
+        __guard
+    }};
+}
+
 /// Nombre de frames de merge consécutives sans write du worker avant de
 /// considérer le move zombie (worker mort/fini) et le retirer du merge.
 /// ~0.5 s à 60 FPS.
@@ -125,7 +148,7 @@ pub struct MergeRuntime {
     /// FPS cible
     fps: f64,
     /// Fonction de post-processing (graph global) — hot-swappable
-    post_process_fn: Arc<RwLock<PostProcessFn>>,
+    post_process_fn: Arc<RwLock<Arc<PostProcessFn>>>,
     /// Positions des tracks .hol (pour Barycenter) — track_id → [x, y, z]
     /// Arc<HashMap> : snapshot par frame = clone d'Arc.
     track_positions: SharedTrackPositions,
@@ -236,7 +259,7 @@ impl MergeRuntime {
             position_callback: Arc::new(Mutex::new(None)),
             sink: Arc::new(Mutex::new(Box::new(osc_sink))),
             fps,
-            post_process_fn: Arc::new(RwLock::new(default_post_process_fn())),
+            post_process_fn: Arc::new(RwLock::new(Arc::new(default_post_process_fn()))),
             track_positions: Arc::new(RwLock::new(Arc::new(HashMap::new()))),
             manual_positions: Arc::new(RwLock::new(HashMap::new())),
             object_channels: Arc::new(RwLock::new(HashMap::new())),
@@ -445,7 +468,7 @@ impl MergeRuntime {
         *self
             .post_process_fn
             .write()
-            .unwrap_or_else(|e| e.into_inner()) = new_fn;
+            .unwrap_or_else(|e| e.into_inner()) = Arc::new(new_fn);
     }
 
     /// Définit les positions des tracks .hol (pour Barycenter)
@@ -1006,6 +1029,18 @@ impl MergeRuntime {
             let mut prev_frame: Option<Instant> = None;
             let mut prev_t: Option<f64> = None;
 
+            // Instrumentation de la contention des locks : chaque acquisition
+            // du hot-path est chronométrée (Instant autour de l'appel) et le
+            // total par frame va dans PerfStats.merge_lock_us. Coût : ~2
+            // Instant::now() (~50 ns) par site × ~25 sites ≈ 1-2 µs/frame.
+            // STAGESPACE_LOCK_PROF=1 active un dump par site toutes les 5 s
+            // sur stderr (attribution fine de la contention).
+            let lock_profiling = std::env::var_os("STAGESPACE_LOCK_PROF").is_some();
+            let mut lock_sites: HashMap<&'static str, u64> = HashMap::new();
+            let mut lock_profile_frames = 0u64;
+            let mut lock_profile_total_ns = 0u64;
+            let mut last_lock_dump = Instant::now();
+
             // Une frame complète du merge. Séparée en closure pour être
             // enveloppée dans catch_unwind : un panic (post-process, callback,
             // modulations…) ne doit PAS tuer le thread en silence — blackout
@@ -1013,6 +1048,9 @@ impl MergeRuntime {
             // marque thread_died, on envoie une frame de parking, puis on sort.
             let mut frame = || {
                 let frame_start = Instant::now();
+                // Attente cumulée des acquisitions de locks de CETTE frame —
+                // publiée à la fin dans merge_lock_us (cf. timed_lock!).
+                let mut lock_wait_ns = 0u64;
                 let t_real = start.elapsed().as_secs_f64();
                 // dt réel mesuré (jitter-tolérant) pour les fades
                 let dt = prev_frame
@@ -1021,10 +1059,14 @@ impl MergeRuntime {
                 prev_frame = Some(frame_start);
 
                 // 1. Lire tous les buffers (read lock très court)
-                let buffers = move_buffers
-                    .read()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .clone();
+                let buffers = timed_lock!(
+                    lock_wait_ns,
+                    lock_sites,
+                    lock_profiling,
+                    "move_buffers.read",
+                    move_buffers.read().unwrap_or_else(|e| e.into_inner())
+                )
+                .clone();
 
                 // 2. Collecter les positions par move, avec fade et priorité
                 // CRITICAL: ne pas tenir le write lock trop longtemps — register_move
@@ -1038,7 +1080,13 @@ impl MergeRuntime {
 
                 // --- Section critique courte: update fades + clone data ---
                 let move_snapshots: Vec<(String, f64, f64, u32, Vec<usize>, bool)> = {
-                    let mut moves_guard = active_moves.write().unwrap_or_else(|e| e.into_inner());
+                    let mut moves_guard = timed_lock!(
+                        lock_wait_ns,
+                        lock_sites,
+                        lock_profiling,
+                        "active_moves.write",
+                        active_moves.write().unwrap_or_else(|e| e.into_inner())
+                    );
                     let mut snapshots = Vec::with_capacity(moves_guard.len());
                     for (move_id, state) in moves_guard.iter_mut() {
                         if !state.is_active {
@@ -1057,14 +1105,32 @@ impl MergeRuntime {
                         // dernières positions indéfiniment.
                         let stale = buffers
                             .get(move_id)
-                            .map(|b| b.frame_count() == state.last_frame_count)
+                            .map(|b| {
+                                timed_lock!(
+                                    lock_wait_ns,
+                                    lock_sites,
+                                    lock_profiling,
+                                    "posbuf.frame_count",
+                                    b.frame_count()
+                                ) == state.last_frame_count
+                            })
                             .unwrap_or(false);
                         if stale {
                             state.stale_frames += 1;
                         } else {
                             state.stale_frames = 0;
-                            state.last_frame_count =
-                                buffers.get(move_id).map(|b| b.frame_count()).unwrap_or(0);
+                            state.last_frame_count = buffers
+                                .get(move_id)
+                                .map(|b| {
+                                    timed_lock!(
+                                        lock_wait_ns,
+                                        lock_sites,
+                                        lock_profiling,
+                                        "posbuf.frame_count",
+                                        b.frame_count()
+                                    )
+                                })
+                                .unwrap_or(0);
                         }
                         // Grace allongée tant que le worker n'a jamais
                         // écrit (last_frame_count == 0 = jamais observé
@@ -1119,7 +1185,13 @@ impl MergeRuntime {
                 for (move_id, fade, weight, priority, track_indices, is_preview) in &move_snapshots
                 {
                     if let Some(buffer) = buffers.get(move_id) {
-                        let positions = buffer.read();
+                        let positions = timed_lock!(
+                            lock_wait_ns,
+                            lock_sites,
+                            lock_profiling,
+                            "posbuf.read",
+                            buffer.read()
+                        );
                         if positions.is_empty() {
                             continue;
                         }
@@ -1168,7 +1240,13 @@ impl MergeRuntime {
 
                 // Nettoyer les buffers des moves retirés (write lock court)
                 if !moves_to_remove.is_empty() {
-                    let mut bufs = move_buffers.write().unwrap_or_else(|e| e.into_inner());
+                    let mut bufs = timed_lock!(
+                        lock_wait_ns,
+                        lock_sites,
+                        lock_profiling,
+                        "move_buffers.write",
+                        move_buffers.write().unwrap_or_else(|e| e.into_inner())
+                    );
                     for id in &moves_to_remove {
                         bufs.remove(id);
                     }
@@ -1197,11 +1275,21 @@ impl MergeRuntime {
 
                 // 3. Merge : résoudre les conflits par track.
                 let merge_work_start = Instant::now();
-                let osc_ids = osc_ids_arc
-                    .read()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .clone();
-                let strategy = *merge_strategy_arc.read().unwrap_or_else(|e| e.into_inner());
+                let osc_ids = timed_lock!(
+                    lock_wait_ns,
+                    lock_sites,
+                    lock_profiling,
+                    "osc_ids.read",
+                    osc_ids_arc.read().unwrap_or_else(|e| e.into_inner())
+                )
+                .clone();
+                let strategy = *timed_lock!(
+                    lock_wait_ns,
+                    lock_sites,
+                    lock_profiling,
+                    "merge_strategy.read",
+                    merge_strategy_arc.read().unwrap_or_else(|e| e.into_inner())
+                );
                 // merge_positions trie ses candidats par move_id → déterministe.
                 let merged = merge_positions(&move_positions, strategy);
 
@@ -1212,10 +1300,14 @@ impl MergeRuntime {
                 // silencieux sur le merge complet : le graphe demande
                 // explicitement ce move).
                 let merged = {
-                    let move_ref = move_ref_id_arc
-                        .read()
-                        .unwrap_or_else(|e| e.into_inner())
-                        .clone();
+                    let move_ref = timed_lock!(
+                        lock_wait_ns,
+                        lock_sites,
+                        lock_profiling,
+                        "move_ref_id.read",
+                        move_ref_id_arc.read().unwrap_or_else(|e| e.into_inner())
+                    )
+                    .clone();
                     match move_ref {
                         Some(ref id) => move_positions
                             .iter()
@@ -1228,15 +1320,31 @@ impl MergeRuntime {
 
                 // 4. Post-processing via le graph global compilé (PostProcessFn)
                 // Snapshots Arc sous locks courts, puis tout hors lock.
-                let origin = *origin_arc.lock().unwrap_or_else(|e| e.into_inner());
-                let track_depths = track_depths_arc
-                    .read()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .clone();
-                let track_positions = track_positions_arc
-                    .read()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .clone();
+                let origin = *timed_lock!(
+                    lock_wait_ns,
+                    lock_sites,
+                    lock_profiling,
+                    "origin.lock",
+                    origin_arc.lock().unwrap_or_else(|e| e.into_inner())
+                );
+                let track_depths = timed_lock!(
+                    lock_wait_ns,
+                    lock_sites,
+                    lock_profiling,
+                    "track_depths.read",
+                    track_depths_arc.read().unwrap_or_else(|e| e.into_inner())
+                )
+                .clone();
+                let track_positions = timed_lock!(
+                    lock_wait_ns,
+                    lock_sites,
+                    lock_profiling,
+                    "track_positions.read",
+                    track_positions_arc
+                        .read()
+                        .unwrap_or_else(|e| e.into_inner())
+                )
+                .clone();
                 // Barycenter (audit T2) : le node recalcule le pivot =
                 // isobarycentre des track_positions à chaque frame — les
                 // transforms pivotent autour du centre réel du groupe.
@@ -1252,14 +1360,24 @@ impl MergeRuntime {
                     } else {
                         origin
                     };
-                let manual_positions = manual_positions_arc
-                    .read()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .clone();
-                let audio_state = audio_state_arc
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .clone();
+                let manual_positions = timed_lock!(
+                    lock_wait_ns,
+                    lock_sites,
+                    lock_profiling,
+                    "manual_positions.read",
+                    manual_positions_arc
+                        .read()
+                        .unwrap_or_else(|e| e.into_inner())
+                )
+                .clone();
+                let audio_state = timed_lock!(
+                    lock_wait_ns,
+                    lock_sites,
+                    lock_profiling,
+                    "audio_state.lock",
+                    audio_state_arc.lock().unwrap_or_else(|e| e.into_inner())
+                )
+                .clone();
 
                 // Signal graph : évalue la `SignalFn` compilée → deltas
                 // additifs appliqués sur un clone effectif des macros.
@@ -1267,13 +1385,29 @@ impl MergeRuntime {
                 // additive pure, les transforms lisent `ctx.macros` sans
                 // changement.
                 let eff_macros = {
-                    let mut signal = signal_fn_arc.lock().unwrap_or_else(|e| e.into_inner());
+                    let mut signal = timed_lock!(
+                        lock_wait_ns,
+                        lock_sites,
+                        lock_profiling,
+                        "signal_fn.lock",
+                        signal_fn_arc.lock().unwrap_or_else(|e| e.into_inner())
+                    );
                     let deltas = {
-                        let osc_map = osc_values_arc
-                            .read()
-                            .unwrap_or_else(|e| e.into_inner())
-                            .clone();
-                        let osc_vals = osc_map.lock().unwrap_or_else(|e| e.into_inner());
+                        let osc_map = timed_lock!(
+                            lock_wait_ns,
+                            lock_sites,
+                            lock_profiling,
+                            "osc_values.read",
+                            osc_values_arc.read().unwrap_or_else(|e| e.into_inner())
+                        )
+                        .clone();
+                        let osc_vals = timed_lock!(
+                            lock_wait_ns,
+                            lock_sites,
+                            lock_profiling,
+                            "osc_map.lock",
+                            osc_map.lock().unwrap_or_else(|e| e.into_inner())
+                        );
                         (*signal)(&crate::signal_compiler::SignalCtx {
                             t: t_real,
                             dt,
@@ -1299,9 +1433,15 @@ impl MergeRuntime {
                 };
 
                 let transformed_raw: Vec<(usize, nalgebra::Vector3<f64>)> = {
-                    let pp_fn = post_process_fn_arc
-                        .read()
-                        .unwrap_or_else(|e| e.into_inner());
+                    let pp_fn = timed_lock!(
+                        lock_wait_ns,
+                        lock_sites,
+                        lock_profiling,
+                        "post_process_fn.read",
+                        post_process_fn_arc
+                            .read()
+                            .unwrap_or_else(|e| e.into_inner())
+                    );
                     pp_fn(&ctx, merged)
                 };
 
@@ -1325,17 +1465,35 @@ impl MergeRuntime {
                 // entre frames pour une mesure correcte même en cas de jitter.
                 let kin_dt = prev_t.map(|p| (t_real - p).max(1e-6)).unwrap_or(dt);
                 prev_t = Some(t_real);
-                let kin_smoothing = *kinematic_smoothing_arc
-                    .read()
-                    .unwrap_or_else(|e| e.into_inner());
-                let has_modulations = !channel_modulations_arc
-                    .read()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .is_empty()
-                    || !graph_modulations_arc
+                let kin_smoothing = *timed_lock!(
+                    lock_wait_ns,
+                    lock_sites,
+                    lock_profiling,
+                    "kin_smoothing.read",
+                    kinematic_smoothing_arc
                         .read()
                         .unwrap_or_else(|e| e.into_inner())
-                        .is_empty();
+                );
+                let has_modulations = !timed_lock!(
+                    lock_wait_ns,
+                    lock_sites,
+                    lock_profiling,
+                    "channel_modulations.read",
+                    channel_modulations_arc
+                        .read()
+                        .unwrap_or_else(|e| e.into_inner())
+                )
+                .is_empty()
+                    || !timed_lock!(
+                        lock_wait_ns,
+                        lock_sites,
+                        lock_profiling,
+                        "graph_modulations.read",
+                        graph_modulations_arc
+                            .read()
+                            .unwrap_or_else(|e| e.into_inner())
+                    )
+                    .is_empty();
                 if has_modulations {
                     let present: std::collections::HashSet<usize> =
                         transformed.iter().map(|(i, _)| *i).collect();
@@ -1353,14 +1511,26 @@ impl MergeRuntime {
                 // Règles = graph-déclarées puis manuelles — les manuelles
                 // écrasent le graph sur les canaux qu'elles ciblent.
                 let modulated_channels: HashMap<usize, SpatialChannels> = {
-                    let graph_rules = graph_modulations_arc
-                        .read()
-                        .unwrap_or_else(|e| e.into_inner())
-                        .clone();
-                    let manual_rules = channel_modulations_arc
-                        .read()
-                        .unwrap_or_else(|e| e.into_inner())
-                        .clone();
+                    let graph_rules = timed_lock!(
+                        lock_wait_ns,
+                        lock_sites,
+                        lock_profiling,
+                        "graph_modulations.read",
+                        graph_modulations_arc
+                            .read()
+                            .unwrap_or_else(|e| e.into_inner())
+                    )
+                    .clone();
+                    let manual_rules = timed_lock!(
+                        lock_wait_ns,
+                        lock_sites,
+                        lock_profiling,
+                        "channel_modulations.read",
+                        channel_modulations_arc
+                            .read()
+                            .unwrap_or_else(|e| e.into_inner())
+                    )
+                    .clone();
                     let mut rules: Vec<ChannelModulation> = (*graph_rules).clone();
                     rules.extend(manual_rules.iter().cloned());
                     apply_modulations(&rules, &kinematic_states)
@@ -1369,11 +1539,22 @@ impl MergeRuntime {
                 // 4.6 Zones : graph-déclarées puis manuelles (dernier mot au
                 // manuel). Snapshot Arc sous read lock court.
                 let zones: Vec<crate::zones::Zone> = {
-                    let graph = graph_zones_arc
-                        .read()
-                        .unwrap_or_else(|e| e.into_inner())
-                        .clone();
-                    let manual = zones_arc.read().unwrap_or_else(|e| e.into_inner()).clone();
+                    let graph = timed_lock!(
+                        lock_wait_ns,
+                        lock_sites,
+                        lock_profiling,
+                        "graph_zones.read",
+                        graph_zones_arc.read().unwrap_or_else(|e| e.into_inner())
+                    )
+                    .clone();
+                    let manual = timed_lock!(
+                        lock_wait_ns,
+                        lock_sites,
+                        lock_profiling,
+                        "zones.read",
+                        zones_arc.read().unwrap_or_else(|e| e.into_inner())
+                    )
+                    .clone();
                     let mut z = (*graph).clone();
                     z.extend(manual.iter().cloned());
                     z
@@ -1386,15 +1567,27 @@ impl MergeRuntime {
                 // compté dans `refused` (renderer down), pas du packet loss.
                 // Erreurs comptées, jamais loguées par paquet (flood de warn!
                 // quand le renderer est down).
-                let object_channels = object_channels_arc
-                    .read()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .clone();
+                let object_channels = timed_lock!(
+                    lock_wait_ns,
+                    lock_sites,
+                    lock_profiling,
+                    "object_channels.read",
+                    object_channels_arc
+                        .read()
+                        .unwrap_or_else(|e| e.into_inner())
+                )
+                .clone();
                 // Master arm : disarmé = silence total, le merge continue
                 // (preview alive) mais aucun paquet ne part — ni les sends
                 // normaux ni la sonde du circuit-breaker.
                 if osc_armed_arc.load(Ordering::SeqCst) {
-                    let mut sink_guard = sink_arc.lock().unwrap_or_else(|e| e.into_inner());
+                    let mut sink_guard = timed_lock!(
+                        lock_wait_ns,
+                        lock_sites,
+                        lock_profiling,
+                        "sink.lock",
+                        sink_arc.lock().unwrap_or_else(|e| e.into_inner())
+                    );
                     if osc_circuit_open {
                         // Circuit ouvert : une sonde par seconde — un vrai
                         // send_state du premier objet (donnée utile si le
@@ -1455,18 +1648,28 @@ impl MergeRuntime {
                 // Le sender est cloné sous un lock très court — la sériali-
                 // sation JSON de l'emit se fait sur le pump thread. Le post-
                 // process du preview reste ici (il doit refléter le live).
-                let cb = position_callback
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .clone();
+                let cb = timed_lock!(
+                    lock_wait_ns,
+                    lock_sites,
+                    lock_profiling,
+                    "position_cb.lock",
+                    position_callback.lock().unwrap_or_else(|e| e.into_inner())
+                )
+                .clone();
                 if let Some(tx) = cb {
                     let preview_transformed: Vec<(usize, nalgebra::Vector3<f64>)> =
                         if preview_positions.is_empty() {
                             Vec::new()
                         } else {
-                            let pp_fn = post_process_fn_arc
-                                .read()
-                                .unwrap_or_else(|e| e.into_inner());
+                            let pp_fn = timed_lock!(
+                                lock_wait_ns,
+                                lock_sites,
+                                lock_profiling,
+                                "post_process_fn.read",
+                                post_process_fn_arc
+                                    .read()
+                                    .unwrap_or_else(|e| e.into_inner())
+                            );
                             pp_fn(&ctx, preview_positions.clone())
                                 .into_iter()
                                 .filter(|(_, pos)| pos.iter().all(|v| v.is_finite()))
@@ -1547,6 +1750,41 @@ impl MergeRuntime {
                 // exclut le sleep de pacing : c'est le vrai coût hot-path,
                 // exposé dans PerfStats.merge_frame_us.
                 perf.set_merge_frame_us(merge_work_start.elapsed().as_secs_f64() * 1e6);
+                // Attente totale en acquisition de locks sur la frame entière
+                // (les premiers locks — move_buffers/active_moves — précèdent
+                // merge_work_start ; le total est donc un tout petit peu plus
+                // large que merge_frame_us, c'est voulu : on mesure la
+                // contention de TOUTE la frame).
+                perf.set_merge_lock_us(lock_wait_ns as f64 / 1000.0);
+
+                // Dump du profiling par site (STAGESPACE_LOCK_PROF=1) : toutes
+                // les 5 s, top des sites par attente cumulée ramenée à la
+                // frame — attribution fine de la contention sans coût quand
+                // le flag est absent (lock_sites reste vide).
+                if lock_profiling {
+                    lock_profile_frames += 1;
+                    lock_profile_total_ns += lock_wait_ns;
+                    if last_lock_dump.elapsed() >= Duration::from_secs(5) {
+                        let frames = lock_profile_frames.max(1) as f64;
+                        let mut ranked: Vec<(&'static str, u64)> = lock_sites.drain().collect();
+                        ranked.sort_by_key(|entry| std::cmp::Reverse(entry.1));
+                        let top = ranked
+                            .iter()
+                            .take(10)
+                            .map(|(name, ns)| format!("{name}={:.0}", *ns as f64 / frames))
+                            .collect::<Vec<_>>()
+                            .join(" ");
+                        eprintln!(
+                            "[lock-prof] {} frames, wait_total={:.0} ns/frame :: {}",
+                            lock_profile_frames,
+                            lock_profile_total_ns as f64 / frames,
+                            top
+                        );
+                        lock_profile_frames = 0;
+                        lock_profile_total_ns = 0;
+                        last_lock_dump = Instant::now();
+                    }
+                }
 
                 // Timing précis + re-ancrage : après un stall (pause debug,
                 // emit bloquant, préemption), on ne burst pas des centaines de
@@ -1639,10 +1877,12 @@ impl MergeRuntime {
         samples: Vec<(f64, f64, f64, f64)>,
         object_index: usize,
     ) -> Vec<(f64, f64, f64, f64)> {
-        if samples.is_empty() {
-            return vec![];
-        }
+        self.sample_post_processor()(samples, object_index)
+    }
 
+    pub fn sample_post_processor(
+        &self,
+    ) -> impl Fn(TrajectorySamples, usize) -> TrajectorySamples + Send + 'static {
         let macros = self.macros.clone();
         let audio_state = self
             .audio_state
@@ -1669,27 +1909,30 @@ impl MergeRuntime {
         let pp_fn = self
             .post_process_fn
             .read()
-            .unwrap_or_else(|e| e.into_inner());
-        let mut result = Vec::with_capacity(samples.len());
-        for (t, x, y, z) in samples {
-            let ctx = PostProcessContext {
-                t,
-                macros: &macros,
-                audio_state: &audio_state,
-                track_positions: &track_positions,
-                manual_positions: &manual_positions,
-                origin,
-                track_depths: &track_depths,
-            };
-            let pos = nalgebra::Vector3::new(x, y, z);
-            let transformed = pp_fn(&ctx, vec![(object_index, pos)]);
-            if let Some((_, tp)) = transformed.first() {
-                result.push((t, tp.x, tp.y, tp.z));
-            } else {
-                result.push((t, x, y, z));
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        move |samples, object_index| {
+            let mut result = Vec::with_capacity(samples.len());
+            for (t, x, y, z) in samples {
+                let ctx = PostProcessContext {
+                    t,
+                    macros: &macros,
+                    audio_state: &audio_state,
+                    track_positions: &track_positions,
+                    manual_positions: &manual_positions,
+                    origin,
+                    track_depths: &track_depths,
+                };
+                let pos = nalgebra::Vector3::new(x, y, z);
+                let transformed = pp_fn(&ctx, vec![(object_index, pos)]);
+                if let Some((_, tp)) = transformed.first() {
+                    result.push((t, tp.x, tp.y, tp.z));
+                } else {
+                    result.push((t, x, y, z));
+                }
             }
+            result
         }
-        result
     }
 }
 

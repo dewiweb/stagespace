@@ -67,6 +67,14 @@ export const StatusBar: React.FC = () => {
               ? `${perfStats.mergeFrameUs.toFixed(0)}µs`
               : `${(perfStats.mergeFrameUs / 1000).toFixed(1)}ms`} merge
           </span>
+          <span
+            className={perfStats.mergeLockUs < 100 ? 'text-gray-500' : perfStats.mergeLockUs < 500 ? 'text-yellow-400' : 'text-red-400'}
+            title="Temps d'attente cumulé en acquisition de locks pendant la frame merge (µs) — contention"
+          >
+            {perfStats.mergeLockUs < 1000
+              ? `${perfStats.mergeLockUs.toFixed(0)}µs`
+              : `${(perfStats.mergeLockUs / 1000).toFixed(1)}ms`} lock
+          </span>
           {perfStats.oscSuspended && (
             <span className="text-orange-400 font-bold animate-pulse">OSC SUSPENDED</span>
           )}

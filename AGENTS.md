@@ -102,6 +102,7 @@ See `.github/workflows/ci.yml`.
 - No `unwrap()` in production code (test modules only)
 - Error handling: `crate::error::StagespaceError` enum with `Result<T, StagespaceError>`
 - Logging: `crate::logging::log_osc_error()` for OSC errors
+- Async Tauri command tests: use `tauri::async_runtime::block_on` inside ordinary `#[test]` functions; no direct Tokio dependency is needed.
 
 ### Frontend (TypeScript/React)
 - State management: Zustand with slice pattern (`src/store/slices/`)
