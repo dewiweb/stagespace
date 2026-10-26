@@ -33,7 +33,7 @@ stagespace/
 ```bash
 cd rust-engines
 cargo build              # Build
-cargo test --lib         # Run tests (509 tests, incl. ts-rs export tests)
+cargo test --lib         # Run tests (510 tests, incl. ts-rs export tests)
 cargo clippy --all-targets -- -D warnings  # Lint (CI: --all-targets inclut tests/benches)
 cargo fmt -- --check     # Format check
 ```
@@ -122,11 +122,11 @@ CI fails if the committed files drift from the Rust sources.
 
 | Suite | Count |
 |-------|-------|
-| Rust engines | 509 |
+| Rust engines | 510 |
 | Tauri backend | 59 |
 | Frontend (vitest) | 359 |
 | E2E CLI | 125 |
-| **Total** | **1052** |
+| **Total** | **1053** |
 
 ## Live Show Safety Features
 

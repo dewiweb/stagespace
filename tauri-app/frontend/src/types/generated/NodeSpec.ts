@@ -2,6 +2,7 @@
 import type { NodeCategory } from "./NodeCategory";
 import type { NodeScope } from "./NodeScope";
 import type { NodeType } from "./NodeType";
+import type { ObjectDistribution } from "./ObjectDistribution";
 import type { ParamSpec } from "./ParamSpec";
 import type { PortDef } from "./PortDef";
 
@@ -24,6 +25,17 @@ outputs: Array<PortDef>,
  * Description courte — palette, hover, doc.
  */
 description: string, 
+/**
+ * Comment `i` est réparti entre les objets produits — hint UI et
+ * documentation du contrat implicite de chaque engine.
+ */
+object_distribution: ObjectDistribution, 
+/**
+ * L'engine dépend-il de l'ordre d'évaluation (cache d'état interne :
+ * agents, simulations) ? Un modifier temporel (PhaseShift, Delay)
+ * sur un upstream stateful reset sa simulation — l'UI peut avertir.
+ */
+stateful: boolean, 
 /**
  * Params éditables — schema du formulaire + valeurs initiales.
  */

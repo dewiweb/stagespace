@@ -526,6 +526,82 @@ fn compile_node(node: &Node) -> std::result::Result<NodeEval, SignalCompileError
             }))
         }
 
+        NodeType::SignalBeat => {
+            let bpm_fallback = get_f64(node, "bpm", 120.0);
+            let width = get_f64(node, "width", 0.25).clamp(0.01, 1.0);
+            Ok(Box::new(move |ctx, _slots, _values| {
+                let bpm = ctx
+                    .audio_state
+                    .bpm
+                    .as_ref()
+                    .map(|b| b.bpm)
+                    .filter(|b| *b > 0.0)
+                    .unwrap_or(bpm_fallback);
+                let period = (60.0 / bpm).max(1e-6);
+                let phase = (ctx.t % period) / period;
+                if phase < width {
+                    1.0
+                } else {
+                    0.0
+                }
+            }))
+        }
+
+        NodeType::SignalSampleHold => {
+            let threshold = get_f64(node, "threshold", 0.5);
+            let mut held = 0.0f64;
+            let mut armed = true;
+            Ok(Box::new(move |_ctx, slots, values| {
+                let signal = port(slots, values, 0, 0.0);
+                let trigger = port(slots, values, 1, 0.0);
+                if trigger >= threshold {
+                    if armed {
+                        held = signal;
+                        armed = false;
+                    }
+                } else {
+                    armed = true;
+                }
+                held
+            }))
+        }
+
+        NodeType::SignalMux => {
+            let threshold = get_f64(node, "threshold", 0.5);
+            Ok(Box::new(move |_ctx, slots, values| {
+                let a = port(slots, values, 0, 0.0);
+                let b = port(slots, values, 1, 0.0);
+                let sel = port(slots, values, 2, threshold);
+                if sel < threshold {
+                    a
+                } else {
+                    b
+                }
+            }))
+        }
+
+        NodeType::SignalCounter => {
+            let threshold = get_f64(node, "threshold", 0.5);
+            let max = get_f64(node, "max", 0.0);
+            let mut count = 0.0f64;
+            let mut armed = true;
+            Ok(Box::new(move |_ctx, slots, values| {
+                let trigger = port(slots, values, 0, 0.0);
+                if trigger >= threshold {
+                    if armed {
+                        count += 1.0;
+                        if max > 0.0 && count >= max {
+                            count = 0.0;
+                        }
+                        armed = false;
+                    }
+                } else {
+                    armed = true;
+                }
+                count
+            }))
+        }
+
         NodeType::SignalThreshold => {
             let threshold = get_f64(node, "threshold", 0.5);
             let hyst = get_f64(node, "hysteresis", 0.05).abs();

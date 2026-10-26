@@ -554,12 +554,14 @@ impl Validator {
                         .filter_map(|id| graph.nodes.get(id))
                         .map(|n| effective_n_objects(graph, n, fallback, depth + 1))
                         .sum(),
-                    NodeType::Mix | NodeType::Sequence | NodeType::Crossfade => graph
-                        .get_binary_inputs(node.id)
-                        .first()
-                        .and_then(|id| graph.nodes.get(id))
-                        .map(|n| effective_n_objects(graph, n, fallback, depth + 1))
-                        .unwrap_or(fallback),
+                    NodeType::Mix | NodeType::Sequence | NodeType::Crossfade | NodeType::Switch => {
+                        graph
+                            .get_binary_inputs(node.id)
+                            .first()
+                            .and_then(|id| graph.nodes.get(id))
+                            .map(|n| effective_n_objects(graph, n, fallback, depth + 1))
+                            .unwrap_or(fallback)
+                    }
                     // Plugin : modifier/composite propagent depuis l'entrée
                     // trajectoire (port 'a' en priorité, puis 'in', 'b') —
                     // les carriers Objects/Duration ne peuvent pas atterrir

@@ -88,6 +88,20 @@ pub enum NodeType {
     Clamp,
     LFO,
     Jitter,
+    /// Multiplie le temps en amont — `upstream(t × factor, i)`.
+    /// t<0 reste dans le domaine : les engines périodiques wrapent,
+    /// les engines bornés clament à leur début.
+    SpeedScale,
+    /// Retarde l'upstream — `upstream(t − delay, i)`. Sur un engine
+    /// stateful, évaluer dans le passé force un reset de sa simulation
+    /// (voir `NodeSpec.stateful`).
+    Delay,
+    /// Fige la sortie sur la dernière position calculée quand `enabled`
+    /// — hold de sécurité live.
+    Freeze,
+    /// Composite binaire de sélection — `select < 0.5` → `a`, sinon `b`.
+    /// Choix manuel/OSC-driven, contrairement à Sequence (temporel).
+    Switch,
 
     // Post-processing nodes (graph global — appliqués après merge)
     RadiusScale,
@@ -188,6 +202,16 @@ pub enum NodeType {
     /// hysteresis, conserve l'état entre les deux.
     /// Params : threshold, hysteresis.
     SignalThreshold,
+    /// Impulsion rythmique depuis l'audio détecté (bpm + last_beat_time) —
+    /// 1.0 pendant `width` fraction de la période du beat, sinon 0.0.
+    SignalBeat,
+    /// Sample & hold — retient `signal` pendant que `trigger` est bas,
+    /// rééchantillonne sur front montant.
+    SignalSampleHold,
+    /// Sélection entre deux signaux — `sel < 0.5` → `a`, sinon `b`.
+    SignalMux,
+    /// Compte les fronts montants de `trigger` — wrap sur `max` si > 0.
+    SignalCounter,
 
     // Terminal
     /// Sink : écrit le signal en DELTA additif sur une macro.

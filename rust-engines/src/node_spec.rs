@@ -101,6 +101,26 @@ pub enum NodeCategory {
     Signal,
 }
 
+/// Comment `object_index` (`i`) est réparti entre les objets produits —
+/// le contrat de distribution d'un engine. Sans cette métadonnée, un
+/// engine qui ignore `i` produit N objets superposés de façon invisible.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
+pub enum ObjectDistribution {
+    /// Chaque objet sur une phase angulaire distincte (`2π·i/n`).
+    Angular,
+    /// Chaque objet sur un point distinct du chemin (`i/n` paramétrique).
+    Parametric,
+    /// Agent indépendant — i indexe des agents dans une simulation
+    /// (engines physiques, cache interne).
+    Agent,
+    /// `i` est ignoré — tous les objets partagent la même position.
+    Broadcast,
+    /// Pas de notion de distribution (modifier, composite, structural,
+    /// signal — la donnée d'entrée détermine la répartition).
+    None,
+}
+
 /// Contexte(s) de graphe où le node est autorisé.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 #[ts(export)]
@@ -163,6 +183,13 @@ pub struct NodeSpec {
     pub outputs: Vec<PortDef>,
     /// Description courte — palette, hover, doc.
     pub description: String,
+    /// Comment `i` est réparti entre les objets produits — hint UI et
+    /// documentation du contrat implicite de chaque engine.
+    pub object_distribution: ObjectDistribution,
+    /// L'engine dépend-il de l'ordre d'évaluation (cache d'état interne :
+    /// agents, simulations) ? Un modifier temporel (PhaseShift, Delay)
+    /// sur un upstream stateful reset sa simulation — l'UI peut avertir.
+    pub stateful: bool,
     /// Params éditables — schema du formulaire + valeurs initiales.
     pub params: Vec<ParamSpec>,
 }
@@ -368,15 +395,83 @@ fn spec(
         inputs,
         outputs,
         description: description.into(),
+        object_distribution: ObjectDistribution::None,
+        stateful: false,
         params,
     }
+}
+
+/// Distribution de `i` par type de node — renseignée en une seule table,
+/// annotée sur le catalogue à la construction.
+fn object_distribution_of(t: &NodeType) -> ObjectDistribution {
+    use ObjectDistribution as D;
+    match t {
+        NodeType::Circular
+        | NodeType::Elliptical
+        | NodeType::Spiral
+        | NodeType::Lissajous
+        | NodeType::Figure8
+        | NodeType::Oscillation
+        | NodeType::RoseCurve
+        | NodeType::Helix
+        | NodeType::Wave
+        | NodeType::Converge
+        | NodeType::OSCInput => D::Angular,
+        NodeType::DrawSpline
+        | NodeType::EvaluateSpline
+        | NodeType::TrimSpline
+        | NodeType::OffsetSpline
+        | NodeType::Formation
+        | NodeType::AudioSpectrum
+        | NodeType::DirectionalFalloff
+        | NodeType::CustomTrajectory => D::Parametric,
+        NodeType::Bouncing
+        | NodeType::Spring
+        | NodeType::Follow
+        | NodeType::Swarm
+        | NodeType::Avoidance
+        | NodeType::Pendulum
+        | NodeType::VectorField
+        | NodeType::PerlinNoise => D::Agent,
+        NodeType::Linear
+        | NodeType::BPM
+        | NodeType::AudioAmplitude
+        | NodeType::TimeFalloff
+        | NodeType::PointDistanceFalloff
+        | NodeType::AudioAmplitudeFalloff => D::Broadcast,
+        _ => D::None,
+    }
+}
+
+/// Engines à état interne (`Mutex<cache>` de simulation) — l'ordre des
+/// évaluations change le résultat ; un warp temporel en amont force un
+/// reset + re-simulation.
+fn is_stateful(t: &NodeType) -> bool {
+    matches!(
+        t,
+        NodeType::Bouncing
+            | NodeType::Spring
+            | NodeType::Follow
+            | NodeType::Swarm
+            | NodeType::Avoidance
+            | NodeType::Pendulum
+            | NodeType::VectorField
+    )
+}
+
+/// Renseigne les champs dérivés du `node_type` — table unique plutôt que
+/// de dupliquer les métadonnées dans les 74 littéraux du catalogue.
+fn annotate(mut s: NodeSpec) -> NodeSpec {
+    s.object_distribution = object_distribution_of(&s.node_type);
+    s.stateful = is_stateful(&s.node_type);
+    s
 }
 
 use NodeCategory as C;
 use NodeScope as S;
 
 fn build_catalog() -> Vec<NodeSpec> {
-    vec![
+    let catalog = vec![
         // ── Structurels ──
         spec(
             NodeType::Objects, C::Structural, S::SubOnly, vec![],
@@ -821,6 +916,21 @@ fn build_catalog() -> Vec<NodeSpec> {
                 ns("seed", "Seed", 1.0).d(42),
             ],
         ),
+        spec(
+            NodeType::SpeedScale, C::Modifier, S::SubOnly, pos_in(), out_pos(),
+            "Multiplies upstream time: upstream(t × factor). factor<1 slows, >1 accelerates",
+            vec![nmin("factor", "Factor", 0.05, 0.0).d(1.0)],
+        ),
+        spec(
+            NodeType::Delay, C::Modifier, S::SubOnly, pos_in(), out_pos(),
+            "Delays the upstream trajectory: upstream(t − delay). On stateful engines (physics) a look-back resets the sim — see stateful flag",
+            vec![nmin("delay", "Delay (s)", 0.05, 0.0).d(0.5)],
+        ),
+        spec(
+            NodeType::Freeze, C::Modifier, S::SubOnly, pos_in(), out_pos(),
+            "Holds the last computed positions while enabled — live safety hold",
+            vec![p("enabled", "Enabled", ParamKind::Boolean).d(true)],
+        ),
         // ── Post-process (graph global) ──
         spec(
             NodeType::RadiusScale, C::PostProcess, S::GlobalOnly, pos_in(), out_pos(),
@@ -904,6 +1014,11 @@ fn build_catalog() -> Vec<NodeSpec> {
             NodeType::Crossfade, C::Composite, S::SubOnly, comp_in(), out_pos(),
             "Chains A→B with a crossfade. Smoother than Sequence",
             vec![nmin("fade_duration", "Fade Duration (s)", 0.1, 0.1).d(1.0)],
+        ),
+        spec(
+            NodeType::Switch, C::Composite, S::SubOnly, comp_in(), out_pos(),
+            "Selects A or B by index — manual/OSC-driven, not time-sliced like Sequence",
+            vec![nrange("select", "Select", 1.0, 0.0, 1.0).d(0.0)],
         ),
         // ── Sources (engines réactifs) ──
         spec(
@@ -1089,6 +1204,39 @@ fn build_catalog() -> Vec<NodeSpec> {
                 nmin("hysteresis", "Hysteresis", 0.01, 0.0).d(0.05),
             ],
         ),
+        spec(
+            NodeType::SignalBeat, C::Signal, S::SignalOnly,
+            vec![], out_sig(),
+            "Rhythmic pulse from detected audio beat — 1.0 during `width` of each beat period, 0 otherwise. Falls back to param bpm without audio",
+            vec![
+                nmin("bpm", "BPM (fallback)", 1.0, 30.0).d(120),
+                nrange("width", "Pulse Width", 0.05, 0.01, 1.0).d(0.25),
+            ],
+        ),
+        spec(
+            NodeType::SignalSampleHold, C::Signal, S::SignalOnly,
+            vec![port("signal", PortType::Signal), port("trigger", PortType::Signal)],
+            out_sig(),
+            "Sample & hold — latches `signal` on `trigger` rising edge, holds otherwise",
+            vec![nrange("threshold", "Trigger Threshold", 0.01, 0.0, 1.0).d(0.5)],
+        ),
+        spec(
+            NodeType::SignalMux, C::Signal, S::SignalOnly,
+            vec![port("a", PortType::Signal), port("b", PortType::Signal), port("sel", PortType::Signal)],
+            out_sig(),
+            "Selects a or b by `sel` — signal-driven switch",
+            vec![nrange("threshold", "Threshold", 0.01, 0.0, 1.0).d(0.5)],
+        ),
+        spec(
+            NodeType::SignalCounter, C::Signal, S::SignalOnly,
+            vec![port("trigger", PortType::Signal)],
+            out_sig(),
+            "Counts `trigger` rising edges — wraps to 0 when `max` > 0 is reached",
+            vec![
+                nrange("threshold", "Trigger Threshold", 0.01, 0.0, 1.0).d(0.5),
+                nmin("max", "Wrap At", 1.0, 0.0).d(0.0),
+            ],
+        ),
         // ── Signal graph — terminal ──
         spec(
             NodeType::SignalOut, C::Signal, S::SignalOnly,
@@ -1099,7 +1247,8 @@ fn build_catalog() -> Vec<NodeSpec> {
                 ns("amount", "Amount", 0.1).d(1.0),
             ],
         ),
-    ]
+    ];
+    catalog.into_iter().map(annotate).collect()
 }
 
 static CATALOG: OnceLock<Vec<NodeSpec>> = OnceLock::new();
@@ -1185,6 +1334,10 @@ mod tests {
             NodeType::Clamp,
             NodeType::LFO,
             NodeType::Jitter,
+            NodeType::SpeedScale,
+            NodeType::Delay,
+            NodeType::Freeze,
+            NodeType::Switch,
             NodeType::RadiusScale,
             NodeType::HeightOffset,
             NodeType::PerTrackDepth,
@@ -1213,6 +1366,10 @@ mod tests {
             NodeType::SignalSlew,
             NodeType::SignalEnvelope,
             NodeType::SignalThreshold,
+            NodeType::SignalBeat,
+            NodeType::SignalSampleHold,
+            NodeType::SignalMux,
+            NodeType::SignalCounter,
             NodeType::SignalOut,
         ];
         assert_eq!(all_node_specs().len(), ALL.len(), "catalog size drift");

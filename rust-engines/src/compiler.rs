@@ -232,6 +232,7 @@ impl Compiler {
             NodeType::Group => Self::compile_group(graph, node, live),
             NodeType::Sequence => Self::compile_sequence(graph, node, live),
             NodeType::Crossfade => Self::compile_crossfade(graph, node, live),
+            NodeType::Switch => Self::compile_switch(graph, node, live),
             NodeType::Scale
             | NodeType::Rotate
             | NodeType::Offset
@@ -239,7 +240,10 @@ impl Compiler {
             | NodeType::Mirror
             | NodeType::Clamp
             | NodeType::LFO
-            | NodeType::Jitter => Self::compile_modifier(graph, node, live),
+            | NodeType::Jitter
+            | NodeType::SpeedScale
+            | NodeType::Delay
+            | NodeType::Freeze => Self::compile_modifier(graph, node, live),
             // Plugin : le kind du manifeste décide du chemin de compile —
             // engine (f(t) pur), modifier (wrap 1 upstream) ou composite
             // (combine 2 upstreams).
@@ -547,6 +551,39 @@ impl Compiler {
                     )
                 }))
             }
+            NodeType::SpeedScale => {
+                let factor = node
+                    .params
+                    .get("factor")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(1.0);
+                Ok(Box::new(move |t, i| upstream_fn(t * factor, i)))
+            }
+            NodeType::Delay => {
+                let delay = node
+                    .params
+                    .get("delay")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.5);
+                Ok(Box::new(move |t, i| upstream_fn(t - delay, i)))
+            }
+            NodeType::Freeze => {
+                let enabled = node
+                    .params
+                    .get("enabled")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(true);
+                let held: std::sync::Mutex<
+                    std::collections::HashMap<usize, nalgebra::Vector3<f64>>,
+                > = std::sync::Mutex::new(std::collections::HashMap::new());
+                Ok(Box::new(move |t, i| {
+                    if !enabled {
+                        return upstream_fn(t, i);
+                    }
+                    let mut h = held.lock().unwrap_or_else(|e| e.into_inner());
+                    *h.entry(i).or_insert_with(|| upstream_fn(t, i))
+                }))
+            }
             NodeType::Jitter => {
                 let intensity = node
                     .params
@@ -651,6 +688,30 @@ impl Compiler {
                 func_a(t, object_index)
             } else {
                 func_b(t - duration_a, object_index)
+            }
+        }))
+    }
+
+    /// Compile un nœud Switch : sélectionne A ou B par index — choix
+    /// manuel/OSC-driven, pas temporel (contrairement à Sequence/Crossfade).
+    fn compile_switch(
+        graph: &Graph,
+        node: &Node,
+        live: &LiveInputs,
+    ) -> Result<CompiledFunction, CompilationError> {
+        let (node_a, node_b) = Self::binary_inputs(graph, node, "Switch")?;
+        let select = node
+            .params
+            .get("select")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        let func_a = Self::compile_node(graph, node_a, live)?;
+        let func_b = Self::compile_node(graph, node_b, live)?;
+        Ok(Box::new(move |t: f64, i: usize| {
+            if select < 0.5 {
+                func_a(t, i)
+            } else {
+                func_b(t, i)
             }
         }))
     }
@@ -766,7 +827,10 @@ impl Compiler {
             | NodeType::Mirror
             | NodeType::Clamp
             | NodeType::LFO
-            | NodeType::Jitter => {
+            | NodeType::Jitter
+            | NodeType::SpeedScale
+            | NodeType::Delay
+            | NodeType::Freeze => {
                 let upstream = inputs
                     .first()
                     .ok_or_else(|| CompilationError::MissingParameter("n_objects".to_string()))?;
@@ -782,7 +846,7 @@ impl Compiler {
                 }
                 Ok(total)
             }
-            NodeType::Mix | NodeType::Sequence | NodeType::Crossfade => {
+            NodeType::Mix | NodeType::Sequence | NodeType::Crossfade | NodeType::Switch => {
                 let binary = graph.get_binary_inputs(node.id);
                 let first = binary
                     .first()
@@ -839,7 +903,10 @@ impl Compiler {
             | NodeType::Mirror
             | NodeType::Clamp
             | NodeType::LFO
-            | NodeType::Jitter => inputs
+            | NodeType::Jitter
+            | NodeType::SpeedScale
+            | NodeType::Delay
+            | NodeType::Freeze => inputs
                 .first()
                 .and_then(|id| graph.nodes.get(id))
                 .map(|n| Self::resolve_duration_depth(graph, n, depth + 1))
@@ -853,7 +920,7 @@ impl Compiler {
                     .map(|n| Self::resolve_duration_depth(graph, n, depth + 1))
                     .sum::<f64>()
             }
-            NodeType::Mix | NodeType::Group | NodeType::Crossfade => {
+            NodeType::Mix | NodeType::Group | NodeType::Crossfade | NodeType::Switch => {
                 let binary = graph.get_binary_inputs(node.id);
                 binary
                     .iter()
