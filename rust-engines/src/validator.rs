@@ -614,7 +614,7 @@ impl Validator {
                         .filter(|e| matches!(e.to_port.as_str(), "a" | "in" | "b"))
                         .min_by_key(|e| match e.to_port.as_str() {
                             "a" => 0,
-                            "in" => 1,
+                            "b" => 1,
                             _ => 2,
                         })
                         .and_then(|e| graph.nodes.get(&e.from))

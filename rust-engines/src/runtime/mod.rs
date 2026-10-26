@@ -456,12 +456,27 @@ impl Runtime {
                             .unwrap_or_else(|e| e.into_inner())
                             .clone();
                         let osc_vals = osc_map.lock().unwrap_or_else(|e| e.into_inner());
-                        let deltas = (*signal)(&crate::signal_compiler::SignalCtx {
-                            t: t_real,
-                            dt: frame_duration.as_secs_f64(),
-                            audio_state: &audio,
-                            osc_values: &osc_vals,
-                        });
+                        // catch_unwind : un panic dans le signal graph ne doit
+                        // pas tuer le worker (seul les evals de position
+                        // étaient protégés avant).
+                        let empty_deltas: crate::signal_compiler::SignalDeltas = Default::default();
+                        let deltas =
+                            match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                (*signal)(&crate::signal_compiler::SignalCtx {
+                                    t: t_real,
+                                    dt: frame_duration.as_secs_f64(),
+                                    audio_state: &audio,
+                                    osc_values: &osc_vals,
+                                })
+                            })) {
+                                Ok(d) => d,
+                                Err(_) => {
+                                    crate::logging::log_osc_error(
+                                        "signal graph eval panicked — deltas dropped",
+                                    );
+                                    empty_deltas
+                                }
+                            };
                         for (key, d) in deltas {
                             if !d.is_finite() {
                                 continue;

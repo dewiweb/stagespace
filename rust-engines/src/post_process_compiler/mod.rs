@@ -64,7 +64,29 @@ pub struct GraphEffects {
 /// un effet attendu par l'utilisateur.
 pub fn extract_graph_effects(graph: &Graph) -> Result<GraphEffects, PostProcessCompileError> {
     let mut effects = GraphEffects::default();
+    // Seuls les nodes atteignant Output portent leurs effets — un
+    // Zone/Velocity/MoveRef/Merge complètement déconnecté ne doit pas
+    // s'appliquer silencieusement (BFS backward depuis Output).
+    let mut reachable: std::collections::HashSet<crate::graph::NodeId> =
+        std::collections::HashSet::new();
+    let mut stack: Vec<crate::graph::NodeId> = graph
+        .nodes
+        .values()
+        .filter(|n| n.node_type == NodeType::Output)
+        .map(|n| n.id)
+        .collect();
+    reachable.extend(stack.iter().copied());
+    while let Some(id) = stack.pop() {
+        for e in &graph.edges {
+            if e.to == id && reachable.insert(e.from) {
+                stack.push(e.from);
+            }
+        }
+    }
     for node in graph.nodes.values() {
+        if !reachable.contains(&node.id) {
+            continue;
+        }
         match node.node_type {
             NodeType::Zone => {
                 let zone = Zone::from_node_params(&node.params).map_err(|e| {

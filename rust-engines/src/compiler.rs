@@ -454,22 +454,38 @@ impl Compiler {
         let upstream_node = Self::node_ref(graph, *upstream_id)?;
         let upstream_fn = Self::compile_node(graph, upstream_node, live)?;
         let node_type = node.node_type.clone();
+        let label = format!("{node_type:?}");
+        let over = live.param_overrides.clone();
 
         match node_type {
             NodeType::Scale => {
                 let sx = node.params.get("x").and_then(|v| v.as_f64()).unwrap_or(1.0);
                 let sy = node.params.get("y").and_then(|v| v.as_f64()).unwrap_or(1.0);
                 let sz = node.params.get("z").and_then(|v| v.as_f64()).unwrap_or(1.0);
+                let over = over.clone();
+                let label = label.clone();
                 Ok(Box::new(move |t, i| {
-                    crate::engines::modifiers::scale(upstream_fn(t, i), sx, sy, sz)
+                    crate::engines::modifiers::scale(
+                        upstream_fn(t, i),
+                        over_f64(&over, &label, "x", sx),
+                        over_f64(&over, &label, "y", sy),
+                        over_f64(&over, &label, "z", sz),
+                    )
                 }))
             }
             NodeType::Offset => {
                 let ox = node.params.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0);
                 let oy = node.params.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0);
                 let oz = node.params.get("z").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let over = over.clone();
+                let label = label.clone();
                 Ok(Box::new(move |t, i| {
-                    crate::engines::modifiers::offset(upstream_fn(t, i), ox, oy, oz)
+                    crate::engines::modifiers::offset(
+                        upstream_fn(t, i),
+                        over_f64(&over, &label, "x", ox),
+                        over_f64(&over, &label, "y", oy),
+                        over_f64(&over, &label, "z", oz),
+                    )
                 }))
             }
             NodeType::Rotate => {
@@ -488,8 +504,15 @@ impl Compiler {
                     .get("angleZ")
                     .and_then(|v| v.as_f64())
                     .unwrap_or(0.0);
+                let over = over.clone();
+                let label = label.clone();
                 Ok(Box::new(move |t, i| {
-                    crate::engines::modifiers::rotate(upstream_fn(t, i), ax, ay, az)
+                    crate::engines::modifiers::rotate(
+                        upstream_fn(t, i),
+                        over_f64(&over, &label, "angleX", ax),
+                        over_f64(&over, &label, "angleY", ay),
+                        over_f64(&over, &label, "angleZ", az),
+                    )
                 }))
             }
             NodeType::PhaseShift => {
@@ -499,9 +522,15 @@ impl Compiler {
                     .and_then(|v| v.as_f64())
                     .unwrap_or(0.1);
                 let duration = Self::resolve_duration(graph, node);
+                let over = over.clone();
+                let label = label.clone();
                 Ok(Box::new(move |t, i| {
-                    let t_shifted =
-                        crate::engines::modifiers::phase_shift_time(t, i, shift, duration);
+                    let t_shifted = crate::engines::modifiers::phase_shift_time(
+                        t,
+                        i,
+                        over_f64(&over, &label, "shift", shift),
+                        duration,
+                    );
                     upstream_fn(t_shifted, i)
                 }))
             }
@@ -517,8 +546,14 @@ impl Compiler {
                     .get("offset")
                     .and_then(|v| v.as_f64())
                     .unwrap_or(0.0);
+                let over = over.clone();
+                let label = label.clone();
                 Ok(Box::new(move |t, i| {
-                    crate::engines::modifiers::mirror(upstream_fn(t, i), &plane, offset)
+                    crate::engines::modifiers::mirror(
+                        upstream_fn(t, i),
+                        &plane,
+                        over_f64(&over, &label, "offset", offset),
+                    )
                 }))
             }
             NodeType::Clamp => {
@@ -552,9 +587,19 @@ impl Compiler {
                     .get("max_z")
                     .and_then(|v| v.as_f64())
                     .unwrap_or(100.0);
-                let min = Vector3::new(min_x, min_y, min_z);
-                let max = Vector3::new(max_x, max_y, max_z);
+                let over = over.clone();
+                let label = label.clone();
                 Ok(Box::new(move |t, i| {
+                    let min = Vector3::new(
+                        over_f64(&over, &label, "min_x", min_x),
+                        over_f64(&over, &label, "min_y", min_y),
+                        over_f64(&over, &label, "min_z", min_z),
+                    );
+                    let max = Vector3::new(
+                        over_f64(&over, &label, "max_x", max_x),
+                        over_f64(&over, &label, "max_y", max_y),
+                        over_f64(&over, &label, "max_z", max_z),
+                    );
                     crate::engines::modifiers::clamp(upstream_fn(t, i), min, max)
                 }))
             }
@@ -586,15 +631,17 @@ impl Compiler {
                     .get("phase")
                     .and_then(|v| v.as_f64())
                     .unwrap_or(0.0);
+                let over = over.clone();
+                let label = label.clone();
                 Ok(Box::new(move |t, i| {
                     crate::engines::modifiers::lfo(
                         upstream_fn(t, i),
                         t,
                         &waveform,
-                        frequency,
-                        amplitude,
+                        over_f64(&over, &label, "frequency", frequency),
+                        over_f64(&over, &label, "amplitude", amplitude),
                         &axis,
-                        phase,
+                        over_f64(&over, &label, "phase", phase),
                     )
                 }))
             }
@@ -604,7 +651,11 @@ impl Compiler {
                     .get("factor")
                     .and_then(|v| v.as_f64())
                     .unwrap_or(1.0);
-                Ok(Box::new(move |t, i| upstream_fn(t * factor, i)))
+                let over = over.clone();
+                let label = label.clone();
+                Ok(Box::new(move |t, i| {
+                    upstream_fn(t * over_f64(&over, &label, "factor", factor), i)
+                }))
             }
             NodeType::Delay => {
                 let delay = node
@@ -612,7 +663,11 @@ impl Compiler {
                     .get("delay")
                     .and_then(|v| v.as_f64())
                     .unwrap_or(0.5);
-                Ok(Box::new(move |t, i| upstream_fn(t - delay, i)))
+                let over = over.clone();
+                let label = label.clone();
+                Ok(Box::new(move |t, i| {
+                    upstream_fn(t - over_f64(&over, &label, "delay", delay), i)
+                }))
             }
             NodeType::Freeze => {
                 let enabled = node
@@ -620,11 +675,13 @@ impl Compiler {
                     .get("enabled")
                     .and_then(|v| v.as_bool())
                     .unwrap_or(true);
+                let over = over.clone();
+                let label = label.clone();
                 let held: std::sync::Mutex<
                     std::collections::HashMap<usize, nalgebra::Vector3<f64>>,
                 > = std::sync::Mutex::new(std::collections::HashMap::new());
                 Ok(Box::new(move |t, i| {
-                    if !enabled {
+                    if over_f64(&over, &label, "enabled", f64::from(enabled)) == 0.0 {
                         return upstream_fn(t, i);
                     }
                     let mut h = held.lock().unwrap_or_else(|e| e.into_inner());
@@ -637,6 +694,8 @@ impl Compiler {
                     .get("intensity")
                     .and_then(|v| v.as_f64())
                     .unwrap_or(0.2);
+                let over = over.clone();
+                let label = label.clone();
                 let frequency = node
                     .params
                     .get("frequency")
@@ -652,8 +711,8 @@ impl Compiler {
                         upstream_fn(t, i),
                         t,
                         i,
-                        intensity,
-                        frequency,
+                        over_f64(&over, &label, "intensity", intensity),
+                        over_f64(&over, &label, "frequency", frequency),
                         seed,
                     )
                 }))
@@ -676,6 +735,8 @@ impl Compiler {
             .and_then(|v| v.as_f64())
             .unwrap_or(0.5)
             .clamp(0.0, 1.0);
+        let over = live.param_overrides.clone();
+        let label = format!("{:?}", node.node_type);
 
         let func_a = Self::compile_node(graph, node_a, live)?;
         let func_b = Self::compile_node(graph, node_b, live)?;
@@ -683,7 +744,8 @@ impl Compiler {
         Ok(Box::new(move |t: f64, object_index: usize| {
             let pos_a = func_a(t, object_index);
             let pos_b = func_b(t, object_index);
-            pos_a * (1.0 - blend) + pos_b * blend
+            pos_a * (1.0 - over_f64(&over, &label, "blend", blend))
+                + pos_b * over_f64(&over, &label, "blend", blend)
         }))
     }
 
@@ -754,8 +816,10 @@ impl Compiler {
             .unwrap_or(0.0);
         let func_a = Self::compile_node(graph, node_a, live)?;
         let func_b = Self::compile_node(graph, node_b, live)?;
+        let over = live.param_overrides.clone();
+        let label = format!("{:?}", node.node_type);
         Ok(Box::new(move |t: f64, i: usize| {
-            if select < 0.5 {
+            if over_f64(&over, &label, "select", select) < 0.5 {
                 func_a(t, i)
             } else {
                 func_b(t, i)
@@ -788,8 +852,12 @@ impl Compiler {
 
         let func_a = Self::compile_node(graph, node_a, live)?;
         let func_b = Self::compile_node(graph, node_b, live)?;
+        let over = live.param_overrides.clone();
+        let label = format!("{:?}", node.node_type);
 
         Ok(Box::new(move |t: f64, object_index: usize| {
+            let fade_duration =
+                over_f64(&over, &label, "fade_duration", fade_duration).min(duration_a * 0.5);
             let fade_start = duration_a - fade_duration;
             if t < fade_start {
                 // Phase A pure
@@ -1241,6 +1309,25 @@ impl Compiler {
 /// clés "<label>:<param_key>" dans la map partagée (écrite par le domaine
 /// signal via les cibles `param:` de SignalOut). Fast path : aucun
 /// override pour ce node → retourne `params` sans cloner.
+/// Lookup d'un override live de param — `<label>:<key>` dans la map
+/// partagée (SignalOut `param:`), fallback = valeur bakée au compile.
+/// Coût : un lock + lookup par éval, seulement si la map existe.
+fn over_f64(
+    over: &Option<Arc<Mutex<HashMap<String, f64>>>>,
+    label: &str,
+    key: &str,
+    fallback: f64,
+) -> f64 {
+    let Some(m) = over else {
+        return fallback;
+    };
+    m.lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(&format!("{label}:{key}"))
+        .copied()
+        .unwrap_or(fallback)
+}
+
 fn patched_params<'a>(
     params: &'a EngineParams,
     label: &str,
