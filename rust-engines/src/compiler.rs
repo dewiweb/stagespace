@@ -30,6 +30,10 @@ pub struct LiveInputs {
     /// les closures déjà compilées gardent leur `Arc<Plugin>` snapshot,
     /// les nouvelles compilations voient les plugins à jour.
     pub plugins: Option<Arc<Mutex<PluginRegistry>>>,
+    /// Overrides live de params de nodes — clé "<label>:<param_key>" →
+    /// valeur. Écrits par le domaine signal via les cibles `param:*` de
+    /// SignalOut ; lus à chaque évaluation (patch de params.extra).
+    pub param_overrides: Option<Arc<Mutex<HashMap<String, f64>>>>,
 }
 
 /// Erreur de compilation
@@ -58,7 +62,7 @@ pub struct Compiler;
 impl Compiler {
     /// Compile un graphe en une fonction composite
     pub fn compile(graph: &Graph) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(graph, None, None, None)
+        Self::compile_inner(graph, None, None, None, None)
     }
 
     /// Compile un graphe avec accès à l'audio state temps réel
@@ -68,7 +72,7 @@ impl Compiler {
         graph: &Graph,
         audio_state: Arc<Mutex<AudioState>>,
     ) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(graph, Some(audio_state), None, None)
+        Self::compile_inner(graph, Some(audio_state), None, None, None)
     }
 
     /// Compile un graphe avec audio state + overrides de paramètres audio
@@ -80,7 +84,7 @@ impl Compiler {
         audio_state: Arc<Mutex<AudioState>>,
         _overrides: AudioParamOverrides,
     ) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(graph, Some(audio_state), None, None)
+        Self::compile_inner(graph, Some(audio_state), None, None, None)
     }
 
     /// Compile un graphe avec un ensemble complet d'entrées live —
@@ -89,7 +93,13 @@ impl Compiler {
         graph: &Graph,
         live: LiveInputs,
     ) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(graph, live.audio, live.osc_values, live.plugins)
+        Self::compile_inner(
+            graph,
+            live.audio,
+            live.osc_values,
+            live.plugins,
+            live.param_overrides,
+        )
     }
 
     /// Compile un graphe avec audio state + cache des valeurs OSC reçues.
@@ -102,7 +112,7 @@ impl Compiler {
         _overrides: AudioParamOverrides,
         osc_values: OscValueMap,
     ) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(graph, Some(audio_state), Some(osc_values), None)
+        Self::compile_inner(graph, Some(audio_state), Some(osc_values), None, None)
     }
 
     fn compile_inner(
@@ -110,11 +120,13 @@ impl Compiler {
         audio_state: Option<Arc<Mutex<AudioState>>>,
         osc_values: Option<OscValueMap>,
         plugins: Option<Arc<Mutex<PluginRegistry>>>,
+        param_overrides: Option<Arc<Mutex<HashMap<String, f64>>>>,
     ) -> Result<CompiledFunction, CompilationError> {
         let live = LiveInputs {
             audio: audio_state,
             osc_values,
             plugins,
+            param_overrides,
         };
         let start = Instant::now();
         log_graph_compilation(graph.nodes.len(), graph.edges.len());
@@ -946,6 +958,7 @@ impl Compiler {
         node: &Node,
         live: &LiveInputs,
     ) -> Result<CompiledFunction, CompilationError> {
+        let label = format!("{:?}", node.node_type);
         let node_type = node.node_type.clone();
         let params = Self::extract_params(graph, node)?;
 
@@ -1059,14 +1072,16 @@ impl Compiler {
                 .as_ref()
                 .ok_or_else(|| CompilationError::MissingParameter("audio source".into()))?
                 .clone();
+            let over = live.param_overrides.clone();
             Ok(Box::new(move |t: f64, object_index: usize| {
-                let mut live_params = params.clone();
+                let mut live_params = patched_params(&params, &label, &over).into_owned();
                 if let Some(map) = live_params.extra.as_object_mut() {
                     inject_audio_values(map, &audio_arc);
                 }
                 engine.position(t, object_index, &live_params)
             }))
         } else if let Some(values) = osc_values {
+            let over = live.param_overrides.clone();
             let address = params
                 .extra
                 .get("address")
@@ -1074,7 +1089,7 @@ impl Compiler {
                 .unwrap_or("*")
                 .to_string();
             Ok(Box::new(move |t: f64, object_index: usize| {
-                let mut live_params = params.clone();
+                let mut live_params = patched_params(&params, &label, &over).into_owned();
                 {
                     let guard = values.lock().unwrap_or_else(|e| e.into_inner());
                     if let Some(v) = guard.get(address.as_str()) {
@@ -1093,8 +1108,9 @@ impl Compiler {
             }))
         } else {
             // Engine non-audio — closure simple
+            let over = live.param_overrides.clone();
             Ok(Box::new(move |t: f64, object_index: usize| {
-                engine.position(t, object_index, &params)
+                engine.position(t, object_index, &patched_params(&params, &label, &over))
             }))
         }
     }
@@ -1173,6 +1189,35 @@ impl Compiler {
 }
 
 // ── Helper functions for live audio injection ──
+
+/// Patche `params.extra` avec les overrides live ciblant ce node —
+/// clés "<label>:<param_key>" dans la map partagée (écrite par le domaine
+/// signal via les cibles `param:` de SignalOut). Fast path : aucun
+/// override pour ce node → retourne `params` sans cloner.
+fn patched_params<'a>(
+    params: &'a EngineParams,
+    label: &str,
+    over: &'a Option<Arc<Mutex<HashMap<String, f64>>>>,
+) -> std::borrow::Cow<'a, EngineParams> {
+    use std::borrow::Cow;
+    let Some(map) = over else {
+        return Cow::Borrowed(params);
+    };
+    let prefix = format!("{label}:");
+    let guard = map.lock().unwrap_or_else(|e| e.into_inner());
+    if !guard.keys().any(|k| k.starts_with(&prefix)) {
+        return Cow::Borrowed(params);
+    }
+    let mut p = params.clone();
+    if let Some(extra) = p.extra.as_object_mut() {
+        for (k, v) in guard.iter() {
+            if let Some(key) = k.strip_prefix(&prefix) {
+                extra.insert(key.to_string(), serde_json::json!(*v));
+            }
+        }
+    }
+    Cow::Owned(p)
+}
 
 /// Injecte les valeurs audio temps réel dans les params extra d'un engine
 fn inject_audio_values(

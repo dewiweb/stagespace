@@ -26,12 +26,14 @@ pub async fn update_move_graph_merged(
     tauri::async_runtime::spawn_blocking(move || {
         // Snapshot court sous le lock — la compilation (lourde) se fait ensuite
         // SANS tenir `movements`, sinon tout edit live gèle stop/panic/recall.
-        let generation = {
+        let (generation, param_overrides) = {
             let movements = lock_or_recover(&sh.movements);
             let movement = movements.get(&movement_id).ok_or_else(|| {
                 IpcError::not_found(format!("Movement '{movement_id}' not found"))
             })?;
-            movement.generation
+            let generation = movement.generation;
+            let param_overrides = movement.runtime.param_overrides();
+            (generation, param_overrides)
         };
 
         let audio_state = lock_or_recover(&sh.audio_state);
@@ -40,7 +42,8 @@ pub async fn update_move_graph_merged(
         drop(audio_state);
 
         // Compile avec toutes les entrées live (audio + OSC reçus + plugins).
-        let compiled = compile_graph_live(&graph, &sh).map_err(IpcError::validation)?;
+        let compiled =
+            compile_graph_live(&graph, &sh, Some(param_overrides)).map_err(IpcError::validation)?;
 
         // Ré-application sous lock, avec check de génération — le move a pu être
         // stoppé puis respawné pendant la compile : dans ce cas on applique au

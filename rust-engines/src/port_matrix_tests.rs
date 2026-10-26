@@ -574,3 +574,75 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod param_override_tests {
+    use crate::compiler::{Compiler, LiveInputs};
+    use crate::graph::{Edge, Graph, Node, NodeType};
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex};
+
+    /// SignalOut `param:<NodeType>:<key>` → la closure compilée lit
+    /// l'override à chaque eval (patch de params.extra).
+    #[test]
+    fn param_override_patches_engine_param_live() {
+        let mut g = Graph::new();
+        let (objects, dur, circle, out) = (
+            Node::new(NodeType::Objects),
+            Node::new(NodeType::Duration),
+            Node::new(NodeType::Circular),
+            Node::new(NodeType::Output),
+        );
+        let (objects, dur, circle, out) = (objects.id, dur.id, circle.id, out.id);
+        for (n, id) in [
+            (NodeType::Objects, objects),
+            (NodeType::Duration, dur),
+            (NodeType::Circular, circle),
+            (NodeType::Output, out),
+        ] {
+            let mut node = Node::new(n.clone());
+            node.id = id;
+            node.params = match n {
+                NodeType::Objects => serde_json::json!({"n_objects": 4}),
+                NodeType::Duration => serde_json::json!({"duration": 4.0}),
+                NodeType::Circular => serde_json::json!({"radius": 1.0}),
+                _ => serde_json::json!({}),
+            };
+            g.add_node(node);
+        }
+        for (f, t_, fp, tp) in [
+            (objects, circle, "objects", "objects"),
+            (dur, circle, "duration", "duration"),
+            (circle, out, "out", "in"),
+        ] {
+            g.add_edge(Edge {
+                from: f,
+                to: t_,
+                from_port: fp.to_string(),
+                to_port: tp.to_string(),
+            });
+        }
+
+        let over: Arc<Mutex<HashMap<String, f64>>> = Arc::new(Mutex::new(HashMap::new()));
+        let compiled = Compiler::compile_with_live_inputs(
+            &g,
+            LiveInputs {
+                param_overrides: Some(over.clone()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let before = compiled(0.0, 0);
+        over.lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert("Circular:radius".to_string(), 10.0);
+        let after = compiled(0.0, 0);
+        let r0 = (before.x * before.x + before.z * before.z).sqrt();
+        let r1 = (after.x * after.x + after.z * after.z).sqrt();
+        assert!(
+            (r1 - 10.0 * r0).abs() < 1e-6,
+            "radius should scale by 10: r0={r0}, r1={r1}"
+        );
+    }
+}

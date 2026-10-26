@@ -40,6 +40,10 @@ pub struct Runtime {
     /// Audio param overrides — calculés à chaque frame à partir des audio_mods,
     /// lus par la closure compilée pour injecter radius/height/turns/offset/rotation
     audio_param_overrides: Arc<Mutex<HashMap<String, f64>>>,
+    /// Overrides de params de nodes — écrits par le domaine signal via
+    /// les cibles `param:<label>:<key>` de SignalOut, lus par les
+    /// closures compilées (patch de params.extra à chaque eval).
+    param_overrides: Arc<Mutex<HashMap<String, f64>>>,
     /// Buffer de positions — le worker écrit ses positions (world-space)
     /// à chaque frame ; le MergeRuntime lit tous les buffers pour faire
     /// le merge + post-processing + envoi via le sink.
@@ -89,6 +93,7 @@ impl Runtime {
             animation_state: Arc::new(Mutex::new(None)),
             audio_state,
             audio_param_overrides: Arc::new(Mutex::new(HashMap::new())),
+            param_overrides: Arc::new(Mutex::new(HashMap::new())),
             position_buffer: Mutex::new(None),
             duration_ms: Arc::new(std::sync::atomic::AtomicU64::new(4000)),
             osc_ids_arc: Arc::new(std::sync::RwLock::new(Vec::new())),
@@ -184,6 +189,12 @@ impl Runtime {
     /// Récupère l'Arc des audio param overrides — à passer à compile_with_audio_and_overrides
     pub fn audio_param_overrides(&self) -> Arc<Mutex<HashMap<String, f64>>> {
         self.audio_param_overrides.clone()
+    }
+
+    /// Map des overrides de params de nodes — partagée avec le domaine
+    /// signal (cibles `param:` de SignalOut) et les closures compilées.
+    pub fn param_overrides(&self) -> Arc<Mutex<HashMap<String, f64>>> {
+        self.param_overrides.clone()
     }
 
     /// Récupère l'Arc de l'audio state — permet de mettre à jour sans locker state.movements
@@ -377,6 +388,7 @@ impl Runtime {
         let anim_state_arc = self.animation_state.clone();
         let audio_state_arc = self.audio_state.clone();
         let audio_param_overrides_arc = self.audio_param_overrides.clone();
+        let param_overrides_arc = self.param_overrides.clone();
         let signal_fn_arc = self.signal_fn.clone();
         let osc_values_arc = self.osc_values.clone();
 
@@ -452,6 +464,13 @@ impl Runtime {
                         });
                         for (key, d) in deltas {
                             if !d.is_finite() {
+                                continue;
+                            }
+                            if let Some(pk) = key.strip_prefix("param:") {
+                                let mut pov = param_overrides_arc
+                                    .lock()
+                                    .unwrap_or_else(|e| e.into_inner());
+                                pov.insert(pk.to_string(), d);
                                 continue;
                             }
                             let k: &str = match key.as_str() {

@@ -1243,9 +1243,9 @@ fn build_catalog() -> Vec<NodeSpec> {
         spec(
             NodeType::SignalOut, C::Signal, S::SignalOnly,
             vec![req("signal", PortType::Signal)], vec![],
-            "Modulation sink — writes signal as ADDITIVE delta on a macro (panel/OSC/cue base + delta). speed only applies per-move",
+            "Modulation sink — writes signal as ADDITIVE delta. target: macro (scale, shift_x, shift_y, shift_z, yaw, pitch, roll, radius_scale, height_offset, speed per-move) or param:<NodeType>:<key> to modulate any node param",
             vec![
-                enm("target", "Target", &["speed", "scale", "shift_x", "shift_y", "shift_z", "yaw", "pitch", "roll", "radius_scale", "height_offset"]).d("yaw"),
+                p("target", "Target", ParamKind::String).d("yaw"),
                 ns("amount", "Amount", 0.1).d(1.0),
             ],
         ),

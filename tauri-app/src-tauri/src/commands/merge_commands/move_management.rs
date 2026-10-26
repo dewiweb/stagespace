@@ -277,10 +277,11 @@ fn spawn_move_inner(
     //    (nodes OSCInput lisent extra["osc_value"] — sans handle ils
     //    produisent un cercle statique) et registry de plugins WASM
     //    (nodes Plugin → params.plugin_id).
-    let compiled = compile_graph_live(&graph, sh).map_err(|e| {
-        eprintln!("[ACTIVATE-ERROR] compile_graph failed: {e}");
-        IpcError::validation(e)
-    })?;
+    let compiled =
+        compile_graph_live(&graph, sh, Some(runtime.param_overrides())).map_err(|e| {
+            eprintln!("[ACTIVATE-ERROR] compile_graph failed: {e}");
+            IpcError::validation(e)
+        })?;
 
     // 4. Configurer le worker
     runtime.set_preview_mode(spec.is_preview);
