@@ -76,6 +76,17 @@ pub fn macro_with_deltas(
     if deltas.is_empty() {
         return eff;
     }
+    // Cibles `param:` : ignorées ici — elles s'adressent aux params de
+    // nodes du sub-graph (appliquées par le worker), pas aux macros
+    // globales. Log une fois pour rendre le silent-drop visible.
+    if deltas.keys().any(|k| k.starts_with("param:")) {
+        static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        if !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+            eprintln!(
+                "[SIGNAL] param: targets are ignored in the global signal graph                  (no sub-graph nodes there) — use them inside a move"
+            );
+        }
+    }
     let g = |k: &str| {
         deltas
             .get(k)

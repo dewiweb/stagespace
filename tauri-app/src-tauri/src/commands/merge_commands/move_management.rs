@@ -309,14 +309,24 @@ fn spawn_move_inner(
     //    (nodes OSCInput lisent extra["osc_value"] — sans handle ils
     //    produisent un cercle statique) et registry de plugins WASM
     //    (nodes Plugin → params.plugin_id).
-    let compiled =
-        compile_graph_live(&graph, sh, Some(runtime.param_overrides())).map_err(|e| {
-            eprintln!("[ACTIVATE-ERROR] compile_graph failed: {e}");
-            IpcError::validation(e)
-        })?;
+    let compiled = compile_graph_live(
+        &graph,
+        sh,
+        Some(runtime.param_overrides()),
+        Some(runtime.held_positions()),
+    )
+    .map_err(|e| {
+        eprintln!("[ACTIVATE-ERROR] compile_graph failed: {e}");
+        IpcError::validation(e)
+    })?;
     // Instance jetable pour le TrajectorySampler — les evals de preview
     // n'avancent pas sim_t des engines stateful de la fn live.
-    if let Ok(sample_fn) = compile_graph_live(&graph, sh, Some(runtime.param_overrides())) {
+    if let Ok(sample_fn) = compile_graph_live(
+        &graph,
+        sh,
+        Some(runtime.param_overrides()),
+        Some(runtime.held_positions()),
+    ) {
         runtime.set_sample_fn(sample_fn);
     }
 

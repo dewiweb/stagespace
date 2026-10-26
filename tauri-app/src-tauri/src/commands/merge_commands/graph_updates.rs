@@ -26,14 +26,15 @@ pub async fn update_move_graph_merged(
     tauri::async_runtime::spawn_blocking(move || {
         // Snapshot court sous le lock — la compilation (lourde) se fait ensuite
         // SANS tenir `movements`, sinon tout edit live gèle stop/panic/recall.
-        let (generation, param_overrides) = {
+        let (generation, param_overrides, held_positions) = {
             let movements = lock_or_recover(&sh.movements);
             let movement = movements.get(&movement_id).ok_or_else(|| {
                 IpcError::not_found(format!("Movement '{movement_id}' not found"))
             })?;
             let generation = movement.generation;
             let param_overrides = movement.runtime.param_overrides();
-            (generation, param_overrides)
+            let held_positions = movement.runtime.held_positions();
+            (generation, param_overrides, held_positions)
         };
 
         let audio_state = lock_or_recover(&sh.audio_state);
@@ -42,8 +43,8 @@ pub async fn update_move_graph_merged(
         drop(audio_state);
 
         // Compile avec toutes les entrées live (audio + OSC reçus + plugins).
-        let compiled =
-            compile_graph_live(&graph, &sh, Some(param_overrides)).map_err(IpcError::validation)?;
+        let compiled = compile_graph_live(&graph, &sh, Some(param_overrides), Some(held_positions))
+            .map_err(IpcError::validation)?;
 
         // Ré-application sous lock, avec check de génération — le move a pu être
         // stoppé puis respawné pendant la compile : dans ce cas on applique au
@@ -108,9 +109,12 @@ pub async fn update_move_graph_merged(
         }
         // Instance jetable pour le TrajectorySampler — les evals de preview
         // n'avancent pas sim_t des engines stateful de la fn live.
-        if let Ok(sample_fn) =
-            compile_graph_live(&graph, &sh, Some(movement.runtime.param_overrides()))
-        {
+        if let Ok(sample_fn) = compile_graph_live(
+            &graph,
+            &sh,
+            Some(movement.runtime.param_overrides()),
+            Some(movement.runtime.held_positions()),
+        ) {
             movement.runtime.set_sample_fn(sample_fn);
         }
         // IMPORTANT: recall_cue (swap position_fn) AVANT set_osc_ids.

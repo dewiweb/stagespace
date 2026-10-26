@@ -19,6 +19,9 @@ pub type AudioParamOverrides = Arc<Mutex<HashMap<String, f64>>>;
 /// lues à chaque frame par les engines OSCInput via la closure compilée.
 pub type OscValueMap = Arc<Mutex<HashMap<String, Vec<f64>>>>;
 
+/// Positions tenues par les nodes Freeze — partagées entre recompiles.
+pub type HeldPositions = Arc<Mutex<HashMap<String, nalgebra::Vector3<f64>>>>;
+
 /// Entrées live disponibles pendant l'évaluation d'une frame —
 /// audio state (BPM/amplitude/spectre) + dernières valeurs OSC reçues
 /// + registry des plugins WASM (résolution de `params.plugin_id`).
@@ -34,6 +37,9 @@ pub struct LiveInputs {
     /// valeur. Écrits par le domaine signal via les cibles `param:*` de
     /// SignalOut ; lus à chaque évaluation (patch de params.extra).
     pub param_overrides: Option<Arc<Mutex<HashMap<String, f64>>>>,
+    /// Positions tenues des nodes Freeze — partagées entre recompiles
+    /// (le hold survit au hot-swap). Clé : `{node_id}:{object_index}`.
+    pub held_positions: Option<HeldPositions>,
 }
 
 /// Erreur de compilation
@@ -62,7 +68,7 @@ pub struct Compiler;
 impl Compiler {
     /// Compile un graphe en une fonction composite
     pub fn compile(graph: &Graph) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(graph, None, None, None, None)
+        Self::compile_inner(graph, None, None, None, None, None)
     }
 
     /// Compile un graphe avec accès à l'audio state temps réel
@@ -72,7 +78,7 @@ impl Compiler {
         graph: &Graph,
         audio_state: Arc<Mutex<AudioState>>,
     ) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(graph, Some(audio_state), None, None, None)
+        Self::compile_inner(graph, Some(audio_state), None, None, None, None)
     }
 
     /// Compile un graphe avec audio state + overrides de paramètres audio
@@ -84,7 +90,7 @@ impl Compiler {
         audio_state: Arc<Mutex<AudioState>>,
         _overrides: AudioParamOverrides,
     ) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(graph, Some(audio_state), None, None, None)
+        Self::compile_inner(graph, Some(audio_state), None, None, None, None)
     }
 
     /// Compile un graphe avec un ensemble complet d'entrées live —
@@ -99,6 +105,7 @@ impl Compiler {
             live.osc_values,
             live.plugins,
             live.param_overrides,
+            live.held_positions,
         )
     }
 
@@ -112,7 +119,7 @@ impl Compiler {
         _overrides: AudioParamOverrides,
         osc_values: OscValueMap,
     ) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(graph, Some(audio_state), Some(osc_values), None, None)
+        Self::compile_inner(graph, Some(audio_state), Some(osc_values), None, None, None)
     }
 
     fn compile_inner(
@@ -121,12 +128,14 @@ impl Compiler {
         osc_values: Option<OscValueMap>,
         plugins: Option<Arc<Mutex<PluginRegistry>>>,
         param_overrides: Option<Arc<Mutex<HashMap<String, f64>>>>,
+        held_positions: Option<HeldPositions>,
     ) -> Result<CompiledFunction, CompilationError> {
         let live = LiveInputs {
             audio: audio_state,
             osc_values,
             plugins,
             param_overrides,
+            held_positions,
         };
         let start = Instant::now();
         log_graph_compilation(graph.nodes.len(), graph.edges.len());
@@ -455,6 +464,7 @@ impl Compiler {
         let upstream_fn = Self::compile_node(graph, upstream_node, live)?;
         let node_type = node.node_type.clone();
         let label = format!("{node_type:?}");
+        let id = format!("{}", node.id.0);
         let over = live.param_overrides.clone();
 
         match node_type {
@@ -467,9 +477,9 @@ impl Compiler {
                 Ok(Box::new(move |t, i| {
                     crate::engines::modifiers::scale(
                         upstream_fn(t, i),
-                        over_f64(&over, &label, "x", sx),
-                        over_f64(&over, &label, "y", sy),
-                        over_f64(&over, &label, "z", sz),
+                        over_f64(&over, &label, &id, "x", sx),
+                        over_f64(&over, &label, &id, "y", sy),
+                        over_f64(&over, &label, &id, "z", sz),
                     )
                 }))
             }
@@ -482,9 +492,9 @@ impl Compiler {
                 Ok(Box::new(move |t, i| {
                     crate::engines::modifiers::offset(
                         upstream_fn(t, i),
-                        over_f64(&over, &label, "x", ox),
-                        over_f64(&over, &label, "y", oy),
-                        over_f64(&over, &label, "z", oz),
+                        over_f64(&over, &label, &id, "x", ox),
+                        over_f64(&over, &label, &id, "y", oy),
+                        over_f64(&over, &label, &id, "z", oz),
                     )
                 }))
             }
@@ -509,9 +519,9 @@ impl Compiler {
                 Ok(Box::new(move |t, i| {
                     crate::engines::modifiers::rotate(
                         upstream_fn(t, i),
-                        over_f64(&over, &label, "angleX", ax),
-                        over_f64(&over, &label, "angleY", ay),
-                        over_f64(&over, &label, "angleZ", az),
+                        over_f64(&over, &label, &id, "angleX", ax),
+                        over_f64(&over, &label, &id, "angleY", ay),
+                        over_f64(&over, &label, &id, "angleZ", az),
                     )
                 }))
             }
@@ -528,7 +538,7 @@ impl Compiler {
                     let t_shifted = crate::engines::modifiers::phase_shift_time(
                         t,
                         i,
-                        over_f64(&over, &label, "shift", shift),
+                        over_f64(&over, &label, &id, "shift", shift),
                         duration,
                     );
                     upstream_fn(t_shifted, i)
@@ -552,7 +562,7 @@ impl Compiler {
                     crate::engines::modifiers::mirror(
                         upstream_fn(t, i),
                         &plane,
-                        over_f64(&over, &label, "offset", offset),
+                        over_f64(&over, &label, &id, "offset", offset),
                     )
                 }))
             }
@@ -591,14 +601,14 @@ impl Compiler {
                 let label = label.clone();
                 Ok(Box::new(move |t, i| {
                     let min = Vector3::new(
-                        over_f64(&over, &label, "min_x", min_x),
-                        over_f64(&over, &label, "min_y", min_y),
-                        over_f64(&over, &label, "min_z", min_z),
+                        over_f64(&over, &label, &id, "min_x", min_x),
+                        over_f64(&over, &label, &id, "min_y", min_y),
+                        over_f64(&over, &label, &id, "min_z", min_z),
                     );
                     let max = Vector3::new(
-                        over_f64(&over, &label, "max_x", max_x),
-                        over_f64(&over, &label, "max_y", max_y),
-                        over_f64(&over, &label, "max_z", max_z),
+                        over_f64(&over, &label, &id, "max_x", max_x),
+                        over_f64(&over, &label, &id, "max_y", max_y),
+                        over_f64(&over, &label, &id, "max_z", max_z),
                     );
                     crate::engines::modifiers::clamp(upstream_fn(t, i), min, max)
                 }))
@@ -638,10 +648,10 @@ impl Compiler {
                         upstream_fn(t, i),
                         t,
                         &waveform,
-                        over_f64(&over, &label, "frequency", frequency),
-                        over_f64(&over, &label, "amplitude", amplitude),
+                        over_f64(&over, &label, &id, "frequency", frequency),
+                        over_f64(&over, &label, &id, "amplitude", amplitude),
                         &axis,
-                        over_f64(&over, &label, "phase", phase),
+                        over_f64(&over, &label, &id, "phase", phase),
                     )
                 }))
             }
@@ -654,7 +664,7 @@ impl Compiler {
                 let over = over.clone();
                 let label = label.clone();
                 Ok(Box::new(move |t, i| {
-                    upstream_fn(t * over_f64(&over, &label, "factor", factor), i)
+                    upstream_fn(t * over_f64(&over, &label, &id, "factor", factor), i)
                 }))
             }
             NodeType::Delay => {
@@ -666,7 +676,7 @@ impl Compiler {
                 let over = over.clone();
                 let label = label.clone();
                 Ok(Box::new(move |t, i| {
-                    upstream_fn(t - over_f64(&over, &label, "delay", delay), i)
+                    upstream_fn(t - over_f64(&over, &label, &id, "delay", delay), i)
                 }))
             }
             NodeType::Freeze => {
@@ -677,15 +687,21 @@ impl Compiler {
                     .unwrap_or(true);
                 let over = over.clone();
                 let label = label.clone();
-                let held: std::sync::Mutex<
-                    std::collections::HashMap<usize, nalgebra::Vector3<f64>>,
-                > = std::sync::Mutex::new(std::collections::HashMap::new());
+                // Hold partagé avec le Runtime : survit au hot-swap du graphe.
+                // Fallback closure-local si aucune map n'est fournie (tests).
+                let shared = live.held_positions.clone();
+                let local: Arc<
+                    std::sync::Mutex<std::collections::HashMap<String, nalgebra::Vector3<f64>>>,
+                > = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+                let node_id = node.id;
                 Ok(Box::new(move |t, i| {
-                    if over_f64(&over, &label, "enabled", f64::from(enabled)) == 0.0 {
+                    if over_f64(&over, &label, &id, "enabled", f64::from(enabled)) == 0.0 {
                         return upstream_fn(t, i);
                     }
-                    let mut h = held.lock().unwrap_or_else(|e| e.into_inner());
-                    *h.entry(i).or_insert_with(|| upstream_fn(t, i))
+                    let held_map = shared.as_ref().unwrap_or(&local);
+                    let mut h = held_map.lock().unwrap_or_else(|e| e.into_inner());
+                    let key = format!("{}:{i}", node_id.0);
+                    *h.entry(key).or_insert_with(|| upstream_fn(t, i))
                 }))
             }
             NodeType::Jitter => {
@@ -711,8 +727,8 @@ impl Compiler {
                         upstream_fn(t, i),
                         t,
                         i,
-                        over_f64(&over, &label, "intensity", intensity),
-                        over_f64(&over, &label, "frequency", frequency),
+                        over_f64(&over, &label, &id, "intensity", intensity),
+                        over_f64(&over, &label, &id, "frequency", frequency),
                         seed,
                     )
                 }))
@@ -737,6 +753,7 @@ impl Compiler {
             .clamp(0.0, 1.0);
         let over = live.param_overrides.clone();
         let label = format!("{:?}", node.node_type);
+        let id = format!("{}", node.id.0);
 
         let func_a = Self::compile_node(graph, node_a, live)?;
         let func_b = Self::compile_node(graph, node_b, live)?;
@@ -744,8 +761,8 @@ impl Compiler {
         Ok(Box::new(move |t: f64, object_index: usize| {
             let pos_a = func_a(t, object_index);
             let pos_b = func_b(t, object_index);
-            pos_a * (1.0 - over_f64(&over, &label, "blend", blend))
-                + pos_b * over_f64(&over, &label, "blend", blend)
+            pos_a * (1.0 - over_f64(&over, &label, &id, "blend", blend))
+                + pos_b * over_f64(&over, &label, &id, "blend", blend)
         }))
     }
 
@@ -818,8 +835,9 @@ impl Compiler {
         let func_b = Self::compile_node(graph, node_b, live)?;
         let over = live.param_overrides.clone();
         let label = format!("{:?}", node.node_type);
+        let id = format!("{}", node.id.0);
         Ok(Box::new(move |t: f64, i: usize| {
-            if over_f64(&over, &label, "select", select) < 0.5 {
+            if over_f64(&over, &label, &id, "select", select) < 0.5 {
                 func_a(t, i)
             } else {
                 func_b(t, i)
@@ -854,10 +872,11 @@ impl Compiler {
         let func_b = Self::compile_node(graph, node_b, live)?;
         let over = live.param_overrides.clone();
         let label = format!("{:?}", node.node_type);
+        let id = format!("{}", node.id.0);
 
         Ok(Box::new(move |t: f64, object_index: usize| {
             let fade_duration =
-                over_f64(&over, &label, "fade_duration", fade_duration).min(duration_a * 0.5);
+                over_f64(&over, &label, &id, "fade_duration", fade_duration).min(duration_a * 0.5);
             let fade_start = duration_a - fade_duration;
             if t < fade_start {
                 // Phase A pure
@@ -1074,6 +1093,7 @@ impl Compiler {
         live: &LiveInputs,
     ) -> Result<CompiledFunction, CompilationError> {
         let label = format!("{:?}", node.node_type);
+        let id = format!("{}", node.id.0);
         let node_type = node.node_type.clone();
         let params = Self::extract_params(graph, node)?;
 
@@ -1189,7 +1209,7 @@ impl Compiler {
                 .clone();
             let over = live.param_overrides.clone();
             Ok(Box::new(move |t: f64, object_index: usize| {
-                let mut live_params = patched_params(&params, &label, &over).into_owned();
+                let mut live_params = patched_params(&params, &label, &id, &over).into_owned();
                 if let Some(map) = live_params.extra.as_object_mut() {
                     inject_audio_values(map, &audio_arc);
                 }
@@ -1204,7 +1224,7 @@ impl Compiler {
                 .unwrap_or("*")
                 .to_string();
             Ok(Box::new(move |t: f64, object_index: usize| {
-                let mut live_params = patched_params(&params, &label, &over).into_owned();
+                let mut live_params = patched_params(&params, &label, &id, &over).into_owned();
                 {
                     let guard = values.lock().unwrap_or_else(|e| e.into_inner());
                     if let Some(v) = guard.get(address.as_str()) {
@@ -1225,7 +1245,11 @@ impl Compiler {
             // Engine non-audio — closure simple
             let over = live.param_overrides.clone();
             Ok(Box::new(move |t: f64, object_index: usize| {
-                engine.position(t, object_index, &patched_params(&params, &label, &over))
+                engine.position(
+                    t,
+                    object_index,
+                    &patched_params(&params, &label, &id, &over),
+                )
             }))
         }
     }
@@ -1306,7 +1330,7 @@ impl Compiler {
 // ── Helper functions for live audio injection ──
 
 /// Patche `params.extra` avec les overrides live ciblant ce node —
-/// clés "<label>:<param_key>" dans la map partagée (écrite par le domaine
+/// clés "<node_id>:<param_key>" ou "<label>:<param_key>" (écrites par le domaine
 /// signal via les cibles `param:` de SignalOut). Fast path : aucun
 /// override pour ce node → retourne `params` sans cloner.
 /// Lookup d'un override live de param — `<label>:<key>` dans la map
@@ -1315,15 +1339,17 @@ impl Compiler {
 fn over_f64(
     over: &Option<Arc<Mutex<HashMap<String, f64>>>>,
     label: &str,
+    node_id: &str,
     key: &str,
     fallback: f64,
 ) -> f64 {
     let Some(m) = over else {
         return fallback;
     };
-    m.lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .get(&format!("{label}:{key}"))
+    let g = m.lock().unwrap_or_else(|e| e.into_inner());
+    // `<node_id>:<key>` (ciblé) prime, puis `<Type>:<key>` (tous du type).
+    g.get(&format!("{node_id}:{key}"))
+        .or_else(|| g.get(&format!("{label}:{key}")))
         .copied()
         .unwrap_or(fallback)
 }
@@ -1331,22 +1357,30 @@ fn over_f64(
 fn patched_params<'a>(
     params: &'a EngineParams,
     label: &str,
+    node_id: &str,
     over: &'a Option<Arc<Mutex<HashMap<String, f64>>>>,
 ) -> std::borrow::Cow<'a, EngineParams> {
     use std::borrow::Cow;
     let Some(map) = over else {
         return Cow::Borrowed(params);
     };
-    let prefix = format!("{label}:");
+    let id_prefix = format!("{node_id}:");
+    let type_prefix = format!("{label}:");
     let guard = map.lock().unwrap_or_else(|e| e.into_inner());
-    if !guard.keys().any(|k| k.starts_with(&prefix)) {
+    if !guard
+        .keys()
+        .any(|k| k.starts_with(&id_prefix) || k.starts_with(&type_prefix))
+    {
         return Cow::Borrowed(params);
     }
     let mut p = params.clone();
     if let Some(extra) = p.extra.as_object_mut() {
-        for (k, v) in guard.iter() {
-            if let Some(key) = k.strip_prefix(&prefix) {
-                extra.insert(key.to_string(), serde_json::json!(*v));
+        // Type d'abord, puis id — l'override ciblé prime.
+        for prefix in [type_prefix.as_str(), id_prefix.as_str()] {
+            for (k, v) in guard.iter() {
+                if let Some(key) = k.strip_prefix(prefix) {
+                    extra.insert(key.to_string(), serde_json::json!(*v));
+                }
             }
         }
     }

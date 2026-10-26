@@ -61,6 +61,7 @@ pub fn compile_graph_live(
     param_overrides: Option<
         std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, f64>>>,
     >,
+    held_positions: Option<stagespace_engines::compiler::HeldPositions>,
 ) -> Result<PositionFn, String> {
     let osc_values = lock_or_recover(&sh.osc_receiver).address_values_handle();
     let live = LiveInputs {
@@ -68,6 +69,7 @@ pub fn compile_graph_live(
         osc_values: Some(osc_values),
         plugins: sh.plugin_registry.clone(),
         param_overrides,
+        held_positions,
     };
     Compiler::compile_with_live_inputs(graph, live)
         .map_err(|e| format!("Compilation failed: {e:?}"))

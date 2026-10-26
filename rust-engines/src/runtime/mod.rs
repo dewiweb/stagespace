@@ -47,6 +47,9 @@ pub struct Runtime {
     /// Audio param overrides — calculés à chaque frame à partir des audio_mods,
     /// lus par la closure compilée pour injecter radius/height/turns/offset/rotation
     audio_param_overrides: Arc<Mutex<HashMap<String, f64>>>,
+    /// Positions tenues par les nodes Freeze — survit aux recompiles
+    /// (partagé avec les closures compilées via LiveInputs).
+    held_positions: crate::compiler::HeldPositions,
     /// Overrides de params de nodes — écrits par le domaine signal via
     /// les cibles `param:<label>:<key>` de SignalOut, lus par les
     /// closures compilées (patch de params.extra à chaque eval).
@@ -104,6 +107,7 @@ impl Runtime {
             animation_state: Arc::new(Mutex::new(None)),
             audio_state,
             audio_param_overrides: Arc::new(Mutex::new(HashMap::new())),
+            held_positions: Arc::new(Mutex::new(HashMap::new())),
             param_overrides: Arc::new(Mutex::new(HashMap::new())),
             position_buffer: Mutex::new(None),
             duration_ms: Arc::new(std::sync::atomic::AtomicU64::new(4000)),
@@ -206,6 +210,12 @@ impl Runtime {
     /// signal (cibles `param:` de SignalOut) et les closures compilées.
     pub fn param_overrides(&self) -> Arc<Mutex<HashMap<String, f64>>> {
         self.param_overrides.clone()
+    }
+
+    /// Positions tenues des nodes Freeze — passée aux compiles pour que
+    /// le hold survive au hot-swap du graphe.
+    pub fn held_positions(&self) -> Arc<Mutex<HashMap<String, nalgebra::Vector3<f64>>>> {
+        self.held_positions.clone()
     }
 
     /// Récupère l'Arc de l'audio state — permet de mettre à jour sans locker state.movements
