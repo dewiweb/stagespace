@@ -142,8 +142,9 @@ impl CompiledSignal {
             // ne doit jamais atteindre une macro → positions figées).
             if let Some(idx) = src {
                 let v = self.values[*idx];
-                if v.is_finite() {
-                    *self.deltas.entry(target.clone()).or_insert(0.0) += v * amount;
+                let d = v * amount;
+                if d.is_finite() {
+                    *self.deltas.entry(target.clone()).or_insert(0.0) += d;
                 }
             }
         }

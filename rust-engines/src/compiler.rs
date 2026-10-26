@@ -189,17 +189,30 @@ impl Compiler {
                 .and_then(|v| v.as_str())
                 .unwrap_or("0-");
 
+            let parse_range = |s: &str| -> Option<usize> { s.trim().parse().ok() };
             let (start_idx, end_idx) = if track_range.contains('-') {
                 let parts: Vec<&str> = track_range.splitn(2, '-').collect();
-                let s: usize = parts[0].trim().parse().unwrap_or(0);
-                let e: usize = if parts[1].trim().is_empty() {
+                let s = parse_range(parts[0]).ok_or_else(|| {
+                    CompilationError::InvalidParameter(format!(
+                        "Output track_range '{track_range}' has a non-numeric start"
+                    ))
+                })?;
+                let e = if parts[1].trim().is_empty() {
                     usize::MAX
                 } else {
-                    parts[1].trim().parse().unwrap_or(usize::MAX)
+                    parse_range(parts[1]).ok_or_else(|| {
+                        CompilationError::InvalidParameter(format!(
+                            "Output track_range '{track_range}' has a non-numeric end"
+                        ))
+                    })?
                 };
                 (s, e)
+            } else if let Ok(s) = track_range.trim().parse::<usize>() {
+                (s, usize::MAX)
             } else {
-                (track_range.trim().parse().unwrap_or(0), usize::MAX)
+                return Err(CompilationError::InvalidParameter(format!(
+                    "Output track_range '{track_range}' is not a valid range"
+                )));
             };
             routed.push((start_idx, end_idx, output_node));
         }
@@ -938,13 +951,25 @@ impl Compiler {
             | NodeType::Clamp
             | NodeType::LFO
             | NodeType::Jitter
-            | NodeType::SpeedScale
             | NodeType::Delay
             | NodeType::Freeze => inputs
                 .first()
                 .and_then(|id| graph.nodes.get(id))
                 .map(|n| Self::resolve_duration_depth(graph, n, depth + 1))
                 .unwrap_or(DEFAULT_DURATION),
+            NodeType::SpeedScale => {
+                let factor = node
+                    .params
+                    .get("factor")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(1.0)
+                    .max(1e-9);
+                inputs
+                    .first()
+                    .and_then(|id| graph.nodes.get(id))
+                    .map(|n| Self::resolve_duration_depth(graph, n, depth + 1) / factor)
+                    .unwrap_or(DEFAULT_DURATION)
+            }
             NodeType::Sequence => {
                 let binary = graph.get_binary_inputs(node.id);
                 binary

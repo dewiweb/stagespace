@@ -216,6 +216,8 @@ pub fn build_graph_from_json(
             | NodeType::Follow
             | NodeType::Swarm
             | NodeType::Avoidance
+            | NodeType::VectorField
+            | NodeType::Wave
             | NodeType::CustomTrajectory
             | NodeType::DrawSpline
             | NodeType::EvaluateSpline

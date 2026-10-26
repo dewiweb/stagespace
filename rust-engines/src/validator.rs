@@ -176,6 +176,17 @@ impl Validator {
             )));
         }
 
+        let duration_count = graph
+            .nodes
+            .values()
+            .filter(|n| n.node_type == NodeType::Duration)
+            .count();
+        if duration_count > 1 {
+            errors.push(ValidationError::InvalidConnection(
+                "Multiple Duration nodes in a subgraph (1 allowed)".to_string(),
+            ));
+        }
+
         // 3. Vérifier les endpoints existants + doublons + self-loops.
         // La légalité de la connexion elle-même est évaluée au niveau PORT
         // dans validate_type_compatibility (existence + égalité de type).
