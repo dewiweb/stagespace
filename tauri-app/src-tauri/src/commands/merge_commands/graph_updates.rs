@@ -106,6 +106,13 @@ pub async fn update_move_graph_merged(
                 "fade_duration must be a finite non-negative number",
             ));
         }
+        // Instance jetable pour le TrajectorySampler — les evals de preview
+        // n'avancent pas sim_t des engines stateful de la fn live.
+        if let Ok(sample_fn) =
+            compile_graph_live(&graph, &sh, Some(movement.runtime.param_overrides()))
+        {
+            movement.runtime.set_sample_fn(sample_fn);
+        }
         // IMPORTANT: recall_cue (swap position_fn) AVANT set_osc_ids.
         movement.runtime.recall_cue(compiled, fade);
         if let Some(ref ids) = osc_ids {

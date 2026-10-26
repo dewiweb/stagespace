@@ -314,6 +314,11 @@ fn spawn_move_inner(
             eprintln!("[ACTIVATE-ERROR] compile_graph failed: {e}");
             IpcError::validation(e)
         })?;
+    // Instance jetable pour le TrajectorySampler — les evals de preview
+    // n'avancent pas sim_t des engines stateful de la fn live.
+    if let Ok(sample_fn) = compile_graph_live(&graph, sh, Some(runtime.param_overrides())) {
+        runtime.set_sample_fn(sample_fn);
+    }
 
     // 4. Configurer le worker
     runtime.set_preview_mode(spec.is_preview);

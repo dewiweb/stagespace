@@ -28,6 +28,13 @@ pub use types::*;
 pub struct Runtime {
     running: Arc<AtomicBool>,
     position_fn: Arc<Mutex<PositionFn>>,
+    /// Fonction compilée dédiée au sampling — instance distincte de la
+    /// live : les engines stateful (Swarm…) ont leur propre cache, les
+    /// evals d'échantillonnage n'avancent pas `sim_t` de la live.
+    sample_fn: Arc<Mutex<PositionFn>>,
+    /// `sample_fn` posée explicitement ? Sinon le sampler retombe sur
+    /// position_fn (chemins directs play_compiled sans instance dédiée).
+    has_sample_fn: std::sync::atomic::AtomicBool,
     macros: Arc<MacroState>,
     config: Arc<RuntimeConfig>,
     perf: Arc<PerfMonitor>,
@@ -85,6 +92,10 @@ impl Runtime {
         Runtime {
             running: Arc::new(AtomicBool::new(false)),
             position_fn: Arc::new(Mutex::new(initial_fn)),
+            sample_fn: Arc::new(Mutex::new(
+                Arc::new(|_, _| nalgebra::Vector3::zeros()) as PositionFn
+            )),
+            has_sample_fn: std::sync::atomic::AtomicBool::new(false),
             macros: Arc::new(MacroState::new()),
             config: Arc::new(RuntimeConfig::new()),
             perf: Arc::new(PerfMonitor::new()),
@@ -219,6 +230,13 @@ impl Runtime {
     /// Hot-swap la fonction de position — pour cue recall sans arrêter le playback.
     /// Jamais d'attente sur un frame en cours : le worker clone l'Arc sous un
     /// lock de nanosecondes puis évalue sans lock (audit I8).
+    /// Instance compilée jetable pour le TrajectorySampler — appelée à
+    /// chaque compile de graphe (spawn + hot-swap).
+    pub fn set_sample_fn(&self, f: PositionFn) {
+        *self.sample_fn.lock().unwrap_or_else(|e| e.into_inner()) = f;
+        self.has_sample_fn.store(true, Ordering::Release);
+    }
+
     pub fn swap_position_fn(&self, new_fn: PositionFn) {
         let mut old = self.position_fn.lock().unwrap_or_else(|e| e.into_inner());
         *old = new_fn;
@@ -229,7 +247,11 @@ impl Runtime {
     /// pendant des milliers d'évaluations).
     pub fn sampler(&self) -> TrajectorySampler {
         TrajectorySampler {
-            position_fn: self.position_fn.clone(),
+            position_fn: if self.has_sample_fn.load(Ordering::Relaxed) {
+                self.sample_fn.clone()
+            } else {
+                self.position_fn.clone()
+            },
             macros: self.macros.clone(),
             origin: self.origin.clone(),
         }
