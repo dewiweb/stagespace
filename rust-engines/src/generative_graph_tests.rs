@@ -95,6 +95,9 @@ mod tests {
         NodeType::Clamp,
         NodeType::LFO,
         NodeType::Jitter,
+        NodeType::SpeedScale,
+        NodeType::Delay,
+        NodeType::Freeze,
     ];
 
     const COMPOSITES: &[NodeType] = &[
@@ -102,6 +105,7 @@ mod tests {
         NodeType::Group,
         NodeType::Sequence,
         NodeType::Crossfade,
+        NodeType::Switch,
     ];
 
     /// Falloffs restreints : ne peuvent alimenter que Scale/Rotate/Offset.
@@ -129,10 +133,13 @@ mod tests {
             | NodeType::Mirror
             | NodeType::Clamp
             | NodeType::LFO
-            | NodeType::Jitter => extend(&mut v, &[MATH, MODIFIERS]),
+            | NodeType::Jitter
+            | NodeType::SpeedScale
+            | NodeType::Delay
+            | NodeType::Freeze => extend(&mut v, &[MATH, MODIFIERS]),
             // Les modifiers ne peuvent pas alimenter Sequence.
             NodeType::Sequence => extend(&mut v, &[MATH, PHYSICS, COMPOSITES]),
-            NodeType::Mix | NodeType::Group | NodeType::Crossfade => {
+            NodeType::Mix | NodeType::Group | NodeType::Crossfade | NodeType::Switch => {
                 extend(&mut v, &[MATH, PHYSICS, COMPOSITES, MODIFIERS])
             }
             _ => unreachable!("not a consumer: {parent:?}"),
@@ -269,6 +276,18 @@ mod tests {
                 NodeType::Crossfade => serde_json::json!({
                     "duration": self.rng.uniform(0.5, 2.0),
                 }),
+                NodeType::Switch => serde_json::json!({
+                    "select": if self.rng.rand() < 0.5 { 0.0 } else { 1.0 },
+                }),
+                NodeType::SpeedScale => serde_json::json!({
+                    "factor": self.rng.uniform(0.25, 3.0),
+                }),
+                NodeType::Delay => serde_json::json!({
+                    "delay": self.rng.uniform(0.0, 2.0),
+                }),
+                NodeType::Freeze => serde_json::json!({
+                    "enabled": self.rng.rand() < 0.7,
+                }),
                 _ => serde_json::json!({}),
             }
         }
@@ -309,7 +328,11 @@ mod tests {
             let id = self.add_node(Node::with_params(wrapper.clone(), params));
             if matches!(
                 wrapper,
-                NodeType::Sequence | NodeType::Crossfade | NodeType::Mix
+                NodeType::Sequence
+                    | NodeType::Crossfade
+                    | NodeType::Mix
+                    | NodeType::Switch
+                    | NodeType::Freeze
             ) {
                 self.may_hide_motion = true;
             }
@@ -543,6 +566,119 @@ mod tests {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    /// Fuzzer de couverture — rapporte la robustesse du système sur un
+    /// échantillon aléatoire large : validation, compilation, finitude et
+    /// déterminisme, plus la couverture par type et par combo intéressant.
+    /// Les stats sont loggées (test #[ignore] manuel ou assertion de
+    /// couverture minimale).
+    #[test]
+    fn fuzz_coverage_robustness_report() {
+        use std::collections::HashMap;
+        let mut type_counts: HashMap<String, usize> = HashMap::new();
+        // Combos intéressants à tracker : <wrapper>→<catégorie-enfant>
+        let mut combo_counts: HashMap<String, usize> = HashMap::new();
+        let mut n_valid = 0usize;
+        let mut n_compiled = 0usize;
+        let mut n_moved = 0usize;
+        let mut n_total = 0usize;
+
+        let category = |t: &NodeType| -> &'static str {
+            if MATH.contains(t) {
+                "math"
+            } else if PHYSICS.contains(t) {
+                "physics"
+            } else if MODIFIERS.contains(t) {
+                "modifier"
+            } else if COMPOSITES.contains(t) {
+                "composite"
+            } else {
+                "other"
+            }
+        };
+
+        for level in 1..=8usize {
+            for seed in 0..40u64 {
+                n_total += 1;
+                let (graph, n_objects, has_mover, may_hide) =
+                    build_graph(seed * 997 + level as u64 * 31, level);
+
+                // Coverage par type
+                for n in graph.nodes.values() {
+                    *type_counts.entry(format!("{:?}", n.node_type)).or_insert(0) += 1;
+                }
+                // Coverage par combo parent→enfant (via edges)
+                for e in &graph.edges {
+                    let from_ty = &graph.nodes[&e.from].node_type;
+                    let to_ty = &graph.nodes[&e.to].node_type;
+                    let combo = format!("{}→{}", format!("{to_ty:?}"), category(from_ty));
+                    *combo_counts.entry(combo).or_insert(0) += 1;
+                }
+
+                if Validator::validate(&graph).is_err() {
+                    continue;
+                }
+                n_valid += 1;
+                let Ok(f) = compile(&graph) else {
+                    continue;
+                };
+                n_compiled += 1;
+
+                let mut moved = false;
+                let mut all_finite = true;
+                for t in [0.0, 1.3, 3.7, 7.9] {
+                    for i in 0..n_objects.max(12) {
+                        let p = f(t, i);
+                        if !(p.x.is_finite() && p.y.is_finite() && p.z.is_finite()) {
+                            all_finite = false;
+                        }
+                        if t > 0.0 && (p - f(0.0, i)).norm() > 1e-9 {
+                            moved = true;
+                        }
+                    }
+                }
+                assert!(all_finite, "non-finite position in fuzzed graph");
+                if moved {
+                    n_moved += 1;
+                }
+                let _ = (has_mover, may_hide);
+            }
+        }
+
+        // Assertions de robustesse minimales
+        assert_eq!(n_valid, n_total, "des graphes générés doivent tous valider");
+        assert_eq!(n_compiled, n_valid, "tout graphe valide doit compiler");
+        assert!(n_moved > 0, "aucun graphe ne bouge — générateur suspect");
+
+        // Rapport (visible avec --nocapture)
+        eprintln!("=== FUZZ COVERAGE ===");
+        eprintln!(
+            "graphes: {n_total} | valides: {n_valid} | compilés: {n_compiled} | mobiles: {n_moved}"
+        );
+        let mut types: Vec<_> = type_counts.iter().collect();
+        types.sort_by(|a, b| b.1.cmp(a.1));
+        for (ty, c) in &types {
+            eprintln!("  {ty:24} {c:5}");
+        }
+        let mut combos: Vec<_> = combo_counts.iter().collect();
+        combos.sort_by(|a, b| b.1.cmp(a.1));
+        eprintln!("--- combos (consommateur→catégorie-source) ---");
+        for (c, n) in combos.iter().take(20) {
+            eprintln!("  {c:40} {n:5}");
+        }
+        eprintln!("=====================");
+
+        // Couverture minimale : chaque type des sets doit apparaître
+        for set in [MATH, PHYSICS, MODIFIERS, COMPOSITES] {
+            for ty in set {
+                let key = format!("{ty:?}");
+                assert!(
+                    type_counts.contains_key(&key),
+                    "type jamais généré en {n_total} graphes : {key}"
+                );
             }
         }
     }
