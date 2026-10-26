@@ -68,6 +68,18 @@ impl Engine for Formation {
                     (object_index as f64 / n.saturating_sub(1).max(1) as f64 - 0.5) * 2.0 * radius;
                 Vector3::new(x * angle_offset.cos(), x * angle_offset.sin(), elevation)
             }
+            "arc" => {
+                // Demi-cercle — objets répartis sur [−π/2, +π/2] autour
+                // de l'axe X, rotate faisant tourner l'arc dans le temps.
+                let span = PI;
+                let frac = if n > 1 {
+                    object_index as f64 / (n - 1) as f64
+                } else {
+                    0.5
+                };
+                let angle = frac * span - span / 2.0 + angle_offset;
+                Vector3::new(radius * angle.cos(), radius * angle.sin(), elevation)
+            }
             "triangle" => {
                 let base_angle = 2.0 * PI * object_index as f64 / n as f64;
                 let angle = base_angle + angle_offset;

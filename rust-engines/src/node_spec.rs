@@ -477,7 +477,10 @@ fn build_catalog() -> Vec<NodeSpec> {
             NodeType::Objects, C::Structural, S::SubOnly, vec![],
             vec![port("objects", PortType::ObjectSet)],
             "Defines the object/track count and their IDs. Required — graph source",
-            vec![nrange("n_objects", "Count", 1.0, 1.0, 64.0).d(9)],
+            vec![
+                nrange("n_objects", "Count", 1.0, 1.0, 64.0).d(9),
+                p("track_ids", "Track IDs", ParamKind::Text).d(""),
+            ],
         ),
         spec(
             NodeType::Duration, C::Structural, S::SubOnly, vec![],
@@ -505,7 +508,6 @@ fn build_catalog() -> Vec<NodeSpec> {
             "Merge node — represents the MergeRuntime. Strategy: override/crossfade/blend/priority",
             vec![
                 enm("strategy", "Strategy", &["override", "crossfade", "blend", "priority"]).d("override"),
-                nmin("fade_duration", "Fade (s)", 0.1, 0.0).d(0.5),
             ],
         ),
         // ── Moteurs math ──
@@ -584,7 +586,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             NodeType::Formation, C::MathEngine, S::SubOnly, engine_in(), out_pos(),
             "Static formations: circle, line, arc, grid. No motion",
             vec![
-                enm("shape", "Shape", &["circle", "line", "arc", "grid"]).d("circle"),
+                enm("shape", "Shape", &["circle", "line", "arc", "grid", "sphere", "triangle", "hexagon"]).d("circle"),
                 ns("radius", "Radius", 0.1).d(0.7),
                 ns("rotate", "Rotate", 0.1).d(0.0),
                 ns("elevation", "Elevation", 0.1).d(0.0),
@@ -1002,7 +1004,7 @@ fn build_catalog() -> Vec<NodeSpec> {
         ),
         spec(
             NodeType::Group, C::Composite, S::SubOnly, comp_in(), out_pos(),
-            "Splits N objects into 2 groups: A→[0..n/2], B→[n/2..n]. For different track assignments",
+            "Splits objects by branch A's n_objects: A→[0..n_a), B→[n_a..n). For different track assignments",
             vec![],
         ),
         spec(
