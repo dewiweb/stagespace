@@ -21,8 +21,8 @@ fn make_graph(nodes: Vec<(NodeType, serde_json::Value)>, edges: Vec<(usize, usiz
         graph.add_edge(Edge {
             from: ids[from],
             to: ids[to],
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
     }
     graph
@@ -509,14 +509,14 @@ fn test_build_transform_chain_rejects_engine() {
     graph.add_edge(Edge {
         from: id_input,
         to: id_circular,
-        from_port: "output".to_string(),
-        to_port: "input".to_string(),
+        from_port: "out".to_string(),
+        to_port: "in".to_string(),
     });
     graph.add_edge(Edge {
         from: id_circular,
         to: id_output,
-        from_port: "output".to_string(),
-        to_port: "input".to_string(),
+        from_port: "out".to_string(),
+        to_port: "in".to_string(),
     });
 
     // On appelle build_transform_chain directement (sans validation)

@@ -290,20 +290,20 @@ mod tests {
         g.add_edge(Edge {
             from: id_objects,
             to: id_plugin,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "objects".to_string(),
+            to_port: "objects".to_string(),
         });
         g.add_edge(Edge {
             from: id_duration,
             to: id_plugin,
-            from_port: "output".to_string(),
+            from_port: "duration".to_string(),
             to_port: "duration".to_string(),
         });
         g.add_edge(Edge {
             from: id_plugin,
             to: id_output,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
         g
     }
@@ -322,16 +322,16 @@ mod tests {
         for n in [objects, duration, engine, modifier, output] {
             g.add_node(n);
         }
-        let edge = |from, to, port: &str| Edge {
+        let edge = |from, to, fp: &str, tp: &str| Edge {
             from,
             to,
-            from_port: "output".to_string(),
-            to_port: port.to_string(),
+            from_port: fp.to_string(),
+            to_port: tp.to_string(),
         };
-        g.add_edge(edge(id_o, id_e, "input"));
-        g.add_edge(edge(id_d, id_e, "duration"));
-        g.add_edge(edge(id_e, id_m, "input"));
-        g.add_edge(edge(id_m, id_out, "input"));
+        g.add_edge(edge(id_o, id_e, "objects", "objects"));
+        g.add_edge(edge(id_d, id_e, "duration", "duration"));
+        g.add_edge(edge(id_e, id_m, "out", "in"));
+        g.add_edge(edge(id_m, id_out, "out", "in"));
         g
     }
 
@@ -349,19 +349,19 @@ mod tests {
         for n in [objects, duration, ea, eb, comp, output] {
             g.add_node(n);
         }
-        let edge = |from, to, port: &str| Edge {
+        let edge = |from, to, fp: &str, tp: &str| Edge {
             from,
             to,
-            from_port: "output".to_string(),
-            to_port: port.to_string(),
+            from_port: fp.to_string(),
+            to_port: tp.to_string(),
         };
-        g.add_edge(edge(id_o, id_a, "input"));
-        g.add_edge(edge(id_d, id_a, "duration"));
-        g.add_edge(edge(id_o, id_b, "input"));
-        g.add_edge(edge(id_d, id_b, "duration"));
-        g.add_edge(edge(id_a, id_c, "input_a"));
-        g.add_edge(edge(id_b, id_c, "input_b"));
-        g.add_edge(edge(id_c, id_out, "input"));
+        g.add_edge(edge(id_o, id_a, "objects", "objects"));
+        g.add_edge(edge(id_d, id_a, "duration", "duration"));
+        g.add_edge(edge(id_o, id_b, "objects", "objects"));
+        g.add_edge(edge(id_d, id_b, "duration", "duration"));
+        g.add_edge(edge(id_a, id_c, "out", "a"));
+        g.add_edge(edge(id_b, id_c, "out", "b"));
+        g.add_edge(edge(id_c, id_out, "out", "in"));
         g
     }
 
@@ -442,14 +442,14 @@ mod tests {
         for n in [objects, modifier, output] {
             g.add_node(n);
         }
-        let edge = |from, to, port: &str| Edge {
+        let edge = |from, to, fp: &str, tp: &str| Edge {
             from,
             to,
-            from_port: "output".to_string(),
-            to_port: port.to_string(),
+            from_port: fp.to_string(),
+            to_port: tp.to_string(),
         };
-        g.add_edge(edge(id_o, id_m, "input")); // Objects→modifier : invalide
-        g.add_edge(edge(id_m, id_out, "input"));
+        g.add_edge(edge(id_o, id_m, "objects", "in")); // Objects→modifier : invalide
+        g.add_edge(edge(id_m, id_out, "out", "in"));
         match Compiler::compile_with_live_inputs(
             &g,
             LiveInputs {
@@ -461,7 +461,7 @@ mod tests {
             Err(e) => {
                 let s = format!("{e:?}");
                 assert!(
-                    s.contains("trajectory") || s.contains("InvalidConnection"),
+                    s.contains("TypeMismatch") || s.contains("InvalidConnection"),
                     "unexpected: {s}"
                 );
             }
@@ -659,19 +659,19 @@ mod tests {
         for n in [objects, duration, ea, eb, morph, output] {
             g.add_node(n);
         }
-        let edge = |from, to, port: &str| Edge {
+        let edge = |from, to, fp: &str, tp: &str| Edge {
             from,
             to,
-            from_port: "output".to_string(),
-            to_port: port.to_string(),
+            from_port: fp.to_string(),
+            to_port: tp.to_string(),
         };
-        g.add_edge(edge(id_o, id_a, "input"));
-        g.add_edge(edge(id_d, id_a, "duration"));
-        g.add_edge(edge(id_o, id_b, "input"));
-        g.add_edge(edge(id_d, id_b, "duration"));
-        g.add_edge(edge(id_a, id_m, "input_a"));
-        g.add_edge(edge(id_b, id_m, "input_b"));
-        g.add_edge(edge(id_m, id_out, "input"));
+        g.add_edge(edge(id_o, id_a, "objects", "objects"));
+        g.add_edge(edge(id_d, id_a, "duration", "duration"));
+        g.add_edge(edge(id_o, id_b, "objects", "objects"));
+        g.add_edge(edge(id_d, id_b, "duration", "duration"));
+        g.add_edge(edge(id_a, id_m, "out", "a"));
+        g.add_edge(edge(id_b, id_m, "out", "b"));
+        g.add_edge(edge(id_m, id_out, "out", "in"));
 
         let reg = Arc::new(Mutex::new(reg));
         let f = Compiler::compile_with_live_inputs(

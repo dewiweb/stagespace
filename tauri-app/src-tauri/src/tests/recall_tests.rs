@@ -89,9 +89,9 @@ mod recall_tests {
                  "data": {"label":"Output","type":"Output","params":{}}}
             ],
             "edges": [
-                {"id":"e1","source":"o","target":"e","targetHandle":"input"},
+                {"id":"e1","source":"o","target":"e","targetHandle":"objects"},
                 {"id":"e2","source":"d","target":"e","targetHandle":"duration"},
-                {"id":"e3","source":"e","target":"out","targetHandle":"input"}
+                {"id":"e3","source":"e","target":"out","targetHandle":"in"}
             ]
         })
     }
@@ -110,8 +110,8 @@ mod recall_tests {
                  "data":{"label":"Output", "type":"Output", "params":{}}}
             ],
             "edges": [
-                {"id":"e1", "source":"input", "target":"scale", "sourceHandle":"output", "targetHandle":"input"},
-                {"id":"e2", "source":"scale", "target":"output", "sourceHandle":"output", "targetHandle":"input"}
+                {"id":"e1", "source":"input", "target":"scale", "sourceHandle":"out", "targetHandle":"in"},
+                {"id":"e2", "source":"scale", "target":"output", "sourceHandle":"out", "targetHandle":"in"}
             ]
         })).unwrap());
         recall_cue_inner(cue, sh.clone()).unwrap();

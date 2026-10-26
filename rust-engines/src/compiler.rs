@@ -298,25 +298,19 @@ impl Compiler {
         kinds
     }
 
-    /// Entrées trajectoire d'un node Plugin, ordonnées par port
-    /// (`input_a`, puis `input`, puis `input_b`) — hors carriers
-    /// Objects/Duration qui ne transportent pas de positions.
+    /// Entrées trajectoire d'un node Plugin, ordonnées par port (`a`,
+    /// `b`, `in`) — les ports Positions de l'ABI v2. Les carriers
+    /// Objects/Duration ne peuvent pas atterrir ici (types disjoints).
     fn plugin_trajectory_inputs(graph: &Graph, node: &Node) -> Vec<crate::graph::NodeId> {
         let mut edges: Vec<&crate::graph::Edge> = graph
             .edges
             .iter()
             .filter(|e| e.to == node.id)
-            .filter(|e| matches!(e.to_port.as_str(), "input" | "input_a" | "input_b"))
-            .filter(|e| {
-                !matches!(
-                    graph.nodes.get(&e.from).map(|n| &n.node_type),
-                    Some(NodeType::Objects) | Some(NodeType::Duration)
-                )
-            })
+            .filter(|e| matches!(e.to_port.as_str(), "a" | "b" | "in"))
             .collect();
         edges.sort_by_key(|e| match e.to_port.as_str() {
-            "input_a" => 0,
-            "input" => 1,
+            "a" => 0,
+            "b" => 1,
             _ => 2,
         });
         edges.iter().map(|e| e.from).collect()

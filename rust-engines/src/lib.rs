@@ -51,6 +51,8 @@ mod integration_tests;
 #[cfg(test)]
 mod plugin_tests;
 #[cfg(test)]
+mod port_matrix_tests;
+#[cfg(test)]
 mod validator_tests;
 
 pub use animation::{

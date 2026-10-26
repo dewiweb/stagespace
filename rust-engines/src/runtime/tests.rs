@@ -308,7 +308,7 @@ fn test_worker_applies_signal_deltas() {
     g.add_edge(crate::graph::Edge {
         from: c.id,
         to: out.id,
-        from_port: "output".to_string(),
+        from_port: "out".to_string(),
         to_port: "signal".to_string(),
     });
     let signal_fn = crate::signal_compiler::compile_signal_graph(&g).expect("compiles");
@@ -355,7 +355,7 @@ fn test_signal_deltas_compose_with_audio_mods() {
     g.add_edge(crate::graph::Edge {
         from: c.id,
         to: out.id,
-        from_port: "output".to_string(),
+        from_port: "out".to_string(),
         to_port: "signal".to_string(),
     });
     rt.swap_signal_fn(crate::signal_compiler::compile_signal_graph(&g).unwrap());

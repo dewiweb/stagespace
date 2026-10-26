@@ -17,7 +17,7 @@ const makeNode = (type: NodeType, position: { x: number; y: number }, params: Re
   data: { label: type, type, params },
 });
 
-const makeEdge = (from: string, to: string, fromPort = 'output', toPort = 'input'): Edge => ({
+const makeEdge = (from: string, to: string, fromPort = 'out', toPort = 'in'): Edge => ({
   id: `${from}-${to}`,
   source: from,
   target: to,
@@ -161,8 +161,8 @@ export const useGlobalGraphStore = create<GlobalGraphState>((set, get) => ({
         id: e.id,
         source: e.source,
         target: e.target,
-        sourceHandle: e.sourceHandle ?? 'output',
-        targetHandle: e.targetHandle ?? 'input',
+        sourceHandle: e.sourceHandle ?? 'out',
+        targetHandle: e.targetHandle ?? 'in',
       })),
     };
 

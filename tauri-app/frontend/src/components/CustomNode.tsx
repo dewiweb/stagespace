@@ -6,7 +6,8 @@ import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import { useSignalGraphStore } from '../store/useSignalGraphStore';
 import { PARAM_SCHEMA, getCategoryColor, pluginNodeSchema, pluginParamsOnSwitch, type ParamDef, type NodeParamValue } from './nodeParamSchema';
-import { isSourceNode, isTerminalNode, isBinaryComposite, getInputPorts } from '../utils/connectionRules';
+import { isSourceNode, isTerminalNode, isBinaryComposite, getInputPorts, getOutputPorts } from '../utils/connectionRules';
+import type { PortDef } from '../types/generated/PortDef';
 
 const AUDIO_NODE_TYPES = new Set(['BPM', 'AudioAmplitude', 'AudioSpectrum', 'AudioAmplitudeFalloff']);
 
@@ -208,82 +209,35 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
     setTrackIdsText(null);
   };
 
-  // Rendu des handles d'input selon le type de node
+  // Couleur du handle par type de port — la sémantique de l'edge se lit
+  // sur la couleur : Positions (trajectoires/mergé), carriers Objects/
+  // Duration, géométrie Spline, domaine Signal.
+  const PORT_COLORS: Record<PortDef['port_type'], string> = {
+    Positions: '!bg-gray-400',
+    ObjectSet: '!bg-cyan-500',
+    Duration: '!bg-yellow-500',
+    Spline: '!bg-emerald-500',
+    Signal: '!bg-orange-400',
+  };
+  const outputPorts = getOutputPorts(data.type);
+
+  // Rendu des handles — convention unique : TOUS les inputs en haut,
+  // TOUS les outputs en bas (Max/MSP). Plusieurs ports sont répartis
+  // horizontalement dans l'ordre de déclaration du spec.
   const renderInputHandles = () => {
     if (!hasInput) return null;
-
-    if (isBinary) {
-      // Composites binaires : 2 handles à gauche (A en haut, B en bas)
-      return (
-        <>
-          <Handle
-            type="target"
-            position={Position.Left}
-            id="input_a"
-            style={{ top: '30%' }}
-            className="!w-3 !h-3 !bg-blue-500"
-          />
-          <Handle
-            type="target"
-            position={Position.Left}
-            id="input_b"
-            style={{ top: '70%' }}
-            className="!w-3 !h-3 !bg-purple-500"
-          />
-        </>
-      );
-    }
-
-    // Node standard : 1 handle en haut
-    // Pour les engines/physics/falloffs qui ont aussi un port "duration", on ajoute un handle latéral
-    const hasDurationPort = inputPorts.includes('duration');
-    // Nodes spline (Evaluate/Trim/Offset) : port 'spline' dédié pour DrawSpline
-    const hasSplinePort = inputPorts.includes('spline');
-    // Domaine signal : les ports multi-entrées (a/b/factor…) sont rendus à
-    // gauche sous leurs propres ids — le premier reste le handle principal
-    // en haut ('signal' ou 'a'), comme 'input' pour les trajectoires.
-    const mainPorts = inputPorts.filter((p) => p !== 'duration' && p !== 'spline');
-    const mainPort = mainPorts[0] ?? 'input';
-    const extraPorts = mainPorts.slice(1);
-    return (
-      <>
-        <Handle
-          type="target"
-          position={Position.Top}
-          id={mainPort}
-          className="!w-3 !h-3 !bg-gray-400"
-        />
-        {hasDurationPort && (
-          <Handle
-            type="target"
-            position={Position.Left}
-            id="duration"
-            style={{ top: hasSplinePort ? '30%' : '50%' }}
-            className="!w-2.5 !h-2.5 !bg-yellow-500"
-          />
-        )}
-        {hasSplinePort && (
-          <Handle
-            type="target"
-            position={Position.Left}
-            id="spline"
-            style={{ top: '70%' }}
-            className="!w-2.5 !h-2.5 !bg-emerald-500"
-          />
-        )}
-        {extraPorts.map((p, i) => (
-          <Handle
-            key={p}
-            type="target"
-            position={Position.Left}
-            id={p}
-            style={{ top: `${((i + 1) / (extraPorts.length + 1)) * 100}%` }}
-            className="!w-2.5 !h-2.5 !bg-amber-400"
-            title={p}
-          />
-        ))}
-      </>
-    );
+    const n = inputPorts.length;
+    return inputPorts.map((p, i) => (
+      <Handle
+        key={p.name}
+        type="target"
+        position={Position.Top}
+        id={p.name}
+        style={{ left: `${((i + 1) / (n + 1)) * 100}%` }}
+        className={`!w-3 !h-3 ${PORT_COLORS[p.port_type]}`}
+        title={`${p.label} (${p.port_type})`}
+      />
+    ));
   };
 
   return (
@@ -362,15 +316,13 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
         </div>
       )}
 
-      {/* Signal multi-ports (a/b/factor…) : labels des handles latéraux
-          — composites exclus (leur label A/B est déjà rendu au-dessus). */}
-      {!isBinary && inputPorts.filter((p) => p !== 'duration' && p !== 'spline').length > 1 && (
-        <div className="flex gap-2 px-1 py-0.5 text-xs text-gray-500 font-mono">
-          {inputPorts
-            .filter((p) => p !== 'duration' && p !== 'spline')
-            .map((p, i) => (
-              <span key={p} className={i === 0 ? 'text-gray-400' : 'text-amber-400'}>{p}</span>
-            ))}
+      {/* Labels des ports multi-entrées — sous les handles du haut,
+          dans le même ordre de déclaration. */}
+      {inputPorts.length > 1 && (
+        <div className="flex justify-around px-1 py-0.5 text-xs text-gray-500 font-mono">
+          {inputPorts.map((p) => (
+            <span key={p.name}>{p.name}</span>
+          ))}
         </div>
       )}
 
@@ -484,10 +436,20 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
         </div>
       )}
 
-      {/* Handle de sortie — seulement si le node n'est pas terminal */}
-      {hasOutput && (
-        <Handle type="source" position={Position.Bottom} id="output" className="!w-3 !h-3 !bg-gray-400" />
-      )}
+      {/* Handles de sortie — en bas, ordre déclaré (DrawSpline a deux
+          sorties : out Positions + spline Spline) */}
+      {hasOutput &&
+        outputPorts.map((p, i) => (
+          <Handle
+            key={p.name}
+            type="source"
+            position={Position.Bottom}
+            id={p.name}
+            style={{ left: `${((i + 1) / (outputPorts.length + 1)) * 100}%` }}
+            className={`!w-3 !h-3 ${PORT_COLORS[p.port_type]}`}
+            title={`${p.label} (${p.port_type})`}
+          />
+        ))}
     </div>
   );
 };

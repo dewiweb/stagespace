@@ -17,7 +17,7 @@ const makeNode = (type: NodeType, position: { x: number; y: number }, params: Re
   data: { label: type, type, params },
 });
 
-const makeEdge = (from: string, to: string, fromPort = 'output', toPort = 'signal'): Edge => ({
+const makeEdge = (from: string, to: string, fromPort = 'out', toPort = 'signal'): Edge => ({
   id: `${from}-${to}`,
   source: from,
   target: to,
@@ -149,7 +149,7 @@ export const useSignalGraphStore = create<SignalGraphState>((set, get) => ({
         id: e.id,
         source: e.source,
         target: e.target,
-        sourceHandle: e.sourceHandle ?? 'output',
+        sourceHandle: e.sourceHandle ?? 'out',
         targetHandle: e.targetHandle ?? 'signal',
       })),
     };

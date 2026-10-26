@@ -115,9 +115,9 @@ function defaultAnimation(): Move {
       { id: 'out-default', type: 'custom', position: { x: 550, y: 180 }, data: { label: 'Output', type: 'Output', params: {} } },
     ],
     edges: [
-      { id: 'e-obj-engine', source: 'obj-default', target: 'engine-default', sourceHandle: 'output', targetHandle: 'input' },
-      { id: 'e-dur-engine', source: 'dur-default', target: 'engine-default', sourceHandle: 'output', targetHandle: 'duration' },
-      { id: 'e-engine-out', source: 'engine-default', target: 'out-default', sourceHandle: 'output', targetHandle: 'input' },
+      { id: 'e-obj-engine', source: 'obj-default', target: 'engine-default', sourceHandle: 'objects', targetHandle: 'objects' },
+      { id: 'e-dur-engine', source: 'dur-default', target: 'engine-default', sourceHandle: 'duration', targetHandle: 'duration' },
+      { id: 'e-engine-out', source: 'engine-default', target: 'out-default', sourceHandle: 'out', targetHandle: 'in' },
     ],
   };
   return {

@@ -188,10 +188,23 @@ mod tests {
         }
 
         fn wire(&mut self, from: NodeId, to: NodeId, to_port: &str) {
+            // Le port de sortie se résout par correspondance de type avec
+            // le port cible — même règle que le validator.
+            let from_ty = self.graph.nodes[&from].node_type.clone();
+            let to_ty = self.graph.nodes[&to].node_type.clone();
+            let in_ty = crate::node_spec::node_spec(&to_ty)
+                .input_port(to_port)
+                .map(|p| p.port_type);
+            let from_port = crate::node_spec::node_spec(&from_ty)
+                .outputs
+                .iter()
+                .find(|p| Some(p.port_type) == in_ty)
+                .map(|p| p.name.clone())
+                .unwrap_or_else(|| "out".to_string());
             self.graph.add_edge(Edge {
                 from,
                 to,
-                from_port: "output".to_string(),
+                from_port,
                 to_port: to_port.to_string(),
             });
         }
@@ -219,7 +232,7 @@ mod tests {
                 self.has_moving_leaf = true;
             }
             let id = self.add_node(Node::with_params(node_type, params));
-            self.wire(self.objects, id, "input");
+            self.wire(self.objects, id, "objects");
             self.wire(self.duration, id, "duration");
             id
         }
@@ -307,11 +320,11 @@ mod tests {
             if COMPOSITES.contains(&wrapper) {
                 let a = self.producer(depth + 1, max_depth, wrapper.clone());
                 let b = self.producer(depth + 1, max_depth, wrapper.clone());
-                self.wire(a, id, "input_a");
-                self.wire(b, id, "input_b");
+                self.wire(a, id, "a");
+                self.wire(b, id, "b");
             } else {
                 let child = self.producer(depth + 1, max_depth, wrapper);
-                self.wire(child, id, "input");
+                self.wire(child, id, "in");
             }
             id
         }
@@ -347,7 +360,7 @@ mod tests {
 
         let root = gen.producer(0, max_depth, NodeType::Output);
         let output = gen.add_node(Node::new(NodeType::Output));
-        gen.wire(root, output, "input");
+        gen.wire(root, output, "in");
 
         (
             gen.graph,
@@ -465,7 +478,7 @@ mod tests {
     /// valide, le compile ne doit pas crasher non plus (Err ok, panic non).
     #[test]
     fn mutated_graphs_fail_cleanly() {
-        let bogus_ports = ["input", "input_a", "input_b", "duration", "bogus"];
+        let bogus_ports = ["in", "a", "b", "duration", "bogus"];
 
         for seed in 0..48u64 {
             let tag = format!("mutant seed={seed}");
@@ -497,7 +510,7 @@ mod tests {
                         graph.add_edge(Edge {
                             from,
                             to,
-                            from_port: "output".to_string(),
+                            from_port: "out".to_string(),
                             to_port: pick_port(&mut rng).to_string(),
                         });
                     }

@@ -133,13 +133,13 @@ mod tests {
             }],
             "edges": [{
                 "id": "e1", "source": "n1", "target": "n2",
-                "sourceHandle": "output", "targetHandle": "input"
+                "sourceHandle": "out", "targetHandle": "in"
             }]
         });
         let g: GraphJson = serde_json::from_value(v).unwrap();
         assert_eq!(g.version(), 0); // legacy — pas de champ
         assert_eq!(g.nodes[0].data.node_type.as_deref(), Some("circular"));
-        assert_eq!(g.edges[0].sourceHandle.as_deref(), Some("output"));
+        assert_eq!(g.edges[0].sourceHandle.as_deref(), Some("out"));
         assert!(g.check_version().is_ok());
     }
 

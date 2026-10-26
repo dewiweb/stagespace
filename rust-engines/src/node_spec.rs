@@ -1,25 +1,79 @@
 //! Catalogue déclaratif des nodes — source de vérité unique pour la taxonomie
 //! du graphe.
 //!
-//! Avant T5d, le même savoir était répliqué dans `validator.rs` (ports,
-//! connexions, scope global/sub) et dans le frontend (`nodeParamSchema.ts`,
-//! `connectionRules.ts` — params, catégories, descriptions, sets de types).
-//! Deux langages, six miroirs — la cause directe des dérives corrigées en T2
-//! (Scale x/y/z vs scalaire, engine→RadiusScale accepté côté UI mais rejeté
-//! côté Rust).
+//! # Modèle de ports
 //!
-//! Désormais : un `NodeSpec` par `NodeType` — catégorie, scope, ports,
-//! règle de ciblage (`Feeds`), params UI et défauts. Le validator dérive ses
-//! décisions du spec, et le catalogue est sérialisé vers
-//! `frontend/src/types/generated/nodeSpecs.json` (test `export_node_spec_catalog`,
-//! lancé par `gen_contracts.sh`) — le frontend consomme ce fichier, plus aucune
-//! liste maintenue à la main.
+//! Chaque node déclare des **ports typés** (`PortDef { name, port_type,
+//! required }`). La règle de connexion est unique et déterministe :
+//!
+//! ```text
+//! edge valide ⟺ out_port.port_type == in_port.port_type
+//! ```
+//!
+//! Cinq types de donnée circulent sur les edges :
+//!
+//! - `ObjectSet` — définition du set de tracks (compte + IDs). Produit
+//!   uniquement par `Objects`, consommé par les engines/sources/falloffs.
+//! - `Duration` — durée du cycle en secondes. Produit uniquement par
+//!   `Duration`, consommé par les mêmes nodes.
+//! - `Positions` — flux de positions. Dans un sub-graph : trajectoire
+//!   `f(t, i) → Vec3` (engines, modifiers, composites, physics, falloffs,
+//!   splines évaluées). Dans le graphe global : positions mergées
+//!   (Input/Merge/MoveRef → chaîne post-process → Output). Le même type
+//!   couvre les deux contextes car ils ne peuvent jamais coexister dans
+//!   un graphe (voir `NodeScope`).
+//! - `Spline` — géométrie spline brute. Produit par `DrawSpline`,
+//!   consommé par le port `spline` des nodes Evaluate/Trim/Offset.
+//! - `Signal` — scalaire `f64`, domaine modulation (nodes `Signal*`).
+//!
+//! Les seules autres règles structurelles sont dérivées des ports :
+//! - `required` — le port doit recevoir au moins un edge.
+//! - arité — un port d'entrée n'accepte qu'un seul edge (fan-out autorisé
+//!   côté sortie).
+//! - contexte — `NodeScope` restreint le(s) graphe(s) où le node vit.
+//!
+//! Le validator dérive ses décisions de cette table, et le catalogue est
+//! sérialisé vers `frontend/src/types/generated/nodeSpecs.json` (test
+//! `export_node_spec_catalog`, lancé par `gen_contracts.sh`) — le frontend
+//! consomme ce fichier, plus aucune liste maintenue à la main.
 
 use serde::Serialize;
 use std::sync::OnceLock;
 use ts_rs::TS;
 
 use crate::graph::NodeType;
+
+/// Type de donnée transportée par un port — détermine la validité d'un edge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
+pub enum PortType {
+    /// Set de tracks (compte + IDs) — produit par `Objects` uniquement.
+    ObjectSet,
+    /// Durée du cycle en secondes — produite par `Duration` uniquement.
+    Duration,
+    /// Flux de positions — trajectoire (sub-graph) ou positions mergées
+    /// (graphe global). Même type : les deux contextes sont disjoints.
+    Positions,
+    /// Géométrie spline brute — produite par `DrawSpline`.
+    Spline,
+    /// Scalaire `f64` — domaine signal/modulation.
+    Signal,
+}
+
+/// Déclaration d'un port (entrée ou sortie).
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct PortDef {
+    /// Identifiant stable du port — stocké dans `Edge::from_port`/`to_port`.
+    pub name: String,
+    /// Type de donnée transportée.
+    pub port_type: PortType,
+    /// `true` → le port doit recevoir au moins un edge (validation).
+    /// `false` → port optionnel (fallback param/défaut à l'évaluation).
+    pub required: bool,
+    /// Label court affiché à côté du handle dans l'éditeur.
+    pub label: String,
+}
 
 /// Catégorie palette + rôle sémantique grossier du node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
@@ -37,7 +91,7 @@ pub enum NodeCategory {
     Modifier,
     /// Post-process du graph global — chaîne linéaire après merge
     PostProcess,
-    /// Mix/Group/Sequence/Crossfade — composites binaires (A/B)
+    /// Mix/Group/Sequence/Crossfade — composites binaires (a/b)
     Composite,
     /// BPM/AudioAmplitude/AudioSpectrum/OSCInput — engines réactifs
     Source,
@@ -60,44 +114,6 @@ pub enum NodeScope {
     /// Graph de modulation (signal) uniquement — domaine scalaire,
     /// incompatible avec les graphes de trajectoire.
     SignalOnly,
-}
-
-/// Règle de ciblage : quels types de nodes cet output peut alimenter.
-/// Évaluée contre le `NodeSpec` de la cible — voir `NodeSpec::accepts_from`
-/// et `NodeSpec::feeds_modifier`/`feeds_composite` pour les plugins.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
-#[ts(export)]
-pub enum Feeds {
-    /// Pas de sortie (Output)
-    Terminal,
-    /// Objects/Duration → tout node exposant un port 'duration'
-    /// (engines, physics, splines, falloffs, sources, Plugin)
-    EngineInputs,
-    /// Engine-like → Output + composites + modifiers
-    /// (math engines, Evaluate/Trim/OffsetSpline, falloffs riches,
-    /// sources BPM/Audio*, Plugin en tant que source)
-    Trajectory,
-    /// DrawSpline → cibles Trajectory + nodes avec port 'spline'
-    SplineAndTrajectory,
-    /// Physics → Output + composites (pas de modifiers)
-    TrajectoryComposites,
-    /// Falloffs limités → nodes `falloff_target` (Scale/Rotate/Offset)
-    BasicModifiers,
-    /// Modifier / post-process → Output + Mix/Group/Crossfade + modifiers +
-    /// post-process (PAS Sequence — pas de sémantique A/B après une chaîne
-    /// modifiée)
-    ModifierChain,
-    /// MoveRef → même cibles que ModifierChain. Variante distincte car un
-    /// MoveRef peut alimenter un plugin *modifier* alors qu'un post-process
-    /// ne le peut pas (feeds_modifier).
-    MoveRefChain,
-    /// Composite → Output + composites
-    Composites,
-    /// Input/Merge → modifiers + post-process + Output
-    PostProcess,
-    /// Signal graph → nodes `NodeCategory::Signal` uniquement (le domaine
-    /// scalaire est hermétique : pas de connexion vers la trajectoire).
-    Signal,
 }
 
 /// Type de paramètre UI — aligné sur `ParamType` frontend et les types de
@@ -138,17 +154,13 @@ pub struct NodeSpec {
     pub node_type: NodeType,
     pub category: NodeCategory,
     pub scope: NodeScope,
-    /// Règle de ciblage pour les edges sortants.
-    pub feeds: Feeds,
-    /// Ports d'entrée. Pour Plugin : superset — le `PluginKind` du manifeste
-    /// restreint à runtime (engine → input+duration, modifier → input,
-    /// composite → input/input_a/input_b).
-    pub inputs: Vec<String>,
-    /// Ports de sortie — `["output"]` ou `[]` pour le terminal.
-    pub outputs: Vec<String>,
-    /// Cible des falloffs limités (Directional/AudioAmplitude) — les
-    /// transforms élémentaires Scale/Rotate/Offset uniquement.
-    pub falloff_target: bool,
+    /// Ports d'entrée. Pour `Plugin` : superset ABI — le `PluginKind` du
+    /// manifeste restreint à runtime (engine → objects+duration,
+    /// modifier → in, composite → a+b).
+    pub inputs: Vec<PortDef>,
+    /// Ports de sortie — un seul `out` typé en général ; DrawSpline en a
+    /// deux (`out` Positions + `spline` Spline) ; le terminal n'en a pas.
+    pub outputs: Vec<PortDef>,
     /// Description courte — palette, hover, doc.
     pub description: String,
     /// Params éditables — schema du formulaire + valeurs initiales.
@@ -156,73 +168,57 @@ pub struct NodeSpec {
 }
 
 impl NodeSpec {
-    /// La cible `to` peut-elle recevoir la sortie de ce node ?
-    /// (Règle type-niveau ; l'arité et les ports sont vérifiés à part.)
-    /// Pour `to == Plugin`, voir `feeds_modifier`/`feeds_composite` — le
-    /// kind du manifeste décide.
-    pub fn can_feed(&self, to: &NodeSpec) -> bool {
-        let cat = |c| to.category == c;
-        match self.feeds {
-            Feeds::Terminal => false,
-            Feeds::EngineInputs => to.inputs.iter().any(|p| p == "duration"),
-            Feeds::Trajectory => {
-                to.node_type == NodeType::Output
-                    || cat(NodeCategory::Composite)
-                    || cat(NodeCategory::Modifier)
-            }
-            Feeds::SplineAndTrajectory => {
-                to.inputs.iter().any(|p| p == "spline") || self.can_feed_trajectory(to)
-            }
-            Feeds::TrajectoryComposites => {
-                to.node_type == NodeType::Output || cat(NodeCategory::Composite)
-            }
-            Feeds::BasicModifiers => to.falloff_target,
-            Feeds::ModifierChain | Feeds::MoveRefChain => {
-                to.node_type == NodeType::Output
-                    || cat(NodeCategory::Modifier)
-                    || cat(NodeCategory::PostProcess)
-                    || matches!(
-                        to.node_type,
-                        NodeType::Mix | NodeType::Group | NodeType::Crossfade
-                    )
-            }
-            Feeds::Composites => to.node_type == NodeType::Output || cat(NodeCategory::Composite),
-            Feeds::PostProcess => {
-                to.node_type == NodeType::Output
-                    || cat(NodeCategory::Modifier)
-                    || cat(NodeCategory::PostProcess)
-            }
-            Feeds::Signal => cat(NodeCategory::Signal),
-        }
+    /// Port d'entrée par nom.
+    pub fn input_port(&self, name: &str) -> Option<&PortDef> {
+        self.inputs.iter().find(|p| p.name == name)
     }
 
-    fn can_feed_trajectory(&self, to: &NodeSpec) -> bool {
-        to.node_type == NodeType::Output
-            || to.category == NodeCategory::Composite
-            || to.category == NodeCategory::Modifier
+    /// Port de sortie par nom.
+    pub fn output_port(&self, name: &str) -> Option<&PortDef> {
+        self.outputs.iter().find(|p| p.name == name)
     }
 
-    /// Ce node produit-il une trajectoire connectable à un plugin `modifier`
-    /// natif ? (validator.rs::feeds_modifier historique)
-    pub fn feeds_modifier(&self) -> bool {
-        match self.feeds {
-            Feeds::Trajectory | Feeds::SplineAndTrajectory | Feeds::BasicModifiers => true,
-            // Les modifiers sub-graph oui, les post-process non.
-            Feeds::ModifierChain => self.category == NodeCategory::Modifier,
-            Feeds::MoveRefChain => true,
-            _ => false,
-        }
+    /// Le node a-t-il un port d'entrée du type donné ?
+    /// Utilisé par le validator : "a un port `ObjectSet`" = engine-like qui
+    /// a besoin d'un set de tracks résoluble.
+    pub fn has_input_type(&self, port_type: PortType) -> bool {
+        self.inputs.iter().any(|p| p.port_type == port_type)
     }
 
-    /// Ce node peut-il alimenter un plugin `composite` ?
-    /// = feeds_modifier + physics + composites, moins les falloffs limités.
-    pub fn feeds_composite(&self) -> bool {
-        match self.feeds {
-            Feeds::Trajectory | Feeds::SplineAndTrajectory => true,
-            Feeds::TrajectoryComposites | Feeds::Composites => true,
-            Feeds::ModifierChain => self.category == NodeCategory::Modifier,
-            Feeds::MoveRefChain => true,
-            _ => false,
+    /// Le node produit-il un flux Positions ? (engine-like, modifier,
+    /// composite, post-process, source globale…)
+    pub fn produces_positions(&self) -> bool {
+        self.outputs
+            .iter()
+            .any(|p| p.port_type == PortType::Positions)
+    }
+
+    /// Résout les ports d'entrée effectifs d'un node Plugin selon le kind
+    /// de son manifeste — `None` pour les nodes natifs.
+    ///
+    /// ABI v2 :
+    /// - engine → `objects` (ObjectSet) + `duration` (Duration), sortie `out`
+    /// - modifier → `in` (Positions, required), sortie `out`
+    /// - composite → `a` + `b` (Positions, required), sortie `out`
+    /// - kind inconnu → superset déclaré dans le catalogue.
+    pub fn plugin_input_ports(kind: Option<crate::plugins::PluginKind>) -> Vec<PortDef> {
+        use crate::plugins::PluginKind as K;
+        match kind {
+            Some(K::Engine) => vec![
+                port("objects", PortType::ObjectSet),
+                port("duration", PortType::Duration),
+            ],
+            Some(K::Modifier) => vec![req("in", PortType::Positions)],
+            Some(K::Composite) => {
+                vec![req("a", PortType::Positions), req("b", PortType::Positions)]
+            }
+            None => vec![
+                port("objects", PortType::ObjectSet),
+                port("duration", PortType::Duration),
+                port("in", PortType::Positions),
+                port("a", PortType::Positions),
+                port("b", PortType::Positions),
+            ],
         }
     }
 }
@@ -285,27 +281,83 @@ impl Def for ParamSpec {
     }
 }
 
+// ─── Builders de ports ──────────────────────────────────────────────────────
+
+/// Port optionnel.
+fn port(name: &str, port_type: PortType) -> PortDef {
+    PortDef {
+        name: name.into(),
+        port_type,
+        required: false,
+        label: name.into(),
+    }
+}
+
+/// Port requis — le validator exige au moins un edge connecté.
+fn req(name: &str, port_type: PortType) -> PortDef {
+    PortDef {
+        required: true,
+        ..port(name, port_type)
+    }
+}
+
+/// Entrées carriers d'un engine-like : set de tracks + durée de cycle.
+/// Optionnels au niveau port — `n_objects`/`duration` ont des fallbacks
+/// (param propre, propagation upstream, défaut) ; le validator garde la
+/// règle graphe-niveau "Objects + Duration connectés si engines présents".
+fn engine_in() -> Vec<PortDef> {
+    vec![
+        port("objects", PortType::ObjectSet),
+        port("duration", PortType::Duration),
+    ]
+}
+
+/// Entrées d'un engine spline : carriers + géométrie spline.
+/// `spline_required` — EvaluateSpline n'a pas de fallback `points` param,
+/// Trim/Offset si (leur champ points sert de fallback).
+fn spline_in(spline_required: bool) -> Vec<PortDef> {
+    let mut v = engine_in();
+    v.push(if spline_required {
+        req("spline", PortType::Spline)
+    } else {
+        port("spline", PortType::Spline)
+    });
+    v
+}
+
+/// Entrée position unique requise — modifiers, post-process, Output.
+fn pos_in() -> Vec<PortDef> {
+    vec![req("in", PortType::Positions)]
+}
+
+/// Entrées binaires ordonnées — Mix/Group/Sequence/Crossfade.
+fn comp_in() -> Vec<PortDef> {
+    vec![req("a", PortType::Positions), req("b", PortType::Positions)]
+}
+
+/// Sortie position standard — un seul port `out`.
+fn out_pos() -> Vec<PortDef> {
+    vec![port("out", PortType::Positions)]
+}
+
+/// Sortie signal standard — domaine modulation.
+fn out_sig() -> Vec<PortDef> {
+    vec![port("out", PortType::Signal)]
+}
+
 const PLANE: &[&str] = &["xz", "xy", "yz"];
 const AXIS: &[&str] = &["x", "y", "z"];
 const EASING: &[&str] = &["linear", "ease_in", "ease_out", "ease_in_out"];
 const BAND: &[&str] = &["rms", "bass", "mid", "high"];
 
-const TRAJ_IN: &[&str] = &["input", "duration"];
-const SPLINE_IN: &[&str] = &["input", "duration", "spline"];
-const MOD_IN: &[&str] = &["input"];
-const COMP_IN: &[&str] = &["input", "input_a", "input_b"];
-const NO_IN: &[&str] = &[];
-
-/// Builder de la table — les 8 paramètres reflètent les champs du spec ;
+/// Builder de la table — les 7 paramètres reflètent les champs du spec ;
 /// une signature longue est le prix d'une déclaration compacte par node.
-#[allow(clippy::too_many_arguments)]
 fn spec(
     node_type: NodeType,
     category: NodeCategory,
     scope: NodeScope,
-    feeds: Feeds,
-    inputs: &[&str],
-    falloff_target: bool,
+    inputs: Vec<PortDef>,
+    outputs: Vec<PortDef>,
     description: &str,
     params: Vec<ParamSpec>,
 ) -> NodeSpec {
@@ -313,20 +365,13 @@ fn spec(
         node_type,
         category,
         scope,
-        feeds,
-        inputs: inputs.iter().map(|s| s.to_string()).collect(),
-        outputs: if feeds == Feeds::Terminal {
-            vec![]
-        } else {
-            vec!["output".to_string()]
-        },
-        falloff_target,
+        inputs,
+        outputs,
         description: description.into(),
         params,
     }
 }
 
-use Feeds as F;
 use NodeCategory as C;
 use NodeScope as S;
 
@@ -334,32 +379,34 @@ fn build_catalog() -> Vec<NodeSpec> {
     vec![
         // ── Structurels ──
         spec(
-            NodeType::Objects, C::Structural, S::SubOnly, F::EngineInputs, NO_IN, false,
+            NodeType::Objects, C::Structural, S::SubOnly, vec![],
+            vec![port("objects", PortType::ObjectSet)],
             "Defines the object/track count and their IDs. Required — graph source",
             vec![nrange("n_objects", "Count", 1.0, 1.0, 64.0).d(9)],
         ),
         spec(
-            NodeType::Duration, C::Structural, S::SubOnly, F::EngineInputs, NO_IN, false,
+            NodeType::Duration, C::Structural, S::SubOnly, vec![],
+            vec![port("duration", PortType::Duration)],
             "Defines the cycle duration in seconds. Required — syncs engines",
             vec![nmin("duration", "Duration (s)", 0.1, 0.1).d(4.0)],
         ),
         spec(
-            NodeType::Output, C::Structural, S::Both, F::Terminal, MOD_IN, false,
+            NodeType::Output, C::Structural, S::Both, pos_in(), vec![],
             "Graph terminal — sends positions via OSC to tracks. Required",
             vec![txt("track_range", "Track Range (ex: 0-11)").d("0-")],
         ),
         spec(
-            NodeType::Input, C::Structural, S::GlobalOnly, F::PostProcess, NO_IN, false,
+            NodeType::Input, C::Structural, S::GlobalOnly, vec![], out_pos(),
             "Global graph entry point — represents the merged positions of all moves",
             vec![],
         ),
         spec(
-            NodeType::MoveRef, C::Structural, S::GlobalOnly, F::MoveRefChain, NO_IN, false,
+            NodeType::MoveRef, C::Structural, S::GlobalOnly, vec![], out_pos(),
             "Alternative source to Input — post-process filtered to one move's tracks via move_id",
             vec![txt("move_id", "Move ID").d("")],
         ),
         spec(
-            NodeType::Merge, C::Structural, S::GlobalOnly, F::PostProcess, NO_IN, false,
+            NodeType::Merge, C::Structural, S::GlobalOnly, vec![], out_pos(),
             "Merge node — represents the MergeRuntime. Strategy: override/crossfade/blend/priority",
             vec![
                 enm("strategy", "Strategy", &["override", "crossfade", "blend", "priority"]).d("override"),
@@ -368,7 +415,7 @@ fn build_catalog() -> Vec<NodeSpec> {
         ),
         // ── Moteurs math ──
         spec(
-            NodeType::Circular, C::MathEngine, S::SubOnly, F::Trajectory, TRAJ_IN, false,
+            NodeType::Circular, C::MathEngine, S::SubOnly, engine_in(), out_pos(),
             "Circular motion — radius, speed, plane. The most used",
             vec![
                 ns("radius", "Radius", 0.1).d(1.5),
@@ -378,7 +425,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::Elliptical, C::MathEngine, S::SubOnly, F::Trajectory, TRAJ_IN, false,
+            NodeType::Elliptical, C::MathEngine, S::SubOnly, engine_in(), out_pos(),
             "Ellipse with independent axes (a≠b). For flattened orbits",
             vec![
                 ns("a", "Semi-major", 0.1).d(0.8),
@@ -389,7 +436,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::Spiral, C::MathEngine, S::SubOnly, F::Trajectory, TRAJ_IN, false,
+            NodeType::Spiral, C::MathEngine, S::SubOnly, engine_in(), out_pos(),
             "Spiral that expands/contracts over time",
             vec![
                 ns("radius", "Radius", 0.1).d(0.5),
@@ -400,7 +447,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::Lissajous, C::MathEngine, S::SubOnly, F::Trajectory, TRAJ_IN, false,
+            NodeType::Lissajous, C::MathEngine, S::SubOnly, engine_in(), out_pos(),
             "Complex harmonic curves (a, b, delta). Ornamental figures",
             vec![
                 ns("a", "A", 0.1).d(1.5),
@@ -411,7 +458,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::Figure8, C::MathEngine, S::SubOnly, F::Trajectory, TRAJ_IN, false,
+            NodeType::Figure8, C::MathEngine, S::SubOnly, engine_in(), out_pos(),
             "Lemniscate — horizontal figure-8",
             vec![
                 ns("scale", "Scale", 0.1).d(1.5),
@@ -421,7 +468,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::Linear, C::MathEngine, S::SubOnly, F::Trajectory, TRAJ_IN, false,
+            NodeType::Linear, C::MathEngine, S::SubOnly, engine_in(), out_pos(),
             "Linear interpolation between 2 points (start→end)",
             vec![
                 v3("start", "Start").d([-1.0, 0.0, 0.0]),
@@ -429,7 +476,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::Oscillation, C::MathEngine, S::SubOnly, F::Trajectory, TRAJ_IN, false,
+            NodeType::Oscillation, C::MathEngine, S::SubOnly, engine_in(), out_pos(),
             "Sine wave on one axis (x/y/z). For vibrations",
             vec![
                 ns("amplitude", "Amplitude", 0.1).d(1.5),
@@ -439,7 +486,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::Formation, C::MathEngine, S::SubOnly, F::Trajectory, TRAJ_IN, false,
+            NodeType::Formation, C::MathEngine, S::SubOnly, engine_in(), out_pos(),
             "Static formations: circle, line, arc, grid. No motion",
             vec![
                 enm("shape", "Shape", &["circle", "line", "arc", "grid"]).d("circle"),
@@ -449,7 +496,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::PerlinNoise, C::MathEngine, S::SubOnly, F::Trajectory, TRAJ_IN, false,
+            NodeType::PerlinNoise, C::MathEngine, S::SubOnly, engine_in(), out_pos(),
             "Perlin noise — smooth organic random motion",
             vec![
                 ns("intensity", "Intensity", 0.1).d(0.5),
@@ -458,7 +505,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::Converge, C::MathEngine, S::SubOnly, F::Trajectory, TRAJ_IN, false,
+            NodeType::Converge, C::MathEngine, S::SubOnly, engine_in(), out_pos(),
             "Radial convergence to center with easing",
             vec![
                 ns("start_radius", "Start Radius", 0.1).d(0.9),
@@ -467,7 +514,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::Pendulum, C::MathEngine, S::SubOnly, F::Trajectory, TRAJ_IN, false,
+            NodeType::Pendulum, C::MathEngine, S::SubOnly, engine_in(), out_pos(),
             "Damped physical pendulum (length, gravity, damping)",
             vec![
                 ns("length", "Length", 0.1).d(0.8),
@@ -478,7 +525,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::RoseCurve, C::MathEngine, S::SubOnly, F::Trajectory, TRAJ_IN, false,
+            NodeType::RoseCurve, C::MathEngine, S::SubOnly, engine_in(), out_pos(),
             "Polar rose r=cos(kθ) — n_petals flowers",
             vec![
                 ns("radius", "Radius", 0.1).d(0.8),
@@ -489,7 +536,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::Helix, C::MathEngine, S::SubOnly, F::Trajectory, TRAJ_IN, false,
+            NodeType::Helix, C::MathEngine, S::SubOnly, engine_in(), out_pos(),
             "3D helix — radius, height, turns. For rises/falls",
             vec![
                 ns("radius", "Radius", 0.1).d(0.7),
@@ -500,7 +547,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::Wave, C::MathEngine, S::SubOnly, F::Trajectory, TRAJ_IN, false,
+            NodeType::Wave, C::MathEngine, S::SubOnly, engine_in(), out_pos(),
             "Travelling wave across objects (stadium wave). Each object oscillates with a delay",
             vec![
                 ns("amplitude", "Amplitude", 0.1).d(1.0),
@@ -512,7 +559,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::CustomTrajectory, C::MathEngine, S::SubOnly, F::Trajectory, TRAJ_IN, false,
+            NodeType::CustomTrajectory, C::MathEngine, S::SubOnly, engine_in(), out_pos(),
             "Custom x,y,z equations (cartesian/polar/spherical). For bespoke trajectories",
             vec![
                 enm("coordinate_system", "Coord System", &["cartesian", "polar", "spherical"]).d("cartesian"),
@@ -521,7 +568,7 @@ fn build_catalog() -> Vec<NodeSpec> {
         ),
         // ── Moteurs physique ──
         spec(
-            NodeType::Bouncing, C::PhysicsEngine, S::SubOnly, F::TrajectoryComposites, TRAJ_IN, false,
+            NodeType::Bouncing, C::PhysicsEngine, S::SubOnly, engine_in(), out_pos(),
             "Physical bounces inside a container (sphere/box) with restitution",
             vec![
                 enm("container", "Container", &["sphere", "box"]).d("sphere"),
@@ -532,7 +579,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::Spring, C::PhysicsEngine, S::SubOnly, F::TrajectoryComposites, TRAJ_IN, false,
+            NodeType::Spring, C::PhysicsEngine, S::SubOnly, engine_in(), out_pos(),
             "Spring toward a target point (stiffness, damping)",
             vec![
                 v3("target", "Target").d([0.0, 0.0, 0.0]),
@@ -542,7 +589,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::Follow, C::PhysicsEngine, S::SubOnly, F::TrajectoryComposites, TRAJ_IN, false,
+            NodeType::Follow, C::PhysicsEngine, S::SubOnly, engine_in(), out_pos(),
             "Steering: follow/pursue/evade/orbit/arrive around a moving target (lookahead, ring, deceleration)",
             vec![
                 enm("mode", "Mode", &["follow", "pursue", "evade", "orbit", "arrive"]).d("follow"),
@@ -563,7 +610,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::Swarm, C::PhysicsEngine, S::SubOnly, F::TrajectoryComposites, TRAJ_IN, false,
+            NodeType::Swarm, C::PhysicsEngine, S::SubOnly, engine_in(), out_pos(),
             "Boids — flocking with separation/alignment/cohesion",
             vec![
                 ns("separation", "Separation", 0.1).d(0.3),
@@ -575,7 +622,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::Avoidance, C::PhysicsEngine, S::SubOnly, F::TrajectoryComposites, TRAJ_IN, false,
+            NodeType::Avoidance, C::PhysicsEngine, S::SubOnly, engine_in(), out_pos(),
             "Inter-object repulsion — mutual avoidance",
             vec![
                 ns("repulsion_radius", "Repulsion Radius", 0.1).d(0.4),
@@ -586,7 +633,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::VectorField, C::PhysicsEngine, S::SubOnly, F::TrajectoryComposites, TRAJ_IN, false,
+            NodeType::VectorField, C::PhysicsEngine, S::SubOnly, engine_in(), out_pos(),
             "Vector field (vortex/sink/source/flow/noise) — advected objects, inertial steering, organic perpetual motion",
             vec![
                 enm("field", "Field", &["vortex", "sink", "source", "flow", "noise", "drawn"]).d("vortex"),
@@ -612,12 +659,18 @@ fn build_catalog() -> Vec<NodeSpec> {
         ),
         // ── Splines ──
         spec(
-            NodeType::DrawSpline, C::Spline, S::SubOnly, F::SplineAndTrajectory, TRAJ_IN, false,
+            NodeType::DrawSpline, C::Spline, S::SubOnly, engine_in(),
+            // Deux sorties : la trajectoire évaluée par défaut (out) et la
+            // géométrie brute (spline) pour Evaluate/Trim/Offset.
+            vec![
+                port("out", PortType::Positions),
+                port("spline", PortType::Spline),
+            ],
             "Catmull-Rom spline from JSON control points. Source — no input",
             vec![txt("points", "Points").d("[[-0.5,0,0],[0,0.5,0],[0.5,0,0]]")],
         ),
         spec(
-            NodeType::EvaluateSpline, C::Spline, S::SubOnly, F::Trajectory, SPLINE_IN, false,
+            NodeType::EvaluateSpline, C::Spline, S::SubOnly, spline_in(true), out_pos(),
             "Uniform arc-length evaluation of a spline (constant speed)",
             vec![
                 boolean("closed", "Closed").d(false),
@@ -627,7 +680,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::TrimSpline, C::Spline, S::SubOnly, F::Trajectory, SPLINE_IN, false,
+            NodeType::TrimSpline, C::Spline, S::SubOnly, spline_in(false), out_pos(),
             "Extracts a spline segment (trim_start → trim_end, 0-1)",
             vec![
                 txt("points", "Points").d("[[-0.5,0,0],[0,0.5,0],[0.5,0,0]]"),
@@ -638,7 +691,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::OffsetSpline, C::Spline, S::SubOnly, F::Trajectory, SPLINE_IN, false,
+            NodeType::OffsetSpline, C::Spline, S::SubOnly, spline_in(false), out_pos(),
             "Spline with spatial offset (x,y,z)",
             vec![
                 txt("points", "Points").d("[[-0.5,0,0],[0,0.5,0],[0.5,0,0]]"),
@@ -651,7 +704,7 @@ fn build_catalog() -> Vec<NodeSpec> {
         ),
         // ── Falloffs ──
         spec(
-            NodeType::TimeFalloff, C::Falloff, S::SubOnly, F::Trajectory, TRAJ_IN, false,
+            NodeType::TimeFalloff, C::Falloff, S::SubOnly, engine_in(), out_pos(),
             "Time envelope — influence that varies over time (start→end)",
             vec![
                 ns("start_time", "Start Time", 0.1).d(0.0),
@@ -662,7 +715,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::PointDistanceFalloff, C::Falloff, S::SubOnly, F::Trajectory, TRAJ_IN, false,
+            NodeType::PointDistanceFalloff, C::Falloff, S::SubOnly, engine_in(), out_pos(),
             "Influence based on distance to a point (center, max_distance)",
             vec![
                 v3("center", "Center").d([0.0, 0.0, 0.0]),
@@ -673,7 +726,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::DirectionalFalloff, C::Falloff, S::SubOnly, F::BasicModifiers, TRAJ_IN, false,
+            NodeType::DirectionalFalloff, C::Falloff, S::SubOnly, engine_in(), out_pos(),
             "Directional influence — cone along a direction",
             vec![
                 v3("direction", "Direction").d([0.0, 0.0, 1.0]),
@@ -684,7 +737,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::AudioAmplitudeFalloff, C::Falloff, S::SubOnly, F::BasicModifiers, TRAJ_IN, false,
+            NodeType::AudioAmplitudeFalloff, C::Falloff, S::SubOnly, engine_in(), out_pos(),
             "Modulation by audio amplitude (band, min, max)",
             vec![
                 enm("band", "Band", BAND).d("rms"),
@@ -697,7 +750,7 @@ fn build_catalog() -> Vec<NodeSpec> {
         ),
         // ── Modifiers ──
         spec(
-            NodeType::Scale, C::Modifier, S::Both, F::ModifierChain, MOD_IN, true,
+            NodeType::Scale, C::Modifier, S::Both, pos_in(), out_pos(),
             "Multiplies positions by (x, y, z). To resize",
             vec![
                 ns("x", "Scale X", 0.1).d(1.0),
@@ -706,7 +759,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::Rotate, C::Modifier, S::Both, F::ModifierChain, MOD_IN, true,
+            NodeType::Rotate, C::Modifier, S::Both, pos_in(), out_pos(),
             "Rotation around axes (angleX, angleY, angleZ in radians)",
             vec![
                 ns("angleX", "Angle X (rad)", 0.1).d(0.0),
@@ -715,7 +768,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::Offset, C::Modifier, S::Both, F::ModifierChain, MOD_IN, true,
+            NodeType::Offset, C::Modifier, S::Both, pos_in(), out_pos(),
             "Translation (x, y, z). To shift a movement",
             vec![
                 ns("x", "Offset X", 0.1).d(0.0),
@@ -724,12 +777,12 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::PhaseShift, C::Modifier, S::SubOnly, F::ModifierChain, MOD_IN, false,
+            NodeType::PhaseShift, C::Modifier, S::SubOnly, pos_in(), out_pos(),
             "Per-object time offset — each object lags behind the previous",
             vec![nrange("shift", "Shift", 0.05, 0.0, 1.0).d(0.1)],
         ),
         spec(
-            NodeType::Mirror, C::Modifier, S::Both, F::ModifierChain, MOD_IN, false,
+            NodeType::Mirror, C::Modifier, S::Both, pos_in(), out_pos(),
             "Mirrors positions across a plane (xy/xz/yz). For symmetric setups",
             vec![
                 enm("plane", "Mirror Plane", PLANE).d("xz"),
@@ -737,7 +790,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::Clamp, C::Modifier, S::Both, F::ModifierChain, MOD_IN, false,
+            NodeType::Clamp, C::Modifier, S::Both, pos_in(), out_pos(),
             "Constrains positions inside a bounding box. Safety to stay within the venue",
             vec![
                 ns("min_x", "Min X", 0.1).d(-5.0),
@@ -749,7 +802,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::LFO, C::Modifier, S::Both, F::ModifierChain, MOD_IN, false,
+            NodeType::LFO, C::Modifier, S::Both, pos_in(), out_pos(),
             "Adds an oscillation (sine/triangle/square/saw) on an axis. Breathing effect",
             vec![
                 enm("waveform", "Waveform", &["sine", "triangle", "square", "sawtooth"]).d("sine"),
@@ -760,7 +813,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::Jitter, C::Modifier, S::Both, F::ModifierChain, MOD_IN, false,
+            NodeType::Jitter, C::Modifier, S::Both, pos_in(), out_pos(),
             "Adds smooth organic noise. Makes a movement less mechanical",
             vec![
                 nmin("intensity", "Intensity", 0.05, 0.0).d(0.2),
@@ -770,27 +823,27 @@ fn build_catalog() -> Vec<NodeSpec> {
         ),
         // ── Post-process (graph global) ──
         spec(
-            NodeType::RadiusScale, C::PostProcess, S::GlobalOnly, F::ModifierChain, MOD_IN, false,
+            NodeType::RadiusScale, C::PostProcess, S::GlobalOnly, pos_in(), out_pos(),
             "Radial scaling relative to origin (radius_scale). Global — applied after merge",
             vec![nmin("radius_scale", "Radius Scale", 0.1, 0.0).d(1.0)],
         ),
         spec(
-            NodeType::HeightOffset, C::PostProcess, S::GlobalOnly, F::ModifierChain, MOD_IN, false,
+            NodeType::HeightOffset, C::PostProcess, S::GlobalOnly, pos_in(), out_pos(),
             "Post-merge vertical offset (height_offset). To adjust global height",
             vec![ns("height_offset", "Height Offset", 0.1).d(0.0)],
         ),
         spec(
-            NodeType::PerTrackDepth, C::PostProcess, S::GlobalOnly, F::ModifierChain, MOD_IN, false,
+            NodeType::PerTrackDepth, C::PostProcess, S::GlobalOnly, pos_in(), out_pos(),
             "Per-track depth — interpolate between origin and position. For depth mapping",
             vec![txt("depths", "Depths (JSON array)").d(serde_json::json!([]))],
         ),
         spec(
-            NodeType::Barycenter, C::PostProcess, S::GlobalOnly, F::ModifierChain, MOD_IN, false,
+            NodeType::Barycenter, C::PostProcess, S::GlobalOnly, pos_in(), out_pos(),
             "Computes the origin from .hol track positions. Group center",
             vec![],
         ),
         spec(
-            NodeType::AudioFalloff, C::PostProcess, S::GlobalOnly, F::ModifierChain, MOD_IN, false,
+            NodeType::AudioFalloff, C::PostProcess, S::GlobalOnly, pos_in(), out_pos(),
             "Modulates a param (scale/height) by audio amplitude. For musical reactivity",
             vec![
                 nmin("amount", "Amount", 0.1, 0.0).d(1.0),
@@ -798,12 +851,12 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::ManualPosition, C::PostProcess, S::GlobalOnly, F::ModifierChain, MOD_IN, false,
+            NodeType::ManualPosition, C::PostProcess, S::GlobalOnly, pos_in(), out_pos(),
             "Manual position override — reads 3D drags. For hand positioning",
             vec![],
         ),
         spec(
-            NodeType::Zone, C::PostProcess, S::GlobalOnly, F::ModifierChain, MOD_IN, false,
+            NodeType::Zone, C::PostProcess, S::GlobalOnly, pos_in(), out_pos(),
             "Spatial region (sphere/box) pulling object channels toward target values — gain/spread/etc. vary with position. Pass-through: doesn't modify positions",
             vec![
                 enm("shape", "Shape", &["sphere", "box"]).d("sphere"),
@@ -818,7 +871,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::Velocity, C::PostProcess, S::GlobalOnly, F::ModifierChain, MOD_IN, false,
+            NodeType::Velocity, C::PostProcess, S::GlobalOnly, pos_in(), out_pos(),
             "Kinematic modulation — object speed/accel/jerk/angvel → spatial channel. angvel = angular speed °/s around the listener (perceptual bound). Pass-through: doesn't modify positions",
             vec![
                 enm("source", "Source", &["speed", "acceleration", "jerk", "angvel"]).d("speed"),
@@ -833,28 +886,28 @@ fn build_catalog() -> Vec<NodeSpec> {
         ),
         // ── Composites ──
         spec(
-            NodeType::Mix, C::Composite, S::SubOnly, F::Composites, COMP_IN, false,
+            NodeType::Mix, C::Composite, S::SubOnly, comp_in(), out_pos(),
             "Linear blend between 2 trajectories (0=A, 1=B). To merge 2 movements",
             vec![nrange("blend", "Blend", 0.01, 0.0, 1.0).d(0.5)],
         ),
         spec(
-            NodeType::Group, C::Composite, S::SubOnly, F::Composites, COMP_IN, false,
+            NodeType::Group, C::Composite, S::SubOnly, comp_in(), out_pos(),
             "Splits N objects into 2 groups: A→[0..n/2], B→[n/2..n]. For different track assignments",
             vec![],
         ),
         spec(
-            NodeType::Sequence, C::Composite, S::SubOnly, F::Composites, COMP_IN, false,
+            NodeType::Sequence, C::Composite, S::SubOnly, comp_in(), out_pos(),
             "Chains 2 trajectories in time: A for its duration, then B. Hard cut",
             vec![],
         ),
         spec(
-            NodeType::Crossfade, C::Composite, S::SubOnly, F::Composites, COMP_IN, false,
+            NodeType::Crossfade, C::Composite, S::SubOnly, comp_in(), out_pos(),
             "Chains A→B with a crossfade. Smoother than Sequence",
             vec![nmin("fade_duration", "Fade Duration (s)", 0.1, 0.1).d(1.0)],
         ),
         // ── Sources (engines réactifs) ──
         spec(
-            NodeType::BPM, C::Source, S::SubOnly, F::Trajectory, TRAJ_IN, false,
+            NodeType::BPM, C::Source, S::SubOnly, engine_in(), out_pos(),
             "Circular motion synced to detected BPM",
             vec![
                 nmin("bpm", "BPM", 1.0, 1.0).d(120),
@@ -863,7 +916,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::AudioAmplitude, C::Source, S::SubOnly, F::Trajectory, TRAJ_IN, false,
+            NodeType::AudioAmplitude, C::Source, S::SubOnly, engine_in(), out_pos(),
             "Audio amplitude modulates a circle radius",
             vec![
                 ns("amplitude", "Amplitude", 0.1).d(0.5),
@@ -873,7 +926,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::AudioSpectrum, C::Source, S::SubOnly, F::Trajectory, TRAJ_IN, false,
+            NodeType::AudioSpectrum, C::Source, S::SubOnly, engine_in(), out_pos(),
             "Audio spectrum FFT band → position",
             vec![
                 enm("band", "Band", BAND).d("bass"),
@@ -883,7 +936,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::OSCInput, C::Source, S::SubOnly, F::Trajectory, TRAJ_IN, false,
+            NodeType::OSCInput, C::Source, S::SubOnly, engine_in(), out_pos(),
             "Receives an OSC value (scalar→angle, array→XYZ) and converts it to a position",
             vec![
                 txt("address", "OSC Address").d("/track/1/xyz"),
@@ -896,20 +949,28 @@ fn build_catalog() -> Vec<NodeSpec> {
         ),
         // ── Plugin WASM ──
         spec(
-            NodeType::Plugin, C::Plugin, S::SubOnly, F::Trajectory,
-            // Superset ABI v2 — le kind du manifeste restreint à runtime.
-            &["input", "input_a", "input_b", "duration"], false,
+            NodeType::Plugin, C::Plugin, S::SubOnly,
+            // Superset ABI v2 — le kind du manifeste restreint à runtime :
+            // engine → objects+duration, modifier → in, composite → a+b.
+            vec![
+                port("objects", PortType::ObjectSet),
+                port("duration", PortType::Duration),
+                port("in", PortType::Positions),
+                port("a", PortType::Positions),
+                port("b", PortType::Positions),
+            ],
+            out_pos(),
             "External WASM plugin (.ssx bundle) — plugin_id selects the loaded plugin",
             vec![txt("plugin_id", "Plugin ID").d("")],
         ),
         // ── Signal graph — sources ──
         spec(
-            NodeType::SignalConst, C::Signal, S::SignalOnly, F::Signal, NO_IN, false,
+            NodeType::SignalConst, C::Signal, S::SignalOnly, vec![], out_sig(),
             "Constant value — bridge for manual live control (UI slider → param). Modulation graph source",
             vec![ns("value", "Value", 0.1).d(0.0)],
         ),
         spec(
-            NodeType::SignalTime, C::Signal, S::SignalOnly, F::Signal, NO_IN, false,
+            NodeType::SignalTime, C::Signal, S::SignalOnly, vec![], out_sig(),
             "Elapsed time as signal — ramps, periodic patterns. wrap=0 → unbounded",
             vec![
                 nrange("rate", "Rate", 0.1, 0.0, 10.0).d(1.0),
@@ -917,7 +978,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::SignalLfo, C::Signal, S::SignalOnly, F::Signal, NO_IN, false,
+            NodeType::SignalLfo, C::Signal, S::SignalOnly, vec![], out_sig(),
             "Low-frequency oscillator — periodic macro animation. The classic 'animate anything'",
             vec![
                 enm("waveform", "Waveform", &["sine", "triangle", "square", "sawtooth", "random"]).d("sine"),
@@ -928,7 +989,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::SignalAudio, C::Signal, S::SignalOnly, F::Signal, NO_IN, false,
+            NodeType::SignalAudio, C::Signal, S::SignalOnly, vec![], out_sig(),
             "Audio source → signal (rms/bass/mid/high/bpm/FFT band). Music-reactive macros",
             vec![
                 enm("band", "Band", &["rms", "bass", "mid", "high", "bpm", "spectrum"]).d("rms"),
@@ -937,7 +998,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::SignalOsc, C::Signal, S::SignalOnly, F::Signal, NO_IN, false,
+            NodeType::SignalOsc, C::Signal, S::SignalOnly, vec![], out_sig(),
             "Incoming OSC value → signal. External controllers (faders, sensors)",
             vec![
                 txt("name", "Handler Name").d("fader1"),
@@ -945,7 +1006,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::SignalRandom, C::Signal, S::SignalOnly, F::Signal, NO_IN, false,
+            NodeType::SignalRandom, C::Signal, S::SignalOnly, vec![], out_sig(),
             "Smooth deterministic noise — organic drift. Sum of incommensurate sinusoids",
             vec![
                 nrange("rate", "Rate", 0.01, 0.0, 10.0).d(0.5),
@@ -955,7 +1016,12 @@ fn build_catalog() -> Vec<NodeSpec> {
         ),
         // ── Signal graph — opérateurs ──
         spec(
-            NodeType::SignalMath, C::Signal, S::SignalOnly, F::Signal, &["a", "b"], false,
+            NodeType::SignalMath, C::Signal, S::SignalOnly,
+            vec![
+                port("a", PortType::Signal),
+                port("b", PortType::Signal),
+            ],
+            out_sig(),
             "Scalar math — combine signals. Unconnected inputs fall back to params a/b",
             vec![
                 enm("op", "Op", &["add", "sub", "mul", "div", "min", "max", "pow", "abs", "neg", "mod"]).d("add"),
@@ -964,7 +1030,8 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::SignalMap, C::Signal, S::SignalOnly, F::Signal, &["signal"], false,
+            NodeType::SignalMap, C::Signal, S::SignalOnly,
+            vec![port("signal", PortType::Signal)], out_sig(),
             "Linear remap in_min..in_max → out_min..out_max, optional clamp",
             vec![
                 ns("in_min", "In Min", 0.1).d(0.0),
@@ -975,7 +1042,8 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::SignalClamp, C::Signal, S::SignalOnly, F::Signal, &["signal"], false,
+            NodeType::SignalClamp, C::Signal, S::SignalOnly,
+            vec![port("signal", PortType::Signal)], out_sig(),
             "Clamp signal to [min, max] — safety bound before MacroOut",
             vec![
                 ns("min", "Min", 0.1).d(0.0),
@@ -983,13 +1051,20 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::SignalMix, C::Signal, S::SignalOnly, F::Signal, &["a", "b", "factor"], false,
+            NodeType::SignalMix, C::Signal, S::SignalOnly,
+            vec![
+                port("a", PortType::Signal),
+                port("b", PortType::Signal),
+                port("factor", PortType::Signal),
+            ],
+            out_sig(),
             "Crossfade between two signals (factor 0=A, 1=B) — factor can itself be a signal",
             vec![nrange("factor", "Factor", 0.01, 0.0, 1.0).d(0.5)],
         ),
         // ── Signal graph — nodes à état ──
         spec(
-            NodeType::SignalSlew, C::Signal, S::SignalOnly, F::Signal, &["signal"], false,
+            NodeType::SignalSlew, C::Signal, S::SignalOnly,
+            vec![port("signal", PortType::Signal)], out_sig(),
             "Slew rate limiter — asymmetric physical smoothing (rise/fall units per second)",
             vec![
                 nmin("rise_rate", "Rise (u/s, 0=unlimited)", 0.1, 0.0).d(0.0),
@@ -997,7 +1072,8 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::SignalEnvelope, C::Signal, S::SignalOnly, F::Signal, &["signal"], false,
+            NodeType::SignalEnvelope, C::Signal, S::SignalOnly,
+            vec![port("signal", PortType::Signal)], out_sig(),
             "Envelope follower — retention factors per frame (small=fast, big=slow). Audio punch → macro",
             vec![
                 nrange("attack", "Attack (low=fast)", 0.01, 0.0, 1.0).d(0.2),
@@ -1005,7 +1081,8 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::SignalThreshold, C::Signal, S::SignalOnly, F::Signal, &["signal"], false,
+            NodeType::SignalThreshold, C::Signal, S::SignalOnly,
+            vec![port("signal", PortType::Signal)], out_sig(),
             "Hysteresis gate — 1 above threshold, 0 below threshold-hysteresis, holds between",
             vec![
                 ns("threshold", "Threshold", 0.01).d(0.5),
@@ -1014,7 +1091,8 @@ fn build_catalog() -> Vec<NodeSpec> {
         ),
         // ── Signal graph — terminal ──
         spec(
-            NodeType::SignalOut, C::Signal, S::SignalOnly, F::Terminal, &["signal"], false,
+            NodeType::SignalOut, C::Signal, S::SignalOnly,
+            vec![req("signal", PortType::Signal)], vec![],
             "Modulation sink — writes signal as ADDITIVE delta on a macro (panel/OSC/cue base + delta). speed only applies per-move",
             vec![
                 enm("target", "Target", &["speed", "scale", "shift_x", "shift_y", "shift_z", "yaw", "pitch", "roll", "radius_scale", "height_offset"]).d("yaw"),
@@ -1026,7 +1104,7 @@ fn build_catalog() -> Vec<NodeSpec> {
 
 static CATALOG: OnceLock<Vec<NodeSpec>> = OnceLock::new();
 
-/// Le catalogue complet — 55 specs, construit une fois.
+/// Le catalogue complet — 62 specs, construit une fois.
 pub fn all_node_specs() -> &'static [NodeSpec] {
     CATALOG.get_or_init(build_catalog)
 }
@@ -1061,9 +1139,6 @@ mod tests {
     fn catalog_covers_all_node_types() {
         // Toute valeur de NodeType doit avoir un spec — si un variant est
         // ajouté à l'enum sans spec, node_spec() paniquerait à runtime.
-        let json = serde_json::to_string(&NodeType::Output).unwrap();
-        let _ = json;
-        // Exhaustivité par énumération des 60 variants connus.
         const ALL: &[NodeType] = &[
             NodeType::Objects,
             NodeType::Duration,
@@ -1147,61 +1222,41 @@ mod tests {
         }
     }
 
-    /// Parité avec l'ancienne matrice de connexion — les invariants critiques
-    /// du validator historique.
-    #[test]
-    fn connection_matrix_invariants() {
-        let s = node_spec;
-        // Output est terminal
-        assert!(s(&NodeType::Output).outputs.is_empty());
-        // Engine → modifier ok, engine → post-process non (drift frontend historique)
-        assert!(s(&NodeType::Circular).can_feed(s(&NodeType::Scale)));
-        assert!(!s(&NodeType::Circular).can_feed(s(&NodeType::RadiusScale)));
-        // Engine → Sequence ok ; modifier → Sequence non
-        assert!(s(&NodeType::Circular).can_feed(s(&NodeType::Sequence)));
-        assert!(!s(&NodeType::Scale).can_feed(s(&NodeType::Sequence)));
-        // Physics → composites mais pas modifiers
-        assert!(s(&NodeType::Swarm).can_feed(s(&NodeType::Mix)));
-        assert!(!s(&NodeType::Swarm).can_feed(s(&NodeType::Scale)));
-        // Falloffs limités → Scale/Rotate/Offset uniquement
-        assert!(s(&NodeType::DirectionalFalloff).can_feed(s(&NodeType::Rotate)));
-        assert!(!s(&NodeType::DirectionalFalloff).can_feed(s(&NodeType::Clamp)));
-        // Objects/Duration → tout ce qui a un port duration
-        assert!(s(&NodeType::Objects).can_feed(s(&NodeType::Circular)));
-        assert!(s(&NodeType::Objects).can_feed(s(&NodeType::DrawSpline)));
-        assert!(!s(&NodeType::Objects).can_feed(s(&NodeType::Scale)));
-        // DrawSpline → spline nodes + cibles trajectory
-        assert!(s(&NodeType::DrawSpline).can_feed(s(&NodeType::EvaluateSpline)));
-        assert!(s(&NodeType::DrawSpline).can_feed(s(&NodeType::Output)));
-        // Input/Merge → post-process + Output, pas de composites
-        assert!(s(&NodeType::Input).can_feed(s(&NodeType::RadiusScale)));
-        assert!(s(&NodeType::Input).can_feed(s(&NodeType::Output)));
-        assert!(!s(&NodeType::Input).can_feed(s(&NodeType::Mix)));
-        // MoveRef → post-process + Output + Mix/Group/Crossfade
-        assert!(s(&NodeType::MoveRef).can_feed(s(&NodeType::Mix)));
-        assert!(!s(&NodeType::MoveRef).can_feed(s(&NodeType::Sequence)));
-        // feeds_modifier / feeds_composite (cibles Plugin)
-        assert!(s(&NodeType::Circular).feeds_modifier());
-        assert!(s(&NodeType::MoveRef).feeds_modifier());
-        assert!(!s(&NodeType::RadiusScale).feeds_modifier());
-        assert!(!s(&NodeType::Swarm).feeds_modifier());
-        assert!(s(&NodeType::Swarm).feeds_composite());
-        assert!(!s(&NodeType::DirectionalFalloff).feeds_composite());
-        assert!(!s(&NodeType::Objects).feeds_composite());
-    }
-
-    /// Les ports du catalogue reproduisent l'ancien has_input_port.
+    /// Les ports du catalogue sont cohérents avec les capacités attendues.
     #[test]
     fn port_tables_invariants() {
-        let ports = |t: NodeType| node_spec(&t).inputs.clone();
-        assert!(ports(NodeType::Objects).is_empty());
-        assert_eq!(ports(NodeType::Circular), ["input", "duration"]);
+        // Terminaux : pas de sortie
+        assert!(node_spec(&NodeType::Output).outputs.is_empty());
+        assert!(node_spec(&NodeType::SignalOut).outputs.is_empty());
+        // Carriers
         assert_eq!(
-            ports(NodeType::EvaluateSpline),
-            ["input", "duration", "spline"]
+            node_spec(&NodeType::Objects).outputs[0].port_type,
+            PortType::ObjectSet
         );
-        assert_eq!(ports(NodeType::Scale), ["input"]);
-        assert_eq!(ports(NodeType::Mix), ["input", "input_a", "input_b"]);
+        assert_eq!(
+            node_spec(&NodeType::Duration).outputs[0].port_type,
+            PortType::Duration
+        );
+        // Engine : objects + duration en entrée, positions en sortie
+        let circ = node_spec(&NodeType::Circular);
+        assert!(circ.input_port("objects").is_some());
+        assert!(circ.input_port("duration").is_some());
+        assert_eq!(circ.outputs[0].port_type, PortType::Positions);
+        // Composites : a + b requis
+        let mix = node_spec(&NodeType::Mix);
+        assert!(mix.input_port("a").unwrap().required);
+        assert!(mix.input_port("b").unwrap().required);
+        // DrawSpline : deux sorties, types distincts
+        let draw = node_spec(&NodeType::DrawSpline);
+        assert_eq!(draw.outputs.len(), 2);
+        assert_eq!(
+            draw.output_port("spline").unwrap().port_type,
+            PortType::Spline
+        );
+        assert_eq!(
+            draw.output_port("out").unwrap().port_type,
+            PortType::Positions
+        );
         // Scope
         assert_eq!(
             node_spec(&NodeType::RadiusScale).scope,

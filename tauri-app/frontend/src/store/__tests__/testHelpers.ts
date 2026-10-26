@@ -60,13 +60,13 @@ export function makeNode(id: string, type: NodeType, params: Record<string, any>
   };
 }
 
-export function makeEdge(source: string, target: string) {
+export function makeEdge(source: string, target: string, fromPort = 'out', toPort = 'in') {
   return {
     id: `e-${source}-${target}`,
     source,
     target,
-    sourceHandle: 'output',
-    targetHandle: 'input',
+    sourceHandle: fromPort,
+    targetHandle: toPort,
   };
 }
 
@@ -79,9 +79,9 @@ export function makeSimpleGraph(nObjects: number = 3) {
       makeNode('out-1', 'Output', {}),
     ],
     edges: [
-      makeEdge('obj-1', 'eng-1'),
-      makeEdge('dur-1', 'eng-1'),
-      makeEdge('eng-1', 'out-1'),
+      makeEdge('obj-1', 'eng-1', 'objects', 'objects'),
+      makeEdge('dur-1', 'eng-1', 'duration', 'duration'),
+      makeEdge('eng-1', 'out-1', 'out', 'in'),
     ],
   };
 }

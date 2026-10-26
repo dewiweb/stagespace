@@ -21,7 +21,7 @@ import { useSignalGraphStore } from '../store/useSignalGraphStore';
 import CustomNode from './CustomNode';
 import { QuickAddModal } from './QuickAddModal';
 import { NODE_CATEGORIES, NODE_COLORS, NODE_DESCRIPTIONS, getCategoryColor, getDefaultParams, getValidTargetTypes, pluginDefaultParams, GLOBAL_ONLY_NODES, SUB_ONLY_NODES, SIGNAL_ONLY_NODES, type GraphNode } from './nodeParamSchema';
-import { isValidConnection, connectionRejectionReason, portRejectionReason, spliceRejectionReason } from '../utils/connectionRules';
+import { isValidConnection, connectionRejectionReason, spliceRejectionReason } from '../utils/connectionRules';
 import { presetsUsingType } from '../utils/shapePresets';
 import { toast } from '../utils/toast-helpers';
 import { open } from '@tauri-apps/plugin-dialog';
@@ -240,17 +240,17 @@ export const NodeEditor: React.FC = () => {
       const edgeIn: Edge = {
         id: `e-${selectedEdge.source}-${newNode.id}-in`,
         source: selectedEdge.source,
-        sourceHandle: selectedEdge.sourceHandle ?? 'output',
+        sourceHandle: selectedEdge.sourceHandle ?? 'out',
         target: newNode.id,
-        targetHandle: 'input',
+        targetHandle: 'in',
         markerEnd: arrow,
       };
       const edgeOut: Edge = {
         id: `e-${newNode.id}-${selectedEdge.target}-out`,
         source: newNode.id,
-        sourceHandle: 'output',
+        sourceHandle: 'out',
         target: selectedEdge.target,
-        targetHandle: selectedEdge.targetHandle ?? 'input',
+        targetHandle: selectedEdge.targetHandle ?? 'in',
         markerEnd: arrow,
       };
       if (activeTab === 'global') {
@@ -311,15 +311,13 @@ export const NodeEditor: React.FC = () => {
         ? plugins.find((m) => m.id === targetNode.data.params?.plugin_id)?.kind
         : undefined;
 
-      // Vérifier la compatibilité des types
-      if (!isValidConnection(fromType, toType, toPluginKind)) return false;
-
-      // Vérifier la compatibilité des ports
-      const targetPort = connection.targetHandle;
-      if (fromType === 'Duration' && targetPort !== 'duration') return false;
-      if (fromType === 'Objects' && targetPort !== 'input' && targetPort !== 'input_a' && targetPort !== 'input_b') return false;
-
-      return true;
+      // Compatibilité port-niveau : existence + égalité de type —
+      // règle unique, mirroir du validator Rust.
+      return isValidConnection(
+        fromType, toType,
+        connection.sourceHandle ?? undefined, connection.targetHandle ?? undefined,
+        toPluginKind,
+      );
     },
     [displayNodes, plugins],
   );
@@ -353,9 +351,9 @@ export const NodeEditor: React.FC = () => {
       : undefined;
     const handleEl = el?.closest?.('.react-flow__handle') as HTMLElement | null;
     const targetPort = handleEl?.dataset?.handleid ?? null;
-    const reason =
-      portRejectionReason(fromType, targetPort) ??
-      connectionRejectionReason(fromType, toType, toPluginKind);
+    const reason = connectionRejectionReason(
+      fromType, toType, undefined, targetPort ?? undefined, toPluginKind,
+    );
     if (reason) toast.warning(reason);
   }, [connectingFrom, displayNodes, plugins]);
 
@@ -438,7 +436,8 @@ export const NodeEditor: React.FC = () => {
   // s'insérer (trajectoire, pas duration/spline) prend un style dash cyan
   // — l'autopatch doit être découvrable sans lire le hint de palette.
   const insertableEdgeId =
-    selectedEdge && selectedEdge.targetHandle !== 'duration' && selectedEdge.targetHandle !== 'spline'
+    selectedEdge &&
+    !['objects', 'duration', 'spline'].includes(selectedEdge.targetHandle ?? '')
       ? selectedEdge.id
       : null;
   // Color-coding par port : une edge vers 'duration' porte un temps, vers

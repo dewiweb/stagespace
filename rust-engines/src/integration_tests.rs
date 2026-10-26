@@ -52,8 +52,8 @@ fn test_graph_serialization() {
     graph.add_edge(Edge {
         from: objects_id,
         to: circular_id,
-        from_port: "output".to_string(),
-        to_port: "input".to_string(),
+        from_port: "out".to_string(),
+        to_port: "in".to_string(),
     });
 
     // Sérialiser

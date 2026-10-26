@@ -22,7 +22,7 @@ fn const_signal_fn(target: &str, value: f64, amount: f64) -> crate::signal_compi
     g.add_edge(crate::graph::Edge {
         from: c.id,
         to: out.id,
-        from_port: "output".to_string(),
+        from_port: "out".to_string(),
         to_port: "signal".to_string(),
     });
     crate::signal_compiler::compile_signal_graph(&g).expect("signal graph compiles")

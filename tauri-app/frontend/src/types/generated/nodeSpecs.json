@@ -3,12 +3,15 @@
     "node_type": "Objects",
     "category": "Structural",
     "scope": "SubOnly",
-    "feeds": "EngineInputs",
     "inputs": [],
     "outputs": [
-      "output"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      }
     ],
-    "falloff_target": false,
     "description": "Defines the object/track count and their IDs. Required — graph source",
     "params": [
       {
@@ -27,12 +30,15 @@
     "node_type": "Duration",
     "category": "Structural",
     "scope": "SubOnly",
-    "feeds": "EngineInputs",
     "inputs": [],
     "outputs": [
-      "output"
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
-    "falloff_target": false,
     "description": "Defines the cycle duration in seconds. Required — syncs engines",
     "params": [
       {
@@ -51,12 +57,15 @@
     "node_type": "Output",
     "category": "Structural",
     "scope": "Both",
-    "feeds": "Terminal",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [],
-    "falloff_target": false,
     "description": "Graph terminal — sends positions via OSC to tracks. Required",
     "params": [
       {
@@ -75,12 +84,15 @@
     "node_type": "Input",
     "category": "Structural",
     "scope": "GlobalOnly",
-    "feeds": "PostProcess",
     "inputs": [],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Global graph entry point — represents the merged positions of all moves",
     "params": []
   },
@@ -88,12 +100,15 @@
     "node_type": "MoveRef",
     "category": "Structural",
     "scope": "GlobalOnly",
-    "feeds": "MoveRefChain",
     "inputs": [],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Alternative source to Input — post-process filtered to one move's tracks via move_id",
     "params": [
       {
@@ -112,12 +127,15 @@
     "node_type": "Merge",
     "category": "Structural",
     "scope": "GlobalOnly",
-    "feeds": "PostProcess",
     "inputs": [],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Merge node — represents the MergeRuntime. Strategy: override/crossfade/blend/priority",
     "params": [
       {
@@ -151,15 +169,28 @@
     "node_type": "Circular",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Circular motion — radius, speed, plane. The most used",
     "params": [
       {
@@ -212,15 +243,28 @@
     "node_type": "Elliptical",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Ellipse with independent axes (a≠b). For flattened orbits",
     "params": [
       {
@@ -283,15 +327,28 @@
     "node_type": "Spiral",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Spiral that expands/contracts over time",
     "params": [
       {
@@ -354,15 +411,28 @@
     "node_type": "Lissajous",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Complex harmonic curves (a, b, delta). Ornamental figures",
     "params": [
       {
@@ -421,15 +491,28 @@
     "node_type": "Figure8",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Lemniscate — horizontal figure-8",
     "params": [
       {
@@ -482,15 +565,28 @@
     "node_type": "Linear",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Linear interpolation between 2 points (start→end)",
     "params": [
       {
@@ -519,15 +615,28 @@
     "node_type": "Oscillation",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Sine wave on one axis (x/y/z). For vibrations",
     "params": [
       {
@@ -580,15 +689,28 @@
     "node_type": "Formation",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Static formations: circle, line, arc, grid. No motion",
     "params": [
       {
@@ -642,15 +764,28 @@
     "node_type": "PerlinNoise",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Perlin noise — smooth organic random motion",
     "params": [
       {
@@ -689,15 +824,28 @@
     "node_type": "Converge",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Radial convergence to center with easing",
     "params": [
       {
@@ -741,15 +889,28 @@
     "node_type": "Pendulum",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Damped physical pendulum (length, gravity, damping)",
     "params": [
       {
@@ -808,15 +969,28 @@
     "node_type": "RoseCurve",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Polar rose r=cos(kθ) — n_petals flowers",
     "params": [
       {
@@ -879,15 +1053,28 @@
     "node_type": "Helix",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "3D helix — radius, height, turns. For rises/falls",
     "params": [
       {
@@ -946,15 +1133,28 @@
     "node_type": "Wave",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Travelling wave across objects (stadium wave). Each object oscillates with a delay",
     "params": [
       {
@@ -1027,15 +1227,28 @@
     "node_type": "CustomTrajectory",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Custom x,y,z equations (cartesian/polar/spherical). For bespoke trajectories",
     "params": [
       {
@@ -1068,15 +1281,28 @@
     "node_type": "Bouncing",
     "category": "PhysicsEngine",
     "scope": "SubOnly",
-    "feeds": "TrajectoryComposites",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Physical bounces inside a container (sphere/box) with restitution",
     "params": [
       {
@@ -1138,15 +1364,28 @@
     "node_type": "Spring",
     "category": "PhysicsEngine",
     "scope": "SubOnly",
-    "feeds": "TrajectoryComposites",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Spring toward a target point (stiffness, damping)",
     "params": [
       {
@@ -1195,15 +1434,28 @@
     "node_type": "Follow",
     "category": "PhysicsEngine",
     "scope": "SubOnly",
-    "feeds": "TrajectoryComposites",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Steering: follow/pursue/evade/orbit/arrive around a moving target (lookahead, ring, deceleration)",
     "params": [
       {
@@ -1368,15 +1620,28 @@
     "node_type": "Swarm",
     "category": "PhysicsEngine",
     "scope": "SubOnly",
-    "feeds": "TrajectoryComposites",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Boids — flocking with separation/alignment/cohesion",
     "params": [
       {
@@ -1445,15 +1710,28 @@
     "node_type": "Avoidance",
     "category": "PhysicsEngine",
     "scope": "SubOnly",
-    "feeds": "TrajectoryComposites",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Inter-object repulsion — mutual avoidance",
     "params": [
       {
@@ -1512,15 +1790,28 @@
     "node_type": "VectorField",
     "category": "PhysicsEngine",
     "scope": "SubOnly",
-    "feeds": "TrajectoryComposites",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Vector field (vortex/sink/source/flow/noise) — advected objects, inertial steering, organic perpetual motion",
     "params": [
       {
@@ -1732,15 +2023,34 @@
     "node_type": "DrawSpline",
     "category": "Spline",
     "scope": "SubOnly",
-    "feeds": "SplineAndTrajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      },
+      {
+        "name": "spline",
+        "port_type": "Spline",
+        "required": false,
+        "label": "spline"
+      }
     ],
-    "falloff_target": false,
     "description": "Catmull-Rom spline from JSON control points. Source — no input",
     "params": [
       {
@@ -1759,16 +2069,34 @@
     "node_type": "EvaluateSpline",
     "category": "Spline",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration",
-      "spline"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      },
+      {
+        "name": "spline",
+        "port_type": "Spline",
+        "required": true,
+        "label": "spline"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Uniform arc-length evaluation of a spline (constant speed)",
     "params": [
       {
@@ -1817,16 +2145,34 @@
     "node_type": "TrimSpline",
     "category": "Spline",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration",
-      "spline"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      },
+      {
+        "name": "spline",
+        "port_type": "Spline",
+        "required": false,
+        "label": "spline"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Extracts a spline segment (trim_start → trim_end, 0-1)",
     "params": [
       {
@@ -1885,16 +2231,34 @@
     "node_type": "OffsetSpline",
     "category": "Spline",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration",
-      "spline"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      },
+      {
+        "name": "spline",
+        "port_type": "Spline",
+        "required": false,
+        "label": "spline"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Spline with spatial offset (x,y,z)",
     "params": [
       {
@@ -1963,15 +2327,28 @@
     "node_type": "TimeFalloff",
     "category": "Falloff",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Time envelope — influence that varies over time (start→end)",
     "params": [
       {
@@ -2039,15 +2416,28 @@
     "node_type": "PointDistanceFalloff",
     "category": "Falloff",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Influence based on distance to a point (center, max_distance)",
     "params": [
       {
@@ -2115,15 +2505,28 @@
     "node_type": "DirectionalFalloff",
     "category": "Falloff",
     "scope": "SubOnly",
-    "feeds": "BasicModifiers",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Directional influence — cone along a direction",
     "params": [
       {
@@ -2191,15 +2594,28 @@
     "node_type": "AudioAmplitudeFalloff",
     "category": "Falloff",
     "scope": "SubOnly",
-    "feeds": "BasicModifiers",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Modulation by audio amplitude (band, min, max)",
     "params": [
       {
@@ -2282,14 +2698,22 @@
     "node_type": "Scale",
     "category": "Modifier",
     "scope": "Both",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": true,
     "description": "Multiplies positions by (x, y, z). To resize",
     "params": [
       {
@@ -2328,14 +2752,22 @@
     "node_type": "Rotate",
     "category": "Modifier",
     "scope": "Both",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": true,
     "description": "Rotation around axes (angleX, angleY, angleZ in radians)",
     "params": [
       {
@@ -2374,14 +2806,22 @@
     "node_type": "Offset",
     "category": "Modifier",
     "scope": "Both",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": true,
     "description": "Translation (x, y, z). To shift a movement",
     "params": [
       {
@@ -2420,14 +2860,22 @@
     "node_type": "PhaseShift",
     "category": "Modifier",
     "scope": "SubOnly",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Per-object time offset — each object lags behind the previous",
     "params": [
       {
@@ -2446,14 +2894,22 @@
     "node_type": "Mirror",
     "category": "Modifier",
     "scope": "Both",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Mirrors positions across a plane (xy/xz/yz). For symmetric setups",
     "params": [
       {
@@ -2486,14 +2942,22 @@
     "node_type": "Clamp",
     "category": "Modifier",
     "scope": "Both",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Constrains positions inside a bounding box. Safety to stay within the venue",
     "params": [
       {
@@ -2562,14 +3026,22 @@
     "node_type": "LFO",
     "category": "Modifier",
     "scope": "Both",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Adds an oscillation (sine/triangle/square/saw) on an axis. Breathing effect",
     "params": [
       {
@@ -2638,14 +3110,22 @@
     "node_type": "Jitter",
     "category": "Modifier",
     "scope": "Both",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Adds smooth organic noise. Makes a movement less mechanical",
     "params": [
       {
@@ -2684,14 +3164,22 @@
     "node_type": "RadiusScale",
     "category": "PostProcess",
     "scope": "GlobalOnly",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Radial scaling relative to origin (radius_scale). Global — applied after merge",
     "params": [
       {
@@ -2710,14 +3198,22 @@
     "node_type": "HeightOffset",
     "category": "PostProcess",
     "scope": "GlobalOnly",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Post-merge vertical offset (height_offset). To adjust global height",
     "params": [
       {
@@ -2736,14 +3232,22 @@
     "node_type": "PerTrackDepth",
     "category": "PostProcess",
     "scope": "GlobalOnly",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Per-track depth — interpolate between origin and position. For depth mapping",
     "params": [
       {
@@ -2762,14 +3266,22 @@
     "node_type": "Barycenter",
     "category": "PostProcess",
     "scope": "GlobalOnly",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Computes the origin from .hol track positions. Group center",
     "params": []
   },
@@ -2777,14 +3289,22 @@
     "node_type": "AudioFalloff",
     "category": "PostProcess",
     "scope": "GlobalOnly",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Modulates a param (scale/height) by audio amplitude. For musical reactivity",
     "params": [
       {
@@ -2816,14 +3336,22 @@
     "node_type": "ManualPosition",
     "category": "PostProcess",
     "scope": "GlobalOnly",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Manual position override — reads 3D drags. For hand positioning",
     "params": []
   },
@@ -2831,14 +3359,22 @@
     "node_type": "Zone",
     "category": "PostProcess",
     "scope": "GlobalOnly",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Spatial region (sphere/box) pulling object channels toward target values — gain/spread/etc. vary with position. Pass-through: doesn't modify positions",
     "params": [
       {
@@ -2940,14 +3476,22 @@
     "node_type": "Velocity",
     "category": "PostProcess",
     "scope": "GlobalOnly",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Kinematic modulation — object speed/accel/jerk/angvel → spatial channel. angvel = angular speed °/s around the listener (perceptual bound). Pass-through: doesn't modify positions",
     "params": [
       {
@@ -3049,16 +3593,28 @@
     "node_type": "Mix",
     "category": "Composite",
     "scope": "SubOnly",
-    "feeds": "Composites",
     "inputs": [
-      "input",
-      "input_a",
-      "input_b"
+      {
+        "name": "a",
+        "port_type": "Positions",
+        "required": true,
+        "label": "a"
+      },
+      {
+        "name": "b",
+        "port_type": "Positions",
+        "required": true,
+        "label": "b"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Linear blend between 2 trajectories (0=A, 1=B). To merge 2 movements",
     "params": [
       {
@@ -3077,16 +3633,28 @@
     "node_type": "Group",
     "category": "Composite",
     "scope": "SubOnly",
-    "feeds": "Composites",
     "inputs": [
-      "input",
-      "input_a",
-      "input_b"
+      {
+        "name": "a",
+        "port_type": "Positions",
+        "required": true,
+        "label": "a"
+      },
+      {
+        "name": "b",
+        "port_type": "Positions",
+        "required": true,
+        "label": "b"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Splits N objects into 2 groups: A→[0..n/2], B→[n/2..n]. For different track assignments",
     "params": []
   },
@@ -3094,16 +3662,28 @@
     "node_type": "Sequence",
     "category": "Composite",
     "scope": "SubOnly",
-    "feeds": "Composites",
     "inputs": [
-      "input",
-      "input_a",
-      "input_b"
+      {
+        "name": "a",
+        "port_type": "Positions",
+        "required": true,
+        "label": "a"
+      },
+      {
+        "name": "b",
+        "port_type": "Positions",
+        "required": true,
+        "label": "b"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Chains 2 trajectories in time: A for its duration, then B. Hard cut",
     "params": []
   },
@@ -3111,16 +3691,28 @@
     "node_type": "Crossfade",
     "category": "Composite",
     "scope": "SubOnly",
-    "feeds": "Composites",
     "inputs": [
-      "input",
-      "input_a",
-      "input_b"
+      {
+        "name": "a",
+        "port_type": "Positions",
+        "required": true,
+        "label": "a"
+      },
+      {
+        "name": "b",
+        "port_type": "Positions",
+        "required": true,
+        "label": "b"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Chains A→B with a crossfade. Smoother than Sequence",
     "params": [
       {
@@ -3139,15 +3731,28 @@
     "node_type": "BPM",
     "category": "Source",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Circular motion synced to detected BPM",
     "params": [
       {
@@ -3190,15 +3795,28 @@
     "node_type": "AudioAmplitude",
     "category": "Source",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Audio amplitude modulates a circle radius",
     "params": [
       {
@@ -3256,15 +3874,28 @@
     "node_type": "AudioSpectrum",
     "category": "Source",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Audio spectrum FFT band → position",
     "params": [
       {
@@ -3322,15 +3953,28 @@
     "node_type": "OSCInput",
     "category": "Source",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Receives an OSC value (scalar→angle, array→XYZ) and converts it to a position",
     "params": [
       {
@@ -3399,17 +4043,46 @@
     "node_type": "Plugin",
     "category": "Plugin",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "input_a",
-      "input_b",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      },
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": false,
+        "label": "in"
+      },
+      {
+        "name": "a",
+        "port_type": "Positions",
+        "required": false,
+        "label": "a"
+      },
+      {
+        "name": "b",
+        "port_type": "Positions",
+        "required": false,
+        "label": "b"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "External WASM plugin (.ssx bundle) — plugin_id selects the loaded plugin",
     "params": [
       {
@@ -3428,12 +4101,15 @@
     "node_type": "SignalConst",
     "category": "Signal",
     "scope": "SignalOnly",
-    "feeds": "Signal",
     "inputs": [],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Constant value — bridge for manual live control (UI slider → param). Modulation graph source",
     "params": [
       {
@@ -3452,12 +4128,15 @@
     "node_type": "SignalTime",
     "category": "Signal",
     "scope": "SignalOnly",
-    "feeds": "Signal",
     "inputs": [],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Elapsed time as signal — ramps, periodic patterns. wrap=0 → unbounded",
     "params": [
       {
@@ -3486,12 +4165,15 @@
     "node_type": "SignalLfo",
     "category": "Signal",
     "scope": "SignalOnly",
-    "feeds": "Signal",
     "inputs": [],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Low-frequency oscillator — periodic macro animation. The classic 'animate anything'",
     "params": [
       {
@@ -3556,12 +4238,15 @@
     "node_type": "SignalAudio",
     "category": "Signal",
     "scope": "SignalOnly",
-    "feeds": "Signal",
     "inputs": [],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Audio source → signal (rms/bass/mid/high/bpm/FFT band). Music-reactive macros",
     "params": [
       {
@@ -3607,12 +4292,15 @@
     "node_type": "SignalOsc",
     "category": "Signal",
     "scope": "SignalOnly",
-    "feeds": "Signal",
     "inputs": [],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Incoming OSC value → signal. External controllers (faders, sensors)",
     "params": [
       {
@@ -3641,12 +4329,15 @@
     "node_type": "SignalRandom",
     "category": "Signal",
     "scope": "SignalOnly",
-    "feeds": "Signal",
     "inputs": [],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Smooth deterministic noise — organic drift. Sum of incommensurate sinusoids",
     "params": [
       {
@@ -3685,15 +4376,28 @@
     "node_type": "SignalMath",
     "category": "Signal",
     "scope": "SignalOnly",
-    "feeds": "Signal",
     "inputs": [
-      "a",
-      "b"
+      {
+        "name": "a",
+        "port_type": "Signal",
+        "required": false,
+        "label": "a"
+      },
+      {
+        "name": "b",
+        "port_type": "Signal",
+        "required": false,
+        "label": "b"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Scalar math — combine signals. Unconnected inputs fall back to params a/b",
     "params": [
       {
@@ -3743,14 +4447,22 @@
     "node_type": "SignalMap",
     "category": "Signal",
     "scope": "SignalOnly",
-    "feeds": "Signal",
     "inputs": [
-      "signal"
+      {
+        "name": "signal",
+        "port_type": "Signal",
+        "required": false,
+        "label": "signal"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Linear remap in_min..in_max → out_min..out_max, optional clamp",
     "params": [
       {
@@ -3809,14 +4521,22 @@
     "node_type": "SignalClamp",
     "category": "Signal",
     "scope": "SignalOnly",
-    "feeds": "Signal",
     "inputs": [
-      "signal"
+      {
+        "name": "signal",
+        "port_type": "Signal",
+        "required": false,
+        "label": "signal"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Clamp signal to [min, max] — safety bound before MacroOut",
     "params": [
       {
@@ -3845,16 +4565,34 @@
     "node_type": "SignalMix",
     "category": "Signal",
     "scope": "SignalOnly",
-    "feeds": "Signal",
     "inputs": [
-      "a",
-      "b",
-      "factor"
+      {
+        "name": "a",
+        "port_type": "Signal",
+        "required": false,
+        "label": "a"
+      },
+      {
+        "name": "b",
+        "port_type": "Signal",
+        "required": false,
+        "label": "b"
+      },
+      {
+        "name": "factor",
+        "port_type": "Signal",
+        "required": false,
+        "label": "factor"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Crossfade between two signals (factor 0=A, 1=B) — factor can itself be a signal",
     "params": [
       {
@@ -3873,14 +4611,22 @@
     "node_type": "SignalSlew",
     "category": "Signal",
     "scope": "SignalOnly",
-    "feeds": "Signal",
     "inputs": [
-      "signal"
+      {
+        "name": "signal",
+        "port_type": "Signal",
+        "required": false,
+        "label": "signal"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Slew rate limiter — asymmetric physical smoothing (rise/fall units per second)",
     "params": [
       {
@@ -3909,14 +4655,22 @@
     "node_type": "SignalEnvelope",
     "category": "Signal",
     "scope": "SignalOnly",
-    "feeds": "Signal",
     "inputs": [
-      "signal"
+      {
+        "name": "signal",
+        "port_type": "Signal",
+        "required": false,
+        "label": "signal"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Envelope follower — retention factors per frame (small=fast, big=slow). Audio punch → macro",
     "params": [
       {
@@ -3945,14 +4699,22 @@
     "node_type": "SignalThreshold",
     "category": "Signal",
     "scope": "SignalOnly",
-    "feeds": "Signal",
     "inputs": [
-      "signal"
+      {
+        "name": "signal",
+        "port_type": "Signal",
+        "required": false,
+        "label": "signal"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Hysteresis gate — 1 above threshold, 0 below threshold-hysteresis, holds between",
     "params": [
       {
@@ -3981,12 +4743,15 @@
     "node_type": "SignalOut",
     "category": "Signal",
     "scope": "SignalOnly",
-    "feeds": "Terminal",
     "inputs": [
-      "signal"
+      {
+        "name": "signal",
+        "port_type": "Signal",
+        "required": true,
+        "label": "signal"
+      }
     ],
     "outputs": [],
-    "falloff_target": false,
     "description": "Modulation sink — writes signal as ADDITIVE delta on a macro (panel/OSC/cue base + delta). speed only applies per-move",
     "params": [
       {

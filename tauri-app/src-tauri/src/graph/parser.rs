@@ -114,14 +114,37 @@ pub fn build_graph_from_json(
         let to = *id_map
             .get(edge.target.as_str())
             .ok_or_else(|| format!("Unknown target node id: {}", edge.target))?;
-        let from_port = edge
-            .sourceHandle
-            .clone()
-            .unwrap_or_else(|| "output".to_string());
-        let to_port = edge
-            .targetHandle
-            .clone()
-            .unwrap_or_else(|| "input".to_string());
+        // Défauts type-aware : sans handle explicite, le port est résolu
+        // par correspondance de type — source → premier port de sortie,
+        // cible → premier port d'entrée du même type que la sortie.
+        let from_spec = graph
+            .nodes
+            .get(&from)
+            .map(|n| stagespace_engines::node_spec::node_spec(&n.node_type));
+        let to_spec = graph
+            .nodes
+            .get(&to)
+            .map(|n| stagespace_engines::node_spec::node_spec(&n.node_type));
+        let from_port = edge.sourceHandle.clone().unwrap_or_else(|| {
+            from_spec
+                .and_then(|s| s.outputs.first())
+                .map(|p| p.name.clone())
+                .unwrap_or_default()
+        });
+        let from_type = from_spec
+            .and_then(|s| s.output_port(&from_port))
+            .map(|p| p.port_type);
+        let to_port = edge.targetHandle.clone().unwrap_or_else(|| {
+            to_spec
+                .and_then(|s| {
+                    s.inputs
+                        .iter()
+                        .find(|p| Some(p.port_type) == from_type)
+                        .or_else(|| s.inputs.first())
+                        .map(|p| p.name.clone())
+                })
+                .unwrap_or_default()
+        });
         graph.add_edge(Edge {
             from,
             to,

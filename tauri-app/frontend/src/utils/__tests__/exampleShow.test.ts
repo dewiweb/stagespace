@@ -31,8 +31,8 @@ function validateGraph(label: string, nodes: Node[], edges: Edge[]) {
     const from = nodeType(src!);
     const to = nodeType(dst!);
     expect(isValidConnection(from, to), `${label}: ${from} -> ${to}`).toBe(true);
-    const th = e.targetHandle ?? 'input';
-    expect(getInputPorts(to), `${label}: port ${th} on ${to}`).toContain(th);
+    const th = e.targetHandle ?? 'in';
+    expect(getInputPorts(to).map((p) => p.name), `${label}: port ${th} on ${to}`).toContain(th);
     const used = usedInputs.get(e.target) ?? new Set<string>();
     expect(used.has(th), `${label}: ${to}.${th} fed twice`).toBe(false);
     used.add(th);

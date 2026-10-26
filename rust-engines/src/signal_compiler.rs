@@ -220,7 +220,7 @@ pub fn compile_signal_graph(graph: &Graph) -> std::result::Result<SignalFn, Sign
                 graph
                     .edges
                     .iter()
-                    .find(|e| e.to == id && e.to_port == *port)
+                    .find(|e| e.to == id && e.to_port == port.name)
                     .and_then(|e| index_of.get(&e.from).copied())
             })
             .collect();

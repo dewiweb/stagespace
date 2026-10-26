@@ -178,7 +178,9 @@ impl Validator {
             )));
         }
 
-        // 3. Vérifier les connexions valides + endpoints existants + doublons
+        // 3. Vérifier les endpoints existants + doublons + self-loops.
+        // La légalité de la connexion elle-même est évaluée au niveau PORT
+        // dans validate_type_compatibility (existence + égalité de type).
         let mut seen_edges: HashSet<(NodeId, NodeId, &str, &str)> = HashSet::new();
         for edge in &graph.edges {
             if !seen_edges.insert((edge.from, edge.to, &edge.from_port, &edge.to_port)) {
@@ -188,27 +190,19 @@ impl Validator {
                 )));
             }
             match (graph.nodes.get(&edge.from), graph.nodes.get(&edge.to)) {
-                (Some(from_node), Some(to_node)) => {
-                    if edge.from == edge.to {
-                        errors.push(ValidationError::InvalidConnection(format!(
-                            "self-loop on {:?} is not allowed",
-                            from_node.node_type
-                        )));
-                    } else if !Self::is_valid_connection(
-                        &from_node.node_type,
-                        &to_node.node_type,
-                        plugin_kinds.get(&to_node.id).copied(),
-                    ) {
-                        errors.push(ValidationError::InvalidConnection(format!(
-                            "{:?} -> {:?}",
-                            from_node.node_type, to_node.node_type
-                        )));
-                    }
+                (Some(from_node), _) if edge.from == edge.to => {
+                    errors.push(ValidationError::InvalidConnection(format!(
+                        "self-loop on {:?} is not allowed",
+                        from_node.node_type
+                    )));
                 }
-                _ => errors.push(ValidationError::InvalidConnection(format!(
-                    "edge references missing node(s): {:?} -> {:?}",
-                    edge.from, edge.to
-                ))),
+                (None, _) | (_, None) => {
+                    errors.push(ValidationError::InvalidConnection(format!(
+                        "edge references missing node(s): {:?} -> {:?}",
+                        edge.from, edge.to
+                    )));
+                }
+                _ => {}
             }
         }
 
@@ -342,179 +336,87 @@ impl Validator {
         }
     }
 
-    /// Détecte si le graphe contient des moteurs (sub-graph).
+    /// Détecte si le graphe contient des engines — dérivé des ports :
+    /// tout node consommant un `ObjectSet` a besoin d'Objects résolubles
+    /// (engines, physics, splines, falloffs, sources, plugins engine).
     fn graph_has_engines(graph: &Graph) -> bool {
         graph.nodes.values().any(|n| {
-            matches!(
-                n.node_type,
-                NodeType::Circular
-                    | NodeType::Elliptical
-                    | NodeType::Spiral
-                    | NodeType::Lissajous
-                    | NodeType::Figure8
-                    | NodeType::Linear
-                    | NodeType::Oscillation
-                    | NodeType::Formation
-                    | NodeType::PerlinNoise
-                    | NodeType::Converge
-                    | NodeType::Pendulum
-                    | NodeType::RoseCurve
-                    | NodeType::Helix
-                    | NodeType::Bouncing
-                    | NodeType::Spring
-                    | NodeType::Follow
-                    | NodeType::Swarm
-                    | NodeType::Avoidance
-                    | NodeType::VectorField
-                    | NodeType::CustomTrajectory
-                    | NodeType::BPM
-                    | NodeType::AudioAmplitude
-                    | NodeType::TimeFalloff
-                    | NodeType::PointDistanceFalloff
-                    | NodeType::DirectionalFalloff
-                    | NodeType::AudioAmplitudeFalloff
-                    | NodeType::Wave
-                    // Splines + sources audio/OSC : compilés comme des engines,
-                    // ils ont aussi besoin d'Objects/Duration résolubles
-                    | NodeType::DrawSpline
-                    | NodeType::EvaluateSpline
-                    | NodeType::TrimSpline
-                    | NodeType::OffsetSpline
-                    | NodeType::AudioSpectrum
-                    | NodeType::OSCInput
-                    | NodeType::Plugin
-            )
+            crate::node_spec::node_spec(&n.node_type)
+                .has_input_type(crate::node_spec::PortType::ObjectSet)
         })
     }
 
-    /// Un type produit une trajectoire connectable à un modifier natif —
-    /// dérivé du `NodeSpec` (node_spec.rs), anciennement une liste explicite.
-    fn feeds_modifier(t: &NodeType) -> bool {
-        crate::node_spec::node_spec(t).feeds_modifier()
-    }
-
-    /// Un type produit une trajectoire connectable à un composite natif —
-    /// feeds_modifier + physics + composites, moins les falloffs limités.
-    fn feeds_composite(t: &NodeType) -> bool {
-        crate::node_spec::node_spec(t).feeds_composite()
-    }
-
-    /// Vérifie si une connexion entre deux types de nœuds est valide —
-    /// délégué au `Feeds` déclaratif du `NodeSpec` (node_spec.rs).
-    fn is_valid_connection(
-        from_type: &NodeType,
-        to_type: &NodeType,
-        to_plugin_kind: Option<crate::plugins::PluginKind>,
-    ) -> bool {
-        use crate::node_spec::node_spec;
-        // Plugin WASM : le kind du manifeste détermine qui peut l'alimenter.
-        // Kind inconnu (registry non branché) → permissif ; l'arité exacte
-        // est garantie au compile.
-        if *to_type == NodeType::Plugin {
-            use crate::plugins::PluginKind as K;
-            return match to_plugin_kind {
-                Some(K::Engine) => {
-                    matches!(from_type, NodeType::Objects | NodeType::Duration)
-                }
-                Some(K::Modifier) => Self::feeds_modifier(from_type),
-                Some(K::Composite) => Self::feeds_composite(from_type),
-                None => {
-                    matches!(from_type, NodeType::Objects | NodeType::Duration)
-                        || Self::feeds_composite(from_type)
-                }
-            };
+    /// Ports d'entrée effectifs d'un node — le `PluginKind` du manifeste
+    /// restreint le superset déclaré pour les plugins ; `None` (kind non
+    /// résolu) retourne le superset permissif.
+    fn effective_input_ports(
+        node_type: &NodeType,
+        plugin_kind: Option<crate::plugins::PluginKind>,
+    ) -> Vec<crate::node_spec::PortDef> {
+        if *node_type == NodeType::Plugin {
+            return crate::node_spec::NodeSpec::plugin_input_ports(plugin_kind);
         }
-        node_spec(from_type).can_feed(node_spec(to_type))
+        crate::node_spec::node_spec(node_type).inputs.clone()
     }
 
-    /// Vérifie que les noms de ports utilisés par les edges existent pour les types connectés.
+    /// La règle de connexion unique : les deux ports existent et portent
+    /// le même `PortType`. C'est tout — pas de matrice de catégories, pas
+    /// de cas particulier : `Objects` ne peut alimenter qu'un port
+    /// `ObjectSet` parce que son unique sortie est typée `ObjectSet`, etc.
     fn validate_type_compatibility(
         graph: &Graph,
         errors: &mut Vec<ValidationError>,
         plugin_kinds: &std::collections::HashMap<crate::graph::NodeId, crate::plugins::PluginKind>,
     ) {
         for edge in &graph.edges {
-            let from_node = match graph.nodes.get(&edge.from) {
-                Some(n) => n,
-                None => continue,
-            };
-            let to_node = match graph.nodes.get(&edge.to) {
-                Some(n) => n,
-                None => continue,
+            let (Some(from_node), Some(to_node)) =
+                (graph.nodes.get(&edge.from), graph.nodes.get(&edge.to))
+            else {
+                continue;
             };
 
-            // Un nœud source sans port de sortie (ex. Output) ne peut rien émettre.
-            if !Self::has_output_port(&from_node.node_type, &edge.from_port) {
+            let from_port =
+                crate::node_spec::node_spec(&from_node.node_type).output_port(&edge.from_port);
+            let Some(from_port) = from_port else {
                 errors.push(ValidationError::TypeMismatch(format!(
                     "{:?} has no output port '{}'",
                     from_node.node_type, edge.from_port
                 )));
-            }
+                continue;
+            };
 
-            // Le port d'entrée cible doit exister pour le type cible.
-            if !Self::has_input_port(
-                &to_node.node_type,
-                &edge.to_port,
-                plugin_kinds.get(&to_node.id).copied(),
-            ) {
+            let to_kind = plugin_kinds.get(&to_node.id).copied();
+            let to_port = Self::effective_input_ports(&to_node.node_type, to_kind)
+                .into_iter()
+                .find(|p| p.name == edge.to_port);
+            let Some(to_port) = to_port else {
                 errors.push(ValidationError::TypeMismatch(format!(
                     "{:?} has no input port '{}', connected from {:?}",
                     to_node.node_type, edge.to_port, from_node.node_type
                 )));
-            }
+                continue;
+            };
 
-            // Un port 'duration' ne peut être alimenté que par un nœud Duration.
-            if edge.to_port == "duration" && from_node.node_type != NodeType::Duration {
+            if from_port.port_type != to_port.port_type {
                 errors.push(ValidationError::TypeMismatch(format!(
-                    "Only Duration can connect to a 'duration' port, got {:?}",
-                    from_node.node_type
+                    "port type mismatch: {:?}.{} ({:?}) → {:?}.{} ({:?})",
+                    from_node.node_type,
+                    edge.from_port,
+                    from_port.port_type,
+                    to_node.node_type,
+                    edge.to_port,
+                    to_port.port_type
                 )));
             }
         }
     }
 
-    /// Indique si un type de nœud expose un port de sortie avec ce nom —
-    /// dérivé de `NodeSpec::outputs` (Output est le seul terminal).
-    fn has_output_port(node_type: &NodeType, port: &str) -> bool {
-        crate::node_spec::node_spec(node_type)
-            .outputs
-            .iter()
-            .any(|p| p == port)
-    }
-
-    /// Indique si un type de nœud expose un port d'entrée avec ce nom.
-    /// `plugin_kind` : kind résolu du manifeste pour les nodes Plugin —
-    /// engine → input+duration, modifier → input, composite → input_a/b.
-    /// Kind inconnu → superset permissif.
-    fn has_input_port(
-        node_type: &NodeType,
-        port: &str,
-        plugin_kind: Option<crate::plugins::PluginKind>,
-    ) -> bool {
-        // Plugin : ports dictés par le kind du manifeste (ABI v2).
-        if *node_type == NodeType::Plugin {
-            use crate::plugins::PluginKind as K;
-            let inputs: &[&str] = match plugin_kind {
-                Some(K::Engine) => &["input", "duration"],
-                Some(K::Modifier) => &["input"],
-                Some(K::Composite) => &["input", "input_a", "input_b"],
-                None => &["input", "input_a", "input_b", "duration"],
-            };
-            return inputs.contains(&port);
-        }
-        // Natifs : ports déclarés dans le NodeSpec (node_spec.rs).
-        crate::node_spec::node_spec(node_type)
-            .inputs
-            .iter()
-            .any(|p| p == port)
-    }
-
     /// Vérifie l'arité des entrées :
-    /// - au plus 1 edge par port d'entrée nommé (deux edges sur "input" sont
-    ///   silencieusement réduits à un par le compiler — erreur ici)
-    /// - les composites binaires exigent exactement 2 entrées
-    /// - Output et les modifiers exigent au moins 1 entrée (sinon le compile
-    ///   échoue tard avec OutputNotConnected / MissingParameter)
+    /// - au plus 1 edge par port d'entrée nommé (le fan-in est rejeté —
+    ///   le compiler réduirait silencieusement à un seul upstream)
+    /// - chaque port `required` reçoit au moins un edge (générique : couvre
+    ///   Output.in, modifier.in, composite a/b, SignalOut.signal,
+    ///   EvaluateSpline.spline et les ports plugin kindés)
     /// - chaque engine doit pouvoir résoudre n_objects (param propre ou
     ///   edge Objects direct — même convention que Compiler::resolve_n_objects)
     fn validate_input_arity(
@@ -542,99 +444,44 @@ impl Validator {
                 }
             }
 
-            // Les composites binaires exigent exactement 2 entrées
-            if matches!(
-                node.node_type,
-                NodeType::Mix | NodeType::Group | NodeType::Sequence | NodeType::Crossfade
-            ) && incoming.len() != 2
-            {
-                errors.push(ValidationError::InvalidConnection(format!(
-                    "{:?} requires exactly 2 trajectory inputs, got {}",
-                    node.node_type,
-                    incoming.len()
-                )));
+            // Ports requis : chaque PortDef.required doit être connecté.
+            let kind = plugin_kinds.get(&node.id).copied();
+            for p in Self::effective_input_ports(&node.node_type, kind) {
+                if p.required && !incoming.iter().any(|e| e.to_port == p.name) {
+                    errors.push(ValidationError::InvalidConnection(format!(
+                        "{:?} required input port '{}' is not connected",
+                        node.node_type, p.name
+                    )));
+                }
             }
 
-            // SignalOut déconnecté = sink mort — le graph compile mais ne
-            // produit rien (même règle qu'Output).
-            if node.node_type == NodeType::SignalOut && incoming.is_empty() {
-                errors.push(ValidationError::InvalidConnection(
-                    "SignalOut requires a signal input, got 0".to_string(),
-                ));
-            }
-
-            // Output et les modifiers exigent une entrée — sinon le compile
-            // échoue tard (OutputNotConnected / MissingParameter).
-            if matches!(
-                node.node_type,
-                NodeType::Output
-                    | NodeType::Scale
-                    | NodeType::Rotate
-                    | NodeType::Offset
-                    | NodeType::PhaseShift
-                    | NodeType::Mirror
-                    | NodeType::Clamp
-                    | NodeType::LFO
-                    | NodeType::Jitter
-            ) && incoming.is_empty()
-            {
-                errors.push(ValidationError::InvalidConnection(format!(
-                    "{:?} requires a trajectory input, got 0",
-                    node.node_type
-                )));
-            }
-
-            // Plugin kind-aware : modifier/composite exigent leurs entrées
-            // trajectoire (hors carriers Objects/Duration) ; un engine
-            // plugin n'en accepte aucune — une edge trajectoire vers un
-            // engine serait silencieusement ignorée au compile.
+            // Plugin kind-aware : un engine plugin n'accepte aucune entrée
+            // Positions — une edge trajectoire serait silencieusement
+            // ignorée au compile.
             if node.node_type == NodeType::Plugin {
                 use crate::plugins::PluginKind as K;
-                let kind = plugin_kinds.get(&node.id).copied();
-                let traj_count = incoming
-                    .iter()
-                    .filter(|e| matches!(e.to_port.as_str(), "input" | "input_a" | "input_b"))
-                    .filter(|e| {
-                        !matches!(
-                            graph.nodes.get(&e.from).map(|n| &n.node_type),
-                            Some(NodeType::Objects) | Some(NodeType::Duration)
-                        )
-                    })
-                    .count();
-                match kind {
-                    Some(K::Modifier) if traj_count == 0 => {
-                        errors.push(ValidationError::InvalidConnection(
-                            "Plugin (modifier) requires 1 trajectory input, got 0".to_string(),
-                        ));
-                    }
-                    Some(K::Composite) if traj_count != 2 => {
-                        errors.push(ValidationError::InvalidConnection(format!(
-                            "Plugin (composite) requires exactly 2 trajectory inputs, got {traj_count}"
-                        )));
-                    }
-                    Some(K::Engine) if traj_count > 0 => {
+                if kind == Some(K::Engine) {
+                    let traj_count = incoming
+                        .iter()
+                        .filter(|e| matches!(e.to_port.as_str(), "in" | "a" | "b"))
+                        .count();
+                    if traj_count > 0 {
                         errors.push(ValidationError::InvalidConnection(format!(
                             "Plugin (engine) takes no trajectory input, got {traj_count}"
                         )));
                     }
-                    _ => {}
                 }
             }
 
             // Chaque engine doit résoudre n_objects avec la même convention
             // que le compiler : param propre, sinon edge direct depuis un
             // node Objects. Sans les deux, MissingParameter au compile.
-            // Plugin modifier/composite : n_objects propage depuis
-            // l'upstream (pas de port 'duration' → règle déjà court-circuitée).
+            // Détecté par le port `ObjectSet` — les modifiers/composites
+            // (n_objects propagé depuis l'upstream) n'en ont pas.
             if context == GraphContext::SubGraph
-                && !(node.node_type == NodeType::Plugin
-                    && plugin_kinds.get(&node.id).copied()
-                        != Some(crate::plugins::PluginKind::Engine))
-                && Self::has_input_port(
-                    &node.node_type,
-                    "duration",
-                    plugin_kinds.get(&node.id).copied(),
-                )
+                && Self::effective_input_ports(&node.node_type, kind)
+                    .iter()
+                    .any(|p| p.port_type == crate::node_spec::PortType::ObjectSet)
                 && node
                     .params
                     .get("n_objects")
@@ -714,22 +561,17 @@ impl Validator {
                         .map(|n| effective_n_objects(graph, n, fallback, depth + 1))
                         .unwrap_or(fallback),
                     // Plugin : modifier/composite propagent depuis l'entrée
-                    // trajectoire (input_a en priorité, sinon 'input') — les
-                    // carriers Objects/Duration sont déjà résolus au-dessus.
+                    // trajectoire (port 'a' en priorité, puis 'in', 'b') —
+                    // les carriers Objects/Duration ne peuvent pas atterrir
+                    // sur un port Positions (types disjoints).
                     NodeType::Plugin => graph
                         .edges
                         .iter()
                         .filter(|e| e.to == node.id)
-                        .filter(|e| matches!(e.to_port.as_str(), "input_a" | "input" | "input_b"))
-                        .filter(|e| {
-                            !matches!(
-                                graph.nodes.get(&e.from).map(|n| &n.node_type),
-                                Some(NodeType::Objects) | Some(NodeType::Duration)
-                            )
-                        })
+                        .filter(|e| matches!(e.to_port.as_str(), "a" | "in" | "b"))
                         .min_by_key(|e| match e.to_port.as_str() {
-                            "input_a" => 0,
-                            "input" => 1,
+                            "a" => 0,
+                            "in" => 1,
                             _ => 2,
                         })
                         .and_then(|e| graph.nodes.get(&e.from))

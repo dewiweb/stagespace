@@ -273,10 +273,10 @@ impl Graph {
     }
 
     /// Entrées d'un composite binaire (Mix, Group, Sequence, Crossfade)
-    /// ordonnées par port : le node connecté à `input_a` en premier, celui
-    /// connecté à `input_b` ensuite. Les edges sans port explicite (legacy
-    /// "input") remplissent les slots restants dans l'ordre d'insertion —
-    /// le résultat est déterministe quelle que soit la convention de ports.
+    /// ordonnées par port : le node connecté à `a` en premier, celui
+    /// connecté à `b` ensuite. Les edges sur d'autres ports (inattendu —
+    /// le validator les rejette) remplissent les slots restants dans
+    /// l'ordre d'insertion — résultat déterministe dans tous les cas.
     pub fn get_binary_inputs(&self, id: NodeId) -> Vec<NodeId> {
         let mut port_a: Option<NodeId> = None;
         let mut port_b: Option<NodeId> = None;
@@ -284,8 +284,8 @@ impl Graph {
 
         for e in self.edges.iter().filter(|e| e.to == id) {
             match e.to_port.as_str() {
-                "input_a" if port_a.is_none() => port_a = Some(e.from),
-                "input_b" if port_b.is_none() => port_b = Some(e.from),
+                "a" if port_a.is_none() => port_a = Some(e.from),
+                "b" if port_b.is_none() => port_b = Some(e.from),
                 _ => unnamed.push(e.from),
             }
         }

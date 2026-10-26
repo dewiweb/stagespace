@@ -10,14 +10,14 @@ import { presetsUsingType, SHAPE_PRESETS } from '../shapePresets';
 describe('spliceRejectionReason (autopatch)', () => {
   it('modifier sur une edge trajectoire : valide', () => {
     // Circular → Output, insert Scale
-    expect(spliceRejectionReason('Circular', 'Output', 'Scale', undefined, 'input')).toBeNull();
+    expect(spliceRejectionReason('Circular', 'Output', 'Scale', undefined, 'in')).toBeNull();
     // Circular → Scale, insert Rotate (chaînage de modifiers)
-    expect(spliceRejectionReason('Circular', 'Scale', 'Rotate', undefined, 'input')).toBeNull();
+    expect(spliceRejectionReason('Circular', 'Scale', 'Rotate', undefined, 'in')).toBeNull();
   });
 
   it('edge vers une entrée composite : valide, le port cible est préservé', () => {
     // Circular → Mix:input_a, insert Offset → Offset → Mix:input_a
-    expect(spliceRejectionReason('Circular', 'Mix', 'Offset', undefined, 'input_a')).toBeNull();
+    expect(spliceRejectionReason('Circular', 'Mix', 'Offset', undefined, 'a')).toBeNull();
   });
 
   it('targetHandle null (edge legacy) : traité comme input', () => {
@@ -34,38 +34,36 @@ describe('spliceRejectionReason (autopatch)', () => {
     expect(reason).toMatch(/spline/);
   });
 
-  it('source incompatible : refusée (Objects ne peut pas alimenter Scale)', () => {
-    const reason = spliceRejectionReason('Objects', 'Circular', 'Scale', undefined, 'input');
-    expect(reason).toMatch(/Objects can't feed Scale/);
-  });
-
-  it('physics → modifier : refusée (mirror du validator Rust)', () => {
-    const reason = spliceRejectionReason('Bouncing', 'Output', 'Scale', undefined, 'input');
+  it('port carrier (Objects) : refusée — pas un edge Positions', () => {
+    const reason = spliceRejectionReason('Objects', 'Circular', 'Scale', undefined, 'objects');
     expect(reason).toBeTruthy();
   });
 
-  it('cible incompatible : refusée (modifier ne peut pas alimenter Sequence)', () => {
-    const reason = spliceRejectionReason('Circular', 'Sequence', 'Scale', undefined, 'input_a');
-    expect(reason).toMatch(/can't feed Sequence/);
+  it('physics → modifier : valide (les types Positions matchent)', () => {
+    expect(spliceRejectionReason('Bouncing', 'Output', 'Scale', undefined, 'in')).toBeNull();
+  });
+
+  it('cible composite : valide (modifier → Sequence.a est Positions)', () => {
+    expect(spliceRejectionReason('Circular', 'Sequence', 'Scale', undefined, 'a')).toBeNull();
   });
 
   it('plugin modifier : insérable sur une edge trajectoire', () => {
-    expect(spliceRejectionReason('Circular', 'Output', 'Plugin', 'modifier', 'input')).toBeNull();
+    expect(spliceRejectionReason('Circular', 'Output', 'Plugin', 'modifier', 'in')).toBeNull();
   });
 
   it('plugin composite : refusé (input_b resterait pendante)', () => {
-    const reason = spliceRejectionReason('Circular', 'Output', 'Plugin', 'composite', 'input');
-    expect(reason).toMatch(/two inputs/);
+    const reason = spliceRejectionReason('Circular', 'Output', 'Plugin', 'composite', 'in');
+    expect(reason).toMatch(/single Positions input/);
   });
 
   it('composite natif (Mix) : refusé', () => {
-    const reason = spliceRejectionReason('Circular', 'Output', 'Mix', undefined, 'input');
-    expect(reason).toMatch(/two inputs/);
+    const reason = spliceRejectionReason('Circular', 'Output', 'Mix', undefined, 'in');
+    expect(reason).toMatch(/single Positions input/);
   });
 
   it('engine : refusé (pas alimentable par une trajectoire)', () => {
-    const reason = spliceRejectionReason('Circular', 'Output', 'Spiral', undefined, 'input');
-    expect(reason).toMatch(/can't feed Spiral/);
+    const reason = spliceRejectionReason('Circular', 'Output', 'Spiral', undefined, 'in');
+    expect(reason).toMatch(/single Positions input/);
   });
 });
 

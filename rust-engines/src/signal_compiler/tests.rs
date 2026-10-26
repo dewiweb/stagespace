@@ -43,7 +43,7 @@ fn edge(from: &Node, to: &Node, to_port: &str) -> Edge {
     Edge {
         from: from.id,
         to: to.id,
-        from_port: "output".to_string(),
+        from_port: "out".to_string(),
         to_port: to_port.to_string(),
     }
 }

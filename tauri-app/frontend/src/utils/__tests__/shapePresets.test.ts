@@ -39,9 +39,9 @@ describe('SHAPE_PRESETS', () => {
             `${from} -> ${to} rejected by connection rules`,
           ).toBe(true);
 
-          const targetPort = e.targetHandle ?? 'input';
+          const targetPort = e.targetHandle ?? 'in';
           expect(
-            getInputPorts(to),
+            getInputPorts(to).map((p) => p.name),
             `${to} has no input port '${targetPort}'`,
           ).toContain(targetPort);
 
