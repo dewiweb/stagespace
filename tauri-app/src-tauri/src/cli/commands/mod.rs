@@ -8,9 +8,10 @@ mod sample;
 
 use hol::{cmd_import_hol, cmd_list_tracks};
 use moves::{
-    cmd_activate_move, cmd_clear_channel, cmd_kin_smoothing, cmd_list_moves, cmd_mod_add,
-    cmd_mod_clear, cmd_mod_list, cmd_set_channel, cmd_set_macros, cmd_set_merge_strategy,
-    cmd_set_move_speed, cmd_stop_all, cmd_stop_move, cmd_zone_add, cmd_zone_clear, cmd_zone_list,
+    cmd_activate_graph, cmd_activate_move, cmd_clear_channel, cmd_global_graph, cmd_kin_smoothing,
+    cmd_list_moves, cmd_mod_add, cmd_mod_clear, cmd_mod_list, cmd_set_channel, cmd_set_macros,
+    cmd_set_merge_strategy, cmd_set_move_speed, cmd_stop_all, cmd_stop_move, cmd_zone_add,
+    cmd_zone_clear, cmd_zone_list,
 };
 use osc::{
     cmd_osc_in, cmd_osc_inject, cmd_osc_listen, cmd_osc_map, cmd_osc_maps, cmd_osc_suppress,
@@ -37,6 +38,8 @@ pub fn dispatch(input: &str) -> Result<String, String> {
         "import-hol" => cmd_import_hol(rest),
         "list-tracks" => cmd_list_tracks(rest),
         "activate-move" | "activate" => cmd_activate_move(rest),
+        "activate-graph" => cmd_activate_graph(rest),
+        "global-graph" => cmd_global_graph(rest),
         "list-moves" | "moves" => cmd_list_moves(rest),
         "sample" => cmd_sample(rest),
         "set-macros" | "macros" => cmd_set_macros(rest),
