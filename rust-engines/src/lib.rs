@@ -1,7 +1,6 @@
 pub mod animation;
 pub mod audio;
 pub mod audio_capture;
-pub mod bpm;
 pub mod compiler;
 pub mod config;
 pub mod cuelist;
@@ -14,12 +13,10 @@ pub mod hol_parser;
 pub mod kinematics;
 pub mod logging;
 pub mod merge_runtime;
-pub mod modulator;
 pub mod node_params;
 pub mod node_spec;
 pub mod osc_receiver;
 pub mod osc_sender;
-pub mod patch;
 pub mod plugins;
 pub mod position_buffer;
 pub mod position_sink;
@@ -35,7 +32,6 @@ pub mod zones;
 #[cfg(test)]
 mod animation_tests;
 #[cfg(test)]
-mod audio_tests;
 #[cfg(test)]
 mod bench;
 #[cfg(test)]
@@ -60,11 +56,9 @@ pub use animation::{
     Direction, ShapeType, TrackAssignment,
 };
 pub use audio::{
-    AmplitudeData, AudioBinding, AudioFrame, AudioReactor, AudioSource, AudioState, BPMData,
-    SpectrumData,
+    AmplitudeData, AudioBinding, AudioFrame, AudioSource, AudioState, BPMData, SpectrumData,
 };
 pub use audio_capture::{AudioCaptureError, AudioCaptureManager, AudioDeviceInfo, BpmDetector};
-pub use bpm::BpmTracker;
 pub use compiler::{
     AudioParamOverrides, CompilationError, CompiledFunction, Compiler, LiveInputs, OscValueMap,
 };
@@ -91,13 +85,11 @@ pub use logging::{
     log_runtime_init,
 };
 pub use merge_runtime::{MergeRuntime, MergeStrategy, MoveState};
-pub use modulator::{ModulationSlot, Modulator, Waveform};
 pub use osc_receiver::{
     MacroTarget, MappingDestination, ObjectRef, OscInStatsSnapshot, OscInTargets, OscMapping,
     OscReceiver, Transform,
 };
 pub use osc_sender::{OscProfile, OscSender, SpatialChannel, SpatialChannels};
-pub use patch::{AudioObject, ObjectGroup, PatchManager};
 pub use plugins::{PluginEngine, PluginError, PluginManifest, PluginRegistry};
 pub use position_buffer::{IndexedPosition, PositionBuffer};
 pub use position_sink::{OscSink, PositionSink, SendReport};
