@@ -282,14 +282,10 @@ mod tests {
                 .filter(|t| COMPOSITES.contains(*t) || MODIFIERS.contains(*t))
                 // Group concatène les espaces d'objets (n_a + n_b) — il ne
                 // peut alimenter que des consommateurs sans check de comptage
-                // (Output, un autre Group, Crossfade). Sous Mix/Sequence le
-                // validator rejette le mismatch, à juste titre.
+                // (Output, un autre Group). Sous Mix/Sequence/Crossfade/Switch
+                // le validator rejette le mismatch, à juste titre.
                 .filter(|t| {
-                    **t != NodeType::Group
-                        || matches!(
-                            parent,
-                            NodeType::Output | NodeType::Group | NodeType::Crossfade
-                        )
+                    **t != NodeType::Group || matches!(parent, NodeType::Output | NodeType::Group)
                 })
                 .cloned()
                 .collect();

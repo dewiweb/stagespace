@@ -569,7 +569,10 @@ impl Validator {
                     | NodeType::Mirror
                     | NodeType::Clamp
                     | NodeType::LFO
-                    | NodeType::Jitter => inputs
+                    | NodeType::Jitter
+                    | NodeType::SpeedScale
+                    | NodeType::Delay
+                    | NodeType::Freeze => inputs
                         .first()
                         .and_then(|id| graph.nodes.get(id))
                         .map(|n| effective_n_objects(graph, n, fallback, depth + 1))
@@ -673,8 +676,9 @@ impl Validator {
                             )));
                         }
                     }
-                    // Mix : les deux entrées doivent avoir le même n_objects
-                    NodeType::Mix => {
+                    // Mix/Sequence/Crossfade/Switch : les deux entrées doivent
+                    // avoir le même n_objects (blend/route per-object)
+                    NodeType::Mix | NodeType::Sequence | NodeType::Crossfade | NodeType::Switch => {
                         let inputs = graph.get_inputs(node.id);
                         if inputs.len() >= 2 {
                             let node_a = graph.nodes.get(&inputs[0]);
@@ -686,26 +690,8 @@ impl Validator {
 
                                 if n_a != n_b {
                                     errors.push(ValidationError::CountMismatch(format!(
-                                        "Mix node: input A has {n_a} objects but input B has {n_b} objects"
-                                    )));
-                                }
-                            }
-                        }
-                    }
-                    // Sequence : les deux entrées doivent avoir le même n_objects
-                    NodeType::Sequence => {
-                        let inputs = graph.get_inputs(node.id);
-                        if inputs.len() >= 2 {
-                            let node_a = graph.nodes.get(&inputs[0]);
-                            let node_b = graph.nodes.get(&inputs[1]);
-
-                            if let (Some(na), Some(nb)) = (node_a, node_b) {
-                                let n_a = resolve(na);
-                                let n_b = resolve(nb);
-
-                                if n_a != n_b {
-                                    errors.push(ValidationError::CountMismatch(format!(
-                                        "Sequence node: input A has {n_a} objects but input B has {n_b} objects"
+                                        "{:?} node: input A has {n_a} objects but input B has {n_b} objects",
+                                        node.node_type
                                     )));
                                 }
                             }
