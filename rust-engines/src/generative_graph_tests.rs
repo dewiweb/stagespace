@@ -665,7 +665,7 @@ mod tests {
                 for e in &graph.edges {
                     let from_ty = &graph.nodes[&e.from].node_type;
                     let to_ty = &graph.nodes[&e.to].node_type;
-                    let combo = format!("{}→{}", format!("{to_ty:?}"), category(from_ty));
+                    let combo = format!("{to_ty:?}→{}", category(from_ty));
                     *combo_counts.entry(combo).or_insert(0) += 1;
                 }
 
