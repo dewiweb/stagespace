@@ -183,7 +183,7 @@ mod tests {
     fn test_global_graph_valid() {
         // Graph global valide : Input → Scale → Output
         let mut graph = Graph::new();
-        let input = Node::new(NodeType::Input);
+        let input = Node::new(NodeType::Merge);
         let scale = Node::new(NodeType::Scale);
         let output = Node::new(NodeType::Output);
 
@@ -220,7 +220,7 @@ mod tests {
         // Objects n'a pas de sens dans un graph global
         let mut graph = Graph::new();
         let objects = Node::new(NodeType::Objects);
-        let input = Node::new(NodeType::Input);
+        let input = Node::new(NodeType::Merge);
         let output = Node::new(NodeType::Output);
 
         let id_input = input.id;
@@ -254,7 +254,7 @@ mod tests {
         // Un moteur (Circular) n'a pas de sens dans un graph global
         let mut graph = Graph::new();
         let circular = Node::new(NodeType::Circular);
-        let input = Node::new(NodeType::Input);
+        let input = Node::new(NodeType::Merge);
         let output = Node::new(NodeType::Output);
 
         let id_input = input.id;
@@ -322,7 +322,7 @@ mod tests {
         let objects = Node::with_params(NodeType::Objects, serde_json::json!({"n_objects": 3}));
         let duration = Node::with_params(NodeType::Duration, serde_json::json!({"duration": 4.0}));
         let circular = Node::with_params(NodeType::Circular, serde_json::json!({"n_objects": 3}));
-        let input = Node::new(NodeType::Input);
+        let input = Node::new(NodeType::Merge);
         let output = Node::new(NodeType::Output);
 
         let id_objects = objects.id;
@@ -510,7 +510,7 @@ mod tests {
         // Input → Zone → Velocity → Output : les nodes d'effets graph-native
         // sont des déclarations pass-through dans la chaîne globale.
         let mut graph = Graph::new();
-        let input = Node::new(NodeType::Input);
+        let input = Node::new(NodeType::Merge);
         let zone = Node::with_params(
             NodeType::Zone,
             serde_json::json!({"shape": "sphere", "center": [0,0,0], "radius": 2.0,
@@ -669,7 +669,7 @@ mod tests {
     fn test_vectorfield_rejected_in_global_graph() {
         // VectorField est un moteur sub-graph — pas un post-process global
         let mut graph = Graph::new();
-        let input = Node::new(NodeType::Input);
+        let input = Node::new(NodeType::Merge);
         let field = Node::new(NodeType::VectorField);
         let output = Node::new(NodeType::Output);
 

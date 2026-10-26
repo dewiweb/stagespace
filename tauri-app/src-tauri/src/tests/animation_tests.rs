@@ -983,7 +983,7 @@ mod tests {
     fn make_global_graph_json(radius_scale: f64) -> serde_json::Value {
         serde_json::json!({
             "nodes": [
-                {"id": "input-1", "type": "custom", "position": {"x": 50, "y": 200}, "data": {"label": "Input", "type": "Input", "params": {}}},
+                {"id": "input-1", "type": "custom", "position": {"x": 50, "y": 200}, "data": {"label": "Input", "type": "Merge", "params": {}}},
                 {"id": "rs-1", "type": "custom", "position": {"x": 300, "y": 200}, "data": {"label": "RadiusScale", "type": "RadiusScale", "params": {"radius_scale": radius_scale}}},
                 {"id": "output-1", "type": "custom", "position": {"x": 550, "y": 200}, "data": {"label": "Output", "type": "Output", "params": {}}}
             ],
@@ -1013,7 +1013,7 @@ mod tests {
         assert!(graph
             .nodes
             .values()
-            .any(|n| n.node_type == stagespace_engines::NodeType::Input));
+            .any(|n| n.node_type == stagespace_engines::NodeType::Merge));
         // Vérifier qu'on a un node RadiusScale
         assert!(graph
             .nodes

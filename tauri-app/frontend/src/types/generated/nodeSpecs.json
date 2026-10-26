@@ -25,6 +25,16 @@
         "min": 1.0,
         "max": 64.0,
         "default_json": "9"
+      },
+      {
+        "key": "track_ids",
+        "label": "Track IDs",
+        "kind": "text",
+        "options": null,
+        "step": null,
+        "min": null,
+        "max": null,
+        "default_json": "\"\""
       }
     ]
   },
@@ -87,24 +97,6 @@
     ]
   },
   {
-    "node_type": "Input",
-    "category": "Structural",
-    "scope": "GlobalOnly",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "out",
-        "port_type": "Positions",
-        "required": false,
-        "label": "out"
-      }
-    ],
-    "description": "Global graph entry point — represents the merged positions of all moves",
-    "object_distribution": "None",
-    "stateful": false,
-    "params": []
-  },
-  {
     "node_type": "MoveRef",
     "category": "Structural",
     "scope": "GlobalOnly",
@@ -117,7 +109,7 @@
         "label": "out"
       }
     ],
-    "description": "Alternative source to Input — post-process filtered to one move's tracks via move_id",
+    "description": "Alternative source to Merge — post-process filtered to one move's tracks via move_id",
     "object_distribution": "None",
     "stateful": false,
     "params": [
@@ -164,16 +156,6 @@
         "min": null,
         "max": null,
         "default_json": "\"override\""
-      },
-      {
-        "key": "fade_duration",
-        "label": "Fade (s)",
-        "kind": "number",
-        "options": null,
-        "step": 0.1,
-        "min": 0.0,
-        "max": null,
-        "default_json": "0.5"
       }
     ]
   },
@@ -749,7 +731,10 @@
           "circle",
           "line",
           "arc",
-          "grid"
+          "grid",
+          "sphere",
+          "triangle",
+          "hexagon"
         ],
         "step": null,
         "min": null,
@@ -2387,7 +2372,7 @@
   },
   {
     "node_type": "TimeFalloff",
-    "category": "Falloff",
+    "category": "Envelope",
     "scope": "SubOnly",
     "inputs": [
       {
@@ -2478,7 +2463,7 @@
   },
   {
     "node_type": "PointDistanceFalloff",
-    "category": "Falloff",
+    "category": "Envelope",
     "scope": "SubOnly",
     "inputs": [
       {
@@ -2569,7 +2554,7 @@
   },
   {
     "node_type": "DirectionalFalloff",
-    "category": "Falloff",
+    "category": "Envelope",
     "scope": "SubOnly",
     "inputs": [
       {
@@ -2660,7 +2645,7 @@
   },
   {
     "node_type": "AudioAmplitudeFalloff",
-    "category": "Falloff",
+    "category": "Envelope",
     "scope": "SubOnly",
     "inputs": [
       {
@@ -3867,7 +3852,7 @@
         "label": "out"
       }
     ],
-    "description": "Splits N objects into 2 groups: A→[0..n/2], B→[n/2..n]. For different track assignments",
+    "description": "Splits objects by branch A's n_objects: A→[0..n_a), B→[n_a..n). For different track assignments",
     "object_distribution": "None",
     "stateful": false,
     "params": []
@@ -5223,26 +5208,15 @@
       }
     ],
     "outputs": [],
-    "description": "Modulation sink — writes signal as ADDITIVE delta on a macro (panel/OSC/cue base + delta). speed only applies per-move",
+    "description": "Modulation sink — writes signal as ADDITIVE delta. target: macro (scale, shift_x, shift_y, shift_z, yaw, pitch, roll, radius_scale, height_offset, speed per-move) or param:<NodeType>:<key> to modulate any node param",
     "object_distribution": "None",
     "stateful": false,
     "params": [
       {
         "key": "target",
         "label": "Target",
-        "kind": "enum",
-        "options": [
-          "speed",
-          "scale",
-          "shift_x",
-          "shift_y",
-          "shift_z",
-          "yaw",
-          "pitch",
-          "roll",
-          "radius_scale",
-          "height_offset"
-        ],
+        "kind": "string",
+        "options": null,
         "step": null,
         "min": null,
         "max": null,

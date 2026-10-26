@@ -36,8 +36,6 @@ pub enum NodeType {
     Mix,
     Sequence,
     Crossfade,
-    /// Point d'entrée du graph global (représente les positions mergées)
-    Input,
 
     // Moteurs math
     Circular,

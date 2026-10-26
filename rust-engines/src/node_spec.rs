@@ -19,7 +19,7 @@
 //! - `Positions` — flux de positions. Dans un sub-graph : trajectoire
 //!   `f(t, i) → Vec3` (engines, modifiers, composites, physics, falloffs,
 //!   splines évaluées). Dans le graphe global : positions mergées
-//!   (Input/Merge/MoveRef → chaîne post-process → Output). Le même type
+//!   (Merge/MoveRef → chaîne post-process → Output). Le même type
 //!   couvre les deux contextes car ils ne peuvent jamais coexister dans
 //!   un graphe (voir `NodeScope`).
 //! - `Spline` — géométrie spline brute. Produit par `DrawSpline`,
@@ -79,13 +79,13 @@ pub struct PortDef {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 #[ts(export)]
 pub enum NodeCategory {
-    /// Objects/Duration/Output + sources du graph global (Input/MoveRef/Merge)
+    /// Objects/Duration/Output + sources du graph global (Merge/MoveRef)
     Structural,
     MathEngine,
     PhysicsEngine,
     /// DrawSpline (source de données) + Evaluate/Trim/Offset (engines spline)
     Spline,
-    Falloff,
+    Envelope,
     /// Modifiers compilables en sub-graph ET en post-process (Scope::Both)
     /// ou sub-only (PhaseShift)
     Modifier,
@@ -494,13 +494,8 @@ fn build_catalog() -> Vec<NodeSpec> {
             vec![txt("track_range", "Track Range (ex: 0-11)").d("0-")],
         ),
         spec(
-            NodeType::Input, C::Structural, S::GlobalOnly, vec![], out_pos(),
-            "Global graph entry point — represents the merged positions of all moves",
-            vec![],
-        ),
-        spec(
             NodeType::MoveRef, C::Structural, S::GlobalOnly, vec![], out_pos(),
-            "Alternative source to Input — post-process filtered to one move's tracks via move_id",
+            "Alternative source to Merge — post-process filtered to one move's tracks via move_id",
             vec![txt("move_id", "Move ID").d("")],
         ),
         spec(
@@ -801,7 +796,7 @@ fn build_catalog() -> Vec<NodeSpec> {
         ),
         // ── Falloffs ──
         spec(
-            NodeType::TimeFalloff, C::Falloff, S::SubOnly, engine_in(), out_pos(),
+            NodeType::TimeFalloff, C::Envelope, S::SubOnly, engine_in(), out_pos(),
             "Time envelope — influence that varies over time (start→end)",
             vec![
                 ns("start_time", "Start Time", 0.1).d(0.0),
@@ -812,7 +807,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::PointDistanceFalloff, C::Falloff, S::SubOnly, engine_in(), out_pos(),
+            NodeType::PointDistanceFalloff, C::Envelope, S::SubOnly, engine_in(), out_pos(),
             "Influence based on distance to a point (center, max_distance)",
             vec![
                 v3("center", "Center").d([0.0, 0.0, 0.0]),
@@ -823,7 +818,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::DirectionalFalloff, C::Falloff, S::SubOnly, engine_in(), out_pos(),
+            NodeType::DirectionalFalloff, C::Envelope, S::SubOnly, engine_in(), out_pos(),
             "Directional influence — cone along a direction",
             vec![
                 v3("direction", "Direction").d([0.0, 0.0, 1.0]),
@@ -834,7 +829,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::AudioAmplitudeFalloff, C::Falloff, S::SubOnly, engine_in(), out_pos(),
+            NodeType::AudioAmplitudeFalloff, C::Envelope, S::SubOnly, engine_in(), out_pos(),
             "Modulation by audio amplitude (band, min, max)",
             vec![
                 enm("band", "Band", BAND).d("rms"),
@@ -1298,7 +1293,6 @@ mod tests {
             NodeType::Mix,
             NodeType::Sequence,
             NodeType::Crossfade,
-            NodeType::Input,
             NodeType::Circular,
             NodeType::Elliptical,
             NodeType::Spiral,

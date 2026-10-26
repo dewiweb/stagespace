@@ -31,8 +31,8 @@ const makeEdge = (from: string, to: string, fromPort = 'out', toPort = 'in'): Ed
 // radius_scale → height_offset → per_track_depth → scale → rotate → offset → output
 
 export function buildDefaultGlobalGraph(): { nodes: GraphNode[]; edges: Edge[] } {
-  const input = makeNode('Input', { x: 50, y: 250 }, { label: 'Merged Positions' });
-  input.data.type = 'Input';
+  const input = makeNode('Merge', { x: 50, y: 250 }, { label: 'Merged Positions' });
+  input.data.type = 'Merge';
   input.data.label = 'Merged';
 
   // ManualPosition first — override positions from drag 3D

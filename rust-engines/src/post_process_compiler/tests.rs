@@ -58,7 +58,7 @@ fn run_test(
 fn test_compile_identity_graph() {
     let graph = make_graph(
         vec![
-            (NodeType::Input, serde_json::json!({})),
+            (NodeType::Merge, serde_json::json!({})),
             (NodeType::Output, serde_json::json!({})),
         ],
         vec![(0, 1)],
@@ -83,7 +83,7 @@ fn test_compile_identity_graph() {
 fn test_compile_scale_node() {
     let graph = make_graph(
         vec![
-            (NodeType::Input, serde_json::json!({})),
+            (NodeType::Merge, serde_json::json!({})),
             (NodeType::Scale, serde_json::json!({"scale": 2.0})),
             (NodeType::Output, serde_json::json!({})),
         ],
@@ -101,7 +101,7 @@ fn test_compile_scale_node() {
 fn test_compile_manual_position_node() {
     let graph = make_graph(
         vec![
-            (NodeType::Input, serde_json::json!({})),
+            (NodeType::Merge, serde_json::json!({})),
             (NodeType::ManualPosition, serde_json::json!({})),
             (NodeType::Output, serde_json::json!({})),
         ],
@@ -134,7 +134,7 @@ fn test_compile_manual_position_node() {
 fn test_compile_offset_with_origin() {
     let graph = make_graph(
         vec![
-            (NodeType::Input, serde_json::json!({})),
+            (NodeType::Merge, serde_json::json!({})),
             (
                 NodeType::Offset,
                 serde_json::json!({"x": 1.0, "y": 0.0, "z": 0.0}),
@@ -211,7 +211,7 @@ fn run_test_with_macros(
 fn test_compile_radius_scale() {
     let graph = make_graph(
         vec![
-            (NodeType::Input, serde_json::json!({})),
+            (NodeType::Merge, serde_json::json!({})),
             (
                 NodeType::RadiusScale,
                 serde_json::json!({"radius_scale": 2.0}),
@@ -235,7 +235,7 @@ fn test_compile_radius_scale() {
 fn test_compile_height_offset() {
     let graph = make_graph(
         vec![
-            (NodeType::Input, serde_json::json!({})),
+            (NodeType::Merge, serde_json::json!({})),
             (
                 NodeType::HeightOffset,
                 serde_json::json!({"height_offset": 1.5}),
@@ -259,7 +259,7 @@ fn test_compile_height_offset() {
 fn test_compile_per_track_depth() {
     let graph = make_graph(
         vec![
-            (NodeType::Input, serde_json::json!({})),
+            (NodeType::Merge, serde_json::json!({})),
             (NodeType::PerTrackDepth, serde_json::json!({})),
             (NodeType::Output, serde_json::json!({})),
         ],
@@ -291,7 +291,7 @@ fn test_compile_per_track_depth() {
 fn test_compile_barycenter() {
     let graph = make_graph(
         vec![
-            (NodeType::Input, serde_json::json!({})),
+            (NodeType::Merge, serde_json::json!({})),
             (NodeType::Barycenter, serde_json::json!({"weight": 1.0})),
             (NodeType::Output, serde_json::json!({})),
         ],
@@ -330,7 +330,7 @@ fn test_merge_not_post_process() {
 /// Test: Input node is NOT a post-process node — it's the source
 #[test]
 fn test_input_not_post_process() {
-    assert!(!is_post_process_node(&NodeType::Input));
+    assert!(!is_post_process_node(&NodeType::Merge));
 }
 
 /// Test: Output node is NOT a post-process node — it's the sink
@@ -344,7 +344,7 @@ fn test_output_not_post_process() {
 fn test_compile_chained_transforms() {
     let graph = make_graph(
         vec![
-            (NodeType::Input, serde_json::json!({})),
+            (NodeType::Merge, serde_json::json!({})),
             (
                 NodeType::RadiusScale,
                 serde_json::json!({"radius_scale": 2.0}),
@@ -375,7 +375,7 @@ fn test_compile_chained_transforms() {
 fn test_compile_rotate() {
     let graph = make_graph(
         vec![
-            (NodeType::Input, serde_json::json!({})),
+            (NodeType::Merge, serde_json::json!({})),
             (NodeType::Rotate, serde_json::json!({"yaw": 90.0})),
             (NodeType::Output, serde_json::json!({})),
         ],
@@ -397,7 +397,7 @@ fn test_compile_rotate() {
 fn test_compile_mirror() {
     let graph = make_graph(
         vec![
-            (NodeType::Input, serde_json::json!({})),
+            (NodeType::Merge, serde_json::json!({})),
             (NodeType::Mirror, serde_json::json!({"axis": "x"})),
             (NodeType::Output, serde_json::json!({})),
         ],
@@ -417,7 +417,7 @@ fn test_compile_mirror() {
 fn test_compile_manual_position_empty() {
     let graph = make_graph(
         vec![
-            (NodeType::Input, serde_json::json!({})),
+            (NodeType::Merge, serde_json::json!({})),
             (NodeType::ManualPosition, serde_json::json!({})),
             (NodeType::Output, serde_json::json!({})),
         ],
@@ -439,7 +439,7 @@ fn test_compile_manual_position_empty() {
 fn test_compile_rejects_engine_in_global_graph() {
     let graph = make_graph(
         vec![
-            (NodeType::Input, serde_json::json!({})),
+            (NodeType::Merge, serde_json::json!({})),
             (NodeType::Circular, serde_json::json!({"n_objects": 3})),
             (NodeType::Output, serde_json::json!({})),
         ],
@@ -494,7 +494,7 @@ fn test_compile_rejects_global_without_source() {
 #[test]
 fn test_build_transform_chain_rejects_engine() {
     let mut graph = Graph::new();
-    let input = Node::new(NodeType::Input);
+    let input = Node::new(NodeType::Merge);
     let circular = Node::new(NodeType::Circular);
     let output = Node::new(NodeType::Output);
 
@@ -545,7 +545,7 @@ fn test_build_transform_chain_rejects_engine() {
 fn test_extract_graph_effects_zone_and_velocity() {
     let graph = make_graph(
         vec![
-            (NodeType::Input, serde_json::json!({})),
+            (NodeType::Merge, serde_json::json!({})),
             (
                 NodeType::Zone,
                 serde_json::json!({
@@ -580,7 +580,7 @@ fn test_extract_graph_effects_empty_and_invalid() {
     // Pas de nodes d'effets → listes vides
     let graph = make_graph(
         vec![
-            (NodeType::Input, serde_json::json!({})),
+            (NodeType::Merge, serde_json::json!({})),
             (NodeType::Scale, serde_json::json!({"scale": 2.0})),
             (NodeType::Output, serde_json::json!({})),
         ],
@@ -593,7 +593,7 @@ fn test_extract_graph_effects_empty_and_invalid() {
     // Zone sans channels → erreur (mieux vaut échouer que perdre l'effet)
     let graph = make_graph(
         vec![
-            (NodeType::Input, serde_json::json!({})),
+            (NodeType::Merge, serde_json::json!({})),
             (NodeType::Zone, serde_json::json!({"shape": "sphere"})),
             (NodeType::Output, serde_json::json!({})),
         ],
@@ -646,7 +646,7 @@ fn test_compile_graph_with_zone_velocity_passthrough() {
     // la compilation du graphe complet reste valide.
     let graph = make_graph(
         vec![
-            (NodeType::Input, serde_json::json!({})),
+            (NodeType::Merge, serde_json::json!({})),
             (
                 NodeType::Zone,
                 serde_json::json!({"shape": "sphere", "channels": {"gain": 0.0}}),
@@ -677,7 +677,7 @@ fn test_compile_graph_with_zone_velocity_passthrough() {
 fn test_compile_scale_node_per_axis() {
     let graph = make_graph(
         vec![
-            (NodeType::Input, serde_json::json!({})),
+            (NodeType::Merge, serde_json::json!({})),
             (
                 NodeType::Scale,
                 serde_json::json!({"x": 2.0, "y": 3.0, "z": 0.5}),
@@ -700,7 +700,7 @@ fn test_compile_scale_node_per_axis() {
 fn test_compile_mirror_plane_schema() {
     let graph = make_graph(
         vec![
-            (NodeType::Input, serde_json::json!({})),
+            (NodeType::Merge, serde_json::json!({})),
             (
                 NodeType::Mirror,
                 serde_json::json!({"plane": "yz", "offset": 1.0}),
@@ -719,7 +719,7 @@ fn test_compile_mirror_plane_schema() {
     // Alias legacy : axis "x" ⇔ plane "yz" (offset 0)
     let graph = make_graph(
         vec![
-            (NodeType::Input, serde_json::json!({})),
+            (NodeType::Merge, serde_json::json!({})),
             (NodeType::Mirror, serde_json::json!({"axis": "x"})),
             (NodeType::Output, serde_json::json!({})),
         ],
@@ -737,7 +737,7 @@ fn test_compile_mirror_plane_schema() {
 fn test_compile_rotate_unified_order() {
     let graph = make_graph(
         vec![
-            (NodeType::Input, serde_json::json!({})),
+            (NodeType::Merge, serde_json::json!({})),
             (
                 NodeType::Rotate,
                 serde_json::json!({"yaw": 90.0, "pitch": 90.0, "roll": 0.0}),
@@ -789,7 +789,7 @@ fn test_extract_effects_barycenter_and_moveref() {
 fn test_lfo_oscillates_in_global_graph() {
     let graph = make_graph(
         vec![
-            (NodeType::Input, serde_json::json!({})),
+            (NodeType::Merge, serde_json::json!({})),
             (
                 NodeType::LFO,
                 serde_json::json!({
@@ -837,7 +837,7 @@ fn test_lfo_oscillates_in_global_graph() {
 fn test_jitter_in_global_graph() {
     let graph = make_graph(
         vec![
-            (NodeType::Input, serde_json::json!({})),
+            (NodeType::Merge, serde_json::json!({})),
             (
                 NodeType::Jitter,
                 serde_json::json!({"intensity": 0.3, "frequency": 2.0, "seed": 7.0}),

@@ -131,14 +131,12 @@ impl Validator {
                 // Pas d'Objects/Duration requis en global ; le graph global
                 // a juste besoin d'un Output et d'au moins une source
                 // (Input, Merge, ou MoveRef).
-                let has_source = graph.nodes.values().any(|n| {
-                    matches!(
-                        n.node_type,
-                        NodeType::Input | NodeType::Merge | NodeType::MoveRef
-                    )
-                });
+                let has_source = graph
+                    .nodes
+                    .values()
+                    .any(|n| matches!(n.node_type, NodeType::Merge | NodeType::MoveRef));
                 if !has_source {
-                    errors.push(ValidationError::MissingRequiredNode(NodeType::Input));
+                    errors.push(ValidationError::MissingRequiredNode(NodeType::Merge));
                 }
             }
             GraphContext::Signal => {

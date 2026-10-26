@@ -103,7 +103,7 @@ mod recall_tests {
         cue.global_graph = Some(serde_json::from_value(serde_json::json!({
             "nodes": [
                 {"id":"input", "type":"custom", "position":{"x":0,"y":0},
-                 "data":{"label":"Input", "type":"Input", "params":{}}},
+                 "data":{"label":"Merge", "type":"Merge", "params":{}}},
                 {"id":"scale", "type":"custom", "position":{"x":0,"y":0},
                  "data":{"label":"RadiusScale", "type":"RadiusScale", "params":{"radius_scale":2.0}}},
                 {"id":"output", "type":"custom", "position":{"x":0,"y":0},

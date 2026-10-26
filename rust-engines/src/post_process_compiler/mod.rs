@@ -217,7 +217,7 @@ fn build_transform_chain(
             // erreur — le validateur devrait l'avoir attrapé avant, mais on garde
             // cette garde défensive au cas où le validateur est contourné.
             match node.node_type {
-                NodeType::Input | NodeType::Merge | NodeType::MoveRef => break,
+                NodeType::Merge | NodeType::MoveRef => break,
                 other => {
                     return Err(PostProcessCompileError::InvalidNode(format!(
                         "{other:?} is not a post-process node and cannot appear in the global graph chain"
