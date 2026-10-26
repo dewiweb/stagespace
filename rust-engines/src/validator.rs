@@ -499,6 +499,35 @@ impl Validator {
 
     /// Vérifie la compatibilité des comptages (n_objects)
     fn validate_count_compatibility(graph: &Graph, errors: &mut Vec<ValidationError>) {
+        // Branches `b` des Group : la frontière du Group est le n_objects
+        // résolu de la branche A — les engines sous `b` portent volontairement
+        // un comptage différent (la split). Exempts du check Objects == engine.
+        let mut group_b_branch: std::collections::HashSet<crate::graph::NodeId> =
+            std::collections::HashSet::new();
+        for edge in &graph.edges {
+            if edge.to_port != "b" {
+                continue;
+            }
+            let is_group_b = graph
+                .nodes
+                .get(&edge.to)
+                .map(|n| n.node_type == NodeType::Group)
+                .unwrap_or(false);
+            if !is_group_b {
+                continue;
+            }
+            let mut stack = vec![edge.from];
+            while let Some(id) = stack.pop() {
+                if group_b_branch.insert(id) {
+                    for e in &graph.edges {
+                        if e.to == id {
+                            stack.push(e.from);
+                        }
+                    }
+                }
+            }
+        }
+
         // Trouver le nœud Objects
         let objects_node = graph
             .nodes
@@ -612,6 +641,9 @@ impl Validator {
                     | NodeType::EvaluateSpline
                     | NodeType::TrimSpline
                     | NodeType::OffsetSpline => {
+                        if group_b_branch.contains(&node.id) {
+                            continue;
+                        }
                         let node_n_objects =
                             node.params
                                 .get("n_objects")

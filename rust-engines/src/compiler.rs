@@ -176,15 +176,12 @@ impl Compiler {
         }
 
         // 4. Cas multi-Output : chaque Output a un param "track_range" (ex: "0-11" ou "12-22")
-        //    On compile chaque chaîne et on crée une fonction de routage
-        let mut sub_functions: Vec<(usize, usize, CompiledFunction)> = Vec::new();
-
+        //    On compile chaque chaîne et on crée une fonction de routage.
+        //    Tri par (start, end, node_id) : l'ordre HashMap des nodes est
+        //    aléatoire entre compilations — sans tri, des ranges qui se
+        //    chevauchent donneraient un gagnant non déterministe.
+        let mut routed: Vec<(usize, usize, &Node)> = Vec::new();
         for output_node in &output_nodes {
-            let inputs = graph.get_inputs(output_node.id);
-            let node_id = inputs.first().ok_or(CompilationError::OutputNotConnected)?;
-            let node = Self::node_ref(graph, *node_id)?;
-            let compiled = Self::compile_node(graph, node, &live)?;
-
             // Parser track_range : "0-11" ou "12-22"
             let track_range = output_node
                 .params
@@ -204,8 +201,17 @@ impl Compiler {
             } else {
                 (track_range.trim().parse().unwrap_or(0), usize::MAX)
             };
+            routed.push((start_idx, end_idx, output_node));
+        }
+        routed.sort_by_key(|(s, e, n)| (*s, *e, n.id.0.as_u128()));
 
-            sub_functions.push((start_idx, end_idx, compiled));
+        let mut sub_functions: Vec<(usize, usize, CompiledFunction)> = Vec::new();
+        for (start_idx, end_idx, output_node) in &routed {
+            let inputs = graph.get_inputs(output_node.id);
+            let node_id = inputs.first().ok_or(CompilationError::OutputNotConnected)?;
+            let node = Self::node_ref(graph, *node_id)?;
+            let compiled = Self::compile_node(graph, node, &live)?;
+            sub_functions.push((*start_idx, *end_idx, compiled));
         }
 
         // Créer la fonction de routage
@@ -223,6 +229,22 @@ impl Compiler {
         let duration_ms = start.elapsed().as_millis();
         log_compilation_success(duration_ms);
         Ok(routing_fn)
+    }
+
+    /// Durée effective du cycle du graphe — résolution depuis l'input
+    /// d'Output (propagation : Sequence = a+b, Mix/Group/Crossfade/
+    /// Switch = max). Utilisée par le spawn pour comparer spec.duration
+    /// à la durée réellement bakée dans les engines.
+    pub fn resolved_cycle_duration(graph: &Graph) -> Option<f64> {
+        let output = graph
+            .nodes
+            .values()
+            .find(|n| n.node_type == NodeType::Output)?;
+        let upstream = graph
+            .get_inputs(output.id)
+            .first()
+            .and_then(|id| graph.nodes.get(id))?;
+        Some(Self::resolve_duration(graph, upstream))
     }
 
     /// Résout un NodeId en référence de nœud, sans paniquer si absent

@@ -266,6 +266,38 @@ fn spawn_move_inner(
         })?
     };
 
+    // 1b. Engines stateful (physique) : un t décroissant force un reset +
+    //    re-simulation à chaque frame (O(t·n²)) → le worker rampe puis meurt
+    //    en stale-kill. Backward/PingPong et le phase spread (t différent
+    //    par objet) déclenchent ce re-sim — refus explicite au spawn.
+    if graph
+        .nodes
+        .values()
+        .any(|n| stagespace_engines::node_spec::node_spec(&n.node_type).stateful)
+    {
+        let spread = spec
+            .animation_state
+            .as_ref()
+            .map(|a| a.track_phase_offsets.iter().any(|o| o.abs() > 1e-9))
+            .unwrap_or(false);
+        if spec.direction != PlayDirection::Forward || spread {
+            return Err(IpcError::validation(
+                "Physics engines (stateful) cannot run backward, ping-pong or with phase spread — every backward eval re-simulates from t=0".to_string(),
+            ));
+        }
+    }
+
+    // 1c. spec.duration (durée du wrap du worker) vs durée résolue du
+    //    graphe (param propre > node Duration > propagation composites) :
+    //    si le graphe demande plus (ex. Sequence a+b), le wrap tronquait
+    //    la branche B — on prend le max.
+    let mut spec = spec;
+    if let Some(resolved) = stagespace_engines::Compiler::resolved_cycle_duration(&graph) {
+        if resolved > spec.duration {
+            spec.duration = resolved;
+        }
+    }
+
     // 2. Créer le worker Runtime — pas de socket propre : les positions
     //    partent dans le PositionBuffer, l'OSC est envoyé uniquement par
     //    le MergeRuntime via son PositionSink.

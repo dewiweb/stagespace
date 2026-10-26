@@ -163,7 +163,40 @@ pub fn build_graph_from_json(
         .and_then(|v| v.as_u64())
         .unwrap_or(1) as usize;
 
+    // Branches `b` des Group : leurs engines gardent leur n_objects propre
+    // — la frontière du Group est le n_objects de la branche A ; forcer la
+    // branche B à objects_n pousserait la frontière à n_total et tuerait
+    // la split (tous les objets sur A). On remonte depuis chaque port `b`.
+    let mut group_b_branch: std::collections::HashSet<stagespace_engines::NodeId> =
+        std::collections::HashSet::new();
+    for edge in &graph.edges {
+        if edge.to_port != "b" {
+            continue;
+        }
+        let is_group_b = graph
+            .nodes
+            .get(&edge.to)
+            .map(|n| n.node_type == NodeType::Group)
+            .unwrap_or(false);
+        if !is_group_b {
+            continue;
+        }
+        let mut stack = vec![edge.from];
+        while let Some(id) = stack.pop() {
+            if group_b_branch.insert(id) {
+                for e in &graph.edges {
+                    if e.to == id {
+                        stack.push(e.from);
+                    }
+                }
+            }
+        }
+    }
+
     for node in graph.nodes.values_mut() {
+        if group_b_branch.contains(&node.id) {
+            continue;
+        }
         match node.node_type {
             NodeType::Circular
             | NodeType::Elliptical
