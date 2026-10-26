@@ -212,10 +212,21 @@ export const useGraphStore = create<GraphState>()((...a) => {
   },
   onConnect: (connection) => {
     get().pushHistory();
+    // Arité-1 mirror du validator : un port d'entrée ne prend qu'une
+    // edge. Re-câbler dans un input occupé remplace l'edge existante
+    // (sémantique standard des éditeurs nodaux) — sinon le graphe passe
+    // en UI mais est rejeté par le backend. On déduplique aussi l'edge
+    // identique (même source/cible/ports).
     set({
       edges: rfAddEdge(
         { ...connection, markerEnd: { type: MarkerType.ArrowClosed } },
-        get().edges,
+        get().edges.filter(
+          (e) =>
+            !(
+              e.target === connection.target &&
+              (e.targetHandle ?? null) === (connection.targetHandle ?? null)
+            ),
+        ),
       ) as Edge[],
     });
     autoSaveToEditingSlot();
