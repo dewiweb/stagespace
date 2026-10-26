@@ -172,6 +172,8 @@ mod tests {
 
     struct Gen<'a> {
         rng: &'a mut SimpleRng,
+        /// Mode hostile : params aux bornes dans `params_for`.
+        extreme: bool,
         graph: Graph,
         objects: NodeId,
         duration: NodeId,
@@ -244,9 +246,52 @@ mod tests {
             id
         }
 
-        /// Paramètres légèrement randomisés pour couvrir les chemins
-        /// de lecture des modifiers/composites.
-        fn params_for(&mut self, node_type: NodeType) -> serde_json::Value {
+        /// Params randomisés — `extreme` pousse aux bornes (0, négatif,
+        /// énorme) pour la chasse aux bugs ; sinon valeurs plausibles.
+        fn params_for_mode(&mut self, node_type: NodeType, extreme: bool) -> serde_json::Value {
+            if extreme {
+                let pick = |rng: &mut SimpleRng| -> f64 {
+                    // bornes plausibles mais agressives
+                    [0.0, -1.0, -0.001, 1e-9, 1e6, 1000.0, -500.0][(rng.rand() * 7.0) as usize % 7]
+                };
+                match node_type {
+                    NodeType::Scale => {
+                        return serde_json::json!({
+                            "x": pick(self.rng), "y": pick(self.rng), "z": pick(self.rng),
+                        })
+                    }
+                    NodeType::Rotate => {
+                        return serde_json::json!({
+                            "angleX": pick(self.rng), "angleY": pick(self.rng),
+                            "angleZ": pick(self.rng),
+                        })
+                    }
+                    NodeType::Offset => {
+                        return serde_json::json!({
+                            "x": pick(self.rng), "y": pick(self.rng), "z": pick(self.rng),
+                        })
+                    }
+                    NodeType::Clamp => {
+                        let lo = pick(self.rng).min(pick(self.rng));
+                        let hi = lo.abs().max(1e-9);
+                        return serde_json::json!({
+                            "min_x": lo, "min_y": lo, "min_z": lo,
+                            "max_x": hi, "max_y": hi, "max_z": hi,
+                        });
+                    }
+                    NodeType::Mix => return serde_json::json!({ "blend": pick(self.rng) }),
+                    NodeType::Switch => return serde_json::json!({ "select": pick(self.rng) }),
+                    NodeType::SpeedScale => return serde_json::json!({ "factor": pick(self.rng) }),
+                    NodeType::Delay => return serde_json::json!({ "delay": pick(self.rng) }),
+                    NodeType::Freeze => {
+                        return serde_json::json!({ "enabled": self.rng.rand() < 0.5 })
+                    }
+                    NodeType::Crossfade => {
+                        return serde_json::json!({ "fade_duration": pick(self.rng) })
+                    }
+                    _ => return serde_json::json!({}),
+                }
+            }
             match node_type {
                 NodeType::Scale => serde_json::json!({
                     "x": self.rng.uniform(0.2, 2.0),
@@ -324,7 +369,7 @@ mod tests {
             }
 
             let wrapper = self.pick(&wrappers);
-            let params = self.params_for(wrapper.clone());
+            let params = self.params_for_mode(wrapper.clone(), self.extreme);
             let id = self.add_node(Node::with_params(wrapper.clone(), params));
             if matches!(
                 wrapper,
@@ -353,6 +398,11 @@ mod tests {
     /// Retourne le graphe, n_objects, si un leaf "toujours mobile" existe et
     /// si une bascule temporelle peut le masquer.
     fn build_graph(seed: u64, max_depth: usize) -> (Graph, usize, bool, bool) {
+        build_graph_mode(seed, max_depth, false)
+    }
+
+    /// `extreme` : params aux bornes pour la chasse aux bugs.
+    fn build_graph_mode(seed: u64, max_depth: usize, extreme: bool) -> (Graph, usize, bool, bool) {
         let mut rng = SimpleRng::new(seed);
         let mut graph = Graph::new();
         let n_objects = 1 + (rng.rand() * 8.0) as usize;
@@ -370,6 +420,7 @@ mod tests {
 
         let mut gen = Gen {
             rng: &mut rng,
+            extreme,
             graph,
             objects: objects_id,
             duration: duration_id,
@@ -681,5 +732,103 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Chasse aux bugs — graphes aux params hostiles (bornes : zéro,
+    /// négatif, énorme) évalués à des t extrêmes. On NE panic PAS au
+    /// premier échec : les violations sont collectées et rapportées
+    /// pour analyser la robustesse réelle du système.
+    /// Invariants testés : positions finies, magnitude bornée,
+    /// déterminisme entre deux évals au même (t, i).
+    #[test]
+    fn fuzz_stress_hostile_params() {
+        let mut failures: Vec<String> = Vec::new();
+        let mut n_run = 0usize;
+
+        // t extrêmes mais réalistes : négatif (pre-loop) et quelques dizaines
+        // de secondes. t=1e6 est pathologique — le worker wrappe t en
+        // [0, duration) et les physics re-simulent chaque pas (13 min).
+        let t_values = [-10.0, -0.001, 0.0, 0.0001, 1.5, 30.0];
+
+        for level in 1..=6usize {
+            for seed in 0..60u64 {
+                let tag = format!("level={level} seed={seed}");
+                let (graph, n_objects, ..) = build_graph_mode(
+                    seed * 1237 + level as u64 * 71,
+                    level,
+                    true, // extreme params
+                );
+
+                // Le validator peut rejeter — c'est une réponse valide, pas un bug.
+                if let Err(e) = Validator::validate(&graph) {
+                    let _ = e;
+                    continue;
+                }
+                n_run += 1;
+
+                let f = match compile(&graph) {
+                    Ok(f) => f,
+                    Err(e) => {
+                        // Un graphe valide qui ne compile pas = bug potentiel.
+                        failures.push(format!("{tag}: valid graph failed compile: {e:?}"));
+                        continue;
+                    }
+                };
+
+                let topology: Vec<String> = graph
+                    .nodes
+                    .values()
+                    .map(|n| format!("{:?}", n.node_type))
+                    .collect();
+
+                for &tv in &t_values {
+                    for i in 0..n_objects.max(8) {
+                        let p = f(tv, i);
+                        if !(p.x.is_finite() && p.y.is_finite() && p.z.is_finite()) {
+                            failures.push(format!(
+                                "{tag}: non-finite pos (t={tv} i={i}) = {p:?} | {topology:?}"
+                            ));
+                            continue;
+                        }
+                        // Les params extrêmes produisent légitimement des
+                        // positions énormes (Scale 1e3² → 1e6×) — GIGO, pas
+                        // un bug. On ne flag que l'approche de f64::MAX,
+                        // signe d'explosion multiplicative interne.
+                        let mag = p.norm();
+                        if mag > 1e290 {
+                            failures.push(format!(
+                                "{tag}: internal numeric explosion {mag:e} (t={tv} i={i}) | {topology:?}"
+                            ));
+                        }
+                        // Déterminisme : même éval = même résultat
+                        let p2 = f(tv, i);
+                        if p != p2 {
+                            failures.push(format!(
+                                "{tag}: non-deterministic (t={tv} i={i}) {p:?} vs {p2:?}"
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+
+        eprintln!("=== STRESS HUNT === {n_run} graphes hostiles évalués");
+        for f in &failures {
+            eprintln!("  FAIL {f}");
+        }
+        eprintln!("===================");
+
+        // Aucun graphe valide ne doit produire non-fini / explosion / non-déterminisme
+        assert!(
+            failures.is_empty(),
+            "{} violations de robustesse trouvées:\n{}",
+            failures.len(),
+            failures
+                .iter()
+                .take(10)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
     }
 }
