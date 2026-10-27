@@ -309,10 +309,14 @@ fn spawn_move_inner(
     //    (nodes OSCInput lisent extra["osc_value"] — sans handle ils
     //    produisent un cercle statique) et registry de plugins WASM
     //    (nodes Plugin → params.plugin_id).
+    // Table de slots de params modulables — une seule par compile, partagée
+    // entre position_fn, sample_fn et la signal_fn du move (binding
+    // compile-time des cibles `param:`).
+    let slots = stagespace_engines::param_slots::ParamSlots::build(&graph);
     let compiled = compile_graph_live(
         &graph,
         sh,
-        Some(runtime.param_overrides()),
+        Some(slots.clone()),
         Some(runtime.held_positions()),
     )
     .map_err(|e| {
@@ -320,11 +324,12 @@ fn spawn_move_inner(
         IpcError::validation(e)
     })?;
     // Instance jetable pour le TrajectorySampler — les evals de preview
-    // n'avancent pas sim_t des engines stateful de la fn live.
+    // n'avancent pas sim_t des engines stateful de la fn live. Partage la
+    // même table de slots (read-only) : le preview reflète la modulation.
     if let Ok(sample_fn) = compile_graph_live(
         &graph,
         sh,
-        Some(runtime.param_overrides()),
+        Some(slots.clone()),
         Some(runtime.held_positions()),
     ) {
         runtime.set_sample_fn(sample_fn);
@@ -361,16 +366,23 @@ fn spawn_move_inner(
 
     // Signal graph per-move : branche le cache OSC (source SignalOsc —
     // l'Arc interne peut être re-pointé après un rebind du receiver) puis
-    // compile + swap la SignalFn (deltas additifs sur les macros du move).
+    // compile + swap la SignalFn liée à la table de slots (les cibles
+    // `param:` sont résolues à la compile — erreurs explicites).
     runtime.set_osc_values_handle(lock_or_recover(&sh.osc_receiver).address_values_handle());
-    if let Some(ref sig_json) = spec.signal_graph {
-        let audio_state = lock_or_recover(&sh.audio_state);
-        let sig_graph = build_graph_from_json(sig_json, &audio_state)
-            .map_err(|e| IpcError::validation(format!("Signal graph parse failed: {e}")))?;
-        drop(audio_state);
-        let sig_fn = stagespace_engines::compile_signal_graph(&sig_graph)
-            .map_err(|e| IpcError::validation(format!("Signal graph compile failed: {e:?}")))?;
-        runtime.swap_signal_fn(sig_fn);
+    {
+        let sig_fn = match spec.signal_graph {
+            Some(ref sig_json) => {
+                let audio_state = lock_or_recover(&sh.audio_state);
+                let sig_graph = build_graph_from_json(sig_json, &audio_state)
+                    .map_err(|e| IpcError::validation(format!("Signal graph parse failed: {e}")))?;
+                drop(audio_state);
+                stagespace_engines::compile_move_signal_graph(&sig_graph, &graph, &slots).map_err(
+                    |e| IpcError::validation(format!("Signal graph compile failed: {e:?}")),
+                )?
+            }
+            None => stagespace_engines::empty_signal_fn(),
+        };
+        runtime.swap_signal_fn(sig_fn, slots);
     }
 
     // 5. PositionBuffer → mode worker (le merge thread collecte les positions)

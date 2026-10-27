@@ -33,10 +33,11 @@ pub struct LiveInputs {
     /// les closures déjà compilées gardent leur `Arc<Plugin>` snapshot,
     /// les nouvelles compilations voient les plugins à jour.
     pub plugins: Option<Arc<Mutex<PluginRegistry>>>,
-    /// Overrides live de params de nodes — clé "<label>:<param_key>" →
-    /// valeur. Écrits par le domaine signal via les cibles `param:*` de
-    /// SignalOut ; lus à chaque évaluation (patch de params.extra).
-    pub param_overrides: Option<Arc<Mutex<HashMap<String, f64>>>>,
+    /// Table de slots de params modulables — construite par le caller via
+    /// `ParamSlots::build(&graph)` et partagée avec la signal_fn du move.
+    /// Les closures capturent les indices de leurs slots ; la valeur
+    /// effective est `base + delta` (additif), lue par AtomicU64 sans lock.
+    pub param_slots: Option<Arc<crate::param_slots::ParamSlots>>,
     /// Positions tenues des nodes Freeze — partagées entre recompiles
     /// (le hold survit au hot-swap). Clé : `{node_id}:{object_index}`.
     pub held_positions: Option<HeldPositions>,
@@ -104,7 +105,7 @@ impl Compiler {
             live.audio,
             live.osc_values,
             live.plugins,
-            live.param_overrides,
+            live.param_slots,
             live.held_positions,
         )
     }
@@ -127,14 +128,14 @@ impl Compiler {
         audio_state: Option<Arc<Mutex<AudioState>>>,
         osc_values: Option<OscValueMap>,
         plugins: Option<Arc<Mutex<PluginRegistry>>>,
-        param_overrides: Option<Arc<Mutex<HashMap<String, f64>>>>,
+        param_slots: Option<Arc<crate::param_slots::ParamSlots>>,
         held_positions: Option<HeldPositions>,
     ) -> Result<CompiledFunction, CompilationError> {
         let live = LiveInputs {
             audio: audio_state,
             osc_values,
             plugins,
-            param_overrides,
+            param_slots,
             held_positions,
         };
         let start = Instant::now();
@@ -463,9 +464,7 @@ impl Compiler {
         let upstream_node = Self::node_ref(graph, *upstream_id)?;
         let upstream_fn = Self::compile_node(graph, upstream_node, live)?;
         let node_type = node.node_type.clone();
-        let label = format!("{node_type:?}");
-        let id = format!("{}", node.id.0);
-        let over = live.param_overrides.clone();
+        let over = live.param_slots.clone();
 
         match node_type {
             NodeType::Scale => {
@@ -473,13 +472,15 @@ impl Compiler {
                 let sy = node.params.get("y").and_then(|v| v.as_f64()).unwrap_or(1.0);
                 let sz = node.params.get("z").and_then(|v| v.as_f64()).unwrap_or(1.0);
                 let over = over.clone();
-                let label = label.clone();
+                let i_x = sidx(&over, node, "x");
+                let i_y = sidx(&over, node, "y");
+                let i_z = sidx(&over, node, "z");
                 Ok(Box::new(move |t, i| {
                     crate::engines::modifiers::scale(
                         upstream_fn(t, i),
-                        over_f64(&over, &label, &id, "x", sx),
-                        over_f64(&over, &label, &id, "y", sy),
-                        over_f64(&over, &label, &id, "z", sz),
+                        sval(&over, i_x, sx),
+                        sval(&over, i_y, sy),
+                        sval(&over, i_z, sz),
                     )
                 }))
             }
@@ -488,13 +489,15 @@ impl Compiler {
                 let oy = node.params.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0);
                 let oz = node.params.get("z").and_then(|v| v.as_f64()).unwrap_or(0.0);
                 let over = over.clone();
-                let label = label.clone();
+                let i_x = sidx(&over, node, "x");
+                let i_y = sidx(&over, node, "y");
+                let i_z = sidx(&over, node, "z");
                 Ok(Box::new(move |t, i| {
                     crate::engines::modifiers::offset(
                         upstream_fn(t, i),
-                        over_f64(&over, &label, &id, "x", ox),
-                        over_f64(&over, &label, &id, "y", oy),
-                        over_f64(&over, &label, &id, "z", oz),
+                        sval(&over, i_x, ox),
+                        sval(&over, i_y, oy),
+                        sval(&over, i_z, oz),
                     )
                 }))
             }
@@ -515,13 +518,15 @@ impl Compiler {
                     .and_then(|v| v.as_f64())
                     .unwrap_or(0.0);
                 let over = over.clone();
-                let label = label.clone();
+                let i_angle_x = sidx(&over, node, "angleX");
+                let i_angle_y = sidx(&over, node, "angleY");
+                let i_angle_z = sidx(&over, node, "angleZ");
                 Ok(Box::new(move |t, i| {
                     crate::engines::modifiers::rotate(
                         upstream_fn(t, i),
-                        over_f64(&over, &label, &id, "angleX", ax),
-                        over_f64(&over, &label, &id, "angleY", ay),
-                        over_f64(&over, &label, &id, "angleZ", az),
+                        sval(&over, i_angle_x, ax),
+                        sval(&over, i_angle_y, ay),
+                        sval(&over, i_angle_z, az),
                     )
                 }))
             }
@@ -533,12 +538,12 @@ impl Compiler {
                     .unwrap_or(0.1);
                 let duration = Self::resolve_duration(graph, node);
                 let over = over.clone();
-                let label = label.clone();
+                let i_shift = sidx(&over, node, "shift");
                 Ok(Box::new(move |t, i| {
                     let t_shifted = crate::engines::modifiers::phase_shift_time(
                         t,
                         i,
-                        over_f64(&over, &label, &id, "shift", shift),
+                        sval(&over, i_shift, shift),
                         duration,
                     );
                     upstream_fn(t_shifted, i)
@@ -557,12 +562,12 @@ impl Compiler {
                     .and_then(|v| v.as_f64())
                     .unwrap_or(0.0);
                 let over = over.clone();
-                let label = label.clone();
+                let i_offset = sidx(&over, node, "offset");
                 Ok(Box::new(move |t, i| {
                     crate::engines::modifiers::mirror(
                         upstream_fn(t, i),
                         &plane,
-                        over_f64(&over, &label, &id, "offset", offset),
+                        sval(&over, i_offset, offset),
                     )
                 }))
             }
@@ -598,17 +603,22 @@ impl Compiler {
                     .and_then(|v| v.as_f64())
                     .unwrap_or(100.0);
                 let over = over.clone();
-                let label = label.clone();
+                let i_min_x = sidx(&over, node, "min_x");
+                let i_min_y = sidx(&over, node, "min_y");
+                let i_min_z = sidx(&over, node, "min_z");
+                let i_max_x = sidx(&over, node, "max_x");
+                let i_max_y = sidx(&over, node, "max_y");
+                let i_max_z = sidx(&over, node, "max_z");
                 Ok(Box::new(move |t, i| {
                     let min = Vector3::new(
-                        over_f64(&over, &label, &id, "min_x", min_x),
-                        over_f64(&over, &label, &id, "min_y", min_y),
-                        over_f64(&over, &label, &id, "min_z", min_z),
+                        sval(&over, i_min_x, min_x),
+                        sval(&over, i_min_y, min_y),
+                        sval(&over, i_min_z, min_z),
                     );
                     let max = Vector3::new(
-                        over_f64(&over, &label, &id, "max_x", max_x),
-                        over_f64(&over, &label, &id, "max_y", max_y),
-                        over_f64(&over, &label, &id, "max_z", max_z),
+                        sval(&over, i_max_x, max_x),
+                        sval(&over, i_max_y, max_y),
+                        sval(&over, i_max_z, max_z),
                     );
                     crate::engines::modifiers::clamp(upstream_fn(t, i), min, max)
                 }))
@@ -642,16 +652,18 @@ impl Compiler {
                     .and_then(|v| v.as_f64())
                     .unwrap_or(0.0);
                 let over = over.clone();
-                let label = label.clone();
+                let i_frequency = sidx(&over, node, "frequency");
+                let i_amplitude = sidx(&over, node, "amplitude");
+                let i_phase = sidx(&over, node, "phase");
                 Ok(Box::new(move |t, i| {
                     crate::engines::modifiers::lfo(
                         upstream_fn(t, i),
                         t,
                         &waveform,
-                        over_f64(&over, &label, &id, "frequency", frequency),
-                        over_f64(&over, &label, &id, "amplitude", amplitude),
+                        sval(&over, i_frequency, frequency),
+                        sval(&over, i_amplitude, amplitude),
                         &axis,
-                        over_f64(&over, &label, &id, "phase", phase),
+                        sval(&over, i_phase, phase),
                     )
                 }))
             }
@@ -662,9 +674,11 @@ impl Compiler {
                     .and_then(|v| v.as_f64())
                     .unwrap_or(1.0);
                 let over = over.clone();
-                let label = label.clone();
+                let i_factor = sidx(&over, node, "factor");
                 Ok(Box::new(move |t, i| {
-                    upstream_fn(t * over_f64(&over, &label, &id, "factor", factor), i)
+                    // factor n'a pas de borne max — un delta hostile peut
+                    // rendre t non-fini en amont : on borne l'argument.
+                    upstream_fn((t * sval(&over, i_factor, factor)).clamp(-1e15, 1e15), i)
                 }))
             }
             NodeType::Delay => {
@@ -674,9 +688,9 @@ impl Compiler {
                     .and_then(|v| v.as_f64())
                     .unwrap_or(0.5);
                 let over = over.clone();
-                let label = label.clone();
+                let i_delay = sidx(&over, node, "delay");
                 Ok(Box::new(move |t, i| {
-                    upstream_fn(t - over_f64(&over, &label, &id, "delay", delay), i)
+                    upstream_fn((t - sval(&over, i_delay, delay)).clamp(-1e15, 1e15), i)
                 }))
             }
             NodeType::Freeze => {
@@ -686,7 +700,7 @@ impl Compiler {
                     .and_then(|v| v.as_bool())
                     .unwrap_or(true);
                 let over = over.clone();
-                let label = label.clone();
+                let i_enabled = sidx(&over, node, "enabled");
                 // Hold partagé avec le Runtime : survit au hot-swap du graphe.
                 // Fallback closure-local si aucune map n'est fournie (tests).
                 let shared = live.held_positions.clone();
@@ -695,7 +709,7 @@ impl Compiler {
                 > = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
                 let node_id = node.id;
                 Ok(Box::new(move |t, i| {
-                    if over_f64(&over, &label, &id, "enabled", f64::from(enabled)) == 0.0 {
+                    if sval(&over, i_enabled, f64::from(enabled)) < 0.5 {
                         return upstream_fn(t, i);
                     }
                     let held_map = shared.as_ref().unwrap_or(&local);
@@ -711,7 +725,8 @@ impl Compiler {
                     .and_then(|v| v.as_f64())
                     .unwrap_or(0.2);
                 let over = over.clone();
-                let label = label.clone();
+                let i_intensity = sidx(&over, node, "intensity");
+                let i_frequency = sidx(&over, node, "frequency");
                 let frequency = node
                     .params
                     .get("frequency")
@@ -727,8 +742,8 @@ impl Compiler {
                         upstream_fn(t, i),
                         t,
                         i,
-                        over_f64(&over, &label, &id, "intensity", intensity),
-                        over_f64(&over, &label, &id, "frequency", frequency),
+                        sval(&over, i_intensity, intensity),
+                        sval(&over, i_frequency, frequency),
                         seed,
                     )
                 }))
@@ -751,9 +766,8 @@ impl Compiler {
             .and_then(|v| v.as_f64())
             .unwrap_or(0.5)
             .clamp(0.0, 1.0);
-        let over = live.param_overrides.clone();
-        let label = format!("{:?}", node.node_type);
-        let id = format!("{}", node.id.0);
+        let over = live.param_slots.clone();
+        let i_blend = sidx(&over, node, "blend");
 
         let func_a = Self::compile_node(graph, node_a, live)?;
         let func_b = Self::compile_node(graph, node_b, live)?;
@@ -761,8 +775,7 @@ impl Compiler {
         Ok(Box::new(move |t: f64, object_index: usize| {
             let pos_a = func_a(t, object_index);
             let pos_b = func_b(t, object_index);
-            pos_a * (1.0 - over_f64(&over, &label, &id, "blend", blend))
-                + pos_b * over_f64(&over, &label, &id, "blend", blend)
+            pos_a * (1.0 - sval(&over, i_blend, blend)) + pos_b * sval(&over, i_blend, blend)
         }))
     }
 
@@ -833,11 +846,10 @@ impl Compiler {
             .unwrap_or(0.0);
         let func_a = Self::compile_node(graph, node_a, live)?;
         let func_b = Self::compile_node(graph, node_b, live)?;
-        let over = live.param_overrides.clone();
-        let label = format!("{:?}", node.node_type);
-        let id = format!("{}", node.id.0);
+        let over = live.param_slots.clone();
+        let i_select = sidx(&over, node, "select");
         Ok(Box::new(move |t: f64, i: usize| {
-            if over_f64(&over, &label, &id, "select", select) < 0.5 {
+            if sval(&over, i_select, select) < 0.5 {
                 func_a(t, i)
             } else {
                 func_b(t, i)
@@ -870,13 +882,11 @@ impl Compiler {
 
         let func_a = Self::compile_node(graph, node_a, live)?;
         let func_b = Self::compile_node(graph, node_b, live)?;
-        let over = live.param_overrides.clone();
-        let label = format!("{:?}", node.node_type);
-        let id = format!("{}", node.id.0);
+        let over = live.param_slots.clone();
+        let i_fade_duration = sidx(&over, node, "fade_duration");
 
         Ok(Box::new(move |t: f64, object_index: usize| {
-            let fade_duration =
-                over_f64(&over, &label, &id, "fade_duration", fade_duration).min(duration_a * 0.5);
+            let fade_duration = sval(&over, i_fade_duration, fade_duration).min(duration_a * 0.5);
             let fade_start = duration_a - fade_duration;
             if t < fade_start {
                 // Phase A pure
@@ -1092,10 +1102,9 @@ impl Compiler {
         node: &Node,
         live: &LiveInputs,
     ) -> Result<CompiledFunction, CompilationError> {
-        let label = format!("{:?}", node.node_type);
-        let id = format!("{}", node.id.0);
         let node_type = node.node_type.clone();
         let params = Self::extract_params(graph, node)?;
+        let patch = build_slot_patch(&params, live, node);
 
         // Déterminer si ce moteur est un moteur audio qui nécessite l'injection
         // des valeurs audio temps réel dans params.extra
@@ -1207,16 +1216,18 @@ impl Compiler {
                 .as_ref()
                 .ok_or_else(|| CompilationError::MissingParameter("audio source".into()))?
                 .clone();
-            let over = live.param_overrides.clone();
+            let patch = patch.clone();
             Ok(Box::new(move |t: f64, object_index: usize| {
-                let mut live_params = patched_params(&params, &label, &id, &over).into_owned();
-                if let Some(map) = live_params.extra.as_object_mut() {
-                    inject_audio_values(map, &audio_arc);
-                }
-                engine.position(t, object_index, &live_params)
+                with_patched_params(&params, &patch, |p| {
+                    let mut live_params = p.clone();
+                    if let Some(map) = live_params.extra.as_object_mut() {
+                        inject_audio_values(map, &audio_arc);
+                    }
+                    engine.position(t, object_index, &live_params)
+                })
             }))
         } else if let Some(values) = osc_values {
-            let over = live.param_overrides.clone();
+            let patch = patch.clone();
             let address = params
                 .extra
                 .get("address")
@@ -1224,32 +1235,29 @@ impl Compiler {
                 .unwrap_or("*")
                 .to_string();
             Ok(Box::new(move |t: f64, object_index: usize| {
-                let mut live_params = patched_params(&params, &label, &id, &over).into_owned();
-                {
-                    let guard = values.lock().unwrap_or_else(|e| e.into_inner());
-                    if let Some(v) = guard.get(address.as_str()) {
-                        // Scalaire → valeur unique ; multi-arg → array (XYZ direct)
-                        let injected = if v.len() == 1 {
-                            serde_json::json!(v[0])
-                        } else {
-                            serde_json::json!(v)
-                        };
-                        if let Some(map) = live_params.extra.as_object_mut() {
-                            map.insert("osc_value".to_string(), injected);
+                with_patched_params(&params, &patch, |p| {
+                    let mut live_params = p.clone();
+                    {
+                        let guard = values.lock().unwrap_or_else(|e| e.into_inner());
+                        if let Some(v) = guard.get(address.as_str()) {
+                            // Scalaire → valeur unique ; multi-arg → array (XYZ direct)
+                            let injected = if v.len() == 1 {
+                                serde_json::json!(v[0])
+                            } else {
+                                serde_json::json!(v)
+                            };
+                            if let Some(map) = live_params.extra.as_object_mut() {
+                                map.insert("osc_value".to_string(), injected);
+                            }
                         }
                     }
-                }
-                engine.position(t, object_index, &live_params)
+                    engine.position(t, object_index, &live_params)
+                })
             }))
         } else {
             // Engine non-audio — closure simple
-            let over = live.param_overrides.clone();
             Ok(Box::new(move |t: f64, object_index: usize| {
-                engine.position(
-                    t,
-                    object_index,
-                    &patched_params(&params, &label, &id, &over),
-                )
+                with_patched_params(&params, &patch, |p| engine.position(t, object_index, p))
             }))
         }
     }
@@ -1327,64 +1335,189 @@ impl Compiler {
     }
 }
 
-// ── Helper functions for live audio injection ──
+// ── Modulation de params par slots (domaine signal `param:`) ──
 
-/// Patche `params.extra` avec les overrides live ciblant ce node —
-/// clés "<node_id>:<param_key>" ou "<label>:<param_key>" (écrites par le domaine
-/// signal via les cibles `param:` de SignalOut). Fast path : aucun
-/// override pour ce node → retourne `params` sans cloner.
-/// Lookup d'un override live de param — `<label>:<key>` dans la map
-/// partagée (SignalOut `param:`), fallback = valeur bakée au compile.
-/// Coût : un lock + lookup par éval, seulement si la map existe.
-fn over_f64(
-    over: &Option<Arc<Mutex<HashMap<String, f64>>>>,
-    label: &str,
-    node_id: &str,
-    key: &str,
-    fallback: f64,
-) -> f64 {
-    let Some(m) = over else {
-        return fallback;
-    };
-    let g = m.lock().unwrap_or_else(|e| e.into_inner());
-    // `<node_id>:<key>` (ciblé) prime, puis `<Type>:<key>` (tous du type).
-    g.get(&format!("{node_id}:{key}"))
-        .or_else(|| g.get(&format!("{label}:{key}")))
-        .copied()
-        .unwrap_or(fallback)
+use crate::param_slots::ParamSlots;
+
+/// Binding compile-time d'un param modulable : index du slot + bornes du
+/// spec. Capturé par la closure — l'eval reste lock/alloc-free.
+#[derive(Clone, Copy, Default)]
+struct SlotBind {
+    idx: Option<usize>,
+    min: Option<f64>,
+    max: Option<f64>,
 }
 
-fn patched_params<'a>(
-    params: &'a EngineParams,
-    label: &str,
-    node_id: &str,
-    over: &'a Option<Arc<Mutex<HashMap<String, f64>>>>,
-) -> std::borrow::Cow<'a, EngineParams> {
-    use std::borrow::Cow;
-    let Some(map) = over else {
-        return Cow::Borrowed(params);
+/// Résout le binding d'un param — index de slot + `min`/`max` déclarés
+/// dans le NodeSpec (mêmes bornes que le param statique).
+fn sidx(slots: &Option<Arc<ParamSlots>>, node: &Node, key: &str) -> SlotBind {
+    let Some(s) = slots.as_ref() else {
+        return SlotBind::default();
     };
-    let id_prefix = format!("{node_id}:");
-    let type_prefix = format!("{label}:");
-    let guard = map.lock().unwrap_or_else(|e| e.into_inner());
-    if !guard
-        .keys()
-        .any(|k| k.starts_with(&id_prefix) || k.starts_with(&type_prefix))
-    {
-        return Cow::Borrowed(params);
+    let spec = crate::node_spec::node_spec(&node.node_type);
+    let p = spec.params.iter().find(|p| p.key == key);
+    SlotBind {
+        idx: s.slot_of(&crate::param_slots::node_key(node), key),
+        min: p.and_then(|p| p.min),
+        max: p.and_then(|p| p.max),
     }
-    let mut p = params.clone();
-    if let Some(extra) = p.extra.as_object_mut() {
-        // Type d'abord, puis id — l'override ciblé prime.
-        for prefix in [type_prefix.as_str(), id_prefix.as_str()] {
-            for (k, v) in guard.iter() {
-                if let Some(key) = k.strip_prefix(prefix) {
-                    extra.insert(key.to_string(), serde_json::json!(*v));
-                }
+}
+
+/// Valeur effective d'un param modulable : `clamp(base + delta)` aux
+/// bornes du spec (un delta hostile ne peut pas sortir le param de sa
+/// plage déclarée — mêmes limites que le réglage manuel). Additif : un
+/// SignalOut à 0 laisse la valeur de base.
+/// Cap absolu sur les params sans borne déclarée : au-delà, les produits
+/// en aval (`speed * t`, `t * factor`…) débordent en inf → NaN. 1e12 est
+/// sans objet métier mais garantit des entrées finies aux engines.
+const PARAM_ABS_CAP: f64 = 1e12;
+
+#[inline]
+fn clamp_param(v: f64, min: Option<f64>, max: Option<f64>) -> f64 {
+    let v = v.clamp(-PARAM_ABS_CAP, PARAM_ABS_CAP);
+    match (min, max) {
+        (Some(lo), Some(hi)) => v.clamp(lo, hi),
+        (Some(lo), None) => v.max(lo),
+        (None, Some(hi)) => v.min(hi),
+        (None, None) => v,
+    }
+}
+
+#[inline]
+fn sval(slots: &Option<Arc<ParamSlots>>, bind: SlotBind, base: f64) -> f64 {
+    let Some(s) = slots else {
+        return base;
+    };
+    let Some(i) = bind.idx else {
+        return base;
+    };
+    clamp_param(base + s.delta(i), bind.min, bind.max)
+}
+
+/// Patch par-frame de `params.extra` pour les engines (qui lisent leurs
+/// params via la map JSON plutôt que des arguments scalaires). Rebuild au
+/// plus une fois par frame par node : si tous les deltas du node sont 0
+/// → params bakés empruntés (aucun clone) ; sinon le clone patché est
+/// caché par `generation` et réutilisé pour tous les objets de la frame.
+/// (param_key, slot_index, base de fallback JSON si absente d'extra,
+/// min/max du spec — bornes appliquées au delta comme `sval`)
+type EngineSlotKey = (String, usize, serde_json::Value, Option<f64>, Option<f64>);
+
+pub struct EngineSlotPatch {
+    slots: Arc<ParamSlots>,
+    keys: Vec<EngineSlotKey>,
+    cache: Mutex<(u64, Option<EngineParams>)>,
+}
+
+fn build_slot_patch(
+    params: &EngineParams,
+    live: &LiveInputs,
+    node: &Node,
+) -> Option<Arc<EngineSlotPatch>> {
+    let slots = live.param_slots.clone()?;
+    let nk = crate::param_slots::node_key(node);
+    let spec = crate::node_spec::node_spec(&node.node_type);
+    let mut keys = Vec::new();
+    for p in &spec.params {
+        if !p.modulable {
+            continue;
+        }
+        let Some(idx) = slots.slot_of(&nk, &p.key) else {
+            continue;
+        };
+        let base = params
+            .extra
+            .get(&p.key)
+            .cloned()
+            .or_else(|| {
+                p.default_json
+                    .as_deref()
+                    .and_then(|d| serde_json::from_str(d).ok())
+            })
+            .unwrap_or(match p.kind {
+                // Booléen sans défaut déclaré → base false (sémantique
+                // `(base + delta) >= 0.5`) ; un f64 brut serait ignoré
+                // par `as_bool` et le param resterait au défaut engine.
+                crate::node_spec::ParamKind::Boolean => serde_json::Value::Bool(false),
+                _ => serde_json::Value::Null,
+            });
+        keys.push((p.key.clone(), idx, base, p.min, p.max));
+    }
+    if keys.is_empty() {
+        None
+    } else {
+        Some(Arc::new(EngineSlotPatch {
+            slots,
+            keys,
+            cache: Mutex::new((0, None)),
+        }))
+    }
+}
+
+/// `base + delta` clampé aux bornes du spec, en préservant le type JSON :
+/// bool → seuil 0.5 (sémantique `(base as f64 + delta) >= 0.5`),
+/// number → somme clampée, Null → delta seul clampé, autres types →
+/// inchangé (non modulable de fait).
+fn add_delta_json(
+    base: &serde_json::Value,
+    delta: f64,
+    min: Option<f64>,
+    max: Option<f64>,
+) -> serde_json::Value {
+    let clamped = |v: f64| clamp_param(v, min, max);
+    match base {
+        serde_json::Value::Bool(b) => serde_json::json!(f64::from(*b) + delta >= 0.5),
+        serde_json::Value::Number(n) => {
+            let v = clamped(n.as_f64().unwrap_or(0.0) + delta);
+            // Les params entiers (n_bands…) sont lus via `as_u64`/`as_i64`
+            // qui REJETTENT les floats — préserver l'intégralité.
+            if n.is_u64() || n.is_i64() {
+                serde_json::json!(v.round() as i64)
+            } else {
+                serde_json::json!(v)
             }
         }
+        serde_json::Value::Null => serde_json::json!(clamped(delta)),
+        _ => base.clone(),
     }
-    Cow::Owned(p)
+}
+
+/// Appelle `f` avec les params effectifs du node : bakés si aucun delta
+/// actif, sinon clone patché caché par generation (rebuild ≤ 1×/frame).
+fn with_patched_params<R>(
+    params: &EngineParams,
+    patch: &Option<Arc<EngineSlotPatch>>,
+    f: impl FnOnce(&EngineParams) -> R,
+) -> R {
+    let Some(p) = patch else {
+        return f(params);
+    };
+    if p.keys
+        .iter()
+        .all(|(_, i, _, _, _)| p.slots.delta(*i) == 0.0)
+    {
+        return f(params);
+    }
+    let gen = p.slots.generation();
+    let mut c = p.cache.lock().unwrap_or_else(|e| e.into_inner());
+    if c.0 != gen || c.1.is_none() {
+        let mut patched = params.clone();
+        if let Some(extra) = patched.extra.as_object_mut() {
+            for (key, i, base, min, max) in &p.keys {
+                let d = p.slots.delta(*i);
+                if d == 0.0 {
+                    continue;
+                }
+                let cur = extra.get(key).cloned().unwrap_or_else(|| base.clone());
+                extra.insert(key.clone(), add_delta_json(&cur, d, *min, *max));
+            }
+        }
+        *c = (gen, Some(patched));
+    }
+    match c.1.as_ref() {
+        Some(effective) => f(effective),
+        None => f(params),
+    }
 }
 
 /// Injecte les valeurs audio temps réel dans les params extra d'un engine

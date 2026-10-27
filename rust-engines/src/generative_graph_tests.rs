@@ -831,4 +831,123 @@ mod tests {
                 .join("\n")
         );
     }
+
+    /// Stress `param:` : des SignalOut hostiles ciblent des slots aléatoires
+    /// du graphe (constantes extrêmes / non-finies). Invariants : positions
+    /// finies + déterminisme — identique au stress des params.
+    #[test]
+    fn fuzz_stress_param_modulation() {
+        use crate::param_slots::ParamSlots;
+        use crate::signal_compiler::{compile_move_signal_graph, SignalCtx};
+        use std::collections::HashMap;
+
+        let mut failures: Vec<String> = Vec::new();
+        let mut n_run = 0usize;
+        let audio = crate::audio::AudioState::new();
+        let osc: HashMap<String, Vec<f64>> = HashMap::new();
+        let hostile = [1e6, -1e6, 0.0, 1e-9, f64::MAX / 4.0, -12.5];
+
+        for seed in 0..40u64 {
+            let tag = format!("seed={seed}");
+            let (graph, n_objects, ..) = build_graph_mode(seed * 313 + 7, 4, true);
+            if Validator::validate(&graph).is_err() {
+                continue;
+            }
+            let slots = ParamSlots::build(&graph);
+            if slots.index.is_empty() {
+                continue;
+            }
+            let f = match Compiler::compile_with_live_inputs(
+                &graph,
+                LiveInputs {
+                    plugins: Some(fuzz_registry()),
+                    param_slots: Some(slots.clone()),
+                    ..Default::default()
+                },
+            ) {
+                Ok(f) => f,
+                Err(_) => continue,
+            };
+
+            // Signal graph hostile : jusqu'à 6 cibles `param:` tirées de la
+            // table (clés réelles → compile garantie), valeurs extrêmes.
+            let mut rng = SimpleRng::new(seed * 7919 + 11);
+            let keys: Vec<&(String, String)> = slots.index.keys().collect();
+            let mut sig = Graph::new();
+            let mut target_desc = Vec::new();
+            let n_targets = 1 + (rng.rand() * 6.0) as usize;
+            for k in 0..n_targets {
+                let (nk, pk) = keys[(rng.rand() * keys.len() as f64) as usize];
+                let v = hostile[(rng.rand() * hostile.len() as f64) as usize];
+                let c = Node::with_params(NodeType::SignalConst, serde_json::json!({"value": v}));
+                let o = Node::with_params(
+                    NodeType::SignalOut,
+                    serde_json::json!({
+                        "target": format!("param:{nk}:{pk}"),
+                        "amount": 1.0
+                    }),
+                );
+                let (c_id, o_id) = (c.id, o.id);
+                sig.add_node(c);
+                sig.add_node(o);
+                sig.add_edge(Edge {
+                    from: c_id,
+                    to: o_id,
+                    from_port: "out".to_string(),
+                    to_port: "signal".to_string(),
+                });
+                target_desc.push(format!("param:{nk}:{pk}={v}"));
+                let _ = k;
+            }
+            let mut sig_fn = match compile_move_signal_graph(&sig, &graph, &slots) {
+                Ok(f) => f,
+                Err(e) => {
+                    failures.push(format!("{tag}: valid param targets failed: {e:?}"));
+                    continue;
+                }
+            };
+            n_run += 1;
+
+            // Une frame de deltas + sampling — mêmes invariants que le stress.
+            let out = sig_fn(&SignalCtx {
+                t: 1.0,
+                dt: 1.0 / 60.0,
+                audio_state: &audio,
+                osc_values: &osc,
+            });
+            slots.apply_frame(&out.slot_deltas);
+            for tv in [-1.0, 0.0, 0.5, 2.7] {
+                for i in 0..n_objects.max(8) {
+                    let p = f(tv, i);
+                    if !(p.x.is_finite() && p.y.is_finite() && p.z.is_finite()) {
+                        failures.push(format!(
+                            "{tag}: non-finite under param mod (t={tv} i={i}) targets={target_desc:?}"
+                        ));
+                        continue;
+                    }
+                    let p2 = f(tv, i);
+                    if p != p2 {
+                        failures.push(format!("{tag}: non-deterministic under param mod"));
+                    }
+                }
+            }
+        }
+
+        eprintln!("=== PARAM MOD STRESS === {n_run} graphes modulés");
+        for f in &failures {
+            eprintln!("  FAIL {f}");
+        }
+        assert!(
+            failures.is_empty(),
+            "{} violations sous modulation param:\n{}",
+            failures.len(),
+            failures
+                .iter()
+                .take(10)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+        assert!(n_run > 20, "trop peu de graphes modulés: {n_run}");
+    }
 }

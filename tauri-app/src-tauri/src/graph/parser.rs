@@ -97,6 +97,16 @@ pub fn build_graph_from_json(
         let x = pos.map(|p| p.x).unwrap_or(0.0) as f32;
         let y = pos.map(|p| p.y).unwrap_or(0.0) as f32;
 
+        // L'id frontend devient la clé de ciblage `param:<node_id>:<key>`
+        // du domaine signal — les NodeId internes sont régénérés à chaque
+        // parse et ne pourraient pas être ciblés depuis l'UI.
+        if let Some(map) = params.as_object_mut() {
+            map.insert(
+                "__fe_id".to_string(),
+                serde_json::json!(frontend_id.as_str()),
+            );
+        }
+
         let new_id = NodeId::new();
         id_map.insert(frontend_id, new_id);
         graph.add_node(Node {

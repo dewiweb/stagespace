@@ -196,6 +196,61 @@ fn test_recall_cue_never_exposes_placeholder() {
 }
 
 #[test]
+fn test_swap_compiled_with_fade_blends_then_lands() {
+    // Crossfade graphe : pendant le fade la sortie interpole l'ancienne fn
+    // vers la nouvelle ; après, c'est la nouvelle pure — et la nouvelle
+    // table de slots est bindée (modulation live).
+    let rt = test_runtime();
+    rt.swap_position_fn(Arc::new(|_, _| nalgebra::Vector3::new(1.0, 0.0, 0.0)));
+
+    // Nouvelle table : slot "n1:x" — la fn cible lit base(1) + delta.
+    let mut graph = crate::graph::Graph::new();
+    let mut params = serde_json::json!({"x": 3.0, "y": 0.0, "z": 0.0});
+    params["__fe_id"] = serde_json::json!("sc");
+    graph.add_node(crate::graph::Node::with_params(
+        crate::graph::NodeType::Scale,
+        params,
+    ));
+    let slots = crate::param_slots::ParamSlots::build(&graph);
+    let idx = slots.slot_of("sc", "x").unwrap();
+    slots.apply_frame(&[(idx, 2.0)]);
+    let slots2 = slots.clone();
+    let new_fn: Arc<dyn Fn(f64, usize) -> nalgebra::Vector3<f64> + Send + Sync> =
+        Arc::new(move |_, _| nalgebra::Vector3::new(3.0 + slots2.delta(idx), 0.0, 0.0));
+
+    rt.swap_compiled_with_fade(
+        new_fn.clone(),
+        new_fn.clone(),
+        crate::signal_compiler::empty_signal_fn(),
+        slots.clone(),
+        0.3,
+    );
+
+    // Pendant le fade : blend entre x=1 et x=5 (3 + delta 2) — jamais
+    // hors de l'intervalle, jamais de placeholder.
+    for _ in 0..10 {
+        let guard = rt.position_fn.lock().unwrap_or_else(|e| e.into_inner());
+        let p = guard(0.0, 0);
+        drop(guard);
+        assert!(
+            (1.0..=5.0).contains(&p.x),
+            "pendant le fade x doit rester dans [1,5], got {}",
+            p.x
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    std::thread::sleep(Duration::from_millis(350));
+    let guard = rt.position_fn.lock().unwrap_or_else(|e| e.into_inner());
+    let p = guard(0.0, 0);
+    drop(guard);
+    assert!(
+        (p.x - 5.0).abs() < 1e-10,
+        "après fade → nouvelle fn + slot live (3+2), got {}",
+        p.x
+    );
+}
+
+#[test]
 fn test_recall_cue_instant() {
     let rt = test_runtime();
     rt.swap_position_fn(Arc::new(|_, _| nalgebra::Vector3::new(1.0, 0.0, 0.0)));
@@ -312,7 +367,7 @@ fn test_worker_applies_signal_deltas() {
         to_port: "signal".to_string(),
     });
     let signal_fn = crate::signal_compiler::compile_signal_graph(&g).expect("compiles");
-    rt.swap_signal_fn(signal_fn);
+    rt.swap_signal_fn(signal_fn, crate::param_slots::ParamSlots::empty());
 
     rt.play_compiled(
         Arc::new(|_, _| nalgebra::Vector3::new(1.0, 0.0, 0.0)),
@@ -358,7 +413,10 @@ fn test_signal_deltas_compose_with_audio_mods() {
         from_port: "out".to_string(),
         to_port: "signal".to_string(),
     });
-    rt.swap_signal_fn(crate::signal_compiler::compile_signal_graph(&g).unwrap());
+    rt.swap_signal_fn(
+        crate::signal_compiler::compile_signal_graph(&g).unwrap(),
+        crate::param_slots::ParamSlots::empty(),
+    );
 
     rt.play_compiled(
         Arc::new(|_, _| nalgebra::Vector3::zeros()),

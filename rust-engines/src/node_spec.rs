@@ -165,6 +165,10 @@ pub struct ParamSpec {
     /// Défaut à la création du node, encodé en JSON (parsed côté frontend).
     /// None → fallback par type (0/false/première option/…).
     pub default_json: Option<String>,
+    /// Le param est-il ciblable par le domaine signal (`param:<node>:<key>`)
+    /// et relu live à chaque eval ? `false` pour les params structurels
+    /// (n_objects, duration, seeds, init de sims — bakés au compile/init).
+    pub modulable: bool,
 }
 
 /// Spec déclarative d'un type de node.
@@ -262,6 +266,20 @@ fn p(key: &str, label: &str, kind: ParamKind) -> ParamSpec {
         min: None,
         max: None,
         default_json: None,
+        // Seuls les params scalaires live-readable sont modulables par
+        // défaut — les strings/enum/vec3 ne portent pas de delta f64.
+        modulable: matches!(kind, ParamKind::Number | ParamKind::Boolean),
+    }
+}
+
+/// Marque un param comme non modulable (structural / baké à l'init).
+trait NoMod {
+    fn fixed(self) -> ParamSpec;
+}
+impl NoMod for ParamSpec {
+    fn fixed(mut self) -> ParamSpec {
+        self.modulable = false;
+        self
     }
 }
 fn num(key: &str, label: &str) -> ParamSpec {
@@ -478,7 +496,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             vec![port("objects", PortType::ObjectSet)],
             "Defines the object/track count and their IDs. Required — graph source",
             vec![
-                nrange("n_objects", "Count", 1.0, 1.0, 64.0).d(9),
+                nrange("n_objects", "Count", 1.0, 1.0, 64.0).d(9).fixed(),
                 p("track_ids", "Track IDs", ParamKind::Text).d(""),
             ],
         ),
@@ -486,7 +504,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             NodeType::Duration, C::Structural, S::SubOnly, vec![],
             vec![port("duration", PortType::Duration)],
             "Defines the cycle duration in seconds. Required — syncs engines",
-            vec![nmin("duration", "Duration (s)", 0.1, 0.1).d(4.0)],
+            vec![nmin("duration", "Duration (s)", 0.1, 0.1).d(4.0).fixed()],
         ),
         spec(
             NodeType::Output, C::Structural, S::Both, pos_in(), vec![],
@@ -593,7 +611,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             vec![
                 ns("intensity", "Intensity", 0.1).d(0.5),
                 ns("smoothness", "Smoothness", 0.1).d(0.5),
-                ns("seed", "Seed", 1.0).d(42),
+                ns("seed", "Seed", 1.0).d(42).fixed(),
             ],
         ),
         spec(
@@ -611,7 +629,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             vec![
                 ns("length", "Length", 0.1).d(0.8),
                 ns("gravity", "Gravity", 0.1).d(9.81),
-                ns("initial_angle", "Initial Angle", 0.1).d(0.5),
+                ns("initial_angle", "Initial Angle", 0.1).d(0.5).fixed(),
                 ns("damping", "Damping", 0.01).d(0.05),
                 boolean("phase_offset", "Phase Offset").d(true),
             ],
@@ -667,7 +685,7 @@ fn build_catalog() -> Vec<NodeSpec> {
                 ns("container_size", "Container Size", 0.1).d(0.9),
                 nrange("restitution", "Restitution", 0.01, 0.0, 1.0).d(0.95),
                 ns("gravity", "Gravity", 0.1).d(0.0),
-                ns("seed", "Seed", 1.0).d(42),
+                ns("seed", "Seed", 1.0).d(42).fixed(),
             ],
         ),
         spec(
@@ -677,7 +695,7 @@ fn build_catalog() -> Vec<NodeSpec> {
                 v3("target", "Target").d([0.0, 0.0, 0.0]),
                 ns("stiffness", "Stiffness", 0.1).d(3.0),
                 ns("damping_coef", "Damping", 0.1).d(0.5),
-                ns("seed", "Seed", 1.0).d(42),
+                ns("seed", "Seed", 1.0).d(42).fixed(),
             ],
         ),
         spec(
@@ -695,10 +713,10 @@ fn build_catalog() -> Vec<NodeSpec> {
                 nmin("target_radius", "Target Radius", 0.1, 0.0).d(0.5),
                 ns("target_speed", "Target Speed (rev/dur)", 0.1).d(1.0),
                 ns("target_z", "Target Z", 0.1).d(0.0),
-                nmin("init_radius", "Init Scatter", 0.1, 0.0).d(0.5),
+                nmin("init_radius", "Init Scatter", 0.1, 0.0).d(0.5).fixed(),
                 nmin("bounds", "Bounds (evade)", 0.1, 0.0).d(1.0),
                 nmin("containment", "Containment", 0.1, 0.0).d(1.0),
-                ns("seed", "Seed", 1.0).d(42),
+                ns("seed", "Seed", 1.0).d(42).fixed(),
             ],
         ),
         spec(
@@ -710,7 +728,7 @@ fn build_catalog() -> Vec<NodeSpec> {
                 ns("cohesion", "Cohesion", 0.1).d(0.3),
                 ns("neighbor_radius", "Neighbor Radius", 0.1).d(0.5),
                 ns("max_speed", "Max Speed", 0.1).d(0.5),
-                ns("seed", "Seed", 1.0).d(42),
+                ns("seed", "Seed", 1.0).d(42).fixed(),
             ],
         ),
         spec(
@@ -721,7 +739,7 @@ fn build_catalog() -> Vec<NodeSpec> {
                 ns("repulsion_strength", "Repulsion Strength", 0.1).d(2.0),
                 ns("damping", "Damping", 0.01).d(0.95),
                 ns("container_size", "Container Size", 0.1).d(0.9),
-                ns("seed", "Seed", 1.0).d(42),
+                ns("seed", "Seed", 1.0).d(42).fixed(),
             ],
         ),
         spec(
@@ -743,10 +761,10 @@ fn build_catalog() -> Vec<NodeSpec> {
                 nmin("bounds", "Bounds", 0.1, 0.01).d(1.0),
                 nmin("containment", "Containment", 0.1, 0.0).d(0.5),
                 enm("init", "Init Layout", &["circle", "line", "grid", "random", "point"]).d("circle"),
-                nmin("init_radius", "Init Radius", 0.1, 0.0).d(0.6),
-                ns("z_init", "Z Init", 0.1).d(0.0),
+                nmin("init_radius", "Init Radius", 0.1, 0.0).d(0.6).fixed(),
+                ns("z_init", "Z Init", 0.1).d(0.0).fixed(),
                 ns("z_drift", "Z Drift", 0.05).d(0.0),
-                ns("seed", "Seed", 1.0).d(42),
+                ns("seed", "Seed", 1.0).d(42).fixed(),
             ],
         ),
         // ── Splines ──
@@ -910,7 +928,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             vec![
                 nmin("intensity", "Intensity", 0.05, 0.0).d(0.2),
                 nmin("frequency", "Frequency", 0.1, 0.1).d(2.0),
-                ns("seed", "Seed", 1.0).d(42),
+                ns("seed", "Seed", 1.0).d(42).fixed(),
             ],
         ),
         spec(
@@ -1123,7 +1141,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             vec![
                 nrange("rate", "Rate", 0.01, 0.0, 10.0).d(0.5),
                 ns("amplitude", "Amplitude", 0.1).d(1.0),
-                ns("seed", "Seed", 1.0).d(1.0),
+                ns("seed", "Seed", 1.0).d(1.0).fixed(),
             ],
         ),
         // ── Signal graph — opérateurs ──

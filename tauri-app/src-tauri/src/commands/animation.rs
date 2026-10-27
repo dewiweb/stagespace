@@ -134,20 +134,42 @@ pub async fn update_animation_state(
         .runtime
         .set_fade(animation.fade_in, animation.fade_out);
 
-    // Signal graph per-move : recompile + hot-swap si l'animation en porte
-    // un (sinon on neutralise — l'edit retire la modulation).
-    let signal_fn = match &animation.signal_graph {
+    // Signal graph per-move : recompile + swap atomique avec le graphe du
+    // move — les cibles `param:` se lient à la table de slots partagée
+    // (sinon on neutralise — l'edit retire la modulation).
+    let move_graph_json = movement.graph_json.clone();
+    let held_positions = movement.runtime.held_positions();
+    let audio_state = lock_or_recover(&state.audio_state);
+    let move_graph = crate::graph::parser::build_graph_from_json(&move_graph_json, &audio_state)
+        .map_err(|e| IpcError::validation(format!("Move graph parse: {e}")))?;
+    let slots = stagespace_engines::param_slots::ParamSlots::build(&move_graph);
+    let sig_fn = match &animation.signal_graph {
         Some(sig_json) => {
-            let audio_state = lock_or_recover(&state.audio_state);
             let sig_graph = crate::graph::parser::build_graph_from_json(sig_json, &audio_state)
                 .map_err(|e| IpcError::validation(format!("Signal graph parse: {e}")))?;
-            drop(audio_state);
-            stagespace_engines::compile_signal_graph(&sig_graph)
+            stagespace_engines::compile_move_signal_graph(&sig_graph, &move_graph, &slots)
                 .map_err(|e| IpcError::validation(format!("Signal graph compile: {e:?}")))?
         }
         None => stagespace_engines::empty_signal_fn(),
     };
-    movement.runtime.swap_signal_fn(signal_fn);
+    drop(audio_state);
+    let compiled = crate::graph::compilation::compile_graph_live(
+        &move_graph,
+        &crate::commands::state::Shared::from_state(&state),
+        Some(slots.clone()),
+        Some(held_positions.clone()),
+    )
+    .map_err(IpcError::validation)?;
+    let sample_fn = crate::graph::compilation::compile_graph_live(
+        &move_graph,
+        &crate::commands::state::Shared::from_state(&state),
+        Some(slots.clone()),
+        Some(held_positions),
+    )
+    .map_err(IpcError::validation)?;
+    movement
+        .runtime
+        .swap_compiled(compiled, sample_fn, sig_fn, slots);
     // Sync du snapshot Movement (store_cue le ressortirait stale sinon).
     movement.signal_graph = animation.signal_graph.clone();
     Ok(())

@@ -579,8 +579,6 @@ mod tests {
 mod param_override_tests {
     use crate::compiler::{Compiler, LiveInputs};
     use crate::graph::{Edge, Graph, Node, NodeType};
-    use std::collections::HashMap;
-    use std::sync::{Arc, Mutex};
 
     /// SignalOut `param:<NodeType>:<key>` → la closure compilée lit
     /// l'override à chaque eval (patch de params.extra).
@@ -623,20 +621,26 @@ mod param_override_tests {
             });
         }
 
-        let over: Arc<Mutex<HashMap<String, f64>>> = Arc::new(Mutex::new(HashMap::new()));
+        let slots = crate::param_slots::ParamSlots::build(&g);
+        let idx = slots
+            .slot_of(
+                &crate::param_slots::node_key(g.nodes.get(&circle).unwrap()),
+                "radius",
+            )
+            .expect("radius slot exists");
         let compiled = Compiler::compile_with_live_inputs(
             &g,
             LiveInputs {
-                param_overrides: Some(over.clone()),
+                param_slots: Some(slots.clone()),
                 ..Default::default()
             },
         )
         .unwrap();
 
         let before = compiled(0.0, 0);
-        over.lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .insert("Circular:radius".to_string(), 10.0);
+        // Delta additif +9.0 sur radius (base 1.0 → effectif 10.0) — la
+        // sémantique est additive, pas un remplacement absolu.
+        slots.apply_frame(&[(idx, 9.0)]);
         let after = compiled(0.0, 0);
         let r0 = (before.x * before.x + before.z * before.z).sqrt();
         let r1 = (after.x * after.x + after.z * after.z).sqrt();
@@ -644,5 +648,10 @@ mod param_override_tests {
             (r1 - 10.0 * r0).abs() < 1e-6,
             "radius should scale by 10: r0={r0}, r1={r1}"
         );
+        // Slots à 0 → retour à la base (pas de valeur stale).
+        slots.apply_frame(&[]);
+        let back = compiled(0.0, 0);
+        let r2 = (back.x * back.x + back.z * back.z).sqrt();
+        assert!((r2 - r0).abs() < 1e-6, "back to base: r0={r0}, r2={r2}");
     }
 }

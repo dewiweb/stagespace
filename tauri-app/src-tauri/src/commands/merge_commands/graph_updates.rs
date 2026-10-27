@@ -26,25 +26,51 @@ pub async fn update_move_graph_merged(
     tauri::async_runtime::spawn_blocking(move || {
         // Snapshot court sous le lock — la compilation (lourde) se fait ensuite
         // SANS tenir `movements`, sinon tout edit live gèle stop/panic/recall.
-        let (generation, param_overrides, held_positions) = {
+        let (generation, held_positions, signal_graph_json) = {
             let movements = lock_or_recover(&sh.movements);
             let movement = movements.get(&movement_id).ok_or_else(|| {
                 IpcError::not_found(format!("Movement '{movement_id}' not found"))
             })?;
-            let generation = movement.generation;
-            let param_overrides = movement.runtime.param_overrides();
-            let held_positions = movement.runtime.held_positions();
-            (generation, param_overrides, held_positions)
+            (
+                movement.generation,
+                movement.runtime.held_positions(),
+                movement.signal_graph.clone(),
+            )
         };
 
         let audio_state = lock_or_recover(&sh.audio_state);
         let graph =
             build_graph_from_json(&graph_json, &audio_state).map_err(IpcError::validation)?;
-        drop(audio_state);
 
         // Compile avec toutes les entrées live (audio + OSC reçus + plugins).
-        let compiled = compile_graph_live(&graph, &sh, Some(param_overrides), Some(held_positions))
+        // Une table de slots par recompile : position_fn + sample_fn +
+        // signal_fn la partagent (swap_compiled atomique — jamais de
+        // signal_fn appariée à une position_fn d'un autre compile).
+        let slots = stagespace_engines::param_slots::ParamSlots::build(&graph);
+        let compiled = compile_graph_live(
+            &graph,
+            &sh,
+            Some(slots.clone()),
+            Some(held_positions.clone()),
+        )
+        .map_err(IpcError::validation)?;
+        // Instance jetable pour le TrajectorySampler — même table de slots.
+        let sample_fn = compile_graph_live(&graph, &sh, Some(slots.clone()), Some(held_positions))
             .map_err(IpcError::validation)?;
+
+        // Le signal graph du move est recompilé avec le graphe — les
+        // cibles `param:` sont re-liées à la nouvelle table de slots.
+        let signal_fn = match signal_graph_json {
+            Some(ref sig_json) if !sig_json.nodes.is_empty() => {
+                let sig_graph = build_graph_from_json(sig_json, &audio_state)
+                    .map_err(|e| IpcError::validation(format!("Signal graph parse failed: {e}")))?;
+                stagespace_engines::compile_move_signal_graph(&sig_graph, &graph, &slots).map_err(
+                    |e| IpcError::validation(format!("Signal graph compile failed: {e:?}")),
+                )?
+            }
+            _ => stagespace_engines::empty_signal_fn(),
+        };
+        drop(audio_state);
 
         // Ré-application sous lock, avec check de génération — le move a pu être
         // stoppé puis respawné pendant la compile : dans ce cas on applique au
@@ -107,18 +133,12 @@ pub async fn update_move_graph_merged(
                 "fade_duration must be a finite non-negative number",
             ));
         }
-        // Instance jetable pour le TrajectorySampler — les evals de preview
-        // n'avancent pas sim_t des engines stateful de la fn live.
-        if let Ok(sample_fn) = compile_graph_live(
-            &graph,
-            &sh,
-            Some(movement.runtime.param_overrides()),
-            Some(movement.runtime.held_positions()),
-        ) {
-            movement.runtime.set_sample_fn(sample_fn);
-        }
-        // IMPORTANT: recall_cue (swap position_fn) AVANT set_osc_ids.
-        movement.runtime.recall_cue(compiled, fade);
+        // Swap atomique position_fn + sample_fn + signal_fn + slots (avec
+        // crossfade — feature live) : le worker n'apparie jamais une
+        // signal_fn avec une position_fn d'un autre compile. AVANT set_osc_ids.
+        movement
+            .runtime
+            .swap_compiled_with_fade(compiled, sample_fn, signal_fn, slots, fade);
         if let Some(ref ids) = osc_ids {
             movement.runtime.set_osc_ids(ids.clone());
         }
@@ -143,30 +163,82 @@ pub async fn update_signal_graph(
 ) -> Result<String, IpcError> {
     let sh = Shared::from_state(&state);
     tauri::async_runtime::spawn_blocking(move || {
-        let signal_fn = if graph_json.nodes.is_empty() {
-            stagespace_engines::signal_compiler::empty_signal_fn()
-        } else {
-            let audio_state = lock_or_recover(&sh.audio_state);
-            let graph = build_graph_from_json(&graph_json, &audio_state)
-                .map_err(|e| IpcError::validation(format!("Failed to parse signal graph: {e}")))?;
-            drop(audio_state);
-
-            stagespace_engines::compile_signal_graph(&graph).map_err(|e| {
-                IpcError::validation(format!("Failed to compile signal graph: {e:?}"))
-            })?
-        };
-
         match movement_id {
             None => {
+                // Scope global : cibles macros uniquement — `param:` est une
+                // erreur de compile (pas de nodes de move à moduler).
+                let signal_fn = if graph_json.nodes.is_empty() {
+                    stagespace_engines::signal_compiler::empty_signal_fn()
+                } else {
+                    let audio_state = lock_or_recover(&sh.audio_state);
+                    let graph = build_graph_from_json(&graph_json, &audio_state).map_err(|e| {
+                        IpcError::validation(format!("Failed to parse signal graph: {e}"))
+                    })?;
+                    drop(audio_state);
+                    stagespace_engines::compile_signal_graph(&graph).map_err(|e| {
+                        IpcError::validation(format!("Failed to compile signal graph: {e:?}"))
+                    })?
+                };
                 lock_or_recover(&sh.merge_runtime).swap_signal_fn(signal_fn);
                 Ok("Global signal graph hot-swapped".to_string())
             }
             Some(id) => {
-                let movements = lock_or_recover(&sh.movements);
-                let movement = movements
-                    .get(&id)
-                    .ok_or_else(|| IpcError::not_found(format!("Movement '{id}' not found")))?;
-                movement.runtime.swap_signal_fn(signal_fn);
+                // Scope per-move : le graphe du move est recompilé AVEC le
+                // signal — une table de slots commune, swap_compiled
+                // atomique (les cibles `param:` se re-lient à la nouvelle
+                // table, aucun stale possible).
+                let (generation, held_positions, move_graph_json) = {
+                    let movements = lock_or_recover(&sh.movements);
+                    let movement = movements
+                        .get(&id)
+                        .ok_or_else(|| IpcError::not_found(format!("Movement '{id}' not found")))?;
+                    (
+                        movement.generation,
+                        movement.runtime.held_positions(),
+                        movement.graph_json.clone(),
+                    )
+                };
+                let audio_state = lock_or_recover(&sh.audio_state);
+                let move_graph = build_graph_from_json(&move_graph_json, &audio_state)
+                    .map_err(|e| IpcError::validation(format!("Move graph parse failed: {e}")))?;
+                let slots = stagespace_engines::param_slots::ParamSlots::build(&move_graph);
+                let compiled = compile_graph_live(
+                    &move_graph,
+                    &sh,
+                    Some(slots.clone()),
+                    Some(held_positions.clone()),
+                )
+                .map_err(IpcError::validation)?;
+                let sample_fn =
+                    compile_graph_live(&move_graph, &sh, Some(slots.clone()), Some(held_positions))
+                        .map_err(IpcError::validation)?;
+                let signal_fn = if graph_json.nodes.is_empty() {
+                    stagespace_engines::signal_compiler::empty_signal_fn()
+                } else {
+                    let sig_graph =
+                        build_graph_from_json(&graph_json, &audio_state).map_err(|e| {
+                            IpcError::validation(format!("Failed to parse signal graph: {e}"))
+                        })?;
+                    stagespace_engines::compile_move_signal_graph(&sig_graph, &move_graph, &slots)
+                        .map_err(|e| {
+                        IpcError::validation(format!("Failed to compile signal graph: {e:?}"))
+                    })?
+                };
+                drop(audio_state);
+
+                let mut movements = lock_or_recover(&sh.movements);
+                let movement = movements.get_mut(&id).ok_or_else(|| {
+                    IpcError::conflict(format!("Movement '{id}' stopped during recompile"))
+                })?;
+                if movement.generation != generation {
+                    return Err(IpcError::conflict(format!(
+                        "Movement '{id}' was respawned during compile — retry the edit"
+                    )));
+                }
+                movement.signal_graph = Some(graph_json);
+                movement
+                    .runtime
+                    .swap_compiled(compiled, sample_fn, signal_fn, slots);
                 Ok(format!("Signal graph hot-swapped on move '{id}'"))
             }
         }

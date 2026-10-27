@@ -76,6 +76,9 @@ export interface MoveSlot {
   name: string;
   /// Graphe sauvegardé pour ce slot (construit depuis un template, puis éditable)
   graphJson: { nodes: GraphNode[]; edges: Edge[] } | null;
+  /// Graphe de modulation per-move (domaine signal → cibles `param:` et
+  /// macros du move). Édité dans le tab Mods quand ce slot est édité.
+  signalGraph: { nodes: GraphNode[]; edges: Edge[] } | null;
   /// Template d'origine (pour affichage dans l'UI)
   templateId: string;
   /// Track IDs ciblées par ce slot
@@ -157,6 +160,8 @@ export interface MoveSlotsSlice {
   toggleSlotPreview: (id: string) => void;
   /// Sélectionne un slot pour édition — sync selectedTrackIds + charge le graphe dans l'éditeur
   selectSlotForEditing: (id: string | null) => void;
+  /// Met à jour le graphe de modulation per-move du slot (tab Mods).
+  setSlotSignalGraph: (id: string, graph: { nodes: GraphNode[]; edges: Edge[] } | null) => void;
 
   // ─── Live (lancer/arrêter) ───
   /// Retourne true si le move est (ou sera) en lecture — false si l'activation a échoué.
@@ -249,6 +254,7 @@ export function normalizeSlot(s: any): MoveSlot {
     phaseSpread: s.phaseSpread ?? 0,
     assignments: s.assignments ?? [],
     audioMods: s.audioMods ?? [],
+    signalGraph: s.signalGraph ?? null,
   };
 }
 
@@ -332,6 +338,16 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
   editingSlotId: null,
   pendingPlays: [],
 
+  setSlotSignalGraph: (id, graph) => {
+    set((s) => {
+      const moveSlots = s.moveSlots.map((sl) =>
+        sl.id === id ? { ...sl, signalGraph: graph } : sl,
+      );
+      saveSlotsToStorageDebounced(moveSlots);
+      return { moveSlots };
+    });
+  },
+
   selectSlotForEditing: (id) => {
     // L'auto-save (useGraphStore) a déjà sauvegardé le slot précédent
     // à chaque mutation. On n'a qu'à charger le nouveau slot.
@@ -397,6 +413,7 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
         id: newSlotId,
         name: `Move ${idx}`,
         graphJson,
+        signalGraph: null,
         templateId: 'circle',
         trackIds: defaultTrackIds,
         movementId: null,
@@ -664,6 +681,29 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
         fade_in: slot.fadeIn,
         fade_out: slot.fadeOut,
       };
+      // Graphe de modulation per-move (cibles `param:` liées aux nodes du
+      // graphe du move — compilé côté backend avec le même graph_json).
+      const signalGraphData = slot.signalGraph
+        ? {
+            nodes: slot.signalGraph.nodes.map((n) => ({
+              id: n.id,
+              type: 'custom',
+              position: n.position,
+              data: {
+                label: n.data.label ?? n.data.type ?? '',
+                type: n.data.type ?? 'SignalOut',
+                params: n.data.params ?? {},
+              },
+            })),
+            edges: slot.signalGraph.edges.map((e) => ({
+              id: e.id,
+              source: e.source,
+              target: e.target,
+              sourceHandle: e.sourceHandle ?? 'out',
+              targetHandle: e.targetHandle ?? 'signal',
+            })),
+          }
+        : null;
 
       await invoke('activate_move', {
         request: {
@@ -677,7 +717,9 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
           duration,
           loop_mode: slot.loopMode,
           direction: slot.direction,
-          animation,
+          // Le graphe de modulation per-move voyage via l'animation payload
+          // (MoveSpec.signal_graph = request.animation.signal_graph).
+          animation: animation ? { ...animation, signal_graph: signalGraphData } : animation,
         },
       });
       if (slot.macros) {

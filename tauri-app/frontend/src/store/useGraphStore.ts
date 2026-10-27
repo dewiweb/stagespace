@@ -28,6 +28,7 @@ import { createSpatialFxSlice, type SpatialFxSlice } from './slices/spatialFxSli
 import { createInteractionModesSlice, type InteractionModesSlice } from './slices/interactionModesSlice';
 import { createPluginSlice, type PluginSlice } from './slices/pluginSlice';
 import { SHAPE_PRESETS } from '../utils/shapePresets';
+import { clearTargetsForRemovedNodes } from '../utils/signalTargets';
 import { toast } from '../utils/toast-helpers';
 import { safeSetItem } from '../utils/safeStorage';
 import type {
@@ -135,11 +136,23 @@ export const useGraphStore = create<GraphState>()((...a) => {
     const editingSlotId = get().editingSlotId;
     if (!editingSlotId) return;
     const { nodes, edges, moveSlots } = get();
-    const newSlots = moveSlots.map((sl) =>
-      sl.id === editingSlotId
-        ? { ...sl, graphJson: { nodes: [...nodes], edges: [...edges] } }
-        : sl
-    );
+    // Suppression de nodes du graphe du move : les cibles SignalOut
+    // `param:<id>:<key>` de la modulation per-move deviendraient mortes —
+    // on les efface (sink inerte) avec un toast.
+    const newSlots = moveSlots.map((sl) => {
+      if (sl.id !== editingSlotId) return sl;
+      const prevIds = new Set((sl.graphJson?.nodes ?? []).map((n) => n.id));
+      const removed = new Set([...prevIds].filter((id) => !nodes.some((n) => n.id === id)));
+      let signalGraph = sl.signalGraph;
+      if (signalGraph && removed.size > 0) {
+        const { nodes: cleaned, cleared } = clearTargetsForRemovedNodes(signalGraph.nodes, removed);
+        if (cleared > 0) {
+          signalGraph = { nodes: cleaned, edges: signalGraph.edges };
+          toast.info(`${cleared} modulation target${cleared > 1 ? 's' : ''} cleared (deleted node)`);
+        }
+      }
+      return { ...sl, signalGraph, graphJson: { nodes: [...nodes], edges: [...edges] } };
+    });
     // Sauvegarder dans localStorage (la fonction est dans moveSlotsSlice)
     safeSetItem('stagespace-move-slots', JSON.stringify(newSlots));
     set({ moveSlots: newSlots });

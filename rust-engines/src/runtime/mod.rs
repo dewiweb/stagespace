@@ -50,10 +50,11 @@ pub struct Runtime {
     /// Positions tenues par les nodes Freeze — survit aux recompiles
     /// (partagé avec les closures compilées via LiveInputs).
     held_positions: crate::compiler::HeldPositions,
-    /// Overrides de params de nodes — écrits par le domaine signal via
-    /// les cibles `param:<label>:<key>` de SignalOut, lus par les
-    /// closures compilées (patch de params.extra à chaque eval).
-    param_overrides: Arc<Mutex<HashMap<String, f64>>>,
+    /// Table de slots de params modulables — partagée entre position_fn,
+    /// sample_fn et signal_fn d'un même compile (swap atomique). Le worker
+    /// y écrit les deltas `param:` de la signal_fn à chaque frame ; les
+    /// closures lisent leurs slots par index (base + delta, sans lock).
+    param_slots: Arc<Mutex<Arc<crate::param_slots::ParamSlots>>>,
     /// Buffer de positions — le worker écrit ses positions (world-space)
     /// à chaque frame ; le MergeRuntime lit tous les buffers pour faire
     /// le merge + post-processing + envoi via le sink.
@@ -108,7 +109,7 @@ impl Runtime {
             audio_state,
             audio_param_overrides: Arc::new(Mutex::new(HashMap::new())),
             held_positions: Arc::new(Mutex::new(HashMap::new())),
-            param_overrides: Arc::new(Mutex::new(HashMap::new())),
+            param_slots: Arc::new(Mutex::new(crate::param_slots::ParamSlots::empty())),
             position_buffer: Mutex::new(None),
             duration_ms: Arc::new(std::sync::atomic::AtomicU64::new(4000)),
             osc_ids_arc: Arc::new(std::sync::RwLock::new(Vec::new())),
@@ -206,12 +207,6 @@ impl Runtime {
         self.audio_param_overrides.clone()
     }
 
-    /// Map des overrides de params de nodes — partagée avec le domaine
-    /// signal (cibles `param:` de SignalOut) et les closures compilées.
-    pub fn param_overrides(&self) -> Arc<Mutex<HashMap<String, f64>>> {
-        self.param_overrides.clone()
-    }
-
     /// Positions tenues des nodes Freeze — passée aux compiles pour que
     /// le hold survive au hot-swap du graphe.
     pub fn held_positions(&self) -> Arc<Mutex<HashMap<String, nalgebra::Vector3<f64>>>> {
@@ -223,11 +218,80 @@ impl Runtime {
         self.audio_state.clone()
     }
 
-    /// Hot-swap du graph de modulation per-move (domaine signal → deltas
-    /// de macros). Les deltas se somment dans `audio_param_overrides` —
-    /// couche additive, la base macro n'est jamais écrasée.
-    pub fn swap_signal_fn(&self, new_fn: crate::signal_compiler::SignalFn) {
-        *self.signal_fn.lock().unwrap_or_else(|e| e.into_inner()) = new_fn;
+    /// Installe le graph de modulation per-move au spawn — la position_fn
+    /// est déjà en place (play_compiled) ; on lie juste la signal_fn et
+    /// sa table de slots (worker : lecture cohérente sous le lock signal).
+    pub fn swap_signal_fn(
+        &self,
+        new_fn: crate::signal_compiler::SignalFn,
+        slots: Arc<crate::param_slots::ParamSlots>,
+    ) {
+        let mut sig = self.signal_fn.lock().unwrap_or_else(|e| e.into_inner());
+        *sig = new_fn;
+        *self.param_slots.lock().unwrap_or_else(|e| e.into_inner()) = slots;
+    }
+
+    /// Swap atomique d'un move recompilé : position_fn + sample_fn +
+    /// signal_fn + leur ParamSlots commune — le worker ne peut jamais
+    /// apparier une signal_fn avec une position_fn d'un autre compile
+    /// (ordre de locks : signal_fn d'abord, puis position_fn — le worker
+    /// prend son snapshot de position_fn sous le lock signal, même ordre
+    /// → pas de deadlock).
+    pub fn swap_compiled(
+        &self,
+        position_fn: PositionFn,
+        sample_fn: PositionFn,
+        signal_fn: crate::signal_compiler::SignalFn,
+        slots: Arc<crate::param_slots::ParamSlots>,
+    ) {
+        let mut sig = self.signal_fn.lock().unwrap_or_else(|e| e.into_inner());
+        *sig = signal_fn;
+        *self.param_slots.lock().unwrap_or_else(|e| e.into_inner()) = slots;
+        *self.position_fn.lock().unwrap_or_else(|e| e.into_inner()) = position_fn;
+        *self.sample_fn.lock().unwrap_or_else(|e| e.into_inner()) = sample_fn;
+        self.has_sample_fn.store(true, Ordering::Release);
+    }
+
+    /// `swap_compiled` avec crossfade : la position_fn devient un blend
+    /// smoothstep ancien → nouveau (même formule que `recall_cue`) pendant
+    /// `fade_duration` s. L'ancienne fn lit sa vieille table de slots —
+    /// qui garde ses dernières valeurs pendant le fade (acceptable : ce
+    /// côté s'estompe). `fade_duration <= 0` → swap instantané.
+    pub fn swap_compiled_with_fade(
+        &self,
+        position_fn: PositionFn,
+        sample_fn: PositionFn,
+        signal_fn: crate::signal_compiler::SignalFn,
+        slots: Arc<crate::param_slots::ParamSlots>,
+        fade_duration: f64,
+    ) {
+        let mut sig = self.signal_fn.lock().unwrap_or_else(|e| e.into_inner());
+        *sig = signal_fn;
+        *self.param_slots.lock().unwrap_or_else(|e| e.into_inner()) = slots;
+        {
+            let mut guard = self.position_fn.lock().unwrap_or_else(|e| e.into_inner());
+            if fade_duration > 0.0 {
+                let from_fn = guard.clone();
+                let fade_start = Instant::now();
+                *guard = Arc::new(move |t, i| {
+                    let elapsed = fade_start.elapsed().as_secs_f64();
+                    if elapsed >= fade_duration {
+                        position_fn(t, i)
+                    } else {
+                        let blend = elapsed / fade_duration;
+                        // smoothstep ease in-out
+                        let blend = blend * blend * (3.0 - 2.0 * blend);
+                        let from_pos = from_fn(t, i);
+                        let to_pos = position_fn(t, i);
+                        from_pos + (to_pos - from_pos) * blend
+                    }
+                });
+            } else {
+                *guard = position_fn;
+            }
+        }
+        *self.sample_fn.lock().unwrap_or_else(|e| e.into_inner()) = sample_fn;
+        self.has_sample_fn.store(true, Ordering::Release);
     }
 
     /// Branche le cache des valeurs OSC reçues (source des nodes
@@ -420,7 +484,7 @@ impl Runtime {
         let anim_state_arc = self.animation_state.clone();
         let audio_state_arc = self.audio_state.clone();
         let audio_param_overrides_arc = self.audio_param_overrides.clone();
-        let param_overrides_arc = self.param_overrides.clone();
+        let param_slots_arc = self.param_slots.clone();
         let signal_fn_arc = self.signal_fn.clone();
         let osc_values_arc = self.osc_values.clone();
 
@@ -442,6 +506,8 @@ impl Runtime {
             let mut frame_count = 0u64;
             let mut last_perf_update = Instant::now();
             let mut frames_since_perf = 0u64;
+            // Snapshot de la position_fn pris sous le lock signal à chaque
+            // frame — garantit l'appariement compile↔compile (audit swap).
 
             while running.load(Ordering::SeqCst) {
                 let elapsed = start.elapsed();
@@ -470,7 +536,8 @@ impl Runtime {
                 let loop_is_on = config.get_loop_mode() == LoopMode::Loop;
 
                 // Lire l'animation state (depth + phase_offset par track)
-                let (track_depths, track_phase_offsets, audio_param_overrides) = {
+                let (track_depths, track_phase_offsets, audio_param_overrides, fn_ref) = {
+                    let fn_ref;
                     let mut anim_guard = anim_state_arc.lock().unwrap_or_else(|e| e.into_inner());
                     let audio = audio_state_arc.lock().unwrap_or_else(|e| e.into_inner());
                     let mut audio_params = if let Some(ref mut anim_state) = *anim_guard {
@@ -483,6 +550,17 @@ impl Runtime {
                     // `shift_*` est traduit vers la convention `offset_*`).
                     {
                         let mut signal = signal_fn_arc.lock().unwrap_or_else(|e| e.into_inner());
+                        // Snapshot de la position_fn SOUS le lock signal — même
+                        // ordre que swap_compiled → la pair (signal_fn,
+                        // position_fn) vient toujours du même compile.
+                        fn_ref = position_fn_arc
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .clone();
+                        let slots = param_slots_arc
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .clone();
                         let osc_map = osc_values_arc
                             .read()
                             .unwrap_or_else(|e| e.into_inner())
@@ -491,7 +569,6 @@ impl Runtime {
                         // catch_unwind : un panic dans le signal graph ne doit
                         // pas tuer le worker (seul les evals de position
                         // étaient protégés avant).
-                        let empty_deltas: crate::signal_compiler::SignalDeltas = Default::default();
                         let deltas =
                             match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                                 (*signal)(&crate::signal_compiler::SignalCtx {
@@ -506,18 +583,16 @@ impl Runtime {
                                     crate::logging::log_osc_error(
                                         "signal graph eval panicked — deltas dropped",
                                     );
-                                    empty_deltas
+                                    crate::signal_compiler::SignalOutput::default()
                                 }
                             };
-                        for (key, d) in deltas {
+                        // Deltas de slots : zero → somme des deltas finis →
+                        // bump generation (les caches de params patchés
+                        // rebuild au plus 1×/frame). Aucun hold : un delta
+                        // absent/non-fini repasse le param à sa base.
+                        slots.apply_frame(&deltas.slot_deltas);
+                        for (key, d) in deltas.macros {
                             if !d.is_finite() {
-                                continue;
-                            }
-                            if let Some(pk) = key.strip_prefix("param:") {
-                                let mut pov = param_overrides_arc
-                                    .lock()
-                                    .unwrap_or_else(|e| e.into_inner());
-                                pov.insert(pk.to_string(), d);
                                 continue;
                             }
                             let k: &str = match key.as_str() {
@@ -534,9 +609,10 @@ impl Runtime {
                             anim_state.track_depths.clone(),
                             anim_state.track_phase_offsets.clone(),
                             audio_params,
+                            fn_ref,
                         )
                     } else {
-                        (Vec::new(), Vec::new(), audio_params)
+                        (Vec::new(), Vec::new(), audio_params, fn_ref)
                     }
                 };
 
@@ -660,13 +736,10 @@ impl Runtime {
                     eff_roll.to_radians(),
                 );
                 let positions: Vec<(usize, nalgebra::Vector3<f64>)> = {
-                    // Clone d'Arc sous un lock de ~ns (audit I8) — l'évaluation
-                    // de toute la frame se fait SANS tenir le mutex : swap/
-                    // recall/sample ne sont plus retardés par un frame lent.
-                    let fn_ref = position_fn_arc
-                        .lock()
-                        .unwrap_or_else(|e| e.into_inner())
-                        .clone();
+                    // Snapshot pris sous le lock signal (appariement
+                    // signal↔position du même compile) — l'évaluation de
+                    // toute la frame se fait SANS tenir le mutex (I8).
+                    let fn_ref = fn_ref;
                     osc_ids
                         .iter()
                         .enumerate()

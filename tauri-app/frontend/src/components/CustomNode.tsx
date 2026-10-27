@@ -5,8 +5,9 @@ import { Slider } from './ui/Slider';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import { useSignalGraphStore } from '../store/useSignalGraphStore';
-import { PARAM_SCHEMA, getCategoryColor, pluginNodeSchema, pluginParamsOnSwitch, type ParamDef, type NodeParamValue } from './nodeParamSchema';
+import { PARAM_SCHEMA, getCategoryColor, pluginNodeSchema, pluginParamsOnSwitch, type ParamDef, type NodeParamValue, type GraphNode } from './nodeParamSchema';
 import { isSourceNode, isTerminalNode, isBinaryComposite, getInputPorts, getOutputPorts } from '../utils/connectionRules';
+import { signalTargetOptions, modulatedParamKeys } from '../utils/signalTargets';
 import type { PortDef } from '../types/generated/PortDef';
 
 const AUDIO_NODE_TYPES = new Set(['BPM', 'AudioAmplitude', 'AudioSpectrum', 'AudioAmplitudeFalloff']);
@@ -57,6 +58,19 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
   const isBinary = isBinaryComposite(data.type)
     || (isPluginNode && pluginKind === 'composite');
   const inputPorts = getInputPorts(data.type, pluginKind);
+
+  // Nodes du graphe du move en cours d'édition — cibles `param:` des
+  // SignalOut en contexte modulation per-move.
+  const moveNodes = useGraphStore((s) => s.nodes);
+  const editingSlotId = useGraphStore((s) => s.editingSlotId);
+  const slotSignalNodes = useGraphStore(
+    (s) => s.moveSlots.find((sl) => sl.id === s.editingSlotId)?.signalGraph?.nodes,
+  );
+  // Params de CE node ciblés par la modulation per-move → indicateur dot.
+  const isMoveNode = !isGlobalNode && !isSignalNode;
+  const modulated = isMoveNode && editingSlotId && slotSignalNodes
+    ? modulatedParamKeys({ id, data } as unknown as GraphNode, slotSignalNodes)
+    : new Set<string>();
 
   // Audio live indicator — pour les nodes audio, afficher les valeurs live
   // Optimisation: seuls les nodes audio se re-subscribe à audioState (60fps)
@@ -182,7 +196,31 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
         );
       }
       case 'text':
-      case 'string':
+      case 'string': {
+        if (data.type === 'SignalOut' && def.key === 'target') {
+          // Cibles : macros + params modulables du graphe du move édité.
+          const options = signalTargetOptions(moveNodes as unknown as GraphNode[]);
+          const current = typeof value === 'string' ? value : '';
+          return (
+            <select
+              value={current}
+              onChange={(e) => {
+                handleChange(def.key, e.target.value);
+                e.currentTarget.blur();
+              }}
+              onKeyDown={blurOnEnter}
+              className="w-full px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none"
+            >
+              <option value="">(inert)</option>
+              {current !== '' && !options.some((o) => o.value === current) && (
+                <option value={current}>{current}</option>
+              )}
+              {options.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          );
+        }
         return (
           <input
             type="text"
@@ -192,6 +230,7 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
             className="w-full px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
           />
         );
+      }
       default:
         return null;
     }
@@ -331,7 +370,15 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
         <div className="p-3 space-y-2">
           {schema.map((def) => (
             <div key={def.key} className="flex flex-col gap-1">
-              <label className="text-gray-400 text-xs font-medium">{def.label}</label>
+              <label className="text-gray-400 text-xs font-medium">
+                {def.label}
+                {modulated.has(def.key) && (
+                  <span
+                    className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-amber-400 align-middle"
+                    title="Modulated by this move's signal graph"
+                  />
+                )}
+              </label>
               {renderInput(def)}
             </div>
           ))}

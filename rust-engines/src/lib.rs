@@ -17,6 +17,7 @@ pub mod node_params;
 pub mod node_spec;
 pub mod osc_receiver;
 pub mod osc_sender;
+pub mod param_slots;
 pub mod plugins;
 pub mod position_buffer;
 pub mod position_sink;
@@ -45,8 +46,9 @@ mod graph_tests;
 #[cfg(test)]
 mod integration_tests;
 #[cfg(test)]
-mod plugin_tests;
+mod param_slots_tests;
 #[cfg(test)]
+mod plugin_tests;
 mod port_matrix_tests;
 #[cfg(test)]
 mod validator_tests;
@@ -104,8 +106,8 @@ pub use runtime::{
     Runtime,
 };
 pub use signal_compiler::{
-    compile_signal_graph, empty_signal_fn, macro_with_deltas, SignalCompileError, SignalCtx,
-    SignalDeltas, SignalFn,
+    compile_move_signal_graph, compile_signal_graph, empty_signal_fn, macro_with_deltas,
+    SignalCompileError, SignalCtx, SignalDeltas, SignalFn, SignalOutput,
 };
 pub use validator::{ValidationError, ValidationResult, Validator};
 pub use zones::{apply_zones, Zone, ZoneShape};

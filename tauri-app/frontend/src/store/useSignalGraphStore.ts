@@ -4,6 +4,7 @@ import type { GraphNode } from '../components/nodeParamSchema';
 import type { NodeType } from '../types/generated/NodeType';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { safeSetItem, safeParseStoredJson } from '../utils/safeStorage';
+import { useGraphStore } from './useGraphStore';
 
 // ─── Helpers ───
 
@@ -60,10 +61,16 @@ export function buildDefaultSignalGraph(): { nodes: GraphNode[]; edges: Edge[] }
 interface SignalGraphState {
   nodes: GraphNode[];
   edges: Edge[];
+  /// 'global' = modulation du MergeRuntime (macros) ; slotId = modulation
+  /// per-move (cibles `param:` liées au graphe du slot).
+  context: 'global' | string;
 
   setNodes: (nodes: GraphNode[]) => void;
   setEdges: (edges: Edge[]) => void;
   updateNodeData: (id: string, data: Partial<Record<string, any>>) => void;
+  /// Bascule le contexte d'édition — charge le graphe de modulation du
+  /// slot (ou le global) dans le store.
+  setContext: (slotId: string | null, slotGraph?: { nodes: GraphNode[]; edges: Edge[] } | null) => void;
 
   // Compile et pousse le graph signal au backend (scope global —
   // `update_signal_graph` avec movement_id null → MergeRuntime).
@@ -92,6 +99,17 @@ function saveToStorage(nodes: GraphNode[], edges: Edge[]) {
   safeSetItem(STORAGE_KEY, JSON.stringify({ nodes, edges }));
 }
 
+/// Écrit les edits : global → localStorage ; slot → slot.signalGraph
+/// (persisté avec les slots par moveSlotsSlice).
+function persist(state: SignalGraphState, nodes: GraphNode[], edges: Edge[]) {
+  if (state.context === 'global') {
+    saveToStorage(nodes, edges);
+  } else {
+    // Accès différé (cycle useGraphStore → persistenceSlice → ce module).
+    useGraphStore.getState().setSlotSignalGraph(state.context, { nodes, edges });
+  }
+}
+
 const _defaultGraph = buildDefaultSignalGraph();
 const _stored = loadFromStorage();
 
@@ -100,15 +118,34 @@ export const useSignalGraphStore = create<SignalGraphState>((set, get) => ({
   // sur l'exemple LFO→yaw plutôt qu'un canvas vide qui refuserait le push.
   nodes: _stored?.nodes ?? _defaultGraph.nodes,
   edges: _stored?.edges ?? _defaultGraph.edges,
+  context: 'global',
 
   setNodes: (nodes) => {
     set({ nodes });
-    saveToStorage(nodes, get().edges);
+    persist(get(), nodes, get().edges);
   },
 
   setEdges: (edges) => {
     set({ edges });
-    saveToStorage(get().nodes, edges);
+    persist(get(), get().nodes, edges);
+  },
+
+  setContext: (slotId, slotGraph) => {
+    const ctx = slotId ?? 'global';
+    if (ctx === get().context) return;
+    if (ctx === 'global') {
+      set({
+        context: 'global',
+        nodes: _stored?.nodes ?? _defaultGraph.nodes,
+        edges: _stored?.edges ?? _defaultGraph.edges,
+      });
+    } else {
+      set({
+        context: ctx,
+        nodes: slotGraph?.nodes ?? [],
+        edges: slotGraph?.edges ?? [],
+      });
+    }
   },
 
   updateNodeData: (id, data) => {
@@ -127,7 +164,7 @@ export const useSignalGraphStore = create<SignalGraphState>((set, get) => ({
         : n,
     );
     set({ nodes });
-    saveToStorage(nodes, get().edges);
+    persist(get(), nodes, get().edges);
   },
 
   pushSignalGraph: async () => {
@@ -155,7 +192,15 @@ export const useSignalGraphStore = create<SignalGraphState>((set, get) => ({
     };
 
     try {
-      await invoke('update_signal_graph', { graphJson, movementId: null });
+      // Contexte per-move : pousse sur le worker du slot s'il joue —
+      // sinon le graphe est juste persisté (appliqué au prochain play).
+      const ctx = get().context;
+      const movementId =
+        ctx === 'global'
+          ? null
+          : (useGraphStore.getState().moveSlots.find((s) => s.id === ctx)?.movementId ?? null);
+      if (ctx !== 'global' && !movementId) return;
+      await invoke('update_signal_graph', { graphJson, movementId });
     } catch (e) {
       console.error('[pushSignalGraph] Failed:', e);
       const { toast } = await import('../utils/toast-helpers');

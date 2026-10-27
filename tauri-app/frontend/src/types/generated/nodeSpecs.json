@@ -24,7 +24,8 @@
         "step": 1.0,
         "min": 1.0,
         "max": 64.0,
-        "default_json": "9"
+        "default_json": "9",
+        "modulable": false
       },
       {
         "key": "track_ids",
@@ -34,7 +35,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"\""
+        "default_json": "\"\"",
+        "modulable": false
       }
     ]
   },
@@ -63,7 +65,8 @@
         "step": 0.1,
         "min": 0.1,
         "max": null,
-        "default_json": "4.0"
+        "default_json": "4.0",
+        "modulable": false
       }
     ]
   },
@@ -92,7 +95,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"0-\""
+        "default_json": "\"0-\"",
+        "modulable": false
       }
     ]
   },
@@ -121,7 +125,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"\""
+        "default_json": "\"\"",
+        "modulable": false
       }
     ]
   },
@@ -155,7 +160,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"override\""
+        "default_json": "\"override\"",
+        "modulable": false
       }
     ]
   },
@@ -197,7 +203,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.5"
+        "default_json": "1.5",
+        "modulable": true
       },
       {
         "key": "speed",
@@ -207,7 +214,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "plane",
@@ -221,7 +229,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"xz\""
+        "default_json": "\"xz\"",
+        "modulable": false
       },
       {
         "key": "phase_offset",
@@ -231,7 +240,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "true"
+        "default_json": "true",
+        "modulable": true
       }
     ]
   },
@@ -273,7 +283,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.8"
+        "default_json": "0.8",
+        "modulable": true
       },
       {
         "key": "b",
@@ -283,7 +294,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.4"
+        "default_json": "0.4",
+        "modulable": true
       },
       {
         "key": "speed",
@@ -293,7 +305,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "plane",
@@ -307,7 +320,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"xy\""
+        "default_json": "\"xy\"",
+        "modulable": false
       },
       {
         "key": "phase_offset",
@@ -317,7 +331,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "true"
+        "default_json": "true",
+        "modulable": true
       }
     ]
   },
@@ -359,7 +374,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "speed",
@@ -369,7 +385,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "expansion",
@@ -379,7 +396,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "plane",
@@ -393,7 +411,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"xz\""
+        "default_json": "\"xz\"",
+        "modulable": false
       },
       {
         "key": "phase_offset",
@@ -403,7 +422,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": null
+        "default_json": null,
+        "modulable": true
       }
     ]
   },
@@ -445,7 +465,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.5"
+        "default_json": "1.5",
+        "modulable": true
       },
       {
         "key": "b",
@@ -455,7 +476,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.5"
+        "default_json": "1.5",
+        "modulable": true
       },
       {
         "key": "delta",
@@ -465,7 +487,8 @@
         "step": 0.01,
         "min": null,
         "max": null,
-        "default_json": "1.5707963267948966"
+        "default_json": "1.5707963267948966",
+        "modulable": true
       },
       {
         "key": "scale",
@@ -475,7 +498,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "phase_offset",
@@ -485,7 +509,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": null
+        "default_json": null,
+        "modulable": true
       }
     ]
   },
@@ -527,7 +552,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.5"
+        "default_json": "1.5",
+        "modulable": true
       },
       {
         "key": "speed",
@@ -537,7 +563,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "plane",
@@ -551,7 +578,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"xz\""
+        "default_json": "\"xz\"",
+        "modulable": false
       },
       {
         "key": "phase_offset",
@@ -561,7 +589,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": null
+        "default_json": null,
+        "modulable": true
       }
     ]
   },
@@ -603,7 +632,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "[-1.0,0.0,0.0]"
+        "default_json": "[-1.0,0.0,0.0]",
+        "modulable": false
       },
       {
         "key": "end",
@@ -613,7 +643,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "[1.0,0.0,0.0]"
+        "default_json": "[1.0,0.0,0.0]",
+        "modulable": false
       }
     ]
   },
@@ -655,7 +686,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.5"
+        "default_json": "1.5",
+        "modulable": true
       },
       {
         "key": "frequency",
@@ -665,7 +697,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "axis",
@@ -679,7 +712,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"y\""
+        "default_json": "\"y\"",
+        "modulable": false
       },
       {
         "key": "phase_offset",
@@ -689,7 +723,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": null
+        "default_json": null,
+        "modulable": true
       }
     ]
   },
@@ -739,7 +774,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"circle\""
+        "default_json": "\"circle\"",
+        "modulable": false
       },
       {
         "key": "radius",
@@ -749,7 +785,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.7"
+        "default_json": "0.7",
+        "modulable": true
       },
       {
         "key": "rotate",
@@ -759,7 +796,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "elevation",
@@ -769,7 +807,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       }
     ]
   },
@@ -811,7 +850,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "smoothness",
@@ -821,7 +861,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "seed",
@@ -831,7 +872,8 @@
         "step": 1.0,
         "min": null,
         "max": null,
-        "default_json": "42"
+        "default_json": "42",
+        "modulable": false
       }
     ]
   },
@@ -873,7 +915,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.9"
+        "default_json": "0.9",
+        "modulable": true
       },
       {
         "key": "end_radius",
@@ -883,7 +926,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "easing",
@@ -898,7 +942,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"linear\""
+        "default_json": "\"linear\"",
+        "modulable": false
       }
     ]
   },
@@ -940,7 +985,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.8"
+        "default_json": "0.8",
+        "modulable": true
       },
       {
         "key": "gravity",
@@ -950,7 +996,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "9.81"
+        "default_json": "9.81",
+        "modulable": true
       },
       {
         "key": "initial_angle",
@@ -960,7 +1007,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": false
       },
       {
         "key": "damping",
@@ -970,7 +1018,8 @@
         "step": 0.01,
         "min": null,
         "max": null,
-        "default_json": "0.05"
+        "default_json": "0.05",
+        "modulable": true
       },
       {
         "key": "phase_offset",
@@ -980,7 +1029,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "true"
+        "default_json": "true",
+        "modulable": true
       }
     ]
   },
@@ -1022,7 +1072,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.8"
+        "default_json": "0.8",
+        "modulable": true
       },
       {
         "key": "n_petals",
@@ -1032,7 +1083,8 @@
         "step": 1.0,
         "min": null,
         "max": null,
-        "default_json": "4"
+        "default_json": "4",
+        "modulable": true
       },
       {
         "key": "speed",
@@ -1042,7 +1094,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "plane",
@@ -1056,7 +1109,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"xy\""
+        "default_json": "\"xy\"",
+        "modulable": false
       },
       {
         "key": "phase_offset",
@@ -1066,7 +1120,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "true"
+        "default_json": "true",
+        "modulable": true
       }
     ]
   },
@@ -1108,7 +1163,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.7"
+        "default_json": "0.7",
+        "modulable": true
       },
       {
         "key": "height",
@@ -1118,7 +1174,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.6"
+        "default_json": "1.6",
+        "modulable": true
       },
       {
         "key": "turns",
@@ -1128,7 +1185,8 @@
         "step": 0.5,
         "min": null,
         "max": null,
-        "default_json": "3.0"
+        "default_json": "3.0",
+        "modulable": true
       },
       {
         "key": "speed",
@@ -1138,7 +1196,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "phase_offset",
@@ -1148,7 +1207,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "true"
+        "default_json": "true",
+        "modulable": true
       }
     ]
   },
@@ -1190,7 +1250,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "frequency",
@@ -1200,7 +1261,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "speed",
@@ -1210,7 +1272,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "axis",
@@ -1224,7 +1287,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"y\""
+        "default_json": "\"y\"",
+        "modulable": false
       },
       {
         "key": "spread",
@@ -1234,7 +1298,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "4.0"
+        "default_json": "4.0",
+        "modulable": true
       },
       {
         "key": "phase_offset",
@@ -1244,7 +1309,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "true"
+        "default_json": "true",
+        "modulable": true
       }
     ]
   },
@@ -1290,7 +1356,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"cartesian\""
+        "default_json": "\"cartesian\"",
+        "modulable": false
       },
       {
         "key": "equations",
@@ -1300,7 +1367,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"0.5,0.3,0.0\""
+        "default_json": "\"0.5,0.3,0.0\"",
+        "modulable": false
       }
     ]
   },
@@ -1345,7 +1413,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"sphere\""
+        "default_json": "\"sphere\"",
+        "modulable": false
       },
       {
         "key": "container_size",
@@ -1355,7 +1424,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.9"
+        "default_json": "0.9",
+        "modulable": true
       },
       {
         "key": "restitution",
@@ -1365,7 +1435,8 @@
         "step": 0.01,
         "min": 0.0,
         "max": 1.0,
-        "default_json": "0.95"
+        "default_json": "0.95",
+        "modulable": true
       },
       {
         "key": "gravity",
@@ -1375,7 +1446,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "seed",
@@ -1385,7 +1457,8 @@
         "step": 1.0,
         "min": null,
         "max": null,
-        "default_json": "42"
+        "default_json": "42",
+        "modulable": false
       }
     ]
   },
@@ -1427,7 +1500,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "[0.0,0.0,0.0]"
+        "default_json": "[0.0,0.0,0.0]",
+        "modulable": false
       },
       {
         "key": "stiffness",
@@ -1437,7 +1511,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "3.0"
+        "default_json": "3.0",
+        "modulable": true
       },
       {
         "key": "damping_coef",
@@ -1447,7 +1522,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "seed",
@@ -1457,7 +1533,8 @@
         "step": 1.0,
         "min": null,
         "max": null,
-        "default_json": "42"
+        "default_json": "42",
+        "modulable": false
       }
     ]
   },
@@ -1505,7 +1582,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"follow\""
+        "default_json": "\"follow\"",
+        "modulable": false
       },
       {
         "key": "speed",
@@ -1515,7 +1593,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "distance",
@@ -1525,7 +1604,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "0.3"
+        "default_json": "0.3",
+        "modulable": true
       },
       {
         "key": "lookahead",
@@ -1535,7 +1615,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "0.4"
+        "default_json": "0.4",
+        "modulable": true
       },
       {
         "key": "arrive_radius",
@@ -1545,7 +1626,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "0.6"
+        "default_json": "0.6",
+        "modulable": true
       },
       {
         "key": "orbit_speed",
@@ -1555,7 +1637,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.3"
+        "default_json": "0.3",
+        "modulable": true
       },
       {
         "key": "orbit_dir",
@@ -1565,7 +1648,8 @@
         "step": 1.0,
         "min": null,
         "max": null,
-        "default_json": "1"
+        "default_json": "1",
+        "modulable": true
       },
       {
         "key": "responsiveness",
@@ -1575,7 +1659,8 @@
         "step": 0.05,
         "min": 0.0,
         "max": 1.0,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "target_radius",
@@ -1585,7 +1670,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "target_speed",
@@ -1595,7 +1681,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "target_z",
@@ -1605,7 +1692,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "init_radius",
@@ -1615,7 +1703,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": false
       },
       {
         "key": "bounds",
@@ -1625,7 +1714,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "containment",
@@ -1635,7 +1725,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "seed",
@@ -1645,7 +1736,8 @@
         "step": 1.0,
         "min": null,
         "max": null,
-        "default_json": "42"
+        "default_json": "42",
+        "modulable": false
       }
     ]
   },
@@ -1687,7 +1779,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.3"
+        "default_json": "0.3",
+        "modulable": true
       },
       {
         "key": "alignment",
@@ -1697,7 +1790,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "cohesion",
@@ -1707,7 +1801,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.3"
+        "default_json": "0.3",
+        "modulable": true
       },
       {
         "key": "neighbor_radius",
@@ -1717,7 +1812,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "max_speed",
@@ -1727,7 +1823,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "seed",
@@ -1737,7 +1834,8 @@
         "step": 1.0,
         "min": null,
         "max": null,
-        "default_json": "42"
+        "default_json": "42",
+        "modulable": false
       }
     ]
   },
@@ -1779,7 +1877,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.4"
+        "default_json": "0.4",
+        "modulable": true
       },
       {
         "key": "repulsion_strength",
@@ -1789,7 +1888,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "2.0"
+        "default_json": "2.0",
+        "modulable": true
       },
       {
         "key": "damping",
@@ -1799,7 +1899,8 @@
         "step": 0.01,
         "min": null,
         "max": null,
-        "default_json": "0.95"
+        "default_json": "0.95",
+        "modulable": true
       },
       {
         "key": "container_size",
@@ -1809,7 +1910,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.9"
+        "default_json": "0.9",
+        "modulable": true
       },
       {
         "key": "seed",
@@ -1819,7 +1921,8 @@
         "step": 1.0,
         "min": null,
         "max": null,
-        "default_json": "42"
+        "default_json": "42",
+        "modulable": false
       }
     ]
   },
@@ -1868,7 +1971,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"vortex\""
+        "default_json": "\"vortex\"",
+        "modulable": false
       },
       {
         "key": "points",
@@ -1878,7 +1982,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"\""
+        "default_json": "\"\"",
+        "modulable": false
       },
       {
         "key": "idw_power",
@@ -1888,7 +1993,8 @@
         "step": 0.5,
         "min": 0.5,
         "max": 8.0,
-        "default_json": "2.0"
+        "default_json": "2.0",
+        "modulable": true
       },
       {
         "key": "strength",
@@ -1898,7 +2004,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "center",
@@ -1908,7 +2015,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "[0.0,0.0,0.0]"
+        "default_json": "[0.0,0.0,0.0]",
+        "modulable": false
       },
       {
         "key": "radius",
@@ -1918,7 +2026,8 @@
         "step": 0.1,
         "min": 0.01,
         "max": null,
-        "default_json": "0.6"
+        "default_json": "0.6",
+        "modulable": true
       },
       {
         "key": "swirl",
@@ -1928,7 +2037,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "direction",
@@ -1938,7 +2048,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "[1.0,0.0,0.0]"
+        "default_json": "[1.0,0.0,0.0]",
+        "modulable": false
       },
       {
         "key": "noise_scale",
@@ -1948,7 +2059,8 @@
         "step": 0.1,
         "min": 0.01,
         "max": null,
-        "default_json": "1.5"
+        "default_json": "1.5",
+        "modulable": true
       },
       {
         "key": "wander",
@@ -1958,7 +2070,8 @@
         "step": 0.05,
         "min": 0.0,
         "max": 1.0,
-        "default_json": "0.1"
+        "default_json": "0.1",
+        "modulable": true
       },
       {
         "key": "responsiveness",
@@ -1968,7 +2081,8 @@
         "step": 0.05,
         "min": 0.0,
         "max": 1.0,
-        "default_json": "0.1"
+        "default_json": "0.1",
+        "modulable": true
       },
       {
         "key": "max_speed",
@@ -1978,7 +2092,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "bounds",
@@ -1988,7 +2103,8 @@
         "step": 0.1,
         "min": 0.01,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "containment",
@@ -1998,7 +2114,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "init",
@@ -2014,7 +2131,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"circle\""
+        "default_json": "\"circle\"",
+        "modulable": false
       },
       {
         "key": "init_radius",
@@ -2024,7 +2142,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "0.6"
+        "default_json": "0.6",
+        "modulable": false
       },
       {
         "key": "z_init",
@@ -2034,7 +2153,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": false
       },
       {
         "key": "z_drift",
@@ -2044,7 +2164,8 @@
         "step": 0.05,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "seed",
@@ -2054,7 +2175,8 @@
         "step": 1.0,
         "min": null,
         "max": null,
-        "default_json": "42"
+        "default_json": "42",
+        "modulable": false
       }
     ]
   },
@@ -2102,7 +2224,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"[[-0.5,0,0],[0,0.5,0],[0.5,0,0]]\""
+        "default_json": "\"[[-0.5,0,0],[0,0.5,0],[0.5,0,0]]\"",
+        "modulable": false
       }
     ]
   },
@@ -2150,7 +2273,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "false"
+        "default_json": "false",
+        "modulable": true
       },
       {
         "key": "tension",
@@ -2160,7 +2284,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": 1.0,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "speed",
@@ -2170,7 +2295,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "phase_offset",
@@ -2180,7 +2306,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "true"
+        "default_json": "true",
+        "modulable": true
       }
     ]
   },
@@ -2228,7 +2355,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"[[-0.5,0,0],[0,0.5,0],[0.5,0,0]]\""
+        "default_json": "\"[[-0.5,0,0],[0,0.5,0],[0.5,0,0]]\"",
+        "modulable": false
       },
       {
         "key": "trim_start",
@@ -2238,7 +2366,8 @@
         "step": 0.05,
         "min": 0.0,
         "max": 1.0,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "trim_end",
@@ -2248,7 +2377,8 @@
         "step": 0.05,
         "min": 0.0,
         "max": 1.0,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "speed",
@@ -2258,7 +2388,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "phase_offset",
@@ -2268,7 +2399,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "true"
+        "default_json": "true",
+        "modulable": true
       }
     ]
   },
@@ -2316,7 +2448,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"[[-0.5,0,0],[0,0.5,0],[0.5,0,0]]\""
+        "default_json": "\"[[-0.5,0,0],[0,0.5,0],[0.5,0,0]]\"",
+        "modulable": false
       },
       {
         "key": "offset_x",
@@ -2326,7 +2459,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "offset_y",
@@ -2336,7 +2470,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "offset_z",
@@ -2346,7 +2481,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "speed",
@@ -2356,7 +2492,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "phase_offset",
@@ -2366,7 +2503,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "true"
+        "default_json": "true",
+        "modulable": true
       }
     ]
   },
@@ -2408,7 +2546,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "end_time",
@@ -2418,7 +2557,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "4.0"
+        "default_json": "4.0",
+        "modulable": true
       },
       {
         "key": "radius",
@@ -2428,7 +2568,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "curve",
@@ -2443,7 +2584,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"linear\""
+        "default_json": "\"linear\"",
+        "modulable": false
       },
       {
         "key": "plane",
@@ -2457,7 +2599,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"xz\""
+        "default_json": "\"xz\"",
+        "modulable": false
       }
     ]
   },
@@ -2499,7 +2642,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "[0.0,0.0,0.0]"
+        "default_json": "[0.0,0.0,0.0]",
+        "modulable": false
       },
       {
         "key": "max_distance",
@@ -2509,7 +2653,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "radius",
@@ -2519,7 +2664,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "curve",
@@ -2534,7 +2680,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"linear\""
+        "default_json": "\"linear\"",
+        "modulable": false
       },
       {
         "key": "plane",
@@ -2548,7 +2695,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"xz\""
+        "default_json": "\"xz\"",
+        "modulable": false
       }
     ]
   },
@@ -2590,7 +2738,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "[0.0,0.0,1.0]"
+        "default_json": "[0.0,0.0,1.0]",
+        "modulable": false
       },
       {
         "key": "max_distance",
@@ -2600,7 +2749,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "curve",
@@ -2615,7 +2765,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"linear\""
+        "default_json": "\"linear\"",
+        "modulable": false
       },
       {
         "key": "radius",
@@ -2625,7 +2776,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "plane",
@@ -2639,7 +2791,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"xz\""
+        "default_json": "\"xz\"",
+        "modulable": false
       }
     ]
   },
@@ -2686,7 +2839,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"rms\""
+        "default_json": "\"rms\"",
+        "modulable": false
       },
       {
         "key": "min_val",
@@ -2696,7 +2850,8 @@
         "step": 0.01,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "max_val",
@@ -2706,7 +2861,8 @@
         "step": 0.01,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "curve",
@@ -2721,7 +2877,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"linear\""
+        "default_json": "\"linear\"",
+        "modulable": false
       },
       {
         "key": "radius",
@@ -2731,7 +2888,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "plane",
@@ -2745,7 +2903,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"xz\""
+        "default_json": "\"xz\"",
+        "modulable": false
       }
     ]
   },
@@ -2781,7 +2940,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "y",
@@ -2791,7 +2951,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "z",
@@ -2801,7 +2962,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       }
     ]
   },
@@ -2837,7 +2999,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "angleY",
@@ -2847,7 +3010,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "angleZ",
@@ -2857,7 +3021,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       }
     ]
   },
@@ -2893,7 +3058,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "y",
@@ -2903,7 +3069,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "z",
@@ -2913,7 +3080,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       }
     ]
   },
@@ -2949,7 +3117,8 @@
         "step": 0.05,
         "min": 0.0,
         "max": 1.0,
-        "default_json": "0.1"
+        "default_json": "0.1",
+        "modulable": true
       }
     ]
   },
@@ -2989,7 +3158,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"xz\""
+        "default_json": "\"xz\"",
+        "modulable": false
       },
       {
         "key": "offset",
@@ -2999,7 +3169,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       }
     ]
   },
@@ -3035,7 +3206,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "-5.0"
+        "default_json": "-5.0",
+        "modulable": true
       },
       {
         "key": "max_x",
@@ -3045,7 +3217,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "5.0"
+        "default_json": "5.0",
+        "modulable": true
       },
       {
         "key": "min_y",
@@ -3055,7 +3228,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "-5.0"
+        "default_json": "-5.0",
+        "modulable": true
       },
       {
         "key": "max_y",
@@ -3065,7 +3239,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "5.0"
+        "default_json": "5.0",
+        "modulable": true
       },
       {
         "key": "min_z",
@@ -3075,7 +3250,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "-5.0"
+        "default_json": "-5.0",
+        "modulable": true
       },
       {
         "key": "max_z",
@@ -3085,7 +3261,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "5.0"
+        "default_json": "5.0",
+        "modulable": true
       }
     ]
   },
@@ -3126,7 +3303,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"sine\""
+        "default_json": "\"sine\"",
+        "modulable": false
       },
       {
         "key": "frequency",
@@ -3136,7 +3314,8 @@
         "step": 0.1,
         "min": 0.01,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "amplitude",
@@ -3146,7 +3325,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.3"
+        "default_json": "0.3",
+        "modulable": true
       },
       {
         "key": "axis",
@@ -3161,7 +3341,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"y\""
+        "default_json": "\"y\"",
+        "modulable": false
       },
       {
         "key": "phase",
@@ -3171,7 +3352,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       }
     ]
   },
@@ -3207,7 +3389,8 @@
         "step": 0.05,
         "min": 0.0,
         "max": null,
-        "default_json": "0.2"
+        "default_json": "0.2",
+        "modulable": true
       },
       {
         "key": "frequency",
@@ -3217,7 +3400,8 @@
         "step": 0.1,
         "min": 0.1,
         "max": null,
-        "default_json": "2.0"
+        "default_json": "2.0",
+        "modulable": true
       },
       {
         "key": "seed",
@@ -3227,7 +3411,8 @@
         "step": 1.0,
         "min": null,
         "max": null,
-        "default_json": "42"
+        "default_json": "42",
+        "modulable": false
       }
     ]
   },
@@ -3263,7 +3448,8 @@
         "step": 0.05,
         "min": 0.0,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       }
     ]
   },
@@ -3299,7 +3485,8 @@
         "step": 0.05,
         "min": 0.0,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       }
     ]
   },
@@ -3335,7 +3522,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "true"
+        "default_json": "true",
+        "modulable": true
       }
     ]
   },
@@ -3371,7 +3559,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       }
     ]
   },
@@ -3407,7 +3596,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       }
     ]
   },
@@ -3443,7 +3633,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "[]"
+        "default_json": "[]",
+        "modulable": false
       }
     ]
   },
@@ -3504,7 +3695,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "target",
@@ -3517,7 +3709,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"scale\""
+        "default_json": "\"scale\"",
+        "modulable": false
       }
     ]
   },
@@ -3581,7 +3774,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"sphere\""
+        "default_json": "\"sphere\"",
+        "modulable": false
       },
       {
         "key": "center",
@@ -3591,7 +3785,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "[0.0,0.0,0.0]"
+        "default_json": "[0.0,0.0,0.0]",
+        "modulable": false
       },
       {
         "key": "radius",
@@ -3601,7 +3796,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "2.0"
+        "default_json": "2.0",
+        "modulable": true
       },
       {
         "key": "min",
@@ -3611,7 +3807,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "[-1.0,-1.0,-1.0]"
+        "default_json": "[-1.0,-1.0,-1.0]",
+        "modulable": false
       },
       {
         "key": "max",
@@ -3621,7 +3818,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "[1.0,1.0,1.0]"
+        "default_json": "[1.0,1.0,1.0]",
+        "modulable": false
       },
       {
         "key": "falloff",
@@ -3631,7 +3829,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "channels",
@@ -3641,7 +3840,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"gain=0\""
+        "default_json": "\"gain=0\"",
+        "modulable": false
       },
       {
         "key": "objects",
@@ -3651,7 +3851,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"\""
+        "default_json": "\"\"",
+        "modulable": false
       },
       {
         "key": "enabled",
@@ -3661,7 +3862,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "true"
+        "default_json": "true",
+        "modulable": true
       }
     ]
   },
@@ -3702,7 +3904,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"speed\""
+        "default_json": "\"speed\"",
+        "modulable": false
       },
       {
         "key": "channel",
@@ -3720,7 +3923,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"spread\""
+        "default_json": "\"spread\"",
+        "modulable": false
       },
       {
         "key": "scale",
@@ -3730,7 +3934,8 @@
         "step": 0.01,
         "min": null,
         "max": null,
-        "default_json": "0.1"
+        "default_json": "0.1",
+        "modulable": true
       },
       {
         "key": "offset",
@@ -3740,7 +3945,8 @@
         "step": 0.01,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "min",
@@ -3750,7 +3956,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"\""
+        "default_json": "\"\"",
+        "modulable": false
       },
       {
         "key": "max",
@@ -3760,7 +3967,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"1\""
+        "default_json": "\"1\"",
+        "modulable": false
       },
       {
         "key": "object",
@@ -3770,7 +3978,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"\""
+        "default_json": "\"\"",
+        "modulable": false
       },
       {
         "key": "listener",
@@ -3780,7 +3989,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "[0.0,0.0,0.0]"
+        "default_json": "[0.0,0.0,0.0]",
+        "modulable": false
       }
     ]
   },
@@ -3822,7 +4032,8 @@
         "step": 0.01,
         "min": 0.0,
         "max": 1.0,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       }
     ]
   },
@@ -3926,7 +4137,8 @@
         "step": 0.1,
         "min": 0.1,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       }
     ]
   },
@@ -3968,7 +4180,8 @@
         "step": 1.0,
         "min": 0.0,
         "max": 1.0,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       }
     ]
   },
@@ -4010,7 +4223,8 @@
         "step": 1.0,
         "min": 1.0,
         "max": null,
-        "default_json": "120"
+        "default_json": "120",
+        "modulable": true
       },
       {
         "key": "radius",
@@ -4020,7 +4234,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "plane",
@@ -4034,7 +4249,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"xz\""
+        "default_json": "\"xz\"",
+        "modulable": false
       }
     ]
   },
@@ -4076,7 +4292,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "radius",
@@ -4086,7 +4303,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "band",
@@ -4101,7 +4319,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"rms\""
+        "default_json": "\"rms\"",
+        "modulable": false
       },
       {
         "key": "plane",
@@ -4115,7 +4334,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"xz\""
+        "default_json": "\"xz\"",
+        "modulable": false
       }
     ]
   },
@@ -4162,7 +4382,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"bass\""
+        "default_json": "\"bass\"",
+        "modulable": false
       },
       {
         "key": "radius",
@@ -4172,7 +4393,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "n_bands",
@@ -4182,7 +4404,8 @@
         "step": 1.0,
         "min": 1.0,
         "max": 64.0,
-        "default_json": "8"
+        "default_json": "8",
+        "modulable": true
       },
       {
         "key": "plane",
@@ -4196,7 +4419,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"xz\""
+        "default_json": "\"xz\"",
+        "modulable": false
       }
     ]
   },
@@ -4238,7 +4462,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"/track/1/xyz\""
+        "default_json": "\"/track/1/xyz\"",
+        "modulable": false
       },
       {
         "key": "radius",
@@ -4248,7 +4473,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "scale",
@@ -4258,7 +4484,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "offset_x",
@@ -4268,7 +4495,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "offset_y",
@@ -4278,7 +4506,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "offset_z",
@@ -4288,7 +4517,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       }
     ]
   },
@@ -4348,7 +4578,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"\""
+        "default_json": "\"\"",
+        "modulable": false
       }
     ]
   },
@@ -4377,7 +4608,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       }
     ]
   },
@@ -4406,7 +4638,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": 10.0,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "wrap",
@@ -4416,7 +4649,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       }
     ]
   },
@@ -4451,7 +4685,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"sine\""
+        "default_json": "\"sine\"",
+        "modulable": false
       },
       {
         "key": "frequency",
@@ -4461,7 +4696,8 @@
         "step": 0.01,
         "min": 0.0,
         "max": 10.0,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "amplitude",
@@ -4471,7 +4707,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "center",
@@ -4481,7 +4718,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "phase",
@@ -4491,7 +4729,8 @@
         "step": 0.01,
         "min": 0.0,
         "max": 6.283185307179586,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       }
     ]
   },
@@ -4527,7 +4766,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"rms\""
+        "default_json": "\"rms\"",
+        "modulable": false
       },
       {
         "key": "index",
@@ -4537,7 +4777,8 @@
         "step": 1.0,
         "min": 0.0,
         "max": 63.0,
-        "default_json": "0"
+        "default_json": "0",
+        "modulable": true
       },
       {
         "key": "smoothing",
@@ -4547,7 +4788,8 @@
         "step": 0.01,
         "min": 0.0,
         "max": 0.95,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       }
     ]
   },
@@ -4576,7 +4818,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"fader1\""
+        "default_json": "\"fader1\"",
+        "modulable": false
       },
       {
         "key": "index",
@@ -4586,7 +4829,8 @@
         "step": 1.0,
         "min": 0.0,
         "max": 7.0,
-        "default_json": "0"
+        "default_json": "0",
+        "modulable": true
       }
     ]
   },
@@ -4615,7 +4859,8 @@
         "step": 0.01,
         "min": 0.0,
         "max": 10.0,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "amplitude",
@@ -4625,7 +4870,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "seed",
@@ -4635,7 +4881,8 @@
         "step": 1.0,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": false
       }
     ]
   },
@@ -4688,7 +4935,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"add\""
+        "default_json": "\"add\"",
+        "modulable": false
       },
       {
         "key": "a",
@@ -4698,7 +4946,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "b",
@@ -4708,7 +4957,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       }
     ]
   },
@@ -4744,7 +4994,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "in_max",
@@ -4754,7 +5005,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "out_min",
@@ -4764,7 +5016,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "out_max",
@@ -4774,7 +5027,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "clamp",
@@ -4784,7 +5038,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "true"
+        "default_json": "true",
+        "modulable": true
       }
     ]
   },
@@ -4820,7 +5075,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "max",
@@ -4830,7 +5086,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       }
     ]
   },
@@ -4878,7 +5135,8 @@
         "step": 0.01,
         "min": 0.0,
         "max": 1.0,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       }
     ]
   },
@@ -4914,7 +5172,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "fall_rate",
@@ -4924,7 +5183,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       }
     ]
   },
@@ -4960,7 +5220,8 @@
         "step": 0.01,
         "min": 0.0,
         "max": 1.0,
-        "default_json": "0.2"
+        "default_json": "0.2",
+        "modulable": true
       },
       {
         "key": "release",
@@ -4970,7 +5231,8 @@
         "step": 0.01,
         "min": 0.0,
         "max": 1.0,
-        "default_json": "0.95"
+        "default_json": "0.95",
+        "modulable": true
       }
     ]
   },
@@ -5006,7 +5268,8 @@
         "step": 0.01,
         "min": null,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "hysteresis",
@@ -5016,7 +5279,8 @@
         "step": 0.01,
         "min": 0.0,
         "max": null,
-        "default_json": "0.05"
+        "default_json": "0.05",
+        "modulable": true
       }
     ]
   },
@@ -5045,7 +5309,8 @@
         "step": 1.0,
         "min": 30.0,
         "max": null,
-        "default_json": "120"
+        "default_json": "120",
+        "modulable": true
       },
       {
         "key": "width",
@@ -5055,7 +5320,8 @@
         "step": 0.05,
         "min": 0.01,
         "max": 1.0,
-        "default_json": "0.25"
+        "default_json": "0.25",
+        "modulable": true
       }
     ]
   },
@@ -5097,7 +5363,8 @@
         "step": 0.01,
         "min": 0.0,
         "max": 1.0,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       }
     ]
   },
@@ -5145,7 +5412,8 @@
         "step": 0.01,
         "min": 0.0,
         "max": 1.0,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       }
     ]
   },
@@ -5181,7 +5449,8 @@
         "step": 0.01,
         "min": 0.0,
         "max": 1.0,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "max",
@@ -5191,7 +5460,8 @@
         "step": 1.0,
         "min": 0.0,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       }
     ]
   },
@@ -5220,7 +5490,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"yaw\""
+        "default_json": "\"yaw\"",
+        "modulable": false
       },
       {
         "key": "amount",
@@ -5230,7 +5501,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       }
     ]
   }

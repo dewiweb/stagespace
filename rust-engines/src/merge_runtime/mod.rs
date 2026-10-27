@@ -462,6 +462,7 @@ impl MergeRuntime {
             audio_state: &audio_state,
             osc_values: &osc_vals,
         })
+        .macros
     }
 
     pub fn swap_post_process_fn(&self, new_fn: PostProcessFn) {
@@ -1415,10 +1416,13 @@ impl MergeRuntime {
                             osc_values: &osc_vals,
                         })
                     };
-                    if deltas.is_empty() {
+                    if deltas.macros.is_empty() {
                         None
                     } else {
-                        Some(crate::signal_compiler::macro_with_deltas(&macros, &deltas))
+                        Some(crate::signal_compiler::macro_with_deltas(
+                            &macros,
+                            &deltas.macros,
+                        ))
                     }
                 };
 

@@ -94,6 +94,16 @@ export const NodeEditor: React.FC = () => {
   const setSignalEdges = useSignalGraphStore((s) => s.setEdges);
   const pushSignalGraph = useSignalGraphStore((s) => s.pushSignalGraph);
   const resetSignalToDefault = useSignalGraphStore((s) => s.resetToDefault);
+  const setSignalContext = useSignalGraphStore((s) => s.setContext);
+
+  // Le tab Mods édite la modulation du slot en cours d'édition (per-move,
+  // cibles `param:`) quand un slot est sélectionné — sinon le global.
+  const editingSlotSignalGraph = editingSlotId
+    ? moveSlots.find((s) => s.id === editingSlotId)?.signalGraph ?? null
+    : null;
+  useEffect(() => {
+    setSignalContext(editingSlotId, editingSlotSignalGraph);
+  }, [editingSlotId]); // eslint-disable-line react-hooks/exhaustive-deps — rebind on slot switch only
 
   // Moves actifs (pour highlight les MoveRef dont le move est actif)
   const movements = useGraphStore((s) => s.movements);

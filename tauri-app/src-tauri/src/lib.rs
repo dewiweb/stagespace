@@ -446,3 +446,7 @@ mod complex_graph_test_file;
 #[cfg(test)]
 #[path = "tests/supervisor_tests.rs"]
 mod supervisor_test_file;
+
+#[cfg(test)]
+#[path = "tests/param_modulation_tests.rs"]
+mod param_modulation_test_file;

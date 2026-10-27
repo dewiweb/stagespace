@@ -55,12 +55,14 @@ pub fn compile_graph_with_audio_osc(
 /// activate_move / update_move_graph / respawn de cue doivent passer par ici
 /// pour que les nodes `Plugin` résolvent leur `plugin_id` (sinon le compile
 /// échoue avec "requires a plugin registry").
+///
+/// `param_slots` : table partagée entre la position_fn compilée, la
+/// sample_fn et la signal_fn du move (construite une fois par recompile
+/// via `ParamSlots::build(&graph)`). `None` → compile sans modulation.
 pub fn compile_graph_live(
     graph: &Graph,
     sh: &Shared,
-    param_overrides: Option<
-        std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, f64>>>,
-    >,
+    param_slots: Option<std::sync::Arc<stagespace_engines::param_slots::ParamSlots>>,
     held_positions: Option<stagespace_engines::compiler::HeldPositions>,
 ) -> Result<PositionFn, String> {
     let osc_values = lock_or_recover(&sh.osc_receiver).address_values_handle();
@@ -68,7 +70,7 @@ pub fn compile_graph_live(
         audio: Some(sh.audio_state.clone()),
         osc_values: Some(osc_values),
         plugins: sh.plugin_registry.clone(),
-        param_overrides,
+        param_slots,
         held_positions,
     };
     Compiler::compile_with_live_inputs(graph, live)

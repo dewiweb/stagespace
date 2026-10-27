@@ -37,15 +37,26 @@ pub struct SignalCtx<'a> {
     pub osc_values: &'a HashMap<String, Vec<f64>>,
 }
 
-/// Deltas produits par le graph pour une frame : `macro_name → delta`.
-/// Clés = noms de macros (`speed`, `scale`, `shift_x`…`height_offset`) —
-/// les mêmes que `MacroTarget`/`audio_param_overrides`.
+/// Deltas de macros produits par le graph pour une frame :
+/// `macro_name → delta`. Clés = noms de macros (`speed`, `scale`,
+/// `shift_x`…`height_offset`) — les mêmes que `MacroTarget`/`audio_param_overrides`.
 pub type SignalDeltas = HashMap<String, f64>;
+
+/// Sortie d'une frame du graph signal : deltas de macros (sommés sur la
+/// base, comme les audio mods) + deltas de slots denses `(index, delta)`
+/// pour les cibles `param:` du move — le worker les somme dans la
+/// `ParamSlots` partagée puis évalue les positions.
+#[derive(Default, Debug, Clone)]
+pub struct SignalOutput {
+    pub macros: SignalDeltas,
+    /// (index de slot dans `ParamSlots.values`, delta) — vide en global.
+    pub slot_deltas: Vec<(usize, f64)>,
+}
 
 /// Graph signal compilé — `FnMut` : les nodes à mémoire (slew, envelope,
 /// smoothing) gardent leur état dans les closures. Évalué une fois par frame.
 /// `Send` car évalué sur le thread worker/merge.
-pub type SignalFn = Box<dyn FnMut(&SignalCtx) -> SignalDeltas + Send>;
+pub type SignalFn = Box<dyn FnMut(&SignalCtx) -> SignalOutput + Send>;
 
 /// Source partagée des valeurs OSC pour `SignalCtx.osc_values` —
 /// `Arc<RwLock<OscValueMap>>` : l'Arc interne peut être re-pointé quand le
@@ -56,7 +67,7 @@ pub type SignalOscSource = std::sync::Arc<std::sync::RwLock<crate::compiler::Osc
 /// `update_signal_graph` (ou après un clear) : le hot-swap remplace la fn,
 /// le code d'éval reste inconditionnel.
 pub fn empty_signal_fn() -> SignalFn {
-    Box::new(|_ctx| HashMap::new())
+    Box::new(|_ctx| SignalOutput::default())
 }
 
 /// Clone un `MacroState` et y applique des deltas additifs — le résultat
@@ -75,17 +86,6 @@ pub fn macro_with_deltas(
     let eff = macros.clone();
     if deltas.is_empty() {
         return eff;
-    }
-    // Cibles `param:` : ignorées ici — elles s'adressent aux params de
-    // nodes du sub-graph (appliquées par le worker), pas aux macros
-    // globales. Log une fois pour rendre le silent-drop visible.
-    if deltas.keys().any(|k| k.starts_with("param:")) {
-        static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-        if !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
-            eprintln!(
-                "[SIGNAL] param: targets are ignored in the global signal graph                  (no sub-graph nodes there) — use them inside a move"
-            );
-        }
     }
     let g = |k: &str| {
         deltas
@@ -113,6 +113,8 @@ pub fn macro_with_deltas(
 pub enum SignalCompileError {
     ValidationFailed(String),
     UnknownNode(String),
+    /// Cible `param:` invalide ou interdite en scope global.
+    InvalidTarget(String),
 }
 
 impl From<SignalCompileError> for StagespaceError {
@@ -120,6 +122,7 @@ impl From<SignalCompileError> for StagespaceError {
         match e {
             SignalCompileError::ValidationFailed(m) => StagespaceError::ValidationFailed(m),
             SignalCompileError::UnknownNode(m) => StagespaceError::CompilationFailed(m),
+            SignalCompileError::InvalidTarget(m) => StagespaceError::CompilationFailed(m),
         }
     }
 }
@@ -128,18 +131,26 @@ impl From<SignalCompileError> for StagespaceError {
 /// non connecté → fallback param) + la closure d'éval.
 type NodeEval = Box<dyn FnMut(&SignalCtx, &[Option<usize>], &[f64]) -> f64 + Send>;
 
+/// Destination d'un sink SignalOut — macro (nom) ou slot de param
+/// (index dense dans `ParamSlots.values` — un par node pour les cibles
+/// type-wide).
+enum SinkDest {
+    Macro(String),
+    Slot(usize),
+}
+
 /// Graph compilé — ordre topologique, scratch `values` réutilisé par frame,
 /// sinks résolus (index eval du port `signal` du SignalOut).
 struct CompiledSignal {
     nodes: Vec<(Vec<Option<usize>>, NodeEval)>,
     values: Vec<f64>,
-    /// (index eval de l'upstream du port `signal`, macro target, amount)
-    sinks: Vec<(Option<usize>, String, f64)>,
-    deltas: SignalDeltas,
+    /// (index eval de l'upstream du port `signal`, destinations, amount)
+    sinks: Vec<(Option<usize>, Vec<SinkDest>, f64)>,
+    output: SignalOutput,
 }
 
 impl CompiledSignal {
-    fn eval(&mut self, ctx: &SignalCtx) -> &SignalDeltas {
+    fn eval(&mut self, ctx: &SignalCtx) -> &SignalOutput {
         // Évaluation en ordre topologique : tous les inputs d'un node sont
         // déjà écrits dans `values` quand il est évalué (DAG garanti par
         // le validator — pas de cycle).
@@ -147,19 +158,28 @@ impl CompiledSignal {
             let (slots, eval) = &mut self.nodes[i];
             self.values[i] = eval(ctx, slots, &self.values);
         }
-        self.deltas.clear();
-        for (src, target, amount) in &self.sinks {
+        self.output.macros.clear();
+        self.output.slot_deltas.clear();
+        for (src, dests, amount) in &self.sinks {
             // SignalOut : delta = signal * amount — non-finite écarté (un NaN
             // ne doit jamais atteindre une macro → positions figées).
             if let Some(idx) = src {
                 let v = self.values[*idx];
                 let d = v * amount;
-                if d.is_finite() {
-                    *self.deltas.entry(target.clone()).or_insert(0.0) += d;
+                if !d.is_finite() {
+                    continue;
+                }
+                for dest in dests {
+                    match dest {
+                        SinkDest::Macro(key) => {
+                            *self.output.macros.entry(key.clone()).or_insert(0.0) += d;
+                        }
+                        SinkDest::Slot(i) => self.output.slot_deltas.push((*i, d)),
+                    }
                 }
             }
         }
-        &self.deltas
+        &self.output
     }
 }
 
@@ -197,8 +217,123 @@ fn get_usize(node: &Node, key: &str, default: usize) -> usize {
         .unwrap_or(default)
 }
 
-/// Compile un graph signal (validation `GraphContext::Signal` incluse).
+/// Binding d'un graph signal à un move : le graphe du move + sa table de
+/// slots — les cibles `param:` y sont résolues en indices denses.
+type MoveBinding<'a> = (
+    &'a Graph,
+    &'a std::sync::Arc<crate::param_slots::ParamSlots>,
+);
+
+/// Compile un graph signal global (validation `GraphContext::Signal`
+/// incluse). Scope MergeRuntime — les cibles `param:` sont une ERREUR ici
+/// (pas de nodes de move à moduler) ; pour un move, utiliser
+/// `compile_move_signal_graph`.
 pub fn compile_signal_graph(graph: &Graph) -> std::result::Result<SignalFn, SignalCompileError> {
+    compile_signal_inner(graph, None)
+}
+
+/// Compile le graph de modulation d'un move — mêmes règles que le global
+/// plus les cibles `param:<node_id|NodeType>:<key>` résolues contre la
+/// `ParamSlots` du graphe de move (additive, dense, type-wide expandé).
+pub fn compile_move_signal_graph(
+    graph: &Graph,
+    move_graph: &Graph,
+    slots: &std::sync::Arc<crate::param_slots::ParamSlots>,
+) -> std::result::Result<SignalFn, SignalCompileError> {
+    compile_signal_inner(graph, Some((move_graph, slots)))
+}
+
+/// Résout la cible d'un SignalOut en destinations : macro (défaut),
+/// slots de params (cible `param:` — move scope uniquement), ou rien
+/// (cible vide → sink inerte, pas d'erreur).
+fn resolve_target(
+    target: &str,
+    bound: Option<MoveBinding>,
+) -> std::result::Result<Vec<SinkDest>, SignalCompileError> {
+    if target.is_empty() {
+        return Ok(Vec::new()); // sink inerte — la chaîne amont est évaluée, rien n'écrit
+    }
+    let Some(rest) = target.strip_prefix("param:") else {
+        return Ok(vec![SinkDest::Macro(target.to_string())]);
+    };
+    let Some((move_graph, slots)) = bound else {
+        return Err(SignalCompileError::InvalidTarget(
+            "param: targets are only valid in a move's signal graph — the global signal graph has no node params to modulate".to_string(),
+        ));
+    };
+    let (seg, key) = rest.split_once(':').ok_or_else(|| {
+        SignalCompileError::InvalidTarget(format!(
+            "param target '{target}' must be param:<node_id|NodeType>:<key>"
+        ))
+    })?;
+    if key.is_empty() || seg.is_empty() {
+        return Err(SignalCompileError::InvalidTarget(format!(
+            "param target '{target}' must be param:<node_id|NodeType>:<key>"
+        )));
+    }
+
+    // Résolution : d'abord par node_key (__fe_id ou uuid), sinon par
+    // NodeType (type-wide → tous les nodes de ce type dans le graphe).
+    let by_id: Vec<&crate::graph::Node> = move_graph
+        .nodes
+        .values()
+        .filter(|n| crate::param_slots::node_key(n) == seg)
+        .collect();
+    let targets: Vec<&crate::graph::Node> = if !by_id.is_empty() {
+        by_id
+    } else {
+        let by_type: Vec<&crate::graph::Node> = move_graph
+            .nodes
+            .values()
+            .filter(|n| format!("{:?}", n.node_type) == seg)
+            .collect();
+        if by_type.is_empty() {
+            let is_known_type = crate::node_spec::all_node_specs()
+                .iter()
+                .any(|sp| format!("{:?}", sp.node_type) == seg);
+            return Err(if is_known_type {
+                SignalCompileError::InvalidTarget(format!(
+                    "param target '{target}': no node of type '{seg}' in the move graph"
+                ))
+            } else {
+                SignalCompileError::InvalidTarget(format!(
+                    "param target '{target}': unknown node id '{seg}' in the move graph"
+                ))
+            });
+        }
+        by_type
+    };
+
+    let mut dests = Vec::with_capacity(targets.len());
+    for node in targets {
+        let spec = crate::node_spec::node_spec(&node.node_type);
+        let Some(param) = spec.params.iter().find(|p| p.key == key) else {
+            return Err(SignalCompileError::InvalidTarget(format!(
+                "param target '{target}': unknown param '{key}' for node type '{:?}'",
+                node.node_type
+            )));
+        };
+        if !param.modulable {
+            return Err(SignalCompileError::InvalidTarget(format!(
+                "param target '{target}': param '{key}' of '{:?}' is not modulable",
+                node.node_type
+            )));
+        }
+        let nk = crate::param_slots::node_key(node);
+        let idx = slots.slot_of(&nk, key).ok_or_else(|| {
+            SignalCompileError::InvalidTarget(format!(
+                "param target '{target}': no slot for '{nk}:{key}' — ParamSlots/graph mismatch"
+            ))
+        })?;
+        dests.push(SinkDest::Slot(idx));
+    }
+    Ok(dests)
+}
+
+fn compile_signal_inner(
+    graph: &Graph,
+    bound: Option<MoveBinding>,
+) -> std::result::Result<SignalFn, SignalCompileError> {
     if let Err(errors) = Validator::validate_with_context(graph, GraphContext::Signal) {
         return Err(SignalCompileError::ValidationFailed(
             errors
@@ -245,8 +380,9 @@ pub fn compile_signal_graph(graph: &Graph) -> std::result::Result<SignalFn, Sign
         if node.node_type == NodeType::SignalOut {
             let target = get_str(node, "target", "yaw");
             let amount = get_f64(node, "amount", 1.0);
+            let dests = resolve_target(&target, bound)?;
             // `signal` est le seul port → slots[0].
-            sinks.push((slots.first().copied().flatten(), target, amount));
+            sinks.push((slots.first().copied().flatten(), dests, amount));
         }
 
         nodes.push((slots, eval));
@@ -256,7 +392,7 @@ pub fn compile_signal_graph(graph: &Graph) -> std::result::Result<SignalFn, Sign
         values: vec![0.0; nodes.len()],
         nodes,
         sinks,
-        deltas: HashMap::new(),
+        output: SignalOutput::default(),
     };
     Ok(Box::new(move |ctx: &SignalCtx| compiled.eval(ctx).clone()))
 }
