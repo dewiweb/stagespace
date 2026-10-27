@@ -105,7 +105,7 @@ export const NodeEditor: React.FC = () => {
     : null;
   useEffect(() => {
     setSignalContext(editingSlotId, editingSlotSignalGraph);
-  }, [editingSlotId]); // eslint-disable-line react-hooks/exhaustive-deps — rebind on slot switch only
+  }, [editingSlotId]); // eslint-disable-line react-hooks/exhaustive-deps -- rebind on slot switch only
 
   // Moves actifs (pour highlight les MoveRef dont le move est actif)
   const movements = useGraphStore((s) => s.movements);

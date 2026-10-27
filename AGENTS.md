@@ -83,7 +83,7 @@ cd rust-engines && cargo test --lib && cargo clippy --all-targets -- -D warnings
 # Tauri
 cd ../tauri-app/src-tauri && cargo test --lib && cargo clippy --all-targets -- -D warnings && cargo fmt -- --check
 # Frontend
-cd ../frontend && npm test && npx tsc -b && npm run build
+cd ../frontend && npm run lint && npm test && npx tsc -b && npm run build
 ```
 
 ## CI
