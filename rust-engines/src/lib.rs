@@ -109,5 +109,7 @@ pub use signal_compiler::{
     compile_move_signal_graph, compile_signal_graph, empty_signal_fn, macro_with_deltas,
     SignalCompileError, SignalCtx, SignalDeltas, SignalFn, SignalOutput,
 };
-pub use validator::{ValidationError, ValidationResult, Validator};
+pub use validator::{
+    diagnose, GraphContext, GraphIssue, IssueSeverity, ValidationError, ValidationResult, Validator,
+};
 pub use zones::{apply_zones, Zone, ZoneShape};

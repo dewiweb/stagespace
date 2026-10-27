@@ -72,6 +72,10 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
     ? modulatedParamKeys({ id, data } as unknown as GraphNode, slotSignalNodes)
     : new Set<string>();
 
+  // Diagnostics backend injectés par NodeEditor (data.issueMessages) —
+  // tooltip sur le header listant erreurs/warnings du node.
+  const issueMessages = (data as { issueMessages?: string[] }).issueMessages ?? [];
+
   // Audio live indicator — pour les nodes audio, afficher les valeurs live
   // Optimisation: seuls les nodes audio se re-subscribe à audioState (60fps)
   // Les autres nodes retournent null → pas de re-render
@@ -280,7 +284,11 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
   };
 
   return (
-    <div className="bg-gray-800 border-2 rounded-lg shadow-lg min-w-[200px] transition-shadow hover:shadow-xl" style={{ borderColor: color + '60' }}>
+    <div
+      className="bg-gray-800 border-2 rounded-lg shadow-lg min-w-[200px] transition-shadow hover:shadow-xl"
+      style={{ borderColor: color + '60' }}
+      title={issueMessages.length > 0 ? issueMessages.join('\n') : undefined}
+    >
       {renderInputHandles()}
 
       {/* Header */}

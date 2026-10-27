@@ -24,6 +24,8 @@ import { NODE_CATEGORIES, NODE_COLORS, NODE_DESCRIPTIONS, getCategoryColor, getD
 import { isValidConnection, connectionRejectionReason, spliceRejectionReason } from '../utils/connectionRules';
 import { presetsUsingType } from '../utils/shapePresets';
 import { toast } from '../utils/toast-helpers';
+import { safeInvoke as invoke } from '../utils/tauri';
+import { issuesByNode, nodeIssueClass, countIssues, type GraphIssue } from '../utils/graphIssues';
 import { open } from '@tauri-apps/plugin-dialog';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import type { PluginManifest } from '../types/generated/PluginManifest';
@@ -128,6 +130,13 @@ export const NodeEditor: React.FC = () => {
   const displayEdges =
     activeTab === 'global' ? globalEdges : activeTab === 'signal' ? signalEdges : edges;
 
+  // Diagnostics live (debounced 200ms) — les règles du graphe vivent dans
+  // le backend ; l'éditeur surligne les nodes en erreur/warning.
+  const [graphIssues, setGraphIssues] = useState<GraphIssue[]>([]);
+  const [issuesOpen, setIssuesOpen] = useState(false);
+  const issueMap = useMemo(() => issuesByNode(graphIssues), [graphIssues]);
+  const issueCounts = useMemo(() => countIssues(graphIssues), [graphIssues]);
+
   // Décor des nodes (highlight connexion + MoveRef actif) memoized — sans ça,
   // chaque render recrée tous les objets node et React Flow re-render tout.
   const decoratedNodes = useMemo(
@@ -137,8 +146,10 @@ export const NodeEditor: React.FC = () => {
         const isMoveRef = nodeType === 'MoveRef';
         const moveId = n.data.params?.move_id as string;
         const isMoveActive = isMoveRef && moveId && activeMoveIds.has(moveId);
+        const issue = issueMap.get(n.id);
         return {
           ...n,
+          data: issue ? { ...n.data, issueMessages: issue.messages } : n.data,
           className: [
             connectingFrom && !isValidConnection(
               connectingFrom,
@@ -148,12 +159,49 @@ export const NodeEditor: React.FC = () => {
                 : undefined,
             ) ? 'rf-node-invalid-target' : '',
             isMoveActive ? 'rf-node-moveref-active' : '',
+            nodeIssueClass(issueMap, n.id) ?? '',
           ].filter(Boolean).join(' '),
           style: isMoveActive ? { ...n.style, boxShadow: '0 0 8px 2px rgba(34, 197, 94, 0.6)' } : n.style,
         };
       }),
-    [displayNodes, connectingFrom, activeMoveIds, plugins],
+    [displayNodes, connectingFrom, activeMoveIds, plugins, issueMap],
   );
+
+  useEffect(() => {
+    const ctx = activeTab === 'global' ? 'global' : activeTab === 'signal' ? 'signal' : 'sub';
+    const timer = setTimeout(async () => {
+      const toGraphJson = (ns: GraphNode[], es: Edge[]) => ({
+        nodes: ns.map((n) => ({
+          id: n.id,
+          type: 'custom',
+          position: n.position,
+          data: { label: n.data.label ?? n.data.type ?? '', type: n.data.type ?? '', params: n.data.params ?? {} },
+        })),
+        edges: es.map((e) => ({
+          id: e.id,
+          source: e.source,
+          target: e.target,
+          sourceHandle: e.sourceHandle ?? 'out',
+          targetHandle: e.targetHandle ?? 'in',
+        })),
+      });
+      try {
+        // En contexte signal per-move, le graphe du move sert à résoudre
+        // les cibles `param:` (global signal → aucun move).
+        const moveGraphJson =
+          activeTab === 'signal' && editingSlotId ? toGraphJson(nodes, edges) : null;
+        const issues = await invoke<GraphIssue[]>('diagnose_graph', {
+          graphJson: toGraphJson(displayNodes, displayEdges),
+          context: ctx,
+          moveGraphJson,
+        });
+        setGraphIssues(issues);
+      } catch {
+        setGraphIssues([]); // pas de backend (Vite seul) — silence
+      }
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [displayNodes, displayEdges, activeTab, editingSlotId, nodes, edges]);
 
   // Pour le tab global, on utilise des handlers locaux (pas le store global)
   const handleGlobalNodesChange = useCallback((changes: any[]) => {
@@ -789,6 +837,35 @@ export const NodeEditor: React.FC = () => {
 
       {/* Canvas */}
       <div className="flex-1 bg-stagespace-bg relative">
+        {(issueCounts.errors > 0 || issueCounts.warnings > 0) && (
+          <div className="absolute top-2 right-2 z-10 text-xs">
+            <button
+              onClick={() => setIssuesOpen((o) => !o)}
+              className="px-2 py-1 rounded bg-gray-900 border border-gray-700 hover:border-gray-500"
+              title="Graph diagnostics (backend)"
+            >
+              {issueCounts.errors > 0 && (
+                <span className="text-red-400">{issueCounts.errors} error{issueCounts.errors > 1 ? 's' : ''}</span>
+              )}
+              {issueCounts.errors > 0 && issueCounts.warnings > 0 && ' · '}
+              {issueCounts.warnings > 0 && (
+                <span className="text-amber-400">{issueCounts.warnings} warning{issueCounts.warnings > 1 ? 's' : ''}</span>
+              )}
+            </button>
+            {issuesOpen && (
+              <div className="mt-1 max-w-xs max-h-64 overflow-y-auto bg-gray-900 border border-gray-700 rounded p-2 space-y-1">
+                {graphIssues.map((i, k) => (
+                  <div key={k} className={i.severity === 'Error' ? 'text-red-300' : 'text-amber-300'}>
+                    <span className="font-semibold">{i.severity}</span> — {i.message}
+                    {i.node_ids.length > 0 && (
+                      <div className="text-gray-500 font-mono text-[10px]">{i.node_ids.join(', ')}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <ReactFlow
           nodes={decoratedNodes}
           edges={decoratedEdges}

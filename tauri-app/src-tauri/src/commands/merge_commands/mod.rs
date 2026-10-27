@@ -16,7 +16,10 @@ pub use channels::{
     list_spatial_channels, list_zones, remove_channel_modulation, remove_zone,
     set_kinematic_smoothing, set_spatial_channel, update_zone,
 };
-pub use graph_updates::{update_global_graph, update_move_graph_merged, update_signal_graph};
+pub use graph_updates::{
+    diagnose_graph, diagnose_graph_inner, update_global_graph, update_move_graph_merged,
+    update_signal_graph,
+};
 pub use macros::{
     set_global_macro, set_global_origin, set_global_osc_ids, set_merge_strategy,
     set_move_playback_mode, set_move_priority, set_move_speed, set_move_weight, set_track_depths,

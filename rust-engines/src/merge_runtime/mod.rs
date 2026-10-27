@@ -176,7 +176,6 @@ pub struct MergeRuntime {
     /// Node `Barycenter` du graph global : l'origin passée au ctx est
     /// recalculée chaque frame = isobarycentre des `track_positions`
     /// (audit T2 — le node était un no-op silencieux).
-    barycenter_pivot: Arc<AtomicBool>,
     /// Node `MoveRef` avec `move_id` non vide : la chaîne post-process ne
     /// reçoit que les positions de ce move au lieu du merge complet
     /// (audit T2 — le param était décoratif).
@@ -268,7 +267,6 @@ impl MergeRuntime {
             zones: Arc::new(RwLock::new(Arc::new(Vec::new()))),
             graph_zones: Arc::new(RwLock::new(Arc::new(Vec::new()))),
             graph_modulations: Arc::new(RwLock::new(Arc::new(Vec::new()))),
-            barycenter_pivot: Arc::new(AtomicBool::new(false)),
             move_ref_id: Arc::new(RwLock::new(None)),
             stale_kill_ids: Arc::new(Mutex::new(Vec::new())),
             signal_fn: Arc::new(Mutex::new(crate::signal_compiler::empty_signal_fn())),
@@ -704,7 +702,6 @@ impl MergeRuntime {
         &self,
         zones: Vec<crate::zones::Zone>,
         modulations: Vec<ChannelModulation>,
-        barycenter: bool,
         move_ref: Option<String>,
     ) {
         *self.graph_zones.write().unwrap_or_else(|e| e.into_inner()) = Arc::new(zones);
@@ -712,7 +709,6 @@ impl MergeRuntime {
             .graph_modulations
             .write()
             .unwrap_or_else(|e| e.into_inner()) = Arc::new(modulations);
-        self.barycenter_pivot.store(barycenter, Ordering::SeqCst);
         *self.move_ref_id.write().unwrap_or_else(|e| e.into_inner()) = move_ref;
     }
 
@@ -994,7 +990,6 @@ impl MergeRuntime {
         let kinematic_smoothing_arc = self.kinematic_smoothing.clone();
         let graph_zones_arc = self.graph_zones.clone();
         let graph_modulations_arc = self.graph_modulations.clone();
-        let barycenter_pivot_arc = self.barycenter_pivot.clone();
         let move_ref_id_arc = self.move_ref_id.clone();
         let stale_kill_ids = self.stale_kill_ids.clone();
         let signal_fn_arc = self.signal_fn.clone();
@@ -1346,21 +1341,6 @@ impl MergeRuntime {
                         .unwrap_or_else(|e| e.into_inner())
                 )
                 .clone();
-                // Barycenter (audit T2) : le node recalcule le pivot =
-                // isobarycentre des track_positions à chaque frame — les
-                // transforms pivotent autour du centre réel du groupe.
-                let origin =
-                    if barycenter_pivot_arc.load(Ordering::SeqCst) && !track_positions.is_empty() {
-                        let n = track_positions.len() as f64;
-                        track_positions
-                            .values()
-                            .fold(nalgebra::Vector3::zeros(), |acc, p| {
-                                acc + nalgebra::Vector3::new(p[0], p[1], p[2])
-                            })
-                            / n
-                    } else {
-                        origin
-                    };
                 let manual_positions = timed_lock!(
                     lock_wait_ns,
                     lock_sites,

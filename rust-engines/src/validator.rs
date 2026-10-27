@@ -92,7 +92,22 @@ impl Validator {
         context: GraphContext,
         plugin_kinds: &std::collections::HashMap<crate::graph::NodeId, crate::plugins::PluginKind>,
     ) -> ValidationResult {
-        let mut errors = Vec::new();
+        let errors = Self::validate_detailed(graph, context, plugin_kinds);
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors.into_iter().map(|(e, _)| e).collect())
+        }
+    }
+
+    /// Même validation que `validate_with_plugin_kinds` mais chaque erreur
+    /// emporte les `NodeId` concernés — consommé par `diagnose`.
+    pub(crate) fn validate_detailed(
+        graph: &Graph,
+        context: GraphContext,
+        plugin_kinds: &std::collections::HashMap<crate::graph::NodeId, crate::plugins::PluginKind>,
+    ) -> Vec<(ValidationError, Vec<NodeId>)> {
+        let mut errors: Vec<(ValidationError, Vec<NodeId>)> = Vec::new();
 
         // -1. Bornes dures AVANT toute traversée récursive (has_cycle est
         // itératif mais le compile/éval downstream ne le sont pas —
@@ -104,7 +119,7 @@ impl Validator {
 
         // 1. Vérifier les cycles
         if graph.has_cycle() {
-            errors.push(ValidationError::CycleDetected);
+            errors.push((ValidationError::CycleDetected, cycle_nodes(graph)));
         }
 
         // 2. Vérifier les nœuds obligatoires (différents selon le contexte)
@@ -122,7 +137,10 @@ impl Validator {
                             n.node_type == required_type && !graph.get_outputs(n.id).is_empty()
                         });
                         if !connected {
-                            errors.push(ValidationError::MissingRequiredNode(required_type));
+                            errors.push((
+                                ValidationError::MissingRequiredNode(required_type),
+                                vec![],
+                            ));
                         }
                     }
                 }
@@ -136,7 +154,10 @@ impl Validator {
                     .values()
                     .any(|n| matches!(n.node_type, NodeType::Merge | NodeType::MoveRef));
                 if !has_source {
-                    errors.push(ValidationError::MissingRequiredNode(NodeType::Merge));
+                    errors.push((
+                        ValidationError::MissingRequiredNode(NodeType::Merge),
+                        vec![],
+                    ));
                 }
             }
             GraphContext::Signal => {
@@ -147,7 +168,10 @@ impl Validator {
                     .values()
                     .any(|n| n.node_type == NodeType::SignalOut);
                 if !has_out {
-                    errors.push(ValidationError::MissingRequiredNode(NodeType::SignalOut));
+                    errors.push((
+                        ValidationError::MissingRequiredNode(NodeType::SignalOut),
+                        vec![],
+                    ));
                 }
             }
         }
@@ -160,30 +184,43 @@ impl Validator {
                 .values()
                 .any(|n| n.node_type == NodeType::Output)
         {
-            errors.push(ValidationError::MissingRequiredNode(NodeType::Output));
+            errors.push((
+                ValidationError::MissingRequiredNode(NodeType::Output),
+                vec![],
+            ));
         }
 
         // Un seul node Objects — plusieurs seraient ambigus (le parser
         // résoudrait n_objects de façon non déterministe via HashMap::find).
-        let objects_count = graph
+        let objects_ids: Vec<NodeId> = graph
             .nodes
             .values()
             .filter(|n| n.node_type == NodeType::Objects)
-            .count();
+            .map(|n| n.id)
+            .collect();
+        let objects_count = objects_ids.len();
         if objects_count > 1 {
-            errors.push(ValidationError::InvalidConnection(format!(
-                "{objects_count} Objects nodes found — at most one is allowed"
-            )));
+            errors.push((
+                ValidationError::InvalidConnection(format!(
+                    "{objects_count} Objects nodes found — at most one is allowed"
+                )),
+                objects_ids.clone(),
+            ));
         }
 
-        let duration_count = graph
+        let duration_ids: Vec<NodeId> = graph
             .nodes
             .values()
             .filter(|n| n.node_type == NodeType::Duration)
-            .count();
+            .map(|n| n.id)
+            .collect();
+        let duration_count = duration_ids.len();
         if duration_count > 1 {
-            errors.push(ValidationError::InvalidConnection(
-                "Multiple Duration nodes in a subgraph (1 allowed)".to_string(),
+            errors.push((
+                ValidationError::InvalidConnection(
+                    "Multiple Duration nodes in a subgraph (1 allowed)".to_string(),
+                ),
+                duration_ids.clone(),
             ));
         }
 
@@ -193,23 +230,32 @@ impl Validator {
         let mut seen_edges: HashSet<(NodeId, NodeId, &str, &str)> = HashSet::new();
         for edge in &graph.edges {
             if !seen_edges.insert((edge.from, edge.to, &edge.from_port, &edge.to_port)) {
-                errors.push(ValidationError::InvalidConnection(format!(
-                    "duplicate edge {:?} -> {:?} ({} -> {})",
-                    edge.from, edge.to, edge.from_port, edge.to_port
-                )));
+                errors.push((
+                    ValidationError::InvalidConnection(format!(
+                        "duplicate edge {:?} -> {:?} ({} -> {})",
+                        edge.from, edge.to, edge.from_port, edge.to_port
+                    )),
+                    vec![edge.from, edge.to],
+                ));
             }
             match (graph.nodes.get(&edge.from), graph.nodes.get(&edge.to)) {
                 (Some(from_node), _) if edge.from == edge.to => {
-                    errors.push(ValidationError::InvalidConnection(format!(
-                        "self-loop on {:?} is not allowed",
-                        from_node.node_type
-                    )));
+                    errors.push((
+                        ValidationError::InvalidConnection(format!(
+                            "self-loop on {:?} is not allowed",
+                            from_node.node_type
+                        )),
+                        vec![edge.from],
+                    ));
                 }
                 (None, _) | (_, None) => {
-                    errors.push(ValidationError::InvalidConnection(format!(
-                        "edge references missing node(s): {:?} -> {:?}",
-                        edge.from, edge.to
-                    )));
+                    errors.push((
+                        ValidationError::InvalidConnection(format!(
+                            "edge references missing node(s): {:?} -> {:?}",
+                            edge.from, edge.to
+                        )),
+                        vec![],
+                    ));
                 }
                 _ => {}
             }
@@ -225,11 +271,13 @@ impl Validator {
             Self::validate_count_compatibility(graph, &mut errors);
         }
 
-        if errors.is_empty() {
-            Ok(())
-        } else {
-            Err(errors)
+        // 6. Règles structurelles du graph global : chaîne source →
+        //    transforms → Output, capteurs branchés sur le dernier node.
+        if context == GraphContext::Global {
+            Self::validate_global_chain(graph, &mut errors);
         }
+
+        errors
     }
 
     /// Vérifie qu'aucun node n'est présent dans un contexte où il n'a pas de sens.
@@ -238,18 +286,24 @@ impl Validator {
     /// un graphe cyclique (les nœuds dans le cycle restent à degré > 0 et
     /// ne contribuent ni profondeur ni chemins — le cycle est signalé
     /// par has_cycle juste après).
-    fn check_complexity(graph: &Graph, errors: &mut Vec<ValidationError>) {
+    fn check_complexity(graph: &Graph, errors: &mut Vec<(ValidationError, Vec<NodeId>)>) {
         if graph.nodes.len() > MAX_GRAPH_NODES {
-            errors.push(ValidationError::TooComplex(format!(
-                "{} nodes (max {MAX_GRAPH_NODES})",
-                graph.nodes.len()
-            )));
+            errors.push((
+                ValidationError::TooComplex(format!(
+                    "{} nodes (max {MAX_GRAPH_NODES})",
+                    graph.nodes.len()
+                )),
+                vec![],
+            ));
         }
         if graph.edges.len() > MAX_GRAPH_EDGES {
-            errors.push(ValidationError::TooComplex(format!(
-                "{} edges (max {MAX_GRAPH_EDGES})",
-                graph.edges.len()
-            )));
+            errors.push((
+                ValidationError::TooComplex(format!(
+                    "{} edges (max {MAX_GRAPH_EDGES})",
+                    graph.edges.len()
+                )),
+                vec![],
+            ));
         }
         if graph.nodes.is_empty() {
             return;
@@ -304,21 +358,22 @@ impl Validator {
             }
         }
         if max_depth > MAX_DAG_DEPTH {
-            errors.push(ValidationError::TooComplex(format!(
-                "DAG depth {max_depth} (max {MAX_DAG_DEPTH})"
-            )));
+            errors.push((
+                ValidationError::TooComplex(format!("DAG depth {max_depth} (max {MAX_DAG_DEPTH})")),
+                vec![],
+            ));
         }
         if total_paths > MAX_EXPANDED_PATHS {
-            errors.push(ValidationError::TooComplex(format!(
+            errors.push((ValidationError::TooComplex(format!(
                 "expanded path count exceeds {MAX_EXPANDED_PATHS} (shared sub-DAGs multiply compile work)"
-            )));
+            )), vec![]));
         }
     }
 
     fn validate_context_compatibility(
         graph: &Graph,
         context: GraphContext,
-        errors: &mut Vec<ValidationError>,
+        errors: &mut Vec<(ValidationError, Vec<NodeId>)>,
     ) {
         for node in graph.nodes.values() {
             let incompatible = match context {
@@ -337,10 +392,13 @@ impl Validator {
                     crate::node_spec::NodeScope::Both => "sub-graph or global",
                     crate::node_spec::NodeScope::SignalOnly => "signal",
                 };
-                errors.push(ValidationError::ContextIncompatible(format!(
-                    "{:?} is only allowed in {allowed} graphs",
-                    node.node_type
-                )));
+                errors.push((
+                    ValidationError::ContextIncompatible(format!(
+                        "{:?} is only allowed in {allowed} graphs",
+                        node.node_type
+                    )),
+                    vec![node.id],
+                ));
             }
         }
     }
@@ -374,7 +432,7 @@ impl Validator {
     /// `ObjectSet` parce que son unique sortie est typée `ObjectSet`, etc.
     fn validate_type_compatibility(
         graph: &Graph,
-        errors: &mut Vec<ValidationError>,
+        errors: &mut Vec<(ValidationError, Vec<NodeId>)>,
         plugin_kinds: &std::collections::HashMap<crate::graph::NodeId, crate::plugins::PluginKind>,
     ) {
         for edge in &graph.edges {
@@ -387,10 +445,13 @@ impl Validator {
             let from_port =
                 crate::node_spec::node_spec(&from_node.node_type).output_port(&edge.from_port);
             let Some(from_port) = from_port else {
-                errors.push(ValidationError::TypeMismatch(format!(
-                    "{:?} has no output port '{}'",
-                    from_node.node_type, edge.from_port
-                )));
+                errors.push((
+                    ValidationError::TypeMismatch(format!(
+                        "{:?} has no output port '{}'",
+                        from_node.node_type, edge.from_port
+                    )),
+                    vec![edge.from, edge.to],
+                ));
                 continue;
             };
 
@@ -399,23 +460,29 @@ impl Validator {
                 .into_iter()
                 .find(|p| p.name == edge.to_port);
             let Some(to_port) = to_port else {
-                errors.push(ValidationError::TypeMismatch(format!(
-                    "{:?} has no input port '{}', connected from {:?}",
-                    to_node.node_type, edge.to_port, from_node.node_type
-                )));
+                errors.push((
+                    ValidationError::TypeMismatch(format!(
+                        "{:?} has no input port '{}', connected from {:?}",
+                        to_node.node_type, edge.to_port, from_node.node_type
+                    )),
+                    vec![edge.from, edge.to],
+                ));
                 continue;
             };
 
             if from_port.port_type != to_port.port_type {
-                errors.push(ValidationError::TypeMismatch(format!(
-                    "port type mismatch: {:?}.{} ({:?}) → {:?}.{} ({:?})",
-                    from_node.node_type,
-                    edge.from_port,
-                    from_port.port_type,
-                    to_node.node_type,
-                    edge.to_port,
-                    to_port.port_type
-                )));
+                errors.push((
+                    ValidationError::TypeMismatch(format!(
+                        "port type mismatch: {:?}.{} ({:?}) → {:?}.{} ({:?})",
+                        from_node.node_type,
+                        edge.from_port,
+                        from_port.port_type,
+                        to_node.node_type,
+                        edge.to_port,
+                        to_port.port_type
+                    )),
+                    vec![edge.from, edge.to],
+                ));
             }
         }
     }
@@ -431,7 +498,7 @@ impl Validator {
     fn validate_input_arity(
         graph: &Graph,
         context: GraphContext,
-        errors: &mut Vec<ValidationError>,
+        errors: &mut Vec<(ValidationError, Vec<NodeId>)>,
         plugin_kinds: &std::collections::HashMap<crate::graph::NodeId, crate::plugins::PluginKind>,
     ) {
         for node in graph.nodes.values() {
@@ -446,10 +513,13 @@ impl Validator {
             }
             for (port, count) in port_counts {
                 if count > 1 {
-                    errors.push(ValidationError::TypeMismatch(format!(
-                        "{:?} input port '{port}' receives {count} edges — only one allowed",
-                        node.node_type
-                    )));
+                    errors.push((
+                        ValidationError::TypeMismatch(format!(
+                            "{:?} input port '{port}' receives {count} edges — only one allowed",
+                            node.node_type
+                        )),
+                        vec![node.id],
+                    ));
                 }
             }
 
@@ -457,10 +527,13 @@ impl Validator {
             let kind = plugin_kinds.get(&node.id).copied();
             for p in Self::effective_input_ports(&node.node_type, kind) {
                 if p.required && !incoming.iter().any(|e| e.to_port == p.name) {
-                    errors.push(ValidationError::InvalidConnection(format!(
-                        "{:?} required input port '{}' is not connected",
-                        node.node_type, p.name
-                    )));
+                    errors.push((
+                        ValidationError::InvalidConnection(format!(
+                            "{:?} required input port '{}' is not connected",
+                            node.node_type, p.name
+                        )),
+                        vec![node.id],
+                    ));
                 }
             }
 
@@ -475,9 +548,12 @@ impl Validator {
                         .filter(|e| matches!(e.to_port.as_str(), "in" | "a" | "b"))
                         .count();
                     if traj_count > 0 {
-                        errors.push(ValidationError::InvalidConnection(format!(
-                            "Plugin (engine) takes no trajectory input, got {traj_count}"
-                        )));
+                        errors.push((
+                            ValidationError::InvalidConnection(format!(
+                                "Plugin (engine) takes no trajectory input, got {traj_count}"
+                            )),
+                            vec![node.id],
+                        ));
                     }
                 }
             }
@@ -500,16 +576,124 @@ impl Validator {
                     matches!(graph.nodes.get(&e.from), Some(n) if n.node_type == NodeType::Objects)
                 })
             {
-                errors.push(ValidationError::InvalidConnection(format!(
+                errors.push((ValidationError::InvalidConnection(format!(
                     "{:?} has no Objects input and no n_objects parameter",
                     node.node_type
-                )));
+                )), vec![node.id]));
+            }
+        }
+    }
+
+    /// Règles structurelles du graph global :
+    /// - la chaîne `in` de l'Output doit remonter jusqu'à EXACTEMENT une
+    ///   source (`Merge` ou `MoveRef`) — les transforms s'ordonnent entre
+    ///   elle et l'Output ;
+    /// - un capteur (`Zone`/`Velocity`) observe les positions envoyées :
+    ///   son `in` doit être alimenté par le node qui alimente `Output.in`
+    ///   (fan-out du dernier node de la chaîne).
+    fn validate_global_chain(graph: &Graph, errors: &mut Vec<(ValidationError, Vec<NodeId>)>) {
+        let is_source = |t: &NodeType| matches!(t, NodeType::Merge | NodeType::MoveRef);
+        let is_sensor = |t: &NodeType| matches!(t, NodeType::Zone | NodeType::Velocity);
+
+        let Some(output) = graph
+            .nodes
+            .values()
+            .find(|n| n.node_type == NodeType::Output)
+        else {
+            return; // MissingRequiredNode déjà signalé
+        };
+        // Le node qui alimente l'Output — l'extrémité réelle de la chaîne.
+        let Some(feeder) = graph
+            .edges
+            .iter()
+            .find(|e| e.to == output.id && e.to_port == "in")
+            .map(|e| e.from)
+        else {
+            return; // required input 'in' déjà signalé
+        };
+
+        // Remonter la chaîne `in` jusqu'au head — vérifier qu'il est une
+        // source. Arity garantit au plus un edge par port `in`.
+        let mut head = feeder;
+        let mut visited = std::collections::HashSet::new();
+        while visited.insert(head) {
+            match graph
+                .edges
+                .iter()
+                .find(|e| e.to == head && e.to_port == "in")
+            {
+                Some(e) => head = e.from,
+                None => break,
+            }
+        }
+        if let Some(head_node) = graph.nodes.get(&head) {
+            if !is_source(&head_node.node_type) {
+                errors.push((
+                    ValidationError::InvalidConnection(format!(
+                        "global chain must start at a source (Merge or MoveRef), found {:?}",
+                        head_node.node_type
+                    )),
+                    vec![head],
+                ));
+            }
+        }
+
+        // Plus d'une source reachable depuis l'Output — ambiguïté.
+        let mut reachable: std::collections::HashSet<crate::graph::NodeId> =
+            std::collections::HashSet::new();
+        let mut stack = vec![output.id];
+        reachable.insert(output.id);
+        while let Some(id) = stack.pop() {
+            for e in &graph.edges {
+                if e.to == id && reachable.insert(e.from) {
+                    stack.push(e.from);
+                }
+            }
+        }
+        let src_ids: Vec<NodeId> = reachable
+            .iter()
+            .filter(|id| {
+                graph
+                    .nodes
+                    .get(id)
+                    .map(|n| is_source(&n.node_type))
+                    .unwrap_or(false)
+            })
+            .copied()
+            .collect();
+        let n_sources = src_ids.len();
+        if n_sources > 1 {
+            errors.push((ValidationError::InvalidConnection(format!(
+                "{n_sources} source nodes (Merge/MoveRef) reachable from Output — exactly one allowed"
+            )), src_ids.clone()));
+        }
+
+        // Capteurs : leur `in` doit venir du node qui alimente l'Output.
+        for node in graph.nodes.values() {
+            if !is_sensor(&node.node_type) {
+                continue;
+            }
+            let fed_by_final = graph
+                .edges
+                .iter()
+                .any(|e| e.to == node.id && e.to_port == "in" && e.from == feeder);
+            if !fed_by_final {
+                errors.push((
+                    ValidationError::InvalidConnection(format!(
+                        "{:?} observes the final positions — connect it to the node feeding Output",
+                        node.node_type
+                    )),
+                    vec![node.id],
+                ));
             }
         }
     }
 
     /// Vérifie la compatibilité des comptages (n_objects)
-    fn validate_count_compatibility(graph: &Graph, errors: &mut Vec<ValidationError>) {
+    fn validate_count_compatibility(
+        graph: &Graph,
+        errors: &mut Vec<(ValidationError, Vec<NodeId>)>,
+    ) {
         // Branches `b` des Group : la frontière du Group est le n_objects
         // résolu de la branche A — les engines sous `b` portent volontairement
         // un comptage différent (la split). Exempts du check Objects == engine.
@@ -665,10 +849,13 @@ impl Validator {
                                 .unwrap_or(n_objects as u64) as usize;
 
                         if node_n_objects != n_objects {
-                            errors.push(ValidationError::CountMismatch(format!(
-                                "Objects has {} but {:?} has {}",
-                                n_objects, node.node_type, node_n_objects
-                            )));
+                            errors.push((
+                                ValidationError::CountMismatch(format!(
+                                    "Objects has {} but {:?} has {}",
+                                    n_objects, node.node_type, node_n_objects
+                                )),
+                                vec![],
+                            ));
                         }
 
                         // T3 : les engines à interaction mutuelle coûtent
@@ -678,13 +865,16 @@ impl Validator {
                         if matches!(node.node_type, NodeType::Swarm | NodeType::Avoidance)
                             && node_n_objects > crate::engines::MAX_INTERACTION_AGENTS
                         {
-                            errors.push(ValidationError::TooComplex(format!(
-                                "{:?} with {} agents exceeds the O(n²) per-step budget \
+                            errors.push((
+                                ValidationError::TooComplex(format!(
+                                    "{:?} with {} agents exceeds the O(n²) per-step budget \
                                  (max {} interaction agents)",
-                                node.node_type,
-                                node_n_objects,
-                                crate::engines::MAX_INTERACTION_AGENTS
-                            )));
+                                    node.node_type,
+                                    node_n_objects,
+                                    crate::engines::MAX_INTERACTION_AGENTS
+                                )),
+                                vec![],
+                            ));
                         }
                     }
                     // Mix/Sequence/Crossfade/Switch : les deux entrées doivent
@@ -700,10 +890,10 @@ impl Validator {
                                 let n_b = resolve(nb);
 
                                 if n_a != n_b {
-                                    errors.push(ValidationError::CountMismatch(format!(
+                                    errors.push((ValidationError::CountMismatch(format!(
                                         "{:?} node: input A has {n_a} objects but input B has {n_b} objects",
                                         node.node_type
-                                    )));
+                                    )), vec![]));
                                 }
                             }
                         }
@@ -733,6 +923,189 @@ fn is_subgraph_only_node(node_type: &NodeType) -> bool {
 }
 
 /// Vrai si le node appartient au domaine signal (scope SignalOnly).
+/// Nodes participants à un cycle — résidu du peeling de Kahn (tout node
+/// encore à degré entrant > 0 après retrait itératif des puits).
+fn cycle_nodes(graph: &Graph) -> Vec<NodeId> {
+    let mut indegree: std::collections::HashMap<NodeId, usize> =
+        graph.nodes.keys().map(|id| (*id, 0)).collect();
+    for e in &graph.edges {
+        if graph.nodes.contains_key(&e.from) {
+            *indegree.entry(e.to).or_insert(0) += 1;
+        }
+    }
+    let mut queue: std::collections::VecDeque<NodeId> = indegree
+        .iter()
+        .filter(|(_, d)| **d == 0)
+        .map(|(id, _)| *id)
+        .collect();
+    while let Some(id) = queue.pop_front() {
+        for e in &graph.edges {
+            if e.from == id {
+                if let Some(d) = indegree.get_mut(&e.to) {
+                    *d -= 1;
+                    if *d == 0 {
+                        queue.push_back(e.to);
+                    }
+                }
+            }
+        }
+    }
+    indegree
+        .into_iter()
+        .filter(|(_, d)| *d > 0)
+        .map(|(id, _)| id)
+        .collect()
+}
+
 fn is_signal_node(node_type: &NodeType) -> bool {
     crate::node_spec::node_spec(node_type).scope == crate::node_spec::NodeScope::SignalOnly
+}
+
+// ── Diagnose live — source de vérité unique des règles du graphe ──────
+
+/// Sévérité d'un diagnostic de graphe.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[ts(export)]
+pub enum IssueSeverity {
+    Error,
+    Warning,
+}
+
+/// Diagnostic de graphe — `node_ids` = clés stables `__fe_id` (ou uuid)
+/// permettant à l'éditeur de surligner les nodes concernés.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[ts(export)]
+pub struct GraphIssue {
+    pub severity: IssueSeverity,
+    pub message: String,
+    pub node_ids: Vec<String>,
+}
+
+/// Diagnostics du graphe : erreurs = exactement ce que
+/// `validate_with_context` rapporte (même acceptation), plus les cibles
+/// `param:` du domaine signal résolues contre `move_graph`. Warnings =
+/// dead nodes (ne peuvent atteindre aucun terminal du contexte).
+pub fn diagnose(
+    graph: &Graph,
+    context: GraphContext,
+    move_graph: Option<&Graph>,
+) -> Vec<GraphIssue> {
+    let mut issues: Vec<GraphIssue> = Vec::new();
+    let key_of = |id: &NodeId| -> String {
+        graph
+            .nodes
+            .get(id)
+            .map(crate::param_slots::node_key)
+            .unwrap_or_else(|| id.0.to_string())
+    };
+
+    for (e, ids) in Validator::validate_detailed(graph, context, &Default::default()) {
+        issues.push(GraphIssue {
+            severity: IssueSeverity::Error,
+            message: e.to_string(),
+            node_ids: ids.iter().map(&key_of).collect(),
+        });
+    }
+
+    // Cibles `param:` des SignalOut — résolues contre le move graph.
+    if context == GraphContext::Signal {
+        for node in graph.nodes.values() {
+            if node.node_type != NodeType::SignalOut {
+                continue;
+            }
+            let target = node
+                .params
+                .get("target")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if let Err(msg) = crate::signal_compiler::validate_param_target(target, move_graph) {
+                issues.push(GraphIssue {
+                    severity: IssueSeverity::Error,
+                    message: msg,
+                    node_ids: vec![key_of(&node.id)],
+                });
+            }
+        }
+    }
+
+    // Dead nodes — ne peuvent atteindre aucun terminal du contexte.
+    // Global : les capteurs Zone/Velocity correctement câblés comptent
+    // comme terminaux (ils n'ont pas de sortie mais observent la chaîne).
+    let mut terminals: Vec<NodeId> = Vec::new();
+    match context {
+        GraphContext::SubGraph | GraphContext::Global => {
+            terminals.extend(
+                graph
+                    .nodes
+                    .values()
+                    .filter(|n| n.node_type == NodeType::Output)
+                    .map(|n| n.id),
+            );
+        }
+        GraphContext::Signal => {
+            terminals.extend(
+                graph
+                    .nodes
+                    .values()
+                    .filter(|n| n.node_type == NodeType::SignalOut)
+                    .map(|n| n.id),
+            );
+        }
+    }
+    if context == GraphContext::Global {
+        if let Some(output) = graph
+            .nodes
+            .values()
+            .find(|n| n.node_type == NodeType::Output)
+        {
+            let feeder = graph
+                .edges
+                .iter()
+                .find(|e| e.to == output.id && e.to_port == "in")
+                .map(|e| e.from);
+            if let Some(f) = feeder {
+                terminals.extend(
+                    graph
+                        .nodes
+                        .values()
+                        .filter(|n| {
+                            matches!(n.node_type, NodeType::Zone | NodeType::Velocity)
+                                && graph
+                                    .edges
+                                    .iter()
+                                    .any(|e| e.to == n.id && e.to_port == "in" && e.from == f)
+                        })
+                        .map(|n| n.id),
+                );
+            }
+        }
+    }
+    // BFS backward depuis les terminaux → nodes "vivants".
+    let mut alive: std::collections::HashSet<NodeId> = terminals.iter().copied().collect();
+    let mut stack = terminals;
+    while let Some(id) = stack.pop() {
+        for e in &graph.edges {
+            if e.to == id && alive.insert(e.from) {
+                stack.push(e.from);
+            }
+        }
+    }
+    let dead: Vec<String> = graph
+        .nodes
+        .values()
+        .filter(|n| !alive.contains(&n.id))
+        .map(|n| key_of(&n.id))
+        .collect();
+    if !dead.is_empty() {
+        issues.push(GraphIssue {
+            severity: IssueSeverity::Warning,
+            message: format!(
+                "{} dead node(s) — no path to any graph terminal",
+                dead.len()
+            ),
+            node_ids: dead,
+        });
+    }
+
+    issues
 }

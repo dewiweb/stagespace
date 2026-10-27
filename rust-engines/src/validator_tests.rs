@@ -532,6 +532,13 @@ mod tests {
         graph.add_node(vel);
         graph.add_node(output);
 
+        // Capteurs en fan-out du node qui alimente Output.
+        graph.add_edge(Edge {
+            from: id_input,
+            to: id_output,
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
+        });
         graph.add_edge(Edge {
             from: id_input,
             to: id_zone,
@@ -539,14 +546,8 @@ mod tests {
             to_port: "in".to_string(),
         });
         graph.add_edge(Edge {
-            from: id_zone,
+            from: id_input,
             to: id_vel,
-            from_port: "out".to_string(),
-            to_port: "in".to_string(),
-        });
-        graph.add_edge(Edge {
-            from: id_vel,
-            to: id_output,
             from_port: "out".to_string(),
             to_port: "in".to_string(),
         });
@@ -1098,5 +1099,170 @@ mod tests {
                 errors
             );
         }
+    }
+}
+
+mod diagnose_tests {
+    use crate::graph::{Edge, Graph, Node, NodeId, NodeType};
+    use crate::validator::{diagnose, GraphContext, IssueSeverity};
+
+    fn node(t: NodeType, fe: &str, params: serde_json::Value) -> Node {
+        let mut p = params;
+        p["__fe_id"] = serde_json::json!(fe);
+        Node::with_params(t, p)
+    }
+
+    fn edge(g: &mut Graph, f: NodeId, t: NodeId, fp: &str, tp: &str) {
+        g.add_edge(Edge {
+            from: f,
+            to: t,
+            from_port: fp.to_string(),
+            to_port: tp.to_string(),
+        });
+    }
+
+    /// Graphe move minimal valide : Objects+Duration → Circular → Output.
+    fn valid_move_graph() -> Graph {
+        let mut g = Graph::new();
+        let o = node(NodeType::Objects, "o", serde_json::json!({"n_objects": 2}));
+        let d = node(
+            NodeType::Duration,
+            "d",
+            serde_json::json!({"duration": 4.0}),
+        );
+        let c = node(NodeType::Circular, "c", serde_json::json!({"radius": 1.0}));
+        let out = node(NodeType::Output, "out", serde_json::json!({}));
+        let (o_id, d_id, c_id, out_id) = (o.id, d.id, c.id, out.id);
+        for n in [o, d, c, out] {
+            g.add_node(n);
+        }
+        edge(&mut g, o_id, c_id, "objects", "objects");
+        edge(&mut g, d_id, c_id, "duration", "duration");
+        edge(&mut g, c_id, out_id, "out", "in");
+        g
+    }
+
+    #[test]
+    fn diagnose_valid_graph_empty() {
+        let g = valid_move_graph();
+        let issues = diagnose(&g, GraphContext::SubGraph, None);
+        assert!(issues.is_empty(), "valid graph → no issues: {issues:?}");
+    }
+
+    #[test]
+    fn diagnose_errors_carry_node_ids() {
+        // Port type mismatch : Objects.out → Circular.in (Positions port
+        // exists but ObjectSet ≠ Positions) → les DEUX endpoints.
+        let mut g = Graph::new();
+        let o = node(NodeType::Objects, "o", serde_json::json!({"n_objects": 2}));
+        let c = node(NodeType::Circular, "c", serde_json::json!({}));
+        let out = node(NodeType::Output, "out", serde_json::json!({}));
+        let (o_id, c_id, out_id) = (o.id, c.id, out.id);
+        for n in [o, c, out] {
+            g.add_node(n);
+        }
+        edge(&mut g, o_id, c_id, "objects", "in");
+        edge(&mut g, c_id, out_id, "out", "in");
+        let issues = diagnose(&g, GraphContext::SubGraph, None);
+        let type_err = issues
+            .iter()
+            .find(|i| i.message.contains("type mismatch") || i.message.contains("port type"))
+            .expect("type mismatch issue");
+        assert_eq!(type_err.severity, IssueSeverity::Error);
+        assert!(
+            type_err.node_ids.contains(&"o".to_string())
+                && type_err.node_ids.contains(&"c".to_string()),
+            "mismatch should carry both endpoint ids: {type_err:?}"
+        );
+    }
+
+    #[test]
+    fn diagnose_dead_nodes_warning() {
+        let mut g = valid_move_graph();
+        // Helix orphelin — n'atteint pas Output → warning.
+        let h = node(NodeType::Helix, "h", serde_json::json!({}));
+        let h_id = h.id;
+        g.add_node(h);
+        // Duration orpheline alimente le Helix (still dead).
+        let d2 = node(
+            NodeType::Duration,
+            "d2",
+            serde_json::json!({"duration": 4.0}),
+        );
+        let d2_id = d2.id;
+        g.add_node(d2);
+        edge(&mut g, d2_id, h_id, "duration", "duration");
+        let _ = h_id;
+        let issues = diagnose(&g, GraphContext::SubGraph, None);
+        let warn = issues
+            .iter()
+            .find(|i| i.severity == IssueSeverity::Warning)
+            .expect("dead node warning");
+        assert!(warn.node_ids.contains(&"h".to_string()));
+    }
+
+    #[test]
+    fn diagnose_signal_param_target() {
+        // SignalOut avec cible invalide → erreur sur le node SignalOut.
+        let move_g = valid_move_graph();
+        let mut g = Graph::new();
+        let c = node(
+            NodeType::SignalConst,
+            "k",
+            serde_json::json!({"value": 1.0}),
+        );
+        let s = node(
+            NodeType::SignalOut,
+            "s",
+            serde_json::json!({"target": "param:ghost:x", "amount": 1.0}),
+        );
+        let (c_id, s_id) = (c.id, s.id);
+        g.add_node(c);
+        g.add_node(s);
+        edge(&mut g, c_id, s_id, "out", "signal");
+        let issues = diagnose(&g, GraphContext::Signal, Some(&move_g));
+        let err = issues
+            .iter()
+            .find(|i| i.severity == IssueSeverity::Error && i.message.contains("param"))
+            .expect("param target error");
+        assert_eq!(err.node_ids, vec!["s".to_string()]);
+
+        // Cible valide → pas d'erreur param.
+        let mut g = Graph::new();
+        let c = node(
+            NodeType::SignalConst,
+            "k",
+            serde_json::json!({"value": 1.0}),
+        );
+        let s = node(
+            NodeType::SignalOut,
+            "s",
+            serde_json::json!({"target": "param:c:radius", "amount": 1.0}),
+        );
+        let (c_id, s_id) = (c.id, s.id);
+        g.add_node(c);
+        g.add_node(s);
+        edge(&mut g, c_id, s_id, "out", "signal");
+        let issues = diagnose(&g, GraphContext::Signal, Some(&move_g));
+        assert!(
+            !issues.iter().any(|i| i.severity == IssueSeverity::Error),
+            "valid param target → no error: {issues:?}"
+        );
+    }
+
+    #[test]
+    fn diagnose_global_chain_errors() {
+        // Chaîne sans source → erreur sur le head + warning dead nodes?
+        let mut g = Graph::new();
+        let s = node(NodeType::Scale, "s", serde_json::json!({"x": 1.0}));
+        let out = node(NodeType::Output, "out", serde_json::json!({}));
+        let (s_id, out_id) = (s.id, out.id);
+        g.add_node(s);
+        g.add_node(out);
+        edge(&mut g, s_id, out_id, "out", "in");
+        let issues = diagnose(&g, GraphContext::Global, None);
+        assert!(issues
+            .iter()
+            .any(|i| i.severity == IssueSeverity::Error && i.message.contains("source")));
     }
 }

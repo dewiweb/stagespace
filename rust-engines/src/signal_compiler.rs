@@ -246,6 +246,78 @@ pub fn compile_move_signal_graph(
 /// Résout la cible d'un SignalOut en destinations : macro (défaut),
 /// slots de params (cible `param:` — move scope uniquement), ou rien
 /// (cible vide → sink inerte, pas d'erreur).
+/// Validation d'une cible `param:` pour le diagnostic live — mêmes règles
+/// que `resolve_target` mais sans la table de slots (le node_id/param est
+/// vérifié contre le graphe du move, pas contre les indices).
+/// `move_graph: None` = contexte global → toute cible `param:` est rejetée.
+/// Retourne `Err(message)` — la chaîne de message reste identique.
+pub fn validate_param_target(
+    target: &str,
+    move_graph: Option<&crate::graph::Graph>,
+) -> std::result::Result<(), String> {
+    if target.is_empty() || !target.starts_with("param:") {
+        return Ok(());
+    }
+    let rest = &target["param:".len()..];
+    let Some(mg) = move_graph else {
+        return Err(
+            "param: targets are only valid in a move's signal graph — the global signal graph has no node params to modulate"
+                .to_string(),
+        );
+    };
+    let Some((seg, key)) = rest.split_once(':') else {
+        return Err(format!(
+            "param target '{target}' must be param:<node_id|NodeType>:<key>"
+        ));
+    };
+    if key.is_empty() || seg.is_empty() {
+        return Err(format!(
+            "param target '{target}' must be param:<node_id|NodeType>:<key>"
+        ));
+    }
+    let by_id: Vec<&crate::graph::Node> = mg
+        .nodes
+        .values()
+        .filter(|n| crate::param_slots::node_key(n) == seg)
+        .collect();
+    let targets: Vec<&crate::graph::Node> = if !by_id.is_empty() {
+        by_id
+    } else {
+        let by_type: Vec<&crate::graph::Node> = mg
+            .nodes
+            .values()
+            .filter(|n| format!("{:?}", n.node_type) == seg)
+            .collect();
+        if by_type.is_empty() {
+            let is_known_type = crate::node_spec::all_node_specs()
+                .iter()
+                .any(|sp| format!("{:?}", sp.node_type) == seg);
+            return Err(if is_known_type {
+                format!("param target '{target}': no node of type '{seg}' in the move graph")
+            } else {
+                format!("param target '{target}': unknown node id '{seg}' in the move graph")
+            });
+        }
+        by_type
+    };
+    for node in targets {
+        let spec = crate::node_spec::node_spec(&node.node_type);
+        let Some(param) = spec.params.iter().find(|p| p.key == key) else {
+            return Err(format!(
+                "param target '{target}': unknown param '{key}' for node type '{:?}'",
+                node.node_type
+            ));
+        };
+        if !param.modulable {
+            return Err(format!(
+                "param target '{target}': param '{key}' of '{:?}' is not modulable",
+                node.node_type
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn resolve_target(
     target: &str,
     bound: Option<MoveBinding>,

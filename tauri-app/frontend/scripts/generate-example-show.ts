@@ -319,8 +319,10 @@ const globalNodes = [gInput, gManual, gRadius, gHeight, gDepth, gScale, gRotate,
 const globalEdges = [
   gEdge(gInput, gManual), gEdge(gManual, gRadius), gEdge(gRadius, gHeight),
   gEdge(gHeight, gDepth), gEdge(gDepth, gScale), gEdge(gScale, gRotate),
-  gEdge(gRotate, gOffset), gEdge(gOffset, gZone), gEdge(gZone, gVel),
-  gEdge(gVel, gOutput),
+  gEdge(gRotate, gOffset),
+  // Capteurs = sinks en fan-out du node final (off → Output.in).
+  gEdge(gOffset, gZone), gEdge(gOffset, gVel),
+  gEdge(gOffset, gOutput),
 ];
 validateGraph('global', globalNodes, globalEdges, 'global');
 const globalGraph = { nodes: globalNodes, edges: globalEdges };

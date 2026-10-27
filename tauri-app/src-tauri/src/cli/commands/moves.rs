@@ -218,12 +218,7 @@ pub fn cmd_global_graph(args: &[&str]) -> Result<String, String> {
         .lock()
         .unwrap_or_else(|e| e.into_inner());
     merge_rt.swap_post_process_fn(post_process_fn);
-    merge_rt.set_graph_effects(
-        effects.zones,
-        effects.modulations,
-        effects.barycenter,
-        effects.move_ref,
-    );
+    merge_rt.set_graph_effects(effects.zones, effects.modulations, effects.move_ref);
     if let Some(strategy) = effects.strategy {
         merge_rt.set_merge_strategy(strategy);
     }
@@ -815,4 +810,91 @@ pub fn cmd_zone_clear(args: &[&str]) -> Result<String, String> {
     } else {
         Err(format!("No zone at index {idx}"))
     }
+}
+
+/// Usage: diagnose <file.json> [--context sub|global|signal] [--move <file.json>]
+/// Diagnostics live du graphe — mêmes règles que le backend/éditeur.
+pub fn cmd_diagnose(args: &[&str]) -> Result<String, String> {
+    if args.is_empty() {
+        return Err(
+            "Usage: diagnose <file.json> [--context sub|global|signal] [--move <file.json>]"
+                .to_string(),
+        );
+    }
+    let path = args[0];
+    let mut context = "sub".to_string();
+    let mut move_path: Option<&str> = None;
+    let mut i = 1;
+    while i < args.len() {
+        match args[i] {
+            "--context" => {
+                context = args.get(i + 1).copied().unwrap_or("sub").to_string();
+                i += 2;
+            }
+            "--move" => {
+                move_path = args.get(i + 1).copied();
+                i += 2;
+            }
+            other => return Err(format!("Unknown flag '{other}'")),
+        }
+    }
+    let read_graph = |p: &str| -> Result<stagespace_engines::GraphJson, String> {
+        let text = std::fs::read_to_string(p).map_err(|e| format!("Cannot read {p}: {e}"))?;
+        let g: stagespace_engines::GraphJson =
+            serde_json::from_str(&text).map_err(|e| format!("Invalid graph JSON in {p}: {e}"))?;
+        g.check_version()
+            .map_err(|e| format!("Unsupported schema version in {p}: {e}"))?;
+        Ok(g)
+    };
+    let graph_json = read_graph(path)?;
+    let move_json = move_path.map(read_graph).transpose()?;
+
+    let ctx = match context.as_str() {
+        "sub" => stagespace_engines::GraphContext::SubGraph,
+        "global" => stagespace_engines::GraphContext::Global,
+        "signal" => stagespace_engines::GraphContext::Signal,
+        other => return Err(format!("Unknown context '{other}' (sub|global|signal)")),
+    };
+
+    let state = cli_state::state();
+    let audio_state = {
+        let merge_rt = state
+            .shared
+            .merge_runtime
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        merge_rt
+            .audio_state_arc()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    };
+    let graph = stagespace_tauri::graph::parser::build_graph_from_json(&graph_json, &audio_state)
+        .map_err(|e| format!("Failed to parse graph: {e}"))?;
+    let move_graph = match move_json {
+        Some(mg) => Some(
+            stagespace_tauri::graph::parser::build_graph_from_json(&mg, &audio_state)
+                .map_err(|e| format!("Failed to parse move graph: {e}"))?,
+        ),
+        None => None,
+    };
+
+    let issues = stagespace_engines::diagnose(&graph, ctx, move_graph.as_ref());
+    if issues.is_empty() {
+        return Ok(format!("{path}: no issues"));
+    }
+    let mut out = format!("{path}: {} issue(s)\n", issues.len());
+    for i in &issues {
+        let sev = match i.severity {
+            stagespace_engines::IssueSeverity::Error => "ERROR",
+            stagespace_engines::IssueSeverity::Warning => "WARN ",
+        };
+        let nodes = if i.node_ids.is_empty() {
+            String::new()
+        } else {
+            format!(" [{}]", i.node_ids.join(", "))
+        };
+        out.push_str(&format!("  {sev} {}{nodes}\n", i.message));
+    }
+    Ok(out.trim_end().to_string())
 }

@@ -33,8 +33,6 @@ pub(crate) fn is_post_process_node(node_type: &NodeType) -> bool {
             | NodeType::Clamp
             | NodeType::LFO
             | NodeType::Jitter
-            | NodeType::Zone
-            | NodeType::Velocity
     )
 }
 
@@ -59,9 +57,6 @@ fn compile_transform_node(node: &Node) -> Result<TransformFn, PostProcessCompile
         NodeType::Clamp => compile_clamp(node),
         NodeType::LFO => compile_lfo(node),
         NodeType::Jitter => compile_jitter(node),
-        // Déclarations d'effets — extraites par `extract_graph_effects`,
-        // pass-through dans la chaîne de positions.
-        NodeType::Zone | NodeType::Velocity => Ok(Box::new(|_ctx, positions| positions)),
         _ => Err(PostProcessCompileError::InvalidNode(format!(
             "{:?} is not a post-process node",
             node.node_type
@@ -277,13 +272,10 @@ fn compile_per_track_depth(node: &Node) -> Result<TransformFn, PostProcessCompil
 }
 
 fn compile_barycenter(_node: &Node) -> Result<TransformFn, PostProcessCompileError> {
-    // Barycenter n'est plus un no-op : `extract_graph_effects` remonte
-    // `effects.barycenter = true` et le merge recalcule `ctx.origin`
-    // chaque frame = isobarycentre des track_positions — les transforms
-    // qui suivent (Scale, Rotate, RadiusScale…) pivotent autour du
-    // centre réel du groupe, pas de l'origin figée au launch.
-    // Dans la chaîne il est pass-through : il agit sur le pivot, pas sur
-    // les positions.
+    // Pass-through sur les positions : `compile_post_process` bascule
+    // `ctx.origin` sur l'isobarycentre des track_positions quand il
+    // rencontre ce node — les transforms qui le suivent pivotent autour
+    // du centre réel du groupe.
     Ok(Box::new(|_ctx, positions| positions))
 }
 

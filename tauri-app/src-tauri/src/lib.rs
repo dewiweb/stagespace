@@ -24,7 +24,7 @@ use commands::file_io::{import_hol_project, load_graph_from_file, save_graph_to_
 use commands::merge_commands::{
     activate_move, add_channel_modulation, add_zone, clear_all_manual_positions,
     clear_all_spatial_channels, clear_channel_modulations, clear_manual_position,
-    clear_spatial_channel, clear_zones, deactivate_all_moves, deactivate_move,
+    clear_spatial_channel, clear_zones, deactivate_all_moves, deactivate_move, diagnose_graph,
     get_merge_perf_stats, list_active_moves, list_channel_modulations, list_graph_effects,
     list_spatial_channels, list_zones, remove_channel_modulation, remove_zone, set_global_macro,
     set_global_origin, set_global_osc_ids, set_kinematic_smoothing, set_manual_position,
@@ -385,6 +385,7 @@ pub fn run() {
             // Global graph commands (Phase 2 — post-processing)
             update_global_graph,
             // Signal graph (domaine modulation → deltas de macros)
+            diagnose_graph,
             update_signal_graph,
             set_track_positions,
             set_manual_position,

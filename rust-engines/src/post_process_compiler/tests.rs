@@ -543,6 +543,8 @@ fn test_build_transform_chain_rejects_engine() {
 
 #[test]
 fn test_extract_graph_effects_zone_and_velocity() {
+    // Capteurs = sinks branchés en fan-out du node qui alimente Output
+    // (ici Merge — chaîne sans transform). Seuls ceux-ci sont extraits.
     let graph = make_graph(
         vec![
             (NodeType::Merge, serde_json::json!({})),
@@ -561,7 +563,7 @@ fn test_extract_graph_effects_zone_and_velocity() {
             ),
             (NodeType::Output, serde_json::json!({})),
         ],
-        vec![(0, 1), (1, 2), (2, 3)],
+        vec![(0, 3), (0, 1), (0, 2)],
     );
 
     let effects = extract_graph_effects(&graph).unwrap();
@@ -597,7 +599,7 @@ fn test_extract_graph_effects_empty_and_invalid() {
             (NodeType::Zone, serde_json::json!({"shape": "sphere"})),
             (NodeType::Output, serde_json::json!({})),
         ],
-        vec![(0, 1), (1, 2)],
+        vec![(0, 2), (0, 1)],
     );
     assert!(extract_graph_effects(&graph).is_err());
 }
@@ -641,9 +643,9 @@ fn test_extract_graph_effects_merge_strategy() {
 }
 
 #[test]
-fn test_compile_graph_with_zone_velocity_passthrough() {
-    // Zone/Velocity dans la chaîne : pass-through pour les positions,
-    // la compilation du graphe complet reste valide.
+fn test_compile_graph_with_zone_velocity_sensors() {
+    // Capteurs en fan-out du node final : positions inchangées dans la
+    // chaîne, effets extraits — c'est le seul câblage valide.
     let graph = make_graph(
         vec![
             (NodeType::Merge, serde_json::json!({})),
@@ -657,16 +659,198 @@ fn test_compile_graph_with_zone_velocity_passthrough() {
             ),
             (NodeType::Output, serde_json::json!({})),
         ],
-        vec![(0, 1), (1, 2), (2, 3)],
+        vec![(0, 3), (0, 1), (0, 2)],
     );
     let positions = vec![(0, nalgebra::Vector3::new(1.0, 2.0, 3.0))];
     let out = run_test(
-        graph,
+        graph.clone(),
         positions.clone(),
         HashMap::new(),
         nalgebra::Vector3::zeros(),
     );
     assert_eq!(out, positions, "Zone/Velocity must not modify positions");
+    let effects = extract_graph_effects(&graph).unwrap();
+    assert_eq!(effects.zones.len(), 1);
+    assert_eq!(effects.modulations.len(), 1);
+}
+
+#[test]
+fn test_sensor_fed_mid_chain_is_validation_error() {
+    // Un capteur dont le `in` n'est pas alimenté par le node qui alimente
+    // Output → erreur explicite (il observerait des positions partielles).
+    let graph = make_graph(
+        vec![
+            (NodeType::Merge, serde_json::json!({})),
+            (NodeType::Scale, serde_json::json!({"scale": 1.0})),
+            (
+                NodeType::Zone,
+                serde_json::json!({"shape": "sphere", "channels": {"gain": 0.0}}),
+            ),
+            (NodeType::Output, serde_json::json!({})),
+        ],
+        vec![(0, 1), (1, 3), (0, 2)], // Zone ← Merge, pas ← Scale (final)
+    );
+    let errors = crate::validator::Validator::validate_with_context(
+        &graph,
+        crate::validator::GraphContext::Global,
+    )
+    .expect_err("Zone fed mid-chain must fail");
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.to_string().contains("final positions")),
+        "expected sensor rule error: {errors:?}"
+    );
+
+    // Alimentée par le node final → valide.
+    let graph = make_graph(
+        vec![
+            (NodeType::Merge, serde_json::json!({})),
+            (NodeType::Scale, serde_json::json!({"scale": 1.0})),
+            (
+                NodeType::Zone,
+                serde_json::json!({"shape": "sphere", "channels": {"gain": 0.0}}),
+            ),
+            (NodeType::Output, serde_json::json!({})),
+        ],
+        vec![(0, 1), (1, 3), (1, 2)],
+    );
+    crate::validator::Validator::validate_with_context(
+        &graph,
+        crate::validator::GraphContext::Global,
+    )
+    .expect("Zone fed by final node is valid");
+}
+
+#[test]
+fn test_global_chain_source_rules() {
+    // Pas de source → erreur (head = Scale, pas Merge/MoveRef).
+    let graph = make_graph(
+        vec![
+            (NodeType::Scale, serde_json::json!({"scale": 1.0})),
+            (NodeType::Output, serde_json::json!({})),
+        ],
+        vec![(0, 1)],
+    );
+    let errors = crate::validator::Validator::validate_with_context(
+        &graph,
+        crate::validator::GraphContext::Global,
+    )
+    .expect_err("chain without source must fail");
+    assert!(
+        errors.iter().any(|e| e.to_string().contains("source")),
+        "expected source error: {errors:?}"
+    );
+
+    // Deux sources atteignables → erreur (Merge en tête + MoveRef mid-chain).
+    let graph = make_graph(
+        vec![
+            (NodeType::Merge, serde_json::json!({})),
+            (NodeType::Scale, serde_json::json!({"scale": 1.0})),
+            (NodeType::MoveRef, serde_json::json!({"move_id": "m"})),
+            (NodeType::Output, serde_json::json!({})),
+        ],
+        vec![(0, 1), (1, 2), (2, 3)],
+    );
+    let errors = crate::validator::Validator::validate_with_context(
+        &graph,
+        crate::validator::GraphContext::Global,
+    )
+    .expect_err("two sources must fail");
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.to_string().contains("source nodes")),
+        "expected two-source error: {errors:?}"
+    );
+}
+
+#[test]
+fn test_moveref_head_sets_move_ref() {
+    // MoveRef en tête de chaîne → move_id extrait.
+    let graph = make_graph(
+        vec![
+            (NodeType::MoveRef, serde_json::json!({"move_id": "slot-2"})),
+            (NodeType::Scale, serde_json::json!({"scale": 1.0})),
+            (NodeType::Output, serde_json::json!({})),
+        ],
+        vec![(0, 1), (1, 2)],
+    );
+    let effects = extract_graph_effects(&graph).unwrap();
+    assert_eq!(effects.move_ref.as_deref(), Some("slot-2"));
+    assert!(effects.strategy.is_none());
+}
+
+#[test]
+fn test_barycenter_position_in_chain_changes_pivot() {
+    // Merge→Barycenter→Scale(2)→Output : le Scale pivote autour de
+    // l'isobarycentre des track_positions (3,0,0) — pos (4,0,0) → 3+(4-3)*2 = 5.
+    // Merge→Scale(2)→Barycenter→Output : le Scale pivote sur l'origin app
+    // (0,0,0) → (4,0,0) → 8. Les deux graphes doivent différer.
+    let tracks = {
+        let mut m = HashMap::new();
+        m.insert(1u32, [2.0, 0.0, 0.0]);
+        m.insert(2u32, [4.0, 0.0, 0.0]);
+        m
+    };
+    let mk = |order: Vec<(NodeType, serde_json::Value)>, edges: Vec<(usize, usize)>| {
+        let g = make_graph(order, edges);
+        let macros = Arc::new(MacroState::new());
+        compile_post_process(PostProcessCompileParams { graph: g, macros }).unwrap()
+    };
+    let ctx = PostProcessContext {
+        t: 0.0,
+        macros: Box::leak(Box::new(MacroState::new())),
+        audio_state: Box::leak(Box::new(crate::audio::AudioState::new())),
+        track_positions: Box::leak(Box::new(tracks)),
+        manual_positions: Box::leak(Box::new(HashMap::new())),
+        origin: nalgebra::Vector3::zeros(),
+        track_depths: Box::leak(Box::new(Vec::new())),
+    };
+
+    // Barycenter AVANT Scale → pivot = barycentre (3,0,0).
+    let f1 = mk(
+        vec![
+            (NodeType::Merge, serde_json::json!({})),
+            (NodeType::Barycenter, serde_json::json!({})),
+            (
+                NodeType::Scale,
+                serde_json::json!({"x": 2.0, "y": 1.0, "z": 1.0}),
+            ),
+            (NodeType::Output, serde_json::json!({})),
+        ],
+        vec![(0, 1), (1, 2), (2, 3)],
+    );
+    let out1 = f1(&ctx, vec![(0, nalgebra::Vector3::new(4.0, 0.0, 0.0))]);
+    assert!(
+        (out1[0].1.x - 5.0).abs() < 1e-6,
+        "barycenter→scale : pivot barycentre → x=5, got {}",
+        out1[0].1.x
+    );
+
+    // Barycenter APRÈS Scale → le Scale utilise l'origin app (0,0,0) → x=8.
+    let f2 = mk(
+        vec![
+            (NodeType::Merge, serde_json::json!({})),
+            (
+                NodeType::Scale,
+                serde_json::json!({"x": 2.0, "y": 1.0, "z": 1.0}),
+            ),
+            (NodeType::Barycenter, serde_json::json!({})),
+            (NodeType::Output, serde_json::json!({})),
+        ],
+        vec![(0, 1), (1, 2), (2, 3)],
+    );
+    let out2 = f2(&ctx, vec![(0, nalgebra::Vector3::new(4.0, 0.0, 0.0))]);
+    assert!(
+        (out2[0].1.x - 8.0).abs() < 1e-6,
+        "scale→barycenter : pivot app → x=8, got {}",
+        out2[0].1.x
+    );
+    assert!(
+        (out1[0].1.x - out2[0].1.x).abs() > 1e-6,
+        "order must matter"
+    );
 }
 
 // ── Audit T2 : clés du schema UI unifiées sub-graph/global ────────────
@@ -753,10 +937,10 @@ fn test_compile_rotate_unified_order() {
     assert!((result[0].1.z + 1.0).abs() < 1e-10, "z={}", result[0].1.z);
 }
 
-/// extract_graph_effects remonte Barycenter et MoveRef.move_id — ils
-/// n'étaient pas lus du tout (audit T2).
+/// extract_graph_effects remonte MoveRef.move_id depuis le head de
+/// chaîne — un `move_id` vide tombe sur le merge complet.
 #[test]
-fn test_extract_effects_barycenter_and_moveref() {
+fn test_extract_effects_moveref_head() {
     let graph = make_graph(
         vec![
             (NodeType::MoveRef, serde_json::json!({"move_id": "slot-2"})),
@@ -766,7 +950,6 @@ fn test_extract_effects_barycenter_and_moveref() {
         vec![(0, 1), (1, 2)],
     );
     let effects = extract_graph_effects(&graph).unwrap();
-    assert!(effects.barycenter);
     assert_eq!(effects.move_ref.as_deref(), Some("slot-2"));
 
     // MoveRef sans move_id → None (fallback merge complet)
@@ -778,7 +961,6 @@ fn test_extract_effects_barycenter_and_moveref() {
         vec![(0, 1)],
     );
     let effects = extract_graph_effects(&graph).unwrap();
-    assert!(!effects.barycenter);
     assert!(effects.move_ref.is_none());
 }
 

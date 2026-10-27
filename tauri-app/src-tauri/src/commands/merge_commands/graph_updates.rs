@@ -284,12 +284,7 @@ pub async fn update_global_graph(
 
         let merge_rt = lock_or_recover(&sh.merge_runtime);
         merge_rt.swap_post_process_fn(post_process_fn);
-        merge_rt.set_graph_effects(
-            effects.zones,
-            effects.modulations,
-            effects.barycenter,
-            effects.move_ref,
-        );
+        merge_rt.set_graph_effects(effects.zones, effects.modulations, effects.move_ref);
         // Le node Merge peut déclarer la stratégie de résolution de conflit
         // (param `strategy`) — appliquée à chaque push du graphe global.
         if let Some(strategy) = effects.strategy {
@@ -300,4 +295,72 @@ pub async fn update_global_graph(
     })
     .await
     .map_err(|e| IpcError::internal(format!("Task join error: {e}")))?
+}
+
+/// Diagnostics live du graphe — la source de vérité des règles reste le
+/// backend (le frontend interroge en continu pour surligner les nodes).
+/// Un échec de parse n'est pas une erreur IPC : c'est un seul issue Error.
+#[tauri::command]
+pub async fn diagnose_graph(
+    graph_json: stagespace_engines::GraphJson,
+    context: String,
+    move_graph_json: Option<stagespace_engines::GraphJson>,
+    state: State<'_, AppState>,
+) -> Result<Vec<stagespace_engines::GraphIssue>, IpcError> {
+    let sh = Shared::from_state(&state);
+    tauri::async_runtime::spawn_blocking(move || {
+        diagnose_graph_inner(graph_json, &context, move_graph_json, &sh)
+    })
+    .await
+    .map_err(|e| IpcError::internal(format!("Task join error: {e}")))?
+}
+
+/// Corps synchrone de `diagnose_graph` — testable hors Tauri.
+pub fn diagnose_graph_inner(
+    graph_json: stagespace_engines::GraphJson,
+    context: &str,
+    move_graph_json: Option<stagespace_engines::GraphJson>,
+    sh: &crate::commands::state::Shared,
+) -> Result<Vec<stagespace_engines::GraphIssue>, IpcError> {
+    {
+        let audio_state = lock_or_recover(&sh.audio_state);
+        let ctx = match context {
+            "sub" => stagespace_engines::GraphContext::SubGraph,
+            "global" => stagespace_engines::GraphContext::Global,
+            "signal" => stagespace_engines::GraphContext::Signal,
+            other => {
+                return Err(IpcError::validation(format!(
+                    "unknown graph context '{other}' (sub|global|signal)"
+                )))
+            }
+        };
+        let move_graph = match move_graph_json {
+            Some(mg) => match build_graph_from_json(&mg, &audio_state) {
+                Ok(g) => Some(g),
+                Err(e) => {
+                    return Ok(vec![stagespace_engines::GraphIssue {
+                        severity: stagespace_engines::IssueSeverity::Error,
+                        message: format!("move graph parse failed: {e}"),
+                        node_ids: vec![],
+                    }])
+                }
+            },
+            None => None,
+        };
+        let graph = match build_graph_from_json(&graph_json, &audio_state) {
+            Ok(g) => g,
+            Err(e) => {
+                return Ok(vec![stagespace_engines::GraphIssue {
+                    severity: stagespace_engines::IssueSeverity::Error,
+                    message: format!("graph parse failed: {e}"),
+                    node_ids: vec![],
+                }])
+            }
+        };
+        Ok(stagespace_engines::diagnose(
+            &graph,
+            ctx,
+            move_graph.as_ref(),
+        ))
+    }
 }

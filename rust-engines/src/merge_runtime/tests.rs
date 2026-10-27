@@ -321,20 +321,20 @@ fn test_set_graph_effects_replaces_in_block() {
     .unwrap();
 
     // Premier set : 1 zone + 1 modulation
-    rt.set_graph_effects(vec![zone.clone()], vec![rule], false, None);
+    rt.set_graph_effects(vec![zone.clone()], vec![rule], None);
     let (z, m) = rt.graph_effects();
     assert_eq!(z.len(), 1);
     assert_eq!(m.len(), 1);
 
     // Deuxième set : remplace en bloc (update du graphe sans effets → vide)
-    rt.set_graph_effects(Vec::new(), Vec::new(), false, None);
+    rt.set_graph_effects(Vec::new(), Vec::new(), None);
     let (z, m) = rt.graph_effects();
     assert!(z.is_empty());
     assert!(m.is_empty());
 
     // Les effets manuels ne sont pas touchés par set_graph_effects
     rt.add_zone(zone).unwrap();
-    rt.set_graph_effects(Vec::new(), Vec::new(), false, None);
+    rt.set_graph_effects(Vec::new(), Vec::new(), None);
     assert_eq!(rt.zones().len(), 1);
 }
 
@@ -596,7 +596,7 @@ fn test_moveref_selects_single_move_positions() {
     let captured = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
     rt.set_sink(Box::new(CaptureSink(captured.clone())));
     rt.set_osc_ids(vec![1, 2]);
-    rt.set_graph_effects(Vec::new(), Vec::new(), false, Some("m2".to_string()));
+    rt.set_graph_effects(Vec::new(), Vec::new(), Some("m2".to_string()));
 
     let b1 = Arc::new(PositionBuffer::new());
     let b2 = Arc::new(PositionBuffer::new());
@@ -640,8 +640,35 @@ fn test_barycenter_recomputes_pivot() {
         m
     });
     rt.macros().set_scale(2.0);
-    // Barycenter actif via les effets du graph global
-    rt.set_graph_effects(Vec::new(), Vec::new(), true, None);
+    // Barycenter dans la chaîne compilée : les transforms qui le suivent
+    // pivotent autour de l'isobarycentre des track_positions.
+    let mut g = crate::graph::Graph::new();
+    let (m, b, s, o) = (
+        crate::graph::Node::new(crate::graph::NodeType::Merge),
+        crate::graph::Node::new(crate::graph::NodeType::Barycenter),
+        crate::graph::Node::new(crate::graph::NodeType::Scale),
+        crate::graph::Node::new(crate::graph::NodeType::Output),
+    );
+    let (m_id, b_id, s_id, o_id) = (m.id, b.id, s.id, o.id);
+    for n in [m, b, s, o] {
+        g.add_node(n);
+    }
+    for (f, t) in [(m_id, b_id), (b_id, s_id), (s_id, o_id)] {
+        g.add_edge(crate::graph::Edge {
+            from: f,
+            to: t,
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
+        });
+    }
+    let pp = crate::post_process_compiler::compile_post_process(
+        crate::post_process_compiler::PostProcessCompileParams {
+            graph: g,
+            macros: rt.macros(),
+        },
+    )
+    .unwrap();
+    rt.swap_post_process_fn(pp);
 
     let b = Arc::new(PositionBuffer::new());
     rt.register_move("m1".to_string(), b.clone(), vec![1], vec![0], false);

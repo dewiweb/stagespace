@@ -264,12 +264,7 @@ pub(crate) fn recall_cue_inner(
 
         let merge_rt = lock_or_recover(&sh.merge_runtime);
         merge_rt.swap_post_process_fn(post_process_fn);
-        merge_rt.set_graph_effects(
-            effects.zones,
-            effects.modulations,
-            effects.barycenter,
-            effects.move_ref,
-        );
+        merge_rt.set_graph_effects(effects.zones, effects.modulations, effects.move_ref);
         // Idem update_global_graph : un node Merge peut fixer la stratégie.
         if let Some(strategy) = effects.strategy {
             merge_rt.set_merge_strategy(strategy);

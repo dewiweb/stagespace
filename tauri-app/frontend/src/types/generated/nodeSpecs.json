@@ -3751,14 +3751,7 @@
         "label": "in"
       }
     ],
-    "outputs": [
-      {
-        "name": "out",
-        "port_type": "Positions",
-        "required": false,
-        "label": "out"
-      }
-    ],
+    "outputs": [],
     "description": "Spatial region (sphere/box) pulling object channels toward target values — gain/spread/etc. vary with position. Pass-through: doesn't modify positions",
     "object_distribution": "None",
     "stateful": false,
@@ -3879,14 +3872,7 @@
         "label": "in"
       }
     ],
-    "outputs": [
-      {
-        "name": "out",
-        "port_type": "Positions",
-        "required": false,
-        "label": "out"
-      }
-    ],
+    "outputs": [],
     "description": "Kinematic modulation — object speed/accel/jerk/angvel → spatial channel. angvel = angular speed °/s around the listener (perceptual bound). Pass-through: doesn't modify positions",
     "object_distribution": "None",
     "stateful": false,

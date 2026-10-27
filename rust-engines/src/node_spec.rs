@@ -981,7 +981,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             vec![],
         ),
         spec(
-            NodeType::Zone, C::PostProcess, S::GlobalOnly, pos_in(), out_pos(),
+            NodeType::Zone, C::PostProcess, S::GlobalOnly, pos_in(), vec![],
             "Spatial region (sphere/box) pulling object channels toward target values — gain/spread/etc. vary with position. Pass-through: doesn't modify positions",
             vec![
                 enm("shape", "Shape", &["sphere", "box"]).d("sphere"),
@@ -996,7 +996,7 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
-            NodeType::Velocity, C::PostProcess, S::GlobalOnly, pos_in(), out_pos(),
+            NodeType::Velocity, C::PostProcess, S::GlobalOnly, pos_in(), vec![],
             "Kinematic modulation — object speed/accel/jerk/angvel → spatial channel. angvel = angular speed °/s around the listener (perceptual bound). Pass-through: doesn't modify positions",
             vec![
                 enm("source", "Source", &["speed", "acceleration", "jerk", "angvel"]).d("speed"),

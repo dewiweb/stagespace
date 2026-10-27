@@ -119,9 +119,10 @@ mod complex_graph_tests {
                 e("g5", "ptd", "sc", "out", "in"),
                 e("g6", "sc", "rot", "out", "in"),
                 e("g7", "rot", "off", "out", "in"),
+                // Capteurs en fan-out du node final (off → Output.in).
                 e("g8", "off", "zone", "out", "in"),
-                e("g9", "zone", "vel", "out", "in"),
-                e("g10", "vel", "out", "out", "in"),
+                e("g9", "off", "vel", "out", "in"),
+                e("g10", "off", "out", "out", "in"),
             ]
         })
     }
