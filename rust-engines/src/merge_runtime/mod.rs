@@ -24,6 +24,7 @@ mod helpers;
 mod move_state;
 #[cfg(test)]
 mod tests;
+mod transition;
 
 pub use helpers::{default_post_process_fn, merge_positions, MoveEntry};
 pub use move_state::{MergeStrategy, MoveState};
@@ -195,6 +196,11 @@ pub struct MergeRuntime {
     /// Mutex (pas RwLock) : `SignalFn` est `FnMut` — les nodes à état
     /// mutent à chaque eval. Hot-swappable via `update_signal_graph`.
     signal_fn: Arc<Mutex<crate::signal_compiler::SignalFn>>,
+    /// Transition de recall en cours — arbre de layers (Live/Frozen/Blend)
+    /// crossfadant tout l'output post-merge : post-process, macros,
+    /// positions manuelles, depths, canaux, zones, modulations. `Live`
+    /// hors transition = chemin à coût nul inchangé.
+    output_layer: Arc<Mutex<transition::Layer>>,
     /// Dernières valeurs OSC reçues (`OscReceiver::address_values_handle`)
     /// — source des nodes `SignalOsc`. L'Arc interne est re-pointé via
     /// `set_osc_values_handle` quand le receiver est recréé (rebind port).
@@ -270,6 +276,7 @@ impl MergeRuntime {
             move_ref_id: Arc::new(RwLock::new(None)),
             stale_kill_ids: Arc::new(Mutex::new(Vec::new())),
             signal_fn: Arc::new(Mutex::new(crate::signal_compiler::empty_signal_fn())),
+            output_layer: Arc::new(Mutex::new(transition::Layer::Live)),
             osc_values: Arc::new(RwLock::new(Arc::new(Mutex::new(HashMap::new())))),
         })
     }
@@ -722,6 +729,81 @@ impl MergeRuntime {
         ((**z).clone(), (**m).clone())
     }
 
+    /// Snapshot immuable de l'output layer courant — utilisé par
+    /// `begin_transition` pour figer le `from` du crossfade.
+    fn snapshot_layer(&self) -> transition::OutputLayer {
+        transition::OutputLayer {
+            post_process_fn: self
+                .post_process_fn
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone(),
+            macros: self.macros.snapshot(),
+            manual_positions: self
+                .manual_positions
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone(),
+            track_depths: (**self.track_depths.read().unwrap_or_else(|e| e.into_inner())).clone(),
+            object_channels: self
+                .object_channels
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone(),
+            zones: {
+                let mut z = (**self.graph_zones.read().unwrap_or_else(|e| e.into_inner())).clone();
+                z.extend(
+                    self.zones
+                        .read()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .iter()
+                        .cloned(),
+                );
+                z
+            },
+            modulations: {
+                let mut m = (**self
+                    .graph_modulations
+                    .read()
+                    .unwrap_or_else(|e| e.into_inner()))
+                .clone();
+                m.extend(
+                    self.channel_modulations
+                        .read()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .iter()
+                        .cloned(),
+                );
+                m
+            },
+            origin: *self.origin.lock().unwrap_or_else(|e| e.into_inner()),
+        }
+    }
+
+    /// Démarre un crossfade de l'output layer : tout ce que le post-merge
+    /// lit en dehors des positions mergées (post-process graph, macros,
+    /// positions manuelles, depths, canaux, zones, modulations, origin)
+    /// est figé en `from` ; les setters suivants écrivent le nouvel état
+    /// dans `Live` (= cible). `duration <= 0` → no-op.
+    /// GO rapides en chaîne : l'ancienne transition continue à l'intérieur
+    /// du nouvel arbre — continuité garantie (pas de saut).
+    pub fn begin_transition(&self, duration: f64) {
+        if duration <= 0.0 {
+            return;
+        }
+        let frozen = self.snapshot_layer();
+        let mut g = self.output_layer.lock().unwrap_or_else(|e| e.into_inner());
+        *g = std::mem::replace(&mut *g, transition::Layer::Live).begin(frozen, duration);
+    }
+
+    /// Une transition d'output layer est-elle en cours ? (tests / perf).
+    pub fn has_active_transition(&self) -> bool {
+        !matches!(
+            *self.output_layer.lock().unwrap_or_else(|e| e.into_inner()),
+            transition::Layer::Live
+        )
+    }
+
     /// Récupère les macros (pour modification temps réel — fast path atomic)
     pub fn macros(&self) -> Arc<MacroState> {
         self.macros.clone()
@@ -993,6 +1075,7 @@ impl MergeRuntime {
         let move_ref_id_arc = self.move_ref_id.clone();
         let stale_kill_ids = self.stale_kill_ids.clone();
         let signal_fn_arc = self.signal_fn.clone();
+        let output_layer_arc = self.output_layer.clone();
         let osc_values_arc = self.osc_values.clone();
 
         let handle = std::thread::spawn(move || {
@@ -1295,7 +1378,7 @@ impl MergeRuntime {
                 // move. Move absent → positions vides (pas de fallback
                 // silencieux sur le merge complet : le graphe demande
                 // explicitement ce move).
-                let merged = {
+                let mut merged = {
                     let move_ref = timed_lock!(
                         lock_wait_ns,
                         lock_sites,
@@ -1365,7 +1448,7 @@ impl MergeRuntime {
                 // La base (panel/OSC/cue) n'est jamais écrasée — couche
                 // additive pure, les transforms lisent `ctx.macros` sans
                 // changement.
-                let eff_macros = {
+                let signal_deltas = {
                     let mut signal = timed_lock!(
                         lock_wait_ns,
                         lock_sites,
@@ -1396,14 +1479,15 @@ impl MergeRuntime {
                             osc_values: &osc_vals,
                         })
                     };
-                    if deltas.macros.is_empty() {
-                        None
-                    } else {
-                        Some(crate::signal_compiler::macro_with_deltas(
-                            &macros,
-                            &deltas.macros,
-                        ))
-                    }
+                    deltas
+                };
+                let eff_macros = if signal_deltas.macros.is_empty() {
+                    None
+                } else {
+                    Some(crate::signal_compiler::macro_with_deltas(
+                        &macros,
+                        &signal_deltas.macros,
+                    ))
                 };
 
                 let ctx = PostProcessContext {
@@ -1416,7 +1500,25 @@ impl MergeRuntime {
                     track_depths: &track_depths,
                 };
 
-                let transformed_raw: Vec<(usize, nalgebra::Vector3<f64>)> = {
+                // Transition de recall en cours ? Snapshot de l'arbre —
+                // `Live` = chemin classique inchangé ; un Blend terminé
+                // retombe à Live (l'arbre n'accumule rien).
+                let layer_snap = {
+                    let mut g = timed_lock!(
+                        lock_wait_ns,
+                        lock_sites,
+                        lock_profiling,
+                        "output_layer.lock",
+                        output_layer_arc.lock().unwrap_or_else(|e| e.into_inner())
+                    );
+                    if transition::layer_finished(&g) {
+                        *g = transition::Layer::Live;
+                    }
+                    g.clone()
+                };
+                let transition_active = !matches!(layer_snap, transition::Layer::Live);
+                // Les valeurs propres vivent ici (référencées par LiveInputs).
+                let transition_owned = if transition_active {
                     let pp_fn = timed_lock!(
                         lock_wait_ns,
                         lock_sites,
@@ -1425,9 +1527,114 @@ impl MergeRuntime {
                         post_process_fn_arc
                             .read()
                             .unwrap_or_else(|e| e.into_inner())
-                    );
-                    pp_fn(&ctx, merged)
+                    )
+                    .clone();
+                    let live_channels = timed_lock!(
+                        lock_wait_ns,
+                        lock_sites,
+                        lock_profiling,
+                        "object_channels.read",
+                        object_channels_arc
+                            .read()
+                            .unwrap_or_else(|e| e.into_inner())
+                    )
+                    .clone();
+                    let live_zones: Vec<crate::zones::Zone> = {
+                        let mut z = (**timed_lock!(
+                            lock_wait_ns,
+                            lock_sites,
+                            lock_profiling,
+                            "graph_zones.read",
+                            graph_zones_arc.read().unwrap_or_else(|e| e.into_inner())
+                        ))
+                        .clone();
+                        z.extend(
+                            timed_lock!(
+                                lock_wait_ns,
+                                lock_sites,
+                                lock_profiling,
+                                "zones.read",
+                                zones_arc.read().unwrap_or_else(|e| e.into_inner())
+                            )
+                            .iter()
+                            .cloned(),
+                        );
+                        z
+                    };
+                    let live_mods: Vec<ChannelModulation> = {
+                        let mut m = (**timed_lock!(
+                            lock_wait_ns,
+                            lock_sites,
+                            lock_profiling,
+                            "graph_modulations.read",
+                            graph_modulations_arc
+                                .read()
+                                .unwrap_or_else(|e| e.into_inner())
+                        ))
+                        .clone();
+                        m.extend(
+                            timed_lock!(
+                                lock_wait_ns,
+                                lock_sites,
+                                lock_profiling,
+                                "channel_modulations.read",
+                                channel_modulations_arc
+                                    .read()
+                                    .unwrap_or_else(|e| e.into_inner())
+                            )
+                            .iter()
+                            .cloned(),
+                        );
+                        m
+                    };
+                    Some((pp_fn, live_channels, live_zones, live_mods))
+                } else {
+                    None
                 };
+                let live_common = transition_owned.as_ref().map(|_| transition::EvalCommon {
+                    t: t_real,
+                    audio_state: &audio_state,
+                    track_positions: &track_positions,
+                    macros_deltas: &signal_deltas.macros,
+                });
+                let live_layer =
+                    transition_owned
+                        .as_ref()
+                        .map(|(pp_fn, ch, zo, mo)| transition::LiveInputs {
+                            post_process_fn: pp_fn,
+                            macros: eff_macros.as_ref().unwrap_or_else(|| macros.as_ref()),
+                            manual_positions: &manual_positions,
+                            track_depths: &track_depths,
+                            object_channels: ch,
+                            zones: zo,
+                            modulations: mo,
+                            origin,
+                        });
+
+                let transformed_raw: Vec<(usize, nalgebra::Vector3<f64>)> =
+                    match (&live_layer, &live_common) {
+                        (Some(live), Some(common)) => {
+                            // Transition : positions = blend des feuilles
+                            // (chaque feuille = son propre post-process /
+                            // macros / manual / depths / origin).
+                            transition::eval_positions_tree(&layer_snap, live, &merged, common)
+                        }
+                        _ => {
+                            let pp_fn = timed_lock!(
+                                lock_wait_ns,
+                                lock_sites,
+                                lock_profiling,
+                                "post_process_fn.read",
+                                post_process_fn_arc
+                                    .read()
+                                    .unwrap_or_else(|e| e.into_inner())
+                            );
+                            // `merged` est consommé ici — les bras
+                            // transition/preview qui le relisent sont
+                            // mutuellement exclusifs avec le bras Live.
+                            pp_fn(&ctx, std::mem::take(&mut merged))
+                        }
+                    };
 
                 // Sanitize : une position NaN/inf ne doit jamais partir en OSC
                 // (f64::clamp ne panique pas ici — on droppe l'objet). Le
@@ -1544,6 +1751,22 @@ impl MergeRuntime {
                     z
                 };
 
+                // Transition : canaux effectifs = blend des feuilles —
+                // chaque feuille évalue statiques ⊕ modulations ⊕ zones sur
+                // SES positions ; les deux côtés partagent `kinematic_states`
+                // (déjà à jour sur les positions blendées).
+                let eff_channels_override: Option<HashMap<usize, SpatialChannels>> =
+                    match (&live_layer, &live_common) {
+                        (Some(live), Some(common)) => Some(transition::eval_channels_tree(
+                            &layer_snap,
+                            live,
+                            &merged,
+                            common,
+                            &kinematic_states,
+                        )),
+                        _ => None,
+                    };
+
                 // 5. Output — le sink est locké pour la frame entière : les
                 // sends par objet sont non-bloquants (~µs), et un set_sink
                 // mid-show ne peut pas swaper en plein milieu d'une frame.
@@ -1597,23 +1820,30 @@ impl MergeRuntime {
                                 // Canaux effectifs = statiques + modulés (modulation
                                 // prioritaire sur les canaux qu'elle cible) + zones
                                 // (blend par influence, prioritaires sur le reste)
-                                let has_zones =
-                                    crate::zones::any_zone_applies(&zones, *obj_idx, pos);
-                                let effective: Option<SpatialChannels> = match (
-                                    object_channels.get(obj_idx),
-                                    modulated_channels.get(obj_idx),
-                                    has_zones,
-                                ) {
-                                    (None, None, false) => None,
-                                    (s, m, _) => {
-                                        let mut eff = s.copied().unwrap_or_default();
-                                        if let Some(mc) = m {
-                                            eff.overlay(mc);
+                                let effective: Option<SpatialChannels> =
+                                    if let Some(over) = &eff_channels_override {
+                                        over.get(obj_idx).copied()
+                                    } else {
+                                        let has_zones =
+                                            crate::zones::any_zone_applies(&zones, *obj_idx, pos);
+                                        match (
+                                            object_channels.get(obj_idx),
+                                            modulated_channels.get(obj_idx),
+                                            has_zones,
+                                        ) {
+                                            (None, None, false) => None,
+                                            (s, m, _) => {
+                                                let mut eff = s.copied().unwrap_or_default();
+                                                if let Some(mc) = m {
+                                                    eff.overlay(mc);
+                                                }
+                                                crate::zones::apply_zones(
+                                                    &zones, *obj_idx, pos, &mut eff,
+                                                );
+                                                Some(eff)
+                                            }
                                         }
-                                        crate::zones::apply_zones(&zones, *obj_idx, pos, &mut eff);
-                                        Some(eff)
-                                    }
-                                };
+                                    };
                                 let report =
                                     sink_guard.send_state(osc_id, *pos, effective.as_ref());
                                 osc_since_perf += report.sent as u64;
@@ -1645,17 +1875,30 @@ impl MergeRuntime {
                         if preview_positions.is_empty() {
                             Vec::new()
                         } else {
-                            let pp_fn = timed_lock!(
-                                lock_wait_ns,
-                                lock_sites,
-                                lock_profiling,
-                                "post_process_fn.read",
-                                post_process_fn_arc
-                                    .read()
-                                    .unwrap_or_else(|e| e.into_inner())
-                            );
-                            pp_fn(&ctx, preview_positions.clone())
-                                .into_iter()
+                            let raw = match (&live_layer, &live_common) {
+                                // Parité : le preview suit le même blend
+                                // de layers que le live pendant une
+                                // transition (sinon le 3D ment).
+                                (Some(live), Some(common)) => transition::eval_positions_tree(
+                                    &layer_snap,
+                                    live,
+                                    &preview_positions,
+                                    common,
+                                ),
+                                _ => {
+                                    let pp_fn = timed_lock!(
+                                        lock_wait_ns,
+                                        lock_sites,
+                                        lock_profiling,
+                                        "post_process_fn.read",
+                                        post_process_fn_arc
+                                            .read()
+                                            .unwrap_or_else(|e| e.into_inner())
+                                    );
+                                    pp_fn(&ctx, preview_positions.clone())
+                                }
+                            };
+                            raw.into_iter()
                                 .filter(|(_, pos)| pos.iter().all(|v| v.is_finite()))
                                 .collect()
                         };

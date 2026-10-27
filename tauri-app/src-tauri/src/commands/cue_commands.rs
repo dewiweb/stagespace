@@ -237,6 +237,13 @@ pub(crate) fn recall_cue_inner(
         (500.0 + cue.fade_duration.max(0.0) * 1000.0).min(MAX_SUPPRESS_MS as f64) as u64;
     lock_or_recover(&sh.osc_receiver).suppress_ms(suppress_ms);
 
+    // Crossfade de l'output layer : tout ce que le post-merge lit hors
+    // positions mergées (graph global, macros, positions manuelles,
+    // depths, canaux, zones, modulations) est figé en `from` — les writes
+    // ci-dessous écrivent la cible (Live) et le merge blende entre les
+    // deux sur `cue.fade_duration` au lieu de sauter. fade=0 → no-op.
+    lock_or_recover(&sh.merge_runtime).begin_transition(cue.fade_duration);
+
     // 1. Hot-swap le graph global AVANT de désactiver les moves (fail-fast sans side effects)
     //    Si la compilation échoue, on retourne une erreur sans avoir modifié l'état.
     if let Some(ref global_graph) = cue.global_graph {
