@@ -49,8 +49,11 @@ pub struct ParamSlots {
 impl ParamSlots {
     /// Construit la table pour un graphe de move : un slot par param
     /// `modulable` (Number/Boolean non structural) de chaque node.
-    /// Itération triée par NodeId — la table est déterministe pour un
-    /// graphe donné (mêmes indices entre compiles identiques).
+    /// Itération triée par NodeId — ordre déterministe pour une instance
+    /// de Graph donnée. Les indices n'ont de sens qu'à l'intérieur d'UN
+    /// compile (les uuid sont régénérés à chaque parse) — c'est pourquoi
+    /// position/sample/signal fns sont toujours bindées et swappées
+    /// ensemble sur la même table.
     pub fn build(graph: &Graph) -> Arc<ParamSlots> {
         let mut nodes: Vec<&Node> = graph.nodes.values().collect();
         nodes.sort_by_key(|n| n.id.0.as_u128());

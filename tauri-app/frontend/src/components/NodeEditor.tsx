@@ -1,6 +1,7 @@
-import React, { useCallback, useState, useEffect, useMemo } from 'react';
+import React, { useCallback, useState, useEffect, useMemo, useRef } from 'react';
 import {
   ReactFlow,
+  useReactFlow,
   Background,
   Controls,
   MiniMap,
@@ -21,7 +22,8 @@ import { useSignalGraphStore } from '../store/useSignalGraphStore';
 import CustomNode from './CustomNode';
 import { QuickAddModal } from './QuickAddModal';
 import { NODE_CATEGORIES, NODE_COLORS, NODE_DESCRIPTIONS, getCategoryColor, getDefaultParams, getValidTargetTypes, pluginDefaultParams, GLOBAL_ONLY_NODES, SUB_ONLY_NODES, SIGNAL_ONLY_NODES, type GraphNode } from './nodeParamSchema';
-import { isValidConnection, connectionRejectionReason, spliceRejectionReason } from '../utils/connectionRules';
+import { isValidConnection, connectionRejectionReason, spliceRejectionReason, portTypesInGraph, PORT_COLORS } from '../utils/connectionRules';
+import { safeGetItem, safeSetItem } from '../utils/safeStorage';
 import { presetsUsingType } from '../utils/shapePresets';
 import { toast } from '../utils/toast-helpers';
 import { safeInvoke as invoke } from '../utils/tauri';
@@ -910,6 +912,8 @@ export const NodeEditor: React.FC = () => {
         >
           <Background color="#1e1e2e" gap={24} />
           <Controls showInteractive={false} />
+          <ViewportSync contextKey={`${activeTab}:${editingSlotId ?? 'global'}`} />
+          <PortLegend nodes={displayNodes} />
           <MiniMap
             nodeColor={(n) => getCategoryColor((n.data.type ?? '') as NodeType)}
             maskColor="rgba(10,10,15,0.7)"
@@ -997,3 +1001,63 @@ export const NodeEditor: React.FC = () => {
 };
 
 export default NodeEditor;
+
+/// Re-fit la vue quand le contexte change (tab / slot édité) — sans ça le
+/// graphe nouveau apparaît hors champ. Doit être enfant de <ReactFlow>
+/// (useReactFlow nécessite le provider interne de ReactFlow).
+function ViewportSync({ contextKey }: { contextKey: string }) {
+  const { fitView } = useReactFlow();
+  const lastKey = useRef(contextKey);
+  useEffect(() => {
+    if (lastKey.current === contextKey) return;
+    lastKey.current = contextKey;
+    const raf = requestAnimationFrame(() => {
+      fitView({ padding: 0.2, duration: 200 });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [contextKey, fitView]);
+  return null;
+}
+
+const LEGEND_STORAGE_KEY = 'stagespace.portLegend.collapsed';
+
+/// Légende compacte des types de ports présents dans le contexte courant —
+/// les couleurs viennent de PORT_COLORS (source unique partagée avec les
+/// handles). Repliée/dépliée persiste en localStorage.
+function PortLegend({ nodes }: { nodes: GraphNode[] }) {
+  const [collapsed, setCollapsed] = useState(
+    () => safeGetItem(LEGEND_STORAGE_KEY) === 'true',
+  );
+  const types = useMemo(
+    () => portTypesInGraph(nodes.map((n) => n.data.type)),
+    [nodes],
+  );
+  if (types.length === 0) return null;
+  return (
+    <div className="absolute top-2 left-2 z-10 text-xs bg-gray-900/90 border border-gray-700 rounded">
+      <button
+        onClick={() => {
+          setCollapsed((c) => {
+            const next = !c;
+            safeSetItem(LEGEND_STORAGE_KEY, String(next));
+            return next;
+          });
+        }}
+        className="px-2 py-1 w-full text-left text-gray-300 hover:text-white"
+        title="Port type legend"
+      >
+        {collapsed ? '› Ports' : '˅ Ports'}
+      </button>
+      {!collapsed && (
+        <div className="px-2 pb-2 space-y-0.5">
+          {types.map((t) => (
+            <div key={t} className="flex items-center gap-1.5 text-gray-400">
+              <span className={`inline-block w-2.5 h-2.5 rounded-full ${PORT_COLORS[t]}`} />
+              {t}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

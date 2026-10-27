@@ -18,6 +18,18 @@ import SPECS_JSON from '../types/generated/nodeSpecs.json';
  */
 
 export const NODE_SPECS: NodeSpec[] = SPECS_JSON as unknown as NodeSpec[];
+
+/// Couleur Tailwind du handle par type de port — la sémantique de l'edge
+/// se lit sur la couleur : Positions (trajectoires), carriers ObjectSet/
+/// Duration, géométrie Spline, domaine Signal. Source unique — handles
+/// (CustomNode) et légende (NodeEditor) la partagent.
+export const PORT_COLORS: Record<PortDef['port_type'], string> = {
+  Positions: '!bg-gray-400',
+  ObjectSet: '!bg-cyan-500',
+  Duration: '!bg-yellow-500',
+  Spline: '!bg-emerald-500',
+  Signal: '!bg-orange-400',
+};
 const SPEC_BY_TYPE = new Map<NodeType, NodeSpec>(NODE_SPECS.map((s) => [s.node_type, s]));
 
 /// Spec d'un type de node — le catalogue couvre tous les variants de NodeType.
@@ -196,4 +208,19 @@ export function isTerminalNode(type: NodeType): boolean {
  */
 export function isBinaryComposite(type: NodeType): boolean {
   return specOf(type).category === 'Composite';
+}
+
+/// Types de ports présents dans un graphe (pour la légende) — union des
+/// inputs/outputs des nodes, ordre fixe PORT_COLORS.
+export function portTypesInGraph(nodeTypes: (NodeType | string | undefined)[]): PortDef['port_type'][] {
+  const present = new Set<PortDef['port_type']>();
+  for (const t of nodeTypes) {
+    if (!t) continue;
+    const spec = SPEC_BY_TYPE.get(t as NodeType);
+    if (!spec) continue;
+    for (const p of [...spec.inputs, ...spec.outputs]) {
+      present.add(p.port_type);
+    }
+  }
+  return (Object.keys(PORT_COLORS) as PortDef['port_type'][]).filter((k) => present.has(k));
 }

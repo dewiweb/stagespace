@@ -243,21 +243,15 @@ pub fn compile_move_signal_graph(
     compile_signal_inner(graph, Some((move_graph, slots)))
 }
 
-/// Résout la cible d'un SignalOut en destinations : macro (défaut),
-/// slots de params (cible `param:` — move scope uniquement), ou rien
-/// (cible vide → sink inerte, pas d'erreur).
-/// Validation d'une cible `param:` pour le diagnostic live — mêmes règles
-/// que `resolve_target` mais sans la table de slots (le node_id/param est
-/// vérifié contre le graphe du move, pas contre les indices).
-/// `move_graph: None` = contexte global → toute cible `param:` est rejetée.
-/// Retourne `Err(message)` — la chaîne de message reste identique.
-pub fn validate_param_target(
+/// Résolution commune des cibles `param:` : parsing `<seg>:<key>`,
+/// rejet du contexte global, lookup par node_key puis par NodeType,
+/// erreurs unknown-id / zero-instance / unknown-key / non-modulable.
+/// Retourne les nodes ciblés + la clé du param. Les messages d'erreur
+/// doivent rester identiques à ceux de `resolve_target` (tests).
+fn resolve_param_nodes<'a>(
     target: &str,
-    move_graph: Option<&crate::graph::Graph>,
-) -> std::result::Result<(), String> {
-    if target.is_empty() || !target.starts_with("param:") {
-        return Ok(());
-    }
+    move_graph: Option<&'a crate::graph::Graph>,
+) -> std::result::Result<(Vec<&'a crate::graph::Node>, String), String> {
     let rest = &target["param:".len()..];
     let Some(mg) = move_graph else {
         return Err(
@@ -275,6 +269,8 @@ pub fn validate_param_target(
             "param target '{target}' must be param:<node_id|NodeType>:<key>"
         ));
     }
+    // Résolution : d'abord par node_key (__fe_id ou uuid), sinon par
+    // NodeType (type-wide → tous les nodes de ce type dans le graphe).
     let by_id: Vec<&crate::graph::Node> = mg
         .nodes
         .values()
@@ -300,7 +296,7 @@ pub fn validate_param_target(
         }
         by_type
     };
-    for node in targets {
+    for node in &targets {
         let spec = crate::node_spec::node_spec(&node.node_type);
         let Some(param) = spec.params.iter().find(|p| p.key == key) else {
             return Err(format!(
@@ -315,9 +311,26 @@ pub fn validate_param_target(
             ));
         }
     }
-    Ok(())
+    Ok((targets, key.to_string()))
 }
 
+/// Validation d'une cible `param:` pour le diagnostic live — mêmes règles
+/// que `resolve_target` mais sans la table de slots (le node_id/param est
+/// vérifié contre le graphe du move, pas contre les indices).
+/// `move_graph: None` = contexte global → toute cible `param:` est rejetée.
+pub fn validate_param_target(
+    target: &str,
+    move_graph: Option<&crate::graph::Graph>,
+) -> std::result::Result<(), String> {
+    if target.is_empty() || !target.starts_with("param:") {
+        return Ok(());
+    }
+    resolve_param_nodes(target, move_graph).map(|_| ())
+}
+
+/// Résout la cible d'un SignalOut en destinations : macro (défaut),
+/// slots de params (cible `param:` — move scope uniquement), ou rien
+/// (cible vide → sink inerte, pas d'erreur).
 fn resolve_target(
     target: &str,
     bound: Option<MoveBinding>,
@@ -325,74 +338,22 @@ fn resolve_target(
     if target.is_empty() {
         return Ok(Vec::new()); // sink inerte — la chaîne amont est évaluée, rien n'écrit
     }
-    let Some(rest) = target.strip_prefix("param:") else {
+    if !target.starts_with("param:") {
         return Ok(vec![SinkDest::Macro(target.to_string())]);
-    };
-    let Some((move_graph, slots)) = bound else {
-        return Err(SignalCompileError::InvalidTarget(
-            "param: targets are only valid in a move's signal graph — the global signal graph has no node params to modulate".to_string(),
-        ));
-    };
-    let (seg, key) = rest.split_once(':').ok_or_else(|| {
-        SignalCompileError::InvalidTarget(format!(
-            "param target '{target}' must be param:<node_id|NodeType>:<key>"
-        ))
-    })?;
-    if key.is_empty() || seg.is_empty() {
-        return Err(SignalCompileError::InvalidTarget(format!(
-            "param target '{target}' must be param:<node_id|NodeType>:<key>"
-        )));
     }
-
-    // Résolution : d'abord par node_key (__fe_id ou uuid), sinon par
-    // NodeType (type-wide → tous les nodes de ce type dans le graphe).
-    let by_id: Vec<&crate::graph::Node> = move_graph
-        .nodes
-        .values()
-        .filter(|n| crate::param_slots::node_key(n) == seg)
-        .collect();
-    let targets: Vec<&crate::graph::Node> = if !by_id.is_empty() {
-        by_id
-    } else {
-        let by_type: Vec<&crate::graph::Node> = move_graph
-            .nodes
-            .values()
-            .filter(|n| format!("{:?}", n.node_type) == seg)
-            .collect();
-        if by_type.is_empty() {
-            let is_known_type = crate::node_spec::all_node_specs()
-                .iter()
-                .any(|sp| format!("{:?}", sp.node_type) == seg);
-            return Err(if is_known_type {
-                SignalCompileError::InvalidTarget(format!(
-                    "param target '{target}': no node of type '{seg}' in the move graph"
-                ))
-            } else {
-                SignalCompileError::InvalidTarget(format!(
-                    "param target '{target}': unknown node id '{seg}' in the move graph"
-                ))
-            });
-        }
-        by_type
+    let (targets, key) = resolve_param_nodes(target, bound.map(|(g, _)| g))
+        .map_err(SignalCompileError::InvalidTarget)?;
+    let Some((_, slots)) = bound else {
+        return Err(SignalCompileError::InvalidTarget(
+            "param: targets are only valid in a move's signal graph — the global signal graph has no node params to modulate"
+                .to_string(),
+        ));
     };
 
     let mut dests = Vec::with_capacity(targets.len());
     for node in targets {
-        let spec = crate::node_spec::node_spec(&node.node_type);
-        let Some(param) = spec.params.iter().find(|p| p.key == key) else {
-            return Err(SignalCompileError::InvalidTarget(format!(
-                "param target '{target}': unknown param '{key}' for node type '{:?}'",
-                node.node_type
-            )));
-        };
-        if !param.modulable {
-            return Err(SignalCompileError::InvalidTarget(format!(
-                "param target '{target}': param '{key}' of '{:?}' is not modulable",
-                node.node_type
-            )));
-        }
         let nk = crate::param_slots::node_key(node);
-        let idx = slots.slot_of(&nk, key).ok_or_else(|| {
+        let idx = slots.slot_of(&nk, &key).ok_or_else(|| {
             SignalCompileError::InvalidTarget(format!(
                 "param target '{target}': no slot for '{nk}:{key}' — ParamSlots/graph mismatch"
             ))

@@ -1,7 +1,7 @@
 /// <reference types="vitest/globals" />
 /// <reference types="@testing-library/jest-dom" />
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import Toolbar from '../Toolbar';
 import { useGraphStore } from '../../store/useGraphStore';
@@ -16,7 +16,14 @@ vi.mock('../SettingsModal', () => ({
   ),
 }));
 
+let errSpy: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
+  // Ces tests exercent des chemins d'erreur — console.error intercepté
+  // pour garder la sortie vitest propre.
+  errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+afterEach(() => {
+  errSpy.mockRestore();
+});
   resetStore();
   clearInvokeCalls();
 });

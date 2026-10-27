@@ -40,3 +40,35 @@ describe('graphIssues helpers', () => {
     expect(countIssues([])).toEqual({ errors: 0, warnings: 0 });
   });
 });
+
+import { portTypesInGraph, PORT_COLORS } from '../connectionRules';
+
+describe('portTypesInGraph — légende contextuelle', () => {
+  it('sub graph : Objects/Duration/Positions en ordre PORT_COLORS', () => {
+    const types = portTypesInGraph(['Objects', 'Duration', 'Circular', 'Output']);
+    expect(types).toContain('ObjectSet');
+    expect(types).toContain('Duration');
+    expect(types).toContain('Positions');
+    expect(types).not.toContain('Signal');
+    expect(types).toEqual(Object.keys(PORT_COLORS).filter((k) => types.includes(k as keyof typeof PORT_COLORS)));
+  });
+
+  it('signal graph : domaine Signal présent', () => {
+    const types = portTypesInGraph(['SignalConst', 'SignalOut']);
+    expect(types).toEqual(['Signal']);
+    // LFO échantillonne une trajectoire Positions → les deux domaines.
+    const withLfo = portTypesInGraph(['SignalConst', 'LFO', 'SignalOut']);
+    expect(withLfo).toContain('Signal');
+    expect(withLfo).toContain('Positions');
+  });
+
+  it('global graph : Positions uniquement (transforms + capteurs)', () => {
+    const types = portTypesInGraph(['Merge', 'Scale', 'Zone', 'Velocity', 'Output']);
+    expect(types).toEqual(['Positions']);
+  });
+
+  it('graphe vide / types inconnus → liste vide', () => {
+    expect(portTypesInGraph([])).toEqual([]);
+    expect(portTypesInGraph([undefined, 'NoSuchType' as never])).toEqual([]);
+  });
+});

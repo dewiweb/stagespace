@@ -6,9 +6,8 @@ import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import { useSignalGraphStore } from '../store/useSignalGraphStore';
 import { PARAM_SCHEMA, getCategoryColor, pluginNodeSchema, pluginParamsOnSwitch, type ParamDef, type NodeParamValue, type GraphNode } from './nodeParamSchema';
-import { isSourceNode, isTerminalNode, isBinaryComposite, getInputPorts, getOutputPorts } from '../utils/connectionRules';
+import { isSourceNode, isTerminalNode, isBinaryComposite, getInputPorts, getOutputPorts, PORT_COLORS } from '../utils/connectionRules';
 import { signalTargetOptions, modulatedParamKeys } from '../utils/signalTargets';
-import type { PortDef } from '../types/generated/PortDef';
 
 const AUDIO_NODE_TYPES = new Set(['BPM', 'AudioAmplitude', 'AudioSpectrum', 'AudioAmplitudeFalloff']);
 
@@ -252,16 +251,7 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
     setTrackIdsText(null);
   };
 
-  // Couleur du handle par type de port — la sémantique de l'edge se lit
-  // sur la couleur : Positions (trajectoires/mergé), carriers Objects/
-  // Duration, géométrie Spline, domaine Signal.
-  const PORT_COLORS: Record<PortDef['port_type'], string> = {
-    Positions: '!bg-gray-400',
-    ObjectSet: '!bg-cyan-500',
-    Duration: '!bg-yellow-500',
-    Spline: '!bg-emerald-500',
-    Signal: '!bg-orange-400',
-  };
+
   const outputPorts = getOutputPorts(data.type);
 
   // Rendu des handles — convention unique : TOUS les inputs en haut,
