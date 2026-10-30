@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Square, Globe, SlidersHorizontal, ListOrdered, AudioLines, Pin } from 'lucide-react';
+import { Play, Square, Globe, SlidersHorizontal, ListOrdered, AudioLines, Pin, Grip } from 'lucide-react';
 import { TrackGrid } from './TrackGrid';
 import { AudioModList } from './AudioModControls';
 import Scene3D from './Scene3D';
@@ -43,6 +43,8 @@ export const PerformView: React.FC = () => {
   const tcFps = useGraphStore((s) => s.timecodeFps);
 
   const [goFeedback, setGoFeedback] = React.useState<{ ok: boolean; message: string } | null>(null);
+  // Mode touch : pads numérotés (busking) + cibles agrandies (tablette).
+  const [touchMode, setTouchMode] = React.useState(false);
 
   const playingCount = moveSlots.filter((s) => s.movementId).length;
 
@@ -88,6 +90,48 @@ export const PerformView: React.FC = () => {
     .map((id) => moveSlots.find((s) => s.id === id))
     .filter(Boolean) as typeof moveSlots;
   const layerSlots = moveSlots.filter((s) => !setlistOrder.includes(s.id));
+
+  // Pad busking (mode touch) — cible 80px+, # = index OSC, tap = play/stop,
+  // coin S = solo (fade les autres).
+  const renderPad = (slot: (typeof moveSlots)[number]) => {
+    const isPlaying = !!slot.movementId || pendingPlays.includes(slot.id);
+    const oscNum = moveSlots.indexOf(slot) + 1;
+    return (
+      <div
+        key={slot.id}
+        onClick={() => (isPlaying ? stopSlot(slot.id) : playSlot(slot.id))}
+        className={`relative flex flex-col justify-between p-3 rounded-xl min-h-[88px] select-none cursor-pointer transition-colors active:scale-95 border ${
+          isPlaying
+            ? 'bg-green-800/70 border-green-600 text-green-50'
+            : 'bg-gray-800/80 border-gray-700 text-gray-200 hover:bg-gray-700/80'
+        }`}
+        role="button"
+        aria-label={`slot ${oscNum} ${slot.name} ${isPlaying ? 'stop' : 'play'}`}
+        title={`OSC: /stagespace/slot ${oscNum} · slot/stop ${oscNum} · solo ${oscNum}`}
+      >
+        <div className="flex items-start justify-between gap-1">
+          <span className={`text-sm font-black font-mono ${isPlaying ? 'text-green-300' : 'text-gray-500'}`}>
+            #{oscNum}
+          </span>
+          {playingCount > 1 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); doSolo(oscNum); }}
+              className="w-8 h-8 -m-1 rounded-lg bg-orange-700/70 hover:bg-orange-600 text-orange-100 text-xs font-bold flex items-center justify-center"
+              title="SOLO — coupe les autres en fondu"
+            >
+              S
+            </button>
+          )}
+        </div>
+        <div className="min-w-0">
+          <div className="text-sm font-semibold truncate leading-tight">{slot.name}</div>
+          <div className={`text-[10px] mt-0.5 ${isPlaying ? 'text-green-300/80' : 'text-gray-500'}`}>
+            {slot.trackIds.length} trk{isPlaying ? ' · LIVE' : ''}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // Row partagée setlist/layers — même interactions (tap = params, ▶/■ = layer)
   const renderSlotRow = (slot: (typeof moveSlots)[number], showSetlistAdd = false) => {
@@ -216,7 +260,7 @@ export const PerformView: React.FC = () => {
           )}
           {cues.length > 0 && (
             <span
-              className="text-xs flex-shrink-0 min-w-0"
+              className={`${touchMode ? 'text-base' : 'text-xs'} flex-shrink-0 min-w-0`}
               title="Conduite — cue courante / cue suivante (armée)"
             >
               <span className="text-gray-500 uppercase">Cue </span>
@@ -279,7 +323,7 @@ export const PerformView: React.FC = () => {
         </button>
         {tcChaseEnabled && (
           <span
-            className={`font-mono text-xs px-1.5 py-0.5 rounded border flex-shrink-0 ${
+            className={`font-mono ${touchMode ? 'text-base px-2.5 py-1.5' : 'text-xs px-1.5 py-0.5'} rounded border flex-shrink-0 ${
               tcActive ? 'border-emerald-600 text-emerald-400' : 'border-gray-600 text-gray-500'
             }`}
             title={tcActive ? 'Timecode actif (chase on)' : 'TC lost — pas de message depuis >1s'}
@@ -287,6 +331,17 @@ export const PerformView: React.FC = () => {
             {tcActive ? tcStr : 'TC lost'}
           </span>
         )}
+        <button
+          onClick={() => setTouchMode(!touchMode)}
+          className={`px-3 py-2 rounded-lg flex-shrink-0 transition-colors active:scale-95 ${
+            touchMode
+              ? 'bg-cyan-700 text-white'
+              : 'bg-gray-800 text-gray-400 hover:text-white border border-gray-700'
+          }`}
+          title="Mode tactile — pads gros doigt pour le busking (tablette)"
+        >
+          <Grip size={16} />
+        </button>
         <OscArmToggle />
         <PanicButton size="lg" />
       </div>
@@ -294,7 +349,18 @@ export const PerformView: React.FC = () => {
       {/* ═══ Corps : setlist | canvas ═══ */}
       <div className="flex-1 flex overflow-hidden">
         {/* Colonne gauche : SETLIST (flux du show) + LAYERS (ad-hoc) + cues */}
-        <div className="w-72 flex-shrink-0 border-r border-stagespace-border flex flex-col bg-stagespace-panel min-h-0">
+        <div className={`${touchMode ? 'w-96' : 'w-72'} flex-shrink-0 border-r border-stagespace-border flex flex-col bg-stagespace-panel min-h-0`}>
+          {touchMode ? (
+            /* Mode touch : grille de pads numérotés — busking gros doigt. */
+            <div className="flex-1 overflow-y-auto p-2 grid grid-cols-2 gap-2 auto-rows-min content-start min-h-0">
+              {moveSlots.map(renderPad)}
+              {moveSlots.length === 0 && (
+                <div className="col-span-2 px-3 py-4 text-gray-400 text-xs italic">
+                  No moves yet — create slots to fill the pads.
+                </div>
+              )}
+            </div>
+          ) : (
           <div className="flex-1 overflow-y-auto min-h-0">
             <div className="px-3 py-2 text-gray-400 text-xs uppercase tracking-wider border-b border-stagespace-border bg-purple-950/20 flex items-center justify-between">
               <span>Setlist — GO avance ici</span>
@@ -345,6 +411,7 @@ export const PerformView: React.FC = () => {
               </div>
             )}
           </div>
+          )}
           {/* Cues — arm + double-clic recall (déjà protégé) */}
           <div className="h-56 flex-shrink-0 border-t border-stagespace-border flex flex-col min-h-0">
             <CuelistPanel />
