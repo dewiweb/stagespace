@@ -20,27 +20,28 @@ export function useShowControl() {
       try {
         const u = await listen<ShowControlEvent>('show-control', (event) => {
           const cmd = event.payload.command;
+          const from = event.payload.from;
           switch (cmd.command) {
             case 'Go':
-              doGo();
+              doGo(from);
               break;
             case 'CueNext':
-              doCueNext();
+              doCueNext(from);
               break;
             case 'CuePrev':
-              doCuePrev();
+              doCuePrev(from);
               break;
             case 'CueRecall':
-              if (cmd.value != null) doCueRecall(cmd.value[0], cmd.value[1] ?? undefined);
+              if (cmd.value != null) doCueRecall(cmd.value[0], cmd.value[1] ?? undefined, from);
               break;
             case 'Slot':
-              if (cmd.value != null) doSlot(cmd.value);
+              if (cmd.value != null) doSlot(cmd.value, from);
               break;
             case 'SlotStop':
-              if (cmd.value != null) doSlotStop(cmd.value);
+              if (cmd.value != null) doSlotStop(cmd.value, from);
               break;
             case 'Solo':
-              if (cmd.value != null) doSolo(cmd.value);
+              if (cmd.value != null) doSolo(cmd.value, from);
               break;
             case 'Arm':
               doArm(true);

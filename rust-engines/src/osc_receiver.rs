@@ -637,6 +637,27 @@ impl OscReceiver {
         }
     }
 
+    /// NACK ciblé : `/stagespace/nack <reason>` vers l'expéditeur d'une
+    /// commande rejetée (busy/not-found) — l'ack confirme la réception,
+    /// le nack signale que rien n'a été exécuté.
+    pub fn send_show_nack(&self, addr: std::net::SocketAddr, reason: &str) {
+        let socket = self
+            .shared
+            .reply_socket
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .cloned();
+        let Some(socket) = socket else { return };
+        let msg = OscPacket::Message(OscMessage {
+            addr: "/stagespace/nack".to_string(),
+            args: vec![OscType::String(reason.to_string())],
+        });
+        if let Ok(bytes) = encode(&msg) {
+            let _ = socket.send_to(&bytes, addr);
+        }
+    }
+
     /// Raccourci : mapping passif vers un handler (comportement legacy)
     pub fn add_handler_mapping(
         &self,

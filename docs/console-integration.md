@@ -21,6 +21,7 @@ soundcheck et la surveillance.
 ## Feedback envoyé au contrôleur
 
 - `/stagespace/ack <addr>` — accusé sur chaque commande acceptée
+- `/stagespace/nack <reason>` — commande rejetée : `busy: recall-in-progress`, `not-found: …` (ciblé sur l'expéditeur)
 - `/stagespace/cue/current <n> <name>` et `/stagespace/cue/next <n> <name>` — à chaque changement de cue et sur `/stagespace/status`
 
 Les 4 derniers contrôleurs reçoivent le feedback — la console ET une tablette

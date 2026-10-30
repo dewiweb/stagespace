@@ -6,8 +6,24 @@ import { useCuelistStore } from '../store/useCuelistStore';
 import { toast } from './toast-helpers';
 import { safeInvoke as invoke } from './tauri';
 
+/** NACK le contrôleur OSC si la commande vient d'/stagespace/* (from). */
+function nack(from: string | undefined, reason: string) {
+  if (!from) return;
+  invoke('send_show_nack', { addr: from, reason }).catch(() => {});
+}
+
+/** Garde commune : rejet NACK si un recall est en cours. */
+function recallBusy(from?: string): boolean {
+  if (useCuelistStore.getState().isRecalling) {
+    nack(from, 'busy: recall-in-progress');
+    return true;
+  }
+  return false;
+}
+
 /// GO setlist (= Enter) — crossfade vers le prochain move.
-export function doGo() {
+export function doGo(from?: string) {
+  if (recallBusy(from)) return;
   useCuelistStore.getState().cancelPendingTimers();
   const gs = useGraphStore.getState();
   gs.goToNextMove().then((res: { ok: boolean; message: string }) => {
@@ -16,35 +32,35 @@ export function doGo() {
 }
 
 /// Cue suivante (= Shift+Enter).
-export function doCueNext() {
+export function doCueNext(from?: string) {
   useCuelistStore.getState().cancelPendingTimers();
-  if (!useCuelistStore.getState().isRecalling) {
-    useCuelistStore.getState().goToNextCue();
-  }
+  if (recallBusy(from)) return;
+  useCuelistStore.getState().goToNextCue();
 }
 
 /// Cue précédente (= Backspace).
-export function doCuePrev() {
+export function doCuePrev(from?: string) {
   useCuelistStore.getState().cancelPendingTimers();
-  if (!useCuelistStore.getState().isRecalling) {
-    useCuelistStore.getState().goToPreviousCue();
-  }
+  if (recallBusy(from)) return;
+  useCuelistStore.getState().goToPreviousCue();
 }
 
 /// Recall direct d'une cue par numéro — match sur `cue_number`, sinon
 /// index 1-based dans la liste.
-export function doCueRecall(n: string, fadeOverride?: number) {
+export function doCueRecall(n: string, fadeOverride?: number, from?: string) {
   const s = useCuelistStore.getState();
   s.cancelPendingTimers();
+  if (recallBusy(from)) return;
   const byNumber = s.cues.find((c) => c.cue_number != null && c.cue_number === n);
   const idx = Number.parseInt(n, 10);
   const byIndex = Number.isFinite(idx) && idx >= 1 && idx <= s.cues.length ? s.cues[idx - 1] : undefined;
   const cue = byNumber ?? byIndex;
   if (!cue) {
+    nack(from, `not-found: cue '${n}'`);
     toast.warning(`Cue '${n}' not found`);
     return;
   }
-  if (!s.isRecalling) s.recallCue(cue.id, fadeOverride != null ? { fadeOverride } : undefined);
+  void s.recallCue(cue.id, fadeOverride != null ? { fadeOverride } : undefined);
 }
 
 /** Arm/disarm OSC — dry-run pilotable depuis la console (set_osc_armed). */
@@ -53,28 +69,41 @@ export function doArm(armed: boolean) {
 }
 
 /** /stagespace/slot <n> — joue le slot n (index 1-based, busking). */
-export function doSlot(n: number) {
+export function doSlot(n: number, from?: string) {
   const gs = useGraphStore.getState();
   const slot = gs.moveSlots[n - 1];
-  if (!slot) return void toast.warning(`Slot '${n}' not found`);
+  if (!slot) {
+    nack(from, `not-found: slot '${n}'`);
+    return void toast.warning(`Slot '${n}' not found`);
+  }
+  // Un slot tiré pendant un recall serait tué par la désactivation du
+  // recall — rejet explicite plutôt qu'un tir orphelin.
+  if (recallBusy(from)) return;
   useCuelistStore.getState().cancelPendingTimers();
   void gs.playSlot(slot.id);
 }
 
 /** /stagespace/slot/stop <n> — coupe le slot n avec son fade_out. */
-export function doSlotStop(n: number) {
+export function doSlotStop(n: number, from?: string) {
   const gs = useGraphStore.getState();
   const slot = gs.moveSlots[n - 1];
-  if (!slot) return void toast.warning(`Slot '${n}' not found`);
+  if (!slot) {
+    nack(from, `not-found: slot '${n}'`);
+    return void toast.warning(`Slot '${n}' not found`);
+  }
   useCuelistStore.getState().cancelPendingTimers();
   if (slot.movementId) void gs.stopSlotWithFade(slot.id, slot.fadeOut ?? 1);
 }
 
 /** /stagespace/solo <n> — coupe les autres slots puis joue n. */
-export function doSolo(n: number) {
+export function doSolo(n: number, from?: string) {
   const gs = useGraphStore.getState();
   const target = gs.moveSlots[n - 1];
-  if (!target) return void toast.warning(`Slot '${n}' not found`);
+  if (!target) {
+    nack(from, `not-found: slot '${n}'`);
+    return void toast.warning(`Slot '${n}' not found`);
+  }
+  if (recallBusy(from)) return;
   useCuelistStore.getState().cancelPendingTimers();
   for (const s of gs.moveSlots) {
     if (s.id !== target.id && s.movementId) void gs.stopSlotWithFade(s.id, s.fadeOut ?? 1);

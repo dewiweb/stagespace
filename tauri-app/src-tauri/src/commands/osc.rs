@@ -260,6 +260,21 @@ pub async fn send_show_feedback(
     Ok(())
 }
 
+/// NACK : `/stagespace/nack <reason>` vers l'expéditeur d'une commande
+/// rejetée (busy/not-found) — addr = le `from` de l'évènement show-control.
+#[tauri::command]
+pub async fn send_show_nack(
+    addr: String,
+    reason: String,
+    state: State<'_, AppState>,
+) -> Result<(), IpcError> {
+    let parsed: std::net::SocketAddr = addr
+        .parse()
+        .map_err(|_| IpcError::validation(format!("invalid controller addr '{addr}'")))?;
+    lock_or_recover(&state.osc_receiver).send_show_nack(parsed, &reason);
+    Ok(())
+}
+
 /// FPS utilisé pour la forme string `HH:MM:SS:FF` du timecode
 /// (`/stagespace/timecode`) — non-drop, 24/25/30 ; défaut 25.
 #[tauri::command]

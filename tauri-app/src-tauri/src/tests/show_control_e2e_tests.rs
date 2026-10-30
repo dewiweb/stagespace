@@ -196,6 +196,16 @@ mod show_control_e2e_tests {
     }
 
     #[test]
+    fn e2e_nack_goes_to_command_sender() {
+        let (mut r, _rx, client) = harness();
+        // Un nack ciblé doit arriver en UDP chez le contrôleur — la
+        // console reçoit "busy: recall-in-progress" au lieu d'un silence.
+        r.send_show_nack(client.local_addr().unwrap(), "busy: recall-in-progress");
+        assert_eq!(udp_recv_addr(&client), "/stagespace/nack");
+        r.stop();
+    }
+
+    #[test]
     fn e2e_panic_passes_during_recall_suppression() {
         let (mut r, rx, client) = harness();
         r.suppress_ms(100_000);
