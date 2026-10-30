@@ -89,6 +89,9 @@ export interface OscSlice {
   listOscMappings: () => Promise<Array<OscMapping>>;
   getOscValue: (handler: string) => Promise<number[]>;
   getAllOscValues: () => Promise<Record<string, number[]>>;
+  /// OSC learn : capture le prochain message entrant (bouge le fader)
+  /// puis crée le mapping vers `destination`. null si timeout.
+  learnAddOscMapping: (destination: string, transform: string | null) => Promise<string | null>;
   setOscInEnabled: (enabled: boolean) => Promise<void>;
   suppressOscIn: (durationMs: number) => Promise<void>;
 }
@@ -142,6 +145,14 @@ export const createOscSlice: StateCreator<OscSlice, [], [], OscSlice> = (set, ge
       console.error('Failed to get all OSC values:', e);
       return {};
     }
+  },
+
+  learnAddOscMapping: async (destination, transform) => {
+    const { learnOscAddress } = await import('../../utils/oscLearn');
+    const learned = await learnOscAddress();
+    if (!learned) return null;
+    await get().addOscMapping(learned.address, destination, transform);
+    return learned.address;
   },
 
   setOscInEnabled: async (enabled) => {

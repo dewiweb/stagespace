@@ -260,6 +260,15 @@ pub async fn send_show_feedback(
     Ok(())
 }
 
+/// Dernier message OSC reçu hors `/stagespace/` — pour le learn :
+/// le frontend poll pendant que l'opérateur bouge son fader.
+#[tauri::command]
+pub async fn get_last_osc_message(
+    state: State<'_, AppState>,
+) -> Result<Option<(String, Vec<f64>, f64)>, IpcError> {
+    Ok(lock_or_recover(&state.osc_receiver).last_received())
+}
+
 /// NACK : `/stagespace/nack <reason>` vers l'expéditeur d'une commande
 /// rejetée (busy/not-found) — addr = le `from` de l'évènement show-control.
 #[tauri::command]

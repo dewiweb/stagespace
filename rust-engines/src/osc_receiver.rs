@@ -324,6 +324,9 @@ struct Shared {
     /// `OSCInput` du graphe (indépendant des mappings : une adresse peut
     /// alimenter le graphe sans être routée vers une destination).
     last_by_address: Arc<Mutex<HashMap<String, Vec<f64>>>>,
+    /// Dernier message OSC reçu hors `/stagespace/` (addr, args, instant) —
+    /// capture pour le "learn" : brancher un fader en bougeant une fois.
+    last_rx: Arc<Mutex<Option<(String, Vec<f64>, Instant)>>>,
     smooth_state: Arc<Mutex<HashMap<String, Vec<f64>>>>,
     targets: Arc<RwLock<OscInTargets>>,
     in_enabled: Arc<AtomicBool>,
@@ -514,6 +517,7 @@ impl OscReceiver {
                 mappings: Arc::new(RwLock::new(HashMap::new())),
                 last_values: Arc::new(Mutex::new(HashMap::new())),
                 last_by_address: Arc::new(Mutex::new(HashMap::new())),
+                last_rx: Arc::new(Mutex::new(None)),
                 smooth_state: Arc::new(Mutex::new(HashMap::new())),
                 targets: Arc::new(RwLock::new(OscInTargets::default())),
                 in_enabled: Arc::new(AtomicBool::new(true)),
@@ -656,6 +660,17 @@ impl OscReceiver {
         if let Ok(bytes) = encode(&msg) {
             let _ = socket.send_to(&bytes, addr);
         }
+    }
+
+    /// Dernier message utilisateur reçu (addr, args, âge en secondes) —
+    /// None si rien reçu depuis le démarrage.
+    pub fn last_received(&self) -> Option<(String, Vec<f64>, f64)> {
+        self.shared
+            .last_rx
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .map(|(a, v, t)| (a.clone(), v.clone(), t.elapsed().as_secs_f64()))
     }
 
     /// Raccourci : mapping passif vers un handler (comportement legacy)
@@ -1113,6 +1128,9 @@ fn dispatch_message(addr: &str, args: Vec<f64>, shared: &Shared) {
             .unwrap_or_else(|e| e.into_inner());
         if lv.len() < MAX_FEEDBACK_KEYS || lv.contains_key(addr) {
             lv.insert(addr.to_string(), args.clone());
+            // Capture learn : le dernier message utilisateur reçu.
+            *shared.last_rx.lock().unwrap_or_else(|e| e.into_inner()) =
+                Some((addr.to_string(), args.clone(), Instant::now()));
         }
     }
 
