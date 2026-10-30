@@ -207,6 +207,9 @@ en messages séparés selon la matrice de capacités du profil
 ## Documentation
 
 - [AGENTS.md](AGENTS.md) — conventions, commandes de build, CI
+- [docs/user-manual.md](docs/user-manual.md) — manuel opérateur (vues, OSC show-control, OSC-IN + learn, sécurité live, dépannage)
+- [docs/console-integration.md](docs/console-integration.md) — piloter STAGESPACE depuis une console/QLab/Companion
+- [docs/use-cases.md](docs/use-cases.md) — cas d'usage terrain et limites ouvertes
 - [MANUAL_TESTING.md](MANUAL_TESTING.md) - Checklist de tests manuels
 - [LOGGING.md](rust-engines/LOGGING.md) - Guide du système de logging
 - [ERROR_HANDLING.md](rust-engines/ERROR_HANDLING.md) - Guide de la gestion d'erreurs
