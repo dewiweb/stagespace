@@ -27,6 +27,19 @@ pub fn cmd_activate_move(args: &[&str]) -> Result<String, String> {
     }
 
     let track_indices = osc_ids_to_indices(&osc_ids, &all_osc_ids);
+    // Ids demandés hors de la liste OSC courante : sans cette erreur le move
+    // s'activerait avec moins de tracks — voire zéro — en silence.
+    if track_indices.len() != osc_ids.len() {
+        let known: std::collections::HashSet<u32> = all_osc_ids.iter().copied().collect();
+        let missing: Vec<u32> = osc_ids
+            .iter()
+            .copied()
+            .filter(|id| !known.contains(id))
+            .collect();
+        return Err(format!(
+            "Tracks {missing:?} hors de la liste OSC courante {all_osc_ids:?} — move refusé (aucune track muette)"
+        ));
+    }
     let duration: f64 = opts
         .get("duration")
         .and_then(|s| s.parse().ok())
@@ -106,6 +119,19 @@ pub fn cmd_activate_graph(args: &[&str]) -> Result<String, String> {
     }
 
     let track_indices = osc_ids_to_indices(&osc_ids, &all_osc_ids);
+    // Ids demandés hors de la liste OSC courante : sans cette erreur le move
+    // s'activerait avec moins de tracks — voire zéro — en silence.
+    if track_indices.len() != osc_ids.len() {
+        let known: std::collections::HashSet<u32> = all_osc_ids.iter().copied().collect();
+        let missing: Vec<u32> = osc_ids
+            .iter()
+            .copied()
+            .filter(|id| !known.contains(id))
+            .collect();
+        return Err(format!(
+            "Tracks {missing:?} hors de la liste OSC courante {all_osc_ids:?} — move refusé (aucune track muette)"
+        ));
+    }
     let duration: f64 = opts
         .get("duration")
         .and_then(|s| s.parse().ok())
