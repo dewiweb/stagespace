@@ -1823,6 +1823,21 @@ mod show_control_tests {
             ("/stagespace/panic", vec![], ShowCommand::Panic),
             ("/stagespace/stop", vec![], ShowCommand::Stop),
             (
+                "/stagespace/park",
+                vec![OscType::Int(3)],
+                ShowCommand::Park(3),
+            ),
+            (
+                "/stagespace/park",
+                vec![OscType::String("7".into())],
+                ShowCommand::Park(7),
+            ),
+            (
+                "/stagespace/unpark",
+                vec![OscType::Int(3)],
+                ShowCommand::Unpark(3),
+            ),
+            (
                 "/stagespace/timecode",
                 vec![OscType::Float(12.5)],
                 ShowCommand::Timecode(12.5),

@@ -227,8 +227,12 @@ export const useCuelistStore = create<CuelistState>((set, get) => ({
       get().cancelPendingTimers();
       const cue = get().cues.find((c) => c.id === result.fire);
       if (cue && !get().isRecalling) {
-        // Le timecode EST le schedule : pre_wait ignoré pour les cues TC.
-        void get().recallCue(cue.id, { skipPreWait: true });
+        // Le timecode EST le schedule : pre_wait ignoré pour les cues TC,
+        // et la trajectoire reprend à tc - cue.timecode (seek, pas t=0).
+        void get().recallCue(cue.id, {
+          skipPreWait: true,
+          timeOffset: cue.timecode != null ? tc - cue.timecode : undefined,
+        });
       }
     }
   },
