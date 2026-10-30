@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
-import { useCuelistStore } from '../store/useCuelistStore';
+import { useCuelistStore, type CueData } from '../store/useCuelistStore';
 import { useGraphStore } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import { useSignalGraphStore } from '../store/useSignalGraphStore';
@@ -14,6 +14,7 @@ export const CuelistPanel: React.FC = () => {
   const isRecalling = useCuelistStore((s) => s.isRecalling);
   const storeCue = useCuelistStore((s) => s.storeCue);
   const recallCue = useCuelistStore((s) => s.recallCue);
+  const pending = useCuelistStore((s) => s.pending);
   const deleteCue = useCuelistStore((s) => s.deleteCue);
   const updateCue = useCuelistStore((s) => s.updateCue);
   const goToNextCue = useCuelistStore((s) => s.goToNextCue);
@@ -86,6 +87,14 @@ export const CuelistPanel: React.FC = () => {
       active_move_ids: activeMoveIds,
       per_track_depths: [],
       manual_positions: manualPosMap,
+      mode: 'Full' as const,
+      scope: {
+        moves: true, channels: true, positions: true, zones: true,
+        global_graph: true, signal_graph: true, macros: true, osc_mappings: true,
+      },
+      pre_wait: 0,
+      follow: null,
+      timecode: null,
     };
 
     try {
@@ -103,6 +112,7 @@ export const CuelistPanel: React.FC = () => {
       <div className="px-3 py-2 border-b border-stagespace-border flex items-center gap-2">
         <span className="text-gray-300 text-xs font-semibold">Cues</span>
         <span className="text-gray-400 text-xs">{cues.length}</span>
+        <TcStatus />
         <div className="flex-1" />
         {/* GO buttons */}
         <button
@@ -187,8 +197,23 @@ export const CuelistPanel: React.FC = () => {
                   {idx + 1}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <div className="text-white text-xs font-medium truncate">
+                  <div className="text-white text-xs font-medium truncate flex items-center gap-1">
                     {cue.name}
+                    {cue.mode === 'Tracking' && (
+                      <span className="text-[9px] px-1 rounded bg-cyan-900/60 text-cyan-300">TRK</span>
+                    )}
+                    {(cue.pre_wait ?? 0) > 0 && (
+                      <span className="text-[9px] px-1 rounded bg-gray-700 text-gray-300">w{cue.pre_wait}s</span>
+                    )}
+                    {cue.follow != null && (
+                      <span className="text-[9px] px-1 rounded bg-gray-700 text-gray-300">f{cue.follow}s</span>
+                    )}
+                    {cue.timecode != null && (
+                      <span className="text-[9px] px-1 rounded bg-gray-700 text-gray-300">TC</span>
+                    )}
+                    {pending?.cueId === cue.id && (
+                      <PendingCountdown deadline={pending.deadline} kind={pending.kind} />
+                    )}
                   </div>
                   <div className="text-gray-400 text-xs truncate flex items-center gap-1.5">
                     {cue.active_move_ids.length > 0 && (
@@ -217,6 +242,68 @@ export const CuelistPanel: React.FC = () => {
                       </label>
                     ) : (
                       <span>· {cue.fade_duration}s</span>
+                    )}
+                    {cue.id === armedCueId && (
+                      <span
+                        className="flex items-center gap-1"
+                        onClick={(e) => e.stopPropagation()}
+                        onDoubleClick={(e) => e.stopPropagation()}
+                      >
+                        <select
+                          value={cue.mode ?? 'Full'}
+                          onChange={(e) =>
+                            updateCue({ ...cue, mode: e.target.value as 'Full' | 'Tracking' })
+                          }
+                          className="bg-gray-900 border border-gray-700 rounded text-gray-300 text-[10px] px-0.5"
+                        >
+                          <option value="Full">Full</option>
+                          <option value="Tracking">Tracking</option>
+                        </select>
+                        {cue.mode === 'Tracking' && (
+                          <ScopeEditor cue={cue} updateCue={updateCue} />
+                        )}
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.1}
+                          title="pre-wait (s)"
+                          defaultValue={cue.pre_wait ?? 0}
+                          key={`${cue.id}-pw-${cue.pre_wait}`}
+                          onChange={(e) => {
+                            const v = Math.max(0, Number(e.target.value));
+                            if (!isNaN(v)) updateCue({ ...cue, pre_wait: v });
+                          }}
+                          className="w-10 px-1 py-0 bg-gray-900 border border-gray-700 rounded text-gray-300 text-right font-mono"
+                        />
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.1}
+                          placeholder="follow"
+                          title="follow (s, vide = off)"
+                          defaultValue={cue.follow ?? ''}
+                          key={`${cue.id}-fw-${cue.follow}`}
+                          onChange={(e) => {
+                            const v = e.target.value === '' ? null : Math.max(0, Number(e.target.value));
+                            updateCue({ ...cue, follow: v });
+                          }}
+                          className="w-10 px-1 py-0 bg-gray-900 border border-gray-700 rounded text-gray-300 text-right font-mono"
+                        />
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.04}
+                          placeholder="TC s"
+                          title="timecode (s, vide = off)"
+                          defaultValue={cue.timecode ?? ''}
+                          key={`${cue.id}-tc-${cue.timecode}`}
+                          onChange={(e) => {
+                            const v = e.target.value === '' ? null : Math.max(0, Number(e.target.value));
+                            updateCue({ ...cue, timecode: v });
+                          }}
+                          className="w-12 px-1 py-0 bg-gray-900 border border-gray-700 rounded text-gray-300 text-right font-mono"
+                        />
+                      </span>
                     )}
                   </div>
                 </div>
@@ -258,3 +345,91 @@ export const CuelistPanel: React.FC = () => {
 };
 
 export default CuelistPanel;
+
+
+/// Compte à rebours du timer pendu (pre-wait/follow) sur une cue.
+function PendingCountdown({ deadline, kind }: { deadline: number; kind: 'pre_wait' | 'follow' }) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => tick((n) => n + 1), 200);
+    return () => clearInterval(t);
+  }, []);
+  const left = Math.max(0, (deadline - Date.now()) / 1000);
+  return (
+    <span className="text-[9px] px-1 rounded bg-amber-800/80 text-amber-200" title={kind}>
+      {kind === 'pre_wait' ? 'in' : 'follow'} {left.toFixed(1)}s
+    </span>
+  );
+}
+
+/// Statut timecode : TC courant (HH:MM:SS:FF) ou "TC lost" si silence >1s.
+function TcStatus() {
+  const tc = useCuelistStore((s) => s.lastTimecode);
+  const at = useCuelistStore((s) => s.lastTimecodeAt);
+  const chaseOn = useCuelistStore((s) => s.tcChaseEnabled);
+  const setChase = useCuelistStore((s) => s.setTcChaseEnabled);
+  const fps = useGraphStore((s) => s.timecodeFps);
+  const setFps = useGraphStore((s) => s.setTimecodeFps);
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => tick((n) => n + 1), 500);
+    return () => clearInterval(t);
+  }, []);
+  // Applique la valeur persistée au receiver au montage — la conversion
+  // HH:MM:SS:FF côté backend doit correspondre à l'affichage ici.
+  useEffect(() => {
+    setFps(fps);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- apply persisted value once
+  }, []);
+  const fmt = (s: number) => {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = Math.floor(s % 60);
+    const f = Math.floor((s % 1) * fps);
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}:${String(f).padStart(2, '0')}`;
+  };
+  const lost = tc == null || Date.now() - at > 1000;
+  return (
+    <span className="ml-auto flex items-center gap-1.5 text-[10px]">
+      <button
+        onClick={() => setChase(!chaseOn)}
+        className={`px-1.5 py-0.5 rounded border ${chaseOn ? 'border-emerald-600 text-emerald-400' : 'border-gray-600 text-gray-500'}`}
+        title="TC chase"
+      >
+        TC chase
+      </button>
+      <span className="font-mono text-gray-400">{lost ? 'TC lost' : fmt(tc!)}</span>
+      <select
+        value={fps}
+        onChange={(e) => setFps(Number(e.target.value))}
+        className="bg-transparent border border-gray-600 rounded text-gray-400 px-0.5"
+        title="Timecode frame rate"
+      >
+        {[24, 25, 30].map((f) => <option key={f} value={f}>{f}fps</option>)}
+      </select>
+    </span>
+  );
+}
+
+/// Checkboxes de scope pour une cue Tracking.
+function ScopeEditor({ cue, updateCue }: { cue: CueData; updateCue: (c: CueData) => void }) {
+  const SCOPE_KEYS = ['moves','channels','positions','zones','global_graph','signal_graph','macros','osc_mappings'] as const;
+  const scope = cue.scope ?? Object.fromEntries(SCOPE_KEYS.map((k) => [k, true]));
+  return (
+    <span className="flex items-center gap-0.5">
+      {SCOPE_KEYS.map((k) => (
+        <label key={k} className="text-[8px] text-gray-400 flex items-center" title={k}>
+          <input
+            type="checkbox"
+            checked={(scope as Record<string, boolean>)[k] ?? true}
+            onChange={(e) =>
+              updateCue({ ...cue, scope: { ...scope, [k]: e.target.checked } })
+            }
+            className="w-2.5 h-2.5"
+          />
+          {k.slice(0, 3)}
+        </label>
+      ))}
+    </span>
+  );
+}

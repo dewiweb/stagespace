@@ -8,7 +8,7 @@
 //! Le routing écrit directement dans les Arcs partagés du MergeRuntime
 //! ([`OscInTargets`]) — aucun lock n'est ajouté au chemin temps réel du merge.
 
-use rosc::{decoder::decode_udp, OscPacket, OscType};
+use rosc::{decoder::decode_udp, encoder::encode, OscMessage, OscPacket, OscType};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::UdpSocket;
@@ -316,7 +316,7 @@ pub struct OscInStatsSnapshot {
 // ─── Receiver ───────────────────────────────────────────────────────────────
 
 /// État partagé entre l'API du receiver et son thread socket.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 struct Shared {
     mappings: Arc<RwLock<HashMap<String, OscMapping>>>,
     last_values: Arc<Mutex<HashMap<String, Vec<f64>>>>,
@@ -338,6 +338,99 @@ struct Shared {
     /// lui-même à sa sortie (shutdown OU erreur fatale recv). Contrairement
     /// au champ `is_running`, ce flag reflète la mort spontanée du thread.
     thread_running: Arc<AtomicBool>,
+    /// Sink show-control : la couche Tauri y branche un callback qui
+    /// émet `show-control` vers le frontend (le backend ne fait que
+    /// router — les actions vivent côté UI, comme les raccourcis).
+    show_sink: Arc<Mutex<Option<ShowSink>>>,
+    /// 4 dernières adresses ayant envoyé une commande `/stagespace/` —
+    /// reçoivent ack + feedback de cue.
+    controllers: Arc<Mutex<Vec<std::net::SocketAddr>>>,
+    /// Socket de réponse (try_clone du socket de réception) — posé au
+    /// démarrage du thread pour envoyer ack/feedback aux contrôleurs.
+    reply_socket: Arc<Mutex<Option<Arc<UdpSocket>>>>,
+    /// FPS pour la conversion `HH:MM:SS:FF` → secondes (24/25/30,
+    /// non-drop ; défaut 25). Configurable depuis le slice OSC.
+    timecode_fps: Arc<AtomicU64>,
+}
+
+/// Commande show-control reçue via `/stagespace/*` — transmise telle
+/// quelle au frontend qui la dispatche vers les mêmes fonctions que
+/// les raccourcis clavier (backend = routeur seulement).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[ts(export)]
+#[serde(tag = "command", content = "value")]
+pub enum ShowCommand {
+    /// `/stagespace/go` — GO setlist (comme Enter).
+    Go,
+    /// `/stagespace/cue/next` — prochaine cue armée (Shift+Enter).
+    CueNext,
+    /// `/stagespace/cue/prev` — cue précédente (Backspace).
+    CuePrev,
+    /// `/stagespace/cue/recall <n>` — n = cue_number (string ou nombre),
+    /// fallback index 1-based si aucun cue_number ne matche.
+    CueRecall(String),
+    /// `/stagespace/panic` — Esc panic.
+    Panic,
+    /// `/stagespace/stop` — stop tous les moves.
+    Stop,
+    /// `/stagespace/timecode <seconds | "HH:MM:SS:FF">` — secondes.
+    Timecode(f64),
+}
+
+type ShowSink = Box<dyn Fn(ShowCommand, std::net::SocketAddr) + Send>;
+
+const MAX_CONTROLLERS: usize = 4;
+
+/// Parse un message `/stagespace/*` (args bruts — strings préservées).
+/// `fps` = frames/s pour la forme string `HH:MM:SS:FF` du timecode.
+fn parse_show_command(addr: &str, args: &[OscType], fps: f64) -> Option<ShowCommand> {
+    let tail = addr.strip_prefix("/stagespace/")?;
+    match tail {
+        "go" => Some(ShowCommand::Go),
+        "cue/next" => Some(ShowCommand::CueNext),
+        "cue/prev" => Some(ShowCommand::CuePrev),
+        "cue/recall" => {
+            let id = args.first().and_then(|a| match a {
+                OscType::String(s) => Some(s.clone()),
+                OscType::Int(i) => Some(i.to_string()),
+                OscType::Long(i) => Some(i.to_string()),
+                OscType::Float(f) => Some(format!("{f}")),
+                OscType::Double(f) => Some(format!("{f}")),
+                _ => None,
+            })?;
+            Some(ShowCommand::CueRecall(id))
+        }
+        "panic" => Some(ShowCommand::Panic),
+        "stop" => Some(ShowCommand::Stop),
+        "timecode" => {
+            let tc = args.first().and_then(|a| match a {
+                OscType::Float(f) => Some(*f as f64),
+                OscType::Double(f) => Some(*f),
+                OscType::Int(i) => Some(*i as f64),
+                OscType::Long(i) => Some(*i as f64),
+                OscType::String(s) => parse_timecode_string(s, fps),
+                _ => None,
+            })?;
+            Some(ShowCommand::Timecode(tc))
+        }
+        _ => None,
+    }
+}
+
+/// `HH:MM:SS:FF` → secondes (non-drop : FF = frames à `fps` fps).
+fn parse_timecode_string(s: &str, fps: f64) -> Option<f64> {
+    if fps <= 0.0 {
+        return None;
+    }
+    let parts: Vec<&str> = s.split(':').collect();
+    if parts.len() != 4 {
+        return None;
+    }
+    let h: f64 = parts[0].trim().parse().ok()?;
+    let m: f64 = parts[1].trim().parse().ok()?;
+    let sec: f64 = parts[2].trim().parse().ok()?;
+    let fr: f64 = parts[3].trim().parse().ok()?;
+    Some(h * 3600.0 + m * 60.0 + sec + fr / fps)
 }
 
 /// OSC Receiver — réception OSC avec mapping configurable style libmapper.
@@ -346,7 +439,6 @@ struct Shared {
 /// `stop()` l'arrête proprement. Les mappings sont modifiables à chaud (RwLock
 /// partagé) — pas besoin de redémarrer. `handle_message()` expose le pipeline
 /// de routing directement (injection de test sans UDP).
-#[derive(Debug)]
 pub struct OscReceiver {
     pub port: u16,
     pub is_running: bool,
@@ -371,6 +463,10 @@ impl OscReceiver {
                 stats: Arc::new(OscInStats::default()),
                 max_objects: Arc::new(AtomicU64::new(MAX_OBJECTS as u64)),
                 thread_running: Arc::new(AtomicBool::new(false)),
+                show_sink: Arc::new(Mutex::new(None)),
+                controllers: Arc::new(Mutex::new(Vec::new())),
+                reply_socket: Arc::new(Mutex::new(None)),
+                timecode_fps: Arc::new(AtomicU64::new(25.0f64.to_bits())),
             },
             shutdown: Arc::new(AtomicBool::new(false)),
             handle: None,
@@ -418,6 +514,69 @@ impl OscReceiver {
         }
         mappings.insert(mapping.address.clone(), mapping);
         Ok(())
+    }
+
+    /// Branche le sink show-control — appelé depuis le thread socket à
+    /// chaque commande `/stagespace/*` reçue (avec l'adresse source).
+    pub fn set_show_sink(&self, sink: impl Fn(ShowCommand, std::net::SocketAddr) + Send + 'static) {
+        *self
+            .shared
+            .show_sink
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(Box::new(sink));
+    }
+
+    /// FPS utilisé pour la forme string `HH:MM:SS:FF` du timecode
+    /// (non-drop ; défaut 25).
+    pub fn set_timecode_fps(&self, fps: f64) {
+        self.shared
+            .timecode_fps
+            .store(fps.to_bits(), Ordering::Relaxed);
+    }
+
+    /// Feedback cue vers les contrôleurs récents : envoie
+    /// `/stagespace/cue/current <number|"" > <name>` et
+    /// `/stagespace/cue/next <number|""> <name>` (args string).
+    pub fn send_show_feedback(
+        &self,
+        current: Option<(String, String)>,
+        next: Option<(String, String)>,
+    ) {
+        let controllers = self
+            .shared
+            .controllers
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        if controllers.is_empty() {
+            return;
+        }
+        let socket = self
+            .shared
+            .reply_socket
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .cloned();
+        let Some(socket) = socket else { return };
+        for (addr_path, cue) in [
+            ("/stagespace/cue/current", current),
+            ("/stagespace/cue/next", next),
+        ] {
+            let (num, name) = cue
+                .as_ref()
+                .map(|(n, name)| (n.clone(), name.clone()))
+                .unwrap_or_else(|| (String::new(), String::new()));
+            let msg = OscPacket::Message(OscMessage {
+                addr: addr_path.to_string(),
+                args: vec![OscType::String(num), OscType::String(name)],
+            });
+            if let Ok(bytes) = encode(&msg) {
+                for c in &controllers {
+                    let _ = socket.send_to(&bytes, c);
+                }
+            }
+        }
     }
 
     /// Raccourci : mapping passif vers un handler (comportement legacy)
@@ -527,6 +686,15 @@ impl OscReceiver {
             .set_read_timeout(Some(Duration::from_millis(100)))
             .map_err(|e| format!("Failed to set socket timeout: {e}"))?;
 
+        // Clone pour les réponses show-control (ack + feedback cue).
+        if let Ok(reply) = socket.try_clone() {
+            *self
+                .shared
+                .reply_socket
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(reply));
+        }
+
         let port = self.port;
         let shared = self.shared.clone();
         let shutdown = self.shutdown.clone();
@@ -539,8 +707,8 @@ impl OscReceiver {
             let mut buf = vec![0u8; 65535];
             while !shutdown.load(Ordering::SeqCst) {
                 match socket.recv_from(&mut buf) {
-                    Ok((len, _)) => match decode_udp(&buf[..len]) {
-                        Ok((_, packet)) => handle_packet(packet, &shared, 0),
+                    Ok((len, src)) => match decode_udp(&buf[..len]) {
+                        Ok((_, packet)) => handle_packet(packet, &shared, 0, src),
                         Err(_) => {
                             // Packet malformé — compté, pas droppé en silence
                             shared.stats.decode_errors.fetch_add(1, Ordering::Relaxed);
@@ -562,6 +730,12 @@ impl OscReceiver {
             // Marque le thread comme arrêté sur TOUTES les sorties (shutdown
             // ou erreur fatale) — sinon is_running resterait stale true.
             shared.thread_running.store(false, Ordering::SeqCst);
+            // Libère le clone de réponse AVANT le socket : il garderait le
+            // port bindé et bloquerait un restart sur le même port.
+            *shared
+                .reply_socket
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = None;
             drop(socket);
             eprintln!("OSC receiver thread stopped on port {port}");
         });
@@ -743,9 +917,16 @@ fn extract_args(args: &[OscType]) -> Vec<f64> {
         .collect()
 }
 
-fn handle_packet(packet: OscPacket, shared: &Shared, depth: usize) {
+fn handle_packet(packet: OscPacket, shared: &Shared, depth: usize, src: std::net::SocketAddr) {
     match packet {
         OscPacket::Message(msg) => {
+            // Show-control : intercepté AVANT les mappings utilisateurs
+            // et AVANT la suppression (un recall ne doit pas avaler un
+            // `/stagespace/panic` reçu pendant sa fenêtre anti-loop).
+            if msg.addr.starts_with("/stagespace/") {
+                handle_show_command(&msg, src, shared);
+                return;
+            }
             dispatch_message(&msg.addr, extract_args(&msg.args), shared);
         }
         OscPacket::Bundle(bundle) => {
@@ -759,7 +940,67 @@ fn handle_packet(packet: OscPacket, shared: &Shared, depth: usize) {
                 return;
             }
             for packet in bundle.content {
-                handle_packet(packet, shared, depth + 1);
+                handle_packet(packet, shared, depth + 1, src);
+            }
+        }
+    }
+}
+
+/// `/stagespace/*` : mémorise le contrôleur (max 4), ack immédiat,
+/// callback sink avec la commande parsée. Inconnu → 1 log par adresse.
+fn handle_show_command(msg: &OscMessage, src: std::net::SocketAddr, shared: &Shared) {
+    shared
+        .stats
+        .packets_received
+        .fetch_add(1, Ordering::Relaxed);
+    {
+        let mut c = shared.controllers.lock().unwrap_or_else(|e| e.into_inner());
+        c.retain(|a| *a != src);
+        c.insert(0, src);
+        c.truncate(MAX_CONTROLLERS);
+    }
+    // Ack immédiat : /stagespace/ack <address>
+    let socket = shared
+        .reply_socket
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_ref()
+        .cloned();
+    if let Some(socket) = socket {
+        let ack = OscPacket::Message(OscMessage {
+            addr: "/stagespace/ack".to_string(),
+            args: vec![OscType::String(msg.addr.clone())],
+        });
+        if let Ok(bytes) = encode(&ack) {
+            let _ = socket.send_to(&bytes, src);
+        }
+    }
+    let fps = f64::from_bits(shared.timecode_fps.load(Ordering::Relaxed));
+    match parse_show_command(&msg.addr, &msg.args, fps) {
+        Some(cmd) => {
+            if let Some(sink) = shared
+                .show_sink
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .as_ref()
+            {
+                sink(cmd, src);
+            }
+        }
+        None => {
+            // Inconnu → ignoré, 1 log par adresse (pas de spam par paquet).
+            static WARNED: std::sync::OnceLock<
+                std::sync::Mutex<std::collections::HashSet<String>>,
+            > = std::sync::OnceLock::new();
+            let mut w = WARNED
+                .get_or_init(|| std::sync::Mutex::new(std::collections::HashSet::new()))
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            if w.insert(msg.addr.clone()) {
+                crate::logging::log_osc_error(&format!(
+                    "Unknown show-control address '{}' — ignored",
+                    msg.addr
+                ));
             }
         }
     }
@@ -1383,7 +1624,7 @@ mod tests {
                 args: vec![OscType::Float(0.5)],
             }),
         );
-        handle_packet(ok, &shared, 0);
+        handle_packet(ok, &shared, 0, "127.0.0.1:1".parse().unwrap());
         assert_eq!(r.get_last_value("h"), Some(vec![0.5]));
 
         // Bundle imbriqué > MAX_BUNDLE_DEPTH → droppé, pas de stack overflow
@@ -1394,7 +1635,7 @@ mod tests {
                 args: vec![OscType::Float(9.9)],
             }),
         );
-        handle_packet(deep, &shared, 0);
+        handle_packet(deep, &shared, 0, "127.0.0.1:1".parse().unwrap());
         assert_eq!(r.get_last_value("h"), Some(vec![0.5])); // inchangé
         assert!(r.stats().messages_dropped >= 1);
     }
@@ -1510,6 +1751,138 @@ mod tests {
         sock.send_to(b"definitely not an osc packet", ("127.0.0.1", r.port))
             .unwrap();
         assert!(wait_until(|| r.stats().decode_errors >= 1));
+        r.stop();
+    }
+}
+
+#[cfg(test)]
+mod show_control_tests {
+    use super::*;
+    use std::sync::mpsc;
+
+    /// Construit un receiver + récupère les commandes via un channel
+    /// branché au show_sink.
+    fn make() -> (
+        OscReceiver,
+        mpsc::Receiver<(ShowCommand, std::net::SocketAddr)>,
+    ) {
+        let r = OscReceiver::new(0);
+        let (tx, rx) = mpsc::channel();
+        r.set_show_sink(move |cmd, addr| {
+            let _ = tx.send((cmd, addr));
+        });
+        (r, rx)
+    }
+
+    fn msg(addr: &str, args: Vec<OscType>) -> OscPacket {
+        OscPacket::Message(OscMessage {
+            addr: addr.to_string(),
+            args,
+        })
+    }
+
+    #[test]
+    fn parses_every_command() {
+        let fps = 25.0;
+        let cases: Vec<(&str, Vec<OscType>, ShowCommand)> = vec![
+            ("/stagespace/go", vec![], ShowCommand::Go),
+            ("/stagespace/cue/next", vec![], ShowCommand::CueNext),
+            ("/stagespace/cue/prev", vec![], ShowCommand::CuePrev),
+            (
+                "/stagespace/cue/recall",
+                vec![OscType::Int(3)],
+                ShowCommand::CueRecall("3".into()),
+            ),
+            (
+                "/stagespace/cue/recall",
+                vec![OscType::String("2".into())],
+                ShowCommand::CueRecall("2".into()),
+            ),
+            ("/stagespace/panic", vec![], ShowCommand::Panic),
+            ("/stagespace/stop", vec![], ShowCommand::Stop),
+            (
+                "/stagespace/timecode",
+                vec![OscType::Float(12.5)],
+                ShowCommand::Timecode(12.5),
+            ),
+            (
+                "/stagespace/timecode",
+                vec![OscType::String("00:00:01:10".into())],
+                ShowCommand::Timecode(1.0 + 10.0 / 25.0),
+            ),
+        ];
+        for (addr, args, expected) in cases {
+            let got = parse_show_command(addr, &args, fps)
+                .unwrap_or_else(|| panic!("{addr} should parse"));
+            assert_eq!(
+                std::mem::discriminant(&got),
+                std::mem::discriminant(&expected),
+                "{addr}"
+            );
+            if let (ShowCommand::Timecode(a), ShowCommand::Timecode(b)) = (&got, &expected) {
+                assert!((a - b).abs() < 1e-9, "{addr}: {a} != {b}");
+            }
+        }
+        // Inconnue → None.
+        assert!(parse_show_command("/stagespace/bogus", &[], fps).is_none());
+        assert!(parse_show_command("/other/go", &[], fps).is_none());
+    }
+
+    #[test]
+    fn stagespace_prefix_never_reaches_mappings() {
+        let (r, rx) = make();
+        let src: std::net::SocketAddr = "127.0.0.1:9999".parse().unwrap();
+        let shared = r.shared.clone();
+        // Un mapping greedy qui aurait capturé l'adresse.
+        handle_packet(msg("/stagespace/go", vec![]), &shared, 0, src);
+        let (cmd, _src) = rx.try_recv().expect("command should arrive");
+        assert!(matches!(cmd, ShowCommand::Go));
+        // Rien dans last_by_address ni dans les valeurs routées.
+        assert!(!shared
+            .last_by_address
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .contains_key("/stagespace/go"));
+    }
+
+    #[test]
+    fn bundle_and_suppress_still_reach_show_control() {
+        let (r, rx) = make();
+        let src: std::net::SocketAddr = "127.0.0.1:9998".parse().unwrap();
+        r.suppress_ms(100_000);
+        let bundle = OscPacket::Bundle(rosc::OscBundle {
+            timetag: (0, 0).into(),
+            content: vec![
+                msg("/stagespace/panic", vec![]),
+                msg("/stagespace/cue/recall", vec![OscType::Int(2)]),
+            ],
+        });
+        handle_packet(bundle, &r.shared, 0, src);
+        assert!(matches!(rx.try_recv().unwrap().0, ShowCommand::Panic));
+        assert!(matches!(rx.try_recv().unwrap().0, ShowCommand::CueRecall(ref s) if s == "2"));
+    }
+
+    #[test]
+    fn ack_goes_back_to_sender() {
+        // Pair de sockets : receiver sur port 0, client envoie et lit l'ack.
+        let mut r = OscReceiver::new(0);
+        r.start().unwrap();
+        let client = UdpSocket::bind("127.0.0.1:0").unwrap();
+        client
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        let pkt = encode(&msg("/stagespace/panic", vec![])).unwrap();
+        client.send_to(&pkt, ("127.0.0.1", r.port)).unwrap();
+        let mut buf = [0u8; 2048];
+        let (len, _) = client.recv_from(&mut buf).expect("ack expected");
+        let (_, packet) = decode_udp(&buf[..len]).unwrap();
+        match packet {
+            OscPacket::Message(m) => {
+                assert_eq!(m.addr, "/stagespace/ack");
+                assert_eq!(m.args, vec![OscType::String("/stagespace/panic".into())]);
+            }
+            _ => panic!("expected message"),
+        }
         r.stop();
     }
 }

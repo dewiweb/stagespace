@@ -7,7 +7,8 @@ mod recall_tests {
     use crate::commands::state::Shared;
     use crate::Movement;
     use stagespace_engines::{
-        AudioState, Cue, MergeRuntime, OscProfile, OscReceiver, OscSender, Runtime,
+        AudioState, Cue, CueMode, MergeRuntime, OscProfile, OscReceiver, OscSender, Runtime,
+        SpatialChannel,
     };
     use std::collections::{HashMap, HashSet};
     use std::sync::atomic::{AtomicBool, AtomicU64};
@@ -55,6 +56,7 @@ mod recall_tests {
             osc_mappings: None,
             zones: None,
             moves: vec![],
+            ..Default::default()
         }
     }
 
@@ -352,5 +354,70 @@ mod recall_tests {
         // is_playing false — un stale-killé ne doit jamais s'afficher "playing".
         assert_eq!(infos.len(), 1);
         assert!(!infos[0].is_playing);
+    }
+
+    #[test]
+    fn test_tracking_recall_merges_channels_and_keeps_out_of_scope() {
+        let sh = make_shared();
+        {
+            let mr = sh.merge_runtime.lock().unwrap();
+            mr.set_object_channel(0, SpatialChannel::Gain, 0.5);
+            mr.set_object_channel(1, SpatialChannel::Spread, 0.3);
+        }
+        let mut cue = make_cue();
+        cue.mode = CueMode::Tracking;
+        cue.track_indices = vec![1];
+        let mut chs = stagespace_engines::SpatialChannels::default();
+        chs.gain = Some(0.8);
+        cue.object_channels = Some(HashMap::from([(1usize, chs)]));
+        recall_cue_inner(cue, sh.clone()).expect("tracking recall");
+        let mr = sh.merge_runtime.lock().unwrap();
+        let all = mr.object_channels();
+        assert_eq!(
+            all.get(&0).and_then(|c| c.gain),
+            Some(0.5),
+            "un canal hors scope garde sa valeur"
+        );
+        let c1 = all.get(&1).copied().unwrap_or_default();
+        assert_eq!(c1.gain, Some(0.8), "le canal du scope est écrit");
+        assert_eq!(
+            c1.spread,
+            Some(0.3),
+            "merge par canal — l'existant du même objet est conservé"
+        );
+    }
+
+    #[test]
+    fn test_tracking_recall_merges_depths_by_index() {
+        let sh = make_shared();
+        {
+            let mr = sh.merge_runtime.lock().unwrap();
+            mr.set_track_depths(vec![1.0, 1.0, 1.0]);
+        }
+        let mut cue = make_cue();
+        cue.mode = CueMode::Tracking;
+        cue.track_indices = vec![1];
+        // Vec positionnel aligné sur la liste globale des tracks — seul
+        // l'index 1 (scope) doit être appliqué.
+        cue.per_track_depths = vec![0.5, 0.2, 0.9];
+        recall_cue_inner(cue, sh.clone()).expect("tracking recall");
+        let mr = sh.merge_runtime.lock().unwrap();
+        assert_eq!(mr.track_depths(), vec![1.0, 0.2, 1.0]);
+    }
+
+    #[test]
+    fn test_tracking_recall_does_not_stop_unlisted_moves() {
+        let sh = make_shared();
+        {
+            let mut mv = sh.movements.lock().unwrap();
+            mv.insert("ghost".to_string(), make_movement("ghost"));
+        }
+        let mut cue = make_cue();
+        cue.mode = CueMode::Tracking;
+        recall_cue_inner(cue, sh.clone()).expect("tracking recall");
+        assert!(
+            sh.movements.lock().unwrap().contains_key("ghost"),
+            "un cue Tracking ne touche pas aux moves non listés"
+        );
     }
 }

@@ -66,7 +66,8 @@ pub use compiler::{
 };
 pub use config::{AudioConfig, Config, GraphConfig, OscConfig, RuntimeConfig};
 pub use cuelist::{
-    Cue, CuelistManager, MacroSnapshot, MoveSnapshot, SpatialMacroSnapshot, CUE_SCHEMA_VERSION,
+    Cue, CueMode, CueScope, CuelistManager, MacroSnapshot, MoveSnapshot, SpatialMacroSnapshot,
+    CUE_SCHEMA_VERSION,
 };
 pub use engines::{Engine, EngineParams, MAX_OBJECTS};
 pub use error::{Result, StagespaceError};

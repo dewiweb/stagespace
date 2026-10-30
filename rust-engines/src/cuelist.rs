@@ -7,12 +7,69 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use ts_rs::TS;
 
+fn default_true() -> bool {
+    true
+}
+
+/// Scope d'une cue Tracking : quelles catégories le recall touche.
+/// Les catégories objet (channels/positions) sont restreintes par
+/// `track_indices` quand il est non vide.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[ts(export)]
+pub struct CueScope {
+    #[serde(default = "default_true")]
+    pub moves: bool,
+    #[serde(default = "default_true")]
+    pub channels: bool,
+    #[serde(default = "default_true")]
+    pub positions: bool,
+    #[serde(default = "default_true")]
+    pub zones: bool,
+    #[serde(default = "default_true")]
+    pub global_graph: bool,
+    #[serde(default = "default_true")]
+    pub signal_graph: bool,
+    #[serde(default = "default_true")]
+    pub macros: bool,
+    #[serde(default = "default_true")]
+    pub osc_mappings: bool,
+}
+
+/// Scope non précisé = tout appliquer — mêmes défauts que le serde
+/// (`default_true`) : une cue Tracking sans scope explicite se comporte
+/// comme Full côté catégories (merge/no-kill en plus).
+impl Default for CueScope {
+    fn default() -> Self {
+        Self {
+            moves: true,
+            channels: true,
+            positions: true,
+            zones: true,
+            global_graph: true,
+            signal_graph: true,
+            macros: true,
+            osc_mappings: true,
+        }
+    }
+}
+
+/// Mode d'une cue : Full = snapshot complet ; Tracking = n'applique que
+/// les catégories cochées (cue incrémentale — les moves non listés
+/// tournent encore, canaux/positions mergés jamais clear-all).
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[ts(export)]
+pub enum CueMode {
+    #[default]
+    Full,
+    Tracking,
+}
+
 /// Version courante du schéma Cue. Cues sans le champ = legacy (0).
 pub const CUE_SCHEMA_VERSION: u32 = 1;
 
 /// Cue - snapshot complet d'un moment du spectacle
 /// Contient le graphe + les macros + les tracks ciblées + le fade
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct Cue {
     pub id: String,
@@ -93,6 +150,29 @@ pub struct Cue {
     /// Champ absent (ancien cue) = recall ne touche pas aux moves.
     #[serde(default)]
     pub moves: Vec<MoveSnapshot>,
+
+    /// Mode de la cue (Full par défaut — anciens cues = Full).
+    #[serde(default)]
+    pub mode: CueMode,
+
+    /// Portée d'une cue Tracking — ignorée en mode Full.
+    #[serde(default)]
+    pub scope: CueScope,
+
+    /// Attente avant exécution (secondes) — jouée par le frontend avant
+    /// d'appeler le recall.
+    #[serde(default)]
+    pub pre_wait: f64,
+
+    /// Follow : auto-GO de la cue suivante ce nombre de secondes après
+    /// l'exécution (None = pas de follow).
+    #[serde(default)]
+    pub follow: Option<f64>,
+
+    /// Timecode de déclenchement (secondes) — la chasse TC rappelle la
+    /// cue quand le TC la franchit.
+    #[serde(default)]
+    pub timecode: Option<f64>,
 }
 
 /// Snapshot d'un move actif — capturé par `store_cue`, rejoué par `recall_cue`.
@@ -304,6 +384,7 @@ mod tests {
             osc_mappings: None,
             zones: None,
             moves: vec![],
+            ..Default::default()
         };
         manager.add(cue);
         assert_eq!(manager.len(), 1);
@@ -334,6 +415,7 @@ mod tests {
             osc_mappings: None,
             zones: None,
             moves: vec![],
+            ..Default::default()
         };
         manager.add(cue);
         manager.remove(0).unwrap();
@@ -385,6 +467,7 @@ mod tests {
             osc_mappings: None,
             zones: None,
             moves: vec![],
+            ..Default::default()
         };
 
         // Sérialiser
@@ -462,6 +545,7 @@ mod tests {
                 enabled: true,
             }]),
             moves: vec![],
+            ..Default::default()
         };
 
         let json = serde_json::to_string(&cue).unwrap();
@@ -534,6 +618,7 @@ mod tests {
             osc_mappings: None,
             zones: None,
             moves: vec![],
+            ..Default::default()
         };
         manager.add(cue);
         manager.remove_by_id("cue1").unwrap();
@@ -565,6 +650,7 @@ mod tests {
             osc_mappings: None,
             zones: None,
             moves: vec![],
+            ..Default::default()
         };
         manager.add(cue.clone());
         let retrieved = manager.get(0);
@@ -597,6 +683,7 @@ mod tests {
             osc_mappings: None,
             zones: None,
             moves: vec![],
+            ..Default::default()
         };
         manager.add(cue);
         let retrieved = manager.get_by_id("cue1");
@@ -628,6 +715,7 @@ mod tests {
             osc_mappings: None,
             zones: None,
             moves: vec![],
+            ..Default::default()
         };
         manager.add(cue);
 
@@ -653,6 +741,7 @@ mod tests {
             osc_mappings: None,
             zones: None,
             moves: vec![],
+            ..Default::default()
         };
         manager.update(0, updated).unwrap();
 
@@ -685,6 +774,7 @@ mod tests {
             osc_mappings: None,
             zones: None,
             moves: vec![],
+            ..Default::default()
         };
         manager.add(cue);
         manager.clear();

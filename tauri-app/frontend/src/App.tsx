@@ -17,6 +17,7 @@ import ShortcutsModal from './components/ShortcutsModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Workflow, ChevronRight, ChevronDown, PanelRightClose, PanelLeftClose, PanelLeftOpen, PanelRightOpen, Maximize2, Minimize2, Activity } from 'lucide-react';
 import { useLiveShortcuts, usePerfStatsPolling } from './hooks/useLiveShortcuts';
+import { useShowControl } from './hooks/useShowControl';
 import { prepareGraphForSave } from './components/nodeParamSchema';
 import { usePersistedState } from './utils/usePersistedState';
 import { useGraphStore, useMovementPositionsListener, useAudioErrorListener, useAudioStateListener, useCueRecallListener, useSupervisorListener } from './store/useGraphStore';
@@ -74,6 +75,7 @@ function App() {
   // au niveau App : ils doivent fonctionner aussi en mode Perform (le Toolbar
   // et sa stack se démontent).
   useLiveShortcuts();
+  useShowControl();
   usePerfStatsPolling();
 
   // ── Resize des panneaux gauche et droit ──

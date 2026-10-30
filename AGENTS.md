@@ -33,7 +33,7 @@ stagespace/
 ```bash
 cd rust-engines
 cargo build              # Build
-cargo test --lib         # Run tests (512 tests, incl. ts-rs export tests)
+cargo test --lib         # Run tests (519 tests, incl. ts-rs export tests)
 cargo clippy --all-targets -- -D warnings  # Lint (CI: --all-targets inclut tests/benches)
 cargo fmt -- --check     # Format check
 ```
@@ -43,7 +43,7 @@ cargo fmt -- --check     # Format check
 ```bash
 cd tauri-app/src-tauri
 cargo build              # Build
-cargo test --lib         # Run tests (62 tests)
+cargo test --lib         # Run tests (66 tests)
 cargo clippy --all-targets -- -D warnings  # Lint (CI: --all-targets inclut tests)
 ```
 
@@ -69,7 +69,7 @@ cd tauri-app/frontend
 npm install              # Install deps
 npm run dev              # Dev server (Vite)
 npm run build            # Production build (tsc + vite build)
-npm test                 # Run tests (371 tests, vitest)
+npm test                 # Run tests (383 tests, vitest)
 npm run contracts        # Regenerate TS types from Rust (ts-rs → src/types/generated/)
 npm run test:watch       # Watch mode
 npx tsc -b               # Type check (build mode — `tsc --noEmit` is vacuous on the solution-style root tsconfig)
@@ -122,11 +122,11 @@ CI fails if the committed files drift from the Rust sources.
 
 | Suite | Count |
 |-------|-------|
-| Rust engines | 512 |
-| Tauri backend | 62 |
-| Frontend (vitest) | 371 |
+| Rust engines | 519 |
+| Tauri backend | 66 |
+| Frontend (vitest) | 383 |
 | E2E CLI | 125 |
-| **Total** | **1064** |
+| **Total** | **1093** |
 
 ## Live Show Safety Features
 
@@ -162,3 +162,28 @@ CI fails if the committed files drift from the Rust sources.
 - `Ctrl+Z` / `Ctrl+Y` — Undo/Redo
 - Cue list: click = arm, double-click = recall (no single-click scene kill)
 - Shortcuts disabled when typing in input fields
+
+## OSC Show Control (`/stagespace/*`)
+
+Reserved OSC-IN prefix, intercepted in `osc_receiver::handle_packet` BEFORE
+user mappings (these messages never reach mappings or `last_by_address`).
+Backend only routes: parsed command → `show-control` event → frontend
+dispatches to the same functions as the keyboard shortcuts (`liveActions.ts`).
+
+| Address | Action | Shortcut |
+|---------|--------|----------|
+| `/stagespace/go` | setlist GO | Enter |
+| `/stagespace/cue/next` | recall next cue | Shift+Enter |
+| `/stagespace/cue/prev` | recall previous cue | Backspace |
+| `/stagespace/cue/recall <n>` | recall cue by `cue_number` (string/num, fallback 1-based index) | — |
+| `/stagespace/panic` | panic (stop all + origins) | Esc |
+| `/stagespace/stop` | stop all moves | — |
+| `/stagespace/timecode <s|"HH:MM:SS:FF">` | TC chase (fps 24/25/30, default 25, `set_timecode_fps`) | — |
+
+Feedback: every accepted command gets `/stagespace/ack <addr>` to the sender;
+the 4 most recent controllers also receive `/stagespace/cue/current <n> <name>`
+and `/stagespace/cue/next <n> <name>` after each cue change (`send_show_feedback`).
+
+Cue fields (`Cue`): `mode` (Full|Tracking), `scope` (8 category flags),
+`pre_wait`, `follow`, `timecode`. Tracking cues merge channels/positions
+(never clear-all), never stop unlisted moves; TC-fired recalls skip pre_wait.

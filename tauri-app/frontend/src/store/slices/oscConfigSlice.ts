@@ -14,6 +14,8 @@ interface PersistedOscConfig {
   oscPort: number;
   oscProfile: string;
   oscInPort: number;
+  /// Frame rate de conversion HH:MM:SS:FF du timecode OSC (non-drop).
+  timecodeFps: number;
 }
 
 function loadConfigFromStorage(): Partial<PersistedOscConfig> {
@@ -23,6 +25,17 @@ function loadConfigFromStorage(): Partial<PersistedOscConfig> {
 function saveConfigToStorage(config: PersistedOscConfig) {
   safeSetItem(OSC_CONFIG_STORAGE_KEY, JSON.stringify(config));
 }
+
+const persist = (s: OscConfigSlice, patch: Partial<PersistedOscConfig>) => {
+  saveConfigToStorage({
+    oscAddress: s.oscAddress,
+    oscPort: s.oscPort,
+    oscProfile: s.oscProfile,
+    oscInPort: s.oscInPort,
+    timecodeFps: s.timecodeFps,
+    ...patch,
+  });
+};
 
 /// Vérifie si des movements sont actifs (playback en cours)
 /// Import dynamique pour éviter une dépendance circulaire
@@ -40,10 +53,13 @@ export interface OscConfigSlice {
   oscProfile: string;
   /// OSC IN — port d'écoute du receiver (messages entrants)
   oscInPort: number;
+  /// Frame rate du timecode OSC entrant (24/25/30 non-drop, défaut 25).
+  timecodeFps: number;
   setOscAddress: (addr: string) => void;
   setOscPort: (port: number) => void;
   setOscProfile: (profile: string) => void;
   setOscInPort: (port: number) => Promise<void>;
+  setTimecodeFps: (fps: number) => Promise<void>;
 }
 
 export const createOscConfigSlice: StateCreator<OscConfigSlice, [], [], OscConfigSlice> = (set, get) => {
@@ -54,6 +70,7 @@ export const createOscConfigSlice: StateCreator<OscConfigSlice, [], [], OscConfi
     oscPort: saved.oscPort ?? 9000,
     oscProfile: saved.oscProfile ?? 'holophonix',
     oscInPort: saved.oscInPort ?? 8001,
+    timecodeFps: saved.timecodeFps ?? 25,
     setOscAddress: (addr) => {
       isPlaybackActive().then((active) => {
         if (active) {
@@ -61,8 +78,7 @@ export const createOscConfigSlice: StateCreator<OscConfigSlice, [], [], OscConfi
           return;
         }
         set({ oscAddress: addr });
-        const s = get();
-        saveConfigToStorage({ oscAddress: addr, oscPort: s.oscPort, oscProfile: s.oscProfile, oscInPort: s.oscInPort });
+        persist(get(), { oscAddress: addr });
       });
     },
     setOscPort: (port) => {
@@ -72,8 +88,7 @@ export const createOscConfigSlice: StateCreator<OscConfigSlice, [], [], OscConfi
           return;
         }
         set({ oscPort: port });
-        const s = get();
-        saveConfigToStorage({ oscAddress: s.oscAddress, oscPort: port, oscProfile: s.oscProfile, oscInPort: s.oscInPort });
+        persist(get(), { oscPort: port });
       });
     },
     setOscProfile: (profile) => {
@@ -83,8 +98,7 @@ export const createOscConfigSlice: StateCreator<OscConfigSlice, [], [], OscConfi
           return;
         }
         set({ oscProfile: profile });
-        const s = get();
-        saveConfigToStorage({ oscAddress: s.oscAddress, oscPort: s.oscPort, oscProfile: profile, oscInPort: s.oscInPort });
+        persist(get(), { oscProfile: profile });
       });
     },
     setOscInPort: async (port) => {
@@ -94,17 +108,29 @@ export const createOscConfigSlice: StateCreator<OscConfigSlice, [], [], OscConfi
       }
       const oldPort = get().oscInPort;
       set({ oscInPort: port });
-      const s = get();
-      saveConfigToStorage({ oscAddress: s.oscAddress, oscPort: s.oscPort, oscProfile: s.oscProfile, oscInPort: port });
+      persist(get(), { oscInPort: port });
       // Appliquer côté backend (stop l'ancien receiver, démarre le nouveau)
       try {
         await invoke('set_osc_receiver_port', { port });
       } catch (e) {
         // Revert state + storage si le backend échoue
         set({ oscInPort: oldPort });
-        saveConfigToStorage({ oscAddress: s.oscAddress, oscPort: s.oscPort, oscProfile: s.oscProfile, oscInPort: oldPort });
+        persist(get(), { oscInPort: oldPort });
         console.error('[setOscInPort] Failed to set OSC receiver port:', e);
         toast.error('OSC port change failed: ' + e);
+      }
+    },
+    setTimecodeFps: async (fps) => {
+      const prev = get().timecodeFps;
+      set({ timecodeFps: fps });
+      persist(get(), { timecodeFps: fps });
+      try {
+        await invoke('set_timecode_fps', { fps });
+      } catch (e) {
+        set({ timecodeFps: prev });
+        persist(get(), { timecodeFps: prev });
+        console.error('[setTimecodeFps] Failed:', e);
+        toast.error('Timecode fps change failed: ' + e);
       }
     },
   };

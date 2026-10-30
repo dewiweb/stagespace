@@ -52,6 +52,21 @@ pub struct StoreCueRequest {
     pub per_track_depths: Vec<f64>,
     /// Positions manuelles (drag 3D)
     pub manual_positions: std::collections::HashMap<usize, [f64; 3]>,
+    /// Mode de la cue (Full par défaut)
+    #[serde(default)]
+    pub mode: stagespace_engines::CueMode,
+    /// Portée d'une cue Tracking — ignorée en mode Full
+    #[serde(default)]
+    pub scope: stagespace_engines::CueScope,
+    /// Attente avant exécution (s)
+    #[serde(default)]
+    pub pre_wait: f64,
+    /// Follow : auto-GO cue suivante après N s (None = off)
+    #[serde(default)]
+    pub follow: Option<f64>,
+    /// Timecode de déclenchement (s)
+    #[serde(default)]
+    pub timecode: Option<f64>,
 }
 
 /// Stocke un cue (snapshot complet)
@@ -125,6 +140,47 @@ pub async fn store_cue(
             .collect()
     };
 
+    // Tracking : filtre ce qui est enregistré — object_channels/
+    // manual_positions/depths restreints aux tracks du scope ; catégories
+    // scope=false → None/vide (le recall ne les touche pas).
+    let tracking = request.mode == stagespace_engines::CueMode::Tracking;
+    let scope = request.scope;
+    let scoped = |idx: usize| -> bool {
+        !tracking || request.track_indices.is_empty() || request.track_indices.contains(&idx)
+    };
+    let object_channels = if tracking && !scope.channels {
+        None
+    } else {
+        Some(
+            object_channels
+                .into_iter()
+                .filter(|(i, _)| scoped(*i))
+                .collect::<std::collections::HashMap<_, _>>(),
+        )
+    };
+    let channel_modulations = if tracking && !scope.channels {
+        None
+    } else {
+        Some(channel_modulations)
+    };
+    let manual_positions: std::collections::HashMap<usize, [f64; 3]> = request
+        .manual_positions
+        .into_iter()
+        .filter(|(i, _)| !tracking || scope.positions && scoped(*i))
+        .collect();
+    // Vecteur positionnel : garder l'alignement index → track. Le scope
+    // ne filtre PAS ici (sinon l'index 5 retomberait à 0) — il s'applique
+    // au recall, en merge par index sur les depths courantes.
+    let per_track_depths = if tracking && !scope.positions {
+        Vec::new()
+    } else {
+        per_track_depths
+    };
+    let moves = if tracking && !scope.moves {
+        Vec::new()
+    } else {
+        moves
+    };
     let cue = Cue {
         id: uuid::Uuid::new_v4().to_string(),
         schema_version: Some(stagespace_engines::CUE_SCHEMA_VERSION),
@@ -135,23 +191,56 @@ pub async fn store_cue(
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_secs_f64())
             .unwrap_or(0.0),
-        macros: request.macros,
+        macros: if tracking && !scope.macros {
+            None
+        } else {
+            request.macros
+        },
         track_indices: request.track_indices,
         fade_duration: request.fade_duration,
         cue_number: request.cue_number,
-        global_graph: request.global_graph,
-        signal_graph: request.signal_graph,
-        active_move_ids: request.active_move_ids,
+        global_graph: if tracking && !scope.global_graph {
+            None
+        } else {
+            request.global_graph
+        },
+        signal_graph: if tracking && !scope.signal_graph {
+            None
+        } else {
+            request.signal_graph
+        },
+        active_move_ids: if tracking && !scope.moves {
+            Vec::new()
+        } else {
+            request.active_move_ids
+        },
         // Capturé depuis le runtime (comme zones/channels) — le champ de la
         // request était toujours [] côté frontend.
         per_track_depths,
-        manual_positions: request.manual_positions,
-        spatial_macros: request.spatial_macros,
-        object_channels: Some(object_channels),
-        channel_modulations: Some(channel_modulations),
-        osc_mappings: Some(osc_mappings),
-        zones: Some(zones),
+        manual_positions,
+        spatial_macros: if tracking && !scope.macros {
+            None
+        } else {
+            request.spatial_macros
+        },
+        object_channels,
+        channel_modulations,
+        osc_mappings: if tracking && !scope.osc_mappings {
+            None
+        } else {
+            Some(osc_mappings)
+        },
+        zones: if tracking && !scope.zones {
+            None
+        } else {
+            Some(zones)
+        },
         moves,
+        mode: request.mode,
+        scope,
+        pre_wait: request.pre_wait,
+        follow: request.follow,
+        timecode: request.timecode,
     };
 
     // Émettre l'événement pour que le frontend persiste le cue
@@ -244,9 +333,19 @@ pub(crate) fn recall_cue_inner(
     // deux sur `cue.fade_duration` au lieu de sauter. fade=0 → no-op.
     lock_or_recover(&sh.merge_runtime).begin_transition(cue.fade_duration);
 
+    // Mode Tracking : n'appliquer que les catégories cochées — les moves
+    // hors cue continuent de tourner, les canaux/positions sont mergés
+    // (jamais clear-all), les catégories scope=false ne sont pas touchées.
+    let tracking = cue.mode == stagespace_engines::CueMode::Tracking;
+    let scope = cue.scope;
+
     // 1. Hot-swap le graph global AVANT de désactiver les moves (fail-fast sans side effects)
     //    Si la compilation échoue, on retourne une erreur sans avoir modifié l'état.
-    if let Some(ref global_graph) = cue.global_graph {
+    if let Some(global_graph) = cue
+        .global_graph
+        .as_ref()
+        .filter(|_| !tracking || scope.global_graph)
+    {
         let audio_state = {
             let merge_rt = lock_or_recover(&sh.merge_runtime);
             merge_rt
@@ -280,7 +379,11 @@ pub(crate) fn recall_cue_inner(
 
     // 1b. Idem pour le graph de modulation global (domaine signal → deltas
     //     de macros) : recompilé + swappé si le cue en porte un.
-    if let Some(ref signal_graph_json) = cue.signal_graph {
+    if let Some(signal_graph_json) = cue
+        .signal_graph
+        .as_ref()
+        .filter(|_| !tracking || scope.signal_graph)
+    {
         let audio_state = {
             let merge_rt = lock_or_recover(&sh.merge_runtime);
             merge_rt
@@ -294,7 +397,7 @@ pub(crate) fn recall_cue_inner(
         let signal_fn = stagespace_engines::compile_signal_graph(&graph)
             .map_err(|e| IpcError::validation(format!("Failed to compile signal graph: {e:?}")))?;
         lock_or_recover(&sh.merge_runtime).swap_signal_fn(signal_fn);
-    } else {
+    } else if !tracking {
         // Le cue ne porte pas de graph signal → la modulation globale
         // est reset. Sans ça, la SignalFn du cue précédent survivrait au
         // recall (deltas stales sur les macros).
@@ -302,11 +405,12 @@ pub(crate) fn recall_cue_inner(
             .swap_signal_fn(stagespace_engines::signal_compiler::empty_signal_fn());
     }
 
-    // 2. Désactiver les moves absents du cue. Quand le cue porte des
+    // 2. Désactiver les moves absents du cue (Full uniquement — Tracking
+    //    ne tue jamais un move non listé). Quand le cue porte des
     //    snapshots (Phase 5), `moves` est la vérité backend — un move spawné
     //    entre le poll frontend et le store y figure, alors qu'il manquerait
     //    dans active_move_ids (killed-then-respawned au lieu de continuer).
-    {
+    if !tracking {
         let movements = lock_or_recover(&sh.movements);
         let active_ids: std::collections::HashSet<&str> = if cue.moves.is_empty() {
             cue.active_move_ids.iter().map(|s| s.as_str()).collect()
@@ -349,7 +453,7 @@ pub(crate) fn recall_cue_inner(
     // 3+4. Restaurer les macros — UNE écriture atomique (restore_all) :
     //      les 5 set_* séparés laissaient plusieurs frames lire un mix
     //      ancien/nouveau pendant le recall.
-    if cue.macros.is_some() || cue.spatial_macros.is_some() {
+    if (!tracking || scope.macros) && (cue.macros.is_some() || cue.spatial_macros.is_some()) {
         let merge_rt = lock_or_recover(&sh.merge_runtime);
         let ms = merge_rt.macros();
         let mut snap = ms.snapshot();
@@ -367,18 +471,42 @@ pub(crate) fn recall_cue_inner(
         ms.restore_all(&snap);
     }
 
-    // 5. Restaurer les per-track depths
-    if !cue.per_track_depths.is_empty() {
+    // 5. Restaurer les per-track depths (Tracking + scope.positions →
+    //    merge par index, jamais clear).
+    if !cue.per_track_depths.is_empty() && (!tracking || scope.positions) {
         let merge_rt = lock_or_recover(&sh.merge_runtime);
-        merge_rt.set_track_depths(cue.per_track_depths.clone());
+        if !tracking {
+            merge_rt.set_track_depths(cue.per_track_depths.clone());
+        } else {
+            // Merge par index : seules les tracks du scope sont écrites —
+            // le vec du cue reste aligné sur la liste globale des tracks.
+            let scoped = |i: usize| cue.track_indices.is_empty() || cue.track_indices.contains(&i);
+            let mut cur = merge_rt.track_depths();
+            if cur.len() < cue.per_track_depths.len() {
+                cur.resize(cue.per_track_depths.len(), 1.0);
+            }
+            for (i, d) in cue.per_track_depths.iter().enumerate() {
+                if scoped(i) {
+                    cur[i] = *d;
+                }
+            }
+            merge_rt.set_track_depths(cur);
+        }
     }
 
-    // 6. Restaurer les manual positions
+    // 6. Restaurer les manual positions — Full = clear+set (snapshot
+    //    exact) ; Tracking+scope.positions = merge (set, jamais clear).
     {
         let merge_rt = lock_or_recover(&sh.merge_runtime);
-        merge_rt.clear_all_manual_positions();
-        for (idx, pos) in &cue.manual_positions {
-            merge_rt.set_manual_position(*idx, *pos);
+        if !tracking {
+            merge_rt.clear_all_manual_positions();
+            for (idx, pos) in &cue.manual_positions {
+                merge_rt.set_manual_position(*idx, *pos);
+            }
+        } else if scope.positions {
+            for (idx, pos) in &cue.manual_positions {
+                merge_rt.set_manual_position(*idx, *pos);
+            }
         }
     }
 
@@ -388,16 +516,26 @@ pub(crate) fn recall_cue_inner(
     {
         let merge_rt = lock_or_recover(&sh.merge_runtime);
         if let Some(ref channels) = cue.object_channels {
-            merge_rt.clear_all_object_channels();
-            for (idx, chs) in channels {
-                for (ch, v) in chs.iter() {
-                    merge_rt.set_object_channel(*idx, ch, v);
+            // Full = snapshot exact (clear+set) ; Tracking = merge par
+            // objet (un objet hors scope garde sa valeur).
+            if !tracking {
+                merge_rt.clear_all_object_channels();
+            }
+            if !tracking || scope.channels {
+                for (idx, chs) in channels {
+                    for (ch, v) in chs.iter() {
+                        merge_rt.set_object_channel(*idx, ch, v);
+                    }
                 }
             }
         }
-        if let Some(ref mods) = cue.channel_modulations {
+        if let Some(mods) = cue
+            .channel_modulations
+            .as_ref()
+            .filter(|_| !tracking || scope.channels)
+        {
             merge_rt.clear_modulations();
-            for rule in mods {
+            for rule in mods.iter() {
                 // Un cue au-delà du cap tronque au lieu d'échouer le recall
                 // entier — les 64 premières règles suffisent en pratique.
                 if merge_rt.add_modulation(rule.clone()).is_err() {
@@ -405,19 +543,23 @@ pub(crate) fn recall_cue_inner(
                 }
             }
         }
-        if let Some(ref zs) = cue.zones {
+        if let Some(zs) = cue.zones.as_ref().filter(|_| !tracking || scope.zones) {
             merge_rt.clear_zones();
-            for z in zs {
+            for z in zs.iter() {
                 if merge_rt.add_zone(z.clone()).is_err() {
                     break;
                 }
             }
         }
     }
-    if let Some(ref maps) = cue.osc_mappings {
+    if let Some(maps) = cue
+        .osc_mappings
+        .as_ref()
+        .filter(|_| !tracking || scope.osc_mappings)
+    {
         let receiver = lock_or_recover(&sh.osc_receiver);
         receiver.clear_mappings();
-        for m in maps {
+        for m in maps.iter() {
             // Un mapping invalide dans un vieux cue ne doit pas faire
             // échouer le recall — on log et on continue
             if let Err(e) = receiver.add_mapping(m.clone()) {
@@ -431,7 +573,7 @@ pub(crate) fn recall_cue_inner(
     //    son graphe, ses tracks, son loop/direction. Champ vide = cue ancien
     //    format → le frontend rejoue `cue.graph` (listener cue-recalled).
     let mut failed_moves: Vec<String> = Vec::new();
-    if !cue.moves.is_empty() {
+    if !cue.moves.is_empty() && (!tracking || scope.moves) {
         use crate::commands::merge_commands::{
             parse_direction, parse_loop_mode, spawn_move_for_recall, MoveSpec,
         };

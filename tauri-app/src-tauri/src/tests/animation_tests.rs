@@ -1166,6 +1166,7 @@ mod tests {
             osc_mappings: None,
             zones: None,
             moves: vec![],
+            ..Default::default()
         };
 
         // Sérialiser (comme Tauri fait pour IPC)

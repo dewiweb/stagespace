@@ -234,3 +234,37 @@ pub async fn get_osc_armed(state: State<'_, AppState>) -> Result<bool, IpcError>
     let merge_rt = lock_or_recover(&state.merge_runtime);
     Ok(merge_rt.osc_armed())
 }
+
+/// Feedback cue vers les contrôleurs show-control : le frontend envoie
+/// la cue courante/prochaine après chaque changement — le backend l'envoie
+/// aux adresses ayant envoyé des commandes `/stagespace/*` (ack déjà
+/// immédiat côté receiver).
+#[derive(serde::Deserialize, ts_rs::TS)]
+#[ts(export)]
+pub struct CueFeedbackEntry {
+    pub number: String,
+    pub name: String,
+}
+
+#[tauri::command]
+pub async fn send_show_feedback(
+    current: Option<CueFeedbackEntry>,
+    next: Option<CueFeedbackEntry>,
+    state: State<'_, AppState>,
+) -> Result<(), IpcError> {
+    let receiver = lock_or_recover(&state.osc_receiver);
+    receiver.send_show_feedback(
+        current.map(|c| (c.number, c.name)),
+        next.map(|n| (n.number, n.name)),
+    );
+    Ok(())
+}
+
+/// FPS utilisé pour la forme string `HH:MM:SS:FF` du timecode
+/// (`/stagespace/timecode`) — non-drop, 24/25/30 ; défaut 25.
+#[tauri::command]
+pub async fn set_timecode_fps(fps: f64, state: State<'_, AppState>) -> Result<(), IpcError> {
+    let receiver = lock_or_recover(&state.osc_receiver);
+    receiver.set_timecode_fps(fps);
+    Ok(())
+}

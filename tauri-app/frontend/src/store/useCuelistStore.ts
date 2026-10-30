@@ -4,20 +4,37 @@ import { toast } from '../utils/toast-helpers';
 import { safeSetItem, safeParseStoredJson } from '../utils/safeStorage';
 import type { Cue } from '../types/generated/Cue';
 import type { StoreCueRequest } from '../types/generated/StoreCueRequest';
+import { chase, type ChaseCue } from '../utils/timecodeChase';
 
 /// Cue complet tel que sérialisé par le backend — type généré (ts-rs).
 /// Inclut `moves`/`object_channels` capturés côté Rust au store.
 export type CueData = Cue;
 
+interface PendingCueAction {
+  cueId: string;
+  /// 'pre_wait' = attente avant recall ; 'follow' = auto-GO suivant.
+  kind: 'pre_wait' | 'follow';
+  /// Timestamp ms de l'exécution prévue (compte à rebours UI).
+  deadline: number;
+}
+
 interface CuelistState {
   cues: CueData[];
   currentCueIndex: number;
   isRecalling: boolean;
+  /// Timer pendu (pre-wait ou follow) — un seul à la fois, annulé par
+  /// toute action manuelle/TC/panic.
+  pending: PendingCueAction | null;
+  /// Chasse timecode activée (persistée).
+  tcChaseEnabled: boolean;
+  /// Dernier timecode reçu (secondes) + horodatage pour "TC lost".
+  lastTimecode: number | null;
+  lastTimecodeAt: number;
 
   loadFromStorage: () => void;
   saveToStorage: () => void;
   storeCue: (cue: StoreCueRequest) => Promise<CueData>;
-  recallCue: (cueId: string) => Promise<void>;
+  recallCue: (cueId: string, opts?: { skipPreWait?: boolean }) => Promise<void>;
   deleteCue: (cueId: string) => void;
   /// Met à jour un cue en place (fade_duration éditable post-store) —
   /// la cuelist vit côté frontend (localStorage), le backend n'en garde
@@ -25,9 +42,40 @@ interface CuelistState {
   updateCue: (cue: CueData) => void;
   goToNextCue: () => Promise<void>;
   goToPreviousCue: () => Promise<void>;
+  /// Annule tout timer pre-wait/follow pendu — appelé par les actions
+  /// manuelles (GO/next/prev/recall/panic/stop) et avant une cue TC.
+  cancelPendingTimers: () => void;
+  /// Entrée d'un message timecode (déjà en secondes) — chasse + recall.
+  handleTimecode: (tc: number) => void;
+  setTcChaseEnabled: (enabled: boolean) => void;
 }
 
 const STORAGE_KEY = 'stagespace-cuelist';
+const TC_CHASE_KEY = 'stagespace-cuelist-tc-chase';
+/// Timer JS du pending — hors state (mutable, pas sérialisable).
+let pendingTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearPendingTimer() {
+  if (pendingTimer !== null) {
+    clearTimeout(pendingTimer);
+    pendingTimer = null;
+  }
+}
+
+/// Feedback OSC show-control — cue courante/prochaine vers les
+/// contrôleurs `/stagespace/*` (échoue silencieusement sans backend).
+async function sendFeedback(cues: CueData[], currentIndex: number) {
+  try {
+    const cur = currentIndex >= 0 ? cues[currentIndex] : null;
+    const nxt = currentIndex + 1 < cues.length ? cues[currentIndex + 1] : null;
+    await invoke('send_show_feedback', {
+      current: cur ? { number: cur.cue_number ?? '', name: cur.name } : null,
+      next: nxt ? { number: nxt.cue_number ?? '', name: nxt.name } : null,
+    });
+  } catch {
+    // Pas de backend (Vite seul) — silence.
+  }
+}
 
 function loadFromStorage(): CueData[] {
   return safeParseStoredJson<CueData[]>(STORAGE_KEY, []);
@@ -41,6 +89,10 @@ export const useCuelistStore = create<CuelistState>((set, get) => ({
   cues: loadFromStorage(),
   currentCueIndex: -1,
   isRecalling: false,
+  pending: null,
+  tcChaseEnabled: safeParseStoredJson<boolean>(TC_CHASE_KEY, false),
+  lastTimecode: null,
+  lastTimecodeAt: 0,
 
   loadFromStorage: () => {
     set({ cues: loadFromStorage() });
@@ -65,15 +117,39 @@ export const useCuelistStore = create<CuelistState>((set, get) => ({
     }
   },
 
-  recallCue: async (cueId: string) => {
+  recallCue: async (cueId: string, opts) => {
     if (get().isRecalling) return; // empêche les recalls concurrents
     const cue = get().cues.find((c) => c.id === cueId);
     if (!cue) return;
+    // Pre-wait : le recall part après N s (compte à rebours sur la cue).
+    // Toute nouvelle action annule ce timer (cancelPendingTimers).
+    if (!opts?.skipPreWait && cue.pre_wait != null && cue.pre_wait > 0) {
+      get().cancelPendingTimers();
+      pendingTimer = setTimeout(() => {
+        pendingTimer = null;
+        set({ pending: null });
+        // Le recall interne skippe le pre_wait (déjà consommé).
+        void get().recallCue(cueId, { skipPreWait: true });
+      }, cue.pre_wait * 1000);
+      set({ pending: { cueId, kind: 'pre_wait', deadline: Date.now() + cue.pre_wait * 1000 } });
+      return;
+    }
     set({ isRecalling: true });
     try {
       await invoke('recall_cue', { cue });
       const idx = get().cues.findIndex((c) => c.id === cueId);
       set({ currentCueIndex: idx });
+      sendFeedback(get().cues, idx);
+      // Follow : auto-GO de la cue suivante N s après l'exécution.
+      if (cue.follow != null && cue.follow > 0 && idx + 1 < get().cues.length) {
+        const nextCue = get().cues[idx + 1];
+        pendingTimer = setTimeout(() => {
+          pendingTimer = null;
+          set({ pending: null });
+          get().recallCue(nextCue.id);
+        }, cue.follow * 1000);
+        set({ pending: { cueId: nextCue.id, kind: 'follow', deadline: Date.now() + cue.follow * 1000 } });
+      }
       // Cue legacy (pré-Phase5) : `moves` est vide, le backend a désactivé
       // les moves mais ne peut pas respawner — le graphe vit dans cue.graph.
       // Le restaurer dans l'éditeur et le rejouer, sinon le show reste muet.
@@ -122,6 +198,37 @@ export const useCuelistStore = create<CuelistState>((set, get) => ({
     const cues = get().cues.map((c) => (c.id === cue.id ? cue : c));
     set({ cues });
     saveToStorage(cues);
+  },
+
+  cancelPendingTimers: () => {
+    clearPendingTimer();
+    if (get().pending !== null) set({ pending: null });
+  },
+
+  setTcChaseEnabled: (enabled: boolean) => {
+    set({ tcChaseEnabled: enabled });
+    safeSetItem(TC_CHASE_KEY, JSON.stringify(enabled));
+  },
+
+  handleTimecode: (tc: number) => {
+    if (!Number.isFinite(tc)) return;
+    const prev = get().lastTimecode;
+    set({ lastTimecode: tc, lastTimecodeAt: Date.now() });
+    if (!get().tcChaseEnabled) return;
+    const cues = get().cues as ChaseCue[];
+    const currentId =
+      get().currentCueIndex >= 0 ? get().cues[get().currentCueIndex].id : null;
+    // Une cue TC ignore pre_wait (le timecode EST le schedule) — le
+    // follow s'applique quand même (annulé par la prochaine cue TC).
+    const result = chase(prev, tc, cues, currentId);
+    if (result.fire) {
+      get().cancelPendingTimers();
+      const cue = get().cues.find((c) => c.id === result.fire);
+      if (cue && !get().isRecalling) {
+        // Le timecode EST le schedule : pre_wait ignoré pour les cues TC.
+        void get().recallCue(cue.id, { skipPreWait: true });
+      }
+    }
   },
 
   goToNextCue: async () => {

@@ -9,7 +9,7 @@ use stagespace_engines::{
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 pub mod commands;
 pub mod graph;
@@ -36,7 +36,8 @@ use commands::network::discover_osc_targets;
 use commands::osc::{
     get_osc_armed, get_osc_receiver_port, osc_add_mapping, osc_clear_mappings, osc_get_all_values,
     osc_get_value, osc_in_stats, osc_list_mappings, osc_remove_mapping, osc_set_in_enabled,
-    osc_suppress_in, send_osc_position, set_osc_armed, set_osc_output, set_osc_receiver_port,
+    osc_suppress_in, send_osc_position, send_show_feedback, set_osc_armed, set_osc_output,
+    set_osc_receiver_port, set_timecode_fps,
 };
 use commands::playback::set_macro;
 use commands::plugins::{import_plugin, list_plugins, reload_plugins};
@@ -275,6 +276,21 @@ pub fn run() {
                         .unwrap_or_else(|e| e.into_inner());
                     merge_rt.set_osc_values_handle(receiver.address_values_handle());
                 }
+                // Show-control : `/stagespace/*` intercepté par le
+                // receiver → évènement `show-control` vers le frontend
+                // (dispatch = les mêmes fonctions que les raccourcis).
+                {
+                    let app_handle = app.handle().clone();
+                    receiver.set_show_sink(move |cmd, addr| {
+                        let _ = app_handle.emit(
+                            "show-control",
+                            serde_json::json!({
+                                "command": cmd,
+                                "from": addr.to_string(),
+                            }),
+                        );
+                    });
+                }
                 if let Err(e) = receiver.start() {
                     eprintln!(
                         "[WARN] OSC receiver failed to start on port {}: {}",
@@ -360,6 +376,8 @@ pub fn run() {
             save_graph_to_file,
             load_graph_from_file,
             send_osc_position,
+            send_show_feedback,
+            set_timecode_fps,
             get_perf_stats,
             discover_osc_targets,
             sample_movement_trajectories,
