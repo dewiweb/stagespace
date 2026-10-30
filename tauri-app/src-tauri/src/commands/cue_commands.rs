@@ -312,6 +312,16 @@ pub async fn unpark_object(obj: usize, state: State<'_, AppState>) -> Result<Str
     Ok(format!("object {obj} unparked"))
 }
 
+/// Objets parkés (indices) — pour l'indicateur UI : un objet parké
+/// échappe aux recalls, l'opérateur doit le voir.
+#[tauri::command]
+pub async fn get_parked_objects(state: State<'_, AppState>) -> Result<Vec<usize>, IpcError> {
+    let set = lock_or_recover(&state.merge_runtime).parked_objects();
+    let mut v: Vec<usize> = set.into_iter().collect();
+    v.sort_unstable();
+    Ok(v)
+}
+
 pub(crate) fn recall_cue_inner(
     cue: Cue,
     sh: crate::commands::state::Shared,

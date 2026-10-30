@@ -9,6 +9,7 @@ import { useGraphStore } from '../store/useGraphStore';
 import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { doSolo } from '../utils/liveActions';
+import { safeInvoke } from '../utils/tauri';
 import { toast } from '../utils/toast-helpers';
 import { type NodeParamValue } from './nodeParamSchema';
 import { NodeParamsPanel } from './NodeParamsPanel';
@@ -56,6 +57,15 @@ export const PerformView: React.FC = () => {
   const [buskingMode, setBuskingMode] = React.useState(false);
   // Press-and-hold (bump momentané) : hold ≥350ms = joue tant que tenu.
   const padPress = React.useRef<{ momentary: boolean; suppressClick: boolean; timer: ReturnType<typeof setTimeout> | null }>({ momentary: false, suppressClick: false, timer: null });
+  // Objets parkés : un park oublié = objet qui ne répond plus aux recalls —
+  // l'opérateur doit le voir en un coup d'œil (conduite).
+  const [parked, setParked] = React.useState<number[]>([]);
+  React.useEffect(() => {
+    const poll = () => safeInvoke<number[]>('get_parked_objects').then((v) => setParked(v ?? [])).catch(() => {});
+    poll();
+    const t = setInterval(poll, 1500);
+    return () => clearInterval(t);
+  }, []);
 
   const playingCount = moveSlots.filter((s) => s.movementId).length;
 
@@ -525,6 +535,14 @@ export const PerformView: React.FC = () => {
           <div className="flex items-center justify-between px-8 py-4 border-b border-stagespace-border">
             <span className="text-gray-400 text-sm uppercase tracking-widest">Conduite</span>
             <div className="flex items-center gap-4">
+              {parked.length > 0 && (
+                <span
+                  className="text-cyan-300 text-lg font-bold"
+                  title={`Objets parkés (hors recalls) : ${parked.join(', ')}`}
+                >
+                  {parked.length} PARKED
+                </span>
+              )}
               {tcChaseEnabled && (
                 <span className={`font-mono text-2xl font-bold ${tcActive ? 'text-emerald-400' : 'text-gray-600'}`}>
                   {tcActive ? tcStr : 'TC lost'}
@@ -921,7 +939,19 @@ const OscMappingsPanel: React.FC = () => {
   const [transform, setTransform] = React.useState('');
   const [addr, setAddr] = React.useState('');
   const [learning, setLearning] = React.useState(false);
+  const [liveValues, setLiveValues] = React.useState<Record<string, number[]>>({});
   const mappings = Array.from(oscMappings.values());
+
+  // Valeurs live : poll léger — l'opérateur voit son fader bouger dans la
+  // liste (feedback immédiat du learn ET du mapping).
+  React.useEffect(() => {
+    const t = setInterval(() => {
+      safeInvoke<Record<string, number[]>>('osc_get_all_values')
+        .then((v) => setLiveValues(v ?? {}))
+        .catch(() => {});
+    }, 500);
+    return () => clearInterval(t);
+  }, []);
 
   const describe = (d: unknown): string => {
     const m = d as { kind: string };
@@ -959,6 +989,11 @@ const OscMappingsPanel: React.FC = () => {
             title={m.enabled !== false ? 'Disable (kept, no dispatch)' : 'Enable'}
           />
           <span className="text-cyan-300 font-mono truncate flex-1">{m.address}</span>
+          {liveValues[m.address] && (
+            <span className="text-green-400/80 font-mono text-[10px] tabular-nums">
+              {liveValues[m.address].map((v) => v.toFixed(2)).join(' ')}
+            </span>
+          )}
           <span className="text-gray-400">→</span>
           <span className="text-gray-200">{describe(m.destination)}</span>
           <button

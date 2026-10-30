@@ -19,7 +19,9 @@ use commands::audio::{
     get_audio_state, list_audio_devices, start_audio_capture, start_audio_poller,
     stop_audio_capture, update_audio_state,
 };
-use commands::cue_commands::{park_object, recall_cue, store_cue, unpark_object};
+use commands::cue_commands::{
+    get_parked_objects, park_object, recall_cue, store_cue, unpark_object,
+};
 use commands::file_io::{import_hol_project, load_graph_from_file, save_graph_to_file};
 use commands::merge_commands::{
     activate_move, add_channel_modulation, add_zone, clear_all_manual_positions,
@@ -36,8 +38,9 @@ use commands::network::discover_osc_targets;
 use commands::osc::{
     get_last_osc_message, get_osc_armed, get_osc_receiver_port, osc_add_mapping,
     osc_clear_mappings, osc_get_all_values, osc_get_value, osc_in_stats, osc_list_mappings,
-    osc_remove_mapping, osc_set_in_enabled, osc_set_mapping_enabled, osc_suppress_in, send_osc_position, send_show_feedback,
-    send_show_nack, set_osc_armed, set_osc_output, set_osc_receiver_port, set_timecode_fps,
+    osc_remove_mapping, osc_set_in_enabled, osc_set_mapping_enabled, osc_suppress_in,
+    send_osc_position, send_show_feedback, send_show_nack, set_osc_armed, set_osc_output,
+    set_osc_receiver_port, set_timecode_fps,
 };
 use commands::playback::set_macro;
 use commands::plugins::{import_plugin, list_plugins, reload_plugins};
@@ -435,6 +438,7 @@ pub fn run() {
             store_cue,
             recall_cue,
             park_object,
+            get_parked_objects,
             unpark_object,
             frontend_log,
             // Plugins WASM (bundles .ssx dans <data_dir>/plugins/)
