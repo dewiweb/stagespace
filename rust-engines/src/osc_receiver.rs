@@ -345,6 +345,8 @@ struct Shared {
     /// émet `show-control` vers le frontend (le backend ne fait que
     /// router — les actions vivent côté UI, comme les raccourcis).
     show_sink: Arc<Mutex<Option<ShowSink>>>,
+    /// Dernier `/stagespace/*` reçu — voyant "console connectée" côté UI.
+    last_show_rx: Arc<Mutex<Option<Instant>>>,
     /// 4 dernières adresses ayant envoyé une commande `/stagespace/` —
     /// reçoivent ack + feedback de cue.
     controllers: Arc<Mutex<Vec<std::net::SocketAddr>>>,
@@ -526,6 +528,7 @@ impl OscReceiver {
                 max_objects: Arc::new(AtomicU64::new(MAX_OBJECTS as u64)),
                 thread_running: Arc::new(AtomicBool::new(false)),
                 show_sink: Arc::new(Mutex::new(None)),
+                last_show_rx: Arc::new(Mutex::new(None)),
                 controllers: Arc::new(Mutex::new(Vec::new())),
                 reply_socket: Arc::new(Mutex::new(None)),
                 timecode_fps: Arc::new(AtomicU64::new(25.0f64.to_bits())),
@@ -660,6 +663,16 @@ impl OscReceiver {
         if let Ok(bytes) = encode(&msg) {
             let _ = socket.send_to(&bytes, addr);
         }
+    }
+
+    /// Âge en secondes de la dernière commande `/stagespace/*` reçue —
+    /// None si jamais aucune. Voyant "console connectée" pour l'UI.
+    pub fn last_show_cmd_age(&self) -> Option<f64> {
+        self.shared
+            .last_show_rx
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .map(|t| t.elapsed().as_secs_f64())
     }
 
     /// Dernier message utilisateur reçu (addr, args, âge en secondes) —
@@ -1072,6 +1085,11 @@ fn handle_show_command(msg: &OscMessage, src: std::net::SocketAddr, shared: &Sha
         c.insert(0, src);
         c.truncate(MAX_CONTROLLERS);
     }
+    // Voyant de lien console : horodate chaque commande show-control.
+    *shared
+        .last_show_rx
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
     // Ack immédiat : /stagespace/ack <address>
     let socket = shared
         .reply_socket

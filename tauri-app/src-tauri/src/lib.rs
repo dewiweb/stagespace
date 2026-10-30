@@ -368,6 +368,7 @@ pub fn run() {
             osc_suppress_in,
             osc_in_stats,
             get_last_osc_message,
+            get_last_show_cmd_age,
             send_show_nack,
             set_osc_receiver_port,
             set_osc_output,

@@ -274,6 +274,12 @@ pub async fn send_show_feedback(
     Ok(())
 }
 
+/// Âge (s) de la dernière commande `/stagespace/*` — voyant console.
+#[tauri::command]
+pub async fn get_last_show_cmd_age(state: State<'_, AppState>) -> Result<Option<f64>, IpcError> {
+    Ok(lock_or_recover(&state.osc_receiver).last_show_cmd_age())
+}
+
 /// Dernier message OSC reçu hors `/stagespace/` — pour le learn :
 /// le frontend poll pendant que l'opérateur bouge son fader.
 #[tauri::command]

@@ -60,8 +60,14 @@ export const PerformView: React.FC = () => {
   // Objets parkés : un park oublié = objet qui ne répond plus aux recalls —
   // l'opérateur doit le voir en un coup d'œil (conduite).
   const [parked, setParked] = React.useState<number[]>([]);
+  // Âge de la dernière commande /stagespace/* — voyant "console connectée"
+  // (vert <5s, gris sinon, absent si jamais aucune commande).
+  const [consoleAge, setConsoleAge] = React.useState<number | null>(null);
   React.useEffect(() => {
-    const poll = () => safeInvoke<number[]>('get_parked_objects').then((v) => setParked(v ?? [])).catch(() => {});
+    const poll = () => {
+      safeInvoke<number[]>('get_parked_objects').then((v) => setParked(v ?? [])).catch(() => {});
+      safeInvoke<number | null>('get_last_show_cmd_age').then((v) => setConsoleAge(v)).catch(() => {});
+    };
     poll();
     const t = setInterval(poll, 1500);
     return () => clearInterval(t);
@@ -399,6 +405,16 @@ export const PerformView: React.FC = () => {
         >
           Conduite
         </button>
+        {consoleAge !== null && (
+          <span
+            className={`px-2 py-1 rounded text-xs font-bold flex-shrink-0 ${
+              consoleAge < 5 ? 'bg-emerald-900/60 text-emerald-300' : 'bg-gray-800 text-gray-500'
+            }`}
+            title={consoleAge < 5 ? 'Console connectée — dernière commande OSC show-control' : `Console idle — dernière commande il y a ${consoleAge.toFixed(0)}s`}
+          >
+            CONSOLE {consoleAge < 5 ? '●' : '○'}
+          </span>
+        )}
         <button
           onClick={() => setTouchMode(!touchMode)}
           className={`px-3 py-2 rounded-lg flex-shrink-0 transition-colors active:scale-95 ${
@@ -546,6 +562,14 @@ export const PerformView: React.FC = () => {
             <span className="text-gray-400 text-sm uppercase tracking-widest">Conduite</span>
             <div className="flex items-center gap-4">
               {parked.length > 0 && <ParkedChip parked={parked} />}
+              {consoleAge !== null && (
+                <span
+                  className={`text-lg font-bold ${consoleAge < 5 ? 'text-emerald-400' : 'text-gray-600'}`}
+                  title="Dernière commande show-control reçue"
+                >
+                  CONSOLE {consoleAge < 5 ? '●' : '○'}
+                </span>
+              )}
               {tcChaseEnabled && (
                 <span className={`font-mono text-2xl font-bold ${tcActive ? 'text-emerald-400' : 'text-gray-600'}`}>
                   {tcActive ? tcStr : 'TC lost'}
