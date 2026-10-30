@@ -52,6 +52,8 @@ export const PerformView: React.FC = () => {
   // Mode conduite : vue plein écran readable à distance — NOW/NEXT cue,
   // TC, armé, pending timers. Le reste du show continue derrière.
   const [conduiteMode, setConduiteMode] = React.useState(false);
+  // Mode busking plein écran : grille de pads géante (tir au doigt).
+  const [buskingMode, setBuskingMode] = React.useState(false);
   // Press-and-hold (bump momentané) : hold ≥350ms = joue tant que tenu.
   const padPress = React.useRef<{ momentary: boolean; suppressClick: boolean; timer: ReturnType<typeof setTimeout> | null }>({ momentary: false, suppressClick: false, timer: null });
 
@@ -102,7 +104,7 @@ export const PerformView: React.FC = () => {
 
   // Pad busking (mode touch) — cible 80px+, # = index OSC, tap = play/stop,
   // coin S = solo (fade les autres).
-  const renderPad = (slot: (typeof moveSlots)[number]) => {
+  const renderPad = (slot: (typeof moveSlots)[number], big = false) => {
     const isPlaying = !!slot.movementId || pendingPlays.includes(slot.id);
     const oscNum = slot.oscIndex || moveSlots.indexOf(slot) + 1;
     return (
@@ -141,7 +143,7 @@ export const PerformView: React.FC = () => {
           }
           void (isPlaying ? stopSlot(slot.id) : playSlot(slot.id));
         }}
-        className={`relative flex flex-col justify-between p-3 rounded-xl min-h-[88px] select-none cursor-pointer transition-colors active:scale-95 border ${
+        className={`relative flex flex-col justify-between p-3 rounded-xl ${big ? 'min-h-[150px] p-4' : 'min-h-[88px]'} select-none cursor-pointer transition-colors active:scale-95 border ${
           isPlaying
             ? 'bg-green-800/70 border-green-600 text-green-50'
             : 'bg-gray-800/80 border-gray-700 text-gray-200 hover:bg-gray-700/80'
@@ -151,7 +153,7 @@ export const PerformView: React.FC = () => {
         title={`OSC: /stagespace/slot ${oscNum} · slot/stop ${oscNum} · solo ${oscNum}`}
       >
         <div className="flex items-start justify-between gap-1">
-          <span className={`text-sm font-black font-mono ${isPlaying ? 'text-green-300' : 'text-gray-500'}`}>
+          <span className={`${big ? 'text-2xl' : 'text-sm'} font-black font-mono ${isPlaying ? 'text-green-300' : 'text-gray-500'}`}>
             #{oscNum}
           </span>
           {playingCount > 1 && (
@@ -165,7 +167,7 @@ export const PerformView: React.FC = () => {
           )}
         </div>
         <div className="min-w-0">
-          <div className="text-sm font-semibold truncate leading-tight">{slot.name}</div>
+          <div className={`${big ? 'text-lg' : 'text-sm'} font-semibold truncate leading-tight`}>{slot.name}</div>
           <div className={`text-[10px] mt-0.5 ${isPlaying ? 'text-green-300/80' : 'text-gray-500'}`}>
             {slot.trackIds.length} trk{isPlaying ? ' · LIVE' : ' · hold=bump'}
           </div>
@@ -373,6 +375,13 @@ export const PerformView: React.FC = () => {
           </span>
         )}
         <button
+          onClick={() => setBuskingMode(true)}
+          className="px-3 py-2 rounded-lg flex-shrink-0 bg-green-800/60 hover:bg-green-700/80 text-green-100 text-xs font-bold uppercase tracking-wide transition-colors active:scale-95"
+          title="Busking plein écran — pads géants, tir au doigt (concert non-timecodé)"
+        >
+          Busking
+        </button>
+        <button
           onClick={() => setConduiteMode(true)}
           className="px-3 py-2 rounded-lg flex-shrink-0 bg-amber-800/60 hover:bg-amber-700/80 text-amber-100 text-xs font-bold uppercase tracking-wide transition-colors active:scale-95"
           title="Vue conduite plein écran — NOW/NEXT cue, TC, ARM (lisible à distance)"
@@ -401,7 +410,7 @@ export const PerformView: React.FC = () => {
           {touchMode ? (
             /* Mode touch : grille de pads numérotés — busking gros doigt. */
             <div className="flex-1 overflow-y-auto p-2 grid grid-cols-2 gap-2 auto-rows-min content-start min-h-0">
-              {moveSlots.map(renderPad)}
+              {moveSlots.map((slot) => renderPad(slot))}
               {moveSlots.length === 0 && (
                 <div className="col-span-2 px-3 py-4 text-gray-400 text-xs italic">
                   No moves yet — create slots to fill the pads.
@@ -474,6 +483,41 @@ export const PerformView: React.FC = () => {
 
       {/* ═══ Bottom : chips live + drawer params ═══ */}
       <LiveDrawer />
+
+      {/* ═══ Busking plein écran — pads géants pour le tir au doigt ═══ */}
+      {buskingMode && (
+        <div className="absolute inset-0 z-50 bg-stagespace-bg flex flex-col">
+          <div className="flex items-center justify-between px-6 py-3 border-b border-stagespace-border">
+            <div className="flex items-center gap-4">
+              <span className="text-gray-400 text-sm uppercase tracking-widest">Busking</span>
+              <span className={`text-xl font-black ${playingCount > 0 ? 'text-green-400' : 'text-gray-600'}`}>
+                {playingCount > 0 ? `${playingCount} LIVE` : 'IDLE'}
+              </span>
+              {isRecalling && <span className="text-purple-400 font-bold animate-pulse">RECALLING…</span>}
+            </div>
+            <div className="flex items-center gap-4">
+              <OscArmToggle />
+              <PanicButton size="lg" />
+              <button
+                onClick={() => setBuskingMode(false)}
+                className="px-6 py-3 rounded-xl bg-gray-800 text-gray-200 text-lg font-semibold"
+              >
+                Fermer ✕
+              </button>
+            </div>
+          </div>
+          <div className={`flex-1 overflow-y-auto p-4 grid gap-3 auto-rows-min content-start ${
+            moveSlots.length > 12 ? 'grid-cols-4' : moveSlots.length > 6 ? 'grid-cols-3' : 'grid-cols-2'
+          }`}>
+            {moveSlots.map((slot) => renderPad(slot, true))}
+            {moveSlots.length === 0 && (
+              <div className="col-span-4 text-center text-gray-500 py-16 text-lg">
+                Aucun slot — crée des moves pour remplir les pads.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ═══ Conduite plein écran — lisible à distance (tablette/FOH) ═══ */}
       {conduiteMode && (
