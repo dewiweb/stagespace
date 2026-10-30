@@ -34,7 +34,7 @@ interface CuelistState {
   loadFromStorage: () => void;
   saveToStorage: () => void;
   storeCue: (cue: StoreCueRequest) => Promise<CueData>;
-  recallCue: (cueId: string, opts?: { skipPreWait?: boolean; timeOffset?: number }) => Promise<void>;
+  recallCue: (cueId: string, opts?: { skipPreWait?: boolean; timeOffset?: number; fadeOverride?: number }) => Promise<void>;
   deleteCue: (cueId: string) => void;
   /// Met à jour un cue en place (fade_duration éditable post-store) —
   /// la cuelist vit côté frontend (localStorage), le backend n'en garde
@@ -42,6 +42,9 @@ interface CuelistState {
   updateCue: (cue: CueData) => void;
   goToNextCue: () => Promise<void>;
   goToPreviousCue: () => Promise<void>;
+  /// Renvoie le feedback cue courant/suivant aux contrôleurs OSC
+  /// (réponse à /stagespace/status).
+  sendStatusNow: () => void;
   /// Annule tout timer pre-wait/follow pendu — appelé par les actions
   /// manuelles (GO/next/prev/recall/panic/stop) et avant une cue TC.
   cancelPendingTimers: () => void;
@@ -136,7 +139,8 @@ export const useCuelistStore = create<CuelistState>((set, get) => ({
     }
     set({ isRecalling: true });
     try {
-      await invoke('recall_cue', { cue, timeOffset: opts?.timeOffset ?? null });
+      const cueOut = opts?.fadeOverride != null ? { ...cue, fade_duration: opts.fadeOverride } : cue;
+      await invoke('recall_cue', { cue: cueOut, timeOffset: opts?.timeOffset ?? null });
       const idx = get().cues.findIndex((c) => c.id === cueId);
       set({ currentCueIndex: idx });
       sendFeedback(get().cues, idx);
@@ -200,6 +204,10 @@ export const useCuelistStore = create<CuelistState>((set, get) => ({
     const cues = get().cues.map((c) => (c.id === cue.id ? cue : c));
     set({ cues });
     saveToStorage(cues);
+  },
+
+  sendStatusNow: () => {
+    sendFeedback(get().cues, get().currentCueIndex);
   },
 
   cancelPendingTimers: () => {

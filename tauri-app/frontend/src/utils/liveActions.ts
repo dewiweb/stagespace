@@ -33,7 +33,7 @@ export function doCuePrev() {
 
 /// Recall direct d'une cue par numéro — match sur `cue_number`, sinon
 /// index 1-based dans la liste.
-export function doCueRecall(n: string) {
+export function doCueRecall(n: string, fadeOverride?: number) {
   const s = useCuelistStore.getState();
   s.cancelPendingTimers();
   const byNumber = s.cues.find((c) => c.cue_number != null && c.cue_number === n);
@@ -44,7 +44,17 @@ export function doCueRecall(n: string) {
     toast.warning(`Cue '${n}' not found`);
     return;
   }
-  if (!s.isRecalling) s.recallCue(cue.id);
+  if (!s.isRecalling) s.recallCue(cue.id, fadeOverride != null ? { fadeOverride } : undefined);
+}
+
+/** Arm/disarm OSC — dry-run pilotable depuis la console (set_osc_armed). */
+export function doArm(armed: boolean) {
+  invoke('set_osc_armed', { armed }).catch((e) => toast.error('OSC arm failed: ' + e));
+}
+
+/** /stagespace/status — renvoie le feedback cue courant/suivant au demandeur. */
+export function doStatus() {
+  useCuelistStore.getState().sendStatusNow();
 }
 
 /// Panic (= Esc) — stop all + positions origine.

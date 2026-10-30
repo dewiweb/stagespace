@@ -366,9 +366,17 @@ pub enum ShowCommand {
     CueNext,
     /// `/stagespace/cue/prev` — cue précédente (Backspace).
     CuePrev,
-    /// `/stagespace/cue/recall <n>` — n = cue_number (string ou nombre),
-    /// fallback index 1-based si aucun cue_number ne matche.
-    CueRecall(String),
+    /// `/stagespace/cue/recall <n> [fade]` — n = cue_number (string ou
+    /// nombre, fallback index 1-based) ; fade optionnel en secondes
+    /// (écrase le fade_duration stocké — la console choisit son fondu).
+    CueRecall(String, Option<f64>),
+    /// `/stagespace/arm` — arme l'émission OSC (fin du dry-run).
+    Arm,
+    /// `/stagespace/disarm` — dry-run : le merge tourne, rien ne part.
+    Disarm,
+    /// `/stagespace/status` — renvoie immédiatement le feedback cue
+    /// courant/suivant au demandeur (initialisation console/companion).
+    Status,
     /// `/stagespace/park <obj>` — l'objet n'est plus touché par les cues.
     Park(usize),
     /// `/stagespace/unpark <obj>`.
@@ -402,7 +410,12 @@ fn parse_show_command(addr: &str, args: &[OscType], fps: f64) -> Option<ShowComm
                 OscType::Double(f) => Some(format!("{f}")),
                 _ => None,
             })?;
-            Some(ShowCommand::CueRecall(id))
+            let fade = args.get(1).and_then(|a| match a {
+                OscType::Float(v) => Some(*v as f64),
+                OscType::Int(v) => Some(*v as f64),
+                _ => None,
+            });
+            Some(ShowCommand::CueRecall(id, fade))
         }
         "park" => args
             .first()
@@ -422,6 +435,9 @@ fn parse_show_command(addr: &str, args: &[OscType], fps: f64) -> Option<ShowComm
                 _ => None,
             })
             .map(ShowCommand::Unpark),
+        "arm" => Some(ShowCommand::Arm),
+        "disarm" => Some(ShowCommand::Disarm),
+        "status" => Some(ShowCommand::Status),
         "panic" => Some(ShowCommand::Panic),
         "stop" => Some(ShowCommand::Stop),
         "timecode" => {
@@ -1813,13 +1829,16 @@ mod show_control_tests {
             (
                 "/stagespace/cue/recall",
                 vec![OscType::Int(3)],
-                ShowCommand::CueRecall("3".into()),
+                ShowCommand::CueRecall("3".into(), None),
             ),
             (
                 "/stagespace/cue/recall",
-                vec![OscType::String("2".into())],
-                ShowCommand::CueRecall("2".into()),
+                vec![OscType::String("2".into()), OscType::Float(1.5)],
+                ShowCommand::CueRecall("2".into(), Some(1.5)),
             ),
+            ("/stagespace/arm", vec![], ShowCommand::Arm),
+            ("/stagespace/disarm", vec![], ShowCommand::Disarm),
+            ("/stagespace/status", vec![], ShowCommand::Status),
             ("/stagespace/panic", vec![], ShowCommand::Panic),
             ("/stagespace/stop", vec![], ShowCommand::Stop),
             (
@@ -1896,7 +1915,7 @@ mod show_control_tests {
         });
         handle_packet(bundle, &r.shared, 0, src);
         assert!(matches!(rx.try_recv().unwrap().0, ShowCommand::Panic));
-        assert!(matches!(rx.try_recv().unwrap().0, ShowCommand::CueRecall(ref s) if s == "2"));
+        assert!(matches!(rx.try_recv().unwrap().0, ShowCommand::CueRecall(ref s, _) if s == "2"));
     }
 
     #[test]

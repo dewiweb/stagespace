@@ -99,7 +99,7 @@ mod show_control_e2e_tests {
             r.port,
         );
         let (cmd, src) = wait_cmd(&rx);
-        assert!(matches!(cmd, ShowCommand::CueRecall(ref n) if n == "1"));
+        assert!(matches!(cmd, ShowCommand::CueRecall(ref n, _) if n == "1"));
         assert_eq!(src.port(), client.local_addr().unwrap().port());
         assert_eq!(udp_recv_addr(&client), "/stagespace/ack");
 
