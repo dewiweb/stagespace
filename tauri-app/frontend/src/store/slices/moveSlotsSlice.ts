@@ -101,6 +101,10 @@ export interface MoveSlot {
   fadeOut: number;
   /// Répartition uniforme des phases des tracks sur le cycle (0 = groupé)
   phaseSpread: number;
+  /// Index OSC stable (1-based) — le n de `/stagespace/slot <n>`. Persisté,
+  /// assigné à la création, NE suit PAS les réordonnancements : ce que la
+  /// console a programmé reste valide après réorganisation de la liste.
+  oscIndex: number;
   /// Depth + phase offset par track (matché par track_id à l'activation)
   assignments: TrackAssignment[];
   /// Modulations audio-réactives (AudioModSource → AudioModTarget)
@@ -255,13 +259,15 @@ export function normalizeSlot(s: any): MoveSlot {
     assignments: s.assignments ?? [],
     audioMods: s.audioMods ?? [],
     signalGraph: s.signalGraph ?? null,
+    oscIndex: s.oscIndex ?? 0,
   };
 }
 
 function loadSlotsFromStorage(): MoveSlot[] {
   const slots = safeParseStoredJson<any[]>(SLOTS_STORAGE_KEY, []);
   if (!Array.isArray(slots)) return [];
-  return slots.map(normalizeSlot);
+  // Backfill : les slots pré-oscIndex prennent leur position (index+1).
+  return slots.map(normalizeSlot).map((s, i) => (s.oscIndex ? s : { ...s, oscIndex: i + 1 }));
 }
 
 /// Projette un slot en `Move` — la forme que l'Inspector édite via
@@ -427,6 +433,7 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
         phaseSpread: 0,
         assignments: [],
         audioMods: [],
+        oscIndex: Math.max(0, ...get().moveSlots.map((sl) => sl.oscIndex)) + 1,
       }];
       saveSlotsToStorage(newSlots);
       return { moveSlots: newSlots };

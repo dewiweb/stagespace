@@ -41,10 +41,16 @@ export const PerformView: React.FC = () => {
   const lastTimecodeAt = useCuelistStore((s) => s.lastTimecodeAt);
   const tcChaseEnabled = useCuelistStore((s) => s.tcChaseEnabled);
   const tcFps = useGraphStore((s) => s.timecodeFps);
+  const pending = useCuelistStore((s) => s.pending);
+  const goToNextCue = useCuelistStore((s) => s.goToNextCue);
+  const goToPreviousCue = useCuelistStore((s) => s.goToPreviousCue);
 
   const [goFeedback, setGoFeedback] = React.useState<{ ok: boolean; message: string } | null>(null);
   // Mode touch : pads numérotés (busking) + cibles agrandies (tablette).
   const [touchMode, setTouchMode] = React.useState(false);
+  // Mode conduite : vue plein écran readable à distance — NOW/NEXT cue,
+  // TC, armé, pending timers. Le reste du show continue derrière.
+  const [conduiteMode, setConduiteMode] = React.useState(false);
 
   const playingCount = moveSlots.filter((s) => s.movementId).length;
 
@@ -95,7 +101,7 @@ export const PerformView: React.FC = () => {
   // coin S = solo (fade les autres).
   const renderPad = (slot: (typeof moveSlots)[number]) => {
     const isPlaying = !!slot.movementId || pendingPlays.includes(slot.id);
-    const oscNum = moveSlots.indexOf(slot) + 1;
+    const oscNum = slot.oscIndex || moveSlots.indexOf(slot) + 1;
     return (
       <div
         key={slot.id}
@@ -143,7 +149,7 @@ export const PerformView: React.FC = () => {
       || (currentSetlistIndex < 0 && setlistIdx === 0);
     // Index 1-based = le n de `/stagespace/slot <n>` — l'écran doit
     // montrer le même numéro que la commande OSC.
-    const oscNum = moveSlots.indexOf(slot) + 1;
+    const oscNum = slot.oscIndex || moveSlots.indexOf(slot) + 1;
     return (
       <div
         key={slot.id}
@@ -332,6 +338,13 @@ export const PerformView: React.FC = () => {
           </span>
         )}
         <button
+          onClick={() => setConduiteMode(true)}
+          className="px-3 py-2 rounded-lg flex-shrink-0 bg-amber-800/60 hover:bg-amber-700/80 text-amber-100 text-xs font-bold uppercase tracking-wide transition-colors active:scale-95"
+          title="Vue conduite plein écran — NOW/NEXT cue, TC, ARM (lisible à distance)"
+        >
+          Conduite
+        </button>
+        <button
           onClick={() => setTouchMode(!touchMode)}
           className={`px-3 py-2 rounded-lg flex-shrink-0 transition-colors active:scale-95 ${
             touchMode
@@ -426,6 +439,74 @@ export const PerformView: React.FC = () => {
 
       {/* ═══ Bottom : chips live + drawer params ═══ */}
       <LiveDrawer />
+
+      {/* ═══ Conduite plein écran — lisible à distance (tablette/FOH) ═══ */}
+      {conduiteMode && (
+        <div className="absolute inset-0 z-50 bg-stagespace-bg flex flex-col">
+          <div className="flex items-center justify-between px-8 py-4 border-b border-stagespace-border">
+            <span className="text-gray-400 text-sm uppercase tracking-widest">Conduite</span>
+            <div className="flex items-center gap-4">
+              {tcChaseEnabled && (
+                <span className={`font-mono text-2xl font-bold ${tcActive ? 'text-emerald-400' : 'text-gray-600'}`}>
+                  {tcActive ? tcStr : 'TC lost'}
+                </span>
+              )}
+              <button
+                onClick={() => setConduiteMode(false)}
+                className="px-6 py-3 rounded-xl bg-gray-800 text-gray-200 text-lg font-semibold"
+              >
+                Fermer ✕
+              </button>
+            </div>
+          </div>
+          <div className="flex-1 flex flex-col items-center justify-center gap-8 px-8">
+            <div className="text-center">
+              <div className="text-gray-500 text-lg uppercase tracking-widest mb-2">Now</div>
+              <div className="text-6xl font-black text-amber-300 truncate max-w-[80vw]">
+                {curCue ? cueLabel(curCue, currentCueIndex) : '—'}
+              </div>
+              {pending && (
+                <div className="text-orange-400 text-2xl font-bold mt-3 animate-pulse">
+                  {pending.kind === 'pre_wait' ? 'pré-attente' : 'follow'} {Math.max(0, (pending.deadline - Date.now()) / 1000).toFixed(1)}s
+                </div>
+              )}
+              {isRecalling && <div className="text-purple-400 text-2xl font-bold mt-3 animate-pulse">RECALLING…</div>}
+            </div>
+            <div className="text-center">
+              <div className="text-gray-500 text-sm uppercase tracking-widest mb-1">Next</div>
+              <div className="text-4xl font-bold text-gray-300 truncate max-w-[70vw]">
+                {nextCue ? cueLabel(nextCue, currentCueIndex + 1) : '—'}
+              </div>
+            </div>
+            <div className="text-green-400/90 text-xl font-semibold">
+              {playingCount > 0 ? `${playingCount} moves live` : 'IDLE'}
+            </div>
+          </div>
+          <div className="flex items-center justify-center gap-6 px-8 pb-10">
+            <button
+              onClick={() => void goToPreviousCue()}
+              disabled={isRecalling || currentCueIndex <= 0}
+              className="px-10 py-6 rounded-2xl bg-gray-800 text-gray-200 text-2xl font-bold disabled:opacity-30 active:scale-95"
+            >
+              ◀ Prev
+            </button>
+            <button
+              onClick={handleGO}
+              className="px-16 py-6 rounded-2xl bg-green-600 text-white text-3xl font-black active:scale-95"
+            >
+              GO ▶
+            </button>
+            <button
+              onClick={() => void goToNextCue()}
+              disabled={isRecalling || currentCueIndex + 1 >= cues.length}
+              className="px-10 py-6 rounded-2xl bg-gray-800 text-gray-200 text-2xl font-bold disabled:opacity-30 active:scale-95"
+            >
+              Next ▶
+            </button>
+            <PanicButton size="lg" />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -71,7 +71,7 @@ export function doArm(armed: boolean) {
 /** /stagespace/slot <n> — joue le slot n (index 1-based, busking). */
 export function doSlot(n: number, from?: string) {
   const gs = useGraphStore.getState();
-  const slot = gs.moveSlots[n - 1];
+  const slot = gs.moveSlots.find((s) => s.oscIndex === n) ?? gs.moveSlots[n - 1];
   if (!slot) {
     nack(from, `not-found: slot '${n}'`);
     return void toast.warning(`Slot '${n}' not found`);
@@ -86,7 +86,7 @@ export function doSlot(n: number, from?: string) {
 /** /stagespace/slot/stop <n> — coupe le slot n avec son fade_out. */
 export function doSlotStop(n: number, from?: string) {
   const gs = useGraphStore.getState();
-  const slot = gs.moveSlots[n - 1];
+  const slot = gs.moveSlots.find((s) => s.oscIndex === n) ?? gs.moveSlots[n - 1];
   if (!slot) {
     nack(from, `not-found: slot '${n}'`);
     return void toast.warning(`Slot '${n}' not found`);
@@ -98,7 +98,7 @@ export function doSlotStop(n: number, from?: string) {
 /** /stagespace/solo <n> — coupe les autres slots puis joue n. */
 export function doSolo(n: number, from?: string) {
   const gs = useGraphStore.getState();
-  const target = gs.moveSlots[n - 1];
+  const target = gs.moveSlots.find((s) => s.oscIndex === n) ?? gs.moveSlots[n - 1];
   if (!target) {
     nack(from, `not-found: slot '${n}'`);
     return void toast.warning(`Slot '${n}' not found`);
