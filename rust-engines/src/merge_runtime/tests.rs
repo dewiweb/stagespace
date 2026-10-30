@@ -686,3 +686,107 @@ fn test_barycenter_recomputes_pivot() {
         "barycenter doit pivoter autour de (3,0,0): {pos:?}"
     );
 }
+
+/// Bench de charge du merge : 8 moves × 8 objets (64 positions/frame,
+/// couvrant 24 objets) + transition active + écritures OSC-IN, ~4 s à
+/// 60 fps. Vérifie que le cadencement tient (pas de frames perdues) et
+/// mesure le coût hot-path réel (`merge_frame_us` / `merge_lock_us`).
+/// Long (~4 s) : `cargo test bench_merge_under_load -- --ignored`.
+#[test]
+#[ignore = "load bench (~4s wall clock) — run on demand"]
+fn bench_merge_under_load() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::{Duration, Instant};
+
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7999, sender, 60.0).unwrap();
+    rt.set_osc_ids((1..=24).collect());
+    rt.set_osc_armed(true);
+
+    // 8 moves × 8 tracks = 64 positions/frame sur 24 objets — charge
+    // réaliste d'un show complet (WFS + couronne KNN).
+    let mut buffers = Vec::new();
+    for m in 0..8usize {
+        let buf = Arc::new(PositionBuffer::new());
+        let idx: Vec<usize> = (0..8).map(|i| (m * 8 + i) % 24).collect();
+        let osc: Vec<u32> = idx.iter().map(|&i| (i + 1) as u32).collect();
+        rt.register_move(format!("mv{m}"), buf.clone(), osc, idx, false);
+        buffers.push(buf);
+    }
+
+    rt.start().expect("merge start");
+
+    // 8 writers simulent les workers à ~60 fps.
+    let stop = Arc::new(AtomicBool::new(false));
+    let mut handles = Vec::new();
+    for (m, buf) in buffers.iter().enumerate() {
+        let buf = buf.clone();
+        let stop = stop.clone();
+        handles.push(std::thread::spawn(move || {
+            let mut t = 0.0f64;
+            while !stop.load(Ordering::Relaxed) {
+                let pos: Vec<(usize, nalgebra::Vector3<f64>)> = (0..8)
+                    .map(|i| {
+                        (
+                            (m * 8 + i) % 24,
+                            nalgebra::Vector3::new(
+                                (t + i as f64).sin() * 3.0,
+                                (t * 0.7 + i as f64).cos() * 3.0,
+                                (t * 1.3 + m as f64).sin() * 2.0,
+                            ),
+                        )
+                    })
+                    .collect();
+                buf.write(pos);
+                t += 1.0 / 60.0;
+                std::thread::sleep(Duration::from_millis(16));
+            }
+        }));
+    }
+
+    // OSC-IN simulé : canaux + position manuelle à ~30 Hz (fader live).
+    for _ in 0..60 {
+        rt.set_object_channel(0, crate::osc_sender::SpatialChannel::Gain, 0.7);
+        rt.set_manual_position(5, [1.0, 2.0, 0.0]);
+        std::thread::sleep(Duration::from_millis(33));
+    }
+
+    // Transition 1.5 s à mi-parcours — mesure le coût Layer::Blend.
+    rt.begin_transition(1.5);
+    let t0 = Instant::now();
+    std::thread::sleep(Duration::from_secs(2));
+
+    stop.store(true, Ordering::Relaxed);
+    for h in handles {
+        let _ = h.join();
+    }
+
+    let stats = rt.get_perf_stats();
+    let frames = rt.merge_frame_count();
+    rt.stop();
+
+    eprintln!(
+        "[bench] frames={frames} elapsed={:.1}s merge_frame_us={:.0} lock_us={:.0}",
+        t0.elapsed().as_secs_f64(),
+        stats.merge_frame_us,
+        stats.merge_lock_us
+    );
+    // Cadencement : ~4 s à 60 fps → ≥200 frames attendues (tolérance CI).
+    assert!(
+        frames >= 200,
+        "merge essoufflé sous charge : {frames} frames"
+    );
+    // Budget : <4 ms de travail par frame à 60 fps (≈25% du quantum).
+    assert!(
+        stats.merge_frame_us < 4_000.0,
+        "merge_frame_us={:.0}µs dépasse le budget 4ms/frame",
+        stats.merge_frame_us
+    );
+    // Contention : le wait total ne doit pas dominer le travail.
+    assert!(
+        stats.merge_lock_us < stats.merge_frame_us,
+        "lock_us={:.0} ≥ frame_us={:.0} — la contention domine",
+        stats.merge_lock_us,
+        stats.merge_frame_us
+    );
+}
