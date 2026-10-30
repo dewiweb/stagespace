@@ -915,6 +915,7 @@ const OscMappingsPanel: React.FC = () => {
   const oscMappings = useGraphStore((s) => s.oscMappings);
   const addOscMapping = useGraphStore((s) => s.addOscMapping);
   const removeOscMapping = useGraphStore((s) => s.removeOscMapping);
+  const setOscMappingEnabled = useGraphStore((s) => s.setOscMappingEnabled);
   const learnAddOscMapping = useGraphStore((s) => s.learnAddOscMapping);
   const [dest, setDest] = React.useState('');
   const [transform, setTransform] = React.useState('');
@@ -949,7 +950,14 @@ const OscMappingsPanel: React.FC = () => {
     <div className="px-4 py-3 space-y-2 text-xs">
       <div className="text-gray-400 uppercase tracking-wider">OSC IN mappings ({mappings.length})</div>
       {mappings.map((m) => (
-        <div key={m.address} className="flex items-center gap-2 py-1 border-b border-gray-800/50">
+        <div key={m.address} className={`flex items-center gap-2 py-1 border-b border-gray-800/50 ${m.enabled === false ? 'opacity-40' : ''}`}>
+          <input
+            type="checkbox"
+            checked={m.enabled !== false}
+            onChange={(e) => void setOscMappingEnabled(m.address, e.target.checked)}
+            className="w-4 h-4 flex-shrink-0"
+            title={m.enabled !== false ? 'Disable (kept, no dispatch)' : 'Enable'}
+          />
           <span className="text-cyan-300 font-mono truncate flex-1">{m.address}</span>
           <span className="text-gray-400">→</span>
           <span className="text-gray-200">{describe(m.destination)}</span>

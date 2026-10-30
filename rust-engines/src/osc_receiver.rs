@@ -700,6 +700,23 @@ impl OscReceiver {
     }
 
     /// Retourne un mapping par adresse pattern
+    /// Active/désactive un mapping sans le supprimer — le mapping reste
+    /// configuré mais ne paie même pas le match (audit I12). `false` si
+    /// l'adresse n'existe pas.
+    pub fn set_mapping_enabled(&self, address: &str, enabled: bool) -> bool {
+        let mut mappings = self
+            .shared
+            .mappings
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
+        if let Some(m) = mappings.get_mut(address) {
+            m.enabled = enabled;
+            true
+        } else {
+            false
+        }
+    }
+
     pub fn get_mapping(&self, address: &str) -> Option<OscMapping> {
         self.shared
             .mappings

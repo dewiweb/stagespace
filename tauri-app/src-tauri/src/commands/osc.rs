@@ -28,6 +28,20 @@ pub async fn osc_remove_mapping(
     Ok(())
 }
 
+/// Active/désactive un mapping sans le supprimer (toggle dans l'éditeur).
+#[tauri::command]
+pub async fn osc_set_mapping_enabled(
+    address: String,
+    enabled: bool,
+    state: State<'_, AppState>,
+) -> Result<(), IpcError> {
+    let receiver = lock_or_recover(&state.osc_receiver);
+    if !receiver.set_mapping_enabled(&address, enabled) {
+        return Err(IpcError::not_found(format!("mapping '{address}'")));
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn osc_list_mappings(state: State<'_, AppState>) -> Result<Vec<OscMapping>, IpcError> {
     let receiver = lock_or_recover(&state.osc_receiver);

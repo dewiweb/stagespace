@@ -36,7 +36,7 @@ use commands::network::discover_osc_targets;
 use commands::osc::{
     get_last_osc_message, get_osc_armed, get_osc_receiver_port, osc_add_mapping,
     osc_clear_mappings, osc_get_all_values, osc_get_value, osc_in_stats, osc_list_mappings,
-    osc_remove_mapping, osc_set_in_enabled, osc_suppress_in, send_osc_position, send_show_feedback,
+    osc_remove_mapping, osc_set_in_enabled, osc_set_mapping_enabled, osc_suppress_in, send_osc_position, send_show_feedback,
     send_show_nack, set_osc_armed, set_osc_output, set_osc_receiver_port, set_timecode_fps,
 };
 use commands::playback::set_macro;
@@ -361,6 +361,7 @@ pub fn run() {
             osc_get_value,
             osc_get_all_values,
             osc_set_in_enabled,
+            osc_set_mapping_enabled,
             osc_suppress_in,
             osc_in_stats,
             get_last_osc_message,

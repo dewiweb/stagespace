@@ -86,6 +86,7 @@ export interface OscSlice {
   setOscValues: (values: Map<string, number[]> | ((prev: Map<string, number[]>) => Map<string, number[]>)) => void;
   addOscMapping: (address: string, destination: string, transform: string | null) => Promise<void>;
   removeOscMapping: (address: string) => Promise<void>;
+  setOscMappingEnabled: (address: string, enabled: boolean) => Promise<void>;
   listOscMappings: () => Promise<Array<OscMapping>>;
   getOscValue: (handler: string) => Promise<number[]>;
   getAllOscValues: () => Promise<Record<string, number[]>>;
@@ -116,6 +117,12 @@ export const createOscSlice: StateCreator<OscSlice, [], [], OscSlice> = (set, ge
 
   removeOscMapping: async (address) => {
     await invoke('osc_remove_mapping', { address });
+    const mappings = await get().listOscMappings();
+    set({ oscMappings: new Map(mappings.map((m) => [m.address, m])) });
+  },
+
+  setOscMappingEnabled: async (address, enabled) => {
+    await invoke('osc_set_mapping_enabled', { address, enabled });
     const mappings = await get().listOscMappings();
     set({ oscMappings: new Map(mappings.map((m) => [m.address, m])) });
   },
