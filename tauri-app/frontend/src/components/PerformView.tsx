@@ -8,7 +8,7 @@ import { Slider } from './ui/Slider';
 import { useGraphStore } from '../store/useGraphStore';
 import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { useCuelistStore } from '../store/useCuelistStore';
-import { doSolo } from '../utils/liveActions';
+import { doSolo, doUnpark } from '../utils/liveActions';
 import { safeInvoke } from '../utils/tauri';
 import { toast } from '../utils/toast-helpers';
 import { type NodeParamValue } from './nodeParamSchema';
@@ -306,6 +306,7 @@ export const PerformView: React.FC = () => {
           <span className="text-gray-400 text-xs uppercase tracking-wider flex-shrink-0">
             Setlist {currentSetlistIndex + 1}/{setlistOrder.length}
           </span>
+          {parked.length > 0 && <ParkedChip parked={parked} compact />}
           {isRecalling && (
             <span className="text-purple-400 text-xs font-bold animate-pulse flex-shrink-0">
               RECALLING…
@@ -535,14 +536,7 @@ export const PerformView: React.FC = () => {
           <div className="flex items-center justify-between px-8 py-4 border-b border-stagespace-border">
             <span className="text-gray-400 text-sm uppercase tracking-widest">Conduite</span>
             <div className="flex items-center gap-4">
-              {parked.length > 0 && (
-                <span
-                  className="text-cyan-300 text-lg font-bold"
-                  title={`Objets parkés (hors recalls) : ${parked.join(', ')}`}
-                >
-                  {parked.length} PARKED
-                </span>
-              )}
+              {parked.length > 0 && <ParkedChip parked={parked} />}
               {tcChaseEnabled && (
                 <span className={`font-mono text-2xl font-bold ${tcActive ? 'text-emerald-400' : 'text-gray-600'}`}>
                   {tcActive ? tcStr : 'TC lost'}
@@ -1045,6 +1039,52 @@ const OscMappingsPanel: React.FC = () => {
           {learning ? 'MOVE…' : 'LEARN'}
         </button>
       </div>
+    </div>
+  );
+};
+
+/// Chip objets parkés : affiche le count, au clic un mini-panneau liste
+/// chaque objet avec unpark individuel + "Unpark all". `compact` =
+/// variante topbar petite.
+const ParkedChip: React.FC<{ parked: number[]; compact?: boolean }> = ({ parked, compact }) => {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className={`rounded-lg bg-cyan-800/70 hover:bg-cyan-700 text-cyan-100 font-bold transition-colors active:scale-95 ${
+          compact ? 'px-2 py-1 text-xs' : 'px-4 py-2 text-lg'
+        }`}
+        title={`Objets parkés (hors recalls) : ${parked.join(', ')} — cliquer pour dégeler`}
+      >
+        {parked.length} PARKED
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-[60] bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-2 min-w-[180px]">
+          <div className="text-gray-400 text-[10px] uppercase tracking-wider px-1 pb-1">
+            Parked — hors recalls
+          </div>
+          {parked.map((obj) => (
+            <div key={obj} className="flex items-center justify-between gap-2 px-1 py-1">
+              <span className="text-cyan-200 font-mono text-sm">obj {obj}</span>
+              <button
+                onClick={() => doUnpark(obj)}
+                className="px-2 py-0.5 rounded bg-gray-700 hover:bg-cyan-700 text-xs text-gray-200"
+              >
+                unpark
+              </button>
+            </div>
+          ))}
+          {parked.length > 1 && (
+            <button
+              onClick={() => parked.forEach((obj) => doUnpark(obj))}
+              className="w-full mt-1 px-2 py-1 rounded bg-cyan-800 hover:bg-cyan-700 text-xs font-semibold text-white"
+            >
+              Unpark all
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 };
