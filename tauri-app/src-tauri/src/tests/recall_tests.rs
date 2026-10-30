@@ -406,6 +406,47 @@ mod recall_tests {
     }
 
     #[test]
+    fn test_parked_object_survives_full_and_tracking_recall() {
+        let sh = make_shared();
+        {
+            let mr = sh.merge_runtime.lock().unwrap();
+            // L'opérateur a repris object 1 à la main → on le parke.
+            mr.set_object_channel(1, SpatialChannel::Gain, 0.9);
+            mr.park_object(1);
+        }
+        let mut chs = stagespace_engines::SpatialChannels::default();
+        chs.gain = Some(-3.0);
+        // Full : clear+set d'un cue qui voudrait écrire object 1 → le
+        // canal parké est préservé à travers le clear.
+        let mut cue = make_cue();
+        cue.object_channels = Some(HashMap::from([(1usize, chs)]));
+        recall_cue_inner(cue, sh.clone()).expect("full recall");
+        {
+            let mr = sh.merge_runtime.lock().unwrap();
+            assert_eq!(
+                mr.object_channels().get(&1).and_then(|c| c.gain),
+                Some(0.9),
+                "un objet parké n'est jamais écrit par une cue Full"
+            );
+        }
+        // Tracking : idem — l'objet parké est sauté du merge.
+        let mut cue = make_cue();
+        cue.mode = CueMode::Tracking;
+        cue.object_channels = Some(HashMap::from([(1usize, chs)]));
+        recall_cue_inner(cue, sh.clone()).expect("tracking recall");
+        {
+            let mr = sh.merge_runtime.lock().unwrap();
+            assert_eq!(
+                mr.object_channels().get(&1).and_then(|c| c.gain),
+                Some(0.9),
+                "un objet parké est sauté du merge Tracking"
+            );
+            mr.unpark_object(1);
+            mr.clear_parked();
+        }
+    }
+
+    #[test]
     fn test_tracking_recall_does_not_stop_unlisted_moves() {
         let sh = make_shared();
         {

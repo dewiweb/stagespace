@@ -207,7 +207,20 @@ export const CuelistPanel: React.FC = () => {
                       <span className="text-[9px] px-1 rounded bg-gray-700 text-gray-300">w{cue.pre_wait}s</span>
                     )}
                     {cue.follow != null && (
-                      <span className="text-[9px] px-1 rounded bg-gray-700 text-gray-300">f{cue.follow}s</span>
+                      <span
+                        className={`text-[9px] px-1 rounded ${
+                          idx + 1 === cues.length
+                            ? 'bg-red-900/80 text-red-300'
+                            : 'bg-gray-700 text-gray-300'
+                        }`}
+                        title={
+                          idx + 1 === cues.length
+                            ? 'Follow has no next cue — it will never fire'
+                            : 'auto-follow (s)'
+                        }
+                      >
+                        f{cue.follow}s{idx + 1 === cues.length ? '!' : ''}
+                      </span>
                     )}
                     {cue.timecode != null && (
                       <span className="text-[9px] px-1 rounded bg-gray-700 text-gray-300">TC</span>

@@ -149,6 +149,8 @@ export const useCuelistStore = create<CuelistState>((set, get) => ({
           get().recallCue(nextCue.id);
         }, cue.follow * 1000);
         set({ pending: { cueId: nextCue.id, kind: 'follow', deadline: Date.now() + cue.follow * 1000 } });
+      } else if (cue.follow != null && cue.follow > 0) {
+        toast.warning(`Cue "${cue.name}": follow has no next cue — it will never fire`);
       }
       // Cue legacy (pré-Phase5) : `moves` est vide, le backend a désactivé
       // les moves mais ne peut pas respawner — le graphe vit dans cue.graph.
