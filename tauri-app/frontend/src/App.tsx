@@ -18,12 +18,22 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { Workflow, ChevronRight, ChevronDown, PanelRightClose, PanelLeftClose, PanelLeftOpen, PanelRightOpen, Maximize2, Minimize2, Activity } from 'lucide-react';
 import { useLiveShortcuts, usePerfStatsPolling } from './hooks/useLiveShortcuts';
 import { useShowControl } from './hooks/useShowControl';
+import { useConduiteBroadcast } from './hooks/useConduiteBroadcast';
 import { prepareGraphForSave } from './components/nodeParamSchema';
 import { usePersistedState } from './utils/usePersistedState';
 import { useGraphStore, useMovementPositionsListener, useAudioErrorListener, useAudioStateListener, useCueRecallListener, useSupervisorListener } from './store/useGraphStore';
 import { useMoveEditorStore } from './store/useMoveEditorStore';
 
 function App() {
+  // Fenêtre détachable ?view=conduite → rendu dédié sans le reste de l'app.
+  if (new URLSearchParams(window.location.search).get('view') === 'conduite') {
+    const ConduitePage = React.lazy(() => import('./pages/ConduitePage'));
+    return <React.Suspense fallback={null}><ConduitePage /></React.Suspense>;
+  }
+  return <AppMain />;
+}
+
+function AppMain() {
   const showExpert = useMoveEditorStore((s) => s.showExpert);
   const setShowExpert = useMoveEditorStore((s) => s.setShowExpert);
   const performMode = useMoveEditorStore((s) => s.performMode);
@@ -76,6 +86,7 @@ function App() {
   // et sa stack se démontent).
   useLiveShortcuts();
   useShowControl();
+  useConduiteBroadcast();
   usePerfStatsPolling();
 
   // ── Resize des panneaux gauche et droit ──

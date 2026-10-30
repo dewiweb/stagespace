@@ -1,0 +1,59 @@
+/// Broadcast de l'état conduite vers la fenêtre détachable.
+/// Émet `conduite:state` toutes les 500ms (état computé depuis les
+/// stores) et écoute `conduite:cmd` → dispatch vers les mêmes
+/// liveActions que le clavier/OSC — sémantique identique partout.
+import { useEffect } from 'react';
+import { emit, listen } from '@tauri-apps/api/event';
+import { useCuelistStore } from '../store/useCuelistStore';
+import { useGraphStore } from '../store/useGraphStore';
+import { doCueNext, doCuePrev, doPanic } from '../utils/liveActions';
+
+const cueLabel = (c: { cue_number?: string | null; name: string } | null, idx: number) =>
+  c ? `${c.cue_number ?? String(idx + 1)} ${c.name}` : '—';
+
+export function useConduiteBroadcast() {
+  useEffect(() => {
+    const t = setInterval(() => {
+      const cs = useCuelistStore.getState();
+      const gs = useGraphStore.getState();
+      const cur = cs.currentCueIndex >= 0 ? cs.cues[cs.currentCueIndex] : null;
+      const next = cs.currentCueIndex + 1 < cs.cues.length ? cs.cues[cs.currentCueIndex + 1] : null;
+      const after = cs.currentCueIndex + 2 < cs.cues.length ? cs.cues[cs.currentCueIndex + 2] : null;
+      const tcActive = cs.lastTimecode != null && Date.now() - cs.lastTimecodeAt < 1000;
+      const s = cs.lastTimecode ?? 0;
+      const pad = (v: number) => String(v).padStart(2, '0');
+      const tcStr = `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s % 3600) / 60))}:${pad(Math.floor(s % 60))}:${pad(Math.floor((s % 1) * gs.timecodeFps))}`;
+      void emit('conduite:state', {
+        curCue: cueLabel(cur, cs.currentCueIndex),
+        nextCue: cueLabel(next, cs.currentCueIndex + 1),
+        nextNextCue: after ? cueLabel(after, cs.currentCueIndex + 2) : '',
+        pending: cs.pending
+          ? { kind: cs.pending.kind, remainingSec: Math.max(0, (cs.pending.deadline - Date.now()) / 1000) }
+          : null,
+        isRecalling: cs.isRecalling,
+        playingCount: gs.moveSlots.filter((m) => m.movementId).length,
+        tcChaseEnabled: cs.tcChaseEnabled,
+        tcActive,
+        tcStr,
+      });
+    }, 500);
+
+    let un: (() => void) | undefined;
+    void listen<string>('conduite:cmd', (e) => {
+      switch (e.payload) {
+        case 'go':
+        case 'next':
+          doCueNext();
+          break;
+        case 'prev':
+          doCuePrev();
+          break;
+        case 'panic':
+          doPanic();
+          break;
+      }
+    }).then((u) => (un = u));
+
+    return () => { clearInterval(t); un?.(); };
+  }, []);
+}

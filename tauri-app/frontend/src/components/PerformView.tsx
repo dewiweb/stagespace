@@ -10,6 +10,7 @@ import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { doSolo, doUnpark, doStop, doUnsolo, getSoloRestoreIds } from '../utils/liveActions';
 import { safeInvoke } from '../utils/tauri';
+import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { toast } from '../utils/toast-helpers';
 import { type NodeParamValue } from './nodeParamSchema';
 import { NodeParamsPanel } from './NodeParamsPanel';
@@ -399,6 +400,26 @@ export const PerformView: React.FC = () => {
           title="Busking plein écran — pads géants, tir au doigt (concert non-timecodé)"
         >
           Busking
+        </button>
+        <button
+          onClick={() => {
+            // Fenêtre détachable : même vue conduite, propre process
+            // webview — posée sur un écran dédié au FOH.
+            WebviewWindow.getByLabel('conduite').then((w) => {
+              if (w) void w.setFocus();
+              else new WebviewWindow('conduite', {
+                url: '/?view=conduite',
+                title: 'STAGESPACE — Conduite',
+                width: 1100,
+                height: 720,
+                resizable: true,
+              });
+            });
+          }}
+          className="px-3 py-2 rounded-lg flex-shrink-0 bg-amber-800/40 hover:bg-amber-700/60 text-amber-200/80 transition-colors active:scale-95"
+          title="Conduite dans une fenêtre détachable (écran dédié)"
+        >
+          ⧉
         </button>
         <button
           onClick={() => setConduiteMode(true)}
