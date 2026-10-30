@@ -33,3 +33,25 @@ numéro en live. Tout doit être fondu et annulable.
 - Pas de "bump momentané" hors `one_shot` (flash = laisser appuyé jusqu'au release n'existe pas).
 - Le mapping fader→param demande un graphe signal pré-câblé (pas d'OSC learn).
 - **Prochain incrément : mode busking dans PerformView** — pads numérotés, flash/solo visuels, learn.
+
+### 2b — Variante WFS + couronne KNN (renderer externe)
+
+**Scénario** : concert live — entrées instrus/voix mixées en **WFS** (Wave
+Field Synthesis) sur alignement HP, plus un **bus KNN** vers une couronne de
+HP autour du public. Le processeur spatial externe (Holophonix, SPAT, ADM-OSC
+renderer…) possède tout le panning : STAGESPACE n'envoie que les
+positions/trajectoires des objets.
+
+**Mapping** : objets 1–N = mix WFS (sources ponctuelles dans le sweet spot),
+objets N+1–24 = couronne KNN. Côté STAGESPACE c'est juste des index de tracks —
+la séparation en bus vit chez le renderer. `Group`/partition dans les graphes
+donne des sous-ensembles propres par bus.
+
+**Spécificités**
+- WFS : les moves doivent rester dans la zone couverte par l'alignement
+  (sweet spot / hors-champ de l'array) — contrainte de *design du graphe*,
+  pas du moteur.
+- KNN couronne : `Circular`/`Rotate`/phase-spread = usage canonique ;
+  `distance`/`gain` universels, `spread`/`aperture` selon profil/renderer.
+- La chaîne audio n'est jamais touchée : park, manual position, slots, solo
+  agissent uniquement sur les positions — le mix WFS/KNN continue tourner.
