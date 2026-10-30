@@ -4155,7 +4155,7 @@
       },
       "pre_wait": 0.0,
       "follow": null,
-      "timecode": null
+      "timecode": 690.0
     },
     {
       "id": "cue-8",
