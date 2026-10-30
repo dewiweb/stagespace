@@ -30,7 +30,7 @@ numéro en live. Tout doit être fondu et annulable.
 
 **Limites ouvertes**
 - Numérotation : `oscIndex` **stable persisté** livré — le n de `/stagespace/slot` ne suit plus les réordonnancements ; backfill index+1 pour les slots existants. `park` survit au panic par design (intention opérateur).
-- Pas de "bump momentané" hors `one_shot` (flash = laisser appuyé jusqu'au release n'existe pas).
+- ~~Pas de "bump momentané"~~ **livré** (`6583fd9`) : press-and-hold ≥350ms sur un pad = joue tant que tenu, release = fade-out — comportement console.
 - ~~Le mapping fader→param demande un graphe signal pré-câblé (pas d'OSC learn)~~ **livré** : scope `OSC IN` du drawer live — liste, add/remove, **LEARN** (bouge le fader, l'adresse se remplit) via `learnAddOscMapping`.
 - ~~Prochain incrément : pads numérotés + solo dans PerformView~~ **livré** (`fda88ac`) — badge `#n` par slot, bouton `S` solo dès que plusieurs moves jouent ; reste flash/solo visuels d'un vrai pad et learn.
 
