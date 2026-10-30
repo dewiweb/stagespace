@@ -52,6 +52,8 @@ export const PerformView: React.FC = () => {
   // Mode conduite : vue plein écran readable à distance — NOW/NEXT cue,
   // TC, armé, pending timers. Le reste du show continue derrière.
   const [conduiteMode, setConduiteMode] = React.useState(false);
+  // Press-and-hold (bump momentané) : hold ≥350ms = joue tant que tenu.
+  const padPress = React.useRef<{ momentary: boolean; suppressClick: boolean; timer: ReturnType<typeof setTimeout> | null }>({ momentary: false, suppressClick: false, timer: null });
 
   const playingCount = moveSlots.filter((s) => s.movementId).length;
 
@@ -106,7 +108,39 @@ export const PerformView: React.FC = () => {
     return (
       <div
         key={slot.id}
-        onClick={() => (isPlaying ? stopSlot(slot.id) : playSlot(slot.id))}
+        onPointerDown={() => {
+          padPress.current.timer = setTimeout(() => {
+            padPress.current.momentary = true;
+            if (!isPlaying) void playSlot(slot.id);
+          }, 350);
+        }}
+        onPointerUp={() => {
+          if (padPress.current.timer) clearTimeout(padPress.current.timer);
+          padPress.current.timer = null;
+          if (padPress.current.momentary) {
+            padPress.current.momentary = false;
+            padPress.current.suppressClick = true;
+            void stopSlot(slot.id);
+          }
+        }}
+        onPointerLeave={() => {
+          if (padPress.current.timer) clearTimeout(padPress.current.timer);
+          padPress.current.timer = null;
+          if (padPress.current.momentary) {
+            padPress.current.momentary = false;
+            padPress.current.suppressClick = true;
+            void stopSlot(slot.id);
+          }
+        }}
+        onClick={() => {
+          // Après un hold momentané, le click toggle ferait repartir le
+          // move — on le saute : le release a déjà fade-out.
+          if (padPress.current.suppressClick) {
+            padPress.current.suppressClick = false;
+            return;
+          }
+          void (isPlaying ? stopSlot(slot.id) : playSlot(slot.id));
+        }}
         className={`relative flex flex-col justify-between p-3 rounded-xl min-h-[88px] select-none cursor-pointer transition-colors active:scale-95 border ${
           isPlaying
             ? 'bg-green-800/70 border-green-600 text-green-50'
@@ -133,7 +167,7 @@ export const PerformView: React.FC = () => {
         <div className="min-w-0">
           <div className="text-sm font-semibold truncate leading-tight">{slot.name}</div>
           <div className={`text-[10px] mt-0.5 ${isPlaying ? 'text-green-300/80' : 'text-gray-500'}`}>
-            {slot.trackIds.length} trk{isPlaying ? ' · LIVE' : ''}
+            {slot.trackIds.length} trk{isPlaying ? ' · LIVE' : ' · hold=bump'}
           </div>
         </div>
       </div>
