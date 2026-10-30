@@ -8,6 +8,7 @@ import { Slider } from './ui/Slider';
 import { useGraphStore } from '../store/useGraphStore';
 import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { useCuelistStore } from '../store/useCuelistStore';
+import { doSolo } from '../utils/liveActions';
 import { type NodeParamValue } from './nodeParamSchema';
 import { NodeParamsPanel } from './NodeParamsPanel';
 import { PanicButton } from './ui/PanicButton';
@@ -34,6 +35,12 @@ export const PerformView: React.FC = () => {
   const addMoveSlot = useGraphStore((s) => s.addMoveSlot);
   const addToSetlist = useGraphStore((s) => s.addToSetlist);
   const isRecalling = useCuelistStore((s) => s.isRecalling);
+  const cues = useCuelistStore((s) => s.cues);
+  const currentCueIndex = useCuelistStore((s) => s.currentCueIndex);
+  const lastTimecode = useCuelistStore((s) => s.lastTimecode);
+  const lastTimecodeAt = useCuelistStore((s) => s.lastTimecodeAt);
+  const tcChaseEnabled = useCuelistStore((s) => s.tcChaseEnabled);
+  const tcFps = useGraphStore((s) => s.timecodeFps);
 
   const [goFeedback, setGoFeedback] = React.useState<{ ok: boolean; message: string } | null>(null);
 
@@ -54,6 +61,20 @@ export const PerformView: React.FC = () => {
     ? moveSlots.find((s) => s.id === editingSlotId) ?? null
     : null;
   const armedPlaying = !!armedSlot?.movementId || (armedSlot ? pendingPlays.includes(armedSlot.id) : false);
+
+  // Conduite : cue courante + suivante (affichage console dans la top bar).
+  const curCue = currentCueIndex >= 0 ? cues[currentCueIndex] : null;
+  const nextCue = currentCueIndex + 1 < cues.length ? cues[currentCueIndex + 1] : null;
+  const cueLabel = (c: typeof curCue, idx: number) =>
+    c ? `${c.cue_number ?? String(idx + 1)} ${c.name}` : '—';
+  // Timecode : HH:MM:SS:FF au fps configuré, "lost" si silence >1s.
+  const tcActive = lastTimecode != null && Date.now() - lastTimecodeAt < 1000;
+  const tcStr = (() => {
+    if (lastTimecode == null) return 'TC —';
+    const s = lastTimecode;
+    const pad = (v: number) => String(v).padStart(2, '0');
+    return `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s % 3600) / 60))}:${pad(Math.floor(s % 60))}:${pad(Math.floor((s % 1) * tcFps))}`;
+  })();
 
   const handleGO = async () => {
     const res = await goToNextMove();
@@ -76,6 +97,9 @@ export const PerformView: React.FC = () => {
     const isCurrentSetlist = setlistIdx === currentSetlistIndex;
     const isNextSetlist = setlistIdx === currentSetlistIndex + 1
       || (currentSetlistIndex < 0 && setlistIdx === 0);
+    // Index 1-based = le n de `/stagespace/slot <n>` — l'écran doit
+    // montrer le même numéro que la commande OSC.
+    const oscNum = moveSlots.indexOf(slot) + 1;
     return (
       <div
         key={slot.id}
@@ -108,6 +132,12 @@ export const PerformView: React.FC = () => {
         </button>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
+            <span
+              className="text-gray-600 text-[10px] font-mono flex-shrink-0"
+              title={`OSC: /stagespace/slot ${oscNum} · slot/stop ${oscNum} · solo ${oscNum}`}
+            >
+              #{oscNum}
+            </span>
             <span className="text-white text-xs font-medium truncate">{slot.name}</span>
             {isPlaying && (
               <span
@@ -128,6 +158,15 @@ export const PerformView: React.FC = () => {
         )}
         {isNextSetlist && !isCurrentSetlist && (
           <span className="text-green-400/80 text-xs font-bold flex-shrink-0" title="Prochain GO">→ NEXT</span>
+        )}
+        {playingCount > 1 && (
+          <button
+            onClick={(e) => { e.stopPropagation(); doSolo(oscNum); }}
+            className="flex-shrink-0 w-6 h-6 rounded text-[10px] font-bold text-gray-400 hover:bg-orange-600/40 hover:text-orange-200 transition-colors"
+            title={`SOLO — stoppe les ${playingCount - 1} autres moves (fade) puis joue celui-ci`}
+          >
+            S
+          </button>
         )}
         {showSetlistAdd && (
           <button
@@ -173,6 +212,17 @@ export const PerformView: React.FC = () => {
           {isRecalling && (
             <span className="text-purple-400 text-xs font-bold animate-pulse flex-shrink-0">
               RECALLING…
+            </span>
+          )}
+          {cues.length > 0 && (
+            <span
+              className="text-xs flex-shrink-0 min-w-0"
+              title="Conduite — cue courante / cue suivante (armée)"
+            >
+              <span className="text-gray-500 uppercase">Cue </span>
+              <span className="text-amber-300 font-semibold truncate">{cueLabel(curCue, currentCueIndex)}</span>
+              <span className="text-gray-500 mx-1">→</span>
+              <span className="text-gray-400 truncate">{nextCue ? cueLabel(nextCue, currentCueIndex + 1) : '—'}</span>
             </span>
           )}
           {goFeedback && (
@@ -227,6 +277,16 @@ export const PerformView: React.FC = () => {
             {nextSetlistSlot ? nextSetlistSlot.name : 'end of setlist'}
           </div>
         </button>
+        {tcChaseEnabled && (
+          <span
+            className={`font-mono text-xs px-1.5 py-0.5 rounded border flex-shrink-0 ${
+              tcActive ? 'border-emerald-600 text-emerald-400' : 'border-gray-600 text-gray-500'
+            }`}
+            title={tcActive ? 'Timecode actif (chase on)' : 'TC lost — pas de message depuis >1s'}
+          >
+            {tcActive ? tcStr : 'TC lost'}
+          </span>
+        )}
         <OscArmToggle />
         <PanicButton size="lg" />
       </div>
