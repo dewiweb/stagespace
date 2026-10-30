@@ -8,7 +8,7 @@ import { Slider } from './ui/Slider';
 import { useGraphStore } from '../store/useGraphStore';
 import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { useCuelistStore } from '../store/useCuelistStore';
-import { doSolo, doUnpark } from '../utils/liveActions';
+import { doSolo, doUnpark, doStop } from '../utils/liveActions';
 import { safeInvoke } from '../utils/tauri';
 import { toast } from '../utils/toast-helpers';
 import { type NodeParamValue } from './nodeParamSchema';
@@ -507,6 +507,15 @@ export const PerformView: React.FC = () => {
               {isRecalling && <span className="text-purple-400 font-bold animate-pulse">RECALLING…</span>}
             </div>
             <div className="flex items-center gap-4">
+              {playingCount > 0 && (
+                <button
+                  onClick={() => doStop()}
+                  className="px-5 py-3 rounded-xl bg-red-800/70 hover:bg-red-700 text-red-100 text-base font-bold active:scale-95"
+                  title="Stop all moves en fondu — moins brutal que PANIC (le renderer reste armé)"
+                >
+                  STOP ALL
+                </button>
+              )}
               <OscArmToggle />
               <PanicButton size="lg" />
               <button
@@ -947,6 +956,19 @@ const OscMappingsPanel: React.FC = () => {
     return () => clearInterval(t);
   }, []);
 
+  // Sérialise le transform pour pré-remplir le formulaire à l'édition —
+  // addOscMapping remplace à même adresse (insert HashMap) = update.
+  const describeTransform = (t: unknown): string => {
+    const tr = (t ?? {}) as Record<string, number | null>;
+    const parts: string[] = [];
+    const dflt: Record<string, number | null> = { scale: 1, offset: 0, smooth: 0, deadzone: 0 };
+    for (const k of ['scale', 'offset', 'min', 'max', 'smooth', 'deadzone']) {
+      const v = tr[k];
+      if (v != null && v !== dflt[k]) parts.push(`${k}=${v}`);
+    }
+    return parts.join(' ');
+  };
+
   const describe = (d: unknown): string => {
     const m = d as { kind: string };
     if (m.kind === 'channel') {
@@ -990,6 +1012,17 @@ const OscMappingsPanel: React.FC = () => {
           )}
           <span className="text-gray-400">→</span>
           <span className="text-gray-200">{describe(m.destination)}</span>
+          <button
+            onClick={() => {
+              setAddr(m.address);
+              setDest(describe(m.destination));
+              setTransform(describeTransform(m.transform));
+            }}
+            className="text-gray-500 hover:text-cyan-300 px-1"
+            title="Edit — pré-remplit le formulaire (Add remplace à même adresse)"
+          >
+            ✎
+          </button>
           <button
             onClick={() => void removeOscMapping(m.address)}
             className="text-gray-600 hover:text-red-400 px-1"
