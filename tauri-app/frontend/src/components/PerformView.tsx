@@ -94,6 +94,8 @@ export const PerformView: React.FC = () => {
   // Conduite : cue courante + suivante (affichage console dans la top bar).
   const curCue = currentCueIndex >= 0 ? cues[currentCueIndex] : null;
   const nextCue = currentCueIndex + 1 < cues.length ? cues[currentCueIndex + 1] : null;
+  // Lookahead console : la cue après la suivante, en grisé sous NEXT.
+  const nextNextCue = currentCueIndex + 2 < cues.length ? cues[currentCueIndex + 2] : null;
   const cueLabel = (c: typeof curCue, idx: number) =>
     c ? `${c.cue_number ?? String(idx + 1)} ${c.name}` : '—';
   // Timecode : HH:MM:SS:FF au fps configuré, "lost" si silence >1s.
@@ -601,6 +603,11 @@ export const PerformView: React.FC = () => {
               <div className="text-4xl font-bold text-gray-300 truncate max-w-[70vw]">
                 {nextCue ? cueLabel(nextCue, currentCueIndex + 1) : '—'}
               </div>
+              {nextNextCue && (
+                <div className="text-lg text-gray-600 truncate max-w-[60vw] mt-1">
+                  then {cueLabel(nextNextCue, currentCueIndex + 2)}
+                </div>
+              )}
             </div>
             <div className="text-green-400/90 text-xl font-semibold">
               {playingCount > 0 ? `${playingCount} moves live` : 'IDLE'}
