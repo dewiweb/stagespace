@@ -370,6 +370,12 @@ pub enum ShowCommand {
     /// nombre, fallback index 1-based) ; fade optionnel en secondes
     /// (écrase le fade_duration stocké — la console choisit son fondu).
     CueRecall(String, Option<f64>),
+    /// `/stagespace/slot <n>` — joue le slot n (index 1-based, busking).
+    Slot(usize),
+    /// `/stagespace/slot/stop <n>` — coupe le slot n avec son fade_out.
+    SlotStop(usize),
+    /// `/stagespace/solo <n>` — coupe tous les autres slots et joue n.
+    Solo(usize),
     /// `/stagespace/arm` — arme l'émission OSC (fin du dry-run).
     Arm,
     /// `/stagespace/disarm` — dry-run : le merge tourne, rien ne part.
@@ -435,6 +441,20 @@ fn parse_show_command(addr: &str, args: &[OscType], fps: f64) -> Option<ShowComm
                 _ => None,
             })
             .map(ShowCommand::Unpark),
+        "slot" | "slot/stop" | "solo" => {
+            let n = args.first().and_then(|a| match a {
+                OscType::Float(v) => Some(*v as usize),
+                OscType::Int(v) => Some((*v).max(0) as usize),
+                OscType::String(s) => s.parse::<usize>().ok(),
+                _ => None,
+            });
+            match (tail, n) {
+                ("slot", Some(n)) => Some(ShowCommand::Slot(n)),
+                ("slot/stop", Some(n)) => Some(ShowCommand::SlotStop(n)),
+                ("solo", Some(n)) => Some(ShowCommand::Solo(n)),
+                _ => None,
+            }
+        }
         "arm" => Some(ShowCommand::Arm),
         "disarm" => Some(ShowCommand::Disarm),
         "status" => Some(ShowCommand::Status),
@@ -1835,6 +1855,21 @@ mod show_control_tests {
                 "/stagespace/cue/recall",
                 vec![OscType::String("2".into()), OscType::Float(1.5)],
                 ShowCommand::CueRecall("2".into(), Some(1.5)),
+            ),
+            (
+                "/stagespace/slot",
+                vec![OscType::Int(3)],
+                ShowCommand::Slot(3),
+            ),
+            (
+                "/stagespace/slot/stop",
+                vec![OscType::Int(3)],
+                ShowCommand::SlotStop(3),
+            ),
+            (
+                "/stagespace/solo",
+                vec![OscType::String("2".into())],
+                ShowCommand::Solo(2),
             ),
             ("/stagespace/arm", vec![], ShowCommand::Arm),
             ("/stagespace/disarm", vec![], ShowCommand::Disarm),

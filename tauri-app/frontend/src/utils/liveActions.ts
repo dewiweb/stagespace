@@ -52,6 +52,36 @@ export function doArm(armed: boolean) {
   invoke('set_osc_armed', { armed }).catch((e) => toast.error('OSC arm failed: ' + e));
 }
 
+/** /stagespace/slot <n> — joue le slot n (index 1-based, busking). */
+export function doSlot(n: number) {
+  const gs = useGraphStore.getState();
+  const slot = gs.moveSlots[n - 1];
+  if (!slot) return void toast.warning(`Slot '${n}' not found`);
+  useCuelistStore.getState().cancelPendingTimers();
+  void gs.playSlot(slot.id);
+}
+
+/** /stagespace/slot/stop <n> — coupe le slot n avec son fade_out. */
+export function doSlotStop(n: number) {
+  const gs = useGraphStore.getState();
+  const slot = gs.moveSlots[n - 1];
+  if (!slot) return void toast.warning(`Slot '${n}' not found`);
+  useCuelistStore.getState().cancelPendingTimers();
+  if (slot.movementId) void gs.stopSlotWithFade(slot.id, slot.fadeOut ?? 1);
+}
+
+/** /stagespace/solo <n> — coupe les autres slots puis joue n. */
+export function doSolo(n: number) {
+  const gs = useGraphStore.getState();
+  const target = gs.moveSlots[n - 1];
+  if (!target) return void toast.warning(`Slot '${n}' not found`);
+  useCuelistStore.getState().cancelPendingTimers();
+  for (const s of gs.moveSlots) {
+    if (s.id !== target.id && s.movementId) void gs.stopSlotWithFade(s.id, s.fadeOut ?? 1);
+  }
+  void gs.playSlot(target.id);
+}
+
 /** /stagespace/status — renvoie le feedback cue courant/suivant au demandeur. */
 export function doStatus() {
   useCuelistStore.getState().sendStatusNow();
