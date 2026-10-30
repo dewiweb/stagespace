@@ -9,6 +9,7 @@ import { useGraphStore } from '../store/useGraphStore';
 import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { doSolo } from '../utils/liveActions';
+import { toast } from '../utils/toast-helpers';
 import { type NodeParamValue } from './nodeParamSchema';
 import { NodeParamsPanel } from './NodeParamsPanel';
 import { PanicButton } from './ui/PanicButton';
@@ -535,7 +536,7 @@ const LiveDrawer: React.FC = () => {
   const pushMacrosToRuntime = useGraphStore((s) => s.pushMacrosToRuntime);
   const macroDebounce = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  type Scope = 'params' | 'playback' | 'tracks' | 'audio' | 'global';
+  type Scope = 'params' | 'playback' | 'tracks' | 'audio' | 'global' | 'osc';
   const [scope, setScope] = React.useState<Scope | null>(null);
 
   const slot = moveSlots.find((s) => s.id === editingSlotId);
@@ -637,6 +638,8 @@ const LiveDrawer: React.FC = () => {
           'Track assignment + depth/phase of the selected move')}
         {scopeBtn('audio', <><AudioLines size={12} className="inline -mt-0.5" /> Audio</>, true,
           'Audio-reactive mods of the selected move')}
+        {scopeBtn('osc', <>OSC IN</>, false,
+          'Mappings OSC entrants (fader→param) + learn')}
         {scopeBtn('global', <><Globe size={12} className="inline -mt-0.5" /> Global</>, false,
           'Macros globales — affectent TOUS les moves live (merge)')}
 
@@ -660,6 +663,8 @@ const LiveDrawer: React.FC = () => {
       </div>
 
       {/* ── Drawer GLOBAL — scope merge : affecte TOUS les moves live ── */}
+      {scope === 'osc' && <OscMappingsPanel />}
+
       {scope === 'global' && (
         <div className="border-t border-orange-900/40 px-4 py-2 flex items-start gap-6 overflow-x-auto max-h-[42vh] overflow-y-auto">
           <div className="flex-shrink-0 w-64 space-y-1">
@@ -824,3 +829,101 @@ const LiveDrawer: React.FC = () => {
 };
 
 export default PerformView;
+
+/// Liste + création des mappings OSC IN — destination texte
+/// (`handler:name`, `macro:scale`, `channel:gain:3`, `position:2`) +
+/// LEARN : bouge le fader, l'adresse se remplit toute seule.
+const OscMappingsPanel: React.FC = () => {
+  const oscMappings = useGraphStore((s) => s.oscMappings);
+  const addOscMapping = useGraphStore((s) => s.addOscMapping);
+  const removeOscMapping = useGraphStore((s) => s.removeOscMapping);
+  const learnAddOscMapping = useGraphStore((s) => s.learnAddOscMapping);
+  const [dest, setDest] = React.useState('');
+  const [transform, setTransform] = React.useState('');
+  const [addr, setAddr] = React.useState('');
+  const [learning, setLearning] = React.useState(false);
+  const mappings = Array.from(oscMappings.values());
+
+  const describe = (d: unknown): string => {
+    const m = d as { kind: string };
+    if (m.kind === 'channel') {
+      const c = d as { channel: string; object: unknown };
+      return `channel:${c.channel}:${c.object}`;
+    }
+    if (m.kind === 'macro') return `macro:${(d as { name: string }).name}`;
+    if (m.kind === 'position') return `position:${(d as { object: unknown }).object}`;
+    return `handler:${(d as { name: string }).name}`;
+  };
+
+  const doLearn = async () => {
+    if (!dest.trim()) {
+      toast.warning('Enter a destination first (e.g. channel:gain:3 or macro:scale)');
+      return;
+    }
+    setLearning(true);
+    const learned = await learnAddOscMapping(dest.trim(), transform.trim() || null);
+    setLearning(false);
+    if (learned) toast.success(`Learned → ${learned}`);
+    else toast.warning('OSC learn timed out — move the fader/knob');
+  };
+
+  return (
+    <div className="px-4 py-3 space-y-2 text-xs">
+      <div className="text-gray-400 uppercase tracking-wider">OSC IN mappings ({mappings.length})</div>
+      {mappings.map((m) => (
+        <div key={m.address} className="flex items-center gap-2 py-1 border-b border-gray-800/50">
+          <span className="text-cyan-300 font-mono truncate flex-1">{m.address}</span>
+          <span className="text-gray-400">→</span>
+          <span className="text-gray-200">{describe(m.destination)}</span>
+          <button
+            onClick={() => void removeOscMapping(m.address)}
+            className="text-gray-600 hover:text-red-400 px-1"
+            title="Remove mapping"
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+      {mappings.length === 0 && <div className="text-gray-600 italic">No mappings yet</div>}
+      <div className="flex items-center gap-2 pt-1">
+        <input
+          value={addr}
+          onChange={(e) => setAddr(e.target.value)}
+          placeholder="/fader/1"
+          className="w-44 bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-gray-200 font-mono"
+        />
+        <span className="text-gray-500">→</span>
+        <input
+          value={dest}
+          onChange={(e) => setDest(e.target.value)}
+          placeholder="channel:gain:3 | macro:scale | handler:hp"
+          className="flex-1 bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-gray-200 font-mono"
+        />
+        <input
+          value={transform}
+          onChange={(e) => setTransform(e.target.value)}
+          placeholder="scale=… (opt)"
+          className="w-28 bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-gray-200 font-mono"
+        />
+        <button
+          onClick={() => {
+            if (!addr.trim() || !dest.trim()) { toast.warning('Address + destination required'); return; }
+            void addOscMapping(addr.trim(), dest.trim(), transform.trim() || null);
+            setAddr('');
+          }}
+          className="px-3 py-1.5 rounded bg-indigo-600 text-white font-semibold"
+        >
+          Add
+        </button>
+        <button
+          onClick={() => void doLearn()}
+          disabled={learning}
+          className={`px-4 py-1.5 rounded font-bold ${learning ? 'bg-cyan-600 animate-pulse' : 'bg-cyan-700 hover:bg-cyan-600'} text-white`}
+          title="OSC learn — bouge le fader : l'adresse se remplit"
+        >
+          {learning ? 'MOVE…' : 'LEARN'}
+        </button>
+      </div>
+    </div>
+  );
+};
