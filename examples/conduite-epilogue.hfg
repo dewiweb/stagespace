@@ -1107,7 +1107,7 @@
             }
           },
           {
-            "id": "per-temp",
+            "id": "e-temp",
             "type": "custom",
             "position": {
               "x": 260,
@@ -1117,17 +1117,17 @@
               "label": "PerlinNoise",
               "type": "PerlinNoise",
               "params": {
-                "n_objects": 24,
                 "amplitude": 4.0,
-                "frequency": 0.8
+                "frequency": 0.8,
+                "n_objects": 24
               }
             }
           },
           {
-            "id": "ph-temp",
+            "id": "m460-temp",
             "type": "custom",
             "position": {
-              "x": 470,
+              "x": 460,
               "y": 110
             },
             "data": {
@@ -1154,29 +1154,29 @@
         ],
         "edges": [
           {
-            "id": "o-temp-per-temp-objects",
+            "id": "o-temp-e-temp-objects",
             "source": "o-temp",
-            "target": "per-temp",
+            "target": "e-temp",
             "sourceHandle": "objects",
             "targetHandle": "objects"
           },
           {
-            "id": "d-temp-per-temp-duration",
+            "id": "d-temp-e-temp-duration",
             "source": "d-temp",
-            "target": "per-temp",
+            "target": "e-temp",
             "sourceHandle": "duration",
             "targetHandle": "duration"
           },
           {
-            "id": "per-temp-ph-temp-in",
-            "source": "per-temp",
-            "target": "ph-temp",
+            "id": "e-temp-m460-temp-in",
+            "source": "e-temp",
+            "target": "m460-temp",
             "sourceHandle": "out",
             "targetHandle": "in"
           },
           {
-            "id": "ph-temp-out-temp-in",
-            "source": "ph-temp",
+            "id": "m460-temp-out-temp-in",
+            "source": "m460-temp",
             "target": "out-temp",
             "sourceHandle": "out",
             "targetHandle": "in"
@@ -1611,6 +1611,1842 @@
       "audioMods": []
     },
     {
+      "id": "slot-pendule",
+      "name": "Pendule",
+      "graphJson": {
+        "nodes": [
+          {
+            "id": "o-pend",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 60
+            },
+            "data": {
+              "label": "Objects",
+              "type": "Objects",
+              "params": {
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "d-pend",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 160
+            },
+            "data": {
+              "label": "Duration",
+              "type": "Duration",
+              "params": {
+                "duration": 18.0
+              }
+            }
+          },
+          {
+            "id": "e-pend",
+            "type": "custom",
+            "position": {
+              "x": 300,
+              "y": 110
+            },
+            "data": {
+              "label": "Pendulum",
+              "type": "Pendulum",
+              "params": {
+                "initial_angle": 0.4,
+                "length": 3.0,
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "out-pend",
+            "type": "custom",
+            "position": {
+              "x": 600,
+              "y": 110
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "o-pend-e-pend-objects",
+            "source": "o-pend",
+            "target": "e-pend",
+            "sourceHandle": "objects",
+            "targetHandle": "objects"
+          },
+          {
+            "id": "d-pend-e-pend-duration",
+            "source": "d-pend",
+            "target": "e-pend",
+            "sourceHandle": "duration",
+            "targetHandle": "duration"
+          },
+          {
+            "id": "e-pend-out-pend-in",
+            "source": "e-pend",
+            "target": "out-pend",
+            "sourceHandle": "out",
+            "targetHandle": "in"
+          }
+        ]
+      },
+      "templateId": "custom",
+      "trackIds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24
+      ],
+      "movementId": null,
+      "isPreview": false,
+      "macros": {
+        "speed": 1,
+        "scale": 1,
+        "shiftX": 0,
+        "shiftY": 0,
+        "shiftZ": 0,
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "fadeDuration": 2.0,
+      "loopMode": "loop",
+      "direction": "forward",
+      "fadeIn": 1.0,
+      "fadeOut": 1.0,
+      "phaseSpread": 0.0,
+      "assignments": [
+        {
+          "track_id": 1,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 2,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 3,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 4,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 5,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 6,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 7,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 8,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 9,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 10,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 11,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 12,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 13,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 14,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 15,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 16,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 17,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 18,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 19,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 20,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 21,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 22,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 23,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 24,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        }
+      ],
+      "audioMods": []
+    },
+    {
+      "id": "slot-entracte",
+      "name": "Entracte",
+      "graphJson": {
+        "nodes": [
+          {
+            "id": "o-entr",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 60
+            },
+            "data": {
+              "label": "Objects",
+              "type": "Objects",
+              "params": {
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "d-entr",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 160
+            },
+            "data": {
+              "label": "Duration",
+              "type": "Duration",
+              "params": {
+                "duration": 60.0
+              }
+            }
+          },
+          {
+            "id": "e-entr",
+            "type": "custom",
+            "position": {
+              "x": 300,
+              "y": 110
+            },
+            "data": {
+              "label": "Circular",
+              "type": "Circular",
+              "params": {
+                "radius": 8.0,
+                "speed": 0.3,
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "out-entr",
+            "type": "custom",
+            "position": {
+              "x": 600,
+              "y": 110
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "o-entr-e-entr-objects",
+            "source": "o-entr",
+            "target": "e-entr",
+            "sourceHandle": "objects",
+            "targetHandle": "objects"
+          },
+          {
+            "id": "d-entr-e-entr-duration",
+            "source": "d-entr",
+            "target": "e-entr",
+            "sourceHandle": "duration",
+            "targetHandle": "duration"
+          },
+          {
+            "id": "e-entr-out-entr-in",
+            "source": "e-entr",
+            "target": "out-entr",
+            "sourceHandle": "out",
+            "targetHandle": "in"
+          }
+        ]
+      },
+      "templateId": "custom",
+      "trackIds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24
+      ],
+      "movementId": null,
+      "isPreview": false,
+      "macros": {
+        "speed": 1,
+        "scale": 1,
+        "shiftX": 0,
+        "shiftY": 0,
+        "shiftZ": 0,
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "fadeDuration": 2.0,
+      "loopMode": "loop",
+      "direction": "forward",
+      "fadeIn": 1.0,
+      "fadeOut": 1.0,
+      "phaseSpread": 0.0,
+      "assignments": [
+        {
+          "track_id": 1,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 2,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 3,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 4,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 5,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 6,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 7,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 8,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 9,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 10,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 11,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 12,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 13,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 14,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 15,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 16,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 17,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 18,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 19,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 20,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 21,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 22,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 23,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 24,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        }
+      ],
+      "audioMods": []
+    },
+    {
+      "id": "slot-helix",
+      "name": "Helix",
+      "graphJson": {
+        "nodes": [
+          {
+            "id": "o-hel",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 60
+            },
+            "data": {
+              "label": "Objects",
+              "type": "Objects",
+              "params": {
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "d-hel",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 160
+            },
+            "data": {
+              "label": "Duration",
+              "type": "Duration",
+              "params": {
+                "duration": 30.0
+              }
+            }
+          },
+          {
+            "id": "e-hel",
+            "type": "custom",
+            "position": {
+              "x": 300,
+              "y": 110
+            },
+            "data": {
+              "label": "Helix",
+              "type": "Helix",
+              "params": {
+                "radius": 4.0,
+                "rise": 0.6,
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "out-hel",
+            "type": "custom",
+            "position": {
+              "x": 600,
+              "y": 110
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "o-hel-e-hel-objects",
+            "source": "o-hel",
+            "target": "e-hel",
+            "sourceHandle": "objects",
+            "targetHandle": "objects"
+          },
+          {
+            "id": "d-hel-e-hel-duration",
+            "source": "d-hel",
+            "target": "e-hel",
+            "sourceHandle": "duration",
+            "targetHandle": "duration"
+          },
+          {
+            "id": "e-hel-out-hel-in",
+            "source": "e-hel",
+            "target": "out-hel",
+            "sourceHandle": "out",
+            "targetHandle": "in"
+          }
+        ]
+      },
+      "templateId": "custom",
+      "trackIds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24
+      ],
+      "movementId": null,
+      "isPreview": false,
+      "macros": {
+        "speed": 1,
+        "scale": 1,
+        "shiftX": 0,
+        "shiftY": 0,
+        "shiftZ": 0,
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "fadeDuration": 2.0,
+      "loopMode": "loop",
+      "direction": "forward",
+      "fadeIn": 1.0,
+      "fadeOut": 1.0,
+      "phaseSpread": 0.0,
+      "assignments": [
+        {
+          "track_id": 1,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 2,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 3,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 4,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 5,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 6,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 7,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 8,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 9,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 10,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 11,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 12,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 13,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 14,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 15,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 16,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 17,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 18,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 19,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 20,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 21,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 22,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 23,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 24,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        }
+      ],
+      "audioMods": []
+    },
+    {
+      "id": "slot-rose",
+      "name": "Vague",
+      "graphJson": {
+        "nodes": [
+          {
+            "id": "o-ros",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 60
+            },
+            "data": {
+              "label": "Objects",
+              "type": "Objects",
+              "params": {
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "d-ros",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 160
+            },
+            "data": {
+              "label": "Duration",
+              "type": "Duration",
+              "params": {
+                "duration": 25.0
+              }
+            }
+          },
+          {
+            "id": "e-ros",
+            "type": "custom",
+            "position": {
+              "x": 300,
+              "y": 110
+            },
+            "data": {
+              "label": "RoseCurve",
+              "type": "RoseCurve",
+              "params": {
+                "radius": 5.0,
+                "k": 3.0,
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "out-ros",
+            "type": "custom",
+            "position": {
+              "x": 600,
+              "y": 110
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "o-ros-e-ros-objects",
+            "source": "o-ros",
+            "target": "e-ros",
+            "sourceHandle": "objects",
+            "targetHandle": "objects"
+          },
+          {
+            "id": "d-ros-e-ros-duration",
+            "source": "d-ros",
+            "target": "e-ros",
+            "sourceHandle": "duration",
+            "targetHandle": "duration"
+          },
+          {
+            "id": "e-ros-out-ros-in",
+            "source": "e-ros",
+            "target": "out-ros",
+            "sourceHandle": "out",
+            "targetHandle": "in"
+          }
+        ]
+      },
+      "templateId": "custom",
+      "trackIds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24
+      ],
+      "movementId": null,
+      "isPreview": false,
+      "macros": {
+        "speed": 1,
+        "scale": 1,
+        "shiftX": 0,
+        "shiftY": 0,
+        "shiftZ": 0,
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "fadeDuration": 2.0,
+      "loopMode": "loop",
+      "direction": "forward",
+      "fadeIn": 1.0,
+      "fadeOut": 1.0,
+      "phaseSpread": 0.0,
+      "assignments": [
+        {
+          "track_id": 1,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 2,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 3,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 4,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 5,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 6,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 7,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 8,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 9,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 10,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 11,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 12,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 13,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 14,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 15,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 16,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 17,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 18,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 19,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 20,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 21,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 22,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 23,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 24,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        }
+      ],
+      "audioMods": []
+    },
+    {
+      "id": "slot-lissajous",
+      "name": "Lissajous",
+      "graphJson": {
+        "nodes": [
+          {
+            "id": "o-lis",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 60
+            },
+            "data": {
+              "label": "Objects",
+              "type": "Objects",
+              "params": {
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "d-lis",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 160
+            },
+            "data": {
+              "label": "Duration",
+              "type": "Duration",
+              "params": {
+                "duration": 20.0
+              }
+            }
+          },
+          {
+            "id": "e-lis",
+            "type": "custom",
+            "position": {
+              "x": 300,
+              "y": 110
+            },
+            "data": {
+              "label": "Lissajous",
+              "type": "Lissajous",
+              "params": {
+                "a": 3.0,
+                "b": 4.0,
+                "delta": 1.57,
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "out-lis",
+            "type": "custom",
+            "position": {
+              "x": 600,
+              "y": 110
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "o-lis-e-lis-objects",
+            "source": "o-lis",
+            "target": "e-lis",
+            "sourceHandle": "objects",
+            "targetHandle": "objects"
+          },
+          {
+            "id": "d-lis-e-lis-duration",
+            "source": "d-lis",
+            "target": "e-lis",
+            "sourceHandle": "duration",
+            "targetHandle": "duration"
+          },
+          {
+            "id": "e-lis-out-lis-in",
+            "source": "e-lis",
+            "target": "out-lis",
+            "sourceHandle": "out",
+            "targetHandle": "in"
+          }
+        ]
+      },
+      "templateId": "custom",
+      "trackIds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24
+      ],
+      "movementId": null,
+      "isPreview": false,
+      "macros": {
+        "speed": 1,
+        "scale": 1,
+        "shiftX": 0,
+        "shiftY": 0,
+        "shiftZ": 0,
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "fadeDuration": 2.0,
+      "loopMode": "loop",
+      "direction": "forward",
+      "fadeIn": 1.0,
+      "fadeOut": 1.0,
+      "phaseSpread": 0.0,
+      "assignments": [
+        {
+          "track_id": 1,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 2,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 3,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 4,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 5,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 6,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 7,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 8,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 9,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 10,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 11,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 12,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 13,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 14,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 15,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 16,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 17,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 18,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 19,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 20,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 21,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 22,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 23,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 24,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        }
+      ],
+      "audioMods": []
+    },
+    {
+      "id": "slot-essaim",
+      "name": "Essaim",
+      "graphJson": {
+        "nodes": [
+          {
+            "id": "o-swa",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 60
+            },
+            "data": {
+              "label": "Objects",
+              "type": "Objects",
+              "params": {
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "d-swa",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 160
+            },
+            "data": {
+              "label": "Duration",
+              "type": "Duration",
+              "params": {
+                "duration": 15.0
+              }
+            }
+          },
+          {
+            "id": "e-swa",
+            "type": "custom",
+            "position": {
+              "x": 300,
+              "y": 110
+            },
+            "data": {
+              "label": "Swarm",
+              "type": "Swarm",
+              "params": {
+                "speed": 1.2,
+                "cohesion": 0.5,
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "out-swa",
+            "type": "custom",
+            "position": {
+              "x": 600,
+              "y": 110
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "o-swa-e-swa-objects",
+            "source": "o-swa",
+            "target": "e-swa",
+            "sourceHandle": "objects",
+            "targetHandle": "objects"
+          },
+          {
+            "id": "d-swa-e-swa-duration",
+            "source": "d-swa",
+            "target": "e-swa",
+            "sourceHandle": "duration",
+            "targetHandle": "duration"
+          },
+          {
+            "id": "e-swa-out-swa-in",
+            "source": "e-swa",
+            "target": "out-swa",
+            "sourceHandle": "out",
+            "targetHandle": "in"
+          }
+        ]
+      },
+      "templateId": "custom",
+      "trackIds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24
+      ],
+      "movementId": null,
+      "isPreview": false,
+      "macros": {
+        "speed": 1,
+        "scale": 1,
+        "shiftX": 0,
+        "shiftY": 0,
+        "shiftZ": 0,
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "fadeDuration": 2.0,
+      "loopMode": "loop",
+      "direction": "forward",
+      "fadeIn": 1.0,
+      "fadeOut": 1.0,
+      "phaseSpread": 0.0,
+      "assignments": [
+        {
+          "track_id": 1,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 2,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 3,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 4,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 5,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 6,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 7,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 8,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 9,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 10,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 11,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 12,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 13,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 14,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 15,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 16,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 17,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 18,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 19,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 20,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 21,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 22,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 23,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 24,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        }
+      ],
+      "audioMods": []
+    },
+    {
+      "id": "slot-percussions",
+      "name": "Percussions",
+      "graphJson": {
+        "nodes": [
+          {
+            "id": "o-bou",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 60
+            },
+            "data": {
+              "label": "Objects",
+              "type": "Objects",
+              "params": {
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "d-bou",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 220
+            },
+            "data": {
+              "label": "Duration",
+              "type": "Duration",
+              "params": {
+                "duration": 8.0
+              }
+            }
+          },
+          {
+            "id": "e-bou",
+            "type": "custom",
+            "position": {
+              "x": 260,
+              "y": 110
+            },
+            "data": {
+              "label": "Bouncing",
+              "type": "Bouncing",
+              "params": {
+                "height": 3.0,
+                "damping": 0.7,
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "m460-bou",
+            "type": "custom",
+            "position": {
+              "x": 460,
+              "y": 110
+            },
+            "data": {
+              "label": "PhaseShift",
+              "type": "PhaseShift",
+              "params": {
+                "shift": 0.1
+              }
+            }
+          },
+          {
+            "id": "out-bou",
+            "type": "custom",
+            "position": {
+              "x": 660,
+              "y": 110
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "o-bou-e-bou-objects",
+            "source": "o-bou",
+            "target": "e-bou",
+            "sourceHandle": "objects",
+            "targetHandle": "objects"
+          },
+          {
+            "id": "d-bou-e-bou-duration",
+            "source": "d-bou",
+            "target": "e-bou",
+            "sourceHandle": "duration",
+            "targetHandle": "duration"
+          },
+          {
+            "id": "e-bou-m460-bou-in",
+            "source": "e-bou",
+            "target": "m460-bou",
+            "sourceHandle": "out",
+            "targetHandle": "in"
+          },
+          {
+            "id": "m460-bou-out-bou-in",
+            "source": "m460-bou",
+            "target": "out-bou",
+            "sourceHandle": "out",
+            "targetHandle": "in"
+          }
+        ]
+      },
+      "templateId": "custom",
+      "trackIds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24
+      ],
+      "movementId": null,
+      "isPreview": false,
+      "macros": {
+        "speed": 1,
+        "scale": 1,
+        "shiftX": 0,
+        "shiftY": 0,
+        "shiftZ": 0,
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "fadeDuration": 2.0,
+      "loopMode": "loop",
+      "direction": "forward",
+      "fadeIn": 1.0,
+      "fadeOut": 1.0,
+      "phaseSpread": 0.0,
+      "assignments": [
+        {
+          "track_id": 1,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 2,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 3,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 4,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 5,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 6,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 7,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 8,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 9,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 10,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 11,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 12,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 13,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 14,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 15,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 16,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 17,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 18,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 19,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 20,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 21,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 22,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 23,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        },
+        {
+          "track_id": 24,
+          "depth": 1.0,
+          "phase_offset": 0.0
+        }
+      ],
+      "audioMods": []
+    },
+    {
       "id": "slot-suspension",
       "name": "Suspension",
       "graphJson": {
@@ -1635,7 +3471,7 @@
             "type": "custom",
             "position": {
               "x": 0,
-              "y": 200
+              "y": 220
             },
             "data": {
               "label": "Duration",
@@ -1646,7 +3482,7 @@
             }
           },
           {
-            "id": "cir-sus",
+            "id": "e-sus",
             "type": "custom",
             "position": {
               "x": 260,
@@ -1656,13 +3492,13 @@
               "label": "Circular",
               "type": "Circular",
               "params": {
-                "n_objects": 24,
-                "radius": 4.0
+                "radius": 4.0,
+                "n_objects": 24
               }
             }
           },
           {
-            "id": "fr-sus",
+            "id": "m460-sus",
             "type": "custom",
             "position": {
               "x": 460,
@@ -1680,7 +3516,7 @@
             "id": "out-sus",
             "type": "custom",
             "position": {
-              "x": 640,
+              "x": 660,
               "y": 110
             },
             "data": {
@@ -1692,29 +3528,29 @@
         ],
         "edges": [
           {
-            "id": "o-sus-cir-sus-objects",
+            "id": "o-sus-e-sus-objects",
             "source": "o-sus",
-            "target": "cir-sus",
+            "target": "e-sus",
             "sourceHandle": "objects",
             "targetHandle": "objects"
           },
           {
-            "id": "d-sus-cir-sus-duration",
+            "id": "d-sus-e-sus-duration",
             "source": "d-sus",
-            "target": "cir-sus",
+            "target": "e-sus",
             "sourceHandle": "duration",
             "targetHandle": "duration"
           },
           {
-            "id": "cir-sus-fr-sus-in",
-            "source": "cir-sus",
-            "target": "fr-sus",
+            "id": "e-sus-m460-sus-in",
+            "source": "e-sus",
+            "target": "m460-sus",
             "sourceHandle": "out",
             "targetHandle": "in"
           },
           {
-            "id": "fr-sus-out-sus-in",
-            "source": "fr-sus",
+            "id": "m460-sus-out-sus-in",
+            "source": "m460-sus",
             "target": "out-sus",
             "sourceHandle": "out",
             "targetHandle": "in"
@@ -2205,6 +4041,13 @@
     "slot-duo",
     "slot-tempete",
     "slot-calme",
+    "slot-pendule",
+    "slot-entracte",
+    "slot-helix",
+    "slot-rose",
+    "slot-lissajous",
+    "slot-essaim",
+    "slot-percussions",
     "slot-suspension",
     "slot-rideau"
   ],
@@ -2214,7 +4057,7 @@
     {
       "id": "cue-1",
       "name": "Pre-show",
-      "description": "Orbite lente d'accueil \u2014 les 24 objets en cercle",
+      "description": "Salle ouverte \u2014 orbite lente d'accueil",
       "schema_version": 1,
       "graph": {
         "nodes": [
@@ -2322,7 +4165,7 @@
       "moves": [
         {
           "id": "mv-orbit",
-          "name": "Orbit Ensemble",
+          "name": "Orbit",
           "graph_json": {
             "nodes": [
               {
@@ -2486,8 +4329,146 @@
     },
     {
       "id": "cue-2",
-      "name": "Entree musiciens",
-      "description": "Le cercle se resserre et monte (spirale)",
+      "name": "Houselights",
+      "description": "Moiti\u00e9 des feux \u2014 dip g\u00e9n\u00e9ral sur toutes les pistes",
+      "schema_version": 1,
+      "graph": {
+        "nodes": [],
+        "edges": []
+      },
+      "timestamp": 0,
+      "macros": null,
+      "track_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "fade_duration": 5.0,
+      "cue_number": "2",
+      "global_graph": null,
+      "signal_graph": null,
+      "active_move_ids": [],
+      "per_track_depths": [],
+      "manual_positions": {},
+      "spatial_macros": null,
+      "object_channels": {
+        "0": {
+          "gain": -6.0
+        },
+        "1": {
+          "gain": -6.0
+        },
+        "2": {
+          "gain": -6.0
+        },
+        "3": {
+          "gain": -6.0
+        },
+        "4": {
+          "gain": -6.0
+        },
+        "5": {
+          "gain": -6.0
+        },
+        "6": {
+          "gain": -6.0
+        },
+        "7": {
+          "gain": -6.0
+        },
+        "8": {
+          "gain": -6.0
+        },
+        "9": {
+          "gain": -6.0
+        },
+        "10": {
+          "gain": -6.0
+        },
+        "11": {
+          "gain": -6.0
+        },
+        "12": {
+          "gain": -6.0
+        },
+        "13": {
+          "gain": -6.0
+        },
+        "14": {
+          "gain": -6.0
+        },
+        "15": {
+          "gain": -6.0
+        },
+        "16": {
+          "gain": -6.0
+        },
+        "17": {
+          "gain": -6.0
+        },
+        "18": {
+          "gain": -6.0
+        },
+        "19": {
+          "gain": -6.0
+        },
+        "20": {
+          "gain": -6.0
+        },
+        "21": {
+          "gain": -6.0
+        },
+        "22": {
+          "gain": -6.0
+        },
+        "23": {
+          "gain": -6.0
+        }
+      },
+      "channel_modulations": null,
+      "osc_mappings": null,
+      "zones": null,
+      "moves": [],
+      "mode": "Tracking",
+      "scope": {
+        "moves": false,
+        "channels": true,
+        "positions": false,
+        "zones": false,
+        "global_graph": false,
+        "signal_graph": false,
+        "macros": false,
+        "osc_mappings": false
+      },
+      "pre_wait": 0.0,
+      "follow": null,
+      "timecode": 570.0
+    },
+    {
+      "id": "cue-3",
+      "name": "Ouverture",
+      "description": "Rideau \u2014 le cercle se resserre et monte",
       "schema_version": 1,
       "graph": {
         "nodes": [
@@ -2580,11 +4561,11 @@
       "macros": null,
       "track_indices": [],
       "fade_duration": 10.0,
-      "cue_number": "2",
+      "cue_number": "3",
       "global_graph": null,
       "signal_graph": null,
       "active_move_ids": [
-        "mv-ress"
+        "mv-montee"
       ],
       "per_track_depths": [],
       "manual_positions": {},
@@ -2595,7 +4576,7 @@
       "zones": null,
       "moves": [
         {
-          "id": "mv-ress",
+          "id": "mv-montee",
           "name": "Montee",
           "graph_json": {
             "nodes": [
@@ -2757,12 +4738,12 @@
       },
       "pre_wait": 0.0,
       "follow": null,
-      "timecode": 30.0
+      "timecode": 600.0
     },
     {
-      "id": "cue-3",
+      "id": "cue-4",
       "name": "Duo + halo",
-      "description": "4 solistes en ligne + halo circulaire de l'ensemble",
+      "description": "4 solistes en ligne + halo de l'ensemble",
       "schema_version": 1,
       "graph": {
         "nodes": [
@@ -2911,7 +4892,7 @@
       "macros": null,
       "track_indices": [],
       "fade_duration": 6.0,
-      "cue_number": "3",
+      "cue_number": "4",
       "global_graph": null,
       "signal_graph": null,
       "active_move_ids": [
@@ -3144,12 +5125,12 @@
       },
       "pre_wait": 0.0,
       "follow": null,
-      "timecode": 135.0
+      "timecode": 840.0
     },
     {
-      "id": "cue-4",
+      "id": "cue-5",
       "name": "Tempete",
-      "description": "Perlin chaotique + phase \u2014 suit auto en 20s vers le calme",
+      "description": "S\u00e9quence de panique \u2014 auto vers le calme en 20s",
       "schema_version": 1,
       "graph": {
         "nodes": [
@@ -3184,7 +5165,7 @@
             }
           },
           {
-            "id": "per-temp",
+            "id": "e-temp",
             "type": "custom",
             "position": {
               "x": 260,
@@ -3194,17 +5175,17 @@
               "label": "PerlinNoise",
               "type": "PerlinNoise",
               "params": {
-                "n_objects": 24,
                 "amplitude": 4.0,
-                "frequency": 0.8
+                "frequency": 0.8,
+                "n_objects": 24
               }
             }
           },
           {
-            "id": "ph-temp",
+            "id": "m460-temp",
             "type": "custom",
             "position": {
-              "x": 470,
+              "x": 460,
               "y": 110
             },
             "data": {
@@ -3231,29 +5212,29 @@
         ],
         "edges": [
           {
-            "id": "o-temp-per-temp-objects",
+            "id": "o-temp-e-temp-objects",
             "source": "o-temp",
-            "target": "per-temp",
+            "target": "e-temp",
             "sourceHandle": "objects",
             "targetHandle": "objects"
           },
           {
-            "id": "d-temp-per-temp-duration",
+            "id": "d-temp-e-temp-duration",
             "source": "d-temp",
-            "target": "per-temp",
+            "target": "e-temp",
             "sourceHandle": "duration",
             "targetHandle": "duration"
           },
           {
-            "id": "per-temp-ph-temp-in",
-            "source": "per-temp",
-            "target": "ph-temp",
+            "id": "e-temp-m460-temp-in",
+            "source": "e-temp",
+            "target": "m460-temp",
             "sourceHandle": "out",
             "targetHandle": "in"
           },
           {
-            "id": "ph-temp-out-temp-in",
-            "source": "ph-temp",
+            "id": "m460-temp-out-temp-in",
+            "source": "m460-temp",
             "target": "out-temp",
             "sourceHandle": "out",
             "targetHandle": "in"
@@ -3264,7 +5245,7 @@
       "macros": null,
       "track_indices": [],
       "fade_duration": 4.0,
-      "cue_number": "4",
+      "cue_number": "5",
       "global_graph": null,
       "signal_graph": null,
       "active_move_ids": [
@@ -3314,7 +5295,7 @@
                 }
               },
               {
-                "id": "per-temp",
+                "id": "e-temp",
                 "type": "custom",
                 "position": {
                   "x": 260,
@@ -3324,17 +5305,17 @@
                   "label": "PerlinNoise",
                   "type": "PerlinNoise",
                   "params": {
-                    "n_objects": 24,
                     "amplitude": 4.0,
-                    "frequency": 0.8
+                    "frequency": 0.8,
+                    "n_objects": 24
                   }
                 }
               },
               {
-                "id": "ph-temp",
+                "id": "m460-temp",
                 "type": "custom",
                 "position": {
-                  "x": 470,
+                  "x": 460,
                   "y": 110
                 },
                 "data": {
@@ -3361,29 +5342,29 @@
             ],
             "edges": [
               {
-                "id": "o-temp-per-temp-objects",
+                "id": "o-temp-e-temp-objects",
                 "source": "o-temp",
-                "target": "per-temp",
+                "target": "e-temp",
                 "sourceHandle": "objects",
                 "targetHandle": "objects"
               },
               {
-                "id": "d-temp-per-temp-duration",
+                "id": "d-temp-e-temp-duration",
                 "source": "d-temp",
-                "target": "per-temp",
+                "target": "e-temp",
                 "sourceHandle": "duration",
                 "targetHandle": "duration"
               },
               {
-                "id": "per-temp-ph-temp-in",
-                "source": "per-temp",
-                "target": "ph-temp",
+                "id": "e-temp-m460-temp-in",
+                "source": "e-temp",
+                "target": "m460-temp",
                 "sourceHandle": "out",
                 "targetHandle": "in"
               },
               {
-                "id": "ph-temp-out-temp-in",
-                "source": "ph-temp",
+                "id": "m460-temp-out-temp-in",
+                "source": "m460-temp",
                 "target": "out-temp",
                 "sourceHandle": "out",
                 "targetHandle": "in"
@@ -3463,12 +5444,12 @@
       },
       "pre_wait": 0.0,
       "follow": 20.0,
-      "timecode": 340.0
+      "timecode": 1170.0
     },
     {
-      "id": "cue-5",
+      "id": "cue-6",
       "name": "Calme",
-      "description": "Formation lente apr\u00e8s la temp\u00eate (auto via follow)",
+      "description": "Formation lente apr\u00e8s la temp\u00eate",
       "schema_version": 1,
       "graph": {
         "nodes": [
@@ -3560,11 +5541,11 @@
       "macros": null,
       "track_indices": [],
       "fade_duration": 12.0,
-      "cue_number": "5",
+      "cue_number": "6",
       "global_graph": null,
       "signal_graph": null,
       "active_move_ids": [
-        "mv-rec"
+        "mv-calme"
       ],
       "per_track_depths": [],
       "manual_positions": {},
@@ -3575,7 +5556,7 @@
       "zones": null,
       "moves": [
         {
-          "id": "mv-rec",
+          "id": "mv-calme",
           "name": "Calme",
           "graph_json": {
             "nodes": [
@@ -3739,67 +5720,1980 @@
       "timecode": null
     },
     {
-      "id": "cue-6",
-      "name": "Voix off",
-      "description": "Narration : -3dB sur les 4 premi\u00e8res tracks, tout le reste tourne",
+      "id": "cue-7",
+      "name": "Transition acte",
+      "description": "Fin de sc\u00e8ne \u2014 pendule r\u00e9gulier pendant l'entracte annonce",
       "schema_version": 1,
       "graph": {
-        "nodes": [],
-        "edges": []
+        "nodes": [
+          {
+            "id": "o-pend",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 60
+            },
+            "data": {
+              "label": "Objects",
+              "type": "Objects",
+              "params": {
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "d-pend",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 160
+            },
+            "data": {
+              "label": "Duration",
+              "type": "Duration",
+              "params": {
+                "duration": 18.0
+              }
+            }
+          },
+          {
+            "id": "e-pend",
+            "type": "custom",
+            "position": {
+              "x": 300,
+              "y": 110
+            },
+            "data": {
+              "label": "Pendulum",
+              "type": "Pendulum",
+              "params": {
+                "initial_angle": 0.4,
+                "length": 3.0,
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "out-pend",
+            "type": "custom",
+            "position": {
+              "x": 600,
+              "y": 110
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "o-pend-e-pend-objects",
+            "source": "o-pend",
+            "target": "e-pend",
+            "sourceHandle": "objects",
+            "targetHandle": "objects"
+          },
+          {
+            "id": "d-pend-e-pend-duration",
+            "source": "d-pend",
+            "target": "e-pend",
+            "sourceHandle": "duration",
+            "targetHandle": "duration"
+          },
+          {
+            "id": "e-pend-out-pend-in",
+            "source": "e-pend",
+            "target": "out-pend",
+            "sourceHandle": "out",
+            "targetHandle": "in"
+          }
+        ]
       },
       "timestamp": 0,
       "macros": null,
-      "track_indices": [
-        0,
-        1,
-        2,
-        3
-      ],
-      "fade_duration": 5.0,
-      "cue_number": "6",
+      "track_indices": [],
+      "fade_duration": 6.0,
+      "cue_number": "7",
       "global_graph": null,
       "signal_graph": null,
-      "active_move_ids": [],
+      "active_move_ids": [
+        "mv-pend"
+      ],
       "per_track_depths": [],
       "manual_positions": {},
       "spatial_macros": null,
-      "object_channels": {
-        "0": {
-          "gain": -3.0
-        },
-        "1": {
-          "gain": -3.0
-        },
-        "2": {
-          "gain": -3.0
-        },
-        "3": {
-          "gain": -3.0
-        }
-      },
+      "object_channels": null,
       "channel_modulations": null,
       "osc_mappings": null,
       "zones": null,
-      "moves": [],
-      "mode": "Tracking",
+      "moves": [
+        {
+          "id": "mv-pend",
+          "name": "Pendule",
+          "graph_json": {
+            "nodes": [
+              {
+                "id": "o-pend",
+                "type": "custom",
+                "position": {
+                  "x": 0,
+                  "y": 60
+                },
+                "data": {
+                  "label": "Objects",
+                  "type": "Objects",
+                  "params": {
+                    "n_objects": 24
+                  }
+                }
+              },
+              {
+                "id": "d-pend",
+                "type": "custom",
+                "position": {
+                  "x": 0,
+                  "y": 160
+                },
+                "data": {
+                  "label": "Duration",
+                  "type": "Duration",
+                  "params": {
+                    "duration": 18.0
+                  }
+                }
+              },
+              {
+                "id": "e-pend",
+                "type": "custom",
+                "position": {
+                  "x": 300,
+                  "y": 110
+                },
+                "data": {
+                  "label": "Pendulum",
+                  "type": "Pendulum",
+                  "params": {
+                    "initial_angle": 0.4,
+                    "length": 3.0,
+                    "n_objects": 24
+                  }
+                }
+              },
+              {
+                "id": "out-pend",
+                "type": "custom",
+                "position": {
+                  "x": 600,
+                  "y": 110
+                },
+                "data": {
+                  "label": "Output",
+                  "type": "Output",
+                  "params": {}
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "o-pend-e-pend-objects",
+                "source": "o-pend",
+                "target": "e-pend",
+                "sourceHandle": "objects",
+                "targetHandle": "objects"
+              },
+              {
+                "id": "d-pend-e-pend-duration",
+                "source": "d-pend",
+                "target": "e-pend",
+                "sourceHandle": "duration",
+                "targetHandle": "duration"
+              },
+              {
+                "id": "e-pend-out-pend-in",
+                "source": "e-pend",
+                "target": "out-pend",
+                "sourceHandle": "out",
+                "targetHandle": "in"
+              }
+            ]
+          },
+          "signal_graph": null,
+          "osc_ids": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24
+          ],
+          "track_indices": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23
+          ],
+          "is_preview": false,
+          "origin": null,
+          "duration": 4.0,
+          "loop_mode": "loop",
+          "direction": "forward"
+        }
+      ],
+      "mode": "Full",
       "scope": {
-        "moves": false,
+        "moves": true,
         "channels": true,
-        "positions": false,
-        "zones": false,
-        "global_graph": false,
-        "signal_graph": false,
-        "macros": false,
-        "osc_mappings": false
+        "positions": true,
+        "zones": true,
+        "global_graph": true,
+        "signal_graph": true,
+        "macros": true,
+        "osc_mappings": true
       },
       "pre_wait": 0.0,
       "follow": null,
-      "timecode": 540.0
+      "timecode": null
     },
     {
-      "id": "cue-7",
+      "id": "cue-8",
+      "name": "Entracte",
+      "description": "Ambiance d'entracte, large et lente",
+      "schema_version": 1,
+      "graph": {
+        "nodes": [
+          {
+            "id": "o-entr",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 60
+            },
+            "data": {
+              "label": "Objects",
+              "type": "Objects",
+              "params": {
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "d-entr",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 160
+            },
+            "data": {
+              "label": "Duration",
+              "type": "Duration",
+              "params": {
+                "duration": 60.0
+              }
+            }
+          },
+          {
+            "id": "e-entr",
+            "type": "custom",
+            "position": {
+              "x": 300,
+              "y": 110
+            },
+            "data": {
+              "label": "Circular",
+              "type": "Circular",
+              "params": {
+                "radius": 8.0,
+                "speed": 0.3,
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "out-entr",
+            "type": "custom",
+            "position": {
+              "x": 600,
+              "y": 110
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "o-entr-e-entr-objects",
+            "source": "o-entr",
+            "target": "e-entr",
+            "sourceHandle": "objects",
+            "targetHandle": "objects"
+          },
+          {
+            "id": "d-entr-e-entr-duration",
+            "source": "d-entr",
+            "target": "e-entr",
+            "sourceHandle": "duration",
+            "targetHandle": "duration"
+          },
+          {
+            "id": "e-entr-out-entr-in",
+            "source": "e-entr",
+            "target": "out-entr",
+            "sourceHandle": "out",
+            "targetHandle": "in"
+          }
+        ]
+      },
+      "timestamp": 0,
+      "macros": null,
+      "track_indices": [],
+      "fade_duration": 8.0,
+      "cue_number": "8",
+      "global_graph": null,
+      "signal_graph": null,
+      "active_move_ids": [
+        "mv-entr"
+      ],
+      "per_track_depths": [],
+      "manual_positions": {},
+      "spatial_macros": null,
+      "object_channels": null,
+      "channel_modulations": null,
+      "osc_mappings": null,
+      "zones": null,
+      "moves": [
+        {
+          "id": "mv-entr",
+          "name": "Entracte",
+          "graph_json": {
+            "nodes": [
+              {
+                "id": "o-entr",
+                "type": "custom",
+                "position": {
+                  "x": 0,
+                  "y": 60
+                },
+                "data": {
+                  "label": "Objects",
+                  "type": "Objects",
+                  "params": {
+                    "n_objects": 24
+                  }
+                }
+              },
+              {
+                "id": "d-entr",
+                "type": "custom",
+                "position": {
+                  "x": 0,
+                  "y": 160
+                },
+                "data": {
+                  "label": "Duration",
+                  "type": "Duration",
+                  "params": {
+                    "duration": 60.0
+                  }
+                }
+              },
+              {
+                "id": "e-entr",
+                "type": "custom",
+                "position": {
+                  "x": 300,
+                  "y": 110
+                },
+                "data": {
+                  "label": "Circular",
+                  "type": "Circular",
+                  "params": {
+                    "radius": 8.0,
+                    "speed": 0.3,
+                    "n_objects": 24
+                  }
+                }
+              },
+              {
+                "id": "out-entr",
+                "type": "custom",
+                "position": {
+                  "x": 600,
+                  "y": 110
+                },
+                "data": {
+                  "label": "Output",
+                  "type": "Output",
+                  "params": {}
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "o-entr-e-entr-objects",
+                "source": "o-entr",
+                "target": "e-entr",
+                "sourceHandle": "objects",
+                "targetHandle": "objects"
+              },
+              {
+                "id": "d-entr-e-entr-duration",
+                "source": "d-entr",
+                "target": "e-entr",
+                "sourceHandle": "duration",
+                "targetHandle": "duration"
+              },
+              {
+                "id": "e-entr-out-entr-in",
+                "source": "e-entr",
+                "target": "out-entr",
+                "sourceHandle": "out",
+                "targetHandle": "in"
+              }
+            ]
+          },
+          "signal_graph": null,
+          "osc_ids": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24
+          ],
+          "track_indices": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23
+          ],
+          "is_preview": false,
+          "origin": null,
+          "duration": 4.0,
+          "loop_mode": "loop",
+          "direction": "forward"
+        }
+      ],
+      "mode": "Full",
+      "scope": {
+        "moves": true,
+        "channels": true,
+        "positions": true,
+        "zones": true,
+        "global_graph": true,
+        "signal_graph": true,
+        "macros": true,
+        "osc_mappings": true
+      },
+      "pre_wait": 0.0,
+      "follow": null,
+      "timecode": 1800.0
+    },
+    {
+      "id": "cue-9",
+      "name": "Reprise acte 2",
+      "description": "Les artistes reviennent \u2014 h\u00e9lice ascendante",
+      "schema_version": 1,
+      "graph": {
+        "nodes": [
+          {
+            "id": "o-hel",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 60
+            },
+            "data": {
+              "label": "Objects",
+              "type": "Objects",
+              "params": {
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "d-hel",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 160
+            },
+            "data": {
+              "label": "Duration",
+              "type": "Duration",
+              "params": {
+                "duration": 30.0
+              }
+            }
+          },
+          {
+            "id": "e-hel",
+            "type": "custom",
+            "position": {
+              "x": 300,
+              "y": 110
+            },
+            "data": {
+              "label": "Helix",
+              "type": "Helix",
+              "params": {
+                "radius": 4.0,
+                "rise": 0.6,
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "out-hel",
+            "type": "custom",
+            "position": {
+              "x": 600,
+              "y": 110
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "o-hel-e-hel-objects",
+            "source": "o-hel",
+            "target": "e-hel",
+            "sourceHandle": "objects",
+            "targetHandle": "objects"
+          },
+          {
+            "id": "d-hel-e-hel-duration",
+            "source": "d-hel",
+            "target": "e-hel",
+            "sourceHandle": "duration",
+            "targetHandle": "duration"
+          },
+          {
+            "id": "e-hel-out-hel-in",
+            "source": "e-hel",
+            "target": "out-hel",
+            "sourceHandle": "out",
+            "targetHandle": "in"
+          }
+        ]
+      },
+      "timestamp": 0,
+      "macros": null,
+      "track_indices": [],
+      "fade_duration": 8.0,
+      "cue_number": "9",
+      "global_graph": null,
+      "signal_graph": null,
+      "active_move_ids": [
+        "mv-helix"
+      ],
+      "per_track_depths": [],
+      "manual_positions": {},
+      "spatial_macros": null,
+      "object_channels": null,
+      "channel_modulations": null,
+      "osc_mappings": null,
+      "zones": null,
+      "moves": [
+        {
+          "id": "mv-helix",
+          "name": "Helix",
+          "graph_json": {
+            "nodes": [
+              {
+                "id": "o-hel",
+                "type": "custom",
+                "position": {
+                  "x": 0,
+                  "y": 60
+                },
+                "data": {
+                  "label": "Objects",
+                  "type": "Objects",
+                  "params": {
+                    "n_objects": 24
+                  }
+                }
+              },
+              {
+                "id": "d-hel",
+                "type": "custom",
+                "position": {
+                  "x": 0,
+                  "y": 160
+                },
+                "data": {
+                  "label": "Duration",
+                  "type": "Duration",
+                  "params": {
+                    "duration": 30.0
+                  }
+                }
+              },
+              {
+                "id": "e-hel",
+                "type": "custom",
+                "position": {
+                  "x": 300,
+                  "y": 110
+                },
+                "data": {
+                  "label": "Helix",
+                  "type": "Helix",
+                  "params": {
+                    "radius": 4.0,
+                    "rise": 0.6,
+                    "n_objects": 24
+                  }
+                }
+              },
+              {
+                "id": "out-hel",
+                "type": "custom",
+                "position": {
+                  "x": 600,
+                  "y": 110
+                },
+                "data": {
+                  "label": "Output",
+                  "type": "Output",
+                  "params": {}
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "o-hel-e-hel-objects",
+                "source": "o-hel",
+                "target": "e-hel",
+                "sourceHandle": "objects",
+                "targetHandle": "objects"
+              },
+              {
+                "id": "d-hel-e-hel-duration",
+                "source": "d-hel",
+                "target": "e-hel",
+                "sourceHandle": "duration",
+                "targetHandle": "duration"
+              },
+              {
+                "id": "e-hel-out-hel-in",
+                "source": "e-hel",
+                "target": "out-hel",
+                "sourceHandle": "out",
+                "targetHandle": "in"
+              }
+            ]
+          },
+          "signal_graph": null,
+          "osc_ids": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24
+          ],
+          "track_indices": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23
+          ],
+          "is_preview": false,
+          "origin": null,
+          "duration": 4.0,
+          "loop_mode": "loop",
+          "direction": "forward"
+        }
+      ],
+      "mode": "Full",
+      "scope": {
+        "moves": true,
+        "channels": true,
+        "positions": true,
+        "zones": true,
+        "global_graph": true,
+        "signal_graph": true,
+        "macros": true,
+        "osc_mappings": true
+      },
+      "pre_wait": 0.0,
+      "follow": null,
+      "timecode": 2400.0
+    },
+    {
+      "id": "cue-10",
+      "name": "Vague",
+      "description": "Sc\u00e8ne onirique \u2014 rose curve",
+      "schema_version": 1,
+      "graph": {
+        "nodes": [
+          {
+            "id": "o-ros",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 60
+            },
+            "data": {
+              "label": "Objects",
+              "type": "Objects",
+              "params": {
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "d-ros",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 160
+            },
+            "data": {
+              "label": "Duration",
+              "type": "Duration",
+              "params": {
+                "duration": 25.0
+              }
+            }
+          },
+          {
+            "id": "e-ros",
+            "type": "custom",
+            "position": {
+              "x": 300,
+              "y": 110
+            },
+            "data": {
+              "label": "RoseCurve",
+              "type": "RoseCurve",
+              "params": {
+                "radius": 5.0,
+                "k": 3.0,
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "out-ros",
+            "type": "custom",
+            "position": {
+              "x": 600,
+              "y": 110
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "o-ros-e-ros-objects",
+            "source": "o-ros",
+            "target": "e-ros",
+            "sourceHandle": "objects",
+            "targetHandle": "objects"
+          },
+          {
+            "id": "d-ros-e-ros-duration",
+            "source": "d-ros",
+            "target": "e-ros",
+            "sourceHandle": "duration",
+            "targetHandle": "duration"
+          },
+          {
+            "id": "e-ros-out-ros-in",
+            "source": "e-ros",
+            "target": "out-ros",
+            "sourceHandle": "out",
+            "targetHandle": "in"
+          }
+        ]
+      },
+      "timestamp": 0,
+      "macros": null,
+      "track_indices": [],
+      "fade_duration": 6.0,
+      "cue_number": "10",
+      "global_graph": null,
+      "signal_graph": null,
+      "active_move_ids": [
+        "mv-rose"
+      ],
+      "per_track_depths": [],
+      "manual_positions": {},
+      "spatial_macros": null,
+      "object_channels": null,
+      "channel_modulations": null,
+      "osc_mappings": null,
+      "zones": null,
+      "moves": [
+        {
+          "id": "mv-rose",
+          "name": "Vague",
+          "graph_json": {
+            "nodes": [
+              {
+                "id": "o-ros",
+                "type": "custom",
+                "position": {
+                  "x": 0,
+                  "y": 60
+                },
+                "data": {
+                  "label": "Objects",
+                  "type": "Objects",
+                  "params": {
+                    "n_objects": 24
+                  }
+                }
+              },
+              {
+                "id": "d-ros",
+                "type": "custom",
+                "position": {
+                  "x": 0,
+                  "y": 160
+                },
+                "data": {
+                  "label": "Duration",
+                  "type": "Duration",
+                  "params": {
+                    "duration": 25.0
+                  }
+                }
+              },
+              {
+                "id": "e-ros",
+                "type": "custom",
+                "position": {
+                  "x": 300,
+                  "y": 110
+                },
+                "data": {
+                  "label": "RoseCurve",
+                  "type": "RoseCurve",
+                  "params": {
+                    "radius": 5.0,
+                    "k": 3.0,
+                    "n_objects": 24
+                  }
+                }
+              },
+              {
+                "id": "out-ros",
+                "type": "custom",
+                "position": {
+                  "x": 600,
+                  "y": 110
+                },
+                "data": {
+                  "label": "Output",
+                  "type": "Output",
+                  "params": {}
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "o-ros-e-ros-objects",
+                "source": "o-ros",
+                "target": "e-ros",
+                "sourceHandle": "objects",
+                "targetHandle": "objects"
+              },
+              {
+                "id": "d-ros-e-ros-duration",
+                "source": "d-ros",
+                "target": "e-ros",
+                "sourceHandle": "duration",
+                "targetHandle": "duration"
+              },
+              {
+                "id": "e-ros-out-ros-in",
+                "source": "e-ros",
+                "target": "out-ros",
+                "sourceHandle": "out",
+                "targetHandle": "in"
+              }
+            ]
+          },
+          "signal_graph": null,
+          "osc_ids": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24
+          ],
+          "track_indices": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23
+          ],
+          "is_preview": false,
+          "origin": null,
+          "duration": 4.0,
+          "loop_mode": "loop",
+          "direction": "forward"
+        }
+      ],
+      "mode": "Full",
+      "scope": {
+        "moves": true,
+        "channels": true,
+        "positions": true,
+        "zones": true,
+        "global_graph": true,
+        "signal_graph": true,
+        "macros": true,
+        "osc_mappings": true
+      },
+      "pre_wait": 0.0,
+      "follow": null,
+      "timecode": 2700.0
+    },
+    {
+      "id": "cue-11",
+      "name": "Lissajous",
+      "description": "Duo de sc\u00e8ne 2 \u2014 entrelacs",
+      "schema_version": 1,
+      "graph": {
+        "nodes": [
+          {
+            "id": "o-lis",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 60
+            },
+            "data": {
+              "label": "Objects",
+              "type": "Objects",
+              "params": {
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "d-lis",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 160
+            },
+            "data": {
+              "label": "Duration",
+              "type": "Duration",
+              "params": {
+                "duration": 20.0
+              }
+            }
+          },
+          {
+            "id": "e-lis",
+            "type": "custom",
+            "position": {
+              "x": 300,
+              "y": 110
+            },
+            "data": {
+              "label": "Lissajous",
+              "type": "Lissajous",
+              "params": {
+                "a": 3.0,
+                "b": 4.0,
+                "delta": 1.57,
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "out-lis",
+            "type": "custom",
+            "position": {
+              "x": 600,
+              "y": 110
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "o-lis-e-lis-objects",
+            "source": "o-lis",
+            "target": "e-lis",
+            "sourceHandle": "objects",
+            "targetHandle": "objects"
+          },
+          {
+            "id": "d-lis-e-lis-duration",
+            "source": "d-lis",
+            "target": "e-lis",
+            "sourceHandle": "duration",
+            "targetHandle": "duration"
+          },
+          {
+            "id": "e-lis-out-lis-in",
+            "source": "e-lis",
+            "target": "out-lis",
+            "sourceHandle": "out",
+            "targetHandle": "in"
+          }
+        ]
+      },
+      "timestamp": 0,
+      "macros": null,
+      "track_indices": [],
+      "fade_duration": 6.0,
+      "cue_number": "11",
+      "global_graph": null,
+      "signal_graph": null,
+      "active_move_ids": [
+        "mv-lis"
+      ],
+      "per_track_depths": [],
+      "manual_positions": {},
+      "spatial_macros": null,
+      "object_channels": null,
+      "channel_modulations": null,
+      "osc_mappings": null,
+      "zones": null,
+      "moves": [
+        {
+          "id": "mv-lis",
+          "name": "Lissajous",
+          "graph_json": {
+            "nodes": [
+              {
+                "id": "o-lis",
+                "type": "custom",
+                "position": {
+                  "x": 0,
+                  "y": 60
+                },
+                "data": {
+                  "label": "Objects",
+                  "type": "Objects",
+                  "params": {
+                    "n_objects": 24
+                  }
+                }
+              },
+              {
+                "id": "d-lis",
+                "type": "custom",
+                "position": {
+                  "x": 0,
+                  "y": 160
+                },
+                "data": {
+                  "label": "Duration",
+                  "type": "Duration",
+                  "params": {
+                    "duration": 20.0
+                  }
+                }
+              },
+              {
+                "id": "e-lis",
+                "type": "custom",
+                "position": {
+                  "x": 300,
+                  "y": 110
+                },
+                "data": {
+                  "label": "Lissajous",
+                  "type": "Lissajous",
+                  "params": {
+                    "a": 3.0,
+                    "b": 4.0,
+                    "delta": 1.57,
+                    "n_objects": 24
+                  }
+                }
+              },
+              {
+                "id": "out-lis",
+                "type": "custom",
+                "position": {
+                  "x": 600,
+                  "y": 110
+                },
+                "data": {
+                  "label": "Output",
+                  "type": "Output",
+                  "params": {}
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "o-lis-e-lis-objects",
+                "source": "o-lis",
+                "target": "e-lis",
+                "sourceHandle": "objects",
+                "targetHandle": "objects"
+              },
+              {
+                "id": "d-lis-e-lis-duration",
+                "source": "d-lis",
+                "target": "e-lis",
+                "sourceHandle": "duration",
+                "targetHandle": "duration"
+              },
+              {
+                "id": "e-lis-out-lis-in",
+                "source": "e-lis",
+                "target": "out-lis",
+                "sourceHandle": "out",
+                "targetHandle": "in"
+              }
+            ]
+          },
+          "signal_graph": null,
+          "osc_ids": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24
+          ],
+          "track_indices": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23
+          ],
+          "is_preview": false,
+          "origin": null,
+          "duration": 4.0,
+          "loop_mode": "loop",
+          "direction": "forward"
+        }
+      ],
+      "mode": "Full",
+      "scope": {
+        "moves": true,
+        "channels": true,
+        "positions": true,
+        "zones": true,
+        "global_graph": true,
+        "signal_graph": true,
+        "macros": true,
+        "osc_mappings": true
+      },
+      "pre_wait": 0.0,
+      "follow": null,
+      "timecode": 3000.0
+    },
+    {
+      "id": "cue-12",
+      "name": "Essaim",
+      "description": "Chaos organique \u2014 boids",
+      "schema_version": 1,
+      "graph": {
+        "nodes": [
+          {
+            "id": "o-swa",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 60
+            },
+            "data": {
+              "label": "Objects",
+              "type": "Objects",
+              "params": {
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "d-swa",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 160
+            },
+            "data": {
+              "label": "Duration",
+              "type": "Duration",
+              "params": {
+                "duration": 15.0
+              }
+            }
+          },
+          {
+            "id": "e-swa",
+            "type": "custom",
+            "position": {
+              "x": 300,
+              "y": 110
+            },
+            "data": {
+              "label": "Swarm",
+              "type": "Swarm",
+              "params": {
+                "speed": 1.2,
+                "cohesion": 0.5,
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "out-swa",
+            "type": "custom",
+            "position": {
+              "x": 600,
+              "y": 110
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "o-swa-e-swa-objects",
+            "source": "o-swa",
+            "target": "e-swa",
+            "sourceHandle": "objects",
+            "targetHandle": "objects"
+          },
+          {
+            "id": "d-swa-e-swa-duration",
+            "source": "d-swa",
+            "target": "e-swa",
+            "sourceHandle": "duration",
+            "targetHandle": "duration"
+          },
+          {
+            "id": "e-swa-out-swa-in",
+            "source": "e-swa",
+            "target": "out-swa",
+            "sourceHandle": "out",
+            "targetHandle": "in"
+          }
+        ]
+      },
+      "timestamp": 0,
+      "macros": null,
+      "track_indices": [],
+      "fade_duration": 4.0,
+      "cue_number": "12",
+      "global_graph": null,
+      "signal_graph": null,
+      "active_move_ids": [
+        "mv-swarm"
+      ],
+      "per_track_depths": [],
+      "manual_positions": {},
+      "spatial_macros": null,
+      "object_channels": null,
+      "channel_modulations": null,
+      "osc_mappings": null,
+      "zones": null,
+      "moves": [
+        {
+          "id": "mv-swarm",
+          "name": "Essaim",
+          "graph_json": {
+            "nodes": [
+              {
+                "id": "o-swa",
+                "type": "custom",
+                "position": {
+                  "x": 0,
+                  "y": 60
+                },
+                "data": {
+                  "label": "Objects",
+                  "type": "Objects",
+                  "params": {
+                    "n_objects": 24
+                  }
+                }
+              },
+              {
+                "id": "d-swa",
+                "type": "custom",
+                "position": {
+                  "x": 0,
+                  "y": 160
+                },
+                "data": {
+                  "label": "Duration",
+                  "type": "Duration",
+                  "params": {
+                    "duration": 15.0
+                  }
+                }
+              },
+              {
+                "id": "e-swa",
+                "type": "custom",
+                "position": {
+                  "x": 300,
+                  "y": 110
+                },
+                "data": {
+                  "label": "Swarm",
+                  "type": "Swarm",
+                  "params": {
+                    "speed": 1.2,
+                    "cohesion": 0.5,
+                    "n_objects": 24
+                  }
+                }
+              },
+              {
+                "id": "out-swa",
+                "type": "custom",
+                "position": {
+                  "x": 600,
+                  "y": 110
+                },
+                "data": {
+                  "label": "Output",
+                  "type": "Output",
+                  "params": {}
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "o-swa-e-swa-objects",
+                "source": "o-swa",
+                "target": "e-swa",
+                "sourceHandle": "objects",
+                "targetHandle": "objects"
+              },
+              {
+                "id": "d-swa-e-swa-duration",
+                "source": "d-swa",
+                "target": "e-swa",
+                "sourceHandle": "duration",
+                "targetHandle": "duration"
+              },
+              {
+                "id": "e-swa-out-swa-in",
+                "source": "e-swa",
+                "target": "out-swa",
+                "sourceHandle": "out",
+                "targetHandle": "in"
+              }
+            ]
+          },
+          "signal_graph": null,
+          "osc_ids": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24
+          ],
+          "track_indices": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23
+          ],
+          "is_preview": false,
+          "origin": null,
+          "duration": 4.0,
+          "loop_mode": "loop",
+          "direction": "forward"
+        }
+      ],
+      "mode": "Full",
+      "scope": {
+        "moves": true,
+        "channels": true,
+        "positions": true,
+        "zones": true,
+        "global_graph": true,
+        "signal_graph": true,
+        "macros": true,
+        "osc_mappings": true
+      },
+      "pre_wait": 0.0,
+      "follow": null,
+      "timecode": 3300.0
+    },
+    {
+      "id": "cue-13",
+      "name": "Percussions",
+      "description": "Bounce rythm\u00e9",
+      "schema_version": 1,
+      "graph": {
+        "nodes": [
+          {
+            "id": "o-bou",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 60
+            },
+            "data": {
+              "label": "Objects",
+              "type": "Objects",
+              "params": {
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "d-bou",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 220
+            },
+            "data": {
+              "label": "Duration",
+              "type": "Duration",
+              "params": {
+                "duration": 8.0
+              }
+            }
+          },
+          {
+            "id": "e-bou",
+            "type": "custom",
+            "position": {
+              "x": 260,
+              "y": 110
+            },
+            "data": {
+              "label": "Bouncing",
+              "type": "Bouncing",
+              "params": {
+                "height": 3.0,
+                "damping": 0.7,
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "m460-bou",
+            "type": "custom",
+            "position": {
+              "x": 460,
+              "y": 110
+            },
+            "data": {
+              "label": "PhaseShift",
+              "type": "PhaseShift",
+              "params": {
+                "shift": 0.1
+              }
+            }
+          },
+          {
+            "id": "out-bou",
+            "type": "custom",
+            "position": {
+              "x": 660,
+              "y": 110
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "o-bou-e-bou-objects",
+            "source": "o-bou",
+            "target": "e-bou",
+            "sourceHandle": "objects",
+            "targetHandle": "objects"
+          },
+          {
+            "id": "d-bou-e-bou-duration",
+            "source": "d-bou",
+            "target": "e-bou",
+            "sourceHandle": "duration",
+            "targetHandle": "duration"
+          },
+          {
+            "id": "e-bou-m460-bou-in",
+            "source": "e-bou",
+            "target": "m460-bou",
+            "sourceHandle": "out",
+            "targetHandle": "in"
+          },
+          {
+            "id": "m460-bou-out-bou-in",
+            "source": "m460-bou",
+            "target": "out-bou",
+            "sourceHandle": "out",
+            "targetHandle": "in"
+          }
+        ]
+      },
+      "timestamp": 0,
+      "macros": null,
+      "track_indices": [],
+      "fade_duration": 2.0,
+      "cue_number": "13",
+      "global_graph": null,
+      "signal_graph": null,
+      "active_move_ids": [
+        "mv-bounce"
+      ],
+      "per_track_depths": [],
+      "manual_positions": {},
+      "spatial_macros": null,
+      "object_channels": null,
+      "channel_modulations": null,
+      "osc_mappings": null,
+      "zones": null,
+      "moves": [
+        {
+          "id": "mv-bounce",
+          "name": "Percussions",
+          "graph_json": {
+            "nodes": [
+              {
+                "id": "o-bou",
+                "type": "custom",
+                "position": {
+                  "x": 0,
+                  "y": 60
+                },
+                "data": {
+                  "label": "Objects",
+                  "type": "Objects",
+                  "params": {
+                    "n_objects": 24
+                  }
+                }
+              },
+              {
+                "id": "d-bou",
+                "type": "custom",
+                "position": {
+                  "x": 0,
+                  "y": 220
+                },
+                "data": {
+                  "label": "Duration",
+                  "type": "Duration",
+                  "params": {
+                    "duration": 8.0
+                  }
+                }
+              },
+              {
+                "id": "e-bou",
+                "type": "custom",
+                "position": {
+                  "x": 260,
+                  "y": 110
+                },
+                "data": {
+                  "label": "Bouncing",
+                  "type": "Bouncing",
+                  "params": {
+                    "height": 3.0,
+                    "damping": 0.7,
+                    "n_objects": 24
+                  }
+                }
+              },
+              {
+                "id": "m460-bou",
+                "type": "custom",
+                "position": {
+                  "x": 460,
+                  "y": 110
+                },
+                "data": {
+                  "label": "PhaseShift",
+                  "type": "PhaseShift",
+                  "params": {
+                    "shift": 0.1
+                  }
+                }
+              },
+              {
+                "id": "out-bou",
+                "type": "custom",
+                "position": {
+                  "x": 660,
+                  "y": 110
+                },
+                "data": {
+                  "label": "Output",
+                  "type": "Output",
+                  "params": {}
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "o-bou-e-bou-objects",
+                "source": "o-bou",
+                "target": "e-bou",
+                "sourceHandle": "objects",
+                "targetHandle": "objects"
+              },
+              {
+                "id": "d-bou-e-bou-duration",
+                "source": "d-bou",
+                "target": "e-bou",
+                "sourceHandle": "duration",
+                "targetHandle": "duration"
+              },
+              {
+                "id": "e-bou-m460-bou-in",
+                "source": "e-bou",
+                "target": "m460-bou",
+                "sourceHandle": "out",
+                "targetHandle": "in"
+              },
+              {
+                "id": "m460-bou-out-bou-in",
+                "source": "m460-bou",
+                "target": "out-bou",
+                "sourceHandle": "out",
+                "targetHandle": "in"
+              }
+            ]
+          },
+          "signal_graph": null,
+          "osc_ids": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24
+          ],
+          "track_indices": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23
+          ],
+          "is_preview": false,
+          "origin": null,
+          "duration": 4.0,
+          "loop_mode": "loop",
+          "direction": "forward"
+        }
+      ],
+      "mode": "Full",
+      "scope": {
+        "moves": true,
+        "channels": true,
+        "positions": true,
+        "zones": true,
+        "global_graph": true,
+        "signal_graph": true,
+        "macros": true,
+        "osc_mappings": true
+      },
+      "pre_wait": 0.0,
+      "follow": null,
+      "timecode": 3600.0
+    },
+    {
+      "id": "cue-14",
       "name": "Suspension",
-      "description": "Freeze pilot\u00e9 par LFO \u2014 geler/d\u00e9geler en rythme",
+      "description": "Freeze/d\u00e9freeze en rythme (LFO)",
       "schema_version": 1,
       "graph": {
         "nodes": [
@@ -3823,7 +7717,7 @@
             "type": "custom",
             "position": {
               "x": 0,
-              "y": 200
+              "y": 220
             },
             "data": {
               "label": "Duration",
@@ -3834,7 +7728,7 @@
             }
           },
           {
-            "id": "cir-sus",
+            "id": "e-sus",
             "type": "custom",
             "position": {
               "x": 260,
@@ -3844,13 +7738,13 @@
               "label": "Circular",
               "type": "Circular",
               "params": {
-                "n_objects": 24,
-                "radius": 4.0
+                "radius": 4.0,
+                "n_objects": 24
               }
             }
           },
           {
-            "id": "fr-sus",
+            "id": "m460-sus",
             "type": "custom",
             "position": {
               "x": 460,
@@ -3868,7 +7762,7 @@
             "id": "out-sus",
             "type": "custom",
             "position": {
-              "x": 640,
+              "x": 660,
               "y": 110
             },
             "data": {
@@ -3880,29 +7774,29 @@
         ],
         "edges": [
           {
-            "id": "o-sus-cir-sus-objects",
+            "id": "o-sus-e-sus-objects",
             "source": "o-sus",
-            "target": "cir-sus",
+            "target": "e-sus",
             "sourceHandle": "objects",
             "targetHandle": "objects"
           },
           {
-            "id": "d-sus-cir-sus-duration",
+            "id": "d-sus-e-sus-duration",
             "source": "d-sus",
-            "target": "cir-sus",
+            "target": "e-sus",
             "sourceHandle": "duration",
             "targetHandle": "duration"
           },
           {
-            "id": "cir-sus-fr-sus-in",
-            "source": "cir-sus",
-            "target": "fr-sus",
+            "id": "e-sus-m460-sus-in",
+            "source": "e-sus",
+            "target": "m460-sus",
             "sourceHandle": "out",
             "targetHandle": "in"
           },
           {
-            "id": "fr-sus-out-sus-in",
-            "source": "fr-sus",
+            "id": "m460-sus-out-sus-in",
+            "source": "m460-sus",
             "target": "out-sus",
             "sourceHandle": "out",
             "targetHandle": "in"
@@ -3913,7 +7807,7 @@
       "macros": null,
       "track_indices": [],
       "fade_duration": 2.0,
-      "cue_number": "7",
+      "cue_number": "14",
       "global_graph": null,
       "signal_graph": null,
       "active_move_ids": [
@@ -3952,7 +7846,7 @@
                 "type": "custom",
                 "position": {
                   "x": 0,
-                  "y": 200
+                  "y": 220
                 },
                 "data": {
                   "label": "Duration",
@@ -3963,7 +7857,7 @@
                 }
               },
               {
-                "id": "cir-sus",
+                "id": "e-sus",
                 "type": "custom",
                 "position": {
                   "x": 260,
@@ -3973,13 +7867,13 @@
                   "label": "Circular",
                   "type": "Circular",
                   "params": {
-                    "n_objects": 24,
-                    "radius": 4.0
+                    "radius": 4.0,
+                    "n_objects": 24
                   }
                 }
               },
               {
-                "id": "fr-sus",
+                "id": "m460-sus",
                 "type": "custom",
                 "position": {
                   "x": 460,
@@ -3997,7 +7891,7 @@
                 "id": "out-sus",
                 "type": "custom",
                 "position": {
-                  "x": 640,
+                  "x": 660,
                   "y": 110
                 },
                 "data": {
@@ -4009,29 +7903,29 @@
             ],
             "edges": [
               {
-                "id": "o-sus-cir-sus-objects",
+                "id": "o-sus-e-sus-objects",
                 "source": "o-sus",
-                "target": "cir-sus",
+                "target": "e-sus",
                 "sourceHandle": "objects",
                 "targetHandle": "objects"
               },
               {
-                "id": "d-sus-cir-sus-duration",
+                "id": "d-sus-e-sus-duration",
                 "source": "d-sus",
-                "target": "cir-sus",
+                "target": "e-sus",
                 "sourceHandle": "duration",
                 "targetHandle": "duration"
               },
               {
-                "id": "cir-sus-fr-sus-in",
-                "source": "cir-sus",
-                "target": "fr-sus",
+                "id": "e-sus-m460-sus-in",
+                "source": "e-sus",
+                "target": "m460-sus",
                 "sourceHandle": "out",
                 "targetHandle": "in"
               },
               {
-                "id": "fr-sus-out-sus-in",
-                "source": "fr-sus",
+                "id": "m460-sus-out-sus-in",
+                "source": "m460-sus",
                 "target": "out-sus",
                 "sourceHandle": "out",
                 "targetHandle": "in"
@@ -4155,12 +8049,287 @@
       },
       "pre_wait": 0.0,
       "follow": null,
-      "timecode": 690.0
+      "timecode": 3840.0
     },
     {
-      "id": "cue-8",
+      "id": "cue-15",
+      "name": "Montee finale",
+      "description": "Derni\u00e8re acc\u00e9l\u00e9ration avant le rideau",
+      "schema_version": 1,
+      "graph": {
+        "nodes": [
+          {
+            "id": "o-ress",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 60
+            },
+            "data": {
+              "label": "Objects",
+              "type": "Objects",
+              "params": {
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "d-ress",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 160
+            },
+            "data": {
+              "label": "Duration",
+              "type": "Duration",
+              "params": {
+                "duration": 20.0
+              }
+            }
+          },
+          {
+            "id": "e-ress",
+            "type": "custom",
+            "position": {
+              "x": 300,
+              "y": 110
+            },
+            "data": {
+              "label": "Spiral",
+              "type": "Spiral",
+              "params": {
+                "radius": 5.0,
+                "rise": 1.5,
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "out-ress",
+            "type": "custom",
+            "position": {
+              "x": 600,
+              "y": 110
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "o-ress-e-ress-objects",
+            "source": "o-ress",
+            "target": "e-ress",
+            "sourceHandle": "objects",
+            "targetHandle": "objects"
+          },
+          {
+            "id": "d-ress-e-ress-duration",
+            "source": "d-ress",
+            "target": "e-ress",
+            "sourceHandle": "duration",
+            "targetHandle": "duration"
+          },
+          {
+            "id": "e-ress-out-ress-in",
+            "source": "e-ress",
+            "target": "out-ress",
+            "sourceHandle": "out",
+            "targetHandle": "in"
+          }
+        ]
+      },
+      "timestamp": 0,
+      "macros": null,
+      "track_indices": [],
+      "fade_duration": 6.0,
+      "cue_number": "15",
+      "global_graph": null,
+      "signal_graph": null,
+      "active_move_ids": [
+        "mv-mfin"
+      ],
+      "per_track_depths": [],
+      "manual_positions": {},
+      "spatial_macros": null,
+      "object_channels": null,
+      "channel_modulations": null,
+      "osc_mappings": null,
+      "zones": null,
+      "moves": [
+        {
+          "id": "mv-mfin",
+          "name": "Montee finale",
+          "graph_json": {
+            "nodes": [
+              {
+                "id": "o-ress",
+                "type": "custom",
+                "position": {
+                  "x": 0,
+                  "y": 60
+                },
+                "data": {
+                  "label": "Objects",
+                  "type": "Objects",
+                  "params": {
+                    "n_objects": 24
+                  }
+                }
+              },
+              {
+                "id": "d-ress",
+                "type": "custom",
+                "position": {
+                  "x": 0,
+                  "y": 160
+                },
+                "data": {
+                  "label": "Duration",
+                  "type": "Duration",
+                  "params": {
+                    "duration": 20.0
+                  }
+                }
+              },
+              {
+                "id": "e-ress",
+                "type": "custom",
+                "position": {
+                  "x": 300,
+                  "y": 110
+                },
+                "data": {
+                  "label": "Spiral",
+                  "type": "Spiral",
+                  "params": {
+                    "radius": 5.0,
+                    "rise": 1.5,
+                    "n_objects": 24
+                  }
+                }
+              },
+              {
+                "id": "out-ress",
+                "type": "custom",
+                "position": {
+                  "x": 600,
+                  "y": 110
+                },
+                "data": {
+                  "label": "Output",
+                  "type": "Output",
+                  "params": {}
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "o-ress-e-ress-objects",
+                "source": "o-ress",
+                "target": "e-ress",
+                "sourceHandle": "objects",
+                "targetHandle": "objects"
+              },
+              {
+                "id": "d-ress-e-ress-duration",
+                "source": "d-ress",
+                "target": "e-ress",
+                "sourceHandle": "duration",
+                "targetHandle": "duration"
+              },
+              {
+                "id": "e-ress-out-ress-in",
+                "source": "e-ress",
+                "target": "out-ress",
+                "sourceHandle": "out",
+                "targetHandle": "in"
+              }
+            ]
+          },
+          "signal_graph": null,
+          "osc_ids": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24
+          ],
+          "track_indices": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23
+          ],
+          "is_preview": false,
+          "origin": null,
+          "duration": 4.0,
+          "loop_mode": "loop",
+          "direction": "forward"
+        }
+      ],
+      "mode": "Full",
+      "scope": {
+        "moves": true,
+        "channels": true,
+        "positions": true,
+        "zones": true,
+        "global_graph": true,
+        "signal_graph": true,
+        "macros": true,
+        "osc_mappings": true
+      },
+      "pre_wait": 0.0,
+      "follow": null,
+      "timecode": 4200.0
+    },
+    {
+      "id": "cue-16",
       "name": "Rideau",
-      "description": "Converge vers le centre + pivot barycentre global",
+      "description": "Convergence au centre + pivot barycentre global",
       "schema_version": 1,
       "graph": {
         "nodes": [
@@ -4257,7 +8426,7 @@
       "macros": null,
       "track_indices": [],
       "fade_duration": 15.0,
-      "cue_number": "8",
+      "cue_number": "16",
       "global_graph": {
         "nodes": [
           {
@@ -4544,7 +8713,691 @@
       },
       "pre_wait": 0.0,
       "follow": null,
-      "timecode": 1200.0
+      "timecode": 4560.0
+    },
+    {
+      "id": "cue-17",
+      "name": "Rappel",
+      "description": "Retour d'ambiance orbit \u2014 sur appel du plateau",
+      "schema_version": 1,
+      "graph": {
+        "nodes": [
+          {
+            "id": "o-orbit",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 60
+            },
+            "data": {
+              "label": "Objects",
+              "type": "Objects",
+              "params": {
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "d-orbit",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 160
+            },
+            "data": {
+              "label": "Duration",
+              "type": "Duration",
+              "params": {
+                "duration": 30.0
+              }
+            }
+          },
+          {
+            "id": "e-orbit",
+            "type": "custom",
+            "position": {
+              "x": 300,
+              "y": 110
+            },
+            "data": {
+              "label": "Circular",
+              "type": "Circular",
+              "params": {
+                "radius": 6.0,
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "out-orbit",
+            "type": "custom",
+            "position": {
+              "x": 600,
+              "y": 110
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "o-orbit-e-orbit-objects",
+            "source": "o-orbit",
+            "target": "e-orbit",
+            "sourceHandle": "objects",
+            "targetHandle": "objects"
+          },
+          {
+            "id": "d-orbit-e-orbit-duration",
+            "source": "d-orbit",
+            "target": "e-orbit",
+            "sourceHandle": "duration",
+            "targetHandle": "duration"
+          },
+          {
+            "id": "e-orbit-out-orbit-in",
+            "source": "e-orbit",
+            "target": "out-orbit",
+            "sourceHandle": "out",
+            "targetHandle": "in"
+          }
+        ]
+      },
+      "timestamp": 0,
+      "macros": null,
+      "track_indices": [],
+      "fade_duration": 8.0,
+      "cue_number": "17",
+      "global_graph": null,
+      "signal_graph": null,
+      "active_move_ids": [
+        "mv-rappel"
+      ],
+      "per_track_depths": [],
+      "manual_positions": {},
+      "spatial_macros": null,
+      "object_channels": null,
+      "channel_modulations": null,
+      "osc_mappings": null,
+      "zones": null,
+      "moves": [
+        {
+          "id": "mv-rappel",
+          "name": "Rappel",
+          "graph_json": {
+            "nodes": [
+              {
+                "id": "o-orbit",
+                "type": "custom",
+                "position": {
+                  "x": 0,
+                  "y": 60
+                },
+                "data": {
+                  "label": "Objects",
+                  "type": "Objects",
+                  "params": {
+                    "n_objects": 24
+                  }
+                }
+              },
+              {
+                "id": "d-orbit",
+                "type": "custom",
+                "position": {
+                  "x": 0,
+                  "y": 160
+                },
+                "data": {
+                  "label": "Duration",
+                  "type": "Duration",
+                  "params": {
+                    "duration": 30.0
+                  }
+                }
+              },
+              {
+                "id": "e-orbit",
+                "type": "custom",
+                "position": {
+                  "x": 300,
+                  "y": 110
+                },
+                "data": {
+                  "label": "Circular",
+                  "type": "Circular",
+                  "params": {
+                    "radius": 6.0,
+                    "n_objects": 24
+                  }
+                }
+              },
+              {
+                "id": "out-orbit",
+                "type": "custom",
+                "position": {
+                  "x": 600,
+                  "y": 110
+                },
+                "data": {
+                  "label": "Output",
+                  "type": "Output",
+                  "params": {}
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "o-orbit-e-orbit-objects",
+                "source": "o-orbit",
+                "target": "e-orbit",
+                "sourceHandle": "objects",
+                "targetHandle": "objects"
+              },
+              {
+                "id": "d-orbit-e-orbit-duration",
+                "source": "d-orbit",
+                "target": "e-orbit",
+                "sourceHandle": "duration",
+                "targetHandle": "duration"
+              },
+              {
+                "id": "e-orbit-out-orbit-in",
+                "source": "e-orbit",
+                "target": "out-orbit",
+                "sourceHandle": "out",
+                "targetHandle": "in"
+              }
+            ]
+          },
+          "signal_graph": null,
+          "osc_ids": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24
+          ],
+          "track_indices": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23
+          ],
+          "is_preview": false,
+          "origin": null,
+          "duration": 4.0,
+          "loop_mode": "loop",
+          "direction": "forward"
+        }
+      ],
+      "mode": "Full",
+      "scope": {
+        "moves": true,
+        "channels": true,
+        "positions": true,
+        "zones": true,
+        "global_graph": true,
+        "signal_graph": true,
+        "macros": true,
+        "osc_mappings": true
+      },
+      "pre_wait": 0.0,
+      "follow": null,
+      "timecode": null
+    },
+    {
+      "id": "cue-18",
+      "name": "Post-show",
+      "description": "Sortie de salle \u2014 dip l\u00e9ger",
+      "schema_version": 1,
+      "graph": {
+        "nodes": [],
+        "edges": []
+      },
+      "timestamp": 0,
+      "macros": null,
+      "track_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "fade_duration": 6.0,
+      "cue_number": "18",
+      "global_graph": null,
+      "signal_graph": null,
+      "active_move_ids": [],
+      "per_track_depths": [],
+      "manual_positions": {},
+      "spatial_macros": null,
+      "object_channels": {
+        "0": {
+          "gain": -6.0
+        },
+        "1": {
+          "gain": -6.0
+        },
+        "2": {
+          "gain": -6.0
+        },
+        "3": {
+          "gain": -6.0
+        },
+        "4": {
+          "gain": -6.0
+        },
+        "5": {
+          "gain": -6.0
+        },
+        "6": {
+          "gain": -6.0
+        },
+        "7": {
+          "gain": -6.0
+        },
+        "8": {
+          "gain": -6.0
+        },
+        "9": {
+          "gain": -6.0
+        },
+        "10": {
+          "gain": -6.0
+        },
+        "11": {
+          "gain": -6.0
+        },
+        "12": {
+          "gain": -6.0
+        },
+        "13": {
+          "gain": -6.0
+        },
+        "14": {
+          "gain": -6.0
+        },
+        "15": {
+          "gain": -6.0
+        },
+        "16": {
+          "gain": -6.0
+        },
+        "17": {
+          "gain": -6.0
+        },
+        "18": {
+          "gain": -6.0
+        },
+        "19": {
+          "gain": -6.0
+        },
+        "20": {
+          "gain": -6.0
+        },
+        "21": {
+          "gain": -6.0
+        },
+        "22": {
+          "gain": -6.0
+        },
+        "23": {
+          "gain": -6.0
+        }
+      },
+      "channel_modulations": null,
+      "osc_mappings": null,
+      "zones": null,
+      "moves": [],
+      "mode": "Tracking",
+      "scope": {
+        "moves": false,
+        "channels": true,
+        "positions": false,
+        "zones": false,
+        "global_graph": false,
+        "signal_graph": false,
+        "macros": false,
+        "osc_mappings": false
+      },
+      "pre_wait": 0.0,
+      "follow": null,
+      "timecode": 5100.0
+    },
+    {
+      "id": "cue-S1",
+      "name": "SAFETY",
+      "description": "Cue de secours : orbite neutre, niveaux plats \u2014 recall manuel",
+      "schema_version": 1,
+      "graph": {
+        "nodes": [
+          {
+            "id": "o-orbit",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 60
+            },
+            "data": {
+              "label": "Objects",
+              "type": "Objects",
+              "params": {
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "d-orbit",
+            "type": "custom",
+            "position": {
+              "x": 0,
+              "y": 160
+            },
+            "data": {
+              "label": "Duration",
+              "type": "Duration",
+              "params": {
+                "duration": 30.0
+              }
+            }
+          },
+          {
+            "id": "e-orbit",
+            "type": "custom",
+            "position": {
+              "x": 300,
+              "y": 110
+            },
+            "data": {
+              "label": "Circular",
+              "type": "Circular",
+              "params": {
+                "radius": 6.0,
+                "n_objects": 24
+              }
+            }
+          },
+          {
+            "id": "out-orbit",
+            "type": "custom",
+            "position": {
+              "x": 600,
+              "y": 110
+            },
+            "data": {
+              "label": "Output",
+              "type": "Output",
+              "params": {}
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "o-orbit-e-orbit-objects",
+            "source": "o-orbit",
+            "target": "e-orbit",
+            "sourceHandle": "objects",
+            "targetHandle": "objects"
+          },
+          {
+            "id": "d-orbit-e-orbit-duration",
+            "source": "d-orbit",
+            "target": "e-orbit",
+            "sourceHandle": "duration",
+            "targetHandle": "duration"
+          },
+          {
+            "id": "e-orbit-out-orbit-in",
+            "source": "e-orbit",
+            "target": "out-orbit",
+            "sourceHandle": "out",
+            "targetHandle": "in"
+          }
+        ]
+      },
+      "timestamp": 0,
+      "macros": null,
+      "track_indices": [],
+      "fade_duration": 3.0,
+      "cue_number": "S1",
+      "global_graph": null,
+      "signal_graph": null,
+      "active_move_ids": [
+        "mv-safe"
+      ],
+      "per_track_depths": [],
+      "manual_positions": {},
+      "spatial_macros": null,
+      "object_channels": null,
+      "channel_modulations": null,
+      "osc_mappings": null,
+      "zones": null,
+      "moves": [
+        {
+          "id": "mv-safe",
+          "name": "Safety",
+          "graph_json": {
+            "nodes": [
+              {
+                "id": "o-orbit",
+                "type": "custom",
+                "position": {
+                  "x": 0,
+                  "y": 60
+                },
+                "data": {
+                  "label": "Objects",
+                  "type": "Objects",
+                  "params": {
+                    "n_objects": 24
+                  }
+                }
+              },
+              {
+                "id": "d-orbit",
+                "type": "custom",
+                "position": {
+                  "x": 0,
+                  "y": 160
+                },
+                "data": {
+                  "label": "Duration",
+                  "type": "Duration",
+                  "params": {
+                    "duration": 30.0
+                  }
+                }
+              },
+              {
+                "id": "e-orbit",
+                "type": "custom",
+                "position": {
+                  "x": 300,
+                  "y": 110
+                },
+                "data": {
+                  "label": "Circular",
+                  "type": "Circular",
+                  "params": {
+                    "radius": 6.0,
+                    "n_objects": 24
+                  }
+                }
+              },
+              {
+                "id": "out-orbit",
+                "type": "custom",
+                "position": {
+                  "x": 600,
+                  "y": 110
+                },
+                "data": {
+                  "label": "Output",
+                  "type": "Output",
+                  "params": {}
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "o-orbit-e-orbit-objects",
+                "source": "o-orbit",
+                "target": "e-orbit",
+                "sourceHandle": "objects",
+                "targetHandle": "objects"
+              },
+              {
+                "id": "d-orbit-e-orbit-duration",
+                "source": "d-orbit",
+                "target": "e-orbit",
+                "sourceHandle": "duration",
+                "targetHandle": "duration"
+              },
+              {
+                "id": "e-orbit-out-orbit-in",
+                "source": "e-orbit",
+                "target": "out-orbit",
+                "sourceHandle": "out",
+                "targetHandle": "in"
+              }
+            ]
+          },
+          "signal_graph": null,
+          "osc_ids": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24
+          ],
+          "track_indices": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23
+          ],
+          "is_preview": false,
+          "origin": null,
+          "duration": 4.0,
+          "loop_mode": "loop",
+          "direction": "forward"
+        }
+      ],
+      "mode": "Full",
+      "scope": {
+        "moves": true,
+        "channels": true,
+        "positions": true,
+        "zones": true,
+        "global_graph": true,
+        "signal_graph": true,
+        "macros": true,
+        "osc_mappings": true
+      },
+      "pre_wait": 0.0,
+      "follow": null,
+      "timecode": null
     }
   ],
   "osc": {
