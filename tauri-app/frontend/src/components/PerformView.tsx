@@ -8,7 +8,7 @@ import { Slider } from './ui/Slider';
 import { useGraphStore } from '../store/useGraphStore';
 import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { useCuelistStore } from '../store/useCuelistStore';
-import { doSolo, doUnpark, doStop } from '../utils/liveActions';
+import { doSolo, doUnpark, doStop, doUnsolo, getSoloRestoreIds } from '../utils/liveActions';
 import { safeInvoke } from '../utils/tauri';
 import { toast } from '../utils/toast-helpers';
 import { type NodeParamValue } from './nodeParamSchema';
@@ -525,6 +525,15 @@ export const PerformView: React.FC = () => {
               {isRecalling && <span className="text-purple-400 font-bold animate-pulse">RECALLING…</span>}
             </div>
             <div className="flex items-center gap-4">
+              {getSoloRestoreIds().length > 0 && (
+                <button
+                  onClick={() => doUnsolo()}
+                  className="px-5 py-3 rounded-xl bg-orange-700/80 hover:bg-orange-600 text-orange-100 text-base font-bold active:scale-95"
+                  title={`UNSOLO — rejoue les ${getSoloRestoreIds().length} slots stoppés par le solo`}
+                >
+                  UNSOLO
+                </button>
+              )}
               {playingCount > 0 && (
                 <button
                   onClick={() => doStop()}

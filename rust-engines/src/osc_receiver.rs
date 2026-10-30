@@ -381,6 +381,8 @@ pub enum ShowCommand {
     SlotStop(usize),
     /// `/stagespace/solo <n>` — coupe tous les autres slots et joue n.
     Solo(usize),
+    /// `/stagespace/unsolo` — rejoue les slots stoppés par le dernier solo.
+    Unsolo,
     /// `/stagespace/arm` — arme l'émission OSC (fin du dry-run).
     Arm,
     /// `/stagespace/disarm` — dry-run : le merge tourne, rien ne part.
@@ -460,6 +462,7 @@ fn parse_show_command(addr: &str, args: &[OscType], fps: f64) -> Option<ShowComm
                 _ => None,
             }
         }
+        "unsolo" => Some(ShowCommand::Unsolo),
         "arm" => Some(ShowCommand::Arm),
         "disarm" => Some(ShowCommand::Disarm),
         "status" => Some(ShowCommand::Status),

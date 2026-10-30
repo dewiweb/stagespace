@@ -11,7 +11,7 @@ soundcheck et la surveillance.
 | `/stagespace/go` | GO setlist (= Enter) |
 | `/stagespace/cue/next` · `/prev` | cue suivante / précédente |
 | `/stagespace/cue/recall <n> [fade]` | recall par `cue_number` ou index ; `fade` optionnel écrase le fade stocké |
-| `/stagespace/slot <n>` · `/slot/stop <n>` · `/solo <n>` | busking : joue / coupe / solo le slot d'`oscIndex` n (stable, 1-based, fades du slot) |
+| `/stagespace/slot <n>` · `/slot/stop <n>` · `/solo <n>` · `/unsolo` | busking : joue / coupe / solo le slot d'`oscIndex` n (stable, 1-based, fades du slot) ; `unsolo` = restore des slots coupés |
 | `/stagespace/arm` · `/disarm` | ARM = envoi OSC ; DISARM = **dry-run** (répétition silencieuse) |
 | `/stagespace/status` | renvoie cue courante/suivante au demandeur |
 | `/stagespace/park <n>` · `/unpark <n>` | l'objet **index n (0-based)** échappe aux recalls (override manuel préservé) |

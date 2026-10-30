@@ -187,6 +187,7 @@ dispatches to the same functions as the keyboard shortcuts (`liveActions.ts`).
 | `/stagespace/slot <n>` | jouer le slot d'`oscIndex` n (busking, fade_in du slot) | — |
 | `/stagespace/slot/stop <n>` | stopper le slot n (fade_out du slot) | — |
 | `/stagespace/solo <n>` | fade-out tous les autres slots puis jouer n | — |
+| `/stagespace/unsolo` | rejoue les slots stoppés par le dernier solo (restore) | — |
 
 Rejection & feedback: commands refused while `isRecalling` or on unknown
 cue/slot get `/stagespace/nack <reason>` back to the sender (`busy:…`,

@@ -96,6 +96,16 @@ export function doSlotStop(n: number, from?: string) {
 }
 
 /** /stagespace/solo <n> — coupe les autres slots puis joue n. */
+/// Slots stoppés par le dernier solo — restore candidat (unsolo).
+/// Module-level : la visibilité du bouton se déduit à chaque render
+/// (un solo/unsolo change toujours les movementIds → re-render).
+let soloSavedIds: string[] = [];
+
+/// Ids des slots à restaurer après le dernier solo (vide = pas de solo actif).
+export function getSoloRestoreIds(): string[] {
+  return soloSavedIds;
+}
+
 export function doSolo(n: number, from?: string) {
   const gs = useGraphStore.getState();
   const target = gs.moveSlots.find((s) => s.oscIndex === n) ?? gs.moveSlots[n - 1];
@@ -105,10 +115,24 @@ export function doSolo(n: number, from?: string) {
   }
   if (recallBusy(from)) return;
   useCuelistStore.getState().cancelPendingTimers();
+  // Sauvegarde des autres slots jouants — un solo n'est jamais une
+  // fin en soi, l'opérateur voudra souvent revenir au mix d'avant.
+  soloSavedIds = gs.moveSlots.filter((s) => s.id !== target.id && s.movementId).map((s) => s.id);
   for (const s of gs.moveSlots) {
     if (s.id !== target.id && s.movementId) void gs.stopSlotWithFade(s.id, s.fadeOut ?? 1);
   }
   void gs.playSlot(target.id);
+}
+
+/** /stagespace/unsolo — rejoue les slots stoppés par le dernier solo. */
+export function doUnsolo() {
+  const gs = useGraphStore.getState();
+  const ids = soloSavedIds;
+  soloSavedIds = [];
+  for (const id of ids) {
+    const slot = gs.moveSlots.find((s) => s.id === id);
+    if (slot && !slot.movementId) void gs.playSlot(id);
+  }
 }
 
 /** /stagespace/status — renvoie le feedback cue courant/suivant au demandeur. */
