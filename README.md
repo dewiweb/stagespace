@@ -224,7 +224,7 @@ cd rust-engines
 cargo test --lib
 ```
 
-267 tests passent côté moteurs (suites complètes : voir le tableau "Test
+519 tests passent côté moteurs (suites complètes : voir le tableau "Test
 Counts" dans [AGENTS.md](AGENTS.md)).
 
 ---

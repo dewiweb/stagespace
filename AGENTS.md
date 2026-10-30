@@ -175,14 +175,26 @@ dispatches to the same functions as the keyboard shortcuts (`liveActions.ts`).
 | `/stagespace/go` | setlist GO | Enter |
 | `/stagespace/cue/next` | recall next cue | Shift+Enter |
 | `/stagespace/cue/prev` | recall previous cue | Backspace |
-| `/stagespace/cue/recall <n>` | recall cue by `cue_number` (string/num, fallback 1-based index) | — |
+| `/stagespace/cue/recall <n> [fade]` | recall cue by `cue_number` (string/num, fallback 1-based index); `fade` overrides the stored fade | — |
 | `/stagespace/panic` | panic (stop all + origins) | Esc |
 | `/stagespace/stop` | stop all moves | — |
 | `/stagespace/timecode <s|"HH:MM:SS:FF">` | TC chase (fps 24/25/30, default 25, `set_timecode_fps`) | — |
+| `/stagespace/arm` | re-arm OSC output (quitte le dry-run) | — |
+| `/stagespace/disarm` | dry-run — tout tourne, rien ne part au renderer | — |
+| `/stagespace/status` | force le renvoi du feedback cue au contrôleur | — |
+| `/stagespace/park <obj>` | geler un objet (survit aux recalls Full/Tracking, panic, arm) | — |
+| `/stagespace/unpark <obj>` | dégeler l'objet | — |
+| `/stagespace/slot <n>` | jouer le slot d'`oscIndex` n (busking, fade_in du slot) | — |
+| `/stagespace/slot/stop <n>` | stopper le slot n (fade_out du slot) | — |
+| `/stagespace/solo <n>` | fade-out tous les autres slots puis jouer n | — |
 
-Feedback: every accepted command gets `/stagespace/ack <addr>` to the sender;
-the 4 most recent controllers also receive `/stagespace/cue/current <n> <name>`
-and `/stagespace/cue/next <n> <name>` after each cue change (`send_show_feedback`).
+Rejection & feedback: commands refused while `isRecalling` or on unknown
+cue/slot get `/stagespace/nack <reason>` back to the sender (`busy:…`,
+`not-found:…`) — slot commands during a recall are nacked rather than
+orphaned. Every accepted command gets `/stagespace/ack <addr>`; the 4 most
+recent controllers also receive `/stagespace/cue/current <n> <name>` and
+`/stagespace/cue/next <n> <name>` after each cue change
+(`send_show_feedback`).
 
 Cue fields (`Cue`): `mode` (Full|Tracking), `scope` (8 category flags),
 `pre_wait`, `follow`, `timecode`. Tracking cues merge channels/positions

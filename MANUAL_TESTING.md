@@ -136,8 +136,9 @@ cd tauri-app/src-tauri
 
 ### 4.5 Keyboard Shortcuts (Live)
 - [ ] Space — play/stop the selected move (click a move first to select it)
-- [ ] Enter — GO to next cue in setlist
-- [ ] Backspace — Go to previous cue
+- [ ] Enter — GO (setlist advance, crossfade)
+- [ ] Shift+Enter — recall next cue
+- [ ] Backspace — recall previous cue
 - [ ] Esc — Panic (stop all + send origin positions)
 - [ ] Ctrl+Z / Ctrl+Y — Undo/Redo graph edits
 - [ ] Verify: shortcuts don't fire when typing in input fields
