@@ -43,7 +43,7 @@ cargo fmt -- --check     # Format check
 ```bash
 cd tauri-app/src-tauri
 cargo build              # Build
-cargo test --lib         # Run tests (70 tests)
+cargo test --lib         # Run tests (72 tests)
 cargo clippy --all-targets -- -D warnings  # Lint (CI: --all-targets inclut tests)
 ```
 
@@ -123,10 +123,10 @@ CI fails if the committed files drift from the Rust sources.
 | Suite | Count |
 |-------|-------|
 | Rust engines | 519 |
-| Tauri backend | 70 |
+| Tauri backend | 72 |
 | Frontend (vitest) | 383 |
 | E2E CLI | 125 |
-| **Total** | **1097** |
+| **Total** | **1099** |
 
 ## Live Show Safety Features
 
