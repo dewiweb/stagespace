@@ -26,7 +26,7 @@ que pour le soundcheck et la surveillance.
 **Scénario** : l'ingé prépare ses slots à la balance, puis tire/coupe/solo au
 numéro en live. Tout doit être fondu et annulable.
 
-**Ce qui est livré** : `playSlot`/`stopSlotWithFade` par UI + OSC (`/stagespace/slot|slot/stop|solo`, fades du slot respectés) ; layers parallèles ; `one_shot` pour les stingers ; macros `scale/shift/rotation/speed` et OSC-IN (`macro`, `channel`, `position`, handlers→signal) pour l'expression live ; `park` pour figer un objet repris à la main ; DRY-RUN pour répéter silencieusement.
+**Ce qui est livré** : `playSlot`/`stopSlotWithFade` par UI + OSC (`/stagespace/slot|slot/stop|solo|unsolo`, fades du slot respectés ; `unsolo` = restore du set pré-solo) ; layers parallèles ; `one_shot` pour les stingers ; macros `scale/shift/rotation/speed` et OSC-IN (`macro`, `channel`, `position`, handlers→signal) pour l'expression live ; `park` pour figer un objet repris à la main ; DRY-RUN pour répéter silencieusement.
 
 **Limites ouvertes**
 - Numérotation : `oscIndex` **stable persisté** livré — le n de `/stagespace/slot` ne suit plus les réordonnancements ; backfill index+1 pour les slots existants. `park` survit au panic par design (intention opérateur).
