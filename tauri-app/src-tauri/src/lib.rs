@@ -469,3 +469,7 @@ mod supervisor_test_file;
 #[cfg(test)]
 #[path = "tests/param_modulation_tests.rs"]
 mod param_modulation_test_file;
+
+#[cfg(test)]
+#[path = "tests/show_control_e2e_tests.rs"]
+mod show_control_e2e_test_file;
