@@ -326,7 +326,7 @@ struct Shared {
     last_by_address: Arc<Mutex<HashMap<String, Vec<f64>>>>,
     /// Dernier message OSC reçu hors `/stagespace/` (addr, args, instant) —
     /// capture pour le "learn" : brancher un fader en bougeant une fois.
-    last_rx: Arc<Mutex<Option<(String, Vec<f64>, Instant)>>>,
+    last_rx: Arc<Mutex<Option<LastRx>>>,
     smooth_state: Arc<Mutex<HashMap<String, Vec<f64>>>>,
     targets: Arc<RwLock<OscInTargets>>,
     in_enabled: Arc<AtomicBool>,
@@ -932,6 +932,8 @@ impl Drop for OscReceiver {
 
 // ─── Pipeline interne ───────────────────────────────────────────────────────
 
+type LastRx = (String, Vec<f64>, Instant);
+
 /// Match une adresse contre un pattern. `*` matche exactement un segment
 /// non vide. Retourne les segments capturés par les wildcards (dans l'ordre).
 ///
@@ -1130,7 +1132,7 @@ fn dispatch_message(addr: &str, args: Vec<f64>, shared: &Shared) {
             lv.insert(addr.to_string(), args.clone());
             // Capture learn : le dernier message utilisateur reçu.
             *shared.last_rx.lock().unwrap_or_else(|e| e.into_inner()) =
-                Some((addr.to_string(), args.clone(), Instant::now()));
+                Some((addr.to_string(), args.clone(), Instant::now()) as LastRx);
         }
     }
 
