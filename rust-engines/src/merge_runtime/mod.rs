@@ -36,7 +36,7 @@ use crate::position_buffer::PositionBuffer;
 use crate::runtime::{
     MacroState, PerfMonitor, PerfStats, PositionCallback, PostProcessContext, PostProcessFn,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
@@ -160,6 +160,10 @@ pub struct MergeRuntime {
     /// yaw, aperture, lfe) — object_index → SpatialChannels.
     /// Type figé par `OscInTargets` (osc_receiver).
     object_channels: Arc<RwLock<HashMap<usize, SpatialChannels>>>,
+    /// Objets « parkés » — les recalls de cues (Full et Tracking) n'écrivent
+    /// jamais leurs canaux : la reprise manuelle d'un opérateur a priorité
+    /// sur la mémoire enregistrée (sémantique Park des consoles).
+    parked_objects: Arc<RwLock<HashSet<usize>>>,
     /// Règles de modulation cinématique (source cinématique → canal spatial)
     /// — Arc<Vec> : snapshot par frame = clone d'Arc.
     channel_modulations: Arc<RwLock<Arc<Vec<ChannelModulation>>>>,
@@ -268,6 +272,7 @@ impl MergeRuntime {
             track_positions: Arc::new(RwLock::new(Arc::new(HashMap::new()))),
             manual_positions: Arc::new(RwLock::new(HashMap::new())),
             object_channels: Arc::new(RwLock::new(HashMap::new())),
+            parked_objects: Arc::new(RwLock::new(HashSet::new())),
             channel_modulations: Arc::new(RwLock::new(Arc::new(Vec::new()))),
             kinematic_smoothing: Arc::new(RwLock::new(0.5)),
             zones: Arc::new(RwLock::new(Arc::new(Vec::new()))),
@@ -551,6 +556,37 @@ impl MergeRuntime {
     }
 
     /// Efface tous les canaux spatiaux de tous les objets
+    /// Parke/déparke un objet — les recalls de cues ne touchent pas ses
+    /// canaux (reprise manuelle prioritaire, sémantique Park des consoles).
+    pub fn park_object(&self, obj: usize) {
+        self.parked_objects
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(obj);
+    }
+
+    pub fn unpark_object(&self, obj: usize) {
+        self.parked_objects
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&obj);
+    }
+
+    pub fn parked_objects(&self) -> HashSet<usize> {
+        self.parked_objects
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// Efface le park d'un objet (panic / nouveau show).
+    pub fn clear_parked(&self) {
+        self.parked_objects
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
+    }
+
     pub fn clear_all_object_channels(&self) {
         self.object_channels
             .write()

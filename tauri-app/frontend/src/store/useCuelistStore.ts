@@ -34,7 +34,7 @@ interface CuelistState {
   loadFromStorage: () => void;
   saveToStorage: () => void;
   storeCue: (cue: StoreCueRequest) => Promise<CueData>;
-  recallCue: (cueId: string, opts?: { skipPreWait?: boolean }) => Promise<void>;
+  recallCue: (cueId: string, opts?: { skipPreWait?: boolean; timeOffset?: number }) => Promise<void>;
   deleteCue: (cueId: string) => void;
   /// Met à jour un cue en place (fade_duration éditable post-store) —
   /// la cuelist vit côté frontend (localStorage), le backend n'en garde
@@ -136,7 +136,7 @@ export const useCuelistStore = create<CuelistState>((set, get) => ({
     }
     set({ isRecalling: true });
     try {
-      await invoke('recall_cue', { cue });
+      await invoke('recall_cue', { cue, timeOffset: opts?.timeOffset ?? null });
       const idx = get().cues.findIndex((c) => c.id === cueId);
       set({ currentCueIndex: idx });
       sendFeedback(get().cues, idx);

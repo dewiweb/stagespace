@@ -7,6 +7,7 @@ import { useSignalGraphStore } from '../store/useSignalGraphStore';
 import { ConfirmModal } from './ui/ConfirmModal';
 import EmptyState from './ui/EmptyState';
 import { toast } from '../utils/toast-helpers';
+import { safeInvoke } from '../utils/tauri';
 
 export const CuelistPanel: React.FC = () => {
   const cues = useCuelistStore((s) => s.cues);
@@ -362,6 +363,22 @@ function PendingCountdown({ deadline, kind }: { deadline: number; kind: 'pre_wai
   );
 }
 
+/// Dry-run : désarme l'OSC (le merge continue, rien ne part au renderer) —
+/// permet de répéter la conduite sans envoyer de positions.
+function DryRunChip() {
+  const [armed, setArmed] = useState(true);
+  useEffect(() => { void safeInvoke<boolean>('get_osc_armed').then(setArmed).catch(() => {}); }, []);
+  return (
+    <button
+      onClick={() => { const a = !armed; void safeInvoke('set_osc_armed', { armed: a }).then(() => setArmed(a)).catch((e: unknown) => toast.error('OSC arm failed: ' + e)); }}
+      className={`px-1.5 py-0.5 rounded border ${armed ? 'border-gray-600 text-gray-500' : 'border-emerald-600 text-emerald-400'}`}
+      title={armed ? 'OSC armed — click to rehearse without sending' : 'DRY-RUN — OSC disarmed'}
+    >
+      {armed ? 'ARM' : 'DRY-RUN'}
+    </button>
+  );
+}
+
 /// Statut timecode : TC courant (HH:MM:SS:FF) ou "TC lost" si silence >1s.
 function TcStatus() {
   const tc = useCuelistStore((s) => s.lastTimecode);
@@ -391,6 +408,7 @@ function TcStatus() {
   const lost = tc == null || Date.now() - at > 1000;
   return (
     <span className="ml-auto flex items-center gap-1.5 text-[10px]">
+      <DryRunChip />
       <button
         onClick={() => setChase(!chaseOn)}
         className={`px-1.5 py-0.5 rounded border ${chaseOn ? 'border-emerald-600 text-emerald-400' : 'border-gray-600 text-gray-500'}`}

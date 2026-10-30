@@ -5,4 +5,4 @@
  * quelle au frontend qui la dispatche vers les mêmes fonctions que
  * les raccourcis clavier (backend = routeur seulement).
  */
-export type ShowCommand = { "command": "Go" } | { "command": "CueNext" } | { "command": "CuePrev" } | { "command": "CueRecall", "value": string } | { "command": "Panic" } | { "command": "Stop" } | { "command": "Timecode", "value": number };
+export type ShowCommand = { "command": "Go" } | { "command": "CueNext" } | { "command": "CuePrev" } | { "command": "CueRecall", "value": string } | { "command": "Park", "value": number } | { "command": "Unpark", "value": number } | { "command": "Panic" } | { "command": "Stop" } | { "command": "Timecode", "value": number };

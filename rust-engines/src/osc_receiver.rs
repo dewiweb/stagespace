@@ -369,6 +369,10 @@ pub enum ShowCommand {
     /// `/stagespace/cue/recall <n>` — n = cue_number (string ou nombre),
     /// fallback index 1-based si aucun cue_number ne matche.
     CueRecall(String),
+    /// `/stagespace/park <obj>` — l'objet n'est plus touché par les cues.
+    Park(usize),
+    /// `/stagespace/unpark <obj>`.
+    Unpark(usize),
     /// `/stagespace/panic` — Esc panic.
     Panic,
     /// `/stagespace/stop` — stop tous les moves.
@@ -400,6 +404,24 @@ fn parse_show_command(addr: &str, args: &[OscType], fps: f64) -> Option<ShowComm
             })?;
             Some(ShowCommand::CueRecall(id))
         }
+        "park" => args
+            .first()
+            .and_then(|a| match a {
+                OscType::Float(v) => Some(*v as usize),
+                OscType::Int(v) => Some((*v).max(0) as usize),
+                OscType::String(s) => s.parse::<usize>().ok(),
+                _ => None,
+            })
+            .map(ShowCommand::Park),
+        "unpark" => args
+            .first()
+            .and_then(|a| match a {
+                OscType::Float(v) => Some(*v as usize),
+                OscType::Int(v) => Some((*v).max(0) as usize),
+                OscType::String(s) => s.parse::<usize>().ok(),
+                _ => None,
+            })
+            .map(ShowCommand::Unpark),
         "panic" => Some(ShowCommand::Panic),
         "stop" => Some(ShowCommand::Stop),
         "timecode" => {

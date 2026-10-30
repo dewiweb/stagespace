@@ -19,7 +19,7 @@ use commands::audio::{
     get_audio_state, list_audio_devices, start_audio_capture, start_audio_poller,
     stop_audio_capture, update_audio_state,
 };
-use commands::cue_commands::{recall_cue, store_cue};
+use commands::cue_commands::{park_object, recall_cue, store_cue, unpark_object};
 use commands::file_io::{import_hol_project, load_graph_from_file, save_graph_to_file};
 use commands::merge_commands::{
     activate_move, add_channel_modulation, add_zone, clear_all_manual_positions,
@@ -431,6 +431,8 @@ pub fn run() {
             // Cue commands (Phase 3 — cue system étendu)
             store_cue,
             recall_cue,
+            park_object,
+            unpark_object,
             frontend_log,
             // Plugins WASM (bundles .ssx dans <data_dir>/plugins/)
             list_plugins,

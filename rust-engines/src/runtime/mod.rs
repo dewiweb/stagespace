@@ -65,6 +65,9 @@ pub struct Runtime {
     /// Le worker thread lit cette valeur à chaque frame au lieu de capturer
     /// la duration dans sa closure.
     duration_ms: Arc<std::sync::atomic::AtomicU64>,
+    /// Offset temporel (seek timecode) — ajouté au temps virtuel à
+    /// chaque frame, avant le modulo de boucle.
+    time_offset_secs: Arc<std::sync::atomic::AtomicU64>,
     /// OSC ids du move — hot-swappable en live via set_osc_ids.
     /// Le worker thread lit cette valeur à chaque frame pour savoir
     /// combien de positions calculer.
@@ -113,6 +116,7 @@ impl Runtime {
             position_buffer: Mutex::new(None),
             duration_ms: Arc::new(std::sync::atomic::AtomicU64::new(4000)),
             osc_ids_arc: Arc::new(std::sync::RwLock::new(Vec::new())),
+            time_offset_secs: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             signal_fn: Arc::new(Mutex::new(crate::signal_compiler::empty_signal_fn())),
             osc_values: Arc::new(std::sync::RwLock::new(Arc::new(Mutex::new(HashMap::new())))),
             thread_handle: Mutex::new(None),
@@ -128,6 +132,13 @@ impl Runtime {
     /// Définit les osc_ids du move — hot-swappable en live
     pub fn set_osc_ids(&self, osc_ids: Vec<u32>) {
         *self.osc_ids_arc.write().unwrap_or_else(|e| e.into_inner()) = osc_ids;
+    }
+
+    /// Offset temporel en secondes — le temps virtuel devient
+    /// `t*speed + offset` (seek TC sur le snapshot d'une cue).
+    pub fn set_time_offset(&self, secs: f64) {
+        self.time_offset_secs
+            .store(secs.to_bits(), Ordering::Relaxed);
     }
 
     /// Récupère la duration actuelle (en secondes)
@@ -475,6 +486,7 @@ impl Runtime {
         self.set_osc_ids(osc_ids.clone());
         let duration_arc = self.duration_ms.clone();
         let osc_ids_arc = self.osc_ids_arc.clone();
+        let time_offset_arc = self.time_offset_secs.clone();
         let position_fn_arc = self.position_fn.clone();
         let macros = self.macros.clone();
         let config = self.config.clone();
@@ -665,7 +677,11 @@ impl Runtime {
 
                 // Recalculer le temps virtuel avec le speed effectif
                 // (audio-modulé) — même clamp >= 0 que ci-dessus
-                let t_virtual_eff = (t_real * effective_speed).max(0.0);
+                // Offset temporel (seek timecode) — ajouté au temps
+                // virtuel avant le modulo de boucle.
+                let t_virtual_eff = (t_real * effective_speed
+                    + f64::from_bits(time_offset_arc.load(Ordering::Relaxed)))
+                .max(0.0);
                 let t_eff = if loop_is_on && duration > 0.0 {
                     let t_mod = t_virtual_eff % duration;
                     // Appliquer la direction (Forward/Backward/PingPong)

@@ -262,22 +262,54 @@ pub async fn store_cue(
 /// threads workers, respawn de moves) — elle tourne sur `spawn_blocking`
 /// pour ne pas affamer l'executor async pendant un live.
 #[tauri::command]
-pub async fn recall_cue(cue: Cue, state: State<'_, AppState>) -> Result<(), IpcError> {
+pub async fn recall_cue(
+    cue: Cue,
+    time_offset: Option<f64>,
+    state: State<'_, AppState>,
+) -> Result<(), IpcError> {
     let sh = crate::commands::state::Shared::from_state(&state);
     let handle = sh
         .app_handle
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .clone();
+    let sh2 = sh.clone();
+    let cue_moves: Vec<String> = cue.moves.iter().map(|m| m.id.clone()).collect();
     let result = tauri::async_runtime::spawn_blocking(move || recall_cue_inner(cue, sh))
         .await
         .map_err(|e| IpcError::internal(format!("Cue recall task failed: {e}")))?;
+    // Seek TC : offset temporel appliqué aux moves du cue — un locate
+    // reprend la trajectoire à tc - cue.timecode, pas à t=0.
+    if let Some(off) = time_offset {
+        if off.is_finite() && result.is_ok() {
+            let movements = lock_or_recover(&sh2.movements);
+            for id in &cue_moves {
+                if let Some(m) = movements.get(id) {
+                    m.runtime.set_time_offset(off);
+                }
+            }
+        }
+    }
     // Le recall tue/respawn des moves (même partiellement en cas d'échec) —
     // l'UI doit resynchroniser sa liste sinon elle affiche des zombies.
     if let Some(h) = handle {
         let _ = h.emit("active-moves-update", ());
     }
     result
+}
+
+/// Park/unpark un objet : les recalls de cues n'écrivent plus ses canaux
+/// (reprise manuelle prioritaire — sémantique Park des consoles).
+#[tauri::command]
+pub async fn park_object(obj: usize, state: State<'_, AppState>) -> Result<String, IpcError> {
+    lock_or_recover(&state.merge_runtime).park_object(obj);
+    Ok(format!("object {obj} parked"))
+}
+
+#[tauri::command]
+pub async fn unpark_object(obj: usize, state: State<'_, AppState>) -> Result<String, IpcError> {
+    lock_or_recover(&state.merge_runtime).unpark_object(obj);
+    Ok(format!("object {obj} unparked"))
 }
 
 pub(crate) fn recall_cue_inner(
@@ -518,14 +550,35 @@ pub(crate) fn recall_cue_inner(
         if let Some(ref channels) = cue.object_channels {
             // Full = snapshot exact (clear+set) ; Tracking = merge par
             // objet (un objet hors scope garde sa valeur).
+            // Objets parkés : jamais touchés par une cue — leurs canaux
+            // courants sont sauvegardés avant le clear et restaurés après.
+            let parked = merge_rt.parked_objects();
+            let kept: Vec<(usize, stagespace_engines::SpatialChannels)> =
+                if !tracking && !parked.is_empty() {
+                    let cur = merge_rt.object_channels();
+                    parked
+                        .iter()
+                        .filter_map(|i| cur.get(i).copied().map(|c| (*i, c)))
+                        .collect()
+                } else {
+                    Vec::new()
+                };
             if !tracking {
                 merge_rt.clear_all_object_channels();
             }
             if !tracking || scope.channels {
                 for (idx, chs) in channels {
+                    if parked.contains(idx) {
+                        continue;
+                    }
                     for (ch, v) in chs.iter() {
                         merge_rt.set_object_channel(*idx, ch, v);
                     }
+                }
+            }
+            for (idx, chs) in kept {
+                for (ch, v) in chs.iter() {
+                    merge_rt.set_object_channel(idx, ch, v);
                 }
             }
         }

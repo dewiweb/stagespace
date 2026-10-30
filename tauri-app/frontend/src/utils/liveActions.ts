@@ -4,6 +4,7 @@
 import { useGraphStore } from '../store/useGraphStore';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { toast } from './toast-helpers';
+import { safeInvoke as invoke } from './tauri';
 
 /// GO setlist (= Enter) — crossfade vers le prochain move.
 export function doGo() {
@@ -50,6 +51,15 @@ export function doCueRecall(n: string) {
 export function doPanic() {
   useCuelistStore.getState().cancelPendingTimers();
   useGraphStore.getState().panic();
+}
+
+/** Park un objet : ses canaux échappent aux recalls de cues. */
+export function doPark(obj: number) {
+  invoke('park_object', { obj }).catch((e) => toast.error('Park failed: ' + e));
+}
+
+export function doUnpark(obj: number) {
+  invoke('unpark_object', { obj }).catch((e) => toast.error('Unpark failed: ' + e));
 }
 
 /// Stop all moves (même fonction que le bouton UI — deactivate_all).

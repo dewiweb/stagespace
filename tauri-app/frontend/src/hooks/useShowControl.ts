@@ -4,7 +4,7 @@
 import { useEffect } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { useCuelistStore } from '../store/useCuelistStore';
-import { doGo, doCueNext, doCuePrev, doCueRecall, doPanic, doStop } from '../utils/liveActions';
+import { doGo, doCueNext, doCuePrev, doCueRecall, doPanic, doStop, doPark, doUnpark } from '../utils/liveActions';
 import type { ShowCommand } from '../types/generated/ShowCommand';
 
 interface ShowControlEvent {
@@ -32,6 +32,12 @@ export function useShowControl() {
               break;
             case 'CueRecall':
               if (cmd.value != null) doCueRecall(cmd.value);
+              break;
+            case 'Park':
+              if (cmd.value != null) doPark(cmd.value);
+              break;
+            case 'Unpark':
+              if (cmd.value != null) doUnpark(cmd.value);
               break;
             case 'Panic':
               doPanic();
