@@ -16,8 +16,8 @@ que pour le soundcheck et la surveillance.
 **Limites ouvertes**
 - Retour d'état limité → **livré** : `/stagespace/nack` (rejet busy/not-found ciblé) + panneau **Conduite plein écran** dans PerformView (NOW/NEXT gros, TC, pending, GO/Prev/Next/Panic touch) ; Companion reste possible pour la console elle-même.
 - Deux couches de gain (fader console vs `object_channels.gain`) — règle documentée : gain spatial réservé aux cues tracking/effets.
-- Pas d'OSC learn pour brancher un fader/encoder en un geste.
-- L'ack confirme la réception, pas l'exécution (recall asynchrone) — `cue/recall + fade court` reste la bonne pratique pour un hit.
+- ~~Pas d'OSC learn~~ **livré** : bouton LEARN dans l'éditeur OSC IN (cf. §2).
+- ~~Ack ≠ exécution~~ mitigé : rejet signalé par `nack`, exécution confirmée par le feedback `cue/current` — reste vrai qu'un hit instantané doit utiliser `cue/recall + fade court`.
 
 ---
 
