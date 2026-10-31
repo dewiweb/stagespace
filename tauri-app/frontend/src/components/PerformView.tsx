@@ -5,6 +5,7 @@ import { AudioModList } from './AudioModControls';
 import Scene3D from './Scene3D';
 import CuelistPanel from './CuelistPanel';
 import { Slider } from './ui/Slider';
+import EmptyState from './ui/EmptyState';
 import { useGraphStore } from '../store/useGraphStore';
 import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { useCuelistStore } from '../store/useCuelistStore';
@@ -462,8 +463,8 @@ export const PerformView: React.FC = () => {
             <div className="flex-1 overflow-y-auto p-2 grid grid-cols-2 gap-2 auto-rows-min content-start min-h-0">
               {moveSlots.map((slot) => renderPad(slot))}
               {moveSlots.length === 0 && (
-                <div className="col-span-2 px-3 py-4 text-gray-400 text-xs italic">
-                  No moves yet — create slots to fill the pads.
+                <div className="col-span-2 px-3 py-4">
+                  <EmptyState size="sm" title="No moves yet" hint="Create slots to fill the pads." />
                 </div>
               )}
             </div>
@@ -485,8 +486,8 @@ export const PerformView: React.FC = () => {
             </div>
             {setlistSlots.map((slot) => renderSlotRow(slot))}
             {setlistSlots.length === 0 && moveSlots.length > 0 && (
-              <div className="px-3 py-4 text-gray-400 text-xs italic">
-                Empty setlist — <span className="text-indigo-300">+ Move</span> creates one, or use → on a layer.
+              <div className="px-3 py-4">
+                <EmptyState size="sm" title="Empty setlist" hint="+ Move creates one, or use → on a layer." />
               </div>
             )}
             {layerSlots.length > 0 && (
@@ -498,23 +499,17 @@ export const PerformView: React.FC = () => {
               </>
             )}
             {moveSlots.length === 0 && (
-              <div className="px-3 py-4 space-y-2.5">
-                <p className="text-gray-300 text-xs font-medium">No moves yet</p>
-                <button
-                  onClick={() => {
+              <div className="px-3 py-4">
+                <EmptyState
+                  title="No moves yet"
+                  hint="A circular trajectory on all tracks — press Space or ▶ to launch it, Enter/GO to advance the setlist."
+                  actionLabel="+ Create your first move"
+                  onAction={() => {
                     addMoveSlot();
-                    // Le slot vient d'être pushé — l'ajouter à la setlist
-                    // pour que GO/Enter fonctionne tout de suite.
                     const ms = useGraphStore.getState().moveSlots; const last = ms[ms.length - 1];
                     if (last) addToSetlist(last.id);
                   }}
-                  className="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors"
-                >
-                  + Create your first move
-                </button>
-                <p className="text-gray-500 text-[10px] leading-snug">
-                  A circular trajectory on all tracks — press <kbd className="px-1 bg-gray-800 rounded">Space</kbd> or ▶ to launch it, Enter/GO to advance the setlist.
-                </p>
+                />
               </div>
             )}
           </div>
@@ -579,8 +574,8 @@ export const PerformView: React.FC = () => {
           }`}>
             {moveSlots.map((slot) => renderPad(slot, true))}
             {moveSlots.length === 0 && (
-              <div className="col-span-4 text-center text-gray-500 py-16 text-lg">
-                Aucun slot — crée des moves pour remplir les pads.
+              <div className="col-span-4 py-16">
+                <EmptyState title="Aucun slot" hint="Crée des moves pour remplir les pads." />
               </div>
             )}
           </div>

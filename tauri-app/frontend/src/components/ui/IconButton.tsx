@@ -12,7 +12,7 @@ interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> 
 
 const BASE: Record<NonNullable<IconButtonProps['variant']>, string> = {
   default: 'bg-gray-800 text-gray-400 hover:text-white',
-  primary: 'bg-indigo-800 text-indigo-200 hover:bg-indigo-700',
+  primary: 'bg-stagespace-accent/70 text-white hover:bg-stagespace-accent',
   danger: 'bg-red-900/60 text-red-300 hover:bg-red-800 border border-red-700/50',
   success: 'bg-green-800 text-green-200 hover:bg-green-700',
   warning: 'bg-orange-800/70 text-orange-200 hover:bg-orange-700',
@@ -20,7 +20,7 @@ const BASE: Record<NonNullable<IconButtonProps['variant']>, string> = {
 
 const ACTIVE: Record<NonNullable<IconButtonProps['variant']>, string> = {
   default: 'bg-gray-600 text-white',
-  primary: 'bg-indigo-600 text-white',
+  primary: 'bg-stagespace-accent text-white',
   danger: 'bg-red-700 text-white border border-red-500',
   success: 'bg-green-600 text-white',
   warning: 'bg-orange-600 text-white',

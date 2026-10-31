@@ -27,7 +27,7 @@ interface SliderProps {
   className?: string;
 }
 
-const ACCENTS: Record<string, string> = {
+const ACCENTS: Record<NonNullable<SliderProps['accent']>, string> = {
   blue: 'accent-blue-500',
   green: 'accent-green-500',
   purple: 'accent-purple-500',
@@ -57,6 +57,7 @@ export const Slider: React.FC<SliderProps> = ({
   const input = (
     <input
       type="range"
+      aria-label={label ?? 'slider'}
       min={min}
       max={max}
       step={step}
