@@ -146,6 +146,8 @@ export interface MoveSlotsSlice {
   editingSlotId: string | null;
   /// Slot IDs avec une activation en cours (anti double-clic, non persisté)
   pendingPlays: string[];
+  /// Slots stoppés par le dernier solo — restore candidat (unsolo).
+  soloSavedIds: string[];
 
   // ─── CRUD moves ───
   addMoveSlot: () => void;
@@ -343,6 +345,7 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
   currentSetlistIndex: -1,
   editingSlotId: null,
   pendingPlays: [],
+  soloSavedIds: [],
 
   setSlotSignalGraph: (id, graph) => {
     set((s) => {
