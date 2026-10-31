@@ -11,28 +11,127 @@ Graphe de nœuds → moteurs f(t) → merge 60fps → OSC → renderer → encei
 
 ---
 
-## 1. Démarrage
+## 1. Premiers pas
 
-1. Lancez l'app. Importez votre projet **`.hol`** (Holophonix) pour peupler les
-   tracks, ou définissez des **OSC ids manuels** si vous n'avez pas de fichier.
-2. Configurez **OSC out** (Toolbar) : adresse, port, profil du renderer
+### Welcome
+
+Au premier lancement, STAGESPACE propose de charger le **show d'exemple** ou de
+partir de zéro. Le lexique du show est affiché d'emblée — retenez ces 4 mots :
+
+| Mot | Signification |
+|-----|---------------|
+| **Template** | une forme de trajectoire (Circle, Spiral, Physics…) |
+| **Move** | un template + des tracks assignées + des paramètres |
+| **Setlist** | vos moves ordonnés — GO avance dedans |
+| **Cue** | un snapshot que vous rappellez en live (Shift+Enter) |
+
+![Welcome](screenshots/01-welcome.png)
+
+### Configuration minimale
+
+1. Importez votre projet **`.hol`** (bouton *Import .hol* dans la toolbar) pour
+   peupler les tracks — ou définissez des **OSC ids manuels** dans Settings.
+2. Configurez **OSC out** : adresse, port, profil du renderer
    (Holophonix / Spat / IEM / ADM / générique XYZ / générique AED).
-3. Les positions de vos objets partent à **60 fps** dès qu'un move tourne.
-
-### Modes d'affichage
-
-| Vue | Pour quoi |
-|-----|-----------|
-| **Edit** (par défaut) | éditer graphes, nodes, paramètres, graphe global |
-| **Perform** | piloter en live : setlist, layers, cues, pads |
-| **Mode touch** (icône grip) | pads numérotés gros doigt pour tablette |
-| **Conduite** | plein écran NOW/NEXT cue — bouton *Conduite* |
-| **Conduite ⧉** | la même vue dans une **fenêtre détachable** (écran dédié FOH) |
-| **Busking** | plein écran pads géants — bouton *Busking* |
+3. Les positions partent à **60 fps** dès qu'un move tourne.
 
 ---
 
-## 2. Deux façons de travailler
+## 2. Les surfaces
+
+STAGESPACE est organisé en une **vue live de base** (Perform) et deux
+**surfaces de focus** plein écran (Busking, Conduite), plus la **fenêtre
+conduite détachable**. Le mode **Edit** sert à la préparation.
+
+### 2.1 Perform — la vue live de base
+
+![Perform](screenshots/02-perform.png)
+
+| Zone | Rôle |
+|------|------|
+| Topbar | PLAY ▶ (slot armé) · GO (setlist) · BUSKING · ⧉ · CONDUITE · LIVE · **PANIC** |
+| Colonne gauche | **Setlist** (GO avance ici) + **Layers** (parallèle) + **Cues** |
+| Centre | Preview 3D — orbite drag, zoom scroll, boutons *Manipulate* / *Assign* |
+| Onglets bas | Params · Playback · Tracks · Audio · OSC IN · Global |
+| StatusBar | statut · **LIVE/DRY-RUN** · **BACKEND ✕** · perf · erreurs · destination OSC |
+
+- **PLAY ▶** affiche le move armé — tap = lancer, re-tap = stop.
+- **GO** avance la setlist en crossfade ; les layers jouent en parallèle.
+- La cue list partage la colonne avec la setlist — click = **arm**, double-click
+  = **recall** (jamais de recall en un clic).
+- **Cue** affichée dans la topbar : `Cue n → suivante armée`.
+
+![Perform — move armé](screenshots/06-perform-slot.png)
+
+### 2.2 Edit — la préparation
+
+![Edit](screenshots/03-edit.png)
+
+- **Toolbar** (zonée) : setup (Import .hol, OSC out) · édition (undo/redo,
+  save/load show .hfg) · **sécurité live à droite** (LIVE + PANIC).
+- **Colonne SHOW** : onglets Moves / Cues / FX — bibliothèque de templates
+  (ORBITS, GESTURES, …) en dessous.
+- **Canvas 3D** central.
+- **Inspector** (droite) : PARAMS, PERFORM (duration/fades/loop), MACROS,
+  AUDIO, TRACKS (sélection par patterns : All / None / 1 of 2 / Odd /
+  Inverse / 1st half / 2nd half…).
+
+### 2.3 Créer un move
+
+![Move + Inspector](screenshots/04-move-inspector.png)
+
+`+ Move` crée un slot — choisissez un **template** (gauche), assignez des
+**tracks** (grille numérotée), réglez les **params** et les **fades**
+(fade in/out du slot), puis `▶ PLAY · Move n`.
+
+### 2.4 Expert — l'éditeur de graphe
+
+![Éditeur de nœuds](screenshots/05-node-editor.png)
+
+Le toggle **Expert/Simple** ouvre le node editor :
+
+- **Tabs** : `Move graph` (le graphe du slot édité) · `Global FX` (post-traitement
+  global) · `Modulation` (graphe signal).
+- **Palette** (gauche) : nodes par catégorie — clic pour ajouter,
+  **Ctrl+K** quick-add, clic-droit sur un node du canvas = exemples runnables.
+- **Canvas** : connexions par drag entre ports — **inputs en haut, outputs
+  en bas** (convention Max/MSP). Légende `Ports` en haut à gauche, minimap
+  en bas. Un node sélectionné s'édite dans l'Inspector (section NODE).
+- **Save** sauvegarde le graphe dans le slot — hot-swap : si le move tourne,
+  le nouveau graphe remplace l'ancien en fondu.
+
+### 2.5 Busking — pads plein écran
+
+![Busking](screenshots/07-busking.png)
+
+Bouton **BUSKING** (topbar Perform) : pads géants numérotés `#n`
+(= `oscIndex` stable — ne change pas au réordonnancement).
+
+- **Tap** = play/stop · **hold ≥350 ms** = bump momentané (joue tant que tenu)
+- **S** = solo (visible quand plusieurs moves jouent)
+- Fades propres à chaque slot (configurés en Edit/PERFORM)
+- Header : LIVE · PANIC · Fermer — le strict nécessaire en FOH.
+
+### 2.6 Conduite — la vue FOH
+
+![Conduite overlay](screenshots/08-conduite-overlay.png)
+
+Bouton **CONDUITE** : NOW (cue courante, amber), NEXT (armée), *then*,
+timers `pre_wait`/`follow`, TC, statut. Le transport **Prev | GO | Next |
+PANIC** en bas — `GO` = crossfade setlist, `Prev/Next` = recall cue.
+
+### 2.7 Conduite détachable — le second écran
+
+![Conduite détachée](screenshots/10-conduite-detached.png)
+
+Bouton **⧉** : la même conduite dans une **fenêtre dédiée** pour un écran FOH
+séparé. Si la fenêtre principale ne broadcast pas encore, la page affiche
+**« WAITING FOR MAIN WINDOW… »** — pas de page blanche. Chips DRY-RUN /
+PARKED / CONSOLE / TC identiques à l'overlay.
+
+---
+
+## 3. Deux façons de travailler
 
 ### A. Conduite console — l'ingé pilote depuis sa console
 
@@ -44,68 +143,70 @@ Snapshot console → OSC → STAGESPACE exécute la cue
                            ↘ feedback → ack/nack + cue courante
 ```
 
-- **Cues** : snapshotez l'état (moves, canaux, graphes, macros, mappings) —
-  *Full* = remplace tout, *Tracking* = ne touche que ce qui est enregistré
-  (merge par index objet).
-- **Conduite détachable** (bouton **⧉**) : NOW/NEXT/*then* en très gros,
-  timers `pre_wait`/`follow`, TC, voyant **CONSOLE ●** (le lien console se voit
-  à l'œil), **PARKED**, PANIC. Posée sur un écran dédié au FOH.
-- **Voyant CONSOLE** : vert = dernière commande show-control < 5 s.
+- **Voyant CONSOLE ●** : vert = dernière commande show-control < 5 s — le lien
+  console se voit à l'œil.
 - **NACK** : toute commande refusée (`busy`, `not-found`) est renvoyée à
   l'expéditeur — la console sait quand quelque chose n'a pas été exécuté.
+- Docs d'intégration : `docs/console-integration.md`.
 
 ### B. Busking — concert non-timecodé, à l'inspiration
 
 Les slots se préparent à la balance, se tirent au numéro ou au doigt.
 
-- **Pads** : mode touch ou Busking — *tap* = play/stop, **hold ≥350 ms =
-  bump momentané** (joue tant que tenu), **S** = solo, fades du slot.
-- **UNSOLO** : rejoue les slots coupés par le dernier solo — le solo n'est
-  plus une fin en soi.
-- **Layers** : les moves jouent en parallèle — superposez un essaim sur une
-  orbite.
-- **Numérotation stable** : `#n` affiché = `oscIndex` — le numéro programmé
-  en console ne change pas si vous réordonnez les slots.
+- **Layers** : les moves jouent en parallèle — superposez un essaim sur une orbite.
+- **UNSOLO** : rejoue les slots coupés par le dernier solo.
 - **STOP ALL** : coupe tous les moves en fondu (moins brutal que PANIC).
-- **Expression live** : macros (scale/shift/rotation/speed), positions
-  manuelles, faders externes via OSC-IN mappings.
+- **Expression live** : macros (scale/shift/rotation/speed), positions manuelles,
+  faders externes via OSC-IN mappings.
 
 ---
 
-## 3. Référence OSC show-control (`/stagespace/*`)
+## 4. Les cues en détail
 
-Port entrant = `oscInPort` (défaut 8001). Préfixe réservé — ces messages sont
-interceptés avant vos mappings utilisateur.
+- **Full** = remplace tout l'état (moves, canaux, graphes, macros, mappings).
+- **Tracking** = merge par index objet — ne touche que ce qui est enregistré
+  dans la cue (scope par catégories). Ne stoppe jamais les moves non listés.
+- `pre_wait` : attente avant exécution (affichée en compte à rebours).
+- `follow` : enchaînement automatique sur la cue suivante.
+- `timecode` : la cue se déclenche quand le TC arrive (fps 24/25/30, TC-originated
+  skips le pre_wait).
+- **Arm** : click simple = arme ; le recall va sur l'armée (ou la suivante).
+
+---
+
+## 5. Référence OSC show-control (`/stagespace/*`)
+
+Port entrant = `oscInPort` (défaut 8001). Préfixe réservé — intercepté avant
+vos mappings utilisateur.
 
 | Message | Effet |
 |---------|-------|
 | `/stagespace/go` | GO setlist (= Entrée) |
 | `/stagespace/cue/next` · `/prev` | cue suivante / précédente |
 | `/stagespace/cue/recall <n> [fade]` | cue par numéro/nom ou index ; `fade` optionnel |
-| `/stagespace/slot <n>` · `/slot/stop <n>` · `/solo <n>` | busking : joue / coupe / solo le slot d'`oscIndex` n |
+| `/stagespace/slot <n>` · `/slot/stop <n>` · `/solo <n>` | busking : joue / coupe / solo le slot `#n` |
 | `/stagespace/unsolo` | restore des slots coupés par le dernier solo |
 | `/stagespace/park <i>` · `/unpark <i>` | objet index *i* (0-based) hors recalls |
-| `/stagespace/arm` · `/disarm` | envoi OSC / **dry-run** (répétition silencieuse) |
+| `/stagespace/arm` · `/disarm` | envoi OSC / **dry-run** |
 | `/stagespace/status` | renvoie cue courante/suivante au demandeur |
-| `/stagespace/timecode <s \| "HH:MM:SS:FF">` | timecode → chase (fps 24/25/30 configurable) |
+| `/stagespace/timecode <s \| "HH:MM:SS:FF">` | timecode → chase |
 | `/stagespace/panic` · `/stop` | blackout / stop all |
 
-**Feedback au contrôleur** : `ack` sur chaque commande acceptée ; `nack
-<reason>` sur rejet ; `cue/current` et `cue/next` à chaque changement et sur
-`status`. Les 4 derniers contrôleurs reçoivent le feedback (console + tablette
-en même temps).
+**Feedback** : `ack` sur commande acceptée ; `nack <reason>` sur rejet ;
+`cue/current` + `cue/next` à chaque changement et sur `status`. Les 4 derniers
+contrôleurs reçoivent le feedback.
 
 ### Raccourcis clavier
 
 `Space` play/stop du slot sélectionné · `Enter` GO setlist · `Shift+Enter`
 recall cue suivante · `Backspace` cue précédente · `Esc` **panic** ·
-`Ctrl+Z`/`Y` undo/redo
+`Ctrl+Z`/`Y` undo/redo · `Ctrl+K` quick-add node · `?` cheatsheet
 
 ---
 
-## 4. OSC-IN mappings + Learn
+## 6. OSC-IN mappings + Learn
 
-Brancher un fader externe sur un paramètre — drawer *OSC IN* (PerformView) :
+Brancher un fader externe — onglet *OSC IN* (PerformView) :
 
 | Destination | Effet |
 |-------------|-------|
@@ -114,40 +215,61 @@ Brancher un fader externe sur un paramètre — drawer *OSC IN* (PerformView) :
 | `channel:gain:3` (gain/spread/distance/presence…) | canal de l'objet 3 |
 | `position:2` | position manuelle de l'objet 2 (override) |
 
-- **LEARN** : tapez une destination, cliquez LEARN, bougez le fader — l'adresse
-  se remplit seule (timeout 10 s).
-- **Valeurs live** affichées à côté de chaque mapping — le fader bouge = le
-  chiffre bouge.
-- ✎ édite le mapping (adresse/destination/transform pré-remplis — Add
-  remplace à même adresse) ; checkbox `enabled` coupe sans supprimer.
+- **LEARN** : tapez une destination, cliquez LEARN, bougez le fader —
+  l'adresse se remplit seule (timeout 10 s).
+- **Valeurs live** affichées à côté de chaque mapping.
+- ✎ édite · checkbox `enabled` coupe sans supprimer.
 
 ---
 
-## 5. Sécurité live
+## 7. Sécurité live
 
-- **Panic (Esc)** : stoppe tous les moves + renvoie les positions origine.
-  Passe même pendant la suppression anti-loop.
-- **Dry-run / ARM** : tout tourne, rien ne part au renderer — répétition
-  silencieuse sans déranger le son.
-- **Park** : un objet repris à la main échappe aux recalls — voyant PARKED
-  dans la topbar et la conduite ; clic → unpark individuel ou tout.
-- **Objets manuels** : toute position déplacée à la main (3D, SpaceMouse,
-  OSC-IN `position:`) est un override — visible sur la vue 3D.
+- **Panic (Esc / PANIC)** : stoppe tous les moves + renvoie les positions origine.
+- **Dry-run / ARM** : tout tourne, rien ne part au renderer — l'indicateur
+  `LIVE`/`DRY-RUN` est **toujours visible** dans la StatusBar.
+- **BACKEND ✕** : une commande backend a échoué silencieusement — le moteur ne
+  répond probablement plus. Revient au vert au premier IPC réussi.
+- **Park** : un objet repris à la main échappe aux recalls — chip **PARKED**
+  (topbar + conduite). `park` survit au panic par design.
+- **Confirmations** : toute action destructive (delete slot/template, clear-all
+  zones/modulations/channels, remove par-item) passe par une boîte de
+  confirmation — fini les deletes en un clic.
+
+![Confirmation de suppression](screenshots/09-confirm-delete.png)
+
+- **Guards recall** : pendant un recall, les commandes slot/cue sont rejetées
+  (`nack busy`) plutôt qu'intercalées — jamais de mouvement orphelin.
 
 ---
 
-## 6. Dépannage
+## 8. Dépannage
 
 | Symptôme | Cause probable | Vérifier |
 |----------|----------------|----------|
-| Objet qui ne bouge plus aux recalls | Park oublié | Chip **PARKED** topbar/conduite |
-| "J'ai appuyé et rien ne s'est passé" | Recall en cours ou slot/cue inexistant | `/stagespace/nack` renvoyé au contrôleur |
-| Console ne répond pas | Lien OSC mort | Voyant **CONSOLE ●** gris = >5 s sans commande |
-| `TC lost` | Pas de message `/stagespace/timecode` depuis >1 s | Source TC et port `oscInPort` |
-| Move qui joue en silence | Tracks demandées hors liste OSC | Le CLI/app refuse désormais explicitement |
-| Pas d'OSC sortant en répète | Dry-run actif | Bouton ARM / `OscArmToggle` |
+| Objet qui ne bouge plus aux recalls | Park oublié | Chip **PARKED** |
+| "J'ai appuyé et rien ne s'est passé" | Recall en cours ou slot/cue inexistant | `nack` renvoyé au contrôleur |
+| Console ne répond pas | Lien OSC mort | Voyant **CONSOLE ●** gris = >5 s |
+| `TC lost` | Pas de `/stagespace/timecode` depuis >1 s | Source TC + `oscInPort` |
+| Move qui joue en silence | Tracks hors liste OSC / dry-run | `LIVE` vs `DRY-RUN` + dest OSC StatusBar |
+| Tout est figé, rien ne répond | Backend mort | Chip **BACKEND ✕** StatusBar |
+| Fenêtre conduite noire | Fenêtre principale fermée / pas de broadcast | « WAITING FOR MAIN WINDOW… » |
+| Graphe pas appliqué au live | Hot-swap raté | Pill erreur StatusBar/Toolbar (persiste après le toast) |
 
-## 7. Conduite d'exemple
+---
+
+## 9. Fichiers & persistance
+
+| Quoi | Où |
+|------|-----|
+| Show complet (graphes, slots, cues, OSC, FX) | fichier `.hfg` — Toolbar save/load |
+| Projet Holophonix | `.hol` (import — source de vérité des tracks) |
+| Auto-save du graphe en édition | à chaque changement structurel |
+| Slots | localStorage (persistés entre sessions) |
+| Préférences UI (legend, collapsed…) | localStorage `stagespace.*` |
+
+---
+
+## 10. Conduite d'exemple
 
 `examples/conduite-epilogue.hfg` (+ `.md`) : spectacle ~1 h 25, 19 cues,
 14 moves, deux actes + entracte — TC, follow, tracking, safety cue S1.
