@@ -165,6 +165,8 @@ export interface MoveSlotsSlice {
   setSlotMacros: (id: string, macros: Partial<MoveMacros>) => void;
   setSlotFadeDuration: (id: string, fade: number) => void;
   setSlotLoopMode: (id: string, mode: 'loop' | 'oneshot') => void;
+  setSlotEndMode: (id: string, mode: 'revert' | 'hold') => void;
+  setSlotAnchorMode: (id: string, mode: 'origin' | 'current') => void;
   setSlotDirection: (id: string, direction: 'forward' | 'backward' | 'ping_pong') => void;
   /// Champs "animation" du slot (fade cycle, phase spread, assignments, audio mods)
   /// — write-through depuis l'Inspector (updateCurrent → ici).
@@ -908,6 +910,22 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
     set((s) => {
       const newSlots = s.moveSlots.map((sl) => sl.id === id ? { ...sl, fadeDuration: fade } : sl);
       saveSlotsToStorageDebounced(newSlots);
+      return { moveSlots: newSlots };
+    });
+  },
+
+  setSlotEndMode: (id, mode) => {
+    set((s) => {
+      const newSlots = s.moveSlots.map((sl) => sl.id === id ? { ...sl, endMode: mode } : sl);
+      saveSlotsToStorage(newSlots);
+      return { moveSlots: newSlots };
+    });
+  },
+
+  setSlotAnchorMode: (id, mode) => {
+    set((s) => {
+      const newSlots = s.moveSlots.map((sl) => sl.id === id ? { ...sl, anchorMode: mode } : sl);
+      saveSlotsToStorage(newSlots);
       return { moveSlots: newSlots };
     });
   },

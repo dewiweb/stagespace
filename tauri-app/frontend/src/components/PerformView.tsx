@@ -510,6 +510,8 @@ const LiveDrawer: React.FC = () => {
   const setSlotMacros = useGraphStore((s) => s.setSlotMacros);
   const setSlotDirection = useGraphStore((s) => s.setSlotDirection);
   const setSlotLoopMode = useGraphStore((s) => s.setSlotLoopMode);
+  const setSlotEndMode = useGraphStore((s) => s.setSlotEndMode);
+  const setSlotAnchorMode = useGraphStore((s) => s.setSlotAnchorMode);
   const setSlotTracks = useGraphStore((s) => s.setSlotTracks);
   const holProject = useGraphStore((s) => s.holProject);
   const manualOscIds = useGraphStore((s) => s.manualOscIds);
@@ -700,6 +702,42 @@ const LiveDrawer: React.FC = () => {
                     }`}
                   >
                     {l}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="text-gray-500 text-xs uppercase tracking-wider mb-1" title="Fin de one-shot : hold fige la dernière position (chaînage), revert revient à la base">End</div>
+              <div className="flex gap-1">
+                {(['revert', 'hold'] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setSlotEndMode(slot.id, m)}
+                    className={`flex-1 py-1.5 text-xs rounded ${
+                      (slot.endMode ?? 'revert') === m
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-800 text-gray-500 hover:text-gray-300'
+                    }`}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="text-gray-500 text-xs uppercase tracking-wider mb-1" title="Ancre : current part de la position courante de chaque objet, origin de l'origine du move">Anchor</div>
+              <div className="flex gap-1">
+                {(['origin', 'current'] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setSlotAnchorMode(slot.id, m)}
+                    className={`flex-1 py-1.5 text-xs rounded ${
+                      (slot.anchorMode ?? 'origin') === m
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-800 text-gray-500 hover:text-gray-300'
+                    }`}
+                  >
+                    {m}
                   </button>
                 ))}
               </div>
