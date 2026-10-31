@@ -52,7 +52,13 @@ export const CuelistPanel: React.FC = () => {
 
     // Récupérer le graph global + le graph de modulation (domaine signal)
     const globalGraphJson = { nodes: globalNodes, edges: globalEdges };
-    const signalGraphJson = { nodes: signalNodes, edges: signalEdges };
+    // Un graphe signal sans SignalOut ne compile pas (sortie obligatoire)
+    // — le stocker rendrait le cue irrévocable. Sans sortie = pas de
+    // modulation à mémoriser → null.
+    const hasSignalOut = signalNodes.some(
+      (n) => (n.data as { type?: string }).type === 'SignalOut'
+    );
+    const signalGraphJson = hasSignalOut ? { nodes: signalNodes, edges: signalEdges } : null;
 
     // IDs des moves actifs
     const activeMoveIds = movements.map((m) => m.id);
