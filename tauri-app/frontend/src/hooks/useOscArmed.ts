@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { safeInvoke, safeListen } from '../utils/tauri';
+import { safeInvoke, safeListen, silentCatch } from '../utils/tauri';
 import { toast } from '../utils/toast-helpers';
 
 /// État arm/disarm OSC — une seule source pour tous les indicateurs
@@ -14,7 +14,7 @@ export function useOscArmed(): [armed: boolean, setArmed: (a: boolean) => void] 
     let cancelled = false;
     void safeInvoke<boolean>('get_osc_armed')
       .then((a) => { if (!cancelled) setArmedState(a); })
-      .catch(() => {});
+      .catch(silentCatch);
     const un = safeListen<boolean>('osc-armed-changed', (e) => setArmedState(e.payload));
     return () => { cancelled = true; void un.then((f) => f()); };
   }, []);

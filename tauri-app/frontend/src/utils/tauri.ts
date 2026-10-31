@@ -36,12 +36,37 @@ function isIpcError(e: unknown): e is IpcErrorPayload {
   );
 }
 
+/// Canal de santé backend — le store s'enregistre (inversion de dépendance :
+/// tauri.ts ne peut pas importer useShowStatusStore sans cycle).
+let _health: { down: () => void; up: () => void } | null = null;
+export function registerBackendHealth(h: { down: () => void; up: () => void }) {
+  _health = h;
+}
+
+let _lastSilentWarn = 0;
+
+/// Drop-in `.catch()` pour les IPC fire-and-forget : avale la rejection
+/// (l'appelant s'en fiche) MAIS flag `backendDown` pour que l'UI montre
+/// l'indicateur "backend absent" — un catch(()=>{}) aveugle cache la mort
+/// du backend en live. Aussi visible en dev via warn rate-limité.
+export function silentCatch(e: unknown): void {
+  _health?.down();
+  const now = Date.now();
+  if (now - _lastSilentWarn > 30_000) {
+    _lastSilentWarn = now;
+    console.warn('[silentCatch] backend call failed silently:', e);
+  }
+}
+
 export async function safeInvoke<T = any>(cmd: string, args?: Record<string, any>): Promise<T> {
   if (!checkTauri()) {
     throw new Error(`Tauri not available: invoke("${cmd}") called in browser mode`);
   }
   try {
-    return await tauriInvoke<T>(cmd, args);
+    const result = await tauriInvoke<T>(cmd, args);
+    // Un invoke réussi prouve que le backend vit — clear l'indicateur.
+    _health?.up();
+    return result;
   } catch (e) {
     // Les commands typées renvoient {code, message} — les wrappe en Error
     // pour que String(e)/e.message restent lisibles dans les toasts, avec

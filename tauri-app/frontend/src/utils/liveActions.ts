@@ -4,12 +4,12 @@
 import { useGraphStore } from '../store/useGraphStore';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { toast } from './toast-helpers';
-import { safeInvoke as invoke } from './tauri';
+import { safeInvoke as invoke, silentCatch } from './tauri';
 
 /** NACK le contrôleur OSC si la commande vient d'/stagespace/* (from). */
 function nack(from: string | undefined, reason: string) {
   if (!from) return;
-  invoke('send_show_nack', { addr: from, reason }).catch(() => {});
+  invoke('send_show_nack', { addr: from, reason }).catch(silentCatch);
 }
 
 /** Garde commune : rejet NACK si un recall est en cours. */

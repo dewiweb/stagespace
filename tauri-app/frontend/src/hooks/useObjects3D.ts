@@ -34,6 +34,11 @@ export function useObjects3D({ sceneRef, nObjects, sceneReady }: UseObjects3DPar
   useEffect(() => {
     let cancelled = false;
     let raf = 0;
+    // Borné : si la scène n'apparaît pas en ~5s, retenter à 60fps pour
+    // toujours est inutile — un warning unique suffit (Scene3D a son
+    // propre boundary si l'init a vraiment échoué).
+    let retries = 0;
+    const MAX_RETRIES = 300;
     const syncObjects = () => {
     if (cancelled) return;
     const scene = sceneRef.current;
@@ -42,7 +47,11 @@ export function useObjects3D({ sceneRef, nObjects, sceneReady }: UseObjects3DPar
       // StrictMode, sceneReady désynchronisé) — retenter à la prochaine
       // frame au lieu d'abandonner : sinon aucun objet n'est jamais créé
       // et la vue reste figée (positions reçues mais aucun mesh à animer).
-      if (!cancelled) raf = requestAnimationFrame(syncObjects);
+      if (!cancelled && retries++ < MAX_RETRIES) {
+        raf = requestAnimationFrame(syncObjects);
+      } else if (!cancelled) {
+        console.error('[useObjects3D] scene never became ready after 300 frames — giving up');
+      }
       return;
     }
 

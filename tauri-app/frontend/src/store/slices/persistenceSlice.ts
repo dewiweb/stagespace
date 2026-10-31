@@ -1,7 +1,7 @@
 import { StateCreator } from 'zustand';
 import type { Edge } from '@xyflow/react';
 import type { GraphNode } from '../../components/nodeParamSchema';
-import { safeInvoke as invoke } from '../../utils/tauri';
+import { safeInvoke as invoke, silentCatch } from '../../utils/tauri';
 import { safeSetItem, safeParseStoredJson } from '../../utils/safeStorage';
 import { toast } from '../../utils/toast-helpers';
 import type { MoveSlot } from './moveSlotsSlice';
@@ -415,7 +415,7 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
       } catch (e) {
         console.error('Failed to push restored macros:', e);
         set({ macros: prevMacros });
-        await get().pushMacrosToRuntime?.().catch(() => {});
+        await get().pushMacrosToRuntime?.().catch(silentCatch);
         toast.error(`Show loaded but macros failed to apply: ${e}`);
       }
     }
@@ -451,8 +451,8 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
           address: prevOsc.oscAddress,
           port: prevOsc.oscPort,
           profile: prevOsc.oscProfile,
-        }).catch(() => {});
-        await invoke('set_osc_receiver_port', { port: prevOsc.oscInPort }).catch(() => {});
+        }).catch(silentCatch);
+        await invoke('set_osc_receiver_port', { port: prevOsc.oscInPort }).catch(silentCatch);
         toast.error(`Show loaded but OSC config failed to apply: ${e}`);
       }
     }
@@ -471,7 +471,7 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
       } catch (e) {
         console.error('Failed to push restored global graph:', e);
         useGlobalGraphStore.setState({ nodes: prevNodes, edges: prevEdges });
-        await useGlobalGraphStore.getState().pushGlobalGraph().catch(() => {});
+        await useGlobalGraphStore.getState().pushGlobalGraph().catch(silentCatch);
         toast.error(`Show loaded but global graph failed to apply: ${e}`);
       }
     }
@@ -490,7 +490,7 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
       } catch (e) {
         console.error('Failed to push restored signal graph:', e);
         useSignalGraphStore.setState({ nodes: prevNodes, edges: prevEdges });
-        await useSignalGraphStore.getState().pushSignalGraph().catch(() => {});
+        await useSignalGraphStore.getState().pushSignalGraph().catch(silentCatch);
         toast.error(`Show loaded but signal graph failed to apply: ${e}`);
       }
     }

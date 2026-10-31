@@ -51,6 +51,8 @@ vi.mock('../utils/tauri', () => ({
   safeListen: async () => () => {},
   checkTauri: () => true,
   feLog: (_msg: string) => { /* no-op in tests */ },
+  registerBackendHealth: (_h: { down: () => void; up: () => void }) => { /* no-op in tests */ },
+  silentCatch: (_e: unknown) => { /* no-op in tests */ },
 }));
 
 // Mock @tauri-apps/api/core and event (in case any code imports directly)

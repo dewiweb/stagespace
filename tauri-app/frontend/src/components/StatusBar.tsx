@@ -3,6 +3,7 @@ import { TriangleAlert } from 'lucide-react';
 import { useGraphStore } from '../store/useGraphStore';
 import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { useOscArmed } from '../hooks/useOscArmed';
+import { useShowStatusStore } from '../store/useShowStatusStore';
 
 /// StatusBar — bandeau persistant en bas de fenêtre, monté dans App pour
 /// TOUS les modes (Edit et Perform). C'est la console de monitoring moteur :
@@ -24,6 +25,7 @@ export const StatusBar: React.FC = () => {
   const oscPort = useGraphStore((s) => s.oscPort);
   const [armed] = useOscArmed();
   const debugPerfVisible = useMoveEditorStore((s) => s.debugPerfVisible);
+  const backendDown = useShowStatusStore((s) => s.backendDown);
 
   const activeCount = movements.length;
   const hasError = !!(compileError || playError);
@@ -63,6 +65,17 @@ export const StatusBar: React.FC = () => {
       >
         {armed ? 'LIVE' : 'DRY-RUN'}
       </span>
+
+      {/* Backend absent — un silentCatch a avalé un échec IPC. Plus de
+          backend = plus d'OSC, plus de recall, plus rien : visible partout. */}
+      {backendDown && (
+        <span
+          className="px-1.5 py-0.5 rounded font-bold flex-shrink-0 text-red-300 bg-red-950/60 border border-red-800 animate-pulse"
+          title="Une commande backend a échoué silencieusement — le moteur ne répond probablement plus"
+        >
+          BACKEND ✕
+        </span>
+      )}
 
       {/* Perf en direct — visible dès qu'un mouvement tourne */}
       {activeCount > 0 && perfStats && (

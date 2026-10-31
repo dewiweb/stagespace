@@ -5,6 +5,7 @@ import { TrackGrid } from './TrackGrid';
 import { PARAM_SCHEMA, NODE_DESCRIPTIONS, getCategoryColor, type ParamDef, type NodeParamValue, type GraphNodeData } from './nodeParamSchema';
 import { NodeParamsPanel } from './NodeParamsPanel';
 import type { MacrosState } from '../store/slices/macrosSlice';
+import { silentCatch } from '../utils/tauri';
 
 // ── Section repliable ──
 function Section({ title, icon, defaultOpen = true, badge, badgeColor = 'gray', children }: {
@@ -508,7 +509,7 @@ export default function Inspector() {
               );
             })}
             <button
-              onClick={() => stopAllMovements().catch(() => {})}
+              onClick={() => stopAllMovements().catch(silentCatch)}
               className="w-full py-1 bg-red-900/50 hover:bg-red-900/70 text-red-400 text-xs rounded font-medium transition-colors"
             >
               ■ Stop All

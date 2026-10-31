@@ -16,7 +16,7 @@ import { useGraphStore } from '../store/useGraphStore';
 import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { doSolo, doUnpark, doStop, doUnsolo, getSoloRestoreIds } from '../utils/liveActions';
-import { safeInvoke } from '../utils/tauri';
+import { safeInvoke, silentCatch } from '../utils/tauri';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { toast } from '../utils/toast-helpers';
 import { type NodeParamValue } from './nodeParamSchema';
@@ -812,7 +812,7 @@ const OscMappingsPanel: React.FC = () => {
     const t = setInterval(() => {
       safeInvoke<Record<string, number[]>>('osc_get_all_values')
         .then((v) => setLiveValues(v ?? {}))
-        .catch(() => {});
+        .catch(silentCatch);
     }, 500);
     return () => clearInterval(t);
   }, []);
