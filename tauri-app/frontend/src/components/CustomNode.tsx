@@ -8,6 +8,7 @@ import { useSignalGraphStore } from '../store/useSignalGraphStore';
 import { PARAM_SCHEMA, getCategoryColor, pluginNodeSchema, pluginParamsOnSwitch, type ParamDef, type NodeParamValue, type GraphNode } from './nodeParamSchema';
 import { isSourceNode, isTerminalNode, isBinaryComposite, getInputPorts, getOutputPorts, PORT_COLORS } from '../utils/connectionRules';
 import { signalTargetOptions, modulatedParamKeys } from '../utils/signalTargets';
+import { LinkedTracksField, NODE_INPUT_CLS, NODE_INPUT_MONO_CLS } from './editor/LinkedTracksField';
 
 const AUDIO_NODE_TYPES = new Set(['BPM', 'AudioAmplitude', 'AudioSpectrum', 'AudioAmplitudeFalloff']);
 
@@ -148,7 +149,7 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
             value={typeof value === 'number' ? value : 0}
             onChange={(e) => handleChange(def.key, parseFloat(e.target.value) || 0)}
             onKeyDown={blurOnEnter}
-            className="w-full px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none"
+            className={NODE_INPUT_CLS}
           />
         );
       case 'boolean':
@@ -173,7 +174,7 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
               e.currentTarget.blur();
             }}
             onKeyDown={blurOnEnter}
-            className="w-full px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none"
+            className={NODE_INPUT_CLS}
           >
             {def.options?.map((opt) => (
               <option key={opt} value={opt}>{opt}</option>
@@ -193,7 +194,7 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
               }
             }}
             onKeyDown={blurOnEnter}
-            className="w-full px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+            className={NODE_INPUT_MONO_CLS}
             placeholder="x, y, z"
           />
         );
@@ -212,7 +213,7 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
                 e.currentTarget.blur();
               }}
               onKeyDown={blurOnEnter}
-              className="w-full px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none"
+              className={NODE_INPUT_CLS}
             >
               <option value="">(inert)</option>
               {current !== '' && !options.some((o) => o.value === current) && (
@@ -230,7 +231,7 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
             value={typeof value === 'string' ? value : ''}
             onChange={(e) => handleChange(def.key, e.target.value)}
             onKeyDown={blurOnEnter}
-            className="w-full px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+            className={NODE_INPUT_MONO_CLS}
           />
         );
       }
@@ -382,28 +383,13 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
           ))}
           {data.type === 'Objects' && (
             <div className="mt-1 pt-2 border-t border-gray-700">
-              <label className="text-cyan-400 text-xs font-mono">Linked Tracks</label>
-              <input
-                type="text"
+              <LinkedTracksField
                 value={trackIdsValue}
-                onChange={(e) => setTrackIdsText(e.target.value)}
-                onBlur={commitTrackIds}
-                onKeyDown={(e) => { if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); } }}
-                placeholder="ex: 1, 2, 3..."
-                className="w-full mt-0.5 px-2 py-1 bg-gray-900 text-cyan-300 text-xs font-mono rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
+                onChangeText={setTrackIdsText}
+                onCommit={commitTrackIds}
+                ids={(data.params?.track_ids as number[]) ?? []}
+                maxShown={16}
               />
-              {((data.params?.track_ids as number[]) ?? []).length > 0 && (
-                <div className="flex flex-wrap gap-0.5 mt-1">
-                  {(data.params.track_ids as number[]).slice(0, 16).map((id: number) => (
-                    <span key={id} className="text-xs font-mono px-1 py-0.5 bg-cyan-900/40 text-cyan-400 rounded">
-                      {id}
-                    </span>
-                  ))}
-                  {(data.params.track_ids as number[]).length > 16 && (
-                    <span className="text-xs text-gray-500">+{(data.params.track_ids as number[]).length - 16}</span>
-                  )}
-                </div>
-              )}
             </div>
           )}
           {data.type === 'DrawSpline' && (
@@ -422,28 +408,13 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
       {/* Objects quand collapsed : éditeur de tracks toujours visible */}
       {data.type === 'Objects' && !expanded && (
         <div className="px-3 py-1.5 border-t border-gray-700">
-          <label className="text-cyan-400 text-xs font-mono">Linked Tracks</label>
-          <input
-            type="text"
+          <LinkedTracksField
             value={trackIdsValue}
-            onChange={(e) => setTrackIdsText(e.target.value)}
-            onBlur={commitTrackIds}
-            onKeyDown={(e) => { if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); } }}
-            placeholder="ex: 1, 2, 3..."
-            className="w-full mt-0.5 px-2 py-1 bg-gray-900 text-cyan-300 text-xs font-mono rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
+            onChangeText={setTrackIdsText}
+            onCommit={commitTrackIds}
+            ids={(data.params?.track_ids as number[]) ?? []}
+            maxShown={12}
           />
-          {((data.params?.track_ids as number[]) ?? []).length > 0 && (
-            <div className="flex flex-wrap gap-0.5 mt-1">
-              {(data.params.track_ids as number[]).slice(0, 12).map((id: number) => (
-                <span key={id} className="text-xs font-mono px-1 py-0.5 bg-cyan-900/40 text-cyan-400 rounded">
-                  {id}
-                </span>
-              ))}
-              {(data.params.track_ids as number[]).length > 12 && (
-                <span className="text-xs text-gray-500">+{(data.params.track_ids as number[]).length - 12}</span>
-              )}
-            </div>
-          )}
         </div>
       )}
 
