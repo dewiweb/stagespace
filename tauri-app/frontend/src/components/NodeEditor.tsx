@@ -1,10 +1,5 @@
-import React, { useCallback, useState, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import {
-  ReactFlow,
-  useReactFlow,
-  Background,
-  Controls,
-  MiniMap,
   NodeTypes,
   MarkerType,
   type Node,
@@ -19,16 +14,15 @@ import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import { useSignalGraphStore } from '../store/useSignalGraphStore';
 import CustomNode from './CustomNode';
 import { NodePalette } from './editor/NodePalette';
+import { GraphCanvas } from './editor/GraphCanvas';
 import { useStandaloneGraph } from '../hooks/useStandaloneGraph';
-import EmptyState from './ui/EmptyState';
 import { QuickAddModal } from './QuickAddModal';
-import { NODE_CATEGORIES, getCategoryColor, getDefaultParams, pluginDefaultParams, GLOBAL_ONLY_NODES, SUB_ONLY_NODES, SIGNAL_ONLY_NODES, type GraphNode } from './nodeParamSchema';
-import { isValidConnection, connectionRejectionReason, spliceRejectionReason, portTypesInGraph, PORT_COLORS } from '../utils/connectionRules';
-import { safeGetItem, safeSetItem } from '../utils/safeStorage';
+import { NODE_CATEGORIES, getDefaultParams, pluginDefaultParams, GLOBAL_ONLY_NODES, SUB_ONLY_NODES, SIGNAL_ONLY_NODES, type GraphNode } from './nodeParamSchema';
+import { isValidConnection, connectionRejectionReason, spliceRejectionReason } from '../utils/connectionRules';
 import { presetsUsingType } from '../utils/shapePresets';
 import { toast } from '../utils/toast-helpers';
 import { safeInvoke as invoke } from '../utils/tauri';
-import { issuesByNode, nodeIssueClass, countIssues, type GraphIssue } from '../utils/graphIssues';
+import { issuesByNode, nodeIssueClass, type GraphIssue } from '../utils/graphIssues';
 import type { PluginManifest } from '../types/generated/PluginManifest';
 import type { PluginKind } from '../types/generated/PluginKind';
 
@@ -136,7 +130,6 @@ export const NodeEditor: React.FC = () => {
   const [graphIssues, setGraphIssues] = useState<GraphIssue[]>([]);
   const [issuesOpen, setIssuesOpen] = useState(false);
   const issueMap = useMemo(() => issuesByNode(graphIssues), [graphIssues]);
-  const issueCounts = useMemo(() => countIssues(graphIssues), [graphIssues]);
 
   // Décor des nodes (highlight connexion + MoveRef actif) memoized — sans ça,
   // chaque render recrée tous les objets node et React Flow re-render tout.
@@ -426,7 +419,9 @@ export const NodeEditor: React.FC = () => {
   }, []);
 
   const onPaneDoubleClick = useCallback((e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('.react-flow__node')) return;
+    // Uniquement le pane lui-même — un double-clic sur MiniMap, Controls
+    // ou un node bubble jusqu'au wrapper et ouvrirait QuickAdd par erreur.
+    if (!(e.target as HTMLElement).classList.contains('react-flow__pane')) return;
     setQuickAddOpen(true);
   }, []);
 
@@ -589,103 +584,45 @@ export const NodeEditor: React.FC = () => {
       />
 
       {/* Canvas */}
-      <div className="flex-1 bg-stagespace-bg relative">
-        {(issueCounts.errors > 0 || issueCounts.warnings > 0) && (
-          <div className="absolute top-2 right-2 z-raised text-xs">
-            <button
-              onClick={() => setIssuesOpen((o) => !o)}
-              className="px-2 py-1 rounded bg-gray-900 border border-gray-700 hover:border-gray-500"
-              title="Graph diagnostics (backend)"
-            >
-              {issueCounts.errors > 0 && (
-                <span className="text-red-400">{issueCounts.errors} error{issueCounts.errors > 1 ? 's' : ''}</span>
-              )}
-              {issueCounts.errors > 0 && issueCounts.warnings > 0 && ' · '}
-              {issueCounts.warnings > 0 && (
-                <span className="text-amber-400">{issueCounts.warnings} warning{issueCounts.warnings > 1 ? 's' : ''}</span>
-              )}
-            </button>
-            {issuesOpen && (
-              <div className="mt-1 max-w-xs max-h-64 overflow-y-auto bg-gray-900 border border-gray-700 rounded p-2 space-y-1">
-                {graphIssues.map((i, k) => (
-                  <div key={k} className={i.severity === 'Error' ? 'text-red-300' : 'text-amber-300'}>
-                    <span className="font-semibold">{i.severity}</span> — {i.message}
-                    {i.node_ids.length > 0 && (
-                      <div className="text-gray-500 font-mono text-[10px]">{i.node_ids.join(', ')}</div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-        <ReactFlow
-          nodes={decoratedNodes}
-          edges={decoratedEdges}
-          onNodesChange={
-            activeTab === 'global'
-              ? globalGraph.onNodesChange
-              : activeTab === 'signal'
-                ? signalGraph.onNodesChange
-                : onNodesChange
-          }
-          onEdgesChange={
-            activeTab === 'global'
-              ? globalGraph.onEdgesChange
-              : activeTab === 'signal'
-                ? signalGraph.onEdgesChange
-                : onEdgesChange
-          }
-          onConnect={
-            activeTab === 'global'
-              ? globalGraph.onConnect
-              : activeTab === 'signal'
-                ? signalGraph.onConnect
-                : handleConnect
-          }
-          onConnectStart={onConnectStart}
-          onConnectEnd={onConnectEnd}
-          onNodeDoubleClick={onNodeDoubleClick}
-          onNodeContextMenu={onNodeContextMenu}
-          onNodeClick={() => setNodeMenu(null)}
-          onPaneClick={() => setNodeMenu(null)}
-          onMoveStart={() => setNodeMenu(null)}
-          onDoubleClick={onPaneDoubleClick}
-          isValidConnection={checkValidConnection}
-          nodeTypes={nodeTypes}
-          fitView
-          /* minZoom bas : les gros graphes doivent pouvoir se dézoomer
-             largement pour la navigation d'ensemble (défaut 0.5 = bloquant). */
-          minZoom={0.15}
-          maxZoom={2}
-          deleteKeyCode={['Delete', 'Backspace']}
-          className="!bg-stagespace-bg"
-        >
-          <Background color="#1e1e2e" gap={24} />
-          <Controls showInteractive={false} />
-          <ViewportSync contextKey={`${activeTab}:${editingSlotId ?? 'global'}`} />
-          <PortLegend nodes={displayNodes} />
-          <MiniMap
-            nodeColor={(n) => getCategoryColor((n.data.type ?? '') as NodeType)}
-            maskColor="rgba(10,10,15,0.7)"
-          />
-        </ReactFlow>
-
-        {displayNodes.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <EmptyState
-              title="Empty graph"
-              hint={
-                activeTab === 'global'
-                  ? 'Click nodes in the palette — Start with: Input → Scale → Rotate → Offset → Output'
-                  : activeTab === 'signal'
-                    ? 'Click nodes in the palette — Start with: SignalLfo → SignalMap → SignalOut'
-                    : 'Click nodes in the palette — Start with: Objects → Duration → Circular → Output'
-              }
-            />
-          </div>
-        )}
-
+      <GraphCanvas
+        nodes={decoratedNodes}
+        edges={decoratedEdges}
+        onNodesChange={
+          activeTab === 'global' ? globalGraph.onNodesChange
+            : activeTab === 'signal' ? signalGraph.onNodesChange
+            : onNodesChange
+        }
+        onEdgesChange={
+          activeTab === 'global' ? globalGraph.onEdgesChange
+            : activeTab === 'signal' ? signalGraph.onEdgesChange
+            : onEdgesChange
+        }
+        onConnect={
+          activeTab === 'global' ? globalGraph.onConnect
+            : activeTab === 'signal' ? signalGraph.onConnect
+            : handleConnect
+        }
+        onConnectStart={onConnectStart}
+        onConnectEnd={onConnectEnd}
+        onNodeDoubleClick={onNodeDoubleClick}
+        onNodeContextMenu={onNodeContextMenu}
+        onDismissNodeMenu={() => setNodeMenu(null)}
+        onPaneDoubleClick={onPaneDoubleClick}
+        isValidConnection={checkValidConnection}
+        nodeTypes={nodeTypes}
+        contextKey={`${activeTab}:${editingSlotId ?? 'global'}`}
+        displayNodes={displayNodes}
+        emptyHint={
+          activeTab === 'global'
+            ? 'Click nodes in the palette — Start with: Input → Scale → Rotate → Offset → Output'
+            : activeTab === 'signal'
+              ? 'Click nodes in the palette — Start with: SignalLfo → SignalMap → SignalOut'
+              : 'Click nodes in the palette — Start with: Objects → Duration → Circular → Output'
+        }
+        graphIssues={graphIssues}
+        issuesOpen={issuesOpen}
+        onToggleIssues={() => setIssuesOpen((o) => !o)}
+      >
         {quickAddOpen && (
           <QuickAddModal
             types={allowedTypes}
@@ -740,70 +677,10 @@ export const NodeEditor: React.FC = () => {
             Connecting from <span className="text-white font-bold">{connectingFrom}</span> — drag to a valid target
           </div>
         )}
-      </div>
+      </GraphCanvas>
       </div>
     </div>
   );
 };
 
 export default NodeEditor;
-
-/// Re-fit la vue quand le contexte change (tab / slot édité) — sans ça le
-/// graphe nouveau apparaît hors champ. Doit être enfant de <ReactFlow>
-/// (useReactFlow nécessite le provider interne de ReactFlow).
-function ViewportSync({ contextKey }: { contextKey: string }) {
-  const { fitView } = useReactFlow();
-  const lastKey = useRef(contextKey);
-  useEffect(() => {
-    if (lastKey.current === contextKey) return;
-    lastKey.current = contextKey;
-    const raf = requestAnimationFrame(() => {
-      fitView({ padding: 0.2, duration: 200 });
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [contextKey, fitView]);
-  return null;
-}
-
-const LEGEND_STORAGE_KEY = 'stagespace.portLegend.collapsed';
-
-/// Légende compacte des types de ports présents dans le contexte courant —
-/// les couleurs viennent de PORT_COLORS (source unique partagée avec les
-/// handles). Repliée/dépliée persiste en localStorage.
-function PortLegend({ nodes }: { nodes: GraphNode[] }) {
-  const [collapsed, setCollapsed] = useState(
-    () => safeGetItem(LEGEND_STORAGE_KEY) === 'true',
-  );
-  const types = useMemo(
-    () => portTypesInGraph(nodes.map((n) => n.data.type)),
-    [nodes],
-  );
-  if (types.length === 0) return null;
-  return (
-    <div className="absolute top-2 left-2 z-raised text-xs bg-gray-900/90 border border-gray-700 rounded">
-      <button
-        onClick={() => {
-          setCollapsed((c) => {
-            const next = !c;
-            safeSetItem(LEGEND_STORAGE_KEY, String(next));
-            return next;
-          });
-        }}
-        className="px-2 py-1 w-full text-left text-gray-300 hover:text-white"
-        title="Port type legend"
-      >
-        {collapsed ? '› Ports' : '˅ Ports'}
-      </button>
-      {!collapsed && (
-        <div className="px-2 pb-2 space-y-0.5">
-          {types.map((t) => (
-            <div key={t} className="flex items-center gap-1.5 text-gray-400">
-              <span className={`inline-block w-2.5 h-2.5 rounded-full ${PORT_COLORS[t]}`} />
-              {t}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}

@@ -36,12 +36,25 @@ export function useStandaloneGraph(opts: {
   const onConnect = useCallback(
     (connection: Connection) => {
       connectedThisDrop.current = true;
+      // id avec handles — `${source}-${target}` seul collisionne quand
+      // deux connexions relient les mêmes nodes sur des ports différents.
       const newEdge = {
         ...connection,
-        id: `${connection.source}-${connection.target}`,
+        id: `${connection.source}.${connection.sourceHandle ?? ''}-${connection.target}.${connection.targetHandle ?? ''}`,
         markerEnd: { type: MarkerType.ArrowClosed },
       };
-      setEdges([...edges, newEdge as Edge]);
+      // Même sémantique que le store sub : un port d'entrée ne prend
+      // qu'une edge — re-câbler dans un input occupé remplace l'existante.
+      setEdges([
+        ...edges.filter(
+          (e) =>
+            !(
+              e.target === connection.target &&
+              (e.targetHandle ?? null) === (connection.targetHandle ?? null)
+            ),
+        ),
+        newEdge as Edge,
+      ]);
     },
     [edges, setEdges, connectedThisDrop],
   );
