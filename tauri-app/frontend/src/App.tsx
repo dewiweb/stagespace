@@ -210,21 +210,25 @@ function AppMain() {
               : 'Perform mode — live surface: setlist, GO, panic, on-demand live params'}
           >
             {performMode ? (
-              <><Workflow size={11} /> Atelier</>
+              <><Workflow size={11} /> Edit</>
             ) : (
               <><span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> PERFORM</>
             )}
           </button>
           {!performMode && (
+            // Même convention que PERFORM/Edit : le bouton affiche la
+            // CIBLE, la couleur signale le mode courant.
             <button
               onClick={() => setShowExpert(!showExpert)}
               className={`px-3 py-1 text-xs font-bold rounded transition-all flex items-center gap-1.5 ${
-                showExpert ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+                showExpert ? 'bg-gray-800 text-gray-400 hover:text-white' : 'bg-purple-600 text-white'
               }`}
-              title="Expert mode — advanced graph editor (nodes, connections, custom trajectories)"
+              title={showExpert
+                ? 'Simple mode — move form editor (no graph nodes)'
+                : 'Expert mode — advanced graph editor (nodes, connections, custom trajectories)'}
             >
               <Workflow size={12} />
-              {showExpert ? 'Expert' : 'Simple'}
+              {showExpert ? 'Simple' : 'Expert'}
             </button>
           )}
         </div>

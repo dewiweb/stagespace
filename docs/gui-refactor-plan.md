@@ -169,3 +169,21 @@ P0.7 (armed event) ─┘         ↑ nécessite P0.5 pour ShowTransport
   ajouter des tests sur les guards (P0.5) et `setDrawMode` exclusif (P0.2).
 - **ConduitePage** : valider en vraie fenêtre Tauri — le browser ne couvre
   ni `listen` ni `emit`.
+
+## Lexique (P2.9) — conventions de nommage figées
+
+- **Deux modes seulement** : `PERFORM` (surface live) ↔ `Edit` (atelier).
+  « Atelier »/« Workshop » ne sont plus utilisés dans l'UI.
+- **Sous-modes d'édition** : `Simple` (formulaire de move) / `Expert`
+  (graphe de nœuds). Les boutons affichent la CIBLE, la couleur signale
+  l'état courant — même convention que le toggle PERFORM/Edit.
+- **`move`** = un slot jouable (objet du show) · **`slot`** = sa place
+  dans le workspace (oscIndex, numéro de commande OSC) ·
+  **`template`/`animation`** = le contenu édité dans le panneau gauche ·
+  **`setlist`** = la séquence ordonnée de moves jouée par GO.
+- **`cue`** = l'objet conduite (scope + fade + pre_wait/follow/timecode) ·
+  **`recall`** = l'action de l'appliquer · **`armed`** = la cue sélectionnée
+  en attente du prochain tir.
+- **`GO`** = avance la SETLIST (crossfade) — partout, y compris la
+  fenêtre conduite détachée · **`Prev/Next`** = recall cue.
+- **`parked`** = objet gelé hors recalls · **`dry-run`** = OSC désarmé.
