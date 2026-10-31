@@ -20,17 +20,16 @@ import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import { useSignalGraphStore } from '../store/useSignalGraphStore';
 import CustomNode from './CustomNode';
+import { NodePalette } from './editor/NodePalette';
 import EmptyState from './ui/EmptyState';
 import { QuickAddModal } from './QuickAddModal';
-import { NODE_CATEGORIES, NODE_COLORS, NODE_DESCRIPTIONS, getCategoryColor, getDefaultParams, getValidTargetTypes, pluginDefaultParams, GLOBAL_ONLY_NODES, SUB_ONLY_NODES, SIGNAL_ONLY_NODES, type GraphNode } from './nodeParamSchema';
+import { NODE_CATEGORIES, getCategoryColor, getDefaultParams, pluginDefaultParams, GLOBAL_ONLY_NODES, SUB_ONLY_NODES, SIGNAL_ONLY_NODES, type GraphNode } from './nodeParamSchema';
 import { isValidConnection, connectionRejectionReason, spliceRejectionReason, portTypesInGraph, PORT_COLORS } from '../utils/connectionRules';
 import { safeGetItem, safeSetItem } from '../utils/safeStorage';
 import { presetsUsingType } from '../utils/shapePresets';
 import { toast } from '../utils/toast-helpers';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { issuesByNode, nodeIssueClass, countIssues, type GraphIssue } from '../utils/graphIssues';
-import { open } from '@tauri-apps/plugin-dialog';
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import type { PluginManifest } from '../types/generated/PluginManifest';
 import type { PluginKind } from '../types/generated/PluginKind';
 
@@ -609,234 +608,25 @@ export const NodeEditor: React.FC = () => {
       {/* Node Palette — repliable en rail : QuickAdd (Ctrl+K / double-clic)
           couvre l'ajout rapide ; la palette sert surtout à la découverte.
           Repliée, le canvas récupère ~220px en split expert. */}
-      {paletteCollapsed ? (
-        <div className="w-9 bg-stagespace-panel border-r border-stagespace-border flex-shrink-0 flex flex-col items-center pt-2 gap-2">
-          <button
-            onClick={() => setPaletteCollapsed(false)}
-            className="w-6 h-6 rounded bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white flex items-center justify-center"
-            title="Show the node palette"
-          >
-            <PanelLeftOpen size={12} />
-          </button>
-          <button
-            onClick={() => setQuickAddOpen(true)}
-            className="w-6 h-6 rounded bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white flex items-center justify-center text-xs font-bold"
-            title="Quick-add node (Ctrl+K)"
-          >
-            +
-          </button>
-        </div>
-      ) : (
-      <div className="w-60 bg-stagespace-panel border-r border-stagespace-border overflow-y-auto flex-shrink-0">
-        <div className="px-3 py-3 border-b border-stagespace-border sticky top-0 bg-stagespace-panel z-raised flex items-start gap-2">
-          <div className="flex-1">
-            <h3 className="text-white font-semibold text-sm">Nodes</h3>
-            <p className="text-gray-500 text-xs mt-0.5">
-              {selectedEdge
-                ? 'Edge selected — click a modifier to insert it into the chain'
-                : 'Click to add · Ctrl+K quick-add · Hover for info'}
-            </p>
-          </div>
-          <button
-            onClick={() => setPaletteCollapsed(true)}
-            className="w-5 h-5 rounded text-gray-500 hover:text-white hover:bg-gray-800 flex items-center justify-center flex-shrink-0"
-            title="Collapse the palette — Ctrl+K stays available"
-          >
-            <PanelLeftClose size={11} />
-          </button>
-        </div>
-
-        <div className="p-2 space-y-2">
-          {NODE_CATEGORIES.map((cat) => {
-            // Filtrer les types selon le tab actif — le domaine signal
-            // (modulation scalaire) est isolé : seuls les nodes Signal dans
-            // le tab Mods, jamais dans les graphes move/global.
-            const filteredTypes = activeTab === 'signal'
-              ? cat.types.filter((t) => SIGNAL_ONLY_NODES.has(t))
-              : activeTab === 'global'
-                ? cat.types.filter((t) => !SUB_ONLY_NODES.has(t) && !SIGNAL_ONLY_NODES.has(t))
-                : cat.types.filter((t) => !GLOBAL_ONLY_NODES.has(t) && !SIGNAL_ONLY_NODES.has(t));
-            // Skip la catégorie si elle n'a plus de types après le filtrage
-            if (filteredTypes.length === 0) return null;
-            const isCollapsed = collapsedCats.has(cat.label);
-            return (
-              <div key={cat.label}>
-                <button
-                  onClick={() => toggleCat(cat.label)}
-                  className="w-full flex items-center gap-1 text-gray-500 text-xs font-semibold mb-1 px-1 uppercase tracking-wider hover:text-gray-300 transition-colors"
-                >
-                  <span className="text-xs">{isCollapsed ? '▸' : '▾'}</span>
-                  <span
-                    className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                    style={{ background: NODE_COLORS[cat.color] ?? '#4b5563' }}
-                  />
-                  {cat.label}
-                  <span className="text-gray-500 ml-auto">{filteredTypes.length}</span>
-                </button>
-                {!isCollapsed && (
-                  <div className="space-y-0.5">
-                    {filteredTypes.map((type) => (
-                      <div
-                        key={type}
-                        className="relative"
-                        onMouseEnter={() => setHoveredPaletteNode(type)}
-                        onMouseLeave={() => setHoveredPaletteNode(null)}
-                      >
-                        <button
-                          onClick={() => addNodeByType(type)}
-                          className="w-full text-left px-2.5 py-1.5 text-white text-xs rounded transition-all hover:translate-x-0.5 flex items-center gap-2 group"
-                          style={{ background: 'transparent' }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = getCategoryColor(type) + '20';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'transparent';
-                          }}
-                        >
-                          <span
-                            className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                            style={{ background: getCategoryColor(type) }}
-                          />
-                          {type}
-                        </button>
-                        {/* Tooltip description */}
-                        {hoveredPaletteNode === type && NODE_DESCRIPTIONS[type] && (
-                          <div className="absolute left-full top-0 ml-2 z-popover w-64 p-2.5 bg-gray-900 border border-gray-700 rounded-lg shadow-xl text-gray-300 text-xs leading-relaxed pointer-events-none">
-                            <div className="text-white font-semibold text-xs mb-1" style={{ color: getCategoryColor(type) }}>{type}</div>
-                            {NODE_DESCRIPTIONS[type]}
-                            {/* Show valid targets */}
-                            {(() => {
-                              const targets = getValidTargetTypes(type);
-                              if (targets.length === 0) return null;
-                              return (
-                                <div className="mt-1.5 pt-1.5 border-t border-gray-700">
-                                  <div className="text-gray-500 text-xs uppercase">Can connect to:</div>
-                                  <div className="text-gray-400 text-xs mt-0.5 flex flex-wrap gap-1">
-                                    {targets.slice(0, 8).map((t) => (
-                                      <span key={t} className="px-1 py-0.5 bg-gray-800 rounded">{t}</span>
-                                    ))}
-                                    {targets.length > 8 && <span className="text-gray-400">+{targets.length - 8}</span>}
-                                  </div>
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {/* Plugins WASM — un item par manifeste chargé dans le
-                    registry backend (sub-graph uniquement : 'Plugin' est
-                    SUB_ONLY → la catégorie est vide en tab global). */}
-                {!isCollapsed && cat.label === 'Plugins' && activeTab === 'sub' && (
-                  <div className="space-y-0.5">
-                    {plugins.map((m) => (
-                      <div
-                        key={m.id}
-                        className="relative"
-                        onMouseEnter={() => setHoveredPaletteNode(`plugin:${m.id}`)}
-                        onMouseLeave={() => setHoveredPaletteNode(null)}
-                      >
-                        <button
-                          onClick={() => addPluginNode(m)}
-                          className="w-full text-left px-2.5 py-1.5 text-white text-xs rounded transition-all hover:translate-x-0.5 flex items-center gap-2"
-                          style={{ background: 'transparent' }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = (NODE_COLORS.yellow ?? '#ca8a04') + '20';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'transparent';
-                          }}
-                        >
-                          <span
-                            className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                            style={{ background: NODE_COLORS.yellow }}
-                          />
-                          <span className="truncate">{m.name}</span>
-                          {m.kind !== 'engine' && (
-                            <span
-                              className="text-[11px] font-bold tracking-wide flex-shrink-0 px-1 rounded bg-sky-900/60 text-sky-300"
-                              title={m.kind === 'modifier' ? 'Modifier: wraps one trajectory (input port)' : 'Composite: combines 2 trajectories (A/B ports)'}
-                            >
-                              {m.kind === 'modifier' ? 'MOD' : '2IN'}
-                            </span>
-                          )}
-                          <span className="text-gray-400 text-[11px] ml-auto flex-shrink-0">v{m.version}</span>
-                        </button>
-                        {hoveredPaletteNode === `plugin:${m.id}` && (
-                          <div className="absolute left-full top-0 ml-2 z-popover w-64 p-2.5 bg-gray-900 border border-gray-700 rounded-lg shadow-xl text-gray-300 text-xs leading-relaxed pointer-events-none">
-                            <div className="text-white font-semibold text-xs mb-1" style={{ color: NODE_COLORS.yellow }}>
-                              {m.name} <span className="text-gray-500 font-normal">v{m.version}</span>
-                            </div>
-                            {m.description ?? 'External WASM plugin'}
-                            {m.author && (
-                              <div className="mt-1 text-gray-500">by {m.author}</div>
-                            )}
-                            <div className="mt-1 text-gray-400 font-mono">id: {m.id}</div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                    {pluginsLoaded && plugins.length === 0 && (
-                      <div className="px-2.5 py-1 text-gray-400 text-xs leading-snug">
-                        No plugin loaded
-                        {pluginsDir && (
-                          <div className="font-mono text-gray-500 break-all mt-0.5" title={pluginsDir}>
-                            {pluginsDir}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {pluginErrors.map((e, i) => (
-                      <div
-                        key={i}
-                        className="px-2.5 text-red-400/80 text-[11px] font-mono truncate"
-                        title={e}
-                      >
-                        ⚠ {e}
-                      </div>
-                    ))}
-                    <button
-                      onClick={async () => {
-                        const selected = await open({
-                          filters: [{ name: 'STAGESPACE plugin', extensions: ['ssx'] }],
-                          multiple: false,
-                        });
-                        if (typeof selected === 'string') void importPlugin(selected);
-                      }}
-                      className="w-full text-left px-2.5 py-1 text-gray-500 hover:text-yellow-400 text-xs rounded transition-colors"
-                      title="Import a .ssx bundle (copy + rescan)"
-                    >
-                      + Import .ssx…
-                    </button>
-                    <button
-                      onClick={() => void reloadPlugins()}
-                      className="w-full text-left px-2.5 py-1 text-gray-500 hover:text-yellow-400 text-xs rounded transition-colors"
-                      title="Rescan the plugins folder"
-                    >
-                      ↻ Rescan plugins
-                    </button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Help footer */}
-        <div className="p-3 border-t border-stagespace-border mt-2">
-          <div className="text-gray-400 text-xs leading-relaxed space-y-1">
-            <div><span className="text-gray-400 font-semibold">Flow:</span> Objects → Engine → Output</div>
-            <div><span className="text-gray-400 font-semibold">Chain:</span> Engine → Modifier → Output</div>
-            <div><span className="text-gray-400 font-semibold">Blend:</span> 2 Engines → Mix → Output</div>
-            <div><span className="text-gray-400 font-semibold">Time:</span> 2 Engines → Sequence/Crossfade</div>
-            <div className="pt-1"><span className="text-gray-400 font-semibold">Edges:</span> <span className="text-gray-300">gray</span> trajectory · <span className="text-amber-500">amber dashes</span> duration · <span className="text-violet-400">violet</span> spline</div>
-            <div className="pt-1 text-gray-500">Drag from a node's bottom handle to connect. Invalid connections are blocked.</div>
-          </div>
-        </div>
-      </div>
-      )}
+      <NodePalette
+        collapsed={paletteCollapsed}
+        onToggleCollapsed={setPaletteCollapsed}
+        onQuickAdd={() => setQuickAddOpen(true)}
+        edgeSelected={!!selectedEdge}
+        activeTab={activeTab}
+        collapsedCats={collapsedCats}
+        onToggleCat={toggleCat}
+        hovered={hoveredPaletteNode}
+        onHover={setHoveredPaletteNode}
+        onAddNode={addNodeByType}
+        onAddPluginNode={addPluginNode}
+        plugins={plugins}
+        pluginsLoaded={pluginsLoaded}
+        pluginsDir={pluginsDir}
+        pluginErrors={pluginErrors}
+        importPlugin={importPlugin}
+        reloadPlugins={reloadPlugins}
+      />
 
       {/* Canvas */}
       <div className="flex-1 bg-stagespace-bg relative">
