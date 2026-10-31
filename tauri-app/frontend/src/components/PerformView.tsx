@@ -6,6 +6,8 @@ import Scene3D from './Scene3D';
 import CuelistPanel from './CuelistPanel';
 import { Slider } from './ui/Slider';
 import EmptyState from './ui/EmptyState';
+import { StatusChip } from './ui/StatusChip';
+import { ShowTransport } from './show/ShowTransport';
 import { useGraphStore } from '../store/useGraphStore';
 import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { useCuelistStore } from '../store/useCuelistStore';
@@ -430,14 +432,13 @@ export const PerformView: React.FC = () => {
           Conduite
         </button>
         {consoleAge !== null && (
-          <span
-            className={`px-2 py-1 rounded text-xs font-bold flex-shrink-0 ${
-              consoleAge < 5 ? 'bg-emerald-900/60 text-emerald-300' : 'bg-gray-800 text-gray-500'
-            }`}
+          <StatusChip
+            variant={consoleAge < 5 ? 'live' : 'dim'}
+            className="flex-shrink-0"
             title={consoleAge < 5 ? 'Console connectée — dernière commande OSC show-control' : `Console idle — dernière commande il y a ${consoleAge.toFixed(0)}s`}
           >
             CONSOLE {consoleAge < 5 ? '●' : '○'}
-          </span>
+          </StatusChip>
         )}
         <button
           onClick={() => setTouchMode(!touchMode)}
@@ -590,12 +591,13 @@ export const PerformView: React.FC = () => {
             <div className="flex items-center gap-4">
               {parked.length > 0 && <ParkedChip parked={parked} />}
               {consoleAge !== null && (
-                <span
-                  className={`text-lg font-bold ${consoleAge < 5 ? 'text-emerald-400' : 'text-gray-600'}`}
+                <StatusChip
+                  variant={consoleAge < 5 ? 'live' : 'dim'}
+                  className="text-lg px-3 py-1"
                   title="Dernière commande show-control reçue"
                 >
                   CONSOLE {consoleAge < 5 ? '●' : '○'}
-                </span>
+                </StatusChip>
               )}
               {tcChaseEnabled && (
                 <span className={`font-mono text-2xl font-bold ${tcActive ? 'text-emerald-400' : 'text-gray-600'}`}>
@@ -638,28 +640,14 @@ export const PerformView: React.FC = () => {
               {playingCount > 0 ? `${playingCount} moves live` : 'IDLE'}
             </div>
           </div>
-          <div className="flex items-center justify-center gap-6 px-8 pb-10">
-            <button
-              onClick={() => void goToPreviousCue()}
-              disabled={isRecalling || currentCueIndex <= 0}
-              className="px-10 py-6 rounded-2xl bg-gray-800 text-gray-200 text-2xl font-bold disabled:opacity-30 active:scale-95"
-            >
-              ◀ Prev
-            </button>
-            <button
-              onClick={handleGO}
-              className="px-16 py-6 rounded-2xl bg-green-600 text-white text-3xl font-black active:scale-95"
-            >
-              GO ▶
-            </button>
-            <button
-              onClick={() => void goToNextCue()}
-              disabled={isRecalling || currentCueIndex + 1 >= cues.length}
-              className="px-10 py-6 rounded-2xl bg-gray-800 text-gray-200 text-2xl font-bold disabled:opacity-30 active:scale-95"
-            >
-              Next ▶
-            </button>
-            <PanicButton size="lg" />
+          <div className="px-8 pb-10">
+            <ShowTransport
+              onPrev={() => void goToPreviousCue()}
+              onGo={handleGO}
+              onNext={() => void goToNextCue()}
+              prevDisabled={isRecalling || currentCueIndex <= 0}
+              nextDisabled={isRecalling || currentCueIndex + 1 >= cues.length}
+            />
           </div>
         </div>
       )}

@@ -6,6 +6,7 @@ import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import { useSignalGraphStore } from '../store/useSignalGraphStore';
 import { ConfirmModal } from './ui/ConfirmModal';
 import EmptyState from './ui/EmptyState';
+import { Badge } from './ui/Badge';
 import { toast } from '../utils/toast-helpers';
 import { useOscArmed } from '../hooks/useOscArmed';
 
@@ -201,18 +202,14 @@ export const CuelistPanel: React.FC = () => {
                   <div className="text-white text-xs font-medium truncate flex items-center gap-1">
                     {cue.name}
                     {cue.mode === 'Tracking' && (
-                      <span className="text-[9px] px-1 rounded bg-cyan-900/60 text-cyan-300">TRK</span>
+                      <Badge className="bg-cyan-900/60 text-cyan-300">TRK</Badge>
                     )}
                     {(cue.pre_wait ?? 0) > 0 && (
-                      <span className="text-[9px] px-1 rounded bg-gray-700 text-gray-300">w{cue.pre_wait}s</span>
+                      <Badge>w{cue.pre_wait}s</Badge>
                     )}
                     {cue.follow != null && (
-                      <span
-                        className={`text-[9px] px-1 rounded ${
-                          idx + 1 === cues.length
-                            ? 'bg-red-900/80 text-red-300'
-                            : 'bg-gray-700 text-gray-300'
-                        }`}
+                      <Badge
+                        danger={idx + 1 === cues.length}
                         title={
                           idx + 1 === cues.length
                             ? 'Follow has no next cue — it will never fire'
@@ -220,10 +217,10 @@ export const CuelistPanel: React.FC = () => {
                         }
                       >
                         f{cue.follow}s{idx + 1 === cues.length ? '!' : ''}
-                      </span>
+                      </Badge>
                     )}
                     {cue.timecode != null && (
-                      <span className="text-[9px] px-1 rounded bg-gray-700 text-gray-300">TC</span>
+                      <Badge>TC</Badge>
                     )}
                     {pending?.cueId === cue.id && (
                       <PendingCountdown deadline={pending.deadline} kind={pending.kind} />
@@ -370,9 +367,9 @@ function PendingCountdown({ deadline, kind }: { deadline: number; kind: 'pre_wai
   }, []);
   const left = Math.max(0, (deadline - Date.now()) / 1000);
   return (
-    <span className="text-[9px] px-1 rounded bg-amber-800/80 text-amber-200" title={kind}>
+    <Badge className="bg-amber-800/80 text-amber-200" title={kind}>
       {kind === 'pre_wait' ? 'in' : 'follow'} {left.toFixed(1)}s
-    </span>
+    </Badge>
   );
 }
 
@@ -448,7 +445,7 @@ function ScopeEditor({ cue, updateCue }: { cue: CueData; updateCue: (c: CueData)
   return (
     <span className="flex items-center gap-0.5">
       {SCOPE_KEYS.map((k) => (
-        <label key={k} className="text-[8px] text-gray-400 flex items-center" title={k}>
+        <label key={k} className="text-[10px] text-gray-400 flex items-center" title={k}>
           <input
             type="checkbox"
             checked={(scope as Record<string, boolean>)[k] ?? true}

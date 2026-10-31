@@ -6,6 +6,8 @@
 import React from 'react';
 import { listen, emit } from '@tauri-apps/api/event';
 import { safeInvoke } from '../utils/tauri';
+import { StatusChip } from '../components/ui/StatusChip';
+import { ShowTransport } from '../components/show/ShowTransport';
 
 type ConduiteState = {
   curCue: string;
@@ -45,12 +47,16 @@ export const ConduitePage: React.FC = () => {
       <div className="flex items-center justify-between px-8 py-4 border-b border-gray-800">
         <span className="text-gray-400 text-sm uppercase tracking-widest">Conduite — STAGESPACE</span>
         <div className="flex items-center gap-5">
-          {armed !== null && !armed && <span className="text-orange-400 text-xl font-bold">DRY-RUN</span>}
-          {parked.length > 0 && <span className="text-cyan-300 text-xl font-bold" title={`Objets parkés : ${parked.join(', ')}`}>{parked.length} PARKED</span>}
+          {armed !== null && !armed && (
+            <StatusChip variant="warning" pulse className="text-xl px-3 py-1.5">DRY-RUN</StatusChip>
+          )}
+          {parked.length > 0 && (
+            <StatusChip variant="osc" className="text-xl px-3 py-1.5" title={`Objets parkés : ${parked.join(', ')}`}>{parked.length} PARKED</StatusChip>
+          )}
           {consoleAge !== null && (
-            <span className={`text-xl font-bold ${consoleAge < 5 ? 'text-emerald-400' : 'text-gray-600'}`}>
+            <StatusChip variant={consoleAge < 5 ? 'live' : 'dim'} className="text-xl px-3 py-1.5">
               CONSOLE {consoleAge < 5 ? '●' : '○'}
-            </span>
+            </StatusChip>
           )}
           {st?.tcChaseEnabled && (
             <span className={`font-mono text-3xl font-bold ${st.tcActive ? 'text-emerald-400' : 'text-gray-600'}`}>
@@ -82,10 +88,16 @@ export const ConduitePage: React.FC = () => {
       </div>
 
       <div className="flex items-center justify-center gap-6 px-8 pb-10">
-        <button onClick={() => cmd('prev')} disabled={!!st?.isRecalling} className="px-10 py-6 rounded-2xl bg-gray-800 text-gray-200 text-2xl font-bold disabled:opacity-30 active:scale-95">◀ Prev</button>
-        <button onClick={() => cmd('go')} className="px-16 py-6 rounded-2xl bg-green-600 text-white text-3xl font-black active:scale-95">GO ▶</button>
-        <button onClick={() => cmd('next')} disabled={!!st?.isRecalling} className="px-10 py-6 rounded-2xl bg-gray-800 text-gray-200 text-2xl font-bold disabled:opacity-30 active:scale-95">Next ▶</button>
-        <button onClick={() => cmd('panic')} className="px-8 py-6 rounded-2xl bg-red-800 hover:bg-red-700 text-red-100 text-2xl font-black active:scale-95">PANIC</button>
+        <ShowTransport
+          onPrev={() => cmd('prev')}
+          onGo={() => cmd('go')}
+          onNext={() => cmd('next')}
+          prevDisabled={!!st?.isRecalling}
+          nextDisabled={!!st?.isRecalling}
+          panic={
+            <button onClick={() => cmd('panic')} className="px-8 py-6 rounded-2xl bg-red-800 hover:bg-red-700 text-red-100 text-2xl font-black active:scale-95">PANIC</button>
+          }
+        />
       </div>
     </div>
   );

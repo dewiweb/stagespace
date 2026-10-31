@@ -20,6 +20,7 @@ import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import { useSignalGraphStore } from '../store/useSignalGraphStore';
 import CustomNode from './CustomNode';
+import EmptyState from './ui/EmptyState';
 import { QuickAddModal } from './QuickAddModal';
 import { NODE_CATEGORIES, NODE_COLORS, NODE_DESCRIPTIONS, getCategoryColor, getDefaultParams, getValidTargetTypes, pluginDefaultParams, GLOBAL_ONLY_NODES, SUB_ONLY_NODES, SIGNAL_ONLY_NODES, type GraphNode } from './nodeParamSchema';
 import { isValidConnection, connectionRejectionReason, spliceRejectionReason, portTypesInGraph, PORT_COLORS } from '../utils/connectionRules';
@@ -922,21 +923,16 @@ export const NodeEditor: React.FC = () => {
 
         {displayNodes.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="text-center">
-              <div className="text-gray-400 text-sm mb-1">Empty graph</div>
-              <div className="text-gray-500 text-xs">
-                {activeTab === 'global'
-                  ? 'Click nodes in the palette to add them'
-                  : 'Click nodes in the palette to add them'}
-              </div>
-              {activeTab === 'global' ? (
-                <div className="text-gray-500 text-xs mt-2">Start with: Input → Scale → Rotate → Offset → Output</div>
-              ) : activeTab === 'signal' ? (
-                <div className="text-gray-500 text-xs mt-2">Start with: SignalLfo → SignalMap → SignalOut</div>
-              ) : (
-                <div className="text-gray-500 text-xs mt-2">Start with: Objects → Duration → Circular → Output</div>
-              )}
-            </div>
+            <EmptyState
+              title="Empty graph"
+              hint={
+                activeTab === 'global'
+                  ? 'Click nodes in the palette — Start with: Input → Scale → Rotate → Offset → Output'
+                  : activeTab === 'signal'
+                    ? 'Click nodes in the palette — Start with: SignalLfo → SignalMap → SignalOut'
+                    : 'Click nodes in the palette — Start with: Objects → Duration → Circular → Output'
+              }
+            />
           </div>
         )}
 

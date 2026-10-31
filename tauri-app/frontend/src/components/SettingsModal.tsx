@@ -3,6 +3,7 @@ import { useGraphStore } from '../store/useGraphStore';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { toast } from '../utils/toast-helpers';
 import Modal from './ui/Modal';
+import EmptyState from './ui/EmptyState';
 import { Settings, ListOrdered } from 'lucide-react';
 
 const MERGE_STRATEGIES = [
@@ -273,9 +274,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 ))}
               </select>
             ) : (
-              <p className="text-gray-400 text-xs italic">
-                Start the microphone once to enumerate available devices.
-              </p>
+              <EmptyState size="sm" title="No device listed" hint="Start the microphone once to enumerate available devices." />
             )}
           </section>
         </div>
