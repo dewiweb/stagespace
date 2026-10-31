@@ -6,8 +6,6 @@ import {
   Controls,
   MiniMap,
   NodeTypes,
-  applyNodeChanges,
-  applyEdgeChanges,
   MarkerType,
   type Node,
   type Connection,
@@ -21,6 +19,7 @@ import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import { useSignalGraphStore } from '../store/useSignalGraphStore';
 import CustomNode from './CustomNode';
 import { NodePalette } from './editor/NodePalette';
+import { useStandaloneGraph } from '../hooks/useStandaloneGraph';
 import EmptyState from './ui/EmptyState';
 import { QuickAddModal } from './QuickAddModal';
 import { NODE_CATEGORIES, getCategoryColor, getDefaultParams, pluginDefaultParams, GLOBAL_ONLY_NODES, SUB_ONLY_NODES, SIGNAL_ONLY_NODES, type GraphNode } from './nodeParamSchema';
@@ -205,65 +204,26 @@ export const NodeEditor: React.FC = () => {
     return () => clearTimeout(timer);
   }, [displayNodes, displayEdges, activeTab, editingSlotId, nodes, edges]);
 
-  // Pour le tab global, on utilise des handlers locaux (pas le store global)
-  const handleGlobalNodesChange = useCallback((changes: any[]) => {
-    // Appliquer les changes sur les globalNodes
-    const updated = applyNodeChanges(changes, globalNodes);
-    setGlobalNodes(updated);
-  }, [globalNodes, setGlobalNodes]);
-
-  const handleGlobalEdgesChange = useCallback((changes: any[]) => {
-    const updated = applyEdgeChanges(changes, globalEdges);
-    setGlobalEdges(updated);
-  }, [globalEdges, setGlobalEdges]);
-
-  // Un drop qui se termine sur un node sans créer d'edge = connexion refusée.
-  // onConnect est appelé avant onConnectEnd quand le drop réussit — le flag
-  // permet de distinguer "refusé" de "annulé sur le canvas" (pas de toast).
+  // Handlers des graphes standalone (global/signal) — un seul hook
+  // factorise le pattern applyChanges→set→push débouncé (ex-triplication).
   const connectedThisDrop = React.useRef(false);
-
-  const handleGlobalConnect = useCallback((connection: Connection) => {
-    connectedThisDrop.current = true;
-    const newEdge = { ...connection, id: `${connection.source}-${connection.target}`, markerEnd: { type: MarkerType.ArrowClosed } };
-    setGlobalEdges([...globalEdges, newEdge as Edge]);
-  }, [globalEdges, setGlobalEdges]);
-
-  // Handlers du tab signal — même pattern que le tab global (store dédié).
-  const handleSignalNodesChange = useCallback((changes: any[]) => {
-    const updated = applyNodeChanges(changes, signalNodes);
-    setSignalNodes(updated);
-  }, [signalNodes, setSignalNodes]);
-
-  const handleSignalEdgesChange = useCallback((changes: any[]) => {
-    const updated = applyEdgeChanges(changes, signalEdges);
-    setSignalEdges(updated);
-  }, [signalEdges, setSignalEdges]);
-
-  const handleSignalConnect = useCallback((connection: Connection) => {
-    connectedThisDrop.current = true;
-    const newEdge = { ...connection, id: `${connection.source}-${connection.target}`, markerEnd: { type: MarkerType.ArrowClosed } };
-    setSignalEdges([...signalEdges, newEdge as Edge]);
-  }, [signalEdges, setSignalEdges]);
+  const globalGraph = useStandaloneGraph({
+    nodes: globalNodes, edges: globalEdges,
+    setNodes: setGlobalNodes, setEdges: setGlobalEdges,
+    pushGraph: pushGlobalGraph, active: activeTab === 'global',
+    connectedThisDrop,
+  });
+  const signalGraph = useStandaloneGraph({
+    nodes: signalNodes, edges: signalEdges,
+    setNodes: setSignalNodes, setEdges: setSignalEdges,
+    pushGraph: pushSignalGraph, active: activeTab === 'signal',
+    connectedThisDrop,
+  });
 
   const handleConnect = useCallback((connection: Connection) => {
     connectedThisDrop.current = true;
     storeConnect(connection);
   }, [storeConnect]);
-
-  // Auto-push du graph global quand il change (debounce)
-  useEffect(() => {
-    if (activeTab !== 'global') return;
-    const timer = setTimeout(() => pushGlobalGraph(), 300);
-    return () => clearTimeout(timer);
-  }, [globalNodes, globalEdges, activeTab, pushGlobalGraph]);
-
-  // Auto-push du graph signal quand il change (debounce) — la compile
-  // rejette les graphs sans SignalOut : le toast remonte l'erreur.
-  useEffect(() => {
-    if (activeTab !== 'signal') return;
-    const timer = setTimeout(() => pushSignalGraph(), 300);
-    return () => clearTimeout(timer);
-  }, [signalNodes, signalEdges, activeTab, pushSignalGraph]);
 
   // Autopatch (plugdata) : une edge sélectionnée + clic palette = insertion
   // du node dans la chaîne (`A → B` devient `A → M → B`). Une seule edge
@@ -664,23 +624,23 @@ export const NodeEditor: React.FC = () => {
           edges={decoratedEdges}
           onNodesChange={
             activeTab === 'global'
-              ? handleGlobalNodesChange
+              ? globalGraph.onNodesChange
               : activeTab === 'signal'
-                ? handleSignalNodesChange
+                ? signalGraph.onNodesChange
                 : onNodesChange
           }
           onEdgesChange={
             activeTab === 'global'
-              ? handleGlobalEdgesChange
+              ? globalGraph.onEdgesChange
               : activeTab === 'signal'
-                ? handleSignalEdgesChange
+                ? signalGraph.onEdgesChange
                 : onEdgesChange
           }
           onConnect={
             activeTab === 'global'
-              ? handleGlobalConnect
+              ? globalGraph.onConnect
               : activeTab === 'signal'
-                ? handleSignalConnect
+                ? signalGraph.onConnect
                 : handleConnect
           }
           onConnectStart={onConnectStart}
