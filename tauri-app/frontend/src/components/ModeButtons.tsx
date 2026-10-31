@@ -1,6 +1,7 @@
 import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
 import { Move3d, MousePointerClick, Pencil } from 'lucide-react';
+import { ModeBanner } from './ui/ModeBanner';
 
 interface ModeButtonsProps {
   manipulateMode: boolean;
@@ -78,11 +79,9 @@ export const ModeButtons: React.FC<ModeButtonsProps> = ({
         )}
       </div>
       {manipulateMode && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-overlay bg-gray-900/90 backdrop-blur rounded-lg px-3 py-1.5 border border-blue-600/50">
-          <span className="text-blue-400 text-xs font-medium">
-            <Move3d size={11} className="inline -mt-0.5" /> Manipulate — drag handle: move · shift+drag: rotate · scroll: scale · drag object: override (Esc to cancel)
-          </span>
-        </div>
+        <ModeBanner variant="tracking">
+          <Move3d size={11} className="inline -mt-0.5" /> Manipulate — drag handle: move · shift+drag: rotate · scroll: scale · drag object: override (Esc to cancel)
+        </ModeBanner>
       )}
     </>
   );

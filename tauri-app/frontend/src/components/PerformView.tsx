@@ -536,7 +536,7 @@ export const PerformView: React.FC = () => {
 
       {/* ═══ Busking plein écran — pads géants pour le tir au doigt ═══ */}
       {buskingMode && (
-        <div className="absolute inset-0 z-50 bg-stagespace-bg flex flex-col">
+        <div className="absolute inset-0 z-menu bg-stagespace-bg flex flex-col">
           <div className="flex items-center justify-between px-6 py-3 border-b border-stagespace-border">
             <div className="flex items-center gap-4">
               <span className="text-gray-400 text-sm uppercase tracking-widest">Busking</span>
@@ -589,7 +589,7 @@ export const PerformView: React.FC = () => {
 
       {/* ═══ Conduite plein écran — lisible à distance (tablette/FOH) ═══ */}
       {conduiteMode && (
-        <div className="absolute inset-0 z-50 bg-stagespace-bg flex flex-col">
+        <div className="absolute inset-0 z-menu bg-stagespace-bg flex flex-col">
           <div className="flex items-center justify-between px-8 py-4 border-b border-stagespace-border">
             <span className="text-gray-400 text-sm uppercase tracking-widest">Conduite</span>
             <div className="flex items-center gap-4">
@@ -1154,7 +1154,7 @@ const ParkedChip: React.FC<{ parked: number[]; compact?: boolean }> = ({ parked,
         {parked.length} PARKED
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-[60] bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-2 min-w-[180px]">
+        <div className="absolute right-0 top-full mt-1 z-menu bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-2 min-w-[180px]">
           <div className="text-gray-400 text-[10px] uppercase tracking-wider px-1 pb-1">
             Parked — hors recalls
           </div>

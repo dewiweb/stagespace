@@ -13,6 +13,7 @@ import { debugPerf } from '../utils/debugPerf';
 (window as any).__debugPerf = debugPerf;
 import { DrawModeOverlay } from './DrawModeOverlay';
 import { ModeButtons } from './ModeButtons';
+import { ModeBanner } from './ui/ModeBanner';
 import { TrajectoryVisualization } from './TrajectoryVisualization';
 import { ZoneVisualization } from './ZoneVisualization';
 import { useHolMarkers } from '../hooks/useHolMarkers';
@@ -377,25 +378,13 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
       {drawMode && <DrawModeOverlay />}
       {manipulateMode && <MacrosPanel isPlaying={isPlaying} hasMovements={movements.length > 0} />}
       {assignMode && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-overlay bg-gray-900/90 backdrop-blur rounded-lg px-3 py-1.5 border border-green-600/50">
-          <span className="text-green-400 text-xs font-medium">
-            Assign — click objects to toggle their track for this move
-          </span>
-        </div>
+        <ModeBanner variant="live">Assign — click objects to toggle their track for this move (Esc to cancel)</ModeBanner>
       )}
       {zonePlaceMode && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-overlay bg-gray-900/90 backdrop-blur rounded-lg px-3 py-1.5 border border-cyan-600/50">
-          <span className="text-cyan-400 text-xs font-medium">
-            Place — click on the floor to set the zone center (Esc to cancel)
-          </span>
-        </div>
+        <ModeBanner variant="osc">Place — click on the floor to set the zone center (Esc to cancel)</ModeBanner>
       )}
       {zoneEditMode && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-overlay bg-gray-900/90 backdrop-blur rounded-lg px-3 py-1.5 border border-cyan-600/50">
-          <span className="text-cyan-400 text-xs font-medium">
-            Edit zones — drag a zone to move it, scroll over it to resize (Esc to cancel)
-          </span>
-        </div>
+        <ModeBanner variant="osc">Edit zones — drag a zone to move it, scroll over it to resize (Esc to cancel)</ModeBanner>
       )}
       <ModeButtons
         manipulateMode={manipulateMode}
@@ -415,7 +404,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
       <ZoneVisualization sceneRef={sceneRef} />
       <canvas
         ref={drawCanvasRef}
-        className="absolute inset-0 z-10"
+        className="absolute inset-0 z-overlay"
         style={{
           width: '100%',
           height: '100%',
@@ -487,7 +476,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
           communique la prochaine action au lieu d'afficher une plaine vide.
           pointer-events-none : l'orbit reste utilisable. */}
       {movements.length === 0 && editingSlotId === null && !manipulateMode && !drawMode && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+        <div className="absolute inset-0 z-overlay flex items-center justify-center pointer-events-none">
           <div className="text-center bg-gray-900/70 backdrop-blur rounded-xl px-6 py-4 border border-gray-700/40">
             <div className="text-gray-300 text-xs font-medium">No move running</div>
             <div className="text-gray-500 text-xs mt-1.5 leading-relaxed">

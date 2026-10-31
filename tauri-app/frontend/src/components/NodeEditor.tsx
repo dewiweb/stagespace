@@ -840,7 +840,7 @@ export const NodeEditor: React.FC = () => {
       {/* Canvas */}
       <div className="flex-1 bg-stagespace-bg relative">
         {(issueCounts.errors > 0 || issueCounts.warnings > 0) && (
-          <div className="absolute top-2 right-2 z-10 text-xs">
+          <div className="absolute top-2 right-2 z-raised text-xs">
             <button
               onClick={() => setIssuesOpen((o) => !o)}
               className="px-2 py-1 rounded bg-gray-900 border border-gray-700 hover:border-gray-500"
@@ -1034,7 +1034,7 @@ function PortLegend({ nodes }: { nodes: GraphNode[] }) {
   );
   if (types.length === 0) return null;
   return (
-    <div className="absolute top-2 left-2 z-10 text-xs bg-gray-900/90 border border-gray-700 rounded">
+    <div className="absolute top-2 left-2 z-raised text-xs bg-gray-900/90 border border-gray-700 rounded">
       <button
         onClick={() => {
           setCollapsed((c) => {
