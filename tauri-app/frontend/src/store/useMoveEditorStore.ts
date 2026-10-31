@@ -88,6 +88,9 @@ interface MoveEditorStore {
   setCurrent: (anim: Move) => void;
   updateCurrent: (patch: Partial<Move>) => void;
   updateAssignment: (trackId: number, patch: Partial<TrackAssignment>) => void;
+  /// Batch — une écriture store + un push live pour N tracks (patterns
+  /// TrackGrid), au lieu de N×updateAssignment = N syncs.
+  updateAssignments: (patches: Array<{ trackId: number; patch: Partial<TrackAssignment> }>) => void;
   addAudioMod: (mod: AudioMod) => void;
   removeAudioMod: (index: number) => void;
   saveAnimation: () => Promise<void>;
@@ -287,6 +290,24 @@ export const useMoveEditorStore = create<MoveEditorStore>((set, get) => {
         assignments[idx] = { ...assignments[idx], ...patch };
       } else {
         assignments.push({ track_id: trackId, depth: 1.0, phase_offset: 0, ...patch });
+      }
+      return { current: { ...s.current, assignments } };
+    });
+    syncCurrentToSlot(get, { assignments: get().current.assignments });
+    get().updateLiveAnimation();
+  },
+
+  updateAssignments: (patches) => {
+    if (patches.length === 0) return;
+    set((s) => {
+      const assignments = [...s.current.assignments];
+      for (const { trackId, patch } of patches) {
+        const idx = assignments.findIndex((a) => a.track_id === trackId);
+        if (idx >= 0) {
+          assignments[idx] = { ...assignments[idx], ...patch };
+        } else {
+          assignments.push({ track_id: trackId, depth: 1.0, phase_offset: 0, ...patch });
+        }
       }
       return { current: { ...s.current, assignments } };
     });

@@ -1,5 +1,6 @@
 import React from 'react';
-import { TrackAssignment } from '../store/useMoveEditorStore';
+import { TrackAssignment, useMoveEditorStore } from '../store/useMoveEditorStore';
+import { useGraphStore } from '../store/useGraphStore';
 import EmptyState from './ui/EmptyState';
 import { trackColor } from '../utils/trackColor';
 
@@ -39,7 +40,7 @@ const PATTERNS: { id: SelectionPattern; label: string; title: string }[] = [
 
 export const TrackGrid: React.FC<TrackGridProps> = ({
   tracks, selectedTrackIds, toggleTrackSelection,
-  selectAllTracks, deselectAllTracks,
+  selectAllTracks,
   assignments, updateAssignment,
   compact = false,
 }) => {
@@ -50,51 +51,40 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
     const ids = tracks.map((t) => t.id);
     const n = ids.length;
     if (n === 0) return;
-
+    // Batch : une sélection + un set d'assignments par pattern — pas
+    // N×toggle/updateAssignment = N syncs + N pushes live.
+    let nextSel: number[] | null = null;
+    const patches: Array<{ trackId: number; patch: { depth: number } }> = [];
     switch (pattern) {
       case 'all':
+        patches.push(...ids.map((id) => ({ trackId: id, patch: { depth: 1.0 } })));
         selectAllTracks();
-        // Set depth to 100% for all
-        ids.forEach((id) => updateAssignment(id, { depth: 1.0 }));
         break;
       case 'none':
-        deselectAllTracks();
+        nextSel = [];
         break;
       case 'even':
-        // Select every other track (even indices)
-        deselectAllTracks();
-        ids.filter((_, i) => i % 2 === 0).forEach((id) => {
-          toggleTrackSelection(id);
-          updateAssignment(id, { depth: 1.0 });
-        });
+        nextSel = ids.filter((_, i) => i % 2 === 0);
+        patches.push(...nextSel.map((id) => ({ trackId: id, patch: { depth: 1.0 } })));
         break;
       case 'odd':
-        // Select every other track (odd indices)
-        deselectAllTracks();
-        ids.filter((_, i) => i % 2 === 1).forEach((id) => {
-          toggleTrackSelection(id);
-          updateAssignment(id, { depth: 1.0 });
-        });
+        nextSel = ids.filter((_, i) => i % 2 === 1);
+        patches.push(...nextSel.map((id) => ({ trackId: id, patch: { depth: 1.0 } })));
         break;
       case 'first_half':
-        deselectAllTracks();
-        ids.slice(0, Math.ceil(n / 2)).forEach((id) => {
-          toggleTrackSelection(id);
-          updateAssignment(id, { depth: 1.0 });
-        });
+        nextSel = ids.slice(0, Math.ceil(n / 2));
+        patches.push(...nextSel.map((id) => ({ trackId: id, patch: { depth: 1.0 } })));
         break;
       case 'second_half':
-        deselectAllTracks();
-        ids.slice(Math.floor(n / 2)).forEach((id) => {
-          toggleTrackSelection(id);
-          updateAssignment(id, { depth: 1.0 });
-        });
+        nextSel = ids.slice(Math.floor(n / 2));
+        patches.push(...nextSel.map((id) => ({ trackId: id, patch: { depth: 1.0 } })));
         break;
       case 'inverse':
-        // Inverser la sélection
-        ids.forEach((id) => toggleTrackSelection(id));
+        nextSel = ids.filter((id) => !selectedTrackIds.has(id));
         break;
     }
+    if (nextSel != null) useGraphStore.getState().setSelectedTracks(nextSel);
+    if (patches.length > 0) useMoveEditorStore.getState().updateAssignments(patches);
   };
 
   // Compte des tracks affectées

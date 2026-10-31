@@ -14,6 +14,9 @@ export interface HolProjectSlice {
   // Track selection (from .hol import)
   selectedTrackIds: Set<number>;
   toggleTrackSelection: (trackId: number) => void;
+  /// Écrit la sélection en une fois — patterns TrackGrid (even/odd/halves)
+  /// qui sinon font N×toggle = N×syncObjectsNode.
+  setSelectedTracks: (ids: Iterable<number>) => void;
   selectAllTracks: () => void;
   deselectAllTracks: () => void;
   /// Définit directement la sélection de tracks (utilisé par selectSlotForEditing)
@@ -167,6 +170,11 @@ export const createHolProjectSlice: StateCreator<HolProjectStore, [], [], HolPro
     // Sync Objects node + hot-swap si en lecture
     get().syncObjectsNode();
     // Sync inverse : mettre à jour le slot édité
+    syncEditingSlotTracks(get, set);
+  },
+  setSelectedTracks: (ids) => {
+    set({ selectedTrackIds: new Set(ids) });
+    get().syncObjectsNode();
     syncEditingSlotTracks(get, set);
   },
   selectAllTracks: () => {
