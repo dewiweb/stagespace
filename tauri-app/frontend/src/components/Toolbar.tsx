@@ -114,10 +114,6 @@ export const Toolbar: React.FC = () => {
         </button>
         {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
 
-        {/* Master arm — « OSC LIVE » global (composant partagé, aussi
-            monté dans le header Perform où il sert réellement) */}
-        <OscArmToggle />
-
         <div className="w-px h-5 bg-stagespace-border mx-1" />
 
         {/* Undo/Redo (expert) */}
@@ -142,6 +138,10 @@ export const Toolbar: React.FC = () => {
         {/* Spacer — la StatusBar (bas de fenêtre) porte statut, perf,
             erreurs et version ; la Toolbar ne garde que les actions. */}
         <div className="flex-1" />
+
+        {/* Zone sécurité live — arm + panic groupés à droite : les deux
+            contrôles d'arrêt/sécurité au même endroit. */}
+        <OscArmToggle />
 
         {/* Help — cheatsheet raccourcis live (même contenu que la touche ?) */}
         <IconButton
