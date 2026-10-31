@@ -1,6 +1,7 @@
 import React from 'react';
 import { X } from 'lucide-react';
 import { Slider } from './ui/Slider';
+import { IconButton } from './ui/IconButton';
 import type { AudioMod, AudioModSource, AudioModTarget } from '../store/useMoveEditorStore';
 import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { audioSourceLabel, audioTargetLabel } from '../utils/audioModLabels';
@@ -67,10 +68,9 @@ export function AudioModAdder({ onAdd, onCancel }: { onAdd: (mod: AudioMod) => v
           className="flex-1 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-xs rounded font-medium">
           Add
         </button>
-        <button onClick={onCancel}
-          className="px-2 py-1.5 bg-gray-800 text-gray-400 hover:text-white text-xs rounded">
+        <IconButton onClick={onCancel}>
           <X size={11} />
-        </button>
+        </IconButton>
       </div>
     </div>
   );
