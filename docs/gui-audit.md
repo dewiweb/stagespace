@@ -163,3 +163,54 @@ PerformView (1184/42/81), NodeEditor (1063/35/19), Inspector (680/49/36),
 MovesTable (617/41/46), CustomNode (618/31/31), SpatialFxPanel (583/30/26),
 CuelistPanel (466/12/25) — **le 60% des couleurs ad hoc est concentré dans
 5 fichiers** ; Scene3D empile 7 overlays `absolute inset-0`.
+
+## Audit détaillé par fichier — synthèse des 6 lots (7 agents)
+
+### Bugs fonctionnels (à corriger avant tout reskin)
+
+| # | Bug | Fichier:ligne |
+|---|---|---|
+| F1 | **ModeButtons recouverts** par les couches `inset-0` — en mode manipulate/assign, sortie impossible au clic (Esc seul) | Scene3D:400 vs 431-468 |
+| F2 | **drawMode non exclusif** — assign/zone restent actifs → dessin impossible | drawModeSlice:38, ModeButtons:57 |
+| F3 | **Ghost lines** — trajectoires jamais effacées après stop-all (early-return avant cleanup) | TrajectoryVisualization:64 |
+| F4 | **RECALL ▶ header en un click** — contournement arm-first (le recall tue la scène) | CuelistPanel:119-137 |
+| F5 | **UI contourne liveActions** — Prev/Next/GO sans guard `isRecalling`, timer pendu peut tirer pendant recall | PerformView:111/648/661, CuelistPanel:120/131/193, doSlotStop sans guard |
+| F6 | **macroDebounce partagé** — un drag macro annule un hot-swap graphe en attente | Inspector:104/135-147/402-403 |
+| F7 | **Modal focus = X** — `focusables[0]` = bouton X, vole l'autofocus de QuickAddModal | ui/Modal:42 |
+| F8 | **Delete sans confirmation** : `deleteAnimation` (hover-only), `clear all` ×3 SpatialFx, removeZone/Modulation/Channel — incohérent avec ConfirmModal ailleurs | AnimationList:222, SpatialFxPanel:227/391/494 |
+| F9 | **OscArmToggle désynchronisé** — 3 sources d'écriture, DryRunChip concurrent sémantique inversée, aucun event | OscArmToggle:13, CuelistPanel:382-393, osc.rs:239 |
+| F10 | **ConduitePage hors-filets** : raw listen/emit, pas d'ErrorBoundary, panic hors PanicButton, GO ≠ GO (cue vs setlist) | ConduitePage:7/44/88 |
+| F11 | **edge-id sans handles** — dup id si 2 edges mêmes nodes | NodeEditor:227/244 |
+| F12 | **Double-clic MiniMap ouvre QuickAdd** — onDoubleClick sur wrapper | NodeEditor:469 |
+| F13 | **État mort prod** : isPlaying/status/compileError/playError/currentTime jamais settés ; bandes d'erreur Toolbar/StatusBar = code mort | useGraphStore:310 |
+
+### Problèmes structurels (refactor)
+
+| # | Problème | Échelle |
+|---|---|---|
+| S1 | **Triplication sub/global/signal** non factorisée | NodeEditor (~45 lignes ×3) |
+| S2 | **Duplication de slots** : MovesTable vs PerformView renderSlotRow | 2 implémentations divergentes |
+| S3 | **Macros = 4 surfaces + 1 morte** : purple/blue/orange, 3 scopes, plages ±3/±5/±10 | Inspector×3, MacrosPanel, PerformView, MacroControls (dead) |
+| S4 | **TabPanel re-key** → remount complet, état perdu, Moves/Cues jamais co-visibles | TabPanel:41 |
+| S5 | **IconButton sous-exploité** : 22 classes ad hoc, 0 token, 1 consommateur | ui/IconButton |
+| S6 | **CuelistPanel confiné** h-56/w-72, text-[8px]-[10px] | PerformView:523 |
+| S7 | **TrackGrid rafales IPC** : patterns = N×updateLiveAnimation non batchés | TrackGrid:53-102 |
+| S8 | **ZoneVisualization rebuild-all** via JSON.stringify deps pendant drag 30Hz | ZoneVisualization:113-147 |
+| S9 | **Couleur track divergente** : TrackGrid (index tableau) vs 3D (track_index) | TrackGrid:26 vs TrajectoryViz:109 |
+| S10 | **Pollings dupliqués** : parked/armed/consoleAge ×2 surfaces ; besoin `showStatusSlice` | PerformView:73 vs ConduitePage:39 |
+| S11 | **État interactif survit au démontage** : zonePlaceMode/EditMode persistent | interactionModesSlice |
+| S12 | **Vocabulaire incohérent** : Move/slot/template/animation/preset ; Shift vs Offset ; loop/oneshot ; FR/EN | repo-entier |
+
+### Priorité par fichier (verdicts agents)
+
+**Haute** : PerformView (1184l — duplication transport/pads, tokens), NodeEditor (1063 — triplication + bugs F11/F12), CustomNode (618 — dup input×7, seuils 16/12), Inspector (680 — god-panel 3 modes, dead code performMode, double-write macros), CuelistPanel (466 — confinement + F4), Scene3D (505 — F1/F2/F3 overlays).
+
+**Moyenne** : MovesTable (617 — 7 micro-actions/ligne), SpatialFxPanel (583 — F8 + 15 inputs mono), NodeParamsPanel (305 — hit targets), MacrosPanel (87 — 3e surface macros mal nommée), TrackGrid (254 — S7/S9), ConduitePage (94 — F10).
+
+**Suppression** : MacroControls (213 — dead code + 24 tests creux).
+
+**Bonne santé** : nodeParamSchema (semi-typé seulement), ui/Modal·ConfirmModal·Slider·EmptyState·PanicButton·ToastContainer (primitives OK, sous-déployées), ErrorBoundary (zones OK, manque conduite), liveActions (bien factorisé, contourné par F5).
+
+### Verdict global
+
+Le câblage soutient le refactor sans réécriture métier : show logic = moveSlotsSlice+useCuelistStore+liveActions (bien factorisé). **13 bugs fonctionnels** à corriger d'abord (dont F1-F4 = sécurité live), puis **12 problèmes structurels** de duplication/convergence. Le design system existe (tokens + primitives) mais n'est pas déployé — c'est de la normalisation, pas de la création.
