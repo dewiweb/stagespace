@@ -4,8 +4,9 @@
 /// `conduite:cmd`, et interroge l'IPC directement (parked, console age,
 /// osc_armed) — chaque webview a son propre contexte JS.
 import React from 'react';
-import { listen, emit } from '@tauri-apps/api/event';
-import { safeInvoke } from '../utils/tauri';
+import { emit } from '@tauri-apps/api/event';
+import { safeListen } from '../utils/tauri';
+import { useShowStatusStore, startShowStatusPolling } from '../store/useShowStatusStore';
 import { StatusChip } from '../components/ui/StatusChip';
 import { ShowTransport } from '../components/show/ShowTransport';
 
@@ -25,21 +26,16 @@ const cmd = (c: string) => void emit('conduite:cmd', c);
 
 export const ConduitePage: React.FC = () => {
   const [st, setSt] = React.useState<ConduiteState | null>(null);
-  const [parked, setParked] = React.useState<number[]>([]);
-  const [consoleAge, setConsoleAge] = React.useState<number | null>(null);
-  const [armed, setArmed] = React.useState<boolean | null>(null);
+  // État de santé show — poll unique partagé (useShowStatusStore).
+  const parked = useShowStatusStore((s) => s.parked);
+  const consoleAge = useShowStatusStore((s) => s.consoleAge);
+  const armed = useShowStatusStore((s) => s.armed);
 
   React.useEffect(() => {
     let un: (() => void) | undefined;
-    void listen<ConduiteState>('conduite:state', (e) => setSt(e.payload)).then((u) => (un = u));
-    const poll = () => {
-      safeInvoke<number[]>('get_parked_objects').then((v) => setParked(v ?? [])).catch(() => {});
-      safeInvoke<number | null>('get_last_show_cmd_age').then((v) => setConsoleAge(v)).catch(() => {});
-      safeInvoke<boolean>('get_osc_armed').then((v) => setArmed(v)).catch(() => {});
-    };
-    poll();
-    const t = setInterval(poll, 1500);
-    return () => { un?.(); clearInterval(t); };
+    void safeListen<ConduiteState>('conduite:state', (e) => setSt(e.payload)).then((u) => (un = u));
+    startShowStatusPolling();
+    return () => { un?.(); };
   }, []);
 
   return (
@@ -47,7 +43,7 @@ export const ConduitePage: React.FC = () => {
       <div className="flex items-center justify-between px-8 py-4 border-b border-gray-800">
         <span className="text-gray-400 text-sm uppercase tracking-widest">Conduite — STAGESPACE</span>
         <div className="flex items-center gap-5">
-          {armed !== null && !armed && (
+          {!armed && (
             <StatusChip variant="warning" pulse className="text-xl px-3 py-1.5">DRY-RUN</StatusChip>
           )}
           {parked.length > 0 && (

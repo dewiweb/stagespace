@@ -8,6 +8,7 @@ import { Slider } from './ui/Slider';
 import EmptyState from './ui/EmptyState';
 import { StatusChip } from './ui/StatusChip';
 import { ShowTransport } from './show/ShowTransport';
+import { useShowStatusStore, startShowStatusPolling } from '../store/useShowStatusStore';
 import { useGraphStore } from '../store/useGraphStore';
 import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { useCuelistStore } from '../store/useCuelistStore';
@@ -61,21 +62,11 @@ export const PerformView: React.FC = () => {
   const [buskingMode, setBuskingMode] = React.useState(false);
   // Press-and-hold (bump momentané) : hold ≥350ms = joue tant que tenu.
   const padPress = React.useRef<{ momentary: boolean; suppressClick: boolean; timer: ReturnType<typeof setTimeout> | null }>({ momentary: false, suppressClick: false, timer: null });
-  // Objets parkés : un park oublié = objet qui ne répond plus aux recalls —
-  // l'opérateur doit le voir en un coup d'œil (conduite).
-  const [parked, setParked] = React.useState<number[]>([]);
-  // Âge de la dernière commande /stagespace/* — voyant "console connectée"
-  // (vert <5s, gris sinon, absent si jamais aucune commande).
-  const [consoleAge, setConsoleAge] = React.useState<number | null>(null);
-  React.useEffect(() => {
-    const poll = () => {
-      safeInvoke<number[]>('get_parked_objects').then((v) => setParked(v ?? [])).catch(() => {});
-      safeInvoke<number | null>('get_last_show_cmd_age').then((v) => setConsoleAge(v)).catch(() => {});
-    };
-    poll();
-    const t = setInterval(poll, 1500);
-    return () => clearInterval(t);
-  }, []);
+  // État de santé show (parked / consoleAge / armed) — poll unique partagé
+  // via useShowStatusStore au lieu d'un setInterval par composant.
+  const parked = useShowStatusStore((s) => s.parked);
+  const consoleAge = useShowStatusStore((s) => s.consoleAge);
+  React.useEffect(() => { startShowStatusPolling(); }, []);
 
   const playingCount = moveSlots.filter((s) => s.movementId).length;
 
