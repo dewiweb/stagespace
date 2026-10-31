@@ -159,7 +159,9 @@ export const NODE_DESCRIPTIONS: Partial<Record<NodeType, string>> = Object.fromE
  */
 export function getValidTargetTypes(from: NodeType): NodeType[] {
   const allTypes: NodeType[] = NODE_SPECS.map((s) => s.node_type);
-  return allTypes.filter((to) => to !== from && isValidConnectionExported(from, to));
+  // Pas de filtre `to !== from` aveugle : Scale→Scale est une connexion
+  // valide (modifier en chaîne) — la validité appartient à isValidConnection.
+  return allTypes.filter((to) => isValidConnectionExported(from, to));
 }
 
 /**
