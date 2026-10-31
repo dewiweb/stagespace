@@ -4,6 +4,7 @@ import { safeInvoke as invoke } from '../utils/tauri';
 import { useGraphStore } from '../store/useGraphStore';
 import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { toThree } from '../utils/coords';
+import { trackHue } from '../utils/trackColor';
 
 
 interface TrajectoryVisualizationProps {
@@ -115,7 +116,7 @@ export const TrajectoryVisualization: React.FC<TrajectoryVisualizationProps> = (
                   });
                   const geo = new THREE.BufferGeometry().setFromPoints(points);
                   // Teinte par track_index global — stable entre moves
-                  const hue = path.track_index / Math.max(nObjs, 1);
+                  const hue = trackHue(path.track_index, nObjs);
                   const mat = new THREE.LineBasicMaterial({
                     color: new THREE.Color().setHSL(hue, 0.7, 0.5),
                     transparent: true, opacity: movement.is_preview ? 0.2 : 0.35,

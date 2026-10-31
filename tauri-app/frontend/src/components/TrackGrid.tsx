@@ -1,6 +1,7 @@
 import React from 'react';
 import { TrackAssignment } from '../store/useMoveEditorStore';
 import EmptyState from './ui/EmptyState';
+import { trackColor } from '../utils/trackColor';
 
 interface TrackInfo {
   id: number;
@@ -22,11 +23,6 @@ interface TrackGridProps {
   compact?: boolean;
 }
 
-/// Couleur HSL pour un index
-function colorForIndex(i: number, total: number) {
-  const hue = (i / Math.max(total, 1)) * 360;
-  return `hsl(${hue}, 70%, 55%)`;
-}
 
 /// Patterns de sélection rapides
 type SelectionPattern = 'all' | 'none' | 'even' | 'odd' | 'first_half' | 'second_half' | 'inverse';
@@ -156,7 +152,7 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
           const isSelected = selectedTrackIds.has(t.id);
           const asg = assignments.find((a) => a.track_id === t.id);
           const depth = asg?.depth ?? 1.0;
-          const color = t.color ?? colorForIndex(i, tracks.length);
+          const color = t.color ?? trackColor(i, tracks.length);
 
           if (showDepth) {
             // Mode depth : chaque track montre son slider de profondeur
