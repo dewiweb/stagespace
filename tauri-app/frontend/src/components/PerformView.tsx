@@ -8,6 +8,7 @@ import { Slider } from './ui/Slider';
 import EmptyState from './ui/EmptyState';
 import { StatusChip } from './ui/StatusChip';
 import { ShowTransport } from './show/ShowTransport';
+import { MacrosSurface } from './show/MacrosSurface';
 import { useShowStatusStore, startShowStatusPolling } from '../store/useShowStatusStore';
 import { cueLabel, tcStr } from '../utils/showFormat';
 import { useGraphStore } from '../store/useGraphStore';
@@ -659,10 +660,6 @@ const LiveDrawer: React.FC = () => {
   const updateAssignment = useMoveEditorStore((s) => s.updateAssignment);
   const current = useMoveEditorStore((s) => s.current);
 
-  const macros = useGraphStore((s) => s.macros);
-  const setMacros = useGraphStore((s) => s.setMacros);
-  const pushMacrosToRuntime = useGraphStore((s) => s.pushMacrosToRuntime);
-  const macroDebounce = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   type Scope = 'params' | 'playback' | 'tracks' | 'audio' | 'global' | 'osc';
   const [scope, setScope] = React.useState<Scope | null>(null);
@@ -670,13 +667,6 @@ const LiveDrawer: React.FC = () => {
   const slot = moveSlots.find((s) => s.id === editingSlotId);
   const playingSlots = moveSlots.filter((s) => s.movementId);
 
-  // Macros GLOBALES (merge — affectent tous les moves live). Debounce 100ms
-  // comme l'Inspector : un drag de slider ne doit pas spammer l'IPC.
-  const setGlobalMacro = (key: string, value: number) => {
-    setMacros({ [key]: value } as Partial<typeof macros>);
-    if (macroDebounce.current) clearTimeout(macroDebounce.current);
-    macroDebounce.current = setTimeout(() => { pushMacrosToRuntime(); }, 100);
-  };
 
   // Params du graphe du slot — chips de nodes + grille de champs via le
   // NodeParamsPanel partagé (même mécanique dans l'Inspector Edit).
@@ -794,25 +784,8 @@ const LiveDrawer: React.FC = () => {
       {scope === 'osc' && <OscMappingsPanel />}
 
       {scope === 'global' && (
-        <div className="border-t border-orange-900/40 px-4 py-2 flex items-start gap-6 overflow-x-auto max-h-[42vh] overflow-y-auto">
-          <div className="flex-shrink-0 w-64 space-y-1">
-            <Slider label="Scale" value={macros.scale} min={0.1} max={3} step={0.05} accent="orange" live onChange={(v) => setGlobalMacro('scale', v)} />
-            <Slider label="Speed all" value={macros.speed} min={0} max={3} step={0.05} unit="x" accent="orange" live onChange={(v) => setGlobalMacro('speed', v)} />
-            <Slider label="Radius ×" value={macros.radius_scale} min={0.1} max={3} step={0.05} accent="orange" live onChange={(v) => setGlobalMacro('radius_scale', v)} />
-            <Slider label="Height +" value={macros.height_offset} min={-5} max={5} step={0.1} unit="m" accent="orange" live onChange={(v) => setGlobalMacro('height_offset', v)} />
-          </div>
-          <div className="flex-shrink-0 w-64 space-y-1">
-            <div className="text-gray-500 text-xs uppercase tracking-wider">Shift (global)</div>
-            <Slider label="X" value={macros.shiftX} min={-10} max={10} step={0.1} unit="m" accent="orange" live onChange={(v) => setGlobalMacro('shiftX', v)} />
-            <Slider label="Y" value={macros.shiftY} min={-10} max={10} step={0.1} unit="m" accent="orange" live onChange={(v) => setGlobalMacro('shiftY', v)} />
-            <Slider label="Z" value={macros.shiftZ} min={-10} max={10} step={0.1} unit="m" accent="orange" live onChange={(v) => setGlobalMacro('shiftZ', v)} />
-          </div>
-          <div className="flex-shrink-0 w-64 space-y-1">
-            <div className="text-gray-500 text-xs uppercase tracking-wider">Rotation (global)</div>
-            <Slider label="Yaw" value={macros.yaw} min={-180} max={180} step={1} unit="°" accent="orange" live onChange={(v) => setGlobalMacro('yaw', v)} />
-            <Slider label="Pitch" value={macros.pitch} min={-180} max={180} step={1} unit="°" accent="orange" live onChange={(v) => setGlobalMacro('pitch', v)} />
-            <Slider label="Roll" value={macros.roll} min={-180} max={180} step={1} unit="°" accent="orange" live onChange={(v) => setGlobalMacro('roll', v)} />
-          </div>
+        <div className="border-t border-stagespace-border px-4 py-2 max-h-[42vh] overflow-y-auto">
+          <MacrosSurface live includeRadius />
         </div>
       )}
 
