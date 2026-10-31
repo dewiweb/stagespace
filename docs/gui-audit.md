@@ -114,3 +114,52 @@ P4 — **Fallbacks visibles** : erreur explicite, pas de page blanche.
 choisies — c'est ~400 textes à 12px, ~250 couleurs hors tokens, ~20 cibles
 sous 44px, répartis sur 32 fichiers. Le refactor est une normalisation en
 profondeur, pas une retouche.
+
+## Annexe — tous les fichiers GUI (données réelles par fichier)
+
+| Fichier | Lignes | text-xs | couleurs ad hoc | petites cibles | overlays |
+|---|---|---|---|---|---|
+| PerformView.tsx | 1184 | 42 | 81 | 6 | 2 |
+| NodeEditor.tsx | 1063 | 35 | 19 | 3 | 1 |
+| Inspector.tsx | 680 | 49 | 36 | 3 | 0 |
+| CustomNode.tsx | 618 | 31 | 31 | 2 | 0 |
+| MovesTable.tsx | 617 | 41 | 46 | 2 | 0 |
+| SpatialFxPanel.tsx | 583 | 30 | 26 | 1 | 0 |
+| Scene3D.tsx | 505 | 9 | 7 | 0 | **7** |
+| CuelistPanel.tsx | 466 | 12 | 25 | 0 | 0 |
+| NodeParamsPanel.tsx | 305 | 14 | 11 | 2 | 0 |
+| SettingsModal.tsx | 294 | 27 | 6 | 0 | 0 |
+| TrackGrid.tsx | 254 | 7 | 2 | 0 | 1 |
+| AnimationList.tsx | 240 | 16 | 13 | 0 | 0 |
+| AudioPanel.tsx | 214 | 14 | 9 | 0 | 0 |
+| MacroControls.tsx | 213 | 10 | 5 | 0 | 0 |
+| Toolbar.tsx | 176 | 6 | 3 | 0 | 0 |
+| ZoneVisualization.tsx | 162 | 0 | 0 | 0 | 0 |
+| TrajectoryVisualization.tsx | 159 | 0 | 0 | 0 | 0 |
+| QuickAddModal.tsx | 138 | 4 | 4 | 0 | 0 |
+| AudioModControls.tsx | 128 | 10 | 8 | 0 | 0 |
+| StatusBar.tsx | 113 | 1 | 12 | 0 | 0 |
+| ui/Slider.tsx | 109 | 4 | 4 | 0 | 0 |
+| pages/ConduitePage.tsx | 94 | 0 | 10 | 0 | 0 |
+| ui/Modal.tsx | 94 | 0 | 0 | 0 | 1 |
+| MacrosPanel.tsx | 87 | 5 | 2 | 0 | 0 |
+| WelcomeModal.tsx | 86 | 6 | 1 | 0 | 0 |
+| ModeButtons.tsx | 74 | 4 | 0 | 0 | 0 |
+| DebugPerfOverlay.tsx | 58 | 2 | 6 | 0 | 0 |
+| ui/PanicButton.tsx | 54 | 1 | 4 | 0 | 1 |
+| ui/EmptyState.tsx | 52 | 2 | 4 | 0 | 0 |
+| ToastContainer.tsx | 51 | 2 | 4 | 0 | 0 |
+| DrawModeOverlay.tsx | 50 | 5 | 6 | 0 | 0 |
+| ErrorBoundary.tsx | 48 | 2 | 1 | 0 | 0 |
+| TabPanel.tsx | 47 | 1 | 0 | 0 | 0 |
+| ShortcutsModal.tsx | 46 | 3 | 0 | 0 | 0 |
+| ui/IconButton.tsx | 46 | 4 | 14 | 0 | 0 |
+| ui/ConfirmModal.tsx | 43 | 3 | 2 | 0 | 0 |
+| ui/OscArmToggle.tsx | 41 | 1 | 5 | 0 | 0 |
+| (+ tests, exclus) | — | — | — | — | — |
+
+**Poids du problème par fichier** (lignes × text-xs × couleurs) :
+PerformView (1184/42/81), NodeEditor (1063/35/19), Inspector (680/49/36),
+MovesTable (617/41/46), CustomNode (618/31/31), SpatialFxPanel (583/30/26),
+CuelistPanel (466/12/25) — **le 60% des couleurs ad hoc est concentré dans
+5 fichiers** ; Scene3D empile 7 overlays `absolute inset-0`.
