@@ -9,6 +9,7 @@ import EmptyState from './ui/EmptyState';
 import { StatusChip } from './ui/StatusChip';
 import { ShowTransport } from './show/ShowTransport';
 import { useShowStatusStore, startShowStatusPolling } from '../store/useShowStatusStore';
+import { cueLabel, tcStr } from '../utils/showFormat';
 import { useGraphStore } from '../store/useGraphStore';
 import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { useCuelistStore } from '../store/useCuelistStore';
@@ -91,16 +92,9 @@ export const PerformView: React.FC = () => {
   const nextCue = currentCueIndex + 1 < cues.length ? cues[currentCueIndex + 1] : null;
   // Lookahead console : la cue après la suivante, en grisé sous NEXT.
   const nextNextCue = currentCueIndex + 2 < cues.length ? cues[currentCueIndex + 2] : null;
-  const cueLabel = (c: typeof curCue, idx: number) =>
-    c ? `${c.cue_number ?? String(idx + 1)} ${c.name}` : '—';
   // Timecode : HH:MM:SS:FF au fps configuré, "lost" si silence >1s.
   const tcActive = lastTimecode != null && Date.now() - lastTimecodeAt < 1000;
-  const tcStr = (() => {
-    if (lastTimecode == null) return 'TC —';
-    const s = lastTimecode;
-    const pad = (v: number) => String(v).padStart(2, '0');
-    return `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s % 3600) / 60))}:${pad(Math.floor(s % 60))}:${pad(Math.floor((s % 1) * tcFps))}`;
-  })();
+  const tc = lastTimecode == null ? 'TC —' : tcStr(lastTimecode, tcFps);
 
   const handleGO = async () => {
     const res = await goToNextMove();
@@ -385,7 +379,7 @@ export const PerformView: React.FC = () => {
             }`}
             title={tcActive ? 'Timecode actif (chase on)' : 'TC lost — pas de message depuis >1s'}
           >
-            {tcActive ? tcStr : 'TC lost'}
+            {tcActive ? tc : 'TC lost'}
           </span>
         )}
         <button
@@ -592,7 +586,7 @@ export const PerformView: React.FC = () => {
               )}
               {tcChaseEnabled && (
                 <span className={`font-mono text-2xl font-bold ${tcActive ? 'text-emerald-400' : 'text-gray-600'}`}>
-                  {tcActive ? tcStr : 'TC lost'}
+                  {tcActive ? tc : 'TC lost'}
                 </span>
               )}
               <button

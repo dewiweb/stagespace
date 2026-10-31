@@ -8,9 +8,8 @@ import { safeListen } from '../utils/tauri';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { useGraphStore } from '../store/useGraphStore';
 import { doCueNext, doCuePrev, doGo, doPanic } from '../utils/liveActions';
+import { cueLabel, tcStr } from '../utils/showFormat';
 
-const cueLabel = (c: { cue_number?: string | null; name: string } | null, idx: number) =>
-  c ? `${c.cue_number ?? String(idx + 1)} ${c.name}` : '—';
 
 export function useConduiteBroadcast() {
   useEffect(() => {
@@ -21,9 +20,7 @@ export function useConduiteBroadcast() {
       const next = cs.currentCueIndex + 1 < cs.cues.length ? cs.cues[cs.currentCueIndex + 1] : null;
       const after = cs.currentCueIndex + 2 < cs.cues.length ? cs.cues[cs.currentCueIndex + 2] : null;
       const tcActive = cs.lastTimecode != null && Date.now() - cs.lastTimecodeAt < 1000;
-      const s = cs.lastTimecode ?? 0;
-      const pad = (v: number) => String(v).padStart(2, '0');
-      const tcStr = `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s % 3600) / 60))}:${pad(Math.floor(s % 60))}:${pad(Math.floor((s % 1) * gs.timecodeFps))}`;
+      const tc = tcStr(cs.lastTimecode ?? 0, gs.timecodeFps);
       void emit('conduite:state', {
         curCue: cueLabel(cur, cs.currentCueIndex),
         nextCue: cueLabel(next, cs.currentCueIndex + 1),
@@ -35,7 +32,7 @@ export function useConduiteBroadcast() {
         playingCount: gs.moveSlots.filter((m) => m.movementId).length,
         tcChaseEnabled: cs.tcChaseEnabled,
         tcActive,
-        tcStr,
+        tcStr: tc,
       }).catch(() => {});
     }, 500);
 
