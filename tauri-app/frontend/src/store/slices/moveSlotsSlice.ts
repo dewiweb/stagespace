@@ -301,8 +301,6 @@ function slotToAnimation(raw: MoveSlot): Move {
     duration,
     direction: slot.direction,
     loop_mode: slot.loopMode === 'oneshot' ? 'one_shot' : 'loop',
-    end_mode: slot.endMode ?? 'revert',
-    anchor_mode: slot.anchorMode ?? 'origin',
     scale: slot.macros.scale,
     yaw: slot.macros.yaw,
     pitch: slot.macros.pitch,
@@ -687,8 +685,6 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
         duration,
         direction: slot.direction,
         loop_mode: slot.loopMode === 'oneshot' ? 'one_shot' : 'loop',
-    end_mode: slot.endMode ?? 'revert',
-    anchor_mode: slot.anchorMode ?? 'origin',
         scale: slot.macros.scale,
         yaw: slot.macros.yaw,
         pitch: slot.macros.pitch,
@@ -739,6 +735,8 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
           duration,
           loop_mode: slot.loopMode,
           direction: slot.direction,
+          end_mode: slot.endMode ?? 'revert',
+          anchor_mode: slot.anchorMode ?? 'origin',
           // Le graphe de modulation per-move voyage via l'animation payload
           // (MoveSpec.signal_graph = request.animation.signal_graph).
           animation: animation ? { ...animation, signal_graph: signalGraphData } : animation,
