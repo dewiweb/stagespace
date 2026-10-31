@@ -187,6 +187,9 @@ vos mappings utilisateur.
 | `/stagespace/slot <n>` · `/slot/stop <n>` · `/solo <n>` | busking : joue / coupe / solo le slot `#n` |
 | `/stagespace/unsolo` | restore des slots coupés par le dernier solo |
 | `/stagespace/park <i>` · `/unpark <i>` | objet index *i* (0-based) hors recalls |
+| `/stagespace/position <i> <x> <y> <z>` | position manuelle de l'objet *i* (reprise opérateur) |
+| `/stagespace/position/clear <i>` · `/position/clearall` | retire la position manuelle |
+| `/stagespace/trackpos <t> <x> <y> <z>` | position d'origine de la track *t* (où panic renvoie) |
 | `/stagespace/arm` · `/disarm` | envoi OSC / **dry-run** |
 | `/stagespace/status` | renvoie cue courante/suivante au demandeur |
 | `/stagespace/timecode <s \| "HH:MM:SS:FF">` | timecode → chase |

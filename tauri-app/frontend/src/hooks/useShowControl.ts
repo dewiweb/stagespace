@@ -4,7 +4,7 @@
 import { useEffect } from 'react';
 import { safeListen } from '../utils/tauri';
 import { useCuelistStore } from '../store/useCuelistStore';
-import { doGo, doCueNext, doCuePrev, doCueRecall, doPanic, doStop, doPark, doUnpark, doArm, doStatus, doSlot, doSlotStop, doSolo, doUnsolo } from '../utils/liveActions';
+import { doGo, doCueNext, doCuePrev, doCueRecall, doPanic, doStop, doPark, doUnpark, doArm, doStatus, doSlot, doSlotStop, doSolo, doUnsolo, doSetPosition, doClearPosition, doClearAllPositions, doSetTrackPosition } from '../utils/liveActions';
 import type { ShowCommand } from '../types/generated/ShowCommand';
 
 interface ShowControlEvent {
@@ -60,6 +60,18 @@ export function useShowControl() {
               break;
             case 'Unpark':
               if (cmd.value != null) doUnpark(cmd.value);
+              break;
+            case 'SetPosition':
+              if (cmd.value != null) doSetPosition(cmd.value[0], cmd.value[1], cmd.value[2], cmd.value[3]);
+              break;
+            case 'ClearPosition':
+              if (cmd.value != null) doClearPosition(cmd.value);
+              break;
+            case 'ClearAllPositions':
+              doClearAllPositions();
+              break;
+            case 'SetTrackPosition':
+              if (cmd.value != null) doSetTrackPosition(cmd.value[0], cmd.value[1], cmd.value[2], cmd.value[3]);
               break;
             case 'Panic':
               doPanic();

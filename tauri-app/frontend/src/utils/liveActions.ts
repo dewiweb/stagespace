@@ -145,6 +145,30 @@ export function doPanic() {
   useGraphStore.getState().panic();
 }
 
+/** /stagespace/position <obj> <x> <y> <z> — position manuelle par OSC
+ *  (reprise opérateur sans drag 3D). */
+export function doSetPosition(obj: number, x: number, y: number, z: number) {
+  invoke('set_manual_position', { objectIndex: obj, position: [x, y, z] })
+    .catch((e) => toast.error('Set position failed: ' + e));
+}
+
+/** /stagespace/position/clear <obj> — retire la position manuelle. */
+export function doClearPosition(obj: number) {
+  invoke('clear_manual_position', { objectIndex: obj }).catch(silentCatch);
+}
+
+/** /stagespace/position/clearall — retire toutes les positions manuelles. */
+export function doClearAllPositions() {
+  invoke('clear_all_manual_positions').catch(silentCatch);
+}
+
+/** /stagespace/trackpos <track> <x> <y> <z> — position d'origine d'une
+ *  track (là où panic renvoie, base Barycenter — .hol par OSC). */
+export function doSetTrackPosition(track: number, x: number, y: number, z: number) {
+  invoke('set_track_positions', { positions: { [track]: [x, y, z] } })
+    .catch((e) => toast.error('Set track position failed: ' + e));
+}
+
 /** Park un objet : ses canaux échappent aux recalls de cues. */
 export function doPark(obj: number) {
   invoke('park_object', { obj }).catch((e) => toast.error('Park failed: ' + e));

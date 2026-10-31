@@ -394,6 +394,17 @@ pub enum ShowCommand {
     Park(usize),
     /// `/stagespace/unpark <obj>`.
     Unpark(usize),
+    /// `/stagespace/position <obj> <x> <y> <z>` — position manuelle
+    /// prioritaire (reprise opérateur depuis la console — drag sans GUI).
+    SetPosition(usize, f64, f64, f64),
+    /// `/stagespace/position/clear <obj>` — retire la position manuelle.
+    ClearPosition(usize),
+    /// `/stagespace/position/clearall` — retire toutes les positions.
+    ClearAllPositions,
+    /// `/stagespace/trackpos <track> <x> <y> <z>` — position d'origine
+    /// d'une track (où panic renvoie, base du Barycenter — équivalent
+    /// à l'import .hol pour un contrôleur externe).
+    SetTrackPosition(u32, f64, f64, f64),
     /// `/stagespace/panic` — Esc panic.
     Panic,
     /// `/stagespace/stop` — stop tous les moves.
@@ -463,6 +474,44 @@ fn parse_show_command(addr: &str, args: &[OscType], fps: f64) -> Option<ShowComm
             }
         }
         "unsolo" => Some(ShowCommand::Unsolo),
+        "position" | "position/clear" | "position/clearall" | "trackpos" => {
+            let index_arg = |a: &OscType| match a {
+                OscType::Float(v) => Some(*v as usize),
+                OscType::Int(v) => Some((*v).max(0) as usize),
+                OscType::String(s) => s.parse::<usize>().ok(),
+                _ => None,
+            };
+            let coord_arg = |a: &OscType| match a {
+                OscType::Float(v) => Some(*v as f64),
+                OscType::Double(v) => Some(*v),
+                OscType::Int(v) => Some(*v as f64),
+                OscType::Long(v) => Some(*v as f64),
+                OscType::String(s) => s.parse::<f64>().ok(),
+                _ => None,
+            };
+            match tail {
+                "position/clearall" => Some(ShowCommand::ClearAllPositions),
+                "position/clear" => args
+                    .first()
+                    .and_then(index_arg)
+                    .map(ShowCommand::ClearPosition),
+                "position" => {
+                    let obj = args.first().and_then(index_arg)?;
+                    let x = args.get(1).and_then(coord_arg)?;
+                    let y = args.get(2).and_then(coord_arg)?;
+                    let z = args.get(3).and_then(coord_arg)?;
+                    Some(ShowCommand::SetPosition(obj, x, y, z))
+                }
+                "trackpos" => {
+                    let track = args.first().and_then(index_arg)? as u32;
+                    let x = args.get(1).and_then(coord_arg)?;
+                    let y = args.get(2).and_then(coord_arg)?;
+                    let z = args.get(3).and_then(coord_arg)?;
+                    Some(ShowCommand::SetTrackPosition(track, x, y, z))
+                }
+                _ => None,
+            }
+        }
         "arm" => Some(ShowCommand::Arm),
         "disarm" => Some(ShowCommand::Disarm),
         "status" => Some(ShowCommand::Status),
@@ -1969,6 +2018,36 @@ mod show_control_tests {
                 "/stagespace/unpark",
                 vec![OscType::Int(3)],
                 ShowCommand::Unpark(3),
+            ),
+            (
+                "/stagespace/position",
+                vec![
+                    OscType::Int(1),
+                    OscType::Float(1.5),
+                    OscType::Float(-2.0),
+                    OscType::Float(0.25),
+                ],
+                ShowCommand::SetPosition(1, 1.5, -2.0, 0.25),
+            ),
+            (
+                "/stagespace/position/clear",
+                vec![OscType::Int(2)],
+                ShowCommand::ClearPosition(2),
+            ),
+            (
+                "/stagespace/position/clearall",
+                vec![],
+                ShowCommand::ClearAllPositions,
+            ),
+            (
+                "/stagespace/trackpos",
+                vec![
+                    OscType::Int(4),
+                    OscType::Float(3.0),
+                    OscType::Float(0.0),
+                    OscType::Float(-1.0),
+                ],
+                ShowCommand::SetTrackPosition(4, 3.0, 0.0, -1.0),
             ),
             (
                 "/stagespace/timecode",
