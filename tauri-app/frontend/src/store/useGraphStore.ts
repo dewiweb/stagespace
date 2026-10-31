@@ -68,10 +68,7 @@ interface GraphState
   setEdges: (edges: Edge[]) => void;
 
   // Playback / status
-  isPlaying: boolean;
   status: AppStatus;
-  currentTime: number;
-  setCurrentTime: (t: number) => void;
   duration: number;
   compileError: string | null;
   playError: string | null;
@@ -307,15 +304,12 @@ export const useGraphStore = create<GraphState>()((...a) => {
   setNodes: (nodes) => set({ nodes }),
   setEdges: (edges) => set({ edges }),
 
-  isPlaying: false,
   status: 'idle',
-  currentTime: 0,
-  setCurrentTime: (t) => set({ currentTime: t }),
   duration: 4.0,
   compileError: null,
   playError: null,
-  clearCompileError: () => set({ compileError: null, status: get().isPlaying ? 'playing' : 'idle' }),
-  clearPlayError: () => set({ playError: null, status: get().isPlaying ? 'playing' : 'idle' }),
+  clearCompileError: () => set({ compileError: null, status: get().movements.length > 0 ? 'playing' : 'idle' }),
+  clearPlayError: () => set({ playError: null, status: get().movements.length > 0 ? 'playing' : 'idle' }),
   graphCompileVersion: 0,
 
   updateGraphLive: async (fadeDuration?: number) => {
@@ -368,6 +362,9 @@ export const useGraphStore = create<GraphState>()((...a) => {
     } catch (error: any) {
       console.error('Live update failed:', error);
       toast.error('Live update failed: ' + (error?.message ?? String(error)));
+      // La pill StatusBar/Toolbar persiste l'erreur après le toast —
+      // un hot-swap raté silencieux = graphe UI ≠ graphe runtime.
+      set({ compileError: String(error?.message ?? error), status: 'error' });
     }
   },
 

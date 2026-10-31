@@ -37,7 +37,7 @@ export function useManipulateMode({
   const movements = useGraphStore((s) => s.movements);
   const macros = useGraphStore((s) => s.macros);
   const setMacros = useGraphStore((s) => s.setMacros);
-  const isPlaying = useGraphStore((s) => s.isPlaying);
+  const isPlaying = useGraphStore((s) => s.movements.length > 0);
 
   // Refs pour les valeurs lues dans les callbacks — évite les stale closures
   const movementsRef = useRef(movements);

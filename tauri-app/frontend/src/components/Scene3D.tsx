@@ -42,7 +42,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   const [webglFailed, setWebglFailed] = useState(false);
   const [sceneReady, setSceneReady] = useState(false);
 
-  const isPlaying = useGraphStore((s) => s.isPlaying);
+  const isPlaying = useGraphStore((s) => s.movements.length > 0);
   const macros = useGraphStore((s) => s.macros);
   const nodes = useGraphStore((s) => s.nodes);
   const holProject = useGraphStore((s) => s.holProject);

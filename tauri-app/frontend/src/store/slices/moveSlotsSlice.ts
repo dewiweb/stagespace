@@ -771,7 +771,13 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
       set((s) => {
         const newSlots = s.moveSlots.map((sl) => sl.id === id ? { ...sl, movementId: null } : sl);
         saveSlotsToStorage(newSlots);
-        return { moveSlots: newSlots, pendingPlays: s.pendingPlays.filter((pid) => pid !== id) };
+        return {
+          moveSlots: newSlots,
+          pendingPlays: s.pendingPlays.filter((pid) => pid !== id),
+          // Surface d'erreur persistante — le toast part, la pill reste.
+          playError: String(e),
+          status: 'error' as const,
+        };
       });
       return false;
     }

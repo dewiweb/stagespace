@@ -53,6 +53,7 @@ type MovementStore = MovementSlice & {
   holProject: HolProject | null;
   manualOscIds: number[];
   graphCompileVersion: number;
+  status?: 'idle' | 'compiling' | 'compiled' | 'playing' | 'error';
   refreshMovements: () => Promise<void>;
   // Undo + auto-save du slot édité — optionnels dans la vue structurelle,
   // présents sur le store combiné.
@@ -177,7 +178,17 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
   refreshMovements: async () => {
     try {
       const movements = await invoke<MovementInfo[]>('list_active_moves');
-      set({ movements });
+      // status suit la réalité backend — 'error' persiste jusqu'au clear
+      // (clearCompileError/clearPlayError restaurent playing/idle).
+      set((s) => ({
+        movements,
+        status:
+          s.status === 'error'
+            ? 'error'
+            : movements.length > 0
+              ? 'playing'
+              : 'idle',
+      }));
     } catch (e) {
       console.error('Failed to list movements:', e);
       const now = Date.now();

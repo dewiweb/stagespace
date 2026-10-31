@@ -21,7 +21,6 @@ export interface DrawModeSlice {
 type DrawModeStore = DrawModeSlice & {
   nodes: GraphNode[];
   edges: any[];
-  isPlaying: boolean;
   updateGraphLive: (fadeDuration?: number) => Promise<void>;
   holProject: any;
   manualOscIds: number[];
