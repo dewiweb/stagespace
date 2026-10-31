@@ -223,7 +223,7 @@ export const PerformView: React.FC = () => {
             else playSlot(armedSlot.id);
           }}
           disabled={!armedSlot}
-          className={`px-6 py-1.5 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 text-left min-w-[140px] text-white ${
+          className={`px-6 py-2.5 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 text-left min-w-[140px] text-white ${
             armedPlaying
               ? 'bg-red-600 hover:bg-red-500'
               : 'bg-indigo-600 hover:bg-indigo-500'
@@ -245,7 +245,7 @@ export const PerformView: React.FC = () => {
         <button
           onClick={handleGO}
           disabled={!nextSetlistSlotId}
-          className="px-6 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 text-left min-w-[160px]"
+          className="px-6 py-2.5 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 text-left min-w-[160px]"
           title="GO : prochain move de la setlist (Enter) — RECALL cue = Shift+Enter"
         >
           <div className="text-lg font-black leading-tight">GO ▶</div>
@@ -265,7 +265,7 @@ export const PerformView: React.FC = () => {
         )}
         <button
           onClick={() => setBuskingMode(true)}
-          className="px-3 py-2 rounded-lg flex-shrink-0 bg-green-800/60 hover:bg-green-700/80 text-green-100 text-xs font-bold uppercase tracking-wide transition-colors active:scale-95"
+          className="px-3 py-2.5 rounded-lg flex-shrink-0 bg-green-800/60 hover:bg-green-700/80 text-green-100 text-xs font-bold uppercase tracking-wide transition-colors active:scale-95"
           title="Busking plein écran — pads géants, tir au doigt (concert non-timecodé)"
         >
           Busking
@@ -285,14 +285,14 @@ export const PerformView: React.FC = () => {
               });
             });
           }}
-          className="px-3 py-2 rounded-lg flex-shrink-0 bg-amber-800/40 hover:bg-amber-700/60 text-amber-200/80 transition-colors active:scale-95"
+          className="px-3 py-2.5 rounded-lg flex-shrink-0 bg-amber-800/40 hover:bg-amber-700/60 text-amber-200/80 transition-colors active:scale-95"
           title="Conduite dans une fenêtre détachable (écran dédié)"
         >
           ⧉
         </button>
         <button
           onClick={() => setConduiteMode(true)}
-          className="px-3 py-2 rounded-lg flex-shrink-0 bg-amber-800/60 hover:bg-amber-700/80 text-amber-100 text-xs font-bold uppercase tracking-wide transition-colors active:scale-95"
+          className="px-3 py-2.5 rounded-lg flex-shrink-0 bg-amber-800/60 hover:bg-amber-700/80 text-amber-100 text-xs font-bold uppercase tracking-wide transition-colors active:scale-95"
           title="Vue conduite plein écran — NOW/NEXT cue, TC, ARM (lisible à distance)"
         >
           Conduite
@@ -559,7 +559,7 @@ const LiveDrawer: React.FC = () => {
     <button
       onClick={() => toggleScope(sc)}
       disabled={needsSlot && !slot}
-      className={`px-4 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors active:scale-95 ${
+      className={`px-4 py-2.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors active:scale-95 ${
         scope === sc
           ? sc === 'global' ? 'bg-orange-600 text-white' : 'bg-indigo-600 text-white'
           : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white border border-gray-700'
@@ -580,7 +580,7 @@ const LiveDrawer: React.FC = () => {
         {playingSlots.length > 0 && (
           <button
             onClick={() => { selectSlotForEditing(null); setScope(null); }}
-            className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+            className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
               !editingSlotId
                 ? 'bg-indigo-600 text-white'
                 : 'bg-gray-800 text-gray-400 hover:text-white border border-gray-700'
@@ -594,7 +594,7 @@ const LiveDrawer: React.FC = () => {
           <button
             key={s.id}
             onClick={() => selectMove(s.id)}
-            className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+            className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
               editingSlotId === s.id && scope !== 'global'
                 ? 'bg-indigo-600 text-white'
                 : 'bg-green-900/40 text-green-300 hover:bg-green-800/50 border border-green-800/50'

@@ -33,7 +33,7 @@ export const IconButton: React.FC<IconButtonProps> = ({
   className = '',
   ...props
 }) => {
-  const sizing = size === 'sm' ? 'px-1.5 py-0.5 text-xs' : 'px-2 py-1.5 text-xs';
+  const sizing = size === 'sm' ? 'px-1.5 py-0.5 text-xs' : 'px-2.5 py-2.5 text-xs';
   const color = active ? ACTIVE[variant] : BASE[variant];
   return (
     <button
