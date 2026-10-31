@@ -94,6 +94,12 @@ export interface MoveSlot {
   fadeDuration: number;
   /// Loop mode : "loop" (défaut) ou "oneshot"
   loopMode: 'loop' | 'oneshot';
+  /// Fin de one-shot : "revert" (défaut) ou "hold" (fige la dernière
+  /// position en manuelle — sémantique continue).
+  endMode?: 'revert' | 'hold';
+  /// Ancre : "origin" (défaut) ou "current" (part de la position courante
+  /// de chaque objet — chaînage sans saut).
+  anchorMode?: 'origin' | 'current';
   /// Direction : "forward" (défaut), "backward", ou "ping_pong"
   direction: 'forward' | 'backward' | 'ping_pong';
   /// Enveloppe de fade du cycle worker (début/fin de boucle) — distinct de
@@ -295,6 +301,8 @@ function slotToAnimation(raw: MoveSlot): Move {
     duration,
     direction: slot.direction,
     loop_mode: slot.loopMode === 'oneshot' ? 'one_shot' : 'loop',
+    end_mode: slot.endMode ?? 'revert',
+    anchor_mode: slot.anchorMode ?? 'origin',
     scale: slot.macros.scale,
     yaw: slot.macros.yaw,
     pitch: slot.macros.pitch,
@@ -679,6 +687,8 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
         duration,
         direction: slot.direction,
         loop_mode: slot.loopMode === 'oneshot' ? 'one_shot' : 'loop',
+    end_mode: slot.endMode ?? 'revert',
+    anchor_mode: slot.anchorMode ?? 'origin',
         scale: slot.macros.scale,
         yaw: slot.macros.yaw,
         pitch: slot.macros.pitch,

@@ -88,6 +88,8 @@ pub fn cmd_activate_move(args: &[&str]) -> Result<String, String> {
         spatial_macros: None,
         animation_state: None,
         signal_graph: None,
+        end_mode: stagespace_engines::EndMode::default(),
+        anchor_mode: stagespace_engines::AnchorMode::default(),
     };
     spawn_move(spec, &state.shared).map_err(|e| e.to_string())?;
 
@@ -184,6 +186,8 @@ pub fn cmd_activate_graph(args: &[&str]) -> Result<String, String> {
         spatial_macros: None,
         animation_state: None,
         signal_graph,
+        end_mode: stagespace_engines::EndMode::default(),
+        anchor_mode: stagespace_engines::AnchorMode::default(),
     };
     spawn_move(spec, &state.shared).map_err(|e| e.to_string())?;
 

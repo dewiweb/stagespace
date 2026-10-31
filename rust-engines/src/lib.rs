@@ -103,8 +103,8 @@ pub use post_process_compiler::{
 pub use presets::{Preset, PresetManager};
 pub use rng::SimpleRng;
 pub use runtime::{
-    LoopMode, MacroState, PerfStats, PlayDirection, PositionFn, PostProcessContext, PostProcessFn,
-    Runtime,
+    AnchorMode, EndMode, LoopMode, MacroState, PerfStats, PlayDirection, PositionFn,
+    PostProcessContext, PostProcessFn, Runtime,
 };
 pub use signal_compiler::{
     compile_move_signal_graph, compile_signal_graph, empty_signal_fn, macro_with_deltas,

@@ -6,7 +6,7 @@ use crate::logging::{log_playback_start, log_playback_stop, log_runtime_init};
 use crate::position_buffer::PositionBuffer;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 
 mod config;
@@ -40,6 +40,10 @@ pub struct Runtime {
     perf: Arc<PerfMonitor>,
     /// Origin = isobarycentre des tracks ciblées — la trajectoire est centrée dessus
     origin: Arc<Mutex<nalgebra::Vector3<f64>>>,
+    /// Ancres capturées au spawn (AnchorMode::Current) — obj_index →
+    /// position monde capturée ; le worker la convertit en offset
+    /// `delta = capturée − pos(t0)` appliqué à chaque frame (chaînage).
+    anchor_capture: Arc<RwLock<std::collections::HashMap<usize, nalgebra::Vector3<f64>>>>,
     /// Animation state — depth + phase_offset par track + audio mods
     animation_state: Arc<Mutex<Option<AnimationState>>>,
     /// Audio state — partagé avec l'app, lu à chaque frame pour les audio mods
@@ -108,6 +112,7 @@ impl Runtime {
             perf: Arc::new(PerfMonitor::new()),
 
             origin: Arc::new(Mutex::new(nalgebra::Vector3::zeros())),
+            anchor_capture: Arc::new(RwLock::new(std::collections::HashMap::new())),
             animation_state: Arc::new(Mutex::new(None)),
             audio_state,
             audio_param_overrides: Arc::new(Mutex::new(HashMap::new())),
@@ -182,6 +187,18 @@ impl Runtime {
     /// Récupère l'origin actuelle
     pub fn get_origin(&self) -> nalgebra::Vector3<f64> {
         *self.origin.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Capture les ancres (AnchorMode::Current) — chaque objet part de sa
+    /// position courante : pos = capturée + (traj(t) − traj(0)).
+    pub fn set_anchor_capture(
+        &self,
+        captured: std::collections::HashMap<usize, nalgebra::Vector3<f64>>,
+    ) {
+        *self
+            .anchor_capture
+            .write()
+            .unwrap_or_else(|e| e.into_inner()) = captured;
     }
 
     /// Définit l'animation state (depth + phase_offset par track + audio mods)
@@ -493,6 +510,11 @@ impl Runtime {
         let perf = self.perf.clone();
 
         let origin_arc = self.origin.clone();
+        let anchor_capture_arc = self.anchor_capture.clone();
+        // Offsets d'ancre par objet — calculés à la première frame :
+        // delta[obj] = capturée[obj] − pos(t0, obj), ensuite pos += delta.
+        let mut anchor_offsets: std::collections::HashMap<usize, nalgebra::Vector3<f64>> =
+            std::collections::HashMap::new();
         let anim_state_arc = self.animation_state.clone();
         let audio_state_arc = self.audio_state.clone();
         let audio_param_overrides_arc = self.audio_param_overrides.clone();
@@ -800,6 +822,26 @@ impl Runtime {
                                 radial,
                             );
                             (obj_idx, pos)
+                        })
+                        .collect()
+                };
+                // AnchorMode::Current — première frame : delta = capturée
+                // − pos calculée ; ensuite pos += delta. Le move part de
+                // là où l'objet était (chaînage sans saut).
+                let captured = anchor_capture_arc
+                    .read()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone();
+                let positions = if captured.is_empty() {
+                    positions
+                } else {
+                    positions
+                        .into_iter()
+                        .map(|(i, p)| {
+                            let d = anchor_offsets.entry(i).or_insert_with(|| {
+                                captured.get(&i).copied().unwrap_or_else(nalgebra::Vector3::zeros) - p
+                            });
+                            (i, p + *d)
                         })
                         .collect()
                 };

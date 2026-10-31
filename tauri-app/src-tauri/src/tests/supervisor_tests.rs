@@ -129,7 +129,7 @@ mod supervisor_tests {
         {
             let mut merge = sh.merge_runtime.lock().unwrap();
             let buffer = Arc::new(PositionBuffer::new());
-            merge.register_move("m1".to_string(), buffer, vec![1], vec![0], false);
+            merge.register_move("m1".to_string(), buffer, vec![1], vec![0], false, stagespace_engines::EndMode::default());
             merge.start().expect("start");
             merge.stop(); // thread mort, move encore actif dans le merge
             assert!(!merge.is_running());

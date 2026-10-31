@@ -70,6 +70,8 @@ pub async fn launch_animation(
         }),
         animation_state: Some(AnimationState::from_animation(&animation, &osc_ids)),
         signal_graph: animation.signal_graph.clone(),
+        end_mode: stagespace_engines::EndMode::default(),
+        anchor_mode: stagespace_engines::AnchorMode::default(),
     };
 
     let sh = Shared::from_state(&state);

@@ -48,6 +48,14 @@ pub struct ActivateMoveRequest {
     /// slots elles vont au merge global via `set_global_macro` (sémantique
     /// "appliquées au lancement" — un double report créerait un transform ×2).
     pub animation: Option<Animation>,
+    /// Fin de one-shot : "revert" (défaut) ou "hold" (fige la dernière
+    /// position en position manuelle — sémantique continue).
+    #[serde(default)]
+    pub end_mode: stagespace_engines::EndMode,
+    /// Ancre : "origin" (défaut) ou "current" (capture la position
+    /// courante de chaque objet — chaînage sans saut).
+    #[serde(default)]
+    pub anchor_mode: stagespace_engines::AnchorMode,
 }
 
 /// Spec complet pour créer un worker move — partagé entre activate_move,
@@ -77,6 +85,10 @@ pub struct MoveSpec {
     /// Graph de modulation per-move (domaine signal → deltas de macros).
     /// Compilé au spawn puis swappé sur le worker (`runtime.swap_signal_fn`).
     pub signal_graph: Option<stagespace_engines::GraphJson>,
+    /// Fin de one-shot : Revert (défaut) ou Hold (fige en position manuelle).
+    pub end_mode: stagespace_engines::EndMode,
+    /// Ancre : Origin (défaut) ou Current (capture la position courante).
+    pub anchor_mode: stagespace_engines::AnchorMode,
 }
 
 /// Macros spatiales initiales d'un worker (système Animation).
@@ -360,6 +372,25 @@ fn spawn_move_inner(
         None => lock_or_recover(&sh.merge_runtime).origin(),
     };
     runtime.set_origin(move_origin);
+    // AnchorMode::Current — capture par index LOCAL : last_position du
+    // track global correspondant (le worker émet en index local, le merge
+    // remappe vers les tracks via track_indices).
+    if spec.anchor_mode == stagespace_engines::AnchorMode::Current {
+        let merge_rt = lock_or_recover(&sh.merge_runtime);
+        let captured: std::collections::HashMap<usize, nalgebra::Vector3<f64>> = spec
+            .track_indices
+            .iter()
+            .enumerate()
+            .filter_map(|(local, &global)| {
+                merge_rt
+                    .last_position(global)
+                    .map(|p| (local, nalgebra::Vector3::new(p[0], p[1], p[2])))
+            })
+            .collect();
+        if !captured.is_empty() {
+            runtime.set_anchor_capture(captured);
+        }
+    }
     if let Some(anim_state) = spec.animation_state {
         runtime.set_animation_state(anim_state);
     }
@@ -461,6 +492,7 @@ fn spawn_move_inner(
             spec.osc_ids.clone(),
             spec.track_indices.clone(),
             spec.is_preview,
+            spec.end_mode,
         );
         // L'origin du move est passée au WORKER (runtime.set_origin, étape 4)
         // — le merge garde SON origin globale (set_global_origin, centroïde
@@ -545,6 +577,8 @@ pub async fn activate_move(
             .animation
             .as_ref()
             .and_then(|a| a.signal_graph.clone()),
+        end_mode: request.end_mode,
+        anchor_mode: request.anchor_mode,
     };
     let sh = Shared::from_state(&state);
     tauri::async_runtime::spawn_blocking(move || spawn_move(spec, &sh))

@@ -249,7 +249,7 @@ fn test_register_unregister_move() {
     let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
     let rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
     let buffer = Arc::new(PositionBuffer::new());
-    rt.register_move("move1".to_string(), buffer, vec![1, 2], vec![0, 1], false);
+    rt.register_move("move1".to_string(), buffer, vec![1, 2], vec![0, 1], false, crate::EndMode::default());
     assert_eq!(rt.active_moves.read().unwrap().len(), 1);
     rt.unregister_move("move1");
     assert_eq!(rt.active_moves.read().unwrap().len(), 0);
@@ -379,7 +379,7 @@ fn test_failing_sink_surfaces_osc_error_rate() {
             }
         })
     };
-    rt.register_move("m1".to_string(), buffer, vec![1], vec![0], false);
+    rt.register_move("m1".to_string(), buffer, vec![1], vec![0], false, crate::EndMode::default());
     rt.start().unwrap();
     // Perf stats ne se rafraîchissent que toutes les ~500 ms.
     std::thread::sleep(std::time::Duration::from_millis(900));
@@ -414,7 +414,7 @@ fn test_thread_died_marks_liveness() {
             }
         })
     };
-    rt.register_move("m1".to_string(), buffer, vec![1], vec![0], false);
+    rt.register_move("m1".to_string(), buffer, vec![1], vec![0], false, crate::EndMode::default());
     rt.start().unwrap();
     std::thread::sleep(std::time::Duration::from_millis(300));
     writer.join().unwrap();
@@ -434,7 +434,7 @@ fn test_fresh_move_survives_stale_grace() {
     let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
     let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
     let buffer = Arc::new(PositionBuffer::new()); // jamais écrit dans le test
-    rt.register_move("fresh".to_string(), buffer, vec![1], vec![0], false);
+    rt.register_move("fresh".to_string(), buffer, vec![1], vec![0], false, crate::EndMode::default());
     rt.start().unwrap();
     // ~70 frames à 60 FPS — dépasse largement l'ancienne limite de 30.
     std::thread::sleep(std::time::Duration::from_millis(1200));
@@ -462,6 +462,7 @@ fn test_stale_kill_publishes_id_and_buffer() {
         vec![1],
         vec![0],
         false,
+        crate::EndMode::default(),
     );
     rt.start().unwrap();
 
@@ -568,7 +569,7 @@ fn test_signal_deltas_reach_sink_e2e() {
     rt.swap_signal_fn(const_signal_fn("scale", 1.0, 1.0));
 
     let b = Arc::new(PositionBuffer::new());
-    rt.register_move("m1".to_string(), b.clone(), vec![1], vec![0], false);
+    rt.register_move("m1".to_string(), b.clone(), vec![1], vec![0], false, crate::EndMode::default());
     let w = spawn_writer(&b, 0, nalgebra::Vector3::new(2.0, 0.0, 0.0), 150);
     rt.start().unwrap();
     std::thread::sleep(std::time::Duration::from_millis(500));
@@ -600,8 +601,8 @@ fn test_moveref_selects_single_move_positions() {
 
     let b1 = Arc::new(PositionBuffer::new());
     let b2 = Arc::new(PositionBuffer::new());
-    rt.register_move("m1".to_string(), b1.clone(), vec![1], vec![0], false);
-    rt.register_move("m2".to_string(), b2.clone(), vec![2], vec![1], false);
+    rt.register_move("m1".to_string(), b1.clone(), vec![1], vec![0], false, crate::EndMode::default());
+    rt.register_move("m2".to_string(), b2.clone(), vec![2], vec![1], false, crate::EndMode::default());
     let w1 = spawn_writer(&b1, 0, nalgebra::Vector3::new(1.0, 0.0, 0.0), 150);
     let w2 = spawn_writer(&b2, 0, nalgebra::Vector3::new(9.0, 9.0, 9.0), 150);
     rt.start().unwrap();
@@ -671,7 +672,7 @@ fn test_barycenter_recomputes_pivot() {
     rt.swap_post_process_fn(pp);
 
     let b = Arc::new(PositionBuffer::new());
-    rt.register_move("m1".to_string(), b.clone(), vec![1], vec![0], false);
+    rt.register_move("m1".to_string(), b.clone(), vec![1], vec![0], false, crate::EndMode::default());
     let w = spawn_writer(&b, 0, nalgebra::Vector3::new(4.0, 0.0, 0.0), 150);
     rt.start().unwrap();
     std::thread::sleep(std::time::Duration::from_millis(500));
@@ -710,7 +711,7 @@ fn bench_merge_under_load() {
         let buf = Arc::new(PositionBuffer::new());
         let idx: Vec<usize> = (0..8).map(|i| (m * 8 + i) % 24).collect();
         let osc: Vec<u32> = idx.iter().map(|&i| (i + 1) as u32).collect();
-        rt.register_move(format!("mv{m}"), buf.clone(), osc, idx, false);
+        rt.register_move(format!("mv{m}"), buf.clone(), osc, idx, false, crate::EndMode::default());
         buffers.push(buf);
     }
 

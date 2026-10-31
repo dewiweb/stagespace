@@ -164,6 +164,12 @@ pub struct MergeRuntime {
     /// jamais leurs canaux : la reprise manuelle d'un opérateur a priorité
     /// sur la mémoire enregistrée (sémantique Park des consoles).
     parked_objects: Arc<RwLock<HashSet<usize>>>,
+    /// End-mode par move (Revert | Hold) — posé au register_move, lu au
+    /// retrait : Hold écrit la dernière position en manual_positions.
+    move_end_modes: Arc<RwLock<HashMap<String, crate::EndMode>>>,
+    /// Dernières positions monde émises par objet — source des ancres
+    /// `AnchorMode::Current` au spawn du move suivant.
+    last_out_positions: Arc<RwLock<HashMap<usize, [f64; 3]>>>,
     /// Règles de modulation cinématique (source cinématique → canal spatial)
     /// — Arc<Vec> : snapshot par frame = clone d'Arc.
     channel_modulations: Arc<RwLock<Arc<Vec<ChannelModulation>>>>,
@@ -273,6 +279,8 @@ impl MergeRuntime {
             manual_positions: Arc::new(RwLock::new(HashMap::new())),
             object_channels: Arc::new(RwLock::new(HashMap::new())),
             parked_objects: Arc::new(RwLock::new(HashSet::new())),
+            move_end_modes: Arc::new(RwLock::new(HashMap::new())),
+            last_out_positions: Arc::new(RwLock::new(HashMap::new())),
             channel_modulations: Arc::new(RwLock::new(Arc::new(Vec::new()))),
             kinematic_smoothing: Arc::new(RwLock::new(0.5)),
             zones: Arc::new(RwLock::new(Arc::new(Vec::new()))),
@@ -901,12 +909,19 @@ impl MergeRuntime {
         osc_ids: Vec<u32>,
         track_indices: Vec<usize>,
         is_preview: bool,
+        end_mode: crate::EndMode,
     ) {
         let state = MoveState::new(osc_ids, track_indices, is_preview);
         self.active_moves
             .write()
             .unwrap_or_else(|e| e.into_inner())
             .insert(move_id.clone(), state);
+        if end_mode == crate::EndMode::Hold {
+            self.move_end_modes
+                .write()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(move_id.clone(), end_mode);
+        }
         self.move_buffers
             .write()
             .unwrap_or_else(|e| e.into_inner())
@@ -1000,10 +1015,41 @@ impl MergeRuntime {
             .write()
             .unwrap_or_else(|e| e.into_inner())
             .remove(move_id);
+        self.move_end_modes
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(move_id);
         self.move_buffers
             .write()
             .unwrap_or_else(|e| e.into_inner())
             .remove(move_id);
+    }
+
+    /// Dernière position monde connue d'un objet — source des ancres
+    /// `AnchorMode::Current`. Ordre : dernière émission merge →
+    /// manuelle → origine track → None (jamais vu).
+    pub fn last_position(&self, obj: usize) -> Option<[f64; 3]> {
+        if let Some(p) = self
+            .last_out_positions
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&obj)
+        {
+            return Some(*p);
+        }
+        if let Some(p) = self
+            .manual_positions
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&obj)
+        {
+            return Some(*p);
+        }
+        self.track_positions
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&(obj as u32))
+            .copied()
     }
 
     /// Règle le poids d'un move actif — fade effectif = fade × weight
@@ -1129,6 +1175,8 @@ impl MergeRuntime {
         let post_process_fn_arc = self.post_process_fn.clone();
         let track_positions_arc = self.track_positions.clone();
         let manual_positions_arc = self.manual_positions.clone();
+        let move_end_modes_arc = self.move_end_modes.clone();
+        let last_out_positions_arc = self.last_out_positions.clone();
         let object_channels_arc = self.object_channels.clone();
         let zones_arc = self.zones.clone();
         let channel_modulations_arc = self.channel_modulations.clone();
@@ -1290,6 +1338,28 @@ impl MergeRuntime {
                             ));
                             state.is_active = false;
                             moves_to_remove.push(move_id.clone());
+                            // EndMode::Hold — figer les dernières positions
+                            // du buffer en positions manuelles : l'objet
+                            // reste où le move l'a laissé (sémantique
+                            // « continue » au lieu du retour à la base).
+                            if move_end_modes_arc
+                                .read()
+                                .unwrap_or_else(|e| e.into_inner())
+                                .get(move_id)
+                                .is_some_and(|m| *m == crate::EndMode::Hold)
+                            {
+                                if let Some(buf) = buffers.get(move_id) {
+                                    let positions = buf.read();
+                                    let mut mp = manual_positions_arc
+                                        .write()
+                                        .unwrap_or_else(|e| e.into_inner());
+                                    for (i, (_, pos)) in positions.iter().enumerate() {
+                                        if let Some(&track) = state.track_indices.get(i) {
+                                            mp.insert(track, [pos.x, pos.y, pos.z]);
+                                        }
+                                    }
+                                }
+                            }
                             // Audit C5 : publier l'ID + le buffer (test
                             // d'identité côté superviseur) pour arrêter
                             // réellement le thread worker — sinon il
@@ -1713,6 +1783,17 @@ impl MergeRuntime {
                         }
                     })
                     .collect();
+
+                // Dernières positions monde émises — source des ancres
+                // `AnchorMode::Current` au spawn du move suivant.
+                {
+                    let mut last_out = last_out_positions_arc
+                        .write()
+                        .unwrap_or_else(|e| e.into_inner());
+                    for (obj, pos) in &transformed {
+                        last_out.insert(*obj, [pos.x, pos.y, pos.z]);
+                    }
+                }
 
                 // 4.5 Cinématique : vitesse/accélération/jerk sur les positions
                 // finales (celles réellement envoyées au renderer), dt réel

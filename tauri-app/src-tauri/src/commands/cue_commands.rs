@@ -691,6 +691,8 @@ pub(crate) fn recall_cue_inner(
                 spatial_macros: None,
                 animation_state: snap.animation_state.clone(),
                 signal_graph: snap.signal_graph.clone(),
+                end_mode: stagespace_engines::EndMode::default(),
+                anchor_mode: stagespace_engines::AnchorMode::default(),
             };
             match spawn_move_for_recall(spec, &sh) {
                 Ok(_) => {

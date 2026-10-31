@@ -50,6 +50,30 @@ pub enum LoopMode {
     OneShot,
 }
 
+/// Ce que fait le move à la fin d'un one-shot.
+#[derive(Debug, Clone, Copy, PartialEq, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum EndMode {
+    /// Revert — l'objet revient à sa position de base (comportement historique).
+    #[default]
+    Revert,
+    /// Hold — la dernière position monde est écrite en position manuelle :
+    /// l'objet reste où le move l'a laissé (sémantique « continue »).
+    Hold,
+}
+
+/// D'où part la trajectoire d'un move.
+#[derive(Debug, Clone, Copy, PartialEq, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AnchorMode {
+    /// Origin — la trajectoire est ancrée sur l'origine du move (défaut).
+    #[default]
+    Origin,
+    /// Current — chaque objet capture sa position courante comme ancre :
+    /// pos(t) = capturée + (traj(t) − traj(0)). Chaînage sans saut.
+    Current,
+}
+
 /// Direction de lecture
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PlayDirection {
