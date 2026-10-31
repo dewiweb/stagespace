@@ -97,3 +97,20 @@ unifiant touch/busking/conduite) — les modes internes de PerformView
 disparaissent.
 P3 — **Tailles de base** : actions live ≥44px, info conduite ≥text-base.
 P4 — **Fallbacks visibles** : erreur explicite, pas de page blanche.
+
+## Recensement quantitatif (32 composants + 7 ui/)
+
+| Métrique | Mesure | Lecture |
+|---|---|---|
+| Lignes totales | ~9 100 | PerformView 1184 + NodeEditor 1063 + Inspector 680 + CustomNode 618 + MovesTable 617 + SpatialFxPanel 583 + Scene3D 505 + CuelistPanel 466 |
+| `text-xs` | **403 occurrences** | 80% du texte est 12px — aucune hiérarchie typographique effective |
+| `text-lg`/`xl`/2xl+ | ~45 | les gros corps sont rares et localisés (overlays) |
+| `text-[10px]`/`[11px]` | 21 | sous-12px répété — illisible |
+| Couleurs ad hoc | **~250 usages**, 15+ teintes | red-400×33, cyan-400×27/300×21/500×20/900×16, purple×37, orange×26, indigo×24 — pas un token de rôle |
+| `z-N` en dur | z-10×4, z-50×2, z-[60]×1 | l'échelle nommée zIndex existe et n'est pas utilisée partout |
+| Cibles <44px | w-6 h-6×6, w-4 h-4×6, w-9 h-5×3, w-5 h-5×2, w-8/w-9×2 | ~20 boutons sous le seuil touch |
+
+**Lecture quantitative** : le problème n'est pas quelques couleurs mal
+choisies — c'est ~400 textes à 12px, ~250 couleurs hors tokens, ~20 cibles
+sous 44px, répartis sur 32 fichiers. Le refactor est une normalisation en
+profondeur, pas une retouche.
