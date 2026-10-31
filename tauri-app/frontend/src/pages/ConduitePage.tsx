@@ -63,6 +63,11 @@ export const ConduitePage: React.FC = () => {
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center gap-8 px-8">
+        {!st && (
+          <div className="text-gray-500 text-sm uppercase tracking-widest animate-pulse">
+            Waiting for main window…
+          </div>
+        )}
         <div className="text-center">
           <div className="text-gray-500 text-lg uppercase tracking-widest mb-2">Now</div>
           <div className="text-6xl font-black text-amber-300 truncate max-w-[80vw]">{st?.curCue || '—'}</div>

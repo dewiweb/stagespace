@@ -69,6 +69,7 @@ export const Modal: React.FC<ModalProps> = ({
       onClick={closeOnOverlay ? onClose : undefined}
       role="dialog"
       aria-modal="true"
+      aria-labelledby={title !== undefined ? 'modal-title' : undefined}
     >
       <div
         ref={panelRef}
@@ -78,7 +79,7 @@ export const Modal: React.FC<ModalProps> = ({
       >
         {title !== undefined && (
           <div className="flex items-center justify-between px-5 py-3 border-b border-stagespace-border">
-            <h2 className="text-white font-semibold text-sm">{title}</h2>
+            <h2 id="modal-title" className="text-white font-semibold text-sm">{title}</h2>
             <button
               onClick={onClose}
               className="text-gray-500 hover:text-white leading-none p-0.5 rounded hover:bg-gray-800 transition-colors"

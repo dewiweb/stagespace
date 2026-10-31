@@ -643,12 +643,6 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
 
       const { prepareGraphForSave } = await import('../../components/nodeParamSchema');
       const graphData = prepareGraphForSave(graphJson.nodes, graphJson.edges);
-      feLog(`[DBG-playSlot] graphJson nodes=${graphJson.nodes.length} edges=${graphJson.edges.length} types=${graphJson.nodes.map((n: any) => n.data?.type).join(',')} isEditing=${isEditing}`);
-      // Log spécifique pour les nodes spline
-      const evalNode = graphJson.nodes.find((n: any) => n.data.type === 'EvaluateSpline');
-      const drawNode = graphJson.nodes.find((n: any) => n.data.type === 'DrawSpline');
-      feLog(`[DBG-playSlot] DrawSpline points=${String(drawNode?.data.params?.points ?? 'NOT SET').slice(0, 120)}`);
-      feLog(`[DBG-playSlot] EvaluateSpline points=${String(evalNode?.data.params?.points ?? 'NOT SET').slice(0, 120)}`);
 
       // Lire la duration depuis le node Duration du graphe
       const duration = extractDuration(graphJson.nodes);

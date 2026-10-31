@@ -87,6 +87,17 @@ export default function SpatialFxPanel() {
   const zoneEditMode = useGraphStore((s) => s.zoneEditMode);
   const setZoneEditMode = useGraphStore((s) => s.setZoneEditMode);
 
+  // Modes interactifs → reset au démontage : sinon un mode place/edit
+  // oublié survive au switch de tab et intercepte les clics du canvas 3D.
+  React.useEffect(() => {
+    return () => {
+      useGraphStore.getState().setZonePlaceMode(false);
+      useGraphStore.getState().setZoneEditMode(false);
+      useGraphStore.getState().setPendingZonePoint(null);
+      useGraphStore.getState().setZonePlaceTarget(null);
+    };
+  }, []);
+
   // ── Zone form state ──
   const [zShape, setZShape] = React.useState<'sphere' | 'box'>('sphere');
   const [zA, setZA] = React.useState('0,0,0');
