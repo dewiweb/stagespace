@@ -214,3 +214,32 @@ CuelistPanel (466/12/25) — **le 60% des couleurs ad hoc est concentré dans
 ### Verdict global
 
 Le câblage soutient le refactor sans réécriture métier : show logic = moveSlotsSlice+useCuelistStore+liveActions (bien factorisé). **13 bugs fonctionnels** à corriger d'abord (dont F1-F4 = sécurité live), puis **12 problèmes structurels** de duplication/convergence. Le design system existe (tokens + primitives) mais n'est pas déployé — c'est de la normalisation, pas de la création.
+
+## Lot 7 — chrome (Toolbar, StatusBar, AudioPanel, ModeButtons)
+
+- **Toolbar** : mélange édition/live/monitoring sans hiérarchie — 5 langages de boutons en une ligne, erreurs dupliquées (×StatusBar), OSC destination ×3, Import `.hol` proéminent en permanence.
+- **StatusBar** : télémétrie dev (`merge µs`, `lock µs`) au premier plan live ; `oscSuspended` affiché mais **état ARM absent** — la métrique de sécurité live manque au poste de surveillance.
+- **AudioPanel** : double collapse (App "AUDIO IN ▸" + panel "Audio Input ▾") = 2 clics ; `h-15` classe morte Tailwind → spectre déformé ; niveau audio disparaît quand replié.
+- **ModeButtons** : banners top-center ×4 dupliqués, `hasDrawableNode` duplique la liste spline, `return null` en drawMode sans sortie visible au clic.
+
+À ajouter aux bugs fonctionnels :
+- **F14** `h-15` inexistant → canvas spectre déformé (AudioPanel:211)
+- **F15** ModeButtons recouverts F1 + `return null` drawMode → **aucune sortie de draw au clic** ni banner manipulate avec "Esc"
+- **F16** état ARM OSC invisible en StatusBar (le monitoring montre la télémétrie dev mais pas le dry-run)
+
+À ajouter aux structurels :
+- **S13** Vocabulaire modes : "PERFORM"/"Atelier"/"Simple"/"Expert" — 3 noms pour 2 modes, bouton affiche l'état courant (ambigu)
+- **S14** Duplications transverses : erreurs ×2, OSC destination ×3, banners ×4, spline list ×2
+
+## Conclusion de l'audit
+
+**Couverture** : 39 fichiers GUI + 6 stores + câblage, 7 lots, lecture intégrale.
+
+**Bilan** : 16 bugs fonctionnels (F1-F16) — dont sécurité live (F1/F2/F4/F5/F15) et état contradictoire (F9/F16). 14 problèmes structurels (S1-S14) — duplication/divergence. Le métier est sain ; le défaut est le **design system non déployé** (tokens + primitives existants mais contournés partout) et les **convergences manquées** (4 surfaces macros, 2 rendus de slot, 4 banners, dispatch contourné).
+
+**Ordre de refactor confirmé** :
+- **P0** — bugs live-safety : F1, F2, F4, F5, F15 (sortie de mode, recall guard) + F16 (ARM visible)
+- **P1** — tokens de rôle + composants partagés (`ShowTransport`, `PadButton`, `StatusChip`, `ModeBanner`, `IconButton` déployée, `NodeParamField`)
+- **P2** — convergences : 1 surface macros, 1 rendu slot, liveActions uniquement, showStatusSlice
+- **P3** — deux modes clairs + tailles ≥44px
+- **P4** — fallbacks : ErrorBoundary conduite, modal focus, delete guards, classes mortes
