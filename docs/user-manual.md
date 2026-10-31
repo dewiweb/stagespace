@@ -274,3 +274,142 @@ Brancher un fader externe — onglet *OSC IN* (PerformView) :
 `examples/conduite-epilogue.hfg` (+ `.md`) : spectacle ~1 h 25, 19 cues,
 14 moves, deux actes + entracte — TC, follow, tracking, safety cue S1.
 Importez-le pour explorer tous les mécanismes.
+
+---
+
+# Appendices
+
+## A. Référence des nœuds
+
+Les nœuds s'ajoutent depuis la palette (ou `Ctrl+K`). **Entrées en haut, sorties
+en bas.** Les ports ont un type (Positions, ObjectSet, Duration, Signal…) —
+seules les connexions valides sont acceptées.
+
+### A.1 Structurels — l'ossature du graphe
+
+| Nœud | Rôle |
+|------|------|
+| `Objects` | source : la liste des objets/tracks du move |
+| `Duration` | durée du move — nécessaire au play |
+| `Output` | sortie : dernier nœud avant le runtime |
+| `Group` | regroupe des nodes en sous-ensemble |
+| `Mix` | mixe deux flux de positions (ponderation) |
+| `Sequence` | chaîne des moves dans le temps |
+| `Crossfade` | fondu entre deux entrées |
+
+### A.2 Moteurs math — trajectoires générées
+
+`Circular` · `Elliptical` · `Spiral` · `Lissajous` · `Figure8` · `Linear` ·
+`Oscillation` · `PerlinNoise` · `Formation` (formations de groupe :
+ligne/arc/grille) · `Converge` (convergence vers un point) · `Pendulum` ·
+`RoseCurve` · `Helix` · `Wave` · `CustomTrajectory`
+
+### A.3 Moteurs physique — simulation
+
+`Bouncing` (rebonds) · `Spring` (ressort) · `Follow` (poursuite) · `Swarm`
+(essaim/boids) · `Avoidance` (évitement mutuel) · `VectorField` (champ de
+vecteurs)
+
+### A.4 Splines — trajectoires dessinées
+
+| Nœud | Rôle |
+|------|------|
+| `DrawSpline` | contient les points dessinés à la main (draw mode) |
+| `EvaluateSpline` | évalue la spline → positions f(t) |
+| `TrimSpline` | extrait une portion de la spline |
+| `OffsetSpline` | décale la spline dans l'espace |
+
+### A.5 Envelopes (ex-Falloffs) — influence spatiale/temporelle
+
+`TimeFalloff` (enveloppe dans le temps) · `PointDistanceFalloff` (influence
+selon la distance à un point) · `DirectionalFalloff` · `AudioAmplitudeFalloff`
+· `AudioFalloff` — une envelope module l'influence de n'importe quel paramètre.
+
+### A.6 Modifiers — transformations
+
+`Scale` · `Rotate` · `Offset` · `PhaseShift` · `Mirror` · `Clamp` · `LFO` ·
+`Jitter` · `SpeedScale` · `Delay` · `Freeze` · `Switch` · `RadiusScale` ·
+`HeightOffset` · `PerTrackDepth` · `Barycenter`
+
+### A.7 Sources — données externes
+
+`BPM` (détection tempo audio IN) · `AudioAmplitude` · `AudioSpectrum` (FFT
+par bande) · `OSCInput` (valeur OSC entrante)
+
+### A.8 Global (post-process) — graphe Global FX uniquement
+
+| Nœud | Rôle |
+|------|------|
+| `Merge` | stratégie de résolution quand plusieurs moves ciblent la même track (override/crossfade/blend/priority — le dernier écrivain gagne) |
+| `Zone` | déclare une zone spatiale pour le panel Spatial FX |
+| `Velocity` | déclare un canal de modulation vélocité |
+
+### A.9 Composite & plugins
+
+`MoveRef` (référence un autre move — composition de mouvements) · `Plugin`
+(moteur WASM externe packagé `.ssx`)
+
+### A.10 Signal — graphe de modulation (tab *Modulation*)
+
+Le graphe signal produit des **valeurs scalaires f(t)** qui modulent les
+paramètres de n'importe quel nœud du graphe de positions — LFO sur le radius,
+audio sur le speed, etc.
+
+Sources : `SignalConst` · `SignalTime` · `SignalLfo` · `SignalAudio` ·
+`SignalOsc` (handlers OSC-IN) · `SignalRandom` · `SignalCounter`
+Traitement : `SignalMath` · `SignalMap` (remappage min/max) · `SignalClamp` ·
+`SignalMix` · `SignalSlew` (lissage) · `SignalEnvelope` · `SignalThreshold` ·
+`SignalBeat` · `SignalSampleHold` · `SignalMux`
+Sortie : `SignalOut` — la sortie nommée devient ciblable depuis un paramètre
+de nœud.
+
+Chaîne typique : `SignalLfo → SignalMap → SignalOut(speed)` puis dans le
+graphe de positions, le paramètre `speed` d'un moteur se lie à cette sortie.
+
+---
+
+## B. Draw mode — dessiner une trajectoire
+
+1. Activez **draw mode** dans la palette ou le canvas 3D — un nœud `DrawSpline`
+   est créé et le canvas passe en saisie de dessin.
+2. Dessinez à la souris — les points capturés remplissent `DrawSpline.params.points`.
+3. Reliez `DrawSpline → EvaluateSpline → Output`.
+4. **Exit Draw** (bouton dédié ou `Esc`) quitte le mode — le mode est
+   **exclusif** : il désactive assign/manipulate pendant le dessin.
+5. La trajectoire fantôme dessinée disparaît à la sortie — ce que vous voyez
+   ensuite est la trajectoire réelle du move.
+
+---
+
+## C. Graphe Global FX
+
+Le graphe *Global FX* (tab du node editor) ne produit pas de trajectoire — il
+**post-traite** le merge final de tous les moves :
+
+- `Merge` fixe la stratégie de résolution des tracks contestées.
+- `Zone`/`Velocity` **déclarent** les zones et canaux que le panel Spatial FX
+  (tab FX, colonne SHOW) affiche et édite.
+- Les modulations globales (macros d'ensemble) s'appliquent après merge —
+  `macro:scale` d'un fader agit sur tous les moves simultanément.
+
+## D. Spatial FX (tab FX)
+
+Le panneau **FX** (colonne SHOW) édite zones, modulations de canaux et canaux
+objet déclarés par le graphe global :
+
+- **Zones** : sphere/box, position + taille, canaux affectés (gain etc.),
+  `Place` = placement par clic dans la 3D. `clear all` et chaque `×` passent
+  par une confirmation.
+- **Modulations** : canaux déclarés par les nœuds `Velocity` du graphe global.
+- **Canaux objet** : gain/spread/distance/presence par objet — l'équivalent
+  spatial d'un fader par track.
+
+## E. Référence Settings
+
+| Section | Contenu |
+|---------|---------|
+| **OSC output** | host:port du renderer + profil (Holophonix/Spat/IEM/ADM/XYZ/AED) + *Discover renderers* |
+| **OSC input** | port de réception des commandes (`oscInPort`, défaut 8001) |
+| **Merge** | stratégie par défaut — override · crossfade · blend · priority |
+| **Track IDs** | IDs virtuels quand aucun `.hol` n'est chargé (ex. `1,2,3,…` ou plages `1-8,12`) |
+| **Audio input** | périphérique d'entrée pour les trajectoires audio-réactives (BPM, amplitude, spectre) |
