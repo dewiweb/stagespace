@@ -164,7 +164,19 @@ MovesTable (617/41/46), CustomNode (618/31/31), SpatialFxPanel (583/30/26),
 CuelistPanel (466/12/25) — **le 60% des couleurs ad hoc est concentré dans
 5 fichiers** ; Scene3D empile 7 overlays `absolute inset-0`.
 
-## Audit détaillé par fichier — synthèse des 6 lots (7 agents)
+## Annexes — rapports détaillés par lot (intégralité des 7 agents)
+
+| Lot | Fichier | Périmètre |
+|---|---|---|
+| 1 | [lot-1-editeur-graphe.md](gui-audit/lot-1-editeur-graphe.md) | NodeEditor, CustomNode, nodeParamSchema |
+| 2 | [lot-2-panneaux-parametres.md](gui-audit/lot-2-panneaux-parametres.md) | Inspector, NodeParamsPanel, MacroControls, MacrosPanel, AudioModControls |
+| 3 | [lot-3-listes-cues.md](gui-audit/lot-3-listes-cues.md) | MovesTable, CuelistPanel, AnimationList, TabPanel, SpatialFxPanel |
+| 4 | [lot-4-3d-visualisations.md](gui-audit/lot-4-3d-visualisations.md) | Scene3D (7 overlays), TrackGrid, Zone/Trajectory, Draw/Debug |
+| 5 | [lot-5-store-cablage.md](gui-audit/lot-5-store-cablage.md) | 6 stores, 14 slices, liveActions, persistance, pollings |
+| 6 | [lot-6-modals-primitives.md](gui-audit/lot-6-modals-primitives.md) | 4 modals, 7 primitives ui/, ConduitePage, ErrorBoundary |
+| 7 | [lot-7-chrome.md](gui-audit/lot-7-chrome.md) | Toolbar, StatusBar, AudioPanel, ModeButtons |
+
+## Audit détaillé par fichier — synthèse des 7 lots
 
 ### Bugs fonctionnels (à corriger avant tout reskin)
 
