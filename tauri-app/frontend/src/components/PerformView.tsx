@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Globe, SlidersHorizontal, ListOrdered, AudioLines, Pin, Grip } from 'lucide-react';
+import { Play, Globe, SlidersHorizontal, ListOrdered, AudioLines, Pin } from 'lucide-react';
 import { TrackGrid } from './TrackGrid';
 import { AudioModList } from './AudioModControls';
 import Scene3D from './Scene3D';
@@ -57,7 +57,9 @@ export const PerformView: React.FC = () => {
 
   const [goFeedback, setGoFeedback] = React.useState<{ ok: boolean; message: string } | null>(null);
   // Mode touch : pads numérotés (busking) + cibles agrandies (tablette).
-  const [touchMode, setTouchMode] = React.useState(false);
+  // Mode tactile supprimé — il doublait buskingMode (pads gros doigt
+  // en colonne vs plein écran). Deux surfaces de focus restantes :
+  // busking (pads) et conduite (transport).
   // Mode conduite : vue plein écran readable à distance — NOW/NEXT cue,
   // TC, armé, pending timers. Le reste du show continue derrière.
   const [conduiteMode, setConduiteMode] = React.useState(false);
@@ -190,7 +192,7 @@ export const PerformView: React.FC = () => {
           )}
           {cues.length > 0 && (
             <span
-              className={`${touchMode ? 'text-base' : 'text-xs'} flex-shrink-0 min-w-0`}
+              className="text-xs flex-shrink-0 min-w-0"
               title="Conduite — cue courante / cue suivante (armée)"
             >
               <span className="text-gray-500 uppercase">Cue </span>
@@ -253,7 +255,7 @@ export const PerformView: React.FC = () => {
         </button>
         {tcChaseEnabled && (
           <span
-            className={`font-mono ${touchMode ? 'text-base px-2.5 py-1.5' : 'text-xs px-1.5 py-0.5'} rounded border flex-shrink-0 ${
+            className={`font-mono text-xs px-1.5 py-0.5 rounded border flex-shrink-0 ${
               tcActive ? 'border-emerald-600 text-emerald-400' : 'border-gray-600 text-gray-500'
             }`}
             title={tcActive ? 'Timecode actif (chase on)' : 'TC lost — pas de message depuis >1s'}
@@ -304,17 +306,6 @@ export const PerformView: React.FC = () => {
             CONSOLE {consoleAge < 5 ? '●' : '○'}
           </StatusChip>
         )}
-        <button
-          onClick={() => setTouchMode(!touchMode)}
-          className={`px-3 py-2 rounded-lg flex-shrink-0 transition-colors active:scale-95 ${
-            touchMode
-              ? 'bg-cyan-700 text-white'
-              : 'bg-gray-800 text-gray-400 hover:text-white border border-gray-700'
-          }`}
-          title="Mode tactile — pads gros doigt pour le busking (tablette)"
-        >
-          <Grip size={16} />
-        </button>
         <OscArmToggle />
         <PanicButton size="lg" />
       </div>
@@ -322,18 +313,7 @@ export const PerformView: React.FC = () => {
       {/* ═══ Corps : setlist | canvas ═══ */}
       <div className="flex-1 flex overflow-hidden">
         {/* Colonne gauche : SETLIST (flux du show) + LAYERS (ad-hoc) + cues */}
-        <div className={`${touchMode ? 'w-96' : 'w-80'} flex-shrink-0 border-r border-stagespace-border flex flex-col bg-stagespace-panel min-h-0`}>
-          {touchMode ? (
-            /* Mode touch : grille de pads numérotés — busking gros doigt. */
-            <div className="flex-1 overflow-y-auto p-2 grid grid-cols-2 gap-2 auto-rows-min content-start min-h-0">
-              {moveSlots.map((slot) => renderPad(slot))}
-              {moveSlots.length === 0 && (
-                <div className="col-span-2 px-3 py-4">
-                  <EmptyState size="sm" title="No moves yet" hint="Create slots to fill the pads." />
-                </div>
-              )}
-            </div>
-          ) : (
+        <div className="w-80 flex-shrink-0 border-r border-stagespace-border flex flex-col bg-stagespace-panel min-h-0">
           <div className="flex-1 overflow-y-auto min-h-0">
             <div className="px-3 py-2 text-gray-400 text-xs uppercase tracking-wider border-b border-stagespace-border bg-purple-950/20 flex items-center justify-between">
               <span>Setlist — GO avance ici</span>
@@ -378,7 +358,6 @@ export const PerformView: React.FC = () => {
               </div>
             )}
           </div>
-          )}
           {/* Cues — arm + double-clic recall (déjà protégé). Partage
               flexible de la colonne : la cue list est l'objet central du
               show, elle ne tient pas en 224px (ex-h-56 confiné). */}
