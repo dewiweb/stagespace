@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { toast } from '../utils/toast-helpers';
 import { useGraphStore } from '../store/useGraphStore';
 import EmptyState from './ui/EmptyState';
+import { ConfirmModal } from './ui/ConfirmModal';
 import {
   SPATIAL_CHANNELS,
   describeChannels,
@@ -31,6 +32,7 @@ function Section({
   onClear?: () => void;
   children: React.ReactNode;
 }) {
+  const [confirming, setConfirming] = React.useState(false);
   return (
     <div>
       <div className="flex items-center justify-between mb-1.5">
@@ -38,12 +40,21 @@ function Section({
           {title} ({count})
         </h4>
         {onClear && count > 0 && (
-          <button onClick={onClear} className="text-gray-400 hover:text-red-400 text-xs">
+          <button onClick={() => setConfirming(true)} className="text-gray-400 hover:text-red-400 text-xs">
             clear all
           </button>
         )}
       </div>
       {children}
+      {confirming && (
+        <ConfirmModal
+          title={`Clear ${title.toLowerCase()}`}
+          message={<>Remove all <b>{count}</b> {title.toLowerCase()}? This can't be undone.</>}
+          confirmLabel="Clear all"
+          onConfirm={() => { setConfirming(false); onClear?.(); }}
+          onCancel={() => setConfirming(false)}
+        />
+      )}
     </div>
   );
 }

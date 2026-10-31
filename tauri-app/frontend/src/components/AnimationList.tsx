@@ -3,6 +3,7 @@ import { Hexagon, X } from 'lucide-react';
 import { useMoveEditorStore, Move } from '../store/useMoveEditorStore';
 import { useGraphStore } from '../store/useGraphStore';
 import EmptyState from './ui/EmptyState';
+import { ConfirmModal } from './ui/ConfirmModal';
 import { SHAPE_PRESETS, type ShapePreset } from '../utils/shapePresets';
 
 // Icône pour une animation — dérivée du node engine principal du graphe
@@ -49,6 +50,7 @@ export default function AnimationList() {
   const editingSlotId = useGraphStore((s) => s.editingSlotId);
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editName, setEditName] = React.useState('');
+  const [confirmDelete, setConfirmDelete] = React.useState<Move | null>(null);
   const [collapsedCats, setCollapsedCats] = React.useState<Set<string>>(new Set(['shaped', 'transitions', 'physics', 'layers', 'spline', 'reactive']));
 
   const startRename = (anim: Move) => {
@@ -218,7 +220,7 @@ export default function AnimationList() {
                       </span>
                     )}
                   </div>
-                  <button onClick={(e) => { e.stopPropagation(); deleteAnimation(anim.id); }}
+                  <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(anim); }}
                     className="text-red-400 hover:text-red-300 text-xs opacity-0 group-hover:opacity-100 transition-opacity"><X size={10} /></button>
                 </div>
               );
@@ -235,6 +237,16 @@ export default function AnimationList() {
           </div>
         </div>
       </div>
+
+      {confirmDelete && (
+        <ConfirmModal
+          title="Delete template"
+          message={<>Delete <b>{confirmDelete.name}</b> permanently? This can't be undone.</>}
+          confirmLabel="Delete"
+          onConfirm={() => { deleteAnimation(confirmDelete.id); setConfirmDelete(null); }}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
     </div>
   );
 }

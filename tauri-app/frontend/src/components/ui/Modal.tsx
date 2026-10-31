@@ -39,7 +39,10 @@ export const Modal: React.FC<ModalProps> = ({
     const panel = panelRef.current;
     if (!panel) return;
     const focusables = panel.querySelectorAll<HTMLElement>(FOCUSABLE);
-    (focusables[0] ?? panel).focus();
+    // Un élément marqué autoFocus gagne — sinon le X du header (premier
+    // focusable du DOM) volerait le focus du champ de saisie.
+    const autofocus = panel.querySelector<HTMLElement>('[autofocus], [data-autofocus]');
+    (autofocus ?? focusables[0] ?? panel).focus();
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Tab') return;

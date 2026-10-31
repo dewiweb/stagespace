@@ -28,7 +28,19 @@ function App() {
   // Fenêtre détachable ?view=conduite → rendu dédié sans le reste de l'app.
   if (new URLSearchParams(window.location.search).get('view') === 'conduite') {
     const ConduitePage = React.lazy(() => import('./pages/ConduitePage'));
-    return <React.Suspense fallback={null}><ConduitePage /></React.Suspense>;
+    return (
+      <ErrorBoundary zone="Conduite">
+        <React.Suspense
+          fallback={
+            <div className="h-screen w-screen bg-stagespace-bg flex items-center justify-center text-gray-500 text-sm">
+              Chargement de la conduite…
+            </div>
+          }
+        >
+          <ConduitePage />
+        </React.Suspense>
+      </ErrorBoundary>
+    );
   }
   return <AppMain />;
 }

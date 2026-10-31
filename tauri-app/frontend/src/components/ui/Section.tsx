@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
+import { ConfirmModal } from './ConfirmModal';
 
 /// Section accordéon unifiée — remplace Inspector.Section (accordéon) et
 /// SpatialFxPanel.Section (statique + count/clear). `defaultOpen` contrôle
-/// l'état initial ; `onClear` ajoute un lien d'effacement (garde : la
-/// confirmation reste au call site).
+/// l'état initial ; `onClear` ajoute un lien d'effacement.
+/// `confirm` : texte de la modale de confirmation requise avant onClear —
+/// les clear-all destructifs ne partent pas en un seul clic.
 export const Section: React.FC<{
   title: string;
   count?: number;
@@ -11,9 +13,13 @@ export const Section: React.FC<{
   badgeColor?: string;
   defaultOpen?: boolean;
   onClear?: () => void;
+  /// Si fourni, un ConfirmModal s'interpose avant onClear.
+  confirm?: { title: string; message: React.ReactNode; label?: string };
   children: React.ReactNode;
-}> = ({ title, count, badge, badgeColor = 'bg-gray-700', defaultOpen = true, onClear, children }) => {
+}> = ({ title, count, badge, badgeColor = 'bg-gray-700', defaultOpen = true, onClear, confirm, children }) => {
   const [open, setOpen] = useState(defaultOpen);
+  const [confirming, setConfirming] = useState(false);
+  const requestClear = () => (confirm ? setConfirming(true) : onClear?.());
   return (
     <div className="border-b border-stagespace-border">
       <button
@@ -29,8 +35,8 @@ export const Section: React.FC<{
           <span
             role="button"
             tabIndex={0}
-            onClick={(e) => { e.stopPropagation(); onClear(); }}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onClear(); } }}
+            onClick={(e) => { e.stopPropagation(); requestClear(); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); requestClear(); } }}
             className="text-xs text-gray-500 hover:text-stagespace-danger transition-colors"
           >
             clear all
@@ -38,6 +44,15 @@ export const Section: React.FC<{
         )}
       </button>
       {open && <div className="px-3 pb-3">{children}</div>}
+      {confirming && confirm && (
+        <ConfirmModal
+          title={confirm.title}
+          message={confirm.message}
+          confirmLabel={confirm.label ?? 'Clear all'}
+          onConfirm={() => { setConfirming(false); onClear?.(); }}
+          onCancel={() => setConfirming(false)}
+        />
+      )}
     </div>
   );
 };
