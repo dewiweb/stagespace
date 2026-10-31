@@ -188,6 +188,24 @@ dispatches to the same functions as the keyboard shortcuts (`liveActions.ts`).
 | `/stagespace/slot/stop <n>` | stopper le slot n (fade_out du slot) | — |
 | `/stagespace/solo <n>` | fade-out tous les autres slots puis jouer n | — |
 | `/stagespace/unsolo` | rejoue les slots stoppés par le dernier solo (restore) | — |
+| `/stagespace/position <obj> <x> <y> <z>` | position manuelle d'un objet (reprise opérateur) | — |
+| `/stagespace/position/clear <obj>` | retire la position manuelle | — |
+| `/stagespace/position/clearall` | toutes les positions manuelles | — |
+| `/stagespace/trackpos <track> <x> <y> <z>` | position d'origine d'une track (là où panic la renvoie) | — |
+
+### Sémantique « continue » (per-move)
+
+Chaque move/slot porte deux flags (Playback tab : `End`, `Anchor`) :
+
+- **`End: hold`** — à la fin d'un one-shot, les dernières positions sont
+  écrites en positions manuelles : l'objet reste où le move l'a laissé
+  (au lieu de revenir à la base — `revert` par défaut).
+- **`Anchor: current`** — au spawn, chaque objet capture sa dernière
+  position émise comme ancre (`delta = capturée − traj(0)`) : le move
+  part de là où l'objet est, sans saut — chaînage move→move.
+
+Combinés : `hold` fige l'objet à `f(T)`, `current` sur le move suivant
+continue depuis ce point — sémantique « release/peg-out » des consoles.
 | `/stagespace/position <obj> <x> <y> <z>` | position manuelle (reprise opérateur — prioritaire) | — |
 | `/stagespace/position/clear <obj>` | retire la position manuelle de l'objet | — |
 | `/stagespace/position/clearall` | retire toutes les positions manuelles | — |
