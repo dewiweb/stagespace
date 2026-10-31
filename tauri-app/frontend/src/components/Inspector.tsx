@@ -28,6 +28,7 @@ function Section({ title, icon, defaultOpen = true, badge, badgeColor = 'gray', 
 }
 
 import Slider from './ui/Slider';
+import { MacrosSurface } from './show/MacrosSurface';
 import { AudioModList } from './AudioModControls';
 import { Zap, AudioLines, Hexagon, SlidersHorizontal, Play, CircleDot, X, Square, ChevronRight, TriangleAlert, Check } from 'lucide-react';
 
@@ -291,25 +292,7 @@ export default function Inspector() {
             {/* MACROS — runtime controls globaux (affectent tous les moves) */}
             <Section title="Macros" icon={<Zap size={12} />} defaultOpen={true}
               badge={activeMovementIds.length > 0 ? `${activeMovementIds.length} live` : undefined}>
-              <Slider label="Scale" value={macros.scale} min={0} max={4} step={0.05}
-                onChange={(v) => handleMacro('scale', v)} accent="purple" />
-              <Slider label="Shift X" value={macros.shiftX} min={-5} max={5} step={0.1}
-                onChange={(v) => handleMacro('shiftX', v)} accent="purple" />
-              <Slider label="Shift Y" value={macros.shiftY} min={-5} max={5} step={0.1}
-                onChange={(v) => handleMacro('shiftY', v)} accent="purple" />
-              <Slider label="Shift Z" value={macros.shiftZ} min={-5} max={5} step={0.1}
-                onChange={(v) => handleMacro('shiftZ', v)} accent="purple" />
-              <Slider label="Yaw" value={macros.yaw} min={-180} max={180} step={1}
-                onChange={(v) => handleMacro('yaw', v)} unit="°" accent="purple" />
-              <Slider label="Pitch" value={macros.pitch} min={-90} max={90} step={1}
-                onChange={(v) => handleMacro('pitch', v)} unit="°" accent="purple" />
-              <Slider label="Roll" value={macros.roll} min={-180} max={180} step={1}
-                onChange={(v) => handleMacro('roll', v)} unit="°" accent="purple" />
-              <Slider label="Radius" value={macros.radius_scale} min={0} max={4} step={0.05}
-                onChange={(v) => handleMacro('radius_scale', v)} unit="x" accent="purple" />
-              <Slider label="Height" value={macros.height_offset} min={-5} max={5} step={0.1}
-                onChange={(v) => handleMacro('height_offset', v)} unit="m" accent="purple" />
-              <div className="text-gray-400 text-xs pt-1">Global macros — applied to all active moves</div>
+              <MacrosSurface includeRadius live />
             </Section>
 
             {/* AUDIO — mods audio-reactifs globaux */}
@@ -355,27 +338,7 @@ export default function Inspector() {
             {/* MACROS — runtime controls appliqués à tous les moves */}
             <Section title="Macros" icon={<Zap size={12} />} defaultOpen={true}
               badge={activeMovementIds.length > 0 ? `${activeMovementIds.length} live` : undefined}>
-              <Slider label="Speed" value={macros.speed} min={0} max={4} step={0.05}
-                onChange={(v) => handleMacro('speed', v)} unit="x" accent="purple" />
-              <Slider label="Scale" value={macros.scale} min={0} max={4} step={0.05}
-                onChange={(v) => handleMacro('scale', v)} accent="purple" />
-              <Slider label="Shift X" value={macros.shiftX} min={-5} max={5} step={0.1}
-                onChange={(v) => handleMacro('shiftX', v)} accent="purple" />
-              <Slider label="Shift Y" value={macros.shiftY} min={-5} max={5} step={0.1}
-                onChange={(v) => handleMacro('shiftY', v)} accent="purple" />
-              <Slider label="Shift Z" value={macros.shiftZ} min={-5} max={5} step={0.1}
-                onChange={(v) => handleMacro('shiftZ', v)} accent="purple" />
-              <Slider label="Yaw" value={macros.yaw} min={-180} max={180} step={1}
-                onChange={(v) => handleMacro('yaw', v)} unit="°" accent="purple" />
-              <Slider label="Pitch" value={macros.pitch} min={-90} max={90} step={1}
-                onChange={(v) => handleMacro('pitch', v)} unit="°" accent="purple" />
-              <Slider label="Roll" value={macros.roll} min={-180} max={180} step={1}
-                onChange={(v) => handleMacro('roll', v)} unit="°" accent="purple" />
-              <Slider label="Radius" value={macros.radius_scale} min={0} max={4} step={0.05}
-                onChange={(v) => handleMacro('radius_scale', v)} unit="x" accent="purple" />
-              <Slider label="Height" value={macros.height_offset} min={-5} max={5} step={0.1}
-                onChange={(v) => handleMacro('height_offset', v)} unit="m" accent="purple" />
-              <div className="text-gray-400 text-xs pt-1">Macros = runtime transforms applied to all active moves</div>
+              <MacrosSurface includeRadius live />
             </Section>
           </>
         ) : (
@@ -456,8 +419,8 @@ export default function Inspector() {
         {/* AUDIO — mods audio-reactifs (commun aux deux modes) */}
         {hasEditingSlot && (
         <Section title="Audio" icon={<AudioLines size={12} />} defaultOpen={false} badge={current.audio_mods.length > 0 ? `${current.audio_mods.length}` : undefined}>
-          <AudioModList />
-        </Section>
+              <MacrosSurface includeRadius live />
+            </Section>
         )}
 
         {/* TRACKS — sélection + depth + phase spread (seulement si slot édité)
