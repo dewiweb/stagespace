@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Square, Globe, SlidersHorizontal, ListOrdered, AudioLines, Pin, Grip } from 'lucide-react';
+import { Play, Globe, SlidersHorizontal, ListOrdered, AudioLines, Pin, Grip } from 'lucide-react';
 import { TrackGrid } from './TrackGrid';
 import { AudioModList } from './AudioModControls';
 import Scene3D from './Scene3D';
@@ -8,6 +8,7 @@ import { Slider } from './ui/Slider';
 import EmptyState from './ui/EmptyState';
 import { StatusChip } from './ui/StatusChip';
 import { ShowTransport } from './show/ShowTransport';
+import { SlotTile } from './show/SlotTile';
 import { MacrosSurface } from './show/MacrosSurface';
 import { useShowStatusStore, startShowStatusPolling } from '../store/useShowStatusStore';
 import { cueLabel, tcStr } from '../utils/showFormat';
@@ -62,8 +63,6 @@ export const PerformView: React.FC = () => {
   const [conduiteMode, setConduiteMode] = React.useState(false);
   // Mode busking plein écran : grille de pads géante (tir au doigt).
   const [buskingMode, setBuskingMode] = React.useState(false);
-  // Press-and-hold (bump momentané) : hold ≥350ms = joue tant que tenu.
-  const padPress = React.useRef<{ momentary: boolean; suppressClick: boolean; timer: ReturnType<typeof setTimeout> | null }>({ momentary: false, suppressClick: false, timer: null });
   // État de santé show (parked / consoleAge / armed) — poll unique partagé
   // via useShowStatusStore au lieu d'un setInterval par composant.
   const parked = useShowStatusStore((s) => s.parked);
@@ -112,75 +111,23 @@ export const PerformView: React.FC = () => {
 
   // Pad busking (mode touch) — cible 80px+, # = index OSC, tap = play/stop,
   // coin S = solo (fade les autres).
+  // Pad busking (mode touch) — délégué à SlotTile (rendu partagé).
   const renderPad = (slot: (typeof moveSlots)[number], big = false) => {
     const isPlaying = !!slot.movementId || pendingPlays.includes(slot.id);
     const oscNum = slot.oscIndex || moveSlots.indexOf(slot) + 1;
     return (
-      <div
+      <SlotTile
         key={slot.id}
-        onPointerDown={() => {
-          padPress.current.timer = setTimeout(() => {
-            padPress.current.momentary = true;
-            if (!isPlaying) void playSlot(slot.id);
-          }, 350);
-        }}
-        onPointerUp={() => {
-          if (padPress.current.timer) clearTimeout(padPress.current.timer);
-          padPress.current.timer = null;
-          if (padPress.current.momentary) {
-            padPress.current.momentary = false;
-            padPress.current.suppressClick = true;
-            void stopSlot(slot.id);
-          }
-        }}
-        onPointerLeave={() => {
-          if (padPress.current.timer) clearTimeout(padPress.current.timer);
-          padPress.current.timer = null;
-          if (padPress.current.momentary) {
-            padPress.current.momentary = false;
-            padPress.current.suppressClick = true;
-            void stopSlot(slot.id);
-          }
-        }}
-        onClick={() => {
-          // Après un hold momentané, le click toggle ferait repartir le
-          // move — on le saute : le release a déjà fade-out.
-          if (padPress.current.suppressClick) {
-            padPress.current.suppressClick = false;
-            return;
-          }
-          void (isPlaying ? stopSlot(slot.id) : playSlot(slot.id));
-        }}
-        className={`relative flex flex-col justify-between p-3 rounded-xl ${big ? 'min-h-[150px] p-4' : 'min-h-[88px]'} select-none cursor-pointer transition-colors active:scale-95 border ${
-          isPlaying
-            ? 'bg-green-800/70 border-green-600 text-green-50'
-            : 'bg-gray-800/80 border-gray-700 text-gray-200 hover:bg-gray-700/80'
-        }`}
-        role="button"
-        aria-label={`slot ${oscNum} ${slot.name} ${isPlaying ? 'stop' : 'play'}`}
-        title={`OSC: /stagespace/slot ${oscNum} · slot/stop ${oscNum} · solo ${oscNum}`}
-      >
-        <div className="flex items-start justify-between gap-1">
-          <span className={`${big ? 'text-2xl' : 'text-sm'} font-black font-mono ${isPlaying ? 'text-green-300' : 'text-gray-500'}`}>
-            #{oscNum}
-          </span>
-          {playingCount > 1 && (
-            <button
-              onClick={(e) => { e.stopPropagation(); doSolo(oscNum); }}
-              className="w-8 h-8 -m-1 rounded-lg bg-orange-700/70 hover:bg-orange-600 text-orange-100 text-xs font-bold flex items-center justify-center"
-              title="SOLO — coupe les autres en fondu"
-            >
-              S
-            </button>
-          )}
-        </div>
-        <div className="min-w-0">
-          <div className={`${big ? 'text-lg' : 'text-sm'} font-semibold truncate leading-tight`}>{slot.name}</div>
-          <div className={`text-[10px] mt-0.5 ${isPlaying ? 'text-green-300/80' : 'text-gray-500'}`}>
-            {slot.trackIds.length} trk{isPlaying ? ' · LIVE' : ' · hold=bump'}
-          </div>
-        </div>
-      </div>
+        slot={slot}
+        oscNum={oscNum}
+        density="pad"
+        big={big}
+        isPlaying={isPlaying}
+        canSolo={playingCount > 1}
+        onPlay={() => void playSlot(slot.id)}
+        onStop={() => void stopSlot(slot.id)}
+        onSolo={() => doSolo(oscNum)}
+      />
     );
   };
 
@@ -189,94 +136,25 @@ export const PerformView: React.FC = () => {
     const isPlaying = !!slot.movementId || pendingPlays.includes(slot.id);
     const isSelected = editingSlotId === slot.id;
     const setlistIdx = setlistOrder.indexOf(slot.id);
-    const isCurrentSetlist = setlistIdx === currentSetlistIndex;
-    const isNextSetlist = setlistIdx === currentSetlistIndex + 1
-      || (currentSetlistIndex < 0 && setlistIdx === 0);
-    // Index 1-based = le n de `/stagespace/slot <n>` — l'écran doit
-    // montrer le même numéro que la commande OSC.
     const oscNum = slot.oscIndex || moveSlots.indexOf(slot) + 1;
     return (
-      <div
+      <SlotTile
         key={slot.id}
-        onClick={() => selectSlotForEditing(isSelected ? null : slot.id)}
-        title="Live params of this move"
-        className={`group flex items-center gap-2 px-3 py-2.5 cursor-pointer border-b border-gray-800/40 transition-colors ${
-          isSelected
-            ? 'bg-indigo-900/30 ring-1 ring-inset ring-indigo-600/60'
-            : isCurrentSetlist
-              ? 'bg-purple-900/20 hover:bg-purple-900/30'
-              : isPlaying
-                ? 'bg-green-900/10 hover:bg-green-900/20'
-                : 'hover:bg-gray-800/30'
-        }`}
-      >
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            if (isPlaying) stopSlot(slot.id);
-            else playSlot(slot.id);
-          }}
-          className={`w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0 transition-colors active:scale-95 ${
-            isPlaying
-              ? 'bg-red-800/80 hover:bg-red-700 text-red-200'
-              : 'bg-green-800/80 hover:bg-green-700 text-green-200'
-          }`}
-          title={isPlaying ? 'Stop this move' : 'Launch (layered — others keep running)'}
-        >
-          {isPlaying ? <Square size={11} fill="currentColor" /> : <Play size={11} fill="currentColor" />}
-        </button>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span
-              className="text-gray-600 text-[10px] font-mono flex-shrink-0"
-              title={`OSC: /stagespace/slot ${oscNum} · slot/stop ${oscNum} · solo ${oscNum}`}
-            >
-              #{oscNum}
-            </span>
-            <span className="text-white text-xs font-medium truncate">{slot.name}</span>
-            {isPlaying && (
-              <span
-                className={`text-xs px-1 rounded ${
-                  slot.isPreview ? 'bg-cyan-900 text-cyan-300' : 'bg-green-900 text-green-300'
-                }`}
-              >
-                {slot.isPreview ? 'PREV' : 'LIVE'}
-              </span>
-            )}
-          </div>
-          <div className="text-gray-500 text-xs">
-            {slot.trackIds.length} trk
-          </div>
-        </div>
-        {isCurrentSetlist && (
-          <span className="text-purple-400 text-xs font-bold flex-shrink-0" title="Current setlist">◉ NOW</span>
-        )}
-        {isNextSetlist && !isCurrentSetlist && (
-          <span className="text-green-400/80 text-xs font-bold flex-shrink-0" title="Prochain GO">→ NEXT</span>
-        )}
-        {playingCount > 1 && (
-          <button
-            onClick={(e) => { e.stopPropagation(); doSolo(oscNum); }}
-            className="flex-shrink-0 w-6 h-6 rounded text-[10px] font-bold text-gray-400 hover:bg-orange-600/40 hover:text-orange-200 transition-colors"
-            title={`SOLO — stoppe les ${playingCount - 1} autres moves (fade) puis joue celui-ci`}
-          >
-            S
-          </button>
-        )}
-        {showSetlistAdd && (
-          <button
-            onClick={(e) => { e.stopPropagation(); addToSetlist(slot.id); }}
-            className="flex-shrink-0 w-6 h-6 rounded text-gray-400 hover:bg-purple-600/30 hover:text-white text-xs transition-colors"
-            title="Add to setlist (jouable via GO)"
-          >
-            →
-          </button>
-        )}
-        <SlidersHorizontal
-          size={12}
-          className={`flex-shrink-0 ${isSelected ? 'text-indigo-300' : 'text-gray-400 group-hover:text-gray-400'}`}
-        />
-      </div>
+        slot={slot}
+        oscNum={oscNum}
+        density="row"
+        isPlaying={isPlaying}
+        isSelected={isSelected}
+        isCurrentSetlist={setlistIdx === currentSetlistIndex}
+        isNextSetlist={setlistIdx === currentSetlistIndex + 1 || (currentSetlistIndex < 0 && setlistIdx === 0)}
+        canSolo={playingCount > 1}
+        showSetlistAdd={showSetlistAdd}
+        onPlay={() => void playSlot(slot.id)}
+        onStop={() => void stopSlot(slot.id)}
+        onSolo={() => doSolo(oscNum)}
+        onSelect={() => selectSlotForEditing(isSelected ? null : slot.id)}
+        onAddToSetlist={() => addToSetlist(slot.id)}
+      />
     );
   };
 
