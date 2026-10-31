@@ -322,7 +322,7 @@ export const PerformView: React.FC = () => {
       {/* ═══ Corps : setlist | canvas ═══ */}
       <div className="flex-1 flex overflow-hidden">
         {/* Colonne gauche : SETLIST (flux du show) + LAYERS (ad-hoc) + cues */}
-        <div className={`${touchMode ? 'w-96' : 'w-72'} flex-shrink-0 border-r border-stagespace-border flex flex-col bg-stagespace-panel min-h-0`}>
+        <div className={`${touchMode ? 'w-96' : 'w-80'} flex-shrink-0 border-r border-stagespace-border flex flex-col bg-stagespace-panel min-h-0`}>
           {touchMode ? (
             /* Mode touch : grille de pads numérotés — busking gros doigt. */
             <div className="flex-1 overflow-y-auto p-2 grid grid-cols-2 gap-2 auto-rows-min content-start min-h-0">
@@ -379,8 +379,10 @@ export const PerformView: React.FC = () => {
             )}
           </div>
           )}
-          {/* Cues — arm + double-clic recall (déjà protégé) */}
-          <div className="h-56 flex-shrink-0 border-t border-stagespace-border flex flex-col min-h-0">
+          {/* Cues — arm + double-clic recall (déjà protégé). Partage
+              flexible de la colonne : la cue list est l'objet central du
+              show, elle ne tient pas en 224px (ex-h-56 confiné). */}
+          <div className="flex-1 min-h-0 basis-2/5 border-t border-stagespace-border flex flex-col">
             <CuelistPanel />
           </div>
         </div>

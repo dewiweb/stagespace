@@ -124,7 +124,7 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
           e.stopPropagation();
           void (isPlaying ? p.onStop() : p.onPlay());
         }}
-        className={`w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0 transition-colors active:scale-95 ${
+        className={`w-11 h-11 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0 transition-colors active:scale-95 ${
           isPlaying
             ? 'bg-red-800/80 hover:bg-red-700 text-red-200'
             : 'bg-green-800/80 hover:bg-green-700 text-green-200'
@@ -165,7 +165,7 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
       {canSolo && p.onSolo && (
         <button
           onClick={(e) => { e.stopPropagation(); p.onSolo!(); }}
-          className="flex-shrink-0 w-6 h-6 rounded text-[10px] font-bold text-gray-400 hover:bg-orange-600/40 hover:text-orange-200 transition-colors"
+          className="flex-shrink-0 w-11 h-11 rounded text-xs font-bold text-gray-400 hover:bg-orange-600/40 hover:text-orange-200 transition-colors"
           title="SOLO — stoppe les autres moves (fade) puis joue celui-ci"
         >
           S
@@ -174,7 +174,7 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
       {p.showSetlistAdd && p.onAddToSetlist && (
         <button
           onClick={(e) => { e.stopPropagation(); p.onAddToSetlist!(); }}
-          className="flex-shrink-0 w-6 h-6 rounded text-gray-400 hover:bg-purple-600/30 hover:text-white text-xs transition-colors"
+          className="flex-shrink-0 w-11 h-11 rounded text-gray-400 hover:bg-purple-600/30 hover:text-white text-sm transition-colors"
           title="Add to setlist (jouable via GO)"
         >
           →
