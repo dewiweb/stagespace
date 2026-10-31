@@ -86,6 +86,7 @@ export default function SpatialFxPanel() {
   const updateZone = useGraphStore((s) => s.updateZone);
   const zoneEditMode = useGraphStore((s) => s.zoneEditMode);
   const setZoneEditMode = useGraphStore((s) => s.setZoneEditMode);
+  const [confirmRemove, setConfirmRemove] = React.useState<{ label: string; action: () => void } | null>(null);
 
   // Modes interactifs → reset au démontage : sinon un mode place/edit
   // oublié survive au switch de tab et intercepte les clics du canvas 3D.
@@ -401,7 +402,7 @@ export default function SpatialFxPanel() {
                     title="Re-place this zone's center on the scene — then click the floor"
                     aria-label={`Re-place zone ${i}`}
                   >⌖</button>
-                  <button onClick={() => removeZone(i).catch((e) => toast.error(`Spatial FX failed: ${e}`))} className={removeBtnCls} aria-label="Remove zone"><X size={11} /></button>
+                  <button onClick={() => setConfirmRemove({ label: `zone ${i}`, action: () => removeZone(i).catch((e) => toast.error(`Spatial FX failed: ${e}`)) })} className={removeBtnCls} aria-label="Remove zone"><X size={11} /></button>
                 </div>
               </div>
             ))}
@@ -501,7 +502,7 @@ export default function SpatialFxPanel() {
                       {mod.max !== null && ` max=${mod.max}`}
                     </div>
                   </div>
-                  <button onClick={() => removeModulation(i).catch((e) => toast.error(`Spatial FX failed: ${e}`))} className={removeBtnCls} aria-label="Remove modulation"><X size={11} /></button>
+                  <button onClick={() => setConfirmRemove({ label: `modulation ${i}`, action: () => removeModulation(i).catch((e) => toast.error(`Spatial FX failed: ${e}`)) })} className={removeBtnCls} aria-label="Remove modulation"><X size={11} /></button>
                 </div>
               </div>
             ))}
@@ -599,6 +600,15 @@ export default function SpatialFxPanel() {
             Declared by Zone/Velocity nodes in the global graph — edit via the node editor (Global tab).
           </p>
         </div>
+      )}
+      {confirmRemove && (
+        <ConfirmModal
+          title="Remove spatial FX"
+          message={<>Remove <b>{confirmRemove.label}</b>? This can't be undone.</>}
+          confirmLabel="Remove"
+          onConfirm={() => { confirmRemove.action(); setConfirmRemove(null); }}
+          onCancel={() => setConfirmRemove(null)}
+        />
       )}
     </div>
   );
