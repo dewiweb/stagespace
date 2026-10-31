@@ -4,6 +4,7 @@ import type { GraphNode } from '../components/nodeParamSchema';
 import type { NodeType } from '../types/generated/NodeType';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { safeSetItem, safeParseStoredJson } from '../utils/safeStorage';
+import { migrateStoredGraph } from '../utils/graphMigration';
 
 // ─── Helpers ───
 
@@ -83,17 +84,10 @@ const STORAGE_KEY = 'stagespace-global-graph-v4';
 
 function loadFromStorage(): { nodes: GraphNode[]; edges: Edge[] } | null {
   const parsed = safeParseStoredJson<{ nodes: GraphNode[]; edges: Edge[] } | null>(STORAGE_KEY, null);
-  if (!parsed?.nodes || !parsed?.edges) return null;
-  // Validation : vérifier que tous les edges référencent des nodes existants
-  const nodeIds = new Set(parsed.nodes.map((n: GraphNode) => n.id));
-  const validEdges = parsed.edges.filter(
-    (e: Edge) => nodeIds.has(e.source) && nodeIds.has(e.target),
-  );
-  if (validEdges.length !== parsed.edges.length) {
-    console.warn('[globalGraph] Cached graph has invalid edges, discarding');
-    return null;
-  }
-  return { nodes: parsed.nodes, edges: parsed.edges };
+  // Migre les types renommés (Input→Merge), drop les inconnus et les
+  // edges orphelins — un graphe stale doit se réparer, pas spammer des
+  // toasts ParseError à chaque push.
+  return migrateStoredGraph(parsed, 'globalGraph');
 }
 
 function saveToStorage(nodes: GraphNode[], edges: Edge[]) {

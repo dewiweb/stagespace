@@ -4,6 +4,7 @@ import type { GraphNode } from '../components/nodeParamSchema';
 import type { NodeType } from '../types/generated/NodeType';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { safeSetItem, safeParseStoredJson } from '../utils/safeStorage';
+import { migrateStoredGraph } from '../utils/graphMigration';
 import { useGraphStore } from './useGraphStore';
 
 // ─── Helpers ───
@@ -83,16 +84,8 @@ const STORAGE_KEY = 'stagespace-signal-graph-v1';
 
 function loadFromStorage(): { nodes: GraphNode[]; edges: Edge[] } | null {
   const parsed = safeParseStoredJson<{ nodes: GraphNode[]; edges: Edge[] } | null>(STORAGE_KEY, null);
-  if (!parsed?.nodes || !parsed?.edges) return null;
-  const nodeIds = new Set(parsed.nodes.map((n: GraphNode) => n.id));
-  const validEdges = parsed.edges.filter(
-    (e: Edge) => nodeIds.has(e.source) && nodeIds.has(e.target),
-  );
-  if (validEdges.length !== parsed.edges.length) {
-    console.warn('[signalGraph] Cached graph has invalid edges, discarding');
-    return null;
-  }
-  return { nodes: parsed.nodes, edges: parsed.edges };
+  // Même migration que le graphe global — types renommés/inconnus.
+  return migrateStoredGraph(parsed, 'signalGraph');
 }
 
 function saveToStorage(nodes: GraphNode[], edges: Edge[]) {

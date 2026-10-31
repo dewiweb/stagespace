@@ -8,6 +8,7 @@ import type { HolProject } from '../types/index';
 import { syncObjectsGraphNodes, OBJECT_ENGINE_TYPES } from './objectsNodeSync';
 import type { Move, TrackAssignment, AudioMod } from '../useMoveEditorStore';
 import { safeSetItem, safeParseStoredJson, debouncedSetItem } from '../../utils/safeStorage';
+import { migrateStoredGraph } from '../../utils/graphMigration';
 import { throttleTrailingKeyed } from '../../utils/throttle';
 import { SHAPE_PRESETS } from '../../utils/shapePresets';
 
@@ -380,9 +381,16 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
     }
     // Charger le graphe du slot dans l'éditeur AVANT de sync les tracks,
     // pour que syncObjectsNode mette à jour le BON Objects node.
+    // migrateStoredGraph : types renommés/inconnus des vieux slots persistés.
     if (graphJson) {
-      get().setNodes(JSON.parse(JSON.stringify(graphJson.nodes)));
-      get().setEdges(JSON.parse(JSON.stringify(graphJson.edges)));
+      const migrated = migrateStoredGraph(
+        { nodes: graphJson.nodes, edges: graphJson.edges },
+        'slotGraph',
+      );
+      if (migrated) {
+        get().setNodes(JSON.parse(JSON.stringify(migrated.nodes)));
+        get().setEdges(JSON.parse(JSON.stringify(migrated.edges)));
+      }
     }
     // Reset undo/redo — l'historique appartient au slot précédent.
     // Sans ça, un undo après switch restaurerait le graphe d'un autre slot.
