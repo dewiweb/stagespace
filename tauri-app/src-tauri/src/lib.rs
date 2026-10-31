@@ -31,7 +31,8 @@ use commands::merge_commands::{
     list_spatial_channels, list_zones, remove_channel_modulation, remove_zone, set_global_macro,
     set_global_origin, set_global_osc_ids, set_kinematic_smoothing, set_manual_position,
     set_merge_strategy, set_move_playback_mode, set_move_priority, set_move_speed, set_move_weight,
-    set_spatial_channel, set_track_depths, set_track_positions, update_global_graph,
+    set_spatial_channel, set_track_depths, get_track_positions, set_track_position,
+    set_track_positions, update_global_graph,
     update_move_graph_merged, update_signal_graph, update_zone,
 };
 use commands::network::discover_osc_targets;
@@ -413,6 +414,8 @@ pub fn run() {
             diagnose_graph,
             update_signal_graph,
             set_track_positions,
+            get_track_positions,
+            set_track_position,
             set_manual_position,
             clear_manual_position,
             clear_all_manual_positions,

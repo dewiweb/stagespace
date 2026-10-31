@@ -163,9 +163,11 @@ export function doClearAllPositions() {
 }
 
 /** /stagespace/trackpos <track> <x> <y> <z> — position d'origine d'une
- *  track (là où panic renvoie, base Barycenter — .hol par OSC). */
+ *  track (là où panic renvoie, base Barycenter — .hol par OSC).
+ *  Setter unitaire : un set par track ne doit pas effacer les autres
+ *  origines (set_track_positions remplace toute la map). */
 export function doSetTrackPosition(track: number, x: number, y: number, z: number) {
-  invoke('set_track_positions', { positions: { [track]: [x, y, z] } })
+  invoke('set_track_position', { track, position: [x, y, z] })
     .catch((e) => toast.error('Set track position failed: ' + e));
 }
 

@@ -490,6 +490,33 @@ impl MergeRuntime {
             .unwrap_or_else(|e| e.into_inner()) = Arc::new(positions);
     }
 
+    /// Définit l'origine d'UNE track — merge dans la map existante
+    /// (contrairement à set_track_positions qui remplace tout : un set
+    /// unitaire par OSC ne doit pas effacer les autres origines).
+    pub fn set_track_position(&self, track: u32, pos: [f64; 3]) {
+        let mut map = (**self
+            .track_positions
+            .read()
+            .unwrap_or_else(|e| e.into_inner()))
+        .clone();
+        map.insert(track, pos);
+        *self
+            .track_positions
+            .write()
+            .unwrap_or_else(|e| e.into_inner()) = Arc::new(map);
+    }
+
+    /// Positions d'origine des tracks — pour panic hors-.hol : les
+    /// origines posées par /stagespace/trackpos ou l'import .hol sont
+    /// la vérité, pas un (0,0,0) en dur.
+    pub fn track_positions(&self) -> HashMap<u32, [f64; 3]> {
+        (**self
+            .track_positions
+            .read()
+            .unwrap_or_else(|e| e.into_inner()))
+        .clone()
+    }
+
     /// Définit une position manuelle pour un objet (pour ManualPosition)
     pub fn set_manual_position(&self, obj_index: usize, pos: [f64; 3]) {
         self.manual_positions

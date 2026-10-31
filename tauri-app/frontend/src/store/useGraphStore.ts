@@ -484,9 +484,20 @@ export const useGraphStore = create<GraphState>()((...a) => {
         );
       }
     } else {
-      // Sans .hol: envoyer position (0,0,0) pour tous les manualOscIds
+      // Sans .hol : origines = track_positions backend (posées par
+      // /stagespace/trackpos ou set_track_positions) — sinon (0,0,0).
+      // Un backend down ne doit pas empêcher le reset à zéro : try/catch.
+      let trackPositions: Record<number, [number, number, number]> = {};
+      try {
+        trackPositions = await invoke('get_track_positions');
+      } catch (e) {
+        console.error('Panic: could not fetch track positions:', e);
+      }
       for (const id of manualOscIds) {
-        sends.push(invoke('send_osc_position', { oscId: id, x: 0, y: 0, z: 0 }));
+        const pos = trackPositions[id] ?? [0, 0, 0];
+        sends.push(
+          invoke('send_osc_position', { oscId: id, x: pos[0], y: pos[1], z: pos[2] }),
+        );
       }
     }
     const results = await Promise.allSettled(sends);
