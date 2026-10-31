@@ -91,6 +91,9 @@ export function doSlotStop(n: number, from?: string) {
     nack(from, `not-found: slot '${n}'`);
     return void toast.warning(`Slot '${n}' not found`);
   }
+  // Un stop pendant un recall peut tuer un move que le recall vient de
+  // respawner — même garde que doSlot.
+  if (recallBusy(from)) return;
   useCuelistStore.getState().cancelPendingTimers();
   if (slot.movementId) void gs.stopSlotWithFade(slot.id, slot.fadeOut ?? 1);
 }

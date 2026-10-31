@@ -2,7 +2,7 @@
 /// parsées via l'évènement `show-control` ; chacune est dispatchée vers
 /// la MÊME fonction que le raccourci clavier correspondant (liveActions).
 import { useEffect } from 'react';
-import { listen } from '@tauri-apps/api/event';
+import { safeListen } from '../utils/tauri';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { doGo, doCueNext, doCuePrev, doCueRecall, doPanic, doStop, doPark, doUnpark, doArm, doStatus, doSlot, doSlotStop, doSolo, doUnsolo } from '../utils/liveActions';
 import type { ShowCommand } from '../types/generated/ShowCommand';
@@ -18,7 +18,7 @@ export function useShowControl() {
     let cancelled = false;
     const setup = async () => {
       try {
-        const u = await listen<ShowControlEvent>('show-control', (event) => {
+        const u = await safeListen<ShowControlEvent>('show-control', (event) => {
           const cmd = event.payload.command;
           const from = event.payload.from;
           switch (cmd.command) {

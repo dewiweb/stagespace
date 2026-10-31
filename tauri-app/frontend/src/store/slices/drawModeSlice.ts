@@ -30,12 +30,21 @@ type DrawModeStore = DrawModeSlice & {
   // finalize (sinon selectSlotForEditing recharge les vieux points).
   editingSlotId: string | null;
   moveSlots: MoveSlot[];
+  // Champs interaction (interactionModesSlice) — setDrawMode les purge.
+  manipulateMode: boolean;
+  assignMode: boolean;
+  zonePlaceMode: boolean;
+  zoneEditMode: boolean;
 };
 
 export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSlice> = (set, get) => ({
-  // Draw mode
+  // Draw mode — setter exclusif : entrer en draw purge les autres modes
+  // d'interaction (sinon une couche assign/manipulate couvre le canvas draw).
   drawMode: false,
-  setDrawMode: (enabled) => set({ drawMode: enabled }),
+  setDrawMode: (enabled) =>
+    set(enabled
+      ? { drawMode: true, manipulateMode: false, assignMode: false, zonePlaceMode: false, zoneEditMode: false }
+      : { drawMode: false }),
   drawZ: 0,
   setDrawZ: (z) => set({ drawZ: z }),
   drawnPoints: [],

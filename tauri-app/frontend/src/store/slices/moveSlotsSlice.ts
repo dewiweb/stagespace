@@ -981,6 +981,17 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
   },
 
   goToNextMove: async () => {
+    // Guard show — un GO pendant un recall intercalerait des stop/play
+    // entre le kill-all et le respawn ; et tout timer pendu (pre_wait/
+    // follow) doit être désarmé. Même garde que liveActions.doGo, ici au
+    // niveau store pour couvrir les appels UI directs.
+    const { useCuelistStore } = await import('../useCuelistStore');
+    const cueStore = useCuelistStore.getState();
+    cueStore.cancelPendingTimers();
+    if (cueStore.isRecalling) {
+      return { ok: false, message: 'Busy — a cue recall is in progress' };
+    }
+
     const { setlistOrder, currentSetlistIndex, moveSlots } = get();
     if (setlistOrder.length === 0) {
       return { ok: false, message: 'Empty setlist — add moves to the setlist' };

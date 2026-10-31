@@ -124,10 +124,13 @@ export const useCuelistStore = create<CuelistState>((set, get) => ({
     if (get().isRecalling) return; // empêche les recalls concurrents
     const cue = get().cues.find((c) => c.id === cueId);
     if (!cue) return;
+    // Toute nouvelle recall annule les timers pendus (pre_wait/follow) —
+    // sinon un timer armé pour une autre cue tirerait au milieu de ce
+    // recall, même si la nouvelle cue n'a pas de pre_wait.
+    get().cancelPendingTimers();
     // Pre-wait : le recall part après N s (compte à rebours sur la cue).
     // Toute nouvelle action annule ce timer (cancelPendingTimers).
     if (!opts?.skipPreWait && cue.pre_wait != null && cue.pre_wait > 0) {
-      get().cancelPendingTimers();
       pendingTimer = setTimeout(() => {
         pendingTimer = null;
         set({ pending: null });

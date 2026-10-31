@@ -19,6 +19,7 @@ export const ModeButtons: React.FC<ModeButtonsProps> = ({
 }) => {
   const drawMode = useGraphStore((s) => s.drawMode);
   const setDrawMode = useGraphStore((s) => s.setDrawMode);
+  const clearDrawnPoints = useGraphStore((s) => s.clearDrawnPoints);
   const hasDrawableNode = useGraphStore((s) =>
     s.nodes.some((n) =>
       n.data.type === 'DrawSpline' ||
@@ -30,11 +31,25 @@ export const ModeButtons: React.FC<ModeButtonsProps> = ({
     )
   );
 
-  if (drawMode) return null;
+  if (drawMode) {
+    // Une sortie de mode au clic — les couches interactives couvrent le
+    // canvas, le bouton doit rester accessible (Esc reste le raccourci).
+    return (
+      <div className="absolute bottom-2 left-2 z-raised flex gap-1">
+        <button
+          onClick={() => { clearDrawnPoints(); setDrawMode(false); }}
+          className="px-2.5 py-1 text-xs rounded font-medium transition-colors bg-orange-700 text-white hover:bg-orange-600"
+          title="Quitter le mode dessin (Esc)"
+        >
+          <Pencil size={11} className="inline -mt-0.5" /> Exit Draw
+        </button>
+      </div>
+    );
+  }
 
   return (
     <>
-      <div className="absolute bottom-2 left-2 z-overlay flex gap-1">
+      <div className="absolute bottom-2 left-2 z-raised flex gap-1">
         <button
           onClick={() => setManipulateMode(!manipulateMode)}
           className={`px-2.5 py-1 text-xs rounded font-medium transition-colors ${
@@ -54,7 +69,7 @@ export const ModeButtons: React.FC<ModeButtonsProps> = ({
         </button>
         {hasDrawableNode && (
           <button
-            onClick={() => { setDrawMode(true); setManipulateMode(false); }}
+            onClick={() => setDrawMode(true)}
             className="px-2.5 py-1 text-xs rounded font-medium transition-colors bg-gray-900/80 text-gray-400 hover:text-white border border-gray-700"
             title="Draw a freehand spline trajectory (or flow line for a drawn VectorField)"
           >
@@ -65,7 +80,7 @@ export const ModeButtons: React.FC<ModeButtonsProps> = ({
       {manipulateMode && (
         <div className="absolute top-2 left-1/2 -translate-x-1/2 z-overlay bg-gray-900/90 backdrop-blur rounded-lg px-3 py-1.5 border border-blue-600/50">
           <span className="text-blue-400 text-xs font-medium">
-            <Move3d size={11} className="inline -mt-0.5" /> Manipulate — drag handle: move · shift+drag: rotate · scroll: scale · drag object: override
+            <Move3d size={11} className="inline -mt-0.5" /> Manipulate — drag handle: move · shift+drag: rotate · scroll: scale · drag object: override (Esc to cancel)
           </span>
         </div>
       )}

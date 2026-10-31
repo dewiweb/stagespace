@@ -3,10 +3,11 @@
 /// stores) et écoute `conduite:cmd` → dispatch vers les mêmes
 /// liveActions que le clavier/OSC — sémantique identique partout.
 import { useEffect } from 'react';
-import { emit, listen } from '@tauri-apps/api/event';
+import { emit } from '@tauri-apps/api/event';
+import { safeListen } from '../utils/tauri';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { useGraphStore } from '../store/useGraphStore';
-import { doCueNext, doCuePrev, doPanic } from '../utils/liveActions';
+import { doCueNext, doCuePrev, doGo, doPanic } from '../utils/liveActions';
 
 const cueLabel = (c: { cue_number?: string | null; name: string } | null, idx: number) =>
   c ? `${c.cue_number ?? String(idx + 1)} ${c.name}` : '—';
@@ -35,13 +36,17 @@ export function useConduiteBroadcast() {
         tcChaseEnabled: cs.tcChaseEnabled,
         tcActive,
         tcStr,
-      });
+      }).catch(() => {});
     }, 500);
 
     let un: (() => void) | undefined;
-    void listen<string>('conduite:cmd', (e) => {
+    // go = GO setlist (crossfade, même action que le gros GO de PerformView) ;
+    // next/prev = recall cue — parité avec l'overlay conduite in-app.
+    void safeListen<string>('conduite:cmd', (e) => {
       switch (e.payload) {
         case 'go':
+          doGo();
+          break;
         case 'next':
           doCueNext();
           break;

@@ -61,16 +61,25 @@ export const TrajectoryVisualization: React.FC<TrajectoryVisualizationProps> = (
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene) return;
-    if (!(isPlaying || hasMovements) || !objectsRef.current || objectsRef.current.length === 0) return;
 
-    const timer = setTimeout(() => {
-      // Nettoyer les anciennes lignes
+    // Purge AVANT tout early-return — sinon les derniers chemins dessinés
+    // restent dans la scène indéfiniment après un stop-all (ghost lines).
+    const clearLines = () => {
       pathLinesRef.current.forEach((l) => {
         scene.remove(l);
         l.geometry.dispose();
         (l.material as THREE.Material).dispose();
       });
       pathLinesRef.current = [];
+    };
+    if (!(isPlaying || hasMovements) || !objectsRef.current || objectsRef.current.length === 0) {
+      clearLines();
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      // Nettoyer les anciennes lignes
+      clearLines();
 
       let cancelled = false;
 

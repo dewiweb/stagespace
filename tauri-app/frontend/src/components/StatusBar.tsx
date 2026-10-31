@@ -1,6 +1,8 @@
 import React from 'react';
 import { TriangleAlert } from 'lucide-react';
 import { useGraphStore } from '../store/useGraphStore';
+import { useMoveEditorStore } from '../store/useMoveEditorStore';
+import { useOscArmed } from '../hooks/useOscArmed';
 
 /// StatusBar — bandeau persistant en bas de fenêtre, monté dans App pour
 /// TOUS les modes (Edit et Perform). C'est la console de monitoring moteur :
@@ -20,6 +22,8 @@ export const StatusBar: React.FC = () => {
   const clearPlayError = useGraphStore((s) => s.clearPlayError);
   const oscAddress = useGraphStore((s) => s.oscAddress);
   const oscPort = useGraphStore((s) => s.oscPort);
+  const [armed] = useOscArmed();
+  const debugPerfVisible = useMoveEditorStore((s) => s.debugPerfVisible);
 
   const activeCount = movements.length;
   const hasError = !!(compileError || playError);
@@ -47,6 +51,19 @@ export const StatusBar: React.FC = () => {
         <span className="text-gray-300 font-medium">{statusLabel}</span>
       </div>
 
+      {/* État arm/disarm — LA métrique de sécurité live : un dry-run sans
+          indicateur visible est un silence réseau impossible à diagnostiquer. */}
+      <span
+        className={`px-1.5 py-0.5 rounded font-bold flex-shrink-0 ${
+          armed
+            ? 'text-red-300 bg-red-900/40 border border-red-700/40'
+            : 'text-emerald-400 bg-emerald-900/40 border border-emerald-700/40 animate-pulse'
+        }`}
+        title={armed ? 'OSC LIVE — positions sent to the renderer' : 'DRY-RUN — OSC muted, nothing is sent'}
+      >
+        {armed ? 'LIVE' : 'DRY-RUN'}
+      </span>
+
       {/* Perf en direct — visible dès qu'un mouvement tourne */}
       {activeCount > 0 && perfStats && (
         <div className="flex items-center gap-2 font-mono flex-shrink-0">
@@ -59,22 +76,28 @@ export const StatusBar: React.FC = () => {
           <span className={perfStats.cpuPercent < 50 ? 'text-gray-400' : 'text-yellow-400'}>
             {perfStats.cpuPercent.toFixed(0)}% cpu
           </span>
-          <span
-            className={perfStats.mergeFrameUs < 2000 ? 'text-gray-400' : perfStats.mergeFrameUs < 8000 ? 'text-yellow-400' : 'text-red-400'}
-            title="Temps de travail réel de la frame merge (µs) — budget 16.6ms"
-          >
-            {perfStats.mergeFrameUs < 1000
-              ? `${perfStats.mergeFrameUs.toFixed(0)}µs`
-              : `${(perfStats.mergeFrameUs / 1000).toFixed(1)}ms`} merge
-          </span>
-          <span
-            className={perfStats.mergeLockUs < 100 ? 'text-gray-500' : perfStats.mergeLockUs < 500 ? 'text-yellow-400' : 'text-red-400'}
-            title="Temps d'attente cumulé en acquisition de locks pendant la frame merge (µs) — contention"
-          >
-            {perfStats.mergeLockUs < 1000
-              ? `${perfStats.mergeLockUs.toFixed(0)}µs`
-              : `${(perfStats.mergeLockUs / 1000).toFixed(1)}ms`} lock
-          </span>
+          {/* Télémétrie dev (merge/lock µs) — gatée derrière debugPerfVisible :
+              utile au bench, pas à l'opérateur en live. */}
+          {debugPerfVisible && (
+            <>
+              <span
+                className={perfStats.mergeFrameUs < 2000 ? 'text-gray-400' : perfStats.mergeFrameUs < 8000 ? 'text-yellow-400' : 'text-red-400'}
+                title="Temps de travail réel de la frame merge (µs) — budget 16.6ms"
+              >
+                {perfStats.mergeFrameUs < 1000
+                  ? `${perfStats.mergeFrameUs.toFixed(0)}µs`
+                  : `${(perfStats.mergeFrameUs / 1000).toFixed(1)}ms`} merge
+              </span>
+              <span
+                className={perfStats.mergeLockUs < 100 ? 'text-gray-500' : perfStats.mergeLockUs < 500 ? 'text-yellow-400' : 'text-red-400'}
+                title="Temps d'attente cumulé en acquisition de locks pendant la frame merge (µs) — contention"
+              >
+                {perfStats.mergeLockUs < 1000
+                  ? `${perfStats.mergeLockUs.toFixed(0)}µs`
+                  : `${(perfStats.mergeLockUs / 1000).toFixed(1)}ms`} lock
+              </span>
+            </>
+          )}
           {perfStats.oscSuspended && (
             <span className="text-orange-400 font-bold animate-pulse">OSC SUSPENDED</span>
           )}

@@ -100,8 +100,11 @@ export default function Inspector() {
 
   // ── Audio mod UI ──
 
-  // ── Macros debounce ──
-  const macroDebounce = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ── Debounces — un timer par action : partager le même ref annulait un
+  // hot-swap graphe en attente quand un slider de macro bougeait (le param
+  // node restait dans le store sans jamais arriver au runtime). ──
+  const macroPushDebounce = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const graphHotSwapDebounce = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Mapping bidirectionnel entre les noms Simple (Move state) et Expert (Graph store macros)
   // Simple: scale, offset_x, offset_y, offset_z, yaw, pitch, roll, speed
@@ -132,8 +135,8 @@ export default function Inspector() {
       if (animKey) updateCurrent({ [animKey]: value } as Partial<Move>);
     }
     // Toujours pousser vers le runtime (debounced) — c'était manquant pour le mode Simple
-    if (macroDebounce.current) clearTimeout(macroDebounce.current);
-    macroDebounce.current = setTimeout(() => { pushMacrosToRuntime(); }, 100);
+    if (macroPushDebounce.current) clearTimeout(macroPushDebounce.current);
+    macroPushDebounce.current = setTimeout(() => { pushMacrosToRuntime(); }, 100);
   };
 
   const handleMacro = (key: string, value: number) => handleUnified(key, value, 'expert');
@@ -143,8 +146,8 @@ export default function Inspector() {
     if (!selectedNode) return;
     updateNodeData(selectedNode.id, { params: { ...selectedNodeParams, [key]: value } });
     // Hot-swap live avec debounce
-    if (macroDebounce.current) clearTimeout(macroDebounce.current);
-    macroDebounce.current = setTimeout(() => { updateGraphLive(); }, 150);
+    if (graphHotSwapDebounce.current) clearTimeout(graphHotSwapDebounce.current);
+    graphHotSwapDebounce.current = setTimeout(() => { updateGraphLive(); }, 150);
   };
 
   const renderNodeParamInput = (def: ParamDef, params: Record<string, NodeParamValue>, onChange: (key: string, value: NodeParamValue) => void) => {
@@ -399,8 +402,8 @@ export default function Inspector() {
                   drawSplineNode={drawSplineNode}
                   onUpdate={(points) => {
                     updateNodeData(drawSplineNode.id, { params: { points } });
-                    if (macroDebounce.current) clearTimeout(macroDebounce.current);
-                    macroDebounce.current = setTimeout(() => { updateGraphLive(); }, 150);
+                    if (graphHotSwapDebounce.current) clearTimeout(graphHotSwapDebounce.current);
+                    graphHotSwapDebounce.current = setTimeout(() => { updateGraphLive(); }, 150);
                   }}
                 />
               )}

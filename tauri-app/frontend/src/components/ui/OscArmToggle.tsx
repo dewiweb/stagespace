@@ -1,30 +1,17 @@
-import React from 'react';
-import { safeInvoke } from '../../utils/tauri';
-import { toast } from '../../utils/toast-helpers';
+import { useOscArmed } from '../../hooks/useOscArmed';
 
 /// Master arm — « OSC LIVE » global. Disarmé = silence réseau total (le
 /// merge et la preview 3D continuent) — l'interrupteur master de la console,
 /// indépendant des badges Live/Preview par move.
 /// Monté dans le Toolbar (atelier) ET le header Perform (surface live) —
-/// c'est là qu'il sert réellement.
+/// c'est là qu'il sert réellement. L'état vient de `useOscArmed` (écouté via
+/// `osc-armed-changed`) — synchronisé quelle que soit la source d'écriture.
 export function OscArmToggle() {
-  const [armed, setArmed] = React.useState(true);
-  React.useEffect(() => {
-    safeInvoke<boolean>('get_osc_armed').then(setArmed).catch(() => {});
-  }, []);
+  const [armed, setArmed] = useOscArmed();
 
   return (
     <button
-      onClick={async () => {
-        const next = !armed;
-        setArmed(next);
-        try {
-          await safeInvoke('set_osc_armed', { armed: next });
-        } catch (e) {
-          setArmed(!next);
-          toast.error(`OSC arm failed: ${e}`);
-        }
-      }}
+      onClick={() => setArmed(!armed)}
       className={`px-2.5 py-1.5 text-xs font-bold rounded transition-colors flex items-center gap-1.5 ${
         armed
           ? 'bg-red-900/60 text-red-300 hover:bg-red-800/70 border border-red-700/50'
