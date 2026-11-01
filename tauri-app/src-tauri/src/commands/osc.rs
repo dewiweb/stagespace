@@ -423,3 +423,19 @@ pub async fn get_manual_position(
 ) -> Result<Option<[f64; 3]>, IpcError> {
     Ok(lock_or_recover(&state.merge_runtime).manual_position(obj))
 }
+
+/// Auto-venue : mappe l'espace canonique du show vers la salle réelle.
+/// `enabled=false` → passthrough (espace canonique identique à la salle).
+/// Le transform ne touche que le payload OSC — anchors/zones/kinematics
+/// restent en canonique.
+#[tauri::command]
+pub async fn set_venue_config(
+    enabled: bool,
+    scale: [f64; 3],
+    offset: [f64; 3],
+    state: State<'_, AppState>,
+) -> Result<(), IpcError> {
+    let merge = lock_or_recover(&state.merge_runtime);
+    merge.set_venue_map(if enabled { Some((scale, offset)) } else { None });
+    Ok(())
+}

@@ -177,6 +177,10 @@ pub struct MergeRuntime {
     /// Objets pilotés par flux PSN — posés par set_psn_config, lus pour
     /// la source-de-contrôle (PSN > manuel dans la priorité).
     psn_objects: Arc<RwLock<HashSet<usize>>>,
+    /// Auto-venue : (scale, offset) appliqués UNIQUEMENT au payload OSC
+    /// — l'espace interne reste canonique (anchors, zones, kinematics,
+    /// last_out). None = passthrough.
+    venue_map: Arc<RwLock<Option<([f64; 3], [f64; 3])>>>,
     /// Règles de modulation cinématique (source cinématique → canal spatial)
     /// — Arc<Vec> : snapshot par frame = clone d'Arc.
     channel_modulations: Arc<RwLock<Arc<Vec<ChannelModulation>>>>,
@@ -290,6 +294,7 @@ impl MergeRuntime {
             last_out_positions: Arc::new(RwLock::new(HashMap::new())),
             held_objects: Arc::new(RwLock::new(HashSet::new())),
             psn_objects: Arc::new(RwLock::new(HashSet::new())),
+            venue_map: Arc::new(RwLock::new(None)),
             channel_modulations: Arc::new(RwLock::new(Arc::new(Vec::new()))),
             kinematic_smoothing: Arc::new(RwLock::new(0.5)),
             zones: Arc::new(RwLock::new(Arc::new(Vec::new()))),
@@ -1066,6 +1071,22 @@ impl MergeRuntime {
             .clone()
     }
 
+    /// Auto-venue : mappe l'espace canonique du show vers la salle
+    /// réelle. `scale`/`offset` par axe — `p_out = p*s + o`. None =
+    /// passthrough. Validé : fini + scale > 0.
+    pub fn set_venue_map(&self, map: Option<([f64; 3], [f64; 3])>) {
+        if let Some((scale, offset)) = map {
+            if scale.iter().all(|s| s.is_finite() && *s > 0.0 && *s <= 100.0)
+                && offset.iter().all(|o| o.is_finite() && o.abs() <= 1000.0)
+            {
+                *self.venue_map.write().unwrap_or_else(|e| e.into_inner()) =
+                    Some((scale, offset));
+            }
+        } else {
+            *self.venue_map.write().unwrap_or_else(|e| e.into_inner()) = None;
+        }
+    }
+
     /// Marque les objets pilotés par flux PSN (source-de-contrôle) —
     /// appelé par `set_psn_config` avec les object_index du mapping.
     pub fn set_psn_objects(&self, objs: HashSet<usize>) {
@@ -1276,6 +1297,7 @@ impl MergeRuntime {
         let move_end_modes_arc = self.move_end_modes.clone();
         let last_out_positions_arc = self.last_out_positions.clone();
         let held_objects_arc = self.held_objects.clone();
+        let venue_map_arc = self.venue_map.clone();
         let object_channels_arc = self.object_channels.clone();
         let zones_arc = self.zones.clone();
         let channel_modulations_arc = self.channel_modulations.clone();
@@ -2051,7 +2073,22 @@ impl MergeRuntime {
                             if let Some(&(obj_idx, pos)) =
                                 transformed.iter().find(|(i, _)| osc_ids.get(*i).is_some())
                             {
-                                let report = sink_guard.send_state(osc_ids[obj_idx], pos, None);
+                                let report = sink_guard.send_state(
+                                    osc_ids[obj_idx],
+                                    venue_map_arc
+                                        .read()
+                                        .unwrap_or_else(|e| e.into_inner())
+                                        .map(|(s, o)| {
+                                            [
+                                                pos.x * s[0] + o[0],
+                                                pos.y * s[1] + o[1],
+                                                pos.z * s[2] + o[2],
+                                            ]
+                                        })
+                                        .unwrap_or([pos.x, pos.y, pos.z])
+                                        .into(),
+                                    None,
+                                );
                                 if report.sent > 0 && report.refused == 0 && report.errors == 0 {
                                     osc_circuit_open = false;
                                     osc_bad_windows = 0;
@@ -2092,7 +2129,24 @@ impl MergeRuntime {
                                         }
                                     };
                                 let report =
-                                    sink_guard.send_state(osc_id, *pos, effective.as_ref());
+                                    // Auto-venue : seul le payload OSC est
+                                    // transformé — zones/canaux évalués sur
+                                    // `pos` canonique (correct).
+                                    sink_guard.send_state(
+                                        osc_id,
+                                        venue_map_arc
+                                            .read()
+                                            .unwrap_or_else(|e| e.into_inner())
+                                            .map(|(s, o)| {
+                                                nalgebra::Vector3::new(
+                                                    pos.x * s[0] + o[0],
+                                                    pos.y * s[1] + o[1],
+                                                    pos.z * s[2] + o[2],
+                                                )
+                                            })
+                                            .unwrap_or(*pos),
+                                        effective.as_ref(),
+                                    );
                                 osc_since_perf += report.sent as u64;
                                 osc_errors_perf += report.errors as u64;
                                 osc_refused_perf += report.refused as u64;

@@ -24,6 +24,10 @@ interface PersistedOscConfig {
   psnMap: string;
   /// Permutation/signes d'axes PSN→stage (texte "x,-y,z").
   psnAxes: string;
+  /// Auto-venue : scale+offset espace canonique → salle réelle.
+  venueEnabled: boolean;
+  venueScale: string;
+  venueOffset: string;
 }
 
 function loadConfigFromStorage(): Partial<PersistedOscConfig> {
@@ -46,6 +50,9 @@ const persist = (s: OscConfigSlice, patch: Partial<PersistedOscConfig>) => {
     psnPort: s.psnPort,
     psnMap: s.psnMap,
     psnAxes: s.psnAxes,
+    venueEnabled: s.venueEnabled,
+    venueScale: s.venueScale,
+    venueOffset: s.venueOffset,
     ...patch,
   });
 };
@@ -86,6 +93,11 @@ export interface OscConfigSlice {
   psnRunning: boolean;
   setPsnConfig: (cfg: { enabled?: boolean; group?: string; port?: number; map?: string; axes?: string }) => Promise<void>;
   refreshPsnHealth: () => Promise<void>;
+  /// Auto-venue — scale/offset texte "x,y,z" appliqués au payload OSC.
+  venueEnabled: boolean;
+  venueScale: string;
+  venueOffset: string;
+  setVenueConfig: (cfg: { enabled?: boolean; scale?: string; offset?: string }) => Promise<void>;
   setOscAddress: (addr: string) => void;
   setOscPort: (port: number) => void;
   setOscProfile: (profile: string) => void;
@@ -107,6 +119,9 @@ export const createOscConfigSlice: StateCreator<OscConfigSlice, [], [], OscConfi
     psnPort: saved.psnPort ?? 56565,
     psnMap: saved.psnMap ?? '',
     psnAxes: saved.psnAxes ?? 'x,y,z',
+    venueEnabled: saved.venueEnabled ?? false,
+    venueScale: saved.venueScale ?? '1,1,1',
+    venueOffset: saved.venueOffset ?? '0,0,0',
     psnLastPacketAge: null,
     psnRunning: false,
     setPsnConfig: async (cfg) => {
@@ -160,6 +175,37 @@ export const createOscConfigSlice: StateCreator<OscConfigSlice, [], [], OscConfi
         persist(get(), prev);
         console.error('[setPsnConfig] Failed:', e);
         toast.error('PSN config failed: ' + e);
+      }
+    },
+    setVenueConfig: async (cfg) => {
+      const prev = {
+        venueEnabled: get().venueEnabled,
+        venueScale: get().venueScale,
+        venueOffset: get().venueOffset,
+      };
+      const next = {
+        venueEnabled: cfg.enabled ?? prev.venueEnabled,
+        venueScale: cfg.scale ?? prev.venueScale,
+        venueOffset: cfg.offset ?? prev.venueOffset,
+      };
+      const parse3 = (str: string): [number, number, number] | null => {
+        const p = str.split(',').map((x) => parseFloat(x.trim()));
+        return p.length === 3 && p.every(Number.isFinite) ? [p[0], p[1], p[2]] : null;
+      };
+      const scale = parse3(next.venueScale);
+      const offset = parse3(next.venueOffset);
+      if (!scale || !offset) {
+        toast.error('Venue config: scale/offset must be "x,y,z" numbers');
+        return;
+      }
+      set(next);
+      persist(get(), next);
+      try {
+        await invoke('set_venue_config', { enabled: next.venueEnabled, scale, offset });
+      } catch (e) {
+        set(prev);
+        persist(get(), prev);
+        toast.error('Venue config failed: ' + e);
       }
     },
     refreshPsnHealth: async () => {

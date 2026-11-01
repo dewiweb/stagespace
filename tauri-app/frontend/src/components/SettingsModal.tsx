@@ -45,6 +45,10 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const psnRunning = useGraphStore((s) => s.psnRunning);
   const psnLastPacketAge = useGraphStore((s) => s.psnLastPacketAge);
   const setPsnConfig = useGraphStore((s) => s.setPsnConfig);
+  const venueEnabled = useGraphStore((s) => s.venueEnabled);
+  const venueScale = useGraphStore((s) => s.venueScale);
+  const venueOffset = useGraphStore((s) => s.venueOffset);
+  const setVenueConfig = useGraphStore((s) => s.setVenueConfig);
 
   const [oscIdsStr, setOscIdsStr] = React.useState(manualOscIds.join(','));
   const [audioDevices, setAudioDevices] = React.useState<MediaDeviceInfo[]>([]);
@@ -53,6 +57,8 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const [psnPortStr, setPsnPortStr] = React.useState(String(psnPort));
   const [psnMapStr, setPsnMapStr] = React.useState(psnMap);
   const [psnAxesStr, setPsnAxesStr] = React.useState(psnAxes);
+  const [venueScaleStr, setVenueScaleStr] = React.useState(venueScale);
+  const [venueOffsetStr, setVenueOffsetStr] = React.useState(venueOffset);
   const [oscInStatus, setOscInStatus] = React.useState<string | null>(null);
   const [discovering, setDiscovering] = React.useState(false);
   const [discoveredTargets, setDiscoveredTargets] = React.useState<Array<{ name: string; host: string; port: number; profile: string; source: string }>>([]);
@@ -294,6 +300,51 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 placeholder="x,y,z"
                 className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
               />
+            </div>
+          </section>
+
+          {/* ─── Venue / auto-adaptation ─── */}
+          <section>
+            <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+              <span className="text-amber-400">⌖</span> Venue adaptation
+            </h3>
+            <p className="text-gray-400 text-xs mb-3">
+              Map the show's canonical space to this room — scale+offset applied
+              to the OSC payload only (trajectories/anchors stay canonical).
+            </p>
+            <div className="flex items-center gap-2 mb-2">
+              <button
+                onClick={() => setVenueConfig({ enabled: !venueEnabled, scale: venueScaleStr, offset: venueOffsetStr })}
+                className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                  venueEnabled ? 'bg-amber-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                {venueEnabled ? 'ON' : 'OFF'}
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-gray-500 text-xs block mb-1">Scale "x,y,z"</label>
+                <input
+                  type="text"
+                  value={venueScaleStr}
+                  onChange={(e) => setVenueScaleStr(e.target.value)}
+                  onBlur={() => setVenueConfig({ scale: venueScaleStr })}
+                  placeholder="0.7,0.65,0.5"
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                />
+              </div>
+              <div>
+                <label className="text-gray-500 text-xs block mb-1">Offset "x,y,z"</label>
+                <input
+                  type="text"
+                  value={venueOffsetStr}
+                  onChange={(e) => setVenueOffsetStr(e.target.value)}
+                  onBlur={() => setVenueConfig({ offset: venueOffsetStr })}
+                  placeholder="0,0,0"
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                />
+              </div>
             </div>
           </section>
 
