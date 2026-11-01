@@ -4,6 +4,7 @@ import { useGraphStore } from '../store/useGraphStore';
 import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { useOscArmed } from '../hooks/useOscArmed';
 import { useShowStatusStore } from '../store/useShowStatusStore';
+import { doPanic } from '../utils/liveActions';
 
 /// StatusBar — bandeau persistant en bas de fenêtre, monté dans App pour
 /// TOUS les modes (Edit et Perform). C'est la console de monitoring moteur :
@@ -11,7 +12,7 @@ import { useShowStatusStore } from '../store/useShowStatusStore';
 /// + topbar Perform) laissait les infos vitales démontées en mode live.
 ///
 /// Volontairement compacte (h-7) : elle informe, elle n'actionne pas —
-/// le PANIC reste dans la Toolbar/Perform top bar.
+/// PANIC vit ici — global, toutes surfaces (Toolbar = Atelier seul).
 export const StatusBar: React.FC = () => {
   // Sélecteurs granulaires — perfStats rafraîchit à 2 Hz pendant le play.
   const movements = useGraphStore((s) => s.movements);
@@ -49,6 +50,17 @@ export const StatusBar: React.FC = () => {
 
   return (
     <footer className="h-7 flex items-center gap-3 px-3 border-t border-stagespace-border bg-stagespace-panel flex-shrink-0 text-xs select-none">
+      {/* PANIC — arrêt d'urgence, global sur toutes les surfaces (le
+          bouton Toolbar n'existe qu'en Atelier : le panic du show ne doit
+          jamais dépendre de la phase de travail). */}
+      <button
+        onClick={() => doPanic('statusbar')}
+        className="px-3 py-0.5 rounded bg-red-700 hover:bg-red-600 text-white text-[10px] font-black tracking-wider flex-shrink-0"
+        title="PANIC — stop all + positions d'origine (Esc)"
+      >
+        PANIC
+      </button>
+
       {/* Statut moteur */}
       <div className="flex items-center gap-1.5 flex-shrink-0">
         <span className={`w-2 h-2 rounded-full ${statusColor}`} />

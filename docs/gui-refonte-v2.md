@@ -190,7 +190,9 @@ R5 hygiène continue
 ## Hors scope
 
 - A1.6 vue partition (reportée)
-- Aucune réécriture de composant sain (NodeEditor, Scene3D, Inspector)
+- Réécriture autorisée si nécessaire (décision utilisateur) — NodeEditor,
+  Scene3D, Inspector inclus ; la règle reste : on réécrit pour une raison
+  structurelle, pas par esthétique
 - Pas de redesign cosmétique — structure + cohérence, le look suit les
   tokens
 
