@@ -547,6 +547,16 @@ impl MergeRuntime {
             .remove(&obj_index);
     }
 
+    /// Position manuelle d'un objet (None = pas de reprise manuelle) —
+    /// sert au soundcheck pour restaurer la position avant le ping.
+    pub fn manual_position(&self, obj_index: usize) -> Option<[f64; 3]> {
+        self.manual_positions
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&obj_index)
+            .copied()
+    }
+
     /// Efface la position manuelle pour un objet
     pub fn clear_manual_position(&self, obj_index: usize) {
         self.manual_positions

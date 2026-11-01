@@ -4,11 +4,11 @@
 import { useGraphStore } from '../store/useGraphStore';
 
 /// Log opérationnel — le point de passage commun GUI + OSC.
-/// Toute action live (quel que soit le transport) est tracée ici.
+/// Les commandes OSC (from présent) sont broadcastées par le backend
+/// en 'show-log' à toutes les fenêtres : ne pas doubler ici.
 function logAction(name: string, detail?: string) {
-  useGraphStore
-    .getState()
-    .pushShowLog(`${name}${detail ? ` ${detail}` : ''}`);
+  if (detail) return; // couvert par le broadcast backend
+  useGraphStore.getState().pushShowLog(name);
 }
 import { useCuelistStore } from '../store/useCuelistStore';
 import { toast } from './toast-helpers';
@@ -204,15 +204,31 @@ function soundcheckPing(tracks: number[]) {
   }
   const obj = tracks[s.idx];
   s.pinged = obj;
-  doSetPosition(obj, 0, -2, 0); // repère front-center
-  if (s.timer) clearTimeout(s.timer);
-  s.timer = setTimeout(() => {
-    doClearPosition(obj);
-    s.pinged = null;
-    s.idx += 1;
-    if (s.running && s.idx < tracks.length) soundcheckPing(tracks);
-    else doSoundcheck('stop');
-  }, SOUNDCHECK_PING_MS);
+  // Sauvegarde la position manuelle existante — le ping ne doit jamais
+  // détruire une reprise opérateur (C2, vérité backend).
+  invoke<[number, number, number] | null>('get_manual_position', { obj }).then((prev) => {
+    doSetPosition(obj, 0, -2, 0); // repère front-center
+    if (s.timer) clearTimeout(s.timer);
+    s.timer = setTimeout(() => {
+      if (prev) doSetPosition(obj, prev[0], prev[1], prev[2]);
+      else doClearPosition(obj);
+      s.pinged = null;
+      s.idx += 1;
+      if (s.running && s.idx < tracks.length) soundcheckPing(tracks);
+      else doSoundcheck('stop');
+    }, SOUNDCHECK_PING_MS);
+  }).catch(() => {
+    // Fallback : comportement historique si le getter échoue.
+    doSetPosition(obj, 0, -2, 0);
+    if (s.timer) clearTimeout(s.timer);
+    s.timer = setTimeout(() => {
+      doClearPosition(obj);
+      s.pinged = null;
+      s.idx += 1;
+      if (s.running && s.idx < tracks.length) soundcheckPing(tracks);
+      else doSoundcheck('stop');
+    }, SOUNDCHECK_PING_MS);
+  });
 }
 
 export function doSoundcheck(action?: string) {

@@ -412,3 +412,14 @@ pub async fn get_emitted_positions(
 ) -> Result<std::collections::HashMap<usize, [f64; 3]>, IpcError> {
     Ok(lock_or_recover(&state.merge_runtime).emitted_positions())
 }
+
+/// Position manuelle d'un objet — le soundcheck sauvegarde la reprise
+/// opérateur avant d'écrire son ping et la restaure après (le ping ne
+/// doit jamais détruire une position de l'opérateur).
+#[tauri::command]
+pub async fn get_manual_position(
+    obj: usize,
+    state: State<'_, AppState>,
+) -> Result<Option<[f64; 3]>, IpcError> {
+    Ok(lock_or_recover(&state.merge_runtime).manual_position(obj))
+}

@@ -81,3 +81,14 @@ setInterval(() => {
     })
     .catch(() => {});
 }, 1500);
+
+// Log broadcasté par le backend — TOUTES les fenêtres (y compris la
+// fenêtre run détachée) voient les commandes OSC. liveActions ne logge
+// que les actions GUI (from absent) pour ne pas doubler.
+import('../../utils/tauri').then(({ safeListen }) =>
+  safeListen<{ label: string }>('show-log', (e) =>
+    import('../useGraphStore').then((m) =>
+      m.useGraphStore.getState().pushShowLog(e.payload.label),
+    ),
+  ),
+);
