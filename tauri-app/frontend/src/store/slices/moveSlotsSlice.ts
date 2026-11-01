@@ -812,6 +812,11 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
     const slot = get().moveSlots.find((s) => s.id === id);
     if (!slot?.movementId) return;
     const movementId = slot.movementId;
+    // Stop opérateur → désarmer les pre_wait/follow pendus : sinon une cue
+    // armée ressuscite le move N secondes après le stop (audit P2).
+    void import('../useCuelistStore').then((m) =>
+      m.useCuelistStore.getState().cancelPendingTimers(),
+    );
     try {
       await get().stopMovement(movementId);
     } catch (e) {
@@ -833,6 +838,9 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
     if (!slot?.movementId) return;
     const movementId = slot.movementId;
     feLog(`[stopSlotWithFade] slot=${id} movementId=${movementId} fade=${fadeDuration}`);
+    void import('../useCuelistStore').then((m) =>
+      m.useCuelistStore.getState().cancelPendingTimers(),
+    );
     try {
       await get().stopMovementWithFade(movementId, fadeDuration);
     } catch (e) {
