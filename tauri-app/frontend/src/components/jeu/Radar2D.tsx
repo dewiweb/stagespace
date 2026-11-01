@@ -4,7 +4,7 @@
 /// Partagé par la surface Jeu et la fenêtre ?view=run.
 import React from 'react';
 import { useGraphStore } from '../../store/useGraphStore';
-import { doThrow } from '../../utils/liveActions';
+import { doThrow, doClearPosition } from '../../utils/liveActions';
 import { sourceHex, SOURCE_LABEL } from '../../utils/sourceColors';
 
 export const Radar2D: React.FC = () => {
@@ -70,6 +70,14 @@ export const Radar2D: React.FC = () => {
           <g
             key={id}
             style={{ cursor: 'grab' }}
+            onContextMenu={(e) => {
+              // Clic-droit = relâcher l'objet tenu en manuel : le moteur
+              // reprend la main (la position manuelle a priorité au merge —
+              // un objet dragué resterait figé sans ce chemin de release).
+              e.preventDefault();
+              e.stopPropagation();
+              doClearPosition(t);
+            }}
             onPointerDown={(e) => {
               throwDrag.current = { id: t, x: e.clientX, y: e.clientY, t: Date.now() };
               e.stopPropagation();

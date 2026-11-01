@@ -712,7 +712,10 @@ export const useMovementPositionsListener = () => {
 
   // Écouter global-positions (un seul event avec toutes les positions mergées)
   React.useEffect(() => {
-    if (movements.length === 0) return;
+    // Bind INCONDITIONNEL — le gate `movements.length === 0` bloquait le
+    // listener quand la liste frontend était stale-vide : aucune position
+    // n'arrivait jamais (radar/3D figés sur le fallback 1.5Hz). L'event
+    // n'émet que quand le merge produit — bind libre = pas de travail inutile.
     let ipcFrameCount = 0;
     let ipcLastPerf = performance.now();
     let ipcMaxDelta = 0;

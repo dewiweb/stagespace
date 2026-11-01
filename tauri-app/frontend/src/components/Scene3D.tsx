@@ -116,6 +116,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
     handleManipulateMove,
     handleManipulateUp,
     handleManipulateWheel,
+    handleManipulateContextMenu,
   } = useManipulateMode({
     cameraRef,
     containerRef,
@@ -453,6 +454,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
           onPointerUp={handleManipulateUp}
           onPointerCancel={handleManipulateUp}
           onWheel={handleManipulateWheel}
+          onContextMenu={handleManipulateContextMenu}
         />
       )}
       {/* Active movements indicator — bottom right */}

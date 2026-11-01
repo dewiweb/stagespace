@@ -5,6 +5,7 @@ import { useGraphStore } from '../store/useGraphStore';
 import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { throttleTrailingKeyed } from '../utils/throttle';
 import { fromThree } from '../utils/coords';
+import { doClearPosition } from '../utils/liveActions';
 
 interface UseManipulateModeParams {
   cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>;
@@ -223,6 +224,38 @@ export function useManipulateMode({
     [],
   );
 
+  // Clic-droit = relâcher l'objet : sa position manuelle (prioritaire au
+  // merge) est retirée → le moteur reprend la main. Même affordance que
+  // le clic-droit du radar 2D. Pas de gate manipulateMode — un objet tenu
+  // doit pouvoir être relâché dans tous les modes (OrbitControls pan =
+  // drag droit, pas contextmenu — aucun conflit).
+  const handleManipulateContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      const camera = cameraRef.current;
+      const container = containerRef.current;
+      if (!camera || !container) return;
+      const rect = container.getBoundingClientRect();
+      const ndc = new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(ndc, camera);
+      const visibleObjs = objectsRef.current.filter((o) => o.visible);
+      const objHits = raycaster.intersectObjects(visibleObjs, true);
+      if (objHits.length === 0) return;
+      e.preventDefault();
+      let hitObj = objHits[0].object as THREE.Mesh;
+      let idx = objectsRef.current.indexOf(hitObj);
+      while (idx < 0 && hitObj.parent) {
+        hitObj = hitObj.parent as THREE.Mesh;
+        idx = objectsRef.current.indexOf(hitObj);
+      }
+      if (idx >= 0) doClearPosition(idx);
+    },
+    [cameraRef, containerRef, objectsRef],
+  );
+
   // Scroll = scale la trajectoire (quand on est sur le handle en manipulate mode)
   const handleManipulateWheel = useCallback(
     (e: React.WheelEvent) => {
@@ -248,5 +281,6 @@ export function useManipulateMode({
     handleManipulateMove,
     handleManipulateUp,
     handleManipulateWheel,
+    handleManipulateContextMenu,
   };
 }
