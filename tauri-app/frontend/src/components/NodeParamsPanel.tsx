@@ -63,7 +63,7 @@ export const NodeParamsPanel: React.FC<{
   // car `pinned` est un champ data à part entière (pas une clé de params).
   const updateNodeData = useGraphStore((s) => s.updateNodeData);
   const pinned = ((paramNode?.data as GraphNodeData | undefined)?.pinned ?? []) as string[];
-  const pinnedSet = React.useMemo(() => new Set(pinned), [pinned]);
+  const pinnedSet = new Set(pinned);
   const visibleSchema = performMode && pinned.length > 0
     ? paramSchema.filter((d) => pinnedSet.has(d.key))
     : paramSchema;

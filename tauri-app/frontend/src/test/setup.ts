@@ -52,7 +52,9 @@ vi.mock('../utils/tauri', () => ({
   safeListen: async (event: string, handler: (e: { payload: any }) => void) => {
     // Les listeners sont enregistrés — les tests peuvent émettre via
     // emitMockEvent (ex: show-control → useShowControl → liveActions).
-    listeners.get(event)?.push(handler) ?? listeners.set(event, [handler]);
+    const existing = listeners.get(event);
+    if (existing) existing.push(handler);
+    else listeners.set(event, [handler]);
     return () => {
       const arr = listeners.get(event) ?? [];
       const i = arr.indexOf(handler);

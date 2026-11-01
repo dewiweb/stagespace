@@ -37,7 +37,6 @@ export function useManipulateMode({
   const movements = useGraphStore((s) => s.movements);
   const macros = useGraphStore((s) => s.macros);
   const setMacros = useGraphStore((s) => s.setMacros);
-  const isPlaying = useGraphStore((s) => s.movements.length > 0);
 
   // Refs pour les valeurs lues dans les callbacks — évite les stale closures
   const movementsRef = useRef(movements);
@@ -205,7 +204,7 @@ export function useManipulateMode({
         pushManualPositionThrottled.current(draggingObject, backendPos);
       }
     },
-    [manipulateMode, draggingObject, draggingHandle, macros, setMacros, isPlaying, cameraRef, containerRef, handleRef, objectsRef],
+    [manipulateMode, draggingObject, draggingHandle, macros, setMacros, cameraRef, containerRef, handleRef, objectsRef],
   );
 
   const handleManipulateUp = useCallback(

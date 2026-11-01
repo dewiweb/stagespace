@@ -173,7 +173,7 @@ function AppMain() {
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     };
-  }, []);
+  }, [setRightWidth, setExpertSplit, setLeftWidth]);
 
   const startRightResize = (e: React.MouseEvent) => {
     e.preventDefault();
