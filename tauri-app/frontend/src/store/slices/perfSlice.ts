@@ -14,6 +14,15 @@ export interface PerfSlice {
   /// track. La lecture opérateur du modèle de contrôle.
   objectStates: Record<number, string>;
   refreshObjectStates: () => Promise<void>;
+  /// Santé des flux — PSN running/age, armé, âge du dernier show-cmd
+  /// (inclut le timecode) en secondes. Bandeau permanent P1.3.
+  flowHealth: {
+    psnRunning: boolean;
+    psnAge: number | null;
+    armed: boolean;
+    showCmdAgeS: number | null;
+  };
+  refreshFlowHealth: () => Promise<void>;
 }
 
 export const createPerfSlice: StateCreator<PerfSlice, [], [], PerfSlice> = (set) => ({
@@ -26,6 +35,17 @@ export const createPerfSlice: StateCreator<PerfSlice, [], [], PerfSlice> = (set)
       set({ objectStates: states });
     } catch { /* non critique */ }
   },
+  flowHealth: { psnRunning: false, psnAge: null, armed: true, showCmdAgeS: null },
+  refreshFlowHealth: async () => {
+    try {
+      const [[psnRunning, psnAge], armed, showCmdAgeS] = await Promise.all([
+        invoke<[boolean, number | null]>('get_psn_health'),
+        invoke<boolean>('get_osc_armed'),
+        invoke<number | null>('get_last_show_cmd_age'),
+      ]);
+      set({ flowHealth: { psnRunning, psnAge, armed, showCmdAgeS } });
+    } catch { /* non critique */ }
+  },
 });
 
 // Poll source-de-contrôle — vit dans le slice (donnée), pas React, et
@@ -33,6 +53,10 @@ export const createPerfSlice: StateCreator<PerfSlice, [], [], PerfSlice> = (set)
 // Import dynamique : le module scope n'a pas accès au store à la création.
 setInterval(() => {
   import('../useGraphStore')
-    .then((m) => m.useGraphStore.getState().refreshObjectStates())
+    .then((m) => {
+      const s = m.useGraphStore.getState();
+      s.refreshObjectStates();
+      s.refreshFlowHealth();
+    })
     .catch(() => {});
 }, 1500);

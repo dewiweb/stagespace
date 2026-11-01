@@ -24,6 +24,7 @@ export const StatusBar: React.FC = () => {
   const oscAddress = useGraphStore((s) => s.oscAddress);
   const oscPort = useGraphStore((s) => s.oscPort);
   const [armed] = useOscArmed();
+  const flowHealth = useGraphStore((s) => s.flowHealth);
   const debugPerfVisible = useMoveEditorStore((s) => s.debugPerfVisible);
   const backendDown = useShowStatusStore((s) => s.backendDown);
 
@@ -65,6 +66,30 @@ export const StatusBar: React.FC = () => {
       >
         {armed ? 'LIVE' : 'DRY-RUN'}
       </span>
+
+      {/* Santé des flux — PSN tracking + last show-cmd (inclut TC). Un flux
+          mort en silence = un follow-me gelé sans alerte : visible en
+          permanence, pas en toast. */}
+      {flowHealth.psnRunning && (
+        <span
+          className={`px-1.5 py-0.5 rounded font-bold flex-shrink-0 border ${
+            flowHealth.psnAge != null && flowHealth.psnAge < 2000
+              ? 'text-purple-300 bg-purple-900/40 border-purple-700/40'
+              : 'text-amber-300 bg-amber-900/40 border-amber-700/40 animate-pulse'
+          }`}
+          title={flowHealth.psnAge != null ? `PSN tracking — dernière trame il y a ${flowHealth.psnAge}ms` : 'PSN actif, aucune trame reçue'}
+        >
+          {flowHealth.psnAge != null && flowHealth.psnAge < 2000 ? 'PSN ●' : 'PSN ✕'}
+        </span>
+      )}
+      {flowHealth.showCmdAgeS != null && flowHealth.showCmdAgeS < 10 && (
+        <span
+          className="px-1.5 py-0.5 rounded font-bold flex-shrink-0 text-cyan-300 bg-cyan-900/40 border border-cyan-700/40"
+          title={`Show-control/TC — dernière commande il y a ${flowHealth.showCmdAgeS.toFixed(1)}s`}
+        >
+          TC ●
+        </span>
+      )}
 
       {/* Backend absent — un silentCatch a avalé un échec IPC. Plus de
           backend = plus d'OSC, plus de recall, plus rien : visible partout. */}
