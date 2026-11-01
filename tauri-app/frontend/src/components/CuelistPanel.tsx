@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { useCuelistStore, type CueData } from '../store/useCuelistStore';
 import { useGraphStore } from '../store/useGraphStore';
-import { doRehearsal, scoreExport, scoreImport, doTape, tapeImport, doCuePrev, doCueNext, doCueRecall } from '../utils/liveActions';
+import { doCuePrev, doCueNext, doCueRecallById } from '../utils/liveActions';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import { useSignalGraphStore } from '../store/useSignalGraphStore';
 import { ConfirmModal } from './ui/ConfirmModal';
@@ -33,7 +33,6 @@ export const CuelistPanel: React.FC = () => {
 
   // Récupérer l'état actuel pour le store
   const nodes = useGraphStore((s) => s.nodes);
-  const showLog = useGraphStore((s) => s.showLog);
   const edges = useGraphStore((s) => s.edges);
   const editingSlotId = useGraphStore((s) => s.editingSlotId);
   const moveSlots = useGraphStore((s) => s.moveSlots);
@@ -172,38 +171,6 @@ export const CuelistPanel: React.FC = () => {
         </button>
       </div>
 
-      {/* Diffusion score — la partition acousmatique : capture du busking,
-          export/import JSON, rejouée comme un cue. */}
-      <div className="border-t border-stagespace-border px-3 py-1.5 flex items-center gap-1.5 flex-shrink-0">
-        <span className="text-[9px] text-gray-500 uppercase tracking-widest">score</span>
-        <button onClick={() => doRehearsal('record')} title="Record — capture le busking" className="px-1.5 py-0.5 text-[9px] rounded bg-red-900/50 hover:bg-red-800/70 text-red-300">⏺</button>
-        <button onClick={() => doRehearsal('stop')} title="Stop — fin de capture" className="px-1.5 py-0.5 text-[9px] rounded bg-gray-800 hover:bg-gray-700 text-gray-400">⏹</button>
-        <button onClick={() => doRehearsal('play')} title="Play — rejoue la partition" className="px-1.5 py-0.5 text-[9px] rounded bg-green-900/50 hover:bg-green-800/70 text-green-300">▶</button>
-        <button onClick={scoreExport} title="Export — télécharge le score JSON" className="px-1.5 py-0.5 text-[9px] rounded bg-gray-800 hover:bg-gray-700 text-gray-400">↓</button>
-        <label title="Import — charge un score JSON" className="px-1.5 py-0.5 text-[9px] rounded bg-gray-800 hover:bg-gray-700 text-gray-400 cursor-pointer">
-          ↑
-          <input type="file" accept=".json" className="hidden" onChange={(e) => e.target.files?.[0] && scoreImport(e.target.files[0])} />
-        </label>
-        <span className="text-[9px] text-gray-600 ml-2 uppercase tracking-widest">tape</span>
-        <button onClick={() => doTape('record')} title="Tape rec — positions émises @30Hz" className="px-1.5 py-0.5 text-[9px] rounded bg-red-900/50 hover:bg-red-800/70 text-red-300">⏺</button>
-        <button onClick={() => doTape('stop')} title="Tape stop" className="px-1.5 py-0.5 text-[9px] rounded bg-gray-800 hover:bg-gray-700 text-gray-400">⏹</button>
-        <button onClick={() => doTape('play')} title="Tape play — rejoue le flux au rythme réel" className="px-1.5 py-0.5 text-[9px] rounded bg-green-900/50 hover:bg-green-800/70 text-green-300">▶</button>
-        <button onClick={() => doTape('export')} title="Tape export — positions JSON (bounce externe)" className="px-1.5 py-0.5 text-[9px] rounded bg-gray-800 hover:bg-gray-700 text-gray-400">↓</button>
-        <label title="Tape import — rejoue une bande de positions" className="px-1.5 py-0.5 text-[9px] rounded bg-gray-800 hover:bg-gray-700 text-gray-400 cursor-pointer">
-          ↑
-          <input type="file" accept=".json" className="hidden" onChange={(e) => e.target.files?.[0] && tapeImport(e.target.files[0])} />
-        </label>
-      </div>
-      {/* Log opérationnel — P2.4 : qui a GO quand, quel NACK. */}
-      {showLog.length > 0 && (
-        <div className="border-t border-stagespace-border px-3 py-1.5 max-h-24 overflow-y-auto flex-shrink-0">
-          {showLog.slice(-6).reverse().map((l, i) => (
-            <div key={i} className="text-[10px] text-gray-500 font-mono truncate">
-              {new Date(l.ts).toLocaleTimeString()} · {l.label}
-            </div>
-          ))}
-        </div>
-      )}
       <div className="flex-1 overflow-y-auto">
         {cues.length === 0 ? (
           <div className="px-3 py-3">
@@ -229,7 +196,7 @@ export const CuelistPanel: React.FC = () => {
                 onClick={() => setArmedCueId(cue.id === armedCueId ? null : cue.id)}
                 onDoubleClick={() => {
                   setArmedCueId(null);
-                  doCueRecall(cue.id);
+                  doCueRecallById(cue.id, undefined, 'cuelist');
                 }}
                 title={idx === currentCueIndex ? 'Current cue' : 'Click = arm · double-click = RECALL (replaces the whole scene)'}
               >
