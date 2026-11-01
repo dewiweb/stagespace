@@ -25,8 +25,30 @@ function logAction(name: string, detail?: string) {
   useGraphStore.getState().pushShowLog(name);
 }
 import { useCuelistStore } from '../store/useCuelistStore';
+import { broadcastTimerCancel } from './timerBroadcast';
+import { isDetachedWindow } from './safeStorage';
+import { emit } from '@tauri-apps/api/event';
 import { toast } from './toast-helpers';
 import { safeInvoke as invoke, silentCatch } from './tauri';
+
+/// Annule les timers pre_wait/follow ICI ET partout — chaque webview
+/// possède ses propres timers (revue H1) : un panic/stop dans une
+/// fenêtre détachée doit désarmer ceux de la principale aussi.
+function disarmPending() {
+  useCuelistStore.getState().cancelPendingTimers();
+  broadcastTimerCancel();
+}
+
+/// Fenêtre détachée → la commande part sur le fil `conduite:cmd` : la
+/// fenêtre PRINCIPALE exécute (propriétaire unique des actions show —
+/// indices, isRecalling, slots toujours frais). Une exécution locale
+/// dans la détachée utilisait son index cue stale et son store local
+/// (revue M5 : mauvaise cue tirée, moves doublés).
+function routeDetached(wire: string): boolean {
+  if (!isDetachedWindow()) return false;
+  void emit('conduite:cmd', wire).catch(() => {});
+  return true;
+}
 
 /** NACK le contrôleur OSC si la commande vient d'/stagespace/* (from). */
 function nack(from: string | undefined, reason: string) {
@@ -45,9 +67,10 @@ function recallBusy(from?: string): boolean {
 
 /// GO setlist (= Enter) — crossfade vers le prochain move.
 export function doGo(from?: string) {
+  if (routeDetached('go')) return;
   logAction('doGo', from);
   if (recallBusy(from)) return;
-  useCuelistStore.getState().cancelPendingTimers();
+  disarmPending();
   const gs = useGraphStore.getState();
   gs.goToNextMove().then((res: { ok: boolean; message: string }) => {
     if (!res.ok) toast.warning(res.message);
@@ -56,28 +79,31 @@ export function doGo(from?: string) {
 
 /// Cue suivante (= Shift+Enter).
 export function doCueNext(from?: string) {
+  if (routeDetached('next')) return;
   logAction('doCueNext', from);
   // Guard avant mutation — une commande nackée ne doit pas annuler les timers.
   if (recallBusy(from)) return;
-  useCuelistStore.getState().cancelPendingTimers();
+  disarmPending();
   useCuelistStore.getState().goToNextCue();
 }
 
 /// Cue précédente (= Backspace).
 export function doCuePrev(from?: string) {
+  if (routeDetached('prev')) return;
   logAction('doCuePrev', from);
   if (recallBusy(from)) return;
-  useCuelistStore.getState().cancelPendingTimers();
+  disarmPending();
   useCuelistStore.getState().goToPreviousCue();
 }
 
 /// Recall direct d'une cue par numéro — match sur `cue_number`, sinon
 /// index 1-based dans la liste.
 export function doCueRecall(n: string, fadeOverride?: number, from?: string) {
-  logAction('doCueRecall');
+  if (routeDetached(`cue:${n}`)) return;
+  logAction('doCueRecall', from);
   const s = useCuelistStore.getState();
   if (recallBusy(from)) return;
-  s.cancelPendingTimers();
+  disarmPending();
   const byNumber = s.cues.find((c) => c.cue_number != null && c.cue_number === n);
   const idx = Number.parseInt(n, 10);
   const byIndex = Number.isFinite(idx) && idx >= 1 && idx <= s.cues.length ? s.cues[idx - 1] : undefined;
@@ -93,14 +119,15 @@ export function doCueRecall(n: string, fadeOverride?: number, from?: string) {
 /// Recall par id de cue — utilisé par les cue lists GUI (ConduiteView,
 /// CuelistPanel) où la cible est l'objet cue, pas son numéro.
 export function doCueRecallById(id: string, fadeOverride?: number, from?: string) {
-  logAction('doCueRecallById');
+  if (routeDetached(`recall:${id}`)) return;
+  logAction('doCueRecallById', from);
   const s = useCuelistStore.getState();
-  s.cancelPendingTimers();
   if (recallBusy(from)) return;
   if (!s.cues.some((c) => c.id === id)) {
     nack(from, `not-found: cue id '${id}'`);
     return;
   }
+  disarmPending();
   void s.recallCue(id, fadeOverride != null ? { fadeOverride } : undefined);
 }
 
@@ -112,7 +139,8 @@ export function doArm(armed: boolean, from?: string) {
 
 /** /stagespace/slot <n> — joue le slot n (index 1-based, busking). */
 export function doSlot(n: number, from?: string) {
-  logAction('doSlot');
+  if (routeDetached(`slot:${n}`)) return;
+  logAction('doSlot', from);
   rec('doSlot', [n]);
   const gs = useGraphStore.getState();
   const slot = gs.moveSlots.find((s) => s.oscIndex === n);
@@ -123,13 +151,14 @@ export function doSlot(n: number, from?: string) {
   // Un slot tiré pendant un recall serait tué par la désactivation du
   // recall — rejet explicite plutôt qu'un tir orphelin.
   if (recallBusy(from)) return;
-  useCuelistStore.getState().cancelPendingTimers();
+  disarmPending();
   void gs.playSlot(slot.id);
 }
 
 /** /stagespace/slot/stop <n> — coupe le slot n avec son fade_out. */
 export function doSlotStop(n: number, from?: string) {
-  logAction('doSlotStop');
+  if (routeDetached(`slotstop:${n}`)) return;
+  logAction('doSlotStop', from);
   rec('doSlotStop', [n]);
   const gs = useGraphStore.getState();
   const slot = gs.moveSlots.find((s) => s.oscIndex === n);
@@ -140,8 +169,10 @@ export function doSlotStop(n: number, from?: string) {
   // Un stop pendant un recall peut tuer un move que le recall vient de
   // respawner — même garde que doSlot.
   if (recallBusy(from)) return;
-  useCuelistStore.getState().cancelPendingTimers();
-  if (slot.movementId) void gs.stopSlotWithFade(slot.id, slot.fadeOut ?? 1);
+  if (slot.movementId) {
+    disarmPending();
+    void gs.stopSlotWithFade(slot.id, slot.fadeOut ?? 1);
+  }
 }
 
 /** /stagespace/solo <n> — coupe les autres slots puis joue n. */
@@ -152,7 +183,8 @@ export function getSoloRestoreIds(): string[] {
 }
 
 export function doSolo(n: number, from?: string) {
-  logAction('doSolo');
+  if (routeDetached(`solo:${n}`)) return;
+  logAction('doSolo', from);
   rec('doSolo', [n]);
   const gs = useGraphStore.getState();
   // Un n hors oscIndex = not-found, jamais le slot n-1 (mauvais objet tiré).
@@ -162,7 +194,7 @@ export function doSolo(n: number, from?: string) {
     return void toast.warning(`Slot '${n}' not found`);
   }
   if (recallBusy(from)) return;
-  useCuelistStore.getState().cancelPendingTimers();
+  disarmPending();
   // Sauvegarde des autres slots jouants — un solo n'est jamais une
   // fin en soi, l'opérateur voudra souvent revenir au mix d'avant.
   useGraphStore.setState({ soloSavedIds: gs.moveSlots.filter((s) => s.id !== target.id && s.movementId).map((s) => s.id) });
@@ -174,10 +206,12 @@ export function doSolo(n: number, from?: string) {
 
 /** /stagespace/unsolo — rejoue les slots stoppés par le dernier solo. */
 export function doUnsolo(from?: string) {
+  if (routeDetached('unsolo')) return;
   logAction('doUnsolo', from);
   // Un recall vient peut-être de tuer ces moves — rejouer maintenant
   // ressusciterait des slots que la cue voulait morts.
   if (recallBusy(from)) return;
+  disarmPending();
   const gs = useGraphStore.getState();
   const ids = gs.soloSavedIds;
   useGraphStore.setState({ soloSavedIds: [] });
@@ -196,7 +230,7 @@ export function doStatus() {
 /// Panic (= Esc) — stop all + positions origine.
 export function doPanic() {
   logAction('doPanic');
-  useCuelistStore.getState().cancelPendingTimers();
+  disarmPending();
   useGraphStore.getState().panic();
 }
 
@@ -374,6 +408,10 @@ export function doRehearsal(action: string, from?: string) {
       const wasRecording = s.recording;
       s.recording = false;
       let delay = 0;
+      // Une bande déjà en cours doit être arrêtée AVANT d'armer la
+      // nouvelle — remplacer playTimers sans clearTimeout perdait les
+      // références et la première bande continuait de tirer (revue M7).
+      s.playTimers.forEach(clearTimeout);
       // Tous les timers sont trackés — 'clear' doit pouvoir tout annuler
       // (un seul playTimer écrasé = la bande continuait de tirer).
       s.playTimers = s.entries.map((e) => {
@@ -502,6 +540,6 @@ export function doUnpark(obj: number, from?: string) {
 /// Stop all moves (même fonction que le bouton UI — deactivate_all).
 export function doStop() {
   logAction('doStop');
-  useCuelistStore.getState().cancelPendingTimers();
+  disarmPending();
   useGraphStore.getState().stopAllMovements();
 }

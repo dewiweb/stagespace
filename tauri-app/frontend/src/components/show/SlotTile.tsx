@@ -57,13 +57,29 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
     return (
       <div
         onPointerDown={() => {
+          // Reset du flag : il ne doit étouffer que le click DU GESTE qui
+          // l'a armé — sinon un release hors pad le laisse armé et le
+          // prochain tap est avalé en silence (revue M1).
+          press.current.suppressClick = false;
+          // Multi-press : le timer précédent doit être annulé.
+          if (press.current.timer) clearTimeout(press.current.timer);
           press.current.timer = setTimeout(() => {
-            press.current.momentary = true;
-            // Hold = inversion momentanée dans les DEUX sens : pad arrêté =
-            // bump play ; pad live = punch-out (stop, le release rejoue).
-            press.current.restore = isPlaying ? 'play' : 'stop';
-            if (isPlaying) p.onStop();
-            else p.onPlay();
+            // État FRAIS au moment du fire, pas la closure du render —
+            // un recall/OSC a pu tuer ou lancer le move pendant le hold
+            // (revue M1 : sinon le restore rejoue un move que le show
+            // voulait mort).
+            void import('../../store/useGraphStore').then(({ useGraphStore }) => {
+              const fresh = useGraphStore
+                .getState()
+                .moveSlots.find((s) => s.id === slot.id);
+              const freshPlaying = fresh?.movementId != null;
+              press.current.momentary = true;
+              // Hold = inversion momentanée dans les DEUX sens : pad arrêté =
+              // bump play ; pad live = punch-out (stop, le release rejoue).
+              press.current.restore = freshPlaying ? 'play' : 'stop';
+              if (freshPlaying) p.onStop();
+              else p.onPlay();
+            });
           }, 350);
         }}
         onPointerUp={releasePress}

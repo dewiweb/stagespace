@@ -341,6 +341,12 @@ pub fn run() {
                                         let _ = merge.send_position_now(id, origin);
                                     }
                                 }
+                                // Chaque webview annule ses propres timers
+                                // pre_wait/follow — ils vivent par contexte
+                                // JS : un panic ici n'atteint pas le
+                                // setTimeout armé dans une autre fenêtre
+                                // (revue H1 — sinon la cue tire après panic).
+                                let _ = app_handle.emit("timers:cancel", ());
                             }
                             _ => {}
                         }

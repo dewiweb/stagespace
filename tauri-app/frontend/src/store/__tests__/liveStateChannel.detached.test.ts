@@ -25,6 +25,7 @@ const payload: LiveStatePayload = {
   cueIndex: 3,
   setlistIndex: 1,
   soloSavedIds: ['s1', 's2'],
+  slotMovements: { s1: 'mv-live-1', s2: null },
 };
 
 describe('live:state — fenêtre détachée (?view=run)', () => {
@@ -58,5 +59,12 @@ describe('live:state — fenêtre détachée (?view=run)', () => {
     expect(useGraphStore.getState().currentSetlistIndex).toBe(1);
     expect(useGraphStore.getState().soloSavedIds).toEqual(['s1', 's2']);
     expect(useShowStatusStore.getState().armed).toBe(false);
+    // Slot states = vérité de la fenêtre principale (pads détachés,
+    // revue M5) : s1 a un movementId, s2 est arrêté.
+    const slots = useGraphStore.getState().moveSlots;
+    if (slots.length > 0) {
+      const s1 = slots.find((s) => s.id === 's1');
+      if (s1) expect(s1.movementId).toBe('mv-live-1');
+    }
   });
 });

@@ -224,7 +224,7 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
     const key = `stagespace_graph_${name}`;
     let exists = false;
     try {
-      exists = localStorage.getItem(key) !== null;
+      exists = typeof localStorage !== 'undefined' && localStorage.getItem(key) !== null;
     } catch {
       // localStorage indisponible (mode privé, quota) — traité comme absent
     }
@@ -235,10 +235,12 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
   },
 
   deleteGraph: async (name) => {
+    if (typeof localStorage === 'undefined') return;
     localStorage.removeItem(`stagespace_graph_${name}`);
   },
 
   listGraphs: async () => {
+    if (typeof localStorage === 'undefined') return [];
     return Object.keys(localStorage)
       .filter((k) => k.startsWith('stagespace_graph_'))
       .map((k) => k.replace('stagespace_graph_', ''));
@@ -484,6 +486,11 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
       useSignalGraphStore.setState({
         nodes: raw.signalGraph.nodes,
         edges: raw.signalGraph.edges,
+        // Le push cible le graphe GLOBAL du merge — si l'utilisateur
+        // avait un Mods-tab de slot ouvert (context != 'global'), le
+        // push court-circuitait et le graphe était silencieusement
+        // perdu au prochain setContext (revue L4).
+        context: 'global',
       });
       const ok = await useSignalGraphStore.getState().pushSignalGraph();
       if (!ok) {

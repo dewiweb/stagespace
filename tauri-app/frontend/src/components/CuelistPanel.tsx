@@ -120,7 +120,7 @@ export const CuelistPanel: React.FC<{ readonly?: boolean }> = ({ readonly = fals
       <div className="px-3 py-2 border-b border-stagespace-border flex items-center gap-2">
         <span className="text-gray-300 text-xs font-semibold">Cues</span>
         <span className="text-gray-400 text-xs">{cues.length}</span>
-        <TcStatus />
+        {!readonly && <TcStatus />}
         <div className="flex-1" />
         {/* GO buttons */}
         <button
@@ -291,7 +291,7 @@ export const CuelistPanel: React.FC<{ readonly?: boolean }> = ({ readonly = fals
                     {cue.active_move_ids.length > 0 && (
                       <span>{cue.active_move_ids.length} move(s)</span>
                     )}
-                    {cue.id === armedCueId ? (
+                    {!readonly && cue.id === armedCueId ? (
                       <label
                         className="flex items-center gap-1 text-amber-400"
                         onClick={(e) => e.stopPropagation()}
@@ -315,7 +315,7 @@ export const CuelistPanel: React.FC<{ readonly?: boolean }> = ({ readonly = fals
                     ) : (
                       <span>· {cue.fade_duration}s</span>
                     )}
-                    {cue.id === armedCueId && (
+                    {!readonly && cue.id === armedCueId && (
                       <span
                         className="flex items-center gap-1"
                         onClick={(e) => e.stopPropagation()}

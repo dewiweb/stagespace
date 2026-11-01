@@ -7,7 +7,7 @@ import { emit } from '@tauri-apps/api/event';
 import { safeListen } from '../utils/tauri';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { useGraphStore } from '../store/useGraphStore';
-import { doArm, doCueNext, doCuePrev, doCueRecallById, doGo, doPanic } from '../utils/liveActions';
+import { doArm, doCueNext, doCuePrev, doCueRecall, doCueRecallById, doGo, doPanic, doSlot, doSlotStop, doSolo, doUnsolo } from '../utils/liveActions';
 import { useShowStatusStore } from '../store/useShowStatusStore';
 import { cueLabel, tcStr } from '../utils/showFormat';
 
@@ -46,6 +46,22 @@ export function useConduiteBroadcast() {
         doCueRecallById(p.slice(7), undefined, 'conduite-window');
         return;
       }
+      if (p.startsWith('cue:')) {
+        doCueRecall(p.slice(4), undefined, 'conduite-window');
+        return;
+      }
+      if (p.startsWith('slotstop:')) {
+        doSlotStop(Number(p.slice(9)), 'conduite-window');
+        return;
+      }
+      if (p.startsWith('slot:')) {
+        doSlot(Number(p.slice(5)), 'conduite-window');
+        return;
+      }
+      if (p.startsWith('solo:')) {
+        doSolo(Number(p.slice(5)), 'conduite-window');
+        return;
+      }
       switch (p) {
         case 'go':
           doGo();
@@ -61,6 +77,9 @@ export function useConduiteBroadcast() {
           break;
         case 'arm':
           doArm(!useShowStatusStore.getState().armed);
+          break;
+        case 'unsolo':
+          doUnsolo('conduite-window');
           break;
       }
     }).then((u) => (un = u));

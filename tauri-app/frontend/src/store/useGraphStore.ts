@@ -461,6 +461,7 @@ export const useGraphStore = create<GraphState>()((...a) => {
     void import('./useCuelistStore').then((m) =>
       m.useCuelistStore.getState().cancelPendingTimers(),
     );
+    void import('../utils/timerBroadcast').then((m) => m.broadcastTimerCancel());
     const { holProject, manualOscIds } = get();
     let failedStops = 0;
     // Stop immédiat — inconditionnel. `deactivate_all_moves` est idempotent et

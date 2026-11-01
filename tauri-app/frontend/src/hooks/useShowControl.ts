@@ -46,22 +46,22 @@ export function useShowControl() {
               if (cmd.value != null) doSolo(cmd.value, from);
               break;
             case 'Unsolo':
-              doUnsolo();
+              doUnsolo(from);
               break;
             case 'Arm':
-              doArm(true);
+              doArm(true, from);
               break;
             case 'Disarm':
-              doArm(false);
+              doArm(false, from);
               break;
             case 'Status':
               doStatus();
               break;
             case 'Park':
-              if (cmd.value != null) doPark(cmd.value);
+              if (cmd.value != null) doPark(cmd.value, from);
               break;
             case 'Unpark':
-              if (cmd.value != null) doUnpark(cmd.value);
+              if (cmd.value != null) doUnpark(cmd.value, from);
               break;
             case 'SetPosition':
               if (cmd.value != null) doSetPosition(cmd.value[0], cmd.value[1], cmd.value[2], cmd.value[3]);

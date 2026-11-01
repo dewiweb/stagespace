@@ -817,6 +817,7 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
     void import('../useCuelistStore').then((m) =>
       m.useCuelistStore.getState().cancelPendingTimers(),
     );
+    void import('../../utils/timerBroadcast').then((m) => m.broadcastTimerCancel());
     try {
       await get().stopMovement(movementId);
     } catch (e) {
@@ -841,6 +842,7 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
     void import('../useCuelistStore').then((m) =>
       m.useCuelistStore.getState().cancelPendingTimers(),
     );
+    void import('../../utils/timerBroadcast').then((m) => m.broadcastTimerCancel());
     try {
       await get().stopMovementWithFade(movementId, fadeDuration);
     } catch (e) {
@@ -1050,10 +1052,12 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
     // niveau store pour couvrir les appels UI directs.
     const { useCuelistStore } = await import('../useCuelistStore');
     const cueStore = useCuelistStore.getState();
-    cueStore.cancelPendingTimers();
     if (cueStore.isRecalling) {
       return { ok: false, message: 'Busy — a cue recall is in progress' };
     }
+    cueStore.cancelPendingTimers();
+    const { broadcastTimerCancel } = await import('../../utils/timerBroadcast');
+    broadcastTimerCancel();
 
     const { setlistOrder, currentSetlistIndex, moveSlots } = get();
     if (setlistOrder.length === 0) {

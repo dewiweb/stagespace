@@ -35,7 +35,10 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
     setArmedCueId(next >= 0 && next < cues.length ? cues[next].id : null);
   };
   const cur = st?.cues.find((c) => c.current);
-  const nxt = st?.cues.find((c) => c.next);
+  // GO tire la cue ARMÉE (ou la suivante si rien d'armé) — l'affichage
+  // "Next" doit annoncer exactement ça, pas le marqueur backend : une
+  // cible affichée ≠ cible tirée est le piège du modèle précédent (M4).
+  const nxt = st?.cues.find((c) => c.id === armedCueId) ?? st?.cues.find((c) => c.next);
 
   return (
     <div className="h-full w-full bg-stagespace-bg flex flex-col select-none overflow-hidden">

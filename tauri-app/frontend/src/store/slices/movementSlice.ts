@@ -122,6 +122,12 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
 
   stopMovement: async (movementId) => {
     try {
+      // Un stop opérateur désarme les timers pendus — sinon une cue
+      // armée ressuscite le move N secondes après le stop (revue M3).
+      void import('../useCuelistStore').then((m) =>
+        m.useCuelistStore.getState().cancelPendingTimers(),
+      );
+      void import('../../utils/timerBroadcast').then((m) => m.broadcastTimerCancel());
       await invoke('deactivate_move', { movementId, fadeDuration: 0.0 });
       // Nettoyer l'objet mutable directement (pas de set())
       delete _movementPositionsExternal[movementId];
@@ -142,6 +148,12 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
 
   stopMovementWithFade: async (movementId, fadeDuration) => {
     try {
+      // Un stop opérateur désarme les timers pendus — sinon une cue
+      // armée ressuscite le move N secondes après le stop (revue M3).
+      void import('../useCuelistStore').then((m) =>
+        m.useCuelistStore.getState().cancelPendingTimers(),
+      );
+      void import('../../utils/timerBroadcast').then((m) => m.broadcastTimerCancel());
       await invoke('deactivate_move', { movementId, fadeDuration });
       delete _movementPositionsExternal[movementId];
       set((s) => {
@@ -159,6 +171,12 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
 
   stopAllMovements: async () => {
     try {
+      // Un stop opérateur désarme les timers pendus — sinon une cue
+      // armée ressuscite le move N secondes après le stop (revue M3).
+      void import('../useCuelistStore').then((m) =>
+        m.useCuelistStore.getState().cancelPendingTimers(),
+      );
+      void import('../../utils/timerBroadcast').then((m) => m.broadcastTimerCancel());
       await invoke('deactivate_all_moves', { fadeDuration: 0.0 });
       // Vider l'objet mutable
       for (const k of Object.keys(_movementPositionsExternal)) delete _movementPositionsExternal[k];

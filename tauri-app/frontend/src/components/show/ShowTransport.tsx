@@ -4,8 +4,8 @@ import { PanicButton } from '../ui/PanicButton';
 /// Transport de show unifié — Prev / GO / Next / Panic.
 ///
 /// Sémantique unique, partagée par toutes les surfaces :
-///   GO   = GO setlist (crossfade vers le prochain move — doGo)
-///   Prev/Next = recall cue précédente/suivante (kill+respawn — doCuePrev/Next)
+///   GO   = tire la cue armée (ou la suivante si rien d'armé)
+///   Prev/Next = naviguent le marqueur d'armement SANS tirer (modèle console)
 ///   Panic = stop-all + origines (PanicButton partagé)
 ///
 /// Les callbacks sont injectés — la même barre sert l'overlay conduite de
@@ -47,14 +47,14 @@ export const ShowTransport: React.FC<ShowTransportProps> = ({
         onClick={onPrev}
         disabled={prevDisabled}
         className={`${sideCls} bg-gray-800 text-gray-200 disabled:opacity-30 active:scale-95`}
-        title="Recall previous cue"
+        title="Arm previous cue (navigation — ne tire pas)"
       >
         ◀ Prev
       </button>
       <button
         onClick={onGo}
         className={`${goCls} bg-green-600 text-white active:scale-95`}
-        title="GO — crossfade to next move in setlist"
+        title="GO — tire la cue armée (ou la suivante)"
       >
         GO ▶
       </button>
@@ -62,7 +62,7 @@ export const ShowTransport: React.FC<ShowTransportProps> = ({
         onClick={onNext}
         disabled={nextDisabled}
         className={`${sideCls} bg-gray-800 text-gray-200 disabled:opacity-30 active:scale-95`}
-        title="Recall next cue"
+        title="Arm next cue (navigation — ne tire pas)"
       >
         Next ▶
       </button>

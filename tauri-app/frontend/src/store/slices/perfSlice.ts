@@ -48,7 +48,9 @@ export const createPerfSlice: StateCreator<PerfSlice, [], [], PerfSlice> = (set)
   refreshObjectStates: async () => {
     try {
       const states = await invoke<Record<number, string>>('get_object_states');
-      set({ objectStates: states });
+      // != null : un invoke en échec/vide ne doit pas effacer le dernier
+      // état connu — sinon la détachée verrait `undefined` broadcast.
+      if (states != null) set({ objectStates: states });
     } catch { /* non critique */ }
   },
   flowHealth: { psnRunning: false, psnAge: null, armed: true, showCmdAgeS: null },
@@ -59,14 +61,15 @@ export const createPerfSlice: StateCreator<PerfSlice, [], [], PerfSlice> = (set)
         invoke<boolean>('get_osc_armed'),
         invoke<number | null>('get_last_show_cmd_age'),
       ]);
-      set({ flowHealth: { psnRunning, psnAge, armed, showCmdAgeS } });
+      if (psnRunning != null && armed != null)
+        set({ flowHealth: { psnRunning, psnAge, armed, showCmdAgeS } });
     } catch { /* non critique */ }
   },
   emittedPositions: {},
   refreshEmittedPositions: async () => {
     try {
       const pos = await invoke<Record<number, [number, number, number]>>('get_emitted_positions');
-      set({ emittedPositions: pos });
+      if (pos != null) set({ emittedPositions: pos });
     } catch { /* non critique */ }
   },
   perceptual: { legibility_deg_s: {}, looming_ms: 0, vection: 0 },
@@ -77,7 +80,7 @@ export const createPerfSlice: StateCreator<PerfSlice, [], [], PerfSlice> = (set)
         looming_ms: number;
         vection: number;
       }>('get_perceptual_metrics');
-      set({ perceptual: p });
+      if (p != null) set({ perceptual: p });
     } catch { /* non critique */ }
   },
   showLog: [],
@@ -104,6 +107,10 @@ export type LiveStatePayload = {
   cueIndex: number;
   setlistIndex: number;
   soloSavedIds: string[];
+  /// slotId → movementId (null = arrêté) — vérité backend transitée :
+  /// les pads détachés affichent l'état réel, et un tap ne peut pas
+  /// lancer un doublon sur un slot déjà vivant (revue M5).
+  slotMovements: Record<string, string | null>;
 };
 
 /// Poll santé complet — écrit perfSlice + showStatusStore locaux, puis
@@ -126,8 +133,12 @@ async function pollLive(broadcast: boolean) {
     invoke<number | null>('get_last_show_cmd_age').catch(() => undefined),
     invoke<Record<number, [number, number, number]>>('get_manual_positions').catch(() => null),
   ]);
+  // `s` est un snapshot FIGÉ capturé avant les awaits — les refresh* ont
+  // produit un nouvel état depuis. patch/payload doivent le relire,
+  // sinon le voyant armed reste vrai ~3s après un disarm (revue M3).
+  const fresh = m.useGraphStore.getState();
   const patch: { parked?: number[]; consoleAge?: number | null; armed: boolean } = {
-    armed: s.flowHealth.armed,
+    armed: fresh.flowHealth.armed,
   };
   if (parked != null) patch.parked = parked;
   if (consoleAge !== undefined) patch.consoleAge = consoleAge ?? null;
@@ -140,16 +151,17 @@ async function pollLive(broadcast: boolean) {
   }
   if (!broadcast) return;
   const payload: LiveStatePayload = {
-    objectStates: s.objectStates,
-    flowHealth: s.flowHealth,
-    emittedPositions: s.emittedPositions,
-    perceptual: s.perceptual,
+    objectStates: fresh.objectStates,
+    flowHealth: fresh.flowHealth,
+    emittedPositions: fresh.emittedPositions,
+    perceptual: fresh.perceptual,
     parked: patch.parked ?? show.useShowStatusStore.getState().parked,
     consoleAge: patch.consoleAge ?? show.useShowStatusStore.getState().consoleAge,
     manualPositions: manualPositions ?? m.useGraphStore.getState().manualPositions,
     cueIndex: -1,
     setlistIndex: -1,
     soloSavedIds: [],
+    slotMovements: {},
   };
   // Indices volatiles — lus depuis les stores au moment du broadcast
   // (await, sinon le payload partirait avec les -1 par défaut).
@@ -158,6 +170,7 @@ async function pollLive(broadcast: boolean) {
   const g = m.useGraphStore.getState();
   payload.setlistIndex = g.currentSetlistIndex;
   payload.soloSavedIds = g.soloSavedIds;
+  payload.slotMovements = Object.fromEntries(g.moveSlots.map((s) => [s.id, s.movementId]));
   const { emit } = await import('@tauri-apps/api/event');
   void emit('live:state', payload).catch(() => {});
 }
@@ -179,6 +192,11 @@ if (isDetachedWindow()) {
           manualPositions: p.manualPositions,
           currentSetlistIndex: p.setlistIndex,
           soloSavedIds: p.soloSavedIds,
+          // États des pads = vérité de la fenêtre principale (les définitions
+          // viennent du storage local ; movementId vient du payload).
+          moveSlots: m.useGraphStore
+            .getState()
+            .moveSlots.map((s) => ({ ...s, movementId: p.slotMovements[s.id] ?? null })),
         }),
       );
       // Index cue — sinon NOW/NEXT détachés restaient à -1 (NOW/NEXT figés).
@@ -202,8 +220,13 @@ if (isDetachedWindow()) {
       void import('../useCuelistStore').then((cs) => cs.useCuelistStore.getState().loadFromStorage());
     } else if (e.key === 'stagespace-move-slots') {
       const slots = safeParseStoredJson<any[]>('stagespace-move-slots', []);
-      void import('../useGraphStore').then((m) =>
-        m.useGraphStore.setState({ moveSlots: slots }),
+      // normalizeSlot comme loadSlotsFromStorage — un slot persisté par
+      // une vieille version sans oscIndex casserait les lookups doSolo/
+      // doSlot (revue M6).
+      void import('./moveSlotsSlice').then(({ normalizeSlot }) =>
+        import('../useGraphStore').then((m) =>
+          m.useGraphStore.setState({ moveSlots: slots.map(normalizeSlot) }),
+        ),
       );
     } else if (e.key === 'stagespace-move-setlist') {
       const order = safeParseStoredJson<string[]>('stagespace-move-setlist', []);
@@ -235,6 +258,19 @@ import('../../utils/tauri').then(({ safeListen }) =>
   safeListen<{ label: string }>('show-log', (e) =>
     import('../useGraphStore').then((m) =>
       m.useGraphStore.getState().pushShowLog(e.payload.label),
+    ),
+  ),
+);
+
+// Les timers pre_wait/follow vivent dans CHAQUE webview — annuler dans
+// une seule fenêtre laisse les autres armées : un panic dans ?view=run
+// ne toucherait pas le setTimeout de la fenêtre principale (revue H1).
+// Backend (sink panic/stop) et actions frontend émettent cet event —
+// chaque contexte annule SES timers.
+import('../../utils/tauri').then(({ safeListen }) =>
+  safeListen('timers:cancel', () =>
+    import('../useCuelistStore').then((m) =>
+      m.useCuelistStore.getState().cancelPendingTimers(),
     ),
   ),
 );

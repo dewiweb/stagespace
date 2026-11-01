@@ -5,12 +5,14 @@
 ///   park   = gelé par panic/park (ambre — survit aux recalls)
 ///   hold   = fin de one-shot retenue (cyan)
 ///   psn    = tracker externe PSN/RTTrP (violet)
+///   freeze = stase attention (indigo — obj figé par attention_focus)
 /// Un seul module : radar, pads, chips et 3D ne peuvent plus diverger.
 export const SOURCE_HEX: Record<string, string> = {
   park: '#f59e0b',
   psn: '#a855f7',
   hold: '#22d3ee',
   manual: '#f97316',
+  freeze: '#818cf8',
   move: '#22c55e',
   track: '#6b7280',
 };
@@ -24,6 +26,7 @@ export const SOURCE_TEXT: Record<string, string> = {
   psn: 'text-purple-400',
   hold: 'text-cyan-400',
   manual: 'text-orange-400',
+  freeze: 'text-indigo-400',
   move: 'text-green-400',
   track: 'text-gray-500',
 };
@@ -37,6 +40,7 @@ export const SOURCE_CHIP: Record<string, string> = {
   psn: 'bg-purple-900 text-purple-300',
   hold: 'bg-cyan-900 text-cyan-300',
   manual: 'bg-orange-900 text-orange-300',
+  freeze: 'bg-indigo-900 text-indigo-300',
   move: 'bg-green-900 text-green-300',
   track: 'bg-gray-800 text-gray-400',
 };
@@ -47,6 +51,7 @@ export const SOURCE_LABEL: Record<string, string> = {
   psn: 'PSN tracker',
   hold: 'hold (fin de move retenue)',
   manual: 'position manuelle',
+  freeze: 'stase attention',
   move: 'move actif',
   track: 'track',
 };
