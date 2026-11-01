@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { useCuelistStore, type CueData } from '../store/useCuelistStore';
 import { useGraphStore } from '../store/useGraphStore';
-import { doRehearsal, scoreExport, scoreImport, doTape, tapeImport } from '../utils/liveActions';
+import { doRehearsal, scoreExport, scoreImport, doTape, tapeImport, doCuePrev, doCueNext, doCueRecall } from '../utils/liveActions';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import { useSignalGraphStore } from '../store/useSignalGraphStore';
 import { ConfirmModal } from './ui/ConfirmModal';
@@ -16,12 +16,11 @@ export const CuelistPanel: React.FC = () => {
   const currentCueIndex = useCuelistStore((s) => s.currentCueIndex);
   const isRecalling = useCuelistStore((s) => s.isRecalling);
   const storeCue = useCuelistStore((s) => s.storeCue);
-  const recallCue = useCuelistStore((s) => s.recallCue);
+  const isRecalling = useCuelistStore((s) => s.isRecalling);
   const pending = useCuelistStore((s) => s.pending);
   const deleteCue = useCuelistStore((s) => s.deleteCue);
   const updateCue = useCuelistStore((s) => s.updateCue);
-  const goToNextCue = useCuelistStore((s) => s.goToNextCue);
-  const goToPreviousCue = useCuelistStore((s) => s.goToPreviousCue);
+  // Rappels/next/prev passent par liveActions (guard recallBusy unifié).
 
   const [newCueName, setNewCueName] = useState('');
   const [newCueFade, setNewCueFade] = useState(0.5);
@@ -126,7 +125,7 @@ export const CuelistPanel: React.FC = () => {
         <div className="flex-1" />
         {/* GO buttons */}
         <button
-          onClick={() => goToPreviousCue()}
+          onClick={() => doCuePrev('cuelist')}
           disabled={currentCueIndex <= 0 || isRecalling}
           className="px-1.5 py-0.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 rounded disabled:opacity-30"
           title="Previous cue"
@@ -137,7 +136,7 @@ export const CuelistPanel: React.FC = () => {
           {currentCueIndex + 1}/{cues.length}
         </span>
         <button
-          onClick={() => goToNextCue()}
+          onClick={() => doCueNext('cuelist')}
           disabled={currentCueIndex + 1 >= cues.length || isRecalling}
           className="px-1.5 py-0.5 text-xs bg-purple-800 hover:bg-purple-700 text-purple-200 rounded disabled:opacity-30"
           title="Next cue — RECALL replaces the whole scene (kill + respawn). Setlist GO = Enter."
@@ -231,7 +230,7 @@ export const CuelistPanel: React.FC = () => {
                 onClick={() => setArmedCueId(cue.id === armedCueId ? null : cue.id)}
                 onDoubleClick={() => {
                   setArmedCueId(null);
-                  recallCue(cue.id);
+                  doCueRecall(cue.id);
                 }}
                 title={idx === currentCueIndex ? 'Current cue' : 'Click = arm · double-click = RECALL (replaces the whole scene)'}
               >
