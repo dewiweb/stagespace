@@ -21,6 +21,7 @@ import { SOURCE_CHIP } from '../utils/sourceColors';
 import { isDetachedWindow } from '../utils/safeStorage';
 import { safeInvoke, silentCatch } from '../utils/tauri';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { ManualReleaseBar } from './ManualReleaseBar';
 import { toast } from '../utils/toast-helpers';
 import { type NodeParamValue } from './nodeParamSchema';
 import { NodeParamsPanel } from './NodeParamsPanel';
@@ -1035,6 +1036,7 @@ const ParkedChip: React.FC<{ parked: number[]; compact?: boolean }> = ({ parked,
           )}
         </div>
       )}
+      <ManualReleaseBar />
     </div>
   );
 };

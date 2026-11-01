@@ -52,7 +52,9 @@ export const Radar2D: React.FC = () => {
         const dt = Math.max(0.05, (Date.now() - drag.t) / 1000);
         const scale = 220 / rect.width / k; // px → viewBox → mètres
         const vx = ((e.clientX - drag.x) * scale) / dt;
-        const vy = (-(e.clientY - drag.y) * scale) / dt;
+        // cy = worldY*k — le +y monde rend vers le BAS de l'écran (FRONT
+        // en haut = -y). Drag vers le haut (dy<0) → vy<0 : PAS de négation.
+        const vy = ((e.clientY - drag.y) * scale) / dt;
         if (Math.hypot(vx, vy) > 0.5) doThrow(drag.id, vx, vy, 0);
       }}
     >

@@ -26,6 +26,7 @@ const payload: LiveStatePayload = {
   setlistIndex: 1,
   soloSavedIds: ['s1', 's2'],
   slotMovements: { s1: 'mv-live-1', s2: null },
+  movements: [{ id: 'mv-live-1', name: 'Spiral', is_active: true }],
 };
 
 describe('live:state — fenêtre détachée (?view=run)', () => {

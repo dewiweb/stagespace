@@ -111,6 +111,11 @@ export type LiveStatePayload = {
   /// les pads détachés affichent l'état réel, et un tap ne peut pas
   /// lancer un doublon sur un slot déjà vivant (revue M5).
   slotMovements: Record<string, string | null>;
+  /// Liste des moves actifs — les détachées ne les apprennent que par
+  /// broadcast : sans eux la 3D détachée affiche "No move running" par-
+  /// dessus des positions qui arrivent pourtant (movements n'est jamais
+  /// re-fetché côté détachée — pas de poll backend).
+  movements: { id: string; name: string; is_active: boolean }[];
 };
 
 /// Poll santé complet — écrit perfSlice + showStatusStore locaux, puis
@@ -162,6 +167,7 @@ async function pollLive(broadcast: boolean) {
     setlistIndex: -1,
     soloSavedIds: [],
     slotMovements: {},
+    movements: [],
   };
   // Indices volatiles — lus depuis les stores au moment du broadcast
   // (await, sinon le payload partirait avec les -1 par défaut).
@@ -171,6 +177,7 @@ async function pollLive(broadcast: boolean) {
   payload.setlistIndex = g.currentSetlistIndex;
   payload.soloSavedIds = g.soloSavedIds;
   payload.slotMovements = Object.fromEntries(g.moveSlots.map((s) => [s.id, s.movementId]));
+  payload.movements = g.movements.map((m: any) => ({ id: m.id, name: m.name, is_active: m.is_active ?? true }));
   const { emit } = await import('@tauri-apps/api/event');
   void emit('live:state', payload).catch(() => {});
 }
@@ -189,6 +196,7 @@ if (isDetachedWindow()) {
           flowHealth: p.flowHealth,
           emittedPositions: p.emittedPositions,
           perceptual: p.perceptual,
+          movements: (p.movements ?? []) as any,
           manualPositions: p.manualPositions,
           currentSetlistIndex: p.setlistIndex,
           soloSavedIds: p.soloSavedIds,
