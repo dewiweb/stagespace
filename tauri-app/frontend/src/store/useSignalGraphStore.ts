@@ -75,7 +75,7 @@ interface SignalGraphState {
 
   // Compile et pousse le graph signal au backend (scope global —
   // `update_signal_graph` avec movement_id null → MergeRuntime).
-  pushSignalGraph: () => Promise<void>;
+  pushSignalGraph: () => Promise<boolean>;
 
   resetToDefault: () => void;
 }
@@ -127,10 +127,14 @@ export const useSignalGraphStore = create<SignalGraphState>((set, get) => ({
     const ctx = slotId ?? 'global';
     if (ctx === get().context) return;
     if (ctx === 'global') {
+      // Relire le storage frais — _stored est figé au chargement du
+      // module : revenir à 'global' après un contexte slot écrasait
+      // silencieusement tous les edits de session.
+      const fresh = loadFromStorage();
       set({
         context: 'global',
-        nodes: _stored?.nodes ?? _defaultGraph.nodes,
-        edges: _stored?.edges ?? _defaultGraph.edges,
+        nodes: fresh?.nodes ?? _defaultGraph.nodes,
+        edges: fresh?.edges ?? _defaultGraph.edges,
       });
     } else {
       set({
@@ -192,12 +196,14 @@ export const useSignalGraphStore = create<SignalGraphState>((set, get) => ({
         ctx === 'global'
           ? null
           : (useGraphStore.getState().moveSlots.find((s) => s.id === ctx)?.movementId ?? null);
-      if (ctx !== 'global' && !movementId) return;
+      if (ctx !== 'global' && !movementId) return true;
       await invoke('update_signal_graph', { graphJson, movementId });
+      return true;
     } catch (e) {
       console.error('[pushSignalGraph] Failed:', e);
       const { toast } = await import('../utils/toast-helpers');
       toast.error(`Signal graph push failed — macro modulation may be stale: ${e}`);
+      return false;
     }
   },
 

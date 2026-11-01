@@ -466,13 +466,13 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
         nodes: raw.globalGraph.nodes,
         edges: raw.globalGraph.edges,
       });
-      try {
-        await useGlobalGraphStore.getState().pushGlobalGraph();
-      } catch (e) {
-        console.error('Failed to push restored global graph:', e);
+      // push*() retournent un succès — le rollback est réel (les pushes
+      // catchaient en interne : le revert n'exécutait jamais).
+      const ok = await useGlobalGraphStore.getState().pushGlobalGraph();
+      if (!ok) {
         useGlobalGraphStore.setState({ nodes: prevNodes, edges: prevEdges });
-        await useGlobalGraphStore.getState().pushGlobalGraph().catch(silentCatch);
-        toast.error(`Show loaded but global graph failed to apply: ${e}`);
+        await useGlobalGraphStore.getState().pushGlobalGraph();
+        toast.error('Show loaded but global graph failed to apply — reverted');
       }
     }
 
@@ -485,13 +485,11 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
         nodes: raw.signalGraph.nodes,
         edges: raw.signalGraph.edges,
       });
-      try {
-        await useSignalGraphStore.getState().pushSignalGraph();
-      } catch (e) {
-        console.error('Failed to push restored signal graph:', e);
+      const ok = await useSignalGraphStore.getState().pushSignalGraph();
+      if (!ok) {
         useSignalGraphStore.setState({ nodes: prevNodes, edges: prevEdges });
-        await useSignalGraphStore.getState().pushSignalGraph().catch(silentCatch);
-        toast.error(`Show loaded but signal graph failed to apply: ${e}`);
+        await useSignalGraphStore.getState().pushSignalGraph();
+        toast.error('Show loaded but signal graph failed to apply — reverted');
       }
     }
 

@@ -74,7 +74,7 @@ interface GlobalGraphState {
   toggleEnabled: () => void;
 
   // Compiler et pousser le graph global au backend
-  pushGlobalGraph: () => Promise<void>;
+  pushGlobalGraph: () => Promise<boolean>;
 
   // Reset au graph par défaut
   resetToDefault: () => void;
@@ -136,7 +136,7 @@ export const useGlobalGraphStore = create<GlobalGraphState>((set, get) => ({
 
   pushGlobalGraph: async () => {
     const { nodes, edges, isGlobalGraphEnabled } = get();
-    if (!isGlobalGraphEnabled) return;
+    if (!isGlobalGraphEnabled) return true;
 
     // Préparer le graph pour le backend — format React Flow (data.type, data.params)
     // Le parser Rust (build_graph_from_json) attend ce format
@@ -169,11 +169,13 @@ export const useGlobalGraphStore = create<GlobalGraphState>((set, get) => ({
       const { holProject, manualOscIds } = useGraphStore.getState();
       const origin = computeCentroid(holProject, [], manualOscIds);
       await invoke('set_global_origin', { origin });
+      return true;
     } catch (e) {
       console.error('[pushGlobalGraph] Failed:', e);
       // Le post-process global ne correspond plus à l'éditeur — critique en live.
       const { toast } = await import('../utils/toast-helpers');
       toast.error(`Global graph push failed — post-processing may be stale: ${e}`);
+      return false;
     }
   },
 
