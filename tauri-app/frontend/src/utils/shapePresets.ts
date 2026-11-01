@@ -672,6 +672,75 @@ export const SHAPE_PRESETS: ShapePreset[] = [
       [{ type: 'Rotate', position: { x: 480, y: 180 }, params: { angleX: 0.25, angleY: 0, angleZ: 0 } }],
     ),
   },
+
+  // ═══════════════ SMALLEY — les gestes archétypaux de l'acousmatique ═══
+  // Denis Smalley, spectromorphologie : les gestes spatiaux que l'oreille
+  // reconnaît — swirling, flocking, loom, drift, turbulence, scatter…
+
+  {
+    id: 'smalley-swirl',
+    name: 'Swirl',
+    icon: '🌀',
+    description: 'Smalley — swirling : rotation dense et virevoltante autour du centre',
+    category: 'smalley',
+    build: (n) => baseFlow('Spiral', { n_objects: n, radius: 1.2, speed: 2.2, expansion: 0.6, plane: 'xz', phase_offset: true }, n, 6.0),
+  },
+  {
+    id: 'smalley-flock',
+    name: 'Flock',
+    icon: '🐦',
+    description: 'Smalley — flocking : essaim cohérent, mouvement collectif vivant',
+    category: 'smalley',
+    build: (n) => baseFlow('Swarm', { n_objects: n, separation: 0.4, alignment: 0.7, cohesion: 0.6, max_speed: 0.5, seed: 42 }, n, 8.0),
+  },
+  {
+    id: 'smalley-loom',
+    name: 'Loom',
+    icon: '🎯',
+    description: 'Smalley — loom : la source grandit et approche — accent émotionnel #1',
+    category: 'smalley',
+    build: (n) => baseFlow('Converge', { n_objects: n, target: [0, 0, -1.5], speed: 0.8, spring: 0.5 }, n, 5.0),
+  },
+  {
+    id: 'smalley-drift',
+    name: 'Drift',
+    icon: '🍃',
+    description: 'Smalley — drifting : dérive lente et inattendue, hors-attention',
+    category: 'smalley',
+    build: (n) => baseFlow('PerlinNoise', { n_objects: n, intensity: 0.6, smoothness: 0.2, seed: 7 }, n, 10.0),
+  },
+  {
+    id: 'smalley-turbulence',
+    name: 'Turbulence',
+    icon: '🌪',
+    description: 'Smalley — turbulence : agitation chaotique à haute intensité',
+    category: 'smalley',
+    build: (n) => baseFlow('PerlinNoise', { n_objects: n, intensity: 2.5, smoothness: 0.8, seed: 99 }, n, 6.0),
+  },
+  {
+    id: 'smalley-scatter',
+    name: 'Scatter',
+    icon: '💥',
+    description: 'Smalley — scatter : dispersion rebondissante, énergie explosive',
+    category: 'smalley',
+    build: (n) => baseFlow('Bouncing', { n_objects: n, gravity: 6.0, bounce: 0.7, initial_height: 3.0, spread: 2.0 }, n, 5.0),
+  },
+  {
+    id: 'smalley-shadow',
+    name: 'Shadow',
+    icon: '👥',
+    description: 'Smalley — shadowing : poursuite orbitale, la source traque sa cible',
+    category: 'smalley',
+    build: (n) => baseFlow('Follow', { n_objects: n, mode: 'orbit', speed: 1.4, distance: 1.2, orbit_speed: 0.8, orbit_dir: 1, responsiveness: 0.15 }, n, 8.0),
+  },
+  {
+    id: 'smalley-elastic',
+    name: 'Elastic',
+    icon: '🏹',
+    description: 'Smalley — elastic : traction-rebond, énergie de rappel',
+    category: 'smalley',
+    build: (n) => baseFlow('Spring', { n_objects: n, stiffness: 2.5, damping: 0.3, target: [1.5, 0, -1.0] }, n, 5.0),
+  },
 ];
 
 /// Help runnable (inspiration help-patches Pd/plugdata) : presets qui utilisent
