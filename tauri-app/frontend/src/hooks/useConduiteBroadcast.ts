@@ -7,7 +7,7 @@ import { emit } from '@tauri-apps/api/event';
 import { safeListen } from '../utils/tauri';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { useGraphStore } from '../store/useGraphStore';
-import { doArm, doCueNext, doCuePrev, doCueRecall, doCueRecallById, doGo, doPanic, doSlot, doSlotStop, doSolo, doUnsolo } from '../utils/liveActions';
+import { doArm, doCueNext, doCuePrev, doCueRecall, doCueRecallById, doCueArm, doCueGo, doGo, doMacro, doTcChase, doTcFps, doPanic, doSlot, doSlotStop, doSolo, doUnsolo } from '../utils/liveActions';
 import { useShowStatusStore } from '../store/useShowStatusStore';
 import { cueLabel, tcStr } from '../utils/showFormat';
 
@@ -62,6 +62,23 @@ export function useConduiteBroadcast() {
         doSolo(Number(p.slice(5)), 'conduite-window');
         return;
       }
+      if (p.startsWith('cuearm:')) {
+        doCueArm(p.slice(7), 'conduite-window');
+        return;
+      }
+      if (p.startsWith('macro:')) {
+        const [name, v] = p.slice(6).split(':');
+        void doMacro(name, Number(v), 'conduite-window');
+        return;
+      }
+      if (p.startsWith('tcchase:')) {
+        doTcChase(p.endsWith('1'), 'conduite-window');
+        return;
+      }
+      if (p.startsWith('tcfps:')) {
+        void doTcFps(Number(p.slice(6)), 'conduite-window');
+        return;
+      }
       switch (p) {
         case 'go':
           doGo();
@@ -80,6 +97,9 @@ export function useConduiteBroadcast() {
           break;
         case 'unsolo':
           doUnsolo('conduite-window');
+          break;
+        case 'cuego':
+          doCueGo('conduite-window');
           break;
       }
     }).then((u) => (un = u));

@@ -435,6 +435,23 @@ pub enum ShowCommand {
     /// `/stagespace/rehearsal <record|stop|play|clear>` — capture de
     /// répétition : bande de commandes horodatée du busking, rejouée.
     Rehearsal(String),
+    /// `/stagespace/cue/arm <n>` — arme une cue sans la tirer (modèle
+    /// console : arm/nav ne tirent jamais, go tire l'armée).
+    CueArm(String),
+    /// `/stagespace/cue/go` — tire la cue armée, ou la suivante si rien
+    /// d'armé — parité avec le GO de la surface conduite.
+    CueGo,
+    /// `/stagespace/macro <name> <v>` — macro globale : speed, scale,
+    /// shift_x/y/z, yaw, pitch, roll, radius_scale, height_offset.
+    Macro(String, f64),
+    /// `/stagespace/timecode/chase <0|1>` — chase TC on/off (frontend).
+    TimecodeChase(bool),
+    /// `/stagespace/timecode/fps <n>` — fps du format HH:MM:SS:FF.
+    TimecodeFps(f64),
+    /// `/stagespace/positions` — dump des positions émises : le demandeur
+    /// reçoit `/stagespace/pos/state <obj> <x> <y> <z>` par objet, répondu
+    /// par le backend même sans webview.
+    PositionsQuery,
 }
 
 type ShowSink = Arc<dyn Fn(ShowCommand, std::net::SocketAddr) + Send + Sync>;
@@ -468,6 +485,60 @@ fn parse_show_command(addr: &str, args: &[OscType], fps: f64) -> Option<ShowComm
             });
             Some(ShowCommand::CueRecall(id, fade))
         }
+        "cue/arm" => args
+            .first()
+            .and_then(|a| match a {
+                OscType::String(s) => Some(s.clone()),
+                OscType::Int(i) => Some(i.to_string()),
+                OscType::Long(i) => Some(i.to_string()),
+                OscType::Float(f) => Some(format!("{f}")),
+                OscType::Double(f) => Some(format!("{f}")),
+                _ => None,
+            })
+            .map(ShowCommand::CueArm),
+        "cue/go" => Some(ShowCommand::CueGo),
+        "macro" => {
+            let name = args.first().and_then(|a| match a {
+                OscType::String(s) => Some(s.clone()),
+                _ => None,
+            })?;
+            let v = args.get(1).and_then(|a| match a {
+                OscType::Float(v) => Some(*v as f64),
+                OscType::Double(v) => Some(*v),
+                OscType::Int(v) => Some(*v as f64),
+                OscType::Long(v) => Some(*v as f64),
+                OscType::String(s) => s.parse::<f64>().ok(),
+                _ => None,
+            })?;
+            Some(ShowCommand::Macro(name, v))
+        }
+        "timecode/chase" => args
+            .first()
+            .and_then(|a| match a {
+                OscType::Int(v) => Some(*v != 0),
+                OscType::Long(v) => Some(*v != 0),
+                OscType::Float(v) => Some(*v != 0.0),
+                OscType::Double(v) => Some(*v != 0.0),
+                OscType::String(s) => match s.as_str() {
+                    "1" | "on" | "true" => Some(true),
+                    "0" | "off" | "false" => Some(false),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .map(ShowCommand::TimecodeChase),
+        "timecode/fps" => args
+            .first()
+            .and_then(|a| match a {
+                OscType::Float(v) => Some(*v as f64),
+                OscType::Double(v) => Some(*v),
+                OscType::Int(v) => Some(*v as f64),
+                OscType::Long(v) => Some(*v as f64),
+                OscType::String(s) => s.parse::<f64>().ok(),
+                _ => None,
+            })
+            .map(ShowCommand::TimecodeFps),
+        "positions" => Some(ShowCommand::PositionsQuery),
         "park" => args
             .first()
             .and_then(|a| match a {
@@ -848,6 +919,12 @@ impl OscReceiver {
     /// NACK ciblé : `/stagespace/nack <reason>` vers l'expéditeur d'une
     /// commande rejetée (busy/not-found) — l'ack confirme la réception,
     /// le nack signale que rien n'a été exécuté.
+    /// Handle du socket de réponse — le show-sink backend peut écrire au
+    /// demandeur sans webview (feedback positions).
+    pub fn reply_socket_handle(&self) -> Arc<Mutex<Option<Arc<UdpSocket>>>> {
+        self.shared.reply_socket.clone()
+    }
+
     pub fn send_show_nack(&self, addr: std::net::SocketAddr, reason: &str) {
         let socket = self
             .shared
@@ -2346,4 +2423,19 @@ mod show_control_tests {
         }
         r.stop();
     }
+}
+
+/// Encode `/stagespace/pos/state <obj> <x> <y> <z>` — réponse feedback au
+/// query `positions` (émise par le sink backend, sans webview requise).
+pub fn encode_position_feedback(obj: usize, pos: [f64; 3]) -> Option<Vec<u8>> {
+    encode(&OscPacket::Message(OscMessage {
+        addr: "/stagespace/pos/state".to_string(),
+        args: vec![
+            OscType::Int(obj as i32),
+            OscType::Float(pos[0] as f32),
+            OscType::Float(pos[1] as f32),
+            OscType::Float(pos[2] as f32),
+        ],
+    }))
+    .ok()
 }

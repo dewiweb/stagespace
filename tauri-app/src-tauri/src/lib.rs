@@ -313,6 +313,9 @@ pub fn run() {
                     let stop_movements = state.movements.clone();
                     let stop_merge = state.merge_runtime.clone();
                     let stop_gen = state.deactivate_gen.clone();
+                    // Socket de réponse partagé — le sink peut répondre
+                    // au demandeur d'un `positions` query sans webview.
+                    let reply_handle = receiver.reply_socket_handle();
                     receiver.set_show_sink(move |cmd, addr| {
                         match cmd {
                             stagespace_engines::osc_receiver::ShowCommand::Panic
@@ -361,6 +364,26 @@ pub fn run() {
                                 // setTimeout armé dans une autre fenêtre
                                 // (revue H1 — sinon la cue tire après panic).
                                 let _ = app_handle.emit("timers:cancel", ());
+                            }
+                            stagespace_engines::osc_receiver::ShowCommand::PositionsQuery => {
+                                // `/stagespace/positions` — dump des positions
+                                // émises au demandeur (console/companion).
+                                // Backend-direct : pas de webview requise.
+                                let merge =
+                                    stop_merge.lock().unwrap_or_else(|e| e.into_inner());
+                                let positions = merge.emitted_positions();
+                                let sock = reply_handle
+                                    .lock()
+                                    .unwrap_or_else(|e| e.into_inner())
+                                    .clone();
+                                if let Some(sock) = sock {
+                                    for (obj, pos) in positions {
+                                        if let Some(bytes) = stagespace_engines::osc_receiver::encode_position_feedback(obj, pos)
+                                        {
+                                            let _ = sock.send_to(&bytes, addr);
+                                        }
+                                    }
+                                }
                             }
                             _ => {}
                         }

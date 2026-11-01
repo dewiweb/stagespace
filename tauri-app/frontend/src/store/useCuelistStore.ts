@@ -25,6 +25,11 @@ interface CuelistState {
   /// Timer pendu (pre-wait ou follow) — un seul à la fois, annulé par
   /// toute action manuelle/TC/panic.
   pending: PendingCueAction | null;
+  /// Cue armée — modèle console : arm/nav ne tirent JAMAIS, GO tire
+  /// l'armée (ou la suivante si null). Store-level : le fil OSC
+  /// (/stagespace/cue/arm|go) et les fenêtres détachées y accèdent.
+  armedCueId: string | null;
+  armCue: (id: string | null) => void;
   /// Chasse timecode activée (persistée).
   tcChaseEnabled: boolean;
   /// Dernier timecode reçu (secondes) + horodatage pour "TC lost".
@@ -93,6 +98,8 @@ export const useCuelistStore = create<CuelistState>((set, get) => ({
   cues: loadFromStorage(),
   currentCueIndex: -1,
   isRecalling: false,
+  armedCueId: null,
+  armCue: (id) => set({ armedCueId: id }),
   pending: null,
   tcChaseEnabled: safeParseStoredJson<boolean>(TC_CHASE_KEY, false),
   lastTimecode: null,

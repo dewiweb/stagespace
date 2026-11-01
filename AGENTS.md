@@ -180,6 +180,12 @@ dispatches to the same functions as the keyboard shortcuts (`liveActions.ts`).
 | `/stagespace/panic` | panic (stop all + origins) | Esc |
 | `/stagespace/stop` | stop all moves | — |
 | `/stagespace/timecode <s|"HH:MM:SS:FF">` | TC chase (fps 24/25/30, default 25, `set_timecode_fps`) | — |
+| `/stagespace/timecode/chase <0|1>` | chase TC on/off | — |
+| `/stagespace/timecode/fps <n>` | fps du format TC string | — |
+| `/stagespace/cue/arm <n>` | arme une cue sans la tirer (modèle console) | — |
+| `/stagespace/cue/go` | tire la cue armée (ou la suivante si rien d'armé) | — |
+| `/stagespace/macro <name> <v>` | macro globale : speed, scale, shift_x/y/z, yaw, pitch, roll, radius_scale, height_offset | — |
+| `/stagespace/positions` | dump positions émises → `/stagespace/pos/state <obj> <x> <y> <z>` par objet (backend-direct, pas de webview) | — |
 | `/stagespace/arm` | re-arm OSC output (quitte le dry-run) | — |
 | `/stagespace/disarm` | dry-run — tout tourne, rien ne part au renderer | — |
 | `/stagespace/status` | force le renvoi du feedback cue au contrôleur | — |

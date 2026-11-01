@@ -131,6 +131,67 @@ export function doCueRecallById(id: string, fadeOverride?: number, from?: string
   void s.recallCue(id, fadeOverride != null ? { fadeOverride } : undefined);
 }
 
+/** /stagespace/cue/arm <n> — arme une cue SANS la tirer (modèle console :
+ *  navigation pure — click unique dans la cue list fait la même chose). */
+export function doCueArm(n: string, from?: string) {
+  if (routeDetached(`cuearm:${n}`)) return;
+  logAction('doCueArm', from);
+  const s = useCuelistStore.getState();
+  const cue = s.cues.find((c) => c.cue_number === n) ?? s.cues[Number(n) - 1];
+  if (!cue) {
+    nack(from, `not-found: cue ${n}`);
+    return;
+  }
+  s.armCue(s.armedCueId === cue.id ? null : cue.id);
+}
+
+/** /stagespace/cue/go — tire la cue armée (ou la suivante si rien d'armé). */
+export function doCueGo(from?: string) {
+  if (routeDetached('cuego')) return;
+  logAction('doCueGo', from);
+  const armed = useCuelistStore.getState().armedCueId;
+  if (armed) doCueRecallById(armed, undefined, from);
+  else doCueNext(from);
+}
+
+/// Alias OSC → clés macros du store (tolérant aux variantes consoles).
+const MACRO_KEYS: Record<string, string> = {
+  speed: 'speed', scale: 'scale',
+  shiftx: 'shiftX', shifty: 'shiftY', shiftz: 'shiftZ',
+  shift_x: 'shiftX', shift_y: 'shiftY', shift_z: 'shiftZ',
+  yaw: 'yaw', pitch: 'pitch', roll: 'roll',
+  radius: 'radius_scale', radius_scale: 'radius_scale',
+  height: 'height_offset', height_offset: 'height_offset',
+};
+
+/** /stagespace/macro <name> <v> — macro globale depuis le fil (fader console). */
+export async function doMacro(name: string, v: number, from?: string) {
+  if (routeDetached(`macro:${name}:${v}`)) return;
+  logAction('doMacro', from);
+  const key = MACRO_KEYS[name.toLowerCase()];
+  if (!key) {
+    nack(from, `unknown-macro: ${name}`);
+    return;
+  }
+  const st = useGraphStore.getState();
+  st.setMacros({ [key]: v } as Record<string, number>);
+  await st.pushMacrosToRuntime();
+}
+
+/** /stagespace/timecode/chase <0|1> — chase TC on/off. */
+export function doTcChase(on: boolean, from?: string) {
+  if (routeDetached(`tcchase:${on ? 1 : 0}`)) return;
+  logAction('doTcChase', from);
+  useCuelistStore.getState().setTcChaseEnabled(on);
+}
+
+/** /stagespace/timecode/fps <n> — fps du format HH:MM:SS:FF. */
+export async function doTcFps(fps: number, from?: string) {
+  if (routeDetached(`tcfps:${fps}`)) return;
+  logAction('doTcFps', from);
+  await invoke('set_timecode_fps', { fps }).catch((e) => toast.error('TC fps failed: ' + e));
+}
+
 /** Arm/disarm OSC — dry-run pilotable depuis la console (set_osc_armed). */
 export function doArm(armed: boolean, from?: string) {
   logAction('doArm', from);

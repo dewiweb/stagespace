@@ -4,7 +4,7 @@
 import { useEffect } from 'react';
 import { safeListen } from '../utils/tauri';
 import { useCuelistStore } from '../store/useCuelistStore';
-import { doGo, doCueNext, doCuePrev, doCueRecall, doPanic, doStop, doPark, doUnpark, doArm, doStatus, doSlot, doSlotStop, doSolo, doUnsolo, doSetPosition, doClearPosition, doClearAllPositions, doSetTrackPosition, doSoundcheck, doThrow, doSpatial, doAttention, doGesture, doRehearsal } from '../utils/liveActions';
+import { doGo, doCueNext, doCuePrev, doCueRecall, doCueArm, doCueGo, doMacro, doTcChase, doTcFps, doPanic, doStop, doPark, doUnpark, doArm, doStatus, doSlot, doSlotStop, doSolo, doUnsolo, doSetPosition, doClearPosition, doClearAllPositions, doSetTrackPosition, doSoundcheck, doThrow, doSpatial, doAttention, doGesture, doRehearsal } from '../utils/liveActions';
 import type { ShowCommand } from '../types/generated/ShowCommand';
 
 interface ShowControlEvent {
@@ -104,6 +104,22 @@ export function useShowControl() {
             case 'Rehearsal':
               doRehearsal(cmd.value ?? 'play', from);
               break;
+            case 'CueArm':
+              if (cmd.value != null) doCueArm(String(cmd.value), from);
+              break;
+            case 'CueGo':
+              doCueGo(from);
+              break;
+            case 'Macro':
+              if (cmd.value != null) void doMacro(cmd.value[0], cmd.value[1], from);
+              break;
+            case 'TimecodeChase':
+              if (cmd.value != null) doTcChase(Boolean(cmd.value), from);
+              break;
+            case 'TimecodeFps':
+              if (cmd.value != null) void doTcFps(cmd.value, from);
+              break;
+            // PositionsQuery : répondu côté backend (sink) — rien ici.
           }
         });
         if (cancelled) u();
