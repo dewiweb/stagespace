@@ -388,12 +388,15 @@ impl OscSender {
                 // Convention interne : azim 0 = front (+Y), >0 vers +X →
                 // atan2(x, y) et non atan2(y, x) (qui mesurait depuis +X).
                 let azimuth = pos.x.atan2(pos.y).to_degrees();
-                let distance = (pos.x.powi(2) + pos.y.powi(2)).sqrt();
-                let elevation = if distance > 0.0 {
-                    pos.z.atan2(distance).to_degrees()
+                let horizontal = (pos.x.powi(2) + pos.y.powi(2)).sqrt();
+                let elevation = if horizontal > 0.0 {
+                    pos.z.atan2(horizontal).to_degrees()
                 } else {
                     0.0
                 };
+                // Distance = norme 3D — une source sur l'axe Z avait dist=0
+                // (2D) → elle s'effondrait sur l'auditeur.
+                let distance = pos.norm();
                 (
                     self.position_address(osc_id),
                     vec![azimuth, elevation, distance],
@@ -415,12 +418,13 @@ impl OscSender {
                 // Generic Polar — UN seul message à 3 valeurs (azimuth,
                 // elevation, distance) sur l'adresse de base /object/{id}
                 let azimuth = pos.x.atan2(pos.y).to_degrees();
-                let distance = (pos.x.powi(2) + pos.y.powi(2)).sqrt();
-                let elevation = if distance > 0.0 {
-                    pos.z.atan2(distance).to_degrees()
+                let horizontal = (pos.x.powi(2) + pos.y.powi(2)).sqrt();
+                let elevation = if horizontal > 0.0 {
+                    pos.z.atan2(horizontal).to_degrees()
                 } else {
                     0.0
                 };
+                let distance = pos.norm();
                 (
                     self.position_address(osc_id),
                     vec![azimuth, elevation, distance],
@@ -429,12 +433,13 @@ impl OscSender {
             OscProfile::ADMOSC => {
                 // ADM-OSC - Ambisonics panning with spherical coordinates
                 let azimuth = pos.x.atan2(pos.y).to_degrees();
-                let distance = (pos.x.powi(2) + pos.y.powi(2)).sqrt();
-                let elevation = if distance > 0.0 {
-                    pos.z.atan2(distance).to_degrees()
+                let horizontal = (pos.x.powi(2) + pos.y.powi(2)).sqrt();
+                let elevation = if horizontal > 0.0 {
+                    pos.z.atan2(horizontal).to_degrees()
                 } else {
                     0.0
                 };
+                let distance = pos.norm();
                 (
                     self.position_address(osc_id),
                     vec![azimuth, elevation, distance],
