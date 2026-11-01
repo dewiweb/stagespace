@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { useCuelistStore, type CueData } from '../store/useCuelistStore';
 import { useGraphStore } from '../store/useGraphStore';
-import { doRehearsal, scoreExport, scoreImport } from '../utils/liveActions';
+import { doRehearsal, scoreExport, scoreImport, doTape, tapeImport } from '../utils/liveActions';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import { useSignalGraphStore } from '../store/useSignalGraphStore';
 import { ConfirmModal } from './ui/ConfirmModal';
@@ -185,6 +185,15 @@ export const CuelistPanel: React.FC = () => {
         <label title="Import — charge un score JSON" className="px-1.5 py-0.5 text-[9px] rounded bg-gray-800 hover:bg-gray-700 text-gray-400 cursor-pointer">
           ↑
           <input type="file" accept=".json" className="hidden" onChange={(e) => e.target.files?.[0] && scoreImport(e.target.files[0])} />
+        </label>
+        <span className="text-[9px] text-gray-600 ml-2 uppercase tracking-widest">tape</span>
+        <button onClick={() => doTape('record')} title="Tape rec — positions émises @30Hz" className="px-1.5 py-0.5 text-[9px] rounded bg-red-900/50 hover:bg-red-800/70 text-red-300">⏺</button>
+        <button onClick={() => doTape('stop')} title="Tape stop" className="px-1.5 py-0.5 text-[9px] rounded bg-gray-800 hover:bg-gray-700 text-gray-400">⏹</button>
+        <button onClick={() => doTape('play')} title="Tape play — rejoue le flux au rythme réel" className="px-1.5 py-0.5 text-[9px] rounded bg-green-900/50 hover:bg-green-800/70 text-green-300">▶</button>
+        <button onClick={() => doTape('export')} title="Tape export — positions JSON (bounce externe)" className="px-1.5 py-0.5 text-[9px] rounded bg-gray-800 hover:bg-gray-700 text-gray-400">↓</button>
+        <label title="Tape import — rejoue une bande de positions" className="px-1.5 py-0.5 text-[9px] rounded bg-gray-800 hover:bg-gray-700 text-gray-400 cursor-pointer">
+          ↑
+          <input type="file" accept=".json" className="hidden" onChange={(e) => e.target.files?.[0] && tapeImport(e.target.files[0])} />
         </label>
       </div>
       {/* Log opérationnel — P2.4 : qui a GO quand, quel NACK. */}

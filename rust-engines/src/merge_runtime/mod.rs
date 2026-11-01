@@ -199,6 +199,15 @@ pub struct MergeRuntime {
     /// appliqué au payload OSC (1.0 = neutre, <1 resserre le champ vers
     /// l'origine, >1 l'étend). Geste live, pas un setup.
     spatial_compression: Arc<RwLock<f64>>,
+    /// Position stream tape — enregistre les positions émises à ~30Hz
+    /// (t, {obj: pos}) pour replay vers un renderer externe (bounce
+    /// binaural côté renderer — STAGESPACE ne rend pas l'audio).
+    tape_recording: Arc<std::sync::atomic::AtomicBool>,
+    pos_tape: Arc<RwLock<Vec<(f64, HashMap<usize, [f64; 3]>)>>>,
+    /// Replay : (start, entries, curseur) — injecté en positions
+    /// manuelles par le frame loop au rythme réel.
+    tape_play: Arc<RwLock<Option<(Instant, Vec<(f64, HashMap<usize, [f64; 3]>)>, usize)>>>,
+
     /// Attention orchestration — objets figés par `attention_focus`
     /// (stase pour le change blindness : un seul objet bouge). Le set
     /// distingue les figés de la feature des positions manuelles de
@@ -338,6 +347,9 @@ impl MergeRuntime {
             thrown: Arc::new(RwLock::new(HashMap::new())),
             spatial_compression: Arc::new(RwLock::new(1.0)),
             attention_frozen: Arc::new(RwLock::new(HashSet::new())),
+            tape_recording: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            pos_tape: Arc::new(RwLock::new(Vec::new())),
+            tape_play: Arc::new(RwLock::new(None)),
             channel_modulations: Arc::new(RwLock::new(Arc::new(Vec::new()))),
             kinematic_smoothing: Arc::new(RwLock::new(0.5)),
             zones: Arc::new(RwLock::new(Arc::new(Vec::new()))),
@@ -1114,6 +1126,27 @@ impl MergeRuntime {
             .clone()
     }
 
+    /// Position tape : record start/stop (start vide la bande).
+    pub fn set_tape_recording(&self, on: bool) {
+        if on {
+            self.pos_tape.write().unwrap_or_else(|e| e.into_inner()).clear();
+        }
+        self.tape_recording
+            .store(on, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// La bande enregistrée (t, {obj: pos}) — export JSON côté IPC.
+    pub fn position_tape(&self) -> Vec<(f64, HashMap<usize, [f64; 3]>)> {
+        self.pos_tape.read().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
+    /// Replay de la bande — injectée en positions manuelles au rythme
+    /// réel par le frame loop (timing backend, pas de setTimeout).
+    pub fn play_tape(&self, entries: Vec<(f64, HashMap<usize, [f64; 3]>)>) {
+        *self.tape_play.write().unwrap_or_else(|e| e.into_inner()) =
+            Some((Instant::now(), entries, 0));
+    }
+
     /// Attention orchestration — fige tous les objets SAUF `focus` à
     /// leur dernière position émise (stase pour change blindness : le
     /// seul objet en mouvement capte toute l'attention).
@@ -1485,6 +1518,9 @@ impl MergeRuntime {
         let distance_reality_arc = self.distance_reality.clone();
         let thrown_arc = self.thrown.clone();
         let spatial_comp_arc = self.spatial_compression.clone();
+        let tape_rec_arc = self.tape_recording.clone();
+        let pos_tape_arc = self.pos_tape.clone();
+        let tape_play_arc = self.tape_play.clone();
         let object_channels_arc = self.object_channels.clone();
         let zones_arc = self.zones.clone();
         let channel_modulations_arc = self.channel_modulations.clone();
@@ -1499,6 +1535,8 @@ impl MergeRuntime {
 
         let mut prev_transformed: HashMap<usize, nalgebra::Vector3<f64>> = HashMap::new();
         let mut prev_perceptual_instant: Option<Instant> = None;
+        let mut tape_frame_ctr: u64 = 0;
+        let mut tape_t0: Option<Instant> = None;
         let handle = std::thread::spawn(move || {
             let mut start = Instant::now();
             let frame_duration = Duration::from_secs_f64(1.0 / fps);
@@ -1557,6 +1595,30 @@ impl MergeRuntime {
                     .map(|p| (frame_start - p).as_secs_f64().max(1e-6))
                     .unwrap_or_else(|| frame_duration.as_secs_f64());
                 prev_frame = Some(frame_start);
+
+                // Position tape replay — avance le curseur et injecte
+                // les entrées échues en positions manuelles (rythme
+                // réel, timing backend).
+                {
+                    let mut play = tape_play_arc
+                        .write()
+                        .unwrap_or_else(|e| e.into_inner());
+                    if let Some((start, entries, cursor)) = play.as_mut() {
+                        let elapsed = start.elapsed().as_secs_f64();
+                        let mut manual = manual_positions_arc
+                            .write()
+                            .unwrap_or_else(|e| e.into_inner());
+                        while *cursor < entries.len() && entries[*cursor].0 <= elapsed {
+                            for (obj, pos) in &entries[*cursor].1 {
+                                manual.insert(*obj, *pos);
+                            }
+                            *cursor += 1;
+                        }
+                        if *cursor >= entries.len() {
+                            *play = None; // bande finie
+                        }
+                    }
+                }
 
                 // Grab & throw : intègre les lancés — pos += v·dt avec
                 // amortissement ; |v| < eps → position manuelle au repos.
@@ -2239,6 +2301,27 @@ impl MergeRuntime {
                         .map(|(i, p)| (*i, *p))
                         .collect();
                     prev_perceptual_instant = Some(now);
+                }
+                // Position tape record — snapshot décimé (~30Hz) des
+                // positions émises (t depuis le début de la bande).
+                if tape_rec_arc.load(std::sync::atomic::Ordering::Relaxed) {
+                    tape_frame_ctr = tape_frame_ctr.wrapping_add(1);
+                    if tape_frame_ctr % 2 == 0 {
+                        let t = tape_t0
+                            .map(|t0| t0.elapsed().as_secs_f64())
+                            .unwrap_or_else(|| {
+                                tape_t0 = Some(Instant::now());
+                                0.0
+                            });
+                        let snap: HashMap<usize, [f64; 3]> = transformed
+                            .iter()
+                            .map(|(i, p)| (*i, [p.x, p.y, p.z]))
+                            .collect();
+                        pos_tape_arc
+                            .write()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .push((t, snap));
+                    }
                 }
                 // Règles = graph-déclarées puis manuelles — les manuelles
                 // écrasent le graph sur les canaux qu'elles ciblent.

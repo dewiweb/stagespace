@@ -491,3 +491,27 @@ pub async fn set_gesture(
     lock_or_recover(&state.merge_runtime).gesture(&name, strength);
     Ok(())
 }
+
+/// Position stream tape — enregistre les positions émises (~30Hz) pour
+/// replay vers un renderer externe (bounce binaural côté renderer).
+#[tauri::command]
+pub async fn set_pos_tape_record(on: bool, state: State<'_, AppState>) -> Result<(), IpcError> {
+    lock_or_recover(&state.merge_runtime).set_tape_recording(on);
+    Ok(())
+}
+
+/// La bande enregistrée, sérialisée JSON (t, {obj: pos}).
+#[tauri::command]
+pub async fn get_pos_tape(state: State<'_, AppState>) -> Result<String, IpcError> {
+    let tape = lock_or_recover(&state.merge_runtime).position_tape();
+    serde_json::to_string(&tape).map_err(|e| IpcError::internal(e.to_string()))
+}
+
+/// Replay de la bande JSON — injection au rythme réel par le frame loop.
+#[tauri::command]
+pub async fn play_pos_tape(json: String, state: State<'_, AppState>) -> Result<(), IpcError> {
+    type Tape = Vec<(f64, std::collections::HashMap<usize, [f64; 3]>)>;
+    let entries: Tape = serde_json::from_str(&json).map_err(|e| IpcError::internal(e.to_string()))?;
+    lock_or_recover(&state.merge_runtime).play_tape(entries);
+    Ok(())
+}

@@ -398,6 +398,43 @@ export function scoreExport() {
   URL.revokeObjectURL(a.href);
 }
 
+/** Position stream tape — enregistre les positions émises à ~30Hz et
+ *  rejoue le flux pour un bounce/renderer externe (binaural côté
+ *  renderer — STAGESPACE ne rend pas l'audio). */
+export function doTape(action: 'record' | 'stop' | 'play' | 'export', from?: string) {
+  logAction('doTape', from);
+  if (action === 'record' || action === 'stop') {
+    const on = action === 'record';
+    invoke('set_pos_tape_record', { on })
+      .then(() => toast.info(on ? 'Tape REC — positions @30Hz' : 'Tape STOP'))
+      .catch((e) => toast.error('Tape failed: ' + e));
+  } else if (action === 'export') {
+    invoke<string>('get_pos_tape').then((json) => {
+      const blob = new Blob([json], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'position-tape.sstape.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }).catch((e) => toast.error('Tape export failed: ' + e));
+  } else {
+    invoke<string>('get_pos_tape').then((json) =>
+      invoke('play_pos_tape', { json })
+    ).then(() => toast.info('Tape PLAY — flux injecté au rythme réel'))
+     .catch((e) => toast.error('Tape play failed: ' + e));
+  }
+}
+
+export function tapeImport(file: File) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    invoke('play_pos_tape', { json: reader.result as string })
+      .then(() => toast.info('Tape importée — lecture'))
+      .catch((e) => toast.error('Tape invalide: ' + e));
+  };
+  reader.readAsText(file);
+}
+
 export function scoreImport(file: File) {
   const reader = new FileReader();
   reader.onload = () => {
