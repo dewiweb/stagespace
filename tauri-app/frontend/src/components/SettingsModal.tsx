@@ -51,6 +51,10 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const setVenueConfig = useGraphStore((s) => s.setVenueConfig);
   const realityStrength = useGraphStore((s) => s.realityStrength);
   const setRealityStrength = useGraphStore((s) => s.setRealityStrength);
+  const mediaSyncEnabled = useGraphStore((s) => s.mediaSyncEnabled);
+  const mediaSyncTarget = useGraphStore((s) => s.mediaSyncTarget);
+  const mediaSyncPrefix = useGraphStore((s) => s.mediaSyncPrefix);
+  const setMediaSync = useGraphStore((s) => s.setMediaSync);
 
   const [oscIdsStr, setOscIdsStr] = React.useState(manualOscIds.join(','));
   const [audioDevices, setAudioDevices] = React.useState<MediaDeviceInfo[]>([]);
@@ -362,6 +366,41 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 value={realityStrength}
                 onChange={(e) => setRealityStrength(parseFloat(e.target.value))}
                 className="w-full accent-amber-500"
+              />
+            </div>
+          </section>
+
+          {/* ─── Media sync out ─── */}
+          <section>
+            <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+              <span className="text-pink-400">📺</span> Media sync out
+            </h3>
+            <p className="text-gray-400 text-xs mb-3">
+              Sends <code className="text-gray-300">{'{prefix}'}/cue &lt;num&gt; &lt;name&gt;</code> to a
+              dedicated desk (light/video) on every cue change.
+            </p>
+            <div className="flex items-center gap-2 mb-2">
+              <button
+                onClick={() => setMediaSync({ enabled: !mediaSyncEnabled })}
+                className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                  mediaSyncEnabled ? 'bg-pink-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                {mediaSyncEnabled ? 'ON' : 'OFF'}
+              </button>
+              <input
+                type="text"
+                defaultValue={mediaSyncTarget}
+                onBlur={(e) => setMediaSync({ target: e.target.value })}
+                placeholder="ip:port"
+                className="flex-1 px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+              />
+              <input
+                type="text"
+                defaultValue={mediaSyncPrefix}
+                onBlur={(e) => setMediaSync({ prefix: e.target.value })}
+                placeholder="/media"
+                className="w-24 px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
               />
             </div>
           </section>

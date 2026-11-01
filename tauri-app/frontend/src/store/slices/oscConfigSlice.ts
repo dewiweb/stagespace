@@ -30,6 +30,10 @@ interface PersistedOscConfig {
   venueOffset: string;
   /// Couche réalité-distance (0..1 → exag/gain/air préréglés).
   realityStrength: number;
+  /// Media sync out — cible dédiée (lumière/vidéo desk) + préfixe.
+  mediaSyncEnabled: boolean;
+  mediaSyncTarget: string;
+  mediaSyncPrefix: string;
 }
 
 function loadConfigFromStorage(): Partial<PersistedOscConfig> {
@@ -56,6 +60,9 @@ const persist = (s: OscConfigSlice, patch: Partial<PersistedOscConfig>) => {
     venueScale: s.venueScale,
     venueOffset: s.venueOffset,
     realityStrength: s.realityStrength,
+    mediaSyncEnabled: s.mediaSyncEnabled,
+    mediaSyncTarget: s.mediaSyncTarget,
+    mediaSyncPrefix: s.mediaSyncPrefix,
     ...patch,
   });
 };
@@ -105,6 +112,11 @@ export interface OscConfigSlice {
   /// gain_atten 0.15·s, air_loss 0.02·s (Zahorik-inspired).
   realityStrength: number;
   setRealityStrength: (v: number) => Promise<void>;
+  /// Media sync out — trigger cue vers desk lumière/vidéo.
+  mediaSyncEnabled: boolean;
+  mediaSyncTarget: string;
+  mediaSyncPrefix: string;
+  setMediaSync: (cfg: { enabled?: boolean; target?: string; prefix?: string }) => Promise<void>;
   setOscAddress: (addr: string) => void;
   setOscPort: (port: number) => void;
   setOscProfile: (profile: string) => void;
@@ -130,6 +142,9 @@ export const createOscConfigSlice: StateCreator<OscConfigSlice, [], [], OscConfi
     venueScale: saved.venueScale ?? '1,1,1',
     venueOffset: saved.venueOffset ?? '0,0,0',
     realityStrength: saved.realityStrength ?? 0,
+    mediaSyncEnabled: saved.mediaSyncEnabled ?? false,
+    mediaSyncTarget: saved.mediaSyncTarget ?? '127.0.0.1:8000',
+    mediaSyncPrefix: saved.mediaSyncPrefix ?? '/media',
     psnLastPacketAge: null,
     psnRunning: false,
     setPsnConfig: async (cfg) => {
@@ -229,6 +244,31 @@ export const createOscConfigSlice: StateCreator<OscConfigSlice, [], [], OscConfi
         set({ realityStrength: prev });
         persist(get(), { realityStrength: prev });
         toast.error('Reality layer failed: ' + e);
+      }
+    },
+    setMediaSync: async (cfg) => {
+      const prev = {
+        mediaSyncEnabled: get().mediaSyncEnabled,
+        mediaSyncTarget: get().mediaSyncTarget,
+        mediaSyncPrefix: get().mediaSyncPrefix,
+      };
+      const next = {
+        mediaSyncEnabled: cfg.enabled ?? prev.mediaSyncEnabled,
+        mediaSyncTarget: cfg.target ?? prev.mediaSyncTarget,
+        mediaSyncPrefix: cfg.prefix ?? prev.mediaSyncPrefix,
+      };
+      set(next);
+      persist(get(), next);
+      try {
+        await invoke('set_media_sync', {
+          enabled: next.mediaSyncEnabled,
+          target: next.mediaSyncTarget,
+          prefix: next.mediaSyncPrefix,
+        });
+      } catch (e) {
+        set(prev);
+        persist(get(), prev);
+        toast.error('Media sync failed: ' + e);
       }
     },
     refreshPsnHealth: async () => {

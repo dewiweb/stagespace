@@ -350,6 +350,11 @@ struct Shared {
     /// 4 dernières adresses ayant envoyé une commande `/stagespace/` —
     /// reçoivent ack + feedback de cue.
     controllers: Arc<Mutex<Vec<std::net::SocketAddr>>>,
+    /// Media sync out — cible dédiée (lumière/vidéo desk : ne peut pas
+    /// être un "controller" puisqu'il n'envoie jamais rien) + préfixe
+    /// d'adresse. `send_show_feedback` émet `{prefix}/cue <num>` dessus.
+    media_sync: Arc<Mutex<Option<(std::net::SocketAddr, String)>>>,
+
     /// Socket de réponse (try_clone du socket de réception) — posé au
     /// démarrage du thread pour envoyer ack/feedback aux contrôleurs.
     reply_socket: Arc<Mutex<Option<Arc<UdpSocket>>>>,
@@ -666,6 +671,7 @@ impl OscReceiver {
                 last_show_rx: Arc::new(Mutex::new(None)),
                 controllers: Arc::new(Mutex::new(Vec::new())),
                 reply_socket: Arc::new(Mutex::new(None)),
+                media_sync: Arc::new(Mutex::new(None)),
                 timecode_fps: Arc::new(AtomicU64::new(25.0f64.to_bits())),
             },
             shutdown: Arc::new(AtomicBool::new(false)),
@@ -737,6 +743,13 @@ impl OscReceiver {
     /// Feedback cue vers les contrôleurs récents : envoie
     /// `/stagespace/cue/current <number|"" > <name>` et
     /// `/stagespace/cue/next <number|""> <name>` (args string).
+    /// Media sync out — configure la cible dédiée (desk lumière/vidéo)
+    /// et le préfixe d'adresse OSC. None = désactivé.
+    pub fn set_media_sync(&self, target: Option<std::net::SocketAddr>, prefix: String) {
+        *self.shared.media_sync.lock().unwrap_or_else(|e| e.into_inner()) =
+            target.map(|t| (t, prefix));
+    }
+
     pub fn send_show_feedback(
         &self,
         current: Option<(String, String)>,
@@ -759,6 +772,7 @@ impl OscReceiver {
             .as_ref()
             .cloned();
         let Some(socket) = socket else { return };
+        let current_media = current.clone();
         for (addr_path, cue) in [
             ("/stagespace/cue/current", current),
             ("/stagespace/cue/next", next),
@@ -775,6 +789,23 @@ impl OscReceiver {
                 for c in &controllers {
                     let _ = socket.send_to(&bytes, c);
                 }
+            }
+        }
+        // Media sync out — le trigger cue vers la cible dédiée
+        // (lumière/vidéo) : `{prefix}/cue <num> <name>`.
+        let media = self
+            .shared
+            .media_sync
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        if let (Some((target, prefix)), Some((num, name))) = (media, current_media) {
+            let msg = OscPacket::Message(OscMessage {
+                addr: format!("{prefix}/cue"),
+                args: vec![OscType::String(num), OscType::String(name)],
+            });
+            if let Ok(bytes) = encode(&msg) {
+                let _ = socket.send_to(&bytes, target);
             }
         }
     }

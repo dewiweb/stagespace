@@ -515,3 +515,26 @@ pub async fn play_pos_tape(json: String, state: State<'_, AppState>) -> Result<(
     lock_or_recover(&state.merge_runtime).play_tape(entries);
     Ok(())
 }
+
+/// Media sync out — cible dédiée (desk lumière/vidéo) + préfixe
+/// d'adresse. `enabled=false` → désactivé. Le trigger `{prefix}/cue
+/// <num> <name>` est émis à chaque changement de cue courante.
+#[tauri::command]
+pub async fn set_media_sync(
+    enabled: bool,
+    target: String,
+    prefix: String,
+    state: State<'_, AppState>,
+) -> Result<(), IpcError> {
+    let addr: Option<std::net::SocketAddr> = if enabled {
+        Some(
+            target
+                .parse()
+                .map_err(|_| IpcError::validation(format!("invalid media target '{target}'")))?,
+        )
+    } else {
+        None
+    };
+    lock_or_recover(&state.osc_receiver).set_media_sync(addr, prefix);
+    Ok(())
+}
