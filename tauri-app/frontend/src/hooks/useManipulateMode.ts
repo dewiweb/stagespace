@@ -231,6 +231,9 @@ export function useManipulateMode({
   // drag droit, pas contextmenu — aucun conflit).
   const handleManipulateContextMenu = useCallback(
     (e: React.MouseEvent) => {
+      // preventDefault EN PREMIER — sinon le menu natif webview
+      // (back/reload/inspect) s'ouvre quand le raycast rate l'objet.
+      e.preventDefault();
       const camera = cameraRef.current;
       const container = containerRef.current;
       if (!camera || !container) return;
@@ -244,7 +247,6 @@ export function useManipulateMode({
       const visibleObjs = objectsRef.current.filter((o) => o.visible);
       const objHits = raycaster.intersectObjects(visibleObjs, true);
       if (objHits.length === 0) return;
-      e.preventDefault();
       let hitObj = objHits[0].object as THREE.Mesh;
       let idx = objectsRef.current.indexOf(hitObj);
       while (idx < 0 && hitObj.parent) {

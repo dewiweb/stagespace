@@ -136,6 +136,16 @@ function AppMain() {
   // Events du superviseur backend : worker zombie arrêté, merge thread
   // redémarré de lui-même (le frontend n'est plus dans la boucle de vie).
   useSupervisorListener();
+
+  // Le menu contextuel natif de la webview (back/forward/reload/inspect)
+  // n'a pas de sens dans une app de show — et il masquait le release
+  // clic-droit des objets (radar + 3D). Suppression globale : les handlers
+  // surface (contextmenu → doClearPosition) continuent de fonctionner.
+  useEffect(() => {
+    const onCtx = (e: MouseEvent) => e.preventDefault();
+    document.addEventListener('contextmenu', onCtx);
+    return () => document.removeEventListener('contextmenu', onCtx);
+  }, []);
   // Raccourcis live (Esc=panic, Enter=GO, Shift+Enter=recall) + polling perf —
   // au niveau App : ils doivent fonctionner aussi en mode Perform (le Toolbar
   // et sa stack se démontent).
