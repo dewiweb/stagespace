@@ -1,6 +1,6 @@
 import { StateCreator } from 'zustand';
 import { safeInvoke as invoke } from '../../utils/tauri';
-import { isDetachedWindow } from '../../utils/safeStorage';
+import { isDetachedWindow, safeParseStoredJson } from '../../utils/safeStorage';
 import type { PerfStatsResponse } from '../../types/generated/PerfStatsResponse';
 
 /// Payload complet de `get_perf_stats` — généré depuis Rust (ts-rs).
@@ -99,6 +99,11 @@ export type LiveStatePayload = {
   parked: number[];
   consoleAge: number | null;
   manualPositions: Record<number, [number, number, number]>;
+  /// Indices volatiles — jamais persistés, les détachées n'ont aucun
+  /// autre moyen de les voir (NOW/NEXT figés sinon).
+  cueIndex: number;
+  setlistIndex: number;
+  soloSavedIds: string[];
 };
 
 /// Poll santé complet — écrit perfSlice + showStatusStore locaux, puis
@@ -142,7 +147,17 @@ async function pollLive(broadcast: boolean) {
     parked: patch.parked ?? show.useShowStatusStore.getState().parked,
     consoleAge: patch.consoleAge ?? show.useShowStatusStore.getState().consoleAge,
     manualPositions: manualPositions ?? m.useGraphStore.getState().manualPositions,
+    cueIndex: -1,
+    setlistIndex: -1,
+    soloSavedIds: [],
   };
+  // Indices volatiles — lus depuis les stores au moment du broadcast
+  // (await, sinon le payload partirait avec les -1 par défaut).
+  const cs = await import('../useCuelistStore');
+  payload.cueIndex = cs.useCuelistStore.getState().currentCueIndex;
+  const g = m.useGraphStore.getState();
+  payload.setlistIndex = g.currentSetlistIndex;
+  payload.soloSavedIds = g.soloSavedIds;
   const { emit } = await import('@tauri-apps/api/event');
   void emit('live:state', payload).catch(() => {});
 }
@@ -162,7 +177,13 @@ if (isDetachedWindow()) {
           emittedPositions: p.emittedPositions,
           perceptual: p.perceptual,
           manualPositions: p.manualPositions,
+          currentSetlistIndex: p.setlistIndex,
+          soloSavedIds: p.soloSavedIds,
         }),
+      );
+      // Index cue — sinon NOW/NEXT détachés restaient à -1 (NOW/NEXT figés).
+      void import('../useCuelistStore').then((cs) =>
+        cs.useCuelistStore.setState({ currentCueIndex: p.cueIndex }),
       );
       void import('../useShowStatusStore').then((m) =>
         m.useShowStatusStore.setState({
@@ -173,6 +194,24 @@ if (isDetachedWindow()) {
       );
     }),
   );
+  // Contenu persisté : un slot/cue créé dans la fenêtre principale après
+  // l'ouverture de la détachée doit y apparaître — l'événement `storage`
+  // est la voie standard inter-webview pour localStorage partagé.
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'stagespace-cuelist') {
+      void import('../useCuelistStore').then((cs) => cs.useCuelistStore.getState().loadFromStorage());
+    } else if (e.key === 'stagespace-move-slots') {
+      const slots = safeParseStoredJson<any[]>('stagespace-move-slots', []);
+      void import('../useGraphStore').then((m) =>
+        m.useGraphStore.setState({ moveSlots: slots }),
+      );
+    } else if (e.key === 'stagespace-move-setlist') {
+      const order = safeParseStoredJson<string[]>('stagespace-move-setlist', []);
+      void import('../useGraphStore').then((m) =>
+        m.useGraphStore.setState({ setlistOrder: order }),
+      );
+    }
+  });
   // Watchdog : si la fenêtre principale est fermée/crashée (plus de
   // broadcast >5s), la détachée reprend le poll localement — elle reste
   // un instrument vivant, pas un écran figé. Silencieux en mode normal.

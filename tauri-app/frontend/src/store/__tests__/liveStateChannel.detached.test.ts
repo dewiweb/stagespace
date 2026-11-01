@@ -7,6 +7,7 @@ import { getInvokeCalls, clearInvokeCalls } from './testHelpers';
 import { emitMockEvent } from '../../test/setup';
 import { useGraphStore } from '../useGraphStore';
 import { useShowStatusStore } from '../useShowStatusStore';
+import { useCuelistStore } from '../useCuelistStore';
 import type { LiveStatePayload } from '../slices/perfSlice';
 
 // Canal live:state — fenêtre DÉTACHÉE (?view=run via le pragma url) :
@@ -21,6 +22,9 @@ const payload: LiveStatePayload = {
   parked: [0],
   consoleAge: 2.5,
   manualPositions: { 1: [0.5, 1.0, 0.0], 2: [-1.0, 0.0, 0.25] },
+  cueIndex: 3,
+  setlistIndex: 1,
+  soloSavedIds: ['s1', 's2'],
 };
 
 describe('live:state — fenêtre détachée (?view=run)', () => {
@@ -49,6 +53,10 @@ describe('live:state — fenêtre détachée (?view=run)', () => {
     expect(useShowStatusStore.getState().parked).toEqual([0]);
     expect(useShowStatusStore.getState().consoleAge).toBe(2.5);
     expect(useGraphStore.getState().manualPositions[1]).toEqual([0.5, 1.0, 0.0]);
+    // Indices volatiles propagés — NOW/NEXT n'est plus figé à -1.
+    expect(useCuelistStore.getState().currentCueIndex).toBe(3);
+    expect(useGraphStore.getState().currentSetlistIndex).toBe(1);
+    expect(useGraphStore.getState().soloSavedIds).toEqual(['s1', 's2']);
     expect(useShowStatusStore.getState().armed).toBe(false);
   });
 });
