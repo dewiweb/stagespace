@@ -291,6 +291,26 @@ export const PerformView: React.FC = () => {
           ⧉
         </button>
         <button
+          onClick={() => {
+            // Surface de jeu détachable — pads + radar + transport sur
+            // écran dédié (la surface à jouer, pas l'admin).
+            WebviewWindow.getByLabel('run').then((w) => {
+              if (w) void w.setFocus();
+              else new WebviewWindow('run', {
+                url: '/?view=run',
+                title: 'STAGESPACE — Run',
+                width: 1200,
+                height: 760,
+                resizable: true,
+              });
+            });
+          }}
+          className="px-3 py-2.5 rounded-lg flex-shrink-0 bg-green-800/40 hover:bg-green-700/60 text-green-200/80 transition-colors active:scale-95"
+          title="Surface de jeu (pads + radar) dans une fenêtre détachable"
+        >
+          ▶
+        </button>
+        <button
           onClick={() => setConduiteMode(true)}
           className="px-3 py-2.5 rounded-lg flex-shrink-0 bg-amber-800/60 hover:bg-amber-700/80 text-amber-100 text-xs font-bold uppercase tracking-wide transition-colors active:scale-95"
           title="Vue conduite plein écran — NOW/NEXT cue, TC, ARM (lisible à distance)"
