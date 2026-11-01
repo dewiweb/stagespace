@@ -35,9 +35,23 @@ interface SlotTileProps {
 
 export const SlotTile: React.FC<SlotTileProps> = (p) => {
   const { slot, oscNum, density, big = false, isPlaying, canSolo = false } = p;
-  const press = React.useRef<{ momentary: boolean; suppressClick: boolean; timer: ReturnType<typeof setTimeout> | null }>(
-    { momentary: false, suppressClick: false, timer: null },
+  const press = React.useRef<{ momentary: boolean; suppressClick: boolean; restore: 'play' | 'stop' | null; timer: ReturnType<typeof setTimeout> | null }>(
+    { momentary: false, suppressClick: false, restore: null, timer: null },
   );
+
+  const releasePress = () => {
+    if (press.current.timer) clearTimeout(press.current.timer);
+    press.current.timer = null;
+    if (press.current.momentary) {
+      press.current.momentary = false;
+      press.current.suppressClick = true;
+      // Retour à l'état CAPTURÉ au début du hold — isPlaying dans la
+      // closure est le nouvel état re-rendu, pas l'état d'avant.
+      if (press.current.restore === 'play') p.onPlay();
+      else p.onStop();
+      press.current.restore = null;
+    }
+  };
 
   if (density === 'pad') {
     return (
@@ -45,27 +59,15 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
         onPointerDown={() => {
           press.current.timer = setTimeout(() => {
             press.current.momentary = true;
-            if (!isPlaying) p.onPlay();
+            // Hold = inversion momentanée dans les DEUX sens : pad arrêté =
+            // bump play ; pad live = punch-out (stop, le release rejoue).
+            press.current.restore = isPlaying ? 'play' : 'stop';
+            if (isPlaying) p.onStop();
+            else p.onPlay();
           }, 350);
         }}
-        onPointerUp={() => {
-          if (press.current.timer) clearTimeout(press.current.timer);
-          press.current.timer = null;
-          if (press.current.momentary) {
-            press.current.momentary = false;
-            press.current.suppressClick = true;
-            p.onStop();
-          }
-        }}
-        onPointerLeave={() => {
-          if (press.current.timer) clearTimeout(press.current.timer);
-          press.current.timer = null;
-          if (press.current.momentary) {
-            press.current.momentary = false;
-            press.current.suppressClick = true;
-            p.onStop();
-          }
-        }}
+        onPointerUp={releasePress}
+        onPointerLeave={releasePress}
         onClick={() => {
           // Après un hold momentané, le click toggle ferait repartir le
           // move — on le saute : le release a déjà fade-out.
