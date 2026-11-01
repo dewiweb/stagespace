@@ -24,25 +24,27 @@ use commands::cue_commands::{
 };
 use commands::file_io::{import_hol_project, load_graph_from_file, save_graph_to_file};
 use commands::merge_commands::{
-    activate_move, add_channel_modulation, add_zone, clear_all_manual_positions, throw_object,
+    activate_move, add_channel_modulation, add_zone, clear_all_manual_positions,
     clear_all_spatial_channels, clear_channel_modulations, clear_manual_position,
     clear_spatial_channel, clear_zones, deactivate_all_moves, deactivate_move, diagnose_graph,
-    get_merge_perf_stats, list_active_moves, list_channel_modulations, list_graph_effects,
-    list_spatial_channels, list_zones, remove_channel_modulation, remove_zone, set_global_macro,
-    set_global_origin, set_global_osc_ids, set_kinematic_smoothing, set_manual_position,
-    set_merge_strategy, set_move_playback_mode, set_move_priority, set_move_speed, set_move_weight,
-    set_spatial_channel, set_track_depths, get_track_positions, set_track_position,
-    set_track_positions, update_global_graph,
-    update_move_graph_merged, update_signal_graph, update_zone,
+    get_merge_perf_stats, get_track_positions, list_active_moves, list_channel_modulations,
+    list_graph_effects, list_spatial_channels, list_zones, remove_channel_modulation, remove_zone,
+    set_global_macro, set_global_origin, set_global_osc_ids, set_kinematic_smoothing,
+    set_manual_position, set_merge_strategy, set_move_playback_mode, set_move_priority,
+    set_move_speed, set_move_weight, set_spatial_channel, set_track_depths, set_track_position,
+    set_track_positions, throw_object, update_global_graph, update_move_graph_merged,
+    update_signal_graph, update_zone,
 };
 use commands::network::discover_osc_targets;
 use commands::osc::{
-    get_last_osc_message, get_last_show_cmd_age, get_osc_armed, get_osc_receiver_port,
-    osc_add_mapping, osc_clear_mappings, osc_get_all_values, osc_get_value, osc_in_stats,
-    osc_list_mappings, osc_remove_mapping, osc_set_in_enabled, osc_set_mapping_enabled,
-    osc_suppress_in, send_osc_position, send_show_feedback, send_show_nack, set_osc_armed,
-    set_osc_output, set_osc_receiver_port, set_timecode_fps,
-    get_emitted_positions, get_manual_position, get_manual_positions, get_object_states, get_perceptual_metrics, get_psn_health, set_distance_reality, set_attention, set_gesture, set_media_sync, set_pos_tape_record, get_pos_tape, play_pos_tape, set_psn_config, set_spatial_compression, set_venue_config,
+    get_emitted_positions, get_last_osc_message, get_last_show_cmd_age, get_manual_position,
+    get_manual_positions, get_object_states, get_osc_armed, get_osc_receiver_port,
+    get_perceptual_metrics, get_pos_tape, get_psn_health, osc_add_mapping, osc_clear_mappings,
+    osc_get_all_values, osc_get_value, osc_in_stats, osc_list_mappings, osc_remove_mapping,
+    osc_set_in_enabled, osc_set_mapping_enabled, osc_suppress_in, play_pos_tape, send_osc_position,
+    send_show_feedback, send_show_nack, set_attention, set_distance_reality, set_gesture,
+    set_media_sync, set_osc_armed, set_osc_output, set_osc_receiver_port, set_pos_tape_record,
+    set_psn_config, set_spatial_compression, set_timecode_fps, set_venue_config,
 };
 use commands::playback::set_macro;
 use commands::plugins::{import_plugin, list_plugins, reload_plugins};
@@ -211,9 +213,7 @@ pub fn run() {
                 pending_move_ids: Arc::new(Mutex::new(HashSet::new())),
                 move_generation: Arc::new(AtomicU64::new(0)),
                 merge_runtime: Arc::new(Mutex::new(merge_rt)),
-                psn_receiver: Arc::new(
-                    stagespace_engines::psn_receiver::PsnReceiver::new(),
-                ),
+                psn_receiver: Arc::new(stagespace_engines::psn_receiver::PsnReceiver::new()),
                 recall_in_progress: Arc::new(std::sync::atomic::AtomicBool::new(false)),
                 deactivate_gen: Arc::new(std::sync::atomic::AtomicU64::new(0)),
                 audio_capture: Arc::new(Mutex::new(AudioCaptureManager::new())),
@@ -319,8 +319,7 @@ pub fn run() {
                             | stagespace_engines::osc_receiver::ShowCommand::Stop => {
                                 // Backend-side stop — exécuté ici, pas
                                 // via la webview. Le panic gagne sur tout.
-                                stop_gen
-                                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                                stop_gen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                                 let drained: Vec<Movement> = {
                                     stop_movements
                                         .lock()
@@ -332,10 +331,12 @@ pub fn run() {
                                 for m in drained {
                                     m.runtime.stop();
                                 }
-                                if matches!(cmd, stagespace_engines::osc_receiver::ShowCommand::Panic) {
-                                    let merge = stop_merge
-                                        .lock()
-                                        .unwrap_or_else(|e| e.into_inner());
+                                if matches!(
+                                    cmd,
+                                    stagespace_engines::osc_receiver::ShowCommand::Panic
+                                ) {
+                                    let merge =
+                                        stop_merge.lock().unwrap_or_else(|e| e.into_inner());
                                     let origin = merge.origin();
                                     // Objets parkés ou tenus manuellement :
                                     // ne PAS téléporter vers l'origine — le
@@ -520,7 +521,8 @@ pub fn run() {
             set_track_position,
             set_manual_position,
             clear_manual_position,
-            clear_all_manual_positions, throw_object,
+            clear_all_manual_positions,
+            throw_object,
             // Spatial channels (Phase 4 — canaux étendus)
             set_spatial_channel,
             clear_spatial_channel,

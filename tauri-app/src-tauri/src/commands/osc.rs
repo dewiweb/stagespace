@@ -355,9 +355,18 @@ pub async fn set_psn_config(
                     (1.0, *p)
                 };
                 match ch {
-                    "x" => { order[i] = 0; signs[i] = sign; }
-                    "y" => { order[i] = 1; signs[i] = sign; }
-                    "z" => { order[i] = 2; signs[i] = sign; }
+                    "x" => {
+                        order[i] = 0;
+                        signs[i] = sign;
+                    }
+                    "y" => {
+                        order[i] = 1;
+                        signs[i] = sign;
+                    }
+                    "z" => {
+                        order[i] = 2;
+                        signs[i] = sign;
+                    }
                     _ => ok = false,
                 }
             }
@@ -451,7 +460,11 @@ pub async fn set_venue_config(
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
     let merge = lock_or_recover(&state.merge_runtime);
-    merge.set_venue_map(if enabled { Some((scale, offset, yaw)) } else { None });
+    merge.set_venue_map(if enabled {
+        Some((scale, offset, yaw))
+    } else {
+        None
+    });
     Ok(())
 }
 
@@ -526,7 +539,8 @@ pub async fn get_pos_tape(state: State<'_, AppState>) -> Result<String, IpcError
 #[tauri::command]
 pub async fn play_pos_tape(json: String, state: State<'_, AppState>) -> Result<(), IpcError> {
     type Tape = Vec<(f64, std::collections::HashMap<usize, [f64; 3]>)>;
-    let entries: Tape = serde_json::from_str(&json).map_err(|e| IpcError::internal(e.to_string()))?;
+    let entries: Tape =
+        serde_json::from_str(&json).map_err(|e| IpcError::internal(e.to_string()))?;
     lock_or_recover(&state.merge_runtime).play_tape(entries);
     Ok(())
 }

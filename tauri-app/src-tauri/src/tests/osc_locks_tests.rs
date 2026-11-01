@@ -2,14 +2,14 @@
 mod osc_locks_tests {
     use crate::commands::osc::{set_osc_output, set_osc_receiver_port};
     use crate::{AppState, Movement};
-    use stagespace_engines::AudioState;
-    use tauri::Manager;
-    use stagespace_engines::osc_sender::{OscProfile, OscSender};
     use stagespace_engines::merge_runtime::MergeRuntime;
+    use stagespace_engines::osc_sender::{OscProfile, OscSender};
     use stagespace_engines::runtime::Runtime;
+    use stagespace_engines::AudioState;
     use std::collections::{HashMap, HashSet};
     use std::sync::atomic::{AtomicBool, AtomicU64};
     use std::sync::{Arc, Mutex};
+    use tauri::Manager;
 
     /// AppState complet minimal — même forme que lib.rs:setup().
     fn make_app_state() -> AppState {
@@ -17,7 +17,9 @@ mod osc_locks_tests {
         let merge = MergeRuntime::new("127.0.0.1".to_string(), 0, sender, 60.0).unwrap();
         AppState {
             audio_state: Arc::new(Mutex::new(AudioState::new())),
-            osc_receiver: Arc::new(Mutex::new(stagespace_engines::osc_receiver::OscReceiver::new(0))),
+            osc_receiver: Arc::new(Mutex::new(
+                stagespace_engines::osc_receiver::OscReceiver::new(0),
+            )),
             presets: Arc::new(Mutex::new(stagespace_engines::presets::PresetManager::new())),
             app_handle: Arc::new(Mutex::new(None)),
             movements: Arc::new(Mutex::new(HashMap::new())),
@@ -79,10 +81,7 @@ mod osc_locks_tests {
             .unwrap_or_else(|e| e.into_inner())
             .insert("m1".to_string(), dummy_movement());
         app.manage(s);
-        let res = tauri::async_runtime::block_on(set_osc_receiver_port(
-            9001,
-            managed_state(&app),
-        ));
+        let res = tauri::async_runtime::block_on(set_osc_receiver_port(9001, managed_state(&app)));
         let err = res.expect_err("le rebind OSC-IN doit être refusé pendant le playback");
         assert_eq!(err.code, "conflict");
     }

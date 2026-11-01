@@ -25,9 +25,8 @@ pub use macros::{
     set_move_playback_mode, set_move_priority, set_move_speed, set_move_weight, set_track_depths,
 };
 pub use manual_positions::{
-    throw_object,
     clear_all_manual_positions, clear_manual_position, get_track_positions, set_manual_position,
-    set_track_position, set_track_positions,
+    set_track_position, set_track_positions, throw_object,
 };
 #[cfg(test)]
 pub(crate) use move_management::collect_movement_infos;

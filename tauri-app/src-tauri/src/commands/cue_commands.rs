@@ -456,8 +456,9 @@ pub(crate) fn recall_cue_inner(
             .values()
             .any(|n| n.node_type == stagespace_engines::NodeType::SignalOut)
         {
-            let signal_fn = stagespace_engines::compile_signal_graph(&graph)
-                .map_err(|e| IpcError::validation(format!("Failed to compile signal graph: {e:?}")))?;
+            let signal_fn = stagespace_engines::compile_signal_graph(&graph).map_err(|e| {
+                IpcError::validation(format!("Failed to compile signal graph: {e:?}"))
+            })?;
             merge_rt.swap_signal_fn(signal_fn);
         } else {
             eprintln!("[WARN] recall: signal graph without SignalOut — treated as no modulation");
