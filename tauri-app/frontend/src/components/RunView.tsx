@@ -25,6 +25,7 @@ export const RunView: React.FC = () => {
   // les deux passent par doSolo) : après un solo, le seul slot jouant
   // est le slot solo'd — le badge S ne peut pas diverger d'un OSC.
   const soloSavedIds = useGraphStore((s) => s.soloSavedIds);
+  const emittedPositions = useGraphStore((s) => s.emittedPositions);
   const playingIds = new Set(moveSlots.filter((s) => s.movementId).map((s) => s.id));
   const soloId =
     soloSavedIds.length > 0
@@ -60,6 +61,7 @@ export const RunView: React.FC = () => {
       </div>
 
       {/* Grille pads — un pad = un slot, état couleur immédiat. */}
+      <div className="flex gap-4 flex-1 min-h-0">
       <div className="grid grid-cols-4 gap-3 flex-1 content-start overflow-y-auto">
         {moveSlots.map((slot) => {
           const playing = playingIds.has(slot.id);
@@ -88,6 +90,33 @@ export const RunView: React.FC = () => {
             </button>
           );
         })}
+      </div>
+
+      {/* Radar 2D — plan top-down fixe (X/Y), positions RÉELLEMENT émises
+          colorées par source-de-contrôle. Lisible à distance, zéro caméra. */}
+      <div className="w-64 flex-shrink-0 bg-gray-900 rounded-lg p-2 flex flex-col">
+        <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">radar · top</div>
+        <svg viewBox="-110 -110 220 220" className="flex-1 min-h-0" preserveAspectRatio="xMidYMid meet">
+          <circle cx="0" cy="0" r="105" fill="none" stroke="#1f2937" strokeWidth="1" />
+          <circle cx="0" cy="0" r="52" fill="none" stroke="#1f2937" strokeWidth="0.5" />
+          <line x1="0" y1="-105" x2="0" y2="105" stroke="#1f2937" strokeWidth="0.5" />
+          <line x1="-105" y1="0" x2="105" y2="0" stroke="#1f2937" strokeWidth="0.5" />
+          <text x="0" y="-99" fill="#4b5563" fontSize="8" textAnchor="middle">FRONT</text>
+          {Object.entries(emittedPositions).map(([id, [x, y]]) => {
+            const t = Number(id);
+            const src = objectStates[t] ?? 'track';
+            const fill = { park: '#f59e0b', psn: '#a855f7', hold: '#22d3ee', manual: '#f97316', move: '#22c55e', track: '#6b7280' }[src];
+            const cx = Math.max(-105, Math.min(105, x * 10));
+            const cy = Math.max(-105, Math.min(105, y * 10));
+            return (
+              <g key={id}>
+                <circle cx={cx} cy={cy} r="4" fill={fill} />
+                <text x={cx} y={cy - 7} fill="#9ca3af" fontSize="7" textAnchor="middle">{id}</text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
       </div>
       <div className="text-[10px] text-gray-600 mt-2">click = play/stop · right-click = solo · P = park · H = hold</div>
     </div>
