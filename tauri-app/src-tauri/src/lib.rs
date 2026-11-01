@@ -337,8 +337,21 @@ pub fn run() {
                                         .lock()
                                         .unwrap_or_else(|e| e.into_inner());
                                     let origin = merge.origin();
-                                    for id in merge.osc_ids() {
-                                        let _ = merge.send_position_now(id, origin);
+                                    // Objets parkés ou tenus manuellement :
+                                    // ne PAS téléporter vers l'origine — le
+                                    // merge les réémettrait aussitôt depuis
+                                    // leur position tenue (flash aller-retour,
+                                    // revue L6). Manuel/park = override
+                                    // opérateur, il survit au panic.
+                                    let manuals = merge.manual_positions();
+                                    let parked = merge.parked_objects();
+                                    for (obj_idx, id) in merge.osc_ids().iter().enumerate() {
+                                        if manuals.contains_key(&obj_idx)
+                                            || parked.contains(&obj_idx)
+                                        {
+                                            continue;
+                                        }
+                                        let _ = merge.send_position_now(*id, origin);
                                     }
                                 }
                                 // Chaque webview annule ses propres timers

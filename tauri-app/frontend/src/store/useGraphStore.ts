@@ -502,7 +502,16 @@ export const useGraphStore = create<GraphState>()((...a) => {
       } catch (e) {
         console.error('Panic: could not fetch track positions:', e);
       }
+      // Objets sous override opérateur/externe (manuel, park, psn, hold,
+      // freeze — les sources backend ≠ track/move) : le panic ne les
+      // téléporte pas — le merge renverrait leur position tenue à la
+      // frame suivante = flash aller-retour (revue L6). PAS manualPositions
+      // ici : la carte contient le layout par défaut pour TOUS les objets.
+      const OVERRIDE_SOURCES = new Set(['manual', 'park', 'psn', 'hold', 'freeze']);
+      const states = get().objectStates ?? {};
       for (const id of manualOscIds) {
+        const objIdx = manualOscIds.indexOf(id);
+        if (OVERRIDE_SOURCES.has(states[objIdx] ?? '')) continue;
         const pos = trackPositions[id] ?? [0, 0, 0];
         sends.push(
           invoke('send_osc_position', { oscId: id, x: pos[0], y: pos[1], z: pos[2] }),
