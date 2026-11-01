@@ -1884,8 +1884,14 @@ impl MergeRuntime {
                         "move_buffers.write",
                         move_buffers.write().unwrap_or_else(|e| e.into_inner())
                     );
+                    let mut end_modes = move_end_modes_arc
+                        .write()
+                        .unwrap_or_else(|e| e.into_inner());
                     for id in &moves_to_remove {
                         bufs.remove(id);
+                        // Sans ça un Hold stale survivrait : id réutilisé
+                        // en Revert + stale-kill → Hold appliqué à tort.
+                        end_modes.remove(id);
                     }
                 }
 
