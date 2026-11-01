@@ -30,13 +30,16 @@ registerBackendHealth({
 
 let started = false;
 
-/// Démarre le poll partagé — idempotent, appelé au mount des surfaces qui
-/// en ont besoin (PerformView, ConduitePage). Intervalle 1500ms : c'est de
-/// la surveillance, pas du feedback d'action.
+/// Démarre l'état santé — idempotent, appelé au mount des surfaces.
+/// L'intervalle parked/consoleAge a migré dans le canal `live:state`
+/// (perfSlice) : la fenêtre principale poll une fois et broadcaste, les
+/// détachées écoutent — N fenêtres ne polluent plus le backend.
+/// Restent ici : le fetch initial (immédiat, avant le 1er tick 1500ms)
+/// et `osc-armed-changed` (event-driven, gratuit dans toute fenêtre).
 export function startShowStatusPolling() {
   if (started) return;
   started = true;
-  const poll = async () => {
+  void (async () => {
     const [parked, age] = await Promise.all([
       safeInvoke<number[]>('get_parked_objects').catch((e) => { silentCatch(e); return null; }),
       safeInvoke<number | null>('get_last_show_cmd_age').catch((e) => { silentCatch(e); return undefined as number | null | undefined; }),
@@ -45,9 +48,7 @@ export function startShowStatusPolling() {
     if (parked != null) patch.parked = parked;
     if (age !== undefined) patch.consoleAge = age ?? null;
     useShowStatusStore.setState(patch);
-  };
-  void poll();
-  setInterval(poll, 1500);
+  })();
   // armed : valeur initiale + événement backend à chaque écriture.
   void safeInvoke<boolean>('get_osc_armed')
     .then((armed) => useShowStatusStore.setState({ armed }))

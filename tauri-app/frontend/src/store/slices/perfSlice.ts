@@ -1,5 +1,6 @@
 import { StateCreator } from 'zustand';
 import { safeInvoke as invoke } from '../../utils/tauri';
+import { isDetachedWindow } from '../../utils/safeStorage';
 import type { PerfStatsResponse } from '../../types/generated/PerfStatsResponse';
 
 /// Payload complet de `get_perf_stats` — généré depuis Rust (ts-rs).
@@ -86,20 +87,97 @@ export const createPerfSlice: StateCreator<PerfSlice, [], [], PerfSlice> = (set)
     })),
 });
 
-// Poll source-de-contrôle — vit dans le slice (donnée), pas React, et
-// JAMAIS gaté sur playback : park/manual/psn restent lisibles à l'arrêt.
-// Import dynamique : le module scope n'a pas accès au store à la création.
-setInterval(() => {
-  import('../useGraphStore')
-    .then((m) => {
-      const s = m.useGraphStore.getState();
-      s.refreshObjectStates();
-      s.refreshFlowHealth();
-      s.refreshEmittedPositions();
-      s.refreshPerceptual();
-    })
-    .catch(() => {});
-}, 1500);
+// Canal live:state — une SEULE fenêtre poll le backend : la principale
+// broadcaste l'état santé complet, les fenêtres détachées écoutent au
+// lieu de poller (N fenêtres ≠ N×1500ms d'IPC). Vit au niveau module,
+// jamais gaté sur playback : park/manual/psn lisibles à l'arrêt.
+export type LiveStatePayload = {
+  objectStates: Record<number, string>;
+  flowHealth: { psnRunning: boolean; psnAge: number | null; armed: boolean; showCmdAgeS: number | null };
+  emittedPositions: Record<number, [number, number, number]>;
+  perceptual: { legibility_deg_s: Record<number, number>; looming_ms: number; vection: number };
+  parked: number[];
+  consoleAge: number | null;
+};
+
+/// Poll santé complet — écrit perfSlice + showStatusStore locaux, puis
+/// (fenêtre principale) broadcaste `live:state` aux détachées.
+async function pollLive(broadcast: boolean) {
+  const [m, show] = await Promise.all([
+    import('../useGraphStore'),
+    import('../useShowStatusStore'),
+  ]);
+  const s = m.useGraphStore.getState();
+  await Promise.all([
+    s.refreshObjectStates(),
+    s.refreshFlowHealth(),
+    s.refreshEmittedPositions(),
+    s.refreshPerceptual(),
+  ]);
+  // Santé show (parked / consoleAge) — même cycle que le reste.
+  const [parked, consoleAge] = await Promise.all([
+    invoke<number[]>('get_parked_objects').catch(() => null),
+    invoke<number | null>('get_last_show_cmd_age').catch(() => undefined),
+  ]);
+  const patch: { parked?: number[]; consoleAge?: number | null; armed: boolean } = {
+    armed: s.flowHealth.armed,
+  };
+  if (parked != null) patch.parked = parked;
+  if (consoleAge !== undefined) patch.consoleAge = consoleAge ?? null;
+  show.useShowStatusStore.setState(patch);
+  if (!broadcast) return;
+  const payload: LiveStatePayload = {
+    objectStates: s.objectStates,
+    flowHealth: s.flowHealth,
+    emittedPositions: s.emittedPositions,
+    perceptual: s.perceptual,
+    parked: patch.parked ?? show.useShowStatusStore.getState().parked,
+    consoleAge: patch.consoleAge ?? show.useShowStatusStore.getState().consoleAge,
+  };
+  const { emit } = await import('@tauri-apps/api/event');
+  void emit('live:state', payload).catch(() => {});
+}
+
+if (isDetachedWindow()) {
+  // Fenêtre détachée : pas de poll — la principale broadcaste. Le show
+  // reste identique partout sans IPC dupliqué.
+  let lastStateAt = 0;
+  import('../../utils/tauri').then(({ safeListen }) =>
+    safeListen<LiveStatePayload>('live:state', (e) => {
+      lastStateAt = Date.now();
+      const p = e.payload;
+      void import('../useGraphStore').then((m) =>
+        m.useGraphStore.setState({
+          objectStates: p.objectStates,
+          flowHealth: p.flowHealth,
+          emittedPositions: p.emittedPositions,
+          perceptual: p.perceptual,
+        }),
+      );
+      void import('../useShowStatusStore').then((m) =>
+        m.useShowStatusStore.setState({
+          parked: p.parked,
+          consoleAge: p.consoleAge,
+          armed: p.flowHealth.armed,
+        }),
+      );
+    }),
+  );
+  // Watchdog : si la fenêtre principale est fermée/crashée (plus de
+  // broadcast >5s), la détachée reprend le poll localement — elle reste
+  // un instrument vivant, pas un écran figé. Silencieux en mode normal.
+  setInterval(() => {
+    if (lastStateAt === 0 || Date.now() - lastStateAt > 5000) {
+      void pollLive(false).catch(() => {});
+    }
+  }, 3000);
+} else {
+  // Surveillance non critique — un tick en échec ne doit jamais
+  // rejeter non capturé (le prochain tick réessaie).
+  const safeTick = () => void pollLive(true).catch(() => {});
+  safeTick();
+  setInterval(safeTick, 1500);
+}
 
 // Log broadcasté par le backend — TOUTES les fenêtres (y compris la
 // fenêtre run détachée) voient les commandes OSC. liveActions ne logge

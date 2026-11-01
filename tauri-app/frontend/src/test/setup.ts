@@ -72,8 +72,13 @@ vi.mock('@tauri-apps/api/core', () => ({
     return undefined;
   },
 }));
+// emit() est capturé — les tests vérifient le broadcast live:state.
+const emitCalls: Array<{ event: string; payload: any }> = [];
 vi.mock('@tauri-apps/api/event', () => ({
   listen: async () => () => {},
+  emit: async (event: string, payload: any) => {
+    emitCalls.push({ event, payload });
+  },
 }));
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({
@@ -105,6 +110,14 @@ export function emitMockEvent(event: string, payload: any): void {
 /// Oublie tous les listeners enregistrés — isolation entre tests.
 export function clearListeners(): void {
   listeners.clear();
+}
+/// Accès aux emit() capturés (broadcast live:state de la fenêtre
+/// principale vers les détachées).
+export function getEmitCalls(): Array<{ event: string; payload: any }> {
+  return emitCalls;
+}
+export function clearEmitCalls(): void {
+  emitCalls.length = 0;
 }
 /// Configure la réponse mockée d'une commande IPC (ex: load_graph_from_file)
 export function setInvokeResponse(cmd: string, response: any): void {
