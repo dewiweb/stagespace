@@ -461,6 +461,9 @@ fn parse_show_command(addr: &str, args: &[OscType], fps: f64) -> Option<ShowComm
             let fade = args.get(1).and_then(|a| match a {
                 OscType::Float(v) => Some(*v as f64),
                 OscType::Int(v) => Some(*v as f64),
+                OscType::Long(v) => Some(*v as f64),
+                OscType::Double(v) => Some(*v),
+                OscType::String(s) => s.parse::<f64>().ok(),
                 _ => None,
             });
             Some(ShowCommand::CueRecall(id, fade))
@@ -1274,25 +1277,26 @@ fn handle_show_command(msg: &OscMessage, src: std::net::SocketAddr, shared: &Sha
         .last_show_rx
         .lock()
         .unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
-    // Ack immédiat : /stagespace/ack <address>
+    // Ack/nack APRÈS parse — un ack avant parse confirmait des commandes
+    // invalides jamais exécutées ; un inconnu mérite un nack explicite.
     let socket = shared
         .reply_socket
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .as_ref()
         .cloned();
-    if let Some(socket) = socket {
-        let ack = OscPacket::Message(OscMessage {
-            addr: "/stagespace/ack".to_string(),
-            args: vec![OscType::String(msg.addr.clone())],
-        });
-        if let Ok(bytes) = encode(&ack) {
-            let _ = socket.send_to(&bytes, src);
-        }
-    }
     let fps = f64::from_bits(shared.timecode_fps.load(Ordering::Relaxed));
     match parse_show_command(&msg.addr, &msg.args, fps) {
         Some(cmd) => {
+            if let Some(socket) = socket.as_ref() {
+                let ack = OscPacket::Message(OscMessage {
+                    addr: "/stagespace/ack".to_string(),
+                    args: vec![OscType::String(msg.addr.clone())],
+                });
+                if let Ok(bytes) = encode(&ack) {
+                    let _ = socket.send_to(&bytes, src);
+                }
+            }
             if let Some(sink) = shared
                 .show_sink
                 .lock()
@@ -1303,6 +1307,20 @@ fn handle_show_command(msg: &OscMessage, src: std::net::SocketAddr, shared: &Sha
             }
         }
         None => {
+            // Commande inconnue/malformée → nack explicite au contrôleur
+            // (l'ack ne part que pour les commandes parsées et dispatchées).
+            if let Some(socket) = socket.as_ref() {
+                let nack = OscPacket::Message(OscMessage {
+                    addr: "/stagespace/nack".to_string(),
+                    args: vec![OscType::String(format!(
+                        "unknown-command: {}",
+                        msg.addr
+                    ))],
+                });
+                if let Ok(bytes) = encode(&nack) {
+                    let _ = socket.send_to(&bytes, src);
+                }
+            }
             // Inconnu → ignoré, 1 log par adresse (pas de spam par paquet).
             static WARNED: std::sync::OnceLock<
                 std::sync::Mutex<std::collections::HashSet<String>>,
