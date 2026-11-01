@@ -5,19 +5,23 @@
 /// les gestes modificateurs sont tous captés avant l'app.
 import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
-import { doClearPosition, doClearAllPositions } from '../utils/liveActions';
+import { doClearPosition, doClearAllPositions, doUnpark, doAttention } from '../utils/liveActions';
 
 export const ManualReleaseBar: React.FC = () => {
-  // Union des deux sources de vérité : manualPositions (map syncée des
-  // positions tenues) + objectStates==='manual' (label backend). Un objet
-  // dragué/thrown n'écrit pas forcément les deux — le union couvre tous
-  // les chemins de prise manuelle.
-  const manualPositions = useGraphStore((s) => s.manualPositions);
+  // Tous les états override qui figent un objet — chacun avec son release :
+  //   manual/hold → clear_manual_position · park → unpark · freeze →
+  //   attention/clear. Un objet dragué/thrown peut tomber dans n'importe
+  //   lequel selon le chemin de prise.
   const objectStates = useGraphStore((s) => s.objectStates);
-  const held = [...new Set([
-    ...Object.keys(manualPositions).map(Number),
-    ...Object.entries(objectStates).filter(([, s]) => s === 'manual').map(([i]) => Number(i)),
-  ])].sort((a, b) => a - b);
+  const manualPositions = useGraphStore((s) => s.manualPositions);
+  const RELEASE: Record<string, (i: number) => void> = {
+    manual: doClearPosition, hold: doClearPosition,
+    park: doUnpark, freeze: () => doAttention(null),
+  };
+  const held = Object.entries(objectStates)
+    .filter(([i, s]) => RELEASE[s] != null || manualPositions[Number(i)] != null)
+    .map(([i]) => Number(i))
+    .sort((a, b) => a - b);
   if (held.length === 0) return null;
   return (
     <div className="fixed bottom-11 left-3 z-40 flex items-center gap-1.5 bg-gray-900/95 border border-orange-500/50 rounded-lg px-2.5 py-1.5 shadow-xl">
@@ -26,8 +30,8 @@ export const ManualReleaseBar: React.FC = () => {
         <button
           key={i}
           className="text-[11px] px-1.5 py-0.5 rounded bg-orange-900/60 text-orange-200 hover:bg-orange-600 hover:text-white transition-colors"
-          title={`Release obj ${i} — le moteur reprend la main`}
-          onClick={() => doClearPosition(i)}
+          title={`Release obj ${i} (${objectStates[i] ?? 'manual'}) — le moteur reprend la main`}
+          onClick={() => (RELEASE[objectStates[i] ?? ''] ?? doClearPosition)(i)}
         >
           {i}×
         </button>
