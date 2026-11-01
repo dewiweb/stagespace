@@ -742,7 +742,13 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
           direction: slot.direction,
           end_mode: slot.endMode ?? 'revert',
           anchor_mode: slot.anchorMode ?? 'origin',
-          anchor_target: slot.anchorTarget ?? null,
+          // Boundary UI→wire : l'opérateur saisit un track_id, le
+          // backend attend obj_index (position dans osc_ids).
+          anchor_target: slot.anchorTarget != null
+            ? (manualOscIds.indexOf(slot.anchorTarget) >= 0
+                ? manualOscIds.indexOf(slot.anchorTarget)
+                : null)
+            : null,
           // Le graphe de modulation per-move voyage via l'animation payload
           // (MoveSpec.signal_graph = request.animation.signal_graph).
           animation: animation ? { ...animation, signal_graph: signalGraphData } : animation,

@@ -26,6 +26,10 @@ export const RunView: React.FC = () => {
   // est le slot solo'd — le badge S ne peut pas diverger d'un OSC.
   const soloSavedIds = useGraphStore((s) => s.soloSavedIds);
   const emittedPositions = useGraphStore((s) => s.emittedPositions);
+  const manualOscIds = useGraphStore((s) => s.manualOscIds);
+  // objectStates est keyed par obj_index (position dans osc_ids) —
+  // trackId → objIndex via indexOf, off-by-one pour tracks 1-based.
+  const srcOf = (trackId: number) => objectStates[manualOscIds.indexOf(trackId)];
   const playingIds = new Set(moveSlots.filter((s) => s.movementId).map((s) => s.id));
   const soloId =
     soloSavedIds.length > 0
@@ -66,8 +70,8 @@ export const RunView: React.FC = () => {
         {moveSlots.map((slot) => {
           const playing = playingIds.has(slot.id);
           const solo = soloId === slot.id;
-          const parked = slot.trackIds.filter((t) => objectStates[t] === 'park');
-          const held = slot.trackIds.filter((t) => objectStates[t] === 'hold');
+          const parked = slot.trackIds.filter((t) => srcOf(t) === 'park');
+          const held = slot.trackIds.filter((t) => srcOf(t) === 'hold');
           const cls = solo ? STATE_COLORS.solo : playing ? STATE_COLORS.playing : STATE_COLORS.stopped;
           return (
             <button
@@ -82,7 +86,7 @@ export const RunView: React.FC = () => {
             >
               <div className="font-bold text-sm truncate">{slot.name}</div>
               <div className="text-[10px] opacity-70 mt-1">
-                {slot.trackIds.map((t) => `${t}${objectStates[t] === 'park' ? '⏸' : ''}`).join(' ')}
+                {slot.trackIds.map((t) => `${t}${srcOf(t) === 'park' ? '⏸' : ''}`).join(' ')}
               </div>
               {parked.length > 0 && <div className="absolute top-1.5 right-1.5 text-[9px] bg-amber-800 px-1 rounded">P</div>}
               {held.length > 0 && <div className="absolute bottom-1.5 right-1.5 text-[9px] bg-cyan-800 px-1 rounded">H</div>}

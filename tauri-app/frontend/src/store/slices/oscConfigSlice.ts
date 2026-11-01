@@ -126,11 +126,16 @@ export const createOscConfigSlice: StateCreator<OscConfigSlice, [], [], OscConfi
       };
       set(next);
       persist(get(), next);
-      // Parse "1:7,2:8" → {1:7, 2:8}
+      // Parse "1:7,2:8" → {1:7, 2:8} — l'opérateur saisit des track_ids,
+      // le backend attend des obj_index (position dans osc_ids) :
+      // conversion à la frontière UI→wire, comme partout ailleurs.
+      const { useGraphStore } = await import('../useGraphStore');
+      const oscIds = useGraphStore.getState().manualOscIds;
       const trackerMap: Record<number, number> = {};
       for (const pair of next.psnMap.split(',')) {
         const [t, o] = pair.split(':').map((s) => parseInt(s.trim()));
-        if (Number.isFinite(t) && Number.isFinite(o)) trackerMap[t] = o;
+        const objIdx = oscIds.indexOf(o);
+        if (Number.isFinite(t) && Number.isFinite(o) && objIdx >= 0) trackerMap[t] = objIdx;
       }
       try {
         await invoke('set_psn_config', {

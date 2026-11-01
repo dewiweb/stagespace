@@ -274,7 +274,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               </div>
             </div>
             <div>
-              <label className="text-gray-500 text-xs block mb-1">Map tracker→objet ("1:7, 2:8" — tracker 1 pilote l'objet 7)</label>
+              <label className="text-gray-500 text-xs block mb-1">Map tracker→track ("1:7, 2:8" — tracker 1 pilote la track 7)</label>
               <input
                 type="text"
                 value={psnMapStr}

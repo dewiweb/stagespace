@@ -643,12 +643,16 @@ const LiveDrawer: React.FC = () => {
               : <span className="text-gray-400">(stopped)</span>}
             {/* Source-de-contrôle par objet du slot — qui pilote quoi. */}
             {slot.trackIds.map((t) => {
-              const src = objectStates[t];
+              // objectStates/emittedPositions sont keyed par obj_index
+              // (position dans osc_ids) — trackId ≠ objIndex, off-by-one
+              // pour des tracks 1-based : conversion obligatoire.
+              const objIdx = manualOscIds.indexOf(t);
+              const src = objIdx >= 0 ? objectStates[objIdx] : undefined;
               // PSN stale : flux figé >2s — le label "psn" mentirait.
               const stale =
                 src === 'psn' &&
                 (flowHealth.psnAge == null || flowHealth.psnAge > 2000);
-              const emitted = emittedPositions[t];
+              const emitted = objIdx >= 0 ? emittedPositions[objIdx] : undefined;
               const colors: Record<string, string> = {
                 park: 'bg-amber-900 text-amber-300',
                 psn: 'bg-purple-900 text-purple-300',
@@ -779,7 +783,7 @@ const LiveDrawer: React.FC = () => {
                   type="number"
                   min={0}
                   placeholder="cible"
-                  title="Track cible suivie (index objet)"
+                  title="Track cible suivie (numéro de track)"
                   value={slot.anchorTarget ?? ''}
                   onChange={(e) => setSlotAnchorTarget(slot.id, parseInt(e.target.value) || 0)}
                   className="mt-1 w-full py-1 px-2 text-xs rounded bg-gray-800 text-gray-300"

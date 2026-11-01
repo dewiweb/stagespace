@@ -105,6 +105,7 @@ See `.github/workflows/ci.yml`.
 - Async Tauri command tests: use `tauri::async_runtime::block_on` inside ordinary `#[test]` functions; no direct Tokio dependency is needed.
 
 ### Frontend (TypeScript/React)
+- **Namespace boundary** — `obj_index` (0-based position dans `osc_ids`) vs `track_id` (le N de `/track/N`) sont DEUX espaces distincts. Wire/backend parle `obj_index` partout (`manual_positions`, `objectStates`, `emittedPositions`, `anchor_target`, `psn tracker_map`, `/stagespace/position <obj>`) ; les UIs opérateur parlent `track_id` (`slot.trackIds`, `manualOscIds`, `trackpos`). Conversion obligatoire à la frontière : `objIdx = manualOscIds.indexOf(trackId)` — jamais `objectStates[trackId]` (off-by-one pour tracks 1-based).
 - State management: Zustand with slice pattern (`src/store/slices/`)
 - Tests: vitest + jsdom, mocks in `src/test/setup.ts`, helpers in `src/store/__tests__/testHelpers.ts`
 - Tauri IPC: use `safeInvoke` from `utils/tauri.ts` (not raw `invoke`)

@@ -234,7 +234,9 @@ function soundcheckPing(tracks: number[]) {
 export function doSoundcheck(action?: string) {
   logAction('doSoundcheck');
   const s = soundcheckState;
-  const tracks = useGraphStore.getState().manualOscIds;
+  // doSetPosition attend obj_index (position dans osc_ids), pas le
+  // track_id — on itère les indices de la liste, pas les ids.
+  const tracks = useGraphStore.getState().manualOscIds.map((_, i) => i);
   if (action === 'stop') {
     s.running = false;
     if (s.timer) { clearTimeout(s.timer); s.timer = null; }
