@@ -597,6 +597,10 @@ function AppMain() {
           des composants démontés par le mode live. */}
       <StatusBar />
 
+      {/* Release des objets tenus en manuel — visible dans tous les modes
+          (un objet figé doit pouvoir être relâché où qu'on soit). */}
+      <ManualReleaseBar />
+
       {/* Toast notifications — erreurs backend, alerts OSC, etc. */}
       <ToastContainer />
 

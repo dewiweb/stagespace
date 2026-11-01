@@ -2,7 +2,11 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Default capability for STAGESPACE main window",
-  "windows": ["main", "conduite"],
+  "windows": [
+    "main",
+    "conduite",
+    "run"
+  ],
   "permissions": [
     "core:default",
     "core:event:default",
@@ -17,6 +21,13 @@
     "fs:allow-read-file",
     "fs:allow-write-file",
     "fs:allow-read-text-file",
-    "fs:allow-write-text-file"
+    "fs:allow-write-text-file",
+    "core:webview-window:default",
+    "core:webview-window:allow-create",
+    "core:window:allow-set-focus",
+    "core:window:allow-center",
+    "core:window:allow-set-size",
+    "core:window:allow-set-title",
+    "core:window:allow-close"
   ]
 }
