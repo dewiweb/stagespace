@@ -4,7 +4,7 @@
 import { useEffect } from 'react';
 import { safeListen } from '../utils/tauri';
 import { useCuelistStore } from '../store/useCuelistStore';
-import { doGo, doCueNext, doCuePrev, doCueRecall, doPanic, doStop, doPark, doUnpark, doArm, doStatus, doSlot, doSlotStop, doSolo, doUnsolo, doSetPosition, doClearPosition, doClearAllPositions, doSetTrackPosition } from '../utils/liveActions';
+import { doGo, doCueNext, doCuePrev, doCueRecall, doPanic, doStop, doPark, doUnpark, doArm, doStatus, doSlot, doSlotStop, doSolo, doUnsolo, doSetPosition, doClearPosition, doClearAllPositions, doSetTrackPosition, doSoundcheck } from '../utils/liveActions';
 import type { ShowCommand } from '../types/generated/ShowCommand';
 
 interface ShowControlEvent {
@@ -83,6 +83,9 @@ export function useShowControl() {
               if (cmd.value != null) {
                 useCuelistStore.getState().handleTimecode(cmd.value);
               }
+              break;
+            case 'Soundcheck':
+              doSoundcheck(cmd.value ?? 'start');
               break;
           }
         });

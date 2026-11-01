@@ -411,6 +411,9 @@ pub enum ShowCommand {
     Stop,
     /// `/stagespace/timecode <seconds | "HH:MM:SS:FF">` — secondes.
     Timecode(f64),
+    /// `/stagespace/soundcheck [start|stop|next|prev]` — ping séquentiel
+    /// par track (identification spatiale en repère). Défaut = start.
+    Soundcheck(Option<String>),
 }
 
 type ShowSink = Box<dyn Fn(ShowCommand, std::net::SocketAddr) + Send>;
@@ -527,6 +530,14 @@ fn parse_show_command(addr: &str, args: &[OscType], fps: f64) -> Option<ShowComm
                 _ => None,
             })?;
             Some(ShowCommand::Timecode(tc))
+        }
+        "soundcheck" => {
+            let action = args.first().and_then(|a| match a {
+                OscType::String(s) => Some(s.clone()),
+                OscType::Int(i) => Some(i.to_string()),
+                _ => None,
+            });
+            Some(ShowCommand::Soundcheck(action))
         }
         _ => None,
     }

@@ -162,6 +162,55 @@ export function doClearAllPositions() {
   invoke('clear_all_manual_positions').catch(silentCatch);
 }
 
+/** /stagespace/soundcheck [start|stop|next|prev] — ping séquentiel par
+ *  track : position repère (front-center) 1.5 s puis retour à la base.
+ *  Identification spatiale en repère — state machine côté frontend,
+ *  le canal `position` existant fait le reste. */
+const SOUNDCHECK_PING_MS = 1500;
+const soundcheckState: { running: boolean; idx: number; timer: ReturnType<typeof setTimeout> | null } = {
+  running: false,
+  idx: 0,
+  timer: null,
+};
+
+function soundcheckPing(tracks: number[]) {
+  const s = soundcheckState;
+  if (s.idx < 0 || s.idx >= tracks.length) {
+    doSoundcheck('stop');
+    return;
+  }
+  const obj = tracks[s.idx];
+  doSetPosition(obj, 0, -2, 0); // repère front-center
+  if (s.timer) clearTimeout(s.timer);
+  s.timer = setTimeout(() => {
+    doClearPosition(obj);
+    s.idx += 1;
+    if (s.running && s.idx < tracks.length) soundcheckPing(tracks);
+    else doSoundcheck('stop');
+  }, SOUNDCHECK_PING_MS);
+}
+
+export function doSoundcheck(action?: string) {
+  const s = soundcheckState;
+  const tracks = useGraphStore.getState().manualOscIds;
+  if (action === 'stop') {
+    s.running = false;
+    if (s.timer) { clearTimeout(s.timer); s.timer = null; }
+    tracks.forEach((o) => doClearPosition(o));
+    return;
+  }
+  if (action === 'next' || action === 'prev') {
+    s.running = true;
+    s.idx = Math.max(0, Math.min(tracks.length - 1, s.idx + (action === 'next' ? 1 : -1)));
+    soundcheckPing(tracks);
+    return;
+  }
+  // start (défaut)
+  s.running = true;
+  s.idx = 0;
+  soundcheckPing(tracks);
+}
+
 /** /stagespace/trackpos <track> <x> <y> <z> — position d'origine d'une
  *  track (là où panic renvoie, base Barycenter — .hol par OSC).
  *  Setter unitaire : un set par track ne doit pas effacer les autres
