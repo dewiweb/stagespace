@@ -181,6 +181,11 @@ pub struct MergeRuntime {
     /// — l'espace interne reste canonique (anchors, zones, kinematics,
     /// last_out). None = passthrough.
     venue_map: Arc<RwLock<Option<([f64; 3], [f64; 3])>>>,
+    /// Vu-mètre perceptuel — calculé par frame depuis les vraies
+    /// positions : vitesse angulaire perçue (legibility MAMA °/s),
+    /// looming (vitesse radiale d'approche m/s), vection (cohérence
+    /// rotationnelle du champ 0..1).
+    perceptual: Arc<RwLock<PerceptualMetrics>>,
     /// Règles de modulation cinématique (source cinématique → canal spatial)
     /// — Arc<Vec> : snapshot par frame = clone d'Arc.
     channel_modulations: Arc<RwLock<Arc<Vec<ChannelModulation>>>>,
@@ -235,6 +240,21 @@ pub struct MergeRuntime {
 pub type StaleKill = (String, Arc<PositionBuffer>);
 /// File partagée merge → superviseur backend.
 type StaleKillQueue = Arc<Mutex<Vec<StaleKill>>>;
+
+/// Vu-mètre perceptuel — un objet qui dépasse ~5°/s de vitesse
+/// angulaire devient flou (MAMA/localization blur) ; un objet qui
+/// s'approche rapidement est l'accent émotionnel #1 (looming) ; un
+/// champ qui tourne en bloc induit l'auto-mouvement (vection).
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct PerceptualMetrics {
+    /// Vitesse angulaire perçue par objet (°/s) — >5°/s = illisible.
+    pub legibility_deg_s: std::collections::HashMap<usize, f64>,
+    /// Pire vitesse d'approche vers l'origine (m/s, 0 = aucune).
+    pub looming_ms: f64,
+    /// Fraction des objets en mouvement tournant dans le même sens
+    /// autour du centre (0..1) — >0.7 = risque vection.
+    pub vection: f64,
+}
 
 impl MergeRuntime {
     /// Crée un nouveau MergeRuntime
@@ -295,6 +315,7 @@ impl MergeRuntime {
             held_objects: Arc::new(RwLock::new(HashSet::new())),
             psn_objects: Arc::new(RwLock::new(HashSet::new())),
             venue_map: Arc::new(RwLock::new(None)),
+            perceptual: Arc::new(RwLock::new(PerceptualMetrics::default())),
             channel_modulations: Arc::new(RwLock::new(Arc::new(Vec::new()))),
             kinematic_smoothing: Arc::new(RwLock::new(0.5)),
             zones: Arc::new(RwLock::new(Arc::new(Vec::new()))),
@@ -1071,6 +1092,14 @@ impl MergeRuntime {
             .clone()
     }
 
+    /// Métriques perceptuelles calculées à 60fps dans le frame loop.
+    pub fn perceptual_metrics(&self) -> PerceptualMetrics {
+        self.perceptual
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
     /// Auto-venue : mappe l'espace canonique du show vers la salle
     /// réelle. `scale`/`offset` par axe — `p_out = p*s + o`. None =
     /// passthrough. Validé : fini + scale > 0.
@@ -1298,6 +1327,7 @@ impl MergeRuntime {
         let last_out_positions_arc = self.last_out_positions.clone();
         let held_objects_arc = self.held_objects.clone();
         let venue_map_arc = self.venue_map.clone();
+        let perceptual_arc = self.perceptual.clone();
         let object_channels_arc = self.object_channels.clone();
         let zones_arc = self.zones.clone();
         let channel_modulations_arc = self.channel_modulations.clone();
@@ -1310,6 +1340,8 @@ impl MergeRuntime {
         let output_layer_arc = self.output_layer.clone();
         let osc_values_arc = self.osc_values.clone();
 
+        let mut prev_transformed: HashMap<usize, nalgebra::Vector3<f64>> = HashMap::new();
+        let mut prev_perceptual_instant: Option<Instant> = None;
         let handle = std::thread::spawn(move || {
             let mut start = Instant::now();
             let frame_duration = Duration::from_secs_f64(1.0 / fps);
@@ -1967,6 +1999,62 @@ impl MergeRuntime {
                     kinematic_states.retain(|idx, _| present.contains(idx));
                 } else if !kinematic_states.is_empty() {
                     kinematic_states.clear();
+                }
+                // Vu-mètre perceptuel — vitesses par frame sur `transformed`
+                // (espace canonique — ce que l'opérateur perçoit, pas le
+                // payload venue-mappé).
+                {
+                    let now = Instant::now();
+                    let dt = prev_perceptual_instant
+                        .map(|p: Instant| (now - p).as_secs_f64())
+                        .unwrap_or(0.0);
+                    if dt > 1e-3 {
+                        let mut metrics = PerceptualMetrics::default();
+                        let mut pos_count = 0usize;
+                        let mut same_sign = 0usize;
+                        let mut dominant = 0i32;
+                        for (obj_idx, pos) in &transformed {
+                            let Some(prev) = prev_transformed.get(obj_idx) else {
+                                continue;
+                            };
+                            let v = (pos - prev) / dt;
+                            let r = pos.norm();
+                            if r < 0.01 {
+                                continue;
+                            }
+                            let radial = v.dot(pos) / r;
+                            let tangential = (v - pos * (radial / r)).norm();
+                            metrics.legibility_deg_s.insert(
+                                *obj_idx,
+                                (tangential / r).to_degrees(),
+                            );
+                            if -radial > metrics.looming_ms {
+                                metrics.looming_ms = -radial;
+                            }
+                            let az = pos.x * v.y - pos.y * v.x; // composante azimutale
+                            if az.abs() > 1e-4 {
+                                pos_count += 1;
+                                let s = if az > 0.0 { 1 } else { -1 };
+                                if dominant == 0 {
+                                    dominant = s;
+                                }
+                                if s == dominant {
+                                    same_sign += 1;
+                                }
+                            }
+                        }
+                        metrics.vection = if pos_count > 0 {
+                            same_sign as f64 / pos_count as f64
+                        } else {
+                            0.0
+                        };
+                        *perceptual_arc.write().unwrap_or_else(|e| e.into_inner()) = metrics;
+                    }
+                    prev_transformed = transformed
+                        .iter()
+                        .map(|(i, p)| (*i, *p))
+                        .collect();
+                    prev_perceptual_instant = Some(now);
                 }
                 // Règles = graph-déclarées puis manuelles — les manuelles
                 // écrasent le graph sur les canaux qu'elles ciblent.

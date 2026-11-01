@@ -439,3 +439,12 @@ pub async fn set_venue_config(
     merge.set_venue_map(if enabled { Some((scale, offset)) } else { None });
     Ok(())
 }
+
+/// Vu-mètre perceptuel — vitesse angulaire perçue par objet (legibility
+/// MAMA), looming, vection. Calculé à 60fps dans le frame loop du merge.
+#[tauri::command]
+pub async fn get_perceptual_metrics(
+    state: State<'_, AppState>,
+) -> Result<stagespace_engines::merge_runtime::PerceptualMetrics, IpcError> {
+    Ok(lock_or_recover(&state.merge_runtime).perceptual_metrics())
+}

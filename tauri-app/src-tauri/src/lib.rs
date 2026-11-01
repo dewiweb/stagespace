@@ -42,7 +42,7 @@ use commands::osc::{
     osc_list_mappings, osc_remove_mapping, osc_set_in_enabled, osc_set_mapping_enabled,
     osc_suppress_in, send_osc_position, send_show_feedback, send_show_nack, set_osc_armed,
     set_osc_output, set_osc_receiver_port, set_timecode_fps,
-    get_emitted_positions, get_manual_position, get_object_states, get_psn_health, set_psn_config, set_venue_config,
+    get_emitted_positions, get_manual_position, get_object_states, get_perceptual_metrics, get_psn_health, set_psn_config, set_venue_config,
 };
 use commands::playback::set_macro;
 use commands::plugins::{import_plugin, list_plugins, reload_plugins};
@@ -407,6 +407,7 @@ pub fn run() {
             get_emitted_positions,
             get_manual_position,
             set_venue_config,
+            get_perceptual_metrics,
             get_perf_stats,
             discover_osc_targets,
             sample_movement_trajectories,

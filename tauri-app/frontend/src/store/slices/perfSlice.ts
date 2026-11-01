@@ -27,6 +27,13 @@ export interface PerfSlice {
   /// confidence view : le "commanded" vs l'intention GUI.
   emittedPositions: Record<number, [number, number, number]>;
   refreshEmittedPositions: () => Promise<void>;
+  /// Vu-mètre perceptuel — calculé à 60fps côté merge.
+  perceptual: {
+    legibility_deg_s: Record<number, number>;
+    looming_ms: number;
+    vection: number;
+  };
+  refreshPerceptual: () => Promise<void>;
   /// Log opérationnel des commandes show — qui a GO quand, quel NACK.
   /// P2.4 : l'historique horodaté visible en conduite.
   showLog: { ts: number; label: string }[];
@@ -61,6 +68,17 @@ export const createPerfSlice: StateCreator<PerfSlice, [], [], PerfSlice> = (set)
       set({ emittedPositions: pos });
     } catch { /* non critique */ }
   },
+  perceptual: { legibility_deg_s: {}, looming_ms: 0, vection: 0 },
+  refreshPerceptual: async () => {
+    try {
+      const p = await invoke<{
+        legibility_deg_s: Record<number, number>;
+        looming_ms: number;
+        vection: number;
+      }>('get_perceptual_metrics');
+      set({ perceptual: p });
+    } catch { /* non critique */ }
+  },
   showLog: [],
   pushShowLog: (label) =>
     set((s) => ({
@@ -78,6 +96,7 @@ setInterval(() => {
       s.refreshObjectStates();
       s.refreshFlowHealth();
       s.refreshEmittedPositions();
+      s.refreshPerceptual();
     })
     .catch(() => {});
 }, 1500);

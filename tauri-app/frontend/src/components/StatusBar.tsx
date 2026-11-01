@@ -25,6 +25,7 @@ export const StatusBar: React.FC = () => {
   const oscPort = useGraphStore((s) => s.oscPort);
   const [armed] = useOscArmed();
   const flowHealth = useGraphStore((s) => s.flowHealth);
+  const perceptual = useGraphStore((s) => s.perceptual);
   const debugPerfVisible = useMoveEditorStore((s) => s.debugPerfVisible);
   const backendDown = useShowStatusStore((s) => s.backendDown);
 
@@ -90,6 +91,32 @@ export const StatusBar: React.FC = () => {
           OSC ●
         </span>
       )}
+
+      {/* Vu-mètre perceptuel — legibility (vitesse angulaire perçue,
+          >5°/s = illisible), looming (approche rapide), vection (champ
+          tournant en bloc). Calculé à 60fps côté merge. */}
+      {(() => {
+        const leg = Math.max(0, ...Object.values(perceptual.legibility_deg_s));
+        const parts: { label: string; warn: boolean; tip: string }[] = [];
+        if (leg > 0.1)
+          parts.push({ label: `${leg.toFixed(0)}°/s`, warn: leg > 5, tip: 'legibility — vitesse angulaire max perçue (MAMA)' });
+        if (perceptual.looming_ms > 0.3)
+          parts.push({ label: `loom ${perceptual.looming_ms.toFixed(1)}`, warn: perceptual.looming_ms > 3, tip: 'looming — vitesse d\'approche max (m/s)' });
+        if (perceptual.vection > 0.7)
+          parts.push({ label: `vec ${Math.round(perceptual.vection * 100)}%`, warn: true, tip: 'vection — champ en rotation cohérente' });
+        return parts.length > 0 ? (
+          <span
+            className={`px-1.5 py-0.5 rounded font-mono flex-shrink-0 border ${
+              parts.some((p) => p.warn)
+                ? 'text-amber-300 bg-amber-900/40 border-amber-700/40'
+                : 'text-gray-400 bg-gray-800/40 border-gray-700/40'
+            }`}
+            title={parts.map((p) => p.tip).join(' · ')}
+          >
+            {parts.map((p) => p.label).join(' ')}
+          </span>
+        ) : null;
+      })()}
 
       {/* Backend absent — un silentCatch a avalé un échec IPC. Plus de
           backend = plus d'OSC, plus de recall, plus rien : visible partout. */}
