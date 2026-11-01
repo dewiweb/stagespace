@@ -141,7 +141,7 @@ function AppMain() {
   // n'a pas de sens dans une app de show — et il masquait le release
   // clic-droit des objets (radar + 3D). Suppression globale : les handlers
   // surface (contextmenu → doClearPosition) continuent de fonctionner.
-  useEffect(() => {
+  React.useEffect(() => {
     const onCtx = (e: MouseEvent) => e.preventDefault();
     document.addEventListener('contextmenu', onCtx);
     return () => document.removeEventListener('contextmenu', onCtx);
