@@ -569,3 +569,7 @@ mod param_modulation_test_file;
 #[cfg(test)]
 #[path = "tests/show_control_e2e_tests.rs"]
 mod show_control_e2e_test_file;
+
+#[cfg(test)]
+#[path = "tests/osc_locks_tests.rs"]
+mod osc_locks_test_file;
