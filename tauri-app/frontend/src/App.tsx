@@ -13,6 +13,7 @@ import StatusBar from './components/StatusBar';
 import ToastContainer from './components/ToastContainer';
 import PerformView from './components/PerformView';
 import WelcomeModal, { shouldShowWelcome } from './components/WelcomeModal';
+import ConduitePage from './pages/ConduitePage';
 import ShortcutsModal from './components/ShortcutsModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Workflow, ChevronRight, ChevronDown, PanelRightClose, PanelLeftClose, PanelLeftOpen, PanelRightOpen, Maximize2, Minimize2, Activity } from 'lucide-react';
@@ -68,8 +69,11 @@ function App() {
 function AppMain() {
   const showExpert = useMoveEditorStore((s) => s.showExpert);
   const setShowExpert = useMoveEditorStore((s) => s.setShowExpert);
-  const performMode = useMoveEditorStore((s) => s.performMode);
-  const setPerformMode = useMoveEditorStore((s) => s.setPerformMode);
+  // La refonte 3 phases : ATELIER (mise en boîte) · CONDUITE (faire
+  // avancer le show) · JEU (interagir avec les objets) — la nav
+  // première remplace l'ancien toggle PERFORM/Edit.
+  const surface = useMoveEditorStore((s) => s.surface);
+  const setSurface = useMoveEditorStore((s) => s.setSurface);
   const debugPerfVisible = useMoveEditorStore((s) => s.debugPerfVisible);
   const setDebugPerfVisible = useMoveEditorStore((s) => s.setDebugPerfVisible);
   const shortcutsOpen = useMoveEditorStore((s) => s.shortcutsOpen);
@@ -231,23 +235,33 @@ function AppMain() {
           <h1 className="text-white font-bold text-base tracking-tight">STAGESPACE</h1>
           <span className="text-gray-400 text-xs ml-1 italic">Play the space</span>
         </div>
+        {/* Nav 3 phases — les surfaces de travail de l'opérateur :
+            ATELIER (composer/préparer) · CONDUITE (faire avancer le show)
+            · JEU (interagir live). La phase courante est colorée. */}
+        <nav className="flex items-center gap-1 bg-gray-900/60 rounded-lg p-0.5">
+          {(
+            [
+              { id: 'atelier', label: 'Atelier', color: 'bg-purple-600', title: 'Composer/préparer — graphes, moves, cues, score, réglages' },
+              { id: 'conduite', label: 'Conduite', color: 'bg-amber-600', title: 'Faire avancer le show — cues, GO, surveillance, log' },
+              { id: 'jeu', label: 'Jeu', color: 'bg-green-600', title: 'Interagir live — pads, gestes, radar, sources' },
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setSurface(tab.id)}
+              title={tab.title}
+              className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
+                surface === tab.id
+                  ? `${tab.color} text-white`
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => setPerformMode(!performMode)}
-            className={`px-3 py-1 text-xs font-bold rounded transition-all flex items-center gap-1.5 ${
-              performMode ? 'bg-gray-800 text-gray-400 hover:text-white' : 'bg-green-700 text-white'
-            }`}
-            title={performMode
-              ? 'Atelier — edit moves and graphs (leave the live surface)'
-              : 'Perform mode — live surface: setlist, GO, panic, on-demand live params'}
-          >
-            {performMode ? (
-              <><Workflow size={11} /> Edit</>
-            ) : (
-              <><span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> PERFORM</>
-            )}
-          </button>
-          {!performMode && (
+          {surface === 'atelier' && (
             // Même convention que PERFORM/Edit : le bouton affiche la
             // CIBLE, la couleur signale le mode courant.
             <button
@@ -266,13 +280,29 @@ function AppMain() {
         </div>
       </header>
 
-      {performMode ? (
-        /* Mode Perform — surface live filtrée : Toolbar et édition absents,
-           les raccourcis live restent actifs (montés ci-dessus). */
-        <ErrorBoundary zone="Perform">
+      {surface === 'conduite' ? (
+        /* Surface Conduite — la page dédiée promue en navigation
+           première (la même que la fenêtre détachable ?view=conduite). */
+        <ErrorBoundary zone="Conduite">
+          <React.Suspense
+            fallback={
+              <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">
+                Chargement de la conduite…
+              </div>
+            }
+          >
+            <ConduitePage />
+          </React.Suspense>
+        </ErrorBoundary>
+      ) : surface === 'jeu' ? (
+        /* Surface Jeu — l'instrument live : pads, gestes, radar,
+           sources. Toolbar et édition absents, raccourcis live actifs. */
+        <ErrorBoundary zone="Jeu">
           <PerformView />
         </ErrorBoundary>
       ) : (
+        /* Surface Atelier — la mise en boîte : graphes, moves, cues,
+           templates, 3D, réglages. */
         <>
       {/* Toolbar (OSC settings, import .hol) */}
       <Toolbar />

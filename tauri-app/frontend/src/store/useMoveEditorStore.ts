@@ -71,6 +71,13 @@ interface MoveEditorStore {
   activeMovementIds: string[];
   launchFlash: number; // timestamp du dernier launch (pour feedback visuel)
   // Mode Expert (node editor) — partagé pour que MovesPanel puisse l'activer via [edit]
+  /// Surface active — la refonte 3 phases de l'opérateur :
+  /// atelier (mise en boîte) · conduite (faire avancer le show) ·
+  /// jeu (interagir avec les objets live). Remplace le booléen
+  /// performMode : 'jeu' = l'ancien performMode=true.
+  surface: 'atelier' | 'conduite' | 'jeu';
+  setSurface: (s: 'atelier' | 'conduite' | 'jeu') => void;
+
   showExpert: boolean;
   setShowExpert: (show: boolean) => void;
   // Mode Perform — surface live réduite (setlist + canvas + params live à la
@@ -260,6 +267,11 @@ export const useMoveEditorStore = create<MoveEditorStore>((set, get) => {
   current: defaultAnimation(),
   activeMovementIds: [],
   launchFlash: 0,
+  surface: (localStorage.getItem('ss-surface') as 'atelier' | 'conduite' | 'jeu') ?? 'jeu',
+  setSurface: (surface) => {
+    try { localStorage.setItem('ss-surface', surface); } catch { /* quota */ }
+    set({ surface, performMode: surface === 'jeu' });
+  },
   showExpert: false,
   setShowExpert: (show) => set({ showExpert: show }),
   // Perform-first : l'app s'ouvre sur la surface de show. Le graphe est

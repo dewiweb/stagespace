@@ -7,7 +7,6 @@ import CuelistPanel from './CuelistPanel';
 import { Slider } from './ui/Slider';
 import EmptyState from './ui/EmptyState';
 import { StatusChip } from './ui/StatusChip';
-import { ShowTransport } from './show/ShowTransport';
 import { SlotTile } from './show/SlotTile';
 import { MacrosSurface } from './show/MacrosSurface';
 import { useShowStatusStore, startShowStatusPolling } from '../store/useShowStatusStore';
@@ -51,10 +50,6 @@ export const PerformView: React.FC = () => {
   const lastTimecodeAt = useCuelistStore((s) => s.lastTimecodeAt);
   const tcChaseEnabled = useCuelistStore((s) => s.tcChaseEnabled);
   const tcFps = useGraphStore((s) => s.timecodeFps);
-  const pending = useCuelistStore((s) => s.pending);
-  const goToNextCue = useCuelistStore((s) => s.goToNextCue);
-  const goToPreviousCue = useCuelistStore((s) => s.goToPreviousCue);
-
   const [goFeedback, setGoFeedback] = React.useState<{ ok: boolean; message: string } | null>(null);
   // Mode touch : pads numérotés (busking) + cibles agrandies (tablette).
   // Mode tactile supprimé — il doublait buskingMode (pads gros doigt
@@ -62,7 +57,9 @@ export const PerformView: React.FC = () => {
   // busking (pads) et conduite (transport).
   // Mode conduite : vue plein écran readable à distance — NOW/NEXT cue,
   // TC, armé, pending timers. Le reste du show continue derrière.
-  const [conduiteMode, setConduiteMode] = React.useState(false);
+  // La conduite est une surface de première classe (nav ATELIER/CONDUITE/
+  // JEU) — le bouton y navigue au lieu de l'overlay interne redondant.
+  const setSurface = useMoveEditorStore((s) => s.setSurface);
   // Mode busking plein écran : grille de pads géante (tir au doigt).
   const [buskingMode, setBuskingMode] = React.useState(false);
   // État de santé show (parked / consoleAge / armed) — poll unique partagé
@@ -92,8 +89,6 @@ export const PerformView: React.FC = () => {
   // Conduite : cue courante + suivante (affichage console dans la top bar).
   const curCue = currentCueIndex >= 0 ? cues[currentCueIndex] : null;
   const nextCue = currentCueIndex + 1 < cues.length ? cues[currentCueIndex + 1] : null;
-  // Lookahead console : la cue après la suivante, en grisé sous NEXT.
-  const nextNextCue = currentCueIndex + 2 < cues.length ? cues[currentCueIndex + 2] : null;
   // Timecode : HH:MM:SS:FF au fps configuré, "lost" si silence >1s.
   const tcActive = lastTimecode != null && Date.now() - lastTimecodeAt < 1000;
   const tc = lastTimecode == null ? 'TC —' : tcStr(lastTimecode, tcFps);
@@ -311,7 +306,7 @@ export const PerformView: React.FC = () => {
           ▶
         </button>
         <button
-          onClick={() => setConduiteMode(true)}
+          onClick={() => setSurface('conduite')}
           className="px-3 py-2.5 rounded-lg flex-shrink-0 bg-amber-800/60 hover:bg-amber-700/80 text-amber-100 text-xs font-bold uppercase tracking-wide transition-colors active:scale-95"
           title="Vue conduite plein écran — NOW/NEXT cue, TC, ARM (lisible à distance)"
         >
@@ -448,74 +443,6 @@ export const PerformView: React.FC = () => {
         </div>
       )}
 
-      {/* ═══ Conduite plein écran — lisible à distance (tablette/FOH) ═══ */}
-      {conduiteMode && (
-        <div className="absolute inset-0 z-menu bg-stagespace-bg flex flex-col">
-          <div className="flex items-center justify-between px-8 py-4 border-b border-stagespace-border">
-            <span className="text-gray-400 text-sm uppercase tracking-widest">Conduite</span>
-            <div className="flex items-center gap-4">
-              {parked.length > 0 && <ParkedChip parked={parked} />}
-              {consoleAge !== null && (
-                <StatusChip
-                  variant={consoleAge < 5 ? 'live' : 'dim'}
-                  className="text-lg px-3 py-1"
-                  title="Dernière commande show-control reçue"
-                >
-                  CONSOLE {consoleAge < 5 ? '●' : '○'}
-                </StatusChip>
-              )}
-              {tcChaseEnabled && (
-                <span className={`font-mono text-2xl font-bold ${tcActive ? 'text-emerald-400' : 'text-gray-600'}`}>
-                  {tcActive ? tc : 'TC lost'}
-                </span>
-              )}
-              <button
-                onClick={() => setConduiteMode(false)}
-                className="px-6 py-3 rounded-xl bg-gray-800 text-gray-200 text-lg font-semibold"
-              >
-                Fermer ✕
-              </button>
-            </div>
-          </div>
-          <div className="flex-1 flex flex-col items-center justify-center gap-8 px-8">
-            <div className="text-center">
-              <div className="text-gray-500 text-lg uppercase tracking-widest mb-2">Now</div>
-              <div className="text-6xl font-black text-amber-300 truncate max-w-[80vw]">
-                {curCue ? cueLabel(curCue, currentCueIndex) : '—'}
-              </div>
-              {pending && (
-                <div className="text-orange-400 text-2xl font-bold mt-3 animate-pulse">
-                  {pending.kind === 'pre_wait' ? 'pré-attente' : 'follow'} {Math.max(0, (pending.deadline - Date.now()) / 1000).toFixed(1)}s
-                </div>
-              )}
-              {isRecalling && <div className="text-purple-400 text-2xl font-bold mt-3 animate-pulse">RECALLING…</div>}
-            </div>
-            <div className="text-center">
-              <div className="text-gray-500 text-sm uppercase tracking-widest mb-1">Next</div>
-              <div className="text-4xl font-bold text-gray-300 truncate max-w-[70vw]">
-                {nextCue ? cueLabel(nextCue, currentCueIndex + 1) : '—'}
-              </div>
-              {nextNextCue && (
-                <div className="text-lg text-gray-600 truncate max-w-[60vw] mt-1">
-                  then {cueLabel(nextNextCue, currentCueIndex + 2)}
-                </div>
-              )}
-            </div>
-            <div className="text-green-400/90 text-xl font-semibold">
-              {playingCount > 0 ? `${playingCount} moves live` : 'IDLE'}
-            </div>
-          </div>
-          <div className="px-8 pb-10">
-            <ShowTransport
-              onPrev={() => void goToPreviousCue()}
-              onGo={handleGO}
-              onNext={() => void goToNextCue()}
-              prevDisabled={isRecalling || currentCueIndex <= 0}
-              nextDisabled={isRecalling || currentCueIndex + 1 >= cues.length}
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 };
