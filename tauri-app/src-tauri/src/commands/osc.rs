@@ -138,6 +138,10 @@ pub async fn set_osc_receiver_port(port: u16, state: State<'_, AppState>) -> Res
     let mut new_receiver = OscReceiver::new(port);
     new_receiver.set_targets(targets);
     new_receiver.set_in_enabled(enabled);
+    // Le receiver est aussi le transport `/stagespace/*` — sans
+    // migration du show_sink, des contrôleurs, de media_sync et du fps
+    // TC, les commandes restent ACKées mais meurent en silence.
+    lock_or_recover(&state.osc_receiver).migrate_show_control_to(&mut new_receiver);
     for mapping in mappings {
         new_receiver
             .add_mapping(mapping)

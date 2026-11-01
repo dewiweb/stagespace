@@ -732,6 +732,20 @@ impl OscReceiver {
             .unwrap_or_else(|e| e.into_inner()) = Some(Box::new(sink));
     }
 
+    /// Migre l'état show-control vers un nouveau receiver — à appeler
+    /// lors d'un rebuild (ex. changement de port). Sans ça, le sink,
+    /// les contrôleurs, la cible media-sync, le fps TC et le dernier RX
+    /// sont perdus : la surface `/stagespace/*` meurt en silence —
+    /// les commandes restent ACKées mais ne sont plus jamais dispatchées.
+    /// Les Arcs sont adoptés : même état, aucune ré-inscription à faire.
+    pub fn migrate_show_control_to(&self, new_receiver: &mut OscReceiver) {
+        new_receiver.shared.show_sink = self.shared.show_sink.clone();
+        new_receiver.shared.controllers = self.shared.controllers.clone();
+        new_receiver.shared.media_sync = self.shared.media_sync.clone();
+        new_receiver.shared.timecode_fps = self.shared.timecode_fps.clone();
+        new_receiver.shared.last_show_rx = self.shared.last_show_rx.clone();
+    }
+
     /// FPS utilisé pour la forme string `HH:MM:SS:FF` du timecode
     /// (non-drop ; défaut 25).
     pub fn set_timecode_fps(&self, fps: f64) {

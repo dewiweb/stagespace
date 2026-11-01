@@ -433,11 +433,28 @@ impl MergeRuntime {
         osc_id: u32,
         pos: nalgebra::Vector3<f64>,
     ) -> crate::error::Result<()> {
+        // Mêmes contrats que la boucle d'envoi : dry-run = rien ne part
+        // (panic inclus — un mute qui émet n'est pas un mute), et la
+        // position passe par venue_map (sinon le panic envoie du
+        // canonique sur une salle adaptée → mauvaise position).
+        if !self.osc_armed() {
+            return Ok(());
+        }
+        let send_pos = self
+            .venue_map
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .map(|(s, o, yaw)| {
+                let (c, sn) = (yaw.cos(), yaw.sin());
+                let (x, y) = (pos.x * c - pos.y * sn, pos.x * sn + pos.y * c);
+                nalgebra::Vector3::new(x * s[0] + o[0], y * s[1] + o[1], pos.z * s[2] + o[2])
+            })
+            .unwrap_or(pos);
         let report = self
             .sink
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .send_state(osc_id, pos, None);
+            .send_state(osc_id, send_pos, None);
         if report.sent == 0 && report.errors > 0 {
             return Err(crate::error::StagespaceError::NetworkError(
                 std::io::Error::other("position sink send failed"),
@@ -2754,15 +2771,31 @@ impl MergeRuntime {
                     );
                     // Parking : envoyer l'origin à toutes les tracks (même
                     // comportement que le panic côté app) avant de mourir.
-                    {
+                    // Mêmes contrats que la boucle d'envoi : dry-run = rien
+                    // ne part, et venue_map s'applique (salle adaptée).
+                    if osc_armed_arc.load(Ordering::SeqCst) {
                         let origin = *origin_arc.lock().unwrap_or_else(|e| e.into_inner());
+                        let send_origin = venue_map_arc
+                            .read()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .map(|(s, o, yaw)| {
+                                let (c, sn) = (yaw.cos(), yaw.sin());
+                                let (x, y) =
+                                    (origin.x * c - origin.y * sn, origin.x * sn + origin.y * c);
+                                nalgebra::Vector3::new(
+                                    x * s[0] + o[0],
+                                    y * s[1] + o[1],
+                                    origin.z * s[2] + o[2],
+                                )
+                            })
+                            .unwrap_or(origin);
                         let ids = osc_ids_arc
                             .read()
                             .unwrap_or_else(|e| e.into_inner())
                             .clone();
                         let mut sink_guard = sink_arc.lock().unwrap_or_else(|e| e.into_inner());
                         for osc_id in ids.iter() {
-                            let _ = sink_guard.send_state(*osc_id, origin, None);
+                            let _ = sink_guard.send_state(*osc_id, send_origin, None);
                         }
                     }
                     let cb = position_callback

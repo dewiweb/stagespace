@@ -215,6 +215,12 @@ pub fn run() {
             }
         })
         .on_window_event(|window, event| {
+            // Seule la fenêtre PRINCIPALE arrête le show — une fenêtre
+            // détachée (conduite/run) qui se ferme ne doit jamais tuer
+            // moves, merge, OSC ou superviseur.
+            if window.label() != "main" {
+                return;
+            }
             if let tauri::WindowEvent::Destroyed | tauri::WindowEvent::CloseRequested { .. } = event
             {
                 // Stopper tous les movements proprement à la fermeture
