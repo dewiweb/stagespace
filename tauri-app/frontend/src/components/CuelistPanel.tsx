@@ -19,6 +19,7 @@ export const CuelistPanel: React.FC<{ readonly?: boolean }> = ({ readonly = fals
   const pending = useCuelistStore((s) => s.pending);
   const deleteCue = useCuelistStore((s) => s.deleteCue);
   const updateCue = useCuelistStore((s) => s.updateCue);
+  const moveCue = useCuelistStore((s) => s.moveCue);
   // Rappels/next/prev passent par liveActions (guard recallBusy unifié).
 
   const [newCueName, setNewCueName] = useState('');
@@ -203,12 +204,44 @@ export const CuelistPanel: React.FC<{ readonly?: boolean }> = ({ readonly = fals
                 }}
                 title={idx === currentCueIndex ? 'Current cue' : 'Click = arm · double-click = RECALL (replaces the whole scene)'}
               >
-                <span className="text-gray-500 text-xs tabular-nums w-6">
+                <span className="text-gray-500 text-xs tabular-nums w-6 flex flex-col items-center">
                   {idx + 1}
+                  {cue.id === armedCueId && !readonly && (
+                    <span className="flex gap-0.5" onClick={(e) => e.stopPropagation()}>
+                      <button onClick={() => moveCue(cue.id, -1)} className="text-gray-500 hover:text-white" title="Move up">↑</button>
+                      <button onClick={() => moveCue(cue.id, 1)} className="text-gray-500 hover:text-white" title="Move down">↓</button>
+                    </span>
+                  )}
                 </span>
                 <div className="flex-1 min-w-0">
                   <div className="text-white text-xs font-medium truncate flex items-center gap-1">
-                    {cue.name}
+                    {cue.id === armedCueId && !readonly ? (
+                      <>
+                        <input
+                          defaultValue={cue.name}
+                          key={`${cue.id}-name-${cue.name}`}
+                          onClick={(e) => e.stopPropagation()}
+                          onDoubleClick={(e) => e.stopPropagation()}
+                          onBlur={(e) => e.target.value.trim() && updateCue({ ...cue, name: e.target.value.trim() })}
+                          onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+                          className="w-24 px-1 py-0 bg-gray-900 border border-gray-700 rounded text-white text-xs focus:outline-none focus:border-purple-500"
+                          title="Rename cue"
+                        />
+                        <input
+                          defaultValue={cue.cue_number ?? ''}
+                          key={`${cue.id}-num-${cue.cue_number}`}
+                          onClick={(e) => e.stopPropagation()}
+                          onDoubleClick={(e) => e.stopPropagation()}
+                          placeholder="n°"
+                          onBlur={(e) => updateCue({ ...cue, cue_number: e.target.value.trim() || null })}
+                          onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+                          className="w-10 px-1 py-0 bg-gray-900 border border-gray-700 rounded text-amber-300 text-right text-xs font-mono focus:outline-none"
+                          title="cue_number — le label que /stagespace/cue/recall matche"
+                        />
+                      </>
+                    ) : (
+                      cue.name
+                    )}
                     {cue.id === armedCueId && (() => {
                       // Même contrat que le backend : scope gate chaque
                       // catégorie + matching par movement.id (le backend

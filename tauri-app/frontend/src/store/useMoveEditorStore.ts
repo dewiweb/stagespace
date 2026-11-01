@@ -259,6 +259,16 @@ function syncCurrentToSlot(get: () => MoveEditorStore, patch: Partial<Move>) {
   }
 }
 
+/// Lecture gardée de la surface persistée — localStorage n'existe pas
+/// hors jsdom (import du module en contexte Node = ReferenceError sinon).
+function readPersistedSurface(): 'atelier' | 'conduite' | 'jeu' {
+  try {
+    return (localStorage.getItem('ss-surface') as 'atelier' | 'conduite' | 'jeu' | null) ?? 'jeu';
+  } catch {
+    return 'jeu';
+  }
+}
+
 export const useMoveEditorStore = create<MoveEditorStore>((set, get) => {
   // Initialise le throttle live-update avec l'accesseur du store
   _initAnimationThrottle(get);
@@ -267,7 +277,7 @@ export const useMoveEditorStore = create<MoveEditorStore>((set, get) => {
   current: defaultAnimation(),
   activeMovementIds: [],
   launchFlash: 0,
-  surface: (localStorage.getItem('ss-surface') as 'atelier' | 'conduite' | 'jeu') ?? 'jeu',
+  surface: readPersistedSurface(),
   setSurface: (surface) => {
     // Fenêtre détachée : la surface n'est pas persistée — elle n'écraserait
     // que la préférence de la fenêtre principale (last-write-wins).
@@ -282,8 +292,7 @@ export const useMoveEditorStore = create<MoveEditorStore>((set, get) => {
   // l'atelier — on y entre via « Edit graph » sur un move, pas par défaut.
   // Dérivé de la surface persistée — sinon un boot 'atelier' gardait
   // performMode=true (sections Inspector repliées comme en jeu).
-  performMode:
-    (localStorage.getItem('ss-surface') as 'atelier' | 'conduite' | 'jeu' | null) !== 'atelier',
+  performMode: readPersistedSurface() !== 'atelier',
   setPerformMode: (on) => set({ performMode: on }),
   debugPerfVisible: false,
   setDebugPerfVisible: (on) => set({ debugPerfVisible: on }),

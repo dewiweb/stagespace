@@ -40,6 +40,7 @@ interface CuelistState {
   /// la cuelist vit côté frontend (localStorage), le backend n'en garde
   /// pas de copie.
   updateCue: (cue: CueData) => void;
+  moveCue: (cueId: string, dir: -1 | 1) => void;
   goToNextCue: () => Promise<void>;
   goToPreviousCue: () => Promise<void>;
   /// Renvoie le feedback cue courant/suivant aux contrôleurs OSC
@@ -207,6 +208,24 @@ export const useCuelistStore = create<CuelistState>((set, get) => ({
     const cues = get().cues.map((c) => (c.id === cue.id ? cue : c));
     set({ cues });
     saveToStorage(cues);
+  },
+
+  /// Réordonne la cue list — le numéro d'ordre (index) EST la structure
+  /// du show ; cue_number reste le label OSC. currentCueIndex suit la
+  /// cue courante par id, pas par position (l'index décale sinon).
+  moveCue: (cueId: string, dir: -1 | 1) => {
+    const { cues, currentCueIndex } = get();
+    const i = cues.findIndex((c) => c.id === cueId);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= cues.length) return;
+    const reordered = [...cues];
+    [reordered[i], reordered[j]] = [reordered[j], reordered[i]];
+    const current = currentCueIndex >= 0 ? cues[currentCueIndex] : null;
+    set({
+      cues: reordered,
+      currentCueIndex: current ? reordered.findIndex((c) => c.id === current.id) : -1,
+    });
+    saveToStorage(reordered);
   },
 
   sendStatusNow: () => {
