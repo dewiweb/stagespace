@@ -565,9 +565,23 @@ pub(crate) fn recall_cue_inner(
     {
         let merge_rt = lock_or_recover(&sh.merge_runtime);
         if !tracking {
+            // Park survit au recall : sauvegarder les positions manuelles
+            // des objets parkés avant le clear, les restaurer après, et ne
+            // jamais les écraser par le snapshot (même règle que les canaux).
+            let parked = merge_rt.parked_objects();
+            let kept: Vec<(usize, [f64; 3])> = parked
+                .iter()
+                .filter_map(|i| merge_rt.manual_position(*i).map(|p| (*i, p)))
+                .collect();
             merge_rt.clear_all_manual_positions();
             for (idx, pos) in &cue.manual_positions {
+                if parked.contains(idx) {
+                    continue;
+                }
                 merge_rt.set_manual_position(*idx, *pos);
+            }
+            for (idx, pos) in kept {
+                merge_rt.set_manual_position(idx, pos);
             }
         } else if scope.positions {
             for (idx, pos) in &cue.manual_positions {
