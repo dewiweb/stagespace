@@ -41,6 +41,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const psnGroup = useGraphStore((s) => s.psnGroup);
   const psnPort = useGraphStore((s) => s.psnPort);
   const psnMap = useGraphStore((s) => s.psnMap);
+  const psnAxes = useGraphStore((s) => s.psnAxes);
   const psnRunning = useGraphStore((s) => s.psnRunning);
   const psnLastPacketAge = useGraphStore((s) => s.psnLastPacketAge);
   const setPsnConfig = useGraphStore((s) => s.setPsnConfig);
@@ -51,6 +52,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const [psnGroupStr, setPsnGroupStr] = React.useState(psnGroup);
   const [psnPortStr, setPsnPortStr] = React.useState(String(psnPort));
   const [psnMapStr, setPsnMapStr] = React.useState(psnMap);
+  const [psnAxesStr, setPsnAxesStr] = React.useState(psnAxes);
   const [oscInStatus, setOscInStatus] = React.useState<string | null>(null);
   const [discovering, setDiscovering] = React.useState(false);
   const [discoveredTargets, setDiscoveredTargets] = React.useState<Array<{ name: string; host: string; port: number; profile: string; source: string }>>([]);
@@ -279,6 +281,17 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 onChange={(e) => setPsnMapStr(e.target.value)}
                 onBlur={() => setPsnConfig({ map: psnMapStr })}
                 placeholder="1:7, 2:8, 3:9"
+                className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+              />
+            </div>
+            <div className="mt-2">
+              <label className="text-gray-500 text-xs block mb-1">Axes PSN→stage ("x,-y,z" — convention variable selon installateur)</label>
+              <input
+                type="text"
+                value={psnAxesStr}
+                onChange={(e) => setPsnAxesStr(e.target.value)}
+                onBlur={() => setPsnConfig({ axes: psnAxesStr })}
+                placeholder="x,y,z"
                 className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
               />
             </div>

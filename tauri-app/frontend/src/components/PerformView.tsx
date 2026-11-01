@@ -515,6 +515,7 @@ const LiveDrawer: React.FC = () => {
   const setSlotAnchorTarget = useGraphStore((s) => s.setSlotAnchorTarget);
   const objectStates = useGraphStore((s) => s.objectStates);
   const emittedPositions = useGraphStore((s) => s.emittedPositions);
+  const flowHealth = useGraphStore((s) => s.flowHealth);
   const setSlotTracks = useGraphStore((s) => s.setSlotTracks);
   const holProject = useGraphStore((s) => s.holProject);
   const manualOscIds = useGraphStore((s) => s.manualOscIds);
@@ -643,6 +644,10 @@ const LiveDrawer: React.FC = () => {
             {/* Source-de-contrôle par objet du slot — qui pilote quoi. */}
             {slot.trackIds.map((t) => {
               const src = objectStates[t];
+              // PSN stale : flux figé >2s — le label "psn" mentirait.
+              const stale =
+                src === 'psn' &&
+                (flowHealth.psnAge == null || flowHealth.psnAge > 2000);
               const emitted = emittedPositions[t];
               const colors: Record<string, string> = {
                 park: 'bg-amber-900 text-amber-300',
@@ -658,10 +663,10 @@ const LiveDrawer: React.FC = () => {
               return src ? (
                 <span
                   key={t}
-                  title={`objet ${t} : ${src} — émis${emittedStr}`}
-                  className={`px-1 rounded ${colors[src] ?? colors.track}`}
+                  title={`objet ${t} : ${src}${stale ? ' (flux figé!)' : ''} — émis${emittedStr}`}
+                  className={`px-1 rounded ${stale ? 'bg-amber-900 text-amber-300 animate-pulse' : colors[src] ?? colors.track}`}
                 >
-                  {t}·{src}
+                  {t}·{src}{stale ? '✕' : ''}
                 </span>
               ) : null;
             })}

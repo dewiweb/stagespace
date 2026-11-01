@@ -332,9 +332,36 @@ pub async fn set_psn_config(
     group: String,
     port: u16,
     tracker_map: std::collections::HashMap<u32, usize>,
+    axes: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
     let psn = state.psn_receiver.clone();
+    // Axes "x,-y,z" → permutation+signe PSN→stage (conventions BlackTrax/
+    // Zactrack variables selon l'installateur).
+    if let Some(a) = axes {
+        let mut order = [0usize; 3];
+        let mut signs = [1.0f64; 3];
+        let parts: Vec<&str> = a.split(',').map(|s| s.trim()).collect();
+        if parts.len() == 3 {
+            let mut ok = true;
+            for (i, p) in parts.iter().enumerate() {
+                let (sign, ch) = if let Some(c) = p.strip_prefix('-') {
+                    (-1.0, c)
+                } else {
+                    (1.0, *p)
+                };
+                match ch {
+                    "x" => { order[i] = 0; signs[i] = sign; }
+                    "y" => { order[i] = 1; signs[i] = sign; }
+                    "z" => { order[i] = 2; signs[i] = sign; }
+                    _ => ok = false,
+                }
+            }
+            if ok {
+                psn.set_axes(order, signs);
+            }
+        }
+    }
     // Source-de-contrôle : informe le merge des objets pilotés par PSN —
     // vidé à l'OFF sinon les objets gardent le label "psn" après arrêt.
     let tracked: std::collections::HashSet<usize> = if enabled {

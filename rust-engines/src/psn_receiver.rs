@@ -89,6 +89,9 @@ pub struct PsnReceiver {
     epoch: Instant,
     /// Map tracker_id → object_index.
     tracker_map: Arc<RwLock<HashMap<u32, usize>>>,
+    /// Permutation+signe des axes PSN→stage : ((i,j,k),(sx,sy,sz)) —
+    /// pos_stage = (pos[i]*sx, pos[j]*sy, pos[k]*sz). Défaut identité.
+    axis_map: Arc<RwLock<([usize; 3], [f64; 3])>>,
 }
 
 impl PsnReceiver {
@@ -102,6 +105,17 @@ impl PsnReceiver {
             last_packet_ms: Arc::new(AtomicU64::new(u64::MAX)),
             epoch: Instant::now(),
             tracker_map: Arc::new(RwLock::new(HashMap::new())),
+            axis_map: Arc::new(RwLock::new(([0, 1, 2], [1.0, 1.0, 1.0]))),
+        }
+    }
+
+    /// Configure le mapping d'axes — `order` = indices PSN vers stage,
+    /// `signs` = ±1 par axe. Ex: PSN y-up → stage z-up :
+    /// `set_axes([0, 2, 1], [1.0, 1.0, 1.0])`.
+    pub fn set_axes(&self, order: [usize; 3], signs: [f64; 3]) {
+        if order.iter().all(|&i| i < 3) {
+            *self.axis_map.write().unwrap_or_else(|e| e.into_inner()) =
+                (order, signs);
         }
     }
 
@@ -136,6 +150,7 @@ impl PsnReceiver {
         let last_packet_ms = self.last_packet_ms.clone();
         let epoch = self.epoch;
         let tracker_map = self.tracker_map.clone();
+        let axis_map = self.axis_map.clone();
         let handle = std::thread::spawn(move || {
             let mut buf = [0u8; 65535];
             while running.load(Ordering::SeqCst) {
@@ -149,9 +164,19 @@ impl PsnReceiver {
                             .read()
                             .unwrap_or_else(|e| e.into_inner())
                             .clone();
+                        let (order, signs) = *axis_map
+                            .read()
+                            .unwrap_or_else(|e| e.into_inner());
                         for (tracker_id, pos) in parse_psn_packet(&buf[..n]) {
                             if let Some(&obj) = map.get(&tracker_id) {
-                                on_position(obj, pos);
+                                on_position(
+                                    obj,
+                                    [
+                                        pos[order[0]] * signs[0],
+                                        pos[order[1]] * signs[1],
+                                        pos[order[2]] * signs[2],
+                                    ],
+                                );
                             }
                         }
                     }
@@ -301,5 +326,41 @@ mod tests {
         assert!(receiver.last_packet_age_ms().is_some());
         receiver.stop();
         assert!(!receiver.is_running());
+    }
+
+    /// Mapping d'axes — un tracker y-up est permuté vers stage z-up
+    /// (convention Zactrack y-up → stagespace z-up : order [0,2,1]).
+    #[test]
+    fn e2e_axis_map_permutation() {
+        let receiver = PsnReceiver::new();
+        receiver.set_tracker_map(std::iter::once((1u32, 5usize)).collect());
+        receiver.set_axes([0, 2, 1], [1.0, -1.0, 1.0]); // y↔z, z négatif
+        let got: Arc<Mutex<Vec<(usize, [f64; 3])>>> = Arc::new(Mutex::new(Vec::new()));
+        let got_c = got.clone();
+        receiver
+            .start("127.0.0.1", 56578, move |obj, pos| {
+                got_c.lock().unwrap_or_else(|e| e.into_inner()).push((obj, pos));
+            })
+            .expect("start");
+        let sender = UdpSocket::bind("127.0.0.1:0").unwrap();
+        sender
+            .send_to(&make_packet(1, [1.0, 2.0, 3.0]), "127.0.0.1:56578")
+            .unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(800);
+        loop {
+            if !got.lock().unwrap_or_else(|e| e.into_inner()).is_empty() {
+                break;
+            }
+            if std::time::Instant::now() > deadline {
+                panic!("no PSN position received");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        let (_, pos) = got.lock().unwrap_or_else(|e| e.into_inner())[0];
+        // (x,y,z) psn=(1,2,3) → stage (x=pos[0]*1, y=pos[2]*-1, z=pos[1]*1) = (1,-3,2)
+        assert!((pos[0] - 1.0).abs() < 1e-5);
+        assert!((pos[1] + 3.0).abs() < 1e-5);
+        assert!((pos[2] - 2.0).abs() < 1e-5);
+        receiver.stop();
     }
 }

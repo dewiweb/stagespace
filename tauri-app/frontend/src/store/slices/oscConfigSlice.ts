@@ -22,6 +22,8 @@ interface PersistedOscConfig {
   psnPort: number;
   /// Mapping tracker_id → object_index (texte "1:7,2:8").
   psnMap: string;
+  /// Permutation/signes d'axes PSN→stage (texte "x,-y,z").
+  psnAxes: string;
 }
 
 function loadConfigFromStorage(): Partial<PersistedOscConfig> {
@@ -43,6 +45,7 @@ const persist = (s: OscConfigSlice, patch: Partial<PersistedOscConfig>) => {
     psnGroup: s.psnGroup,
     psnPort: s.psnPort,
     psnMap: s.psnMap,
+    psnAxes: s.psnAxes,
     ...patch,
   });
 };
@@ -75,10 +78,13 @@ export interface OscConfigSlice {
   psnPort: number;
   /// Mapping tracker_id→object_index, texte "1:7,2:8".
   psnMap: string;
+  /// Permutation/signes d'axes PSN→stage, texte "x,-y,z" (convention
+  /// variable selon l'installateur du système de tracking).
+  psnAxes: string;
   /// Santé du flux PSN — âge du dernier paquet (ms), null = jamais reçu.
   psnLastPacketAge: number | null;
   psnRunning: boolean;
-  setPsnConfig: (cfg: { enabled?: boolean; group?: string; port?: number; map?: string }) => Promise<void>;
+  setPsnConfig: (cfg: { enabled?: boolean; group?: string; port?: number; map?: string; axes?: string }) => Promise<void>;
   refreshPsnHealth: () => Promise<void>;
   setOscAddress: (addr: string) => void;
   setOscPort: (port: number) => void;
@@ -100,6 +106,7 @@ export const createOscConfigSlice: StateCreator<OscConfigSlice, [], [], OscConfi
     psnGroup: saved.psnGroup ?? '236.0.0.1',
     psnPort: saved.psnPort ?? 56565,
     psnMap: saved.psnMap ?? '',
+    psnAxes: saved.psnAxes ?? 'x,y,z',
     psnLastPacketAge: null,
     psnRunning: false,
     setPsnConfig: async (cfg) => {
@@ -108,12 +115,14 @@ export const createOscConfigSlice: StateCreator<OscConfigSlice, [], [], OscConfi
         psnGroup: get().psnGroup,
         psnPort: get().psnPort,
         psnMap: get().psnMap,
+        psnAxes: get().psnAxes,
       };
       const next = {
         psnEnabled: cfg.enabled ?? prev.psnEnabled,
         psnGroup: cfg.group ?? prev.psnGroup,
         psnPort: cfg.port ?? prev.psnPort,
         psnMap: cfg.map ?? prev.psnMap,
+        psnAxes: cfg.axes ?? prev.psnAxes,
       };
       set(next);
       persist(get(), next);
@@ -129,6 +138,7 @@ export const createOscConfigSlice: StateCreator<OscConfigSlice, [], [], OscConfi
           group: next.psnGroup,
           port: next.psnPort,
           tracker_map: trackerMap,
+          axes: next.psnAxes,
         });
         // Poll santé piloté par le slice (pas React) — tourne tant que le
         // flux est actif, indépendamment de l'UI ouverte.
