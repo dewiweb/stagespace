@@ -17,6 +17,7 @@ import { useCuelistStore } from '../store/useCuelistStore';
 import { doSolo, doUnpark, doStop, doUnsolo, getSoloRestoreIds, doAttention } from '../utils/liveActions';
 import { Radar2D } from './jeu/Radar2D';
 import { GestureStrip } from './jeu/GestureStrip';
+import { SOURCE_CHIP } from '../utils/sourceColors';
 import { safeInvoke, silentCatch } from '../utils/tauri';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { toast } from '../utils/toast-helpers';
@@ -618,14 +619,7 @@ const LiveDrawer: React.FC = () => {
                 src === 'psn' &&
                 (flowHealth.psnAge == null || flowHealth.psnAge > 2000);
               const emitted = objIdx >= 0 ? emittedPositions[objIdx] : undefined;
-              const colors: Record<string, string> = {
-                park: 'bg-amber-900 text-amber-300',
-                psn: 'bg-purple-900 text-purple-300',
-                hold: 'bg-cyan-900 text-cyan-300',
-                manual: 'bg-orange-900 text-orange-300',
-                move: 'bg-green-900 text-green-300',
-                track: 'bg-gray-800 text-gray-400',
-              };
+              const colors: Record<string, string> = SOURCE_CHIP;
               const emittedStr = emitted
                 ? ` (${emitted.map((v) => v.toFixed(2)).join(', ')})`
                 : '';

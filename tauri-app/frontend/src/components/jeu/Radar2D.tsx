@@ -5,15 +5,7 @@
 import React from 'react';
 import { useGraphStore } from '../../store/useGraphStore';
 import { doThrow } from '../../utils/liveActions';
-
-const SRC_FILL: Record<string, string> = {
-  park: '#f59e0b',
-  psn: '#a855f7',
-  hold: '#22d3ee',
-  manual: '#f97316',
-  move: '#22c55e',
-  track: '#6b7280',
-};
+import { sourceHex, SOURCE_LABEL } from '../../utils/sourceColors';
 
 export const Radar2D: React.FC = () => {
   const emittedPositions = useGraphStore((s) => s.emittedPositions);
@@ -64,7 +56,9 @@ export const Radar2D: React.FC = () => {
               e.stopPropagation();
             }}
           >
-            <circle cx={cx} cy={cy} r="4" fill={SRC_FILL[src] ?? '#6b7280'} />
+            <circle cx={cx} cy={cy} r="4" fill={sourceHex(src)}>
+              <title>{id} · {SOURCE_LABEL[src] ?? src}</title>
+            </circle>
             <text x={cx} y={cy - 7} fill="#9ca3af" fontSize="7" textAnchor="middle">{id}</text>
           </g>
         );
