@@ -274,6 +274,14 @@ export function doSpatial(k: number, from?: string) {
     .catch((e) => toast.error('Spatial compression failed: ' + e));
 }
 
+/** /stagespace/attention <obj>|clear — fige les autres objets (change
+ *  blindness : un seul bouge) / libère la stase. */
+export function doAttention(obj: number | null, from?: string) {
+  logAction('doAttention', from);
+  invoke('set_attention', { obj })
+    .catch((e) => toast.error('Attention failed: ' + e));
+}
+
 /** /stagespace/trackpos <track> <x> <y> <z> — position d'origine d'une
  *  track (là où panic renvoie, base Barycenter — .hol par OSC).
  *  Setter unitaire : un set par track ne doit pas effacer les autres

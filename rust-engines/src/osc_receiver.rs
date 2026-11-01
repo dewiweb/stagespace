@@ -420,6 +420,10 @@ pub enum ShowCommand {
     /// `/stagespace/spatial <k>` — dynamique spatiale : compresseur
     /// spatial global (k<1 resserre le champ, k>1 l'étend).
     Spatial(f64),
+    /// `/stagespace/attention <obj>` — fige tous les autres objets
+    /// (change blindness : un seul bouge, capte toute l'attention).
+    /// `/stagespace/attention/clear` — libère la stase.
+    Attention(Option<usize>),
 }
 
 type ShowSink = Box<dyn Fn(ShowCommand, std::net::SocketAddr) + Send>;
@@ -568,6 +572,15 @@ fn parse_show_command(addr: &str, args: &[OscType], fps: f64) -> Option<ShowComm
             })?;
             Some(ShowCommand::Spatial(k))
         }
+        "attention" => {
+            let obj = args.first().and_then(|a| match a {
+                OscType::Int(i) => Some(*i as usize),
+                OscType::Float(f) => Some(*f as usize),
+                _ => None,
+            });
+            Some(ShowCommand::Attention(obj))
+        }
+        "attention/clear" => Some(ShowCommand::Attention(None)),
         _ => None,
     }
 }

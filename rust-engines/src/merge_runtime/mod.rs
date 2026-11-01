@@ -199,6 +199,11 @@ pub struct MergeRuntime {
     /// appliqué au payload OSC (1.0 = neutre, <1 resserre le champ vers
     /// l'origine, >1 l'étend). Geste live, pas un setup.
     spatial_compression: Arc<RwLock<f64>>,
+    /// Attention orchestration — objets figés par `attention_focus`
+    /// (stase pour le change blindness : un seul objet bouge). Le set
+    /// distingue les figés de la feature des positions manuelles de
+    /// l'opérateur — clear ne touche que les nôtres.
+    attention_frozen: Arc<RwLock<HashSet<usize>>>,
     /// Règles de modulation cinématique (source cinématique → canal spatial)
     /// — Arc<Vec> : snapshot par frame = clone d'Arc.
     channel_modulations: Arc<RwLock<Arc<Vec<ChannelModulation>>>>,
@@ -332,6 +337,7 @@ impl MergeRuntime {
             distance_reality: Arc::new(RwLock::new(None)),
             thrown: Arc::new(RwLock::new(HashMap::new())),
             spatial_compression: Arc::new(RwLock::new(1.0)),
+            attention_frozen: Arc::new(RwLock::new(HashSet::new())),
             channel_modulations: Arc::new(RwLock::new(Arc::new(Vec::new()))),
             kinematic_smoothing: Arc::new(RwLock::new(0.5)),
             zones: Arc::new(RwLock::new(Arc::new(Vec::new()))),
@@ -1108,6 +1114,47 @@ impl MergeRuntime {
             .clone()
     }
 
+    /// Attention orchestration — fige tous les objets SAUF `focus` à
+    /// leur dernière position émise (stase pour change blindness : le
+    /// seul objet en mouvement capte toute l'attention).
+    pub fn attention_focus(&self, focus: usize) {
+        let last_out = self
+            .last_out_positions
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let mut frozen = self
+            .attention_frozen
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
+        let mut manual = self
+            .manual_positions
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
+        for (obj, pos) in last_out {
+            if obj != focus {
+                manual.insert(obj, pos);
+                frozen.insert(obj);
+            }
+        }
+    }
+
+    /// Libère la stase d'attention — retire uniquement les positions
+    /// que `attention_focus` a figées (jamais les manuelles opérateur).
+    pub fn attention_release(&self) {
+        let frozen = std::mem::take(&mut *self
+            .attention_frozen
+            .write()
+            .unwrap_or_else(|e| e.into_inner()));
+        let mut manual = self
+            .manual_positions
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
+        for obj in frozen {
+            manual.remove(&obj);
+        }
+    }
+
     /// Dynamique spatiale — le compresseur spatial : k<1 resserre le
     /// champ, k>1 l'étend. Clampé [0.1, 4].
     pub fn set_spatial_compression(&self, k: f64) {
@@ -1220,6 +1267,10 @@ impl MergeRuntime {
         objs.extend(held.iter().copied());
         objs.extend(manual.keys().copied());
         objs.extend(tracks.keys().map(|&t| t as usize));
+        let frozen_attn = self
+            .attention_frozen
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
         for s in moves.values() {
             objs.extend(s.track_indices.iter().copied());
         }
@@ -1231,6 +1282,8 @@ impl MergeRuntime {
                 "psn"
             } else if held.contains(&obj) {
                 "hold"
+            } else if frozen_attn.contains(&obj) {
+                "freeze"
             } else if manual.contains_key(&obj) {
                 "manual"
             } else if moves.values().any(|s| s.is_active && s.track_indices.contains(&obj)) {

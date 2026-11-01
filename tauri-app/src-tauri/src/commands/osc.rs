@@ -467,3 +467,15 @@ pub async fn set_spatial_compression(k: f64, state: State<'_, AppState>) -> Resu
     lock_or_recover(&state.merge_runtime).set_spatial_compression(k);
     Ok(())
 }
+
+/// Attention orchestration — Some(obj) fige tous les autres à leur
+/// position (stase pour change blindness), None libère la stase.
+#[tauri::command]
+pub async fn set_attention(obj: Option<usize>, state: State<'_, AppState>) -> Result<(), IpcError> {
+    let merge = lock_or_recover(&state.merge_runtime);
+    match obj {
+        Some(o) => merge.attention_focus(o),
+        None => merge.attention_release(),
+    }
+    Ok(())
+}
