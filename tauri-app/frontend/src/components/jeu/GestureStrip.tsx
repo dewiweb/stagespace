@@ -3,9 +3,13 @@
 /// Partagé par la surface Jeu et la fenêtre ?view=run.
 import React from 'react';
 import { doAttention, doSpatial } from '../../utils/liveActions';
+import { useGraphStore } from '../../store/useGraphStore';
 
 export const GestureStrip: React.FC = () => {
   const [spatialK, setSpatialK] = React.useState(1);
+  // Un objet en stase attention = source 'freeze' (frozen_attn côté
+  // merge) — le bouton reflète l'état réel au lieu d'être toujours actif.
+  const attnActive = useGraphStore((s) => Object.values(s.objectStates).includes('freeze'));
 
   return (
     <div className="flex gap-3 items-stretch">
@@ -29,8 +33,16 @@ export const GestureStrip: React.FC = () => {
       </div>
       <button
         onClick={() => doAttention(null)}
-        className="px-4 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-bold"
-        title="Libère la stase attention (tous les objets redeviennent vivants)"
+        className={`px-4 rounded-lg text-xs font-bold ${
+          attnActive
+            ? 'bg-amber-800 hover:bg-amber-700 text-amber-100 animate-pulse'
+            : 'bg-gray-800 text-gray-600'
+        }`}
+        title={
+          attnActive
+            ? 'Libère la stase attention (tous les objets redeviennent vivants)'
+            : 'Pas de stase attention active'
+        }
       >
         ATTN ✕
       </button>
