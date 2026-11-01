@@ -84,6 +84,6 @@ pub async fn throw_object(
     vel: [f64; 3],
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
-    crate::state::lock_or_recover(&state.merge_runtime).throw_object(obj, vel);
+    lock_or_recover(&state.merge_runtime).throw_object(obj, vel);
     Ok(())
 }
