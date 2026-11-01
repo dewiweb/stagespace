@@ -775,7 +775,17 @@ impl OscReceiver {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .clone();
-        if controllers.is_empty() {
+        // La cible media-sync (desk lumière/vidéo) n'envoie jamais rien —
+        // elle ne figure donc jamais dans `controllers`. Sans ce check
+        // combiné, un media-sync sans controller n'aurait jamais reçu
+        // un seul trigger.
+        let media = self
+            .shared
+            .media_sync
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        if controllers.is_empty() && media.is_none() {
             return;
         }
         let socket = self
@@ -807,12 +817,6 @@ impl OscReceiver {
         }
         // Media sync out — le trigger cue vers la cible dédiée
         // (lumière/vidéo) : `{prefix}/cue <num> <name>`.
-        let media = self
-            .shared
-            .media_sync
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
         if let (Some((target, prefix)), Some((num, name))) = (media, current_media) {
             let msg = OscPacket::Message(OscMessage {
                 addr: format!("{prefix}/cue"),

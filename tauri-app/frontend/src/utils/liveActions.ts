@@ -57,16 +57,17 @@ export function doGo(from?: string) {
 /// Cue suivante (= Shift+Enter).
 export function doCueNext(from?: string) {
   logAction('doCueNext', from);
-  useCuelistStore.getState().cancelPendingTimers();
+  // Guard avant mutation — une commande nackée ne doit pas annuler les timers.
   if (recallBusy(from)) return;
+  useCuelistStore.getState().cancelPendingTimers();
   useCuelistStore.getState().goToNextCue();
 }
 
 /// Cue précédente (= Backspace).
 export function doCuePrev(from?: string) {
   logAction('doCuePrev', from);
-  useCuelistStore.getState().cancelPendingTimers();
   if (recallBusy(from)) return;
+  useCuelistStore.getState().cancelPendingTimers();
   useCuelistStore.getState().goToPreviousCue();
 }
 
@@ -75,8 +76,8 @@ export function doCuePrev(from?: string) {
 export function doCueRecall(n: string, fadeOverride?: number, from?: string) {
   logAction('doCueRecall');
   const s = useCuelistStore.getState();
-  s.cancelPendingTimers();
   if (recallBusy(from)) return;
+  s.cancelPendingTimers();
   const byNumber = s.cues.find((c) => c.cue_number != null && c.cue_number === n);
   const idx = Number.parseInt(n, 10);
   const byIndex = Number.isFinite(idx) && idx >= 1 && idx <= s.cues.length ? s.cues[idx - 1] : undefined;
@@ -104,8 +105,8 @@ export function doCueRecallById(id: string, fadeOverride?: number, from?: string
 }
 
 /** Arm/disarm OSC — dry-run pilotable depuis la console (set_osc_armed). */
-export function doArm(armed: boolean) {
-  logAction('doArm');
+export function doArm(armed: boolean, from?: string) {
+  logAction('doArm', from);
   invoke('set_osc_armed', { armed }).catch((e) => toast.error('OSC arm failed: ' + e));
 }
 
@@ -114,7 +115,7 @@ export function doSlot(n: number, from?: string) {
   logAction('doSlot');
   rec('doSlot', [n]);
   const gs = useGraphStore.getState();
-  const slot = gs.moveSlots.find((s) => s.oscIndex === n) ?? gs.moveSlots[n - 1];
+  const slot = gs.moveSlots.find((s) => s.oscIndex === n);
   if (!slot) {
     nack(from, `not-found: slot '${n}'`);
     return void toast.warning(`Slot '${n}' not found`);
@@ -131,7 +132,7 @@ export function doSlotStop(n: number, from?: string) {
   logAction('doSlotStop');
   rec('doSlotStop', [n]);
   const gs = useGraphStore.getState();
-  const slot = gs.moveSlots.find((s) => s.oscIndex === n) ?? gs.moveSlots[n - 1];
+  const slot = gs.moveSlots.find((s) => s.oscIndex === n);
   if (!slot) {
     nack(from, `not-found: slot '${n}'`);
     return void toast.warning(`Slot '${n}' not found`);
@@ -154,7 +155,8 @@ export function doSolo(n: number, from?: string) {
   logAction('doSolo');
   rec('doSolo', [n]);
   const gs = useGraphStore.getState();
-  const target = gs.moveSlots.find((s) => s.oscIndex === n) ?? gs.moveSlots[n - 1];
+  // Un n hors oscIndex = not-found, jamais le slot n-1 (mauvais objet tiré).
+  const target = gs.moveSlots.find((s) => s.oscIndex === n);
   if (!target) {
     nack(from, `not-found: slot '${n}'`);
     return void toast.warning(`Slot '${n}' not found`);
@@ -171,8 +173,11 @@ export function doSolo(n: number, from?: string) {
 }
 
 /** /stagespace/unsolo — rejoue les slots stoppés par le dernier solo. */
-export function doUnsolo() {
-  logAction('doUnsolo');
+export function doUnsolo(from?: string) {
+  logAction('doUnsolo', from);
+  // Un recall vient peut-être de tuer ces moves — rejouer maintenant
+  // ressusciterait des slots que la cue voulait morts.
+  if (recallBusy(from)) return;
   const gs = useGraphStore.getState();
   const ids = gs.soloSavedIds;
   useGraphStore.setState({ soloSavedIds: [] });
@@ -482,14 +487,14 @@ export function doSetTrackPosition(track: number, x: number, y: number, z: numbe
 }
 
 /** Park un objet : ses canaux échappent aux recalls de cues. */
-export function doPark(obj: number) {
-  logAction('doPark');
+export function doPark(obj: number, from?: string) {
+  logAction('doPark', from);
   rec('doPark', [obj]);
   invoke('park_object', { obj }).catch((e) => toast.error('Park failed: ' + e));
 }
 
-export function doUnpark(obj: number) {
-  logAction('doUnpark');
+export function doUnpark(obj: number, from?: string) {
+  logAction('doUnpark', from);
   rec('doUnpark', [obj]);
   invoke('unpark_object', { obj }).catch((e) => toast.error('Unpark failed: ' + e));
 }
