@@ -667,7 +667,7 @@ const LiveDrawer: React.FC = () => {
               return src ? (
                 <span
                   key={t}
-                  title={`objet ${t} : ${src}${stale ? ' (flux figé!)' : ''} — émis${emittedStr}`}
+                  title={`objet ${t} : ${src}${stale ? ' (flux figé!)' : ''} — dernier envoyé${emittedStr}`}
                   className={`px-1 rounded ${stale ? 'bg-amber-900 text-amber-300 animate-pulse' : colors[src] ?? colors.track}`}
                 >
                   {t}·{src}{stale ? '✕' : ''}

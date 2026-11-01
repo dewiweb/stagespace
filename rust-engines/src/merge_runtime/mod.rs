@@ -1057,8 +1057,8 @@ impl MergeRuntime {
             .remove(move_id);
     }
 
-    /// Positions réellement émises par objet (ce que le renderer a reçu)
-    /// — le côté "commanded" de la confidence view.
+    /// Dernières positions émises par objet (tentées — pas de confirmation
+    /// renderer) — le côté "commanded" de la confidence view.
     pub fn emitted_positions(&self) -> HashMap<usize, [f64; 3]> {
         self.last_out_positions
             .read()

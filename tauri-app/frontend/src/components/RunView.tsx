@@ -100,18 +100,27 @@ export const RunView: React.FC = () => {
           colorées par source-de-contrôle. Lisible à distance, zéro caméra. */}
       <div className="w-64 flex-shrink-0 bg-gray-900 rounded-lg p-2 flex flex-col">
         <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">radar · top</div>
+        {(() => {
+          // Auto-fit : échelle sur les bounds réels (venues >10m
+          // n'étaient pas clampées — elles sortaient du cadre).
+          const maxR = Math.max(
+            5,
+            ...Object.values(emittedPositions).flatMap((p) => [Math.abs(p[0]), Math.abs(p[1])]),
+          );
+          const k = 100 / maxR;
+          return (
         <svg viewBox="-110 -110 220 220" className="flex-1 min-h-0" preserveAspectRatio="xMidYMid meet">
           <circle cx="0" cy="0" r="105" fill="none" stroke="#1f2937" strokeWidth="1" />
           <circle cx="0" cy="0" r="52" fill="none" stroke="#1f2937" strokeWidth="0.5" />
           <line x1="0" y1="-105" x2="0" y2="105" stroke="#1f2937" strokeWidth="0.5" />
           <line x1="-105" y1="0" x2="105" y2="0" stroke="#1f2937" strokeWidth="0.5" />
-          <text x="0" y="-99" fill="#4b5563" fontSize="8" textAnchor="middle">FRONT</text>
+          <text x="0" y="-99" fill="#4b5563" fontSize="8" textAnchor="middle">FRONT · {maxR.toFixed(0)}m</text>
           {Object.entries(emittedPositions).map(([id, [x, y]]) => {
             const t = Number(id);
             const src = objectStates[t] ?? 'track';
             const fill = { park: '#f59e0b', psn: '#a855f7', hold: '#22d3ee', manual: '#f97316', move: '#22c55e', track: '#6b7280' }[src];
-            const cx = Math.max(-105, Math.min(105, x * 10));
-            const cy = Math.max(-105, Math.min(105, y * 10));
+            const cx = Math.max(-105, Math.min(105, x * k));
+            const cy = Math.max(-105, Math.min(105, y * k));
             return (
               <g key={id}>
                 <circle cx={cx} cy={cy} r="4" fill={fill} />
@@ -120,6 +129,8 @@ export const RunView: React.FC = () => {
             );
           })}
         </svg>
+          );
+        })()}
       </div>
       </div>
       <div className="text-[10px] text-gray-600 mt-2">click = play/stop · right-click = solo · P = park · H = hold</div>
