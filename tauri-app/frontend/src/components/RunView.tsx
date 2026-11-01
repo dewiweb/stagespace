@@ -5,7 +5,7 @@
 import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
 import { useCuelistStore } from '../store/useCuelistStore';
-import { doGo, doPanic, doSlot, doSlotStop, doSolo, doUnsolo } from '../utils/liveActions';
+import { doGo, doPanic, doSlot, doSlotStop, doSolo, doUnsolo, doSpatial, doAttention } from '../utils/liveActions';
 
 const STATE_COLORS: Record<string, string> = {
   stopped: 'bg-gray-800 text-gray-500 hover:bg-gray-700',
@@ -25,6 +25,7 @@ export const RunView: React.FC = () => {
   // les deux passent par doSolo) : après un solo, le seul slot jouant
   // est le slot solo'd — le badge S ne peut pas diverger d'un OSC.
   const soloSavedIds = useGraphStore((s) => s.soloSavedIds);
+  const [spatialK, setSpatialK] = React.useState(1);
   const emittedPositions = useGraphStore((s) => s.emittedPositions);
   const manualOscIds = useGraphStore((s) => s.manualOscIds);
   // objectStates est keyed par obj_index (position dans osc_ids) —
@@ -64,6 +65,32 @@ export const RunView: React.FC = () => {
         </div>
       </div>
 
+      {/* Gestes live — les gestes du jeu, pas des réglages : compression
+          spatiale (slider live) + stase attention (focus/release). */}
+      <div className="flex gap-3 mb-4 items-stretch">
+        <div className="flex-1 bg-gray-900 rounded-lg px-4 py-2.5 flex items-center gap-3">
+          <span className="text-[10px] text-gray-500 uppercase tracking-widest flex-shrink-0">spatial</span>
+          <input
+            type="range"
+            min={0.3}
+            max={2.5}
+            step={0.05}
+            value={spatialK}
+            onChange={(e) => { const k = parseFloat(e.target.value); setSpatialK(k); doSpatial(k); }}
+            className="flex-1 accent-indigo-500"
+            title="Compresseur spatial — k<1 resserre le champ, k>1 l'étend"
+          />
+          <span className="text-[10px] text-gray-600 w-14 text-right">×{spatialK.toFixed(2)}</span>
+        </div>
+        <button
+          onClick={() => doAttention(null)}
+          className="px-4 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-bold"
+          title="Libère la stase attention (tous les objets redeviennent vivants)"
+        >
+          ATTN ✕
+        </button>
+      </div>
+
       {/* Grille pads — un pad = un slot, état couleur immédiat. */}
       <div className="flex gap-4 flex-1 min-h-0">
       <div className="grid grid-cols-4 gap-3 flex-1 content-start overflow-y-auto">
@@ -91,6 +118,17 @@ export const RunView: React.FC = () => {
               {parked.length > 0 && <div className="absolute top-1.5 right-1.5 text-[9px] bg-amber-800 px-1 rounded">P</div>}
               {held.length > 0 && <div className="absolute bottom-1.5 right-1.5 text-[9px] bg-cyan-800 px-1 rounded">H</div>}
               {solo && <div className="absolute top-1.5 left-1.5 text-[9px] bg-cyan-900 px-1 rounded">S</div>}
+              <span
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const objIdx = manualOscIds.indexOf(slot.trackIds[0]);
+                  if (objIdx >= 0) doAttention(objIdx);
+                }}
+                title="Attention — fige les autres objets, seul celui-ci bouge (change blindness)"
+                className="absolute bottom-1.5 left-1.5 text-[9px] bg-purple-800 hover:bg-purple-700 px-1 rounded cursor-pointer"
+              >
+                ◎
+              </span>
             </button>
           );
         })}
