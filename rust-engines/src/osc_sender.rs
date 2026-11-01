@@ -389,11 +389,7 @@ impl OscSender {
                 // atan2(x, y) et non atan2(y, x) (qui mesurait depuis +X).
                 let azimuth = pos.x.atan2(pos.y).to_degrees();
                 let horizontal = (pos.x.powi(2) + pos.y.powi(2)).sqrt();
-                let elevation = if horizontal > 0.0 {
-                    pos.z.atan2(horizontal).to_degrees()
-                } else {
-                    0.0
-                };
+                let elevation = pos.z.atan2(horizontal).to_degrees();
                 // Distance = norme 3D — une source sur l'axe Z avait dist=0
                 // (2D) → elle s'effondrait sur l'auditeur.
                 let distance = pos.norm();
@@ -419,11 +415,7 @@ impl OscSender {
                 // elevation, distance) sur l'adresse de base /object/{id}
                 let azimuth = pos.x.atan2(pos.y).to_degrees();
                 let horizontal = (pos.x.powi(2) + pos.y.powi(2)).sqrt();
-                let elevation = if horizontal > 0.0 {
-                    pos.z.atan2(horizontal).to_degrees()
-                } else {
-                    0.0
-                };
+                let elevation = pos.z.atan2(horizontal).to_degrees();
                 let distance = pos.norm();
                 (
                     self.position_address(osc_id),
@@ -434,11 +426,7 @@ impl OscSender {
                 // ADM-OSC - Ambisonics panning with spherical coordinates
                 let azimuth = pos.x.atan2(pos.y).to_degrees();
                 let horizontal = (pos.x.powi(2) + pos.y.powi(2)).sqrt();
-                let elevation = if horizontal > 0.0 {
-                    pos.z.atan2(horizontal).to_degrees()
-                } else {
-                    0.0
-                };
+                let elevation = pos.z.atan2(horizontal).to_degrees();
                 let distance = pos.norm();
                 (
                     self.position_address(osc_id),
@@ -747,6 +735,33 @@ mod tests {
         let (addr, values) = sender.format_position(2, Vector3::new(0.5, 0.0, 0.0));
         assert_eq!(addr, "/object/2");
         assert_eq!(values.len(), 3);
+    }
+
+    #[test]
+    fn test_polar_distance_is_3d() {
+        // P1.9 : la distance polaire est la norme 3D — une source sur l'axe
+        // Z (0,0,2) → distance 2, pas 0 (le calcul 2D l'effondrait sur
+        // l'auditeur). Verrouillé sur les 3 profils polaires.
+        for profile in [
+            OscProfile::GenericPolar,
+            OscProfile::IEMMultiEncoder,
+            OscProfile::ADMOSC,
+        ] {
+            let name = format!("{profile:?}");
+            let sender = OscSender::new(profile, "127.0.0.1".to_string(), 7000);
+            let (_, values) = sender.format_position(1, Vector3::new(0.0, 0.0, 2.0));
+            let distance = values.last().copied().unwrap_or(-1.0);
+            assert!(
+                (distance - 2.0).abs() < 1e-9,
+                "{name} : distance attendue 2.0, reçue {distance}"
+            );
+            // Elevation 90° pour une source pile au-dessus (ou -90 selon repère).
+            let elevation = values[1];
+            assert!(
+                elevation.abs() > 89.9,
+                "{name} : elevation attendue ≈±90°, reçue {elevation}"
+            );
+        }
     }
 
     #[test]

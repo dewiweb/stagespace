@@ -791,3 +791,176 @@ fn bench_merge_under_load() {
         stats.merge_frame_us
     );
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// P3 — verrouillage des sémantiques fixées par l'audit regard-neuf.
+// Ces chemins passaient zéro test : un yaw inversé, un disarm qui émet,
+// une régression d'index étaient invisibles.
+// ═══════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_osc_armed_false_is_total_silence() {
+    // P3/audit : désarmé = zéro paquet, même avec un move actif. Un
+    // disarm qui émettrait quand même passait invisible avant ce test.
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    let captured = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+    rt.set_sink(Box::new(CaptureSink(captured.clone())));
+    rt.set_osc_ids(vec![1]);
+    rt.set_osc_armed(false);
+
+    let b = Arc::new(PositionBuffer::new());
+    rt.register_move("m1".to_string(), b.clone(), vec![1], vec![0], false, crate::EndMode::default());
+    let w = spawn_writer(&b, 0, nalgebra::Vector3::new(5.0, 5.0, 5.0), 150);
+    rt.start().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(400));
+    rt.stop();
+    w.join().unwrap();
+
+    assert!(
+        captured.lock().unwrap_or_else(|e| e.into_inner()).is_empty(),
+        "désarmé = silence total, aucun paquet ne doit partir"
+    );
+}
+
+#[test]
+fn test_venue_map_applied_to_send_path() {
+    // P3 : venue_map (scale + offset + yaw) transforme les positions
+    // canoniques vers la salle — pos (1,0,0) avec scale×2 + offset
+    // (10,0,0) + yaw 0 → (12,0,0) au renderer.
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    let captured = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+    rt.set_sink(Box::new(CaptureSink(captured.clone())));
+    rt.set_osc_ids(vec![1]);
+    rt.set_venue_map(Some(([2.0, 2.0, 2.0], [10.0, 0.0, 0.0], 0.0)));
+
+    let b = Arc::new(PositionBuffer::new());
+    rt.register_move("m1".to_string(), b.clone(), vec![1], vec![0], false, crate::EndMode::default());
+    let w = spawn_writer(&b, 0, nalgebra::Vector3::new(1.0, 0.0, 0.0), 150);
+    rt.start().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(400));
+    rt.stop();
+    w.join().unwrap();
+
+    let map = captured.lock().unwrap_or_else(|e| e.into_inner());
+    let pos = map.get(&1).copied().expect("aucune position capturée");
+    assert!(
+        (pos.x - 12.0).abs() < 1e-6 && pos.y.abs() < 1e-6 && pos.z.abs() < 1e-6,
+        "venue map ×2 + offset(10) : attendu (12,0,0), reçu {pos:?}"
+    );
+}
+
+#[test]
+fn test_venue_map_yaw_rotates() {
+    // Le yaw tourne le monde vers la salle — pos (1,0,0) avec yaw 90°
+    // → (0,1,0) en salle (rotation Z positive, repère droit).
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    let captured = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+    rt.set_sink(Box::new(CaptureSink(captured.clone())));
+    rt.set_osc_ids(vec![1]);
+    rt.set_venue_map(Some(([1.0, 1.0, 1.0], [0.0, 0.0, 0.0], std::f64::consts::FRAC_PI_2)));
+
+    let b = Arc::new(PositionBuffer::new());
+    rt.register_move("m1".to_string(), b.clone(), vec![1], vec![0], false, crate::EndMode::default());
+    let w = spawn_writer(&b, 0, nalgebra::Vector3::new(1.0, 0.0, 0.0), 150);
+    rt.start().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(400));
+    rt.stop();
+    w.join().unwrap();
+
+    let map = captured.lock().unwrap_or_else(|e| e.into_inner());
+    let pos = map.get(&1).copied().expect("aucune position capturée");
+    assert!(
+        pos.x.abs() < 1e-6 && (pos.y - 1.0).abs() < 1e-6,
+        "yaw 90° : attendu ≈(0,1,0), reçu {pos:?}"
+    );
+}
+
+#[test]
+fn test_manual_position_emits_without_move() {
+    // P1.1 : une position manuelle émet même SANS move couvrant l'objet —
+    // la reprise opérateur sur un objet libre n'est plus un no-op.
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    let captured = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+    rt.set_sink(Box::new(CaptureSink(captured.clone())));
+    rt.set_osc_ids(vec![1, 2]);
+    rt.set_manual_position(1, [3.0, 4.0, 5.0]); // obj_index 1 → osc_id 2
+
+    // Un move sur l'autre objet pour faire tourner la boucle.
+    let b = Arc::new(PositionBuffer::new());
+    rt.register_move("m1".to_string(), b.clone(), vec![1], vec![0], false, crate::EndMode::default());
+    let w = spawn_writer(&b, 0, nalgebra::Vector3::new(0.0, 0.0, 0.0), 150);
+    rt.start().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(400));
+    rt.stop();
+    w.join().unwrap();
+
+    let map = captured.lock().unwrap_or_else(|e| e.into_inner());
+    assert_eq!(
+        map.get(&2).copied(),
+        Some(nalgebra::Vector3::new(3.0, 4.0, 5.0)),
+        "la position manuelle de l'objet sans move doit être émise: {map:?}"
+    );
+}
+
+#[test]
+fn test_end_mode_hold_writes_manual_position() {
+    // P1.4/Hold : à la fin d'un move EndMode::Hold, la dernière position
+    // devient une position manuelle (l'objet reste où le move l'a laissé).
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    let captured = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+    rt.set_sink(Box::new(CaptureSink(captured.clone())));
+    rt.set_osc_ids(vec![1]);
+
+    let b = Arc::new(PositionBuffer::new());
+    rt.register_move("m1".to_string(), b.clone(), vec![1], vec![0], false, crate::EndMode::Hold);
+    b.write(vec![(0usize, nalgebra::Vector3::new(7.0, 8.0, 9.0))]);
+    // Plus d'écriture → stale-kill (30 frames) → EndMode::Hold fige la
+    // dernière position en manuelle. C'est LE chemin réel (unregister_move
+    // n'applique pas le end_mode — kill manuel ≠ fin naturelle).
+    rt.start().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(1500));
+    rt.stop();
+
+    assert_eq!(
+        rt.manual_position(0),
+        Some([7.0, 8.0, 9.0]),
+        "Hold : la dernière position du move doit devenir manuelle"
+    );
+}
+
+#[test]
+fn test_non_identity_obj_index_mapping() {
+    // P3 : obj_index ≠ position dans la liste — un mapping .hol
+    // [track 5, track 9, track 12] : obj_index 1 → osc_id 9, jamais 2.
+    // Une régression `tid - 1` enverrait aux mauvaises tracks.
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    let captured = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+    rt.set_sink(Box::new(CaptureSink(captured.clone())));
+    rt.set_osc_ids(vec![5, 9, 12]); // mapping non-identity
+    rt.set_manual_position(1, [1.0, 2.0, 3.0]);
+
+    let b = Arc::new(PositionBuffer::new());
+    rt.register_move("m1".to_string(), b.clone(), vec![5], vec![0], false, crate::EndMode::default());
+    let w = spawn_writer(&b, 0, nalgebra::Vector3::new(0.0, 0.0, 0.0), 150);
+    rt.start().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(400));
+    rt.stop();
+    w.join().unwrap();
+
+    let map = captured.lock().unwrap_or_else(|e| e.into_inner());
+    assert_eq!(
+        map.get(&9).copied(),
+        Some(nalgebra::Vector3::new(1.0, 2.0, 3.0)),
+        "obj_index 1 doit résoudre vers osc_id 9 — pas 2: {map:?}"
+    );
+    assert!(
+        !map.contains_key(&2),
+        "aucun envoi ne doit partir vers l'osc_id 2 (off-by-one): {map:?}"
+    );
+}
