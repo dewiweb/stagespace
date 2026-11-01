@@ -14,7 +14,9 @@ import { cueLabel, tcStr } from '../utils/showFormat';
 import { useGraphStore } from '../store/useGraphStore';
 import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { useCuelistStore } from '../store/useCuelistStore';
-import { doSolo, doUnpark, doStop, doUnsolo, getSoloRestoreIds } from '../utils/liveActions';
+import { doSolo, doUnpark, doStop, doUnsolo, getSoloRestoreIds, doAttention } from '../utils/liveActions';
+import { Radar2D } from './jeu/Radar2D';
+import { GestureStrip } from './jeu/GestureStrip';
 import { safeInvoke, silentCatch } from '../utils/tauri';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { toast } from '../utils/toast-helpers';
@@ -52,20 +54,22 @@ export const PerformView: React.FC = () => {
   const tcFps = useGraphStore((s) => s.timecodeFps);
   const [goFeedback, setGoFeedback] = React.useState<{ ok: boolean; message: string } | null>(null);
   // Mode touch : pads numérotés (busking) + cibles agrandies (tablette).
-  // Mode tactile supprimé — il doublait buskingMode (pads gros doigt
-  // en colonne vs plein écran). Deux surfaces de focus restantes :
-  // busking (pads) et conduite (transport).
-  // Mode conduite : vue plein écran readable à distance — NOW/NEXT cue,
-  // TC, armé, pending timers. Le reste du show continue derrière.
-  // La conduite est une surface de première classe (nav ATELIER/CONDUITE/
+  // Mode tactile/busking plein écran supprimés — la surface Jeu EST
+  // l'instrument (pads permanents au centre, gestes en strip). La
+  // conduite est une surface de première classe (nav ATELIER/CONDUITE/
   // JEU) — le bouton y navigue au lieu de l'overlay interne redondant.
   const setSurface = useMoveEditorStore((s) => s.setSurface);
-  // Mode busking plein écran : grille de pads géante (tir au doigt).
-  const [buskingMode, setBuskingMode] = React.useState(false);
   // État de santé show (parked / consoleAge / armed) — poll unique partagé
   // via useShowStatusStore au lieu d'un setInterval par composant.
   const parked = useShowStatusStore((s) => s.parked);
   const consoleAge = useShowStatusStore((s) => s.consoleAge);
+  // Source-de-contrôle par track (badges pads) + solo actif — même
+  // sémantique que l'ex-RunView : objectStates keyed par obj_index.
+  const objectStates = useGraphStore((s) => s.objectStates);
+  const manualOscIds = useGraphStore((s) => s.manualOscIds);
+  const soloSavedIds = useGraphStore((s) => s.soloSavedIds);
+  // Panneau central : pads (l'instrument, défaut) ou canvas 3D.
+  const [centerView, setCenterView] = React.useState<'pads' | '3d'>('pads');
   React.useEffect(() => { startShowStatusPolling(); }, []);
 
   const playingCount = moveSlots.filter((s) => s.movementId).length;
@@ -106,12 +110,17 @@ export const PerformView: React.FC = () => {
     .filter(Boolean) as typeof moveSlots;
   const layerSlots = moveSlots.filter((s) => !setlistOrder.includes(s.id));
 
-  // Pad busking (mode touch) — cible 80px+, # = index OSC, tap = play/stop,
-  // coin S = solo (fade les autres).
-  // Pad busking (mode touch) — délégué à SlotTile (rendu partagé).
+  // Pad jeu — SlotTile + badges source-de-contrôle (P/H/S) + attention ◎.
+  // objectStates est keyed par obj_index : trackId → indexOf(manualOscIds).
+  const srcOf = (trackId: number) => objectStates[manualOscIds.indexOf(trackId)];
+  const soloId =
+    soloSavedIds.length > 0 ? (moveSlots.find((s) => s.movementId)?.id ?? null) : null;
   const renderPad = (slot: (typeof moveSlots)[number], big = false) => {
     const isPlaying = !!slot.movementId || pendingPlays.includes(slot.id);
     const oscNum = slot.oscIndex || moveSlots.indexOf(slot) + 1;
+    const parkedTracks = slot.trackIds.filter((t) => srcOf(t) === 'park');
+    const heldTracks = slot.trackIds.filter((t) => srcOf(t) === 'hold');
+    const firstObj = manualOscIds.indexOf(slot.trackIds[0]);
     return (
       <SlotTile
         key={slot.id}
@@ -120,10 +129,14 @@ export const PerformView: React.FC = () => {
         density="pad"
         big={big}
         isPlaying={isPlaying}
+        isSolo={soloId === slot.id}
         canSolo={playingCount > 1}
+        parkedTracks={parkedTracks}
+        heldTracks={heldTracks}
+        onAttention={firstObj >= 0 ? () => doAttention(firstObj) : undefined}
         onPlay={() => void playSlot(slot.id)}
         onStop={() => void stopSlot(slot.id)}
-        onSolo={() => doSolo(oscNum)}
+        onSolo={() => (soloId === slot.id ? doUnsolo() : doSolo(oscNum))}
       />
     );
   };
@@ -259,13 +272,6 @@ export const PerformView: React.FC = () => {
           </span>
         )}
         <button
-          onClick={() => setBuskingMode(true)}
-          className="px-3 py-2.5 rounded-lg flex-shrink-0 bg-green-800/60 hover:bg-green-700/80 text-green-100 text-xs font-bold uppercase tracking-wide transition-colors active:scale-95"
-          title="Busking plein écran — pads géants, tir au doigt (concert non-timecodé)"
-        >
-          Busking
-        </button>
-        <button
           onClick={() => {
             // Fenêtre détachable : même vue conduite, propre process
             // webview — posée sur un écran dédié au FOH.
@@ -325,6 +331,32 @@ export const PerformView: React.FC = () => {
         <PanicButton size="lg" />
       </div>
 
+      {/* ═══ Strip gestes — les gestes du jeu (spatial, attention
+          release) + les actions de secours ex-busking (unsolo/stop all). ═══ */}
+      <div className="flex gap-3 px-4 py-2 border-b border-stagespace-border flex-shrink-0 items-stretch">
+        <div className="flex-1">
+          <GestureStrip />
+        </div>
+        {getSoloRestoreIds().length > 0 && (
+          <button
+            onClick={() => doUnsolo()}
+            className="px-4 rounded-lg bg-orange-700/80 hover:bg-orange-600 text-orange-100 text-xs font-bold active:scale-95"
+            title={`UNSOLO — rejoue les ${getSoloRestoreIds().length} slots stoppés par le solo`}
+          >
+            UNSOLO
+          </button>
+        )}
+        {playingCount > 0 && (
+          <button
+            onClick={() => doStop()}
+            className="px-4 rounded-lg bg-red-800/70 hover:bg-red-700 text-red-100 text-xs font-bold active:scale-95"
+            title="Stop all moves en fondu — moins brutal que PANIC (le renderer reste armé)"
+          >
+            STOP ALL
+          </button>
+        )}
+      </div>
+
       {/* ═══ Corps : setlist | canvas ═══ */}
       <div className="flex-1 flex overflow-hidden">
         {/* Colonne gauche : SETLIST (flux du show) + LAYERS (ad-hoc) + cues */}
@@ -381,67 +413,53 @@ export const PerformView: React.FC = () => {
           </div>
         </div>
 
-        {/* Canvas 3D */}
-        <div className="flex-1 min-w-0">
-          <Scene3D width="100%" height="100%" />
+        {/* Centre — l'instrument : pads permanents (ex-busking, la
+            surface EST le jeu) ou canvas 3D via toggle, + radar. */}
+        <div className="flex-1 min-w-0 flex flex-col">
+          <div className="flex items-center gap-2 px-3 py-1 border-b border-stagespace-border flex-shrink-0">
+            <button
+              onClick={() => setCenterView('pads')}
+              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${centerView === 'pads' ? 'bg-indigo-700 text-white' : 'text-gray-500 hover:text-gray-300'}`}
+            >
+              Pads
+            </button>
+            <button
+              onClick={() => setCenterView('3d')}
+              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${centerView === '3d' ? 'bg-indigo-700 text-white' : 'text-gray-500 hover:text-gray-300'}`}
+            >
+              3D
+            </button>
+          </div>
+          {centerView === '3d' ? (
+            <div className="flex-1 min-h-0">
+              <Scene3D width="100%" height="100%" />
+            </div>
+          ) : (
+            <div className={`flex-1 overflow-y-auto p-3 grid gap-3 auto-rows-min content-start ${
+              moveSlots.length > 12 ? 'grid-cols-4' : moveSlots.length > 6 ? 'grid-cols-3' : 'grid-cols-2'
+            }`}>
+              {moveSlots.map((slot) => renderPad(slot))}
+              {moveSlots.length === 0 && (
+                <div className="col-span-4 py-16">
+                  <EmptyState title="Aucun slot" hint="Crée des moves pour remplir les pads." />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Radar — positions réellement émises + grab & throw. */}
+        <div className="w-64 flex-shrink-0 border-l border-stagespace-border bg-gray-900/50 p-2 flex flex-col">
+          <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1 flex justify-between">
+            <span>radar · top</span>
+            <span className="normal-case text-gray-600">drag = throw</span>
+          </div>
+          <Radar2D />
         </div>
       </div>
 
       {/* ═══ Bottom : chips live + drawer params ═══ */}
       <LiveDrawer />
-
-      {/* ═══ Busking plein écran — pads géants pour le tir au doigt ═══ */}
-      {buskingMode && (
-        <div className="absolute inset-0 z-menu bg-stagespace-bg flex flex-col">
-          <div className="flex items-center justify-between px-6 py-3 border-b border-stagespace-border">
-            <div className="flex items-center gap-4">
-              <span className="text-gray-400 text-sm uppercase tracking-widest">Busking</span>
-              <span className={`text-xl font-black ${playingCount > 0 ? 'text-green-400' : 'text-gray-600'}`}>
-                {playingCount > 0 ? `${playingCount} LIVE` : 'IDLE'}
-              </span>
-              {isRecalling && <span className="text-purple-400 font-bold animate-pulse">RECALLING…</span>}
-            </div>
-            <div className="flex items-center gap-4">
-              {getSoloRestoreIds().length > 0 && (
-                <button
-                  onClick={() => doUnsolo()}
-                  className="px-5 py-3 rounded-xl bg-orange-700/80 hover:bg-orange-600 text-orange-100 text-base font-bold active:scale-95"
-                  title={`UNSOLO — rejoue les ${getSoloRestoreIds().length} slots stoppés par le solo`}
-                >
-                  UNSOLO
-                </button>
-              )}
-              {playingCount > 0 && (
-                <button
-                  onClick={() => doStop()}
-                  className="px-5 py-3 rounded-xl bg-red-800/70 hover:bg-red-700 text-red-100 text-base font-bold active:scale-95"
-                  title="Stop all moves en fondu — moins brutal que PANIC (le renderer reste armé)"
-                >
-                  STOP ALL
-                </button>
-              )}
-              <OscArmToggle />
-              <PanicButton size="lg" />
-              <button
-                onClick={() => setBuskingMode(false)}
-                className="px-6 py-3 rounded-xl bg-gray-800 text-gray-200 text-lg font-semibold"
-              >
-                Fermer ✕
-              </button>
-            </div>
-          </div>
-          <div className={`flex-1 overflow-y-auto p-4 grid gap-3 auto-rows-min content-start ${
-            moveSlots.length > 12 ? 'grid-cols-4' : moveSlots.length > 6 ? 'grid-cols-3' : 'grid-cols-2'
-          }`}>
-            {moveSlots.map((slot) => renderPad(slot, true))}
-            {moveSlots.length === 0 && (
-              <div className="col-span-4 py-16">
-                <EmptyState title="Aucun slot" hint="Crée des moves pour remplir les pads." />
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
     </div>
   );

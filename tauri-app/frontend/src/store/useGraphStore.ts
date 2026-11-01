@@ -489,7 +489,9 @@ export const useGraphStore = create<GraphState>()((...a) => {
       // Un backend down ne doit pas empêcher le reset à zéro : try/catch.
       let trackPositions: Record<number, [number, number, number]> = {};
       try {
-        trackPositions = await invoke('get_track_positions');
+        // `?? {}` : un backend qui résout null/undefined n'est pas une
+        // erreur pour try/catch — mais trackPositions[id] crasherait.
+        trackPositions = (await invoke('get_track_positions')) ?? {};
       } catch (e) {
         console.error('Panic: could not fetch track positions:', e);
       }

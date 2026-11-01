@@ -26,6 +26,11 @@ interface SlotTileProps {
   onSolo?: () => void;
   onSelect?: () => void;
   onAddToSetlist?: () => void;
+  /// Badges jeu (density pad) — source-de-contrôle par track du slot.
+  parkedTracks?: number[];
+  heldTracks?: number[];
+  isSolo?: boolean;
+  onAttention?: () => void;
 }
 
 export const SlotTile: React.FC<SlotTileProps> = (p) => {
@@ -96,9 +101,27 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
         <div className="min-w-0">
           <div className={`${big ? 'text-lg' : 'text-sm'} font-semibold truncate leading-tight`}>{slot.name}</div>
           <div className={`text-[10px] mt-0.5 ${isPlaying ? 'text-green-300/80' : 'text-gray-500'}`}>
-            {slot.trackIds.length} trk{isPlaying ? ' · LIVE' : ' · hold=bump'}
+            {slot.trackIds.map((t) => `${t}${p.parkedTracks?.includes(t) ? '⏸' : ''}`).join(' ')}
+            {isPlaying ? ' · LIVE' : ' · hold=bump'}
           </div>
         </div>
+        {/* Badges source-de-contrôle — P park, H hold, S solo, ◎ attention. */}
+        {p.parkedTracks && p.parkedTracks.length > 0 && (
+          <div className="absolute top-10 right-1.5 text-[9px] bg-amber-800 px-1 rounded" title={`Parké : ${p.parkedTracks.join(', ')}`}>P</div>
+        )}
+        {p.heldTracks && p.heldTracks.length > 0 && (
+          <div className="absolute bottom-1.5 right-1.5 text-[9px] bg-cyan-800 px-1 rounded" title={`Hold : ${p.heldTracks.join(', ')}`}>H</div>
+        )}
+        {p.isSolo && <div className="absolute top-1.5 left-1.5 text-[9px] bg-cyan-900 px-1 rounded">S</div>}
+        {p.onAttention && (
+          <span
+            onClick={(e) => { e.stopPropagation(); p.onAttention!(); }}
+            title="Attention — fige les autres objets, seul celui-ci bouge (change blindness)"
+            className="absolute bottom-1.5 left-1.5 text-[9px] bg-purple-800 hover:bg-purple-700 px-1 rounded cursor-pointer"
+          >
+            ◎
+          </span>
+        )}
       </div>
     );
   }
