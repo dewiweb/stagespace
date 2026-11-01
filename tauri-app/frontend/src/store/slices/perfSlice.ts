@@ -16,7 +16,7 @@ export interface PerfSlice {
   refreshObjectStates: () => Promise<void>;
 }
 
-export const createPerfSlice: StateCreator<PerfSlice, [], [], PerfSlice> = (set, get) => ({
+export const createPerfSlice: StateCreator<PerfSlice, [], [], PerfSlice> = (set) => ({
   perfStats: null,
   setPerfStats: (stats) => set({ perfStats: stats }),
   objectStates: {},
