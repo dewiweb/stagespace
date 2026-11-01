@@ -25,7 +25,7 @@ export function useShowControl() {
           useGraphStore
             .getState()
             .pushShowLog(
-              `${cmd.command}${cmd.value != null ? ` ${JSON.stringify(cmd.value)}` : ''} ${from}`,
+              `${cmd.command}${'value' in cmd && cmd.value != null ? ` ${JSON.stringify(cmd.value)}` : ''} ${from}`,
             );
           switch (cmd.command) {
             case 'Go':
