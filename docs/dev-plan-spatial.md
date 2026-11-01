@@ -1,100 +1,175 @@
 # Plan de développement — mix orienté objet
 
 Issu de `docs/spatial-object-mixing-study.md` + `docs/conduites/` (spec d'acceptance).
-Critère d'ordonnancement : **débloquer les conduites d'abord**, différenciateurs ensuite.
+Ordonnancement : **débloquer les conduites d'abord**, la tour ensuite, les
+différenciateurs en dernier.
+
+Estimations : S < 1 j · M = 1–3 j · L = 3–7 j · XL > 1 sem.
 
 ---
 
-## P0 — Les deux trous qui bloquent C et D
+## P0 — Débloquer les conduites trackées
 
-### P0.1 `anchor:follow` — ancre dynamique
-**Pourquoi** : l'orbit autour d'un objet mobile (silages, TRAVERSE) —
-aujourd'hui `anchor:current` fige au spawn ; la cible bouge → l'orbit reste.
-**Quoi** : lire `merge.last_position(anchor_target)` par frame au lieu de
-capturer une fois → `anchor[obj] = pos_courante_cible − traj(0)`.
-**Test d'acceptance** : conduite C cue 04 — orbit centré sur V1 *qui bouge*,
-vérifié au listener : l'orbite suit le déplacement de V1.
+### P0.1 `anchor:follow` — ancre dynamique par objet
+
+**Conduites** : C cue 04 (orbit sur V1 mobile), D cue 05. Actuellement
+`anchor:current` fige la capture au spawn — la cible bouge, l'orbit reste.
+
+**Design** : mode `follow` — l'ancre se **met à jour par frame** au lieu de
+capturer une fois. Le worker lit la dernière position émise de la track
+cible (`merge.last_position`) chaque frame, recalcule `delta = cible −
+traj(0)`, l'applique. L'orbit reste centré sur la cible qui bouge.
+
+**Tâches**
+- `AnchorMode::Follow` (3e variante, `runtime/types.rs`)
+- Worker : remplacer le `delta` figé par une lecture par frame —
+  `last_position` exposée par le merge via un handle passé au worker au
+  spawn (Arc<RwLock<HashMap>> partagé — le même que `last_out_positions`)
+- `MoveSpec.anchor_target: Option<u32>` — la track à suivre (None = par
+  objet : chaque objet suit sa propre position)
+- `ActivateMoveRequest` + `MoveSlot.anchorTarget` + payload + select UI
+- Docs
+
+**Acceptance** : conduite C cue 04 — `/stagespace/slot 4` avec `anchor:follow`
+sur V1 tracké → l'orbit centre suit le déplacement de V1 au listener.
+`anchor:current` = comportement figé inchangé.
+
+**Effort** : M · **Blocs** : worker delta par frame + handle last_position.
+
+---
 
 ### P0.2 PSN/RTTrP ingest — tracking industrie
-**Pourquoi** : le protocole standard (BlackTrax/Zactrack/Follow-Me) — canal
-#1 du "follow performer" pro.
-**Quoi** : parser les paquets PSN (multicast 236.0.0.1:56565 par défaut) →
-`/stagespace/position <obj> x y z` interne → positions manuelles lissées.
-Rate-limit + kinematic smoothing existant.
-**Test** : flux PSN simulé → objets suivent en douceur ; coupure → fige
-propre (dernière position tenue).
+
+**Conduites** : C, D — le canal standard (BlackTrax/Zactrack/Follow-Me/
+StagePrecision). Sans ça, pas de "follow performer" pro.
+
+**Design** : listener multicast PSN (236.0.0.1:56565 ou configurable) →
+décoder paquets RTTrPL (position/velocity per tracker) → mapper tracker_id
+→ object_index (mapping config) → `set_manual_position` (le canal existe —
+les positions manuelles lissées via kinematic smoothing).
+
+**Tâches**
+- `rust-engines/src/psn_receiver.rs` — socket multicast + parser RTTrPL
+  (header, packet_id, tracker packets, position xyz)
+- Config : `psn_port`, `psn_group`, `psn_map: tracker_id → object_index`
+- Intégration `osc_receiver`-like : même pattern de routing
+- Smoothing : kinematic smoothing existant suffit (dt réel)
+- Status : age dernière trame exposé pour le bandeau santé (P1.3)
+
+**Acceptance** : flux PSN simulé → objets suivent au listener ; coupure →
+fige + indicateur de perte.
+
+**Effort** : L · **Blocs** : protocol parsing (RTTrPL non trivial — framing,
+tracker packets) + mapping config.
 
 ---
 
-## P1 — Outillage métier (débloque la production réelle)
+## P1 — Outillage métier (production réelle)
 
-### P1.1 Soundcheck walk
-**Pourquoi** : repère indispensable (conduite B 00).
-**Quoi** : séquence auto ping par track — position identifiable + silence →
-suivante. Commande `/stagespace/soundcheck [start|stop|next]`.
-**Test** : B 00 — chaque track s'identifie spatialement en séquence.
+### P1.1 Soundcheck walk — S
 
-### P1.2 Source-de-contrôle par objet (ergonomie n°1)
-**Pourquoi** : LE manque transverse — "pourquoi cet objet est là".
-**Quoi** : état par objet (move/manuel/PSN/park/hold/track) exposé via
-`get_object_states` → badge couleur dans 3D + liste.
-**Test** : conduite C — l'opérateur lit d'un coup d'œil V1=PSN, M1=park,
-S3=move, A9=hold.
+**Conduite** : B 00.
+**Quoi** : `/stagespace/soundcheck [start|stop|next|prev]` — séquence auto :
+ping une track (position identifiable = pulse/oscillation marqueur) →
+silence → suivante. Vérifie routing + identité spatiale.
+**Acceptance** : chaque track s'identifie au listener, séquence traversable
+manuellement.
 
-### P1.3 Santé des flux (bandeau d'état)
-**Pourquoi** : PSN/TC/OSC coupés = show mort silencieux (C, D).
-**Quoi** : age de dernière trame par flux + lock TC + error rate OSC —
-bandeau permanent, pas toasts.
-**Test** : couper le flux PSN → indicateur rouge < 1 s.
+### P1.2 Source-de-contrôle par objet — M · **priorité ergonomie n°1**
 
-### P1.4 Confidence view — emitted-vs-commanded
-**Pourquoi** : le listener :9000 externe = gap de diagnostic intégrable.
-**Quoi** : diff émission réelle vs positions GUI dans une vue debug.
-**Test** : tout décalage GUI↔OSC visible en < 1 frame.
+**Conduites** : C, D — *pourquoi cet objet est là*.
+**Quoi** : par objet, la source active : `move:{id}` / `manual` / `psn` /
+`park` / `hold` / `track`(origine) — exposée via `get_object_states` IPC →
+badge couleur en 3D + colonne dans les listes.
+**Tâches** : état par objet dans le merge (déterminer qui a écrit en dernier —
+move, manual_positions, PSN flag, park set, hold) → getter → frontend badge.
+**Acceptance** : lecture instantanée du modèle de contrôle — C conduite
+jouable "à vue".
 
----
+### P1.3 Santé des flux — S-M
 
-## P2 — Expérience opérateur (la tour)
+**Conduites** : C, D — flux coupés = mort silencieuse.
+**Quoi** : bandeau permanent : PSN age, TC lock, OSC out rate, OSC error
+rate, armed state — pas des toasts épisodiques.
+**Tâches** : timestamps derniers paquets dans receivers → `get_flow_health`
+→ StatusBar extension.
 
-### P2.1 Surface de jeu (Perform run-view)
-**Pourquoi** : busking = instrument, pas GUI d'admin (B, D).
-**Quoi** : grille pads dédiée (états playing/fading/solo'd/park'd), holds
-visibles, gros GO/panic — construit sur la Conduite window existante.
+### P1.4 Confidence view — M
 
-### P2.2 Audition avant émission
-**Pourquoi** : "à quoi ressemble la prochaine cue" (A).
-**Quoi** : preview de cue — render interne sans envoi OSC.
-
-### P2.3 Vue radar 2D fixe
-**Pourquoi** : conduite = plan fixe lisible, pas caméra 3D.
-**Quoi** : top-down + profil, marquage park/manual/PSN par objet.
-
-### P2.4 Log opérationnel
-**Pourquoi** : "qu'est-ce qui s'est passé" (D) — qui a GO, quand, quel NACK.
+**Quoi** : emitted-vs-commanded diff — le listener :9000 en natif : vue debug
+affichant les dernières positions réellement émises par track vs GUI.
+**Acceptance** : tout écart visible < 1 frame.
 
 ---
 
-## P3 — Différenciateurs (au-delà de l'état de l'art)
+## P2 — La tour de contrôle
 
-| # | Item | Fondement | Marché |
-|---|---|---|---|
-| P3.1 | **Auto-venue adaptation** — conduite→géométrie enceintes réelle | touring | personne |
-| P3.2 | **Legibility/looming/vection meters** | MAMA, Neuhoff, Riecke | personne |
-| P3.3 | **Distance reality layer** — pos→gain/EQ/reverb auto | Zahorik, DRR | partiel L-ISA |
-| P3.4 | **Spatial dynamics** — compression énergie spatiale | 4DSOUND | 4DSOUND seul |
-| P3.5 | **Attention orchestration** — "un seul bouge" auto | change blindness | personne |
-| P3.6 | **Diffusion score view** — temps×zones partition | Vande Gorne | personne |
-| P3.7 | **Trajectory library** — taxonomie Peters | Schacher/Peters | — |
-| P3.8 | **Rehearsal capture** — live→cue | workflow | — |
-| P3.9 | **Binaural bounce** — show→écoute à distance | prelisten | partiel SPAT |
-| P3.10 | **Media sync out** — cue→trigger lumière/vidéo | D | — |
+### P2.1 Surface de jeu (run-view) — L
+
+**Conduites** : B, D — l'instrument, pas l'admin.
+**Quoi** : construit sur `Conduite` window existante — grille pads (état
+playing/fading/solo'd/park'd), gros GO/panic, holds visibles, cue list,
+bandeau santé (P1.3), source-de-contrôle (P1.2) — UN écran.
+**Acceptance** : conduite B jouable sans jamais ouvrir l'éditeur de graphe.
+
+### P2.2 Audition de cue avant émission — M
+
+**Conduite** : A — voir la prochaine image avant GO.
+**Quoi** : `is_preview` existant pour moves — l'étendre aux cues : render
+interne des positions sans envoi, affichage seul.
+
+### P2.3 Vue radar 2D — M
+
+**Quoi** : top-down + profil fixes, marquage park/manual/PSN/move par objet
+(couleur source-de-contrôle) — le "plan" de conduite vs le 3D manipulable.
+
+### P2.4 Log opérationnel — S-M
+
+**Quoi** : historique horodaté : GO/recall/slot/park/NACK — qui, quand, quoi.
 
 ---
 
-## Critères globaux
+## P3 — Différenciateurs
 
-- **Jouabilité** : les 4 conduites jouables bout-à-bout au listener = done
-- **Règle de l'étude** : chaque feature répond à une exigence de conduite
-  ou à un fondement de la bibliographie — pas de feature "parce que cool"
-- **La tour** : ergonomie P2 = rendre le modèle de contrôle visible — qui
-  pilote quoi, qu'est-ce qui vit, qu'est-ce qui sera touché
+| # | Item | Effort | Fondement | Note |
+|---|---|---|---|---|
+| P3.1 | **Auto-venue adaptation** | XL | touring | Normaliser positions à espace canonique + re-ancrer géométrie enceintes — le différenciateur #1, personne ne le fait |
+| P3.2 | **Perceptual meters** (legibility/looming/vection) | M | MAMA, Neuhoff, Riecke | Vu-mètre de la lisibilité — vitesse angulaire/distance |
+| P3.3 | **Distance reality layer** | M | Zahorik ×0.7, DRR | pos→gain/air-EQ/reverb-send auto |
+| P3.4 | **Spatial dynamics** | L | 4DSOUND | compression/expansion énergie spatiale globale |
+| P3.5 | **Attention orchestration** | M | change blindness | mode "un seul bouge" — stasis auto des autres |
+| P3.6 | **Diffusion score view** | L | Vande Gorne | partition temps×zones×gestes |
+| P3.7 | **Trajectory library** | M | Peters/Smalley | templates de gestes catalogués |
+| P3.8 | **Rehearsal capture** | M | workflow | busking enregistré → cue rejouable |
+| P3.9 | **Binaural bounce** | L | prelisten | show→binaural offline, répétition à distance |
+| P3.10 | **Media sync out** | M | D | cue→trigger lumière/vidéo dédié |
+
+---
+
+## Jalons
+
+**J1 — Conduites jouables** : P0 (follow + PSN) + P1 → C et D jouables au
+listener avec suivi réel.
+
+**J2 — Tour de contrôle** : P2 → B et D jouables depuis une seule surface,
+sans l'éditeur.
+
+**J3 — Différenciation** : P3 par ordre d'impact marché : auto-venue >
+perceptual meters > distance layer > le reste.
+
+## Dépendances
+
+```
+P0.1 (follow) ─┐
+               ├─→ débloque C/D cue-04/05
+P0.2 (PSN) ────┘
+P1.2 (source-de-contrôle) ─→ P2.1 (run-view s'appuie dessus) + P2.3 (radar)
+P1.3 (santé flux) ─────────→ P2.1 (bandeau dans la surface)
+P0.2 ──────────────────────→ P1.3 (PSN health nécessite le flux)
+```
+
+## Règle de gouvernance
+
+Chaque feature répond à une **conduite** ou à un **fondement de
+bibliographie** — pas de feature "parce que cool". Critère global : les 4
+conduites jouables bout-à-bout au listener.
