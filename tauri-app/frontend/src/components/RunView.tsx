@@ -5,7 +5,7 @@
 import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
 import { useCuelistStore } from '../store/useCuelistStore';
-import { doGo, doPanic, doSlot, doSlotStop, doSolo, doUnsolo, doSpatial, doAttention } from '../utils/liveActions';
+import { doGo, doPanic, doSlot, doSlotStop, doSolo, doUnsolo, doSpatial, doAttention, doThrow } from '../utils/liveActions';
 
 const STATE_COLORS: Record<string, string> = {
   stopped: 'bg-gray-800 text-gray-500 hover:bg-gray-700',
@@ -26,6 +26,7 @@ export const RunView: React.FC = () => {
   // est le slot solo'd — le badge S ne peut pas diverger d'un OSC.
   const soloSavedIds = useGraphStore((s) => s.soloSavedIds);
   const [spatialK, setSpatialK] = React.useState(1);
+  const throwDrag = React.useRef<{ id: number; x: number; y: number; t: number } | null>(null);
   const emittedPositions = useGraphStore((s) => s.emittedPositions);
   const manualOscIds = useGraphStore((s) => s.manualOscIds);
   // objectStates est keyed par obj_index (position dans osc_ids) —
@@ -147,7 +148,24 @@ export const RunView: React.FC = () => {
           );
           const k = 100 / maxR;
           return (
-        <svg viewBox="-110 -110 220 220" className="flex-1 min-h-0" preserveAspectRatio="xMidYMid meet">
+        <svg
+          viewBox="-110 -110 220 220"
+          className="flex-1 min-h-0"
+          preserveAspectRatio="xMidYMid meet"
+          // Grab & throw — drag un objet : la vélocité du geste devient
+          // la vélocité du lancer (px→mètres via l'échelle du viewBox).
+          onPointerUp={(e) => {
+            const drag = throwDrag.current;
+            if (!drag) return;
+            throwDrag.current = null;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const dt = Math.max(0.05, (Date.now() - drag.t) / 1000);
+            const scale = 220 / rect.width / k; // px → viewBox → mètres
+            const vx = ((e.clientX - drag.x) * scale) / dt;
+            const vy = (-(e.clientY - drag.y) * scale) / dt;
+            if (Math.hypot(vx, vy) > 0.5) doThrow(drag.id, vx, vy, 0);
+          }}
+        >
           <circle cx="0" cy="0" r="105" fill="none" stroke="#1f2937" strokeWidth="1" />
           <circle cx="0" cy="0" r="52" fill="none" stroke="#1f2937" strokeWidth="0.5" />
           <line x1="0" y1="-105" x2="0" y2="105" stroke="#1f2937" strokeWidth="0.5" />
@@ -160,7 +178,14 @@ export const RunView: React.FC = () => {
             const cx = Math.max(-105, Math.min(105, x * k));
             const cy = Math.max(-105, Math.min(105, y * k));
             return (
-              <g key={id}>
+              <g
+                key={id}
+                style={{ cursor: 'grab' }}
+                onPointerDown={(e) => {
+                  throwDrag.current = { id: t, x: e.clientX, y: e.clientY, t: Date.now() };
+                  e.stopPropagation();
+                }}
+              >
                 <circle cx={cx} cy={cy} r="4" fill={fill} />
                 <text x={cx} y={cy - 7} fill="#9ca3af" fontSize="7" textAnchor="middle">{id}</text>
               </g>
