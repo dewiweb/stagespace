@@ -200,9 +200,9 @@ export function useManipulateMode({
         // Conversion Three.js (x, y=up, z=depth) → backend (x, y=depth, z=up)
         const backendPos = fromThree(intersection.x, mesh?.position.y ?? 0, intersection.z);
         useGraphStore.getState().setManualPosition(draggingObject, backendPos);
-        if (isPlaying || movementsRef.current.length > 0) {
-          pushManualPositionThrottled.current(draggingObject, backendPos);
-        }
+        // Toujours invoquer — depuis P1.1 une position manuelle émet même
+        // sans move live ; sinon le drag-while-stopped divergeait en silence.
+        pushManualPositionThrottled.current(draggingObject, backendPos);
       }
     },
     [manipulateMode, draggingObject, draggingHandle, macros, setMacros, isPlaying, cameraRef, containerRef, handleRef, objectsRef],

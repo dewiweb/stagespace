@@ -98,6 +98,7 @@ export type LiveStatePayload = {
   perceptual: { legibility_deg_s: Record<number, number>; looming_ms: number; vection: number };
   parked: number[];
   consoleAge: number | null;
+  manualPositions: Record<number, [number, number, number]>;
 };
 
 /// Poll santé complet — écrit perfSlice + showStatusStore locaux, puis
@@ -115,9 +116,10 @@ async function pollLive(broadcast: boolean) {
     s.refreshPerceptual(),
   ]);
   // Santé show (parked / consoleAge) — même cycle que le reste.
-  const [parked, consoleAge] = await Promise.all([
+  const [parked, consoleAge, manualPositions] = await Promise.all([
     invoke<number[]>('get_parked_objects').catch(() => null),
     invoke<number | null>('get_last_show_cmd_age').catch(() => undefined),
+    invoke<Record<number, [number, number, number]>>('get_manual_positions').catch(() => null),
   ]);
   const patch: { parked?: number[]; consoleAge?: number | null; armed: boolean } = {
     armed: s.flowHealth.armed,
@@ -125,6 +127,12 @@ async function pollLive(broadcast: boolean) {
   if (parked != null) patch.parked = parked;
   if (consoleAge !== undefined) patch.consoleAge = consoleAge ?? null;
   show.useShowStatusStore.setState(patch);
+  // Vérité backend des positions manuelles — le cache frontend ne voit
+  // sinon jamais les écritures OSC/hold/tape/attention (cue capture et
+  // .hfg sauvaient des positions fausses).
+  if (manualPositions != null) {
+    m.useGraphStore.setState({ manualPositions });
+  }
   if (!broadcast) return;
   const payload: LiveStatePayload = {
     objectStates: s.objectStates,
@@ -133,6 +141,7 @@ async function pollLive(broadcast: boolean) {
     perceptual: s.perceptual,
     parked: patch.parked ?? show.useShowStatusStore.getState().parked,
     consoleAge: patch.consoleAge ?? show.useShowStatusStore.getState().consoleAge,
+    manualPositions: manualPositions ?? m.useGraphStore.getState().manualPositions,
   };
   const { emit } = await import('@tauri-apps/api/event');
   void emit('live:state', payload).catch(() => {});
@@ -152,6 +161,7 @@ if (isDetachedWindow()) {
           flowHealth: p.flowHealth,
           emittedPositions: p.emittedPositions,
           perceptual: p.perceptual,
+          manualPositions: p.manualPositions,
         }),
       );
       void import('../useShowStatusStore').then((m) =>

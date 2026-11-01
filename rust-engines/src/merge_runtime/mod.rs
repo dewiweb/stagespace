@@ -639,6 +639,16 @@ impl MergeRuntime {
             .copied()
     }
 
+    /// Toutes les positions manuelles — le frontend synchronise son cache
+    /// depuis cette vérité backend (OSC /position, hold, tape, attention…
+    /// n'atteignent jamais le store frontend autrement).
+    pub fn manual_positions(&self) -> HashMap<usize, [f64; 3]> {
+        self.manual_positions
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
     /// Efface la position manuelle pour un objet
     pub fn clear_manual_position(&self, obj_index: usize) {
         self.manual_positions

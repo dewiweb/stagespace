@@ -20,6 +20,7 @@ const payload: LiveStatePayload = {
   perceptual: { legibility_deg_s: { 1: 4.2 }, looming_ms: 1.1, vection: 0.3 },
   parked: [0],
   consoleAge: 2.5,
+  manualPositions: { 1: [0.5, 1.0, 0.0], 2: [-1.0, 0.0, 0.25] },
 };
 
 describe('live:state — fenêtre détachée (?view=run)', () => {
@@ -47,6 +48,7 @@ describe('live:state — fenêtre détachée (?view=run)', () => {
     expect(useGraphStore.getState().perceptual.looming_ms).toBe(1.1);
     expect(useShowStatusStore.getState().parked).toEqual([0]);
     expect(useShowStatusStore.getState().consoleAge).toBe(2.5);
+    expect(useGraphStore.getState().manualPositions[1]).toEqual([0.5, 1.0, 0.0]);
     expect(useShowStatusStore.getState().armed).toBe(false);
   });
 });

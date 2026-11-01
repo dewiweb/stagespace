@@ -428,6 +428,16 @@ pub async fn get_manual_position(
     Ok(lock_or_recover(&state.merge_runtime).manual_position(obj))
 }
 
+/// Toutes les positions manuelles — vérité backend que le frontend poll
+/// pour synchroniser son cache (cue capture, .hfg, fallback 3D). Les
+/// écritures OSC/hold/tape/attention n'atteignent jamais le store sinon.
+#[tauri::command]
+pub async fn get_manual_positions(
+    state: State<'_, AppState>,
+) -> Result<std::collections::HashMap<usize, [f64; 3]>, IpcError> {
+    Ok(lock_or_recover(&state.merge_runtime).manual_positions())
+}
+
 /// Auto-venue : mappe l'espace canonique du show vers la salle réelle.
 /// `enabled=false` → passthrough (espace canonique identique à la salle).
 /// Le transform ne touche que le payload OSC — anchors/zones/kinematics
