@@ -59,6 +59,9 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
 
   const [oscIdsStr, setOscIdsStr] = React.useState(manualOscIds.join(','));
   const [audioDevices, setAudioDevices] = React.useState<MediaDeviceInfo[]>([]);
+  // Tabs par domaine — 8 sections plates étaient illisibles ; regroupées
+  // par métier opérateur (réseau, tracking, salle, show, audio).
+  const [tab, setTab] = React.useState<'reseau' | 'tracking' | 'salle' | 'show' | 'audio'>('reseau');
   const [oscInPortStr, setOscInPortStr] = React.useState(String(oscInPort));
   const [psnGroupStr, setPsnGroupStr] = React.useState(psnGroup);
   const [psnPortStr, setPsnPortStr] = React.useState(String(psnPort));
@@ -133,8 +136,32 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
       onClose={onClose}
       widthClass="max-w-[520px]"
     >
-        <div className="px-5 py-4 space-y-5">
+        {/* Tab bar — un domaine par tab, la taille du modal reste stable. */}
+        <div className="flex gap-1 px-5 pt-3 border-b border-stagespace-border">
+          {([
+            ['reseau', 'Réseau'],
+            ['tracking', 'Tracking'],
+            ['salle', 'Salle'],
+            ['show', 'Show'],
+            ['audio', 'Audio'],
+          ] as const).map(([id, label]) => (
+            <button
+              key={id}
+              onClick={() => setTab(id)}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-t transition-colors ${
+                tab === id
+                  ? 'bg-stagespace-panel text-white border-b-2 border-indigo-500'
+                  : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="px-5 py-4 space-y-5 min-h-[320px]">
           {/* ─── OSC OUT ─── */}
+          {tab === 'reseau' && (
           <section>
             <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
               <span className="text-blue-400">→</span> OSC Output
@@ -208,8 +235,10 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               ))}
             </div>
           </section>
+          )}
 
           {/* ─── OSC IN ─── */}
+          {tab === 'reseau' && (
           <section>
             <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
               <span className="text-green-400">←</span> OSC Input
@@ -240,8 +269,10 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               </p>
             )}
           </section>
+          )}
 
           {/* ─── PSN / Tracking ─── */}
+          {tab === 'tracking' && (
           <section>
             <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
               <span className="text-purple-400">◎</span> PSN / RTTrP Tracking
@@ -310,8 +341,10 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               />
             </div>
           </section>
+          )}
 
           {/* ─── Venue / auto-adaptation ─── */}
+          {tab === 'salle' && (
           <section>
             <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
               <span className="text-amber-400">⌖</span> Venue adaptation
@@ -382,8 +415,10 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               />
             </div>
           </section>
+          )}
 
           {/* ─── Media sync out ─── */}
+          {tab === 'reseau' && (
           <section>
             <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
               <span className="text-pink-400">📺</span> Media sync out
@@ -417,8 +452,10 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               />
             </div>
           </section>
+          )}
 
-          {/* ─── Merge ─── */}
+          {/* ─── Merge + Track IDs ─── */}
+          {tab === 'show' && (<>
           <section>
             <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
               <span className="text-amber-400">⇄</span> Merge
@@ -454,8 +491,10 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               placeholder="1,2,3..."
             />
           </section>
+          </>)}
 
           {/* ─── Audio Input ─── */}
+          {tab === 'audio' && (
           <section>
             <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
               <span className="text-cyan-400">♪</span> Audio Input
@@ -480,6 +519,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <EmptyState size="sm" title="No device listed" hint="Start the microphone once to enumerate available devices." />
             )}
           </section>
+          )}
         </div>
 
         {/* Footer */}
