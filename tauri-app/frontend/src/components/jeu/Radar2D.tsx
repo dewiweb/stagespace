@@ -10,6 +10,7 @@ import { sourceHex, SOURCE_LABEL } from '../../utils/sourceColors';
 export const Radar2D: React.FC = () => {
   const emittedPositions = useGraphStore((s) => s.emittedPositions);
   const objectStates = useGraphStore((s) => s.objectStates);
+  const manualOscIds = useGraphStore((s) => s.manualOscIds);
   const throwDrag = React.useRef<{ id: number; x: number; y: number; t: number } | null>(null);
 
   // Auto-fit : échelle sur les bounds réels (venues >10m ne sortent plus
@@ -59,7 +60,10 @@ export const Radar2D: React.FC = () => {
             <circle cx={cx} cy={cy} r="4" fill={sourceHex(src)}>
               <title>{id} · {SOURCE_LABEL[src] ?? src}</title>
             </circle>
-            <text x={cx} y={cy - 7} fill="#9ca3af" fontSize="7" textAnchor="middle">{id}</text>
+            <text x={cx} y={cy - 7} fill="#9ca3af" fontSize="7" textAnchor="middle">
+              {/* track_id (même numérotation que les pads et la 3D) — pas obj_index */}
+              {manualOscIds[t] ?? t + 1}
+            </text>
           </g>
         );
       })}

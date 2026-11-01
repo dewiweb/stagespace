@@ -235,9 +235,11 @@ export const useCuelistStore = create<CuelistState>((set, get) => ({
     // follow s'applique quand même (annulé par la prochaine cue TC).
     const result = chase(prev, tc, cues, currentId);
     if (result.fire) {
-      get().cancelPendingTimers();
       const cue = get().cues.find((c) => c.id === result.fire);
+      // cancelPendingTimers DANS le guard — un tick TC pendant un recall
+      // ne doit pas désarmer un pre_wait/follow pending.
       if (cue && !get().isRecalling) {
+        get().cancelPendingTimers();
         // Le timecode EST le schedule : pre_wait ignoré pour les cues TC,
         // et la trajectoire reprend à tc - cue.timecode (seek, pas t=0).
         void get().recallCue(cue.id, {

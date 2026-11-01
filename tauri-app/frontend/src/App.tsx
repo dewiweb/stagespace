@@ -47,6 +47,9 @@ const RunWindow: React.FC = () => {
       }
     >
       <PerformView />
+      {/* Toasts — un GO refusé / erreur backend doit être visible dans
+          la fenêtre de jeu dédiée, pas seulement dans la principale. */}
+      <ToastContainer />
     </React.Suspense>
   );
 };
@@ -74,6 +77,7 @@ function App() {
           }
         >
           <ConduitePage />
+          <ToastContainer />
         </React.Suspense>
       </ErrorBoundary>
     );

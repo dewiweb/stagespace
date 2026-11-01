@@ -420,7 +420,7 @@ export default function Inspector() {
         {/* AUDIO — mods audio-reactifs (commun aux deux modes) */}
         {hasEditingSlot && (
         <Section title="Audio" icon={<AudioLines size={12} />} defaultOpen={false} badge={current.audio_mods.length > 0 ? `${current.audio_mods.length}` : undefined}>
-              <MacrosSurface includeRadius live />
+              <AudioModList />
             </Section>
         )}
 

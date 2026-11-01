@@ -280,7 +280,10 @@ export const useMoveEditorStore = create<MoveEditorStore>((set, get) => {
   setShowExpert: (show) => set({ showExpert: show }),
   // Perform-first : l'app s'ouvre sur la surface de show. Le graphe est
   // l'atelier — on y entre via « Edit graph » sur un move, pas par défaut.
-  performMode: true,
+  // Dérivé de la surface persistée — sinon un boot 'atelier' gardait
+  // performMode=true (sections Inspector repliées comme en jeu).
+  performMode:
+    (localStorage.getItem('ss-surface') as 'atelier' | 'conduite' | 'jeu' | null) !== 'atelier',
   setPerformMode: (on) => set({ performMode: on }),
   debugPerfVisible: false,
   setDebugPerfVisible: (on) => set({ debugPerfVisible: on }),
