@@ -417,6 +417,9 @@ pub enum ShowCommand {
     /// `/stagespace/throw <obj> <vx> <vy> <vz>` — grab & throw : lance
     /// l'objet avec une vélocité initiale (m/s), amortissement au repos.
     Throw(usize, f64, f64, f64),
+    /// `/stagespace/spatial <k>` — dynamique spatiale : compresseur
+    /// spatial global (k<1 resserre le champ, k>1 l'étend).
+    Spatial(f64),
 }
 
 type ShowSink = Box<dyn Fn(ShowCommand, std::net::SocketAddr) + Send>;
@@ -555,6 +558,15 @@ fn parse_show_command(addr: &str, args: &[OscType], fps: f64) -> Option<ShowComm
                 _ => None,
             };
             Some(ShowCommand::Throw(obj, get(1)?, get(2)?, get(3)?))
+        }
+        "spatial" => {
+            let k = args.first().and_then(|a| match a {
+                OscType::Float(f) => Some(*f as f64),
+                OscType::Double(d) => Some(*d),
+                OscType::Int(i) => Some(*i as f64),
+                _ => None,
+            })?;
+            Some(ShowCommand::Spatial(k))
         }
         _ => None,
     }

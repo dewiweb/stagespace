@@ -459,3 +459,11 @@ pub async fn set_distance_reality(
     lock_or_recover(&state.merge_runtime).set_distance_reality(cfg);
     Ok(())
 }
+
+/// Dynamique spatiale — le compresseur spatial : k<1 resserre le champ
+/// vers l'origine, k>1 l'étend. Geste live (busking), pas un setup.
+#[tauri::command]
+pub async fn set_spatial_compression(k: f64, state: State<'_, AppState>) -> Result<(), IpcError> {
+    lock_or_recover(&state.merge_runtime).set_spatial_compression(k);
+    Ok(())
+}

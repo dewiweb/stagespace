@@ -266,6 +266,14 @@ export function doThrow(obj: number, vx: number, vy: number, vz: number, from?: 
     .catch((e) => toast.error('Throw failed: ' + e));
 }
 
+/** /stagespace/spatial <k> — dynamique spatiale : compresseur spatial
+ *  global (k<1 resserre le champ, k>1 l'étend). Geste live busking. */
+export function doSpatial(k: number, from?: string) {
+  logAction('doSpatial', from);
+  invoke('set_spatial_compression', { k })
+    .catch((e) => toast.error('Spatial compression failed: ' + e));
+}
+
 /** /stagespace/trackpos <track> <x> <y> <z> — position d'origine d'une
  *  track (là où panic renvoie, base Barycenter — .hol par OSC).
  *  Setter unitaire : un set par track ne doit pas effacer les autres

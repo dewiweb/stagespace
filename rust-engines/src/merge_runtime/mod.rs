@@ -195,6 +195,10 @@ pub struct MergeRuntime {
     /// Le frame loop intègre pos += v·dt avec amortissement ; quand
     /// |v| < eps l'objet devient une position manuelle au repos.
     thrown: Arc<RwLock<HashMap<usize, [f64; 3]>>>,
+    /// Dynamique spatiale — le "compresseur spatial" : scalaire global
+    /// appliqué au payload OSC (1.0 = neutre, <1 resserre le champ vers
+    /// l'origine, >1 l'étend). Geste live, pas un setup.
+    spatial_compression: Arc<RwLock<f64>>,
     /// Règles de modulation cinématique (source cinématique → canal spatial)
     /// — Arc<Vec> : snapshot par frame = clone d'Arc.
     channel_modulations: Arc<RwLock<Arc<Vec<ChannelModulation>>>>,
@@ -327,6 +331,7 @@ impl MergeRuntime {
             perceptual: Arc::new(RwLock::new(PerceptualMetrics::default())),
             distance_reality: Arc::new(RwLock::new(None)),
             thrown: Arc::new(RwLock::new(HashMap::new())),
+            spatial_compression: Arc::new(RwLock::new(1.0)),
             channel_modulations: Arc::new(RwLock::new(Arc::new(Vec::new()))),
             kinematic_smoothing: Arc::new(RwLock::new(0.5)),
             zones: Arc::new(RwLock::new(Arc::new(Vec::new()))),
@@ -1103,6 +1108,17 @@ impl MergeRuntime {
             .clone()
     }
 
+    /// Dynamique spatiale — le compresseur spatial : k<1 resserre le
+    /// champ, k>1 l'étend. Clampé [0.1, 4].
+    pub fn set_spatial_compression(&self, k: f64) {
+        if k.is_finite() {
+            *self
+                .spatial_compression
+                .write()
+                .unwrap_or_else(|e| e.into_inner()) = k.clamp(0.1, 4.0);
+        }
+    }
+
     /// Grab & throw : lance un objet avec une vélocité initiale.
     /// L'objet part de sa dernière position émise (ou manuelle/base)
     /// et continue balistique avec amortissement.
@@ -1392,6 +1408,7 @@ impl MergeRuntime {
         let perceptual_arc = self.perceptual.clone();
         let distance_reality_arc = self.distance_reality.clone();
         let thrown_arc = self.thrown.clone();
+        let spatial_comp_arc = self.spatial_compression.clone();
         let object_channels_arc = self.object_channels.clone();
         let zones_arc = self.zones.clone();
         let channel_modulations_arc = self.channel_modulations.clone();
@@ -2345,6 +2362,14 @@ impl MergeRuntime {
                                         if let Some(p) = eff.presence {
                                             eff.presence = Some(p * (-al * r).exp());
                                         }
+                                    }
+                                    // Dynamique spatiale — le compresseur
+                                    // spatial global (k<1 resserre le champ).
+                                    let k = *spatial_comp_arc
+                                        .read()
+                                        .unwrap_or_else(|e| e.into_inner());
+                                    if (k - 1.0).abs() > 1e-6 {
+                                        send_pos *= k;
                                     }
                                     sink_guard.send_state(
                                         osc_id,
