@@ -54,7 +54,7 @@ export const StatusBar: React.FC = () => {
           bouton Toolbar n'existe qu'en Atelier : le panic du show ne doit
           jamais dépendre de la phase de travail). */}
       <button
-        onClick={() => doPanic('statusbar')}
+        onClick={() => doPanic()}
         className="px-3 py-0.5 rounded bg-red-700 hover:bg-red-600 text-white text-[10px] font-black tracking-wider flex-shrink-0"
         title="PANIC — stop all + positions d'origine (Esc)"
       >
