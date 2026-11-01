@@ -2173,6 +2173,51 @@ mod show_control_tests {
                 vec![OscType::String("00:00:01:10".into())],
                 ShowCommand::Timecode(1.0 + 10.0 / 25.0),
             ),
+            (
+                "/stagespace/throw",
+                vec![
+                    OscType::Int(2),
+                    OscType::Float(1.5),
+                    OscType::Float(0.5),
+                    OscType::Float(-1.0),
+                ],
+                ShowCommand::Throw(2, 1.5, 0.5, -1.0),
+            ),
+            (
+                "/stagespace/spatial",
+                vec![OscType::Float(0.7)],
+                ShowCommand::Spatial(0.7),
+            ),
+            (
+                "/stagespace/attention",
+                vec![OscType::Int(3)],
+                ShowCommand::Attention(Some(3)),
+            ),
+            (
+                "/stagespace/attention/clear",
+                vec![],
+                ShowCommand::Attention(None),
+            ),
+            (
+                "/stagespace/gesture",
+                vec![OscType::String("explode".into())],
+                ShowCommand::Gesture("explode".into(), 3.0),
+            ),
+            (
+                "/stagespace/gesture",
+                vec![OscType::String("orbit".into()), OscType::Float(5.0)],
+                ShowCommand::Gesture("orbit".into(), 5.0),
+            ),
+            (
+                "/stagespace/rehearsal",
+                vec![OscType::String("play".into())],
+                ShowCommand::Rehearsal("play".into()),
+            ),
+            (
+                "/stagespace/record",
+                vec![OscType::String("start".into())],
+                ShowCommand::Rehearsal("record".into()),
+            ),
         ];
         for (addr, args, expected) in cases {
             let got = parse_show_command(addr, &args, fps)
