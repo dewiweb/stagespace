@@ -2263,16 +2263,8 @@ impl MergeRuntime {
                     }
                 }
 
-                // Dernières positions monde émises — source des ancres
-                // `AnchorMode::Current` au spawn du move suivant.
-                {
-                    let mut last_out = last_out_positions_arc
-                        .write()
-                        .unwrap_or_else(|e| e.into_inner());
-                    for (obj, pos) in &transformed {
-                        last_out.insert(*obj, [pos.x, pos.y, pos.z]);
-                    }
-                }
+                // (last_out est écrit dans le gate osc_armed — il doit
+                // refléter les envois réellement tentés, pas le computed.)
 
                 // 4.5 Cinématique : vitesse/accélération/jerk sur les positions
                 // finales (celles réellement envoyées au renderer), dt réel
@@ -2491,6 +2483,17 @@ impl MergeRuntime {
                 // (preview alive) mais aucun paquet ne part — ni les sends
                 // normaux ni la sonde du circuit-breaker.
                 if osc_armed_arc.load(Ordering::SeqCst) {
+                    // Positions réellement tentées — la confidence view ne
+                    // doit montrer que ce qui part au renderer (dry-run =
+                    // rien n'est émis, last_out se fige honnêtement).
+                    {
+                        let mut last_out = last_out_positions_arc
+                            .write()
+                            .unwrap_or_else(|e| e.into_inner());
+                        for (obj, pos) in &transformed {
+                            last_out.insert(*obj, [pos.x, pos.y, pos.z]);
+                        }
+                    }
                     let mut sink_guard = timed_lock!(
                         lock_wait_ns,
                         lock_sites,
