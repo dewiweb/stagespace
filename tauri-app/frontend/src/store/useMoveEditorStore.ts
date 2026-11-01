@@ -269,7 +269,11 @@ export const useMoveEditorStore = create<MoveEditorStore>((set, get) => {
   launchFlash: 0,
   surface: (localStorage.getItem('ss-surface') as 'atelier' | 'conduite' | 'jeu') ?? 'jeu',
   setSurface: (surface) => {
-    try { localStorage.setItem('ss-surface', surface); } catch { /* quota */ }
+    // Fenêtre détachée : la surface n'est pas persistée — elle n'écraserait
+    // que la préférence de la fenêtre principale (last-write-wins).
+    if (!new URLSearchParams(window.location.search).has('view')) {
+      try { localStorage.setItem('ss-surface', surface); } catch { /* quota */ }
+    }
     set({ surface, performMode: surface === 'jeu' });
   },
   showExpert: false,

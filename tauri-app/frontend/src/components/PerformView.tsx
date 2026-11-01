@@ -18,6 +18,7 @@ import { doSolo, doUnpark, doStop, doUnsolo, getSoloRestoreIds, doAttention } fr
 import { Radar2D } from './jeu/Radar2D';
 import { GestureStrip } from './jeu/GestureStrip';
 import { SOURCE_CHIP } from '../utils/sourceColors';
+import { isDetachedWindow } from '../utils/safeStorage';
 import { safeInvoke, silentCatch } from '../utils/tauri';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { toast } from '../utils/toast-helpers';
@@ -71,6 +72,9 @@ export const PerformView: React.FC = () => {
   const soloSavedIds = useGraphStore((s) => s.soloSavedIds);
   // Panneau central : pads (l'instrument, défaut) ou canvas 3D.
   const [centerView, setCenterView] = React.useState<'pads' | '3d'>('pads');
+  // Fenêtre détachée (?view=run) — l'édition pure est masquée : le
+  // storage est read-only là-bas, créer divergerait sans persister.
+  const detached = isDetachedWindow();
   React.useEffect(() => { startShowStatusPolling(); }, []);
 
   const playingCount = moveSlots.filter((s) => s.movementId).length;
@@ -365,17 +369,22 @@ export const PerformView: React.FC = () => {
           <div className="flex-1 overflow-y-auto min-h-0">
             <div className="px-3 py-2 text-gray-400 text-xs uppercase tracking-wider border-b border-stagespace-border bg-purple-950/20 flex items-center justify-between">
               <span>Setlist — GO avance ici</span>
-              <button
-                onClick={() => {
-                  addMoveSlot();
-                  const ms = useGraphStore.getState().moveSlots; const last = ms[ms.length - 1];
-                  if (last) addToSetlist(last.id);
-                }}
-                className="px-1.5 py-0.5 rounded text-[10px] text-indigo-300 hover:bg-indigo-600/30 hover:text-white transition-colors normal-case"
-                title="New move added to the setlist"
-              >
-                + Move
-              </button>
+              {/* "+ Move" masqué en fenêtre détachée — créer un slot y
+                  serait non persisté (read-only storage) et divergerait
+                  de la fenêtre principale. L'édition vit à l'atelier. */}
+              {!detached && (
+                <button
+                  onClick={() => {
+                    addMoveSlot();
+                    const ms = useGraphStore.getState().moveSlots; const last = ms[ms.length - 1];
+                    if (last) addToSetlist(last.id);
+                  }}
+                  className="px-1.5 py-0.5 rounded text-[10px] text-indigo-300 hover:bg-indigo-600/30 hover:text-white transition-colors normal-case"
+                  title="New move added to the setlist"
+                >
+                  + Move
+                </button>
+              )}
             </div>
             {setlistSlots.map((slot) => renderSlotRow(slot))}
             {setlistSlots.length === 0 && moveSlots.length > 0 && (

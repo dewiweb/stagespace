@@ -4,7 +4,19 @@ import { toast } from '../store/useToastStore';
 /// En live, perdre silencieusement un setlist = désastre.
 let quotaWarningShown = false;
 
+/// Fenêtre détachée (?view=run, ?view=conduite) — R7 : read-only sur le
+/// storage partagé. localStorage est commun à toutes les webviews (même
+/// origine) : une fenêtre détachée qui persisterait écraserait l'état de
+/// la fenêtre principale en last-write-wins silencieux. La détachée LIT
+/// au boot (même show partout) mais n'ÉCRIT jamais — la vérité live passe
+/// par l'IPC backend, pas par le storage.
+export function isDetachedWindow(): boolean {
+  if (typeof window === 'undefined') return false;
+  return new URLSearchParams(window.location.search).has('view');
+}
+
 export function safeSetItem(key: string, value: string): boolean {
+  if (isDetachedWindow()) return true; // read-only — succès feint, pas d'écriture
   try {
     localStorage.setItem(key, value);
     return true;
@@ -85,6 +97,7 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 const STORAGE_DEBOUNCE_MS = 250;
 
 export function debouncedSetItem(key: string, value: string): void {
+  if (isDetachedWindow()) return; // read-only — pas d'écriture détachée
   pendingWrites.set(key, value);
   if (debounceTimer) clearTimeout(debounceTimer);
   debounceTimer = setTimeout(flushPendingWrites, STORAGE_DEBOUNCE_MS);
