@@ -427,6 +427,9 @@ pub enum ShowCommand {
     /// `/stagespace/gesture <name> [strength]` — explode/converge/orbit/
     /// front : vélocité calculée par objet via la balistique `thrown`.
     Gesture(String, f64),
+    /// `/stagespace/rehearsal <record|stop|play|clear>` — capture de
+    /// répétition : bande de commandes horodatée du busking, rejouée.
+    Rehearsal(String),
 }
 
 type ShowSink = Box<dyn Fn(ShowCommand, std::net::SocketAddr) + Send>;
@@ -596,6 +599,17 @@ fn parse_show_command(addr: &str, args: &[OscType], fps: f64) -> Option<ShowComm
                 _ => None,
             }).unwrap_or(3.0);
             Some(ShowCommand::Gesture(name, strength))
+        }
+        "rehearsal" | "record" => {
+            let action = args.first().and_then(|a| match a {
+                OscType::String(s) => Some(s.clone()),
+                _ => None,
+            })?;
+            Some(ShowCommand::Rehearsal(if tail == "record" && action == "start" {
+                "record".to_string()
+            } else {
+                action
+            }))
         }
         _ => None,
     }

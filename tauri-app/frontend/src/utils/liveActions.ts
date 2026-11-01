@@ -3,6 +3,20 @@
 /// Toute action manuelle annule d'abord les timers pre-wait/follow pendus.
 import { useGraphStore } from '../store/useGraphStore';
 
+/// Rehearsal capture — bande de commandes horodatée : enregistre ce
+/// que le busking fait vraiment, rejoue comme un cue live.
+const rehearsalState: {
+  recording: boolean;
+  t0: number;
+  entries: { t: number; name: string; args: number[] }[];
+  playTimer: ReturnType<typeof setTimeout> | null;
+} = { recording: false, t0: 0, entries: [], playTimer: null };
+
+function rec(name: string, args: number[] = []) {
+  if (rehearsalState.recording)
+    rehearsalState.entries.push({ t: Date.now() - rehearsalState.t0, name, args });
+}
+
 /// Log opérationnel — le point de passage commun GUI + OSC.
 /// Les commandes OSC (from présent) sont broadcastées par le backend
 /// en 'show-log' à toutes les fenêtres : ne pas doubler ici.
@@ -84,6 +98,7 @@ export function doArm(armed: boolean) {
 /** /stagespace/slot <n> — joue le slot n (index 1-based, busking). */
 export function doSlot(n: number, from?: string) {
   logAction('doSlot');
+  rec('doSlot', [n]);
   const gs = useGraphStore.getState();
   const slot = gs.moveSlots.find((s) => s.oscIndex === n) ?? gs.moveSlots[n - 1];
   if (!slot) {
@@ -100,6 +115,7 @@ export function doSlot(n: number, from?: string) {
 /** /stagespace/slot/stop <n> — coupe le slot n avec son fade_out. */
 export function doSlotStop(n: number, from?: string) {
   logAction('doSlotStop');
+  rec('doSlotStop', [n]);
   const gs = useGraphStore.getState();
   const slot = gs.moveSlots.find((s) => s.oscIndex === n) ?? gs.moveSlots[n - 1];
   if (!slot) {
@@ -122,6 +138,7 @@ export function getSoloRestoreIds(): string[] {
 
 export function doSolo(n: number, from?: string) {
   logAction('doSolo');
+  rec('doSolo', [n]);
   const gs = useGraphStore.getState();
   const target = gs.moveSlots.find((s) => s.oscIndex === n) ?? gs.moveSlots[n - 1];
   if (!target) {
@@ -168,6 +185,7 @@ export function doPanic() {
  *  (reprise opérateur sans drag 3D). */
 export function doSetPosition(obj: number, x: number, y: number, z: number) {
   logAction('doSetPosition');
+  rec('doSetPosition', [obj, x, y, z]);
   invoke('set_manual_position', { objectIndex: obj, position: [x, y, z] })
     .catch((e) => toast.error('Set position failed: ' + e));
 }
@@ -175,6 +193,7 @@ export function doSetPosition(obj: number, x: number, y: number, z: number) {
 /** /stagespace/position/clear <obj> — retire la position manuelle. */
 export function doClearPosition(obj: number) {
   logAction('doClearPosition');
+  rec('doClearPosition', [obj]);
   invoke('clear_manual_position', { objectIndex: obj }).catch(silentCatch);
 }
 
@@ -262,6 +281,7 @@ export function doSoundcheck(action?: string) {
  *  avec une vélocité initiale, amortissement balistique au repos. */
 export function doThrow(obj: number, vx: number, vy: number, vz: number, from?: string) {
   logAction('doThrow', from);
+  rec('doThrow', [obj, vx, vy, vz]);
   invoke('throw_object', { obj, vel: [vx, vy, vz] })
     .catch((e) => toast.error('Throw failed: ' + e));
 }
@@ -270,6 +290,7 @@ export function doThrow(obj: number, vx: number, vy: number, vz: number, from?: 
  *  global (k<1 resserre le champ, k>1 l'étend). Geste live busking. */
 export function doSpatial(k: number, from?: string) {
   logAction('doSpatial', from);
+  rec('doSpatial', [k]);
   invoke('set_spatial_compression', { k })
     .catch((e) => toast.error('Spatial compression failed: ' + e));
 }
@@ -278,6 +299,7 @@ export function doSpatial(k: number, from?: string) {
  *  blindness : un seul bouge) / libère la stase. */
 export function doAttention(obj: number | null, from?: string) {
   logAction('doAttention', from);
+  rec('doAttention', [obj ?? -1]);
   invoke('set_attention', { obj })
     .catch((e) => toast.error('Attention failed: ' + e));
 }
@@ -290,12 +312,69 @@ export function doGesture(name: string, strength: number, from?: string) {
     .catch((e) => toast.error('Gesture failed: ' + e));
 }
 
+/** /stagespace/record <start|stop> · /stagespace/rehearsal <play|clear> —
+ *  capture de répétition : enregistre la session busking (commandes
+ *  horodatées) et la rejoue comme un cue live. */
+const REPLAY: Record<string, (...a: number[]) => void> = {
+  doGo: () => doGo(),
+  doPanic: () => doPanic(),
+  doSlot: (n) => doSlot(n),
+  doSlotStop: (n) => doSlotStop(n),
+  doSolo: (n) => doSolo(n),
+  doUnsolo: () => doUnsolo(),
+  doSetPosition: (o, x, y, z) => doSetPosition(o, x, y, z),
+  doClearPosition: (o) => doClearPosition(o),
+  doThrow: (o, x, y, z) => doThrow(o, x, y, z),
+  doSpatial: (k) => doSpatial(k),
+  doAttention: (o) => doAttention(o === -1 ? null : o),
+  doSetTrackPosition: (t, x, y, z) => doSetTrackPosition(t, x, y, z),
+};
+
+export function doRehearsal(action: string, from?: string) {
+  logAction('doRehearsal', from);
+  const s = rehearsalState;
+  switch (action) {
+    case 'record':
+      s.recording = true;
+      s.t0 = Date.now();
+      s.entries = [];
+      toast.info('Rehearsal REC — capture du busking');
+      break;
+    case 'stop':
+      s.recording = false;
+      toast.info(`Rehearsal STOP — ${s.entries.length} commandes capturées`);
+      break;
+    case 'play': {
+      if (s.entries.length === 0) { toast.warning('Rehearsal vide'); return; }
+      // Rejoue la bande sur ses timestamps (une chaîne de setTimeout).
+      // recording off pendant le replay — sinon la bande s'auto-écrit.
+      const wasRecording = s.recording;
+      s.recording = false;
+      let delay = 0;
+      for (const e of s.entries) {
+        delay = e.t;
+        s.playTimer = setTimeout(() => REPLAY[e.name]?.(...e.args), e.t);
+      }
+      s.playTimer = setTimeout(() => {
+        s.recording = wasRecording;
+        toast.info('Rehearsal fini');
+      }, delay + 100);
+      break;
+    }
+    case 'clear':
+      s.entries = [];
+      if (s.playTimer) { clearTimeout(s.playTimer); s.playTimer = null; }
+      break;
+  }
+}
+
 /** /stagespace/trackpos <track> <x> <y> <z> — position d'origine d'une
  *  track (là où panic renvoie, base Barycenter — .hol par OSC).
  *  Setter unitaire : un set par track ne doit pas effacer les autres
  *  origines (set_track_positions remplace toute la map). */
 export function doSetTrackPosition(track: number, x: number, y: number, z: number) {
   logAction('doSetTrackPosition');
+  rec('doSetTrackPosition', [track, x, y, z]);
   invoke('set_track_position', { track, position: [x, y, z] })
     .catch((e) => toast.error('Set track position failed: ' + e));
 }
@@ -303,11 +382,13 @@ export function doSetTrackPosition(track: number, x: number, y: number, z: numbe
 /** Park un objet : ses canaux échappent aux recalls de cues. */
 export function doPark(obj: number) {
   logAction('doPark');
+  rec('doPark', [obj]);
   invoke('park_object', { obj }).catch((e) => toast.error('Park failed: ' + e));
 }
 
 export function doUnpark(obj: number) {
   logAction('doUnpark');
+  rec('doUnpark', [obj]);
   invoke('unpark_object', { obj }).catch((e) => toast.error('Unpark failed: ' + e));
 }
 
