@@ -170,6 +170,10 @@ pub struct MergeRuntime {
     /// Dernières positions monde émises par objet — source des ancres
     /// `AnchorMode::Current` au spawn du move suivant.
     last_out_positions: Arc<RwLock<HashMap<usize, [f64; 3]>>>,
+    /// Positions canoniques pré-post-process (merged ∪ manual — manual
+    /// gagne, comme le post-process). Graine des anchors/freeze/throw :
+    /// seed depuis last_out (post-macro) provoquerait un double-transform.
+    last_canonical_positions: Arc<RwLock<HashMap<usize, [f64; 3]>>>,
     /// Objets dont la position manuelle vient d'un hold de fin de move
     /// (end_mode=Hold) — distingue "tenu par la mémoire" de "reprise
     /// opérateur" dans la source-de-contrôle.
@@ -339,6 +343,7 @@ impl MergeRuntime {
             parked_objects: Arc::new(RwLock::new(HashSet::new())),
             move_end_modes: Arc::new(RwLock::new(HashMap::new())),
             last_out_positions: Arc::new(RwLock::new(HashMap::new())),
+            last_canonical_positions: Arc::new(RwLock::new(HashMap::new())),
             held_objects: Arc::new(RwLock::new(HashSet::new())),
             psn_objects: Arc::new(RwLock::new(HashSet::new())),
             venue_map: Arc::new(RwLock::new(None)),
@@ -1167,9 +1172,11 @@ impl MergeRuntime {
     /// Attention orchestration — fige tous les objets SAUF `focus` à
     /// leur dernière position émise (stase pour change blindness : le
     /// seul objet en mouvement capte toute l'attention).
+    /// Seed canonique pré-pp — last_out (post-macro) double-transformerait
+    /// le gel quand les macros globales ≠ identité.
     pub fn attention_focus(&self, focus: usize) {
         let last_out = self
-            .last_out_positions
+            .last_canonical_positions
             .read()
             .unwrap_or_else(|e| e.into_inner())
             .clone();
@@ -1222,7 +1229,7 @@ impl MergeRuntime {
     /// tangentielle · `front` pousse vers l'avant (y<0).
     pub fn gesture(&self, name: &str, strength: f64) {
         let last_out = self
-            .last_out_positions
+            .last_canonical_positions
             .read()
             .unwrap_or_else(|e| e.into_inner())
             .clone();
@@ -1247,7 +1254,8 @@ impl MergeRuntime {
             return;
         }
         let vel: [f64; 3] = vel.map(|v| v.clamp(-50.0, 50.0));
-        // Seed la position manuelle au point de départ si pas déjà tenue.
+        // Seed la position manuelle au point de départ si pas déjà tenue
+        // — canonique pré-pp, sinon le point de départ double-transforme.
         if self
             .manual_positions
             .read()
@@ -1256,7 +1264,7 @@ impl MergeRuntime {
             .is_none()
         {
             if let Some(p) = self
-                .last_out_positions
+                .last_canonical_positions
                 .read()
                 .unwrap_or_else(|e| e.into_inner())
                 .get(&obj)
@@ -1379,15 +1387,17 @@ impl MergeRuntime {
     pub fn last_positions_handle(
         &self,
     ) -> Arc<RwLock<HashMap<usize, [f64; 3]>>> {
-        self.last_out_positions.clone()
+        // Le worker (Follow) travaille en espace canonique — handle sur la
+        // map pré-pp, pas sur last_out (post-macro).
+        self.last_canonical_positions.clone()
     }
 
     /// Dernière position monde connue d'un objet — source des ancres
-    /// `AnchorMode::Current`. Ordre : dernière émission merge →
-    /// manuelle → origine track → None (jamais vu).
+    /// `AnchorMode::Current`. Ordre : canonique pré-pp (émission merge,
+    /// manuelles incluses) → manuelle → origine track → None (jamais vu).
     pub fn last_position(&self, obj: usize) -> Option<[f64; 3]> {
         if let Some(p) = self
-            .last_out_positions
+            .last_canonical_positions
             .read()
             .unwrap_or_else(|e| e.into_inner())
             .get(&obj)
@@ -1534,6 +1544,7 @@ impl MergeRuntime {
         let manual_positions_arc = self.manual_positions.clone();
         let move_end_modes_arc = self.move_end_modes.clone();
         let last_out_positions_arc = self.last_out_positions.clone();
+        let last_canonical_arc = self.last_canonical_positions.clone();
         let held_objects_arc = self.held_objects.clone();
         let venue_map_arc = self.venue_map.clone();
         let perceptual_arc = self.perceptual.clone();
@@ -2003,6 +2014,20 @@ impl MergeRuntime {
                         .unwrap_or_else(|e| e.into_inner())
                 )
                 .clone();
+
+                // Positions canoniques pré-post-process — merged ∪ manual
+                // (manual gagne, comme le pp). Graine des anchors/freeze/
+                // throw : seed depuis last_out (post-macro) double-transforme.
+                {
+                    let mut canonical: HashMap<usize, [f64; 3]> = merged
+                        .iter()
+                        .map(|(i, p)| (*i, [p.x, p.y, p.z]))
+                        .collect();
+                    canonical.extend(manual_positions.iter().map(|(i, p)| (*i, *p)));
+                    *last_canonical_arc
+                        .write()
+                        .unwrap_or_else(|e| e.into_inner()) = canonical;
+                }
                 let audio_state = timed_lock!(
                     lock_wait_ns,
                     lock_sites,
@@ -2364,10 +2389,13 @@ impl MergeRuntime {
                                 tape_t0 = Some(Instant::now());
                                 0.0
                             });
-                        let snap: HashMap<usize, [f64; 3]> = transformed
-                            .iter()
-                            .map(|(i, p)| (*i, [p.x, p.y, p.z]))
-                            .collect();
+                        // On enregistre le canonique pré-pp — sinon le
+                        // replay en manual_positions subirait les macros
+                        // une seconde fois (double-transform).
+                        let snap: HashMap<usize, [f64; 3]> = last_canonical_arc
+                            .read()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .clone();
                         pos_tape_arc
                             .write()
                             .unwrap_or_else(|e| e.into_inner())
