@@ -9,8 +9,8 @@ const rehearsalState: {
   recording: boolean;
   t0: number;
   entries: { t: number; name: string; args: number[] }[];
-  playTimer: ReturnType<typeof setTimeout> | null;
-} = { recording: false, t0: 0, entries: [], playTimer: null };
+  playTimers: ReturnType<typeof setTimeout>[];
+} = { recording: false, t0: 0, entries: [], playTimers: [] };
 
 function rec(name: string, args: number[] = []) {
   if (rehearsalState.recording)
@@ -369,19 +369,24 @@ export function doRehearsal(action: string, from?: string) {
       const wasRecording = s.recording;
       s.recording = false;
       let delay = 0;
-      for (const e of s.entries) {
+      // Tous les timers sont trackés — 'clear' doit pouvoir tout annuler
+      // (un seul playTimer écrasé = la bande continuait de tirer).
+      s.playTimers = s.entries.map((e) => {
         delay = e.t;
-        s.playTimer = setTimeout(() => REPLAY[e.name]?.(...e.args), e.t);
-      }
-      s.playTimer = setTimeout(() => {
-        s.recording = wasRecording;
-        toast.info('Rehearsal fini');
-      }, delay + 100);
+        return setTimeout(() => REPLAY[e.name]?.(...e.args), e.t);
+      });
+      s.playTimers.push(
+        setTimeout(() => {
+          s.recording = wasRecording;
+          toast.info('Rehearsal fini');
+        }, delay + 100),
+      );
       break;
     }
     case 'clear':
       s.entries = [];
-      if (s.playTimer) { clearTimeout(s.playTimer); s.playTimer = null; }
+      s.playTimers.forEach(clearTimeout);
+      s.playTimers = [];
       break;
     case 'load':
       // Charge la partition persistée (dernier record ou score importé).

@@ -228,14 +228,16 @@ export const createOscConfigSlice: StateCreator<OscConfigSlice, [], [], OscConfi
         toast.error('Venue config: scale/offset must be "x,y,z" numbers');
         return;
       }
+      // Valider AVANT de persister — un yaw invalide laissait une
+      // config en store+localStorage jamais poussée au backend.
+      const yawDeg = parseFloat(next.venueYaw);
+      if (!Number.isFinite(yawDeg)) {
+        toast.error('Venue config: yaw must be a number (degrees)');
+        return;
+      }
       set(next);
       persist(get(), next);
       try {
-        const yawDeg = parseFloat(next.venueYaw);
-        if (!Number.isFinite(yawDeg)) {
-          toast.error('Venue config: yaw must be a number (degrees)');
-          return;
-        }
         await invoke('set_venue_config', {
           enabled: next.venueEnabled,
           scale,

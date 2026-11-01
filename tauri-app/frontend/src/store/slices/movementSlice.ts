@@ -125,7 +125,6 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
       await invoke('deactivate_move', { movementId, fadeDuration: 0.0 });
       // Nettoyer l'objet mutable directement (pas de set())
       delete _movementPositionsExternal[movementId];
-      delete _movementPositionsExternal['global'];
       set((s) => {
         const newSaved = { ...s.savedGraphs };
         delete newSaved[movementId];
@@ -145,7 +144,6 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
     try {
       await invoke('deactivate_move', { movementId, fadeDuration });
       delete _movementPositionsExternal[movementId];
-      delete _movementPositionsExternal['global'];
       set((s) => {
         const newSaved = { ...s.savedGraphs };
         delete newSaved[movementId];

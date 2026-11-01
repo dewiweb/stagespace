@@ -37,6 +37,29 @@ pub async fn set_macro(
     request: SetMacroRequest,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
+    // Validation : une macro NaN/Inf → sanitize droppe chaque position
+    // → blackout silencieux. Rejeter AVANT d'appliquer.
+    for v in [
+        request.speed,
+        request.scale,
+        request.shiftX,
+        request.shiftY,
+        request.shiftZ,
+        request.yaw,
+        request.pitch,
+        request.roll,
+        request.radius_scale,
+        request.height_offset,
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if !v.is_finite() {
+            return Err(IpcError::validation(
+                "Macro values must be finite".to_string(),
+            ));
+        }
+    }
     let macros = lock_or_recover(&state.merge_runtime).macros();
     if let Some(s) = request.speed {
         macros.set_speed(s);
