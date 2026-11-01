@@ -21,10 +21,15 @@ export const RunView: React.FC = () => {
   const currentCueIndex = useCuelistStore((s) => s.currentCueIndex);
   const cues = useCuelistStore((s) => s.cues);
 
-  // Solo — backend-side (pas de flag sur le slot) : suivi local par oscIndex.
-  const [soloOsc, setSoloOsc] = React.useState<number | null>(null);
+  // Solo — vérité partagée `soloSavedIds` (alimentée par GUI et OSC,
+  // les deux passent par doSolo) : après un solo, le seul slot jouant
+  // est le slot solo'd — le badge S ne peut pas diverger d'un OSC.
+  const soloSavedIds = useGraphStore((s) => s.soloSavedIds);
   const playingIds = new Set(moveSlots.filter((s) => s.movementId).map((s) => s.id));
-  const soloId = moveSlots.find((s) => s.oscIndex === soloOsc)?.id ?? null;
+  const soloId =
+    soloSavedIds.length > 0
+      ? (moveSlots.find((s) => s.movementId)?.id ?? null)
+      : null;
 
   return (
     <div className="flex flex-col h-full bg-gray-950 text-white p-4 select-none">
@@ -68,8 +73,8 @@ export const RunView: React.FC = () => {
               onClick={() => (playing ? doSlotStop(slot.oscIndex || 0) : doSlot(slot.oscIndex || 0, undefined))}
               onContextMenu={(e) => {
                 e.preventDefault();
-                if (solo) { doUnsolo(); setSoloOsc(null); }
-                else { doSolo(slot.oscIndex || 0); setSoloOsc(slot.oscIndex || 0); }
+                if (solo) doUnsolo();
+                else doSolo(slot.oscIndex || 0);
               }}
               className={`${cls} rounded-lg p-4 text-left transition-colors relative`}
             >
