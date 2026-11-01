@@ -414,6 +414,9 @@ pub enum ShowCommand {
     /// `/stagespace/soundcheck [start|stop|next|prev]` — ping séquentiel
     /// par track (identification spatiale en repère). Défaut = start.
     Soundcheck(Option<String>),
+    /// `/stagespace/throw <obj> <vx> <vy> <vz>` — grab & throw : lance
+    /// l'objet avec une vélocité initiale (m/s), amortissement au repos.
+    Throw(usize, f64, f64, f64),
 }
 
 type ShowSink = Box<dyn Fn(ShowCommand, std::net::SocketAddr) + Send>;
@@ -538,6 +541,20 @@ fn parse_show_command(addr: &str, args: &[OscType], fps: f64) -> Option<ShowComm
                 _ => None,
             });
             Some(ShowCommand::Soundcheck(action))
+        }
+        "throw" => {
+            let obj = args.first().and_then(|a| match a {
+                OscType::Int(i) => Some(*i as usize),
+                OscType::Float(f) => Some(*f as usize),
+                _ => None,
+            })?;
+            let get = |i: usize| match args.get(i) {
+                Some(OscType::Float(f)) => Some(*f as f64),
+                Some(OscType::Double(d)) => Some(*d),
+                Some(OscType::Int(n)) => Some(*n as f64),
+                _ => None,
+            };
+            Some(ShowCommand::Throw(obj, get(1)?, get(2)?, get(3)?))
         }
         _ => None,
     }

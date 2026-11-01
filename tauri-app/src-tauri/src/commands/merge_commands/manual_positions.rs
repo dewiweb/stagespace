@@ -74,3 +74,16 @@ pub async fn clear_all_manual_positions(state: State<'_, AppState>) -> Result<()
     merge_rt.clear_all_manual_positions();
     Ok(())
 }
+
+/// Grab & throw — lance un objet avec une vélocité initiale (m/s).
+/// L'objet part de sa dernière position émise et continue balistique
+/// avec amortissement (~2/s) jusqu'au repos en position manuelle.
+#[tauri::command]
+pub async fn throw_object(
+    obj: usize,
+    vel: [f64; 3],
+    state: State<'_, AppState>,
+) -> Result<(), IpcError> {
+    crate::state::lock_or_recover(&state.merge_runtime).throw_object(obj, vel);
+    Ok(())
+}

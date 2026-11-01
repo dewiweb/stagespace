@@ -258,6 +258,14 @@ export function doSoundcheck(action?: string) {
   soundcheckPing(tracks);
 }
 
+/** /stagespace/throw <obj> <vx> <vy> <vz> — grab & throw : lance l'objet
+ *  avec une vélocité initiale, amortissement balistique au repos. */
+export function doThrow(obj: number, vx: number, vy: number, vz: number, from?: string) {
+  logAction('doThrow', from);
+  invoke('throw_object', { obj, vel: [vx, vy, vz] })
+    .catch((e) => toast.error('Throw failed: ' + e));
+}
+
 /** /stagespace/trackpos <track> <x> <y> <z> — position d'origine d'une
  *  track (là où panic renvoie, base Barycenter — .hol par OSC).
  *  Setter unitaire : un set par track ne doit pas effacer les autres

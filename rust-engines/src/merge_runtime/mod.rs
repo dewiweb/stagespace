@@ -191,6 +191,10 @@ pub struct MergeRuntime {
     /// (gain 1/(1+a·r), presence e^(-air·r) air-EQ, distance=r DRR).
     /// None = désactivé.
     distance_reality: Arc<RwLock<Option<(f64, f64, f64)>>>,
+    /// Objets "lancés" (grab & throw) : obj_index → vélocité m/s.
+    /// Le frame loop intègre pos += v·dt avec amortissement ; quand
+    /// |v| < eps l'objet devient une position manuelle au repos.
+    thrown: Arc<RwLock<HashMap<usize, [f64; 3]>>>,
     /// Règles de modulation cinématique (source cinématique → canal spatial)
     /// — Arc<Vec> : snapshot par frame = clone d'Arc.
     channel_modulations: Arc<RwLock<Arc<Vec<ChannelModulation>>>>,
@@ -322,6 +326,7 @@ impl MergeRuntime {
             venue_map: Arc::new(RwLock::new(None)),
             perceptual: Arc::new(RwLock::new(PerceptualMetrics::default())),
             distance_reality: Arc::new(RwLock::new(None)),
+            thrown: Arc::new(RwLock::new(HashMap::new())),
             channel_modulations: Arc::new(RwLock::new(Arc::new(Vec::new()))),
             kinematic_smoothing: Arc::new(RwLock::new(0.5)),
             zones: Arc::new(RwLock::new(Arc::new(Vec::new()))),
@@ -1098,6 +1103,38 @@ impl MergeRuntime {
             .clone()
     }
 
+    /// Grab & throw : lance un objet avec une vélocité initiale.
+    /// L'objet part de sa dernière position émise (ou manuelle/base)
+    /// et continue balistique avec amortissement.
+    pub fn throw_object(&self, obj: usize, vel: [f64; 3]) {
+        if !vel.iter().all(|v| v.is_finite()) {
+            return;
+        }
+        let vel: [f64; 3] = vel.map(|v| v.clamp(-50.0, 50.0));
+        // Seed la position manuelle au point de départ si pas déjà tenue.
+        if self
+            .manual_positions
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&obj)
+            .is_none()
+        {
+            if let Some(p) = self
+                .last_out_positions
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .get(&obj)
+                .copied()
+            {
+                self.set_manual_position(obj, p);
+            }
+        }
+        self.thrown
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(obj, vel);
+    }
+
     /// Couche réalité-distance — (exagération, gain_atten, air_loss).
     /// Validé : fini + bornes [0,4], [0,2], [0,0.5].
     pub fn set_distance_reality(&self, cfg: Option<(f64, f64, f64)>) {
@@ -1354,6 +1391,7 @@ impl MergeRuntime {
         let venue_map_arc = self.venue_map.clone();
         let perceptual_arc = self.perceptual.clone();
         let distance_reality_arc = self.distance_reality.clone();
+        let thrown_arc = self.thrown.clone();
         let object_channels_arc = self.object_channels.clone();
         let zones_arc = self.zones.clone();
         let channel_modulations_arc = self.channel_modulations.clone();
@@ -1426,6 +1464,33 @@ impl MergeRuntime {
                     .map(|p| (frame_start - p).as_secs_f64().max(1e-6))
                     .unwrap_or_else(|| frame_duration.as_secs_f64());
                 prev_frame = Some(frame_start);
+
+                // Grab & throw : intègre les lancés — pos += v·dt avec
+                // amortissement ; |v| < eps → position manuelle au repos.
+                {
+                    let mut thrown = thrown_arc
+                        .write()
+                        .unwrap_or_else(|e| e.into_inner());
+                    if !thrown.is_empty() {
+                        let damp = (-2.0 * dt).exp(); // ~amortissement 2/s
+                        let mut manual = manual_positions_arc
+                            .write()
+                            .unwrap_or_else(|e| e.into_inner());
+                        thrown.retain(|obj, vel| {
+                            if let Some(p) = manual.get_mut(obj) {
+                                p[0] += vel[0] * dt;
+                                p[1] += vel[1] * dt;
+                                p[2] += vel[2] * dt;
+                            }
+                            vel[0] *= damp;
+                            vel[1] *= damp;
+                            vel[2] *= damp;
+                            let speed2 =
+                                vel[0] * vel[0] + vel[1] * vel[1] + vel[2] * vel[2];
+                            speed2 > 1e-4 // retiré quand quasi-arrêté
+                        });
+                    }
+                }
 
                 // 1. Lire tous les buffers (read lock très court)
                 let buffers = timed_lock!(

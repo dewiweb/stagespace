@@ -24,7 +24,7 @@ use commands::cue_commands::{
 };
 use commands::file_io::{import_hol_project, load_graph_from_file, save_graph_to_file};
 use commands::merge_commands::{
-    activate_move, add_channel_modulation, add_zone, clear_all_manual_positions,
+    activate_move, add_channel_modulation, add_zone, clear_all_manual_positions, throw_object,
     clear_all_spatial_channels, clear_channel_modulations, clear_manual_position,
     clear_spatial_channel, clear_zones, deactivate_all_moves, deactivate_move, diagnose_graph,
     get_merge_perf_stats, list_active_moves, list_channel_modulations, list_graph_effects,
@@ -406,6 +406,7 @@ pub fn run() {
             get_object_states,
             get_emitted_positions,
             get_manual_position,
+            throw_object,
             set_venue_config,
             get_perceptual_metrics,
             set_distance_reality,
@@ -441,7 +442,7 @@ pub fn run() {
             set_track_position,
             set_manual_position,
             clear_manual_position,
-            clear_all_manual_positions,
+            clear_all_manual_positions, throw_object,
             // Spatial channels (Phase 4 — canaux étendus)
             set_spatial_channel,
             clear_spatial_channel,
