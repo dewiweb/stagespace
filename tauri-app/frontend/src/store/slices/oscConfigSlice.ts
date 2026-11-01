@@ -28,6 +28,8 @@ interface PersistedOscConfig {
   venueEnabled: boolean;
   venueScale: string;
   venueOffset: string;
+  /// Couche réalité-distance (0..1 → exag/gain/air préréglés).
+  realityStrength: number;
 }
 
 function loadConfigFromStorage(): Partial<PersistedOscConfig> {
@@ -53,6 +55,7 @@ const persist = (s: OscConfigSlice, patch: Partial<PersistedOscConfig>) => {
     venueEnabled: s.venueEnabled,
     venueScale: s.venueScale,
     venueOffset: s.venueOffset,
+    realityStrength: s.realityStrength,
     ...patch,
   });
 };
@@ -98,6 +101,10 @@ export interface OscConfigSlice {
   venueScale: string;
   venueOffset: string;
   setVenueConfig: (cfg: { enabled?: boolean; scale?: string; offset?: string }) => Promise<void>;
+  /// Distance reality layer — 0..1 (0 = off). Preset : exag 0.4·s,
+  /// gain_atten 0.15·s, air_loss 0.02·s (Zahorik-inspired).
+  realityStrength: number;
+  setRealityStrength: (v: number) => Promise<void>;
   setOscAddress: (addr: string) => void;
   setOscPort: (port: number) => void;
   setOscProfile: (profile: string) => void;
@@ -122,6 +129,7 @@ export const createOscConfigSlice: StateCreator<OscConfigSlice, [], [], OscConfi
     venueEnabled: saved.venueEnabled ?? false,
     venueScale: saved.venueScale ?? '1,1,1',
     venueOffset: saved.venueOffset ?? '0,0,0',
+    realityStrength: saved.realityStrength ?? 0,
     psnLastPacketAge: null,
     psnRunning: false,
     setPsnConfig: async (cfg) => {
@@ -206,6 +214,21 @@ export const createOscConfigSlice: StateCreator<OscConfigSlice, [], [], OscConfi
         set(prev);
         persist(get(), prev);
         toast.error('Venue config failed: ' + e);
+      }
+    },
+    setRealityStrength: async (v) => {
+      const strength = Math.max(0, Math.min(1, v));
+      const prev = get().realityStrength;
+      set({ realityStrength: strength });
+      persist(get(), { realityStrength: strength });
+      try {
+        await invoke('set_distance_reality', {
+          cfg: strength > 0 ? [0.4 * strength, 0.15 * strength, 0.02 * strength] : null,
+        });
+      } catch (e) {
+        set({ realityStrength: prev });
+        persist(get(), { realityStrength: prev });
+        toast.error('Reality layer failed: ' + e);
       }
     },
     refreshPsnHealth: async () => {

@@ -448,3 +448,14 @@ pub async fn get_perceptual_metrics(
 ) -> Result<stagespace_engines::merge_runtime::PerceptualMetrics, IpcError> {
     Ok(lock_or_recover(&state.merge_runtime).perceptual_metrics())
 }
+
+/// Couche réalité-distance (Zahorik ×0.7 de compression perçue) —
+/// (exagération, gain_atten, air_loss). None = désactivé.
+#[tauri::command]
+pub async fn set_distance_reality(
+    cfg: Option<(f64, f64, f64)>,
+    state: State<'_, AppState>,
+) -> Result<(), IpcError> {
+    lock_or_recover(&state.merge_runtime).set_distance_reality(cfg);
+    Ok(())
+}

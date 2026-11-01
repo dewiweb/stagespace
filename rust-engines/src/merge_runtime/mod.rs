@@ -186,6 +186,11 @@ pub struct MergeRuntime {
     /// looming (vitesse radiale d'approche m/s), vection (cohérence
     /// rotationnelle du champ 0..1).
     perceptual: Arc<RwLock<PerceptualMetrics>>,
+    /// Couche réalité-distance (Zahorik : distance perçue compressée
+    /// ~×0.7) — exagération géométrique + couplage distance→canaux
+    /// (gain 1/(1+a·r), presence e^(-air·r) air-EQ, distance=r DRR).
+    /// None = désactivé.
+    distance_reality: Arc<RwLock<Option<(f64, f64, f64)>>>,
     /// Règles de modulation cinématique (source cinématique → canal spatial)
     /// — Arc<Vec> : snapshot par frame = clone d'Arc.
     channel_modulations: Arc<RwLock<Arc<Vec<ChannelModulation>>>>,
@@ -316,6 +321,7 @@ impl MergeRuntime {
             psn_objects: Arc::new(RwLock::new(HashSet::new())),
             venue_map: Arc::new(RwLock::new(None)),
             perceptual: Arc::new(RwLock::new(PerceptualMetrics::default())),
+            distance_reality: Arc::new(RwLock::new(None)),
             channel_modulations: Arc::new(RwLock::new(Arc::new(Vec::new()))),
             kinematic_smoothing: Arc::new(RwLock::new(0.5)),
             zones: Arc::new(RwLock::new(Arc::new(Vec::new()))),
@@ -1092,6 +1098,25 @@ impl MergeRuntime {
             .clone()
     }
 
+    /// Couche réalité-distance — (exagération, gain_atten, air_loss).
+    /// Validé : fini + bornes [0,4], [0,2], [0,0.5].
+    pub fn set_distance_reality(&self, cfg: Option<(f64, f64, f64)>) {
+        if let Some((ex, ga, al)) = cfg {
+            if ex.is_finite() && ga.is_finite() && al.is_finite() {
+                *self
+                    .distance_reality
+                    .write()
+                    .unwrap_or_else(|e| e.into_inner()) =
+                    Some((ex.clamp(0.0, 4.0), ga.clamp(0.0, 2.0), al.clamp(0.0, 0.5)));
+            }
+        } else {
+            *self
+                .distance_reality
+                .write()
+                .unwrap_or_else(|e| e.into_inner()) = None;
+        }
+    }
+
     /// Métriques perceptuelles calculées à 60fps dans le frame loop.
     pub fn perceptual_metrics(&self) -> PerceptualMetrics {
         self.perceptual
@@ -1328,6 +1353,7 @@ impl MergeRuntime {
         let held_objects_arc = self.held_objects.clone();
         let venue_map_arc = self.venue_map.clone();
         let perceptual_arc = self.perceptual.clone();
+        let distance_reality_arc = self.distance_reality.clone();
         let object_channels_arc = self.object_channels.clone();
         let zones_arc = self.zones.clone();
         let channel_modulations_arc = self.channel_modulations.clone();
@@ -2216,25 +2242,51 @@ impl MergeRuntime {
                                             }
                                         }
                                     };
-                                let report =
-                                    // Auto-venue : seul le payload OSC est
-                                    // transformé — zones/canaux évalués sur
-                                    // `pos` canonique (correct).
+                                let report = {
+                                    // Auto-venue + réalité-distance : seul
+                                    // le payload OSC est transformé —
+                                    // zones/canaux évalués sur `pos`
+                                    // canonique (correct).
+                                    let reality = *distance_reality_arc
+                                        .read()
+                                        .unwrap_or_else(|e| e.into_inner());
+                                    let r = pos.norm();
+                                    let mut send_pos = venue_map_arc
+                                        .read()
+                                        .unwrap_or_else(|e| e.into_inner())
+                                        .map(|(s, o)| {
+                                            nalgebra::Vector3::new(
+                                                pos.x * s[0] + o[0],
+                                                pos.y * s[1] + o[1],
+                                                pos.z * s[2] + o[2],
+                                            )
+                                        })
+                                        .unwrap_or(*pos);
+                                    let mut eff_out = effective;
+                                    if let Some((ex, ga, al)) = reality {
+                                        // Exagération géométrique — la
+                                        // distance perçue compresse ~×0.7 :
+                                        // pousser les objets lointains pour
+                                        // retrouver l'échelle perçue.
+                                        send_pos *= r.max(1.0).powf(ex);
+                                        let eff = eff_out
+                                            .get_or_insert_with(Default::default);
+                                        // distance → DRR renderer (reverb)
+                                        eff.distance = Some(r);
+                                        // gain 1/(1+a·r) — atténuation
+                                        eff.gain =
+                                            Some(eff.gain.unwrap_or(1.0) / (1.0 + ga * r));
+                                        // presence e^(-air·r) — air-EQ
+                                        if let Some(p) = eff.presence {
+                                            eff.presence = Some(p * (-al * r).exp());
+                                        }
+                                    }
                                     sink_guard.send_state(
                                         osc_id,
-                                        venue_map_arc
-                                            .read()
-                                            .unwrap_or_else(|e| e.into_inner())
-                                            .map(|(s, o)| {
-                                                nalgebra::Vector3::new(
-                                                    pos.x * s[0] + o[0],
-                                                    pos.y * s[1] + o[1],
-                                                    pos.z * s[2] + o[2],
-                                                )
-                                            })
-                                            .unwrap_or(*pos),
-                                        effective.as_ref(),
-                                    );
+                                        send_pos,
+                                        eff_out.as_ref(),
+                                    )
+                                };
                                 osc_since_perf += report.sent as u64;
                                 osc_errors_perf += report.errors as u64;
                                 osc_refused_perf += report.refused as u64;

@@ -49,6 +49,8 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const venueScale = useGraphStore((s) => s.venueScale);
   const venueOffset = useGraphStore((s) => s.venueOffset);
   const setVenueConfig = useGraphStore((s) => s.setVenueConfig);
+  const realityStrength = useGraphStore((s) => s.realityStrength);
+  const setRealityStrength = useGraphStore((s) => s.setRealityStrength);
 
   const [oscIdsStr, setOscIdsStr] = React.useState(manualOscIds.join(','));
   const [audioDevices, setAudioDevices] = React.useState<MediaDeviceInfo[]>([]);
@@ -345,6 +347,22 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
                 />
               </div>
+            </div>
+            {/* Distance reality layer — couplage Zahorik (distance →
+                exagération + gain + air-EQ + DRR automatiques). */}
+            <div className="mt-3">
+              <label className="text-gray-500 text-xs block mb-1">
+                Distance reality — {realityStrength > 0 ? `${Math.round(realityStrength * 100)}%` : 'off'}
+              </label>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={realityStrength}
+                onChange={(e) => setRealityStrength(parseFloat(e.target.value))}
+                className="w-full accent-amber-500"
+              />
             </div>
           </section>
 
