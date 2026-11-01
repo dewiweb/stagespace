@@ -34,6 +34,7 @@ const CATEGORY_LABELS: Record<ShapePreset['category'], { label: string; color: s
   layers: { label: 'Layers', color: 'text-purple-400' },
   spline: { label: 'Splines', color: 'text-cyan-400' },
   reactive: { label: 'Reactive', color: 'text-yellow-400' },
+  smalley: { label: 'Smalley', color: 'text-orange-400' },
 };
 
 const CATEGORY_ORDER: ShapePreset['category'][] = ['orbits', 'gestures', 'shaped', 'transitions', 'physics', 'layers', 'spline', 'reactive'];
