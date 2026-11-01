@@ -1047,6 +1047,15 @@ impl MergeRuntime {
             .remove(move_id);
     }
 
+    /// Positions réellement émises par objet (ce que le renderer a reçu)
+    /// — le côté "commanded" de la confidence view.
+    pub fn emitted_positions(&self) -> HashMap<usize, [f64; 3]> {
+        self.last_out_positions
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
     /// Marque les objets pilotés par flux PSN (source-de-contrôle) —
     /// appelé par `set_psn_config` avec les object_index du mapping.
     pub fn set_psn_objects(&self, objs: HashSet<usize>) {

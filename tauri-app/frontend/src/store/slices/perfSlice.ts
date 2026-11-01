@@ -23,6 +23,10 @@ export interface PerfSlice {
     showCmdAgeS: number | null;
   };
   refreshFlowHealth: () => Promise<void>;
+  /// Positions réellement émises par objet (ce que le renderer a reçu) —
+  /// confidence view : le "commanded" vs l'intention GUI.
+  emittedPositions: Record<number, [number, number, number]>;
+  refreshEmittedPositions: () => Promise<void>;
 }
 
 export const createPerfSlice: StateCreator<PerfSlice, [], [], PerfSlice> = (set) => ({
@@ -46,6 +50,13 @@ export const createPerfSlice: StateCreator<PerfSlice, [], [], PerfSlice> = (set)
       set({ flowHealth: { psnRunning, psnAge, armed, showCmdAgeS } });
     } catch { /* non critique */ }
   },
+  emittedPositions: {},
+  refreshEmittedPositions: async () => {
+    try {
+      const pos = await invoke<Record<number, [number, number, number]>>('get_emitted_positions');
+      set({ emittedPositions: pos });
+    } catch { /* non critique */ }
+  },
 });
 
 // Poll source-de-contrôle — vit dans le slice (donnée), pas React, et
@@ -57,6 +68,7 @@ setInterval(() => {
       const s = m.useGraphStore.getState();
       s.refreshObjectStates();
       s.refreshFlowHealth();
+      s.refreshEmittedPositions();
     })
     .catch(() => {});
 }, 1500);

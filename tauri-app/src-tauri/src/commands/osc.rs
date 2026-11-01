@@ -372,3 +372,13 @@ pub async fn get_object_states(
 ) -> Result<std::collections::HashMap<usize, String>, IpcError> {
     Ok(lock_or_recover(&state.merge_runtime).object_control_sources())
 }
+
+/// Positions réellement émises en OSC par objet — le côté "commanded" de
+/// la confidence view (ce que le renderer a reçu, pas ce qu'on croit
+/// avoir envoyé).
+#[tauri::command]
+pub async fn get_emitted_positions(
+    state: State<'_, AppState>,
+) -> Result<std::collections::HashMap<usize, [f64; 3]>, IpcError> {
+    Ok(lock_or_recover(&state.merge_runtime).emitted_positions())
+}
