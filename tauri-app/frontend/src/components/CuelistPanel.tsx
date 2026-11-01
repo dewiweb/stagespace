@@ -11,7 +11,7 @@ import { Badge } from './ui/Badge';
 import { toast } from '../utils/toast-helpers';
 import { useOscArmed } from '../hooks/useOscArmed';
 
-export const CuelistPanel: React.FC = () => {
+export const CuelistPanel: React.FC<{ readonly?: boolean }> = ({ readonly = false }) => {
   const cues = useCuelistStore((s) => s.cues);
   const currentCueIndex = useCuelistStore((s) => s.currentCueIndex);
   const isRecalling = useCuelistStore((s) => s.isRecalling);
@@ -143,7 +143,9 @@ export const CuelistPanel: React.FC = () => {
         </button>
       </div>
 
-      {/* Store new cue */}
+      {/* Store new cue — masqué en jeu : rien qui mute le show ne vit
+          sur la surface live (authoring = atelier/conduite). */}
+      {!readonly && (
       <div className="px-3 py-2 border-b border-stagespace-border flex items-center gap-1">
         <input
           type="text"
@@ -170,6 +172,7 @@ export const CuelistPanel: React.FC = () => {
           ★ Store
         </button>
       </div>
+      )}
 
       <div className="flex-1 overflow-y-auto">
         {cues.length === 0 ? (
@@ -343,16 +346,18 @@ export const CuelistPanel: React.FC = () => {
                     )}
                   </div>
                 </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setPendingDelete({ id: cue.id, name: cue.name });
-                  }}
-                  className="text-gray-400 hover:text-red-400 text-xs px-1"
-                  title="Delete"
-                >
-                  <X size={11} />
-                </button>
+                {!readonly && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPendingDelete({ id: cue.id, name: cue.name });
+                    }}
+                    className="text-gray-400 hover:text-red-400 text-xs px-1"
+                    title="Delete"
+                  >
+                    <X size={11} />
+                  </button>
+                )}
               </div>
               {/* Audition — où la cue pose les objets, SANS émettre :
                   fantômes cue (manual_positions + move origins) vs
