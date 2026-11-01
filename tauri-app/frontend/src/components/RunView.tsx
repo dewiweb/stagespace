@@ -5,7 +5,7 @@
 import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
 import { useCuelistStore } from '../store/useCuelistStore';
-import { doGo, doPanic, doSlot, doSlotStop, doSolo, doUnsolo, doPark, doUnpark } from '../utils/liveActions';
+import { doGo, doPanic, doSlot, doSlotStop, doSolo, doUnsolo } from '../utils/liveActions';
 
 const STATE_COLORS: Record<string, string> = {
   stopped: 'bg-gray-800 text-gray-500 hover:bg-gray-700',
