@@ -335,6 +335,11 @@ pub async fn set_psn_config(
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
     let psn = state.psn_receiver.clone();
+    // Source-de-contrôle : informe le merge des objets pilotés par PSN
+    // (le getter object_control_sources lit ce set pour afficher "psn").
+    let tracked: std::collections::HashSet<usize> =
+        tracker_map.values().copied().collect();
+    lock_or_recover(&state.merge_runtime).set_psn_objects(tracked);
     psn.set_tracker_map(tracker_map);
     if enabled {
         let merge_rt = state.merge_runtime.clone();
@@ -356,4 +361,14 @@ pub async fn set_psn_config(
 pub async fn get_psn_health(state: State<'_, AppState>) -> Result<(bool, Option<u64>), IpcError> {
     let psn = &state.psn_receiver;
     Ok((psn.is_running(), psn.last_packet_age_ms()))
+}
+
+/// Source-de-contrôle par objet — *pourquoi cet objet est là*
+/// (park/psn/hold/manual/move/track). La lecture opérateur du modèle
+/// de contrôle, exposée à la GUI pour badges par objet.
+#[tauri::command]
+pub async fn get_object_states(
+    state: State<'_, AppState>,
+) -> Result<std::collections::HashMap<usize, String>, IpcError> {
+    Ok(lock_or_recover(&state.merge_runtime).object_control_sources())
 }

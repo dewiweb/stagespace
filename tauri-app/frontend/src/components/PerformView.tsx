@@ -513,6 +513,7 @@ const LiveDrawer: React.FC = () => {
   const setSlotEndMode = useGraphStore((s) => s.setSlotEndMode);
   const setSlotAnchorMode = useGraphStore((s) => s.setSlotAnchorMode);
   const setSlotAnchorTarget = useGraphStore((s) => s.setSlotAnchorTarget);
+  const objectStates = useGraphStore((s) => s.objectStates);
   const setSlotTracks = useGraphStore((s) => s.setSlotTracks);
   const holProject = useGraphStore((s) => s.holProject);
   const manualOscIds = useGraphStore((s) => s.manualOscIds);
@@ -638,6 +639,23 @@ const LiveDrawer: React.FC = () => {
             {slot.movementId
               ? <span className={`px-1 rounded ${slot.isPreview ? 'bg-cyan-900 text-cyan-300' : 'bg-green-900 text-green-300'}`}>{slot.isPreview ? 'PREV' : 'LIVE'}</span>
               : <span className="text-gray-400">(stopped)</span>}
+            {/* Source-de-contrôle par objet du slot — qui pilote quoi. */}
+            {slot.trackIds.map((t) => {
+              const src = objectStates[t];
+              const colors: Record<string, string> = {
+                park: 'bg-amber-900 text-amber-300',
+                psn: 'bg-purple-900 text-purple-300',
+                hold: 'bg-cyan-900 text-cyan-300',
+                manual: 'bg-orange-900 text-orange-300',
+                move: 'bg-green-900 text-green-300',
+                track: 'bg-gray-800 text-gray-400',
+              };
+              return src ? (
+                <span key={t} title={`objet ${t} : ${src}`} className={`px-1 rounded ${colors[src] ?? colors.track}`}>
+                  {t}·{src}
+                </span>
+              ) : null;
+            })}
           </span>
         )}
       </div>

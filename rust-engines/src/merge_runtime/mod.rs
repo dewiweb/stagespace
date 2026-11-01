@@ -170,6 +170,13 @@ pub struct MergeRuntime {
     /// Dernières positions monde émises par objet — source des ancres
     /// `AnchorMode::Current` au spawn du move suivant.
     last_out_positions: Arc<RwLock<HashMap<usize, [f64; 3]>>>,
+    /// Objets dont la position manuelle vient d'un hold de fin de move
+    /// (end_mode=Hold) — distingue "tenu par la mémoire" de "reprise
+    /// opérateur" dans la source-de-contrôle.
+    held_objects: Arc<RwLock<HashSet<usize>>>,
+    /// Objets pilotés par flux PSN — posés par set_psn_config, lus pour
+    /// la source-de-contrôle (PSN > manuel dans la priorité).
+    psn_objects: Arc<RwLock<HashSet<usize>>>,
     /// Règles de modulation cinématique (source cinématique → canal spatial)
     /// — Arc<Vec> : snapshot par frame = clone d'Arc.
     channel_modulations: Arc<RwLock<Arc<Vec<ChannelModulation>>>>,
@@ -281,6 +288,8 @@ impl MergeRuntime {
             parked_objects: Arc::new(RwLock::new(HashSet::new())),
             move_end_modes: Arc::new(RwLock::new(HashMap::new())),
             last_out_positions: Arc::new(RwLock::new(HashMap::new())),
+            held_objects: Arc::new(RwLock::new(HashSet::new())),
+            psn_objects: Arc::new(RwLock::new(HashSet::new())),
             channel_modulations: Arc::new(RwLock::new(Arc::new(Vec::new()))),
             kinematic_smoothing: Arc::new(RwLock::new(0.5)),
             zones: Arc::new(RwLock::new(Arc::new(Vec::new()))),
@@ -531,6 +540,11 @@ impl MergeRuntime {
             .write()
             .unwrap_or_else(|e| e.into_inner())
             .insert(obj_index, pos);
+        // Une reprise manuelle fraîche remplace un hold éventuel.
+        self.held_objects
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&obj_index);
     }
 
     /// Efface la position manuelle pour un objet
@@ -539,11 +553,19 @@ impl MergeRuntime {
             .write()
             .unwrap_or_else(|e| e.into_inner())
             .remove(&obj_index);
+        self.held_objects
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&obj_index);
     }
 
     /// Efface toutes les positions manuelles
     pub fn clear_all_manual_positions(&self) {
         self.manual_positions
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
+        self.held_objects
             .write()
             .unwrap_or_else(|e| e.into_inner())
             .clear();
@@ -1025,6 +1047,55 @@ impl MergeRuntime {
             .remove(move_id);
     }
 
+    /// Marque les objets pilotés par flux PSN (source-de-contrôle) —
+    /// appelé par `set_psn_config` avec les object_index du mapping.
+    pub fn set_psn_objects(&self, objs: HashSet<usize>) {
+        *self
+            .psn_objects
+            .write()
+            .unwrap_or_else(|e| e.into_inner()) = objs;
+    }
+
+    /// Source-de-contrôle par objet — *pourquoi cet objet est là*.
+    /// Priorité : park > psn > hold > manual > move > track(origine).
+    /// Utilisé par `get_object_states` — la lecture opérateur du modèle
+    /// de contrôle.
+    pub fn object_control_sources(&self) -> HashMap<usize, String> {
+        let parked = self.parked_objects.read().unwrap_or_else(|e| e.into_inner());
+        let psn = self.psn_objects.read().unwrap_or_else(|e| e.into_inner());
+        let held = self.held_objects.read().unwrap_or_else(|e| e.into_inner());
+        let manual = self.manual_positions.read().unwrap_or_else(|e| e.into_inner());
+        let moves = self.active_moves.read().unwrap_or_else(|e| e.into_inner());
+        let tracks = self.track_positions.read().unwrap_or_else(|e| e.into_inner());
+        let mut objs: HashSet<usize> = HashSet::new();
+        objs.extend(parked.iter().copied());
+        objs.extend(psn.iter().copied());
+        objs.extend(held.iter().copied());
+        objs.extend(manual.keys().copied());
+        objs.extend(tracks.keys().map(|&t| t as usize));
+        for s in moves.values() {
+            objs.extend(s.track_indices.iter().copied());
+        }
+        let mut out = HashMap::with_capacity(objs.len());
+        for &obj in &objs {
+            let src = if parked.contains(&obj) {
+                "park"
+            } else if psn.contains(&obj) {
+                "psn"
+            } else if held.contains(&obj) {
+                "hold"
+            } else if manual.contains_key(&obj) {
+                "manual"
+            } else if moves.values().any(|s| s.is_active && s.track_indices.contains(&obj)) {
+                "move"
+            } else {
+                "track"
+            };
+            out.insert(obj, src.to_string());
+        }
+        out
+    }
+
     /// Handle partagé des dernières positions émises — injecté dans le
     /// worker pour `AnchorMode::Follow` (origine suit la cible par frame).
     pub fn last_positions_handle(
@@ -1185,6 +1256,7 @@ impl MergeRuntime {
         let manual_positions_arc = self.manual_positions.clone();
         let move_end_modes_arc = self.move_end_modes.clone();
         let last_out_positions_arc = self.last_out_positions.clone();
+        let held_objects_arc = self.held_objects.clone();
         let object_channels_arc = self.object_channels.clone();
         let zones_arc = self.zones.clone();
         let channel_modulations_arc = self.channel_modulations.clone();
@@ -1364,6 +1436,10 @@ impl MergeRuntime {
                                     for (i, (_, pos)) in positions.iter().enumerate() {
                                         if let Some(&track) = state.track_indices.get(i) {
                                             mp.insert(track, [pos.x, pos.y, pos.z]);
+                                            held_objects_arc
+                                                .write()
+                                                .unwrap_or_else(|e| e.into_inner())
+                                                .insert(track);
                                         }
                                     }
                                 }

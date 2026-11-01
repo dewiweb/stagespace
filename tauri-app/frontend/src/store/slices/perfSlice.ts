@@ -1,4 +1,5 @@
 import { StateCreator } from 'zustand';
+import { safeInvoke as invoke } from '../../utils/tauri';
 import type { PerfStatsResponse } from '../../types/generated/PerfStatsResponse';
 
 /// Payload complet de `get_perf_stats` — généré depuis Rust (ts-rs).
@@ -9,9 +10,20 @@ export interface PerfSlice {
   // Performance overlay
   perfStats: PerfStats | null;
   setPerfStats: (stats: PerfStats) => void;
+  /// Source-de-contrôle par objet — move / manual / psn / park / hold /
+  /// track. La lecture opérateur du modèle de contrôle.
+  objectStates: Record<number, string>;
+  refreshObjectStates: () => Promise<void>;
 }
 
 export const createPerfSlice: StateCreator<PerfSlice, [], [], PerfSlice> = (set) => ({
   perfStats: null,
   setPerfStats: (stats) => set({ perfStats: stats }),
+  objectStates: {},
+  refreshObjectStates: async () => {
+    try {
+      const states = await invoke<Record<number, string>>('get_object_states');
+      set({ objectStates: states });
+    } catch { /* non critique */ }
+  },
 });
