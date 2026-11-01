@@ -16,7 +16,7 @@ export interface PerfSlice {
   refreshObjectStates: () => Promise<void>;
 }
 
-export const createPerfSlice: StateCreator<PerfSlice, [], [], PerfSlice> = (set) => ({
+export const createPerfSlice: StateCreator<PerfSlice, [], [], PerfSlice> = (set, get) => ({
   perfStats: null,
   setPerfStats: (stats) => set({ perfStats: stats }),
   objectStates: {},
@@ -27,3 +27,12 @@ export const createPerfSlice: StateCreator<PerfSlice, [], [], PerfSlice> = (set)
     } catch { /* non critique */ }
   },
 });
+
+// Poll source-de-contrôle — vit dans le slice (donnée), pas React, et
+// JAMAIS gaté sur playback : park/manual/psn restent lisibles à l'arrêt.
+// Import dynamique : le module scope n'a pas accès au store à la création.
+setInterval(() => {
+  import('../useGraphStore')
+    .then((m) => m.useGraphStore.getState().refreshObjectStates())
+    .catch(() => {});
+}, 1500);

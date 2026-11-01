@@ -202,3 +202,59 @@ impl Drop for PsnReceiver {
         self.stop();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Construit un paquet RTTrPL synthétique : header + un tracker
+    /// (chunk id=tracker_id) contenant un sous-chunk pos (0x0000).
+    fn make_packet(tracker_id: u16, pos: [f32; 3]) -> Vec<u8> {
+        let mut pkt = Vec::new();
+        // Header 12 octets : sig + version + packet_id + format + size + context
+        pkt.extend_from_slice(&0x6756u16.to_le_bytes()); // sig RTTrPL
+        pkt.extend_from_slice(&2u16.to_le_bytes()); // version
+        pkt.push(1); // packet_id
+        pkt.push(0x02); // format
+        pkt.extend_from_slice(&0u16.to_le_bytes()); // size (placeholder)
+        pkt.extend_from_slice(&0u32.to_le_bytes()); // context
+        // Tracker chunk : id + size + sous-chunk pos
+        let sub_size: u16 = 4 + 12; // sub-header + 3×f32
+        pkt.extend_from_slice(&tracker_id.to_le_bytes());
+        pkt.extend_from_slice(&sub_size.to_le_bytes());
+        pkt.extend_from_slice(&0x0000u16.to_le_bytes()); // pos sub-chunk id
+        pkt.extend_from_slice(&12u16.to_le_bytes()); // sub size
+        for v in pos {
+            pkt.extend_from_slice(&v.to_le_bytes());
+        }
+        pkt
+    }
+
+    #[test]
+    fn parse_rttrpl_tracker_pos() {
+        let pkt = make_packet(7, [1.5, -2.0, 3.25]);
+        let got = parse_psn_packet(&pkt);
+        assert_eq!(got.len(), 1);
+        let (tid, p) = got[0];
+        assert_eq!(tid, 7);
+        assert!((p[0] - 1.5).abs() < 1e-5);
+        assert!((p[1] + 2.0).abs() < 1e-5);
+        assert!((p[2] - 3.25).abs() < 1e-5);
+    }
+
+    #[test]
+    fn parse_ignores_non_psn() {
+        assert!(parse_psn_packet(b"garbage-packet").is_empty());
+        assert!(parse_psn_packet(&[]).is_empty());
+        // Mauvaise signature
+        let mut pkt = make_packet(1, [0.0; 3]);
+        pkt[0] = 0xFF;
+        assert!(parse_psn_packet(&pkt).is_empty());
+    }
+
+    #[test]
+    fn parse_ignores_nan() {
+        let pkt = make_packet(3, [f32::NAN, 1.0, 2.0]);
+        assert!(parse_psn_packet(&pkt).is_empty());
+    }
+}

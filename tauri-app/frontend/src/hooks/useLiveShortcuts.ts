@@ -163,7 +163,6 @@ export function usePerfStatsPolling() {
       try {
         const stats = await invoke<PerfStatsResponse>('get_perf_stats');
         setPerfStats(stats);
-        useGraphStore.getState().refreshObjectStates();
         // Merge thread mort = blackout OSC silencieux (fps affiché = valeur
         // figée, pas un signe de vie). Alerter une fois.
         if (stats.threadDied && !mergeDiedToastShown.current) {
