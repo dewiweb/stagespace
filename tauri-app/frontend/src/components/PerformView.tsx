@@ -316,13 +316,15 @@ export const PerformView: React.FC = () => {
         >
           ▶
         </button>
-        <button
-          onClick={() => setSurface('conduite')}
-          className="px-3 py-2.5 rounded-lg flex-shrink-0 bg-amber-800/60 hover:bg-amber-700/80 text-amber-100 text-xs font-bold uppercase tracking-wide transition-colors active:scale-95"
-          title="Vue conduite plein écran — NOW/NEXT cue, TC, ARM (lisible à distance)"
-        >
-          Conduite
-        </button>
+        {!detached && (
+          <button
+            onClick={() => setSurface('conduite')}
+            className="px-3 py-2.5 rounded-lg flex-shrink-0 bg-amber-800/60 hover:bg-amber-700/80 text-amber-100 text-xs font-bold uppercase tracking-wide transition-colors active:scale-95"
+            title="Vue conduite plein écran — NOW/NEXT cue, TC, ARM (lisible à distance)"
+          >
+            Conduite
+          </button>
+        )}
         {consoleAge !== null && (
           <StatusChip
             variant={consoleAge < 5 ? 'live' : 'dim'}

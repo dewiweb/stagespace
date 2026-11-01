@@ -18,11 +18,11 @@ export function OscArmToggle() {
           : 'bg-gray-800 text-gray-500 hover:text-gray-300 border border-gray-700'
       }`}
       title={armed
-        ? 'OSC LIVE — positions are being sent. Click to mute all OSC output'
-        : 'OSC muted — preview only, nothing is sent. Click to go LIVE'}
+        ? 'OSC LIVE — positions are being sent. Click for DRY-RUN (mute all OSC output)'
+        : 'DRY-RUN — preview only, nothing is sent. Click to go LIVE'}
     >
       <span className={`w-2 h-2 rounded-full ${armed ? 'bg-red-400 animate-pulse' : 'bg-gray-600'}`} />
-      {armed ? 'LIVE' : 'MUTED'}
+      {armed ? 'LIVE' : 'DRY-RUN'}
     </button>
   );
 }
