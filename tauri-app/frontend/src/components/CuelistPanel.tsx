@@ -218,8 +218,9 @@ export const CuelistPanel: React.FC = () => {
         ) : (
           <div className="divide-y divide-stagespace-border">
             {cues.map((cue, idx) => (
+              <React.Fragment key={cue.id}>
               <div
-                key={cue.id}
+                key={cue.id + '-row'}
                 className={`px-3 py-2 flex items-center gap-2 cursor-pointer transition-colors ${
                   idx === currentCueIndex
                     ? 'bg-purple-900/30 border-l-2 border-purple-500'
@@ -388,6 +389,56 @@ export const CuelistPanel: React.FC = () => {
                   <X size={11} />
                 </button>
               </div>
+              {/* Audition — où la cue pose les objets, SANS émettre :
+                  fantômes cue (manual_positions + move origins) vs
+                  positions actuellement émises. */}
+              {cue.id === armedCueId && (() => {
+                const ghosts: { x: number; y: number; kind: 'pos' | 'origin' }[] = [];
+                const posOn = (cue.scope ?? {}).positions !== false;
+                if (posOn) {
+                  for (const p of Object.values(cue.manual_positions ?? {})) {
+                    if (p) ghosts.push({ x: p[0], y: p[1], kind: 'pos' });
+                  }
+                }
+                if ((cue.scope ?? {}).moves !== false) {
+                  for (const m of cue.moves ?? []) {
+                    const o = m.origin;
+                    if (o) ghosts.push({ x: o[0], y: o[1], kind: 'origin' });
+                  }
+                }
+                if (ghosts.length === 0) return null;
+                const emitted = useGraphStore.getState().emittedPositions;
+                const all = [...ghosts.map((g) => [g.x, g.y]), ...Object.values(emitted)];
+                const maxR = Math.max(5, ...all.flatMap((p) => [Math.abs(p[0]), Math.abs(p[1])]));
+                const k = 60 / maxR;
+                return (
+                  <div className="mx-3 mb-1 bg-gray-900/60 rounded p-1.5">
+                    <svg viewBox="-70 -70 140 140" className="w-full h-28">
+                      <circle cx="0" cy="0" r="65" fill="none" stroke="#1f2937" strokeWidth="1" />
+                      <line x1="0" y1="-65" x2="0" y2="65" stroke="#1f2937" strokeWidth="0.5" />
+                      <line x1="-65" y1="0" x2="65" y2="0" stroke="#1f2937" strokeWidth="0.5" />
+                      {Object.entries(emitted).map(([id, [x, y]]) => (
+                        <circle key={'e' + id} cx={x * k} cy={-y * k} r="2.5" fill="#4b5563" />
+                      ))}
+                      {ghosts.map((g, i) => (
+                        <circle
+                          key={i}
+                          cx={g.x * k}
+                          cy={-g.y * k}
+                          r={g.kind === 'pos' ? 4 : 3}
+                          fill={g.kind === 'pos' ? '#f59e0b' : 'none'}
+                          stroke={g.kind === 'pos' ? 'none' : '#22d3ee'}
+                          strokeWidth="1.5"
+                        />
+                      ))}
+                    </svg>
+                    <div className="text-[8px] text-gray-500 text-center">
+                      ○ actuel · ● cue pos · ○ cyan cue origins — audition, rien n'est émis
+                    </div>
+                  </div>
+                );
+              })()}
+              </React.Fragment>
             ))}
           </div>
         )}
