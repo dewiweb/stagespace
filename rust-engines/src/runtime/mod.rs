@@ -50,8 +50,7 @@ pub struct Runtime {
     anchor_follow_target: Arc<RwLock<Option<usize>>>,
     /// Handle partagé vers les dernières positions monde du merge —
     /// injecté au spawn quand anchor_mode = Follow.
-    last_positions_handle:
-        Arc<RwLock<std::collections::HashMap<usize, [f64; 3]>>>,
+    last_positions_handle: Arc<RwLock<std::collections::HashMap<usize, [f64; 3]>>>,
     /// Animation state — depth + phase_offset par track + audio mods
     animation_state: Arc<Mutex<Option<AnimationState>>>,
     /// Audio state — partagé avec l'app, lu à chaque frame pour les audio mods
@@ -806,9 +805,7 @@ impl Runtime {
                             .get(&t)
                             .map(|p| nalgebra::Vector3::new(p[0], p[1], p[2]))
                     })
-                    .unwrap_or_else(|| {
-                        *origin_arc.lock().unwrap_or_else(|e| e.into_inner())
-                    });
+                    .unwrap_or_else(|| *origin_arc.lock().unwrap_or_else(|e| e.into_inner()));
                 // Matrice de rotation — ordre canonique `euler_rotation`
                 // (X→Y→Z), identique au modifier sub-graph et au merge.
                 let rot_matrix = crate::spatial_transform::euler_rotation(
@@ -882,7 +879,11 @@ impl Runtime {
                         .into_iter()
                         .map(|(i, p)| {
                             let d = anchor_offsets.entry(i).or_insert_with(|| {
-                                captured.get(&i).copied().unwrap_or_else(nalgebra::Vector3::zeros) - p
+                                captured
+                                    .get(&i)
+                                    .copied()
+                                    .unwrap_or_else(nalgebra::Vector3::zeros)
+                                    - p
                             });
                             (i, p + *d)
                         })

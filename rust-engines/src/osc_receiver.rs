@@ -437,7 +437,7 @@ pub enum ShowCommand {
     Rehearsal(String),
 }
 
-type ShowSink = Box<dyn Fn(ShowCommand, std::net::SocketAddr) + Send>;
+type ShowSink = Arc<dyn Fn(ShowCommand, std::net::SocketAddr) + Send + Sync>;
 
 const MAX_CONTROLLERS: usize = 4;
 
@@ -600,12 +600,15 @@ fn parse_show_command(addr: &str, args: &[OscType], fps: f64) -> Option<ShowComm
                 OscType::String(s) => Some(s.clone()),
                 _ => None,
             })?;
-            let strength = args.get(1).and_then(|a| match a {
-                OscType::Float(f) => Some(*f as f64),
-                OscType::Double(d) => Some(*d),
-                OscType::Int(i) => Some(*i as f64),
-                _ => None,
-            }).unwrap_or(3.0);
+            let strength = args
+                .get(1)
+                .and_then(|a| match a {
+                    OscType::Float(f) => Some(*f as f64),
+                    OscType::Double(d) => Some(*d),
+                    OscType::Int(i) => Some(*i as f64),
+                    _ => None,
+                })
+                .unwrap_or(3.0);
             Some(ShowCommand::Gesture(name, strength))
         }
         "rehearsal" | "record" => {
@@ -613,11 +616,13 @@ fn parse_show_command(addr: &str, args: &[OscType], fps: f64) -> Option<ShowComm
                 OscType::String(s) => Some(s.clone()),
                 _ => None,
             })?;
-            Some(ShowCommand::Rehearsal(if tail == "record" && action == "start" {
-                "record".to_string()
-            } else {
-                action
-            }))
+            Some(ShowCommand::Rehearsal(
+                if tail == "record" && action == "start" {
+                    "record".to_string()
+                } else {
+                    action
+                },
+            ))
         }
         _ => None,
     }
@@ -727,12 +732,15 @@ impl OscReceiver {
 
     /// Branche le sink show-control — appelé depuis le thread socket à
     /// chaque commande `/stagespace/*` reçue (avec l'adresse source).
-    pub fn set_show_sink(&self, sink: impl Fn(ShowCommand, std::net::SocketAddr) + Send + 'static) {
+    pub fn set_show_sink(
+        &self,
+        sink: impl Fn(ShowCommand, std::net::SocketAddr) + Send + Sync + 'static,
+    ) {
         *self
             .shared
             .show_sink
             .lock()
-            .unwrap_or_else(|e| e.into_inner()) = Some(Box::new(sink));
+            .unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(sink));
     }
 
     /// Migre l'état show-control vers un nouveau receiver — à appeler
@@ -747,6 +755,9 @@ impl OscReceiver {
         new_receiver.shared.media_sync = self.shared.media_sync.clone();
         new_receiver.shared.timecode_fps = self.shared.timecode_fps.clone();
         new_receiver.shared.last_show_rx = self.shared.last_show_rx.clone();
+        // Learn capture (revue F5) : une adresse apprise doit survivre au
+        // rebind — sinon l'opérateur perd sa source en cours d'apprentissage.
+        new_receiver.shared.last_rx = self.shared.last_rx.clone();
     }
 
     /// FPS utilisé pour la forme string `HH:MM:SS:FF` du timecode
@@ -763,8 +774,11 @@ impl OscReceiver {
     /// Media sync out — configure la cible dédiée (desk lumière/vidéo)
     /// et le préfixe d'adresse OSC. None = désactivé.
     pub fn set_media_sync(&self, target: Option<std::net::SocketAddr>, prefix: String) {
-        *self.shared.media_sync.lock().unwrap_or_else(|e| e.into_inner()) =
-            target.map(|t| (t, prefix));
+        *self
+            .shared
+            .media_sync
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = target.map(|t| (t, prefix));
     }
 
     pub fn send_show_feedback(
@@ -1266,17 +1280,6 @@ fn handle_show_command(msg: &OscMessage, src: std::net::SocketAddr, shared: &Sha
         .stats
         .packets_received
         .fetch_add(1, Ordering::Relaxed);
-    {
-        let mut c = shared.controllers.lock().unwrap_or_else(|e| e.into_inner());
-        c.retain(|a| *a != src);
-        c.insert(0, src);
-        c.truncate(MAX_CONTROLLERS);
-    }
-    // Voyant de lien console : horodate chaque commande show-control.
-    *shared
-        .last_show_rx
-        .lock()
-        .unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
     // Ack/nack APRÈS parse — un ack avant parse confirmait des commandes
     // invalides jamais exécutées ; un inconnu mérite un nack explicite.
     let socket = shared
@@ -1288,6 +1291,19 @@ fn handle_show_command(msg: &OscMessage, src: std::net::SocketAddr, shared: &Sha
     let fps = f64::from_bits(shared.timecode_fps.load(Ordering::Relaxed));
     match parse_show_command(&msg.addr, &msg.args, fps) {
         Some(cmd) => {
+            // Contrôleur + voyant enregistrés APRÈS parse (revue F6) —
+            // du garbage /stagespace/* évincerait une console légitime
+            // (max 4) et allumerait le voyant "console connectée".
+            {
+                let mut c = shared.controllers.lock().unwrap_or_else(|e| e.into_inner());
+                c.retain(|a| *a != src);
+                c.insert(0, src);
+                c.truncate(MAX_CONTROLLERS);
+            }
+            *shared
+                .last_show_rx
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
             if let Some(socket) = socket.as_ref() {
                 let ack = OscPacket::Message(OscMessage {
                     addr: "/stagespace/ack".to_string(),
@@ -1297,12 +1313,16 @@ fn handle_show_command(msg: &OscMessage, src: std::net::SocketAddr, shared: &Sha
                     let _ = socket.send_to(&bytes, src);
                 }
             }
-            if let Some(sink) = shared
+            // Le sink est cloné (Arc) hors du mutex — l'invoquer sous le
+            // lock bloquerait toute la file /stagespace/* : un panic
+            // attendrait derrière la commande lente qu'il doit interrompre
+            // (revue des fixs F7).
+            let sink = shared
                 .show_sink
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
-                .as_ref()
-            {
+                .clone();
+            if let Some(sink) = sink {
                 sink(cmd, src);
             }
         }
@@ -1312,10 +1332,7 @@ fn handle_show_command(msg: &OscMessage, src: std::net::SocketAddr, shared: &Sha
             if let Some(socket) = socket.as_ref() {
                 let nack = OscPacket::Message(OscMessage {
                     addr: "/stagespace/nack".to_string(),
-                    args: vec![OscType::String(format!(
-                        "unknown-command: {}",
-                        msg.addr
-                    ))],
+                    args: vec![OscType::String(format!("unknown-command: {}", msg.addr))],
                 });
                 if let Ok(bytes) = encode(&nack) {
                     let _ = socket.send_to(&bytes, src);

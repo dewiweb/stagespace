@@ -106,6 +106,13 @@ const CATCHUP_FRAME_LIMIT: u128 = 30;
 ///
 /// Une seule thread, une seule socket OSC. Lit les PositionBuffers de tous les
 /// moves actifs, merge les positions, applique les macros spatiales, envoie l'OSC.
+/// (scale, offset, yaw) — transform venue appliqué au payload OSC uniquement.
+type VenueMap = ([f64; 3], [f64; 3], f64);
+/// Frame de tape : (temps, positions canoniques par objet).
+type TapeFrame = (f64, HashMap<usize, [f64; 3]>);
+/// État du replay tape : (départ, frames, index courant).
+type TapePlayState = (Instant, Vec<TapeFrame>, usize);
+
 pub struct MergeRuntime {
     thread: Option<std::thread::JoinHandle<()>>,
     running: Arc<AtomicBool>,
@@ -184,7 +191,7 @@ pub struct MergeRuntime {
     /// Auto-venue : (scale, offset) appliqués UNIQUEMENT au payload OSC
     /// — l'espace interne reste canonique (anchors, zones, kinematics,
     /// last_out). None = passthrough.
-    venue_map: Arc<RwLock<Option<([f64; 3], [f64; 3], f64)>>>,
+    venue_map: Arc<RwLock<Option<VenueMap>>>,
     /// Vu-mètre perceptuel — calculé par frame depuis les vraies
     /// positions : vitesse angulaire perçue (legibility MAMA °/s),
     /// looming (vitesse radiale d'approche m/s), vection (cohérence
@@ -207,10 +214,10 @@ pub struct MergeRuntime {
     /// (t, {obj: pos}) pour replay vers un renderer externe (bounce
     /// binaural côté renderer — STAGESPACE ne rend pas l'audio).
     tape_recording: Arc<std::sync::atomic::AtomicBool>,
-    pos_tape: Arc<RwLock<Vec<(f64, HashMap<usize, [f64; 3]>)>>>,
+    pos_tape: Arc<RwLock<Vec<TapeFrame>>>,
     /// Replay : (start, entries, curseur) — injecté en positions
     /// manuelles par le frame loop au rythme réel.
-    tape_play: Arc<RwLock<Option<(Instant, Vec<(f64, HashMap<usize, [f64; 3]>)>, usize)>>>,
+    tape_play: Arc<RwLock<Option<TapePlayState>>>,
 
     /// Attention orchestration — objets figés par `attention_focus`
     /// (stase pour le change blindness : un seul objet bouge). Le set
@@ -1161,7 +1168,10 @@ impl MergeRuntime {
     /// Position tape : record start/stop (start vide la bande).
     pub fn set_tape_recording(&self, on: bool) {
         if on {
-            self.pos_tape.write().unwrap_or_else(|e| e.into_inner()).clear();
+            self.pos_tape
+                .write()
+                .unwrap_or_else(|e| e.into_inner())
+                .clear();
         }
         self.tape_recording
             .store(on, std::sync::atomic::Ordering::Relaxed);
@@ -1169,7 +1179,10 @@ impl MergeRuntime {
 
     /// La bande enregistrée (t, {obj: pos}) — export JSON côté IPC.
     pub fn position_tape(&self) -> Vec<(f64, HashMap<usize, [f64; 3]>)> {
-        self.pos_tape.read().unwrap_or_else(|e| e.into_inner()).clone()
+        self.pos_tape
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     /// Replay de la bande — injectée en positions manuelles au rythme
@@ -1209,10 +1222,12 @@ impl MergeRuntime {
     /// Libère la stase d'attention — retire uniquement les positions
     /// que `attention_focus` a figées (jamais les manuelles opérateur).
     pub fn attention_release(&self) {
-        let frozen = std::mem::take(&mut *self
-            .attention_frozen
-            .write()
-            .unwrap_or_else(|e| e.into_inner()));
+        let frozen = std::mem::take(
+            &mut *self
+                .attention_frozen
+                .write()
+                .unwrap_or_else(|e| e.into_inner()),
+        );
         let mut manual = self
             .manual_positions
             .write()
@@ -1325,7 +1340,9 @@ impl MergeRuntime {
     /// Validé : fini + scale > 0.
     pub fn set_venue_map(&self, map: Option<([f64; 3], [f64; 3], f64)>) {
         if let Some((scale, offset, yaw)) = map {
-            if scale.iter().all(|s| s.is_finite() && *s > 0.0 && *s <= 100.0)
+            if scale
+                .iter()
+                .all(|s| s.is_finite() && *s > 0.0 && *s <= 100.0)
                 && offset.iter().all(|o| o.is_finite() && o.abs() <= 1000.0)
                 && yaw.is_finite()
             {
@@ -1340,10 +1357,7 @@ impl MergeRuntime {
     /// Marque les objets pilotés par flux PSN (source-de-contrôle) —
     /// appelé par `set_psn_config` avec les object_index du mapping.
     pub fn set_psn_objects(&self, objs: HashSet<usize>) {
-        *self
-            .psn_objects
-            .write()
-            .unwrap_or_else(|e| e.into_inner()) = objs;
+        *self.psn_objects.write().unwrap_or_else(|e| e.into_inner()) = objs;
     }
 
     /// Source-de-contrôle par objet — *pourquoi cet objet est là*.
@@ -1351,12 +1365,21 @@ impl MergeRuntime {
     /// Utilisé par `get_object_states` — la lecture opérateur du modèle
     /// de contrôle.
     pub fn object_control_sources(&self) -> HashMap<usize, String> {
-        let parked = self.parked_objects.read().unwrap_or_else(|e| e.into_inner());
+        let parked = self
+            .parked_objects
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
         let psn = self.psn_objects.read().unwrap_or_else(|e| e.into_inner());
         let held = self.held_objects.read().unwrap_or_else(|e| e.into_inner());
-        let manual = self.manual_positions.read().unwrap_or_else(|e| e.into_inner());
+        let manual = self
+            .manual_positions
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
         let moves = self.active_moves.read().unwrap_or_else(|e| e.into_inner());
-        let tracks = self.track_positions.read().unwrap_or_else(|e| e.into_inner());
+        let tracks = self
+            .track_positions
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
         let mut objs: HashSet<usize> = HashSet::new();
         objs.extend(parked.iter().copied());
         objs.extend(psn.iter().copied());
@@ -1382,7 +1405,10 @@ impl MergeRuntime {
                 "freeze"
             } else if manual.contains_key(&obj) {
                 "manual"
-            } else if moves.values().any(|s| s.is_active && s.track_indices.contains(&obj)) {
+            } else if moves
+                .values()
+                .any(|s| s.is_active && s.track_indices.contains(&obj))
+            {
                 "move"
             } else {
                 "track"
@@ -1394,9 +1420,7 @@ impl MergeRuntime {
 
     /// Handle partagé des dernières positions émises — injecté dans le
     /// worker pour `AnchorMode::Follow` (origine suit la cible par frame).
-    pub fn last_positions_handle(
-        &self,
-    ) -> Arc<RwLock<HashMap<usize, [f64; 3]>>> {
+    pub fn last_positions_handle(&self) -> Arc<RwLock<HashMap<usize, [f64; 3]>>> {
         // Le worker (Follow) travaille en espace canonique — handle sur la
         // map pré-pp, pas sur last_out (post-macro).
         self.last_canonical_positions.clone()
@@ -1643,9 +1667,7 @@ impl MergeRuntime {
                 // les entrées échues en positions manuelles (rythme
                 // réel, timing backend).
                 {
-                    let mut play = tape_play_arc
-                        .write()
-                        .unwrap_or_else(|e| e.into_inner());
+                    let mut play = tape_play_arc.write().unwrap_or_else(|e| e.into_inner());
                     if let Some((start, entries, cursor)) = play.as_mut() {
                         let elapsed = start.elapsed().as_secs_f64();
                         let mut manual = manual_positions_arc
@@ -1666,9 +1688,7 @@ impl MergeRuntime {
                 // Grab & throw : intègre les lancés — pos += v·dt avec
                 // amortissement ; |v| < eps → position manuelle au repos.
                 {
-                    let mut thrown = thrown_arc
-                        .write()
-                        .unwrap_or_else(|e| e.into_inner());
+                    let mut thrown = thrown_arc.write().unwrap_or_else(|e| e.into_inner());
                     if !thrown.is_empty() {
                         let damp = (-2.0 * dt).exp(); // ~amortissement 2/s
                         let mut manual = manual_positions_arc
@@ -1683,8 +1703,7 @@ impl MergeRuntime {
                             vel[0] *= damp;
                             vel[1] *= damp;
                             vel[2] *= damp;
-                            let speed2 =
-                                vel[0] * vel[0] + vel[1] * vel[1] + vel[2] * vel[2];
+                            let speed2 = vel[0] * vel[0] + vel[1] * vel[1] + vel[2] * vel[2];
                             speed2 > 1e-4 // retiré quand quasi-arrêté
                         });
                     }
@@ -1909,10 +1928,25 @@ impl MergeRuntime {
                         .write()
                         .unwrap_or_else(|e| e.into_inner());
                     for id in &moves_to_remove {
-                        bufs.remove(id);
-                        // Sans ça un Hold stale survivrait : id réutilisé
-                        // en Revert + stale-kill → Hold appliqué à tort.
-                        end_modes.remove(id);
+                        // TOCTOU (revue des fixs F2) : le move_id a pu être
+                        // réenregistré entre la suppression de active_moves
+                        // et ici — ne supprimer buffer/end_mode que si c'est
+                        // ENCORE le buffer observé stale, sinon on tue le
+                        // nouveau move (buffers.get → None → jamais mergé,
+                        // jamais stale-killé = blackout silencieux).
+                        let same_buffer = match (bufs.get(id), buffers.get(id)) {
+                            (Some(cur), Some(observed)) => Arc::ptr_eq(cur, observed),
+                            (None, _) => true, // rien à protéger
+                            (Some(_), None) => false,
+                        };
+                        if same_buffer {
+                            bufs.remove(id);
+                            // Sans ça un Hold stale survivrait : id réutilisé
+                            // en Revert + stale-kill → Hold appliqué à tort.
+                            // Couplée à same_buffer : le end_mode d'un move
+                            // réenregistré appartient au nouveau, pas au stale.
+                            end_modes.remove(id);
+                        }
                     }
                 }
 
@@ -1960,7 +1994,11 @@ impl MergeRuntime {
                     merge_strategy_arc.read().unwrap_or_else(|e| e.into_inner())
                 );
                 // merge_positions trie ses candidats par move_id → déterministe.
+                // full_merged = le merge complet, avant MoveRef — last_canonical
+                // (anchors/attention/throw/tape) doit couvrir TOUS les objets,
+                // pas seulement celui du move référencé.
                 let merged = merge_positions(&move_positions, strategy);
+                let full_merged = merged.clone();
 
                 // MoveRef (audit T2) : un node MoveRef avec `move_id`
                 // déclaré dans le graph global remplace la source — la
@@ -2025,11 +2063,25 @@ impl MergeRuntime {
                 )
                 .clone();
 
-                // Positions canoniques pré-post-process — merged ∪ manual
+                // Objets en manual_positions hors merge (aucun move ne les
+                // couvre) : reprise opérateur / PSN / tape / throw doivent
+                // émettre même sans move live. Injecté DANS merged avant le
+                // post-process → mêmes macros + sanitize que les objets
+                // couverts (injecter en sortie post-sanitize laissait passer
+                // du NaN et sautait l'espace macro — revue des fixs F1).
+                for (obj_idx, pos) in manual_positions.iter() {
+                    if !merged.iter().any(|(i, _)| i == obj_idx) {
+                        merged.push((*obj_idx, nalgebra::Vector3::new(pos[0], pos[1], pos[2])));
+                    }
+                }
+
+                // Positions canoniques pré-post-process — full_merged ∪ manual
                 // (manual gagne, comme le pp). Graine des anchors/freeze/
                 // throw : seed depuis last_out (post-macro) double-transforme.
+                // full_merged (pas merged filtré par MoveRef) — sinon les
+                // seeds perdent tous les objets hors move référencé.
                 {
-                    let mut canonical: HashMap<usize, [f64; 3]> = merged
+                    let mut canonical: HashMap<usize, [f64; 3]> = full_merged
                         .iter()
                         .map(|(i, p)| (*i, [p.x, p.y, p.z]))
                         .collect();
@@ -2243,7 +2295,7 @@ impl MergeRuntime {
                 // Sanitize : une position NaN/inf ne doit jamais partir en OSC
                 // (f64::clamp ne panique pas ici — on droppe l'objet). Le
                 // compteur dropped_positions rend la perte observable.
-                let mut transformed: Vec<(usize, nalgebra::Vector3<f64>)> = transformed_raw
+                let transformed: Vec<(usize, nalgebra::Vector3<f64>)> = transformed_raw
                     .into_iter()
                     .filter(|(_, pos)| {
                         if pos.iter().all(|v| v.is_finite()) {
@@ -2254,24 +2306,6 @@ impl MergeRuntime {
                         }
                     })
                     .collect();
-
-                // Objets en manual_positions hors merge (aucun move ne les
-                // couvre) : la reprise opérateur / PSN / tape / throw doivent
-                // émettre même sans move live. World-space brut — même espace
-                // que l'override manuel du post-process.
-                {
-                    let manual = manual_positions_arc
-                        .read()
-                        .unwrap_or_else(|e| e.into_inner());
-                    for (obj_idx, pos) in manual.iter() {
-                        if !transformed.iter().any(|(i, _)| i == obj_idx) {
-                            transformed.push((
-                                *obj_idx,
-                                nalgebra::Vector3::new(pos[0], pos[1], pos[2]),
-                            ));
-                        }
-                    }
-                }
 
                 // (last_out est écrit dans le gate osc_armed — il doit
                 // refléter les envois réellement tentés, pas le computed.)
@@ -2348,10 +2382,9 @@ impl MergeRuntime {
                             }
                             let radial = v.dot(pos) / r;
                             let tangential = (v - pos * (radial / r)).norm();
-                            metrics.legibility_deg_s.insert(
-                                *obj_idx,
-                                (tangential / r).to_degrees(),
-                            );
+                            metrics
+                                .legibility_deg_s
+                                .insert(*obj_idx, (tangential / r).to_degrees());
                             if -radial > metrics.looming_ms {
                                 metrics.looming_ms = -radial;
                             }
@@ -2374,17 +2407,14 @@ impl MergeRuntime {
                         };
                         *perceptual_arc.write().unwrap_or_else(|e| e.into_inner()) = metrics;
                     }
-                    prev_transformed = transformed
-                        .iter()
-                        .map(|(i, p)| (*i, *p))
-                        .collect();
+                    prev_transformed = transformed.iter().map(|(i, p)| (*i, *p)).collect();
                     prev_perceptual_instant = Some(now);
                 }
                 // Position tape record — snapshot décimé (~30Hz) des
                 // positions émises (t depuis le début de la bande).
                 if tape_rec_arc.load(std::sync::atomic::Ordering::Relaxed) {
                     tape_frame_ctr = tape_frame_ctr.wrapping_add(1);
-                    if tape_frame_ctr % 2 == 0 {
+                    if tape_frame_ctr.is_multiple_of(2) {
                         let t = tape_t0
                             .map(|t0| t0.elapsed().as_secs_f64())
                             .unwrap_or_else(|| {
@@ -2493,17 +2523,6 @@ impl MergeRuntime {
                 // (preview alive) mais aucun paquet ne part — ni les sends
                 // normaux ni la sonde du circuit-breaker.
                 if osc_armed_arc.load(Ordering::SeqCst) {
-                    // Positions réellement tentées — la confidence view ne
-                    // doit montrer que ce qui part au renderer (dry-run =
-                    // rien n'est émis, last_out se fige honnêtement).
-                    {
-                        let mut last_out = last_out_positions_arc
-                            .write()
-                            .unwrap_or_else(|e| e.into_inner());
-                        for (obj, pos) in &transformed {
-                            last_out.insert(*obj, [pos.x, pos.y, pos.z]);
-                        }
-                    }
                     let mut sink_guard = timed_lock!(
                         lock_wait_ns,
                         lock_sites,
@@ -2520,6 +2539,13 @@ impl MergeRuntime {
                             if let Some(&(obj_idx, pos)) =
                                 transformed.iter().find(|(i, _)| osc_ids.get(*i).is_some())
                             {
+                                // En circuit ouvert, seule la sonde part —
+                                // last_out ne doit pas prétendre que tout
+                                // `transformed` a été tenté (revue F3).
+                                last_out_positions_arc
+                                    .write()
+                                    .unwrap_or_else(|e| e.into_inner())
+                                    .insert(obj_idx, [pos.x, pos.y, pos.z]);
                                 let report = sink_guard.send_state(
                                     osc_ids[obj_idx],
                                     venue_map_arc
@@ -2527,15 +2553,9 @@ impl MergeRuntime {
                                         .unwrap_or_else(|e| e.into_inner())
                                         .map(|(s, o, yaw)| {
                                             let (c, sn) = (yaw.cos(), yaw.sin());
-                                            let (x, y) = (
-                                                pos.x * c - pos.y * sn,
-                                                pos.x * sn + pos.y * c,
-                                            );
-                                            [
-                                                x * s[0] + o[0],
-                                                y * s[1] + o[1],
-                                                pos.z * s[2] + o[2],
-                                            ]
+                                            let (x, y) =
+                                                (pos.x * c - pos.y * sn, pos.x * sn + pos.y * c);
+                                            [x * s[0] + o[0], y * s[1] + o[1], pos.z * s[2] + o[2]]
                                         })
                                         .unwrap_or([pos.x, pos.y, pos.z])
                                         .into(),
@@ -2551,6 +2571,17 @@ impl MergeRuntime {
                             }
                         }
                     } else {
+                        // Positions réellement tentées — la confidence view
+                        // ne montre que ce qui part au renderer (dry-run et
+                        // circuit ouvert = rien n'est émis, last_out se fige).
+                        {
+                            let mut last_out = last_out_positions_arc
+                                .write()
+                                .unwrap_or_else(|e| e.into_inner());
+                            for (obj, pos) in &transformed {
+                                last_out.insert(*obj, [pos.x, pos.y, pos.z]);
+                            }
+                        }
                         for (obj_idx, pos) in &transformed {
                             if let Some(&osc_id) = osc_ids.get(*obj_idx) {
                                 // Canaux effectifs = statiques + modulés (modulation
@@ -2594,10 +2625,8 @@ impl MergeRuntime {
                                         .unwrap_or_else(|e| e.into_inner())
                                         .map(|(s, o, yaw)| {
                                             let (c, sn) = (yaw.cos(), yaw.sin());
-                                            let (x, y) = (
-                                                pos.x * c - pos.y * sn,
-                                                pos.x * sn + pos.y * c,
-                                            );
+                                            let (x, y) =
+                                                (pos.x * c - pos.y * sn, pos.x * sn + pos.y * c);
                                             nalgebra::Vector3::new(
                                                 x * s[0] + o[0],
                                                 y * s[1] + o[1],
@@ -2612,13 +2641,11 @@ impl MergeRuntime {
                                         // pousser les objets lointains pour
                                         // retrouver l'échelle perçue.
                                         send_pos *= r.max(1.0).powf(ex);
-                                        let eff = eff_out
-                                            .get_or_insert_with(Default::default);
+                                        let eff = eff_out.get_or_insert_with(Default::default);
                                         // distance → DRR renderer (reverb)
                                         eff.distance = Some(r);
                                         // gain 1/(1+a·r) — atténuation
-                                        eff.gain =
-                                            Some(eff.gain.unwrap_or(1.0) / (1.0 + ga * r));
+                                        eff.gain = Some(eff.gain.unwrap_or(1.0) / (1.0 + ga * r));
                                         // presence e^(-air·r) — air-EQ
                                         if let Some(p) = eff.presence {
                                             eff.presence = Some(p * (-al * r).exp());
@@ -2626,17 +2653,12 @@ impl MergeRuntime {
                                     }
                                     // Dynamique spatiale — le compresseur
                                     // spatial global (k<1 resserre le champ).
-                                    let k = *spatial_comp_arc
-                                        .read()
-                                        .unwrap_or_else(|e| e.into_inner());
+                                    let k =
+                                        *spatial_comp_arc.read().unwrap_or_else(|e| e.into_inner());
                                     if (k - 1.0).abs() > 1e-6 {
                                         send_pos *= k;
                                     }
-                                    sink_guard.send_state(
-                                        osc_id,
-                                        send_pos,
-                                        eff_out.as_ref(),
-                                    )
+                                    sink_guard.send_state(osc_id, send_pos, eff_out.as_ref())
                                 };
                                 osc_since_perf += report.sent as u64;
                                 osc_errors_perf += report.errors as u64;

@@ -249,7 +249,14 @@ fn test_register_unregister_move() {
     let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
     let rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
     let buffer = Arc::new(PositionBuffer::new());
-    rt.register_move("move1".to_string(), buffer, vec![1, 2], vec![0, 1], false, crate::EndMode::default());
+    rt.register_move(
+        "move1".to_string(),
+        buffer,
+        vec![1, 2],
+        vec![0, 1],
+        false,
+        crate::EndMode::default(),
+    );
     assert_eq!(rt.active_moves.read().unwrap().len(), 1);
     rt.unregister_move("move1");
     assert_eq!(rt.active_moves.read().unwrap().len(), 0);
@@ -379,7 +386,14 @@ fn test_failing_sink_surfaces_osc_error_rate() {
             }
         })
     };
-    rt.register_move("m1".to_string(), buffer, vec![1], vec![0], false, crate::EndMode::default());
+    rt.register_move(
+        "m1".to_string(),
+        buffer,
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::default(),
+    );
     rt.start().unwrap();
     // Perf stats ne se rafraîchissent que toutes les ~500 ms.
     std::thread::sleep(std::time::Duration::from_millis(900));
@@ -414,7 +428,14 @@ fn test_thread_died_marks_liveness() {
             }
         })
     };
-    rt.register_move("m1".to_string(), buffer, vec![1], vec![0], false, crate::EndMode::default());
+    rt.register_move(
+        "m1".to_string(),
+        buffer,
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::default(),
+    );
     rt.start().unwrap();
     std::thread::sleep(std::time::Duration::from_millis(300));
     writer.join().unwrap();
@@ -434,7 +455,14 @@ fn test_fresh_move_survives_stale_grace() {
     let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
     let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
     let buffer = Arc::new(PositionBuffer::new()); // jamais écrit dans le test
-    rt.register_move("fresh".to_string(), buffer, vec![1], vec![0], false, crate::EndMode::default());
+    rt.register_move(
+        "fresh".to_string(),
+        buffer,
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::default(),
+    );
     rt.start().unwrap();
     // ~70 frames à 60 FPS — dépasse largement l'ancienne limite de 30.
     std::thread::sleep(std::time::Duration::from_millis(1200));
@@ -569,7 +597,14 @@ fn test_signal_deltas_reach_sink_e2e() {
     rt.swap_signal_fn(const_signal_fn("scale", 1.0, 1.0));
 
     let b = Arc::new(PositionBuffer::new());
-    rt.register_move("m1".to_string(), b.clone(), vec![1], vec![0], false, crate::EndMode::default());
+    rt.register_move(
+        "m1".to_string(),
+        b.clone(),
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::default(),
+    );
     let w = spawn_writer(&b, 0, nalgebra::Vector3::new(2.0, 0.0, 0.0), 150);
     rt.start().unwrap();
     std::thread::sleep(std::time::Duration::from_millis(500));
@@ -601,8 +636,22 @@ fn test_moveref_selects_single_move_positions() {
 
     let b1 = Arc::new(PositionBuffer::new());
     let b2 = Arc::new(PositionBuffer::new());
-    rt.register_move("m1".to_string(), b1.clone(), vec![1], vec![0], false, crate::EndMode::default());
-    rt.register_move("m2".to_string(), b2.clone(), vec![2], vec![1], false, crate::EndMode::default());
+    rt.register_move(
+        "m1".to_string(),
+        b1.clone(),
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::default(),
+    );
+    rt.register_move(
+        "m2".to_string(),
+        b2.clone(),
+        vec![2],
+        vec![1],
+        false,
+        crate::EndMode::default(),
+    );
     let w1 = spawn_writer(&b1, 0, nalgebra::Vector3::new(1.0, 0.0, 0.0), 150);
     let w2 = spawn_writer(&b2, 0, nalgebra::Vector3::new(9.0, 9.0, 9.0), 150);
     rt.start().unwrap();
@@ -672,7 +721,14 @@ fn test_barycenter_recomputes_pivot() {
     rt.swap_post_process_fn(pp);
 
     let b = Arc::new(PositionBuffer::new());
-    rt.register_move("m1".to_string(), b.clone(), vec![1], vec![0], false, crate::EndMode::default());
+    rt.register_move(
+        "m1".to_string(),
+        b.clone(),
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::default(),
+    );
     let w = spawn_writer(&b, 0, nalgebra::Vector3::new(4.0, 0.0, 0.0), 150);
     rt.start().unwrap();
     std::thread::sleep(std::time::Duration::from_millis(500));
@@ -711,7 +767,14 @@ fn bench_merge_under_load() {
         let buf = Arc::new(PositionBuffer::new());
         let idx: Vec<usize> = (0..8).map(|i| (m * 8 + i) % 24).collect();
         let osc: Vec<u32> = idx.iter().map(|&i| (i + 1) as u32).collect();
-        rt.register_move(format!("mv{m}"), buf.clone(), osc, idx, false, crate::EndMode::default());
+        rt.register_move(
+            format!("mv{m}"),
+            buf.clone(),
+            osc,
+            idx,
+            false,
+            crate::EndMode::default(),
+        );
         buffers.push(buf);
     }
 
@@ -810,7 +873,14 @@ fn test_osc_armed_false_is_total_silence() {
     rt.set_osc_armed(false);
 
     let b = Arc::new(PositionBuffer::new());
-    rt.register_move("m1".to_string(), b.clone(), vec![1], vec![0], false, crate::EndMode::default());
+    rt.register_move(
+        "m1".to_string(),
+        b.clone(),
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::default(),
+    );
     let w = spawn_writer(&b, 0, nalgebra::Vector3::new(5.0, 5.0, 5.0), 150);
     rt.start().unwrap();
     std::thread::sleep(std::time::Duration::from_millis(400));
@@ -818,7 +888,10 @@ fn test_osc_armed_false_is_total_silence() {
     w.join().unwrap();
 
     assert!(
-        captured.lock().unwrap_or_else(|e| e.into_inner()).is_empty(),
+        captured
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_empty(),
         "désarmé = silence total, aucun paquet ne doit partir"
     );
 }
@@ -836,7 +909,14 @@ fn test_venue_map_applied_to_send_path() {
     rt.set_venue_map(Some(([2.0, 2.0, 2.0], [10.0, 0.0, 0.0], 0.0)));
 
     let b = Arc::new(PositionBuffer::new());
-    rt.register_move("m1".to_string(), b.clone(), vec![1], vec![0], false, crate::EndMode::default());
+    rt.register_move(
+        "m1".to_string(),
+        b.clone(),
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::default(),
+    );
     let w = spawn_writer(&b, 0, nalgebra::Vector3::new(1.0, 0.0, 0.0), 150);
     rt.start().unwrap();
     std::thread::sleep(std::time::Duration::from_millis(400));
@@ -860,10 +940,21 @@ fn test_venue_map_yaw_rotates() {
     let captured = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
     rt.set_sink(Box::new(CaptureSink(captured.clone())));
     rt.set_osc_ids(vec![1]);
-    rt.set_venue_map(Some(([1.0, 1.0, 1.0], [0.0, 0.0, 0.0], std::f64::consts::FRAC_PI_2)));
+    rt.set_venue_map(Some((
+        [1.0, 1.0, 1.0],
+        [0.0, 0.0, 0.0],
+        std::f64::consts::FRAC_PI_2,
+    )));
 
     let b = Arc::new(PositionBuffer::new());
-    rt.register_move("m1".to_string(), b.clone(), vec![1], vec![0], false, crate::EndMode::default());
+    rt.register_move(
+        "m1".to_string(),
+        b.clone(),
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::default(),
+    );
     let w = spawn_writer(&b, 0, nalgebra::Vector3::new(1.0, 0.0, 0.0), 150);
     rt.start().unwrap();
     std::thread::sleep(std::time::Duration::from_millis(400));
@@ -891,7 +982,14 @@ fn test_manual_position_emits_without_move() {
 
     // Un move sur l'autre objet pour faire tourner la boucle.
     let b = Arc::new(PositionBuffer::new());
-    rt.register_move("m1".to_string(), b.clone(), vec![1], vec![0], false, crate::EndMode::default());
+    rt.register_move(
+        "m1".to_string(),
+        b.clone(),
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::default(),
+    );
     let w = spawn_writer(&b, 0, nalgebra::Vector3::new(0.0, 0.0, 0.0), 150);
     rt.start().unwrap();
     std::thread::sleep(std::time::Duration::from_millis(400));
@@ -917,7 +1015,14 @@ fn test_end_mode_hold_writes_manual_position() {
     rt.set_osc_ids(vec![1]);
 
     let b = Arc::new(PositionBuffer::new());
-    rt.register_move("m1".to_string(), b.clone(), vec![1], vec![0], false, crate::EndMode::Hold);
+    rt.register_move(
+        "m1".to_string(),
+        b.clone(),
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::Hold,
+    );
     b.write(vec![(0usize, nalgebra::Vector3::new(7.0, 8.0, 9.0))]);
     // Plus d'écriture → stale-kill (30 frames) → EndMode::Hold fige la
     // dernière position en manuelle. C'est LE chemin réel (unregister_move
@@ -946,7 +1051,14 @@ fn test_non_identity_obj_index_mapping() {
     rt.set_manual_position(1, [1.0, 2.0, 3.0]);
 
     let b = Arc::new(PositionBuffer::new());
-    rt.register_move("m1".to_string(), b.clone(), vec![5], vec![0], false, crate::EndMode::default());
+    rt.register_move(
+        "m1".to_string(),
+        b.clone(),
+        vec![5],
+        vec![0],
+        false,
+        crate::EndMode::default(),
+    );
     let w = spawn_writer(&b, 0, nalgebra::Vector3::new(0.0, 0.0, 0.0), 150);
     rt.start().unwrap();
     std::thread::sleep(std::time::Duration::from_millis(400));

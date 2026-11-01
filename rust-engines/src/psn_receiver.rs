@@ -54,8 +54,7 @@ pub fn parse_psn_packet(data: &[u8]) -> Vec<(u32, [f64; 3])> {
         let mut sub = 0usize;
         while sub + 4 <= chunk_data.len() {
             let sub_id = u16::from_le_bytes([chunk_data[sub], chunk_data[sub + 1]]);
-            let sub_size =
-                u16::from_le_bytes([chunk_data[sub + 2], chunk_data[sub + 3]]) as usize;
+            let sub_size = u16::from_le_bytes([chunk_data[sub + 2], chunk_data[sub + 3]]) as usize;
             sub += 4;
             if sub + sub_size > chunk_data.len() {
                 break;
@@ -64,8 +63,7 @@ pub fn parse_psn_packet(data: &[u8]) -> Vec<(u32, [f64; 3])> {
             if sub_id == CHUNK_POS && payload.len() >= 12 {
                 let x = f32::from_le_bytes([payload[0], payload[1], payload[2], payload[3]]);
                 let y = f32::from_le_bytes([payload[4], payload[5], payload[6], payload[7]]);
-                let z =
-                    f32::from_le_bytes([payload[8], payload[9], payload[10], payload[11]]);
+                let z = f32::from_le_bytes([payload[8], payload[9], payload[10], payload[11]]);
                 if x.is_finite() && y.is_finite() && z.is_finite() {
                     out.push((chunk_id as u32, [x as f64, y as f64, z as f64]));
                 }
@@ -94,6 +92,12 @@ pub struct PsnReceiver {
     axis_map: Arc<RwLock<([usize; 3], [f64; 3])>>,
 }
 
+impl Default for PsnReceiver {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PsnReceiver {
     pub fn new() -> Self {
         Self {
@@ -114,8 +118,7 @@ impl PsnReceiver {
     /// `set_axes([0, 2, 1], [1.0, 1.0, 1.0])`.
     pub fn set_axes(&self, order: [usize; 3], signs: [f64; 3]) {
         if order.iter().all(|&i| i < 3) {
-            *self.axis_map.write().unwrap_or_else(|e| e.into_inner()) =
-                (order, signs);
+            *self.axis_map.write().unwrap_or_else(|e| e.into_inner()) = (order, signs);
         }
     }
 
@@ -156,17 +159,12 @@ impl PsnReceiver {
             while running.load(Ordering::SeqCst) {
                 match socket.recv_from(&mut buf) {
                     Ok((n, _src)) => {
-                        last_packet_ms.store(
-                            epoch.elapsed().as_millis() as u64,
-                            Ordering::SeqCst,
-                        );
+                        last_packet_ms.store(epoch.elapsed().as_millis() as u64, Ordering::SeqCst);
                         let map = tracker_map
                             .read()
                             .unwrap_or_else(|e| e.into_inner())
                             .clone();
-                        let (order, signs) = *axis_map
-                            .read()
-                            .unwrap_or_else(|e| e.into_inner());
+                        let (order, signs) = *axis_map.read().unwrap_or_else(|e| e.into_inner());
                         for (tracker_id, pos) in parse_psn_packet(&buf[..n]) {
                             if let Some(&obj) = map.get(&tracker_id) {
                                 on_position(
@@ -196,22 +194,14 @@ impl PsnReceiver {
 
     pub fn stop(&self) {
         self.running.store(false, Ordering::SeqCst);
-        if let Some(h) = self
-            .thread
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .take()
-        {
+        if let Some(h) = self.thread.lock().unwrap_or_else(|e| e.into_inner()).take() {
             let _ = h.join();
         }
     }
 
     /// Configure le mapping tracker_id → object_index.
     pub fn set_tracker_map(&self, map: HashMap<u32, usize>) {
-        *self
-            .tracker_map
-            .write()
-            .unwrap_or_else(|e| e.into_inner()) = map;
+        *self.tracker_map.write().unwrap_or_else(|e| e.into_inner()) = map;
     }
 
     /// Âge en ms du dernier paquet reçu (None = jamais reçu).
@@ -236,6 +226,7 @@ impl Drop for PsnReceiver {
 
 #[cfg(test)]
 mod tests {
+    type Captured = Arc<Mutex<Vec<(usize, [f64; 3])>>>;
     use super::*;
 
     /// Construit un paquet RTTrPL synthétique : header + un tracker
@@ -249,7 +240,7 @@ mod tests {
         pkt.push(0x02); // format
         pkt.extend_from_slice(&0u16.to_le_bytes()); // size (placeholder)
         pkt.extend_from_slice(&0u32.to_le_bytes()); // context
-        // Tracker chunk : id + size + sous-chunk pos
+                                                    // Tracker chunk : id + size + sous-chunk pos
         let sub_size: u16 = 4 + 12; // sub-header + 3×f32
         pkt.extend_from_slice(&tracker_id.to_le_bytes());
         pkt.extend_from_slice(&sub_size.to_le_bytes());
@@ -296,11 +287,14 @@ mod tests {
     fn e2e_udp_to_position() {
         let receiver = PsnReceiver::new();
         receiver.set_tracker_map(std::iter::once((7u32, 42usize)).collect());
-        let got: Arc<Mutex<Vec<(usize, [f64; 3])>>> = Arc::new(Mutex::new(Vec::new()));
+        let got: Captured = Arc::new(Mutex::new(Vec::new()));
         let got_c = got.clone();
         receiver
             .start("127.0.0.1", 56577, move |obj, pos| {
-                got_c.lock().unwrap_or_else(|e| e.into_inner()).push((obj, pos));
+                got_c
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .push((obj, pos));
             })
             .expect("start unicast");
         let sender = UdpSocket::bind("127.0.0.1:0").unwrap();
@@ -335,11 +329,14 @@ mod tests {
         let receiver = PsnReceiver::new();
         receiver.set_tracker_map(std::iter::once((1u32, 5usize)).collect());
         receiver.set_axes([0, 2, 1], [1.0, -1.0, 1.0]); // y↔z, z négatif
-        let got: Arc<Mutex<Vec<(usize, [f64; 3])>>> = Arc::new(Mutex::new(Vec::new()));
+        let got: Captured = Arc::new(Mutex::new(Vec::new()));
         let got_c = got.clone();
         receiver
             .start("127.0.0.1", 56578, move |obj, pos| {
-                got_c.lock().unwrap_or_else(|e| e.into_inner()).push((obj, pos));
+                got_c
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .push((obj, pos));
             })
             .expect("start");
         let sender = UdpSocket::bind("127.0.0.1:0").unwrap();
