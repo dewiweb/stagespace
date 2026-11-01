@@ -218,6 +218,26 @@ export const CuelistPanel: React.FC = () => {
                 <div className="flex-1 min-w-0">
                   <div className="text-white text-xs font-medium truncate flex items-center gap-1">
                     {cue.name}
+                    {cue.id === armedCueId && (() => {
+                      // Même contrat que le backend : scope gate chaque
+                      // catégorie + matching par movement.id (le backend
+                      // compare active_ids à cue.moves[].id — pas de name).
+                      const scope = cue.scope ?? {};
+                      const movesOn = scope.moves !== false;
+                      const posOn = scope.positions !== false;
+                      const activeIds = new Set(movements.map((m) => m.id));
+                      const start = movesOn ? (cue.moves ?? []).filter((m) => !activeIds.has(m.id)).length : 0;
+                      const stop = movesOn && cue.mode !== 'Tracking'
+                        ? movements.filter((m) => !(cue.moves ?? []).some((cm) => cm.id === m.id)).length
+                        : 0;
+                      const pos = posOn ? Object.keys(cue.manual_positions ?? {}).length : 0;
+                      const parts = [
+                        start > 0 && `+${start}m`,
+                        stop > 0 && `−${stop}m`,
+                        pos > 0 && `${pos}pos`,
+                      ].filter(Boolean).join(' ');
+                      return parts ? <span className="text-[9px] text-amber-400 font-mono" title="audition : ce que la cue va toucher (scope-respecté)">{parts}</span> : null;
+                    })()}
                     {cue.mode === 'Tracking' && (
                       <Badge className="bg-cyan-900/60 text-cyan-300">TRK</Badge>
                     )}
