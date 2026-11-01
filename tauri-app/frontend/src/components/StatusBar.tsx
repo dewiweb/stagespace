@@ -4,6 +4,7 @@ import { useGraphStore } from '../store/useGraphStore';
 import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { useOscArmed } from '../hooks/useOscArmed';
 import { useShowStatusStore } from '../store/useShowStatusStore';
+import { useCuelistStore } from '../store/useCuelistStore';
 import { doPanic } from '../utils/liveActions';
 
 /// StatusBar — bandeau persistant en bas de fenêtre, monté dans App pour
@@ -29,6 +30,7 @@ export const StatusBar: React.FC = () => {
   const perceptual = useGraphStore((s) => s.perceptual);
   const debugPerfVisible = useMoveEditorStore((s) => s.debugPerfVisible);
   const backendDown = useShowStatusStore((s) => s.backendDown);
+  const isRecalling = useCuelistStore((s) => s.isRecalling);
 
   const activeCount = movements.length;
   const hasError = !!(compileError || playError);
@@ -79,6 +81,18 @@ export const StatusBar: React.FC = () => {
       >
         {armed ? 'LIVE' : 'DRY-RUN'}
       </span>
+
+      {/* Recall en cours — le backend supprime les /stagespace/* entrants
+          (hors panic) : sans cet indicateur, un desk dont les commandes
+          sont avalées jusqu'à 120s ressemble à un bug. */}
+      {isRecalling && (
+        <span
+          className="px-1.5 py-0.5 rounded font-bold flex-shrink-0 text-purple-300 bg-purple-900/40 border border-purple-700/40 animate-pulse"
+          title="Cue recall in progress — incoming show-control commands are suppressed (except panic)"
+        >
+          RECALL
+        </span>
+      )}
 
       {/* Santé des flux — PSN tracking + last show-cmd (inclut TC). Un flux
           mort en silence = un follow-me gelé sans alerte : visible en
