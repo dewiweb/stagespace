@@ -30,7 +30,7 @@ import { createPluginSlice, type PluginSlice } from './slices/pluginSlice';
 import { SHAPE_PRESETS } from '../utils/shapePresets';
 import { clearTargetsForRemovedNodes } from '../utils/signalTargets';
 import { toast } from '../utils/toast-helpers';
-import { safeSetItem } from '../utils/safeStorage';
+import { safeSetItem, isDetachedWindow } from '../utils/safeStorage';
 import type {
   NodeType,
   AppStatus,
@@ -653,6 +653,9 @@ export const useMovementPositionsListener = () => {
   const oscPort = useGraphStore((s) => s.oscPort);
   const oscProfile = useGraphStore((s) => s.oscProfile);
   React.useEffect(() => {
+    // Fenêtre détachée : jamais de push config — sa config locale est
+    // stale (pas de .hol) et écraserait celle de la fenêtre principale.
+    if (isDetachedWindow()) return;
     // Pendant le playback la config OSC est lockée backend-side — ne pas
     // invoquer (évite un faux toast d'erreur à chaque transition).
     if (movementsCountRef.current > 0) return;
@@ -675,6 +678,9 @@ export const useMovementPositionsListener = () => {
   const manualOscIds = useGraphStore((s) => s.manualOscIds);
   const holProject = useGraphStore((s) => s.holProject);
   React.useEffect(() => {
+    // Fenêtre détachée : manualOscIds=[1..64] par défaut + holProject=null
+    // — pousser écraserait le mapping .hol de la fenêtre principale.
+    if (isDetachedWindow()) return;
     // Pendant le playback le backend rejette set_global_osc_ids — ne pas
     // invoquer (évitait le toast "OSC track mapping failed" à chaque play).
     // movementsCount dans les deps : quand le dernier move s'arrête, l'effect
