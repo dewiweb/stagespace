@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { useCuelistStore, type CueData } from '../store/useCuelistStore';
 import { useGraphStore } from '../store/useGraphStore';
+import { doRehearsal, scoreExport, scoreImport } from '../utils/liveActions';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import { useSignalGraphStore } from '../store/useSignalGraphStore';
 import { ConfirmModal } from './ui/ConfirmModal';
@@ -173,7 +174,19 @@ export const CuelistPanel: React.FC = () => {
         </button>
       </div>
 
-      {/* Cue list */}
+      {/* Diffusion score — la partition acousmatique : capture du busking,
+          export/import JSON, rejouée comme un cue. */}
+      <div className="border-t border-stagespace-border px-3 py-1.5 flex items-center gap-1.5 flex-shrink-0">
+        <span className="text-[9px] text-gray-500 uppercase tracking-widest">score</span>
+        <button onClick={() => doRehearsal('record')} title="Record — capture le busking" className="px-1.5 py-0.5 text-[9px] rounded bg-red-900/50 hover:bg-red-800/70 text-red-300">⏺</button>
+        <button onClick={() => doRehearsal('stop')} title="Stop — fin de capture" className="px-1.5 py-0.5 text-[9px] rounded bg-gray-800 hover:bg-gray-700 text-gray-400">⏹</button>
+        <button onClick={() => doRehearsal('play')} title="Play — rejoue la partition" className="px-1.5 py-0.5 text-[9px] rounded bg-green-900/50 hover:bg-green-800/70 text-green-300">▶</button>
+        <button onClick={scoreExport} title="Export — télécharge le score JSON" className="px-1.5 py-0.5 text-[9px] rounded bg-gray-800 hover:bg-gray-700 text-gray-400">↓</button>
+        <label title="Import — charge un score JSON" className="px-1.5 py-0.5 text-[9px] rounded bg-gray-800 hover:bg-gray-700 text-gray-400 cursor-pointer">
+          ↑
+          <input type="file" accept=".json" className="hidden" onChange={(e) => e.target.files?.[0] && scoreImport(e.target.files[0])} />
+        </label>
+      </div>
       {/* Log opérationnel — P2.4 : qui a GO quand, quel NACK. */}
       {showLog.length > 0 && (
         <div className="border-t border-stagespace-border px-3 py-1.5 max-h-24 overflow-y-auto flex-shrink-0">

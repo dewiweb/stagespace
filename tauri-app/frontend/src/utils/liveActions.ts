@@ -342,6 +342,10 @@ export function doRehearsal(action: string, from?: string) {
       break;
     case 'stop':
       s.recording = false;
+      // Persiste la dernière prise — la partition survit au reload.
+      try {
+        localStorage.setItem('stagespace:diffusion-score', JSON.stringify(s.entries));
+      } catch { /* storage full — non critique */ }
       toast.info(`Rehearsal STOP — ${s.entries.length} commandes capturées`);
       break;
     case 'play': {
@@ -365,7 +369,49 @@ export function doRehearsal(action: string, from?: string) {
       s.entries = [];
       if (s.playTimer) { clearTimeout(s.playTimer); s.playTimer = null; }
       break;
+    case 'load':
+      // Charge la partition persistée (dernier record ou score importé).
+      try {
+        const raw = localStorage.getItem('stagespace:diffusion-score');
+        if (raw) {
+          s.entries = JSON.parse(raw);
+          toast.info(`Score chargé — ${s.entries.length} commandes`);
+        } else {
+          toast.warning('Aucun score sauvegardé');
+        }
+      } catch { toast.error('Score invalide'); }
+      break;
   }
+}
+
+/** Diffusion score — export/import de la partition (JSON). Le score =
+ *  la bande rehearsal sérialisée : capturé OU autorisé, sauvegardé,
+ *  joué — la partition acousmatique de la conduite A. */
+export function scoreExport() {
+  const raw = localStorage.getItem('stagespace:diffusion-score');
+  if (!raw) { toast.warning('Aucun score à exporter'); return; }
+  const blob = new Blob([raw], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'diffusion-score.sscore.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+export function scoreImport(file: File) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const entries = JSON.parse(reader.result as string);
+      if (!Array.isArray(entries)) throw new Error('not a tape');
+      localStorage.setItem('stagespace:diffusion-score', JSON.stringify(entries));
+      rehearsalState.entries = entries;
+      toast.info(`Score importé — ${entries.length} commandes`);
+    } catch {
+      toast.error('Score invalide');
+    }
+  };
+  reader.readAsText(file);
 }
 
 /** /stagespace/trackpos <track> <x> <y> <z> — position d'origine d'une
