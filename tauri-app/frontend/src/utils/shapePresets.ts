@@ -6,7 +6,7 @@ export interface ShapePreset {
   name: string;
   icon: string;
   description: string;
-  category: 'orbits' | 'gestures' | 'shaped' | 'transitions' | 'physics' | 'layers' | 'spline' | 'reactive';
+  category: 'orbits' | 'gestures' | 'shaped' | 'transitions' | 'physics' | 'layers' | 'spline' | 'reactive' | 'smalley';
   build: (nObjects: number) => { nodes: Node[]; edges: Edge[] };
 }
 
