@@ -733,6 +733,12 @@ pub async fn deactivate_all_moves(
 ) -> Result<String, IpcError> {
     let fade = fade_duration.unwrap_or(0.5);
 
+    // Panic beat — un recall en cours doit détecter ça et s'avorter
+    // avant de respawner (le panic gagne toujours).
+    state
+        .deactivate_gen
+        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
     // Snapshot (id, génération) — le sleeper ne tuera que ces instances-là.
     let move_entries: Vec<(String, u64)> = {
         let movements = lock_or_recover(&state.movements);

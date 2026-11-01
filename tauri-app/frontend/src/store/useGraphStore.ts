@@ -455,6 +455,12 @@ export const useGraphStore = create<GraphState>()((...a) => {
 
   // ─── Panic ───
   panic: async () => {
+    // Le panic annule aussi les timers de cue pendus (pre_wait/follow) —
+    // sinon une cue armée pouvait refaire vivre des moves N secondes
+    // après l'arrêt d'urgence.
+    void import('./useCuelistStore').then((m) =>
+      m.useCuelistStore.getState().cancelPendingTimers(),
+    );
     const { holProject, manualOscIds } = get();
     let failedStops = 0;
     // Stop immédiat — inconditionnel. `deactivate_all_moves` est idempotent et

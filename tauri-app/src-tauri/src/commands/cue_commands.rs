@@ -356,6 +356,11 @@ pub(crate) fn recall_cue_inner(
     // Garantir que le flag est remis à false quoi qu'il arrive
     let _guard = RecallGuard(&sh.recall_in_progress);
 
+    // Panic beat : un deactivate pendant le recall doit l'avorter —
+    // respawner des moves après un panic renverrait des sources vivantes
+    // alors que l'opérateur vient d'arrêter d'urgence.
+    let panic_gen_at_start = sh.deactivate_gen.load(std::sync::atomic::Ordering::SeqCst);
+
     // Anti-loop OSC IN : ignorer les messages entrants pendant le recall —
     // le renderer renvoie souvent un echo des valeurs qu'on vient d'envoyer.
     // La fenêtre couvre le recall entier : fade_in des moves respawnés +
@@ -643,6 +648,14 @@ pub(crate) fn recall_cue_inner(
                 eprintln!("[WARN] Skipping invalid OSC mapping '{}': {e}", m.address);
             }
         }
+    }
+
+    // Veto panic — un deactivate a eu lieu pendant le recall : le panic
+    // gagne, on ne respawn rien. Le guard libère recall_in_progress.
+    if sh.deactivate_gen.load(std::sync::atomic::Ordering::SeqCst) != panic_gen_at_start {
+        return Err(IpcError::conflict(
+            "Recall aborted — panic/deactivate during recall".to_string(),
+        ));
     }
 
     // 7. Restaurer les moves snapshotés au store (Phase 5). Le backend

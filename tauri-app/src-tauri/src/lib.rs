@@ -75,6 +75,8 @@ pub struct AppState {
     pub psn_receiver: Arc<stagespace_engines::psn_receiver::PsnReceiver>,
     /// Flag anti-recall concurrent — empêche deux cue recalls simultanés
     pub recall_in_progress: Arc<std::sync::atomic::AtomicBool>,
+    /// Compteur panic/deactivate — un recall qui le voit bouger s'avorte.
+    pub deactivate_gen: Arc<std::sync::atomic::AtomicU64>,
     /// Capture audio via cpal (remplace getUserMedia de la WebView)
     pub audio_capture: Arc<Mutex<AudioCaptureManager>>,
     /// Flag pour arrêter le poller audio proprement à la fermeture
@@ -207,6 +209,7 @@ pub fn run() {
                     stagespace_engines::psn_receiver::PsnReceiver::new(),
                 ),
                 recall_in_progress: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                deactivate_gen: Arc::new(std::sync::atomic::AtomicU64::new(0)),
                 audio_capture: Arc::new(Mutex::new(AudioCaptureManager::new())),
                 audio_poller_shutdown: Arc::new(AtomicBool::new(false)),
                 supervisor_shutdown: Arc::new(AtomicBool::new(false)),

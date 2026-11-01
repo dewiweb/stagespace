@@ -31,6 +31,10 @@ pub struct Shared {
     pub move_generation: Arc<AtomicU64>,
     pub merge_runtime: Arc<Mutex<MergeRuntime>>,
     pub recall_in_progress: Arc<AtomicBool>,
+    /// Compteur de panic/deactivate — incrémenté par `deactivate_all_moves`.
+    /// Un recall qui détecte un panic mid-flight doit s'avorter : le panic
+    /// gagne toujours, jamais de respawn après un arrêt d'urgence.
+    pub deactivate_gen: Arc<AtomicU64>,
     pub osc_receiver: Arc<Mutex<OscReceiver>>,
     /// Registry des plugins WASM — None si wasmtime n'a pas pu s'initialiser.
     pub plugin_registry: Option<Arc<Mutex<stagespace_engines::PluginRegistry>>>,
@@ -48,6 +52,7 @@ impl Shared {
             move_generation: state.move_generation.clone(),
             merge_runtime: state.merge_runtime.clone(),
             recall_in_progress: state.recall_in_progress.clone(),
+            deactivate_gen: state.deactivate_gen.clone(),
             osc_receiver: state.osc_receiver.clone(),
             plugin_registry: state.plugin_registry.clone(),
             plugins_dir: state.plugins_dir.clone(),

@@ -93,6 +93,7 @@ impl CliState {
             move_generation: Arc::new(AtomicU64::new(0)),
             merge_runtime,
             recall_in_progress: Arc::new(AtomicBool::new(false)),
+            deactivate_gen: Arc::new(AtomicU64::new(0)),
             osc_receiver: Arc::new(Mutex::new(osc_receiver)),
             plugin_registry,
             plugins_dir,
