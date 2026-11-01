@@ -335,10 +335,13 @@ pub async fn set_psn_config(
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
     let psn = state.psn_receiver.clone();
-    // Source-de-contrôle : informe le merge des objets pilotés par PSN
-    // (le getter object_control_sources lit ce set pour afficher "psn").
-    let tracked: std::collections::HashSet<usize> =
-        tracker_map.values().copied().collect();
+    // Source-de-contrôle : informe le merge des objets pilotés par PSN —
+    // vidé à l'OFF sinon les objets gardent le label "psn" après arrêt.
+    let tracked: std::collections::HashSet<usize> = if enabled {
+        tracker_map.values().copied().collect()
+    } else {
+        std::collections::HashSet::new()
+    };
     lock_or_recover(&state.merge_runtime).set_psn_objects(tracked);
     psn.set_tracker_map(tracker_map);
     if enabled {

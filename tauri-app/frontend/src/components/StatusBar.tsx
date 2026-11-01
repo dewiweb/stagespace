@@ -85,9 +85,9 @@ export const StatusBar: React.FC = () => {
       {flowHealth.showCmdAgeS != null && flowHealth.showCmdAgeS < 10 && (
         <span
           className="px-1.5 py-0.5 rounded font-bold flex-shrink-0 text-cyan-300 bg-cyan-900/40 border border-cyan-700/40"
-          title={`Show-control/TC — dernière commande il y a ${flowHealth.showCmdAgeS.toFixed(1)}s`}
+          title={`Show-control OSC actif — dernière commande il y a ${flowHealth.showCmdAgeS.toFixed(1)}s (toute commande, pas spécifiquement le timecode)`}
         >
-          TC ●
+          OSC ●
         </span>
       )}
 
