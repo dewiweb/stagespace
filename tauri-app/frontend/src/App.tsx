@@ -13,6 +13,7 @@ import TabPanel from './components/TabPanel';
 import Toolbar from './components/Toolbar';
 import StatusBar from './components/StatusBar';
 import ToastContainer from './components/ToastContainer';
+import { ManualReleaseBar } from './components/ManualReleaseBar';
 import PerformView from './components/PerformView';
 import WelcomeModal, { shouldShowWelcome } from './components/WelcomeModal';
 const ConduiteSurface = React.lazy(() => import('./components/conduite/ConduiteSurface'));
@@ -49,6 +50,7 @@ const RunWindow: React.FC = () => {
       <PerformView />
       {/* Toasts — un GO refusé / erreur backend doit être visible dans
           la fenêtre de jeu dédiée, pas seulement dans la principale. */}
+      <ManualReleaseBar />
       <ToastContainer />
     </React.Suspense>
   );

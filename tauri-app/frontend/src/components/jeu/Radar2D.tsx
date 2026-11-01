@@ -66,6 +66,7 @@ export const Radar2D: React.FC = () => {
         const src = objectStates[t] ?? 'track';
         const cx = Math.max(-105, Math.min(105, x * k));
         const cy = Math.max(-105, Math.min(105, y * k));
+        const isManual = src === 'manual';
         return (
           <g
             key={id}
@@ -79,12 +80,35 @@ export const Radar2D: React.FC = () => {
               doClearPosition(t);
             }}
             onPointerDown={(e) => {
+              if (e.ctrlKey) {
+                // Ctrl+clic = relâcher l'objet tenu en manuel (clic-droit
+                // = menu natif webview ; Alt+clic = move-fenêtre du WM).
+                e.stopPropagation();
+                doClearPosition(t);
+                return;
+              }
               throwDrag.current = { id: t, x: e.clientX, y: e.clientY, t: Date.now() };
               e.stopPropagation();
             }}
           >
             <circle cx={cx} cy={cy} r="4" fill={sourceHex(src)}>
               <title>{id} · {SOURCE_LABEL[src] ?? src}</title>
+              {isManual && (
+                <text
+                  x={12}
+                  y={-8}
+                  fill="#f97316"
+                  fontSize="11"
+                  fontWeight="bold"
+                  style={{ cursor: 'pointer' }}
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                        doClearPosition(t);
+                  }}
+                >
+                  ×
+                </text>
+              )}
             </circle>
             <text x={cx} y={cy - 7} fill="#9ca3af" fontSize="7" textAnchor="middle">
               {/* track_id (même numérotation que les pads et la 3D) — pas obj_index */}

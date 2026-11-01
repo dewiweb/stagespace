@@ -104,6 +104,12 @@ export function useManipulateMode({
           idx = objectsRef.current.indexOf(hitObj);
         }
         if (idx >= 0) {
+          // Ctrl+clic = relâcher l'objet tenu en manuel — clic-droit =
+          // menu natif webview, Alt+clic = move-fenêtre du WM Linux.
+          if (e.ctrlKey) {
+            doClearPosition(idx);
+            return;
+          }
           setDraggingObject(idx);
           (e.target as HTMLElement).setPointerCapture(e.pointerId);
         }
