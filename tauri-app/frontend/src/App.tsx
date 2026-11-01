@@ -13,7 +13,7 @@ import StatusBar from './components/StatusBar';
 import ToastContainer from './components/ToastContainer';
 import PerformView from './components/PerformView';
 import WelcomeModal, { shouldShowWelcome } from './components/WelcomeModal';
-import ConduitePage from './pages/ConduitePage';
+const ConduiteSurface = React.lazy(() => import('./components/conduite/ConduiteSurface'));
 import ShortcutsModal from './components/ShortcutsModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Workflow, ChevronRight, ChevronDown, PanelRightClose, PanelLeftClose, PanelLeftOpen, PanelRightOpen, Maximize2, Minimize2, Activity } from 'lucide-react';
@@ -281,8 +281,9 @@ function AppMain() {
       </header>
 
       {surface === 'conduite' ? (
-        /* Surface Conduite — la page dédiée promue en navigation
-           première (la même que la fenêtre détachable ?view=conduite). */
+        /* Surface Conduite — la station opérable interne : lit les
+           stores directement (pas le broadcast réservé à la fenêtre
+           détachée ?view=conduite, qui monte ConduitePage). */
         <ErrorBoundary zone="Conduite">
           <React.Suspense
             fallback={
@@ -291,7 +292,7 @@ function AppMain() {
               </div>
             }
           >
-            <ConduitePage />
+            <ConduiteSurface />
           </React.Suspense>
         </ErrorBoundary>
       ) : surface === 'jeu' ? (

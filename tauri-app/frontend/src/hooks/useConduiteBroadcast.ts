@@ -7,7 +7,8 @@ import { emit } from '@tauri-apps/api/event';
 import { safeListen } from '../utils/tauri';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { useGraphStore } from '../store/useGraphStore';
-import { doCueNext, doCuePrev, doGo, doPanic } from '../utils/liveActions';
+import { doArm, doCueNext, doCuePrev, doCueRecallById, doGo, doPanic } from '../utils/liveActions';
+import { useShowStatusStore } from '../store/useShowStatusStore';
 import { cueLabel, tcStr } from '../utils/showFormat';
 
 
@@ -16,15 +17,15 @@ export function useConduiteBroadcast() {
     const t = setInterval(() => {
       const cs = useCuelistStore.getState();
       const gs = useGraphStore.getState();
-      const cur = cs.currentCueIndex >= 0 ? cs.cues[cs.currentCueIndex] : null;
-      const next = cs.currentCueIndex + 1 < cs.cues.length ? cs.cues[cs.currentCueIndex + 1] : null;
-      const after = cs.currentCueIndex + 2 < cs.cues.length ? cs.cues[cs.currentCueIndex + 2] : null;
       const tcActive = cs.lastTimecode != null && Date.now() - cs.lastTimecodeAt < 1000;
       const tc = tcStr(cs.lastTimecode ?? 0, gs.timecodeFps);
       void emit('conduite:state', {
-        curCue: cueLabel(cur, cs.currentCueIndex),
-        nextCue: cueLabel(next, cs.currentCueIndex + 1),
-        nextNextCue: after ? cueLabel(after, cs.currentCueIndex + 2) : '',
+        cues: cs.cues.map((c, i) => ({
+          id: c.id,
+          label: cueLabel(c, i),
+          current: i === cs.currentCueIndex,
+          next: i === cs.currentCueIndex + 1,
+        })),
         pending: cs.pending
           ? { kind: cs.pending.kind, remainingSec: Math.max(0, (cs.pending.deadline - Date.now()) / 1000) }
           : null,
@@ -40,7 +41,12 @@ export function useConduiteBroadcast() {
     // go = GO setlist (crossfade, même action que le gros GO de PerformView) ;
     // next/prev = recall cue — parité avec l'overlay conduite in-app.
     void safeListen<string>('conduite:cmd', (e) => {
-      switch (e.payload) {
+      const p = e.payload;
+      if (p.startsWith('recall:')) {
+        doCueRecallById(p.slice(7), undefined, 'conduite-window');
+        return;
+      }
+      switch (p) {
         case 'go':
           doGo();
           break;
@@ -52,6 +58,9 @@ export function useConduiteBroadcast() {
           break;
         case 'panic':
           doPanic();
+          break;
+        case 'arm':
+          doArm(!useShowStatusStore.getState().armed);
           break;
       }
     }).then((u) => (un = u));

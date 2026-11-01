@@ -89,6 +89,20 @@ export function doCueRecall(n: string, fadeOverride?: number, from?: string) {
   void s.recallCue(cue.id, fadeOverride != null ? { fadeOverride } : undefined);
 }
 
+/// Recall par id de cue — utilisé par les cue lists GUI (ConduiteView,
+/// CuelistPanel) où la cible est l'objet cue, pas son numéro.
+export function doCueRecallById(id: string, fadeOverride?: number, from?: string) {
+  logAction('doCueRecallById');
+  const s = useCuelistStore.getState();
+  s.cancelPendingTimers();
+  if (recallBusy(from)) return;
+  if (!s.cues.some((c) => c.id === id)) {
+    nack(from, `not-found: cue id '${id}'`);
+    return;
+  }
+  void s.recallCue(id, fadeOverride != null ? { fadeOverride } : undefined);
+}
+
 /** Arm/disarm OSC — dry-run pilotable depuis la console (set_osc_armed). */
 export function doArm(armed: boolean) {
   logAction('doArm');
