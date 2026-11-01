@@ -16,7 +16,6 @@ export const CuelistPanel: React.FC = () => {
   const currentCueIndex = useCuelistStore((s) => s.currentCueIndex);
   const isRecalling = useCuelistStore((s) => s.isRecalling);
   const storeCue = useCuelistStore((s) => s.storeCue);
-  const isRecalling = useCuelistStore((s) => s.isRecalling);
   const pending = useCuelistStore((s) => s.pending);
   const deleteCue = useCuelistStore((s) => s.deleteCue);
   const updateCue = useCuelistStore((s) => s.updateCue);
