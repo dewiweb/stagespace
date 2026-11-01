@@ -34,6 +34,9 @@ export interface HolProjectSlice {
   manualPositions: Record<number, [number, number, number]>;
   setManualPosition: (index: number, pos: [number, number, number]) => void;
   setManualPositions: (positions: Record<number, [number, number, number]>) => void;
+  /// Objet sélectionné dans les vues (obj_index) — radar proximité-clic.
+  selectedObjIndex: number | null;
+  setSelectedObjIndex: (i: number | null) => void;
   resetManualPositions: (nObjects: number) => void;
 }
 
@@ -156,6 +159,10 @@ export const createHolProjectSlice: StateCreator<HolProjectStore, [], [], HolPro
 
   // Manual positions — cercle par défaut
   manualPositions: defaultCirclePositions(DEFAULT_TRACK_COUNT),
+  /// Objet sélectionné dans les vues (radar proximité-clic, 3D) — panneau
+  /// inspect + release/park ciblés. null = pas de sélection.
+  selectedObjIndex: null as number | null,
+  setSelectedObjIndex: (i: number | null) => set({ selectedObjIndex: i }),
   setManualPosition: (index, pos) =>
     set((s) => ({ manualPositions: { ...s.manualPositions, [index]: pos } })),
   setManualPositions: (positions) => set({ manualPositions: positions }),

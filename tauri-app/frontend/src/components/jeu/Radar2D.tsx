@@ -30,6 +30,8 @@ export const Radar2D: React.FC = () => {
     return () => clearInterval(t);
   }, []);
   const positions = Object.keys(livePositions).length > 0 ? livePositions : emittedPositions;
+  const selectedObj = useGraphStore((s) => s.selectedObjIndex);
+  const setSelectedObj = useGraphStore((s) => s.setSelectedObjIndex);
 
   // Auto-fit : échelle sur les bounds réels (venues >10m ne sortent plus
   // du cadre).
@@ -44,6 +46,22 @@ export const Radar2D: React.FC = () => {
       viewBox="-110 -110 220 220"
       className="flex-1 min-h-0"
       preserveAspectRatio="xMidYMid meet"
+      onPointerDown={(e) => {
+        // Sélection par proximité : un objet en mouvement est dur à viser —
+        // on prend le plus proche du clic dans un seuil de ~18 unités
+        // viewBox (≈15px écran). Le ring suit l'objet par index — stable
+        // quelles que soient ses positions.
+        const rect = e.currentTarget.getBoundingClientRect();
+        const vx = ((e.clientX - rect.left) / rect.width) * 220 - 110;
+        const vy = ((e.clientY - rect.top) / rect.height) * 220 - 110;
+        let best = -1;
+        let bd = 18;
+        for (const [id, [x, y]] of Object.entries(positions)) {
+          const d = Math.hypot(x * k - vx, y * k - vy);
+          if (d < bd) { bd = d; best = Number(id); }
+        }
+        setSelectedObj(best >= 0 ? best : null);
+      }}
       onPointerUp={(e) => {
         const drag = throwDrag.current;
         if (!drag) return;
@@ -69,6 +87,7 @@ export const Radar2D: React.FC = () => {
         const cx = Math.max(-105, Math.min(105, x * k));
         const cy = Math.max(-105, Math.min(105, y * k));
         const isManual = src === 'manual';
+        const isSelected = selectedObj === t;
         return (
           <g
             key={id}
@@ -93,6 +112,9 @@ export const Radar2D: React.FC = () => {
               e.stopPropagation();
             }}
           >
+            {isSelected && (
+              <circle cx={cx} cy={cy} r={8} fill="none" stroke="#fff" strokeWidth="1.5" opacity="0.9" />
+            )}
             <circle cx={cx} cy={cy} r="4" fill={sourceHex(src)}>
               <title>{id} · {SOURCE_LABEL[src] ?? src}</title>
               {isManual && (
