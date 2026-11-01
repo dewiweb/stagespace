@@ -45,6 +45,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const psnRunning = useGraphStore((s) => s.psnRunning);
   const psnLastPacketAge = useGraphStore((s) => s.psnLastPacketAge);
   const setPsnConfig = useGraphStore((s) => s.setPsnConfig);
+  const venueYaw = useGraphStore((s) => s.venueYaw);
   const venueEnabled = useGraphStore((s) => s.venueEnabled);
   const venueScale = useGraphStore((s) => s.venueScale);
   const venueOffset = useGraphStore((s) => s.venueOffset);
@@ -65,6 +66,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const [psnAxesStr, setPsnAxesStr] = React.useState(psnAxes);
   const [venueScaleStr, setVenueScaleStr] = React.useState(venueScale);
   const [venueOffsetStr, setVenueOffsetStr] = React.useState(venueOffset);
+  const [venueYawStr, setVenueYawStr] = React.useState(venueYaw);
   const [oscInStatus, setOscInStatus] = React.useState<string | null>(null);
   const [discovering, setDiscovering] = React.useState(false);
   const [discoveredTargets, setDiscoveredTargets] = React.useState<Array<{ name: string; host: string; port: number; profile: string; source: string }>>([]);
@@ -348,6 +350,17 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   onChange={(e) => setVenueOffsetStr(e.target.value)}
                   onBlur={() => setVenueConfig({ offset: venueOffsetStr })}
                   placeholder="0,0,0"
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                />
+              </div>
+              <div>
+                <label className="text-gray-500 text-xs block mb-1">Yaw (° — salle tournée)</label>
+                <input
+                  type="text"
+                  value={venueYawStr}
+                  onChange={(e) => setVenueYawStr(e.target.value)}
+                  onBlur={() => setVenueConfig({ yaw: venueYawStr })}
+                  placeholder="0"
                   className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
                 />
               </div>

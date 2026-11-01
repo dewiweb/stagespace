@@ -28,6 +28,8 @@ interface PersistedOscConfig {
   venueEnabled: boolean;
   venueScale: string;
   venueOffset: string;
+  /// Rotation yaw (degrés) dans le plan sol — salle tournée.
+  venueYaw: string;
   /// Couche réalité-distance (0..1 → exag/gain/air préréglés).
   realityStrength: number;
   /// Media sync out — cible dédiée (lumière/vidéo desk) + préfixe.
@@ -59,6 +61,7 @@ const persist = (s: OscConfigSlice, patch: Partial<PersistedOscConfig>) => {
     venueEnabled: s.venueEnabled,
     venueScale: s.venueScale,
     venueOffset: s.venueOffset,
+    venueYaw: s.venueYaw,
     realityStrength: s.realityStrength,
     mediaSyncEnabled: s.mediaSyncEnabled,
     mediaSyncTarget: s.mediaSyncTarget,
@@ -107,6 +110,7 @@ export interface OscConfigSlice {
   venueEnabled: boolean;
   venueScale: string;
   venueOffset: string;
+  venueYaw: string;
   setVenueConfig: (cfg: { enabled?: boolean; scale?: string; offset?: string }) => Promise<void>;
   /// Distance reality layer — 0..1 (0 = off). Preset : exag 0.4·s,
   /// gain_atten 0.15·s, air_loss 0.02·s (Zahorik-inspired).
@@ -141,6 +145,7 @@ export const createOscConfigSlice: StateCreator<OscConfigSlice, [], [], OscConfi
     venueEnabled: saved.venueEnabled ?? false,
     venueScale: saved.venueScale ?? '1,1,1',
     venueOffset: saved.venueOffset ?? '0,0,0',
+    venueYaw: saved.venueYaw ?? '0',
     realityStrength: saved.realityStrength ?? 0,
     mediaSyncEnabled: saved.mediaSyncEnabled ?? false,
     mediaSyncTarget: saved.mediaSyncTarget ?? '127.0.0.1:8000',
@@ -205,11 +210,13 @@ export const createOscConfigSlice: StateCreator<OscConfigSlice, [], [], OscConfi
         venueEnabled: get().venueEnabled,
         venueScale: get().venueScale,
         venueOffset: get().venueOffset,
+        venueYaw: get().venueYaw,
       };
       const next = {
         venueEnabled: cfg.enabled ?? prev.venueEnabled,
         venueScale: cfg.scale ?? prev.venueScale,
         venueOffset: cfg.offset ?? prev.venueOffset,
+        venueYaw: cfg.yaw ?? prev.venueYaw,
       };
       const parse3 = (str: string): [number, number, number] | null => {
         const p = str.split(',').map((x) => parseFloat(x.trim()));
@@ -224,7 +231,17 @@ export const createOscConfigSlice: StateCreator<OscConfigSlice, [], [], OscConfi
       set(next);
       persist(get(), next);
       try {
-        await invoke('set_venue_config', { enabled: next.venueEnabled, scale, offset });
+        const yawDeg = parseFloat(next.venueYaw);
+        if (!Number.isFinite(yawDeg)) {
+          toast.error('Venue config: yaw must be a number (degrees)');
+          return;
+        }
+        await invoke('set_venue_config', {
+          enabled: next.venueEnabled,
+          scale,
+          offset,
+          yaw: (yawDeg * Math.PI) / 180,
+        });
       } catch (e) {
         set(prev);
         persist(get(), prev);

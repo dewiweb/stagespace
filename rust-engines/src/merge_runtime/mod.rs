@@ -180,7 +180,7 @@ pub struct MergeRuntime {
     /// Auto-venue : (scale, offset) appliqués UNIQUEMENT au payload OSC
     /// — l'espace interne reste canonique (anchors, zones, kinematics,
     /// last_out). None = passthrough.
-    venue_map: Arc<RwLock<Option<([f64; 3], [f64; 3])>>>,
+    venue_map: Arc<RwLock<Option<([f64; 3], [f64; 3], f64)>>>,
     /// Vu-mètre perceptuel — calculé par frame depuis les vraies
     /// positions : vitesse angulaire perçue (legibility MAMA °/s),
     /// looming (vitesse radiale d'approche m/s), vection (cohérence
@@ -1284,13 +1284,18 @@ impl MergeRuntime {
     /// Auto-venue : mappe l'espace canonique du show vers la salle
     /// réelle. `scale`/`offset` par axe — `p_out = p*s + o`. None =
     /// passthrough. Validé : fini + scale > 0.
-    pub fn set_venue_map(&self, map: Option<([f64; 3], [f64; 3])>) {
-        if let Some((scale, offset)) = map {
+    /// Auto-venue : mappe l'espace canonique du show vers la salle
+    /// réelle. (scale, offset, yaw) — yaw = rotation dans le plan
+    /// x-y (le sol) en radians, appliqué AVANT scale+offset.
+    /// Validé : fini + scale > 0.
+    pub fn set_venue_map(&self, map: Option<([f64; 3], [f64; 3], f64)>) {
+        if let Some((scale, offset, yaw)) = map {
             if scale.iter().all(|s| s.is_finite() && *s > 0.0 && *s <= 100.0)
                 && offset.iter().all(|o| o.is_finite() && o.abs() <= 1000.0)
+                && yaw.is_finite()
             {
                 *self.venue_map.write().unwrap_or_else(|e| e.into_inner()) =
-                    Some((scale, offset));
+                    Some((scale, offset, yaw.clamp(-6.3, 6.3)));
             }
         } else {
             *self.venue_map.write().unwrap_or_else(|e| e.into_inner()) = None;
@@ -2433,10 +2438,15 @@ impl MergeRuntime {
                                     venue_map_arc
                                         .read()
                                         .unwrap_or_else(|e| e.into_inner())
-                                        .map(|(s, o)| {
+                                        .map(|(s, o, yaw)| {
+                                            let (c, sn) = (yaw.cos(), yaw.sin());
+                                            let (x, y) = (
+                                                pos.x * c - pos.y * sn,
+                                                pos.x * sn + pos.y * c,
+                                            );
                                             [
-                                                pos.x * s[0] + o[0],
-                                                pos.y * s[1] + o[1],
+                                                x * s[0] + o[0],
+                                                y * s[1] + o[1],
                                                 pos.z * s[2] + o[2],
                                             ]
                                         })
@@ -2495,10 +2505,15 @@ impl MergeRuntime {
                                     let mut send_pos = venue_map_arc
                                         .read()
                                         .unwrap_or_else(|e| e.into_inner())
-                                        .map(|(s, o)| {
+                                        .map(|(s, o, yaw)| {
+                                            let (c, sn) = (yaw.cos(), yaw.sin());
+                                            let (x, y) = (
+                                                pos.x * c - pos.y * sn,
+                                                pos.x * sn + pos.y * c,
+                                            );
                                             nalgebra::Vector3::new(
-                                                pos.x * s[0] + o[0],
-                                                pos.y * s[1] + o[1],
+                                                x * s[0] + o[0],
+                                                y * s[1] + o[1],
                                                 pos.z * s[2] + o[2],
                                             )
                                         })

@@ -433,10 +433,11 @@ pub async fn set_venue_config(
     enabled: bool,
     scale: [f64; 3],
     offset: [f64; 3],
+    yaw: f64,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
     let merge = lock_or_recover(&state.merge_runtime);
-    merge.set_venue_map(if enabled { Some((scale, offset)) } else { None });
+    merge.set_venue_map(if enabled { Some((scale, offset, yaw)) } else { None });
     Ok(())
 }
 
