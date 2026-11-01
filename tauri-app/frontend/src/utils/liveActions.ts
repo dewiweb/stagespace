@@ -167,9 +167,10 @@ export function doClearAllPositions() {
  *  Identification spatiale en repère — state machine côté frontend,
  *  le canal `position` existant fait le reste. */
 const SOUNDCHECK_PING_MS = 1500;
-const soundcheckState: { running: boolean; idx: number; timer: ReturnType<typeof setTimeout> | null } = {
+const soundcheckState: { running: boolean; idx: number; pinged: number | null; timer: ReturnType<typeof setTimeout> | null } = {
   running: false,
   idx: 0,
+  pinged: null,
   timer: null,
 };
 
@@ -180,10 +181,12 @@ function soundcheckPing(tracks: number[]) {
     return;
   }
   const obj = tracks[s.idx];
+  s.pinged = obj;
   doSetPosition(obj, 0, -2, 0); // repère front-center
   if (s.timer) clearTimeout(s.timer);
   s.timer = setTimeout(() => {
     doClearPosition(obj);
+    s.pinged = null;
     s.idx += 1;
     if (s.running && s.idx < tracks.length) soundcheckPing(tracks);
     else doSoundcheck('stop');
@@ -196,7 +199,10 @@ export function doSoundcheck(action?: string) {
   if (action === 'stop') {
     s.running = false;
     if (s.timer) { clearTimeout(s.timer); s.timer = null; }
-    tracks.forEach((o) => doClearPosition(o));
+    // Ne nettoie que le ping courant — jamais les positions manuelles
+    // de l'opérateur.
+    if (s.pinged != null) doClearPosition(s.pinged);
+    s.pinged = null;
     return;
   }
   if (action === 'next' || action === 'prev') {
