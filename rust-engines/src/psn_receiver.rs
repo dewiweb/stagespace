@@ -96,7 +96,10 @@ impl PsnReceiver {
         Self {
             running: Arc::new(AtomicBool::new(false)),
             thread: Mutex::new(None),
-            last_packet_ms: Arc::new(AtomicU64::new(0)),
+            // u64::MAX = "jamais reçu" — 0 est une valeur légitime
+            // (paquet reçu dans la première ms) : la sentinelle ne doit
+            // jamais pouvoir être un timestamp réel.
+            last_packet_ms: Arc::new(AtomicU64::new(u64::MAX)),
             epoch: Instant::now(),
             tracker_map: Arc::new(RwLock::new(HashMap::new())),
         }
@@ -118,9 +121,12 @@ impl PsnReceiver {
         let group_addr: Ipv4Addr = group
             .parse()
             .map_err(|e| format!("PSN group invalid: {e}"))?;
-        socket
-            .join_multicast_v4(&group_addr, &Ipv4Addr::UNSPECIFIED)
-            .map_err(|e| format!("PSN join multicast failed: {e}"))?;
+        if group_addr.is_multicast() {
+            socket
+                .join_multicast_v4(&group_addr, &Ipv4Addr::UNSPECIFIED)
+                .map_err(|e| format!("PSN join multicast failed: {e}"))?;
+        }
+        // Unicast (127.0.0.1, bridge, tests) : pas de join — bind suffit.
         socket
             .set_read_timeout(Some(std::time::Duration::from_millis(500)))
             .map_err(|e| format!("PSN timeout: {e}"))?;
@@ -186,7 +192,7 @@ impl PsnReceiver {
     /// Âge en ms du dernier paquet reçu (None = jamais reçu).
     pub fn last_packet_age_ms(&self) -> Option<u64> {
         let last = self.last_packet_ms.load(Ordering::SeqCst);
-        if last == 0 {
+        if last == u64::MAX {
             return None;
         }
         Some(self.epoch.elapsed().as_millis() as u64 - last)
@@ -256,5 +262,44 @@ mod tests {
     fn parse_ignores_nan() {
         let pkt = make_packet(3, [f32::NAN, 1.0, 2.0]);
         assert!(parse_psn_packet(&pkt).is_empty());
+    }
+
+    /// E2E réel : socket UDP loopback → parse → map tracker→objet →
+    /// callback + health. Prouve la chaîne complète, pas seulement le
+    /// parser.
+    #[test]
+    fn e2e_udp_to_position() {
+        let receiver = PsnReceiver::new();
+        receiver.set_tracker_map(std::iter::once((7u32, 42usize)).collect());
+        let got: Arc<Mutex<Vec<(usize, [f64; 3])>>> = Arc::new(Mutex::new(Vec::new()));
+        let got_c = got.clone();
+        receiver
+            .start("127.0.0.1", 56577, move |obj, pos| {
+                got_c.lock().unwrap_or_else(|e| e.into_inner()).push((obj, pos));
+            })
+            .expect("start unicast");
+        let sender = UdpSocket::bind("127.0.0.1:0").unwrap();
+        sender
+            .send_to(&make_packet(7, [3.5, -1.0, 2.0]), "127.0.0.1:56577")
+            .unwrap();
+        // Le recv timeout est 500ms — on attend jusqu'à 800ms.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(800);
+        loop {
+            if !got.lock().unwrap_or_else(|e| e.into_inner()).is_empty() {
+                break;
+            }
+            if std::time::Instant::now() > deadline {
+                panic!("no PSN position received on loopback within 800ms");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        let (obj, pos) = got.lock().unwrap_or_else(|e| e.into_inner())[0];
+        assert_eq!(obj, 42);
+        assert!((pos[0] - 3.5).abs() < 1e-5);
+        assert!((pos[1] + 1.0).abs() < 1e-5);
+        assert!((pos[2] - 2.0).abs() < 1e-5);
+        assert!(receiver.last_packet_age_ms().is_some());
+        receiver.stop();
+        assert!(!receiver.is_running());
     }
 }
