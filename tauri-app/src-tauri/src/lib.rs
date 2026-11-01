@@ -301,7 +301,43 @@ pub fn run() {
                 // (dispatch = les mêmes fonctions que les raccourcis).
                 {
                     let app_handle = app.handle().clone();
+                    // L'arrêt d'urgence vit aussi côté backend : un panic
+                    // OSC ne doit JAMAIS dépendre d'une webview vivante —
+                    // sinon il est ACKé mais jamais exécuté (webview gelée).
+                    let stop_movements = state.movements.clone();
+                    let stop_merge = state.merge_runtime.clone();
+                    let stop_gen = state.deactivate_gen.clone();
                     receiver.set_show_sink(move |cmd, addr| {
+                        match cmd {
+                            stagespace_engines::osc_receiver::ShowCommand::Panic
+                            | stagespace_engines::osc_receiver::ShowCommand::Stop => {
+                                // Backend-side stop — exécuté ici, pas
+                                // via la webview. Le panic gagne sur tout.
+                                stop_gen
+                                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                                let drained: Vec<Movement> = {
+                                    stop_movements
+                                        .lock()
+                                        .unwrap_or_else(|e| e.into_inner())
+                                        .drain()
+                                        .map(|(_, m)| m)
+                                        .collect()
+                                };
+                                for m in drained {
+                                    m.runtime.stop();
+                                }
+                                if matches!(cmd, stagespace_engines::osc_receiver::ShowCommand::Panic) {
+                                    let merge = stop_merge
+                                        .lock()
+                                        .unwrap_or_else(|e| e.into_inner());
+                                    let origin = merge.origin();
+                                    for id in merge.osc_ids() {
+                                        let _ = merge.send_position_now(id, origin);
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
                         // Broadcast à TOUTES les fenêtres : la fenêtre run
                         // détachée voit les commandes OSC dans son log.
                         let _ = app_handle.emit(
