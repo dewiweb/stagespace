@@ -10,8 +10,6 @@ import type { ConduiteHandlers, ConduiteViewState } from './types';
 export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteHandlers> = ({
   st,
   onGo,
-  onPrev,
-  onNext,
   onPanic,
   onArmToggle,
   onRecallCue,
@@ -19,6 +17,23 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
   // Arm local — click = arm (outline), double-click = RECALL : le même
   // contrat que CuelistPanel, jamais de scene-kill au simple clic.
   const [armedCueId, setArmedCueId] = React.useState<string | null>(null);
+
+  // Modèle console : Prev/Next déplacent le marqueur d'armement SANS
+  // tirer — on se positionne dans la cue list sans casser la scène.
+  const moveArmed = (dir: 1 | -1) => {
+    const cues = st?.cues ?? [];
+    if (!cues.length) return;
+    const cur = cues.findIndex((c) => c.id === armedCueId);
+    if (cur === -1) {
+      const currentIdx = cues.findIndex((c) => c.current);
+      const start = dir === 1 ? currentIdx + 1 : currentIdx - 1;
+      const idx = Math.min(Math.max(start < 0 ? 0 : start, 0), cues.length - 1);
+      setArmedCueId(cues[idx]?.id ?? null);
+      return;
+    }
+    const next = cur + dir;
+    setArmedCueId(next >= 0 && next < cues.length ? cues[next].id : null);
+  };
   const cur = st?.cues.find((c) => c.current);
   const nxt = st?.cues.find((c) => c.next);
 
@@ -117,11 +132,11 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
           </div>
 
           <ShowTransport
-            onPrev={onPrev}
-            onGo={onGo}
-            onNext={onNext}
-            prevDisabled={!!st?.isRecalling}
-            nextDisabled={!!st?.isRecalling}
+            onPrev={() => moveArmed(-1)}
+            onGo={() => onGo(armedCueId)}
+            onNext={() => moveArmed(1)}
+            prevDisabled={false}
+            nextDisabled={false}
             panic={
               <button
                 onClick={onPanic}

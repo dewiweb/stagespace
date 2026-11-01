@@ -5,7 +5,7 @@ import React from 'react';
 import { useCuelistStore } from '../../store/useCuelistStore';
 import { useGraphStore } from '../../store/useGraphStore';
 import { useShowStatusStore } from '../../store/useShowStatusStore';
-import { doArm, doCueNext, doCuePrev, doCueRecallById, doGo, doPanic } from '../../utils/liveActions';
+import { doArm, doCueNext, doCueRecallById, doPanic } from '../../utils/liveActions';
 import { cueLabel, tcStr } from '../../utils/showFormat';
 import { ConduiteView } from './ConduiteView';
 import type { ConduiteViewState } from './types';
@@ -50,9 +50,9 @@ export const ConduiteSurface: React.FC = () => {
   return (
     <ConduiteView
       st={st}
-      onGo={() => doGo('conduite')}
-      onPrev={() => doCuePrev('conduite')}
-      onNext={() => doCueNext('conduite')}
+      onGo={(armed) =>
+        armed ? doCueRecallById(armed, undefined, 'conduite') : doCueNext('conduite')
+      }
       onPanic={() => doPanic()}
       onArmToggle={() => doArm(!armed)}
       onRecallCue={(id) => doCueRecallById(id, undefined, 'conduite')}

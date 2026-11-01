@@ -47,9 +47,7 @@ export const ConduitePage: React.FC = () => {
     <div className="h-screen w-screen bg-stagespace-bg" style={{ background: '#0b0d12' }}>
       <ConduiteView
         st={st}
-        onGo={() => cmd('go')}
-        onPrev={() => cmd('prev')}
-        onNext={() => cmd('next')}
+        onGo={(armed) => cmd(armed ? `recall:${armed}` : 'next')}
         onPanic={() => cmd('panic')}
         onArmToggle={() => cmd('arm')}
         onRecallCue={(id) => cmd(`recall:${id}`)}

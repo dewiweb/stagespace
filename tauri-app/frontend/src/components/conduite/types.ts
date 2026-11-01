@@ -24,9 +24,9 @@ export type ConduiteViewState = {
 };
 
 export type ConduiteHandlers = {
-  onGo: () => void;
-  onPrev: () => void;
-  onNext: () => void;
+  /// GO = tirer la cue armée, ou la cue suivante si rien d'armé (modèle
+  /// console — Prev/Next ne tirent pas, ils naviguent le marqueur).
+  onGo: (armedCueId: string | null) => void;
   onPanic: () => void;
   onArmToggle: () => void;
   onRecallCue: (id: string) => void;
