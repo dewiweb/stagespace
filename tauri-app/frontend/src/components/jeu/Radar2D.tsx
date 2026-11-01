@@ -13,11 +13,29 @@ export const Radar2D: React.FC = () => {
   const manualOscIds = useGraphStore((s) => s.manualOscIds);
   const throwDrag = React.useRef<{ id: number; x: number; y: number; t: number } | null>(null);
 
+  // Positions LIVE : l'event backend 'global-positions' remplit
+  // movementPositions['global'] à 60fps. emittedPositions n'est qu'un
+  // fallback — elle n'est refreshée qu'à 1.5Hz par pollLive (vue de
+  // confiance, pas du temps réel). Intervalle ~25fps plutôt qu'un
+  // abonnement React : même raisonnement que le render loop 3D.
+  const [livePositions, setLivePositions] = React.useState<Record<number, [number, number, number]>>({});
+  React.useEffect(() => {
+    const t = setInterval(() => {
+      const g = useGraphStore.getState().movementPositions?.['global'];
+      if (!g?.length) return;
+      const m: Record<number, [number, number, number]> = {};
+      for (const p of g) m[p.index] = [p.x, p.y, p.z];
+      setLivePositions(m);
+    }, 40);
+    return () => clearInterval(t);
+  }, []);
+  const positions = Object.keys(livePositions).length > 0 ? livePositions : emittedPositions;
+
   // Auto-fit : échelle sur les bounds réels (venues >10m ne sortent plus
   // du cadre).
   const maxR = Math.max(
     5,
-    ...Object.values(emittedPositions).flatMap((p) => [Math.abs(p[0]), Math.abs(p[1])]),
+    ...Object.values(positions).flatMap((p) => [Math.abs(p[0]), Math.abs(p[1])]),
   );
   const k = 100 / maxR;
 
@@ -43,7 +61,7 @@ export const Radar2D: React.FC = () => {
       <line x1="0" y1="-105" x2="0" y2="105" stroke="#1f2937" strokeWidth="0.5" />
       <line x1="-105" y1="0" x2="105" y2="0" stroke="#1f2937" strokeWidth="0.5" />
       <text x="0" y="-99" fill="#4b5563" fontSize="8" textAnchor="middle">FRONT · {maxR.toFixed(0)}m</text>
-      {Object.entries(emittedPositions).map(([id, [x, y]]) => {
+      {Object.entries(positions).map(([id, [x, y]]) => {
         const t = Number(id);
         const src = objectStates[t] ?? 'track';
         const cx = Math.max(-105, Math.min(105, x * k));
