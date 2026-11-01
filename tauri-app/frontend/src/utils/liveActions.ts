@@ -282,6 +282,14 @@ export function doAttention(obj: number | null, from?: string) {
     .catch((e) => toast.error('Attention failed: ' + e));
 }
 
+/** /stagespace/gesture <name> [strength] — explode/converge/orbit/front
+ *  en une commande : vélocité calculée par objet (balistique thrown). */
+export function doGesture(name: string, strength: number, from?: string) {
+  logAction('doGesture', from);
+  invoke('set_gesture', { name, strength })
+    .catch((e) => toast.error('Gesture failed: ' + e));
+}
+
 /** /stagespace/trackpos <track> <x> <y> <z> — position d'origine d'une
  *  track (là où panic renvoie, base Barycenter — .hol par OSC).
  *  Setter unitaire : un set par track ne doit pas effacer les autres

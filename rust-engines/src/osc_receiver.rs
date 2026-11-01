@@ -424,6 +424,9 @@ pub enum ShowCommand {
     /// (change blindness : un seul bouge, capte toute l'attention).
     /// `/stagespace/attention/clear` — libère la stase.
     Attention(Option<usize>),
+    /// `/stagespace/gesture <name> [strength]` — explode/converge/orbit/
+    /// front : vélocité calculée par objet via la balistique `thrown`.
+    Gesture(String, f64),
 }
 
 type ShowSink = Box<dyn Fn(ShowCommand, std::net::SocketAddr) + Send>;
@@ -581,6 +584,19 @@ fn parse_show_command(addr: &str, args: &[OscType], fps: f64) -> Option<ShowComm
             Some(ShowCommand::Attention(obj))
         }
         "attention/clear" => Some(ShowCommand::Attention(None)),
+        "gesture" => {
+            let name = args.first().and_then(|a| match a {
+                OscType::String(s) => Some(s.clone()),
+                _ => None,
+            })?;
+            let strength = args.get(1).and_then(|a| match a {
+                OscType::Float(f) => Some(*f as f64),
+                OscType::Double(d) => Some(*d),
+                OscType::Int(i) => Some(*i as f64),
+                _ => None,
+            }).unwrap_or(3.0);
+            Some(ShowCommand::Gesture(name, strength))
+        }
         _ => None,
     }
 }

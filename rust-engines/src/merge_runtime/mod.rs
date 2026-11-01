@@ -1166,6 +1166,29 @@ impl MergeRuntime {
         }
     }
 
+    /// Position gestures — applique une vélocité calculée à tous les
+    /// objets émis (réutilise la balistique `thrown`).
+    /// `explode` radiale · `converge` vers l'origine · `orbit`
+    /// tangentielle · `front` pousse vers l'avant (y<0).
+    pub fn gesture(&self, name: &str, strength: f64) {
+        let last_out = self
+            .last_out_positions
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        for (obj, p) in last_out {
+            let r = (p[0] * p[0] + p[1] * p[1]).sqrt().max(0.5);
+            let vel = match name {
+                "explode" => [p[0] / r * strength, p[1] / r * strength, 0.0],
+                "converge" => [-p[0] / r * strength, -p[1] / r * strength, 0.0],
+                "orbit" => [-p[1] / r * strength, p[0] / r * strength, 0.0],
+                "front" => [0.0, -strength, 0.0],
+                _ => continue,
+            };
+            self.throw_object(obj, vel);
+        }
+    }
+
     /// Grab & throw : lance un objet avec une vélocité initiale.
     /// L'objet part de sa dernière position émise (ou manuelle/base)
     /// et continue balistique avec amortissement.

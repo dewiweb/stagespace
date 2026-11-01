@@ -479,3 +479,15 @@ pub async fn set_attention(obj: Option<usize>, state: State<'_, AppState>) -> Re
     }
     Ok(())
 }
+
+/// Position gestures — explode/converge/orbit/front en une commande.
+/// Chaque objet émis reçoit une vélocité calculée (balistique `thrown`).
+#[tauri::command]
+pub async fn set_gesture(
+    name: String,
+    strength: f64,
+    state: State<'_, AppState>,
+) -> Result<(), IpcError> {
+    lock_or_recover(&state.merge_runtime).gesture(&name, strength);
+    Ok(())
+}
