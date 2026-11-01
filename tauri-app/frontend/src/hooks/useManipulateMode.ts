@@ -94,25 +94,40 @@ export function useManipulateMode({
       // les tracks cachées par le focus slot restent cliquables/draggables.
       const visibleObjs = objectsRef.current.filter((o) => o.visible);
       const objHits = raycaster.intersectObjects(visibleObjs, true);
+      let idx = -1;
       if (objHits.length > 0) {
         // Trouver l'objet parent dans objectsRef (peut être un enfant si labels ajoutés)
         let hitObj = objHits[0].object as THREE.Mesh;
-        let idx = objectsRef.current.indexOf(hitObj);
+        idx = objectsRef.current.indexOf(hitObj);
         // Si l'objet touché est un enfant (ex: label), remonter au parent
         while (idx < 0 && hitObj.parent) {
           hitObj = hitObj.parent as THREE.Mesh;
           idx = objectsRef.current.indexOf(hitObj);
         }
-        if (idx >= 0) {
-          // Ctrl+clic = relâcher l'objet tenu en manuel — clic-droit =
-          // menu natif webview, Alt+clic = move-fenêtre du WM Linux.
-          if (e.ctrlKey) {
-            doClearPosition(idx);
-            return;
-          }
-          setDraggingObject(idx);
-          (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      }
+      // Fallback proximité : une sphère en mouvement est dure à viser —
+      // l'objet le plus proche du clic (< 40px écran) est saisi, comme la
+      // sélection proximité du radar. Projection NDC → pixels.
+      if (idx < 0) {
+        let bd = 40;
+        for (let i = 0; i < visibleObjs.length; i++) {
+          const p = visibleObjs[i].position.clone().project(camera);
+          if (p.z < -1 || p.z > 1) continue; // derrière la caméra
+          const sx = ((p.x + 1) / 2) * rect.width;
+          const sy = ((1 - p.y) / 2) * rect.height;
+          const d = Math.hypot(sx - (e.clientX - rect.left), sy - (e.clientY - rect.top));
+          if (d < bd) { bd = d; idx = objectsRef.current.indexOf(visibleObjs[i]); }
         }
+      }
+      if (idx >= 0) {
+        // Ctrl+clic = relâcher l'objet tenu en manuel — clic-droit =
+        // menu natif webview, Alt+clic = move-fenêtre du WM Linux.
+        if (e.ctrlKey) {
+          doClearPosition(idx);
+          return;
+        }
+        setDraggingObject(idx);
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
       }
     },
     [manipulateMode, cameraRef, containerRef, handleRef, objectsRef],
