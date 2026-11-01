@@ -16,6 +16,7 @@ pub mod merge_runtime;
 pub mod node_params;
 pub mod node_spec;
 pub mod osc_receiver;
+pub mod psn_receiver;
 pub mod osc_sender;
 pub mod param_slots;
 pub mod plugins;

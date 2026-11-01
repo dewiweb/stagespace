@@ -16,6 +16,12 @@ interface PersistedOscConfig {
   oscInPort: number;
   /// Frame rate de conversion HH:MM:SS:FF du timecode OSC (non-drop).
   timecodeFps: number;
+  /// PSN/RTTrP — tracking industrie (BlackTrax/Zactrack/Follow-Me).
+  psnEnabled: boolean;
+  psnGroup: string;
+  psnPort: number;
+  /// Mapping tracker_id → object_index (texte "1:7,2:8").
+  psnMap: string;
 }
 
 function loadConfigFromStorage(): Partial<PersistedOscConfig> {
@@ -33,9 +39,17 @@ const persist = (s: OscConfigSlice, patch: Partial<PersistedOscConfig>) => {
     oscProfile: s.oscProfile,
     oscInPort: s.oscInPort,
     timecodeFps: s.timecodeFps,
+    psnEnabled: s.psnEnabled,
+    psnGroup: s.psnGroup,
+    psnPort: s.psnPort,
+    psnMap: s.psnMap,
     ...patch,
   });
 };
+
+/// Intervalle de santé PSN — vit dans le slice (donnée), pas dans un
+/// composant (l'UI lit juste `psnRunning`/`psnLastPacketAge`).
+let psnHealthTimer: ReturnType<typeof setInterval> | null = null;
 
 /// Vérifie si des movements sont actifs (playback en cours)
 /// Import dynamique pour éviter une dépendance circulaire
@@ -55,6 +69,17 @@ export interface OscConfigSlice {
   oscInPort: number;
   /// Frame rate du timecode OSC entrant (24/25/30 non-drop, défaut 25).
   timecodeFps: number;
+  /// PSN/RTTrP — tracking industrie.
+  psnEnabled: boolean;
+  psnGroup: string;
+  psnPort: number;
+  /// Mapping tracker_id→object_index, texte "1:7,2:8".
+  psnMap: string;
+  /// Santé du flux PSN — âge du dernier paquet (ms), null = jamais reçu.
+  psnLastPacketAge: number | null;
+  psnRunning: boolean;
+  setPsnConfig: (cfg: { enabled?: boolean; group?: string; port?: number; map?: string }) => Promise<void>;
+  refreshPsnHealth: () => Promise<void>;
   setOscAddress: (addr: string) => void;
   setOscPort: (port: number) => void;
   setOscProfile: (profile: string) => void;
@@ -71,6 +96,63 @@ export const createOscConfigSlice: StateCreator<OscConfigSlice, [], [], OscConfi
     oscProfile: saved.oscProfile ?? 'holophonix',
     oscInPort: saved.oscInPort ?? 8001,
     timecodeFps: saved.timecodeFps ?? 25,
+    psnEnabled: saved.psnEnabled ?? false,
+    psnGroup: saved.psnGroup ?? '236.0.0.1',
+    psnPort: saved.psnPort ?? 56565,
+    psnMap: saved.psnMap ?? '',
+    psnLastPacketAge: null,
+    psnRunning: false,
+    setPsnConfig: async (cfg) => {
+      const prev = {
+        psnEnabled: get().psnEnabled,
+        psnGroup: get().psnGroup,
+        psnPort: get().psnPort,
+        psnMap: get().psnMap,
+      };
+      const next = {
+        psnEnabled: cfg.enabled ?? prev.psnEnabled,
+        psnGroup: cfg.group ?? prev.psnGroup,
+        psnPort: cfg.port ?? prev.psnPort,
+        psnMap: cfg.map ?? prev.psnMap,
+      };
+      set(next);
+      persist(get(), next);
+      // Parse "1:7,2:8" → {1:7, 2:8}
+      const trackerMap: Record<number, number> = {};
+      for (const pair of next.psnMap.split(',')) {
+        const [t, o] = pair.split(':').map((s) => parseInt(s.trim()));
+        if (Number.isFinite(t) && Number.isFinite(o)) trackerMap[t] = o;
+      }
+      try {
+        await invoke('set_psn_config', {
+          enabled: next.psnEnabled,
+          group: next.psnGroup,
+          port: next.psnPort,
+          tracker_map: trackerMap,
+        });
+        // Poll santé piloté par le slice (pas React) — tourne tant que le
+        // flux est actif, indépendamment de l'UI ouverte.
+        if (next.psnEnabled && !psnHealthTimer) {
+          psnHealthTimer = setInterval(() => get().refreshPsnHealth(), 1000);
+          get().refreshPsnHealth();
+        } else if (!next.psnEnabled && psnHealthTimer) {
+          clearInterval(psnHealthTimer);
+          psnHealthTimer = null;
+          set({ psnRunning: false, psnLastPacketAge: null });
+        }
+      } catch (e) {
+        set(prev);
+        persist(get(), prev);
+        console.error('[setPsnConfig] Failed:', e);
+        toast.error('PSN config failed: ' + e);
+      }
+    },
+    refreshPsnHealth: async () => {
+      try {
+        const [running, age] = await invoke<[boolean, number | null]>('get_psn_health');
+        set({ psnRunning: running, psnLastPacketAge: age });
+      } catch { /* silencieux — indicateur non critique */ }
+    },
     setOscAddress: (addr) => {
       isPlaybackActive().then((active) => {
         if (active) {

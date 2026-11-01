@@ -319,3 +319,41 @@ pub async fn set_timecode_fps(fps: f64, state: State<'_, AppState>) -> Result<()
     receiver.set_timecode_fps(fps);
     Ok(())
 }
+
+// ─── PSN/RTTrP (PosiStageNet) — tracking industrie ───
+
+/// Configure et démarre/arrête le récepteur PSN. Le mapping
+/// `tracker_id → object_index` s'applique immédiatement ; les positions
+/// reçues sont injectées en positions manuelles (lissées par la couche
+/// cinématique du merge).
+#[tauri::command]
+pub async fn set_psn_config(
+    enabled: bool,
+    group: String,
+    port: u16,
+    tracker_map: std::collections::HashMap<u32, usize>,
+    state: State<'_, AppState>,
+) -> Result<(), IpcError> {
+    let psn = state.psn_receiver.clone();
+    psn.set_tracker_map(tracker_map);
+    if enabled {
+        let merge_rt = state.merge_runtime.clone();
+        psn.start(&group, port, move |obj, pos| {
+            if let Ok(rt) = merge_rt.lock() {
+                rt.set_manual_position(obj, pos);
+            }
+        })
+        .map_err(IpcError::internal)?;
+    } else {
+        psn.stop();
+    }
+    Ok(())
+}
+
+/// Santé du flux PSN — `last_packet_age_ms` (None = jamais reçu) +
+/// `running`. Utilisé par le bandeau de santé des flux.
+#[tauri::command]
+pub async fn get_psn_health(state: State<'_, AppState>) -> Result<(bool, Option<u64>), IpcError> {
+    let psn = &state.psn_receiver;
+    Ok((psn.is_running(), psn.last_packet_age_ms()))
+}

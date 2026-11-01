@@ -37,10 +37,20 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const setSelectedAudioDeviceId = useGraphStore((s) => s.setSelectedAudioDeviceId);
   const mergeStrategy = useGraphStore((s) => s.mergeStrategy);
   const setMergeStrategy = useGraphStore((s) => s.setMergeStrategy);
+  const psnEnabled = useGraphStore((s) => s.psnEnabled);
+  const psnGroup = useGraphStore((s) => s.psnGroup);
+  const psnPort = useGraphStore((s) => s.psnPort);
+  const psnMap = useGraphStore((s) => s.psnMap);
+  const psnRunning = useGraphStore((s) => s.psnRunning);
+  const psnLastPacketAge = useGraphStore((s) => s.psnLastPacketAge);
+  const setPsnConfig = useGraphStore((s) => s.setPsnConfig);
 
   const [oscIdsStr, setOscIdsStr] = React.useState(manualOscIds.join(','));
   const [audioDevices, setAudioDevices] = React.useState<MediaDeviceInfo[]>([]);
   const [oscInPortStr, setOscInPortStr] = React.useState(String(oscInPort));
+  const [psnGroupStr, setPsnGroupStr] = React.useState(psnGroup);
+  const [psnPortStr, setPsnPortStr] = React.useState(String(psnPort));
+  const [psnMapStr, setPsnMapStr] = React.useState(psnMap);
   const [oscInStatus, setOscInStatus] = React.useState<string | null>(null);
   const [discovering, setDiscovering] = React.useState(false);
   const [discoveredTargets, setDiscoveredTargets] = React.useState<Array<{ name: string; host: string; port: number; profile: string; source: string }>>([]);
@@ -213,6 +223,65 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 {oscInStatus}
               </p>
             )}
+          </section>
+
+          {/* ─── PSN / Tracking ─── */}
+          <section>
+            <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+              <span className="text-purple-400">◎</span> PSN / RTTrP Tracking
+            </h3>
+            <p className="text-gray-400 text-xs mb-3">
+              PosiStageNet tracking (BlackTrax, Zactrack, Follow-Me) — tracker positions
+              feed manual positions of the mapped objects.
+            </p>
+            <div className="flex items-center gap-2 mb-2">
+              <button
+                onClick={() => setPsnConfig({ enabled: !psnEnabled, group: psnGroupStr, port: parseInt(psnPortStr) || 56565, map: psnMapStr })}
+                className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                  psnEnabled ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                {psnEnabled ? 'ON' : 'OFF'}
+              </button>
+              <span className={`text-xs ${psnRunning ? 'text-green-400' : 'text-gray-500'}`}>
+                {psnRunning
+                  ? psnLastPacketAge != null
+                    ? `flux ${psnLastPacketAge < 2000 ? 'vivant' : `stale (${Math.round(psnLastPacketAge / 1000)}s)`}`
+                    : 'en écoute…'
+                  : 'arrêté'}
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 mb-2">
+              <div className="col-span-2">
+                <label className="text-gray-500 text-xs block mb-1">Multicast group</label>
+                <input
+                  type="text"
+                  value={psnGroupStr}
+                  onChange={(e) => setPsnGroupStr(e.target.value)}
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                />
+              </div>
+              <div>
+                <label className="text-gray-500 text-xs block mb-1">Port</label>
+                <input
+                  type="number"
+                  value={psnPortStr}
+                  onChange={(e) => setPsnPortStr(e.target.value)}
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-gray-500 text-xs block mb-1">Map tracker→objet ("1:7, 2:8" — tracker 1 pilote l'objet 7)</label>
+              <input
+                type="text"
+                value={psnMapStr}
+                onChange={(e) => setPsnMapStr(e.target.value)}
+                onBlur={() => setPsnConfig({ map: psnMapStr })}
+                placeholder="1:7, 2:8, 3:9"
+                className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+              />
+            </div>
           </section>
 
           {/* ─── Merge ─── */}
