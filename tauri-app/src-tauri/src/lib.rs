@@ -265,6 +265,14 @@ pub fn run() {
                 state
                     .supervisor_shutdown
                     .store(true, std::sync::atomic::Ordering::SeqCst);
+                // Fermer les fenêtres détachées avec la principale — sinon
+                // elles survivent en orphelines : surfaces figées sans
+                // backend, actions routées vers une fenêtre morte.
+                for label in ["run", "conduite"] {
+                    if let Some(w) = window.get_webview_window(label) {
+                        let _ = w.close();
+                    }
+                }
                 eprintln!("[INFO] All movements stopped on window close");
             }
         })
