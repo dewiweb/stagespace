@@ -25,6 +25,26 @@ import { useGraphStore, useMovementPositionsListener, useAudioErrorListener, use
 import { useMoveEditorStore } from './store/useMoveEditorStore';
 
 function App() {
+  // Fenêtre détachable ?view=run → surface de jeu dédiée (pads + transport).
+  if (new URLSearchParams(window.location.search).get('view') === 'run') {
+    const RunView = React.lazy(() =>
+      import('./components/RunView').then((m) => ({ default: m.RunView })),
+    );
+    return (
+      <ErrorBoundary zone="Run">
+        <React.Suspense
+          fallback={
+            <div className="h-screen w-screen bg-gray-950 flex items-center justify-center text-gray-500 text-sm">
+              Chargement de la surface de jeu…
+            </div>
+          }
+        >
+          <RunView />
+        </React.Suspense>
+      </ErrorBoundary>
+    );
+  }
+
   // Fenêtre détachable ?view=conduite → rendu dédié sans le reste de l'app.
   if (new URLSearchParams(window.location.search).get('view') === 'conduite') {
     const ConduitePage = React.lazy(() => import('./pages/ConduitePage'));
