@@ -693,6 +693,7 @@ pub(crate) fn recall_cue_inner(
                 signal_graph: snap.signal_graph.clone(),
                 end_mode: stagespace_engines::EndMode::default(),
                 anchor_mode: stagespace_engines::AnchorMode::default(),
+                anchor_target: None,
             };
             match spawn_move_for_recall(spec, &sh) {
                 Ok(_) => {

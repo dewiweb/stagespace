@@ -72,6 +72,10 @@ pub enum AnchorMode {
     /// Current — chaque objet capture sa position courante comme ancre :
     /// pos(t) = capturée + (traj(t) − traj(0)). Chaînage sans saut.
     Current,
+    /// Follow — l'origine du move suit une track cible en continu :
+    /// `origin(t) = last_position(cible)` relue à chaque frame — l'orbit
+    /// reste centrée sur un objet qui bouge (follow-me spatial).
+    Follow,
 }
 
 /// Direction de lecture

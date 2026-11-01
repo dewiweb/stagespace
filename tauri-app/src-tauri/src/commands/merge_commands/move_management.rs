@@ -56,6 +56,9 @@ pub struct ActivateMoveRequest {
     /// courante de chaque objet — chaînage sans saut).
     #[serde(default)]
     pub anchor_mode: stagespace_engines::AnchorMode,
+    /// Cible du mode "follow" — la track dont l'origine suit la position.
+    #[serde(default)]
+    pub anchor_target: Option<u32>,
 }
 
 /// Spec complet pour créer un worker move — partagé entre activate_move,
@@ -89,6 +92,8 @@ pub struct MoveSpec {
     pub end_mode: stagespace_engines::EndMode,
     /// Ancre : Origin (défaut) ou Current (capture la position courante).
     pub anchor_mode: stagespace_engines::AnchorMode,
+    /// Cible du mode Follow — la track suivie (None = pas de follow).
+    pub anchor_target: Option<u32>,
 }
 
 /// Macros spatiales initiales d'un worker (système Animation).
@@ -315,7 +320,7 @@ fn spawn_move_inner(
     //    le MergeRuntime via son PositionSink.
     // L'AudioState maître est injecté — le worker lit l'état audio à jour à
     // chaque frame sans propagation par polling (une seule source de vérité).
-    let runtime = Runtime::new_with_audio_state(sh.audio_state.clone());
+    let mut runtime = Runtime::new_with_audio_state(sh.audio_state.clone());
 
     // 3. Compiler avec toutes les entrées live : audio, valeurs OSC reçues
     //    (nodes OSCInput lisent extra["osc_value"] — sans handle ils
@@ -390,6 +395,13 @@ fn spawn_move_inner(
         if !captured.is_empty() {
             runtime.set_anchor_capture(captured);
         }
+    }
+    // AnchorMode::Follow — l'origine suit la dernière position émise de la
+    // track cible à chaque frame. Injecte le handle last_out du merge.
+    if spec.anchor_mode == stagespace_engines::AnchorMode::Follow {
+        let merge_rt = lock_or_recover(&sh.merge_runtime);
+        runtime.set_last_positions_handle(merge_rt.last_positions_handle());
+        runtime.set_anchor_follow(spec.anchor_target.map(|t| t as usize));
     }
     if let Some(anim_state) = spec.animation_state {
         runtime.set_animation_state(anim_state);
@@ -579,6 +591,7 @@ pub async fn activate_move(
             .and_then(|a| a.signal_graph.clone()),
         end_mode: request.end_mode,
         anchor_mode: request.anchor_mode,
+        anchor_target: request.anchor_target,
     };
     let sh = Shared::from_state(&state);
     tauri::async_runtime::spawn_blocking(move || spawn_move(spec, &sh))

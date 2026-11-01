@@ -512,6 +512,7 @@ const LiveDrawer: React.FC = () => {
   const setSlotLoopMode = useGraphStore((s) => s.setSlotLoopMode);
   const setSlotEndMode = useGraphStore((s) => s.setSlotEndMode);
   const setSlotAnchorMode = useGraphStore((s) => s.setSlotAnchorMode);
+  const setSlotAnchorTarget = useGraphStore((s) => s.setSlotAnchorTarget);
   const setSlotTracks = useGraphStore((s) => s.setSlotTracks);
   const holProject = useGraphStore((s) => s.holProject);
   const manualOscIds = useGraphStore((s) => s.manualOscIds);
@@ -727,7 +728,7 @@ const LiveDrawer: React.FC = () => {
             <div>
               <div className="text-gray-500 text-xs uppercase tracking-wider mb-1" title="Ancre : current part de la position courante de chaque objet, origin de l'origine du move">Anchor</div>
               <div className="flex gap-1">
-                {(['origin', 'current'] as const).map((m) => (
+                {(['origin', 'current', 'follow'] as const).map((m) => (
                   <button
                     key={m}
                     onClick={() => setSlotAnchorMode(slot.id, m)}
@@ -741,6 +742,17 @@ const LiveDrawer: React.FC = () => {
                   </button>
                 ))}
               </div>
+              {slot.anchorMode === 'follow' && (
+                <input
+                  type="number"
+                  min={0}
+                  placeholder="cible"
+                  title="Track cible suivie (index objet)"
+                  value={slot.anchorTarget ?? ''}
+                  onChange={(e) => setSlotAnchorTarget(slot.id, parseInt(e.target.value) || 0)}
+                  className="mt-1 w-full py-1 px-2 text-xs rounded bg-gray-800 text-gray-300"
+                />
+              )}
             </div>
           </div>
           {/* Fades de cycle */}

@@ -97,9 +97,11 @@ export interface MoveSlot {
   /// Fin de one-shot : "revert" (défaut) ou "hold" (fige la dernière
   /// position en manuelle — sémantique continue).
   endMode?: 'revert' | 'hold';
-  /// Ancre : "origin" (défaut) ou "current" (part de la position courante
-  /// de chaque objet — chaînage sans saut).
-  anchorMode?: 'origin' | 'current';
+  /// Ancre : "origin" (défaut), "current" (position courante — chaînage
+  /// sans saut) ou "follow" (suit la position de la track cible en continu).
+  anchorMode?: 'origin' | 'current' | 'follow';
+  /// Track cible du mode "follow" (index de l'objet suivi).
+  anchorTarget?: number;
   /// Direction : "forward" (défaut), "backward", ou "ping_pong"
   direction: 'forward' | 'backward' | 'ping_pong';
   /// Enveloppe de fade du cycle worker (début/fin de boucle) — distinct de
@@ -166,7 +168,8 @@ export interface MoveSlotsSlice {
   setSlotFadeDuration: (id: string, fade: number) => void;
   setSlotLoopMode: (id: string, mode: 'loop' | 'oneshot') => void;
   setSlotEndMode: (id: string, mode: 'revert' | 'hold') => void;
-  setSlotAnchorMode: (id: string, mode: 'origin' | 'current') => void;
+  setSlotAnchorMode: (id: string, mode: 'origin' | 'current' | 'follow') => void;
+  setSlotAnchorTarget: (id: string, target: number) => void;
   setSlotDirection: (id: string, direction: 'forward' | 'backward' | 'ping_pong') => void;
   /// Champs "animation" du slot (fade cycle, phase spread, assignments, audio mods)
   /// — write-through depuis l'Inspector (updateCurrent → ici).
@@ -739,6 +742,7 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
           direction: slot.direction,
           end_mode: slot.endMode ?? 'revert',
           anchor_mode: slot.anchorMode ?? 'origin',
+          anchor_target: slot.anchorTarget ?? null,
           // Le graphe de modulation per-move voyage via l'animation payload
           // (MoveSpec.signal_graph = request.animation.signal_graph).
           animation: animation ? { ...animation, signal_graph: signalGraphData } : animation,
@@ -925,6 +929,14 @@ export const createMoveSlotsSlice: StateCreator<MoveSlotsStore, [], [], MoveSlot
   setSlotAnchorMode: (id, mode) => {
     set((s) => {
       const newSlots = s.moveSlots.map((sl) => sl.id === id ? { ...sl, anchorMode: mode } : sl);
+      saveSlotsToStorage(newSlots);
+      return { moveSlots: newSlots };
+    });
+  },
+
+  setSlotAnchorTarget: (id, target) => {
+    set((s) => {
+      const newSlots = s.moveSlots.map((sl) => sl.id === id ? { ...sl, anchorTarget: target } : sl);
       saveSlotsToStorage(newSlots);
       return { moveSlots: newSlots };
     });

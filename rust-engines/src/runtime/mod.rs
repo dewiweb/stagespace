@@ -44,6 +44,14 @@ pub struct Runtime {
     /// position monde capturée ; le worker la convertit en offset
     /// `delta = capturée − pos(t0)` appliqué à chaque frame (chaînage).
     anchor_capture: Arc<RwLock<std::collections::HashMap<usize, nalgebra::Vector3<f64>>>>,
+    /// AnchorMode::Follow — track cible suivie : l'origine du move est
+    /// remplacée par la dernière position émise de cette track à chaque
+    /// frame (orbit autour d'un objet qui bouge).
+    anchor_follow_target: Arc<RwLock<Option<usize>>>,
+    /// Handle partagé vers les dernières positions monde du merge —
+    /// injecté au spawn quand anchor_mode = Follow.
+    last_positions_handle:
+        Arc<RwLock<std::collections::HashMap<usize, [f64; 3]>>>,
     /// Animation state — depth + phase_offset par track + audio mods
     animation_state: Arc<Mutex<Option<AnimationState>>>,
     /// Audio state — partagé avec l'app, lu à chaque frame pour les audio mods
@@ -113,6 +121,8 @@ impl Runtime {
 
             origin: Arc::new(Mutex::new(nalgebra::Vector3::zeros())),
             anchor_capture: Arc::new(RwLock::new(std::collections::HashMap::new())),
+            anchor_follow_target: Arc::new(RwLock::new(None)),
+            last_positions_handle: Arc::new(RwLock::new(std::collections::HashMap::new())),
             animation_state: Arc::new(Mutex::new(None)),
             audio_state,
             audio_param_overrides: Arc::new(Mutex::new(HashMap::new())),
@@ -199,6 +209,22 @@ impl Runtime {
             .anchor_capture
             .write()
             .unwrap_or_else(|e| e.into_inner()) = captured;
+    }
+
+    /// AnchorMode::Follow — track cible dont l'origine suit la position.
+    pub fn set_anchor_follow(&self, target: Option<usize>) {
+        *self
+            .anchor_follow_target
+            .write()
+            .unwrap_or_else(|e| e.into_inner()) = target;
+    }
+
+    /// Injecte le handle des dernières positions du merge (anchor Follow).
+    pub fn set_last_positions_handle(
+        &mut self,
+        handle: Arc<RwLock<std::collections::HashMap<usize, [f64; 3]>>>,
+    ) {
+        self.last_positions_handle = handle;
     }
 
     /// Définit l'animation state (depth + phase_offset par track + audio mods)
@@ -510,6 +536,8 @@ impl Runtime {
         let perf = self.perf.clone();
 
         let origin_arc = self.origin.clone();
+        let anchor_follow_arc = self.anchor_follow_target.clone();
+        let last_positions_arc = self.last_positions_handle.clone();
         let anchor_capture_arc = self.anchor_capture.clone();
         // Offsets d'ancre par objet — calculés à la première frame :
         // delta[obj] = capturée[obj] − pos(t0, obj), ensuite pos += delta.
@@ -765,7 +793,22 @@ impl Runtime {
                     .clone();
                 // Origin du move (ancre monde de la trajectoire) — lue à
                 // chaque frame pour refléter un set_origin en cours de jeu.
-                let move_origin = *origin_arc.lock().unwrap_or_else(|e| e.into_inner());
+                // AnchorMode::Follow — l'origine suit la dernière position
+                // émise de la track cible à chaque frame (orbit autour
+                // d'un objet qui bouge). Fallback : origin statique.
+                let move_origin = anchor_follow_arc
+                    .read()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .and_then(|t| {
+                        last_positions_arc
+                            .read()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .get(&t)
+                            .map(|p| nalgebra::Vector3::new(p[0], p[1], p[2]))
+                    })
+                    .unwrap_or_else(|| {
+                        *origin_arc.lock().unwrap_or_else(|e| e.into_inner())
+                    });
                 // Matrice de rotation — ordre canonique `euler_rotation`
                 // (X→Y→Z), identique au modifier sub-graph et au merge.
                 let rot_matrix = crate::spatial_transform::euler_rotation(

@@ -1025,6 +1025,14 @@ impl MergeRuntime {
             .remove(move_id);
     }
 
+    /// Handle partagé des dernières positions émises — injecté dans le
+    /// worker pour `AnchorMode::Follow` (origine suit la cible par frame).
+    pub fn last_positions_handle(
+        &self,
+    ) -> Arc<RwLock<HashMap<usize, [f64; 3]>>> {
+        self.last_out_positions.clone()
+    }
+
     /// Dernière position monde connue d'un objet — source des ancres
     /// `AnchorMode::Current`. Ordre : dernière émission merge →
     /// manuelle → origine track → None (jamais vu).
