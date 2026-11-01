@@ -432,7 +432,7 @@ export default function MovesTable() {
                         {isPlaying ? (
                           <>
                             <button
-                              onClick={(e) => { e.stopPropagation(); stopSlotWithFade(slot.id, 1.0); }}
+                              onClick={(e) => { e.stopPropagation(); stopSlotWithFade(slot.id, slot.fadeOut ?? 1); }}
                               className="text-yellow-400 hover:text-yellow-300 text-xs px-1 rounded hover:bg-yellow-900/30"
                               title="Stop avec fade 1s"
                             ><Square size={10} /></button>

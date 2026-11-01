@@ -42,7 +42,7 @@ export const PerformView: React.FC = () => {
   const editingSlotId = useGraphStore((s) => s.editingSlotId);
   const selectSlotForEditing = useGraphStore((s) => s.selectSlotForEditing);
   const playSlot = useGraphStore((s) => s.playSlot);
-  const stopSlot = useGraphStore((s) => s.stopSlot);
+  const stopSlotWithFade = useGraphStore((s) => s.stopSlotWithFade);
   const goToNextMove = useGraphStore((s) => s.goToNextMove);
   const pendingPlays = useGraphStore((s) => s.pendingPlays);
   const addMoveSlot = useGraphStore((s) => s.addMoveSlot);
@@ -140,7 +140,7 @@ export const PerformView: React.FC = () => {
         heldTracks={heldTracks}
         onAttention={firstObj >= 0 ? () => doAttention(firstObj) : undefined}
         onPlay={() => void playSlot(slot.id)}
-        onStop={() => void stopSlot(slot.id)}
+        onStop={() => void stopSlotWithFade(slot.id, slot.fadeOut ?? 1)}
         onSolo={() => (soloId === slot.id ? doUnsolo() : doSolo(oscNum))}
       />
     );
@@ -165,7 +165,7 @@ export const PerformView: React.FC = () => {
         canSolo={playingCount > 1}
         showSetlistAdd={showSetlistAdd}
         onPlay={() => void playSlot(slot.id)}
-        onStop={() => void stopSlot(slot.id)}
+        onStop={() => void stopSlotWithFade(slot.id, slot.fadeOut ?? 1)}
         onSolo={() => doSolo(oscNum)}
         onSelect={() => selectSlotForEditing(isSelected ? null : slot.id)}
         onAddToSetlist={() => addToSetlist(slot.id)}
@@ -232,7 +232,7 @@ export const PerformView: React.FC = () => {
         <button
           onClick={() => {
             if (!armedSlot) return;
-            if (armedPlaying) stopSlot(armedSlot.id);
+            if (armedPlaying) stopSlotWithFade(armedSlot.id, armedSlot.fadeOut ?? 1);
             else playSlot(armedSlot.id);
           }}
           disabled={!armedSlot}
