@@ -8,10 +8,12 @@ import { useGraphStore } from '../store/useGraphStore';
 import { doClearPosition, doClearAllPositions } from '../utils/liveActions';
 
 export const ManualReleaseBar: React.FC = () => {
-  const objectStates = useGraphStore((s) => s.objectStates);
-  const held = Object.entries(objectStates)
-    .filter(([, s]) => s === 'manual')
-    .map(([i]) => Number(i))
+  // manualPositions = la map réelle des positions tenues (sync backend,
+  // ~1.5s) — ce que `position/clear` retire. Plus fiable qu'objectStates :
+  // un objet dragué/thrown peut garder un autre label de source.
+  const manualPositions = useGraphStore((s) => s.manualPositions);
+  const held = Object.keys(manualPositions)
+    .map(Number)
     .sort((a, b) => a - b);
   if (held.length === 0) return null;
   return (
