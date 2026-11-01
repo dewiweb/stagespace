@@ -135,6 +135,11 @@ pub async fn store_cue(
                     animation_state: m.runtime.animation_state(),
                     fade_in,
                     fade_out,
+                    // Sémantiques continue — sans elles le recall revertait
+                    // silencieusement le "End: hold"/"Anchor: current".
+                    end_mode: Some(m.end_mode),
+                    anchor_mode: Some(m.anchor_mode),
+                    anchor_target: m.anchor_target,
                 }
             })
             .collect()
@@ -704,9 +709,9 @@ pub(crate) fn recall_cue_inner(
                 spatial_macros: None,
                 animation_state: snap.animation_state.clone(),
                 signal_graph: snap.signal_graph.clone(),
-                end_mode: stagespace_engines::EndMode::default(),
-                anchor_mode: stagespace_engines::AnchorMode::default(),
-                anchor_target: None,
+                end_mode: snap.end_mode.unwrap_or_default(),
+                anchor_mode: snap.anchor_mode.unwrap_or_default(),
+                anchor_target: snap.anchor_target,
             };
             match spawn_move_for_recall(spec, &sh) {
                 Ok(_) => {

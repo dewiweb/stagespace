@@ -21,6 +21,7 @@ mod param_modulation_tests {
             move_generation: Arc::new(AtomicU64::new(0)),
             merge_runtime: Arc::new(Mutex::new(merge)),
             recall_in_progress: Arc::new(AtomicBool::new(false)),
+            deactivate_gen: Arc::new(AtomicU64::new(0)),
             osc_receiver: Arc::new(Mutex::new(OscReceiver::new(0))),
             plugin_registry: None,
             plugins_dir: None,
@@ -93,6 +94,9 @@ mod param_modulation_tests {
             signal_graph: Some(
                 serde_json::from_value(signal_graph_json("param:sc:x", 0.5)).unwrap(),
             ),
+            end_mode: stagespace_engines::EndMode::default(),
+            anchor_mode: stagespace_engines::AnchorMode::default(),
+            anchor_target: None,
         };
         spawn_move_for_recall(spec, &sh).expect("spawn with signal graph");
 

@@ -224,6 +224,18 @@ pub struct MoveSnapshot {
     pub fade_in: f64,
     #[serde(default)]
     pub fade_out: f64,
+    /// Sémantique de fin de one-shot (revert|hold) — snapshotée : un recall
+    /// ne doit pas perdre le "End: hold" de l'opérateur.
+    #[serde(default)]
+    #[ts(type = "unknown")]
+    pub end_mode: Option<crate::EndMode>,
+    /// Sémantique d'ancrage (origin|current|follow) — idem.
+    #[serde(default)]
+    #[ts(type = "unknown")]
+    pub anchor_mode: Option<crate::AnchorMode>,
+    /// Cible de l'ancrage follow (obj_index).
+    #[serde(default)]
+    pub anchor_target: Option<u32>,
 }
 
 fn default_move_duration() -> f64 {

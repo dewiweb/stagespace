@@ -27,6 +27,7 @@ mod recall_tests {
             move_generation: Arc::new(AtomicU64::new(0)),
             merge_runtime: Arc::new(Mutex::new(merge)),
             recall_in_progress: Arc::new(AtomicBool::new(false)),
+            deactivate_gen: Arc::new(AtomicU64::new(0)),
             osc_receiver: Arc::new(Mutex::new(OscReceiver::new(0))),
             plugin_registry: None,
             plugins_dir: None,
@@ -75,6 +76,9 @@ mod recall_tests {
             direction: "forward".to_string(),
             origin: None,
             generation: 1,
+            end_mode: stagespace_engines::EndMode::default(),
+            anchor_mode: stagespace_engines::AnchorMode::default(),
+            anchor_target: None,
         }
     }
 
@@ -202,6 +206,9 @@ mod recall_tests {
             animation_state: None,
             fade_in: 0.0,
             fade_out: 0.0,
+            end_mode: None,
+            anchor_mode: None,
+            anchor_target: None,
         }];
         recall_cue_inner(cue, sh.clone()).expect("recall with respawn");
 
@@ -254,6 +261,9 @@ mod recall_tests {
             spatial_macros: None,
             animation_state: None,
             signal_graph: None,
+            end_mode: stagespace_engines::EndMode::default(),
+            anchor_mode: stagespace_engines::AnchorMode::default(),
+            anchor_target: None,
         };
         spawn_move_for_recall(spec, &sh).expect("initial spawn");
         let gen_before = sh.movements.lock().unwrap()["mv-live"].generation;
@@ -276,6 +286,9 @@ mod recall_tests {
             animation_state: None,
             fade_in: 0.0,
             fade_out: 0.0,
+            end_mode: None,
+            anchor_mode: None,
+            anchor_target: None,
         }];
         recall_cue_inner(cue, sh.clone()).expect("recall");
 

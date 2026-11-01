@@ -489,6 +489,9 @@ fn spawn_move_inner(
                 loop_mode: loop_mode_str,
                 direction: direction_str,
                 origin: spec.origin,
+                end_mode: spec.end_mode,
+                anchor_mode: spec.anchor_mode,
+                anchor_target: spec.anchor_target,
                 generation,
             },
         );

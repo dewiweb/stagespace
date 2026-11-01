@@ -29,6 +29,7 @@ mod show_control_e2e_tests {
             move_generation: Arc::new(AtomicU64::new(0)),
             merge_runtime: Arc::new(Mutex::new(merge)),
             recall_in_progress: Arc::new(AtomicBool::new(false)),
+            deactivate_gen: Arc::new(AtomicU64::new(0)),
             osc_receiver: Arc::new(Mutex::new(OscReceiver::new(0))),
             plugin_registry: None,
             plugins_dir: None,

@@ -113,6 +113,12 @@ pub struct Movement {
     pub direction: String,
     /// Origin (isobarycentre des tracks ciblées) à l'activation
     pub origin: Option<[f64; 3]>,
+    /// Sémantique de fin (revert|hold) — gardée pour les cue snapshots.
+    pub end_mode: stagespace_engines::EndMode,
+    /// Sémantique d'ancrage (origin|current|follow) — idem.
+    pub anchor_mode: stagespace_engines::AnchorMode,
+    /// Cible de l'ancrage follow (obj_index).
+    pub anchor_target: Option<u32>,
     /// Génération de l'id — un sleeper de fade-out ne touche l'entrée que
     /// si la génération correspond encore (protection id réutilisé).
     pub generation: u64,
