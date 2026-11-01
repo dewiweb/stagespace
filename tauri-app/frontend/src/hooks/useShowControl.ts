@@ -4,7 +4,6 @@
 import { useEffect } from 'react';
 import { safeListen } from '../utils/tauri';
 import { useCuelistStore } from '../store/useCuelistStore';
-import { useGraphStore } from '../store/useGraphStore';
 import { doGo, doCueNext, doCuePrev, doCueRecall, doPanic, doStop, doPark, doUnpark, doArm, doStatus, doSlot, doSlotStop, doSolo, doUnsolo, doSetPosition, doClearPosition, doClearAllPositions, doSetTrackPosition, doSoundcheck } from '../utils/liveActions';
 import type { ShowCommand } from '../types/generated/ShowCommand';
 
@@ -22,11 +21,8 @@ export function useShowControl() {
         const u = await safeListen<ShowControlEvent>('show-control', (event) => {
           const cmd = event.payload.command;
           const from = event.payload.from;
-          useGraphStore
-            .getState()
-            .pushShowLog(
-              `${cmd.command}${'value' in cmd && cmd.value != null ? ` ${JSON.stringify(cmd.value)}` : ''} ${from}`,
-            );
+          // Pas de log ici — il vit dans liveActions (point de passage
+          // commun GUI + OSC), sinon chaque commande OSC loggerait 2×.
           switch (cmd.command) {
             case 'Go':
               doGo(from);

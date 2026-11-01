@@ -2,6 +2,14 @@
 /// (useLiveShortcuts) et les commandes OSC `/stagespace/*` (useShowControl).
 /// Toute action manuelle annule d'abord les timers pre-wait/follow pendus.
 import { useGraphStore } from '../store/useGraphStore';
+
+/// Log opérationnel — le point de passage commun GUI + OSC.
+/// Toute action live (quel que soit le transport) est tracée ici.
+function logAction(name: string, detail?: string) {
+  useGraphStore
+    .getState()
+    .pushShowLog(`${name}${detail ? ` ${detail}` : ''}`);
+}
 import { useCuelistStore } from '../store/useCuelistStore';
 import { toast } from './toast-helpers';
 import { safeInvoke as invoke, silentCatch } from './tauri';
@@ -23,6 +31,7 @@ function recallBusy(from?: string): boolean {
 
 /// GO setlist (= Enter) — crossfade vers le prochain move.
 export function doGo(from?: string) {
+  logAction('doGo', from);
   if (recallBusy(from)) return;
   useCuelistStore.getState().cancelPendingTimers();
   const gs = useGraphStore.getState();
@@ -33,6 +42,7 @@ export function doGo(from?: string) {
 
 /// Cue suivante (= Shift+Enter).
 export function doCueNext(from?: string) {
+  logAction('doCueNext', from);
   useCuelistStore.getState().cancelPendingTimers();
   if (recallBusy(from)) return;
   useCuelistStore.getState().goToNextCue();
@@ -40,6 +50,7 @@ export function doCueNext(from?: string) {
 
 /// Cue précédente (= Backspace).
 export function doCuePrev(from?: string) {
+  logAction('doCuePrev', from);
   useCuelistStore.getState().cancelPendingTimers();
   if (recallBusy(from)) return;
   useCuelistStore.getState().goToPreviousCue();
@@ -48,6 +59,7 @@ export function doCuePrev(from?: string) {
 /// Recall direct d'une cue par numéro — match sur `cue_number`, sinon
 /// index 1-based dans la liste.
 export function doCueRecall(n: string, fadeOverride?: number, from?: string) {
+  logAction('doCueRecall');
   const s = useCuelistStore.getState();
   s.cancelPendingTimers();
   if (recallBusy(from)) return;
@@ -65,11 +77,13 @@ export function doCueRecall(n: string, fadeOverride?: number, from?: string) {
 
 /** Arm/disarm OSC — dry-run pilotable depuis la console (set_osc_armed). */
 export function doArm(armed: boolean) {
+  logAction('doArm');
   invoke('set_osc_armed', { armed }).catch((e) => toast.error('OSC arm failed: ' + e));
 }
 
 /** /stagespace/slot <n> — joue le slot n (index 1-based, busking). */
 export function doSlot(n: number, from?: string) {
+  logAction('doSlot');
   const gs = useGraphStore.getState();
   const slot = gs.moveSlots.find((s) => s.oscIndex === n) ?? gs.moveSlots[n - 1];
   if (!slot) {
@@ -85,6 +99,7 @@ export function doSlot(n: number, from?: string) {
 
 /** /stagespace/slot/stop <n> — coupe le slot n avec son fade_out. */
 export function doSlotStop(n: number, from?: string) {
+  logAction('doSlotStop');
   const gs = useGraphStore.getState();
   const slot = gs.moveSlots.find((s) => s.oscIndex === n) ?? gs.moveSlots[n - 1];
   if (!slot) {
@@ -106,6 +121,7 @@ export function getSoloRestoreIds(): string[] {
 }
 
 export function doSolo(n: number, from?: string) {
+  logAction('doSolo');
   const gs = useGraphStore.getState();
   const target = gs.moveSlots.find((s) => s.oscIndex === n) ?? gs.moveSlots[n - 1];
   if (!target) {
@@ -125,6 +141,7 @@ export function doSolo(n: number, from?: string) {
 
 /** /stagespace/unsolo — rejoue les slots stoppés par le dernier solo. */
 export function doUnsolo() {
+  logAction('doUnsolo');
   const gs = useGraphStore.getState();
   const ids = gs.soloSavedIds;
   useGraphStore.setState({ soloSavedIds: [] });
@@ -136,11 +153,13 @@ export function doUnsolo() {
 
 /** /stagespace/status — renvoie le feedback cue courant/suivant au demandeur. */
 export function doStatus() {
+  logAction('doStatus');
   useCuelistStore.getState().sendStatusNow();
 }
 
 /// Panic (= Esc) — stop all + positions origine.
 export function doPanic() {
+  logAction('doPanic');
   useCuelistStore.getState().cancelPendingTimers();
   useGraphStore.getState().panic();
 }
@@ -148,17 +167,20 @@ export function doPanic() {
 /** /stagespace/position <obj> <x> <y> <z> — position manuelle par OSC
  *  (reprise opérateur sans drag 3D). */
 export function doSetPosition(obj: number, x: number, y: number, z: number) {
+  logAction('doSetPosition');
   invoke('set_manual_position', { objectIndex: obj, position: [x, y, z] })
     .catch((e) => toast.error('Set position failed: ' + e));
 }
 
 /** /stagespace/position/clear <obj> — retire la position manuelle. */
 export function doClearPosition(obj: number) {
+  logAction('doClearPosition');
   invoke('clear_manual_position', { objectIndex: obj }).catch(silentCatch);
 }
 
 /** /stagespace/position/clearall — retire toutes les positions manuelles. */
 export function doClearAllPositions() {
+  logAction('doClearAllPositions');
   invoke('clear_all_manual_positions').catch(silentCatch);
 }
 
@@ -194,6 +216,7 @@ function soundcheckPing(tracks: number[]) {
 }
 
 export function doSoundcheck(action?: string) {
+  logAction('doSoundcheck');
   const s = soundcheckState;
   const tracks = useGraphStore.getState().manualOscIds;
   if (action === 'stop') {
@@ -222,21 +245,25 @@ export function doSoundcheck(action?: string) {
  *  Setter unitaire : un set par track ne doit pas effacer les autres
  *  origines (set_track_positions remplace toute la map). */
 export function doSetTrackPosition(track: number, x: number, y: number, z: number) {
+  logAction('doSetTrackPosition');
   invoke('set_track_position', { track, position: [x, y, z] })
     .catch((e) => toast.error('Set track position failed: ' + e));
 }
 
 /** Park un objet : ses canaux échappent aux recalls de cues. */
 export function doPark(obj: number) {
+  logAction('doPark');
   invoke('park_object', { obj }).catch((e) => toast.error('Park failed: ' + e));
 }
 
 export function doUnpark(obj: number) {
+  logAction('doUnpark');
   invoke('unpark_object', { obj }).catch((e) => toast.error('Unpark failed: ' + e));
 }
 
 /// Stop all moves (même fonction que le bouton UI — deactivate_all).
 export function doStop() {
+  logAction('doStop');
   useCuelistStore.getState().cancelPendingTimers();
   useGraphStore.getState().stopAllMovements();
 }
