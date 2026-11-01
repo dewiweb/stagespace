@@ -75,7 +75,7 @@ export const StatusBar: React.FC = () => {
             ? 'text-red-300 bg-red-900/40 border border-red-700/40'
             : 'text-emerald-400 bg-emerald-900/40 border border-emerald-700/40 animate-pulse'
         }`}
-        title={armed ? 'OSC LIVE — positions sent to the renderer' : 'DRY-RUN — OSC muted, nothing is sent'}
+        title={armed ? 'OSC LIVE — positions attempted; UDP cannot confirm delivery (a powered-off renderer host stays invisible)' : 'DRY-RUN — OSC muted, nothing is sent'}
       >
         {armed ? 'LIVE' : 'DRY-RUN'}
       </span>
@@ -147,7 +147,10 @@ export const StatusBar: React.FC = () => {
           <span className={perfStats.fps >= 55 ? 'text-green-400' : perfStats.fps >= 30 ? 'text-yellow-400' : 'text-red-400'}>
             {perfStats.fps.toFixed(0)} FPS
           </span>
-          <span className={perfStats.oscErrorRate > 0.05 ? 'text-red-400' : 'text-cyan-400'}>
+          <span
+            className={perfStats.oscErrorRate > 0.05 ? 'text-red-400' : 'text-cyan-400'}
+            title="OSC packets attempted — send() succeeding does NOT prove delivery. Only a refused port (OSC SUSPENDED) is detectable; a dead/offline renderer host is invisible to UDP."
+          >
             {perfStats.oscRate.toFixed(0)} osc/s
           </span>
           <span className={perfStats.cpuPercent < 50 ? 'text-gray-400' : 'text-yellow-400'}>
@@ -200,8 +203,8 @@ export const StatusBar: React.FC = () => {
       <div className="flex-1" />
 
       {/* Destination OSC — rappel discret de où partent les positions */}
-      <span className="text-gray-500 font-mono flex-shrink-0" title="OSC output destination">
-        → {oscAddress}:{oscPort}
+      <span className="text-gray-500 font-mono flex-shrink-0" title="OSC output destination — UDP: delivery unverified; OSC SUSPENDED only fires on refused port, not on a dead host">
+        → {oscAddress}:{oscPort} ·unverified
       </span>
       <span className="text-gray-400 font-mono flex-shrink-0" title="STAGESPACE version">
         v{__APP_VERSION__}
