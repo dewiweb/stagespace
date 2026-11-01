@@ -1889,11 +1889,16 @@ impl MergeRuntime {
                     }
                 }
 
-                // Idle : aucun move live ni preview → sauter le travail lourd,
-                // mais garder la boucle vivante (liveness observable via
-                // merge_frames) ET le pacing — sans sleep ici la boucle
+                // Idle : aucun move live ni preview NI position manuelle →
+                // sauter le travail lourd. Des manual_positions seules DOIVENT
+                // émettre (reprise opérateur/PSN/tape/throw : l'opérateur peut
+                // reprendre un objet sans move). Sans sleep ici la boucle
                 // spinne à 100% CPU et martèle les locks.
-                if move_positions.is_empty() && preview_positions.is_empty() {
+                let manual_empty = manual_positions_arc
+                    .read()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .is_empty();
+                if move_positions.is_empty() && preview_positions.is_empty() && manual_empty {
                     frame_count += 1;
                     let target_time = frame_count as u128 * frame_duration.as_nanos();
                     let current_time = start.elapsed().as_nanos();
@@ -2197,7 +2202,7 @@ impl MergeRuntime {
                 // Sanitize : une position NaN/inf ne doit jamais partir en OSC
                 // (f64::clamp ne panique pas ici — on droppe l'objet). Le
                 // compteur dropped_positions rend la perte observable.
-                let transformed: Vec<(usize, nalgebra::Vector3<f64>)> = transformed_raw
+                let mut transformed: Vec<(usize, nalgebra::Vector3<f64>)> = transformed_raw
                     .into_iter()
                     .filter(|(_, pos)| {
                         if pos.iter().all(|v| v.is_finite()) {
@@ -2208,6 +2213,24 @@ impl MergeRuntime {
                         }
                     })
                     .collect();
+
+                // Objets en manual_positions hors merge (aucun move ne les
+                // couvre) : la reprise opérateur / PSN / tape / throw doivent
+                // émettre même sans move live. World-space brut — même espace
+                // que l'override manuel du post-process.
+                {
+                    let manual = manual_positions_arc
+                        .read()
+                        .unwrap_or_else(|e| e.into_inner());
+                    for (obj_idx, pos) in manual.iter() {
+                        if !transformed.iter().any(|(i, _)| i == obj_idx) {
+                            transformed.push((
+                                *obj_idx,
+                                nalgebra::Vector3::new(pos[0], pos[1], pos[2]),
+                            ));
+                        }
+                    }
+                }
 
                 // Dernières positions monde émises — source des ancres
                 // `AnchorMode::Current` au spawn du move suivant.
