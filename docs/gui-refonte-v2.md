@@ -205,3 +205,28 @@ R5 hygiène continue
 4. Un métier identifiable par panneau
 5. Tests sur les chemins live (dispatch, cues, gestes)
 6. Fenêtres détachées sans N× poll
+
+---
+
+## Exécution (2026-11-01) — R0→R7 livrés
+
+| Item | Commit | Livré |
+|---|---|---|
+| R0 | `403b163`+`71d85a5` | PANIC global dans StatusBar (déjà montée sur toutes surfaces — le seul trou était panic, Toolbar-only) |
+| R1 | `0db0668` | `ConduiteView` partagée + `ConduiteSurface` (stores) + `ConduitePage` (events) — cue list opérable, arm, log, transport ; `doCueRecallById` |
+| R2 | `9e3f493` | PerformView = instrument complet (pads+badges+radar+throw+gestes+drawer) ; `?view=run` = même surface via RunWindow ; RunView.tsx supprimé ; **fix panic** (crash sur get_track_positions undefined) |
+| R3 | `9859a68` | CuelistPanel recentré cues-only ; ScorePanel + ShowLogPanel en tabs ; **fix recall par id cassé depuis toujours** |
+| R4 | `3dc628e` | Settings 8 sections → 5 tabs (Réseau/Tracking/Salle/Show/Audio) |
+| R5 | `a848739` | sourceColors.ts (hex/text/chip/label) — radar+pads+chips unifiés |
+| R6 | `f7d0de3` | useShowControl.test 11 tests — dispatch OSC→liveActions→IPC + guards ; 391/391 |
+| R7 | `a1d80ff` | fenêtres détachées read-only (isDetachedWindow + guards storage) ; ss-surface non persisté ; +Move masqué en détaché |
+
+### Bugs réels découverts en route
+- `panic` crashait si `get_track_positions` résolvait undefined
+- `doCueRecall(cue.id)` dans CuelistPanel — cassé depuis le début (id ≠ cue_number/index)
+- `?view=run` n'avait pas les listeners live (états potentiellement figés) → RunWindow monte les listeners sans useShowControl (double dispatch évité)
+
+### Reste hors-scope assumé
+- Fenêtre run : le `N×poll` perfSlice persiste (module-level, par fenêtre) — R7 fige l'écriture, pas la lecture ; un stream backend unique resterait l'idéal
+- logAction/rec injecté par regex dans liveActions — pattern fragile au refacto
+- Validation Tauri runtime réel toujours pendante (events/listeners inter-webview)
