@@ -111,7 +111,7 @@ export interface OscConfigSlice {
   venueScale: string;
   venueOffset: string;
   venueYaw: string;
-  setVenueConfig: (cfg: { enabled?: boolean; scale?: string; offset?: string }) => Promise<void>;
+  setVenueConfig: (cfg: { enabled?: boolean; scale?: string; offset?: string; yaw?: string }) => Promise<void>;
   /// Distance reality layer — 0..1 (0 = off). Preset : exag 0.4·s,
   /// gain_atten 0.15·s, air_loss 0.02·s (Zahorik-inspired).
   realityStrength: number;
