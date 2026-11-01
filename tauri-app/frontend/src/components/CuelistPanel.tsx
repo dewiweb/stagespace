@@ -34,6 +34,7 @@ export const CuelistPanel: React.FC = () => {
 
   // Récupérer l'état actuel pour le store
   const nodes = useGraphStore((s) => s.nodes);
+  const showLog = useGraphStore((s) => s.showLog);
   const edges = useGraphStore((s) => s.edges);
   const editingSlotId = useGraphStore((s) => s.editingSlotId);
   const moveSlots = useGraphStore((s) => s.moveSlots);
@@ -173,6 +174,16 @@ export const CuelistPanel: React.FC = () => {
       </div>
 
       {/* Cue list */}
+      {/* Log opérationnel — P2.4 : qui a GO quand, quel NACK. */}
+      {showLog.length > 0 && (
+        <div className="border-t border-stagespace-border px-3 py-1.5 max-h-24 overflow-y-auto flex-shrink-0">
+          {showLog.slice(-6).reverse().map((l, i) => (
+            <div key={i} className="text-[10px] text-gray-500 font-mono truncate">
+              {new Date(l.ts).toLocaleTimeString()} · {l.label}
+            </div>
+          ))}
+        </div>
+      )}
       <div className="flex-1 overflow-y-auto">
         {cues.length === 0 ? (
           <div className="px-3 py-3">

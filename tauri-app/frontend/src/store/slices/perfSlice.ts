@@ -27,6 +27,10 @@ export interface PerfSlice {
   /// confidence view : le "commanded" vs l'intention GUI.
   emittedPositions: Record<number, [number, number, number]>;
   refreshEmittedPositions: () => Promise<void>;
+  /// Log opérationnel des commandes show — qui a GO quand, quel NACK.
+  /// P2.4 : l'historique horodaté visible en conduite.
+  showLog: { ts: number; label: string }[];
+  pushShowLog: (label: string) => void;
 }
 
 export const createPerfSlice: StateCreator<PerfSlice, [], [], PerfSlice> = (set) => ({
@@ -57,6 +61,11 @@ export const createPerfSlice: StateCreator<PerfSlice, [], [], PerfSlice> = (set)
       set({ emittedPositions: pos });
     } catch { /* non critique */ }
   },
+  showLog: [],
+  pushShowLog: (label) =>
+    set((s) => ({
+      showLog: [...s.showLog.slice(-49), { ts: Date.now(), label }],
+    })),
 });
 
 // Poll source-de-contrôle — vit dans le slice (donnée), pas React, et
