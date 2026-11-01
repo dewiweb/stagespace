@@ -469,3 +469,61 @@ fn test_worker_fade_collapses_toward_origin() {
     assert!((p_end.x - 6.0).abs() < 1e-9, "x={}", p_end.x);
     rt.stop();
 }
+
+#[test]
+fn test_anchor_current_starts_from_captured_position() {
+    // AnchorMode::Current — la trajectoire est offsetée pour que pos(t)
+    // = capturée + (traj(t) − traj(première frame)) : le move part de là
+    // où l'objet était, sans saut (chaînage move→move).
+    let rt = test_runtime();
+    let buffer = Arc::new(PositionBuffer::new());
+    rt.set_position_buffer(buffer.clone());
+    // Objet capturé à (10,10,10) — le delta = capturée − traj doit être
+    // appliqué : avec une traj constante (1,0,0) la sortie = capturée.
+    let mut captured = std::collections::HashMap::new();
+    captured.insert(0usize, nalgebra::Vector3::new(10.0, 10.0, 10.0));
+    rt.set_anchor_capture(captured);
+    rt.play_compiled(
+        Arc::new(|_, _| nalgebra::Vector3::new(1.0, 0.0, 0.0)),
+        test_params(60.0),
+        vec![1],
+    )
+    .unwrap();
+    std::thread::sleep(Duration::from_millis(80));
+    rt.stop();
+    let positions = buffer.read();
+    let p = positions[0].1;
+    assert!(
+        (p.x - 10.0).abs() < 1e-9 && (p.y - 10.0).abs() < 1e-9 && (p.z - 10.0).abs() < 1e-9,
+        "AnchorMode::Current : la sortie doit partir de la position capturée, reçu {p:?}"
+    );
+}
+
+#[test]
+fn test_anchor_follow_origin_tracks_target() {
+    // AnchorMode::Follow — l'origine du move suit la dernière position
+    // émise de la track cible À CHAQUE frame (orbit autour d'un objet
+    // qui bouge — follow-me spatial).
+    let mut rt = test_runtime();
+    let buffer = Arc::new(PositionBuffer::new());
+    rt.set_position_buffer(buffer.clone());
+    let last: std::collections::HashMap<usize, [f64; 3]> =
+        [(0usize, [5.0, 0.0, 0.0])].into_iter().collect();
+    let handle = Arc::new(std::sync::RwLock::new(last));
+    rt.set_last_positions_handle(handle);
+    rt.set_anchor_follow(Some(0));
+    rt.play_compiled(
+        Arc::new(|_, _| nalgebra::Vector3::new(1.0, 0.0, 0.0)),
+        test_params(60.0),
+        vec![1],
+    )
+    .unwrap();
+    std::thread::sleep(Duration::from_millis(80));
+    rt.stop();
+    let positions = buffer.read();
+    let p = positions[0].1;
+    assert!(
+        (p.x - 6.0).abs() < 1e-9,
+        "Follow : origin doit suivre la cible (5,0,0) → traj(1,0,0)+origin = (6,0,0), reçu {p:?}"
+    );
+}
