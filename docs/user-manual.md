@@ -194,6 +194,29 @@ Commandes d'expression directe — utilisables depuis la console ou le busking :
 - `play` — rejoue la bande au rythme réel (injectée dans le merge)
 - `export` — exporte la bande en `.sstape.json` |
 
+### 4quater. Contrôles interactifs (surfaces)
+
+Au-delà des boutons, plusieurs contrôles directs sur les surfaces :
+
+- **Radar 2D** (vue Jeu — panneau droit) : plan top-down X/Y des positions
+  mergées live, colorées par source de contrôle (move/manuel/hold/park/freeze).
+  **Drag un objet = grab & throw** — vous lancez physiquement la source.
+- **GestureStrip** (vue Jeu) : slider de **compression spatiale** `k`
+  (resserre/étend le champ en live) + release de la stase attention —
+  partagé avec la fenêtre `?view=run`.
+- **LiveDrawer** (bas de PerformView) : panneau à scopes — Params / Tracks /
+  Audio du move sélectionné + Global merge — le canvas 3D reste visible
+  pendant le tweak (pas de modal).
+- **Manipulate / Macros** (overlay canvas) : macros **globales** merge
+  (speed, scale, shift, rotation — affecte tous les moves live) +
+  *clear overrides* des positions manuelles.
+- **ManualReleaseBar** (flottante, toutes surfaces) : un objet dragué est
+  **tenu en manuel** (prioritaire au merge, il reste figé) — la barre permet
+  de **libérer** chaque retenue d'un geste.
+- **ObjectInspectBar** : clic sur un objet (3D ou radar) → inspect — état
+  source (manuel/move/hold/park/freeze), position, boutons de release par
+  mode. Le détail par objet sans ouvrir l'Inspector.
+
 ## 4ter. Sémantique « continue » d'un move
 
 Deux flags par move/slot (onglet **Playback**) :
