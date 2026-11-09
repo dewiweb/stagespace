@@ -63,6 +63,8 @@ conduite détachable**. Le mode **Edit** sert à la préparation.
 
 ![Perform — move armé](screenshots/06-perform-slot.png)
 
+![Jeu — slot live + radar](screenshots/14-jeu-live-radar.png)
+
 ### 2.2 Edit — la préparation
 
 ![Edit](screenshots/03-edit.png)
@@ -113,6 +115,8 @@ Bouton **BUSKING** (topbar Perform) : pads géants numérotés `#n`
 - Header : LIVE · PANIC · Fermer — le strict nécessaire en FOH.
 
 ### 2.6 Conduite — la vue FOH
+
+![Conduite — cue armée + log OSC](screenshots/15-conduite-armed.png)
 
 ![Conduite — surface réelle](screenshots/11-conduite.png)
 
@@ -188,6 +192,8 @@ Commandes d'expression directe — utilisables depuis la console ou le busking :
 | `/stagespace/gesture <name> [strength]` | geste composé en une commande : `explode` · `converge` · `orbit` · `front` — vélocité calculée par objet |
 | `/stagespace/soundcheck [stop]` | sonde cyclique des objets (passe chaque track en revue — vérification des canaux) |
 | `/stagespace/rehearsal <action>` | mode répétition & pos-tape — alias `/stagespace/record` (voir ci-dessous) |
+
+![Geste explode](screenshots/16-gesture-explode.png) ![Stase attention](screenshots/17-attention.png)
 
 **Pos-tape** (`/stagespace/rehearsal <action>`) — enregistrement/rejeu de positions :
 
@@ -298,6 +304,8 @@ Brancher un fader externe — onglet *OSC IN* (PerformView) :
 - **Panic (Esc / PANIC)** : stoppe tous les moves + renvoie les positions origine.
 - **Dry-run / ARM** : tout tourne, rien ne part au renderer — l'indicateur
   `LIVE`/`DRY-RUN` est **toujours visible** dans la StatusBar.
+
+![DRY-RUN — chip topbar + status](screenshots/18-dryrun.png)
 - **BACKEND ✕** : une commande backend a échoué silencieusement — le moteur ne
   répond probablement plus. Revient au vert au premier IPC réussi.
 - **Park** : un objet repris à la main échappe aux recalls — chip **PARKED**
