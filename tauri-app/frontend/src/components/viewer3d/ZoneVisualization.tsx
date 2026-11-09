@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { useGraphStore } from '../store/useGraphStore';
-import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
-import type { Zone } from '../store/slices/spatialFxSlice';
-import { toThree } from '../utils/coords';
+import { useGraphStore } from '../../store/useGraphStore';
+import { useGlobalGraphStore } from '../../store/useGlobalGraphStore';
+import type { Zone } from '../../store/slices/spatialFxSlice';
+import { toThree } from '../../utils/coords';
 
 
 const MANUAL_COLOR = 0x22d3ee; // cyan — zones manuelles (FX panel / CLI / OSC IN)

@@ -4,7 +4,7 @@ import { TrackGrid } from '../TrackGrid';
 import { AudioModList } from '../AudioModControls';
 import { MacrosSurface } from '../show/MacrosSurface';
 import { Slider } from '../ui/Slider';
-import { NodeParamsPanel } from '../NodeParamsPanel';
+import { NodeParamsPanel } from '../panels/NodeParamsPanel';
 import { OscMappingsPanel } from './OscMappingsPanel';
 import { useGraphStore } from '../../store/useGraphStore';
 import { useMoveEditorStore } from '../../store/useMoveEditorStore';

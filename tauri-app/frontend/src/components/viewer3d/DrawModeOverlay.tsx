@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pencil } from 'lucide-react';
-import { useGraphStore } from '../store/useGraphStore';
-import Slider from './ui/Slider';
+import { useGraphStore } from '../../store/useGraphStore';
+import Slider from '../ui/Slider';
 
 /**
  * Overlay du mode Draw — slider Z + instructions + bouton Done.

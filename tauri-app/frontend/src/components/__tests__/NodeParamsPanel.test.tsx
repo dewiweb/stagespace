@@ -2,7 +2,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { NodeParamsPanel } from '../NodeParamsPanel';
+import { NodeParamsPanel } from '../panels/NodeParamsPanel';
 import { useGraphStore, resetStore, makeNode } from '../../store/__tests__/testHelpers';
 
 /// Pin-to-Perform — toggles 📌 en mode édition, filtrage curé en performMode.

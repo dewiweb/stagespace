@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import { safeInvoke as invoke } from '../utils/tauri';
-import { useGraphStore } from '../store/useGraphStore';
-import { useMoveEditorStore } from '../store/useMoveEditorStore';
-import { toThree } from '../utils/coords';
-import { trackHue } from '../utils/trackColor';
+import { safeInvoke as invoke } from '../../utils/tauri';
+import { useGraphStore } from '../../store/useGraphStore';
+import { useMoveEditorStore } from '../../store/useMoveEditorStore';
+import { toThree } from '../../utils/coords';
+import { trackHue } from '../../utils/trackColor';
 
 
 interface TrajectoryVisualizationProps {

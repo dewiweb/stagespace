@@ -1,8 +1,8 @@
 import React from 'react';
-import { useGraphStore } from '../store/useGraphStore';
+import { useGraphStore } from '../../store/useGraphStore';
 import { Move3d, MousePointerClick, Pencil } from 'lucide-react';
-import { ModeBanner } from './ui/ModeBanner';
-import { isDetachedWindow } from '../utils/safeStorage';
+import { ModeBanner } from '../ui/ModeBanner';
+import { isDetachedWindow } from '../../utils/safeStorage';
 
 interface ModeButtonsProps {
   manipulateMode: boolean;

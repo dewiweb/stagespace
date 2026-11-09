@@ -1,7 +1,7 @@
 import React from 'react';
 import { Play } from 'lucide-react';
-import Scene3D from './Scene3D';
-import CuelistPanel from './CuelistPanel';
+import Scene3D from './viewer3d/Scene3D';
+import CuelistPanel from './panels/CuelistPanel';
 import EmptyState from './ui/EmptyState';
 import { StatusChip } from './ui/StatusChip';
 import { SlotTile } from './show/SlotTile';

@@ -7,7 +7,7 @@ import React from 'react';
 import { useGraphStore } from '../../store/useGraphStore';
 import { doThrow, doClearPosition } from '../../utils/liveActions';
 import { sourceHex, SOURCE_LABEL, SOURCE_HEX } from '../../utils/sourceColors';
-import { ObjectInspectBar } from '../ObjectInspectBar';
+import { ObjectInspectBar } from '../viewer3d/ObjectInspectBar';
 import type { Zone } from '../../store/slices/spatialFxSlice';
 
 /// Empreinte top-down d'une zone en coords monde (x, y) — bounds utilisés

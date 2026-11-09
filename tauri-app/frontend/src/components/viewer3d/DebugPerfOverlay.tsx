@@ -1,5 +1,5 @@
 import React from 'react';
-import { debugPerf } from '../utils/debugPerf';
+import { debugPerf } from '../../utils/debugPerf';
 
 export const DebugPerfOverlay: React.FC = () => {
   const [, forceRender] = React.useState(0);

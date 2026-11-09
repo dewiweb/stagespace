@@ -3,7 +3,7 @@
 /// rejouable, exportable .sscore.json) ; TAPE = positions émises ~30Hz
 /// (le flux positions, pour bounce/rejeu chez un renderer externe).
 import React from 'react';
-import { doRehearsal, scoreExport, scoreImport, doTape, tapeImport } from '../utils/liveActions';
+import { doRehearsal, scoreExport, scoreImport, doTape, tapeImport } from '../../utils/liveActions';
 
 const btn = 'px-1.5 py-0.5 text-[10px] rounded';
 const rec = `${btn} bg-red-900/50 hover:bg-red-800/70 text-red-300`;

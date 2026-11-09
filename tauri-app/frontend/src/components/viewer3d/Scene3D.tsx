@@ -2,32 +2,32 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
-import { useGraphStore } from '../store/useGraphStore';
-import { useMoveEditorStore } from '../store/useMoveEditorStore';
+import { useGraphStore } from '../../store/useGraphStore';
+import { useMoveEditorStore } from '../../store/useMoveEditorStore';
 import { TriangleAlert } from 'lucide-react';
 import { MacrosPanel } from './MacrosPanel';
 import { DebugPerfOverlay } from './DebugPerfOverlay';
-import { debugPerf } from '../utils/debugPerf';
+import { debugPerf } from '../../utils/debugPerf';
 
 // Exposer debugPerf sur window pour le render loop et le listener IPC
 (window as any).__debugPerf = debugPerf;
 import { DrawModeOverlay } from './DrawModeOverlay';
 import { ModeButtons } from './ModeButtons';
-import { ModeBanner } from './ui/ModeBanner';
+import { ModeBanner } from '../ui/ModeBanner';
 import { TrajectoryVisualization } from './TrajectoryVisualization';
 import { ZoneVisualization } from './ZoneVisualization';
 import { ObjectInspectBar } from './ObjectInspectBar';
-import { useHolMarkers } from '../hooks/useHolMarkers';
-import { useObjects3D } from '../hooks/useObjects3D';
-import { useManipulateHandle } from '../hooks/useManipulateHandle';
-import { useInteractionModes } from '../hooks/useInteractionModes';
-import { useDrawMode } from '../hooks/useDrawMode';
-import { useManipulateMode } from '../hooks/useManipulateMode';
-import { useRenderLoop } from '../hooks/useRenderLoop';
-import { fromThree, toThree } from '../utils/coords';
-import { dollyCamera } from '../utils/three';
-import { zoneToParams, zoneToParamsResized } from '../store/slices/spatialFxSlice';
-import { doClearPosition } from '../utils/liveActions';
+import { useHolMarkers } from '../../hooks/useHolMarkers';
+import { useObjects3D } from '../../hooks/useObjects3D';
+import { useManipulateHandle } from '../../hooks/useManipulateHandle';
+import { useInteractionModes } from '../../hooks/useInteractionModes';
+import { useDrawMode } from '../../hooks/useDrawMode';
+import { useManipulateMode } from '../../hooks/useManipulateMode';
+import { useRenderLoop } from '../../hooks/useRenderLoop';
+import { fromThree, toThree } from '../../utils/coords';
+import { dollyCamera } from '../../utils/three';
+import { zoneToParams, zoneToParamsResized } from '../../store/slices/spatialFxSlice';
+import { doClearPosition } from '../../utils/liveActions';
 
 interface Scene3DProps {
   width?: string | number;

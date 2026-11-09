@@ -1,9 +1,9 @@
 import React from 'react';
 import { Pin } from 'lucide-react';
-import { ParamInput } from './ParamInput';
-import { PARAM_SCHEMA, ENGINE_TYPES, NON_PARAM_NODES, pluginNodeSchema, pluginParamsOnSwitch, type NodeParamValue, type GraphNodeData, type ParamDef } from './nodeParamSchema';
-import { useGraphStore } from '../store/useGraphStore';
-import type { NodeType } from '../store/types/index';
+import { ParamInput } from '../ParamInput';
+import { PARAM_SCHEMA, ENGINE_TYPES, NON_PARAM_NODES, pluginNodeSchema, pluginParamsOnSwitch, type NodeParamValue, type GraphNodeData, type ParamDef } from '../nodeParamSchema';
+import { useGraphStore } from '../../store/useGraphStore';
+import type { NodeType } from '../../store/types/index';
 import type { Node } from '@xyflow/react';
 
 /**

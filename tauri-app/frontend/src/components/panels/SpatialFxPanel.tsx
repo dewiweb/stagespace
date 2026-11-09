@@ -1,10 +1,10 @@
 import React from 'react';
 import { X } from 'lucide-react';
-import { toast } from '../utils/toast-helpers';
-import { useGraphStore } from '../store/useGraphStore';
-import { safeInvoke as invoke } from '../utils/tauri';
-import EmptyState from './ui/EmptyState';
-import { ConfirmModal } from './ui/ConfirmModal';
+import { toast } from '../../utils/toast-helpers';
+import { useGraphStore } from '../../store/useGraphStore';
+import { safeInvoke as invoke } from '../../utils/tauri';
+import EmptyState from '../ui/EmptyState';
+import { ConfirmModal } from '../ui/ConfirmModal';
 import {
   SPATIAL_CHANNELS,
   describeChannels,
@@ -14,7 +14,7 @@ import {
   type KinematicSourceName,
   type SpatialChannelName,
   zoneToParams,
-} from '../store/slices/spatialFxSlice';
+} from '../../store/slices/spatialFxSlice';
 
 const inputCls =
   'w-full px-2.5 py-1.5 bg-gray-800 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none';

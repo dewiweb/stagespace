@@ -3,7 +3,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import AudioPanel from '../AudioPanel';
+import AudioPanel from '../panels/AudioPanel';
 import { useGraphStore } from '../../store/useGraphStore';
 import { resetStore, getInvokeCalls, setInvokeResponse } from '../../store/__tests__/testHelpers';
 

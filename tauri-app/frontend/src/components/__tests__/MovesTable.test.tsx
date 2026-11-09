@@ -3,7 +3,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import MovesTable from '../MovesTable';
+import MovesTable from '../panels/MovesTable';
 import { useGraphStore } from '../../store/useGraphStore';
 import { useMoveEditorStore } from '../../store/useMoveEditorStore';
 import { resetStore, makeSlot, getInvokeCalls, clearInvokeCalls } from '../../store/__tests__/testHelpers';

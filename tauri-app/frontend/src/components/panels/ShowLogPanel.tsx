@@ -2,8 +2,8 @@
 /// Toutes les entrées (le slice en garde 50), scrollables. Partagé par
 /// l'atelier (tab Log) — la conduite a sa propre vue du même showLog.
 import React from 'react';
-import { useGraphStore } from '../store/useGraphStore';
-import EmptyState from './ui/EmptyState';
+import { useGraphStore } from '../../store/useGraphStore';
+import EmptyState from '../ui/EmptyState';
 
 export const ShowLogPanel: React.FC = () => {
   const showLog = useGraphStore((s) => s.showLog);

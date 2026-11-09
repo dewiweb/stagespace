@@ -1,10 +1,10 @@
 import React from 'react';
 import { Hexagon, X } from 'lucide-react';
-import { useMoveEditorStore, Move } from '../store/useMoveEditorStore';
-import { useGraphStore } from '../store/useGraphStore';
-import EmptyState from './ui/EmptyState';
-import { ConfirmModal } from './ui/ConfirmModal';
-import { SHAPE_PRESETS, type ShapePreset } from '../utils/shapePresets';
+import { useMoveEditorStore, Move } from '../../store/useMoveEditorStore';
+import { useGraphStore } from '../../store/useGraphStore';
+import EmptyState from '../ui/EmptyState';
+import { ConfirmModal } from '../ui/ConfirmModal';
+import { SHAPE_PRESETS, type ShapePreset } from '../../utils/shapePresets';
 
 // Icône pour une animation — dérivée du node engine principal du graphe
 function animIcon(anim: Move): string {

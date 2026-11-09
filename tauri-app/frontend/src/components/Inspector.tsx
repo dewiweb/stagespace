@@ -3,7 +3,7 @@ import { useMoveEditorStore, Move } from '../store/useMoveEditorStore';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { TrackGrid } from './TrackGrid';
 import { PARAM_SCHEMA, NODE_DESCRIPTIONS, getCategoryColor, type ParamDef, type NodeParamValue, type GraphNodeData } from './nodeParamSchema';
-import { NodeParamsPanel } from './NodeParamsPanel';
+import { NodeParamsPanel } from './panels/NodeParamsPanel';
 import { ParamInput } from './ParamInput';
 import type { MacrosState } from '../store/slices/macrosSlice';
 import { silentCatch } from '../utils/tauri';

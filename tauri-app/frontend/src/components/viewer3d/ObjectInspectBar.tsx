@@ -3,9 +3,9 @@
 /// et l'overlay du viewer 3D : la sélection par proximité produit le
 /// même affichage sur les deux surfaces.
 import React from 'react';
-import { useGraphStore } from '../store/useGraphStore';
-import { doClearPosition, doUnpark, doPark, doAttention } from '../utils/liveActions';
-import { sourceHex, SOURCE_LABEL } from '../utils/sourceColors';
+import { useGraphStore } from '../../store/useGraphStore';
+import { doClearPosition, doUnpark, doPark, doAttention } from '../../utils/liveActions';
+import { sourceHex, SOURCE_LABEL } from '../../utils/sourceColors';
 
 interface ObjectInspectBarProps {
   /// Positions live à afficher (radar: livePositions/emittedPositions,

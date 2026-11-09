@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
-import { useCuelistStore, type CueData } from '../store/useCuelistStore';
-import { useGraphStore } from '../store/useGraphStore';
-import { doCuePrev, doCueNext, doCueRecallById } from '../utils/liveActions';
-import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
-import { useSignalGraphStore } from '../store/useSignalGraphStore';
-import { ConfirmModal } from './ui/ConfirmModal';
-import EmptyState from './ui/EmptyState';
-import { Badge } from './ui/Badge';
-import { toast } from '../utils/toast-helpers';
-import { useOscArmed } from '../hooks/useOscArmed';
+import { useCuelistStore, type CueData } from '../../store/useCuelistStore';
+import { useGraphStore } from '../../store/useGraphStore';
+import { doCuePrev, doCueNext, doCueRecallById } from '../../utils/liveActions';
+import { useGlobalGraphStore } from '../../store/useGlobalGraphStore';
+import { useSignalGraphStore } from '../../store/useSignalGraphStore';
+import { ConfirmModal } from '../ui/ConfirmModal';
+import EmptyState from '../ui/EmptyState';
+import { Badge } from '../ui/Badge';
+import { toast } from '../../utils/toast-helpers';
+import { useOscArmed } from '../../hooks/useOscArmed';
 
 export const CuelistPanel: React.FC<{ readonly?: boolean }> = ({ readonly = false }) => {
   const cues = useCuelistStore((s) => s.cues);

@@ -4,8 +4,8 @@
 /// chemin GUI fiable : clic-droit = menu natif webview, Alt = WM Linux,
 /// les gestes modificateurs sont tous captés avant l'app.
 import React from 'react';
-import { useGraphStore } from '../store/useGraphStore';
-import { doClearPosition, doClearAllPositions, doUnpark, doAttention } from '../utils/liveActions';
+import { useGraphStore } from '../../store/useGraphStore';
+import { doClearPosition, doClearAllPositions, doUnpark, doAttention } from '../../utils/liveActions';
 
 export const ManualReleaseBar: React.FC = () => {
   // Tous les états override qui figent un objet — chacun avec son release :

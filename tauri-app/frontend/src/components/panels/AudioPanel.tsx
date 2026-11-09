@@ -1,6 +1,6 @@
 import React from 'react';
-import { safeInvoke as invoke } from '../utils/tauri';
-import { useGraphStore } from '../store/useGraphStore';
+import { safeInvoke as invoke } from '../../utils/tauri';
+import { useGraphStore } from '../../store/useGraphStore';
 
 interface AudioDevice {
   id: string;

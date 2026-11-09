@@ -1,7 +1,7 @@
 import React from 'react';
-import { safeInvoke } from '../utils/tauri';
-import { toast } from '../utils/toast-helpers';
-import { MacrosSurface } from './show/MacrosSurface';
+import { safeInvoke } from '../../utils/tauri';
+import { toast } from '../../utils/toast-helpers';
+import { MacrosSurface } from '../show/MacrosSurface';
 
 /// Overlay "Manipulate" du canvas 3D — macros globales via MacrosSurface
 /// partagé (plus de 3e surface divergente) + clear des overrides manuels,

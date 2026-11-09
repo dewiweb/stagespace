@@ -1,13 +1,13 @@
 import React from 'react';
 import { CircleDot, Play, Square, RefreshCw, Pencil, SlidersHorizontal, X, Star, ChevronDown } from 'lucide-react';
-import { useGraphStore } from '../store/useGraphStore';
-import { useMoveEditorStore } from '../store/useMoveEditorStore';
-import { SHAPE_PRESETS } from '../utils/shapePresets';
-import { useModalGuardOn } from '../utils/modalGuard';
-import Modal from './ui/Modal';
-import Slider from './ui/Slider';
-import EmptyState from './ui/EmptyState';
-import ConfirmModal from './ui/ConfirmModal';
+import { useGraphStore } from '../../store/useGraphStore';
+import { useMoveEditorStore } from '../../store/useMoveEditorStore';
+import { SHAPE_PRESETS } from '../../utils/shapePresets';
+import { useModalGuardOn } from '../../utils/modalGuard';
+import Modal from '../ui/Modal';
+import Slider from '../ui/Slider';
+import EmptyState from '../ui/EmptyState';
+import ConfirmModal from '../ui/ConfirmModal';
 
 /// MovesTable — la table des moves (concept unifié)
 /// Tout est un Move. Certains moves sont dans la setlist (l'ordre du spectacle).
