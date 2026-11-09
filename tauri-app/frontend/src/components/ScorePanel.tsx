@@ -35,7 +35,7 @@ export const ScorePanel: React.FC = () => {
           </p>
         </div>
         <div>
-          <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1.5">Tape — positions émises (~30 Hz)</div>
+          <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1.5">Tape — positions (30 Hz)</div>
           <div className="flex items-center gap-1.5">
             <button onClick={() => doTape('record')} title="Tape rec — positions réellement émises" className={rec}>⏺ rec</button>
             <button onClick={() => doTape('stop')} title="Tape stop" className={stp}>⏹</button>

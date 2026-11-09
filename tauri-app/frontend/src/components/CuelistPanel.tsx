@@ -154,7 +154,7 @@ export const CuelistPanel: React.FC<{ readonly?: boolean }> = ({ readonly = fals
           onChange={(e) => setNewCueName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleStoreCue()}
           placeholder="Cue name..."
-          className="flex-1 px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-white placeholder-gray-600 focus:outline-none focus:border-purple-500"
+          className="flex-1 min-w-0 px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-white placeholder-gray-600 focus:outline-none focus:border-purple-500"
         />
         <input
           type="number"
@@ -163,12 +163,12 @@ export const CuelistPanel: React.FC<{ readonly?: boolean }> = ({ readonly = fals
           value={newCueFade}
           onChange={(e) => setNewCueFade(Math.max(0, Number(e.target.value) || 0))}
           title="Crossfade duration on recall (s)"
-          className="w-14 px-1.5 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-white text-right font-mono focus:outline-none focus:border-purple-500"
+          className="w-14 flex-shrink-0 px-1.5 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-white text-right font-mono focus:outline-none focus:border-purple-500"
         />
         <button
           onClick={handleStoreCue}
           disabled={!newCueName.trim()}
-          className="px-2 py-1 text-xs bg-purple-700 hover:bg-purple-600 text-white rounded disabled:opacity-30 font-medium"
+          className="flex-shrink-0 px-2 py-1 text-xs bg-purple-700 hover:bg-purple-600 text-white rounded disabled:opacity-30 font-medium"
         >
           ★ Store
         </button>
