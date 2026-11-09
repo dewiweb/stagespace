@@ -56,7 +56,10 @@ impl Compiler {
     /// Entrées trajectoire d'un node Plugin, ordonnées par port (`a`,
     /// `b`, `in`) — les ports Positions de l'ABI v2. Les carriers
     /// Objects/Duration ne peuvent pas atterrir ici (types disjoints).
-    pub(crate) fn plugin_trajectory_inputs(graph: &Graph, node: &Node) -> Vec<crate::graph::NodeId> {
+    pub(crate) fn plugin_trajectory_inputs(
+        graph: &Graph,
+        node: &Node,
+    ) -> Vec<crate::graph::NodeId> {
         let mut edges: Vec<&crate::graph::Edge> = graph
             .edges
             .iter()
@@ -140,5 +143,4 @@ impl Compiler {
             }
         }
     }
-
 }

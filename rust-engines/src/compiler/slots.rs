@@ -1,3 +1,4 @@
+use super::LiveInputs;
 /// Modulation de params par slots (domaine signal `param:`) — extraite de
 /// mod.rs (règle modularisation). Helpers appelés par compile_engine /
 /// compile_modifier : binding compile-time des slots de params modulables.
@@ -6,10 +7,8 @@ use crate::engines::EngineParams;
 use crate::graph::Node;
 use crate::param_slots::ParamSlots;
 use std::sync::{Arc, Mutex};
-use super::LiveInputs;
 
 // ── Modulation de params par slots (domaine signal `param:`) ──
-
 
 /// Binding compile-time d'un param modulable : index du slot + bornes du
 /// spec. Capturé par la closure — l'eval reste lock/alloc-free.
@@ -239,4 +238,3 @@ pub(crate) fn inject_audio_values(
         }
     }
 }
-

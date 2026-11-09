@@ -68,9 +68,6 @@ impl MergeRuntime {
             let mut frame_count = 0u64;
             let mut last_perf_update = Instant::now();
             let mut frames_since_perf = 0u64;
-            let mut osc_since_perf = 0u64;
-            let mut osc_errors_perf = 0u64;
-            let mut osc_refused_perf = 0u64;
             // Circuit-breaker OSC (C6) : si >50 % des paquets reviennent en
             // ECONNREFUSED sur 2 fenêtres de perf consécutives (~1 s), la
             // destination est morte — on suspend les sends (le merge et le
@@ -79,9 +76,7 @@ impl MergeRuntime {
             // panne persiste les fenêtres refused re-tripent naturellement.
             // Sans ça : 30 000 encodages/s + sends perdus indéfiniment, et
             // le sweep de PANIC retardé d'autant.
-            let mut osc_circuit_open = false;
-            let mut osc_bad_windows = 0u32;
-            let mut last_probe = Instant::now() - Duration::from_secs(1);
+            let mut osc_flow = frame_helpers::OscFlow::new();
             // États cinématiques par objet — thread-local, aucun lock.
             // Mesurés sur les positions finales (post-merge + post-process).
             let mut kinematic_states: HashMap<usize, KinematicState> = HashMap::new();
@@ -734,51 +729,19 @@ impl MergeRuntime {
                 // 4.5 Cinématique : vitesse/accélération/jerk sur les positions
                 // finales (celles réellement envoyées au renderer), dt réel
                 // entre frames pour une mesure correcte même en cas de jitter.
-                let kin_dt = prev_t.map(|p| (t_real - p).max(1e-6)).unwrap_or(dt);
-                prev_t = Some(t_real);
-                let kin_smoothing = *timed_lock!(
-                    lock_wait_ns,
-                    lock_sites,
+                frame_helpers::update_kinematics(
+                    &mut kinematic_states,
+                    &transformed,
+                    &mut prev_t,
+                    t_real,
+                    dt,
+                    &kinematic_smoothing_arc,
+                    &channel_modulations_arc,
+                    &graph_modulations_arc,
+                    &mut lock_wait_ns,
+                    &mut lock_sites,
                     lock_profiling,
-                    "kin_smoothing.read",
-                    kinematic_smoothing_arc
-                        .read()
-                        .unwrap_or_else(|e| e.into_inner())
                 );
-                let has_modulations = !timed_lock!(
-                    lock_wait_ns,
-                    lock_sites,
-                    lock_profiling,
-                    "channel_modulations.read",
-                    channel_modulations_arc
-                        .read()
-                        .unwrap_or_else(|e| e.into_inner())
-                )
-                .is_empty()
-                    || !timed_lock!(
-                        lock_wait_ns,
-                        lock_sites,
-                        lock_profiling,
-                        "graph_modulations.read",
-                        graph_modulations_arc
-                            .read()
-                            .unwrap_or_else(|e| e.into_inner())
-                    )
-                    .is_empty();
-                if has_modulations {
-                    let present: std::collections::HashSet<usize> =
-                        transformed.iter().map(|(i, _)| *i).collect();
-                    for (obj_idx, pos) in &transformed {
-                        kinematic_states.entry(*obj_idx).or_default().update(
-                            *pos,
-                            kin_dt,
-                            kin_smoothing,
-                        );
-                    }
-                    kinematic_states.retain(|idx, _| present.contains(idx));
-                } else if !kinematic_states.is_empty() {
-                    kinematic_states.clear();
-                }
                 // Vu-mètre perceptuel — vitesses par frame sur `transformed`
                 // (espace canonique — ce que l'opérateur perçoit, pas le
                 // payload venue-mappé).
@@ -914,180 +877,25 @@ impl MergeRuntime {
                 // compté dans `refused` (renderer down), pas du packet loss.
                 // Erreurs comptées, jamais loguées par paquet (flood de warn!
                 // quand le renderer est down).
-                let object_channels = timed_lock!(
-                    lock_wait_ns,
-                    lock_sites,
+                emit::emit_osc_frame(
+                    &object_channels_arc,
+                    &osc_armed_arc,
+                    &sink_arc,
+                    &mut osc_flow,
+                    &transformed,
+                    &osc_ids,
+                    &last_out_positions_arc,
+                    &eff_channels_override,
+                    &modulated_channels,
+                    &zones,
+                    &last_effective_channels_arc,
+                    &venue_map_arc,
+                    &distance_reality_arc,
+                    &spatial_comp_arc,
+                    &mut lock_wait_ns,
+                    &mut lock_sites,
                     lock_profiling,
-                    "object_channels.read",
-                    object_channels_arc
-                        .read()
-                        .unwrap_or_else(|e| e.into_inner())
-                )
-                .clone();
-                // Master arm : disarmé = silence total, le merge continue
-                // (preview alive) mais aucun paquet ne part — ni les sends
-                // normaux ni la sonde du circuit-breaker.
-                if osc_armed_arc.load(Ordering::SeqCst) {
-                    let mut sink_guard = timed_lock!(
-                        lock_wait_ns,
-                        lock_sites,
-                        lock_profiling,
-                        "sink.lock",
-                        sink_arc.lock().unwrap_or_else(|e| e.into_inner())
-                    );
-                    if osc_circuit_open {
-                        // Circuit ouvert : une sonde par seconde — un vrai
-                        // send_state du premier objet (donnée utile si le
-                        // renderer est revenu entre-temps).
-                        if last_probe.elapsed() >= Duration::from_secs(1) {
-                            last_probe = Instant::now();
-                            if let Some(&(obj_idx, pos)) =
-                                transformed.iter().find(|(i, _)| osc_ids.get(*i).is_some())
-                            {
-                                // En circuit ouvert, seule la sonde part —
-                                // last_out ne doit pas prétendre que tout
-                                // `transformed` a été tenté (revue F3).
-                                last_out_positions_arc
-                                    .write()
-                                    .unwrap_or_else(|e| e.into_inner())
-                                    .insert(obj_idx, [pos.x, pos.y, pos.z]);
-                                let report = sink_guard.send_state(
-                                    osc_ids[obj_idx],
-                                    venue_map_arc
-                                        .read()
-                                        .unwrap_or_else(|e| e.into_inner())
-                                        .map(|(s, o, yaw)| {
-                                            let (c, sn) = (yaw.cos(), yaw.sin());
-                                            let (x, y) =
-                                                (pos.x * c - pos.y * sn, pos.x * sn + pos.y * c);
-                                            [x * s[0] + o[0], y * s[1] + o[1], pos.z * s[2] + o[2]]
-                                        })
-                                        .unwrap_or([pos.x, pos.y, pos.z])
-                                        .into(),
-                                    None,
-                                );
-                                if report.sent > 0 && report.refused == 0 && report.errors == 0 {
-                                    osc_circuit_open = false;
-                                    osc_bad_windows = 0;
-                                    crate::logging::log_osc_error(
-                                        "OSC circuit CLOSED — renderer reachable again",
-                                    );
-                                }
-                            }
-                        }
-                    } else {
-                        // Positions réellement tentées — la confidence view
-                        // ne montre que ce qui part au renderer (dry-run et
-                        // circuit ouvert = rien n'est émis, last_out se fige).
-                        {
-                            let mut last_out = last_out_positions_arc
-                                .write()
-                                .unwrap_or_else(|e| e.into_inner());
-                            for (obj, pos) in &transformed {
-                                last_out.insert(*obj, [pos.x, pos.y, pos.z]);
-                            }
-                        }
-                        for (obj_idx, pos) in &transformed {
-                            if let Some(&osc_id) = osc_ids.get(*obj_idx) {
-                                // Canaux effectifs = statiques + modulés (modulation
-                                // prioritaire sur les canaux qu'elle cible) + zones
-                                // (blend par influence, prioritaires sur le reste)
-                                let effective: Option<SpatialChannels> =
-                                    if let Some(over) = &eff_channels_override {
-                                        over.get(obj_idx).copied()
-                                    } else {
-                                        let has_zones =
-                                            crate::zones::any_zone_applies(&zones, *obj_idx, pos);
-                                        match (
-                                            object_channels.get(obj_idx),
-                                            modulated_channels.get(obj_idx),
-                                            has_zones,
-                                        ) {
-                                            (None, None, false) => None,
-                                            (s, m, _) => {
-                                                let mut eff = s.copied().unwrap_or_default();
-                                                if let Some(mc) = m {
-                                                    eff.overlay(mc);
-                                                }
-                                                crate::zones::apply_zones(
-                                                    &zones, *obj_idx, pos, &mut eff,
-                                                );
-                                                Some(eff)
-                                            }
-                                        }
-                                    };
-                                // Readback opérateur — les canaux FX calculés
-                                // (statiques ⊕ modulés ⊕ zones) rendent l'effet
-                                // visible sans écouter le rendu.
-                                {
-                                    let mut ec = last_effective_channels_arc
-                                        .write()
-                                        .unwrap_or_else(|e| e.into_inner());
-                                    match &effective {
-                                        Some(e) => {
-                                            ec.insert(*obj_idx, *e);
-                                        }
-                                        None => {
-                                            ec.remove(obj_idx);
-                                        }
-                                    }
-                                }
-                                let report = {
-                                    // Auto-venue + réalité-distance : seul
-                                    // le payload OSC est transformé —
-                                    // zones/canaux évalués sur `pos`
-                                    // canonique (correct).
-                                    let reality = *distance_reality_arc
-                                        .read()
-                                        .unwrap_or_else(|e| e.into_inner());
-                                    let r = pos.norm();
-                                    let mut send_pos = venue_map_arc
-                                        .read()
-                                        .unwrap_or_else(|e| e.into_inner())
-                                        .map(|(s, o, yaw)| {
-                                            let (c, sn) = (yaw.cos(), yaw.sin());
-                                            let (x, y) =
-                                                (pos.x * c - pos.y * sn, pos.x * sn + pos.y * c);
-                                            nalgebra::Vector3::new(
-                                                x * s[0] + o[0],
-                                                y * s[1] + o[1],
-                                                pos.z * s[2] + o[2],
-                                            )
-                                        })
-                                        .unwrap_or(*pos);
-                                    let mut eff_out = effective;
-                                    if let Some((ex, ga, al)) = reality {
-                                        // Exagération géométrique — la
-                                        // distance perçue compresse ~×0.7 :
-                                        // pousser les objets lointains pour
-                                        // retrouver l'échelle perçue.
-                                        send_pos *= r.max(1.0).powf(ex);
-                                        let eff = eff_out.get_or_insert_with(Default::default);
-                                        // distance → DRR renderer (reverb)
-                                        eff.distance = Some(r);
-                                        // gain 1/(1+a·r) — atténuation
-                                        eff.gain = Some(eff.gain.unwrap_or(1.0) / (1.0 + ga * r));
-                                        // presence e^(-air·r) — air-EQ
-                                        if let Some(p) = eff.presence {
-                                            eff.presence = Some(p * (-al * r).exp());
-                                        }
-                                    }
-                                    // Dynamique spatiale — le compresseur
-                                    // spatial global (k<1 resserre le champ).
-                                    let k =
-                                        *spatial_comp_arc.read().unwrap_or_else(|e| e.into_inner());
-                                    if (k - 1.0).abs() > 1e-6 {
-                                        send_pos *= k;
-                                    }
-                                    sink_guard.send_state(osc_id, send_pos, eff_out.as_ref())
-                                };
-                                osc_since_perf += report.sent as u64;
-                                osc_errors_perf += report.errors as u64;
-                                osc_refused_perf += report.refused as u64;
-                            }
-                        }
-                    }
-                }
+                );
 
                 // 6. Callback pour le 3D preview : display = positions mergées +
                 // positions preview (affichées mais jamais envoyées en OSC).
@@ -1148,65 +956,14 @@ impl MergeRuntime {
                 // 7. Perf monitor — agrégation des erreurs OSC (1 log max par
                 // fenêtre de 500 ms au lieu d'un warn! par paquet échoué).
                 frame_count += 1;
-                frames_since_perf += 1;
-                let perf_elapsed = last_perf_update.elapsed();
-                if perf_elapsed.as_millis() >= 500 {
-                    let secs = perf_elapsed.as_secs_f64();
-                    let fps_actual = frames_since_perf as f64 / secs;
-                    let osc_rate = osc_since_perf as f64 / secs;
-                    let frame_time_us = frame_start.elapsed().as_micros() as f64;
-                    let latency_ms = frame_time_us / 1000.0;
-                    let cpu_pct = (latency_ms / (1000.0 / fps)) * 100.0;
-                    let total_osc = osc_since_perf + osc_errors_perf;
-                    let (error_rate, refused_rate) = if total_osc > 0 {
-                        (
-                            osc_errors_perf as f64 / total_osc as f64,
-                            osc_refused_perf as f64 / total_osc as f64,
-                        )
-                    } else {
-                        (0.0, 0.0)
-                    };
-                    if osc_errors_perf > 0 {
-                        crate::logging::log_osc_error(&format!(
-                            "MergeRuntime OSC: {} erreurs / {} paquets sur {:.0} ms ({} refused)",
-                            osc_errors_perf,
-                            total_osc,
-                            perf_elapsed.as_millis(),
-                            osc_refused_perf
-                        ));
-                    }
-                    // Circuit-breaker : 2 fenêtres de 500 ms à >50 % refused
-                    // = renderer mort → suspendre les sends (sonde à 1 Hz).
-                    if !osc_circuit_open {
-                        if total_osc > 0 && refused_rate > 0.5 {
-                            osc_bad_windows += 1;
-                            if osc_bad_windows >= 2 {
-                                osc_circuit_open = true;
-                                // Sonde quasi-immédiate à la prochaine frame.
-                                last_probe = Instant::now() - Duration::from_secs(1);
-                                crate::logging::log_osc_error(
-                                    "OSC circuit OPEN — target unreachable, suspending sends (probe @1Hz)",
-                                );
-                            }
-                        } else {
-                            osc_bad_windows = 0;
-                        }
-                    }
-                    perf.set_osc_suspended(osc_circuit_open);
-                    perf.update_with_error_rate(
-                        fps_actual,
-                        osc_rate,
-                        latency_ms,
-                        cpu_pct,
-                        error_rate,
-                        refused_rate,
-                    );
-                    frames_since_perf = 0;
-                    osc_since_perf = 0;
-                    osc_errors_perf = 0;
-                    osc_refused_perf = 0;
-                    last_perf_update = Instant::now();
-                }
+                frame_helpers::update_perf_window(
+                    &mut osc_flow,
+                    &mut frames_since_perf,
+                    &mut last_perf_update,
+                    &perf,
+                    fps,
+                    frame_start,
+                );
 
                 // Durée de travail réel de la frame (merge + sends + perf) —
                 // exclut le sleep de pacing : c'est le vrai coût hot-path,

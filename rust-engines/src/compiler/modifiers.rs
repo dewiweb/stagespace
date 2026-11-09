@@ -307,5 +307,4 @@ impl Compiler {
             other => Err(CompilationError::InvalidNodeType(other)),
         }
     }
-
 }

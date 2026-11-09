@@ -14,9 +14,7 @@ pub(super) fn advance_tape_replay(
     let mut play = tape_play.write().unwrap_or_else(|e| e.into_inner());
     if let Some((start, entries, cursor)) = play.as_mut() {
         let elapsed = start.elapsed().as_secs_f64();
-        let mut manual = manual_positions
-            .write()
-            .unwrap_or_else(|e| e.into_inner());
+        let mut manual = manual_positions.write().unwrap_or_else(|e| e.into_inner());
         while *cursor < entries.len() && entries[*cursor].0 <= elapsed {
             for (obj, pos) in &entries[*cursor].1 {
                 manual.insert(*obj, *pos);
@@ -39,9 +37,7 @@ pub(super) fn integrate_thrown(
     let mut thrown = thrown.write().unwrap_or_else(|e| e.into_inner());
     if !thrown.is_empty() {
         let damp = (-2.0 * dt).exp(); // ~amortissement 2/s
-        let mut manual = manual_positions
-            .write()
-            .unwrap_or_else(|e| e.into_inner());
+        let mut manual = manual_positions.write().unwrap_or_else(|e| e.into_inner());
         thrown.retain(|obj, vel| {
             if let Some(p) = manual.get_mut(obj) {
                 p[0] += vel[0] * dt;
@@ -226,10 +222,7 @@ pub(super) fn park_all_objects(
                 nalgebra::Vector3::new(x * s[0] + o[0], y * s[1] + o[1], origin.z * s[2] + o[2])
             })
             .unwrap_or(origin);
-        let ids = osc_ids
-            .read()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
+        let ids = osc_ids.read().unwrap_or_else(|e| e.into_inner()).clone();
         let mut sink_guard = sink.lock().unwrap_or_else(|e| e.into_inner());
         for osc_id in ids.iter() {
             let _ = sink_guard.send_state(*osc_id, send_origin, None);
@@ -243,5 +236,168 @@ pub(super) fn park_all_objects(
         // send (bloquant borné) plutôt que try_send : la frame
         // de parking DOIT passer — le pump est en général vide.
         let _ = tx.send((0.0, Vec::new()));
+    }
+}
+
+/// État du flux OSC sur la fenêtre de perf courante — compteurs de
+/// sends + état du circuit-breaker. Muté par la boucle d'envoi
+/// (compteurs par paquet) et update_perf_window (trip du circuit).
+/// Regroupé : les deux sites partagent le même état, un tuple de 6
+/// &mut en signature serait illisible pour le même effet.
+pub(super) struct OscFlow {
+    pub sent: u64,
+    pub errors: u64,
+    pub refused: u64,
+    pub bad_windows: u32,
+    pub circuit_open: bool,
+    pub last_probe: Instant,
+}
+
+impl OscFlow {
+    pub fn new() -> Self {
+        Self {
+            sent: 0,
+            errors: 0,
+            refused: 0,
+            bad_windows: 0,
+            circuit_open: false,
+            last_probe: Instant::now() - Duration::from_secs(1),
+        }
+    }
+}
+
+/// Perf monitor — agrégation des erreurs OSC (1 log max par
+/// fenêtre de 500 ms au lieu d'un warn! par paquet échoué) +
+/// circuit-breaker : 2 fenêtres de 500 ms à >50 % refused
+/// = renderer mort → suspendre les sends (sonde à 1 Hz).
+pub(super) fn update_perf_window(
+    flow: &mut OscFlow,
+    frames_since_perf: &mut u64,
+    last_perf_update: &mut Instant,
+    perf: &PerfMonitor,
+    fps: f64,
+    frame_start: Instant,
+) {
+    *frames_since_perf += 1;
+    let perf_elapsed = last_perf_update.elapsed();
+    if perf_elapsed.as_millis() >= 500 {
+        let secs = perf_elapsed.as_secs_f64();
+        let fps_actual = *frames_since_perf as f64 / secs;
+        let osc_rate = flow.sent as f64 / secs;
+        let frame_time_us = frame_start.elapsed().as_micros() as f64;
+        let latency_ms = frame_time_us / 1000.0;
+        let cpu_pct = (latency_ms / (1000.0 / fps)) * 100.0;
+        let total_osc = flow.sent + flow.errors;
+        let (error_rate, refused_rate) = if total_osc > 0 {
+            (
+                flow.errors as f64 / total_osc as f64,
+                flow.refused as f64 / total_osc as f64,
+            )
+        } else {
+            (0.0, 0.0)
+        };
+        if flow.errors > 0 {
+            crate::logging::log_osc_error(&format!(
+                "MergeRuntime OSC: {} erreurs / {} paquets sur {:.0} ms ({} refused)",
+                flow.errors,
+                total_osc,
+                perf_elapsed.as_millis(),
+                flow.refused
+            ));
+        }
+        if !flow.circuit_open {
+            if total_osc > 0 && refused_rate > 0.5 {
+                flow.bad_windows += 1;
+                if flow.bad_windows >= 2 {
+                    flow.circuit_open = true;
+                    // Sonde quasi-immédiate à la prochaine frame.
+                    flow.last_probe = Instant::now() - Duration::from_secs(1);
+                    crate::logging::log_osc_error(
+                        "OSC circuit OPEN — target unreachable, suspending sends (probe @1Hz)",
+                    );
+                }
+            } else {
+                flow.bad_windows = 0;
+            }
+        }
+        perf.set_osc_suspended(flow.circuit_open);
+        perf.update_with_error_rate(
+            fps_actual,
+            osc_rate,
+            latency_ms,
+            cpu_pct,
+            error_rate,
+            refused_rate,
+        );
+        *frames_since_perf = 0;
+        flow.sent = 0;
+        flow.errors = 0;
+        flow.refused = 0;
+        *last_perf_update = Instant::now();
+    }
+}
+
+/// Cinématique : vitesse/accélération/jerk sur les positions
+/// finales (celles réellement envoyées au renderer), dt réel
+/// entre frames pour une mesure correcte même en cas de jitter.
+/// Court-circuit : aucune modulation déclarée → états vidés,
+/// coût nul (les KinematicState ne servent qu'aux modulations).
+#[allow(clippy::too_many_arguments)]
+pub(super) fn update_kinematics(
+    kinematic_states: &mut HashMap<usize, KinematicState>,
+    transformed: &[(usize, nalgebra::Vector3<f64>)],
+    prev_t: &mut Option<f64>,
+    t_real: f64,
+    dt: f64,
+    kinematic_smoothing: &Arc<RwLock<f64>>,
+    channel_modulations: &Arc<RwLock<Arc<Vec<ChannelModulation>>>>,
+    graph_modulations: &Arc<RwLock<Arc<Vec<ChannelModulation>>>>,
+    lock_wait_ns: &mut u64,
+    lock_sites: &mut HashMap<&'static str, u64>,
+    lock_profiling: bool,
+) {
+    let mut wait_ns = 0u64;
+    let kin_dt = prev_t.map(|p| (t_real - p).max(1e-6)).unwrap_or(dt);
+    *prev_t = Some(t_real);
+    let kin_smoothing = *timed_lock!(
+        wait_ns,
+        lock_sites,
+        lock_profiling,
+        "kin_smoothing.read",
+        kinematic_smoothing
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+    );
+    let has_modulations = !timed_lock!(
+        wait_ns,
+        lock_sites,
+        lock_profiling,
+        "channel_modulations.read",
+        channel_modulations
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+    )
+    .is_empty()
+        || !timed_lock!(
+            wait_ns,
+            lock_sites,
+            lock_profiling,
+            "graph_modulations.read",
+            graph_modulations.read().unwrap_or_else(|e| e.into_inner())
+        )
+        .is_empty();
+    *lock_wait_ns += wait_ns;
+    if has_modulations {
+        let present: std::collections::HashSet<usize> =
+            transformed.iter().map(|(i, _)| *i).collect();
+        for (obj_idx, pos) in transformed {
+            kinematic_states
+                .entry(*obj_idx)
+                .or_default()
+                .update(*pos, kin_dt, kin_smoothing);
+        }
+        kinematic_states.retain(|idx, _| present.contains(idx));
+    } else if !kinematic_states.is_empty() {
+        kinematic_states.clear();
     }
 }

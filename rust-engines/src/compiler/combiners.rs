@@ -176,5 +176,4 @@ impl Compiler {
             Self::node_ref(graph, inputs[1])?,
         ))
     }
-
 }

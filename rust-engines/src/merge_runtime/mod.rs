@@ -20,6 +20,7 @@
 //! - OSC output : une seule socket
 //! - Callback : un seul event Tauri pour le 3D preview
 
+mod emit;
 mod frame_helpers;
 mod helpers;
 mod loop_core;
@@ -117,6 +118,9 @@ const CATCHUP_FRAME_LIMIT: u128 = 30;
 /// moves actifs, merge les positions, applique les macros spatiales, envoie l'OSC.
 /// (scale, offset, yaw) — transform venue appliqué au payload OSC uniquement.
 type VenueMap = ([f64; 3], [f64; 3], f64);
+/// distance_reality : (exagération, gain-atténuation, air-EQ) — tuple lu
+/// dans la boucle d'envoi (emit.rs) et par les setters state_ops.
+type DistanceReality = Option<(f64, f64, f64)>;
 /// Frame de tape : (temps, positions canoniques par objet).
 type TapeFrame = (f64, HashMap<usize, [f64; 3]>);
 /// État du replay tape : (départ, frames, index courant).

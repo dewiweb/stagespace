@@ -170,7 +170,10 @@ impl Compiler {
     }
 
     /// Extrait les paramètres du graphe pour un nœud
-    pub(crate) fn extract_params(graph: &Graph, node: &Node) -> Result<EngineParams, CompilationError> {
+    pub(crate) fn extract_params(
+        graph: &Graph,
+        node: &Node,
+    ) -> Result<EngineParams, CompilationError> {
         // n_objects et duration sont résolus depuis le nœud lui-même, sinon héritées
         // des nœuds Objects / Duration connectés en amont.
         let n_objects = Self::resolve_n_objects(graph, node)?;
