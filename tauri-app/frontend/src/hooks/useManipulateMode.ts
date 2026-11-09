@@ -1,14 +1,17 @@
 import { useRef, useState, useCallback, MutableRefObject } from 'react';
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { useGraphStore } from '../store/useGraphStore';
 import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { throttleTrailingKeyed } from '../utils/throttle';
 import { fromThree } from '../utils/coords';
 import { doClearPosition } from '../utils/liveActions';
+import { dollyCamera } from '../utils/three';
 
 interface UseManipulateModeParams {
   cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>;
+  controlsRef?: MutableRefObject<OrbitControls | null>;
   containerRef: MutableRefObject<HTMLDivElement | null>;
   objectsRef: MutableRefObject<THREE.Mesh[]>;
   handleRef: MutableRefObject<THREE.Mesh | null>;
@@ -17,11 +20,12 @@ interface UseManipulateModeParams {
 
 /**
  * Gère le mode manipulation : drag des objets 3D et du handle,
- * rotation (shift+drag), scale (scroll).
+ * rotation (shift+drag), scale (scroll sur le handle).
  * (L'assignation de tracks se fait dans la TrackGrid — mode assign retiré.)
  */
 export function useManipulateMode({
   cameraRef,
+  controlsRef,
   containerRef,
   objectsRef,
   handleRef,
@@ -246,44 +250,33 @@ export function useManipulateMode({
     [],
   );
 
-  // Clic-droit = relâcher l'objet : sa position manuelle (prioritaire au
-  // merge) est retirée → le moteur reprend la main. Même affordance que
-  // le clic-droit du radar 2D. Pas de gate manipulateMode — un objet tenu
-  // doit pouvoir être relâché dans tous les modes (OrbitControls pan =
-  // drag droit, pas contextmenu — aucun conflit).
-  const handleManipulateContextMenu = useCallback(
-    (e: React.MouseEvent) => {
-      // preventDefault EN PREMIER — sinon le menu natif webview
-      // (back/reload/inspect) s'ouvre quand le raycast rate l'objet.
-      e.preventDefault();
-      const camera = cameraRef.current;
-      const container = containerRef.current;
-      if (!camera || !container) return;
-      const rect = container.getBoundingClientRect();
-      const ndc = new THREE.Vector2(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1,
-      );
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(ndc, camera);
-      const visibleObjs = objectsRef.current.filter((o) => o.visible);
-      const objHits = raycaster.intersectObjects(visibleObjs, true);
-      if (objHits.length === 0) return;
-      let hitObj = objHits[0].object as THREE.Mesh;
-      let idx = objectsRef.current.indexOf(hitObj);
-      while (idx < 0 && hitObj.parent) {
-        hitObj = hitObj.parent as THREE.Mesh;
-        idx = objectsRef.current.indexOf(hitObj);
-      }
-      if (idx >= 0) doClearPosition(idx);
-    },
-    [cameraRef, containerRef, objectsRef],
-  );
+  // Clic-droit = relâcher l'objet tenu — géré au niveau conteneur dans
+  // Scene3D (pointerdown/up <6px <500ms + pickObjectIndexAt) pour marcher
+  // dans TOUS les modes, pas seulement manipulate.
 
-  // Scroll = scale la trajectoire (quand on est sur le handle en manipulate mode)
+  // Scroll : scale la trajectoire UNIQUEMENT au-dessus du handle — ailleurs
+  // la molette zoome la caméra (restauré : avant, scroll n'importe où
+  // scalait et le zoom était impossible dans tous les modes interactifs).
   const handleManipulateWheel = useCallback(
     (e: React.WheelEvent) => {
       if (!manipulateMode) return;
+      const camera = cameraRef.current;
+      const container = containerRef.current;
+      // Scale la trajectoire SEULEMENT au-dessus du handle — ailleurs la
+      // molette zoome la caméra (avant : scale global → zoom impossible).
+      if (camera && container && handleRef.current) {
+        const rect = container.getBoundingClientRect();
+        const ndc = new THREE.Vector2(
+          ((e.clientX - rect.left) / rect.width) * 2 - 1,
+          -((e.clientY - rect.top) / rect.height) * 2 + 1,
+        );
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(ndc, camera);
+        if (raycaster.intersectObject(handleRef.current).length === 0) {
+          dollyCamera(controlsRef?.current ?? null, e.deltaY < 0 ? 0.92 : 1.08);
+          return;
+        }
+      }
       // deltaY < 0 = scroll up = agrandir
       const factor = e.deltaY < 0 ? 1.05 : 0.95;
       const animStore = animStoreRef.current;
@@ -292,7 +285,7 @@ export function useManipulateMode({
       // Aussi mettre à jour les macros legacy
       setMacros({ ...useGraphStore.getState().macros, scale: newScale });
     },
-    [manipulateMode, setMacros],
+    [manipulateMode, cameraRef, controlsRef, containerRef, handleRef, setMacros],
   );
 
   return {
@@ -305,6 +298,5 @@ export function useManipulateMode({
     handleManipulateMove,
     handleManipulateUp,
     handleManipulateWheel,
-    handleManipulateContextMenu,
   };
 }

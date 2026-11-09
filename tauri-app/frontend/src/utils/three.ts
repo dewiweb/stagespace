@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 /// Retire `obj` de `parent` en détachant d'abord ses CSS2DObject descendants.
 ///
@@ -14,4 +15,18 @@ export function removeWithLabels(parent: THREE.Object3D, obj: THREE.Object3D) {
   });
   labels.forEach((l) => l.removeFromParent());
   parent.remove(obj);
+}
+
+/// Dolly la caméra vers/depuis `controls.target` (clampé à min/maxDistance).
+/// Zoom manuel utilisé quand OrbitControls.enabled=false — les overlays des
+/// modes interactifs capturaient la molette : sans ça, impossible de zoomer
+/// tant qu'un mode (draw/manipulate/assign/zone) était armé.
+export function dollyCamera(controls: OrbitControls | null, factor: number) {
+  if (!controls) return;
+  const camera = controls.object;
+  const dir = camera.position.clone().sub(controls.target);
+  const len = dir.length();
+  if (len < 1e-9) return;
+  const newLen = THREE.MathUtils.clamp(len * factor, controls.minDistance, controls.maxDistance);
+  camera.position.copy(controls.target).addScaledVector(dir.normalize(), newLen);
 }

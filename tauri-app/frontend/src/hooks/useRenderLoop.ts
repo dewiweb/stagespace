@@ -64,10 +64,11 @@ export interface UseRenderLoopParams {
   holProject: HolProject | null;
   drawnPoints: DrawnPointsValue;
   draggingObjectRef: MutableRefObject<number | null>;
-  manualPositions: Record<number, [number, number, number]>;
   // Pour signaler l'échec WebGL
   setWebglFailed: (v: boolean) => void;
   dimensions: { width: number; height: number };
+  /// Incrémenté pour forcer une ré-init (bouton Retry après échec WebGL).
+  initKey?: number;
 }
 
 /**
@@ -97,15 +98,14 @@ export function useRenderLoop({
   holProject,
   drawnPoints,
   draggingObjectRef,
-  manualPositions,
   setWebglFailed,
+  initKey = 0,
 }: UseRenderLoopParams) {
   // Refs internes pour les valeurs changeantes — lues dans le render loop à 60fps
   const macrosRef = useRef(macros);
   const manipulateModeRef = useRef(manipulateMode);
   const holProjectRef = useRef(holProject);
   const drawnPointsRef = useRef(drawnPoints);
-  const manualPositionsRef = useRef(manualPositions);
   const lastDrawnKeyRef = useRef('');
 
   // Sync des refs à chaque render React (cheap — pas d'effet de bord)
@@ -113,7 +113,6 @@ export function useRenderLoop({
   manipulateModeRef.current = manipulateMode;
   holProjectRef.current = holProject;
   drawnPointsRef.current = drawnPoints;
-  manualPositionsRef.current = manualPositions;
 
   // Init scene — ne se déclenche qu'une seule fois (deps = [])
   // Les dimensions initiales sont lues directement depuis le container
@@ -362,8 +361,7 @@ export function useRenderLoop({
             }
           } else {
             // Pas de position pour cet objet → manualPositions (statique)
-            const manualPos = manualPositionsRef.current;
-            const mp = manualPos[objIdx];
+            const mp = storeState.manualPositions[objIdx];
             if (mp) {
               const [tx, ty, tz] = toThree(mp[0], mp[1], mp[2]);
               mesh.position.set(tx, ty, tz);
@@ -386,7 +384,7 @@ export function useRenderLoop({
         // ── Mode statique : aucun move actif, OU positions pas encore arrivées
         // (transition après GO/recall — on montre les positions manuelles
         // plutôt qu'un flash de scène vide) ──
-        const manualPos = manualPositionsRef.current;
+        const manualPos = storeState.manualPositions;
         const manipMode = manipulateModeRef.current;
         const showObjects = manipMode || mvts.length > 0;
         objs.forEach((mesh) => { hideMeshAndLabels(mesh); });
@@ -588,5 +586,6 @@ export function useRenderLoop({
       setWebglFailed(true);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // ← deps vide : la scène n'est créée qu'une fois. Le ResizeObserver gère les resize.
+  }, [initKey]); // ← la scène n'est créée qu'une fois par initKey (Retry WebGL
+  // incrémente → cleanup + ré-init). Le ResizeObserver gère les resize.
 }

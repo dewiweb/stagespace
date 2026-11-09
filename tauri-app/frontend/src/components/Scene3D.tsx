@@ -24,6 +24,7 @@ import { useDrawMode } from '../hooks/useDrawMode';
 import { useManipulateMode } from '../hooks/useManipulateMode';
 import { useRenderLoop } from '../hooks/useRenderLoop';
 import { fromThree, toThree } from '../utils/coords';
+import { dollyCamera } from '../utils/three';
 import { zoneToParams, zoneToParamsResized } from '../store/slices/spatialFxSlice';
 import { doClearPosition } from '../utils/liveActions';
 
@@ -42,6 +43,9 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [webglFailed, setWebglFailed] = useState(false);
   const [sceneReady, setSceneReady] = useState(false);
+  // Incrémenté par le bouton Retry — refire l'init du render loop
+  // (avant : retry était mort, l'effect [] ne se relançait jamais).
+  const [initKey, setInitKey] = useState(0);
 
   const isPlaying = useGraphStore((s) => s.movements.length > 0);
   const macros = useGraphStore((s) => s.macros);
@@ -63,7 +67,8 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   // dans useRenderLoop pour éviter 60 re-renders/seconde.
   // On garde movements pour le useMemo nObjects et le rendu conditionnel.
   const movements = useGraphStore((s) => s.movements);
-  const manualPositions = useGraphStore((s) => s.manualPositions);
+  // NOTE : manualPositions est lu via getState() dans useRenderLoop — une
+  // subscription ici re-rendrait Scene3D ~30×/s pendant un drag d'objet.
   const manualOscIds = useGraphStore((s) => s.manualOscIds);
   const editingSlotId = useGraphStore((s) => s.editingSlotId);
   const debugPerfVisible = useMoveEditorStore((s) => s.debugPerfVisible);
@@ -119,22 +124,31 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
     handleManipulateWheel,
   } = useManipulateMode({
     cameraRef,
+    controlsRef,
     containerRef,
     objectsRef,
     handleRef,
     manipulateMode,
   });
 
-  // Assign mode — clic sur un objet 3D = toggle de sa track via la même
-  // source de vérité que la TrackGrid (toggleTrackSelection → sélection +
-  // Objects node + slot en édition). Pas de chemin parallèle : la sélection
-  // ne peut pas diverger entre scène et grille.
-  const handleAssignDown = useCallback(
-    (e: React.PointerEvent) => {
-      if (e.button !== 0) return; // clic droit = release, pas assign
+  // Zoom manuel (dolly vers controls.target) — OrbitControls est désactivé
+  // pendant les modes interactifs : sans ça la molette ne zoomait plus.
+  const handleZoomWheel = useCallback((e: React.WheelEvent) => {
+    dollyCamera(controlsRef.current, e.deltaY < 0 ? 0.92 : 1.08);
+  }, []);
+
+  // Pick partagé — NDC→raycast sur les objets visibles, avec fallback
+  // proximité écran : une sphère en mouvement est dure à viser, l'objet
+  // le plus proche du clic (< proximityPx) est retourné. Utilisé par
+  // assign, release clic-droit — même sémantique que useManipulateMode.
+  const pickObjectIndexAt = useCallback(
+    (
+      e: { clientX: number; clientY: number },
+      opts?: { proximityPx?: number },
+    ): number | null => {
       const camera = cameraRef.current;
       const container = containerRef.current;
-      if (!camera || !container) return;
+      if (!camera || !container) return null;
       const rect = container.getBoundingClientRect();
       const ndc = new THREE.Vector2(
         ((e.clientX - rect.left) / rect.width) * 2 - 1,
@@ -142,24 +156,48 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
       );
       const raycaster = new THREE.Raycaster();
       raycaster.setFromCamera(ndc, camera);
-      // Même filtre que Manipulate : les tracks cachées par le focus slot
-      // ne doivent pas être assignables.
-      const hits = raycaster.intersectObjects(
-        objectsRef.current.filter((o) => o.visible), true,
-      );
-      if (hits.length === 0) return;
-      let hitObj = hits[0].object as THREE.Mesh;
-      let idx = objectsRef.current.indexOf(hitObj);
-      while (idx < 0 && hitObj.parent) {
-        hitObj = hitObj.parent as THREE.Mesh;
-        idx = objectsRef.current.indexOf(hitObj);
+      const visibleObjs = objectsRef.current.filter((o) => o.visible);
+      const hits = raycaster.intersectObjects(visibleObjs, true);
+      if (hits.length > 0) {
+        let hitObj = hits[0].object as THREE.Mesh;
+        let idx = objectsRef.current.indexOf(hitObj);
+        while (idx < 0 && hitObj.parent) {
+          hitObj = hitObj.parent as THREE.Mesh;
+          idx = objectsRef.current.indexOf(hitObj);
+        }
+        if (idx >= 0) return idx;
       }
-      if (idx < 0) return;
+      const maxPx = opts?.proximityPx ?? 0;
+      if (maxPx <= 0) return null;
+      let bd = maxPx;
+      let best: number | null = null;
+      for (const o of visibleObjs) {
+        const p = o.position.clone().project(camera);
+        if (p.z < -1 || p.z > 1) continue; // derrière la caméra
+        const sx = ((p.x + 1) / 2) * rect.width;
+        const sy = ((1 - p.y) / 2) * rect.height;
+        const d = Math.hypot(sx - (e.clientX - rect.left), sy - (e.clientY - rect.top));
+        if (d < bd) {
+          bd = d;
+          best = objectsRef.current.indexOf(o);
+        }
+      }
+      return best;
+    },
+    [cameraRef, containerRef, objectsRef],
+  );
+
+  // Assign mode — clic sur un objet 3D = toggle de sa track via la même
+  const handleAssignDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.button !== 0) return; // clic droit = release, pas assign
+      const idx = pickObjectIndexAt(e, { proximityPx: 40 });
+      if (idx === null) return;
       const s = useGraphStore.getState();
       const trackId = s.holProject?.tracks[idx]?.id ?? s.manualOscIds[idx] ?? idx + 1;
       s.toggleTrackSelection(trackId);
     },
-    [objectsRef],
+    [pickObjectIndexAt],
   );
 
   // Zone place mode — clic sur le sol (plan y=0 côté Three = z=0 backend)
@@ -297,27 +335,9 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
     rightDownRef.current = null;
     if (e.button !== 2 || !d) return;
     if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6 || Date.now() - d.t > 500) return;
-    const camera = cameraRef.current;
-    const container = containerRef.current;
-    if (!camera || !container) return;
-    const rect = container.getBoundingClientRect();
-    const ndc = new THREE.Vector2(
-      ((e.clientX - rect.left) / rect.width) * 2 - 1,
-      -((e.clientY - rect.top) / rect.height) * 2 + 1,
-    );
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(ndc, camera);
-    const visibleObjs = objectsRef.current.filter((o) => o.visible);
-    const objHits = raycaster.intersectObjects(visibleObjs, true);
-    if (objHits.length === 0) return;
-    let hitObj = objHits[0].object as THREE.Mesh;
-    let idx = objectsRef.current.indexOf(hitObj);
-    while (idx < 0 && hitObj.parent) {
-      hitObj = hitObj.parent as THREE.Mesh;
-      idx = objectsRef.current.indexOf(hitObj);
-    }
-    if (idx >= 0) doClearPosition(idx);
-  }, [cameraRef, containerRef, objectsRef]);
+    const idx = pickObjectIndexAt(e, { proximityPx: 40 });
+    if (idx !== null) doClearPosition(idx);
+  }, [pickObjectIndexAt]);
 
   // Resize observer — merge du handle resize en un seul effect
   // Met à jour directement les refs Three.js (pas de re-render React)
@@ -362,9 +382,9 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
     holProject,
     drawnPoints,
     draggingObjectRef,
-    manualPositions,
     setWebglFailed,
     dimensions,
+    initKey,
   });
 
   // Détecter quand la scène est initialisée (useRenderLoop mutate sceneRef.current)
@@ -411,8 +431,10 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
           <button
             onClick={() => {
               setWebglFailed(false);
-              // Force re-mount by toggling dimensions
-              setDimensions((d) => ({ ...d }));
+              // Re-tenter l'init réelle — incrémenter initKey refire
+              // l'effect du render loop (cleanup + scène recréée).
+              setSceneReady(false);
+              setInitKey((k) => k + 1);
             }}
             className="px-3 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 text-white rounded"
           >
@@ -460,6 +482,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
         onPointerMove={handleDrawMove}
         onPointerUp={handleDrawEnd}
         onPointerCancel={handleDrawEnd}
+        onWheel={handleZoomWheel}
       />
       {/* Interaction layer — manipulate, assign, place-zone ou edit-zone */}
       {zoneEditMode && (
@@ -470,7 +493,12 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
           onPointerMove={handleZoneEditMove}
           onPointerUp={handleZoneEditUp}
           onPointerCancel={handleZoneEditUp}
-          onWheel={handleZoneEditWheel}
+          onWheel={(e) => {
+            // Resize si la molette est au-dessus d'une zone — sinon zoom.
+            const r = zoneRaycast(e);
+            if (r && zoneIndexAt(r) !== null) handleZoneEditWheel(e);
+            else handleZoomWheel(e);
+          }}
         />
       )}
       {zonePlaceMode && (
@@ -478,6 +506,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
           className="absolute inset-0 z-overlay"
           style={{ cursor: 'crosshair' }}
           onPointerDown={handleZonePlaceDown}
+          onWheel={handleZoomWheel}
         />
       )}
       {assignMode && (
@@ -485,6 +514,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
           className="absolute inset-0 z-overlay"
           style={{ cursor: 'pointer' }}
           onPointerDown={handleAssignDown}
+          onWheel={handleZoomWheel}
         />
       )}
       {manipulateMode && (
