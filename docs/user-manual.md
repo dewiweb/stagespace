@@ -45,7 +45,7 @@ conduite détachable**. Le mode **Edit** sert à la préparation.
 
 ### 2.1 Perform — la vue live de base
 
-![Perform](screenshots/02-perform.png)
+![Surface Jeu](screenshots/12-jeu.png)
 
 | Zone | Rôle |
 |------|------|
@@ -60,8 +60,6 @@ conduite détachable**. Le mode **Edit** sert à la préparation.
 - La cue list partage la colonne avec la setlist — click = **arm**, double-click
   = **recall** (jamais de recall en un clic).
 - **Cue** affichée dans la topbar : `Cue n → suivante armée`.
-
-![Perform — move armé](screenshots/06-perform-slot.png)
 
 ![Jeu — slot live + radar](screenshots/14-jeu-live-radar.png)
 
@@ -80,15 +78,13 @@ conduite détachable**. Le mode **Edit** sert à la préparation.
 
 ### 2.3 Créer un move
 
-![Move + Inspector](screenshots/04-move-inspector.png)
+![Move + Inspector](screenshots/03-edit.png)
 
 `+ Move` crée un slot — choisissez un **template** (gauche), assignez des
 **tracks** (grille numérotée), réglez les **params** et les **fades**
 (fade in/out du slot), puis `▶ PLAY · Move n`.
 
 ### 2.4 Expert — l'éditeur de graphe
-
-![Éditeur de nœuds](screenshots/05-node-editor.png)
 
 Le toggle **Expert/Simple** ouvre le node editor :
 
@@ -309,8 +305,6 @@ Brancher un fader externe — onglet *OSC IN* (PerformView) :
 - **Confirmations** : toute action destructive (delete slot/template, clear-all
   zones/modulations/channels, remove par-item) passe par une boîte de
   confirmation — fini les deletes en un clic.
-
-![Confirmation de suppression](screenshots/09-confirm-delete.png)
 
 - **Guards recall** : pendant un recall, les commandes slot/cue sont rejetées
   (`nack busy`) plutôt qu'intercalées — jamais de mouvement orphelin.
