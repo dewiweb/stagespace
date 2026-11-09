@@ -386,7 +386,15 @@ export function useRenderLoop({
         // plutôt qu'un flash de scène vide) ──
         const manualPos = storeState.manualPositions;
         const manipMode = manipulateModeRef.current;
-        const showObjects = manipMode || mvts.length > 0;
+        // Les modes qui cliquent sur les objets (assign) ou les placent
+        // dans l'espace (zones) ont besoin de LES VOIR — sinon ils opèrent
+        // à l'aveugle sur une scène vide quand aucun move ne tourne.
+        const needsObjects =
+          manipMode ||
+          storeState.assignMode ||
+          storeState.zonePlaceMode ||
+          storeState.zoneEditMode;
+        const showObjects = needsObjects || mvts.length > 0;
         objs.forEach((mesh) => { hideMeshAndLabels(mesh); });
         if (showObjects) {
           objs.forEach((mesh, i) => {
@@ -397,8 +405,10 @@ export function useRenderLoop({
             if (p) {
               const [tx, ty, tz] = toThree(p[0], p[1], p[2]);
               mesh.position.set(tx, ty, tz);
-              showMeshAndLabels(mesh);
             }
+            // Sans position manuelle l'objet garde sa position spawn —
+            // affiché quand même : assign/zones doivent viser ce qui existe.
+            if (p || needsObjects) showMeshAndLabels(mesh);
           });
         }
       }

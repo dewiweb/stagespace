@@ -34,8 +34,9 @@ export function useManipulateMode({
   const [draggingObject, setDraggingObject] = useState<number | null>(null);
   const draggingObjectRef = useRef<number | null>(null);
   const [draggingHandle, setDraggingHandle] = useState(false);
-  // Track shift state for rotate vs move
-  const shiftHeldRef = useRef(false);
+  // Position/yaw au down — baseline du shift+drag (rotate). Le shift est
+  // lu en live dans handleManipulateMove (e.shiftKey) : basculer
+  // move↔rotate en cours de drag est possible.
   const dragStartPosRef = useRef<{ x: number; y: number } | null>(null);
   const dragStartYawRef = useRef(0);
 
@@ -86,7 +87,6 @@ export function useManipulateMode({
         const hits = raycaster.intersectObject(handleRef.current);
         if (hits.length > 0) {
           setDraggingHandle(true);
-          shiftHeldRef.current = e.shiftKey;
           dragStartPosRef.current = { x: e.clientX, y: e.clientY };
           dragStartYawRef.current = animStoreRef.current.current.yaw;
           (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -164,8 +164,9 @@ export function useManipulateMode({
       if (!raycaster.ray.intersectPlane(plane, intersection)) return;
 
       if (draggingHandle) {
-        // Shift+drag = rotation (yaw) de la trajectoire
-        if (shiftHeldRef.current && dragStartPosRef.current) {
+        // Shift+drag = rotation (yaw) — shift lu en live : basculer
+        // move↔rotate en cours de drag sans relâcher.
+        if (e.shiftKey && dragStartPosRef.current) {
           const dx = e.clientX - dragStartPosRef.current.x;
           // 1 pixel = 0.5° de rotation
           const newYaw = dragStartYawRef.current + dx * 0.5;
@@ -239,7 +240,6 @@ export function useManipulateMode({
       // Si on relâche un objet draggé, garder l'override (ne pas effacer)
       setDraggingObject(null);
       setDraggingHandle(false);
-      shiftHeldRef.current = false;
       dragStartPosRef.current = null;
       try {
         (e.target as HTMLElement).releasePointerCapture(e.pointerId);
