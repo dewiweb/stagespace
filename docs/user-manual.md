@@ -449,13 +449,14 @@ graphe de positions, le paramètre `speed` d'un moteur se lie à cette sortie.
 
 ## B. Draw mode — dessiner une trajectoire
 
-1. Activez **draw mode** dans la palette ou le canvas 3D — un nœud `DrawSpline`
-   est créé et le canvas passe en saisie de dessin.
-2. Dessinez à la souris — les points capturés remplissent `DrawSpline.params.points`.
-3. Reliez `DrawSpline → EvaluateSpline → Output`.
-4. **Exit Draw** (bouton dédié ou `Esc`) quitte le mode — le mode est
-   **exclusif** : il désactive assign/manipulate pendant le dessin.
-5. La trajectoire fantôme dessinée disparaît à la sortie — ce que vous voyez
+1. Ajoutez un nœud dessinable au graphe édité (`DrawSpline`, `EvaluateSpline`
+   ou `VectorField` en mode `drawn`) — palette Expert ou preset spline.
+2. Le bouton **Draw** du canvas 3D s'active — cliquez-le : le canvas passe en
+   saisie de dessin (Manipulate/Assign sont exclus).
+3. Dessinez à la souris — les points capturés remplissent `DrawSpline.params.points`.
+4. Reliez `DrawSpline → EvaluateSpline → Output` si ce n'est déjà fait.
+5. **Exit Draw** (bouton dédié ou `Esc`) quitte le mode.
+6. La trajectoire fantôme dessinée disparaît à la sortie — ce que vous voyez
    ensuite est la trajectoire réelle du move.
 
 ---
