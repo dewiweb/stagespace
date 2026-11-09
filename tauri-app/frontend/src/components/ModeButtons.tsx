@@ -42,7 +42,7 @@ export const ModeButtons: React.FC<ModeButtonsProps> = ({
     // Une sortie de mode au clic — les couches interactives couvrent le
     // canvas, le bouton doit rester accessible (Esc reste le raccourci).
     return (
-      <div className="absolute bottom-2 left-2 z-raised flex gap-1">
+      <div className="absolute bottom-2 left-2 z-raised flex gap-1 flex-wrap max-w-[calc(100%-8px)]">
         <button
           onClick={() => { clearDrawnPoints(); setDrawMode(false); }}
           className="px-2.5 py-1 text-xs rounded font-medium transition-colors bg-orange-700 text-white hover:bg-orange-600"
@@ -56,7 +56,7 @@ export const ModeButtons: React.FC<ModeButtonsProps> = ({
 
   return (
     <>
-      <div className="absolute bottom-2 left-2 z-raised flex gap-1">
+      <div className="absolute bottom-2 left-2 z-raised flex gap-1 flex-wrap max-w-[calc(100%-8px)]">
         <button
           onClick={() => setManipulateMode(!manipulateMode)}
           className={`px-2.5 py-1 text-xs rounded font-medium transition-colors ${
