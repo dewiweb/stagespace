@@ -336,9 +336,14 @@ export function useRenderLoop({
             // toute la scène cyan, on ne distinguait plus ce qui était on air).
             const isPreviewTrack = previewTracks.has(objIdx) && !liveTracks.has(objIdx);
             const isHighlighted = highlightedTracks.has(objIdx);
+            const isSelected = storeState.selectedObjIndex === objIdx;
             if (isPreviewTrack) {
               mat.color.setHex(0x00ccff);
               mat.emissive.setHex(0x003344);
+            } else if (isSelected) {
+              // Parité radar : l'objet sélectionné (clic proximité) reçoit
+              // le même highlight visible — emissive blanc au lieu de l'anneau.
+              mat.emissive.setHex(0x555555);
             } else if (isHighlighted) {
               // Track du move sélectionné : emissive renforcé (blanc chaud)
               mat.emissive.setHex(0x664400);

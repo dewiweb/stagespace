@@ -1,11 +1,13 @@
-/// Radar 2D top-down (plan X/Y) — positions RÉELLEMENT émises colorées
-/// par source-de-contrôle, auto-fit sur les bounds réels. Drag un objet
-/// = grab & throw : la vélocité du geste devient la vélocité du lancer.
+/// Radar 2D top-down (plan X/Y) — positions MERGÉES live colorées par
+/// source-de-contrôle (fallback emittedPositions = réellement envoyées),
+/// auto-fit amorti sur les bounds réels. Drag un objet = grab & throw :
+/// la vélocité du flick (~200ms) devient la vélocité du lancer.
 /// Partagé par la surface Jeu et la fenêtre ?view=run.
 import React from 'react';
 import { useGraphStore } from '../../store/useGraphStore';
-import { doThrow, doClearPosition, doPark, doUnpark, doAttention } from '../../utils/liveActions';
-import { sourceHex, SOURCE_LABEL } from '../../utils/sourceColors';
+import { doThrow, doClearPosition } from '../../utils/liveActions';
+import { sourceHex, SOURCE_LABEL, SOURCE_HEX } from '../../utils/sourceColors';
+import { ObjectInspectBar } from '../ObjectInspectBar';
 import type { Zone } from '../../store/slices/spatialFxSlice';
 
 /// Empreinte top-down d'une zone en coords monde (x, y) — bounds utilisés
@@ -82,16 +84,12 @@ export const Radar2D: React.FC = () => {
   const maxR = maxRef.current;
   const k = 100 / maxR;
 
-  // Inspect de l'objet sélectionné — sans lui le clic-proximité ne
-  // produisait qu'un anneau sans effet (state mort). Une ligne d'info +
-  // actions sous le radar : release selon l'état, park/unpark.
-  const selSrc = selectedObj != null ? (objectStates[selectedObj] ?? 'track') : null;
-  const selPos = selectedObj != null ? positions[selectedObj] : undefined;
-  const selTrackId = selectedObj != null ? (manualOscIds[selectedObj] ?? selectedObj + 1) : null;
-  const OVERRIDE_RELEASE: Record<string, (i: number) => void> = {
-    manual: doClearPosition, hold: doClearPosition,
-    park: doUnpark, freeze: () => doAttention(null),
-  };
+  // Inspect de l'objet sélectionné — délégué à ObjectInspectBar (partagé
+  // avec le viewer 3D) : état source + position + release/park.
+  // Position écran du drag-throw courant — la flèche montre la direction
+  // et la longueur du flick pendant le geste (feedback : le lancer était
+  // invisible avant).
+  const [throwCursor, setThrowCursor] = React.useState<{ x: number; y: number } | null>(null);
 
   return (
     <>
@@ -120,11 +118,18 @@ export const Radar2D: React.FC = () => {
         if (!drag) return;
         drag.trail.push({ x: e.clientX, y: e.clientY, t: Date.now() });
         if (drag.trail.length > 12) drag.trail.shift();
+        // Position du curseur en viewBox pour la flèche de lancer.
+        const rect = e.currentTarget.getBoundingClientRect();
+        setThrowCursor({
+          x: ((e.clientX - rect.left) / rect.width) * 220 - 110,
+          y: ((e.clientY - rect.top) / rect.height) * 220 - 110,
+        });
       }}
       onPointerUp={(e) => {
         const drag = throwDrag.current;
         if (!drag) return;
         throwDrag.current = null;
+        setThrowCursor(null);
         const rect = e.currentTarget.getBoundingClientRect();
         const totalDt = (Date.now() - drag.t) / 1000;
         const totalDx = e.clientX - drag.x;
@@ -270,47 +275,38 @@ export const Radar2D: React.FC = () => {
           </g>
         );
       })}
+      {/* Flèche du lancer en cours — direction + longueur du flick.
+          Le geste était invisible : impossible de viser le lancer. */}
+      {throwCursor && throwDrag.current && positions[throwDrag.current.id] && (() => {
+        const [ox, oy] = positions[throwDrag.current!.id];
+        const x1 = ox * k;
+        const y1 = oy * k;
+        return (
+          <line
+            x1={x1} y1={y1} x2={throwCursor.x} y2={throwCursor.y}
+            stroke="#22d3ee" strokeWidth="1.5" strokeOpacity="0.8"
+            markerEnd="url(#throwArrow)" pointerEvents="none"
+          />
+        );
+      })()}
+      <defs>
+        <marker id="throwArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#22d3ee" fillOpacity="0.8" />
+        </marker>
+      </defs>
     </svg>
-    {selectedObj != null && selSrc && (
-      <div className="mt-1 px-1.5 py-1 rounded bg-gray-800/80 border border-gray-700 text-[10px] flex items-center gap-1.5 flex-shrink-0">
-        <span className="text-white font-bold">#{selTrackId}</span>
-        <span
-          className="px-1 rounded font-semibold"
-          style={{ backgroundColor: sourceHex(selSrc) + '33', color: sourceHex(selSrc) }}
-        >
-          {SOURCE_LABEL[selSrc] ?? selSrc}
+    {/* Inspect de l'objet sélectionné — composant partagé avec le 3D */}
+    <ObjectInspectBar positions={positions} />
+    {/* Légende des couleurs source-de-contrôle — les points colorés
+        n'avaient aucune clé de lecture. */}
+    <div className="flex flex-wrap gap-x-2 gap-y-0.5 px-1 mt-0.5 flex-shrink-0">
+      {(['move', 'manual', 'hold', 'park', 'freeze', 'psn'] as const).map((src) => (
+        <span key={src} className="flex items-center gap-0.5 text-[9px] text-gray-500">
+          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: SOURCE_HEX[src] }} />
+          {src}
         </span>
-        {selPos && (
-          <span className="text-gray-500 font-mono">
-            {selPos[0].toFixed(1)},{selPos[1].toFixed(1)}
-          </span>
-        )}
-        <span className="flex-1" />
-        {OVERRIDE_RELEASE[selSrc] && (
-          <button
-            onClick={() => OVERRIDE_RELEASE[selSrc](selectedObj)}
-            className="px-1.5 py-0.5 rounded bg-orange-900/70 text-orange-200 hover:bg-orange-600 text-[10px] font-bold"
-            title={`Release obj ${selectedObj} (${selSrc}) — le moteur reprend`}
-          >
-            release
-          </button>
-        )}
-        <button
-          onClick={() => (selSrc === 'park' ? doUnpark(selectedObj) : doPark(selectedObj))}
-          className="px-1.5 py-0.5 rounded bg-cyan-900/70 text-cyan-200 hover:bg-cyan-700 text-[10px] font-bold"
-          title={selSrc === 'park' ? 'Unpark — l\'objet rejoint recalls/stop' : 'Park — gèle l\'objet hors recalls/stop/panic'}
-        >
-          {selSrc === 'park' ? 'unpark' : 'park'}
-        </button>
-        <button
-          onClick={() => setSelectedObj(null)}
-          className="px-1 text-gray-500 hover:text-white"
-          title="Désélectionner"
-        >
-          ×
-        </button>
-      </div>
-    )}
+      ))}
+    </div>
     </>
   );
 };

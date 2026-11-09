@@ -16,6 +16,7 @@ import { ModeButtons } from './ModeButtons';
 import { ModeBanner } from './ui/ModeBanner';
 import { TrajectoryVisualization } from './TrajectoryVisualization';
 import { ZoneVisualization } from './ZoneVisualization';
+import { ObjectInspectBar } from './ObjectInspectBar';
 import { useHolMarkers } from '../hooks/useHolMarkers';
 import { useObjects3D } from '../hooks/useObjects3D';
 import { useManipulateHandle } from '../hooks/useManipulateHandle';
@@ -70,6 +71,10 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   // NOTE : manualPositions est lu via getState() dans useRenderLoop — une
   // subscription ici re-rendrait Scene3D ~30×/s pendant un drag d'objet.
   const manualOscIds = useGraphStore((s) => s.manualOscIds);
+  const selectedObjIndex = useGraphStore((s) => s.selectedObjIndex);
+  // emittedPositions (1.5Hz) suffit pour la barre d'inspect — la vue live
+  // 60fps reste dans la boucle de rendu.
+  const emittedPositions = useGraphStore((s) => s.emittedPositions);
   const editingSlotId = useGraphStore((s) => s.editingSlotId);
   const debugPerfVisible = useMoveEditorStore((s) => s.debugPerfVisible);
 
@@ -327,16 +332,35 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   // du drag par le déplacement (<6px) et la durée (<500ms). Le contexte
   // menu natif est déjà supprimé globalement dans App.tsx.
   const rightDownRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  // Clic-gauche SANS drag = sélection de l'objet le plus proche — parité
+  // avec le radar (tap-select) : clic = sélection, drag = orbit caméra.
+  const leftDownRef = useRef<{ x: number; y: number; t: number } | null>(null);
   const handleScenePointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button === 2) rightDownRef.current = { x: e.clientX, y: e.clientY, t: Date.now() };
+    if (e.button === 0) leftDownRef.current = { x: e.clientX, y: e.clientY, t: Date.now() };
   }, []);
   const handleScenePointerUp = useCallback((e: React.PointerEvent) => {
-    const d = rightDownRef.current;
-    rightDownRef.current = null;
-    if (e.button !== 2 || !d) return;
-    if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6 || Date.now() - d.t > 500) return;
-    const idx = pickObjectIndexAt(e, { proximityPx: 40 });
-    if (idx !== null) doClearPosition(idx);
+    if (e.button === 2) {
+      const d = rightDownRef.current;
+      rightDownRef.current = null;
+      if (!d) return;
+      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6 || Date.now() - d.t > 500) return;
+      const idx = pickObjectIndexAt(e, { proximityPx: 40 });
+      if (idx !== null) doClearPosition(idx);
+      return;
+    }
+    if (e.button === 0) {
+      const d = leftDownRef.current;
+      leftDownRef.current = null;
+      // Clic-gauche sans drag SÉLECTIONNE — seulement hors modes
+      // interactifs (manipulate drag/assign/draw gèrent leur propre clic).
+      if (!d) return;
+      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6 || Date.now() - d.t > 500) return;
+      const s = useGraphStore.getState();
+      if (s.manipulateMode || s.assignMode || s.drawMode || s.zonePlaceMode || s.zoneEditMode) return;
+      const idx = pickObjectIndexAt(e, { proximityPx: 40 });
+      s.setSelectedObjIndex(idx);
+    }
   }, [pickObjectIndexAt]);
 
   // Resize observer — merge du handle resize en un seul effect
@@ -558,6 +582,14 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
               <span className="text-gray-400">+ Move</span> creates a slot · a <span className="text-gray-400">template</span> fills it · <span className="text-gray-400">▶</span> launches it
             </div>
           </div>
+        </div>
+      )}
+      {/* Inspect de l'objet sélectionné (clic-gauche proximité, même
+          anneau blanc qu'au radar via selectedObjIndex) — partage la
+          barre du radar : état source + release/park. */}
+      {selectedObjIndex !== null && (
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-raised">
+          <ObjectInspectBar positions={emittedPositions} />
         </div>
       )}
       {/* Debug perf overlay — top left, opt-in via le toggle de la barre canvas */}
