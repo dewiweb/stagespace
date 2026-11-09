@@ -10,6 +10,7 @@
 ///   liveActionsSpatial.ts    — positions, soundcheck, throw, gestes, park
 ///   liveActionsRehearsal.ts  — répétition, tape, scores
 import { useMoveEditorStore } from '../store/useMoveEditorStore';
+import { useGraphStore } from '../store/useGraphStore';
 import { feLog } from './tauri';
 export * from './liveActionsTransport';
 export * from './liveActionsSlots';
@@ -24,4 +25,14 @@ export function doView(v: string | number | null, from?: string): void {
   if (surface !== 'atelier' && surface !== 'conduite' && surface !== 'jeu') return;
   useMoveEditorStore.getState().setSurface(surface);
   feLog(`[osc-in] /stagespace/view ${surface}${from ? ` (${from})` : ''}`);
+}
+
+/// `/stagespace/show/load <path.hfg>` — charge un fichier show depuis
+/// le disque local (même fonction que le file dialog). Le chemin est
+/// celui de la machine qui fait tourner STAGESPACE.
+export function doShowLoad(path: string | number | null, from?: string): void {
+  const p = String(path);
+  if (!p) return;
+  feLog(`[osc-in] /stagespace/show/load ${p}${from ? ` (${from})` : ''}`);
+  void useGraphStore.getState().loadGraphFromFile(p);
 }

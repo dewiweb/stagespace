@@ -96,6 +96,10 @@ pub enum ShowCommand {
     /// (atelier|conduite|jeu) : un contrôleur externe peut changer
     /// la vue de l'écran (dispatch frontend — le backend ne fait que router).
     View(String),
+    /// `/stagespace/show/load <path.hfg>` — charge un fichier show
+    /// depuis le disque de la machine STAGESPACE (dispatch frontend —
+    /// même fonction que le file dialog).
+    ShowLoad(String),
 }
 
 pub(crate) type ShowSink = Arc<dyn Fn(ShowCommand, std::net::SocketAddr) + Send + Sync>;
@@ -192,6 +196,13 @@ pub(crate) fn parse_show_command(addr: &str, args: &[OscType], fps: f64) -> Opti
                 _ => None,
             })
             .map(ShowCommand::View),
+        "show/load" | "load" => args
+            .first()
+            .and_then(|a| match a {
+                OscType::String(s) => Some(s.clone()),
+                _ => None,
+            })
+            .map(ShowCommand::ShowLoad),
         "park" => args
             .first()
             .and_then(|a| match a {

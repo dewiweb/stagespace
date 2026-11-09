@@ -245,3 +245,15 @@ fn view_parse() {
     // Sans arg → refusé.
     assert!(parse_show_command("/stagespace/view", &[], 25.0).is_none());
 }
+
+#[test]
+fn show_load_parse() {
+    assert_eq!(
+        parse_show_command("/stagespace/show/load", &[OscType::String("/tmp/s.hfg".into())], 25.0),
+        Some(ShowCommand::ShowLoad("/tmp/s.hfg".into()))
+    );
+    assert_eq!(
+        parse_show_command("/stagespace/load", &[OscType::String("s.hfg".into())], 25.0),
+        Some(ShowCommand::ShowLoad("s.hfg".into()))
+    );
+}

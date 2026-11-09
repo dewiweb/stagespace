@@ -1,0 +1,1462 @@
+{
+ "format": "stagespace-show",
+ "version": 2,
+ "savedAt": 0,
+ "nodes": [
+  {
+   "id": "o-amb",
+   "type": "custom",
+   "position": {
+    "x": 0,
+    "y": 60
+   },
+   "data": {
+    "label": "Objects",
+    "type": "Objects",
+    "params": {
+     "n_objects": 6
+    }
+   }
+  },
+  {
+   "id": "d-amb",
+   "type": "custom",
+   "position": {
+    "x": 0,
+    "y": 160
+   },
+   "data": {
+    "label": "Duration",
+    "type": "Duration",
+    "params": {
+     "duration": 90
+    }
+   }
+  },
+  {
+   "id": "e-amb",
+   "type": "custom",
+   "position": {
+    "x": 300,
+    "y": 110
+   },
+   "data": {
+    "label": "Formation",
+    "type": "Formation",
+    "params": {
+     "spacing": 1.0,
+     "n_objects": 6
+    }
+   }
+  },
+  {
+   "id": "out-amb",
+   "type": "custom",
+   "position": {
+    "x": 600,
+    "y": 110
+   },
+   "data": {
+    "label": "Output",
+    "type": "Output",
+    "params": {}
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "o-amb-e-amb-objects",
+   "source": "o-amb",
+   "target": "e-amb",
+   "sourceHandle": "objects",
+   "targetHandle": "objects"
+  },
+  {
+   "id": "d-amb-e-amb-duration",
+   "source": "d-amb",
+   "target": "e-amb",
+   "sourceHandle": "duration",
+   "targetHandle": "duration"
+  },
+  {
+   "id": "e-amb-out-amb-in",
+   "source": "e-amb",
+   "target": "out-amb",
+   "sourceHandle": "out",
+   "targetHandle": "in"
+  }
+ ],
+ "globalGraph": {
+  "nodes": [],
+  "edges": []
+ },
+ "slots": [
+  {
+   "id": "slot-amb",
+   "name": "Ambiances \u2014 nappes fixes",
+   "graphJson": {
+    "nodes": [
+     {
+      "id": "o-amb",
+      "type": "custom",
+      "position": {
+       "x": 0,
+       "y": 60
+      },
+      "data": {
+       "label": "Objects",
+       "type": "Objects",
+       "params": {
+        "n_objects": 6
+       }
+      }
+     },
+     {
+      "id": "d-amb",
+      "type": "custom",
+      "position": {
+       "x": 0,
+       "y": 160
+      },
+      "data": {
+       "label": "Duration",
+       "type": "Duration",
+       "params": {
+        "duration": 90
+       }
+      }
+     },
+     {
+      "id": "e-amb",
+      "type": "custom",
+      "position": {
+       "x": 300,
+       "y": 110
+      },
+      "data": {
+       "label": "Formation",
+       "type": "Formation",
+       "params": {
+        "spacing": 1.0,
+        "n_objects": 6
+       }
+      }
+     },
+     {
+      "id": "out-amb",
+      "type": "custom",
+      "position": {
+       "x": 600,
+       "y": 110
+      },
+      "data": {
+       "label": "Output",
+       "type": "Output",
+       "params": {}
+      }
+     }
+    ],
+    "edges": [
+     {
+      "id": "o-amb-e-amb-objects",
+      "source": "o-amb",
+      "target": "e-amb",
+      "sourceHandle": "objects",
+      "targetHandle": "objects"
+     },
+     {
+      "id": "d-amb-e-amb-duration",
+      "source": "d-amb",
+      "target": "e-amb",
+      "sourceHandle": "duration",
+      "targetHandle": "duration"
+     },
+     {
+      "id": "e-amb-out-amb-in",
+      "source": "e-amb",
+      "target": "out-amb",
+      "sourceHandle": "out",
+      "targetHandle": "in"
+     }
+    ]
+   },
+   "templateId": "formation",
+   "trackIds": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+   ],
+   "movementId": null,
+   "isPreview": false,
+   "macros": {
+    "speed": 1,
+    "scale": 1,
+    "shiftX": 0,
+    "shiftY": 0,
+    "shiftZ": 0,
+    "yaw": 0,
+    "pitch": 0,
+    "roll": 0
+   },
+   "fadeDuration": 2.0,
+   "loopMode": "loop",
+   "direction": "forward",
+   "fadeIn": 1.0,
+   "fadeOut": 1.0,
+   "phaseSpread": 0.0,
+   "assignments": [
+    {
+     "track_id": 1,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 2,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 3,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 4,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 5,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 6,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    }
+   ],
+   "audioMods": []
+  },
+  {
+   "id": "slot-orbitv",
+   "name": "Orbit autour V1",
+   "graphJson": {
+    "nodes": [
+     {
+      "id": "o-orbitv",
+      "type": "custom",
+      "position": {
+       "x": 0,
+       "y": 60
+      },
+      "data": {
+       "label": "Objects",
+       "type": "Objects",
+       "params": {
+        "n_objects": 2
+       }
+      }
+     },
+     {
+      "id": "d-orbitv",
+      "type": "custom",
+      "position": {
+       "x": 0,
+       "y": 160
+      },
+      "data": {
+       "label": "Duration",
+       "type": "Duration",
+       "params": {
+        "duration": 30
+       }
+      }
+     },
+     {
+      "id": "e-orbitv",
+      "type": "custom",
+      "position": {
+       "x": 300,
+       "y": 110
+      },
+      "data": {
+       "label": "Circular",
+       "type": "Circular",
+       "params": {
+        "radius": 2.5,
+        "speed": 0.3,
+        "n_objects": 2
+       }
+      }
+     },
+     {
+      "id": "out-orbitv",
+      "type": "custom",
+      "position": {
+       "x": 600,
+       "y": 110
+      },
+      "data": {
+       "label": "Output",
+       "type": "Output",
+       "params": {}
+      }
+     }
+    ],
+    "edges": [
+     {
+      "id": "o-orbitv-e-orbitv-objects",
+      "source": "o-orbitv",
+      "target": "e-orbitv",
+      "sourceHandle": "objects",
+      "targetHandle": "objects"
+     },
+     {
+      "id": "d-orbitv-e-orbitv-duration",
+      "source": "d-orbitv",
+      "target": "e-orbitv",
+      "sourceHandle": "duration",
+      "targetHandle": "duration"
+     },
+     {
+      "id": "e-orbitv-out-orbitv-in",
+      "source": "e-orbitv",
+      "target": "out-orbitv",
+      "sourceHandle": "out",
+      "targetHandle": "in"
+     }
+    ]
+   },
+   "templateId": "circle",
+   "trackIds": [
+    13,
+    14
+   ],
+   "movementId": null,
+   "isPreview": false,
+   "macros": {
+    "speed": 1,
+    "scale": 1,
+    "shiftX": 0,
+    "shiftY": 0,
+    "shiftZ": 0,
+    "yaw": 0,
+    "pitch": 0,
+    "roll": 0
+   },
+   "fadeDuration": 2.0,
+   "loopMode": "loop",
+   "direction": "forward",
+   "fadeIn": 1.0,
+   "fadeOut": 1.0,
+   "phaseSpread": 0.0,
+   "assignments": [
+    {
+     "track_id": 13,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 14,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    }
+   ],
+   "audioMods": []
+  },
+  {
+   "id": "slot-follow",
+   "name": "Follow F1 \u2014 d\u00e9lai 800ms",
+   "graphJson": {
+    "nodes": [
+     {
+      "id": "o-follow",
+      "type": "custom",
+      "position": {
+       "x": 0,
+       "y": 60
+      },
+      "data": {
+       "label": "Objects",
+       "type": "Objects",
+       "params": {
+        "n_objects": 2
+       }
+      }
+     },
+     {
+      "id": "d-follow",
+      "type": "custom",
+      "position": {
+       "x": 0,
+       "y": 160
+      },
+      "data": {
+       "label": "Duration",
+       "type": "Duration",
+       "params": {
+        "duration": 60
+       }
+      }
+     },
+     {
+      "id": "e-follow",
+      "type": "custom",
+      "position": {
+       "x": 300,
+       "y": 110
+      },
+      "data": {
+       "label": "Follow",
+       "type": "Follow",
+       "params": {
+        "delay": 0.8,
+        "n_objects": 2
+       }
+      }
+     },
+     {
+      "id": "out-follow",
+      "type": "custom",
+      "position": {
+       "x": 600,
+       "y": 110
+      },
+      "data": {
+       "label": "Output",
+       "type": "Output",
+       "params": {}
+      }
+     }
+    ],
+    "edges": [
+     {
+      "id": "o-follow-e-follow-objects",
+      "source": "o-follow",
+      "target": "e-follow",
+      "sourceHandle": "objects",
+      "targetHandle": "objects"
+     },
+     {
+      "id": "d-follow-e-follow-duration",
+      "source": "d-follow",
+      "target": "e-follow",
+      "sourceHandle": "duration",
+      "targetHandle": "duration"
+     },
+     {
+      "id": "e-follow-out-follow-in",
+      "source": "e-follow",
+      "target": "out-follow",
+      "sourceHandle": "out",
+      "targetHandle": "in"
+     }
+    ]
+   },
+   "templateId": "follow",
+   "trackIds": [
+    13,
+    14
+   ],
+   "movementId": null,
+   "isPreview": false,
+   "macros": {
+    "speed": 1,
+    "scale": 1,
+    "shiftX": 0,
+    "shiftY": 0,
+    "shiftZ": 0,
+    "yaw": 0,
+    "pitch": 0,
+    "roll": 0
+   },
+   "fadeDuration": 2.0,
+   "loopMode": "loop",
+   "direction": "forward",
+   "fadeIn": 1.0,
+   "fadeOut": 1.0,
+   "phaseSpread": 0.0,
+   "assignments": [
+    {
+     "track_id": 13,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 14,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    }
+   ],
+   "audioMods": []
+  },
+  {
+   "id": "slot-converge",
+   "name": "Converge \u2014 sur danseurs",
+   "graphJson": {
+    "nodes": [
+     {
+      "id": "o-converge",
+      "type": "custom",
+      "position": {
+       "x": 0,
+       "y": 60
+      },
+      "data": {
+       "label": "Objects",
+       "type": "Objects",
+       "params": {
+        "n_objects": 18
+       }
+      }
+     },
+     {
+      "id": "d-converge",
+      "type": "custom",
+      "position": {
+       "x": 0,
+       "y": 160
+      },
+      "data": {
+       "label": "Duration",
+       "type": "Duration",
+       "params": {
+        "duration": 15
+       }
+      }
+     },
+     {
+      "id": "e-converge",
+      "type": "custom",
+      "position": {
+       "x": 300,
+       "y": 110
+      },
+      "data": {
+       "label": "Converge",
+       "type": "Converge",
+       "params": {
+        "speed": 0.2,
+        "n_objects": 18
+       }
+      }
+     },
+     {
+      "id": "out-converge",
+      "type": "custom",
+      "position": {
+       "x": 600,
+       "y": 110
+      },
+      "data": {
+       "label": "Output",
+       "type": "Output",
+       "params": {}
+      }
+     }
+    ],
+    "edges": [
+     {
+      "id": "o-converge-e-converge-objects",
+      "source": "o-converge",
+      "target": "e-converge",
+      "sourceHandle": "objects",
+      "targetHandle": "objects"
+     },
+     {
+      "id": "d-converge-e-converge-duration",
+      "source": "d-converge",
+      "target": "e-converge",
+      "sourceHandle": "duration",
+      "targetHandle": "duration"
+     },
+     {
+      "id": "e-converge-out-converge-in",
+      "source": "e-converge",
+      "target": "out-converge",
+      "sourceHandle": "out",
+      "targetHandle": "in"
+     }
+    ]
+   },
+   "templateId": "converge",
+   "trackIds": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18
+   ],
+   "movementId": null,
+   "isPreview": false,
+   "macros": {
+    "speed": 1,
+    "scale": 1,
+    "shiftX": 0,
+    "shiftY": 0,
+    "shiftZ": 0,
+    "yaw": 0,
+    "pitch": 0,
+    "roll": 0
+   },
+   "fadeDuration": 2.0,
+   "loopMode": "once",
+   "direction": "forward",
+   "fadeIn": 1.0,
+   "fadeOut": 1.0,
+   "phaseSpread": 0.0,
+   "assignments": [
+    {
+     "track_id": 1,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 2,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 3,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 4,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 5,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 6,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 7,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 8,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 9,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 10,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 11,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 12,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 13,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 14,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 15,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 16,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 17,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 18,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    }
+   ],
+   "audioMods": []
+  },
+  {
+   "id": "slot-scatter",
+   "name": "Scatter \u2014 extr\u00eames",
+   "graphJson": {
+    "nodes": [
+     {
+      "id": "o-scatter",
+      "type": "custom",
+      "position": {
+       "x": 0,
+       "y": 60
+      },
+      "data": {
+       "label": "Objects",
+       "type": "Objects",
+       "params": {
+        "n_objects": 18
+       }
+      }
+     },
+     {
+      "id": "d-scatter",
+      "type": "custom",
+      "position": {
+       "x": 0,
+       "y": 160
+      },
+      "data": {
+       "label": "Duration",
+       "type": "Duration",
+       "params": {
+        "duration": 20
+       }
+      }
+     },
+     {
+      "id": "e-scatter",
+      "type": "custom",
+      "position": {
+       "x": 300,
+       "y": 110
+      },
+      "data": {
+       "label": "PerlinNoise",
+       "type": "PerlinNoise",
+       "params": {
+        "amplitude": 6.0,
+        "frequency": 0.3,
+        "n_objects": 18
+       }
+      }
+     },
+     {
+      "id": "out-scatter",
+      "type": "custom",
+      "position": {
+       "x": 600,
+       "y": 110
+      },
+      "data": {
+       "label": "Output",
+       "type": "Output",
+       "params": {}
+      }
+     }
+    ],
+    "edges": [
+     {
+      "id": "o-scatter-e-scatter-objects",
+      "source": "o-scatter",
+      "target": "e-scatter",
+      "sourceHandle": "objects",
+      "targetHandle": "objects"
+     },
+     {
+      "id": "d-scatter-e-scatter-duration",
+      "source": "d-scatter",
+      "target": "e-scatter",
+      "sourceHandle": "duration",
+      "targetHandle": "duration"
+     },
+     {
+      "id": "e-scatter-out-scatter-in",
+      "source": "e-scatter",
+      "target": "out-scatter",
+      "sourceHandle": "out",
+      "targetHandle": "in"
+     }
+    ]
+   },
+   "templateId": "perlin_noise",
+   "trackIds": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18
+   ],
+   "movementId": null,
+   "isPreview": false,
+   "macros": {
+    "speed": 1,
+    "scale": 1,
+    "shiftX": 0,
+    "shiftY": 0,
+    "shiftZ": 0,
+    "yaw": 0,
+    "pitch": 0,
+    "roll": 0
+   },
+   "fadeDuration": 2.0,
+   "loopMode": "loop",
+   "direction": "forward",
+   "fadeIn": 1.0,
+   "fadeOut": 1.0,
+   "phaseSpread": 0.0,
+   "assignments": [
+    {
+     "track_id": 1,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 2,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 3,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 4,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 5,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 6,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 7,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 8,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 9,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 10,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 11,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 12,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 13,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 14,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 15,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 16,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 17,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    },
+    {
+     "track_id": 18,
+     "depth": 1.0,
+     "phase_offset": 0.0
+    }
+   ],
+   "audioMods": []
+  }
+ ],
+ "setlistOrder": [
+  "slot-amb",
+  "slot-orbitv",
+  "slot-follow",
+  "slot-converge",
+  "slot-scatter"
+ ],
+ "currentSetlistIndex": -1,
+ "editingSlotId": "slot-amb",
+ "cues": [
+  {
+   "id": "cue-c1",
+   "name": "AMB \u2014 Sc.1",
+   "description": "Nappes fixes zone plateau \u2014 image ouverte",
+   "schema_version": 1,
+   "fade_duration": 6.0,
+   "cue_number": "1",
+   "active_move_ids": [
+    "mv-amb"
+   ],
+   "moves": [
+    {
+     "id": "mv-amb",
+     "name": "Ambiances",
+     "graph_json": {
+      "nodes": [
+       {
+        "id": "o-amb",
+        "type": "custom",
+        "position": {
+         "x": 0,
+         "y": 60
+        },
+        "data": {
+         "label": "Objects",
+         "type": "Objects",
+         "params": {
+          "n_objects": 6
+         }
+        }
+       },
+       {
+        "id": "d-amb",
+        "type": "custom",
+        "position": {
+         "x": 0,
+         "y": 160
+        },
+        "data": {
+         "label": "Duration",
+         "type": "Duration",
+         "params": {
+          "duration": 90
+         }
+        }
+       },
+       {
+        "id": "e-amb",
+        "type": "custom",
+        "position": {
+         "x": 300,
+         "y": 110
+        },
+        "data": {
+         "label": "Formation",
+         "type": "Formation",
+         "params": {
+          "spacing": 1.0,
+          "n_objects": 6
+         }
+        }
+       },
+       {
+        "id": "out-amb",
+        "type": "custom",
+        "position": {
+         "x": 600,
+         "y": 110
+        },
+        "data": {
+         "label": "Output",
+         "type": "Output",
+         "params": {}
+        }
+       }
+      ],
+      "edges": [
+       {
+        "id": "o-amb-e-amb-objects",
+        "source": "o-amb",
+        "target": "e-amb",
+        "sourceHandle": "objects",
+        "targetHandle": "objects"
+       },
+       {
+        "id": "d-amb-e-amb-duration",
+        "source": "d-amb",
+        "target": "e-amb",
+        "sourceHandle": "duration",
+        "targetHandle": "duration"
+       },
+       {
+        "id": "e-amb-out-amb-in",
+        "source": "e-amb",
+        "target": "out-amb",
+        "sourceHandle": "out",
+        "targetHandle": "in"
+       }
+      ]
+     },
+     "signal_graph": null,
+     "osc_ids": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ],
+     "track_indices": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "is_preview": false,
+     "origin": null,
+     "duration": 90,
+     "loop_mode": "loop",
+     "direction": "forward"
+    }
+   ],
+   "mode": "Full",
+   "scope": {
+    "moves": true,
+    "channels": true,
+    "positions": true,
+    "zones": true,
+    "global_graph": true,
+    "signal_graph": true,
+    "macros": true,
+    "osc_mappings": true
+   }
+  },
+  {
+   "id": "cue-c3",
+   "name": "Tracking Sc.2",
+   "description": "Ambiances changent \u2014 V1/V2 intouch\u00e9s (PSN)",
+   "schema_version": 1,
+   "fade_duration": 5.0,
+   "cue_number": "3",
+   "track_indices": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+   ],
+   "mode": "Tracking",
+   "scope": {
+    "moves": false,
+    "channels": false,
+    "positions": true,
+    "zones": false,
+    "global_graph": false,
+    "signal_graph": false,
+    "macros": false,
+    "osc_mappings": false
+   }
+  },
+  {
+   "id": "cue-c5",
+   "name": "Converge \u2014 duo",
+   "description": "Tous objets convergent sur danseurs \u2014 end:hold",
+   "schema_version": 1,
+   "fade_duration": 8.0,
+   "cue_number": "5",
+   "active_move_ids": [
+    "mv-conv"
+   ],
+   "moves": [
+    {
+     "id": "mv-conv",
+     "name": "Converge",
+     "graph_json": {
+      "nodes": [
+       {
+        "id": "o-converge",
+        "type": "custom",
+        "position": {
+         "x": 0,
+         "y": 60
+        },
+        "data": {
+         "label": "Objects",
+         "type": "Objects",
+         "params": {
+          "n_objects": 18
+         }
+        }
+       },
+       {
+        "id": "d-converge",
+        "type": "custom",
+        "position": {
+         "x": 0,
+         "y": 160
+        },
+        "data": {
+         "label": "Duration",
+         "type": "Duration",
+         "params": {
+          "duration": 15
+         }
+        }
+       },
+       {
+        "id": "e-converge",
+        "type": "custom",
+        "position": {
+         "x": 300,
+         "y": 110
+        },
+        "data": {
+         "label": "Converge",
+         "type": "Converge",
+         "params": {
+          "speed": 0.2,
+          "n_objects": 18
+         }
+        }
+       },
+       {
+        "id": "out-converge",
+        "type": "custom",
+        "position": {
+         "x": 600,
+         "y": 110
+        },
+        "data": {
+         "label": "Output",
+         "type": "Output",
+         "params": {}
+        }
+       }
+      ],
+      "edges": [
+       {
+        "id": "o-converge-e-converge-objects",
+        "source": "o-converge",
+        "target": "e-converge",
+        "sourceHandle": "objects",
+        "targetHandle": "objects"
+       },
+       {
+        "id": "d-converge-e-converge-duration",
+        "source": "d-converge",
+        "target": "e-converge",
+        "sourceHandle": "duration",
+        "targetHandle": "duration"
+       },
+       {
+        "id": "e-converge-out-converge-in",
+        "source": "e-converge",
+        "target": "out-converge",
+        "sourceHandle": "out",
+        "targetHandle": "in"
+       }
+      ]
+     },
+     "signal_graph": null,
+     "osc_ids": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+     ],
+     "track_indices": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17
+     ],
+     "is_preview": false,
+     "origin": null,
+     "duration": 15,
+     "loop_mode": "loop",
+     "direction": "forward"
+    }
+   ],
+   "mode": "Full",
+   "scope": {
+    "moves": true,
+    "channels": true,
+    "positions": true,
+    "zones": true,
+    "global_graph": true,
+    "signal_graph": true,
+    "macros": true,
+    "osc_mappings": true
+   }
+  },
+  {
+   "id": "cue-c8",
+   "name": "Scatter \u2014 Sc.4",
+   "description": "Dispersion aux extr\u00eames \u2014 tracking",
+   "schema_version": 1,
+   "fade_duration": 4.0,
+   "cue_number": "8",
+   "track_indices": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17
+   ],
+   "mode": "Tracking",
+   "scope": {
+    "moves": false,
+    "channels": false,
+    "positions": true,
+    "zones": false,
+    "global_graph": false,
+    "signal_graph": false,
+    "macros": false,
+    "osc_mappings": false
+   }
+  },
+  {
+   "id": "cue-c9",
+   "name": "Image finale",
+   "description": "V1/V2 derniers points \u2014 positions tenues",
+   "schema_version": 1,
+   "fade_duration": 6.0,
+   "cue_number": "9",
+   "active_move_ids": [
+    "mv-final"
+   ],
+   "moves": [
+    {
+     "id": "mv-final",
+     "name": "Image finale",
+     "graph_json": {
+      "nodes": [
+       {
+        "id": "o-amb",
+        "type": "custom",
+        "position": {
+         "x": 0,
+         "y": 60
+        },
+        "data": {
+         "label": "Objects",
+         "type": "Objects",
+         "params": {
+          "n_objects": 6
+         }
+        }
+       },
+       {
+        "id": "d-amb",
+        "type": "custom",
+        "position": {
+         "x": 0,
+         "y": 160
+        },
+        "data": {
+         "label": "Duration",
+         "type": "Duration",
+         "params": {
+          "duration": 90
+         }
+        }
+       },
+       {
+        "id": "e-amb",
+        "type": "custom",
+        "position": {
+         "x": 300,
+         "y": 110
+        },
+        "data": {
+         "label": "Formation",
+         "type": "Formation",
+         "params": {
+          "spacing": 1.0,
+          "n_objects": 6
+         }
+        }
+       },
+       {
+        "id": "out-amb",
+        "type": "custom",
+        "position": {
+         "x": 600,
+         "y": 110
+        },
+        "data": {
+         "label": "Output",
+         "type": "Output",
+         "params": {}
+        }
+       }
+      ],
+      "edges": [
+       {
+        "id": "o-amb-e-amb-objects",
+        "source": "o-amb",
+        "target": "e-amb",
+        "sourceHandle": "objects",
+        "targetHandle": "objects"
+       },
+       {
+        "id": "d-amb-e-amb-duration",
+        "source": "d-amb",
+        "target": "e-amb",
+        "sourceHandle": "duration",
+        "targetHandle": "duration"
+       },
+       {
+        "id": "e-amb-out-amb-in",
+        "source": "e-amb",
+        "target": "out-amb",
+        "sourceHandle": "out",
+        "targetHandle": "in"
+       }
+      ]
+     },
+     "signal_graph": null,
+     "osc_ids": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ],
+     "track_indices": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "is_preview": false,
+     "origin": null,
+     "duration": 90,
+     "loop_mode": "loop",
+     "direction": "forward"
+    }
+   ],
+   "mode": "Full",
+   "scope": {
+    "moves": true,
+    "channels": true,
+    "positions": true,
+    "zones": true,
+    "global_graph": true,
+    "signal_graph": true,
+    "macros": true,
+    "osc_mappings": true
+   }
+  }
+ ],
+ "osc": {
+  "oscAddress": "127.0.0.1",
+  "oscPort": 9000,
+  "oscProfile": "holophonix",
+  "oscInPort": 8001
+ },
+ "spatialFx": [],
+ "tracks": [],
+ "oscMappings": [],
+ "macros": {}
+}
