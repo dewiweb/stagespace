@@ -2,6 +2,7 @@ import React from 'react';
 import { X } from 'lucide-react';
 import { toast } from '../utils/toast-helpers';
 import { useGraphStore } from '../store/useGraphStore';
+import { safeInvoke as invoke } from '../utils/tauri';
 import EmptyState from './ui/EmptyState';
 import { ConfirmModal } from './ui/ConfirmModal';
 import {
@@ -86,7 +87,20 @@ export default function SpatialFxPanel() {
   const updateZone = useGraphStore((s) => s.updateZone);
   const zoneEditMode = useGraphStore((s) => s.zoneEditMode);
   const setZoneEditMode = useGraphStore((s) => s.setZoneEditMode);
+  const oscProfile = useGraphStore((s) => s.oscProfile);
   const [confirmRemove, setConfirmRemove] = React.useState<{ label: string; action: () => void } | null>(null);
+
+  // Canaux que le profil OSC courant sérialise réellement — un réglage
+  // sur un canal hors liste produit du silence (ex : holophonix → gain
+  // seul). `null` = inconnu (backend down) → pas d'annotation.
+  const [profileChannels, setProfileChannels] = React.useState<SpatialChannelName[] | null>(null);
+  React.useEffect(() => {
+    invoke<SpatialChannelName[]>('get_profile_channels', { profile: oscProfile })
+      .then(setProfileChannels)
+      .catch(() => setProfileChannels(null));
+  }, [oscProfile]);
+  const sentLabel = (c: SpatialChannelName) =>
+    profileChannels && !profileChannels.includes(c) ? ' (not sent)' : '';
 
   // Modes interactifs → reset au démontage : sinon un mode place/edit
   // oublié survive au switch de tab et intercepte les clics du canvas 3D.
@@ -255,6 +269,16 @@ export default function SpatialFxPanel() {
         <h3 className="text-white font-semibold text-sm">Spatial FX</h3>
       </div>
 
+      {/* Profil → canaux émis : rend visible ce qui produirait du silence
+          (ex : holophonix ne sérialise que gain — les réglages sur les
+          autres canaux sont calculés mais jamais envoyés au renderer). */}
+      {profileChannels && profileChannels.length < SPATIAL_CHANNELS.length && (
+        <div className="mx-2 mt-1.5 px-2 py-1 bg-amber-900/20 border border-amber-800/40 rounded text-amber-300/90 text-[10px] font-mono">
+          profile {oscProfile} sends: {profileChannels.map((c) => c.toLowerCase()).join(' ')}
+          — other channels produce silence
+        </div>
+      )}
+
       {/* ── Zones ── */}
       <Section title="Zones" count={zones.length} onClear={() => clearZones().catch((e) => toast.error(`Spatial FX failed: ${e}`))}>
         <div className="space-y-1.5 mb-2">
@@ -314,7 +338,7 @@ export default function SpatialFxPanel() {
             <div className="flex gap-1.5">
               <select value={zcName} onChange={(e) => setZcName(e.target.value as SpatialChannelName)} className={selectCls} title="Spatial channel">
                 {SPATIAL_CHANNELS.map((c) => (
-                  <option key={c} value={c}>{c.toLowerCase()}</option>
+                  <option key={c} value={c}>{c.toLowerCase()}{sentLabel(c)}</option>
                 ))}
               </select>
               <input
@@ -461,7 +485,7 @@ export default function SpatialFxPanel() {
             <select value={mChannel} onChange={(e) => setMChannel(e.target.value as SpatialChannelName)} className={selectCls}>
               {SPATIAL_CHANNELS.map((c) => (
                 <option key={c} value={c}>
-                  {c.toLowerCase()}
+                  {c.toLowerCase()}{sentLabel(c)}
                 </option>
               ))}
             </select>
@@ -559,7 +583,7 @@ export default function SpatialFxPanel() {
             <select value={cChannel} onChange={(e) => setCChannel(e.target.value as SpatialChannelName)} className={selectCls}>
               {SPATIAL_CHANNELS.map((c) => (
                 <option key={c} value={c}>
-                  {c.toLowerCase()}
+                  {c.toLowerCase()}{sentLabel(c)}
                 </option>
               ))}
             </select>

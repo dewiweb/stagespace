@@ -237,6 +237,24 @@ impl OscProfile {
             _ => None,
         }
     }
+
+    /// Canaux spatiaux que ce profil sérialise réellement en OSC —
+    /// source de vérité pour l'UI : un réglage sur un canal non listé
+    /// produit du silence (ex : Holophonix n'émet que `Gain`).
+    pub fn supported_channels(&self) -> Vec<SpatialChannel> {
+        [
+            SpatialChannel::Gain,
+            SpatialChannel::Spread,
+            SpatialChannel::Distance,
+            SpatialChannel::Presence,
+            SpatialChannel::Yaw,
+            SpatialChannel::Aperture,
+            SpatialChannel::Lfe,
+        ]
+        .into_iter()
+        .filter(|ch| self.channel_address(0, *ch).is_some())
+        .collect()
+    }
 }
 
 /// OSC Sender - envoi OSC avec différents profils

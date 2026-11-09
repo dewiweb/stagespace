@@ -293,6 +293,20 @@ pub async fn list_zones(state: State<'_, AppState>) -> Result<Vec<Zone>, IpcErro
     Ok(merge_rt.zones())
 }
 
+/// Liste les canaux spatiaux qu'un profil OSC sérialise réellement —
+/// source de vérité pour l'UI : un réglage sur un canal absent produit du
+/// silence (ex : Holophonix n'émet que `gain`). Pure — le frontend passe
+/// son `oscProfile` courant (`_state` requis par la signature Tauri).
+#[tauri::command]
+pub async fn get_profile_channels(
+    profile: String,
+    _state: State<'_, AppState>,
+) -> Result<Vec<SpatialChannel>, IpcError> {
+    let p = stagespace_engines::osc_sender::OscProfile::from_str(&profile)
+        .map_err(IpcError::validation)?;
+    Ok(p.supported_channels())
+}
+
 /// Liste les effets déclarés par le graph global (nodes `Zone` / `Velocity`)
 /// — séparés des effets manuels (add_zone/add_channel_modulation).
 #[tauri::command]
