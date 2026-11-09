@@ -176,7 +176,7 @@ Les slots se préparent à la balance, se tirent au numéro ou au doigt.
 
 ---
 
-## 4bis. Gestes spatiaux & expression live
+## 5. Gestes spatiaux & expression live
 
 Commandes d'expression directe — utilisables depuis la console ou le busking :
 
@@ -187,14 +187,16 @@ Commandes d'expression directe — utilisables depuis la console ou le busking :
 | `/stagespace/attention <obj>` | fige tous les autres objets — un seul bouge (*change blindness*) ; `/attention/clear` libère |
 | `/stagespace/gesture <name> [strength]` | geste composé en une commande : `explode` · `converge` · `orbit` · `front` — vélocité calculée par objet |
 | `/stagespace/soundcheck [stop]` | sonde cyclique des objets (passe chaque track en revue — vérification des canaux) |
-| `/stagespace/rehearsal <action>` | mode répétition & **pos-tape** — enregistrement/rejeu de positions :
+| `/stagespace/rehearsal <action>` | mode répétition & pos-tape (voir ci-dessous) |
 
-- `record` — capture les positions émises @30 Hz (simulation de jeu sans acteurs)
+**Pos-tape** (`/stagespace/rehearsal <action>`) — enregistrement/rejeu de positions :
+
+- `record` — capture les positions émises @30 Hz (jeu simulé sans acteurs)
 - `stop` — arrête la capture
 - `play` — rejoue la bande au rythme réel (injectée dans le merge)
-- `export` — exporte la bande en `.sstape.json` |
+- `export` — exporte la bande en `.sstape.json`
 
-### 4quater. Contrôles interactifs (surfaces)
+## 6. Contrôles interactifs (surfaces)
 
 Au-delà des boutons, plusieurs contrôles directs sur les surfaces :
 
@@ -217,7 +219,7 @@ Au-delà des boutons, plusieurs contrôles directs sur les surfaces :
   source (manuel/move/hold/park/freeze), position, boutons de release par
   mode. Le détail par objet sans ouvrir l'Inspector.
 
-## 4ter. Sémantique « continue » d'un move
+## 7. Sémantique « continue » d'un move
 
 Deux flags par move/slot (onglet **Playback**) :
 
@@ -233,7 +235,7 @@ le move suivant depuis ce point — conduite « continue » sans téléportation
 
 ---
 
-## 5. Référence OSC show-control (`/stagespace/*`)
+## 8. Référence OSC show-control (`/stagespace/*`)
 
 Port entrant = `oscInPort` (défaut 8001). Préfixe réservé — intercepté avant
 vos mappings utilisateur.
@@ -273,7 +275,7 @@ recall cue suivante · `Backspace` cue précédente · `Esc` **panic** ·
 
 ---
 
-## 6. OSC-IN mappings + Learn
+## 9. OSC-IN mappings + Learn
 
 Brancher un fader externe — onglet *OSC IN* (PerformView) :
 
@@ -291,7 +293,7 @@ Brancher un fader externe — onglet *OSC IN* (PerformView) :
 
 ---
 
-## 7. Sécurité live
+## 10. Sécurité live
 
 - **Panic (Esc / PANIC)** : stoppe tous les moves + renvoie les positions origine.
 - **Dry-run / ARM** : tout tourne, rien ne part au renderer — l'indicateur
@@ -311,7 +313,7 @@ Brancher un fader externe — onglet *OSC IN* (PerformView) :
 
 ---
 
-## 8. Dépannage
+## 11. Dépannage
 
 | Symptôme | Cause probable | Vérifier |
 |----------|----------------|----------|
@@ -326,7 +328,7 @@ Brancher un fader externe — onglet *OSC IN* (PerformView) :
 
 ---
 
-## 9. Fichiers & persistance
+## 12. Fichiers & persistance
 
 | Quoi | Où |
 |------|-----|
@@ -338,7 +340,7 @@ Brancher un fader externe — onglet *OSC IN* (PerformView) :
 
 ---
 
-## 10. Conduite d'exemple
+## 13. Conduite d'exemple
 
 `examples/conduite-epilogue.hfg` (+ `.md`) : spectacle ~1 h 25, 19 cues,
 14 moves, deux actes + entracte — TC, follow, tracking, safety cue S1.
@@ -483,20 +485,20 @@ objet déclarés par le graphe global :
 - **Canaux objet** : gain/spread/distance/presence par objet — l'équivalent
   spatial d'un fader par track.
 
-## E2. Trackers externes (PSN)
+## E. Trackers externes (PSN)
 
 STAGESPACE consomme le protocole **PosiStageNet** (PSN) pour le tracking
 d'acteurs/danseurs — les trackers apparaissent comme sources de position
 (tracker_map) et peuvent piloter des moves Follow ou des positions d'objets.
 Le scénario `sillage-theatre` l'utilise pour suivre les danseurs.
 
-## E3. Plugins `.ssx` (moteurs WASM)
+## F. Plugins `.ssx` (moteurs WASM)
 
 Les moteurs externes packagés `.ssx` (WASM) se placent dans le dossier
 `plugins` de l'app — ils apparaissent comme nœud `Plugin` dans le graphe
 et compilent comme les moteurs natifs. SDK : `plugin-sdk/` + `plugin-examples/`.
 
-## E4. Config avancée (backend)
+## G. Config avancée (backend)
 
 | Commande / setting | Rôle |
 |--------------------|------|
@@ -506,14 +508,14 @@ et compilent comme les moteurs natifs. SDK : `plugin-sdk/` + `plugin-examples/`.
 | **Presets** (`preset_save/load/list/delete`) | configurations nommées sauvegardées — rappel rapide de réglages |
 | **Découverte renderer** | `Discover renderers` en Settings — scan OSC out disponibles |
 
-## E5. Panneaux de monitoring
+## H. Panneaux de monitoring
 
 - **Score** — partition/timeline des cues et événements du show.
 - **Log** — historique des commandes show (GUI + OSC `/stagespace/*` reçues) —
   chaque entrée horodatée. Le voyant **CONSOLE ●** reflète l'activité.
 - **Audio** — état de la capture audio (périphérique, niveau, BPM détecté).
 
-## E. Référence Settings
+## I. Référence Settings
 
 | Section | Contenu |
 |---------|---------|
