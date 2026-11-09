@@ -294,7 +294,7 @@ export const useMoveEditorStore = create<MoveEditorStore>((set, get) => {
   // performMode=true (sections Inspector repliées comme en jeu).
   performMode: readPersistedSurface() !== 'atelier',
   setPerformMode: (on) => set({ performMode: on }),
-  debugPerfVisible: false,
+  debugPerfVisible: import.meta.env.DEV,
   setDebugPerfVisible: (on) => set({ debugPerfVisible: on }),
   shortcutsOpen: false,
   setShortcutsOpen: (on) => set({ shortcutsOpen: on }),
