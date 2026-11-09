@@ -6,7 +6,7 @@ use super::*;
 /// Commande show-control reçue via `/stagespace/*` — transmise telle
 /// quelle au frontend qui la dispatche vers les mêmes fonctions que
 /// les raccourcis clavier (backend = routeur seulement).
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[ts(export)]
 #[serde(tag = "command", content = "value")]
 pub enum ShowCommand {
@@ -92,6 +92,10 @@ pub enum ShowCommand {
     /// reçoit `/stagespace/pos/state <obj> <x> <y> <z>` par objet, répondu
     /// par le backend même sans webview.
     PositionsQuery,
+    /// `/stagespace/view <surface>` — bascule la surface opérateur
+    /// (atelier|conduite|jeu) : un contrôleur externe peut changer
+    /// la vue de l'écran (dispatch frontend — le backend ne fait que router).
+    View(String),
 }
 
 pub(crate) type ShowSink = Arc<dyn Fn(ShowCommand, std::net::SocketAddr) + Send + Sync>;
@@ -179,6 +183,15 @@ pub(crate) fn parse_show_command(addr: &str, args: &[OscType], fps: f64) -> Opti
             })
             .map(ShowCommand::TimecodeFps),
         "positions" => Some(ShowCommand::PositionsQuery),
+        "view" => args
+            .first()
+            .and_then(|a| match a {
+                OscType::String(s) => Some(s.clone()),
+                OscType::Int(i) => Some(i.to_string()),
+                OscType::Long(i) => Some(i.to_string()),
+                _ => None,
+            })
+            .map(ShowCommand::View),
         "park" => args
             .first()
             .and_then(|a| match a {

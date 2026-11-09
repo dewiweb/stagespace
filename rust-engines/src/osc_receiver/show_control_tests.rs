@@ -235,3 +235,13 @@ fn ack_goes_back_to_sender() {
     }
     r.stop();
 }
+
+#[test]
+fn view_parse() {
+    assert_eq!(
+        parse_show_command("/stagespace/view", &[OscType::String("conduite".into())], 25.0),
+        Some(ShowCommand::View("conduite".into()))
+    );
+    // Sans arg → refusé.
+    assert!(parse_show_command("/stagespace/view", &[], 25.0).is_none());
+}

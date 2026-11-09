@@ -4,7 +4,7 @@
 import { useEffect } from 'react';
 import { safeListen } from '../utils/tauri';
 import { useCuelistStore } from '../store/useCuelistStore';
-import { doGo, doCueNext, doCuePrev, doCueRecall, doCueArm, doCueGo, doMacro, doTcChase, doTcFps, doPanic, doStop, doPark, doUnpark, doArm, doStatus, doSlot, doSlotStop, doSolo, doUnsolo, doSetPosition, doClearPosition, doClearAllPositions, doSetTrackPosition, doSoundcheck, doThrow, doSpatial, doAttention, doGesture, doRehearsal } from '../utils/liveActions';
+import { doGo, doCueNext, doCuePrev, doCueRecall, doCueArm, doCueGo, doMacro, doTcChase, doTcFps, doPanic, doStop, doPark, doUnpark, doArm, doStatus, doSlot, doSlotStop, doSolo, doUnsolo, doSetPosition, doClearPosition, doClearAllPositions, doSetTrackPosition, doSoundcheck, doThrow, doSpatial, doAttention, doGesture, doRehearsal, doView } from '../utils/liveActions';
 import type { ShowCommand } from '../types/generated/ShowCommand';
 
 interface ShowControlEvent {
@@ -118,6 +118,9 @@ export function useShowControl() {
               break;
             case 'TimecodeFps':
               if (cmd.value != null) void doTcFps(cmd.value, from);
+              break;
+            case 'View':
+              if (cmd.value != null) doView(cmd.value, from);
               break;
             // PositionsQuery : répondu côté backend (sink) — rien ici.
           }
