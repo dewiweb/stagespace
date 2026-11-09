@@ -9,9 +9,9 @@
 //!     { "id": "n4", "data": { "type": "Output", "params": {} } }
 //!   ],
 //!   "edges": [
-//!     { "source": "n1", "target": "n3", "sourceHandle": "output", "targetHandle": "input" },
-//!     { "source": "n2", "target": "n3", "sourceHandle": "output", "targetHandle": "duration" },
-//!     { "source": "n3", "target": "n4", "sourceHandle": "output", "targetHandle": "input" }
+//!     { "source": "n1", "target": "n3", "sourceHandle": "out", "targetHandle": "in" },
+//!     { "source": "n2", "target": "n3", "sourceHandle": "duration", "targetHandle": "duration" },
+//!     { "source": "n3", "target": "n4", "sourceHandle": "out", "targetHandle": "in" }
 //!   ]
 //! }
 
@@ -121,9 +121,9 @@ fn build_template_graph_value(
             { "id": "n-output", "data": { "type": "Output", "params": {} } },
         ],
         "edges": [
-            { "source": "n-objects", "target": "n-engine", "sourceHandle": "output", "targetHandle": "input" },
-            { "source": "n-duration", "target": "n-engine", "sourceHandle": "output", "targetHandle": "duration" },
-            { "source": "n-engine", "target": "n-output", "sourceHandle": "output", "targetHandle": "input" },
+            { "source": "n-objects", "target": "n-engine", "sourceHandle": "objects", "targetHandle": "objects" },
+            { "source": "n-duration", "target": "n-engine", "sourceHandle": "duration", "targetHandle": "duration" },
+            { "source": "n-engine", "target": "n-output", "sourceHandle": "out", "targetHandle": "in" },
         ],
     }))
 }
@@ -138,7 +138,7 @@ fn plugin_template_graph(
     let objects = json!({ "id": "n-objects", "data": { "type": "Objects", "params": { "n_objects": n_objects } } });
     let dur = json!({ "id": "n-duration", "data": { "type": "Duration", "params": { "duration": duration } } });
     let output = json!({ "id": "n-output", "data": { "type": "Output", "params": {} } });
-    let edge = |src: &str, tgt: &str, th: &str| json!({ "source": src, "target": tgt, "sourceHandle": "output", "targetHandle": th });
+    let edge = |src: &str, tgt: &str, sh: &str, th: &str| json!({ "source": src, "target": tgt, "sourceHandle": sh, "targetHandle": th });
 
     // plugin:<id> — engine ABI v1 : Objects→Plugin→Output, Duration→Plugin.
     if let Some(id) = template.strip_prefix("plugin:") {
@@ -151,9 +151,9 @@ fn plugin_template_graph(
         return Some(Ok(json!({
             "nodes": [objects, dur, plugin, output],
             "edges": [
-                edge("n-objects", "n-plugin", "input"),
-                edge("n-duration", "n-plugin", "duration"),
-                edge("n-plugin", "n-output", "input"),
+                edge("n-objects", "n-plugin", "objects", "objects"),
+                edge("n-duration", "n-plugin", "duration", "duration"),
+                edge("n-plugin", "n-output", "out", "in"),
             ],
         })));
     }
@@ -168,10 +168,10 @@ fn plugin_template_graph(
                 output,
             ],
             "edges": [
-                edge("n-objects", "n-engine", "input"),
-                edge("n-duration", "n-engine", "duration"),
-                edge("n-engine", "n-plugin", "input"),
-                edge("n-plugin", "n-output", "input"),
+                edge("n-objects", "n-engine", "objects", "objects"),
+                edge("n-duration", "n-engine", "duration", "duration"),
+                edge("n-engine", "n-plugin", "out", "in"),
+                edge("n-plugin", "n-output", "out", "in"),
             ],
         }))),
 
@@ -185,13 +185,13 @@ fn plugin_template_graph(
                 output,
             ],
             "edges": [
-                edge("n-objects", "n-a", "input"),
-                edge("n-duration", "n-a", "duration"),
-                edge("n-objects", "n-b", "input"),
-                edge("n-duration", "n-b", "duration"),
-                edge("n-a", "n-plugin", "input_a"),
-                edge("n-b", "n-plugin", "input_b"),
-                edge("n-plugin", "n-output", "input"),
+                edge("n-objects", "n-a", "objects", "objects"),
+                edge("n-duration", "n-a", "duration", "duration"),
+                edge("n-objects", "n-b", "objects", "objects"),
+                edge("n-duration", "n-b", "duration", "duration"),
+                edge("n-a", "n-plugin", "out", "a"),
+                edge("n-b", "n-plugin", "out", "b"),
+                edge("n-plugin", "n-output", "out", "in"),
             ],
         }))),
 

@@ -25,20 +25,20 @@ mod tests {
         graph.add_edge(Edge {
             from: id_objects,
             to: id_circular,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "objects".to_string(),
+            to_port: "objects".to_string(),
         });
         graph.add_edge(Edge {
             from: id_duration,
             to: id_circular,
-            from_port: "output".to_string(),
+            from_port: "duration".to_string(),
             to_port: "duration".to_string(),
         });
         graph.add_edge(Edge {
             from: id_circular,
             to: id_output,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
 
         let result = Validator::validate(&graph);
@@ -64,20 +64,20 @@ mod tests {
         graph.add_edge(Edge {
             from: id1,
             to: id2,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
         graph.add_edge(Edge {
             from: id2,
             to: id3,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "duration".to_string(),
+            to_port: "in".to_string(),
         });
         graph.add_edge(Edge {
             from: id3,
             to: id1,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
 
         let result = Validator::validate(&graph);
@@ -126,8 +126,8 @@ mod tests {
         graph.add_edge(Edge {
             from: id_objects,
             to: id_output,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "objects".to_string(),
+            to_port: "objects".to_string(),
         });
 
         let result = Validator::validate(&graph);
@@ -158,14 +158,14 @@ mod tests {
         graph.add_edge(Edge {
             from: id_objects,
             to: id_circular,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "objects".to_string(),
+            to_port: "objects".to_string(),
         });
         graph.add_edge(Edge {
             from: id_circular,
             to: id_output,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
 
         let result = Validator::validate(&graph);
@@ -183,7 +183,7 @@ mod tests {
     fn test_global_graph_valid() {
         // Graph global valide : Input → Scale → Output
         let mut graph = Graph::new();
-        let input = Node::new(NodeType::Input);
+        let input = Node::new(NodeType::Merge);
         let scale = Node::new(NodeType::Scale);
         let output = Node::new(NodeType::Output);
 
@@ -198,14 +198,14 @@ mod tests {
         graph.add_edge(Edge {
             from: id_input,
             to: id_scale,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
         graph.add_edge(Edge {
             from: id_scale,
             to: id_output,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
 
         let result = Validator::validate_with_context(&graph, GraphContext::Global);
@@ -220,7 +220,7 @@ mod tests {
         // Objects n'a pas de sens dans un graph global
         let mut graph = Graph::new();
         let objects = Node::new(NodeType::Objects);
-        let input = Node::new(NodeType::Input);
+        let input = Node::new(NodeType::Merge);
         let output = Node::new(NodeType::Output);
 
         let id_input = input.id;
@@ -233,8 +233,8 @@ mod tests {
         graph.add_edge(Edge {
             from: id_input,
             to: id_output,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
 
         let result = Validator::validate_with_context(&graph, GraphContext::Global);
@@ -254,7 +254,7 @@ mod tests {
         // Un moteur (Circular) n'a pas de sens dans un graph global
         let mut graph = Graph::new();
         let circular = Node::new(NodeType::Circular);
-        let input = Node::new(NodeType::Input);
+        let input = Node::new(NodeType::Merge);
         let output = Node::new(NodeType::Output);
 
         let id_input = input.id;
@@ -267,8 +267,8 @@ mod tests {
         graph.add_edge(Edge {
             from: id_input,
             to: id_output,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
 
         let result = Validator::validate_with_context(&graph, GraphContext::Global);
@@ -299,8 +299,8 @@ mod tests {
         graph.add_edge(Edge {
             from: id_scale,
             to: id_output,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
 
         let result = Validator::validate_with_context(&graph, GraphContext::Global);
@@ -322,7 +322,7 @@ mod tests {
         let objects = Node::with_params(NodeType::Objects, serde_json::json!({"n_objects": 3}));
         let duration = Node::with_params(NodeType::Duration, serde_json::json!({"duration": 4.0}));
         let circular = Node::with_params(NodeType::Circular, serde_json::json!({"n_objects": 3}));
-        let input = Node::new(NodeType::Input);
+        let input = Node::new(NodeType::Merge);
         let output = Node::new(NodeType::Output);
 
         let id_objects = objects.id;
@@ -339,20 +339,20 @@ mod tests {
         graph.add_edge(Edge {
             from: id_objects,
             to: id_circular,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "objects".to_string(),
+            to_port: "objects".to_string(),
         });
         graph.add_edge(Edge {
             from: id_duration,
             to: id_circular,
-            from_port: "output".to_string(),
+            from_port: "duration".to_string(),
             to_port: "duration".to_string(),
         });
         graph.add_edge(Edge {
             from: id_circular,
             to: id_output,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
 
         let result = Validator::validate(&graph); // SubGraph par défaut
@@ -391,20 +391,20 @@ mod tests {
         graph.add_edge(Edge {
             from: id_objects,
             to: id_circular,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "objects".to_string(),
+            to_port: "objects".to_string(),
         });
         graph.add_edge(Edge {
             from: id_duration,
             to: id_circular,
-            from_port: "output".to_string(),
+            from_port: "duration".to_string(),
             to_port: "duration".to_string(),
         });
         graph.add_edge(Edge {
             from: id_circular,
             to: id_output,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
 
         let result = Validator::validate(&graph);
@@ -438,14 +438,14 @@ mod tests {
         graph.add_edge(Edge {
             from: id_moveref,
             to: id_scale,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
         graph.add_edge(Edge {
             from: id_scale,
             to: id_output,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
 
         let result = Validator::validate_with_context(&graph, GraphContext::Global);
@@ -479,20 +479,20 @@ mod tests {
         graph.add_edge(Edge {
             from: id_objects,
             to: id_elliptical,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "objects".to_string(),
+            to_port: "objects".to_string(),
         });
         graph.add_edge(Edge {
             from: id_duration,
             to: id_elliptical,
-            from_port: "output".to_string(),
+            from_port: "duration".to_string(),
             to_port: "duration".to_string(),
         });
         graph.add_edge(Edge {
             from: id_elliptical,
             to: id_output,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
 
         // Si has_engines ne détecte pas Elliptical, la validation ne va pas
@@ -510,7 +510,7 @@ mod tests {
         // Input → Zone → Velocity → Output : les nodes d'effets graph-native
         // sont des déclarations pass-through dans la chaîne globale.
         let mut graph = Graph::new();
-        let input = Node::new(NodeType::Input);
+        let input = Node::new(NodeType::Merge);
         let zone = Node::with_params(
             NodeType::Zone,
             serde_json::json!({"shape": "sphere", "center": [0,0,0], "radius": 2.0,
@@ -532,23 +532,24 @@ mod tests {
         graph.add_node(vel);
         graph.add_node(output);
 
+        // Capteurs en fan-out du node qui alimente Output.
+        graph.add_edge(Edge {
+            from: id_input,
+            to: id_output,
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
+        });
         graph.add_edge(Edge {
             from: id_input,
             to: id_zone,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
         graph.add_edge(Edge {
-            from: id_zone,
+            from: id_input,
             to: id_vel,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
-        });
-        graph.add_edge(Edge {
-            from: id_vel,
-            to: id_output,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
 
         let result = Validator::validate_with_context(&graph, GraphContext::Global);
@@ -585,20 +586,20 @@ mod tests {
             graph.add_edge(Edge {
                 from: id_objects,
                 to: id_circular,
-                from_port: "output".to_string(),
-                to_port: "input".to_string(),
+                from_port: "objects".to_string(),
+                to_port: "objects".to_string(),
             });
             graph.add_edge(Edge {
                 from: id_duration,
                 to: id_circular,
-                from_port: "output".to_string(),
+                from_port: "duration".to_string(),
                 to_port: "duration".to_string(),
             });
             graph.add_edge(Edge {
                 from: id_circular,
                 to: id_output,
-                from_port: "output".to_string(),
-                to_port: "input".to_string(),
+                from_port: "out".to_string(),
+                to_port: "in".to_string(),
             });
 
             let result = Validator::validate(&graph);
@@ -642,20 +643,20 @@ mod tests {
         graph.add_edge(Edge {
             from: id_objects,
             to: id_field,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "objects".to_string(),
+            to_port: "objects".to_string(),
         });
         graph.add_edge(Edge {
             from: id_duration,
             to: id_field,
-            from_port: "output".to_string(),
+            from_port: "duration".to_string(),
             to_port: "duration".to_string(),
         });
         graph.add_edge(Edge {
             from: id_field,
             to: id_output,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
 
         let result = Validator::validate(&graph);
@@ -669,7 +670,7 @@ mod tests {
     fn test_vectorfield_rejected_in_global_graph() {
         // VectorField est un moteur sub-graph — pas un post-process global
         let mut graph = Graph::new();
-        let input = Node::new(NodeType::Input);
+        let input = Node::new(NodeType::Merge);
         let field = Node::new(NodeType::VectorField);
         let output = Node::new(NodeType::Output);
 
@@ -684,14 +685,14 @@ mod tests {
         graph.add_edge(Edge {
             from: id_input,
             to: id_output,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
         graph.add_edge(Edge {
             from: id_field,
             to: id_output,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
 
         let result = Validator::validate_with_context(&graph, GraphContext::Global);
@@ -732,20 +733,20 @@ mod tests {
         graph.add_edge(Edge {
             from: id_objects,
             to: id_field,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "objects".to_string(),
+            to_port: "objects".to_string(),
         });
         graph.add_edge(Edge {
             from: id_field,
             to: id_scale,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
         graph.add_edge(Edge {
             from: id_scale,
             to: id_output,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
 
         let result = Validator::validate(&graph);
@@ -776,13 +777,13 @@ mod tests {
         graph.add_edge(Edge {
             from: id_objects,
             to: id_circular,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "objects".to_string(),
+            to_port: "objects".to_string(),
         });
         graph.add_edge(Edge {
             from: id_duration,
             to: id_circular,
-            from_port: "output".to_string(),
+            from_port: "duration".to_string(),
             to_port: "duration".to_string(),
         });
 
@@ -791,7 +792,7 @@ mod tests {
         if let Err(errors) = result {
             assert!(errors.iter().any(|e| matches!(
                 e,
-                ValidationError::InvalidConnection(msg) if msg.contains("Output requires")
+                ValidationError::InvalidConnection(msg) if msg.contains("required input port")
             )));
         }
     }
@@ -819,20 +820,20 @@ mod tests {
         graph.add_edge(Edge {
             from: id_objects,
             to: id_circular,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "objects".to_string(),
+            to_port: "objects".to_string(),
         });
         graph.add_edge(Edge {
             from: id_duration,
             to: id_circular,
-            from_port: "output".to_string(),
+            from_port: "duration".to_string(),
             to_port: "duration".to_string(),
         });
         graph.add_edge(Edge {
             from: id_circular,
             to: id_output,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
 
         let result = Validator::validate(&graph);
@@ -840,7 +841,7 @@ mod tests {
         if let Err(errors) = result {
             assert!(errors.iter().any(|e| matches!(
                 e,
-                ValidationError::InvalidConnection(msg) if msg.contains("Scale requires")
+                ValidationError::InvalidConnection(msg) if msg.contains("required input port")
             )));
         }
     }
@@ -869,21 +870,21 @@ mod tests {
         graph.add_edge(Edge {
             from: id_duration,
             to: id_circular,
-            from_port: "output".to_string(),
+            from_port: "duration".to_string(),
             to_port: "duration".to_string(),
         });
 
         graph.add_edge(Edge {
             from: id_objects,
             to: id_circular,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "objects".to_string(),
+            to_port: "objects".to_string(),
         });
         graph.add_edge(Edge {
             from: id_circular,
             to: id_output,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
 
         let result = Validator::validate(&graph);
@@ -917,20 +918,20 @@ mod tests {
         graph.add_edge(Edge {
             from: id_objects,
             to: id_spiral,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "objects".to_string(),
+            to_port: "objects".to_string(),
         });
         graph.add_edge(Edge {
             from: id_duration,
             to: id_spiral,
-            from_port: "output".to_string(),
+            from_port: "duration".to_string(),
             to_port: "duration".to_string(),
         });
         graph.add_edge(Edge {
             from: id_spiral,
             to: id_output,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
 
         assert!(Validator::validate(&graph).is_ok());
@@ -950,8 +951,8 @@ mod tests {
             graph.add_edge(Edge {
                 from: w[0],
                 to: w[1],
-                from_port: "output".to_string(),
-                to_port: "input".to_string(),
+                from_port: "out".to_string(),
+                to_port: "in".to_string(),
             });
         }
         graph
@@ -991,8 +992,8 @@ mod tests {
             graph.add_edge(Edge {
                 from: id_a,
                 to: id_b,
-                from_port: "output".to_string(),
-                to_port: "input".to_string(),
+                from_port: "out".to_string(),
+                to_port: "in".to_string(),
             });
         }
         let result = Validator::validate(&graph);
@@ -1021,11 +1022,11 @@ mod tests {
             let mix = Node::new(NodeType::Mix);
             let id = mix.id;
             graph.add_node(mix);
-            for port in ["input_a", "input_b"] {
+            for port in ["a", "b"] {
                 graph.add_edge(Edge {
                     from: prev,
                     to: id,
-                    from_port: "output".to_string(),
+                    from_port: "out".to_string(),
                     to_port: port.to_string(),
                 });
             }
@@ -1070,20 +1071,20 @@ mod tests {
             graph.add_edge(Edge {
                 from: id_o,
                 to: id_s,
-                from_port: "output".to_string(),
-                to_port: "input".to_string(),
+                from_port: "out".to_string(),
+                to_port: "in".to_string(),
             });
             graph.add_edge(Edge {
                 from: id_d,
                 to: id_s,
-                from_port: "output".to_string(),
+                from_port: "out".to_string(),
                 to_port: "duration".to_string(),
             });
             graph.add_edge(Edge {
                 from: id_s,
                 to: id_out,
-                from_port: "output".to_string(),
-                to_port: "input".to_string(),
+                from_port: "out".to_string(),
+                to_port: "in".to_string(),
             });
             let result = Validator::validate(&graph);
             let errors = result.clone().err().unwrap_or_default();
@@ -1098,5 +1099,170 @@ mod tests {
                 errors
             );
         }
+    }
+}
+
+mod diagnose_tests {
+    use crate::graph::{Edge, Graph, Node, NodeId, NodeType};
+    use crate::validator::{diagnose, GraphContext, IssueSeverity};
+
+    fn node(t: NodeType, fe: &str, params: serde_json::Value) -> Node {
+        let mut p = params;
+        p["__fe_id"] = serde_json::json!(fe);
+        Node::with_params(t, p)
+    }
+
+    fn edge(g: &mut Graph, f: NodeId, t: NodeId, fp: &str, tp: &str) {
+        g.add_edge(Edge {
+            from: f,
+            to: t,
+            from_port: fp.to_string(),
+            to_port: tp.to_string(),
+        });
+    }
+
+    /// Graphe move minimal valide : Objects+Duration → Circular → Output.
+    fn valid_move_graph() -> Graph {
+        let mut g = Graph::new();
+        let o = node(NodeType::Objects, "o", serde_json::json!({"n_objects": 2}));
+        let d = node(
+            NodeType::Duration,
+            "d",
+            serde_json::json!({"duration": 4.0}),
+        );
+        let c = node(NodeType::Circular, "c", serde_json::json!({"radius": 1.0}));
+        let out = node(NodeType::Output, "out", serde_json::json!({}));
+        let (o_id, d_id, c_id, out_id) = (o.id, d.id, c.id, out.id);
+        for n in [o, d, c, out] {
+            g.add_node(n);
+        }
+        edge(&mut g, o_id, c_id, "objects", "objects");
+        edge(&mut g, d_id, c_id, "duration", "duration");
+        edge(&mut g, c_id, out_id, "out", "in");
+        g
+    }
+
+    #[test]
+    fn diagnose_valid_graph_empty() {
+        let g = valid_move_graph();
+        let issues = diagnose(&g, GraphContext::SubGraph, None);
+        assert!(issues.is_empty(), "valid graph → no issues: {issues:?}");
+    }
+
+    #[test]
+    fn diagnose_errors_carry_node_ids() {
+        // Port type mismatch : Objects.out → Circular.in (Positions port
+        // exists but ObjectSet ≠ Positions) → les DEUX endpoints.
+        let mut g = Graph::new();
+        let o = node(NodeType::Objects, "o", serde_json::json!({"n_objects": 2}));
+        let c = node(NodeType::Circular, "c", serde_json::json!({}));
+        let out = node(NodeType::Output, "out", serde_json::json!({}));
+        let (o_id, c_id, out_id) = (o.id, c.id, out.id);
+        for n in [o, c, out] {
+            g.add_node(n);
+        }
+        edge(&mut g, o_id, c_id, "objects", "in");
+        edge(&mut g, c_id, out_id, "out", "in");
+        let issues = diagnose(&g, GraphContext::SubGraph, None);
+        let type_err = issues
+            .iter()
+            .find(|i| i.message.contains("type mismatch") || i.message.contains("port type"))
+            .expect("type mismatch issue");
+        assert_eq!(type_err.severity, IssueSeverity::Error);
+        assert!(
+            type_err.node_ids.contains(&"o".to_string())
+                && type_err.node_ids.contains(&"c".to_string()),
+            "mismatch should carry both endpoint ids: {type_err:?}"
+        );
+    }
+
+    #[test]
+    fn diagnose_dead_nodes_warning() {
+        let mut g = valid_move_graph();
+        // Helix orphelin — n'atteint pas Output → warning.
+        let h = node(NodeType::Helix, "h", serde_json::json!({}));
+        let h_id = h.id;
+        g.add_node(h);
+        // Duration orpheline alimente le Helix (still dead).
+        let d2 = node(
+            NodeType::Duration,
+            "d2",
+            serde_json::json!({"duration": 4.0}),
+        );
+        let d2_id = d2.id;
+        g.add_node(d2);
+        edge(&mut g, d2_id, h_id, "duration", "duration");
+        let _ = h_id;
+        let issues = diagnose(&g, GraphContext::SubGraph, None);
+        let warn = issues
+            .iter()
+            .find(|i| i.severity == IssueSeverity::Warning)
+            .expect("dead node warning");
+        assert!(warn.node_ids.contains(&"h".to_string()));
+    }
+
+    #[test]
+    fn diagnose_signal_param_target() {
+        // SignalOut avec cible invalide → erreur sur le node SignalOut.
+        let move_g = valid_move_graph();
+        let mut g = Graph::new();
+        let c = node(
+            NodeType::SignalConst,
+            "k",
+            serde_json::json!({"value": 1.0}),
+        );
+        let s = node(
+            NodeType::SignalOut,
+            "s",
+            serde_json::json!({"target": "param:ghost:x", "amount": 1.0}),
+        );
+        let (c_id, s_id) = (c.id, s.id);
+        g.add_node(c);
+        g.add_node(s);
+        edge(&mut g, c_id, s_id, "out", "signal");
+        let issues = diagnose(&g, GraphContext::Signal, Some(&move_g));
+        let err = issues
+            .iter()
+            .find(|i| i.severity == IssueSeverity::Error && i.message.contains("param"))
+            .expect("param target error");
+        assert_eq!(err.node_ids, vec!["s".to_string()]);
+
+        // Cible valide → pas d'erreur param.
+        let mut g = Graph::new();
+        let c = node(
+            NodeType::SignalConst,
+            "k",
+            serde_json::json!({"value": 1.0}),
+        );
+        let s = node(
+            NodeType::SignalOut,
+            "s",
+            serde_json::json!({"target": "param:c:radius", "amount": 1.0}),
+        );
+        let (c_id, s_id) = (c.id, s.id);
+        g.add_node(c);
+        g.add_node(s);
+        edge(&mut g, c_id, s_id, "out", "signal");
+        let issues = diagnose(&g, GraphContext::Signal, Some(&move_g));
+        assert!(
+            !issues.iter().any(|i| i.severity == IssueSeverity::Error),
+            "valid param target → no error: {issues:?}"
+        );
+    }
+
+    #[test]
+    fn diagnose_global_chain_errors() {
+        // Chaîne sans source → erreur sur le head + warning dead nodes?
+        let mut g = Graph::new();
+        let s = node(NodeType::Scale, "s", serde_json::json!({"x": 1.0}));
+        let out = node(NodeType::Output, "out", serde_json::json!({}));
+        let (s_id, out_id) = (s.id, out.id);
+        g.add_node(s);
+        g.add_node(out);
+        edge(&mut g, s_id, out_id, "out", "in");
+        let issues = diagnose(&g, GraphContext::Global, None);
+        assert!(issues
+            .iter()
+            .any(|i| i.severity == IssueSeverity::Error && i.message.contains("source")));
     }
 }

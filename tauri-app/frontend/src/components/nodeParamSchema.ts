@@ -66,7 +66,7 @@ const CATEGORY_META: { category: NodeCategory; label: string; color: string }[] 
   { category: 'MathEngine', label: 'Math Engines', color: 'blue' },
   { category: 'PhysicsEngine', label: 'Physics Engines', color: 'green' },
   { category: 'Spline', label: 'Splines', color: 'cyan' },
-  { category: 'Falloff', label: 'Falloffs', color: 'orange' },
+  { category: 'Envelope', label: 'Envelopes', color: 'orange' },
   { category: 'Modifier', label: 'Modifiers', color: 'pink' },
   { category: 'PostProcess', label: 'Global (Post-process)', color: 'cyan' },
   { category: 'Composite', label: 'Composite', color: 'purple' },
@@ -159,7 +159,9 @@ export const NODE_DESCRIPTIONS: Partial<Record<NodeType, string>> = Object.fromE
  */
 export function getValidTargetTypes(from: NodeType): NodeType[] {
   const allTypes: NodeType[] = NODE_SPECS.map((s) => s.node_type);
-  return allTypes.filter((to) => to !== from && isValidConnectionExported(from, to));
+  // Pas de filtre `to !== from` aveugle : Scale→Scale est une connexion
+  // valide (modifier en chaîne) — la validité appartient à isValidConnection.
+  return allTypes.filter((to) => isValidConnectionExported(from, to));
 }
 
 /**

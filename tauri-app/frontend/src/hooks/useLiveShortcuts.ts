@@ -1,7 +1,7 @@
 import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
-import { useCuelistStore } from '../store/useCuelistStore';
 import { toast } from '../utils/toast-helpers';
+import { doGo, doCueNext, doCuePrev } from '../utils/liveActions';
 import { isModalOpen, closeTopModal } from '../utils/modalGuard';
 import { safeInvoke as invoke } from '../utils/tauri';
 import type { PerfStatsResponse } from '../types/generated/PerfStatsResponse';
@@ -84,25 +84,16 @@ export function useLiveShortcuts() {
         // Distinct du cue recall (Shift+Enter) : le GO ne tue pas les moves
         // layerés, il fait la transition de scène prévue.
         e.preventDefault();
-        const gs = useGraphStore.getState();
-        gs.goToNextMove().then((res: { ok: boolean; message: string }) => {
-          // Un GO qui ne démarre rien (fin de setlist, activation échouée)
-          // doit être visible — sinon silence en live.
-          if (!res.ok) toast.warning(res.message);
-        });
+        doGo();
       } else if (e.key === 'Enter' && e.shiftKey) {
         // RECALL = cue suivant — kill + respawn du snapshot complet.
         // Shift requis : action de scène entière, jamais sur un Enter nu.
         e.preventDefault();
-        if (!useCuelistStore.getState().isRecalling) {
-          useCuelistStore.getState().goToNextCue();
-        }
+        doCueNext();
       } else if (e.key === 'Backspace') {
         // Previous cue
         e.preventDefault();
-        if (!useCuelistStore.getState().isRecalling) {
-          useCuelistStore.getState().goToPreviousCue();
-        }
+        doCuePrev();
       } else if (e.key === ' ') {
         // Space: play/stop the selected (editing) slot
         e.preventDefault();

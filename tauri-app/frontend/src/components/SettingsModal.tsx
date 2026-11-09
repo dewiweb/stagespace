@@ -3,6 +3,7 @@ import { useGraphStore } from '../store/useGraphStore';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { toast } from '../utils/toast-helpers';
 import Modal from './ui/Modal';
+import EmptyState from './ui/EmptyState';
 import { Settings, ListOrdered } from 'lucide-react';
 
 const MERGE_STRATEGIES = [
@@ -36,10 +37,39 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const setSelectedAudioDeviceId = useGraphStore((s) => s.setSelectedAudioDeviceId);
   const mergeStrategy = useGraphStore((s) => s.mergeStrategy);
   const setMergeStrategy = useGraphStore((s) => s.setMergeStrategy);
+  const psnEnabled = useGraphStore((s) => s.psnEnabled);
+  const psnGroup = useGraphStore((s) => s.psnGroup);
+  const psnPort = useGraphStore((s) => s.psnPort);
+  const psnMap = useGraphStore((s) => s.psnMap);
+  const psnAxes = useGraphStore((s) => s.psnAxes);
+  const psnRunning = useGraphStore((s) => s.psnRunning);
+  const psnLastPacketAge = useGraphStore((s) => s.psnLastPacketAge);
+  const setPsnConfig = useGraphStore((s) => s.setPsnConfig);
+  const venueYaw = useGraphStore((s) => s.venueYaw);
+  const venueEnabled = useGraphStore((s) => s.venueEnabled);
+  const venueScale = useGraphStore((s) => s.venueScale);
+  const venueOffset = useGraphStore((s) => s.venueOffset);
+  const setVenueConfig = useGraphStore((s) => s.setVenueConfig);
+  const realityStrength = useGraphStore((s) => s.realityStrength);
+  const setRealityStrength = useGraphStore((s) => s.setRealityStrength);
+  const mediaSyncEnabled = useGraphStore((s) => s.mediaSyncEnabled);
+  const mediaSyncTarget = useGraphStore((s) => s.mediaSyncTarget);
+  const mediaSyncPrefix = useGraphStore((s) => s.mediaSyncPrefix);
+  const setMediaSync = useGraphStore((s) => s.setMediaSync);
 
   const [oscIdsStr, setOscIdsStr] = React.useState(manualOscIds.join(','));
   const [audioDevices, setAudioDevices] = React.useState<MediaDeviceInfo[]>([]);
+  // Tabs par domaine — 8 sections plates étaient illisibles ; regroupées
+  // par métier opérateur (réseau, tracking, salle, show, audio).
+  const [tab, setTab] = React.useState<'reseau' | 'tracking' | 'salle' | 'show' | 'audio'>('reseau');
   const [oscInPortStr, setOscInPortStr] = React.useState(String(oscInPort));
+  const [psnGroupStr, setPsnGroupStr] = React.useState(psnGroup);
+  const [psnPortStr, setPsnPortStr] = React.useState(String(psnPort));
+  const [psnMapStr, setPsnMapStr] = React.useState(psnMap);
+  const [psnAxesStr, setPsnAxesStr] = React.useState(psnAxes);
+  const [venueScaleStr, setVenueScaleStr] = React.useState(venueScale);
+  const [venueOffsetStr, setVenueOffsetStr] = React.useState(venueOffset);
+  const [venueYawStr, setVenueYawStr] = React.useState(venueYaw);
   const [oscInStatus, setOscInStatus] = React.useState<string | null>(null);
   const [discovering, setDiscovering] = React.useState(false);
   const [discoveredTargets, setDiscoveredTargets] = React.useState<Array<{ name: string; host: string; port: number; profile: string; source: string }>>([]);
@@ -106,8 +136,32 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
       onClose={onClose}
       widthClass="max-w-[520px]"
     >
-        <div className="px-5 py-4 space-y-5">
+        {/* Tab bar — un domaine par tab, la taille du modal reste stable. */}
+        <div className="flex gap-1 px-5 pt-3 border-b border-stagespace-border">
+          {([
+            ['reseau', 'Réseau'],
+            ['tracking', 'Tracking'],
+            ['salle', 'Salle'],
+            ['show', 'Show'],
+            ['audio', 'Audio'],
+          ] as const).map(([id, label]) => (
+            <button
+              key={id}
+              onClick={() => setTab(id)}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-t transition-colors ${
+                tab === id
+                  ? 'bg-stagespace-panel text-white border-b-2 border-indigo-500'
+                  : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="px-5 py-4 space-y-5 min-h-[320px]">
           {/* ─── OSC OUT ─── */}
+          {tab === 'reseau' && (
           <section>
             <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
               <span className="text-blue-400">→</span> OSC Output
@@ -181,8 +235,10 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               ))}
             </div>
           </section>
+          )}
 
           {/* ─── OSC IN ─── */}
+          {tab === 'reseau' && (
           <section>
             <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
               <span className="text-green-400">←</span> OSC Input
@@ -213,8 +269,193 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               </p>
             )}
           </section>
+          )}
 
-          {/* ─── Merge ─── */}
+          {/* ─── PSN / Tracking ─── */}
+          {tab === 'tracking' && (
+          <section>
+            <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+              <span className="text-purple-400">◎</span> PSN / RTTrP Tracking
+            </h3>
+            <p className="text-gray-400 text-xs mb-3">
+              PosiStageNet tracking (BlackTrax, Zactrack, Follow-Me) — tracker positions
+              feed manual positions of the mapped objects.
+            </p>
+            <div className="flex items-center gap-2 mb-2">
+              <button
+                onClick={() => setPsnConfig({ enabled: !psnEnabled, group: psnGroupStr, port: parseInt(psnPortStr) || 56565, map: psnMapStr })}
+                className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                  psnEnabled ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                {psnEnabled ? 'ON' : 'OFF'}
+              </button>
+              <span className={`text-xs ${psnRunning ? 'text-green-400' : 'text-gray-500'}`}>
+                {psnRunning
+                  ? psnLastPacketAge != null
+                    ? `flux ${psnLastPacketAge < 2000 ? 'vivant' : `stale (${Math.round(psnLastPacketAge / 1000)}s)`}`
+                    : 'en écoute…'
+                  : 'arrêté'}
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 mb-2">
+              <div className="col-span-2">
+                <label className="text-gray-500 text-xs block mb-1">Multicast group</label>
+                <input
+                  type="text"
+                  value={psnGroupStr}
+                  onChange={(e) => setPsnGroupStr(e.target.value)}
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                />
+              </div>
+              <div>
+                <label className="text-gray-500 text-xs block mb-1">Port</label>
+                <input
+                  type="number"
+                  value={psnPortStr}
+                  onChange={(e) => setPsnPortStr(e.target.value)}
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-gray-500 text-xs block mb-1">Map tracker→track ("1:7, 2:8" — tracker 1 pilote la track 7)</label>
+              <input
+                type="text"
+                value={psnMapStr}
+                onChange={(e) => setPsnMapStr(e.target.value)}
+                onBlur={() => setPsnConfig({ map: psnMapStr })}
+                placeholder="1:7, 2:8, 3:9"
+                className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+              />
+            </div>
+            <div className="mt-2">
+              <label className="text-gray-500 text-xs block mb-1">Axes PSN→stage ("x,-y,z" — convention variable selon installateur)</label>
+              <input
+                type="text"
+                value={psnAxesStr}
+                onChange={(e) => setPsnAxesStr(e.target.value)}
+                onBlur={() => setPsnConfig({ axes: psnAxesStr })}
+                placeholder="x,y,z"
+                className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+              />
+            </div>
+          </section>
+          )}
+
+          {/* ─── Venue / auto-adaptation ─── */}
+          {tab === 'salle' && (
+          <section>
+            <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+              <span className="text-amber-400">⌖</span> Venue adaptation
+            </h3>
+            <p className="text-gray-400 text-xs mb-3">
+              Map the show's canonical space to this room — scale+offset applied
+              to the OSC payload only (trajectories/anchors stay canonical).
+            </p>
+            <div className="flex items-center gap-2 mb-2">
+              <button
+                onClick={() => setVenueConfig({ enabled: !venueEnabled, scale: venueScaleStr, offset: venueOffsetStr })}
+                className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                  venueEnabled ? 'bg-amber-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                {venueEnabled ? 'ON' : 'OFF'}
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-gray-500 text-xs block mb-1">Scale "x,y,z"</label>
+                <input
+                  type="text"
+                  value={venueScaleStr}
+                  onChange={(e) => setVenueScaleStr(e.target.value)}
+                  onBlur={() => setVenueConfig({ scale: venueScaleStr })}
+                  placeholder="0.7,0.65,0.5"
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                />
+              </div>
+              <div>
+                <label className="text-gray-500 text-xs block mb-1">Offset "x,y,z"</label>
+                <input
+                  type="text"
+                  value={venueOffsetStr}
+                  onChange={(e) => setVenueOffsetStr(e.target.value)}
+                  onBlur={() => setVenueConfig({ offset: venueOffsetStr })}
+                  placeholder="0,0,0"
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                />
+              </div>
+              <div>
+                <label className="text-gray-500 text-xs block mb-1">Yaw (° — salle tournée)</label>
+                <input
+                  type="text"
+                  value={venueYawStr}
+                  onChange={(e) => setVenueYawStr(e.target.value)}
+                  onBlur={() => setVenueConfig({ yaw: venueYawStr })}
+                  placeholder="0"
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                />
+              </div>
+            </div>
+            {/* Distance reality layer — couplage Zahorik (distance →
+                exagération + gain + air-EQ + DRR automatiques). */}
+            <div className="mt-3">
+              <label className="text-gray-500 text-xs block mb-1">
+                Distance reality — {realityStrength > 0 ? `${Math.round(realityStrength * 100)}%` : 'off'}
+              </label>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={realityStrength}
+                onChange={(e) => setRealityStrength(parseFloat(e.target.value))}
+                className="w-full accent-amber-500"
+              />
+            </div>
+          </section>
+          )}
+
+          {/* ─── Media sync out ─── */}
+          {tab === 'reseau' && (
+          <section>
+            <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+              <span className="text-pink-400">📺</span> Media sync out
+            </h3>
+            <p className="text-gray-400 text-xs mb-3">
+              Sends <code className="text-gray-300">{'{prefix}'}/cue &lt;num&gt; &lt;name&gt;</code> to a
+              dedicated desk (light/video) on every cue change.
+            </p>
+            <div className="flex items-center gap-2 mb-2">
+              <button
+                onClick={() => setMediaSync({ enabled: !mediaSyncEnabled })}
+                className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                  mediaSyncEnabled ? 'bg-pink-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                {mediaSyncEnabled ? 'ON' : 'OFF'}
+              </button>
+              <input
+                type="text"
+                defaultValue={mediaSyncTarget}
+                onBlur={(e) => setMediaSync({ target: e.target.value })}
+                placeholder="ip:port"
+                className="flex-1 px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+              />
+              <input
+                type="text"
+                defaultValue={mediaSyncPrefix}
+                onBlur={(e) => setMediaSync({ prefix: e.target.value })}
+                placeholder="/media"
+                className="w-24 px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+              />
+            </div>
+          </section>
+          )}
+
+          {/* ─── Merge + Track IDs ─── */}
+          {tab === 'show' && (<>
           <section>
             <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
               <span className="text-amber-400">⇄</span> Merge
@@ -250,8 +491,10 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               placeholder="1,2,3..."
             />
           </section>
+          </>)}
 
           {/* ─── Audio Input ─── */}
+          {tab === 'audio' && (
           <section>
             <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
               <span className="text-cyan-400">♪</span> Audio Input
@@ -273,11 +516,10 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 ))}
               </select>
             ) : (
-              <p className="text-gray-400 text-xs italic">
-                Start the microphone once to enumerate available devices.
-              </p>
+              <EmptyState size="sm" title="No device listed" hint="Start the microphone once to enumerate available devices." />
             )}
           </section>
+          )}
         </div>
 
         {/* Footer */}

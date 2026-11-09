@@ -55,6 +55,7 @@ export function useDrawMode({ cameraRef, containerRef }: UseDrawModeParams) {
   const handleDrawStart = useCallback(
     (e: React.PointerEvent) => {
       if (!drawMode) return;
+      if (e.button !== 0) return; // clic droit = release, pas draw
       const world = screenToWorld(e.clientX, e.clientY);
       if (!world) return;
       clearDrawnPoints();

@@ -1,3 +1,6 @@
+---
+trigger: always_on
+---
 # Règle : Review des useEffect dans le code Three.js
 
 ## Objectif

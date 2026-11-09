@@ -35,8 +35,8 @@ pub enum PostProcessCompileError {
 }
 
 /// Effets déclarés dans le graph global — les nodes `Zone` et `Velocity`
-/// sont des déclarations pass-through : ils ne transforment pas les positions,
-/// leurs paramètres sont extraits ici et installés dans le MergeRuntime pour
+/// sont des capteurs (sinks) : ils observent les positions finales, leurs
+/// paramètres sont extraits ici et installés dans le MergeRuntime pour
 /// être évalués chaque frame avec les effets configurés manuellement.
 #[derive(Debug, Default)]
 pub struct GraphEffects {
@@ -44,27 +44,90 @@ pub struct GraphEffects {
     pub zones: Vec<Zone>,
     /// Modulations cinématiques déclarées par les nodes `Velocity`
     pub modulations: Vec<ChannelModulation>,
-    /// Stratégie de merge déclarée par un node `Merge` (param `strategy`)
-    /// — None si absent : la stratégie courante est conservée.
+    /// Stratégie de merge déclarée par le node `Merge` en tête de chaîne
+    /// (param `strategy`) — None si absent ou non en tête.
     pub strategy: Option<crate::merge_runtime::MergeStrategy>,
-    /// Un node `Barycenter` est présent : le merge recalcule `origin`
-    /// chaque frame = isobarycentre des `track_positions` (pivot des
-    /// transforms qui suivent). Sans le node, l'origin vient de l'app.
-    pub barycenter: bool,
-    /// Un node `MoveRef` avec `move_id` non vide : la chaîne de
-    /// post-processing ne reçoit que les positions de CE move au lieu du
-    /// merge de tous les moves (audit T2 — le param était décoratif).
+    /// Le head de chaîne est un `MoveRef` avec `move_id` non vide : la
+    /// chaîne ne reçoit que les positions de CE move au lieu du merge.
     pub move_ref: Option<String>,
 }
 
-/// Extrait les effets déclarés dans le graph global (nodes Zone/Velocity).
+/// Extrait les effets déclarés dans le graph global.
 ///
-/// Les nodes dont les params sont invalides produisent une erreur —
-/// mieux vaut échouer à l'update du graph que perdre silencieusement
-/// un effet attendu par l'utilisateur.
+/// `strategy`/`move_id` sont lus sur le HEAD de la chaîne `in` de l'Output
+/// uniquement (une source ailleurs dans le graphe est rejetée par le
+/// validateur). Les zones/modulations ne sont extraites que des capteurs
+/// alimentés par le node qui alimente `Output.in` — un capteur branché
+/// au milieu de la chaîne est une erreur de validation, pas un effet
+/// silencieusement déplacé.
 pub fn extract_graph_effects(graph: &Graph) -> Result<GraphEffects, PostProcessCompileError> {
     let mut effects = GraphEffects::default();
+
+    let Some(output) = graph
+        .nodes
+        .values()
+        .find(|n| n.node_type == NodeType::Output)
+    else {
+        return Ok(effects);
+    };
+    // Le node qui alimente `Output.in` — extrémité de la chaîne.
+    let Some(feeder) = graph
+        .edges
+        .iter()
+        .find(|e| e.to == output.id && e.to_port == "in")
+        .map(|e| e.from)
+    else {
+        return Ok(effects);
+    };
+
+    // Head de chaîne = remonter les `in` jusqu'au node sans `in` entrant.
+    let mut head = feeder;
+    let mut visited = std::collections::HashSet::new();
+    while visited.insert(head) {
+        match graph
+            .edges
+            .iter()
+            .find(|e| e.to == head && e.to_port == "in")
+        {
+            Some(e) => head = e.from,
+            None => break,
+        }
+    }
+    if let Some(head_node) = graph.nodes.get(&head) {
+        match head_node.node_type {
+            NodeType::Merge => {
+                if let Some(s) = head_node.params.get("strategy").and_then(|v| v.as_str()) {
+                    use std::str::FromStr;
+                    let strat = crate::merge_runtime::MergeStrategy::from_str(s).map_err(|e| {
+                        PostProcessCompileError::InvalidParameter(format!("Merge node: {e}"))
+                    })?;
+                    effects.strategy = Some(strat);
+                }
+            }
+            NodeType::MoveRef => {
+                // `move_id` vide = fallback sur le merge complet.
+                if let Some(id) = head_node
+                    .params
+                    .get("move_id")
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.is_empty())
+                {
+                    effects.move_ref = Some(id.to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Capteurs alimentés par le node final de la chaîne uniquement.
     for node in graph.nodes.values() {
+        let fed_by_final = graph
+            .edges
+            .iter()
+            .any(|e| e.to == node.id && e.to_port == "in" && e.from == feeder);
+        if !fed_by_final {
+            continue;
+        }
         match node.node_type {
             NodeType::Zone => {
                 let zone = Zone::from_node_params(&node.params).map_err(|e| {
@@ -77,32 +140,6 @@ pub fn extract_graph_effects(graph: &Graph) -> Result<GraphEffects, PostProcessC
                     PostProcessCompileError::InvalidParameter(format!("Velocity node: {e}"))
                 })?;
                 effects.modulations.push(m);
-            }
-            NodeType::Merge => {
-                // Param `strategy` du node Merge — documenté dans le node mais
-                // jamais lu auparavant. Appliqué au MergeRuntime par l'appelant.
-                if let Some(s) = node.params.get("strategy").and_then(|v| v.as_str()) {
-                    use std::str::FromStr;
-                    let strat = crate::merge_runtime::MergeStrategy::from_str(s).map_err(|e| {
-                        PostProcessCompileError::InvalidParameter(format!("Merge node: {e}"))
-                    })?;
-                    effects.strategy = Some(strat);
-                }
-            }
-            NodeType::Barycenter => {
-                effects.barycenter = true;
-            }
-            NodeType::MoveRef => {
-                // `move_id` vide = fallback sur le merge complet (comme
-                // Input) — le param n'est plus décoratif.
-                if let Some(id) = node
-                    .params
-                    .get("move_id")
-                    .and_then(|v| v.as_str())
-                    .filter(|s| !s.is_empty())
-                {
-                    effects.move_ref = Some(id.to_string());
-                }
             }
             _ => {}
         }
@@ -160,12 +197,31 @@ pub fn compile_post_process(
     // Compiler chaque node en une closure de transformation
     // On construit la chaîne de l'amont vers l'aval (premier node = premier appliqué)
     let transforms = transforms::compile_chain(&chain)?;
+    let bary_flags: Vec<bool> = chain
+        .iter()
+        .map(|n| n.node_type == NodeType::Barycenter)
+        .collect();
 
-    // La PostProcessFn applique les transformations en séquence
+    // La PostProcessFn applique les transformations en séquence. Un node
+    // `Barycenter` ne touche pas les positions : il bascule `ctx.origin`
+    // sur l'isobarycentre des `track_positions` pour les transforms qui
+    // le SUIVENT dans la chaîne — la position du node a donc un sens.
     Ok(Box::new(move |ctx: &PostProcessContext, positions| {
         let mut result = positions;
-        for transform in &transforms {
-            result = transform(ctx, result);
+        let mut origin = ctx.origin;
+        for (i, transform) in transforms.iter().enumerate() {
+            if bary_flags[i] && !ctx.track_positions.is_empty() {
+                let n = ctx.track_positions.len() as f64;
+                origin = ctx
+                    .track_positions
+                    .values()
+                    .fold(nalgebra::Vector3::zeros(), |acc, p| {
+                        acc + nalgebra::Vector3::new(p[0], p[1], p[2])
+                    })
+                    / n;
+            }
+            let ctx_eff = PostProcessContext { origin, ..*ctx };
+            result = transform(&ctx_eff, result);
         }
         result
     }))
@@ -217,7 +273,7 @@ fn build_transform_chain(
             // erreur — le validateur devrait l'avoir attrapé avant, mais on garde
             // cette garde défensive au cas où le validateur est contourné.
             match node.node_type {
-                NodeType::Input | NodeType::Merge | NodeType::MoveRef => break,
+                NodeType::Merge | NodeType::MoveRef => break,
                 other => {
                     return Err(PostProcessCompileError::InvalidNode(format!(
                         "{other:?} is not a post-process node and cannot appear in the global graph chain"

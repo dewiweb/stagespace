@@ -71,6 +71,13 @@ interface MoveEditorStore {
   activeMovementIds: string[];
   launchFlash: number; // timestamp du dernier launch (pour feedback visuel)
   // Mode Expert (node editor) — partagé pour que MovesPanel puisse l'activer via [edit]
+  /// Surface active — la refonte 3 phases de l'opérateur :
+  /// atelier (mise en boîte) · conduite (faire avancer le show) ·
+  /// jeu (interagir avec les objets live). Remplace le booléen
+  /// performMode : 'jeu' = l'ancien performMode=true.
+  surface: 'atelier' | 'conduite' | 'jeu';
+  setSurface: (s: 'atelier' | 'conduite' | 'jeu') => void;
+
   showExpert: boolean;
   setShowExpert: (show: boolean) => void;
   // Mode Perform — surface live réduite (setlist + canvas + params live à la
@@ -88,6 +95,9 @@ interface MoveEditorStore {
   setCurrent: (anim: Move) => void;
   updateCurrent: (patch: Partial<Move>) => void;
   updateAssignment: (trackId: number, patch: Partial<TrackAssignment>) => void;
+  /// Batch — une écriture store + un push live pour N tracks (patterns
+  /// TrackGrid), au lieu de N×updateAssignment = N syncs.
+  updateAssignments: (patches: Array<{ trackId: number; patch: Partial<TrackAssignment> }>) => void;
   addAudioMod: (mod: AudioMod) => void;
   removeAudioMod: (index: number) => void;
   saveAnimation: () => Promise<void>;
@@ -115,9 +125,9 @@ function defaultAnimation(): Move {
       { id: 'out-default', type: 'custom', position: { x: 550, y: 180 }, data: { label: 'Output', type: 'Output', params: {} } },
     ],
     edges: [
-      { id: 'e-obj-engine', source: 'obj-default', target: 'engine-default', sourceHandle: 'output', targetHandle: 'input' },
-      { id: 'e-dur-engine', source: 'dur-default', target: 'engine-default', sourceHandle: 'output', targetHandle: 'duration' },
-      { id: 'e-engine-out', source: 'engine-default', target: 'out-default', sourceHandle: 'output', targetHandle: 'input' },
+      { id: 'e-obj-engine', source: 'obj-default', target: 'engine-default', sourceHandle: 'objects', targetHandle: 'objects' },
+      { id: 'e-dur-engine', source: 'dur-default', target: 'engine-default', sourceHandle: 'duration', targetHandle: 'duration' },
+      { id: 'e-engine-out', source: 'engine-default', target: 'out-default', sourceHandle: 'out', targetHandle: 'in' },
     ],
   };
   return {
@@ -249,6 +259,16 @@ function syncCurrentToSlot(get: () => MoveEditorStore, patch: Partial<Move>) {
   }
 }
 
+/// Lecture gardée de la surface persistée — localStorage n'existe pas
+/// hors jsdom (import du module en contexte Node = ReferenceError sinon).
+function readPersistedSurface(): 'atelier' | 'conduite' | 'jeu' {
+  try {
+    return (localStorage.getItem('ss-surface') as 'atelier' | 'conduite' | 'jeu' | null) ?? 'jeu';
+  } catch {
+    return 'jeu';
+  }
+}
+
 export const useMoveEditorStore = create<MoveEditorStore>((set, get) => {
   // Initialise le throttle live-update avec l'accesseur du store
   _initAnimationThrottle(get);
@@ -257,11 +277,22 @@ export const useMoveEditorStore = create<MoveEditorStore>((set, get) => {
   current: defaultAnimation(),
   activeMovementIds: [],
   launchFlash: 0,
+  surface: readPersistedSurface(),
+  setSurface: (surface) => {
+    // Fenêtre détachée : la surface n'est pas persistée — elle n'écraserait
+    // que la préférence de la fenêtre principale (last-write-wins).
+    if (!new URLSearchParams(window.location.search).has('view')) {
+      try { localStorage.setItem('ss-surface', surface); } catch { /* quota */ }
+    }
+    set({ surface, performMode: surface === 'jeu' });
+  },
   showExpert: false,
   setShowExpert: (show) => set({ showExpert: show }),
   // Perform-first : l'app s'ouvre sur la surface de show. Le graphe est
   // l'atelier — on y entre via « Edit graph » sur un move, pas par défaut.
-  performMode: true,
+  // Dérivé de la surface persistée — sinon un boot 'atelier' gardait
+  // performMode=true (sections Inspector repliées comme en jeu).
+  performMode: readPersistedSurface() !== 'atelier',
   setPerformMode: (on) => set({ performMode: on }),
   debugPerfVisible: false,
   setDebugPerfVisible: (on) => set({ debugPerfVisible: on }),
@@ -287,6 +318,24 @@ export const useMoveEditorStore = create<MoveEditorStore>((set, get) => {
         assignments[idx] = { ...assignments[idx], ...patch };
       } else {
         assignments.push({ track_id: trackId, depth: 1.0, phase_offset: 0, ...patch });
+      }
+      return { current: { ...s.current, assignments } };
+    });
+    syncCurrentToSlot(get, { assignments: get().current.assignments });
+    get().updateLiveAnimation();
+  },
+
+  updateAssignments: (patches) => {
+    if (patches.length === 0) return;
+    set((s) => {
+      const assignments = [...s.current.assignments];
+      for (const { trackId, patch } of patches) {
+        const idx = assignments.findIndex((a) => a.track_id === trackId);
+        if (idx >= 0) {
+          assignments[idx] = { ...assignments[idx], ...patch };
+        } else {
+          assignments.push({ track_id: trackId, depth: 1.0, phase_offset: 0, ...patch });
+        }
       }
       return { current: { ...s.current, assignments } };
     });

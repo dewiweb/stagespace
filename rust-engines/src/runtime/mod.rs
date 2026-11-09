@@ -6,7 +6,7 @@ use crate::logging::{log_playback_start, log_playback_stop, log_runtime_init};
 use crate::position_buffer::PositionBuffer;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 
 mod config;
@@ -28,11 +28,29 @@ pub use types::*;
 pub struct Runtime {
     running: Arc<AtomicBool>,
     position_fn: Arc<Mutex<PositionFn>>,
+    /// Fonction compilée dédiée au sampling — instance distincte de la
+    /// live : les engines stateful (Swarm…) ont leur propre cache, les
+    /// evals d'échantillonnage n'avancent pas `sim_t` de la live.
+    sample_fn: Arc<Mutex<PositionFn>>,
+    /// `sample_fn` posée explicitement ? Sinon le sampler retombe sur
+    /// position_fn (chemins directs play_compiled sans instance dédiée).
+    has_sample_fn: std::sync::atomic::AtomicBool,
     macros: Arc<MacroState>,
     config: Arc<RuntimeConfig>,
     perf: Arc<PerfMonitor>,
     /// Origin = isobarycentre des tracks ciblées — la trajectoire est centrée dessus
     origin: Arc<Mutex<nalgebra::Vector3<f64>>>,
+    /// Ancres capturées au spawn (AnchorMode::Current) — obj_index →
+    /// position monde capturée ; le worker la convertit en offset
+    /// `delta = capturée − pos(t0)` appliqué à chaque frame (chaînage).
+    anchor_capture: Arc<RwLock<std::collections::HashMap<usize, nalgebra::Vector3<f64>>>>,
+    /// AnchorMode::Follow — track cible suivie : l'origine du move est
+    /// remplacée par la dernière position émise de cette track à chaque
+    /// frame (orbit autour d'un objet qui bouge).
+    anchor_follow_target: Arc<RwLock<Option<usize>>>,
+    /// Handle partagé vers les dernières positions monde du merge —
+    /// injecté au spawn quand anchor_mode = Follow.
+    last_positions_handle: Arc<RwLock<std::collections::HashMap<usize, [f64; 3]>>>,
     /// Animation state — depth + phase_offset par track + audio mods
     animation_state: Arc<Mutex<Option<AnimationState>>>,
     /// Audio state — partagé avec l'app, lu à chaque frame pour les audio mods
@@ -40,6 +58,14 @@ pub struct Runtime {
     /// Audio param overrides — calculés à chaque frame à partir des audio_mods,
     /// lus par la closure compilée pour injecter radius/height/turns/offset/rotation
     audio_param_overrides: Arc<Mutex<HashMap<String, f64>>>,
+    /// Positions tenues par les nodes Freeze — survit aux recompiles
+    /// (partagé avec les closures compilées via LiveInputs).
+    held_positions: crate::compiler::HeldPositions,
+    /// Table de slots de params modulables — partagée entre position_fn,
+    /// sample_fn et signal_fn d'un même compile (swap atomique). Le worker
+    /// y écrit les deltas `param:` de la signal_fn à chaque frame ; les
+    /// closures lisent leurs slots par index (base + delta, sans lock).
+    param_slots: Arc<Mutex<Arc<crate::param_slots::ParamSlots>>>,
     /// Buffer de positions — le worker écrit ses positions (world-space)
     /// à chaque frame ; le MergeRuntime lit tous les buffers pour faire
     /// le merge + post-processing + envoi via le sink.
@@ -50,6 +76,9 @@ pub struct Runtime {
     /// Le worker thread lit cette valeur à chaque frame au lieu de capturer
     /// la duration dans sa closure.
     duration_ms: Arc<std::sync::atomic::AtomicU64>,
+    /// Offset temporel (seek timecode) — ajouté au temps virtuel à
+    /// chaque frame, avant le modulo de boucle.
+    time_offset_secs: Arc<std::sync::atomic::AtomicU64>,
     /// OSC ids du move — hot-swappable en live via set_osc_ids.
     /// Le worker thread lit cette valeur à chaque frame pour savoir
     /// combien de positions calculer.
@@ -81,17 +110,27 @@ impl Runtime {
         Runtime {
             running: Arc::new(AtomicBool::new(false)),
             position_fn: Arc::new(Mutex::new(initial_fn)),
+            sample_fn: Arc::new(Mutex::new(
+                Arc::new(|_, _| nalgebra::Vector3::zeros()) as PositionFn
+            )),
+            has_sample_fn: std::sync::atomic::AtomicBool::new(false),
             macros: Arc::new(MacroState::new()),
             config: Arc::new(RuntimeConfig::new()),
             perf: Arc::new(PerfMonitor::new()),
 
             origin: Arc::new(Mutex::new(nalgebra::Vector3::zeros())),
+            anchor_capture: Arc::new(RwLock::new(std::collections::HashMap::new())),
+            anchor_follow_target: Arc::new(RwLock::new(None)),
+            last_positions_handle: Arc::new(RwLock::new(std::collections::HashMap::new())),
             animation_state: Arc::new(Mutex::new(None)),
             audio_state,
             audio_param_overrides: Arc::new(Mutex::new(HashMap::new())),
+            held_positions: Arc::new(Mutex::new(HashMap::new())),
+            param_slots: Arc::new(Mutex::new(crate::param_slots::ParamSlots::empty())),
             position_buffer: Mutex::new(None),
             duration_ms: Arc::new(std::sync::atomic::AtomicU64::new(4000)),
             osc_ids_arc: Arc::new(std::sync::RwLock::new(Vec::new())),
+            time_offset_secs: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             signal_fn: Arc::new(Mutex::new(crate::signal_compiler::empty_signal_fn())),
             osc_values: Arc::new(std::sync::RwLock::new(Arc::new(Mutex::new(HashMap::new())))),
             thread_handle: Mutex::new(None),
@@ -107,6 +146,13 @@ impl Runtime {
     /// Définit les osc_ids du move — hot-swappable en live
     pub fn set_osc_ids(&self, osc_ids: Vec<u32>) {
         *self.osc_ids_arc.write().unwrap_or_else(|e| e.into_inner()) = osc_ids;
+    }
+
+    /// Offset temporel en secondes — le temps virtuel devient
+    /// `t*speed + offset` (seek TC sur le snapshot d'une cue).
+    pub fn set_time_offset(&self, secs: f64) {
+        self.time_offset_secs
+            .store(secs.to_bits(), Ordering::Relaxed);
     }
 
     /// Récupère la duration actuelle (en secondes)
@@ -152,6 +198,34 @@ impl Runtime {
         *self.origin.lock().unwrap_or_else(|e| e.into_inner())
     }
 
+    /// Capture les ancres (AnchorMode::Current) — chaque objet part de sa
+    /// position courante : pos = capturée + (traj(t) − traj(0)).
+    pub fn set_anchor_capture(
+        &self,
+        captured: std::collections::HashMap<usize, nalgebra::Vector3<f64>>,
+    ) {
+        *self
+            .anchor_capture
+            .write()
+            .unwrap_or_else(|e| e.into_inner()) = captured;
+    }
+
+    /// AnchorMode::Follow — track cible dont l'origine suit la position.
+    pub fn set_anchor_follow(&self, target: Option<usize>) {
+        *self
+            .anchor_follow_target
+            .write()
+            .unwrap_or_else(|e| e.into_inner()) = target;
+    }
+
+    /// Injecte le handle des dernières positions du merge (anchor Follow).
+    pub fn set_last_positions_handle(
+        &mut self,
+        handle: Arc<RwLock<std::collections::HashMap<usize, [f64; 3]>>>,
+    ) {
+        self.last_positions_handle = handle;
+    }
+
     /// Définit l'animation state (depth + phase_offset par track + audio mods)
     pub fn set_animation_state(&self, state: AnimationState) {
         let mut s = self
@@ -186,16 +260,91 @@ impl Runtime {
         self.audio_param_overrides.clone()
     }
 
+    /// Positions tenues des nodes Freeze — passée aux compiles pour que
+    /// le hold survive au hot-swap du graphe.
+    pub fn held_positions(&self) -> Arc<Mutex<HashMap<String, nalgebra::Vector3<f64>>>> {
+        self.held_positions.clone()
+    }
+
     /// Récupère l'Arc de l'audio state — permet de mettre à jour sans locker state.movements
     pub fn audio_state_arc(&self) -> Arc<Mutex<AudioState>> {
         self.audio_state.clone()
     }
 
-    /// Hot-swap du graph de modulation per-move (domaine signal → deltas
-    /// de macros). Les deltas se somment dans `audio_param_overrides` —
-    /// couche additive, la base macro n'est jamais écrasée.
-    pub fn swap_signal_fn(&self, new_fn: crate::signal_compiler::SignalFn) {
-        *self.signal_fn.lock().unwrap_or_else(|e| e.into_inner()) = new_fn;
+    /// Installe le graph de modulation per-move au spawn — la position_fn
+    /// est déjà en place (play_compiled) ; on lie juste la signal_fn et
+    /// sa table de slots (worker : lecture cohérente sous le lock signal).
+    pub fn swap_signal_fn(
+        &self,
+        new_fn: crate::signal_compiler::SignalFn,
+        slots: Arc<crate::param_slots::ParamSlots>,
+    ) {
+        let mut sig = self.signal_fn.lock().unwrap_or_else(|e| e.into_inner());
+        *sig = new_fn;
+        *self.param_slots.lock().unwrap_or_else(|e| e.into_inner()) = slots;
+    }
+
+    /// Swap atomique d'un move recompilé : position_fn + sample_fn +
+    /// signal_fn + leur ParamSlots commune — le worker ne peut jamais
+    /// apparier une signal_fn avec une position_fn d'un autre compile
+    /// (ordre de locks : signal_fn d'abord, puis position_fn — le worker
+    /// prend son snapshot de position_fn sous le lock signal, même ordre
+    /// → pas de deadlock).
+    pub fn swap_compiled(
+        &self,
+        position_fn: PositionFn,
+        sample_fn: PositionFn,
+        signal_fn: crate::signal_compiler::SignalFn,
+        slots: Arc<crate::param_slots::ParamSlots>,
+    ) {
+        let mut sig = self.signal_fn.lock().unwrap_or_else(|e| e.into_inner());
+        *sig = signal_fn;
+        *self.param_slots.lock().unwrap_or_else(|e| e.into_inner()) = slots;
+        *self.position_fn.lock().unwrap_or_else(|e| e.into_inner()) = position_fn;
+        *self.sample_fn.lock().unwrap_or_else(|e| e.into_inner()) = sample_fn;
+        self.has_sample_fn.store(true, Ordering::Release);
+    }
+
+    /// `swap_compiled` avec crossfade : la position_fn devient un blend
+    /// smoothstep ancien → nouveau (même formule que `recall_cue`) pendant
+    /// `fade_duration` s. L'ancienne fn lit sa vieille table de slots —
+    /// qui garde ses dernières valeurs pendant le fade (acceptable : ce
+    /// côté s'estompe). `fade_duration <= 0` → swap instantané.
+    pub fn swap_compiled_with_fade(
+        &self,
+        position_fn: PositionFn,
+        sample_fn: PositionFn,
+        signal_fn: crate::signal_compiler::SignalFn,
+        slots: Arc<crate::param_slots::ParamSlots>,
+        fade_duration: f64,
+    ) {
+        let mut sig = self.signal_fn.lock().unwrap_or_else(|e| e.into_inner());
+        *sig = signal_fn;
+        *self.param_slots.lock().unwrap_or_else(|e| e.into_inner()) = slots;
+        {
+            let mut guard = self.position_fn.lock().unwrap_or_else(|e| e.into_inner());
+            if fade_duration > 0.0 {
+                let from_fn = guard.clone();
+                let fade_start = Instant::now();
+                *guard = Arc::new(move |t, i| {
+                    let elapsed = fade_start.elapsed().as_secs_f64();
+                    if elapsed >= fade_duration {
+                        position_fn(t, i)
+                    } else {
+                        let blend = elapsed / fade_duration;
+                        // smoothstep ease in-out
+                        let blend = blend * blend * (3.0 - 2.0 * blend);
+                        let from_pos = from_fn(t, i);
+                        let to_pos = position_fn(t, i);
+                        from_pos + (to_pos - from_pos) * blend
+                    }
+                });
+            } else {
+                *guard = position_fn;
+            }
+        }
+        *self.sample_fn.lock().unwrap_or_else(|e| e.into_inner()) = sample_fn;
+        self.has_sample_fn.store(true, Ordering::Release);
     }
 
     /// Branche le cache des valeurs OSC reçues (source des nodes
@@ -208,6 +357,13 @@ impl Runtime {
     /// Hot-swap la fonction de position — pour cue recall sans arrêter le playback.
     /// Jamais d'attente sur un frame en cours : le worker clone l'Arc sous un
     /// lock de nanosecondes puis évalue sans lock (audit I8).
+    /// Instance compilée jetable pour le TrajectorySampler — appelée à
+    /// chaque compile de graphe (spawn + hot-swap).
+    pub fn set_sample_fn(&self, f: PositionFn) {
+        *self.sample_fn.lock().unwrap_or_else(|e| e.into_inner()) = f;
+        self.has_sample_fn.store(true, Ordering::Release);
+    }
+
     pub fn swap_position_fn(&self, new_fn: PositionFn) {
         let mut old = self.position_fn.lock().unwrap_or_else(|e| e.into_inner());
         *old = new_fn;
@@ -218,7 +374,11 @@ impl Runtime {
     /// pendant des milliers d'évaluations).
     pub fn sampler(&self) -> TrajectorySampler {
         TrajectorySampler {
-            position_fn: self.position_fn.clone(),
+            position_fn: if self.has_sample_fn.load(Ordering::Relaxed) {
+                self.sample_fn.clone()
+            } else {
+                self.position_fn.clone()
+            },
             macros: self.macros.clone(),
             origin: self.origin.clone(),
         }
@@ -368,15 +528,24 @@ impl Runtime {
         self.set_osc_ids(osc_ids.clone());
         let duration_arc = self.duration_ms.clone();
         let osc_ids_arc = self.osc_ids_arc.clone();
+        let time_offset_arc = self.time_offset_secs.clone();
         let position_fn_arc = self.position_fn.clone();
         let macros = self.macros.clone();
         let config = self.config.clone();
         let perf = self.perf.clone();
 
         let origin_arc = self.origin.clone();
+        let anchor_follow_arc = self.anchor_follow_target.clone();
+        let last_positions_arc = self.last_positions_handle.clone();
+        let anchor_capture_arc = self.anchor_capture.clone();
+        // Offsets d'ancre par objet — calculés à la première frame :
+        // delta[obj] = capturée[obj] − pos(t0, obj), ensuite pos += delta.
+        let mut anchor_offsets: std::collections::HashMap<usize, nalgebra::Vector3<f64>> =
+            std::collections::HashMap::new();
         let anim_state_arc = self.animation_state.clone();
         let audio_state_arc = self.audio_state.clone();
         let audio_param_overrides_arc = self.audio_param_overrides.clone();
+        let param_slots_arc = self.param_slots.clone();
         let signal_fn_arc = self.signal_fn.clone();
         let osc_values_arc = self.osc_values.clone();
 
@@ -398,6 +567,8 @@ impl Runtime {
             let mut frame_count = 0u64;
             let mut last_perf_update = Instant::now();
             let mut frames_since_perf = 0u64;
+            // Snapshot de la position_fn pris sous le lock signal à chaque
+            // frame — garantit l'appariement compile↔compile (audit swap).
 
             while running.load(Ordering::SeqCst) {
                 let elapsed = start.elapsed();
@@ -426,7 +597,8 @@ impl Runtime {
                 let loop_is_on = config.get_loop_mode() == LoopMode::Loop;
 
                 // Lire l'animation state (depth + phase_offset par track)
-                let (track_depths, track_phase_offsets, audio_param_overrides) = {
+                let (track_depths, track_phase_offsets, audio_param_overrides, fn_ref) = {
+                    let fn_ref;
                     let mut anim_guard = anim_state_arc.lock().unwrap_or_else(|e| e.into_inner());
                     let audio = audio_state_arc.lock().unwrap_or_else(|e| e.into_inner());
                     let mut audio_params = if let Some(ref mut anim_state) = *anim_guard {
@@ -439,18 +611,48 @@ impl Runtime {
                     // `shift_*` est traduit vers la convention `offset_*`).
                     {
                         let mut signal = signal_fn_arc.lock().unwrap_or_else(|e| e.into_inner());
+                        // Snapshot de la position_fn SOUS le lock signal — même
+                        // ordre que swap_compiled → la pair (signal_fn,
+                        // position_fn) vient toujours du même compile.
+                        fn_ref = position_fn_arc
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .clone();
+                        let slots = param_slots_arc
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .clone();
                         let osc_map = osc_values_arc
                             .read()
                             .unwrap_or_else(|e| e.into_inner())
                             .clone();
                         let osc_vals = osc_map.lock().unwrap_or_else(|e| e.into_inner());
-                        let deltas = (*signal)(&crate::signal_compiler::SignalCtx {
-                            t: t_real,
-                            dt: frame_duration.as_secs_f64(),
-                            audio_state: &audio,
-                            osc_values: &osc_vals,
-                        });
-                        for (key, d) in deltas {
+                        // catch_unwind : un panic dans le signal graph ne doit
+                        // pas tuer le worker (seul les evals de position
+                        // étaient protégés avant).
+                        let deltas =
+                            match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                (*signal)(&crate::signal_compiler::SignalCtx {
+                                    t: t_real,
+                                    dt: frame_duration.as_secs_f64(),
+                                    audio_state: &audio,
+                                    osc_values: &osc_vals,
+                                })
+                            })) {
+                                Ok(d) => d,
+                                Err(_) => {
+                                    crate::logging::log_osc_error(
+                                        "signal graph eval panicked — deltas dropped",
+                                    );
+                                    crate::signal_compiler::SignalOutput::default()
+                                }
+                            };
+                        // Deltas de slots : zero → somme des deltas finis →
+                        // bump generation (les caches de params patchés
+                        // rebuild au plus 1×/frame). Aucun hold : un delta
+                        // absent/non-fini repasse le param à sa base.
+                        slots.apply_frame(&deltas.slot_deltas);
+                        for (key, d) in deltas.macros {
                             if !d.is_finite() {
                                 continue;
                             }
@@ -468,9 +670,10 @@ impl Runtime {
                             anim_state.track_depths.clone(),
                             anim_state.track_phase_offsets.clone(),
                             audio_params,
+                            fn_ref,
                         )
                     } else {
-                        (Vec::new(), Vec::new(), audio_params)
+                        (Vec::new(), Vec::new(), audio_params, fn_ref)
                     }
                 };
 
@@ -523,7 +726,11 @@ impl Runtime {
 
                 // Recalculer le temps virtuel avec le speed effectif
                 // (audio-modulé) — même clamp >= 0 que ci-dessus
-                let t_virtual_eff = (t_real * effective_speed).max(0.0);
+                // Offset temporel (seek timecode) — ajouté au temps
+                // virtuel avant le modulo de boucle.
+                let t_virtual_eff = (t_real * effective_speed
+                    + f64::from_bits(time_offset_arc.load(Ordering::Relaxed)))
+                .max(0.0);
                 let t_eff = if loop_is_on && duration > 0.0 {
                     let t_mod = t_virtual_eff % duration;
                     // Appliquer la direction (Forward/Backward/PingPong)
@@ -585,7 +792,20 @@ impl Runtime {
                     .clone();
                 // Origin du move (ancre monde de la trajectoire) — lue à
                 // chaque frame pour refléter un set_origin en cours de jeu.
-                let move_origin = *origin_arc.lock().unwrap_or_else(|e| e.into_inner());
+                // AnchorMode::Follow — l'origine suit la dernière position
+                // émise de la track cible à chaque frame (orbit autour
+                // d'un objet qui bouge). Fallback : origin statique.
+                let move_origin = anchor_follow_arc
+                    .read()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .and_then(|t| {
+                        last_positions_arc
+                            .read()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .get(&t)
+                            .map(|p| nalgebra::Vector3::new(p[0], p[1], p[2]))
+                    })
+                    .unwrap_or_else(|| *origin_arc.lock().unwrap_or_else(|e| e.into_inner()));
                 // Matrice de rotation — ordre canonique `euler_rotation`
                 // (X→Y→Z), identique au modifier sub-graph et au merge.
                 let rot_matrix = crate::spatial_transform::euler_rotation(
@@ -594,13 +814,10 @@ impl Runtime {
                     eff_roll.to_radians(),
                 );
                 let positions: Vec<(usize, nalgebra::Vector3<f64>)> = {
-                    // Clone d'Arc sous un lock de ~ns (audit I8) — l'évaluation
-                    // de toute la frame se fait SANS tenir le mutex : swap/
-                    // recall/sample ne sont plus retardés par un frame lent.
-                    let fn_ref = position_fn_arc
-                        .lock()
-                        .unwrap_or_else(|e| e.into_inner())
-                        .clone();
+                    // Snapshot pris sous le lock signal (appariement
+                    // signal↔position du même compile) — l'évaluation de
+                    // toute la frame se fait SANS tenir le mutex (I8).
+                    let fn_ref = fn_ref;
                     osc_ids
                         .iter()
                         .enumerate()
@@ -645,6 +862,30 @@ impl Runtime {
                                 radial,
                             );
                             (obj_idx, pos)
+                        })
+                        .collect()
+                };
+                // AnchorMode::Current — première frame : delta = capturée
+                // − pos calculée ; ensuite pos += delta. Le move part de
+                // là où l'objet était (chaînage sans saut).
+                let captured = anchor_capture_arc
+                    .read()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone();
+                let positions = if captured.is_empty() {
+                    positions
+                } else {
+                    positions
+                        .into_iter()
+                        .map(|(i, p)| {
+                            let d = anchor_offsets.entry(i).or_insert_with(|| {
+                                captured
+                                    .get(&i)
+                                    .copied()
+                                    .unwrap_or_else(nalgebra::Vector3::zeros)
+                                    - p
+                            });
+                            (i, p + *d)
                         })
                         .collect()
                 };

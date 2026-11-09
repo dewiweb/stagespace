@@ -208,7 +208,7 @@ const SpectrumView: React.FC<{ spectrum: number[] }> = ({ spectrum }) => {
       ref={canvasRef}
       width={220}
       height={60}
-      className="w-full h-15 bg-gray-900 rounded border border-gray-700/50"
+      className="w-full h-[60px] bg-gray-900 rounded border border-gray-700/50"
     />
   );
 };

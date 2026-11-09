@@ -1,14 +1,21 @@
 /// <reference types="vitest/globals" />
 /// <reference types="@testing-library/jest-dom" />
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import MovesTable from '../MovesTable';
 import { useGraphStore } from '../../store/useGraphStore';
 import { useMoveEditorStore } from '../../store/useMoveEditorStore';
 import { resetStore, makeSlot, getInvokeCalls, clearInvokeCalls } from '../../store/__tests__/testHelpers';
 
+let errSpy: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
+  // Ces tests exercent des chemins d'erreur — console.error intercepté
+  // pour garder la sortie vitest propre.
+  errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+afterEach(() => {
+  errSpy.mockRestore();
+});
   resetStore();
   // Reset animation store
   useMoveEditorStore.setState({

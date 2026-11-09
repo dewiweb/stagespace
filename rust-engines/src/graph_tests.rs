@@ -37,8 +37,8 @@ mod tests {
         let edge = Edge {
             from: id1,
             to: id2,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         };
 
         graph.add_edge(edge);
@@ -66,14 +66,14 @@ mod tests {
         graph.add_edge(Edge {
             from: id1,
             to: id2,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
         graph.add_edge(Edge {
             from: id2,
             to: id3,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "duration".to_string(),
+            to_port: "in".to_string(),
         });
         assert!(!graph.has_cycle());
 
@@ -81,8 +81,8 @@ mod tests {
         graph.add_edge(Edge {
             from: id3,
             to: id1,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
         assert!(graph.has_cycle());
     }
@@ -104,8 +104,8 @@ mod tests {
             graph.add_edge(Edge {
                 from: w[0],
                 to: w[1],
-                from_port: "output".to_string(),
-                to_port: "input".to_string(),
+                from_port: "out".to_string(),
+                to_port: "in".to_string(),
             });
         }
         assert!(!graph.has_cycle());
@@ -113,8 +113,8 @@ mod tests {
         graph.add_edge(Edge {
             from: *ids.last().unwrap(),
             to: ids[0],
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
         assert!(graph.has_cycle());
     }
@@ -136,14 +136,14 @@ mod tests {
         graph.add_edge(Edge {
             from: id1,
             to: id2,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
         graph.add_edge(Edge {
             from: id2,
             to: id3,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "duration".to_string(),
+            to_port: "in".to_string(),
         });
 
         let outputs1 = graph.get_outputs(id1);

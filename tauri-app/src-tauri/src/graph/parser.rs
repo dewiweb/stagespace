@@ -97,6 +97,16 @@ pub fn build_graph_from_json(
         let x = pos.map(|p| p.x).unwrap_or(0.0) as f32;
         let y = pos.map(|p| p.y).unwrap_or(0.0) as f32;
 
+        // L'id frontend devient la clé de ciblage `param:<node_id>:<key>`
+        // du domaine signal — les NodeId internes sont régénérés à chaque
+        // parse et ne pourraient pas être ciblés depuis l'UI.
+        if let Some(map) = params.as_object_mut() {
+            map.insert(
+                "__fe_id".to_string(),
+                serde_json::json!(frontend_id.as_str()),
+            );
+        }
+
         let new_id = NodeId::new();
         id_map.insert(frontend_id, new_id);
         graph.add_node(Node {
@@ -114,14 +124,37 @@ pub fn build_graph_from_json(
         let to = *id_map
             .get(edge.target.as_str())
             .ok_or_else(|| format!("Unknown target node id: {}", edge.target))?;
-        let from_port = edge
-            .sourceHandle
-            .clone()
-            .unwrap_or_else(|| "output".to_string());
-        let to_port = edge
-            .targetHandle
-            .clone()
-            .unwrap_or_else(|| "input".to_string());
+        // Défauts type-aware : sans handle explicite, le port est résolu
+        // par correspondance de type — source → premier port de sortie,
+        // cible → premier port d'entrée du même type que la sortie.
+        let from_spec = graph
+            .nodes
+            .get(&from)
+            .map(|n| stagespace_engines::node_spec::node_spec(&n.node_type));
+        let to_spec = graph
+            .nodes
+            .get(&to)
+            .map(|n| stagespace_engines::node_spec::node_spec(&n.node_type));
+        let from_port = edge.sourceHandle.clone().unwrap_or_else(|| {
+            from_spec
+                .and_then(|s| s.outputs.first())
+                .map(|p| p.name.clone())
+                .unwrap_or_default()
+        });
+        let from_type = from_spec
+            .and_then(|s| s.output_port(&from_port))
+            .map(|p| p.port_type);
+        let to_port = edge.targetHandle.clone().unwrap_or_else(|| {
+            to_spec
+                .and_then(|s| {
+                    s.inputs
+                        .iter()
+                        .find(|p| Some(p.port_type) == from_type)
+                        .or_else(|| s.inputs.first())
+                        .map(|p| p.name.clone())
+                })
+                .unwrap_or_default()
+        });
         graph.add_edge(Edge {
             from,
             to,
@@ -140,7 +173,40 @@ pub fn build_graph_from_json(
         .and_then(|v| v.as_u64())
         .unwrap_or(1) as usize;
 
+    // Branches `b` des Group : leurs engines gardent leur n_objects propre
+    // — la frontière du Group est le n_objects de la branche A ; forcer la
+    // branche B à objects_n pousserait la frontière à n_total et tuerait
+    // la split (tous les objets sur A). On remonte depuis chaque port `b`.
+    let mut group_b_branch: std::collections::HashSet<stagespace_engines::NodeId> =
+        std::collections::HashSet::new();
+    for edge in &graph.edges {
+        if edge.to_port != "b" {
+            continue;
+        }
+        let is_group_b = graph
+            .nodes
+            .get(&edge.to)
+            .map(|n| n.node_type == NodeType::Group)
+            .unwrap_or(false);
+        if !is_group_b {
+            continue;
+        }
+        let mut stack = vec![edge.from];
+        while let Some(id) = stack.pop() {
+            if group_b_branch.insert(id) {
+                for e in &graph.edges {
+                    if e.to == id {
+                        stack.push(e.from);
+                    }
+                }
+            }
+        }
+    }
+
     for node in graph.nodes.values_mut() {
+        if group_b_branch.contains(&node.id) {
+            continue;
+        }
         match node.node_type {
             NodeType::Circular
             | NodeType::Elliptical
@@ -160,6 +226,8 @@ pub fn build_graph_from_json(
             | NodeType::Follow
             | NodeType::Swarm
             | NodeType::Avoidance
+            | NodeType::VectorField
+            | NodeType::Wave
             | NodeType::CustomTrajectory
             | NodeType::DrawSpline
             | NodeType::EvaluateSpline

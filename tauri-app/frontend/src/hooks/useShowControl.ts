@@ -1,0 +1,137 @@
+/// Show-control OSC `/stagespace/*` — le backend route les commandes
+/// parsées via l'évènement `show-control` ; chacune est dispatchée vers
+/// la MÊME fonction que le raccourci clavier correspondant (liveActions).
+import { useEffect } from 'react';
+import { safeListen } from '../utils/tauri';
+import { useCuelistStore } from '../store/useCuelistStore';
+import { doGo, doCueNext, doCuePrev, doCueRecall, doCueArm, doCueGo, doMacro, doTcChase, doTcFps, doPanic, doStop, doPark, doUnpark, doArm, doStatus, doSlot, doSlotStop, doSolo, doUnsolo, doSetPosition, doClearPosition, doClearAllPositions, doSetTrackPosition, doSoundcheck, doThrow, doSpatial, doAttention, doGesture, doRehearsal } from '../utils/liveActions';
+import type { ShowCommand } from '../types/generated/ShowCommand';
+
+interface ShowControlEvent {
+  command: ShowCommand;
+  from: string;
+}
+
+export function useShowControl() {
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+    const setup = async () => {
+      try {
+        const u = await safeListen<ShowControlEvent>('show-control', (event) => {
+          const cmd = event.payload.command;
+          const from = event.payload.from;
+          // Pas de log ici — il vit dans liveActions (point de passage
+          // commun GUI + OSC), sinon chaque commande OSC loggerait 2×.
+          switch (cmd.command) {
+            case 'Go':
+              doGo(from);
+              break;
+            case 'CueNext':
+              doCueNext(from);
+              break;
+            case 'CuePrev':
+              doCuePrev(from);
+              break;
+            case 'CueRecall':
+              if (cmd.value != null) doCueRecall(cmd.value[0], cmd.value[1] ?? undefined, from);
+              break;
+            case 'Slot':
+              if (cmd.value != null) doSlot(cmd.value, from);
+              break;
+            case 'SlotStop':
+              if (cmd.value != null) doSlotStop(cmd.value, from);
+              break;
+            case 'Solo':
+              if (cmd.value != null) doSolo(cmd.value, from);
+              break;
+            case 'Unsolo':
+              doUnsolo(from);
+              break;
+            case 'Arm':
+              doArm(true, from);
+              break;
+            case 'Disarm':
+              doArm(false, from);
+              break;
+            case 'Status':
+              doStatus();
+              break;
+            case 'Park':
+              if (cmd.value != null) doPark(cmd.value, from);
+              break;
+            case 'Unpark':
+              if (cmd.value != null) doUnpark(cmd.value, from);
+              break;
+            case 'SetPosition':
+              if (cmd.value != null) doSetPosition(cmd.value[0], cmd.value[1], cmd.value[2], cmd.value[3]);
+              break;
+            case 'ClearPosition':
+              if (cmd.value != null) doClearPosition(cmd.value);
+              break;
+            case 'ClearAllPositions':
+              doClearAllPositions();
+              break;
+            case 'SetTrackPosition':
+              if (cmd.value != null) doSetTrackPosition(cmd.value[0], cmd.value[1], cmd.value[2], cmd.value[3]);
+              break;
+            case 'Panic':
+              doPanic();
+              break;
+            case 'Stop':
+              doStop();
+              break;
+            case 'Timecode':
+              if (cmd.value != null) {
+                useCuelistStore.getState().handleTimecode(cmd.value);
+              }
+              break;
+            case 'Soundcheck':
+              doSoundcheck(cmd.value ?? 'start');
+              break;
+            case 'Throw':
+              doThrow(cmd.value[0], cmd.value[1], cmd.value[2], cmd.value[3], from);
+              break;
+            case 'Spatial':
+              doSpatial(cmd.value, from);
+              break;
+            case 'Attention':
+              doAttention(cmd.value ?? null, from);
+              break;
+            case 'Gesture':
+              doGesture(cmd.value[0], cmd.value[1], from);
+              break;
+            case 'Rehearsal':
+              doRehearsal(cmd.value ?? 'play', from);
+              break;
+            case 'CueArm':
+              if (cmd.value != null) doCueArm(String(cmd.value), from);
+              break;
+            case 'CueGo':
+              doCueGo(from);
+              break;
+            case 'Macro':
+              if (cmd.value != null) void doMacro(cmd.value[0], cmd.value[1], from);
+              break;
+            case 'TimecodeChase':
+              if (cmd.value != null) doTcChase(Boolean(cmd.value), from);
+              break;
+            case 'TimecodeFps':
+              if (cmd.value != null) void doTcFps(cmd.value, from);
+              break;
+            // PositionsQuery : répondu côté backend (sink) — rien ici.
+          }
+        });
+        if (cancelled) u();
+        else unlisten = u;
+      } catch {
+        // Pas de backend (Vite seul) — silence.
+      }
+    };
+    void setup();
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
+}

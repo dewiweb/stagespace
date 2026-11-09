@@ -4,7 +4,9 @@ import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { TrackGrid } from './TrackGrid';
 import { PARAM_SCHEMA, NODE_DESCRIPTIONS, getCategoryColor, type ParamDef, type NodeParamValue, type GraphNodeData } from './nodeParamSchema';
 import { NodeParamsPanel } from './NodeParamsPanel';
+import { ParamInput } from './ParamInput';
 import type { MacrosState } from '../store/slices/macrosSlice';
+import { silentCatch } from '../utils/tauri';
 
 // ── Section repliable ──
 function Section({ title, icon, defaultOpen = true, badge, badgeColor = 'gray', children }: {
@@ -28,6 +30,7 @@ function Section({ title, icon, defaultOpen = true, badge, badgeColor = 'gray', 
 }
 
 import Slider from './ui/Slider';
+import { MacrosSurface } from './show/MacrosSurface';
 import { AudioModList } from './AudioModControls';
 import { Zap, AudioLines, Hexagon, SlidersHorizontal, Play, CircleDot, X, Square, ChevronRight, TriangleAlert, Check } from 'lucide-react';
 
@@ -100,8 +103,11 @@ export default function Inspector() {
 
   // ── Audio mod UI ──
 
-  // ── Macros debounce ──
-  const macroDebounce = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ── Debounces — un timer par action : partager le même ref annulait un
+  // hot-swap graphe en attente quand un slider de macro bougeait (le param
+  // node restait dans le store sans jamais arriver au runtime). ──
+  const macroPushDebounce = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const graphHotSwapDebounce = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Mapping bidirectionnel entre les noms Simple (Move state) et Expert (Graph store macros)
   // Simple: scale, offset_x, offset_y, offset_z, yaw, pitch, roll, speed
@@ -132,8 +138,8 @@ export default function Inspector() {
       if (animKey) updateCurrent({ [animKey]: value } as Partial<Move>);
     }
     // Toujours pousser vers le runtime (debounced) — c'était manquant pour le mode Simple
-    if (macroDebounce.current) clearTimeout(macroDebounce.current);
-    macroDebounce.current = setTimeout(() => { pushMacrosToRuntime(); }, 100);
+    if (macroPushDebounce.current) clearTimeout(macroPushDebounce.current);
+    macroPushDebounce.current = setTimeout(() => { pushMacrosToRuntime(); }, 100);
   };
 
   const handleMacro = (key: string, value: number) => handleUnified(key, value, 'expert');
@@ -143,72 +149,21 @@ export default function Inspector() {
     if (!selectedNode) return;
     updateNodeData(selectedNode.id, { params: { ...selectedNodeParams, [key]: value } });
     // Hot-swap live avec debounce
-    if (macroDebounce.current) clearTimeout(macroDebounce.current);
-    macroDebounce.current = setTimeout(() => { updateGraphLive(); }, 150);
+    if (graphHotSwapDebounce.current) clearTimeout(graphHotSwapDebounce.current);
+    graphHotSwapDebounce.current = setTimeout(() => { updateGraphLive(); }, 150);
   };
 
-  const renderNodeParamInput = (def: ParamDef, params: Record<string, NodeParamValue>, onChange: (key: string, value: NodeParamValue) => void) => {
-    const value = params?.[def.key];
-    switch (def.type) {
-      case 'number':
-        return (
-          <div className="flex items-center gap-2">
-            <span className="text-gray-400 text-xs w-20 flex-shrink-0">{def.label}</span>
-            <input type="number" step={def.step ?? 0.1} min={def.min} max={def.max}
-              value={typeof value === 'number' ? value : 0}
-              onChange={(e) => onChange(def.key, parseFloat(e.target.value) || 0)}
-              className="flex-1 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none" />
-          </div>
-        );
-      case 'boolean':
-        return (
-          <div className="flex items-center gap-2">
-            <span className="text-gray-400 text-xs w-20 flex-shrink-0">{def.label}</span>
-            <button onClick={() => onChange(def.key, value !== true)}
-              className={`relative w-9 h-5 rounded-full transition-colors ${value === true ? 'bg-blue-600' : 'bg-gray-700'}`}>
-              <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${value === true ? 'translate-x-4' : ''}`} />
-            </button>
-          </div>
-        );
-      case 'enum':
-        return (
-          <div className="flex items-center gap-2">
-            <span className="text-gray-400 text-xs w-20 flex-shrink-0">{def.label}</span>
-            <select value={typeof value === 'string' ? value : ''}
-              onChange={(e) => onChange(def.key, e.target.value)}
-              className="flex-1 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none">
-              {def.options?.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-            </select>
-          </div>
-        );
-      case 'vec3': {
-        const arr = Array.isArray(value) ? value : [0, 0, 0];
-        return (
-          <div className="flex items-center gap-2">
-            <span className="text-gray-400 text-xs w-20 flex-shrink-0">{def.label}</span>
-            <input type="text" value={arr.join(', ')}
-              onChange={(e) => {
-                const parsed = e.target.value.split(',').map((v) => parseFloat(v.trim()));
-                if (parsed.length === 3 && parsed.every((n) => !isNaN(n))) onChange(def.key, parsed);
-              }}
-              className="flex-1 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
-              placeholder="x, y, z" />
-          </div>
-        );
-      }
-      case 'text':
-      case 'string':
-        return (
-          <div className="flex items-center gap-2">
-            <span className="text-gray-400 text-xs w-20 flex-shrink-0">{def.label}</span>
-            <input type="text" value={typeof value === 'string' ? value : ''}
-              onChange={(e) => onChange(def.key, e.target.value)}
-              className="flex-1 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono" />
-          </div>
-        );
-      default: return null;
-    }
-  };
+  // Rendu param unifié — ParamInput variante 'field' (sliders bornés
+  // comme le drawer Params, live = hot-swap actif sur le slot édité).
+  const renderNodeParamInput = (def: ParamDef, params: Record<string, NodeParamValue>, onChange: (key: string, value: NodeParamValue) => void) => (
+    <ParamInput
+      def={def}
+      value={params?.[def.key]}
+      live={editingIsLive}
+      onChange={(v) => onChange(def.key, v)}
+      variant="field"
+    />
+  );
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-stagespace-panel">
@@ -288,25 +243,7 @@ export default function Inspector() {
             {/* MACROS — runtime controls globaux (affectent tous les moves) */}
             <Section title="Macros" icon={<Zap size={12} />} defaultOpen={true}
               badge={activeMovementIds.length > 0 ? `${activeMovementIds.length} live` : undefined}>
-              <Slider label="Scale" value={macros.scale} min={0} max={4} step={0.05}
-                onChange={(v) => handleMacro('scale', v)} accent="purple" />
-              <Slider label="Shift X" value={macros.shiftX} min={-5} max={5} step={0.1}
-                onChange={(v) => handleMacro('shiftX', v)} accent="purple" />
-              <Slider label="Shift Y" value={macros.shiftY} min={-5} max={5} step={0.1}
-                onChange={(v) => handleMacro('shiftY', v)} accent="purple" />
-              <Slider label="Shift Z" value={macros.shiftZ} min={-5} max={5} step={0.1}
-                onChange={(v) => handleMacro('shiftZ', v)} accent="purple" />
-              <Slider label="Yaw" value={macros.yaw} min={-180} max={180} step={1}
-                onChange={(v) => handleMacro('yaw', v)} unit="°" accent="purple" />
-              <Slider label="Pitch" value={macros.pitch} min={-90} max={90} step={1}
-                onChange={(v) => handleMacro('pitch', v)} unit="°" accent="purple" />
-              <Slider label="Roll" value={macros.roll} min={-180} max={180} step={1}
-                onChange={(v) => handleMacro('roll', v)} unit="°" accent="purple" />
-              <Slider label="Radius" value={macros.radius_scale} min={0} max={4} step={0.05}
-                onChange={(v) => handleMacro('radius_scale', v)} unit="x" accent="purple" />
-              <Slider label="Height" value={macros.height_offset} min={-5} max={5} step={0.1}
-                onChange={(v) => handleMacro('height_offset', v)} unit="m" accent="purple" />
-              <div className="text-gray-400 text-xs pt-1">Global macros — applied to all active moves</div>
+              <MacrosSurface includeRadius live />
             </Section>
 
             {/* AUDIO — mods audio-reactifs globaux */}
@@ -352,27 +289,7 @@ export default function Inspector() {
             {/* MACROS — runtime controls appliqués à tous les moves */}
             <Section title="Macros" icon={<Zap size={12} />} defaultOpen={true}
               badge={activeMovementIds.length > 0 ? `${activeMovementIds.length} live` : undefined}>
-              <Slider label="Speed" value={macros.speed} min={0} max={4} step={0.05}
-                onChange={(v) => handleMacro('speed', v)} unit="x" accent="purple" />
-              <Slider label="Scale" value={macros.scale} min={0} max={4} step={0.05}
-                onChange={(v) => handleMacro('scale', v)} accent="purple" />
-              <Slider label="Shift X" value={macros.shiftX} min={-5} max={5} step={0.1}
-                onChange={(v) => handleMacro('shiftX', v)} accent="purple" />
-              <Slider label="Shift Y" value={macros.shiftY} min={-5} max={5} step={0.1}
-                onChange={(v) => handleMacro('shiftY', v)} accent="purple" />
-              <Slider label="Shift Z" value={macros.shiftZ} min={-5} max={5} step={0.1}
-                onChange={(v) => handleMacro('shiftZ', v)} accent="purple" />
-              <Slider label="Yaw" value={macros.yaw} min={-180} max={180} step={1}
-                onChange={(v) => handleMacro('yaw', v)} unit="°" accent="purple" />
-              <Slider label="Pitch" value={macros.pitch} min={-90} max={90} step={1}
-                onChange={(v) => handleMacro('pitch', v)} unit="°" accent="purple" />
-              <Slider label="Roll" value={macros.roll} min={-180} max={180} step={1}
-                onChange={(v) => handleMacro('roll', v)} unit="°" accent="purple" />
-              <Slider label="Radius" value={macros.radius_scale} min={0} max={4} step={0.05}
-                onChange={(v) => handleMacro('radius_scale', v)} unit="x" accent="purple" />
-              <Slider label="Height" value={macros.height_offset} min={-5} max={5} step={0.1}
-                onChange={(v) => handleMacro('height_offset', v)} unit="m" accent="purple" />
-              <div className="text-gray-400 text-xs pt-1">Macros = runtime transforms applied to all active moves</div>
+              <MacrosSurface includeRadius live />
             </Section>
           </>
         ) : (
@@ -399,8 +316,8 @@ export default function Inspector() {
                   drawSplineNode={drawSplineNode}
                   onUpdate={(points) => {
                     updateNodeData(drawSplineNode.id, { params: { points } });
-                    if (macroDebounce.current) clearTimeout(macroDebounce.current);
-                    macroDebounce.current = setTimeout(() => { updateGraphLive(); }, 150);
+                    if (graphHotSwapDebounce.current) clearTimeout(graphHotSwapDebounce.current);
+                    graphHotSwapDebounce.current = setTimeout(() => { updateGraphLive(); }, 150);
                   }}
                 />
               )}
@@ -453,8 +370,8 @@ export default function Inspector() {
         {/* AUDIO — mods audio-reactifs (commun aux deux modes) */}
         {hasEditingSlot && (
         <Section title="Audio" icon={<AudioLines size={12} />} defaultOpen={false} badge={current.audio_mods.length > 0 ? `${current.audio_mods.length}` : undefined}>
-          <AudioModList />
-        </Section>
+              <AudioModList />
+            </Section>
         )}
 
         {/* TRACKS — sélection + depth + phase spread (seulement si slot édité)
@@ -529,9 +446,9 @@ export default function Inspector() {
                   <span className="text-white text-xs font-medium truncate flex-1">{mv.name}</span>
                   <span className="text-gray-500 text-xs font-mono flex-shrink-0">{trackCount}tr</span>
                   <button
-                    onClick={(e) => { e.stopPropagation(); stopMovementWithFade(mv.id, 0.5); }}
+                    onClick={(e) => { e.stopPropagation(); stopMovementWithFade(mv.id, useGraphStore.getState().moveSlots.find((sl) => sl.movementId === mv.id)?.fadeOut ?? 0.5); }}
                     className="text-yellow-400 hover:text-yellow-300 text-xs px-1 flex-shrink-0"
-                    title="Stop avec fade 0.5s"
+                    title="Stop avec fade (fade_out du slot, 0.5s par défaut)"
                   ><Square size={10} /></button>
                   <button
                     onClick={(e) => { e.stopPropagation(); stopMovement(mv.id); }}
@@ -542,7 +459,7 @@ export default function Inspector() {
               );
             })}
             <button
-              onClick={() => stopAllMovements().catch(() => {})}
+              onClick={() => stopAllMovements().catch(silentCatch)}
               className="w-full py-1 bg-red-900/50 hover:bg-red-900/70 text-red-400 text-xs rounded font-medium transition-colors"
             >
               ■ Stop All

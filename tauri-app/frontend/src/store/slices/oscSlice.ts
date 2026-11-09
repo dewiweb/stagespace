@@ -86,9 +86,13 @@ export interface OscSlice {
   setOscValues: (values: Map<string, number[]> | ((prev: Map<string, number[]>) => Map<string, number[]>)) => void;
   addOscMapping: (address: string, destination: string, transform: string | null) => Promise<void>;
   removeOscMapping: (address: string) => Promise<void>;
+  setOscMappingEnabled: (address: string, enabled: boolean) => Promise<void>;
   listOscMappings: () => Promise<Array<OscMapping>>;
   getOscValue: (handler: string) => Promise<number[]>;
   getAllOscValues: () => Promise<Record<string, number[]>>;
+  /// OSC learn : capture le prochain message entrant (bouge le fader)
+  /// puis crée le mapping vers `destination`. null si timeout.
+  learnAddOscMapping: (destination: string, transform: string | null) => Promise<string | null>;
   setOscInEnabled: (enabled: boolean) => Promise<void>;
   suppressOscIn: (durationMs: number) => Promise<void>;
 }
@@ -113,6 +117,12 @@ export const createOscSlice: StateCreator<OscSlice, [], [], OscSlice> = (set, ge
 
   removeOscMapping: async (address) => {
     await invoke('osc_remove_mapping', { address });
+    const mappings = await get().listOscMappings();
+    set({ oscMappings: new Map(mappings.map((m) => [m.address, m])) });
+  },
+
+  setOscMappingEnabled: async (address, enabled) => {
+    await invoke('osc_set_mapping_enabled', { address, enabled });
     const mappings = await get().listOscMappings();
     set({ oscMappings: new Map(mappings.map((m) => [m.address, m])) });
   },
@@ -142,6 +152,14 @@ export const createOscSlice: StateCreator<OscSlice, [], [], OscSlice> = (set, ge
       console.error('Failed to get all OSC values:', e);
       return {};
     }
+  },
+
+  learnAddOscMapping: async (destination, transform) => {
+    const { learnOscAddress } = await import('../../utils/oscLearn');
+    const learned = await learnOscAddress();
+    if (!learned) return null;
+    await get().addOscMapping(learned.address, destination, transform);
+    return learned.address;
   },
 
   setOscInEnabled: async (enabled) => {

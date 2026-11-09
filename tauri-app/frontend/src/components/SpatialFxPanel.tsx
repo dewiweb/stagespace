@@ -2,7 +2,9 @@ import React from 'react';
 import { X } from 'lucide-react';
 import { toast } from '../utils/toast-helpers';
 import { useGraphStore } from '../store/useGraphStore';
+import { safeInvoke as invoke } from '../utils/tauri';
 import EmptyState from './ui/EmptyState';
+import { ConfirmModal } from './ui/ConfirmModal';
 import {
   SPATIAL_CHANNELS,
   describeChannels,
@@ -31,6 +33,7 @@ function Section({
   onClear?: () => void;
   children: React.ReactNode;
 }) {
+  const [confirming, setConfirming] = React.useState(false);
   return (
     <div>
       <div className="flex items-center justify-between mb-1.5">
@@ -38,12 +41,21 @@ function Section({
           {title} ({count})
         </h4>
         {onClear && count > 0 && (
-          <button onClick={onClear} className="text-gray-400 hover:text-red-400 text-xs">
+          <button onClick={() => setConfirming(true)} className="text-gray-400 hover:text-red-400 text-xs">
             clear all
           </button>
         )}
       </div>
       {children}
+      {confirming && (
+        <ConfirmModal
+          title={`Clear ${title.toLowerCase()}`}
+          message={<>Remove all <b>{count}</b> {title.toLowerCase()}? This can't be undone.</>}
+          confirmLabel="Clear all"
+          onConfirm={() => { setConfirming(false); onClear?.(); }}
+          onCancel={() => setConfirming(false)}
+        />
+      )}
     </div>
   );
 }
@@ -75,6 +87,47 @@ export default function SpatialFxPanel() {
   const updateZone = useGraphStore((s) => s.updateZone);
   const zoneEditMode = useGraphStore((s) => s.zoneEditMode);
   const setZoneEditMode = useGraphStore((s) => s.setZoneEditMode);
+  const oscProfile = useGraphStore((s) => s.oscProfile);
+  const [confirmRemove, setConfirmRemove] = React.useState<{ label: string; action: () => void } | null>(null);
+
+  // Canaux que le profil OSC courant sérialise réellement — un réglage
+  // sur un canal hors liste produit du silence (ex : holophonix → gain
+  // seul). `null` = inconnu (backend down) → pas d'annotation.
+  const [profileChannels, setProfileChannels] = React.useState<SpatialChannelName[] | null>(null);
+  React.useEffect(() => {
+    invoke<SpatialChannelName[]>('get_profile_channels', { profile: oscProfile })
+      .then(setProfileChannels)
+      .catch(() => setProfileChannels(null));
+  }, [oscProfile]);
+  const sentLabel = (c: SpatialChannelName) =>
+    profileChannels && !profileChannels.includes(c) ? ' (not sent)' : '';
+
+  // Readback live : canaux effectifs calculés par le merge par objet
+  // (statiques ⊕ modulés ⊕ zones) — rend l'effet des FX visible sans
+  // écouter le rendu. Poll ~2Hz comme les perf stats.
+  const [liveChannels, setLiveChannels] = React.useState<Record<number, Record<string, number>>>({});
+  React.useEffect(() => {
+    const tick = () => {
+      invoke<Record<number, Record<string, number>>>('list_effective_channels')
+        .then(setLiveChannels)
+        .catch(() => {});
+    };
+    tick();
+    const iv = setInterval(tick, 500);
+    return () => clearInterval(iv);
+  }, []);
+  const liveEntries = Object.entries(liveChannels);
+
+  // Modes interactifs → reset au démontage : sinon un mode place/edit
+  // oublié survive au switch de tab et intercepte les clics du canvas 3D.
+  React.useEffect(() => {
+    return () => {
+      useGraphStore.getState().setZonePlaceMode(false);
+      useGraphStore.getState().setZoneEditMode(false);
+      useGraphStore.getState().setPendingZonePoint(null);
+      useGraphStore.getState().setZonePlaceTarget(null);
+    };
+  }, []);
 
   // ── Zone form state ──
   const [zShape, setZShape] = React.useState<'sphere' | 'box'>('sphere');
@@ -86,6 +139,9 @@ export default function SpatialFxPanel() {
   const [zcValue, setZcValue] = React.useState('1');
   const [zChannelRows, setZChannelRows] = React.useState<[SpatialChannelName, number][]>([]);
   const [zObjects, setZObjects] = React.useState('');
+  /// Effet positionnel : 'none' = zone canaux-only (comportement historique).
+  const [zEffect, setZEffect] = React.useState<'none' | 'repel' | 'attract' | 'dampen' | 'vortex'>('none');
+  const [zStrength, setZStrength] = React.useState('1');
 
   // ── Modulation form state ──
   const [mSource, setMSource] = React.useState<KinematicSourceName>('Speed');
@@ -134,13 +190,15 @@ export default function SpatialFxPanel() {
   const zoneChannels = Object.fromEntries(
     zChannelRows.map(([c, v]) => [c.toLowerCase(), v])
   );
-  const zoneChannelsValid = zChannelRows.length > 0;
+  /// Une zone est valide avec des canaux OU un effet positionnel (ou les
+  /// deux — une zone repel-only sans canal est légitime).
+  const zoneChannelsValid = zChannelRows.length > 0 || zEffect !== 'none';
   const zoneHint = !zoneCenterValid
     ? zShape === 'sphere'
       ? 'invalid center — format x,y,z (ex: 0,0,0)'
       : 'invalid min — format x,y,z'
     : !zoneChannelsValid
-      ? 'add at least one channel (e.g. spread = 1)'
+      ? 'add at least one channel (e.g. spread = 1) or pick an effect'
       : null;
 
   const handleAddChannelRow = () => {
@@ -165,8 +223,12 @@ export default function SpatialFxPanel() {
         falloff: parseFloat(zFalloff) || 0,
         channels: zoneChannels,
         objects: parseObjectsSpec(zObjects),
+        effect: zEffect === 'none'
+          ? null
+          : { kind: zEffect, strength: parseFloat(zStrength) || 1 },
       });
       setZChannelRows([]);
+      setZEffect('none');
     } catch (e) {
       console.error('Failed to add zone:', e);
       toast.error(`Add zone failed: ${e}`);
@@ -222,6 +284,16 @@ export default function SpatialFxPanel() {
         </div>
         <h3 className="text-white font-semibold text-sm">Spatial FX</h3>
       </div>
+
+      {/* Profil → canaux émis : rend visible ce qui produirait du silence
+          (ex : holophonix ne sérialise que gain — les réglages sur les
+          autres canaux sont calculés mais jamais envoyés au renderer). */}
+      {profileChannels && profileChannels.length < SPATIAL_CHANNELS.length && (
+        <div className="mx-2 mt-1.5 px-2 py-1 bg-amber-900/20 border border-amber-800/40 rounded text-amber-300/90 text-[10px] font-mono">
+          profile {oscProfile} sends: {profileChannels.map((c) => c.toLowerCase()).join(' ')}
+          — other channels produce silence
+        </div>
+      )}
 
       {/* ── Zones ── */}
       <Section title="Zones" count={zones.length} onClear={() => clearZones().catch((e) => toast.error(`Spatial FX failed: ${e}`))}>
@@ -282,7 +354,7 @@ export default function SpatialFxPanel() {
             <div className="flex gap-1.5">
               <select value={zcName} onChange={(e) => setZcName(e.target.value as SpatialChannelName)} className={selectCls} title="Spatial channel">
                 {SPATIAL_CHANNELS.map((c) => (
-                  <option key={c} value={c}>{c.toLowerCase()}</option>
+                  <option key={c} value={c}>{c.toLowerCase()}{sentLabel(c)}</option>
                 ))}
               </select>
               <input
@@ -324,6 +396,33 @@ export default function SpatialFxPanel() {
             placeholder="objects (optional: 0,1,2 — empty = all)"
             className={`${inputCls} font-mono`}
           />
+          {/* Effet positionnel — déplace les objets mergés à travers la
+              zone (blendé par l'influence SDF+falloff). Séparé des canaux :
+              une zone peut déplacer ET envoyer des canaux au renderer. */}
+          <div className="flex gap-1.5">
+            <select
+              value={zEffect}
+              onChange={(e) => setZEffect(e.target.value as typeof zEffect)}
+              className={selectCls}
+              title="Position effect — displaces objects through the zone (blended by falloff)"
+            >
+              <option value="none">no position effect</option>
+              <option value="repel">repel — push objects out</option>
+              <option value="attract">attract — pull toward center</option>
+              <option value="dampen">dampen — damp toward center</option>
+              <option value="vortex">vortex — swirl around center</option>
+            </select>
+            {zEffect !== 'none' && (
+              <input
+                type="text"
+                value={zStrength}
+                onChange={(e) => setZStrength(e.target.value)}
+                placeholder="strength"
+                className={`${inputCls} font-mono w-20`}
+                title="Effect strength — displacement magnitude (units/radians)"
+              />
+            )}
+          </div>
           <button
             onClick={handleAddZone}
             disabled={!zoneCenterValid || !zoneChannelsValid}
@@ -368,6 +467,7 @@ export default function SpatialFxPanel() {
                     <div className="text-white text-xs font-mono">{describeZoneShape(zone.shape)}</div>
                     <div className="text-gray-500 text-xs truncate">
                       {describeChannels(zone.channels)}
+                      {zone.effect && ` · ${zone.effect.kind}=${zone.effect.strength}`}
                       {zone.falloff > 0 && ` · falloff=${zone.falloff}`}
                       {zone.objects && ` · objs=[${zone.objects.join(',')}]`}
                       {!zone.enabled && ' · disabled'}
@@ -379,7 +479,7 @@ export default function SpatialFxPanel() {
                     title="Re-place this zone's center on the scene — then click the floor"
                     aria-label={`Re-place zone ${i}`}
                   >⌖</button>
-                  <button onClick={() => removeZone(i).catch((e) => toast.error(`Spatial FX failed: ${e}`))} className={removeBtnCls} aria-label="Remove zone"><X size={11} /></button>
+                  <button onClick={() => setConfirmRemove({ label: `zone ${i}`, action: () => removeZone(i).catch((e) => toast.error(`Spatial FX failed: ${e}`)) })} className={removeBtnCls} aria-label="Remove zone"><X size={11} /></button>
                 </div>
               </div>
             ))}
@@ -401,7 +501,7 @@ export default function SpatialFxPanel() {
             <select value={mChannel} onChange={(e) => setMChannel(e.target.value as SpatialChannelName)} className={selectCls}>
               {SPATIAL_CHANNELS.map((c) => (
                 <option key={c} value={c}>
-                  {c.toLowerCase()}
+                  {c.toLowerCase()}{sentLabel(c)}
                 </option>
               ))}
             </select>
@@ -479,7 +579,7 @@ export default function SpatialFxPanel() {
                       {mod.max !== null && ` max=${mod.max}`}
                     </div>
                   </div>
-                  <button onClick={() => removeModulation(i).catch((e) => toast.error(`Spatial FX failed: ${e}`))} className={removeBtnCls} aria-label="Remove modulation"><X size={11} /></button>
+                  <button onClick={() => setConfirmRemove({ label: `modulation ${i}`, action: () => removeModulation(i).catch((e) => toast.error(`Spatial FX failed: ${e}`)) })} className={removeBtnCls} aria-label="Remove modulation"><X size={11} /></button>
                 </div>
               </div>
             ))}
@@ -499,7 +599,7 @@ export default function SpatialFxPanel() {
             <select value={cChannel} onChange={(e) => setCChannel(e.target.value as SpatialChannelName)} className={selectCls}>
               {SPATIAL_CHANNELS.map((c) => (
                 <option key={c} value={c}>
-                  {c.toLowerCase()}
+                  {c.toLowerCase()}{sentLabel(c)}
                 </option>
               ))}
             </select>
@@ -513,6 +613,21 @@ export default function SpatialFxPanel() {
             Set Channel
           </button>
         </div>
+        {/* Readback live — canaux effectifs calculés par le merge
+            (statiques ⊕ modulés ⊕ zones) : l'effet réel des réglages,
+            visible sans écouter le rendu. */}
+        {liveEntries.length > 0 && (
+          <div className="mb-2 px-2 py-1.5 bg-cyan-950/30 rounded border border-cyan-900/40">
+            <div className="text-[9px] text-cyan-500/80 uppercase tracking-widest mb-1">live — computed by merge</div>
+            <div className="space-y-0.5 max-h-28 overflow-y-auto">
+              {liveEntries.map(([obj, ch]) => (
+                <div key={obj} className="text-[10px] font-mono text-cyan-200/80 truncate">
+                  #{obj} · {describeChannels(ch)}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {channelEntries.length === 0 ? (
           <EmptyState
             size="sm"
@@ -577,6 +692,15 @@ export default function SpatialFxPanel() {
             Declared by Zone/Velocity nodes in the global graph — edit via the node editor (Global tab).
           </p>
         </div>
+      )}
+      {confirmRemove && (
+        <ConfirmModal
+          title="Remove spatial FX"
+          message={<>Remove <b>{confirmRemove.label}</b>? This can't be undone.</>}
+          confirmLabel="Remove"
+          onConfirm={() => { confirmRemove.action(); setConfirmRemove(null); }}
+          onCancel={() => setConfirmRemove(null)}
+        />
       )}
     </div>
   );

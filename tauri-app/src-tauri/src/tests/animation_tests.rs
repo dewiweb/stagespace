@@ -45,9 +45,9 @@ mod tests {
                 }
             ],
             "edges": [
-                {"id": "e1", "source": "objects-1", "target": "engine-1", "sourceHandle": "output", "targetHandle": "input"},
-                {"id": "e2", "source": "duration-1", "target": "engine-1", "sourceHandle": "output", "targetHandle": "duration"},
-                {"id": "e3", "source": "engine-1", "target": "output-1", "sourceHandle": "output", "targetHandle": "input"}
+                {"id": "e1", "source": "objects-1", "target": "engine-1", "sourceHandle": "objects", "targetHandle": "objects"},
+                {"id": "e2", "source": "duration-1", "target": "engine-1", "sourceHandle": "duration", "targetHandle": "duration"},
+                {"id": "e3", "source": "engine-1", "target": "output-1", "sourceHandle": "out", "targetHandle": "in"}
             ]
         })
     }
@@ -185,9 +185,9 @@ mod tests {
                     {"id": "output-1", "type": "custom", "position": {"x": 550, "y": 150}, "data": {"label": "Output", "type": "Output", "params": {}}}
                 ],
                 "edges": [
-                    {"id": "e1", "source": "objects-1", "target": "engine-1", "sourceHandle": "output", "targetHandle": "input"},
-                    {"id": "e2", "source": "duration-1", "target": "engine-1", "sourceHandle": "output", "targetHandle": "duration"},
-                    {"id": "e3", "source": "engine-1", "target": "output-1", "sourceHandle": "output", "targetHandle": "input"}
+                    {"id": "e1", "source": "objects-1", "target": "engine-1", "sourceHandle": "objects", "targetHandle": "objects"},
+                    {"id": "e2", "source": "duration-1", "target": "engine-1", "sourceHandle": "duration", "targetHandle": "duration"},
+                    {"id": "e3", "source": "engine-1", "target": "output-1", "sourceHandle": "out", "targetHandle": "in"}
                 ]
             },
             "speed": 1.0,
@@ -241,9 +241,9 @@ mod tests {
                 {"id": "output-1", "type": "custom", "position": {"x": 550, "y": 150}, "data": {"label": "Output", "type": "Output", "params": {}}}
             ],
             "edges": [
-                {"id": "e1", "source": "objects-1", "target": "engine-1", "sourceHandle": "output", "targetHandle": "input"},
-                {"id": "e2", "source": "duration-1", "target": "engine-1", "sourceHandle": "output", "targetHandle": "duration"},
-                {"id": "e3", "source": "engine-1", "target": "output-1", "sourceHandle": "output", "targetHandle": "input"}
+                {"id": "e1", "source": "objects-1", "target": "engine-1", "sourceHandle": "objects", "targetHandle": "objects"},
+                {"id": "e2", "source": "duration-1", "target": "engine-1", "sourceHandle": "duration", "targetHandle": "duration"},
+                {"id": "e3", "source": "engine-1", "target": "output-1", "sourceHandle": "out", "targetHandle": "in"}
             ]
         })
     }
@@ -269,13 +269,13 @@ mod tests {
                 {"id": "output-1", "type": "custom", "position": {"x": 820, "y": 200}, "data": {"label": "Output", "type": "Output", "params": {}}}
             ],
             "edges": [
-                {"id": "e1", "source": "objects-1", "target": "engine-a", "sourceHandle": "output", "targetHandle": "input"},
-                {"id": "e2", "source": "objects-1", "target": "engine-b", "sourceHandle": "output", "targetHandle": "input"},
-                {"id": "e3", "source": "duration-1", "target": "engine-a", "sourceHandle": "output", "targetHandle": "duration"},
-                {"id": "e4", "source": "duration-1", "target": "engine-b", "sourceHandle": "output", "targetHandle": "duration"},
-                {"id": "e5", "source": "engine-a", "target": "composite-1", "sourceHandle": "output", "targetHandle": "input_a"},
-                {"id": "e6", "source": "engine-b", "target": "composite-1", "sourceHandle": "output", "targetHandle": "input_b"},
-                {"id": "e7", "source": "composite-1", "target": "output-1", "sourceHandle": "output", "targetHandle": "input"}
+                {"id": "e1", "source": "objects-1", "target": "engine-a", "sourceHandle": "objects", "targetHandle": "objects"},
+                {"id": "e2", "source": "objects-1", "target": "engine-b", "sourceHandle": "objects", "targetHandle": "objects"},
+                {"id": "e3", "source": "duration-1", "target": "engine-a", "sourceHandle": "duration", "targetHandle": "duration"},
+                {"id": "e4", "source": "duration-1", "target": "engine-b", "sourceHandle": "duration", "targetHandle": "duration"},
+                {"id": "e5", "source": "engine-a", "target": "composite-1", "sourceHandle": "out", "targetHandle": "a"},
+                {"id": "e6", "source": "engine-b", "target": "composite-1", "sourceHandle": "out", "targetHandle": "b"},
+                {"id": "e7", "source": "composite-1", "target": "output-1", "sourceHandle": "out", "targetHandle": "in"}
             ]
         })
     }
@@ -742,10 +742,10 @@ mod tests {
                 {"id": "output-1", "type": "custom", "position": {"x": 700, "y": 150}, "data": {"label": "Output", "type": "Output", "params": {}}}
             ],
             "edges": [
-                {"id": "e1", "source": "objects-1", "target": "engine-1", "sourceHandle": "output", "targetHandle": "input"},
-                {"id": "e2", "source": "duration-1", "target": "engine-1", "sourceHandle": "output", "targetHandle": "duration"},
-                {"id": "e3", "source": "engine-1", "target": "scale-1", "sourceHandle": "output", "targetHandle": "input"},
-                {"id": "e4", "source": "scale-1", "target": "output-1", "sourceHandle": "output", "targetHandle": "input"}
+                {"id": "e1", "source": "objects-1", "target": "engine-1", "sourceHandle": "objects", "targetHandle": "objects"},
+                {"id": "e2", "source": "duration-1", "target": "engine-1", "sourceHandle": "duration", "targetHandle": "duration"},
+                {"id": "e3", "source": "engine-1", "target": "scale-1", "sourceHandle": "out", "targetHandle": "in"},
+                {"id": "e4", "source": "scale-1", "target": "output-1", "sourceHandle": "out", "targetHandle": "in"}
             ]
         });
 
@@ -867,9 +867,9 @@ mod tests {
                 {"id": "output-1", "type": "custom", "position": {"x": 550, "y": 150}, "data": {"label": "Output", "type": "Output", "params": {}}}
             ],
             "edges": [
-                {"id": "e1", "source": "objects-1", "target": "bpm-1", "sourceHandle": "output", "targetHandle": "input"},
-                {"id": "e2", "source": "duration-1", "target": "bpm-1", "sourceHandle": "output", "targetHandle": "duration"},
-                {"id": "e3", "source": "bpm-1", "target": "output-1", "sourceHandle": "output", "targetHandle": "input"}
+                {"id": "e1", "source": "objects-1", "target": "bpm-1", "sourceHandle": "objects", "targetHandle": "objects"},
+                {"id": "e2", "source": "duration-1", "target": "bpm-1", "sourceHandle": "duration", "targetHandle": "duration"},
+                {"id": "e3", "source": "bpm-1", "target": "output-1", "sourceHandle": "out", "targetHandle": "in"}
             ]
         });
 
@@ -917,8 +917,8 @@ mod tests {
                 {"id": "engine-1", "type": "custom", "position": {"x": 300, "y": 150}, "data": {"label": "Circular", "type": "Circular", "params": {"radius": 2.0, "n_objects": 4, "speed": 1.0, "plane": "xz", "phase_offset": true}}}
             ],
             "edges": [
-                {"id": "e1", "source": "objects-1", "target": "engine-1", "sourceHandle": "output", "targetHandle": "input"},
-                {"id": "e2", "source": "duration-1", "target": "engine-1", "sourceHandle": "output", "targetHandle": "duration"}
+                {"id": "e1", "source": "objects-1", "target": "engine-1", "sourceHandle": "objects", "targetHandle": "objects"},
+                {"id": "e2", "source": "duration-1", "target": "engine-1", "sourceHandle": "duration", "targetHandle": "duration"}
             ]
         });
 
@@ -945,9 +945,9 @@ mod tests {
                 {"id": "output-1", "type": "custom", "position": {"x": 550, "y": 150}, "data": {"label": "Output", "type": "Output", "params": {}}}
             ],
             "edges": [
-                {"id": "e1", "source": "objects-1", "target": "engine-1", "sourceHandle": "output", "targetHandle": "input"},
-                {"id": "e2", "source": "duration-1", "target": "engine-1", "sourceHandle": "output", "targetHandle": "duration"},
-                {"id": "e3", "source": "engine-1", "target": "output-1", "sourceHandle": "output", "targetHandle": "input"}
+                {"id": "e1", "source": "objects-1", "target": "engine-1", "sourceHandle": "objects", "targetHandle": "objects"},
+                {"id": "e2", "source": "duration-1", "target": "engine-1", "sourceHandle": "duration", "targetHandle": "duration"},
+                {"id": "e3", "source": "engine-1", "target": "output-1", "sourceHandle": "out", "targetHandle": "in"}
             ]
         });
 
@@ -983,13 +983,13 @@ mod tests {
     fn make_global_graph_json(radius_scale: f64) -> serde_json::Value {
         serde_json::json!({
             "nodes": [
-                {"id": "input-1", "type": "custom", "position": {"x": 50, "y": 200}, "data": {"label": "Input", "type": "Input", "params": {}}},
+                {"id": "input-1", "type": "custom", "position": {"x": 50, "y": 200}, "data": {"label": "Input", "type": "Merge", "params": {}}},
                 {"id": "rs-1", "type": "custom", "position": {"x": 300, "y": 200}, "data": {"label": "RadiusScale", "type": "RadiusScale", "params": {"radius_scale": radius_scale}}},
                 {"id": "output-1", "type": "custom", "position": {"x": 550, "y": 200}, "data": {"label": "Output", "type": "Output", "params": {}}}
             ],
             "edges": [
-                {"id": "e1", "source": "input-1", "target": "rs-1", "sourceHandle": "output", "targetHandle": "input"},
-                {"id": "e2", "source": "rs-1", "target": "output-1", "sourceHandle": "output", "targetHandle": "input"}
+                {"id": "e1", "source": "input-1", "target": "rs-1", "sourceHandle": "out", "targetHandle": "in"},
+                {"id": "e2", "source": "rs-1", "target": "output-1", "sourceHandle": "out", "targetHandle": "in"}
             ]
         })
     }
@@ -1013,7 +1013,7 @@ mod tests {
         assert!(graph
             .nodes
             .values()
-            .any(|n| n.node_type == stagespace_engines::NodeType::Input));
+            .any(|n| n.node_type == stagespace_engines::NodeType::Merge));
         // Vérifier qu'on a un node RadiusScale
         assert!(graph
             .nodes
@@ -1075,7 +1075,7 @@ mod tests {
                 {"id": "output-1", "type": "custom", "position": {"x": 550, "y": 200}, "data": {"label": "Output", "type": "Output", "params": {}}}
             ],
             "edges": [
-                {"id": "e1", "source": "moveref-1", "target": "output-1", "sourceHandle": "output", "targetHandle": "input"}
+                {"id": "e1", "source": "moveref-1", "target": "output-1", "sourceHandle": "out", "targetHandle": "in"}
             ]
         });
         let audio_state = AudioState::new();
@@ -1103,8 +1103,8 @@ mod tests {
                 {"id": "output-1", "type": "custom", "position": {"x": 550, "y": 200}, "data": {"label": "Output", "type": "Output", "params": {}}}
             ],
             "edges": [
-                {"id": "e1", "source": "merge-1", "target": "rs-1", "sourceHandle": "output", "targetHandle": "input"},
-                {"id": "e2", "source": "rs-1", "target": "output-1", "sourceHandle": "output", "targetHandle": "input"}
+                {"id": "e1", "source": "merge-1", "target": "rs-1", "sourceHandle": "out", "targetHandle": "in"},
+                {"id": "e2", "source": "rs-1", "target": "output-1", "sourceHandle": "out", "targetHandle": "in"}
             ]
         });
         let audio_state = AudioState::new();
@@ -1166,6 +1166,7 @@ mod tests {
             osc_mappings: None,
             zones: None,
             moves: vec![],
+            ..Default::default()
         };
 
         // Sérialiser (comme Tauri fait pour IPC)

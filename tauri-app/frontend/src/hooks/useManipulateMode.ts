@@ -1,13 +1,17 @@
 import { useRef, useState, useCallback, MutableRefObject } from 'react';
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { useGraphStore } from '../store/useGraphStore';
 import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { throttleTrailingKeyed } from '../utils/throttle';
 import { fromThree } from '../utils/coords';
+import { doClearPosition } from '../utils/liveActions';
+import { dollyCamera } from '../utils/three';
 
 interface UseManipulateModeParams {
   cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>;
+  controlsRef?: MutableRefObject<OrbitControls | null>;
   containerRef: MutableRefObject<HTMLDivElement | null>;
   objectsRef: MutableRefObject<THREE.Mesh[]>;
   handleRef: MutableRefObject<THREE.Mesh | null>;
@@ -16,11 +20,12 @@ interface UseManipulateModeParams {
 
 /**
  * Gère le mode manipulation : drag des objets 3D et du handle,
- * rotation (shift+drag), scale (scroll).
+ * rotation (shift+drag), scale (scroll sur le handle).
  * (L'assignation de tracks se fait dans la TrackGrid — mode assign retiré.)
  */
 export function useManipulateMode({
   cameraRef,
+  controlsRef,
   containerRef,
   objectsRef,
   handleRef,
@@ -29,15 +34,15 @@ export function useManipulateMode({
   const [draggingObject, setDraggingObject] = useState<number | null>(null);
   const draggingObjectRef = useRef<number | null>(null);
   const [draggingHandle, setDraggingHandle] = useState(false);
-  // Track shift state for rotate vs move
-  const shiftHeldRef = useRef(false);
+  // Position/yaw au down — baseline du shift+drag (rotate). Le shift est
+  // lu en live dans handleManipulateMove (e.shiftKey) : basculer
+  // move↔rotate en cours de drag est possible.
   const dragStartPosRef = useRef<{ x: number; y: number } | null>(null);
   const dragStartYawRef = useRef(0);
 
   const movements = useGraphStore((s) => s.movements);
   const macros = useGraphStore((s) => s.macros);
   const setMacros = useGraphStore((s) => s.setMacros);
-  const isPlaying = useGraphStore((s) => s.isPlaying);
 
   // Refs pour les valeurs lues dans les callbacks — évite les stale closures
   const movementsRef = useRef(movements);
@@ -64,6 +69,7 @@ export function useManipulateMode({
   const handleManipulateDown = useCallback(
     (e: React.PointerEvent) => {
       if (!manipulateMode) return;
+      if (e.button !== 0) return; // clic droit = release (handler conteneur), pas drag
       const camera = cameraRef.current;
       const container = containerRef.current;
       if (!camera || !container) return;
@@ -81,7 +87,6 @@ export function useManipulateMode({
         const hits = raycaster.intersectObject(handleRef.current);
         if (hits.length > 0) {
           setDraggingHandle(true);
-          shiftHeldRef.current = e.shiftKey;
           dragStartPosRef.current = { x: e.clientX, y: e.clientY };
           dragStartYawRef.current = animStoreRef.current.current.yaw;
           (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -94,19 +99,40 @@ export function useManipulateMode({
       // les tracks cachées par le focus slot restent cliquables/draggables.
       const visibleObjs = objectsRef.current.filter((o) => o.visible);
       const objHits = raycaster.intersectObjects(visibleObjs, true);
+      let idx = -1;
       if (objHits.length > 0) {
         // Trouver l'objet parent dans objectsRef (peut être un enfant si labels ajoutés)
         let hitObj = objHits[0].object as THREE.Mesh;
-        let idx = objectsRef.current.indexOf(hitObj);
+        idx = objectsRef.current.indexOf(hitObj);
         // Si l'objet touché est un enfant (ex: label), remonter au parent
         while (idx < 0 && hitObj.parent) {
           hitObj = hitObj.parent as THREE.Mesh;
           idx = objectsRef.current.indexOf(hitObj);
         }
-        if (idx >= 0) {
-          setDraggingObject(idx);
-          (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      }
+      // Fallback proximité : une sphère en mouvement est dure à viser —
+      // l'objet le plus proche du clic (< 40px écran) est saisi, comme la
+      // sélection proximité du radar. Projection NDC → pixels.
+      if (idx < 0) {
+        let bd = 40;
+        for (let i = 0; i < visibleObjs.length; i++) {
+          const p = visibleObjs[i].position.clone().project(camera);
+          if (p.z < -1 || p.z > 1) continue; // derrière la caméra
+          const sx = ((p.x + 1) / 2) * rect.width;
+          const sy = ((1 - p.y) / 2) * rect.height;
+          const d = Math.hypot(sx - (e.clientX - rect.left), sy - (e.clientY - rect.top));
+          if (d < bd) { bd = d; idx = objectsRef.current.indexOf(visibleObjs[i]); }
         }
+      }
+      if (idx >= 0) {
+        // Ctrl+clic = relâcher l'objet tenu en manuel — clic-droit =
+        // menu natif webview, Alt+clic = move-fenêtre du WM Linux.
+        if (e.ctrlKey) {
+          doClearPosition(idx);
+          return;
+        }
+        setDraggingObject(idx);
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
       }
     },
     [manipulateMode, cameraRef, containerRef, handleRef, objectsRef],
@@ -138,8 +164,9 @@ export function useManipulateMode({
       if (!raycaster.ray.intersectPlane(plane, intersection)) return;
 
       if (draggingHandle) {
-        // Shift+drag = rotation (yaw) de la trajectoire
-        if (shiftHeldRef.current && dragStartPosRef.current) {
+        // Shift+drag = rotation (yaw) — shift lu en live : basculer
+        // move↔rotate en cours de drag sans relâcher.
+        if (e.shiftKey && dragStartPosRef.current) {
           const dx = e.clientX - dragStartPosRef.current.x;
           // 1 pixel = 0.5° de rotation
           const newYaw = dragStartYawRef.current + dx * 0.5;
@@ -200,12 +227,12 @@ export function useManipulateMode({
         // Conversion Three.js (x, y=up, z=depth) → backend (x, y=depth, z=up)
         const backendPos = fromThree(intersection.x, mesh?.position.y ?? 0, intersection.z);
         useGraphStore.getState().setManualPosition(draggingObject, backendPos);
-        if (isPlaying || movementsRef.current.length > 0) {
-          pushManualPositionThrottled.current(draggingObject, backendPos);
-        }
+        // Toujours invoquer — depuis P1.1 une position manuelle émet même
+        // sans move live ; sinon le drag-while-stopped divergeait en silence.
+        pushManualPositionThrottled.current(draggingObject, backendPos);
       }
     },
-    [manipulateMode, draggingObject, draggingHandle, macros, setMacros, isPlaying, cameraRef, containerRef, handleRef, objectsRef],
+    [manipulateMode, draggingObject, draggingHandle, macros, setMacros, cameraRef, containerRef, handleRef, objectsRef],
   );
 
   const handleManipulateUp = useCallback(
@@ -213,7 +240,6 @@ export function useManipulateMode({
       // Si on relâche un objet draggé, garder l'override (ne pas effacer)
       setDraggingObject(null);
       setDraggingHandle(false);
-      shiftHeldRef.current = false;
       dragStartPosRef.current = null;
       try {
         (e.target as HTMLElement).releasePointerCapture(e.pointerId);
@@ -224,10 +250,33 @@ export function useManipulateMode({
     [],
   );
 
-  // Scroll = scale la trajectoire (quand on est sur le handle en manipulate mode)
+  // Clic-droit = relâcher l'objet tenu — géré au niveau conteneur dans
+  // Scene3D (pointerdown/up <6px <500ms + pickObjectIndexAt) pour marcher
+  // dans TOUS les modes, pas seulement manipulate.
+
+  // Scroll : scale la trajectoire UNIQUEMENT au-dessus du handle — ailleurs
+  // la molette zoome la caméra (restauré : avant, scroll n'importe où
+  // scalait et le zoom était impossible dans tous les modes interactifs).
   const handleManipulateWheel = useCallback(
     (e: React.WheelEvent) => {
       if (!manipulateMode) return;
+      const camera = cameraRef.current;
+      const container = containerRef.current;
+      // Scale la trajectoire SEULEMENT au-dessus du handle — ailleurs la
+      // molette zoome la caméra (avant : scale global → zoom impossible).
+      if (camera && container && handleRef.current) {
+        const rect = container.getBoundingClientRect();
+        const ndc = new THREE.Vector2(
+          ((e.clientX - rect.left) / rect.width) * 2 - 1,
+          -((e.clientY - rect.top) / rect.height) * 2 + 1,
+        );
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(ndc, camera);
+        if (raycaster.intersectObject(handleRef.current).length === 0) {
+          dollyCamera(controlsRef?.current ?? null, e.deltaY < 0 ? 0.92 : 1.08);
+          return;
+        }
+      }
       // deltaY < 0 = scroll up = agrandir
       const factor = e.deltaY < 0 ? 1.05 : 0.95;
       const animStore = animStoreRef.current;
@@ -236,7 +285,7 @@ export function useManipulateMode({
       // Aussi mettre à jour les macros legacy
       setMacros({ ...useGraphStore.getState().macros, scale: newScale });
     },
-    [manipulateMode, setMacros],
+    [manipulateMode, cameraRef, controlsRef, containerRef, handleRef, setMacros],
   );
 
   return {

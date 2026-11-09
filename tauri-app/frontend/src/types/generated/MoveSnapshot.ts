@@ -60,4 +60,17 @@ animation_state: unknown,
 /**
  * Enveloppe de fade du cycle worker (fade-in/out en début/fin de boucle)
  */
-fade_in: number, fade_out: number, };
+fade_in: number, fade_out: number, 
+/**
+ * Sémantique de fin de one-shot (revert|hold) — snapshotée : un recall
+ * ne doit pas perdre le "End: hold" de l'opérateur.
+ */
+end_mode: unknown, 
+/**
+ * Sémantique d'ancrage (origin|current|follow) — idem.
+ */
+anchor_mode: unknown, 
+/**
+ * Cible de l'ancrage follow (obj_index).
+ */
+anchor_target: number | null, };

@@ -10,7 +10,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SHAPE_PRESETS } from '../src/utils/shapePresets';
-import { isValidConnection, getInputPorts, specOf } from '../src/utils/connectionRules';
+import { isValidConnection, getInputPorts, getOutputPorts, specOf } from '../src/utils/connectionRules';
 import type { NodeType } from '../src/store/useGraphStore';
 import type { Node, Edge } from 'reactflow';
 
@@ -32,13 +32,24 @@ const gNode = (type: string, position: { x: number; y: number }, params: Record<
   data: { label: type, type, params },
 });
 
-const gEdge = (from: Node, to: Node): Edge => ({
-  id: `${from.id}-${to.id}`,
-  source: from.id,
-  target: to.id,
-  sourceHandle: 'output',
-  targetHandle: 'input',
-});
+const gEdge = (from: Node, to: Node): Edge => {
+  // Ports résolus par correspondance de type — même règle que le validator.
+  const outPorts = getOutputPorts(nodeType(from) as NodeType);
+  const inPorts = getInputPorts(nodeType(to) as NodeType);
+  for (const op of outPorts) {
+    const ip = inPorts.find((p) => p.port_type === op.port_type);
+    if (ip) {
+      return {
+        id: `${from.id}-${to.id}`,
+        source: from.id,
+        target: to.id,
+        sourceHandle: op.name,
+        targetHandle: ip.name,
+      };
+    }
+  }
+  throw new Error(`no compatible port ${nodeType(from)} -> ${nodeType(to)}`);
+};
 
 // ─── Validation (mêmes règles que shapePresets.test.ts + arité) ───
 
@@ -53,14 +64,14 @@ function validateGraph(name: string, nodes: Node[], edges: Edge[], scope: 'sub' 
     if (!src || !dst) throw new Error(`${name}: edge ${e.id} references missing node`);
     const from = nodeType(src) as Parameters<typeof isValidConnection>[0];
     const to = nodeType(dst) as Parameters<typeof isValidConnection>[0];
-    if (!isValidConnection(from, to)) {
-      throw new Error(`${name}: invalid connection ${from} -> ${to}`);
+    const sh = e.sourceHandle ?? 'out';
+    const th = e.targetHandle ?? 'in';
+    if (!isValidConnection(from, to, sh, th)) {
+      throw new Error(`${name}: invalid connection ${from}.${sh} -> ${to}.${th}`);
     }
     const inPorts = getInputPorts(to);
-    const sh = e.sourceHandle ?? 'output';
-    const th = e.targetHandle ?? 'input';
-    if (sh !== 'output') throw new Error(`${name}: bad source port '${sh}' on ${from}`);
-    if (!inPorts.includes(th)) throw new Error(`${name}: bad target port '${th}' on ${to}`);
+    if (!inPorts.some((p) => p.name === th))
+      throw new Error(`${name}: bad target port '${th}' on ${to}`);
     const key = `${e.target}`;
     const used = usedInputs.get(key) ?? new Set<string>();
     if (used.has(th)) throw new Error(`${name}: port '${th}' of ${to} fed twice`);
@@ -308,8 +319,10 @@ const globalNodes = [gInput, gManual, gRadius, gHeight, gDepth, gScale, gRotate,
 const globalEdges = [
   gEdge(gInput, gManual), gEdge(gManual, gRadius), gEdge(gRadius, gHeight),
   gEdge(gHeight, gDepth), gEdge(gDepth, gScale), gEdge(gScale, gRotate),
-  gEdge(gRotate, gOffset), gEdge(gOffset, gZone), gEdge(gZone, gVel),
-  gEdge(gVel, gOutput),
+  gEdge(gRotate, gOffset),
+  // Capteurs = sinks en fan-out du node final (off → Output.in).
+  gEdge(gOffset, gZone), gEdge(gOffset, gVel),
+  gEdge(gOffset, gOutput),
 ];
 validateGraph('global', globalNodes, globalEdges, 'global');
 const globalGraph = { nodes: globalNodes, edges: globalEdges };

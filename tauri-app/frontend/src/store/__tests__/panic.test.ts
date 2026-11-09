@@ -1,14 +1,21 @@
 /// <reference types="vitest/globals" />
-import { vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useGraphStore, getInvokeCalls, setInvokeResponse, resetStore } from './testHelpers';
 import { toast } from '../useToastStore';
 
 // Le panic est LE contrôle d'urgence du show — ses promesses doivent être
 // véridiques : stop inconditionnel, échecs remontés, pas de faux succès.
 describe('panic', () => {
+  let errSpy: ReturnType<typeof vi.spyOn>;
   beforeEach(() => {
     resetStore();
     vi.restoreAllMocks();
+    // Les tests exercent des chemins d'erreur — le console.error est
+    // attendu : on l'intercepte, pas de stack trace dans la sortie.
+    errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    errSpy.mockRestore();
   });
 
   it('calls deactivate_all_moves unconditionally — even with an empty movement cache', async () => {

@@ -1,12 +1,6 @@
 import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import {
-  ReactFlow,
-  Background,
-  Controls,
-  MiniMap,
   NodeTypes,
-  applyNodeChanges,
-  applyEdgeChanges,
   MarkerType,
   type Node,
   type Connection,
@@ -19,13 +13,16 @@ import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import { useSignalGraphStore } from '../store/useSignalGraphStore';
 import CustomNode from './CustomNode';
+import { NodePalette } from './editor/NodePalette';
+import { GraphCanvas } from './editor/GraphCanvas';
+import { useStandaloneGraph } from '../hooks/useStandaloneGraph';
 import { QuickAddModal } from './QuickAddModal';
-import { NODE_CATEGORIES, NODE_COLORS, NODE_DESCRIPTIONS, getCategoryColor, getDefaultParams, getValidTargetTypes, pluginDefaultParams, GLOBAL_ONLY_NODES, SUB_ONLY_NODES, SIGNAL_ONLY_NODES, type GraphNode } from './nodeParamSchema';
-import { isValidConnection, connectionRejectionReason, portRejectionReason, spliceRejectionReason } from '../utils/connectionRules';
+import { NODE_CATEGORIES, getDefaultParams, pluginDefaultParams, GLOBAL_ONLY_NODES, SUB_ONLY_NODES, SIGNAL_ONLY_NODES, type GraphNode } from './nodeParamSchema';
+import { isValidConnection, connectionRejectionReason, spliceRejectionReason } from '../utils/connectionRules';
 import { presetsUsingType } from '../utils/shapePresets';
 import { toast } from '../utils/toast-helpers';
-import { open } from '@tauri-apps/plugin-dialog';
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { safeInvoke as invoke } from '../utils/tauri';
+import { issuesByNode, nodeIssueClass, type GraphIssue } from '../utils/graphIssues';
 import type { PluginManifest } from '../types/generated/PluginManifest';
 import type { PluginKind } from '../types/generated/PluginKind';
 
@@ -66,7 +63,14 @@ export const NodeEditor: React.FC = () => {
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   // Palette repliable — QuickAdd couvre l'ajout rapide ; la palette sert
   // la découverte. Repliée elle rend ~220px au canvas en split expert.
-  const [paletteCollapsed, setPaletteCollapsed] = useState(false);
+  // État persisté : sans ça elle repartait dépliée à chaque session et
+  // écrasait le canvas en split (240px de palette pour ~430px de colonne).
+  const [paletteCollapsed, _setPaletteCollapsed] = useState(() =>
+    localStorage.getItem('stagespace:node-palette-collapsed') === '1');
+  const setPaletteCollapsed = useCallback((v: boolean) => {
+    _setPaletteCollapsed(v);
+    localStorage.setItem('stagespace:node-palette-collapsed', v ? '1' : '0');
+  }, []);
 
   // Tab: "sub" = graph du slot édité, "global" = graph global (post-processing),
   // "signal" = graph de modulation (domaine scalaire → deltas de macros)
@@ -94,6 +98,16 @@ export const NodeEditor: React.FC = () => {
   const setSignalEdges = useSignalGraphStore((s) => s.setEdges);
   const pushSignalGraph = useSignalGraphStore((s) => s.pushSignalGraph);
   const resetSignalToDefault = useSignalGraphStore((s) => s.resetToDefault);
+  const setSignalContext = useSignalGraphStore((s) => s.setContext);
+
+  // Le tab Mods édite la modulation du slot en cours d'édition (per-move,
+  // cibles `param:`) quand un slot est sélectionné — sinon le global.
+  const editingSlotSignalGraph = editingSlotId
+    ? moveSlots.find((s) => s.id === editingSlotId)?.signalGraph ?? null
+    : null;
+  useEffect(() => {
+    setSignalContext(editingSlotId, editingSlotSignalGraph);
+  }, [editingSlotId]); // eslint-disable-line react-hooks/exhaustive-deps -- rebind on slot switch only
 
   // Moves actifs (pour highlight les MoveRef dont le move est actif)
   const movements = useGraphStore((s) => s.movements);
@@ -118,6 +132,12 @@ export const NodeEditor: React.FC = () => {
   const displayEdges =
     activeTab === 'global' ? globalEdges : activeTab === 'signal' ? signalEdges : edges;
 
+  // Diagnostics live (debounced 200ms) — les règles du graphe vivent dans
+  // le backend ; l'éditeur surligne les nodes en erreur/warning.
+  const [graphIssues, setGraphIssues] = useState<GraphIssue[]>([]);
+  const [issuesOpen, setIssuesOpen] = useState(false);
+  const issueMap = useMemo(() => issuesByNode(graphIssues), [graphIssues]);
+
   // Décor des nodes (highlight connexion + MoveRef actif) memoized — sans ça,
   // chaque render recrée tous les objets node et React Flow re-render tout.
   const decoratedNodes = useMemo(
@@ -127,8 +147,10 @@ export const NodeEditor: React.FC = () => {
         const isMoveRef = nodeType === 'MoveRef';
         const moveId = n.data.params?.move_id as string;
         const isMoveActive = isMoveRef && moveId && activeMoveIds.has(moveId);
+        const issue = issueMap.get(n.id);
         return {
           ...n,
+          data: issue ? { ...n.data, issueMessages: issue.messages } : n.data,
           className: [
             connectingFrom && !isValidConnection(
               connectingFrom,
@@ -138,72 +160,70 @@ export const NodeEditor: React.FC = () => {
                 : undefined,
             ) ? 'rf-node-invalid-target' : '',
             isMoveActive ? 'rf-node-moveref-active' : '',
+            nodeIssueClass(issueMap, n.id) ?? '',
           ].filter(Boolean).join(' '),
           style: isMoveActive ? { ...n.style, boxShadow: '0 0 8px 2px rgba(34, 197, 94, 0.6)' } : n.style,
         };
       }),
-    [displayNodes, connectingFrom, activeMoveIds, plugins],
+    [displayNodes, connectingFrom, activeMoveIds, plugins, issueMap],
   );
 
-  // Pour le tab global, on utilise des handlers locaux (pas le store global)
-  const handleGlobalNodesChange = useCallback((changes: any[]) => {
-    // Appliquer les changes sur les globalNodes
-    const updated = applyNodeChanges(changes, globalNodes);
-    setGlobalNodes(updated);
-  }, [globalNodes, setGlobalNodes]);
+  useEffect(() => {
+    const ctx = activeTab === 'global' ? 'global' : activeTab === 'signal' ? 'signal' : 'sub';
+    const timer = setTimeout(async () => {
+      const toGraphJson = (ns: GraphNode[], es: Edge[]) => ({
+        nodes: ns.map((n) => ({
+          id: n.id,
+          type: 'custom',
+          position: n.position,
+          data: { label: n.data.label ?? n.data.type ?? '', type: n.data.type ?? '', params: n.data.params ?? {} },
+        })),
+        edges: es.map((e) => ({
+          id: e.id,
+          source: e.source,
+          target: e.target,
+          sourceHandle: e.sourceHandle ?? 'out',
+          targetHandle: e.targetHandle ?? 'in',
+        })),
+      });
+      try {
+        // En contexte signal per-move, le graphe du move sert à résoudre
+        // les cibles `param:` (global signal → aucun move).
+        const moveGraphJson =
+          activeTab === 'signal' && editingSlotId ? toGraphJson(nodes, edges) : null;
+        const issues = await invoke<GraphIssue[]>('diagnose_graph', {
+          graphJson: toGraphJson(displayNodes, displayEdges),
+          context: ctx,
+          moveGraphJson,
+        });
+        setGraphIssues(issues);
+      } catch {
+        setGraphIssues([]); // pas de backend (Vite seul) — silence
+      }
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [displayNodes, displayEdges, activeTab, editingSlotId, nodes, edges]);
 
-  const handleGlobalEdgesChange = useCallback((changes: any[]) => {
-    const updated = applyEdgeChanges(changes, globalEdges);
-    setGlobalEdges(updated);
-  }, [globalEdges, setGlobalEdges]);
-
-  // Un drop qui se termine sur un node sans créer d'edge = connexion refusée.
-  // onConnect est appelé avant onConnectEnd quand le drop réussit — le flag
-  // permet de distinguer "refusé" de "annulé sur le canvas" (pas de toast).
+  // Handlers des graphes standalone (global/signal) — un seul hook
+  // factorise le pattern applyChanges→set→push débouncé (ex-triplication).
   const connectedThisDrop = React.useRef(false);
-
-  const handleGlobalConnect = useCallback((connection: Connection) => {
-    connectedThisDrop.current = true;
-    const newEdge = { ...connection, id: `${connection.source}-${connection.target}`, markerEnd: { type: MarkerType.ArrowClosed } };
-    setGlobalEdges([...globalEdges, newEdge as Edge]);
-  }, [globalEdges, setGlobalEdges]);
-
-  // Handlers du tab signal — même pattern que le tab global (store dédié).
-  const handleSignalNodesChange = useCallback((changes: any[]) => {
-    const updated = applyNodeChanges(changes, signalNodes);
-    setSignalNodes(updated);
-  }, [signalNodes, setSignalNodes]);
-
-  const handleSignalEdgesChange = useCallback((changes: any[]) => {
-    const updated = applyEdgeChanges(changes, signalEdges);
-    setSignalEdges(updated);
-  }, [signalEdges, setSignalEdges]);
-
-  const handleSignalConnect = useCallback((connection: Connection) => {
-    connectedThisDrop.current = true;
-    const newEdge = { ...connection, id: `${connection.source}-${connection.target}`, markerEnd: { type: MarkerType.ArrowClosed } };
-    setSignalEdges([...signalEdges, newEdge as Edge]);
-  }, [signalEdges, setSignalEdges]);
+  const globalGraph = useStandaloneGraph({
+    nodes: globalNodes, edges: globalEdges,
+    setNodes: setGlobalNodes, setEdges: setGlobalEdges,
+    pushGraph: pushGlobalGraph, active: activeTab === 'global',
+    connectedThisDrop,
+  });
+  const signalGraph = useStandaloneGraph({
+    nodes: signalNodes, edges: signalEdges,
+    setNodes: setSignalNodes, setEdges: setSignalEdges,
+    pushGraph: pushSignalGraph, active: activeTab === 'signal',
+    connectedThisDrop,
+  });
 
   const handleConnect = useCallback((connection: Connection) => {
     connectedThisDrop.current = true;
     storeConnect(connection);
   }, [storeConnect]);
-
-  // Auto-push du graph global quand il change (debounce)
-  useEffect(() => {
-    if (activeTab !== 'global') return;
-    const timer = setTimeout(() => pushGlobalGraph(), 300);
-    return () => clearTimeout(timer);
-  }, [globalNodes, globalEdges, activeTab, pushGlobalGraph]);
-
-  // Auto-push du graph signal quand il change (debounce) — la compile
-  // rejette les graphs sans SignalOut : le toast remonte l'erreur.
-  useEffect(() => {
-    if (activeTab !== 'signal') return;
-    const timer = setTimeout(() => pushSignalGraph(), 300);
-    return () => clearTimeout(timer);
-  }, [signalNodes, signalEdges, activeTab, pushSignalGraph]);
 
   // Autopatch (plugdata) : une edge sélectionnée + clic palette = insertion
   // du node dans la chaîne (`A → B` devient `A → M → B`). Une seule edge
@@ -240,17 +260,17 @@ export const NodeEditor: React.FC = () => {
       const edgeIn: Edge = {
         id: `e-${selectedEdge.source}-${newNode.id}-in`,
         source: selectedEdge.source,
-        sourceHandle: selectedEdge.sourceHandle ?? 'output',
+        sourceHandle: selectedEdge.sourceHandle ?? 'out',
         target: newNode.id,
-        targetHandle: 'input',
+        targetHandle: 'in',
         markerEnd: arrow,
       };
       const edgeOut: Edge = {
         id: `e-${newNode.id}-${selectedEdge.target}-out`,
         source: newNode.id,
-        sourceHandle: 'output',
+        sourceHandle: 'out',
         target: selectedEdge.target,
-        targetHandle: selectedEdge.targetHandle ?? 'input',
+        targetHandle: selectedEdge.targetHandle ?? 'in',
         markerEnd: arrow,
       };
       if (activeTab === 'global') {
@@ -311,15 +331,13 @@ export const NodeEditor: React.FC = () => {
         ? plugins.find((m) => m.id === targetNode.data.params?.plugin_id)?.kind
         : undefined;
 
-      // Vérifier la compatibilité des types
-      if (!isValidConnection(fromType, toType, toPluginKind)) return false;
-
-      // Vérifier la compatibilité des ports
-      const targetPort = connection.targetHandle;
-      if (fromType === 'Duration' && targetPort !== 'duration') return false;
-      if (fromType === 'Objects' && targetPort !== 'input' && targetPort !== 'input_a' && targetPort !== 'input_b') return false;
-
-      return true;
+      // Compatibilité port-niveau : existence + égalité de type —
+      // règle unique, mirroir du validator Rust.
+      return isValidConnection(
+        fromType, toType,
+        connection.sourceHandle ?? undefined, connection.targetHandle ?? undefined,
+        toPluginKind,
+      );
     },
     [displayNodes, plugins],
   );
@@ -353,9 +371,9 @@ export const NodeEditor: React.FC = () => {
       : undefined;
     const handleEl = el?.closest?.('.react-flow__handle') as HTMLElement | null;
     const targetPort = handleEl?.dataset?.handleid ?? null;
-    const reason =
-      portRejectionReason(fromType, targetPort) ??
-      connectionRejectionReason(fromType, toType, toPluginKind);
+    const reason = connectionRejectionReason(
+      fromType, toType, undefined, targetPort ?? undefined, toPluginKind,
+    );
     if (reason) toast.warning(reason);
   }, [connectingFrom, displayNodes, plugins]);
 
@@ -408,7 +426,9 @@ export const NodeEditor: React.FC = () => {
   }, []);
 
   const onPaneDoubleClick = useCallback((e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('.react-flow__node')) return;
+    // Uniquement le pane lui-même — un double-clic sur MiniMap, Controls
+    // ou un node bubble jusqu'au wrapper et ouvrirait QuickAdd par erreur.
+    if (!(e.target as HTMLElement).classList.contains('react-flow__pane')) return;
     setQuickAddOpen(true);
   }, []);
 
@@ -438,7 +458,8 @@ export const NodeEditor: React.FC = () => {
   // s'insérer (trajectoire, pas duration/spline) prend un style dash cyan
   // — l'autopatch doit être découvrable sans lire le hint de palette.
   const insertableEdgeId =
-    selectedEdge && selectedEdge.targetHandle !== 'duration' && selectedEdge.targetHandle !== 'spline'
+    selectedEdge &&
+    !['objects', 'duration', 'spline'].includes(selectedEdge.targetHandle ?? '')
       ? selectedEdge.id
       : null;
   // Color-coding par port : une edge vers 'duration' porte un temps, vers
@@ -549,307 +570,66 @@ export const NodeEditor: React.FC = () => {
       {/* Node Palette — repliable en rail : QuickAdd (Ctrl+K / double-clic)
           couvre l'ajout rapide ; la palette sert surtout à la découverte.
           Repliée, le canvas récupère ~220px en split expert. */}
-      {paletteCollapsed ? (
-        <div className="w-9 bg-stagespace-panel border-r border-stagespace-border flex-shrink-0 flex flex-col items-center pt-2 gap-2">
-          <button
-            onClick={() => setPaletteCollapsed(false)}
-            className="w-6 h-6 rounded bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white flex items-center justify-center"
-            title="Show the node palette"
-          >
-            <PanelLeftOpen size={12} />
-          </button>
-          <button
-            onClick={() => setQuickAddOpen(true)}
-            className="w-6 h-6 rounded bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white flex items-center justify-center text-xs font-bold"
-            title="Quick-add node (Ctrl+K)"
-          >
-            +
-          </button>
-        </div>
-      ) : (
-      <div className="w-60 bg-stagespace-panel border-r border-stagespace-border overflow-y-auto flex-shrink-0">
-        <div className="px-3 py-3 border-b border-stagespace-border sticky top-0 bg-stagespace-panel z-raised flex items-start gap-2">
-          <div className="flex-1">
-            <h3 className="text-white font-semibold text-sm">Nodes</h3>
-            <p className="text-gray-500 text-xs mt-0.5">
-              {selectedEdge
-                ? 'Edge selected — click a modifier to insert it into the chain'
-                : 'Click to add · Ctrl+K quick-add · Hover for info'}
-            </p>
-          </div>
-          <button
-            onClick={() => setPaletteCollapsed(true)}
-            className="w-5 h-5 rounded text-gray-500 hover:text-white hover:bg-gray-800 flex items-center justify-center flex-shrink-0"
-            title="Collapse the palette — Ctrl+K stays available"
-          >
-            <PanelLeftClose size={11} />
-          </button>
-        </div>
-
-        <div className="p-2 space-y-2">
-          {NODE_CATEGORIES.map((cat) => {
-            // Filtrer les types selon le tab actif — le domaine signal
-            // (modulation scalaire) est isolé : seuls les nodes Signal dans
-            // le tab Mods, jamais dans les graphes move/global.
-            const filteredTypes = activeTab === 'signal'
-              ? cat.types.filter((t) => SIGNAL_ONLY_NODES.has(t))
-              : activeTab === 'global'
-                ? cat.types.filter((t) => !SUB_ONLY_NODES.has(t) && !SIGNAL_ONLY_NODES.has(t))
-                : cat.types.filter((t) => !GLOBAL_ONLY_NODES.has(t) && !SIGNAL_ONLY_NODES.has(t));
-            // Skip la catégorie si elle n'a plus de types après le filtrage
-            if (filteredTypes.length === 0) return null;
-            const isCollapsed = collapsedCats.has(cat.label);
-            return (
-              <div key={cat.label}>
-                <button
-                  onClick={() => toggleCat(cat.label)}
-                  className="w-full flex items-center gap-1 text-gray-500 text-xs font-semibold mb-1 px-1 uppercase tracking-wider hover:text-gray-300 transition-colors"
-                >
-                  <span className="text-xs">{isCollapsed ? '▸' : '▾'}</span>
-                  <span
-                    className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                    style={{ background: NODE_COLORS[cat.color] ?? '#4b5563' }}
-                  />
-                  {cat.label}
-                  <span className="text-gray-500 ml-auto">{filteredTypes.length}</span>
-                </button>
-                {!isCollapsed && (
-                  <div className="space-y-0.5">
-                    {filteredTypes.map((type) => (
-                      <div
-                        key={type}
-                        className="relative"
-                        onMouseEnter={() => setHoveredPaletteNode(type)}
-                        onMouseLeave={() => setHoveredPaletteNode(null)}
-                      >
-                        <button
-                          onClick={() => addNodeByType(type)}
-                          className="w-full text-left px-2.5 py-1.5 text-white text-xs rounded transition-all hover:translate-x-0.5 flex items-center gap-2 group"
-                          style={{ background: 'transparent' }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = getCategoryColor(type) + '20';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'transparent';
-                          }}
-                        >
-                          <span
-                            className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                            style={{ background: getCategoryColor(type) }}
-                          />
-                          {type}
-                        </button>
-                        {/* Tooltip description */}
-                        {hoveredPaletteNode === type && NODE_DESCRIPTIONS[type] && (
-                          <div className="absolute left-full top-0 ml-2 z-popover w-64 p-2.5 bg-gray-900 border border-gray-700 rounded-lg shadow-xl text-gray-300 text-xs leading-relaxed pointer-events-none">
-                            <div className="text-white font-semibold text-xs mb-1" style={{ color: getCategoryColor(type) }}>{type}</div>
-                            {NODE_DESCRIPTIONS[type]}
-                            {/* Show valid targets */}
-                            {(() => {
-                              const targets = getValidTargetTypes(type);
-                              if (targets.length === 0) return null;
-                              return (
-                                <div className="mt-1.5 pt-1.5 border-t border-gray-700">
-                                  <div className="text-gray-500 text-xs uppercase">Can connect to:</div>
-                                  <div className="text-gray-400 text-xs mt-0.5 flex flex-wrap gap-1">
-                                    {targets.slice(0, 8).map((t) => (
-                                      <span key={t} className="px-1 py-0.5 bg-gray-800 rounded">{t}</span>
-                                    ))}
-                                    {targets.length > 8 && <span className="text-gray-400">+{targets.length - 8}</span>}
-                                  </div>
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {/* Plugins WASM — un item par manifeste chargé dans le
-                    registry backend (sub-graph uniquement : 'Plugin' est
-                    SUB_ONLY → la catégorie est vide en tab global). */}
-                {!isCollapsed && cat.label === 'Plugins' && activeTab === 'sub' && (
-                  <div className="space-y-0.5">
-                    {plugins.map((m) => (
-                      <div
-                        key={m.id}
-                        className="relative"
-                        onMouseEnter={() => setHoveredPaletteNode(`plugin:${m.id}`)}
-                        onMouseLeave={() => setHoveredPaletteNode(null)}
-                      >
-                        <button
-                          onClick={() => addPluginNode(m)}
-                          className="w-full text-left px-2.5 py-1.5 text-white text-xs rounded transition-all hover:translate-x-0.5 flex items-center gap-2"
-                          style={{ background: 'transparent' }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = (NODE_COLORS.yellow ?? '#ca8a04') + '20';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'transparent';
-                          }}
-                        >
-                          <span
-                            className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                            style={{ background: NODE_COLORS.yellow }}
-                          />
-                          <span className="truncate">{m.name}</span>
-                          {m.kind !== 'engine' && (
-                            <span
-                              className="text-[11px] font-bold tracking-wide flex-shrink-0 px-1 rounded bg-sky-900/60 text-sky-300"
-                              title={m.kind === 'modifier' ? 'Modifier: wraps one trajectory (input port)' : 'Composite: combines 2 trajectories (A/B ports)'}
-                            >
-                              {m.kind === 'modifier' ? 'MOD' : '2IN'}
-                            </span>
-                          )}
-                          <span className="text-gray-400 text-[11px] ml-auto flex-shrink-0">v{m.version}</span>
-                        </button>
-                        {hoveredPaletteNode === `plugin:${m.id}` && (
-                          <div className="absolute left-full top-0 ml-2 z-popover w-64 p-2.5 bg-gray-900 border border-gray-700 rounded-lg shadow-xl text-gray-300 text-xs leading-relaxed pointer-events-none">
-                            <div className="text-white font-semibold text-xs mb-1" style={{ color: NODE_COLORS.yellow }}>
-                              {m.name} <span className="text-gray-500 font-normal">v{m.version}</span>
-                            </div>
-                            {m.description ?? 'External WASM plugin'}
-                            {m.author && (
-                              <div className="mt-1 text-gray-500">by {m.author}</div>
-                            )}
-                            <div className="mt-1 text-gray-400 font-mono">id: {m.id}</div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                    {pluginsLoaded && plugins.length === 0 && (
-                      <div className="px-2.5 py-1 text-gray-400 text-xs leading-snug">
-                        No plugin loaded
-                        {pluginsDir && (
-                          <div className="font-mono text-gray-500 break-all mt-0.5" title={pluginsDir}>
-                            {pluginsDir}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {pluginErrors.map((e, i) => (
-                      <div
-                        key={i}
-                        className="px-2.5 text-red-400/80 text-[11px] font-mono truncate"
-                        title={e}
-                      >
-                        ⚠ {e}
-                      </div>
-                    ))}
-                    <button
-                      onClick={async () => {
-                        const selected = await open({
-                          filters: [{ name: 'STAGESPACE plugin', extensions: ['ssx'] }],
-                          multiple: false,
-                        });
-                        if (typeof selected === 'string') void importPlugin(selected);
-                      }}
-                      className="w-full text-left px-2.5 py-1 text-gray-500 hover:text-yellow-400 text-xs rounded transition-colors"
-                      title="Import a .ssx bundle (copy + rescan)"
-                    >
-                      + Import .ssx…
-                    </button>
-                    <button
-                      onClick={() => void reloadPlugins()}
-                      className="w-full text-left px-2.5 py-1 text-gray-500 hover:text-yellow-400 text-xs rounded transition-colors"
-                      title="Rescan the plugins folder"
-                    >
-                      ↻ Rescan plugins
-                    </button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Help footer */}
-        <div className="p-3 border-t border-stagespace-border mt-2">
-          <div className="text-gray-400 text-xs leading-relaxed space-y-1">
-            <div><span className="text-gray-400 font-semibold">Flow:</span> Objects → Engine → Output</div>
-            <div><span className="text-gray-400 font-semibold">Chain:</span> Engine → Modifier → Output</div>
-            <div><span className="text-gray-400 font-semibold">Blend:</span> 2 Engines → Mix → Output</div>
-            <div><span className="text-gray-400 font-semibold">Time:</span> 2 Engines → Sequence/Crossfade</div>
-            <div className="pt-1"><span className="text-gray-400 font-semibold">Edges:</span> <span className="text-gray-300">gray</span> trajectory · <span className="text-amber-500">amber dashes</span> duration · <span className="text-violet-400">violet</span> spline</div>
-            <div className="pt-1 text-gray-500">Drag from a node's bottom handle to connect. Invalid connections are blocked.</div>
-          </div>
-        </div>
-      </div>
-      )}
+      <NodePalette
+        collapsed={paletteCollapsed}
+        onToggleCollapsed={setPaletteCollapsed}
+        onQuickAdd={() => setQuickAddOpen(true)}
+        edgeSelected={!!selectedEdge}
+        activeTab={activeTab}
+        collapsedCats={collapsedCats}
+        onToggleCat={toggleCat}
+        hovered={hoveredPaletteNode}
+        onHover={setHoveredPaletteNode}
+        onAddNode={addNodeByType}
+        onAddPluginNode={addPluginNode}
+        plugins={plugins}
+        pluginsLoaded={pluginsLoaded}
+        pluginsDir={pluginsDir}
+        pluginErrors={pluginErrors}
+        importPlugin={importPlugin}
+        reloadPlugins={reloadPlugins}
+      />
 
       {/* Canvas */}
-      <div className="flex-1 bg-stagespace-bg relative">
-        <ReactFlow
-          nodes={decoratedNodes}
-          edges={decoratedEdges}
-          onNodesChange={
-            activeTab === 'global'
-              ? handleGlobalNodesChange
-              : activeTab === 'signal'
-                ? handleSignalNodesChange
-                : onNodesChange
-          }
-          onEdgesChange={
-            activeTab === 'global'
-              ? handleGlobalEdgesChange
-              : activeTab === 'signal'
-                ? handleSignalEdgesChange
-                : onEdgesChange
-          }
-          onConnect={
-            activeTab === 'global'
-              ? handleGlobalConnect
-              : activeTab === 'signal'
-                ? handleSignalConnect
-                : handleConnect
-          }
-          onConnectStart={onConnectStart}
-          onConnectEnd={onConnectEnd}
-          onNodeDoubleClick={onNodeDoubleClick}
-          onNodeContextMenu={onNodeContextMenu}
-          onNodeClick={() => setNodeMenu(null)}
-          onPaneClick={() => setNodeMenu(null)}
-          onMoveStart={() => setNodeMenu(null)}
-          onDoubleClick={onPaneDoubleClick}
-          isValidConnection={checkValidConnection}
-          nodeTypes={nodeTypes}
-          fitView
-          /* minZoom bas : les gros graphes doivent pouvoir se dézoomer
-             largement pour la navigation d'ensemble (défaut 0.5 = bloquant). */
-          minZoom={0.15}
-          maxZoom={2}
-          deleteKeyCode={['Delete', 'Backspace']}
-          className="!bg-stagespace-bg"
-        >
-          <Background color="#1e1e2e" gap={24} />
-          <Controls showInteractive={false} />
-          <MiniMap
-            nodeColor={(n) => getCategoryColor((n.data.type ?? '') as NodeType)}
-            maskColor="rgba(10,10,15,0.7)"
-          />
-        </ReactFlow>
-
-        {displayNodes.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="text-center">
-              <div className="text-gray-400 text-sm mb-1">Empty graph</div>
-              <div className="text-gray-500 text-xs">
-                {activeTab === 'global'
-                  ? 'Click nodes in the palette to add them'
-                  : 'Click nodes in the palette to add them'}
-              </div>
-              {activeTab === 'global' ? (
-                <div className="text-gray-500 text-xs mt-2">Start with: Input → Scale → Rotate → Offset → Output</div>
-              ) : activeTab === 'signal' ? (
-                <div className="text-gray-500 text-xs mt-2">Start with: SignalLfo → SignalMap → SignalOut</div>
-              ) : (
-                <div className="text-gray-500 text-xs mt-2">Start with: Objects → Duration → Circular → Output</div>
-              )}
-            </div>
-          </div>
-        )}
-
+      <GraphCanvas
+        nodes={decoratedNodes}
+        edges={decoratedEdges}
+        onNodesChange={
+          activeTab === 'global' ? globalGraph.onNodesChange
+            : activeTab === 'signal' ? signalGraph.onNodesChange
+            : onNodesChange
+        }
+        onEdgesChange={
+          activeTab === 'global' ? globalGraph.onEdgesChange
+            : activeTab === 'signal' ? signalGraph.onEdgesChange
+            : onEdgesChange
+        }
+        onConnect={
+          activeTab === 'global' ? globalGraph.onConnect
+            : activeTab === 'signal' ? signalGraph.onConnect
+            : handleConnect
+        }
+        onConnectStart={onConnectStart}
+        onConnectEnd={onConnectEnd}
+        onNodeDoubleClick={onNodeDoubleClick}
+        onNodeContextMenu={onNodeContextMenu}
+        onDismissNodeMenu={() => setNodeMenu(null)}
+        onPaneDoubleClick={onPaneDoubleClick}
+        isValidConnection={checkValidConnection}
+        nodeTypes={nodeTypes}
+        contextKey={`${activeTab}:${editingSlotId ?? 'global'}`}
+        displayNodes={displayNodes}
+        emptyHint={
+          activeTab === 'global'
+            ? 'Click nodes in the palette — Start with: Input → Scale → Rotate → Offset → Output'
+            : activeTab === 'signal'
+              ? 'Click nodes in the palette — Start with: SignalLfo → SignalMap → SignalOut'
+              : 'Click nodes in the palette — Start with: Objects → Duration → Circular → Output'
+        }
+        graphIssues={graphIssues}
+        issuesOpen={issuesOpen}
+        onToggleIssues={() => setIssuesOpen((o) => !o)}
+      >
         {quickAddOpen && (
           <QuickAddModal
             types={allowedTypes}
@@ -904,7 +684,7 @@ export const NodeEditor: React.FC = () => {
             Connecting from <span className="text-white font-bold">{connectingFrom}</span> — drag to a valid target
           </div>
         )}
-      </div>
+      </GraphCanvas>
       </div>
     </div>
   );

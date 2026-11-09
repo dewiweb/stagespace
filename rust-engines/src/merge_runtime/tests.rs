@@ -22,7 +22,7 @@ fn const_signal_fn(target: &str, value: f64, amount: f64) -> crate::signal_compi
     g.add_edge(crate::graph::Edge {
         from: c.id,
         to: out.id,
-        from_port: "output".to_string(),
+        from_port: "out".to_string(),
         to_port: "signal".to_string(),
     });
     crate::signal_compiler::compile_signal_graph(&g).expect("signal graph compiles")
@@ -249,7 +249,14 @@ fn test_register_unregister_move() {
     let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
     let rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
     let buffer = Arc::new(PositionBuffer::new());
-    rt.register_move("move1".to_string(), buffer, vec![1, 2], vec![0, 1], false);
+    rt.register_move(
+        "move1".to_string(),
+        buffer,
+        vec![1, 2],
+        vec![0, 1],
+        false,
+        crate::EndMode::default(),
+    );
     assert_eq!(rt.active_moves.read().unwrap().len(), 1);
     rt.unregister_move("move1");
     assert_eq!(rt.active_moves.read().unwrap().len(), 0);
@@ -321,20 +328,20 @@ fn test_set_graph_effects_replaces_in_block() {
     .unwrap();
 
     // Premier set : 1 zone + 1 modulation
-    rt.set_graph_effects(vec![zone.clone()], vec![rule], false, None);
+    rt.set_graph_effects(vec![zone.clone()], vec![rule], None);
     let (z, m) = rt.graph_effects();
     assert_eq!(z.len(), 1);
     assert_eq!(m.len(), 1);
 
     // Deuxième set : remplace en bloc (update du graphe sans effets → vide)
-    rt.set_graph_effects(Vec::new(), Vec::new(), false, None);
+    rt.set_graph_effects(Vec::new(), Vec::new(), None);
     let (z, m) = rt.graph_effects();
     assert!(z.is_empty());
     assert!(m.is_empty());
 
     // Les effets manuels ne sont pas touchés par set_graph_effects
     rt.add_zone(zone).unwrap();
-    rt.set_graph_effects(Vec::new(), Vec::new(), false, None);
+    rt.set_graph_effects(Vec::new(), Vec::new(), None);
     assert_eq!(rt.zones().len(), 1);
 }
 
@@ -379,7 +386,14 @@ fn test_failing_sink_surfaces_osc_error_rate() {
             }
         })
     };
-    rt.register_move("m1".to_string(), buffer, vec![1], vec![0], false);
+    rt.register_move(
+        "m1".to_string(),
+        buffer,
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::default(),
+    );
     rt.start().unwrap();
     // Perf stats ne se rafraîchissent que toutes les ~500 ms.
     std::thread::sleep(std::time::Duration::from_millis(900));
@@ -414,7 +428,14 @@ fn test_thread_died_marks_liveness() {
             }
         })
     };
-    rt.register_move("m1".to_string(), buffer, vec![1], vec![0], false);
+    rt.register_move(
+        "m1".to_string(),
+        buffer,
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::default(),
+    );
     rt.start().unwrap();
     std::thread::sleep(std::time::Duration::from_millis(300));
     writer.join().unwrap();
@@ -434,7 +455,14 @@ fn test_fresh_move_survives_stale_grace() {
     let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
     let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
     let buffer = Arc::new(PositionBuffer::new()); // jamais écrit dans le test
-    rt.register_move("fresh".to_string(), buffer, vec![1], vec![0], false);
+    rt.register_move(
+        "fresh".to_string(),
+        buffer,
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::default(),
+    );
     rt.start().unwrap();
     // ~70 frames à 60 FPS — dépasse largement l'ancienne limite de 30.
     std::thread::sleep(std::time::Duration::from_millis(1200));
@@ -462,6 +490,7 @@ fn test_stale_kill_publishes_id_and_buffer() {
         vec![1],
         vec![0],
         false,
+        crate::EndMode::default(),
     );
     rt.start().unwrap();
 
@@ -568,7 +597,14 @@ fn test_signal_deltas_reach_sink_e2e() {
     rt.swap_signal_fn(const_signal_fn("scale", 1.0, 1.0));
 
     let b = Arc::new(PositionBuffer::new());
-    rt.register_move("m1".to_string(), b.clone(), vec![1], vec![0], false);
+    rt.register_move(
+        "m1".to_string(),
+        b.clone(),
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::default(),
+    );
     let w = spawn_writer(&b, 0, nalgebra::Vector3::new(2.0, 0.0, 0.0), 150);
     rt.start().unwrap();
     std::thread::sleep(std::time::Duration::from_millis(500));
@@ -596,12 +632,26 @@ fn test_moveref_selects_single_move_positions() {
     let captured = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
     rt.set_sink(Box::new(CaptureSink(captured.clone())));
     rt.set_osc_ids(vec![1, 2]);
-    rt.set_graph_effects(Vec::new(), Vec::new(), false, Some("m2".to_string()));
+    rt.set_graph_effects(Vec::new(), Vec::new(), Some("m2".to_string()));
 
     let b1 = Arc::new(PositionBuffer::new());
     let b2 = Arc::new(PositionBuffer::new());
-    rt.register_move("m1".to_string(), b1.clone(), vec![1], vec![0], false);
-    rt.register_move("m2".to_string(), b2.clone(), vec![2], vec![1], false);
+    rt.register_move(
+        "m1".to_string(),
+        b1.clone(),
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::default(),
+    );
+    rt.register_move(
+        "m2".to_string(),
+        b2.clone(),
+        vec![2],
+        vec![1],
+        false,
+        crate::EndMode::default(),
+    );
     let w1 = spawn_writer(&b1, 0, nalgebra::Vector3::new(1.0, 0.0, 0.0), 150);
     let w2 = spawn_writer(&b2, 0, nalgebra::Vector3::new(9.0, 9.0, 9.0), 150);
     rt.start().unwrap();
@@ -640,11 +690,45 @@ fn test_barycenter_recomputes_pivot() {
         m
     });
     rt.macros().set_scale(2.0);
-    // Barycenter actif via les effets du graph global
-    rt.set_graph_effects(Vec::new(), Vec::new(), true, None);
+    // Barycenter dans la chaîne compilée : les transforms qui le suivent
+    // pivotent autour de l'isobarycentre des track_positions.
+    let mut g = crate::graph::Graph::new();
+    let (m, b, s, o) = (
+        crate::graph::Node::new(crate::graph::NodeType::Merge),
+        crate::graph::Node::new(crate::graph::NodeType::Barycenter),
+        crate::graph::Node::new(crate::graph::NodeType::Scale),
+        crate::graph::Node::new(crate::graph::NodeType::Output),
+    );
+    let (m_id, b_id, s_id, o_id) = (m.id, b.id, s.id, o.id);
+    for n in [m, b, s, o] {
+        g.add_node(n);
+    }
+    for (f, t) in [(m_id, b_id), (b_id, s_id), (s_id, o_id)] {
+        g.add_edge(crate::graph::Edge {
+            from: f,
+            to: t,
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
+        });
+    }
+    let pp = crate::post_process_compiler::compile_post_process(
+        crate::post_process_compiler::PostProcessCompileParams {
+            graph: g,
+            macros: rt.macros(),
+        },
+    )
+    .unwrap();
+    rt.swap_post_process_fn(pp);
 
     let b = Arc::new(PositionBuffer::new());
-    rt.register_move("m1".to_string(), b.clone(), vec![1], vec![0], false);
+    rt.register_move(
+        "m1".to_string(),
+        b.clone(),
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::default(),
+    );
     let w = spawn_writer(&b, 0, nalgebra::Vector3::new(4.0, 0.0, 0.0), 150);
     rt.start().unwrap();
     std::thread::sleep(std::time::Duration::from_millis(500));
@@ -657,5 +741,338 @@ fn test_barycenter_recomputes_pivot() {
     assert!(
         (pos.x - 5.0).abs() < 1e-6,
         "barycenter doit pivoter autour de (3,0,0): {pos:?}"
+    );
+}
+
+/// Bench de charge du merge : 8 moves × 8 objets (64 positions/frame,
+/// couvrant 24 objets) + transition active + écritures OSC-IN, ~4 s à
+/// 60 fps. Vérifie que le cadencement tient (pas de frames perdues) et
+/// mesure le coût hot-path réel (`merge_frame_us` / `merge_lock_us`).
+/// Long (~4 s) : `cargo test bench_merge_under_load -- --ignored`.
+#[test]
+#[ignore = "load bench (~4s wall clock) — run on demand"]
+fn bench_merge_under_load() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::{Duration, Instant};
+
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7999, sender, 60.0).unwrap();
+    rt.set_osc_ids((1..=24).collect());
+    rt.set_osc_armed(true);
+
+    // 8 moves × 8 tracks = 64 positions/frame sur 24 objets — charge
+    // réaliste d'un show complet (WFS + couronne KNN).
+    let mut buffers = Vec::new();
+    for m in 0..8usize {
+        let buf = Arc::new(PositionBuffer::new());
+        let idx: Vec<usize> = (0..8).map(|i| (m * 8 + i) % 24).collect();
+        let osc: Vec<u32> = idx.iter().map(|&i| (i + 1) as u32).collect();
+        rt.register_move(
+            format!("mv{m}"),
+            buf.clone(),
+            osc,
+            idx,
+            false,
+            crate::EndMode::default(),
+        );
+        buffers.push(buf);
+    }
+
+    rt.start().expect("merge start");
+
+    // 8 writers simulent les workers à ~60 fps.
+    let stop = Arc::new(AtomicBool::new(false));
+    let mut handles = Vec::new();
+    for (m, buf) in buffers.iter().enumerate() {
+        let buf = buf.clone();
+        let stop = stop.clone();
+        handles.push(std::thread::spawn(move || {
+            let mut t = 0.0f64;
+            while !stop.load(Ordering::Relaxed) {
+                let pos: Vec<(usize, nalgebra::Vector3<f64>)> = (0..8)
+                    .map(|i| {
+                        (
+                            (m * 8 + i) % 24,
+                            nalgebra::Vector3::new(
+                                (t + i as f64).sin() * 3.0,
+                                (t * 0.7 + i as f64).cos() * 3.0,
+                                (t * 1.3 + m as f64).sin() * 2.0,
+                            ),
+                        )
+                    })
+                    .collect();
+                buf.write(pos);
+                t += 1.0 / 60.0;
+                std::thread::sleep(Duration::from_millis(16));
+            }
+        }));
+    }
+
+    // OSC-IN simulé : canaux + position manuelle à ~30 Hz (fader live).
+    for _ in 0..60 {
+        rt.set_object_channel(0, crate::osc_sender::SpatialChannel::Gain, 0.7);
+        rt.set_manual_position(5, [1.0, 2.0, 0.0]);
+        std::thread::sleep(Duration::from_millis(33));
+    }
+
+    // Transition 1.5 s à mi-parcours — mesure le coût Layer::Blend.
+    rt.begin_transition(1.5);
+    let t0 = Instant::now();
+    std::thread::sleep(Duration::from_secs(2));
+
+    stop.store(true, Ordering::Relaxed);
+    for h in handles {
+        let _ = h.join();
+    }
+
+    let stats = rt.get_perf_stats();
+    let frames = rt.merge_frame_count();
+    rt.stop();
+
+    eprintln!(
+        "[bench] frames={frames} elapsed={:.1}s merge_frame_us={:.0} lock_us={:.0}",
+        t0.elapsed().as_secs_f64(),
+        stats.merge_frame_us,
+        stats.merge_lock_us
+    );
+    // Cadencement : ~4 s à 60 fps → ≥200 frames attendues (tolérance CI).
+    assert!(
+        frames >= 200,
+        "merge essoufflé sous charge : {frames} frames"
+    );
+    // Budget : <4 ms de travail par frame à 60 fps (≈25% du quantum).
+    assert!(
+        stats.merge_frame_us < 4_000.0,
+        "merge_frame_us={:.0}µs dépasse le budget 4ms/frame",
+        stats.merge_frame_us
+    );
+    // Contention : le wait total ne doit pas dominer le travail.
+    assert!(
+        stats.merge_lock_us < stats.merge_frame_us,
+        "lock_us={:.0} ≥ frame_us={:.0} — la contention domine",
+        stats.merge_lock_us,
+        stats.merge_frame_us
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// P3 — verrouillage des sémantiques fixées par l'audit regard-neuf.
+// Ces chemins passaient zéro test : un yaw inversé, un disarm qui émet,
+// une régression d'index étaient invisibles.
+// ═══════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_osc_armed_false_is_total_silence() {
+    // P3/audit : désarmé = zéro paquet, même avec un move actif. Un
+    // disarm qui émettrait quand même passait invisible avant ce test.
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    let captured = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+    rt.set_sink(Box::new(CaptureSink(captured.clone())));
+    rt.set_osc_ids(vec![1]);
+    rt.set_osc_armed(false);
+
+    let b = Arc::new(PositionBuffer::new());
+    rt.register_move(
+        "m1".to_string(),
+        b.clone(),
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::default(),
+    );
+    let w = spawn_writer(&b, 0, nalgebra::Vector3::new(5.0, 5.0, 5.0), 150);
+    rt.start().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(400));
+    rt.stop();
+    w.join().unwrap();
+
+    assert!(
+        captured
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_empty(),
+        "désarmé = silence total, aucun paquet ne doit partir"
+    );
+}
+
+#[test]
+fn test_venue_map_applied_to_send_path() {
+    // P3 : venue_map (scale + offset + yaw) transforme les positions
+    // canoniques vers la salle — pos (1,0,0) avec scale×2 + offset
+    // (10,0,0) + yaw 0 → (12,0,0) au renderer.
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    let captured = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+    rt.set_sink(Box::new(CaptureSink(captured.clone())));
+    rt.set_osc_ids(vec![1]);
+    rt.set_venue_map(Some(([2.0, 2.0, 2.0], [10.0, 0.0, 0.0], 0.0)));
+
+    let b = Arc::new(PositionBuffer::new());
+    rt.register_move(
+        "m1".to_string(),
+        b.clone(),
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::default(),
+    );
+    let w = spawn_writer(&b, 0, nalgebra::Vector3::new(1.0, 0.0, 0.0), 150);
+    rt.start().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(400));
+    rt.stop();
+    w.join().unwrap();
+
+    let map = captured.lock().unwrap_or_else(|e| e.into_inner());
+    let pos = map.get(&1).copied().expect("aucune position capturée");
+    assert!(
+        (pos.x - 12.0).abs() < 1e-6 && pos.y.abs() < 1e-6 && pos.z.abs() < 1e-6,
+        "venue map ×2 + offset(10) : attendu (12,0,0), reçu {pos:?}"
+    );
+}
+
+#[test]
+fn test_venue_map_yaw_rotates() {
+    // Le yaw tourne le monde vers la salle — pos (1,0,0) avec yaw 90°
+    // → (0,1,0) en salle (rotation Z positive, repère droit).
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    let captured = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+    rt.set_sink(Box::new(CaptureSink(captured.clone())));
+    rt.set_osc_ids(vec![1]);
+    rt.set_venue_map(Some((
+        [1.0, 1.0, 1.0],
+        [0.0, 0.0, 0.0],
+        std::f64::consts::FRAC_PI_2,
+    )));
+
+    let b = Arc::new(PositionBuffer::new());
+    rt.register_move(
+        "m1".to_string(),
+        b.clone(),
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::default(),
+    );
+    let w = spawn_writer(&b, 0, nalgebra::Vector3::new(1.0, 0.0, 0.0), 150);
+    rt.start().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(400));
+    rt.stop();
+    w.join().unwrap();
+
+    let map = captured.lock().unwrap_or_else(|e| e.into_inner());
+    let pos = map.get(&1).copied().expect("aucune position capturée");
+    assert!(
+        pos.x.abs() < 1e-6 && (pos.y - 1.0).abs() < 1e-6,
+        "yaw 90° : attendu ≈(0,1,0), reçu {pos:?}"
+    );
+}
+
+#[test]
+fn test_manual_position_emits_without_move() {
+    // P1.1 : une position manuelle émet même SANS move couvrant l'objet —
+    // la reprise opérateur sur un objet libre n'est plus un no-op.
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    let captured = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+    rt.set_sink(Box::new(CaptureSink(captured.clone())));
+    rt.set_osc_ids(vec![1, 2]);
+    rt.set_manual_position(1, [3.0, 4.0, 5.0]); // obj_index 1 → osc_id 2
+
+    // Un move sur l'autre objet pour faire tourner la boucle.
+    let b = Arc::new(PositionBuffer::new());
+    rt.register_move(
+        "m1".to_string(),
+        b.clone(),
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::default(),
+    );
+    let w = spawn_writer(&b, 0, nalgebra::Vector3::new(0.0, 0.0, 0.0), 150);
+    rt.start().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(400));
+    rt.stop();
+    w.join().unwrap();
+
+    let map = captured.lock().unwrap_or_else(|e| e.into_inner());
+    assert_eq!(
+        map.get(&2).copied(),
+        Some(nalgebra::Vector3::new(3.0, 4.0, 5.0)),
+        "la position manuelle de l'objet sans move doit être émise: {map:?}"
+    );
+}
+
+#[test]
+fn test_end_mode_hold_writes_manual_position() {
+    // P1.4/Hold : à la fin d'un move EndMode::Hold, la dernière position
+    // devient une position manuelle (l'objet reste où le move l'a laissé).
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    let captured = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+    rt.set_sink(Box::new(CaptureSink(captured.clone())));
+    rt.set_osc_ids(vec![1]);
+
+    let b = Arc::new(PositionBuffer::new());
+    rt.register_move(
+        "m1".to_string(),
+        b.clone(),
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::Hold,
+    );
+    b.write(vec![(0usize, nalgebra::Vector3::new(7.0, 8.0, 9.0))]);
+    // Plus d'écriture → stale-kill (30 frames) → EndMode::Hold fige la
+    // dernière position en manuelle. C'est LE chemin réel (unregister_move
+    // n'applique pas le end_mode — kill manuel ≠ fin naturelle).
+    rt.start().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(1500));
+    rt.stop();
+
+    assert_eq!(
+        rt.manual_position(0),
+        Some([7.0, 8.0, 9.0]),
+        "Hold : la dernière position du move doit devenir manuelle"
+    );
+}
+
+#[test]
+fn test_non_identity_obj_index_mapping() {
+    // P3 : obj_index ≠ position dans la liste — un mapping .hol
+    // [track 5, track 9, track 12] : obj_index 1 → osc_id 9, jamais 2.
+    // Une régression `tid - 1` enverrait aux mauvaises tracks.
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    let captured = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+    rt.set_sink(Box::new(CaptureSink(captured.clone())));
+    rt.set_osc_ids(vec![5, 9, 12]); // mapping non-identity
+    rt.set_manual_position(1, [1.0, 2.0, 3.0]);
+
+    let b = Arc::new(PositionBuffer::new());
+    rt.register_move(
+        "m1".to_string(),
+        b.clone(),
+        vec![5],
+        vec![0],
+        false,
+        crate::EndMode::default(),
+    );
+    let w = spawn_writer(&b, 0, nalgebra::Vector3::new(0.0, 0.0, 0.0), 150);
+    rt.start().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(400));
+    rt.stop();
+    w.join().unwrap();
+
+    let map = captured.lock().unwrap_or_else(|e| e.into_inner());
+    assert_eq!(
+        map.get(&9).copied(),
+        Some(nalgebra::Vector3::new(1.0, 2.0, 3.0)),
+        "obj_index 1 doit résoudre vers osc_id 9 — pas 2: {map:?}"
+    );
+    assert!(
+        !map.contains_key(&2),
+        "aucun envoi ne doit partir vers l'osc_id 2 (off-by-one): {map:?}"
     );
 }

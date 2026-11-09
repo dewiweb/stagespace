@@ -1,3 +1,6 @@
+---
+trigger: always_on
+---
 # Règle : Modularisation des fichiers > 500 lignes
 
 ## Objectif

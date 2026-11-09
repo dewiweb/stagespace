@@ -32,6 +32,9 @@ export interface ZoneParams {
   falloff?: number | null;
   channels: Record<string, number>;
   objects?: number[] | null;
+  /// Effet positionnel (repel/attract/dampen/vortex) — déplace les objets
+  /// mergés blendé par l'influence SDF de la zone.
+  effect?: { kind: 'repel' | 'attract' | 'dampen' | 'vortex'; strength: number } | null;
 }
 
 /// Payload pour `add_channel_modulation`.
@@ -90,7 +93,7 @@ export function zoneToParams(zone: Zone, center: [number, number, number]): Zone
     Object.entries(zone.channels).filter(([, v]) => v !== null && v !== undefined),
   ) as Record<string, number>;
   if (zone.shape.shape === 'sphere') {
-    return { shape: 'sphere', a: center, radius: zone.shape.radius, b: null, falloff: zone.falloff, channels, objects: zone.objects ?? null };
+    return { shape: 'sphere', a: center, radius: zone.shape.radius, b: null, falloff: zone.falloff, channels, objects: zone.objects ?? null, effect: zone.effect ?? null };
   }
   const half = (k: number) => (zone.shape.shape === 'box' ? (zone.shape.max[k] - zone.shape.min[k]) / 2 : 0);
   return {
@@ -101,6 +104,7 @@ export function zoneToParams(zone: Zone, center: [number, number, number]): Zone
     falloff: zone.falloff,
     channels,
     objects: zone.objects ?? null,
+    effect: zone.effect ?? null,
   };
 }
 
@@ -111,7 +115,7 @@ export function zoneToParamsResized(zone: Zone, opts: { radius?: number; scale?:
     Object.entries(zone.channels).filter(([, v]) => v !== null && v !== undefined),
   ) as Record<string, number>;
   if (zone.shape.shape === 'sphere') {
-    return { shape: 'sphere', a: zone.shape.center, radius: Math.max(opts.radius ?? zone.shape.radius, 0.1), b: null, falloff: zone.falloff, channels, objects: zone.objects ?? null };
+    return { shape: 'sphere', a: zone.shape.center, radius: Math.max(opts.radius ?? zone.shape.radius, 0.1), b: null, falloff: zone.falloff, channels, objects: zone.objects ?? null, effect: zone.effect ?? null };
   }
   const s = opts.scale ?? 1;
   const cx = (zone.shape.shape === 'box' ? (zone.shape.min[0] + zone.shape.max[0]) / 2 : 0);
@@ -127,6 +131,7 @@ export function zoneToParamsResized(zone: Zone, opts: { radius?: number; scale?:
     falloff: zone.falloff,
     channels,
     objects: zone.objects ?? null,
+    effect: zone.effect ?? null,
   };
 }
 

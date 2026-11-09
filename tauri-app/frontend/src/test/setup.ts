@@ -32,8 +32,9 @@ vi.mock('../store/useMoveEditorStore', () => ({
   useMoveEditorStore: useMoveEditorStoreHook,
 }));
 
-// Mock safeInvoke/safeListen — captures invoke calls
+// Mock safeInvoke/safeListen — captures invoke calls AND event listeners
 const invokeCalls: Array<{ cmd: string; args?: Record<string, any> }> = [];
+const listeners = new Map<string, Array<(e: { payload: any }) => void>>();
 const invokeResponses = new Map<string, any>();
 vi.mock('../utils/tauri', () => ({
   safeInvoke: async <T = any>(cmd: string, args?: Record<string, any>): Promise<T> => {
@@ -48,9 +49,22 @@ vi.mock('../utils/tauri', () => ({
     if (cmd === 'load_graph_from_file') return { nodes: [], edges: [] } as unknown as T;
     return undefined as unknown as T;
   },
-  safeListen: async () => () => {},
+  safeListen: async (event: string, handler: (e: { payload: any }) => void) => {
+    // Les listeners sont enregistrés — les tests peuvent émettre via
+    // emitMockEvent (ex: show-control → useShowControl → liveActions).
+    const existing = listeners.get(event);
+    if (existing) existing.push(handler);
+    else listeners.set(event, [handler]);
+    return () => {
+      const arr = listeners.get(event) ?? [];
+      const i = arr.indexOf(handler);
+      if (i >= 0) arr.splice(i, 1);
+    };
+  },
   checkTauri: () => true,
   feLog: (_msg: string) => { /* no-op in tests */ },
+  registerBackendHealth: (_h: { down: () => void; up: () => void }) => { /* no-op in tests */ },
+  silentCatch: (_e: unknown) => { /* no-op in tests */ },
 }));
 
 // Mock @tauri-apps/api/core and event (in case any code imports directly)
@@ -60,8 +74,13 @@ vi.mock('@tauri-apps/api/core', () => ({
     return undefined;
   },
 }));
+// emit() est capturé — les tests vérifient le broadcast live:state.
+const emitCalls: Array<{ event: string; payload: any }> = [];
 vi.mock('@tauri-apps/api/event', () => ({
   listen: async () => () => {},
+  emit: async (event: string, payload: any) => {
+    emitCalls.push({ event, payload });
+  },
 }));
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({
@@ -85,6 +104,22 @@ export function getInvokeCalls(): Array<{ cmd: string; args?: Record<string, any
 export function clearInvokeCalls(): void {
   invokeCalls.length = 0;
   invokeResponses.clear();
+}
+/// Émet un event mocké vers les listeners enregistrés (safeListen).
+export function emitMockEvent(event: string, payload: any): void {
+  for (const h of listeners.get(event) ?? []) h({ payload });
+}
+/// Oublie tous les listeners enregistrés — isolation entre tests.
+export function clearListeners(): void {
+  listeners.clear();
+}
+/// Accès aux emit() capturés (broadcast live:state de la fenêtre
+/// principale vers les détachées).
+export function getEmitCalls(): Array<{ event: string; payload: any }> {
+  return emitCalls;
+}
+export function clearEmitCalls(): void {
+  emitCalls.length = 0;
 }
 /// Configure la réponse mockée d'une commande IPC (ex: load_graph_from_file)
 export function setInvokeResponse(cmd: string, response: any): void {

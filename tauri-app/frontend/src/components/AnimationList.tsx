@@ -3,6 +3,7 @@ import { Hexagon, X } from 'lucide-react';
 import { useMoveEditorStore, Move } from '../store/useMoveEditorStore';
 import { useGraphStore } from '../store/useGraphStore';
 import EmptyState from './ui/EmptyState';
+import { ConfirmModal } from './ui/ConfirmModal';
 import { SHAPE_PRESETS, type ShapePreset } from '../utils/shapePresets';
 
 // Icône pour une animation — dérivée du node engine principal du graphe
@@ -33,6 +34,7 @@ const CATEGORY_LABELS: Record<ShapePreset['category'], { label: string; color: s
   layers: { label: 'Layers', color: 'text-purple-400' },
   spline: { label: 'Splines', color: 'text-cyan-400' },
   reactive: { label: 'Reactive', color: 'text-yellow-400' },
+  smalley: { label: 'Smalley', color: 'text-orange-400' },
 };
 
 const CATEGORY_ORDER: ShapePreset['category'][] = ['orbits', 'gestures', 'shaped', 'transitions', 'physics', 'layers', 'spline', 'reactive'];
@@ -49,6 +51,7 @@ export default function AnimationList() {
   const editingSlotId = useGraphStore((s) => s.editingSlotId);
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editName, setEditName] = React.useState('');
+  const [confirmDelete, setConfirmDelete] = React.useState<Move | null>(null);
   const [collapsedCats, setCollapsedCats] = React.useState<Set<string>>(new Set(['shaped', 'transitions', 'physics', 'layers', 'spline', 'reactive']));
 
   const startRename = (anim: Move) => {
@@ -91,8 +94,6 @@ export default function AnimationList() {
       <div className="flex-1 overflow-y-auto">
         {/* ═══ TEMPLATES (built-in presets) ═══ */}
         <div className="p-2 space-y-1">
-          <div className="text-gray-500 text-xs uppercase tracking-wider mb-1 px-1">Templates</div>
-
           {presetsByCategory.map((group) => {
             const isCollapsed = collapsedCats.has(group.cat);
             const catLabel = CATEGORY_LABELS[group.cat];
@@ -218,7 +219,7 @@ export default function AnimationList() {
                       </span>
                     )}
                   </div>
-                  <button onClick={(e) => { e.stopPropagation(); deleteAnimation(anim.id); }}
+                  <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(anim); }}
                     className="text-red-400 hover:text-red-300 text-xs opacity-0 group-hover:opacity-100 transition-opacity"><X size={10} /></button>
                 </div>
               );
@@ -235,6 +236,16 @@ export default function AnimationList() {
           </div>
         </div>
       </div>
+
+      {confirmDelete && (
+        <ConfirmModal
+          title="Delete template"
+          message={<>Delete <b>{confirmDelete.name}</b> permanently? This can't be undone.</>}
+          confirmLabel="Delete"
+          onConfirm={() => { deleteAnimation(confirmDelete.id); setConfirmDelete(null); }}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
     </div>
   );
 }

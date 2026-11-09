@@ -6,7 +6,7 @@ export interface ShapePreset {
   name: string;
   icon: string;
   description: string;
-  category: 'orbits' | 'gestures' | 'shaped' | 'transitions' | 'physics' | 'layers' | 'spline' | 'reactive';
+  category: 'orbits' | 'gestures' | 'shaped' | 'transitions' | 'physics' | 'layers' | 'spline' | 'reactive' | 'smalley';
   build: (nObjects: number) => { nodes: Node[]; edges: Edge[] };
 }
 
@@ -24,7 +24,7 @@ const makeNode = (
   data: { label: type, type, params },
 });
 
-const makeEdge = (from: string, to: string, fromPort = 'output', toPort = 'input'): Edge => ({
+const makeEdge = (from: string, to: string, fromPort = 'out', toPort = 'in'): Edge => ({
   id: `e-${from}-${to}-${fromPort}-${toPort}`,
   source: from,
   target: to,
@@ -50,8 +50,8 @@ const baseFlow = (
 
   const nodes = [objects, durationNode, engine, output];
   const edges = [
-    makeEdge(objects.id, engine.id, 'output', 'input'),
-    makeEdge(durationNode.id, engine.id, 'output', 'duration'),
+    makeEdge(objects.id, engine.id, 'objects', 'objects'),
+    makeEdge(durationNode.id, engine.id, 'duration', 'duration'),
   ];
 
   // Insert extra nodes between engine and output
@@ -60,14 +60,14 @@ const baseFlow = (
   extraNodes.forEach((extra, i) => {
     const node = makeNode(extra.type, { x: 480 + i * spacing, y: 180 }, extra.params ?? {});
     nodes.push(node);
-    edges.push(makeEdge(prevId, node.id, 'output', 'input'));
+    edges.push(makeEdge(prevId, node.id, 'out', 'in'));
     prevId = node.id;
   });
-  edges.push(makeEdge(prevId, output.id, 'output', 'input'));
+  edges.push(makeEdge(prevId, output.id, 'out', 'in'));
 
   // Add extra edges (e.g. for composites)
   extraEdges.forEach((e) => {
-    edges.push(makeEdge(e.from, e.to, e.fromPort ?? 'output', e.toPort ?? 'input'));
+    edges.push(makeEdge(e.from, e.to, e.fromPort ?? 'out', e.toPort ?? 'in'));
   });
 
   return { nodes, edges };
@@ -93,13 +93,13 @@ const binaryComposite = (
   return {
     nodes: [objects, durationNode, engineA, engineB, composite, output],
     edges: [
-      makeEdge(objects.id, engineA.id, 'output', 'input'),
-      makeEdge(objects.id, engineB.id, 'output', 'input'),
-      makeEdge(durationNode.id, engineA.id, 'output', 'duration'),
-      makeEdge(durationNode.id, engineB.id, 'output', 'duration'),
-      makeEdge(engineA.id, composite.id, 'output', 'input_a'),
-      makeEdge(engineB.id, composite.id, 'output', 'input_b'),
-      makeEdge(composite.id, output.id, 'output', 'input'),
+      makeEdge(objects.id, engineA.id, 'objects', 'objects'),
+      makeEdge(objects.id, engineB.id, 'objects', 'objects'),
+      makeEdge(durationNode.id, engineA.id, 'duration', 'duration'),
+      makeEdge(durationNode.id, engineB.id, 'duration', 'duration'),
+      makeEdge(engineA.id, composite.id, 'out', 'a'),
+      makeEdge(engineB.id, composite.id, 'out', 'b'),
+      makeEdge(composite.id, output.id, 'out', 'in'),
     ],
   };
 };
@@ -462,10 +462,10 @@ export const SHAPE_PRESETS: ShapePreset[] = [
       return {
         nodes: [objects, duration, drawSpline, evalSpline, output],
         edges: [
-          makeEdge(objects.id, evalSpline.id, 'output', 'input'),
-          makeEdge(duration.id, evalSpline.id, 'output', 'duration'),
-          makeEdge(drawSpline.id, evalSpline.id, 'output', 'spline'),
-          makeEdge(evalSpline.id, output.id, 'output', 'input'),
+          makeEdge(objects.id, evalSpline.id, 'objects', 'objects'),
+          makeEdge(duration.id, evalSpline.id, 'duration', 'duration'),
+          makeEdge(drawSpline.id, evalSpline.id, 'spline', 'spline'),
+          makeEdge(evalSpline.id, output.id, 'out', 'in'),
         ],
       };
     },
@@ -494,10 +494,10 @@ export const SHAPE_PRESETS: ShapePreset[] = [
       return {
         nodes: [objects, duration, drawSpline, trimSpline, output],
         edges: [
-          makeEdge(objects.id, trimSpline.id, 'output', 'input'),
-          makeEdge(duration.id, trimSpline.id, 'output', 'duration'),
-          makeEdge(drawSpline.id, trimSpline.id, 'output', 'spline'),
-          makeEdge(trimSpline.id, output.id, 'output', 'input'),
+          makeEdge(objects.id, trimSpline.id, 'objects', 'objects'),
+          makeEdge(duration.id, trimSpline.id, 'duration', 'duration'),
+          makeEdge(drawSpline.id, trimSpline.id, 'spline', 'spline'),
+          makeEdge(trimSpline.id, output.id, 'out', 'in'),
         ],
       };
     },
@@ -527,10 +527,10 @@ export const SHAPE_PRESETS: ShapePreset[] = [
       return {
         nodes: [objects, duration, drawSpline, offsetSpline, output],
         edges: [
-          makeEdge(objects.id, offsetSpline.id, 'output', 'input'),
-          makeEdge(duration.id, offsetSpline.id, 'output', 'duration'),
-          makeEdge(drawSpline.id, offsetSpline.id, 'output', 'spline'),
-          makeEdge(offsetSpline.id, output.id, 'output', 'input'),
+          makeEdge(objects.id, offsetSpline.id, 'objects', 'objects'),
+          makeEdge(duration.id, offsetSpline.id, 'duration', 'duration'),
+          makeEdge(drawSpline.id, offsetSpline.id, 'spline', 'spline'),
+          makeEdge(offsetSpline.id, output.id, 'out', 'in'),
         ],
       };
     },
@@ -671,6 +671,75 @@ export const SHAPE_PRESETS: ShapePreset[] = [
       { band: 'bass', min_val: 0.15, max_val: 1.0, curve: 'ease_out', radius: 2.5, plane: 'xz' }, n, 4.0,
       [{ type: 'Rotate', position: { x: 480, y: 180 }, params: { angleX: 0.25, angleY: 0, angleZ: 0 } }],
     ),
+  },
+
+  // ═══════════════ SMALLEY — les gestes archétypaux de l'acousmatique ═══
+  // Denis Smalley, spectromorphologie : les gestes spatiaux que l'oreille
+  // reconnaît — swirling, flocking, loom, drift, turbulence, scatter…
+
+  {
+    id: 'smalley-swirl',
+    name: 'Swirl',
+    icon: '🌀',
+    description: 'Smalley — swirling : rotation dense et virevoltante autour du centre',
+    category: 'smalley',
+    build: (n) => baseFlow('Spiral', { n_objects: n, radius: 1.2, speed: 2.2, expansion: 0.6, plane: 'xz', phase_offset: true }, n, 6.0),
+  },
+  {
+    id: 'smalley-flock',
+    name: 'Flock',
+    icon: '🐦',
+    description: 'Smalley — flocking : essaim cohérent, mouvement collectif vivant',
+    category: 'smalley',
+    build: (n) => baseFlow('Swarm', { n_objects: n, separation: 0.4, alignment: 0.7, cohesion: 0.6, max_speed: 0.5, seed: 42 }, n, 8.0),
+  },
+  {
+    id: 'smalley-loom',
+    name: 'Loom',
+    icon: '🎯',
+    description: 'Smalley — loom : la source grandit et approche — accent émotionnel #1',
+    category: 'smalley',
+    build: (n) => baseFlow('Converge', { n_objects: n, target: [0, 0, -1.5], speed: 0.8, spring: 0.5 }, n, 5.0),
+  },
+  {
+    id: 'smalley-drift',
+    name: 'Drift',
+    icon: '🍃',
+    description: 'Smalley — drifting : dérive lente et inattendue, hors-attention',
+    category: 'smalley',
+    build: (n) => baseFlow('PerlinNoise', { n_objects: n, intensity: 0.6, smoothness: 0.2, seed: 7 }, n, 10.0),
+  },
+  {
+    id: 'smalley-turbulence',
+    name: 'Turbulence',
+    icon: '🌪',
+    description: 'Smalley — turbulence : agitation chaotique à haute intensité',
+    category: 'smalley',
+    build: (n) => baseFlow('PerlinNoise', { n_objects: n, intensity: 2.5, smoothness: 0.8, seed: 99 }, n, 6.0),
+  },
+  {
+    id: 'smalley-scatter',
+    name: 'Scatter',
+    icon: '💥',
+    description: 'Smalley — scatter : dispersion rebondissante, énergie explosive',
+    category: 'smalley',
+    build: (n) => baseFlow('Bouncing', { n_objects: n, gravity: 6.0, bounce: 0.7, initial_height: 3.0, spread: 2.0 }, n, 5.0),
+  },
+  {
+    id: 'smalley-shadow',
+    name: 'Shadow',
+    icon: '👥',
+    description: 'Smalley — shadowing : poursuite orbitale, la source traque sa cible',
+    category: 'smalley',
+    build: (n) => baseFlow('Follow', { n_objects: n, mode: 'orbit', speed: 1.4, distance: 1.2, orbit_speed: 0.8, orbit_dir: 1, responsiveness: 0.15 }, n, 8.0),
+  },
+  {
+    id: 'smalley-elastic',
+    name: 'Elastic',
+    icon: '🏹',
+    description: 'Smalley — elastic : traction-rebond, énergie de rappel',
+    category: 'smalley',
+    build: (n) => baseFlow('Spring', { n_objects: n, stiffness: 2.5, damping: 0.3, target: [1.5, 0, -1.0] }, n, 5.0),
   },
 ];
 

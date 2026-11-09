@@ -136,8 +136,9 @@ cd tauri-app/src-tauri
 
 ### 4.5 Keyboard Shortcuts (Live)
 - [ ] Space — play/stop the selected move (click a move first to select it)
-- [ ] Enter — GO to next cue in setlist
-- [ ] Backspace — Go to previous cue
+- [ ] Enter — GO (setlist advance, crossfade)
+- [ ] Shift+Enter — recall next cue
+- [ ] Backspace — recall previous cue
 - [ ] Esc — Panic (stop all + send origin positions)
 - [ ] Ctrl+Z / Ctrl+Y — Undo/Redo graph edits
 - [ ] Verify: shortcuts don't fire when typing in input fields
@@ -296,3 +297,50 @@ Minimum viable test before a demo:
 ```
 
 Expected output: `✓ PASS: All packets valid, rate OK, all tracks covered`
+
+---
+
+## Phase 0 — Smoke test automatisé (validé 2026-11-01)
+
+Boot réel + chaîne OSC-IN bout-à-bout, sans UI automation :
+
+```bash
+cd tauri-app/frontend && npm run build            # dist frais
+cd ../src-tauri && cargo build --bin stagespace-tauri  # ~2min incrémental
+
+# Lancer 30s sur le display réel
+(timeout 30 ./target/debug/stagespace-tauri > /tmp/stagespace-smoke.log 2>&1 &)
+sleep 4
+
+# Envoyer un vrai paquet OSC-IN — show-control bout-à-bout
+python3 -c "
+import socket
+def osc_str(s):
+    b = s.encode() + b'\0'
+    return b + b'\0' * ((4 - len(b) % 4) % 4)
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+for a in ['/stagespace/disarm', '/stagespace/arm']:
+    sock.sendto(osc_str(a) + osc_str(','), ('127.0.0.1', 8001))
+"
+sleep 6 && tail -10 /tmp/stagespace-smoke.log
+```
+
+**Attendu** : plugins chargés · `OSC receiver listening on port 8001` ·
+supervisor actif · `OSC output now sending to …` · `OSC master arm:
+DISARMED` puis `ARMED`. Prouve : boot sain, webview vivante, backend
+show-control réel (UDP → commande → état).
+
+**Non couvert** : les events inter-webview (`conduite:state/cmd`,
+`live:state`) — ouvrir la fenêtre détachée demande un clic UI
+(xdotool absent). Couvert en jsdom : `useConduiteBroadcast.test`,
+`liveStateChannel.*.test` (14 tests).
+
+### Checklist fenêtres détachées (manuelle)
+
+- [ ] `▶` dans PerformView ouvre `?view=run` — pads/radar/gestes à l'état
+      réel (pas figés — le canal `live:state` doit alimenter)
+- [ ] `⧉` ouvre `?view=conduite` — cue list peuplée, NOW/NEXT vivants
+- [ ] Dbl-click cue dans la détachée → recall dans la principale
+- [ ] Bouton DRY-RUN détachée → toggle arm dans la principale
+- [ ] Fermer la principale : la détachée continue (watchdog repoll >5s)
+- [ ] Fermer la détachée : `live:state` continue dans la principale

@@ -27,6 +27,19 @@ pub fn cmd_activate_move(args: &[&str]) -> Result<String, String> {
     }
 
     let track_indices = osc_ids_to_indices(&osc_ids, &all_osc_ids);
+    // Ids demandés hors de la liste OSC courante : sans cette erreur le move
+    // s'activerait avec moins de tracks — voire zéro — en silence.
+    if track_indices.len() != osc_ids.len() {
+        let known: std::collections::HashSet<u32> = all_osc_ids.iter().copied().collect();
+        let missing: Vec<u32> = osc_ids
+            .iter()
+            .copied()
+            .filter(|id| !known.contains(id))
+            .collect();
+        return Err(format!(
+            "Tracks {missing:?} hors de la liste OSC courante {all_osc_ids:?} — move refusé (aucune track muette)"
+        ));
+    }
     let duration: f64 = opts
         .get("duration")
         .and_then(|s| s.parse().ok())
@@ -75,11 +88,173 @@ pub fn cmd_activate_move(args: &[&str]) -> Result<String, String> {
         spatial_macros: None,
         animation_state: None,
         signal_graph: None,
+        end_mode: stagespace_engines::EndMode::default(),
+        anchor_mode: stagespace_engines::AnchorMode::default(),
+        anchor_target: None,
     };
     spawn_move(spec, &state.shared).map_err(|e| e.to_string())?;
 
     let mode = if is_preview { "preview" } else { "live" };
     Ok(format!("Move '{name}' activated (id={move_id}, tracks={track_str}, mode={mode}, duration={duration}s)"))
+}
+
+/// Active un graphe depuis un fichier JSON (format éditeur `GraphJson`) —
+/// même pipeline que l'app : parse → validation → compile → worker → merge.
+/// Usage: activate-graph <file.json> [--tracks 1,2,3] [--duration 4] [--name name] [--preview]
+pub fn cmd_activate_graph(args: &[&str]) -> Result<String, String> {
+    if args.is_empty() {
+        return Err("Usage: activate-graph <file.json> [--tracks 1,2,3] [--duration 4] [--name name] [--preview]".to_string());
+    }
+    let path = args[0];
+    let opts = parse_args(&args[1..]);
+
+    let text = std::fs::read_to_string(path).map_err(|e| format!("Cannot read {path}: {e}"))?;
+    let graph_json: stagespace_engines::GraphJson =
+        serde_json::from_str(&text).map_err(|e| format!("Invalid graph JSON in {path}: {e}"))?;
+
+    let state = cli_state::state();
+    let all_osc_ids = state.get_osc_ids();
+
+    let track_str = opts.get("tracks").map(|s| s.as_str()).unwrap_or("all");
+    let osc_ids = parse_track_list(track_str, &all_osc_ids)?;
+    if osc_ids.is_empty() {
+        return Err("No tracks selected. Use --tracks 1,2,3 or --tracks all".to_string());
+    }
+
+    let track_indices = osc_ids_to_indices(&osc_ids, &all_osc_ids);
+    // Ids demandés hors de la liste OSC courante : sans cette erreur le move
+    // s'activerait avec moins de tracks — voire zéro — en silence.
+    if track_indices.len() != osc_ids.len() {
+        let known: std::collections::HashSet<u32> = all_osc_ids.iter().copied().collect();
+        let missing: Vec<u32> = osc_ids
+            .iter()
+            .copied()
+            .filter(|id| !known.contains(id))
+            .collect();
+        return Err(format!(
+            "Tracks {missing:?} hors de la liste OSC courante {all_osc_ids:?} — move refusé (aucune track muette)"
+        ));
+    }
+    let duration: f64 = opts
+        .get("duration")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(4.0);
+    let is_preview = opts.contains_key("preview");
+    let name = opts.get("name").cloned().unwrap_or_else(|| {
+        std::path::Path::new(path)
+            .file_stem()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| "graph".to_string())
+    });
+
+    // --signal <file.json> : graphe de modulation attaché au move
+    // (SignalOut → macros / param:<node>:<key>).
+    let signal_graph = match opts.get("signal") {
+        Some(p) => {
+            let text = std::fs::read_to_string(p)
+                .map_err(|e| format!("Cannot read signal graph {p}: {e}"))?;
+            Some(
+                serde_json::from_str::<stagespace_engines::GraphJson>(&text)
+                    .map_err(|e| format!("Invalid signal graph JSON in {p}: {e}"))?,
+            )
+        }
+        None => None,
+    };
+
+    let move_id = state.next_move_id(&name);
+    let origin = state.compute_centroid(&track_indices);
+
+    state
+        .shared
+        .merge_runtime
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .set_osc_ids(all_osc_ids.clone());
+
+    let spec = MoveSpec {
+        id: move_id.clone(),
+        name: name.clone(),
+        graph_json,
+        osc_ids,
+        track_indices,
+        is_preview,
+        origin: Some(origin),
+        duration,
+        loop_mode: LoopMode::Loop,
+        direction: PlayDirection::Forward,
+        fade: None,
+        speed: None,
+        spatial_macros: None,
+        animation_state: None,
+        signal_graph,
+        end_mode: stagespace_engines::EndMode::default(),
+        anchor_mode: stagespace_engines::AnchorMode::default(),
+        anchor_target: None,
+    };
+    spawn_move(spec, &state.shared).map_err(|e| e.to_string())?;
+
+    let mode = if is_preview { "preview" } else { "live" };
+    Ok(format!("Move '{name}' activated from {path} (id={move_id}, tracks={track_str}, mode={mode}, duration={duration}s)"))
+}
+
+/// Push le graphe global (post-processing) depuis un fichier JSON —
+/// même pipeline que `update_global_graph` : parse → extract effects →
+/// compile post-process → swap sur le merge runtime.
+/// Usage: global-graph <file.json>
+pub fn cmd_global_graph(args: &[&str]) -> Result<String, String> {
+    if args.is_empty() {
+        return Err("Usage: global-graph <file.json>".to_string());
+    }
+    let path = args[0];
+    let text = std::fs::read_to_string(path).map_err(|e| format!("Cannot read {path}: {e}"))?;
+    let graph_json: stagespace_engines::GraphJson = serde_json::from_str(&text)
+        .map_err(|e| format!("Invalid global graph JSON in {path}: {e}"))?;
+    graph_json
+        .check_version()
+        .map_err(|e| format!("Unsupported schema version: {e}"))?;
+
+    let state = cli_state::state();
+    let audio_state = {
+        let merge_rt = state
+            .shared
+            .merge_runtime
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        merge_rt
+            .audio_state_arc()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    };
+
+    let graph = stagespace_tauri::graph::parser::build_graph_from_json(&graph_json, &audio_state)
+        .map_err(|e| format!("Failed to parse global graph: {e}"))?;
+
+    let effects = stagespace_engines::extract_graph_effects(&graph)
+        .map_err(|e| format!("Failed to extract graph effects: {e:?}"))?;
+
+    let macros = state
+        .shared
+        .merge_runtime
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .macros();
+
+    let compile_params = stagespace_engines::PostProcessCompileParams { graph, macros };
+    let post_process_fn = stagespace_engines::compile_post_process(compile_params)
+        .map_err(|e| format!("Failed to compile global graph: {e:?}"))?;
+
+    let merge_rt = state
+        .shared
+        .merge_runtime
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    merge_rt.swap_post_process_fn(post_process_fn);
+    merge_rt.set_graph_effects(effects.zones, effects.modulations, effects.move_ref);
+    if let Some(strategy) = effects.strategy {
+        merge_rt.set_merge_strategy(strategy);
+    }
+    Ok(format!("Global graph loaded from {path}"))
 }
 
 pub fn cmd_list_moves(_args: &[&str]) -> Result<String, String> {
@@ -591,6 +766,7 @@ pub fn cmd_zone_add(args: &[&str]) -> Result<String, String> {
         channels,
         objects,
         enabled: !opts.contains_key("disabled"),
+        effect: None,
     };
     let state = cli_state::state();
     let merge_rt = state
@@ -667,4 +843,91 @@ pub fn cmd_zone_clear(args: &[&str]) -> Result<String, String> {
     } else {
         Err(format!("No zone at index {idx}"))
     }
+}
+
+/// Usage: diagnose <file.json> [--context sub|global|signal] [--move <file.json>]
+/// Diagnostics live du graphe — mêmes règles que le backend/éditeur.
+pub fn cmd_diagnose(args: &[&str]) -> Result<String, String> {
+    if args.is_empty() {
+        return Err(
+            "Usage: diagnose <file.json> [--context sub|global|signal] [--move <file.json>]"
+                .to_string(),
+        );
+    }
+    let path = args[0];
+    let mut context = "sub".to_string();
+    let mut move_path: Option<&str> = None;
+    let mut i = 1;
+    while i < args.len() {
+        match args[i] {
+            "--context" => {
+                context = args.get(i + 1).copied().unwrap_or("sub").to_string();
+                i += 2;
+            }
+            "--move" => {
+                move_path = args.get(i + 1).copied();
+                i += 2;
+            }
+            other => return Err(format!("Unknown flag '{other}'")),
+        }
+    }
+    let read_graph = |p: &str| -> Result<stagespace_engines::GraphJson, String> {
+        let text = std::fs::read_to_string(p).map_err(|e| format!("Cannot read {p}: {e}"))?;
+        let g: stagespace_engines::GraphJson =
+            serde_json::from_str(&text).map_err(|e| format!("Invalid graph JSON in {p}: {e}"))?;
+        g.check_version()
+            .map_err(|e| format!("Unsupported schema version in {p}: {e}"))?;
+        Ok(g)
+    };
+    let graph_json = read_graph(path)?;
+    let move_json = move_path.map(read_graph).transpose()?;
+
+    let ctx = match context.as_str() {
+        "sub" => stagespace_engines::GraphContext::SubGraph,
+        "global" => stagespace_engines::GraphContext::Global,
+        "signal" => stagespace_engines::GraphContext::Signal,
+        other => return Err(format!("Unknown context '{other}' (sub|global|signal)")),
+    };
+
+    let state = cli_state::state();
+    let audio_state = {
+        let merge_rt = state
+            .shared
+            .merge_runtime
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        merge_rt
+            .audio_state_arc()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    };
+    let graph = stagespace_tauri::graph::parser::build_graph_from_json(&graph_json, &audio_state)
+        .map_err(|e| format!("Failed to parse graph: {e}"))?;
+    let move_graph = match move_json {
+        Some(mg) => Some(
+            stagespace_tauri::graph::parser::build_graph_from_json(&mg, &audio_state)
+                .map_err(|e| format!("Failed to parse move graph: {e}"))?,
+        ),
+        None => None,
+    };
+
+    let issues = stagespace_engines::diagnose(&graph, ctx, move_graph.as_ref());
+    if issues.is_empty() {
+        return Ok(format!("{path}: no issues"));
+    }
+    let mut out = format!("{path}: {} issue(s)\n", issues.len());
+    for i in &issues {
+        let sev = match i.severity {
+            stagespace_engines::IssueSeverity::Error => "ERROR",
+            stagespace_engines::IssueSeverity::Warning => "WARN ",
+        };
+        let nodes = if i.node_ids.is_empty() {
+            String::new()
+        } else {
+            format!(" [{}]", i.node_ids.join(", "))
+        };
+        out.push_str(&format!("  {sev} {}{nodes}\n", i.message));
+    }
+    Ok(out.trim_end().to_string())
 }

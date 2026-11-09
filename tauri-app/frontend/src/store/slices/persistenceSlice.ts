@@ -1,7 +1,7 @@
 import { StateCreator } from 'zustand';
 import type { Edge } from '@xyflow/react';
 import type { GraphNode } from '../../components/nodeParamSchema';
-import { safeInvoke as invoke } from '../../utils/tauri';
+import { safeInvoke as invoke, silentCatch } from '../../utils/tauri';
 import { safeSetItem, safeParseStoredJson } from '../../utils/safeStorage';
 import { toast } from '../../utils/toast-helpers';
 import type { MoveSlot } from './moveSlotsSlice';
@@ -224,7 +224,7 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
     const key = `stagespace_graph_${name}`;
     let exists = false;
     try {
-      exists = localStorage.getItem(key) !== null;
+      exists = typeof localStorage !== 'undefined' && localStorage.getItem(key) !== null;
     } catch {
       // localStorage indisponible (mode privé, quota) — traité comme absent
     }
@@ -235,10 +235,12 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
   },
 
   deleteGraph: async (name) => {
+    if (typeof localStorage === 'undefined') return;
     localStorage.removeItem(`stagespace_graph_${name}`);
   },
 
   listGraphs: async () => {
+    if (typeof localStorage === 'undefined') return [];
     return Object.keys(localStorage)
       .filter((k) => k.startsWith('stagespace_graph_'))
       .map((k) => k.replace('stagespace_graph_', ''));
@@ -415,7 +417,7 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
       } catch (e) {
         console.error('Failed to push restored macros:', e);
         set({ macros: prevMacros });
-        await get().pushMacrosToRuntime?.().catch(() => {});
+        await get().pushMacrosToRuntime?.().catch(silentCatch);
         toast.error(`Show loaded but macros failed to apply: ${e}`);
       }
     }
@@ -451,8 +453,8 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
           address: prevOsc.oscAddress,
           port: prevOsc.oscPort,
           profile: prevOsc.oscProfile,
-        }).catch(() => {});
-        await invoke('set_osc_receiver_port', { port: prevOsc.oscInPort }).catch(() => {});
+        }).catch(silentCatch);
+        await invoke('set_osc_receiver_port', { port: prevOsc.oscInPort }).catch(silentCatch);
         toast.error(`Show loaded but OSC config failed to apply: ${e}`);
       }
     }
@@ -466,13 +468,13 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
         nodes: raw.globalGraph.nodes,
         edges: raw.globalGraph.edges,
       });
-      try {
-        await useGlobalGraphStore.getState().pushGlobalGraph();
-      } catch (e) {
-        console.error('Failed to push restored global graph:', e);
+      // push*() retournent un succès — le rollback est réel (les pushes
+      // catchaient en interne : le revert n'exécutait jamais).
+      const ok = await useGlobalGraphStore.getState().pushGlobalGraph();
+      if (!ok) {
         useGlobalGraphStore.setState({ nodes: prevNodes, edges: prevEdges });
-        await useGlobalGraphStore.getState().pushGlobalGraph().catch(() => {});
-        toast.error(`Show loaded but global graph failed to apply: ${e}`);
+        await useGlobalGraphStore.getState().pushGlobalGraph();
+        toast.error('Show loaded but global graph failed to apply — reverted');
       }
     }
 
@@ -484,14 +486,17 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
       useSignalGraphStore.setState({
         nodes: raw.signalGraph.nodes,
         edges: raw.signalGraph.edges,
+        // Le push cible le graphe GLOBAL du merge — si l'utilisateur
+        // avait un Mods-tab de slot ouvert (context != 'global'), le
+        // push court-circuitait et le graphe était silencieusement
+        // perdu au prochain setContext (revue L4).
+        context: 'global',
       });
-      try {
-        await useSignalGraphStore.getState().pushSignalGraph();
-      } catch (e) {
-        console.error('Failed to push restored signal graph:', e);
+      const ok = await useSignalGraphStore.getState().pushSignalGraph();
+      if (!ok) {
         useSignalGraphStore.setState({ nodes: prevNodes, edges: prevEdges });
-        await useSignalGraphStore.getState().pushSignalGraph().catch(() => {});
-        toast.error(`Show loaded but signal graph failed to apply: ${e}`);
+        await useSignalGraphStore.getState().pushSignalGraph();
+        toast.error('Show loaded but signal graph failed to apply — reverted');
       }
     }
 

@@ -20,8 +20,9 @@ describe('clearCompileError', () => {
     expect((useGraphStore.getState() as any).status).toBe('idle');
   });
 
-  it('sets status to playing if currently playing', () => {
-    useGraphStore.setState({ compileError: 'some error', status: 'error', isPlaying: true } as any);
+  it('sets status to playing if moves are running', () => {
+    // "Playing" se dérive de movements — le champ isPlaying a été supprimé.
+    useGraphStore.setState({ compileError: 'some error', status: 'error', movements: [{ id: 'm1' }] } as any);
     useGraphStore.getState().clearCompileError();
     expect((useGraphStore.getState() as any).status).toBe('playing');
   });

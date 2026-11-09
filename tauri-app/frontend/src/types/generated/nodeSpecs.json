@@ -3,13 +3,18 @@
     "node_type": "Objects",
     "category": "Structural",
     "scope": "SubOnly",
-    "feeds": "EngineInputs",
     "inputs": [],
     "outputs": [
-      "output"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      }
     ],
-    "falloff_target": false,
     "description": "Defines the object/track count and their IDs. Required — graph source",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "n_objects",
@@ -19,7 +24,19 @@
         "step": 1.0,
         "min": 1.0,
         "max": 64.0,
-        "default_json": "9"
+        "default_json": "9",
+        "modulable": false
+      },
+      {
+        "key": "track_ids",
+        "label": "Track IDs",
+        "kind": "text",
+        "options": null,
+        "step": null,
+        "min": null,
+        "max": null,
+        "default_json": "\"\"",
+        "modulable": false
       }
     ]
   },
@@ -27,13 +44,18 @@
     "node_type": "Duration",
     "category": "Structural",
     "scope": "SubOnly",
-    "feeds": "EngineInputs",
     "inputs": [],
     "outputs": [
-      "output"
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
-    "falloff_target": false,
     "description": "Defines the cycle duration in seconds. Required — syncs engines",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "duration",
@@ -43,7 +65,8 @@
         "step": 0.1,
         "min": 0.1,
         "max": null,
-        "default_json": "4.0"
+        "default_json": "4.0",
+        "modulable": false
       }
     ]
   },
@@ -51,13 +74,18 @@
     "node_type": "Output",
     "category": "Structural",
     "scope": "Both",
-    "feeds": "Terminal",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [],
-    "falloff_target": false,
     "description": "Graph terminal — sends positions via OSC to tracks. Required",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "track_range",
@@ -67,34 +95,27 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"0-\""
+        "default_json": "\"0-\"",
+        "modulable": false
       }
     ]
-  },
-  {
-    "node_type": "Input",
-    "category": "Structural",
-    "scope": "GlobalOnly",
-    "feeds": "PostProcess",
-    "inputs": [],
-    "outputs": [
-      "output"
-    ],
-    "falloff_target": false,
-    "description": "Global graph entry point — represents the merged positions of all moves",
-    "params": []
   },
   {
     "node_type": "MoveRef",
     "category": "Structural",
     "scope": "GlobalOnly",
-    "feeds": "MoveRefChain",
     "inputs": [],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
-    "description": "Alternative source to Input — post-process filtered to one move's tracks via move_id",
+    "description": "Alternative source to Merge — post-process filtered to one move's tracks via move_id",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "move_id",
@@ -104,7 +125,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"\""
+        "default_json": "\"\"",
+        "modulable": false
       }
     ]
   },
@@ -112,13 +134,18 @@
     "node_type": "Merge",
     "category": "Structural",
     "scope": "GlobalOnly",
-    "feeds": "PostProcess",
     "inputs": [],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Merge node — represents the MergeRuntime. Strategy: override/crossfade/blend/priority",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "strategy",
@@ -133,17 +160,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"override\""
-      },
-      {
-        "key": "fade_duration",
-        "label": "Fade (s)",
-        "kind": "number",
-        "options": null,
-        "step": 0.1,
-        "min": 0.0,
-        "max": null,
-        "default_json": "0.5"
+        "default_json": "\"override\"",
+        "modulable": false
       }
     ]
   },
@@ -151,16 +169,31 @@
     "node_type": "Circular",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Circular motion — radius, speed, plane. The most used",
+    "object_distribution": "Angular",
+    "stateful": false,
     "params": [
       {
         "key": "radius",
@@ -170,7 +203,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.5"
+        "default_json": "1.5",
+        "modulable": true
       },
       {
         "key": "speed",
@@ -180,7 +214,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "plane",
@@ -194,7 +229,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"xz\""
+        "default_json": "\"xz\"",
+        "modulable": false
       },
       {
         "key": "phase_offset",
@@ -204,7 +240,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "true"
+        "default_json": "true",
+        "modulable": true
       }
     ]
   },
@@ -212,16 +249,31 @@
     "node_type": "Elliptical",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Ellipse with independent axes (a≠b). For flattened orbits",
+    "object_distribution": "Angular",
+    "stateful": false,
     "params": [
       {
         "key": "a",
@@ -231,7 +283,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.8"
+        "default_json": "0.8",
+        "modulable": true
       },
       {
         "key": "b",
@@ -241,7 +294,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.4"
+        "default_json": "0.4",
+        "modulable": true
       },
       {
         "key": "speed",
@@ -251,7 +305,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "plane",
@@ -265,7 +320,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"xy\""
+        "default_json": "\"xy\"",
+        "modulable": false
       },
       {
         "key": "phase_offset",
@@ -275,7 +331,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "true"
+        "default_json": "true",
+        "modulable": true
       }
     ]
   },
@@ -283,16 +340,31 @@
     "node_type": "Spiral",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Spiral that expands/contracts over time",
+    "object_distribution": "Angular",
+    "stateful": false,
     "params": [
       {
         "key": "radius",
@@ -302,7 +374,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "speed",
@@ -312,7 +385,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "expansion",
@@ -322,7 +396,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "plane",
@@ -336,7 +411,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"xz\""
+        "default_json": "\"xz\"",
+        "modulable": false
       },
       {
         "key": "phase_offset",
@@ -346,7 +422,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": null
+        "default_json": null,
+        "modulable": true
       }
     ]
   },
@@ -354,16 +431,31 @@
     "node_type": "Lissajous",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Complex harmonic curves (a, b, delta). Ornamental figures",
+    "object_distribution": "Angular",
+    "stateful": false,
     "params": [
       {
         "key": "a",
@@ -373,7 +465,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.5"
+        "default_json": "1.5",
+        "modulable": true
       },
       {
         "key": "b",
@@ -383,7 +476,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.5"
+        "default_json": "1.5",
+        "modulable": true
       },
       {
         "key": "delta",
@@ -393,7 +487,8 @@
         "step": 0.01,
         "min": null,
         "max": null,
-        "default_json": "1.5707963267948966"
+        "default_json": "1.5707963267948966",
+        "modulable": true
       },
       {
         "key": "scale",
@@ -403,7 +498,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "phase_offset",
@@ -413,7 +509,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": null
+        "default_json": null,
+        "modulable": true
       }
     ]
   },
@@ -421,16 +518,31 @@
     "node_type": "Figure8",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Lemniscate — horizontal figure-8",
+    "object_distribution": "Angular",
+    "stateful": false,
     "params": [
       {
         "key": "scale",
@@ -440,7 +552,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.5"
+        "default_json": "1.5",
+        "modulable": true
       },
       {
         "key": "speed",
@@ -450,7 +563,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "plane",
@@ -464,7 +578,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"xz\""
+        "default_json": "\"xz\"",
+        "modulable": false
       },
       {
         "key": "phase_offset",
@@ -474,7 +589,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": null
+        "default_json": null,
+        "modulable": true
       }
     ]
   },
@@ -482,16 +598,31 @@
     "node_type": "Linear",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Linear interpolation between 2 points (start→end)",
+    "object_distribution": "Broadcast",
+    "stateful": false,
     "params": [
       {
         "key": "start",
@@ -501,7 +632,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "[-1.0,0.0,0.0]"
+        "default_json": "[-1.0,0.0,0.0]",
+        "modulable": false
       },
       {
         "key": "end",
@@ -511,7 +643,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "[1.0,0.0,0.0]"
+        "default_json": "[1.0,0.0,0.0]",
+        "modulable": false
       }
     ]
   },
@@ -519,16 +652,31 @@
     "node_type": "Oscillation",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Sine wave on one axis (x/y/z). For vibrations",
+    "object_distribution": "Angular",
+    "stateful": false,
     "params": [
       {
         "key": "amplitude",
@@ -538,7 +686,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.5"
+        "default_json": "1.5",
+        "modulable": true
       },
       {
         "key": "frequency",
@@ -548,7 +697,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "axis",
@@ -562,7 +712,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"y\""
+        "default_json": "\"y\"",
+        "modulable": false
       },
       {
         "key": "phase_offset",
@@ -572,7 +723,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": null
+        "default_json": null,
+        "modulable": true
       }
     ]
   },
@@ -580,16 +732,31 @@
     "node_type": "Formation",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Static formations: circle, line, arc, grid. No motion",
+    "object_distribution": "Parametric",
+    "stateful": false,
     "params": [
       {
         "key": "shape",
@@ -599,12 +766,16 @@
           "circle",
           "line",
           "arc",
-          "grid"
+          "grid",
+          "sphere",
+          "triangle",
+          "hexagon"
         ],
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"circle\""
+        "default_json": "\"circle\"",
+        "modulable": false
       },
       {
         "key": "radius",
@@ -614,7 +785,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.7"
+        "default_json": "0.7",
+        "modulable": true
       },
       {
         "key": "rotate",
@@ -624,7 +796,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "elevation",
@@ -634,7 +807,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       }
     ]
   },
@@ -642,16 +816,31 @@
     "node_type": "PerlinNoise",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Perlin noise — smooth organic random motion",
+    "object_distribution": "Agent",
+    "stateful": false,
     "params": [
       {
         "key": "intensity",
@@ -661,7 +850,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "smoothness",
@@ -671,7 +861,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "seed",
@@ -681,7 +872,8 @@
         "step": 1.0,
         "min": null,
         "max": null,
-        "default_json": "42"
+        "default_json": "42",
+        "modulable": false
       }
     ]
   },
@@ -689,16 +881,31 @@
     "node_type": "Converge",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Radial convergence to center with easing",
+    "object_distribution": "Angular",
+    "stateful": false,
     "params": [
       {
         "key": "start_radius",
@@ -708,7 +915,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.9"
+        "default_json": "0.9",
+        "modulable": true
       },
       {
         "key": "end_radius",
@@ -718,7 +926,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "easing",
@@ -733,7 +942,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"linear\""
+        "default_json": "\"linear\"",
+        "modulable": false
       }
     ]
   },
@@ -741,16 +951,31 @@
     "node_type": "Pendulum",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Damped physical pendulum (length, gravity, damping)",
+    "object_distribution": "Agent",
+    "stateful": true,
     "params": [
       {
         "key": "length",
@@ -760,7 +985,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.8"
+        "default_json": "0.8",
+        "modulable": true
       },
       {
         "key": "gravity",
@@ -770,7 +996,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "9.81"
+        "default_json": "9.81",
+        "modulable": true
       },
       {
         "key": "initial_angle",
@@ -780,7 +1007,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": false
       },
       {
         "key": "damping",
@@ -790,7 +1018,8 @@
         "step": 0.01,
         "min": null,
         "max": null,
-        "default_json": "0.05"
+        "default_json": "0.05",
+        "modulable": true
       },
       {
         "key": "phase_offset",
@@ -800,7 +1029,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "true"
+        "default_json": "true",
+        "modulable": true
       }
     ]
   },
@@ -808,16 +1038,31 @@
     "node_type": "RoseCurve",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Polar rose r=cos(kθ) — n_petals flowers",
+    "object_distribution": "Angular",
+    "stateful": false,
     "params": [
       {
         "key": "radius",
@@ -827,7 +1072,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.8"
+        "default_json": "0.8",
+        "modulable": true
       },
       {
         "key": "n_petals",
@@ -837,7 +1083,8 @@
         "step": 1.0,
         "min": null,
         "max": null,
-        "default_json": "4"
+        "default_json": "4",
+        "modulable": true
       },
       {
         "key": "speed",
@@ -847,7 +1094,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "plane",
@@ -861,7 +1109,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"xy\""
+        "default_json": "\"xy\"",
+        "modulable": false
       },
       {
         "key": "phase_offset",
@@ -871,7 +1120,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "true"
+        "default_json": "true",
+        "modulable": true
       }
     ]
   },
@@ -879,16 +1129,31 @@
     "node_type": "Helix",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "3D helix — radius, height, turns. For rises/falls",
+    "object_distribution": "Angular",
+    "stateful": false,
     "params": [
       {
         "key": "radius",
@@ -898,7 +1163,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.7"
+        "default_json": "0.7",
+        "modulable": true
       },
       {
         "key": "height",
@@ -908,7 +1174,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.6"
+        "default_json": "1.6",
+        "modulable": true
       },
       {
         "key": "turns",
@@ -918,7 +1185,8 @@
         "step": 0.5,
         "min": null,
         "max": null,
-        "default_json": "3.0"
+        "default_json": "3.0",
+        "modulable": true
       },
       {
         "key": "speed",
@@ -928,7 +1196,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "phase_offset",
@@ -938,7 +1207,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "true"
+        "default_json": "true",
+        "modulable": true
       }
     ]
   },
@@ -946,16 +1216,31 @@
     "node_type": "Wave",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Travelling wave across objects (stadium wave). Each object oscillates with a delay",
+    "object_distribution": "Angular",
+    "stateful": false,
     "params": [
       {
         "key": "amplitude",
@@ -965,7 +1250,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "frequency",
@@ -975,7 +1261,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "speed",
@@ -985,7 +1272,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "axis",
@@ -999,7 +1287,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"y\""
+        "default_json": "\"y\"",
+        "modulable": false
       },
       {
         "key": "spread",
@@ -1009,7 +1298,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "4.0"
+        "default_json": "4.0",
+        "modulable": true
       },
       {
         "key": "phase_offset",
@@ -1019,7 +1309,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "true"
+        "default_json": "true",
+        "modulable": true
       }
     ]
   },
@@ -1027,16 +1318,31 @@
     "node_type": "CustomTrajectory",
     "category": "MathEngine",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Custom x,y,z equations (cartesian/polar/spherical). For bespoke trajectories",
+    "object_distribution": "Parametric",
+    "stateful": false,
     "params": [
       {
         "key": "coordinate_system",
@@ -1050,7 +1356,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"cartesian\""
+        "default_json": "\"cartesian\"",
+        "modulable": false
       },
       {
         "key": "equations",
@@ -1060,7 +1367,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"0.5,0.3,0.0\""
+        "default_json": "\"0.5,0.3,0.0\"",
+        "modulable": false
       }
     ]
   },
@@ -1068,16 +1376,31 @@
     "node_type": "Bouncing",
     "category": "PhysicsEngine",
     "scope": "SubOnly",
-    "feeds": "TrajectoryComposites",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Physical bounces inside a container (sphere/box) with restitution",
+    "object_distribution": "Agent",
+    "stateful": true,
     "params": [
       {
         "key": "container",
@@ -1090,7 +1413,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"sphere\""
+        "default_json": "\"sphere\"",
+        "modulable": false
       },
       {
         "key": "container_size",
@@ -1100,7 +1424,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.9"
+        "default_json": "0.9",
+        "modulable": true
       },
       {
         "key": "restitution",
@@ -1110,7 +1435,8 @@
         "step": 0.01,
         "min": 0.0,
         "max": 1.0,
-        "default_json": "0.95"
+        "default_json": "0.95",
+        "modulable": true
       },
       {
         "key": "gravity",
@@ -1120,7 +1446,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "seed",
@@ -1130,7 +1457,8 @@
         "step": 1.0,
         "min": null,
         "max": null,
-        "default_json": "42"
+        "default_json": "42",
+        "modulable": false
       }
     ]
   },
@@ -1138,16 +1466,31 @@
     "node_type": "Spring",
     "category": "PhysicsEngine",
     "scope": "SubOnly",
-    "feeds": "TrajectoryComposites",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Spring toward a target point (stiffness, damping)",
+    "object_distribution": "Agent",
+    "stateful": true,
     "params": [
       {
         "key": "target",
@@ -1157,7 +1500,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "[0.0,0.0,0.0]"
+        "default_json": "[0.0,0.0,0.0]",
+        "modulable": false
       },
       {
         "key": "stiffness",
@@ -1167,7 +1511,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "3.0"
+        "default_json": "3.0",
+        "modulable": true
       },
       {
         "key": "damping_coef",
@@ -1177,7 +1522,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "seed",
@@ -1187,7 +1533,8 @@
         "step": 1.0,
         "min": null,
         "max": null,
-        "default_json": "42"
+        "default_json": "42",
+        "modulable": false
       }
     ]
   },
@@ -1195,16 +1542,31 @@
     "node_type": "Follow",
     "category": "PhysicsEngine",
     "scope": "SubOnly",
-    "feeds": "TrajectoryComposites",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Steering: follow/pursue/evade/orbit/arrive around a moving target (lookahead, ring, deceleration)",
+    "object_distribution": "Agent",
+    "stateful": true,
     "params": [
       {
         "key": "mode",
@@ -1220,7 +1582,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"follow\""
+        "default_json": "\"follow\"",
+        "modulable": false
       },
       {
         "key": "speed",
@@ -1230,7 +1593,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "distance",
@@ -1240,7 +1604,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "0.3"
+        "default_json": "0.3",
+        "modulable": true
       },
       {
         "key": "lookahead",
@@ -1250,7 +1615,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "0.4"
+        "default_json": "0.4",
+        "modulable": true
       },
       {
         "key": "arrive_radius",
@@ -1260,7 +1626,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "0.6"
+        "default_json": "0.6",
+        "modulable": true
       },
       {
         "key": "orbit_speed",
@@ -1270,7 +1637,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.3"
+        "default_json": "0.3",
+        "modulable": true
       },
       {
         "key": "orbit_dir",
@@ -1280,7 +1648,8 @@
         "step": 1.0,
         "min": null,
         "max": null,
-        "default_json": "1"
+        "default_json": "1",
+        "modulable": true
       },
       {
         "key": "responsiveness",
@@ -1290,7 +1659,8 @@
         "step": 0.05,
         "min": 0.0,
         "max": 1.0,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "target_radius",
@@ -1300,7 +1670,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "target_speed",
@@ -1310,7 +1681,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "target_z",
@@ -1320,7 +1692,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "init_radius",
@@ -1330,7 +1703,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": false
       },
       {
         "key": "bounds",
@@ -1340,7 +1714,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "containment",
@@ -1350,7 +1725,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "seed",
@@ -1360,7 +1736,8 @@
         "step": 1.0,
         "min": null,
         "max": null,
-        "default_json": "42"
+        "default_json": "42",
+        "modulable": false
       }
     ]
   },
@@ -1368,16 +1745,31 @@
     "node_type": "Swarm",
     "category": "PhysicsEngine",
     "scope": "SubOnly",
-    "feeds": "TrajectoryComposites",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Boids — flocking with separation/alignment/cohesion",
+    "object_distribution": "Agent",
+    "stateful": true,
     "params": [
       {
         "key": "separation",
@@ -1387,7 +1779,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.3"
+        "default_json": "0.3",
+        "modulable": true
       },
       {
         "key": "alignment",
@@ -1397,7 +1790,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "cohesion",
@@ -1407,7 +1801,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.3"
+        "default_json": "0.3",
+        "modulable": true
       },
       {
         "key": "neighbor_radius",
@@ -1417,7 +1812,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "max_speed",
@@ -1427,7 +1823,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "seed",
@@ -1437,7 +1834,8 @@
         "step": 1.0,
         "min": null,
         "max": null,
-        "default_json": "42"
+        "default_json": "42",
+        "modulable": false
       }
     ]
   },
@@ -1445,16 +1843,31 @@
     "node_type": "Avoidance",
     "category": "PhysicsEngine",
     "scope": "SubOnly",
-    "feeds": "TrajectoryComposites",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Inter-object repulsion — mutual avoidance",
+    "object_distribution": "Agent",
+    "stateful": true,
     "params": [
       {
         "key": "repulsion_radius",
@@ -1464,7 +1877,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.4"
+        "default_json": "0.4",
+        "modulable": true
       },
       {
         "key": "repulsion_strength",
@@ -1474,7 +1888,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "2.0"
+        "default_json": "2.0",
+        "modulable": true
       },
       {
         "key": "damping",
@@ -1484,7 +1899,8 @@
         "step": 0.01,
         "min": null,
         "max": null,
-        "default_json": "0.95"
+        "default_json": "0.95",
+        "modulable": true
       },
       {
         "key": "container_size",
@@ -1494,7 +1910,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.9"
+        "default_json": "0.9",
+        "modulable": true
       },
       {
         "key": "seed",
@@ -1504,7 +1921,8 @@
         "step": 1.0,
         "min": null,
         "max": null,
-        "default_json": "42"
+        "default_json": "42",
+        "modulable": false
       }
     ]
   },
@@ -1512,16 +1930,31 @@
     "node_type": "VectorField",
     "category": "PhysicsEngine",
     "scope": "SubOnly",
-    "feeds": "TrajectoryComposites",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Vector field (vortex/sink/source/flow/noise) — advected objects, inertial steering, organic perpetual motion",
+    "object_distribution": "Agent",
+    "stateful": true,
     "params": [
       {
         "key": "field",
@@ -1538,7 +1971,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"vortex\""
+        "default_json": "\"vortex\"",
+        "modulable": false
       },
       {
         "key": "points",
@@ -1548,7 +1982,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"\""
+        "default_json": "\"\"",
+        "modulable": false
       },
       {
         "key": "idw_power",
@@ -1558,7 +1993,8 @@
         "step": 0.5,
         "min": 0.5,
         "max": 8.0,
-        "default_json": "2.0"
+        "default_json": "2.0",
+        "modulable": true
       },
       {
         "key": "strength",
@@ -1568,7 +2004,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "center",
@@ -1578,7 +2015,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "[0.0,0.0,0.0]"
+        "default_json": "[0.0,0.0,0.0]",
+        "modulable": false
       },
       {
         "key": "radius",
@@ -1588,7 +2026,8 @@
         "step": 0.1,
         "min": 0.01,
         "max": null,
-        "default_json": "0.6"
+        "default_json": "0.6",
+        "modulable": true
       },
       {
         "key": "swirl",
@@ -1598,7 +2037,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "direction",
@@ -1608,7 +2048,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "[1.0,0.0,0.0]"
+        "default_json": "[1.0,0.0,0.0]",
+        "modulable": false
       },
       {
         "key": "noise_scale",
@@ -1618,7 +2059,8 @@
         "step": 0.1,
         "min": 0.01,
         "max": null,
-        "default_json": "1.5"
+        "default_json": "1.5",
+        "modulable": true
       },
       {
         "key": "wander",
@@ -1628,7 +2070,8 @@
         "step": 0.05,
         "min": 0.0,
         "max": 1.0,
-        "default_json": "0.1"
+        "default_json": "0.1",
+        "modulable": true
       },
       {
         "key": "responsiveness",
@@ -1638,7 +2081,8 @@
         "step": 0.05,
         "min": 0.0,
         "max": 1.0,
-        "default_json": "0.1"
+        "default_json": "0.1",
+        "modulable": true
       },
       {
         "key": "max_speed",
@@ -1648,7 +2092,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "bounds",
@@ -1658,7 +2103,8 @@
         "step": 0.1,
         "min": 0.01,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "containment",
@@ -1668,7 +2114,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "init",
@@ -1684,7 +2131,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"circle\""
+        "default_json": "\"circle\"",
+        "modulable": false
       },
       {
         "key": "init_radius",
@@ -1694,7 +2142,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "0.6"
+        "default_json": "0.6",
+        "modulable": false
       },
       {
         "key": "z_init",
@@ -1704,7 +2153,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": false
       },
       {
         "key": "z_drift",
@@ -1714,7 +2164,8 @@
         "step": 0.05,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "seed",
@@ -1724,7 +2175,8 @@
         "step": 1.0,
         "min": null,
         "max": null,
-        "default_json": "42"
+        "default_json": "42",
+        "modulable": false
       }
     ]
   },
@@ -1732,16 +2184,37 @@
     "node_type": "DrawSpline",
     "category": "Spline",
     "scope": "SubOnly",
-    "feeds": "SplineAndTrajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      },
+      {
+        "name": "spline",
+        "port_type": "Spline",
+        "required": false,
+        "label": "spline"
+      }
     ],
-    "falloff_target": false,
     "description": "Catmull-Rom spline from JSON control points. Source — no input",
+    "object_distribution": "Parametric",
+    "stateful": false,
     "params": [
       {
         "key": "points",
@@ -1751,7 +2224,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"[[-0.5,0,0],[0,0.5,0],[0.5,0,0]]\""
+        "default_json": "\"[[-0.5,0,0],[0,0.5,0],[0.5,0,0]]\"",
+        "modulable": false
       }
     ]
   },
@@ -1759,17 +2233,37 @@
     "node_type": "EvaluateSpline",
     "category": "Spline",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration",
-      "spline"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      },
+      {
+        "name": "spline",
+        "port_type": "Spline",
+        "required": true,
+        "label": "spline"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Uniform arc-length evaluation of a spline (constant speed)",
+    "object_distribution": "Parametric",
+    "stateful": false,
     "params": [
       {
         "key": "closed",
@@ -1779,7 +2273,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "false"
+        "default_json": "false",
+        "modulable": true
       },
       {
         "key": "tension",
@@ -1789,7 +2284,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": 1.0,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "speed",
@@ -1799,7 +2295,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "phase_offset",
@@ -1809,7 +2306,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "true"
+        "default_json": "true",
+        "modulable": true
       }
     ]
   },
@@ -1817,17 +2315,37 @@
     "node_type": "TrimSpline",
     "category": "Spline",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration",
-      "spline"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      },
+      {
+        "name": "spline",
+        "port_type": "Spline",
+        "required": false,
+        "label": "spline"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Extracts a spline segment (trim_start → trim_end, 0-1)",
+    "object_distribution": "Parametric",
+    "stateful": false,
     "params": [
       {
         "key": "points",
@@ -1837,7 +2355,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"[[-0.5,0,0],[0,0.5,0],[0.5,0,0]]\""
+        "default_json": "\"[[-0.5,0,0],[0,0.5,0],[0.5,0,0]]\"",
+        "modulable": false
       },
       {
         "key": "trim_start",
@@ -1847,7 +2366,8 @@
         "step": 0.05,
         "min": 0.0,
         "max": 1.0,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "trim_end",
@@ -1857,7 +2377,8 @@
         "step": 0.05,
         "min": 0.0,
         "max": 1.0,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "speed",
@@ -1867,7 +2388,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "phase_offset",
@@ -1877,7 +2399,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "true"
+        "default_json": "true",
+        "modulable": true
       }
     ]
   },
@@ -1885,17 +2408,37 @@
     "node_type": "OffsetSpline",
     "category": "Spline",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration",
-      "spline"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      },
+      {
+        "name": "spline",
+        "port_type": "Spline",
+        "required": false,
+        "label": "spline"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Spline with spatial offset (x,y,z)",
+    "object_distribution": "Parametric",
+    "stateful": false,
     "params": [
       {
         "key": "points",
@@ -1905,7 +2448,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"[[-0.5,0,0],[0,0.5,0],[0.5,0,0]]\""
+        "default_json": "\"[[-0.5,0,0],[0,0.5,0],[0.5,0,0]]\"",
+        "modulable": false
       },
       {
         "key": "offset_x",
@@ -1915,7 +2459,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "offset_y",
@@ -1925,7 +2470,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "offset_z",
@@ -1935,7 +2481,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "speed",
@@ -1945,7 +2492,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "phase_offset",
@@ -1955,24 +2503,40 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "true"
+        "default_json": "true",
+        "modulable": true
       }
     ]
   },
   {
     "node_type": "TimeFalloff",
-    "category": "Falloff",
+    "category": "Envelope",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Time envelope — influence that varies over time (start→end)",
+    "object_distribution": "Broadcast",
+    "stateful": false,
     "params": [
       {
         "key": "start_time",
@@ -1982,7 +2546,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "end_time",
@@ -1992,7 +2557,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "4.0"
+        "default_json": "4.0",
+        "modulable": true
       },
       {
         "key": "radius",
@@ -2002,7 +2568,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "curve",
@@ -2017,7 +2584,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"linear\""
+        "default_json": "\"linear\"",
+        "modulable": false
       },
       {
         "key": "plane",
@@ -2031,24 +2599,40 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"xz\""
+        "default_json": "\"xz\"",
+        "modulable": false
       }
     ]
   },
   {
     "node_type": "PointDistanceFalloff",
-    "category": "Falloff",
+    "category": "Envelope",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Influence based on distance to a point (center, max_distance)",
+    "object_distribution": "Broadcast",
+    "stateful": false,
     "params": [
       {
         "key": "center",
@@ -2058,7 +2642,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "[0.0,0.0,0.0]"
+        "default_json": "[0.0,0.0,0.0]",
+        "modulable": false
       },
       {
         "key": "max_distance",
@@ -2068,7 +2653,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "radius",
@@ -2078,7 +2664,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "curve",
@@ -2093,7 +2680,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"linear\""
+        "default_json": "\"linear\"",
+        "modulable": false
       },
       {
         "key": "plane",
@@ -2107,24 +2695,40 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"xz\""
+        "default_json": "\"xz\"",
+        "modulable": false
       }
     ]
   },
   {
     "node_type": "DirectionalFalloff",
-    "category": "Falloff",
+    "category": "Envelope",
     "scope": "SubOnly",
-    "feeds": "BasicModifiers",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Directional influence — cone along a direction",
+    "object_distribution": "Parametric",
+    "stateful": false,
     "params": [
       {
         "key": "direction",
@@ -2134,7 +2738,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "[0.0,0.0,1.0]"
+        "default_json": "[0.0,0.0,1.0]",
+        "modulable": false
       },
       {
         "key": "max_distance",
@@ -2144,7 +2749,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "curve",
@@ -2159,7 +2765,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"linear\""
+        "default_json": "\"linear\"",
+        "modulable": false
       },
       {
         "key": "radius",
@@ -2169,7 +2776,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "plane",
@@ -2183,24 +2791,40 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"xz\""
+        "default_json": "\"xz\"",
+        "modulable": false
       }
     ]
   },
   {
     "node_type": "AudioAmplitudeFalloff",
-    "category": "Falloff",
+    "category": "Envelope",
     "scope": "SubOnly",
-    "feeds": "BasicModifiers",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Modulation by audio amplitude (band, min, max)",
+    "object_distribution": "Broadcast",
+    "stateful": false,
     "params": [
       {
         "key": "band",
@@ -2215,7 +2839,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"rms\""
+        "default_json": "\"rms\"",
+        "modulable": false
       },
       {
         "key": "min_val",
@@ -2225,7 +2850,8 @@
         "step": 0.01,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "max_val",
@@ -2235,7 +2861,8 @@
         "step": 0.01,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "curve",
@@ -2250,7 +2877,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"linear\""
+        "default_json": "\"linear\"",
+        "modulable": false
       },
       {
         "key": "radius",
@@ -2260,7 +2888,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "plane",
@@ -2274,7 +2903,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"xz\""
+        "default_json": "\"xz\"",
+        "modulable": false
       }
     ]
   },
@@ -2282,15 +2912,25 @@
     "node_type": "Scale",
     "category": "Modifier",
     "scope": "Both",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": true,
     "description": "Multiplies positions by (x, y, z). To resize",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "x",
@@ -2300,7 +2940,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "y",
@@ -2310,7 +2951,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "z",
@@ -2320,7 +2962,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       }
     ]
   },
@@ -2328,15 +2971,25 @@
     "node_type": "Rotate",
     "category": "Modifier",
     "scope": "Both",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": true,
     "description": "Rotation around axes (angleX, angleY, angleZ in radians)",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "angleX",
@@ -2346,7 +2999,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "angleY",
@@ -2356,7 +3010,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "angleZ",
@@ -2366,7 +3021,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       }
     ]
   },
@@ -2374,15 +3030,25 @@
     "node_type": "Offset",
     "category": "Modifier",
     "scope": "Both",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": true,
     "description": "Translation (x, y, z). To shift a movement",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "x",
@@ -2392,7 +3058,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "y",
@@ -2402,7 +3069,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "z",
@@ -2412,7 +3080,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       }
     ]
   },
@@ -2420,15 +3089,25 @@
     "node_type": "PhaseShift",
     "category": "Modifier",
     "scope": "SubOnly",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Per-object time offset — each object lags behind the previous",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "shift",
@@ -2438,7 +3117,8 @@
         "step": 0.05,
         "min": 0.0,
         "max": 1.0,
-        "default_json": "0.1"
+        "default_json": "0.1",
+        "modulable": true
       }
     ]
   },
@@ -2446,15 +3126,25 @@
     "node_type": "Mirror",
     "category": "Modifier",
     "scope": "Both",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Mirrors positions across a plane (xy/xz/yz). For symmetric setups",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "plane",
@@ -2468,7 +3158,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"xz\""
+        "default_json": "\"xz\"",
+        "modulable": false
       },
       {
         "key": "offset",
@@ -2478,7 +3169,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       }
     ]
   },
@@ -2486,15 +3178,25 @@
     "node_type": "Clamp",
     "category": "Modifier",
     "scope": "Both",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Constrains positions inside a bounding box. Safety to stay within the venue",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "min_x",
@@ -2504,7 +3206,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "-5.0"
+        "default_json": "-5.0",
+        "modulable": true
       },
       {
         "key": "max_x",
@@ -2514,7 +3217,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "5.0"
+        "default_json": "5.0",
+        "modulable": true
       },
       {
         "key": "min_y",
@@ -2524,7 +3228,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "-5.0"
+        "default_json": "-5.0",
+        "modulable": true
       },
       {
         "key": "max_y",
@@ -2534,7 +3239,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "5.0"
+        "default_json": "5.0",
+        "modulable": true
       },
       {
         "key": "min_z",
@@ -2544,7 +3250,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "-5.0"
+        "default_json": "-5.0",
+        "modulable": true
       },
       {
         "key": "max_z",
@@ -2554,7 +3261,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "5.0"
+        "default_json": "5.0",
+        "modulable": true
       }
     ]
   },
@@ -2562,15 +3270,25 @@
     "node_type": "LFO",
     "category": "Modifier",
     "scope": "Both",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Adds an oscillation (sine/triangle/square/saw) on an axis. Breathing effect",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "waveform",
@@ -2585,7 +3303,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"sine\""
+        "default_json": "\"sine\"",
+        "modulable": false
       },
       {
         "key": "frequency",
@@ -2595,7 +3314,8 @@
         "step": 0.1,
         "min": 0.01,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "amplitude",
@@ -2605,7 +3325,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.3"
+        "default_json": "0.3",
+        "modulable": true
       },
       {
         "key": "axis",
@@ -2620,7 +3341,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"y\""
+        "default_json": "\"y\"",
+        "modulable": false
       },
       {
         "key": "phase",
@@ -2630,7 +3352,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       }
     ]
   },
@@ -2638,15 +3361,25 @@
     "node_type": "Jitter",
     "category": "Modifier",
     "scope": "Both",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Adds smooth organic noise. Makes a movement less mechanical",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "intensity",
@@ -2656,7 +3389,8 @@
         "step": 0.05,
         "min": 0.0,
         "max": null,
-        "default_json": "0.2"
+        "default_json": "0.2",
+        "modulable": true
       },
       {
         "key": "frequency",
@@ -2666,7 +3400,8 @@
         "step": 0.1,
         "min": 0.1,
         "max": null,
-        "default_json": "2.0"
+        "default_json": "2.0",
+        "modulable": true
       },
       {
         "key": "seed",
@@ -2676,7 +3411,119 @@
         "step": 1.0,
         "min": null,
         "max": null,
-        "default_json": "42"
+        "default_json": "42",
+        "modulable": false
+      }
+    ]
+  },
+  {
+    "node_type": "SpeedScale",
+    "category": "Modifier",
+    "scope": "SubOnly",
+    "inputs": [
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
+    ],
+    "description": "Multiplies upstream time: upstream(t × factor). factor<1 slows, >1 accelerates",
+    "object_distribution": "None",
+    "stateful": false,
+    "params": [
+      {
+        "key": "factor",
+        "label": "Factor",
+        "kind": "number",
+        "options": null,
+        "step": 0.05,
+        "min": 0.0,
+        "max": null,
+        "default_json": "1.0",
+        "modulable": true
+      }
+    ]
+  },
+  {
+    "node_type": "Delay",
+    "category": "Modifier",
+    "scope": "SubOnly",
+    "inputs": [
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
+    ],
+    "description": "Delays the upstream trajectory: upstream(t − delay). On stateful engines (physics) a look-back resets the sim — see stateful flag",
+    "object_distribution": "None",
+    "stateful": false,
+    "params": [
+      {
+        "key": "delay",
+        "label": "Delay (s)",
+        "kind": "number",
+        "options": null,
+        "step": 0.05,
+        "min": 0.0,
+        "max": null,
+        "default_json": "0.5",
+        "modulable": true
+      }
+    ]
+  },
+  {
+    "node_type": "Freeze",
+    "category": "Modifier",
+    "scope": "SubOnly",
+    "inputs": [
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
+    ],
+    "description": "Holds the last computed positions while enabled — live safety hold",
+    "object_distribution": "None",
+    "stateful": false,
+    "params": [
+      {
+        "key": "enabled",
+        "label": "Enabled",
+        "kind": "boolean",
+        "options": null,
+        "step": null,
+        "min": null,
+        "max": null,
+        "default_json": "true",
+        "modulable": true
       }
     ]
   },
@@ -2684,15 +3531,25 @@
     "node_type": "RadiusScale",
     "category": "PostProcess",
     "scope": "GlobalOnly",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Radial scaling relative to origin (radius_scale). Global — applied after merge",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "radius_scale",
@@ -2702,7 +3559,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       }
     ]
   },
@@ -2710,15 +3568,25 @@
     "node_type": "HeightOffset",
     "category": "PostProcess",
     "scope": "GlobalOnly",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Post-merge vertical offset (height_offset). To adjust global height",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "height_offset",
@@ -2728,7 +3596,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       }
     ]
   },
@@ -2736,15 +3605,25 @@
     "node_type": "PerTrackDepth",
     "category": "PostProcess",
     "scope": "GlobalOnly",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Per-track depth — interpolate between origin and position. For depth mapping",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "depths",
@@ -2754,7 +3633,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "[]"
+        "default_json": "[]",
+        "modulable": false
       }
     ]
   },
@@ -2762,30 +3642,50 @@
     "node_type": "Barycenter",
     "category": "PostProcess",
     "scope": "GlobalOnly",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Computes the origin from .hol track positions. Group center",
+    "object_distribution": "None",
+    "stateful": false,
     "params": []
   },
   {
     "node_type": "AudioFalloff",
     "category": "PostProcess",
     "scope": "GlobalOnly",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Modulates a param (scale/height) by audio amplitude. For musical reactivity",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "amount",
@@ -2795,7 +3695,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "target",
@@ -2808,7 +3709,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"scale\""
+        "default_json": "\"scale\"",
+        "modulable": false
       }
     ]
   },
@@ -2816,30 +3718,43 @@
     "node_type": "ManualPosition",
     "category": "PostProcess",
     "scope": "GlobalOnly",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Manual position override — reads 3D drags. For hand positioning",
+    "object_distribution": "None",
+    "stateful": false,
     "params": []
   },
   {
     "node_type": "Zone",
     "category": "PostProcess",
     "scope": "GlobalOnly",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
-    "outputs": [
-      "output"
-    ],
-    "falloff_target": false,
+    "outputs": [],
     "description": "Spatial region (sphere/box) pulling object channels toward target values — gain/spread/etc. vary with position. Pass-through: doesn't modify positions",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "shape",
@@ -2852,7 +3767,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"sphere\""
+        "default_json": "\"sphere\"",
+        "modulable": false
       },
       {
         "key": "center",
@@ -2862,7 +3778,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "[0.0,0.0,0.0]"
+        "default_json": "[0.0,0.0,0.0]",
+        "modulable": false
       },
       {
         "key": "radius",
@@ -2872,7 +3789,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "2.0"
+        "default_json": "2.0",
+        "modulable": true
       },
       {
         "key": "min",
@@ -2882,7 +3800,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "[-1.0,-1.0,-1.0]"
+        "default_json": "[-1.0,-1.0,-1.0]",
+        "modulable": false
       },
       {
         "key": "max",
@@ -2892,7 +3811,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "[1.0,1.0,1.0]"
+        "default_json": "[1.0,1.0,1.0]",
+        "modulable": false
       },
       {
         "key": "falloff",
@@ -2902,7 +3822,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "channels",
@@ -2912,7 +3833,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"gain=0\""
+        "default_json": "\"gain=0\"",
+        "modulable": false
       },
       {
         "key": "objects",
@@ -2922,7 +3844,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"\""
+        "default_json": "\"\"",
+        "modulable": false
       },
       {
         "key": "enabled",
@@ -2932,7 +3855,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "true"
+        "default_json": "true",
+        "modulable": true
       }
     ]
   },
@@ -2940,15 +3864,18 @@
     "node_type": "Velocity",
     "category": "PostProcess",
     "scope": "GlobalOnly",
-    "feeds": "ModifierChain",
     "inputs": [
-      "input"
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": true,
+        "label": "in"
+      }
     ],
-    "outputs": [
-      "output"
-    ],
-    "falloff_target": false,
+    "outputs": [],
     "description": "Kinematic modulation — object speed/accel/jerk/angvel → spatial channel. angvel = angular speed °/s around the listener (perceptual bound). Pass-through: doesn't modify positions",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "source",
@@ -2963,7 +3890,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"speed\""
+        "default_json": "\"speed\"",
+        "modulable": false
       },
       {
         "key": "channel",
@@ -2981,7 +3909,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"spread\""
+        "default_json": "\"spread\"",
+        "modulable": false
       },
       {
         "key": "scale",
@@ -2991,7 +3920,8 @@
         "step": 0.01,
         "min": null,
         "max": null,
-        "default_json": "0.1"
+        "default_json": "0.1",
+        "modulable": true
       },
       {
         "key": "offset",
@@ -3001,7 +3931,8 @@
         "step": 0.01,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "min",
@@ -3011,7 +3942,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"\""
+        "default_json": "\"\"",
+        "modulable": false
       },
       {
         "key": "max",
@@ -3021,7 +3953,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"1\""
+        "default_json": "\"1\"",
+        "modulable": false
       },
       {
         "key": "object",
@@ -3031,7 +3964,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"\""
+        "default_json": "\"\"",
+        "modulable": false
       },
       {
         "key": "listener",
@@ -3041,7 +3975,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "[0.0,0.0,0.0]"
+        "default_json": "[0.0,0.0,0.0]",
+        "modulable": false
       }
     ]
   },
@@ -3049,17 +3984,31 @@
     "node_type": "Mix",
     "category": "Composite",
     "scope": "SubOnly",
-    "feeds": "Composites",
     "inputs": [
-      "input",
-      "input_a",
-      "input_b"
+      {
+        "name": "a",
+        "port_type": "Positions",
+        "required": true,
+        "label": "a"
+      },
+      {
+        "name": "b",
+        "port_type": "Positions",
+        "required": true,
+        "label": "b"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Linear blend between 2 trajectories (0=A, 1=B). To merge 2 movements",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "blend",
@@ -3069,7 +4018,8 @@
         "step": 0.01,
         "min": 0.0,
         "max": 1.0,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       }
     ]
   },
@@ -3077,51 +4027,93 @@
     "node_type": "Group",
     "category": "Composite",
     "scope": "SubOnly",
-    "feeds": "Composites",
     "inputs": [
-      "input",
-      "input_a",
-      "input_b"
+      {
+        "name": "a",
+        "port_type": "Positions",
+        "required": true,
+        "label": "a"
+      },
+      {
+        "name": "b",
+        "port_type": "Positions",
+        "required": true,
+        "label": "b"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
-    "description": "Splits N objects into 2 groups: A→[0..n/2], B→[n/2..n]. For different track assignments",
+    "description": "Splits objects by branch A's n_objects: A→[0..n_a), B→[n_a..n). For different track assignments",
+    "object_distribution": "None",
+    "stateful": false,
     "params": []
   },
   {
     "node_type": "Sequence",
     "category": "Composite",
     "scope": "SubOnly",
-    "feeds": "Composites",
     "inputs": [
-      "input",
-      "input_a",
-      "input_b"
+      {
+        "name": "a",
+        "port_type": "Positions",
+        "required": true,
+        "label": "a"
+      },
+      {
+        "name": "b",
+        "port_type": "Positions",
+        "required": true,
+        "label": "b"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Chains 2 trajectories in time: A for its duration, then B. Hard cut",
+    "object_distribution": "None",
+    "stateful": false,
     "params": []
   },
   {
     "node_type": "Crossfade",
     "category": "Composite",
     "scope": "SubOnly",
-    "feeds": "Composites",
     "inputs": [
-      "input",
-      "input_a",
-      "input_b"
+      {
+        "name": "a",
+        "port_type": "Positions",
+        "required": true,
+        "label": "a"
+      },
+      {
+        "name": "b",
+        "port_type": "Positions",
+        "required": true,
+        "label": "b"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Chains A→B with a crossfade. Smoother than Sequence",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "fade_duration",
@@ -3131,7 +4123,51 @@
         "step": 0.1,
         "min": 0.1,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
+      }
+    ]
+  },
+  {
+    "node_type": "Switch",
+    "category": "Composite",
+    "scope": "SubOnly",
+    "inputs": [
+      {
+        "name": "a",
+        "port_type": "Positions",
+        "required": true,
+        "label": "a"
+      },
+      {
+        "name": "b",
+        "port_type": "Positions",
+        "required": true,
+        "label": "b"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
+    ],
+    "description": "Selects A or B by index — manual/OSC-driven, not time-sliced like Sequence",
+    "object_distribution": "None",
+    "stateful": false,
+    "params": [
+      {
+        "key": "select",
+        "label": "Select",
+        "kind": "number",
+        "options": null,
+        "step": 1.0,
+        "min": 0.0,
+        "max": 1.0,
+        "default_json": "0.0",
+        "modulable": true
       }
     ]
   },
@@ -3139,16 +4175,31 @@
     "node_type": "BPM",
     "category": "Source",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Circular motion synced to detected BPM",
+    "object_distribution": "Broadcast",
+    "stateful": false,
     "params": [
       {
         "key": "bpm",
@@ -3158,7 +4209,8 @@
         "step": 1.0,
         "min": 1.0,
         "max": null,
-        "default_json": "120"
+        "default_json": "120",
+        "modulable": true
       },
       {
         "key": "radius",
@@ -3168,7 +4220,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "plane",
@@ -3182,7 +4235,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"xz\""
+        "default_json": "\"xz\"",
+        "modulable": false
       }
     ]
   },
@@ -3190,16 +4244,31 @@
     "node_type": "AudioAmplitude",
     "category": "Source",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Audio amplitude modulates a circle radius",
+    "object_distribution": "Broadcast",
+    "stateful": false,
     "params": [
       {
         "key": "amplitude",
@@ -3209,7 +4278,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "radius",
@@ -3219,7 +4289,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "band",
@@ -3234,7 +4305,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"rms\""
+        "default_json": "\"rms\"",
+        "modulable": false
       },
       {
         "key": "plane",
@@ -3248,7 +4320,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"xz\""
+        "default_json": "\"xz\"",
+        "modulable": false
       }
     ]
   },
@@ -3256,16 +4329,31 @@
     "node_type": "AudioSpectrum",
     "category": "Source",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Audio spectrum FFT band → position",
+    "object_distribution": "Parametric",
+    "stateful": false,
     "params": [
       {
         "key": "band",
@@ -3280,7 +4368,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"bass\""
+        "default_json": "\"bass\"",
+        "modulable": false
       },
       {
         "key": "radius",
@@ -3290,7 +4379,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "n_bands",
@@ -3300,7 +4390,8 @@
         "step": 1.0,
         "min": 1.0,
         "max": 64.0,
-        "default_json": "8"
+        "default_json": "8",
+        "modulable": true
       },
       {
         "key": "plane",
@@ -3314,7 +4405,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"xz\""
+        "default_json": "\"xz\"",
+        "modulable": false
       }
     ]
   },
@@ -3322,16 +4414,31 @@
     "node_type": "OSCInput",
     "category": "Source",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Receives an OSC value (scalar→angle, array→XYZ) and converts it to a position",
+    "object_distribution": "Angular",
+    "stateful": false,
     "params": [
       {
         "key": "address",
@@ -3341,7 +4448,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"/track/1/xyz\""
+        "default_json": "\"/track/1/xyz\"",
+        "modulable": false
       },
       {
         "key": "radius",
@@ -3351,7 +4459,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "scale",
@@ -3361,7 +4470,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "offset_x",
@@ -3371,7 +4481,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "offset_y",
@@ -3381,7 +4492,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "offset_z",
@@ -3391,7 +4503,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       }
     ]
   },
@@ -3399,18 +4512,49 @@
     "node_type": "Plugin",
     "category": "Plugin",
     "scope": "SubOnly",
-    "feeds": "Trajectory",
     "inputs": [
-      "input",
-      "input_a",
-      "input_b",
-      "duration"
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      },
+      {
+        "name": "in",
+        "port_type": "Positions",
+        "required": false,
+        "label": "in"
+      },
+      {
+        "name": "a",
+        "port_type": "Positions",
+        "required": false,
+        "label": "a"
+      },
+      {
+        "name": "b",
+        "port_type": "Positions",
+        "required": false,
+        "label": "b"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "External WASM plugin (.ssx bundle) — plugin_id selects the loaded plugin",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "plugin_id",
@@ -3420,7 +4564,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"\""
+        "default_json": "\"\"",
+        "modulable": false
       }
     ]
   },
@@ -3428,13 +4573,18 @@
     "node_type": "SignalConst",
     "category": "Signal",
     "scope": "SignalOnly",
-    "feeds": "Signal",
     "inputs": [],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Constant value — bridge for manual live control (UI slider → param). Modulation graph source",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "value",
@@ -3444,7 +4594,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       }
     ]
   },
@@ -3452,13 +4603,18 @@
     "node_type": "SignalTime",
     "category": "Signal",
     "scope": "SignalOnly",
-    "feeds": "Signal",
     "inputs": [],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Elapsed time as signal — ramps, periodic patterns. wrap=0 → unbounded",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "rate",
@@ -3468,7 +4624,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": 10.0,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "wrap",
@@ -3478,7 +4635,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       }
     ]
   },
@@ -3486,13 +4644,18 @@
     "node_type": "SignalLfo",
     "category": "Signal",
     "scope": "SignalOnly",
-    "feeds": "Signal",
     "inputs": [],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Low-frequency oscillator — periodic macro animation. The classic 'animate anything'",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "waveform",
@@ -3508,7 +4671,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"sine\""
+        "default_json": "\"sine\"",
+        "modulable": false
       },
       {
         "key": "frequency",
@@ -3518,7 +4682,8 @@
         "step": 0.01,
         "min": 0.0,
         "max": 10.0,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "amplitude",
@@ -3528,7 +4693,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "center",
@@ -3538,7 +4704,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "phase",
@@ -3548,7 +4715,8 @@
         "step": 0.01,
         "min": 0.0,
         "max": 6.283185307179586,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       }
     ]
   },
@@ -3556,13 +4724,18 @@
     "node_type": "SignalAudio",
     "category": "Signal",
     "scope": "SignalOnly",
-    "feeds": "Signal",
     "inputs": [],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Audio source → signal (rms/bass/mid/high/bpm/FFT band). Music-reactive macros",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "band",
@@ -3579,7 +4752,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"rms\""
+        "default_json": "\"rms\"",
+        "modulable": false
       },
       {
         "key": "index",
@@ -3589,7 +4763,8 @@
         "step": 1.0,
         "min": 0.0,
         "max": 63.0,
-        "default_json": "0"
+        "default_json": "0",
+        "modulable": true
       },
       {
         "key": "smoothing",
@@ -3599,7 +4774,8 @@
         "step": 0.01,
         "min": 0.0,
         "max": 0.95,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       }
     ]
   },
@@ -3607,13 +4783,18 @@
     "node_type": "SignalOsc",
     "category": "Signal",
     "scope": "SignalOnly",
-    "feeds": "Signal",
     "inputs": [],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Incoming OSC value → signal. External controllers (faders, sensors)",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "name",
@@ -3623,7 +4804,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"fader1\""
+        "default_json": "\"fader1\"",
+        "modulable": false
       },
       {
         "key": "index",
@@ -3633,7 +4815,8 @@
         "step": 1.0,
         "min": 0.0,
         "max": 7.0,
-        "default_json": "0"
+        "default_json": "0",
+        "modulable": true
       }
     ]
   },
@@ -3641,13 +4824,18 @@
     "node_type": "SignalRandom",
     "category": "Signal",
     "scope": "SignalOnly",
-    "feeds": "Signal",
     "inputs": [],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Smooth deterministic noise — organic drift. Sum of incommensurate sinusoids",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "rate",
@@ -3657,7 +4845,8 @@
         "step": 0.01,
         "min": 0.0,
         "max": 10.0,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "amplitude",
@@ -3667,7 +4856,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "seed",
@@ -3677,7 +4867,8 @@
         "step": 1.0,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": false
       }
     ]
   },
@@ -3685,16 +4876,31 @@
     "node_type": "SignalMath",
     "category": "Signal",
     "scope": "SignalOnly",
-    "feeds": "Signal",
     "inputs": [
-      "a",
-      "b"
+      {
+        "name": "a",
+        "port_type": "Signal",
+        "required": false,
+        "label": "a"
+      },
+      {
+        "name": "b",
+        "port_type": "Signal",
+        "required": false,
+        "label": "b"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Scalar math — combine signals. Unconnected inputs fall back to params a/b",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "op",
@@ -3715,7 +4921,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"add\""
+        "default_json": "\"add\"",
+        "modulable": false
       },
       {
         "key": "a",
@@ -3725,7 +4932,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "b",
@@ -3735,7 +4943,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       }
     ]
   },
@@ -3743,15 +4952,25 @@
     "node_type": "SignalMap",
     "category": "Signal",
     "scope": "SignalOnly",
-    "feeds": "Signal",
     "inputs": [
-      "signal"
+      {
+        "name": "signal",
+        "port_type": "Signal",
+        "required": false,
+        "label": "signal"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Linear remap in_min..in_max → out_min..out_max, optional clamp",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "in_min",
@@ -3761,7 +4980,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "in_max",
@@ -3771,7 +4991,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "out_min",
@@ -3781,7 +5002,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "out_max",
@@ -3791,7 +5013,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       },
       {
         "key": "clamp",
@@ -3801,7 +5024,8 @@
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "true"
+        "default_json": "true",
+        "modulable": true
       }
     ]
   },
@@ -3809,15 +5033,25 @@
     "node_type": "SignalClamp",
     "category": "Signal",
     "scope": "SignalOnly",
-    "feeds": "Signal",
     "inputs": [
-      "signal"
+      {
+        "name": "signal",
+        "port_type": "Signal",
+        "required": false,
+        "label": "signal"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Clamp signal to [min, max] — safety bound before MacroOut",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "min",
@@ -3827,7 +5061,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "max",
@@ -3837,7 +5072,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       }
     ]
   },
@@ -3845,17 +5081,37 @@
     "node_type": "SignalMix",
     "category": "Signal",
     "scope": "SignalOnly",
-    "feeds": "Signal",
     "inputs": [
-      "a",
-      "b",
-      "factor"
+      {
+        "name": "a",
+        "port_type": "Signal",
+        "required": false,
+        "label": "a"
+      },
+      {
+        "name": "b",
+        "port_type": "Signal",
+        "required": false,
+        "label": "b"
+      },
+      {
+        "name": "factor",
+        "port_type": "Signal",
+        "required": false,
+        "label": "factor"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Crossfade between two signals (factor 0=A, 1=B) — factor can itself be a signal",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "factor",
@@ -3865,7 +5121,8 @@
         "step": 0.01,
         "min": 0.0,
         "max": 1.0,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       }
     ]
   },
@@ -3873,15 +5130,25 @@
     "node_type": "SignalSlew",
     "category": "Signal",
     "scope": "SignalOnly",
-    "feeds": "Signal",
     "inputs": [
-      "signal"
+      {
+        "name": "signal",
+        "port_type": "Signal",
+        "required": false,
+        "label": "signal"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Slew rate limiter — asymmetric physical smoothing (rise/fall units per second)",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "rise_rate",
@@ -3891,7 +5158,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       },
       {
         "key": "fall_rate",
@@ -3901,7 +5169,8 @@
         "step": 0.1,
         "min": 0.0,
         "max": null,
-        "default_json": "0.0"
+        "default_json": "0.0",
+        "modulable": true
       }
     ]
   },
@@ -3909,15 +5178,25 @@
     "node_type": "SignalEnvelope",
     "category": "Signal",
     "scope": "SignalOnly",
-    "feeds": "Signal",
     "inputs": [
-      "signal"
+      {
+        "name": "signal",
+        "port_type": "Signal",
+        "required": false,
+        "label": "signal"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Envelope follower — retention factors per frame (small=fast, big=slow). Audio punch → macro",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "attack",
@@ -3927,7 +5206,8 @@
         "step": 0.01,
         "min": 0.0,
         "max": 1.0,
-        "default_json": "0.2"
+        "default_json": "0.2",
+        "modulable": true
       },
       {
         "key": "release",
@@ -3937,7 +5217,8 @@
         "step": 0.01,
         "min": 0.0,
         "max": 1.0,
-        "default_json": "0.95"
+        "default_json": "0.95",
+        "modulable": true
       }
     ]
   },
@@ -3945,15 +5226,25 @@
     "node_type": "SignalThreshold",
     "category": "Signal",
     "scope": "SignalOnly",
-    "feeds": "Signal",
     "inputs": [
-      "signal"
+      {
+        "name": "signal",
+        "port_type": "Signal",
+        "required": false,
+        "label": "signal"
+      }
     ],
     "outputs": [
-      "output"
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
     ],
-    "falloff_target": false,
     "description": "Hysteresis gate — 1 above threshold, 0 below threshold-hysteresis, holds between",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "threshold",
@@ -3963,7 +5254,8 @@
         "step": 0.01,
         "min": null,
         "max": null,
-        "default_json": "0.5"
+        "default_json": "0.5",
+        "modulable": true
       },
       {
         "key": "hysteresis",
@@ -3973,7 +5265,189 @@
         "step": 0.01,
         "min": 0.0,
         "max": null,
-        "default_json": "0.05"
+        "default_json": "0.05",
+        "modulable": true
+      }
+    ]
+  },
+  {
+    "node_type": "SignalBeat",
+    "category": "Signal",
+    "scope": "SignalOnly",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
+    ],
+    "description": "Rhythmic pulse from detected audio beat — 1.0 during `width` of each beat period, 0 otherwise. Falls back to param bpm without audio",
+    "object_distribution": "None",
+    "stateful": false,
+    "params": [
+      {
+        "key": "bpm",
+        "label": "BPM (fallback)",
+        "kind": "number",
+        "options": null,
+        "step": 1.0,
+        "min": 30.0,
+        "max": null,
+        "default_json": "120",
+        "modulable": true
+      },
+      {
+        "key": "width",
+        "label": "Pulse Width",
+        "kind": "number",
+        "options": null,
+        "step": 0.05,
+        "min": 0.01,
+        "max": 1.0,
+        "default_json": "0.25",
+        "modulable": true
+      }
+    ]
+  },
+  {
+    "node_type": "SignalSampleHold",
+    "category": "Signal",
+    "scope": "SignalOnly",
+    "inputs": [
+      {
+        "name": "signal",
+        "port_type": "Signal",
+        "required": false,
+        "label": "signal"
+      },
+      {
+        "name": "trigger",
+        "port_type": "Signal",
+        "required": false,
+        "label": "trigger"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
+    ],
+    "description": "Sample & hold — latches `signal` on `trigger` rising edge, holds otherwise",
+    "object_distribution": "None",
+    "stateful": false,
+    "params": [
+      {
+        "key": "threshold",
+        "label": "Trigger Threshold",
+        "kind": "number",
+        "options": null,
+        "step": 0.01,
+        "min": 0.0,
+        "max": 1.0,
+        "default_json": "0.5",
+        "modulable": true
+      }
+    ]
+  },
+  {
+    "node_type": "SignalMux",
+    "category": "Signal",
+    "scope": "SignalOnly",
+    "inputs": [
+      {
+        "name": "a",
+        "port_type": "Signal",
+        "required": false,
+        "label": "a"
+      },
+      {
+        "name": "b",
+        "port_type": "Signal",
+        "required": false,
+        "label": "b"
+      },
+      {
+        "name": "sel",
+        "port_type": "Signal",
+        "required": false,
+        "label": "sel"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
+    ],
+    "description": "Selects a or b by `sel` — signal-driven switch",
+    "object_distribution": "None",
+    "stateful": false,
+    "params": [
+      {
+        "key": "threshold",
+        "label": "Threshold",
+        "kind": "number",
+        "options": null,
+        "step": 0.01,
+        "min": 0.0,
+        "max": 1.0,
+        "default_json": "0.5",
+        "modulable": true
+      }
+    ]
+  },
+  {
+    "node_type": "SignalCounter",
+    "category": "Signal",
+    "scope": "SignalOnly",
+    "inputs": [
+      {
+        "name": "trigger",
+        "port_type": "Signal",
+        "required": false,
+        "label": "trigger"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "out",
+        "port_type": "Signal",
+        "required": false,
+        "label": "out"
+      }
+    ],
+    "description": "Counts `trigger` rising edges — wraps to 0 when `max` > 0 is reached",
+    "object_distribution": "None",
+    "stateful": false,
+    "params": [
+      {
+        "key": "threshold",
+        "label": "Trigger Threshold",
+        "kind": "number",
+        "options": null,
+        "step": 0.01,
+        "min": 0.0,
+        "max": 1.0,
+        "default_json": "0.5",
+        "modulable": true
+      },
+      {
+        "key": "max",
+        "label": "Wrap At",
+        "kind": "number",
+        "options": null,
+        "step": 1.0,
+        "min": 0.0,
+        "max": null,
+        "default_json": "0.0",
+        "modulable": true
       }
     ]
   },
@@ -3981,34 +5455,29 @@
     "node_type": "SignalOut",
     "category": "Signal",
     "scope": "SignalOnly",
-    "feeds": "Terminal",
     "inputs": [
-      "signal"
+      {
+        "name": "signal",
+        "port_type": "Signal",
+        "required": true,
+        "label": "signal"
+      }
     ],
     "outputs": [],
-    "falloff_target": false,
-    "description": "Modulation sink — writes signal as ADDITIVE delta on a macro (panel/OSC/cue base + delta). speed only applies per-move",
+    "description": "Modulation sink — writes signal as ADDITIVE delta. target: macro (scale, shift_x, shift_y, shift_z, yaw, pitch, roll, radius_scale, height_offset, speed per-move) or param:<NodeType>:<key> to modulate any node param",
+    "object_distribution": "None",
+    "stateful": false,
     "params": [
       {
         "key": "target",
         "label": "Target",
-        "kind": "enum",
-        "options": [
-          "speed",
-          "scale",
-          "shift_x",
-          "shift_y",
-          "shift_z",
-          "yaw",
-          "pitch",
-          "roll",
-          "radius_scale",
-          "height_offset"
-        ],
+        "kind": "string",
+        "options": null,
         "step": null,
         "min": null,
         "max": null,
-        "default_json": "\"yaw\""
+        "default_json": "\"yaw\"",
+        "modulable": false
       },
       {
         "key": "amount",
@@ -4018,7 +5487,8 @@
         "step": 0.1,
         "min": null,
         "max": null,
-        "default_json": "1.0"
+        "default_json": "1.0",
+        "modulable": true
       }
     ]
   }

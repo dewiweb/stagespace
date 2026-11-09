@@ -225,3 +225,20 @@ body {
 .animate-fadein {
   animation: fadein 0.2s ease-out;
 }
+
+/* Diagnostics backend (Lot 3) — erreurs/warnings sur les nodes */
+.rf-node-error .react-flow__node-custom,
+.rf-node-error > div:first-child {
+  outline: 2px solid #ef4444;
+  outline-offset: -1px;
+  border-radius: 8px;
+}
+.rf-node-warning .react-flow__node-custom,
+.rf-node-warning > div:first-child {
+  outline: 2px solid #f59e0b;
+  outline-offset: -1px;
+  border-radius: 8px;
+}
+.rf-node-warning {
+  opacity: 0.75;
+}

@@ -1,6 +1,8 @@
 import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
 import { Move3d, MousePointerClick, Pencil } from 'lucide-react';
+import { ModeBanner } from './ui/ModeBanner';
+import { isDetachedWindow } from '../utils/safeStorage';
 
 interface ModeButtonsProps {
   manipulateMode: boolean;
@@ -19,6 +21,12 @@ export const ModeButtons: React.FC<ModeButtonsProps> = ({
 }) => {
   const drawMode = useGraphStore((s) => s.drawMode);
   const setDrawMode = useGraphStore((s) => s.setDrawMode);
+  const clearDrawnPoints = useGraphStore((s) => s.clearDrawnPoints);
+  // Fenêtre ?view=run : son store est local à ce webview — assign/draw
+  // y écriraient un état qui diverge de la fenêtre principale sans
+  // persister (le broadcast live:state ne couvre pas l'édition). Seul
+  // Manipulate y reste utile : il agit via IPC backend, pas le store.
+  const detached = isDetachedWindow();
   const hasDrawableNode = useGraphStore((s) =>
     s.nodes.some((n) =>
       n.data.type === 'DrawSpline' ||
@@ -30,11 +38,25 @@ export const ModeButtons: React.FC<ModeButtonsProps> = ({
     )
   );
 
-  if (drawMode) return null;
+  if (drawMode) {
+    // Une sortie de mode au clic — les couches interactives couvrent le
+    // canvas, le bouton doit rester accessible (Esc reste le raccourci).
+    return (
+      <div className="absolute bottom-2 left-2 z-raised flex gap-1 flex-wrap max-w-[calc(100%-8px)]">
+        <button
+          onClick={() => { clearDrawnPoints(); setDrawMode(false); }}
+          className="px-2.5 py-1 text-xs rounded font-medium transition-colors bg-orange-700 text-white hover:bg-orange-600"
+          title="Quitter le mode dessin (Esc)"
+        >
+          <Pencil size={11} className="inline -mt-0.5" /> Exit Draw
+        </button>
+      </div>
+    );
+  }
 
   return (
     <>
-      <div className="absolute bottom-2 left-2 z-overlay flex gap-1">
+      <div className="absolute bottom-2 left-2 z-raised flex gap-1 flex-wrap max-w-[calc(100%-8px)]">
         <button
           onClick={() => setManipulateMode(!manipulateMode)}
           className={`px-2.5 py-1 text-xs rounded font-medium transition-colors ${
@@ -43,31 +65,38 @@ export const ModeButtons: React.FC<ModeButtonsProps> = ({
         >
           <Move3d size={11} className="inline -mt-0.5" /> Manipulate
         </button>
-        <button
-          onClick={() => setAssignMode(!assignMode)}
-          className={`px-2.5 py-1 text-xs rounded font-medium transition-colors ${
-            assignMode ? 'bg-green-600 text-white' : 'bg-gray-900/80 text-gray-400 hover:text-white border border-gray-700'
-          }`}
-          title="Assign mode — click objects in the scene to toggle their track"
-        >
-          <MousePointerClick size={11} className="inline -mt-0.5" /> Assign
-        </button>
-        {hasDrawableNode && (
+        {!detached && (
           <button
-            onClick={() => { setDrawMode(true); setManipulateMode(false); }}
-            className="px-2.5 py-1 text-xs rounded font-medium transition-colors bg-gray-900/80 text-gray-400 hover:text-white border border-gray-700"
-            title="Draw a freehand spline trajectory (or flow line for a drawn VectorField)"
+            onClick={() => setAssignMode(!assignMode)}
+            className={`px-2.5 py-1 text-xs rounded font-medium transition-colors ${
+              assignMode ? 'bg-green-600 text-white' : 'bg-gray-900/80 text-gray-400 hover:text-white border border-gray-700'
+            }`}
+            title="Assign mode — click objects in the scene to toggle their track"
+          >
+            <MousePointerClick size={11} className="inline -mt-0.5" /> Assign
+          </button>
+        )}
+        {!detached && (
+          <button
+            onClick={() => hasDrawableNode && setDrawMode(true)}
+            disabled={!hasDrawableNode}
+            className={`px-2.5 py-1 text-xs rounded font-medium transition-colors ${
+              hasDrawableNode
+                ? 'bg-gray-900/80 text-gray-400 hover:text-white border border-gray-700'
+                : 'bg-gray-900/40 text-gray-600 border border-gray-800 cursor-not-allowed'
+            }`}
+            title={hasDrawableNode
+              ? 'Draw a freehand spline trajectory (or flow line for a drawn VectorField)'
+              : 'No drawable node — add a DrawSpline / EvaluateSpline / VectorField(drawn) node first'}
           >
             <Pencil size={11} className="inline -mt-0.5" /> Draw
           </button>
         )}
       </div>
       {manipulateMode && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-overlay bg-gray-900/90 backdrop-blur rounded-lg px-3 py-1.5 border border-blue-600/50">
-          <span className="text-blue-400 text-xs font-medium">
-            <Move3d size={11} className="inline -mt-0.5" /> Manipulate — drag handle: move · shift+drag: rotate · scroll: scale · drag object: override
-          </span>
-        </div>
+        <ModeBanner variant="tracking">
+          <Move3d size={11} className="inline -mt-0.5" /> Manipulate — drag handle: move · shift+drag: rotate · scroll: scale · drag object: override (Esc to cancel)
+        </ModeBanner>
       )}
     </>
   );

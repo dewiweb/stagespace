@@ -16,10 +16,10 @@ describe('insertNodeOnEdge', () => {
     const inserted = makeNode('scale-1', 'Scale', { factor: 1.5 });
     const edgeIn = {
       id: 'e-eng-1-scale-1-in', source: old.source, sourceHandle: old.sourceHandle,
-      target: inserted.id, targetHandle: 'input',
+      target: inserted.id, targetHandle: 'in',
     } as any;
     const edgeOut = {
-      id: 'e-scale-1-out-1-out', source: inserted.id, sourceHandle: 'output',
+      id: 'e-scale-1-out-1-out', source: inserted.id, sourceHandle: 'out',
       target: old.target, targetHandle: old.targetHandle,
     } as any;
     useGraphStore.getState().insertNodeOnEdge(inserted, old.id, edgeIn, edgeOut);
@@ -34,9 +34,9 @@ describe('insertNodeOnEdge', () => {
     const eIn = s.edges.find((e) => e.target === 'scale-1');
     const eOut = s.edges.find((e) => e.source === 'scale-1');
     expect(eIn?.source).toBe('eng-1');
-    expect(eIn?.targetHandle).toBe('input');
+    expect(eIn?.targetHandle).toBe('in');
     expect(eOut?.target).toBe('out-1');
-    expect(eOut?.targetHandle).toBe('input');
+    expect(eOut?.targetHandle).toBe('in');
     // Les autres edges sont préservées
     expect(s.edges).toHaveLength(4); // 3 - 1 + 2
   });

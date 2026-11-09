@@ -60,7 +60,7 @@ RUST_BACKTRACE=1 cargo test --lib
 
 ## Couverture de tests
 
-Actuellement, STAGESPACE a **105 tests** qui couvrent :
+Actuellement, STAGESPACE a **519 tests** qui couvrent :
 
 - 22 moteurs (tests unitaires)
 - Validation de graphes

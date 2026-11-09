@@ -180,6 +180,7 @@ fn main() {
         osc_ids.clone(),
         vec![0, 1], // track_indices dans la liste globale
         false,
+        stagespace_engines::EndMode::default(),
     );
 
     let anim_state = AnimationState::from_animation(&anim, &osc_ids);
@@ -277,6 +278,7 @@ fn main() {
         osc_ids2.clone(),
         vec![0, 1, 2],
         false,
+        stagespace_engines::EndMode::default(),
     );
 
     let anim_state2 = AnimationState::from_animation(&anim2, &osc_ids2);

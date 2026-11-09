@@ -95,6 +95,9 @@ mod tests {
         NodeType::Clamp,
         NodeType::LFO,
         NodeType::Jitter,
+        NodeType::SpeedScale,
+        NodeType::Delay,
+        NodeType::Freeze,
     ];
 
     const COMPOSITES: &[NodeType] = &[
@@ -102,6 +105,7 @@ mod tests {
         NodeType::Group,
         NodeType::Sequence,
         NodeType::Crossfade,
+        NodeType::Switch,
     ];
 
     /// Falloffs restreints : ne peuvent alimenter que Scale/Rotate/Offset.
@@ -129,10 +133,13 @@ mod tests {
             | NodeType::Mirror
             | NodeType::Clamp
             | NodeType::LFO
-            | NodeType::Jitter => extend(&mut v, &[MATH, MODIFIERS]),
+            | NodeType::Jitter
+            | NodeType::SpeedScale
+            | NodeType::Delay
+            | NodeType::Freeze => extend(&mut v, &[MATH, MODIFIERS]),
             // Les modifiers ne peuvent pas alimenter Sequence.
             NodeType::Sequence => extend(&mut v, &[MATH, PHYSICS, COMPOSITES]),
-            NodeType::Mix | NodeType::Group | NodeType::Crossfade => {
+            NodeType::Mix | NodeType::Group | NodeType::Crossfade | NodeType::Switch => {
                 extend(&mut v, &[MATH, PHYSICS, COMPOSITES, MODIFIERS])
             }
             _ => unreachable!("not a consumer: {parent:?}"),
@@ -165,6 +172,8 @@ mod tests {
 
     struct Gen<'a> {
         rng: &'a mut SimpleRng,
+        /// Mode hostile : params aux bornes dans `params_for`.
+        extreme: bool,
         graph: Graph,
         objects: NodeId,
         duration: NodeId,
@@ -188,10 +197,23 @@ mod tests {
         }
 
         fn wire(&mut self, from: NodeId, to: NodeId, to_port: &str) {
+            // Le port de sortie se résout par correspondance de type avec
+            // le port cible — même règle que le validator.
+            let from_ty = self.graph.nodes[&from].node_type.clone();
+            let to_ty = self.graph.nodes[&to].node_type.clone();
+            let in_ty = crate::node_spec::node_spec(&to_ty)
+                .input_port(to_port)
+                .map(|p| p.port_type);
+            let from_port = crate::node_spec::node_spec(&from_ty)
+                .outputs
+                .iter()
+                .find(|p| Some(p.port_type) == in_ty)
+                .map(|p| p.name.clone())
+                .unwrap_or_else(|| "out".to_string());
             self.graph.add_edge(Edge {
                 from,
                 to,
-                from_port: "output".to_string(),
+                from_port,
                 to_port: to_port.to_string(),
             });
         }
@@ -219,14 +241,57 @@ mod tests {
                 self.has_moving_leaf = true;
             }
             let id = self.add_node(Node::with_params(node_type, params));
-            self.wire(self.objects, id, "input");
+            self.wire(self.objects, id, "objects");
             self.wire(self.duration, id, "duration");
             id
         }
 
-        /// Paramètres légèrement randomisés pour couvrir les chemins
-        /// de lecture des modifiers/composites.
-        fn params_for(&mut self, node_type: NodeType) -> serde_json::Value {
+        /// Params randomisés — `extreme` pousse aux bornes (0, négatif,
+        /// énorme) pour la chasse aux bugs ; sinon valeurs plausibles.
+        fn params_for_mode(&mut self, node_type: NodeType, extreme: bool) -> serde_json::Value {
+            if extreme {
+                let pick = |rng: &mut SimpleRng| -> f64 {
+                    // bornes plausibles mais agressives
+                    [0.0, -1.0, -0.001, 1e-9, 1e6, 1000.0, -500.0][(rng.rand() * 7.0) as usize % 7]
+                };
+                match node_type {
+                    NodeType::Scale => {
+                        return serde_json::json!({
+                            "x": pick(self.rng), "y": pick(self.rng), "z": pick(self.rng),
+                        })
+                    }
+                    NodeType::Rotate => {
+                        return serde_json::json!({
+                            "angleX": pick(self.rng), "angleY": pick(self.rng),
+                            "angleZ": pick(self.rng),
+                        })
+                    }
+                    NodeType::Offset => {
+                        return serde_json::json!({
+                            "x": pick(self.rng), "y": pick(self.rng), "z": pick(self.rng),
+                        })
+                    }
+                    NodeType::Clamp => {
+                        let lo = pick(self.rng).min(pick(self.rng));
+                        let hi = lo.abs().max(1e-9);
+                        return serde_json::json!({
+                            "min_x": lo, "min_y": lo, "min_z": lo,
+                            "max_x": hi, "max_y": hi, "max_z": hi,
+                        });
+                    }
+                    NodeType::Mix => return serde_json::json!({ "blend": pick(self.rng) }),
+                    NodeType::Switch => return serde_json::json!({ "select": pick(self.rng) }),
+                    NodeType::SpeedScale => return serde_json::json!({ "factor": pick(self.rng) }),
+                    NodeType::Delay => return serde_json::json!({ "delay": pick(self.rng) }),
+                    NodeType::Freeze => {
+                        return serde_json::json!({ "enabled": self.rng.rand() < 0.5 })
+                    }
+                    NodeType::Crossfade => {
+                        return serde_json::json!({ "fade_duration": pick(self.rng) })
+                    }
+                    _ => return serde_json::json!({}),
+                }
+            }
             match node_type {
                 NodeType::Scale => serde_json::json!({
                     "x": self.rng.uniform(0.2, 2.0),
@@ -256,6 +321,18 @@ mod tests {
                 NodeType::Crossfade => serde_json::json!({
                     "duration": self.rng.uniform(0.5, 2.0),
                 }),
+                NodeType::Switch => serde_json::json!({
+                    "select": if self.rng.rand() < 0.5 { 0.0 } else { 1.0 },
+                }),
+                NodeType::SpeedScale => serde_json::json!({
+                    "factor": self.rng.uniform(0.25, 3.0),
+                }),
+                NodeType::Delay => serde_json::json!({
+                    "delay": self.rng.uniform(0.0, 2.0),
+                }),
+                NodeType::Freeze => serde_json::json!({
+                    "enabled": self.rng.rand() < 0.7,
+                }),
                 _ => serde_json::json!({}),
             }
         }
@@ -269,14 +346,10 @@ mod tests {
                 .filter(|t| COMPOSITES.contains(*t) || MODIFIERS.contains(*t))
                 // Group concatène les espaces d'objets (n_a + n_b) — il ne
                 // peut alimenter que des consommateurs sans check de comptage
-                // (Output, un autre Group, Crossfade). Sous Mix/Sequence le
-                // validator rejette le mismatch, à juste titre.
+                // (Output, un autre Group). Sous Mix/Sequence/Crossfade/Switch
+                // le validator rejette le mismatch, à juste titre.
                 .filter(|t| {
-                    **t != NodeType::Group
-                        || matches!(
-                            parent,
-                            NodeType::Output | NodeType::Group | NodeType::Crossfade
-                        )
+                    **t != NodeType::Group || matches!(parent, NodeType::Output | NodeType::Group)
                 })
                 .cloned()
                 .collect();
@@ -296,22 +369,26 @@ mod tests {
             }
 
             let wrapper = self.pick(&wrappers);
-            let params = self.params_for(wrapper.clone());
+            let params = self.params_for_mode(wrapper.clone(), self.extreme);
             let id = self.add_node(Node::with_params(wrapper.clone(), params));
             if matches!(
                 wrapper,
-                NodeType::Sequence | NodeType::Crossfade | NodeType::Mix
+                NodeType::Sequence
+                    | NodeType::Crossfade
+                    | NodeType::Mix
+                    | NodeType::Switch
+                    | NodeType::Freeze
             ) {
                 self.may_hide_motion = true;
             }
             if COMPOSITES.contains(&wrapper) {
                 let a = self.producer(depth + 1, max_depth, wrapper.clone());
                 let b = self.producer(depth + 1, max_depth, wrapper.clone());
-                self.wire(a, id, "input_a");
-                self.wire(b, id, "input_b");
+                self.wire(a, id, "a");
+                self.wire(b, id, "b");
             } else {
                 let child = self.producer(depth + 1, max_depth, wrapper);
-                self.wire(child, id, "input");
+                self.wire(child, id, "in");
             }
             id
         }
@@ -321,6 +398,11 @@ mod tests {
     /// Retourne le graphe, n_objects, si un leaf "toujours mobile" existe et
     /// si une bascule temporelle peut le masquer.
     fn build_graph(seed: u64, max_depth: usize) -> (Graph, usize, bool, bool) {
+        build_graph_mode(seed, max_depth, false)
+    }
+
+    /// `extreme` : params aux bornes pour la chasse aux bugs.
+    fn build_graph_mode(seed: u64, max_depth: usize, extreme: bool) -> (Graph, usize, bool, bool) {
         let mut rng = SimpleRng::new(seed);
         let mut graph = Graph::new();
         let n_objects = 1 + (rng.rand() * 8.0) as usize;
@@ -338,6 +420,7 @@ mod tests {
 
         let mut gen = Gen {
             rng: &mut rng,
+            extreme,
             graph,
             objects: objects_id,
             duration: duration_id,
@@ -347,7 +430,7 @@ mod tests {
 
         let root = gen.producer(0, max_depth, NodeType::Output);
         let output = gen.add_node(Node::new(NodeType::Output));
-        gen.wire(root, output, "input");
+        gen.wire(root, output, "in");
 
         (
             gen.graph,
@@ -465,7 +548,7 @@ mod tests {
     /// valide, le compile ne doit pas crasher non plus (Err ok, panic non).
     #[test]
     fn mutated_graphs_fail_cleanly() {
-        let bogus_ports = ["input", "input_a", "input_b", "duration", "bogus"];
+        let bogus_ports = ["in", "a", "b", "duration", "bogus"];
 
         for seed in 0..48u64 {
             let tag = format!("mutant seed={seed}");
@@ -497,7 +580,7 @@ mod tests {
                         graph.add_edge(Edge {
                             from,
                             to,
-                            from_port: "output".to_string(),
+                            from_port: "out".to_string(),
                             to_port: pick_port(&mut rng).to_string(),
                         });
                     }
@@ -536,5 +619,335 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// Fuzzer de couverture — rapporte la robustesse du système sur un
+    /// échantillon aléatoire large : validation, compilation, finitude et
+    /// déterminisme, plus la couverture par type et par combo intéressant.
+    /// Les stats sont loggées (test #[ignore] manuel ou assertion de
+    /// couverture minimale).
+    #[test]
+    fn fuzz_coverage_robustness_report() {
+        use std::collections::HashMap;
+        let mut type_counts: HashMap<String, usize> = HashMap::new();
+        // Combos intéressants à tracker : <wrapper>→<catégorie-enfant>
+        let mut combo_counts: HashMap<String, usize> = HashMap::new();
+        let mut n_valid = 0usize;
+        let mut n_compiled = 0usize;
+        let mut n_moved = 0usize;
+        let mut n_total = 0usize;
+
+        let category = |t: &NodeType| -> &'static str {
+            if MATH.contains(t) {
+                "math"
+            } else if PHYSICS.contains(t) {
+                "physics"
+            } else if MODIFIERS.contains(t) {
+                "modifier"
+            } else if COMPOSITES.contains(t) {
+                "composite"
+            } else {
+                "other"
+            }
+        };
+
+        for level in 1..=8usize {
+            for seed in 0..40u64 {
+                n_total += 1;
+                let (graph, n_objects, has_mover, may_hide) =
+                    build_graph(seed * 997 + level as u64 * 31, level);
+
+                // Coverage par type
+                for n in graph.nodes.values() {
+                    *type_counts.entry(format!("{:?}", n.node_type)).or_insert(0) += 1;
+                }
+                // Coverage par combo parent→enfant (via edges)
+                for e in &graph.edges {
+                    let from_ty = &graph.nodes[&e.from].node_type;
+                    let to_ty = &graph.nodes[&e.to].node_type;
+                    let combo = format!("{to_ty:?}→{}", category(from_ty));
+                    *combo_counts.entry(combo).or_insert(0) += 1;
+                }
+
+                if Validator::validate(&graph).is_err() {
+                    continue;
+                }
+                n_valid += 1;
+                let Ok(f) = compile(&graph) else {
+                    continue;
+                };
+                n_compiled += 1;
+
+                let mut moved = false;
+                let mut all_finite = true;
+                for t in [0.0, 1.3, 3.7, 7.9] {
+                    for i in 0..n_objects.max(12) {
+                        let p = f(t, i);
+                        if !(p.x.is_finite() && p.y.is_finite() && p.z.is_finite()) {
+                            all_finite = false;
+                        }
+                        if t > 0.0 && (p - f(0.0, i)).norm() > 1e-9 {
+                            moved = true;
+                        }
+                    }
+                }
+                assert!(all_finite, "non-finite position in fuzzed graph");
+                if moved {
+                    n_moved += 1;
+                }
+                let _ = (has_mover, may_hide);
+            }
+        }
+
+        // Assertions de robustesse minimales
+        assert_eq!(n_valid, n_total, "des graphes générés doivent tous valider");
+        assert_eq!(n_compiled, n_valid, "tout graphe valide doit compiler");
+        assert!(n_moved > 0, "aucun graphe ne bouge — générateur suspect");
+
+        // Rapport (visible avec --nocapture)
+        eprintln!("=== FUZZ COVERAGE ===");
+        eprintln!(
+            "graphes: {n_total} | valides: {n_valid} | compilés: {n_compiled} | mobiles: {n_moved}"
+        );
+        let mut types: Vec<_> = type_counts.iter().collect();
+        types.sort_by(|a, b| b.1.cmp(a.1));
+        for (ty, c) in &types {
+            eprintln!("  {ty:24} {c:5}");
+        }
+        let mut combos: Vec<_> = combo_counts.iter().collect();
+        combos.sort_by(|a, b| b.1.cmp(a.1));
+        eprintln!("--- combos (consommateur→catégorie-source) ---");
+        for (c, n) in combos.iter().take(20) {
+            eprintln!("  {c:40} {n:5}");
+        }
+        eprintln!("=====================");
+
+        // Couverture minimale : chaque type des sets doit apparaître
+        for set in [MATH, PHYSICS, MODIFIERS, COMPOSITES] {
+            for ty in set {
+                let key = format!("{ty:?}");
+                assert!(
+                    type_counts.contains_key(&key),
+                    "type jamais généré en {n_total} graphes : {key}"
+                );
+            }
+        }
+    }
+
+    /// Chasse aux bugs — graphes aux params hostiles (bornes : zéro,
+    /// négatif, énorme) évalués à des t extrêmes. On NE panic PAS au
+    /// premier échec : les violations sont collectées et rapportées
+    /// pour analyser la robustesse réelle du système.
+    /// Invariants testés : positions finies, magnitude bornée,
+    /// déterminisme entre deux évals au même (t, i).
+    #[test]
+    fn fuzz_stress_hostile_params() {
+        let mut failures: Vec<String> = Vec::new();
+        let mut n_run = 0usize;
+
+        // t extrêmes mais réalistes : négatif (pre-loop) et quelques dizaines
+        // de secondes. t=1e6 est pathologique — le worker wrappe t en
+        // [0, duration) et les physics re-simulent chaque pas (13 min).
+        let t_values = [-10.0, -0.001, 0.0, 0.0001, 1.5, 30.0];
+
+        for level in 1..=6usize {
+            for seed in 0..60u64 {
+                let tag = format!("level={level} seed={seed}");
+                let (graph, n_objects, ..) = build_graph_mode(
+                    seed * 1237 + level as u64 * 71,
+                    level,
+                    true, // extreme params
+                );
+
+                // Le validator peut rejeter — c'est une réponse valide, pas un bug.
+                if let Err(e) = Validator::validate(&graph) {
+                    let _ = e;
+                    continue;
+                }
+                n_run += 1;
+
+                let f = match compile(&graph) {
+                    Ok(f) => f,
+                    Err(e) => {
+                        // Un graphe valide qui ne compile pas = bug potentiel.
+                        failures.push(format!("{tag}: valid graph failed compile: {e:?}"));
+                        continue;
+                    }
+                };
+
+                let topology: Vec<String> = graph
+                    .nodes
+                    .values()
+                    .map(|n| format!("{:?}", n.node_type))
+                    .collect();
+
+                for &tv in &t_values {
+                    for i in 0..n_objects.max(8) {
+                        let p = f(tv, i);
+                        if !(p.x.is_finite() && p.y.is_finite() && p.z.is_finite()) {
+                            failures.push(format!(
+                                "{tag}: non-finite pos (t={tv} i={i}) = {p:?} | {topology:?}"
+                            ));
+                            continue;
+                        }
+                        // Les params extrêmes produisent légitimement des
+                        // positions énormes (Scale 1e3² → 1e6×) — GIGO, pas
+                        // un bug. On ne flag que l'approche de f64::MAX,
+                        // signe d'explosion multiplicative interne.
+                        let mag = p.norm();
+                        if mag > 1e290 {
+                            failures.push(format!(
+                                "{tag}: internal numeric explosion {mag:e} (t={tv} i={i}) | {topology:?}"
+                            ));
+                        }
+                        // Déterminisme : même éval = même résultat
+                        let p2 = f(tv, i);
+                        if p != p2 {
+                            failures.push(format!(
+                                "{tag}: non-deterministic (t={tv} i={i}) {p:?} vs {p2:?}"
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+
+        eprintln!("=== STRESS HUNT === {n_run} graphes hostiles évalués");
+        for f in &failures {
+            eprintln!("  FAIL {f}");
+        }
+        eprintln!("===================");
+
+        // Aucun graphe valide ne doit produire non-fini / explosion / non-déterminisme
+        assert!(
+            failures.is_empty(),
+            "{} violations de robustesse trouvées:\n{}",
+            failures.len(),
+            failures
+                .iter()
+                .take(10)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+    }
+
+    /// Stress `param:` : des SignalOut hostiles ciblent des slots aléatoires
+    /// du graphe (constantes extrêmes / non-finies). Invariants : positions
+    /// finies + déterminisme — identique au stress des params.
+    #[test]
+    fn fuzz_stress_param_modulation() {
+        use crate::param_slots::ParamSlots;
+        use crate::signal_compiler::{compile_move_signal_graph, SignalCtx};
+        use std::collections::HashMap;
+
+        let mut failures: Vec<String> = Vec::new();
+        let mut n_run = 0usize;
+        let audio = crate::audio::AudioState::new();
+        let osc: HashMap<String, Vec<f64>> = HashMap::new();
+        let hostile = [1e6, -1e6, 0.0, 1e-9, f64::MAX / 4.0, -12.5];
+
+        for seed in 0..40u64 {
+            let tag = format!("seed={seed}");
+            let (graph, n_objects, ..) = build_graph_mode(seed * 313 + 7, 4, true);
+            if Validator::validate(&graph).is_err() {
+                continue;
+            }
+            let slots = ParamSlots::build(&graph);
+            if slots.index.is_empty() {
+                continue;
+            }
+            let f = match Compiler::compile_with_live_inputs(
+                &graph,
+                LiveInputs {
+                    plugins: Some(fuzz_registry()),
+                    param_slots: Some(slots.clone()),
+                    ..Default::default()
+                },
+            ) {
+                Ok(f) => f,
+                Err(_) => continue,
+            };
+
+            // Signal graph hostile : jusqu'à 6 cibles `param:` tirées de la
+            // table (clés réelles → compile garantie), valeurs extrêmes.
+            let mut rng = SimpleRng::new(seed * 7919 + 11);
+            let keys: Vec<&(String, String)> = slots.index.keys().collect();
+            let mut sig = Graph::new();
+            let mut target_desc = Vec::new();
+            let n_targets = 1 + (rng.rand() * 6.0) as usize;
+            for k in 0..n_targets {
+                let (nk, pk) = keys[(rng.rand() * keys.len() as f64) as usize];
+                let v = hostile[(rng.rand() * hostile.len() as f64) as usize];
+                let c = Node::with_params(NodeType::SignalConst, serde_json::json!({"value": v}));
+                let o = Node::with_params(
+                    NodeType::SignalOut,
+                    serde_json::json!({
+                        "target": format!("param:{nk}:{pk}"),
+                        "amount": 1.0
+                    }),
+                );
+                let (c_id, o_id) = (c.id, o.id);
+                sig.add_node(c);
+                sig.add_node(o);
+                sig.add_edge(Edge {
+                    from: c_id,
+                    to: o_id,
+                    from_port: "out".to_string(),
+                    to_port: "signal".to_string(),
+                });
+                target_desc.push(format!("param:{nk}:{pk}={v}"));
+                let _ = k;
+            }
+            let mut sig_fn = match compile_move_signal_graph(&sig, &graph, &slots) {
+                Ok(f) => f,
+                Err(e) => {
+                    failures.push(format!("{tag}: valid param targets failed: {e:?}"));
+                    continue;
+                }
+            };
+            n_run += 1;
+
+            // Une frame de deltas + sampling — mêmes invariants que le stress.
+            let out = sig_fn(&SignalCtx {
+                t: 1.0,
+                dt: 1.0 / 60.0,
+                audio_state: &audio,
+                osc_values: &osc,
+            });
+            slots.apply_frame(&out.slot_deltas);
+            for tv in [-1.0, 0.0, 0.5, 2.7] {
+                for i in 0..n_objects.max(8) {
+                    let p = f(tv, i);
+                    if !(p.x.is_finite() && p.y.is_finite() && p.z.is_finite()) {
+                        failures.push(format!(
+                            "{tag}: non-finite under param mod (t={tv} i={i}) targets={target_desc:?}"
+                        ));
+                        continue;
+                    }
+                    let p2 = f(tv, i);
+                    if p != p2 {
+                        failures.push(format!("{tag}: non-deterministic under param mod"));
+                    }
+                }
+            }
+        }
+
+        eprintln!("=== PARAM MOD STRESS === {n_run} graphes modulés");
+        for f in &failures {
+            eprintln!("  FAIL {f}");
+        }
+        assert!(
+            failures.is_empty(),
+            "{} violations sous modulation param:\n{}",
+            failures.len(),
+            failures
+                .iter()
+                .take(10)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+        assert!(n_run > 20, "trop peu de graphes modulés: {n_run}");
     }
 }

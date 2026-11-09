@@ -7,7 +7,8 @@ mod recall_tests {
     use crate::commands::state::Shared;
     use crate::Movement;
     use stagespace_engines::{
-        AudioState, Cue, MergeRuntime, OscProfile, OscReceiver, OscSender, Runtime,
+        AudioState, Cue, CueMode, MergeRuntime, OscProfile, OscReceiver, OscSender, Runtime,
+        SpatialChannel,
     };
     use std::collections::{HashMap, HashSet};
     use std::sync::atomic::{AtomicBool, AtomicU64};
@@ -26,6 +27,7 @@ mod recall_tests {
             move_generation: Arc::new(AtomicU64::new(0)),
             merge_runtime: Arc::new(Mutex::new(merge)),
             recall_in_progress: Arc::new(AtomicBool::new(false)),
+            deactivate_gen: Arc::new(AtomicU64::new(0)),
             osc_receiver: Arc::new(Mutex::new(OscReceiver::new(0))),
             plugin_registry: None,
             plugins_dir: None,
@@ -55,6 +57,7 @@ mod recall_tests {
             osc_mappings: None,
             zones: None,
             moves: vec![],
+            ..Default::default()
         }
     }
 
@@ -73,6 +76,9 @@ mod recall_tests {
             direction: "forward".to_string(),
             origin: None,
             generation: 1,
+            end_mode: stagespace_engines::EndMode::default(),
+            anchor_mode: stagespace_engines::AnchorMode::default(),
+            anchor_target: None,
         }
     }
 
@@ -89,9 +95,9 @@ mod recall_tests {
                  "data": {"label":"Output","type":"Output","params":{}}}
             ],
             "edges": [
-                {"id":"e1","source":"o","target":"e","targetHandle":"input"},
+                {"id":"e1","source":"o","target":"e","targetHandle":"objects"},
                 {"id":"e2","source":"d","target":"e","targetHandle":"duration"},
-                {"id":"e3","source":"e","target":"out","targetHandle":"input"}
+                {"id":"e3","source":"e","target":"out","targetHandle":"in"}
             ]
         })
     }
@@ -103,15 +109,15 @@ mod recall_tests {
         cue.global_graph = Some(serde_json::from_value(serde_json::json!({
             "nodes": [
                 {"id":"input", "type":"custom", "position":{"x":0,"y":0},
-                 "data":{"label":"Input", "type":"Input", "params":{}}},
+                 "data":{"label":"Merge", "type":"Merge", "params":{}}},
                 {"id":"scale", "type":"custom", "position":{"x":0,"y":0},
                  "data":{"label":"RadiusScale", "type":"RadiusScale", "params":{"radius_scale":2.0}}},
                 {"id":"output", "type":"custom", "position":{"x":0,"y":0},
                  "data":{"label":"Output", "type":"Output", "params":{}}}
             ],
             "edges": [
-                {"id":"e1", "source":"input", "target":"scale", "sourceHandle":"output", "targetHandle":"input"},
-                {"id":"e2", "source":"scale", "target":"output", "sourceHandle":"output", "targetHandle":"input"}
+                {"id":"e1", "source":"input", "target":"scale", "sourceHandle":"out", "targetHandle":"in"},
+                {"id":"e2", "source":"scale", "target":"output", "sourceHandle":"out", "targetHandle":"in"}
             ]
         })).unwrap());
         recall_cue_inner(cue, sh.clone()).unwrap();
@@ -200,6 +206,9 @@ mod recall_tests {
             animation_state: None,
             fade_in: 0.0,
             fade_out: 0.0,
+            end_mode: None,
+            anchor_mode: None,
+            anchor_target: None,
         }];
         recall_cue_inner(cue, sh.clone()).expect("recall with respawn");
 
@@ -252,6 +261,9 @@ mod recall_tests {
             spatial_macros: None,
             animation_state: None,
             signal_graph: None,
+            end_mode: stagespace_engines::EndMode::default(),
+            anchor_mode: stagespace_engines::AnchorMode::default(),
+            anchor_target: None,
         };
         spawn_move_for_recall(spec, &sh).expect("initial spawn");
         let gen_before = sh.movements.lock().unwrap()["mv-live"].generation;
@@ -274,6 +286,9 @@ mod recall_tests {
             animation_state: None,
             fade_in: 0.0,
             fade_out: 0.0,
+            end_mode: None,
+            anchor_mode: None,
+            anchor_target: None,
         }];
         recall_cue_inner(cue, sh.clone()).expect("recall");
 
@@ -352,5 +367,111 @@ mod recall_tests {
         // is_playing false — un stale-killé ne doit jamais s'afficher "playing".
         assert_eq!(infos.len(), 1);
         assert!(!infos[0].is_playing);
+    }
+
+    #[test]
+    fn test_tracking_recall_merges_channels_and_keeps_out_of_scope() {
+        let sh = make_shared();
+        {
+            let mr = sh.merge_runtime.lock().unwrap();
+            mr.set_object_channel(0, SpatialChannel::Gain, 0.5);
+            mr.set_object_channel(1, SpatialChannel::Spread, 0.3);
+        }
+        let mut cue = make_cue();
+        cue.mode = CueMode::Tracking;
+        cue.track_indices = vec![1];
+        let mut chs = stagespace_engines::SpatialChannels::default();
+        chs.gain = Some(0.8);
+        cue.object_channels = Some(HashMap::from([(1usize, chs)]));
+        recall_cue_inner(cue, sh.clone()).expect("tracking recall");
+        let mr = sh.merge_runtime.lock().unwrap();
+        let all = mr.object_channels();
+        assert_eq!(
+            all.get(&0).and_then(|c| c.gain),
+            Some(0.5),
+            "un canal hors scope garde sa valeur"
+        );
+        let c1 = all.get(&1).copied().unwrap_or_default();
+        assert_eq!(c1.gain, Some(0.8), "le canal du scope est écrit");
+        assert_eq!(
+            c1.spread,
+            Some(0.3),
+            "merge par canal — l'existant du même objet est conservé"
+        );
+    }
+
+    #[test]
+    fn test_tracking_recall_merges_depths_by_index() {
+        let sh = make_shared();
+        {
+            let mr = sh.merge_runtime.lock().unwrap();
+            mr.set_track_depths(vec![1.0, 1.0, 1.0]);
+        }
+        let mut cue = make_cue();
+        cue.mode = CueMode::Tracking;
+        cue.track_indices = vec![1];
+        // Vec positionnel aligné sur la liste globale des tracks — seul
+        // l'index 1 (scope) doit être appliqué.
+        cue.per_track_depths = vec![0.5, 0.2, 0.9];
+        recall_cue_inner(cue, sh.clone()).expect("tracking recall");
+        let mr = sh.merge_runtime.lock().unwrap();
+        assert_eq!(mr.track_depths(), vec![1.0, 0.2, 1.0]);
+    }
+
+    #[test]
+    fn test_parked_object_survives_full_and_tracking_recall() {
+        let sh = make_shared();
+        {
+            let mr = sh.merge_runtime.lock().unwrap();
+            // L'opérateur a repris object 1 à la main → on le parke.
+            mr.set_object_channel(1, SpatialChannel::Gain, 0.9);
+            mr.park_object(1);
+        }
+        let mut chs = stagespace_engines::SpatialChannels::default();
+        chs.gain = Some(-3.0);
+        // Full : clear+set d'un cue qui voudrait écrire object 1 → le
+        // canal parké est préservé à travers le clear.
+        let mut cue = make_cue();
+        cue.object_channels = Some(HashMap::from([(1usize, chs)]));
+        recall_cue_inner(cue, sh.clone()).expect("full recall");
+        {
+            let mr = sh.merge_runtime.lock().unwrap();
+            assert_eq!(
+                mr.object_channels().get(&1).and_then(|c| c.gain),
+                Some(0.9),
+                "un objet parké n'est jamais écrit par une cue Full"
+            );
+        }
+        // Tracking : idem — l'objet parké est sauté du merge.
+        let mut cue = make_cue();
+        cue.mode = CueMode::Tracking;
+        cue.object_channels = Some(HashMap::from([(1usize, chs)]));
+        recall_cue_inner(cue, sh.clone()).expect("tracking recall");
+        {
+            let mr = sh.merge_runtime.lock().unwrap();
+            assert_eq!(
+                mr.object_channels().get(&1).and_then(|c| c.gain),
+                Some(0.9),
+                "un objet parké est sauté du merge Tracking"
+            );
+            mr.unpark_object(1);
+            mr.clear_parked();
+        }
+    }
+
+    #[test]
+    fn test_tracking_recall_does_not_stop_unlisted_moves() {
+        let sh = make_shared();
+        {
+            let mut mv = sh.movements.lock().unwrap();
+            mv.insert("ghost".to_string(), make_movement("ghost"));
+        }
+        let mut cue = make_cue();
+        cue.mode = CueMode::Tracking;
+        recall_cue_inner(cue, sh.clone()).expect("tracking recall");
+        assert!(
+            sh.movements.lock().unwrap().contains_key("ghost"),
+            "un cue Tracking ne touche pas aux moves non listés"
+        );
     }
 }

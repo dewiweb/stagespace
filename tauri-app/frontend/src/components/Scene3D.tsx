@@ -13,8 +13,10 @@ import { debugPerf } from '../utils/debugPerf';
 (window as any).__debugPerf = debugPerf;
 import { DrawModeOverlay } from './DrawModeOverlay';
 import { ModeButtons } from './ModeButtons';
+import { ModeBanner } from './ui/ModeBanner';
 import { TrajectoryVisualization } from './TrajectoryVisualization';
 import { ZoneVisualization } from './ZoneVisualization';
+import { ObjectInspectBar } from './ObjectInspectBar';
 import { useHolMarkers } from '../hooks/useHolMarkers';
 import { useObjects3D } from '../hooks/useObjects3D';
 import { useManipulateHandle } from '../hooks/useManipulateHandle';
@@ -23,7 +25,9 @@ import { useDrawMode } from '../hooks/useDrawMode';
 import { useManipulateMode } from '../hooks/useManipulateMode';
 import { useRenderLoop } from '../hooks/useRenderLoop';
 import { fromThree, toThree } from '../utils/coords';
+import { dollyCamera } from '../utils/three';
 import { zoneToParams, zoneToParamsResized } from '../store/slices/spatialFxSlice';
+import { doClearPosition } from '../utils/liveActions';
 
 interface Scene3DProps {
   width?: string | number;
@@ -40,8 +44,11 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [webglFailed, setWebglFailed] = useState(false);
   const [sceneReady, setSceneReady] = useState(false);
+  // Incrémenté par le bouton Retry — refire l'init du render loop
+  // (avant : retry était mort, l'effect [] ne se relançait jamais).
+  const [initKey, setInitKey] = useState(0);
 
-  const isPlaying = useGraphStore((s) => s.isPlaying);
+  const isPlaying = useGraphStore((s) => s.movements.length > 0);
   const macros = useGraphStore((s) => s.macros);
   const nodes = useGraphStore((s) => s.nodes);
   const holProject = useGraphStore((s) => s.holProject);
@@ -61,8 +68,13 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   // dans useRenderLoop pour éviter 60 re-renders/seconde.
   // On garde movements pour le useMemo nObjects et le rendu conditionnel.
   const movements = useGraphStore((s) => s.movements);
-  const manualPositions = useGraphStore((s) => s.manualPositions);
+  // NOTE : manualPositions est lu via getState() dans useRenderLoop — une
+  // subscription ici re-rendrait Scene3D ~30×/s pendant un drag d'objet.
   const manualOscIds = useGraphStore((s) => s.manualOscIds);
+  const selectedObjIndex = useGraphStore((s) => s.selectedObjIndex);
+  // emittedPositions (1.5Hz) suffit pour la barre d'inspect — la vue live
+  // 60fps reste dans la boucle de rendu.
+  const emittedPositions = useGraphStore((s) => s.emittedPositions);
   const editingSlotId = useGraphStore((s) => s.editingSlotId);
   const debugPerfVisible = useMoveEditorStore((s) => s.debugPerfVisible);
 
@@ -117,21 +129,31 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
     handleManipulateWheel,
   } = useManipulateMode({
     cameraRef,
+    controlsRef,
     containerRef,
     objectsRef,
     handleRef,
     manipulateMode,
   });
 
-  // Assign mode — clic sur un objet 3D = toggle de sa track via la même
-  // source de vérité que la TrackGrid (toggleTrackSelection → sélection +
-  // Objects node + slot en édition). Pas de chemin parallèle : la sélection
-  // ne peut pas diverger entre scène et grille.
-  const handleAssignDown = useCallback(
-    (e: React.PointerEvent) => {
+  // Zoom manuel (dolly vers controls.target) — OrbitControls est désactivé
+  // pendant les modes interactifs : sans ça la molette ne zoomait plus.
+  const handleZoomWheel = useCallback((e: React.WheelEvent) => {
+    dollyCamera(controlsRef.current, e.deltaY < 0 ? 0.92 : 1.08);
+  }, []);
+
+  // Pick partagé — NDC→raycast sur les objets visibles, avec fallback
+  // proximité écran : une sphère en mouvement est dure à viser, l'objet
+  // le plus proche du clic (< proximityPx) est retourné. Utilisé par
+  // assign, release clic-droit — même sémantique que useManipulateMode.
+  const pickObjectIndexAt = useCallback(
+    (
+      e: { clientX: number; clientY: number },
+      opts?: { proximityPx?: number },
+    ): number | null => {
       const camera = cameraRef.current;
       const container = containerRef.current;
-      if (!camera || !container) return;
+      if (!camera || !container) return null;
       const rect = container.getBoundingClientRect();
       const ndc = new THREE.Vector2(
         ((e.clientX - rect.left) / rect.width) * 2 - 1,
@@ -139,30 +161,55 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
       );
       const raycaster = new THREE.Raycaster();
       raycaster.setFromCamera(ndc, camera);
-      // Même filtre que Manipulate : les tracks cachées par le focus slot
-      // ne doivent pas être assignables.
-      const hits = raycaster.intersectObjects(
-        objectsRef.current.filter((o) => o.visible), true,
-      );
-      if (hits.length === 0) return;
-      let hitObj = hits[0].object as THREE.Mesh;
-      let idx = objectsRef.current.indexOf(hitObj);
-      while (idx < 0 && hitObj.parent) {
-        hitObj = hitObj.parent as THREE.Mesh;
-        idx = objectsRef.current.indexOf(hitObj);
+      const visibleObjs = objectsRef.current.filter((o) => o.visible);
+      const hits = raycaster.intersectObjects(visibleObjs, true);
+      if (hits.length > 0) {
+        let hitObj = hits[0].object as THREE.Mesh;
+        let idx = objectsRef.current.indexOf(hitObj);
+        while (idx < 0 && hitObj.parent) {
+          hitObj = hitObj.parent as THREE.Mesh;
+          idx = objectsRef.current.indexOf(hitObj);
+        }
+        if (idx >= 0) return idx;
       }
-      if (idx < 0) return;
+      const maxPx = opts?.proximityPx ?? 0;
+      if (maxPx <= 0) return null;
+      let bd = maxPx;
+      let best: number | null = null;
+      for (const o of visibleObjs) {
+        const p = o.position.clone().project(camera);
+        if (p.z < -1 || p.z > 1) continue; // derrière la caméra
+        const sx = ((p.x + 1) / 2) * rect.width;
+        const sy = ((1 - p.y) / 2) * rect.height;
+        const d = Math.hypot(sx - (e.clientX - rect.left), sy - (e.clientY - rect.top));
+        if (d < bd) {
+          bd = d;
+          best = objectsRef.current.indexOf(o);
+        }
+      }
+      return best;
+    },
+    [cameraRef, containerRef, objectsRef],
+  );
+
+  // Assign mode — clic sur un objet 3D = toggle de sa track via la même
+  const handleAssignDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.button !== 0) return; // clic droit = release, pas assign
+      const idx = pickObjectIndexAt(e, { proximityPx: 40 });
+      if (idx === null) return;
       const s = useGraphStore.getState();
       const trackId = s.holProject?.tracks[idx]?.id ?? s.manualOscIds[idx] ?? idx + 1;
       s.toggleTrackSelection(trackId);
     },
-    [objectsRef],
+    [pickObjectIndexAt],
   );
 
   // Zone place mode — clic sur le sol (plan y=0 côté Three = z=0 backend)
   // → enregistre le centre en coords backend pour le formulaire SpatialFX.
   const handleZonePlaceDown = useCallback(
     (e: React.PointerEvent) => {
+      if (e.button !== 0) return; // clic droit = release, pas place
       const camera = cameraRef.current;
       const container = containerRef.current;
       if (!camera || !container) return;
@@ -222,6 +269,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   );
   const handleZoneEditDown = useCallback(
     (e: React.PointerEvent) => {
+      if (e.button !== 0) return; // clic droit = release, pas edit
       const r = zoneRaycast(e);
       if (!r) return;
       const idx = zoneIndexAt(r);
@@ -278,6 +326,43 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
     [zoneRaycast, zoneIndexAt],
   );
 
+  // Release uniforme — clic-droit (SANS drag) sur un objet = relâche sa
+  // position manuelle, dans TOUS les modes (pas seulement manipulate).
+  // Le pan OrbitControls utilise le drag droit : on distingue le clic
+  // du drag par le déplacement (<6px) et la durée (<500ms). Le contexte
+  // menu natif est déjà supprimé globalement dans App.tsx.
+  const rightDownRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  // Clic-gauche SANS drag = sélection de l'objet le plus proche — parité
+  // avec le radar (tap-select) : clic = sélection, drag = orbit caméra.
+  const leftDownRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  const handleScenePointerDown = useCallback((e: React.PointerEvent) => {
+    if (e.button === 2) rightDownRef.current = { x: e.clientX, y: e.clientY, t: Date.now() };
+    if (e.button === 0) leftDownRef.current = { x: e.clientX, y: e.clientY, t: Date.now() };
+  }, []);
+  const handleScenePointerUp = useCallback((e: React.PointerEvent) => {
+    if (e.button === 2) {
+      const d = rightDownRef.current;
+      rightDownRef.current = null;
+      if (!d) return;
+      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6 || Date.now() - d.t > 500) return;
+      const idx = pickObjectIndexAt(e, { proximityPx: 40 });
+      if (idx !== null) doClearPosition(idx);
+      return;
+    }
+    if (e.button === 0) {
+      const d = leftDownRef.current;
+      leftDownRef.current = null;
+      // Clic-gauche sans drag SÉLECTIONNE — seulement hors modes
+      // interactifs (manipulate drag/assign/draw gèrent leur propre clic).
+      if (!d) return;
+      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6 || Date.now() - d.t > 500) return;
+      const s = useGraphStore.getState();
+      if (s.manipulateMode || s.assignMode || s.drawMode || s.zonePlaceMode || s.zoneEditMode) return;
+      const idx = pickObjectIndexAt(e, { proximityPx: 40 });
+      s.setSelectedObjIndex(idx);
+    }
+  }, [pickObjectIndexAt]);
+
   // Resize observer — merge du handle resize en un seul effect
   // Met à jour directement les refs Three.js (pas de re-render React)
   useEffect(() => {
@@ -321,9 +406,9 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
     holProject,
     drawnPoints,
     draggingObjectRef,
-    manualPositions,
     setWebglFailed,
     dimensions,
+    initKey,
   });
 
   // Détecter quand la scène est initialisée (useRenderLoop mutate sceneRef.current)
@@ -352,7 +437,12 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   // Draw handlers → useDrawMode hook
 
   return (
-    <div ref={containerRef} style={{ width, height, overflow: 'hidden', position: 'relative' }}>
+    <div
+      ref={containerRef}
+      style={{ width, height, overflow: 'hidden', position: 'relative' }}
+      onPointerDown={handleScenePointerDown}
+      onPointerUp={handleScenePointerUp}
+    >
       {webglFailed && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-900/90 z-raised p-4">
           <TriangleAlert size={32} className="text-amber-400" />
@@ -365,8 +455,10 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
           <button
             onClick={() => {
               setWebglFailed(false);
-              // Force re-mount by toggling dimensions
-              setDimensions((d) => ({ ...d }));
+              // Re-tenter l'init réelle — incrémenter initKey refire
+              // l'effect du render loop (cleanup + scène recréée).
+              setSceneReady(false);
+              setInitKey((k) => k + 1);
             }}
             className="px-3 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 text-white rounded"
           >
@@ -377,25 +469,13 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
       {drawMode && <DrawModeOverlay />}
       {manipulateMode && <MacrosPanel isPlaying={isPlaying} hasMovements={movements.length > 0} />}
       {assignMode && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-overlay bg-gray-900/90 backdrop-blur rounded-lg px-3 py-1.5 border border-green-600/50">
-          <span className="text-green-400 text-xs font-medium">
-            Assign — click objects to toggle their track for this move
-          </span>
-        </div>
+        <ModeBanner variant="live">Assign — click objects to toggle their track for this move (Esc to cancel)</ModeBanner>
       )}
       {zonePlaceMode && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-overlay bg-gray-900/90 backdrop-blur rounded-lg px-3 py-1.5 border border-cyan-600/50">
-          <span className="text-cyan-400 text-xs font-medium">
-            Place — click on the floor to set the zone center (Esc to cancel)
-          </span>
-        </div>
+        <ModeBanner variant="osc">Place — click on the floor to set the zone center (Esc to cancel)</ModeBanner>
       )}
       {zoneEditMode && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-overlay bg-gray-900/90 backdrop-blur rounded-lg px-3 py-1.5 border border-cyan-600/50">
-          <span className="text-cyan-400 text-xs font-medium">
-            Edit zones — drag a zone to move it, scroll over it to resize (Esc to cancel)
-          </span>
-        </div>
+        <ModeBanner variant="osc">Edit zones — drag a zone to move it, scroll over it to resize (Esc to cancel)</ModeBanner>
       )}
       <ModeButtons
         manipulateMode={manipulateMode}
@@ -415,7 +495,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
       <ZoneVisualization sceneRef={sceneRef} />
       <canvas
         ref={drawCanvasRef}
-        className="absolute inset-0 z-10"
+        className="absolute inset-0 z-overlay"
         style={{
           width: '100%',
           height: '100%',
@@ -426,6 +506,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
         onPointerMove={handleDrawMove}
         onPointerUp={handleDrawEnd}
         onPointerCancel={handleDrawEnd}
+        onWheel={handleZoomWheel}
       />
       {/* Interaction layer — manipulate, assign, place-zone ou edit-zone */}
       {zoneEditMode && (
@@ -436,7 +517,12 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
           onPointerMove={handleZoneEditMove}
           onPointerUp={handleZoneEditUp}
           onPointerCancel={handleZoneEditUp}
-          onWheel={handleZoneEditWheel}
+          onWheel={(e) => {
+            // Resize si la molette est au-dessus d'une zone — sinon zoom.
+            const r = zoneRaycast(e);
+            if (r && zoneIndexAt(r) !== null) handleZoneEditWheel(e);
+            else handleZoomWheel(e);
+          }}
         />
       )}
       {zonePlaceMode && (
@@ -444,6 +530,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
           className="absolute inset-0 z-overlay"
           style={{ cursor: 'crosshair' }}
           onPointerDown={handleZonePlaceDown}
+          onWheel={handleZoomWheel}
         />
       )}
       {assignMode && (
@@ -451,6 +538,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
           className="absolute inset-0 z-overlay"
           style={{ cursor: 'pointer' }}
           onPointerDown={handleAssignDown}
+          onWheel={handleZoomWheel}
         />
       )}
       {manipulateMode && (
@@ -487,13 +575,21 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
           communique la prochaine action au lieu d'afficher une plaine vide.
           pointer-events-none : l'orbit reste utilisable. */}
       {movements.length === 0 && editingSlotId === null && !manipulateMode && !drawMode && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+        <div className="absolute inset-0 z-overlay flex items-center justify-center pointer-events-none">
           <div className="text-center bg-gray-900/70 backdrop-blur rounded-xl px-6 py-4 border border-gray-700/40">
             <div className="text-gray-300 text-xs font-medium">No move running</div>
             <div className="text-gray-500 text-xs mt-1.5 leading-relaxed">
               <span className="text-gray-400">+ Move</span> creates a slot · a <span className="text-gray-400">template</span> fills it · <span className="text-gray-400">▶</span> launches it
             </div>
           </div>
+        </div>
+      )}
+      {/* Inspect de l'objet sélectionné (clic-gauche proximité, même
+          anneau blanc qu'au radar via selectedObjIndex) — partage la
+          barre du radar : état source + release/park. */}
+      {selectedObjIndex !== null && (
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-raised">
+          <ObjectInspectBar positions={emittedPositions} />
         </div>
       )}
       {/* Debug perf overlay — top left, opt-in via le toggle de la barre canvas */}

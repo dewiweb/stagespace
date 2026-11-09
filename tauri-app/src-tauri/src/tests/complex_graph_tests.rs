@@ -30,6 +30,7 @@ mod complex_graph_tests {
             move_generation: Arc::new(AtomicU64::new(0)),
             merge_runtime: Arc::new(Mutex::new(merge)),
             recall_in_progress: Arc::new(AtomicBool::new(false)),
+            deactivate_gen: Arc::new(AtomicU64::new(0)),
             osc_receiver: Arc::new(Mutex::new(OscReceiver::new(0))),
             plugin_registry: None,
             plugins_dir: None,
@@ -43,10 +44,10 @@ mod complex_graph_tests {
         })
     }
 
-    fn e(id: &str, from: &str, to: &str, to_port: &str) -> serde_json::Value {
+    fn e(id: &str, from: &str, to: &str, from_port: &str, to_port: &str) -> serde_json::Value {
         serde_json::json!({
             "id": id, "source": from, "target": to,
-            "sourceHandle": "output", "targetHandle": to_port
+            "sourceHandle": from_port, "targetHandle": to_port
         })
     }
 
@@ -72,19 +73,19 @@ mod complex_graph_tests {
                 n("out", "Output", serde_json::json!({})),
             ],
             "edges": [
-                e("e1", "objs", "circ", "input"),
-                e("e2", "objs", "spir", "input"),
-                e("e3", "objs", "swarm", "input"),
-                e("e4", "dur", "circ", "duration"),
-                e("e5", "dur", "spir", "duration"),
-                e("e6", "dur", "swarm", "duration"),
-                e("e7", "circ", "scale", "input"),
-                e("e8", "scale", "mix", "input_a"),
-                e("e9", "spir", "rot", "input"),
-                e("e10", "rot", "mix", "input_b"),
-                e("e11", "mix", "seq", "input_a"),
-                e("e12", "swarm", "seq", "input_b"),
-                e("e13", "seq", "out", "input"),
+                e("e1", "objs", "circ", "objects", "objects"),
+                e("e2", "objs", "spir", "objects", "objects"),
+                e("e3", "objs", "swarm", "objects", "objects"),
+                e("e4", "dur", "circ", "duration", "duration"),
+                e("e5", "dur", "spir", "duration", "duration"),
+                e("e6", "dur", "swarm", "duration", "duration"),
+                e("e7", "circ", "scale", "out", "in"),
+                e("e8", "scale", "mix", "out", "a"),
+                e("e9", "spir", "rot", "out", "in"),
+                e("e10", "rot", "mix", "out", "b"),
+                e("e11", "mix", "seq", "out", "a"),
+                e("e12", "swarm", "seq", "out", "b"),
+                e("e13", "seq", "out", "out", "in"),
             ]
         })
     }
@@ -112,16 +113,17 @@ mod complex_graph_tests {
                 n("out", "Output", serde_json::json!({})),
             ],
             "edges": [
-                e("g1", "merge", "man", "input"),
-                e("g2", "man", "rs", "input"),
-                e("g3", "rs", "ho", "input"),
-                e("g4", "ho", "ptd", "input"),
-                e("g5", "ptd", "sc", "input"),
-                e("g6", "sc", "rot", "input"),
-                e("g7", "rot", "off", "input"),
-                e("g8", "off", "zone", "input"),
-                e("g9", "zone", "vel", "input"),
-                e("g10", "vel", "out", "input"),
+                e("g1", "merge", "man", "out", "in"),
+                e("g2", "man", "rs", "out", "in"),
+                e("g3", "rs", "ho", "out", "in"),
+                e("g4", "ho", "ptd", "out", "in"),
+                e("g5", "ptd", "sc", "out", "in"),
+                e("g6", "sc", "rot", "out", "in"),
+                e("g7", "rot", "off", "out", "in"),
+                // Capteurs en fan-out du node final (off → Output.in).
+                e("g8", "off", "zone", "out", "in"),
+                e("g9", "off", "vel", "out", "in"),
+                e("g10", "off", "out", "out", "in"),
             ]
         })
     }
@@ -264,6 +266,9 @@ mod complex_graph_tests {
                     spatial_macros: None,
                     animation_state: None,
                     signal_graph: None,
+                    end_mode: stagespace_engines::EndMode::default(),
+                    anchor_mode: stagespace_engines::AnchorMode::default(),
+                    anchor_target: None,
                 }
             };
 
@@ -288,9 +293,9 @@ mod complex_graph_tests {
                 n("out", "Output", serde_json::json!({})),
             ],
             "edges": [
-                e("a", "o", "c", "input"),
-                e("b", "d", "c", "duration"),
-                e("c", "c", "out", "input"),
+                e("a", "o", "c", "objects", "objects"),
+                e("b", "d", "c", "duration", "duration"),
+                e("c", "c", "out", "out", "in"),
             ]
         });
         spawn_move_for_recall(

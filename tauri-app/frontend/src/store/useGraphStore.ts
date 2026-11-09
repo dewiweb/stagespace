@@ -1,7 +1,5 @@
-import React from 'react';
 import { create } from 'zustand';
 import { safeInvoke as invoke } from '../utils/tauri';
-import { safeListen as listen } from '../utils/tauri';
 import {
   applyNodeChanges,
   applyEdgeChanges,
@@ -14,7 +12,7 @@ import {
 } from '@xyflow/react';
 import type { GraphNode } from '../components/nodeParamSchema';
 import { createPerfSlice, type PerfSlice } from './slices/perfSlice';
-import { createAudioSlice, type AudioSlice, type AudioState } from './slices/audioSlice';
+import { createAudioSlice, type AudioSlice } from './slices/audioSlice';
 import { createOscSlice, type OscSlice } from './slices/oscSlice';
 import { createPersistenceSlice, type PersistenceSlice } from './slices/persistenceSlice';
 import { createMacrosSlice, type MacrosSlice } from './slices/macrosSlice';
@@ -26,8 +24,10 @@ import { createOscConfigSlice, type OscConfigSlice } from './slices/oscConfigSli
 import { createSplineLibrarySlice, type SplineLibrarySlice } from './slices/splineLibrarySlice';
 import { createSpatialFxSlice, type SpatialFxSlice } from './slices/spatialFxSlice';
 import { createInteractionModesSlice, type InteractionModesSlice } from './slices/interactionModesSlice';
+import { createEmergencySlice, type EmergencySlice } from './slices/emergencySlice';
 import { createPluginSlice, type PluginSlice } from './slices/pluginSlice';
 import { SHAPE_PRESETS } from '../utils/shapePresets';
+import { clearTargetsForRemovedNodes } from '../utils/signalTargets';
 import { toast } from '../utils/toast-helpers';
 import { safeSetItem } from '../utils/safeStorage';
 import type {
@@ -50,7 +50,7 @@ interface GraphState
   extends PerfSlice, AudioSlice, OscSlice, PersistenceSlice,
     MacrosSlice, HolProjectSlice, DrawModeSlice,
     MovementSlice, MoveSlotsSlice, OscConfigSlice, SplineLibrarySlice, SpatialFxSlice,
-    InteractionModesSlice, PluginSlice {
+    InteractionModesSlice, PluginSlice, EmergencySlice {
   // React Flow state (single source of truth)
   nodes: GraphNode[];
   edges: Edge[];
@@ -67,10 +67,7 @@ interface GraphState
   setEdges: (edges: Edge[]) => void;
 
   // Playback / status
-  isPlaying: boolean;
   status: AppStatus;
-  currentTime: number;
-  setCurrentTime: (t: number) => void;
   duration: number;
   compileError: string | null;
   playError: string | null;
@@ -120,8 +117,6 @@ interface GraphState
   /// loadGraph) puissent synchroniser le slot après avoir remplacé nodes/edges.
   autoSaveToEditingSlot: () => void;
 
-  // Panic
-  panic: () => Promise<void>;
 }
 
 export const useGraphStore = create<GraphState>()((...a) => {
@@ -135,11 +130,23 @@ export const useGraphStore = create<GraphState>()((...a) => {
     const editingSlotId = get().editingSlotId;
     if (!editingSlotId) return;
     const { nodes, edges, moveSlots } = get();
-    const newSlots = moveSlots.map((sl) =>
-      sl.id === editingSlotId
-        ? { ...sl, graphJson: { nodes: [...nodes], edges: [...edges] } }
-        : sl
-    );
+    // Suppression de nodes du graphe du move : les cibles SignalOut
+    // `param:<id>:<key>` de la modulation per-move deviendraient mortes —
+    // on les efface (sink inerte) avec un toast.
+    const newSlots = moveSlots.map((sl) => {
+      if (sl.id !== editingSlotId) return sl;
+      const prevIds = new Set((sl.graphJson?.nodes ?? []).map((n) => n.id));
+      const removed = new Set([...prevIds].filter((id) => !nodes.some((n) => n.id === id)));
+      let signalGraph = sl.signalGraph;
+      if (signalGraph && removed.size > 0) {
+        const { nodes: cleaned, cleared } = clearTargetsForRemovedNodes(signalGraph.nodes, removed);
+        if (cleared > 0) {
+          signalGraph = { nodes: cleaned, edges: signalGraph.edges };
+          toast.info(`${cleared} modulation target${cleared > 1 ? 's' : ''} cleared (deleted node)`);
+        }
+      }
+      return { ...sl, signalGraph, graphJson: { nodes: [...nodes], edges: [...edges] } };
+    });
     // Sauvegarder dans localStorage (la fonction est dans moveSlotsSlice)
     safeSetItem('stagespace-move-slots', JSON.stringify(newSlots));
     set({ moveSlots: newSlots });
@@ -192,6 +199,7 @@ export const useGraphStore = create<GraphState>()((...a) => {
   ...createSpatialFxSlice(...a),
   ...createInteractionModesSlice(...a),
   ...createPluginSlice(...a),
+  ...createEmergencySlice(set, get),
 
   // Graphe par défaut — preset Circle pour que l'app ne démarre jamais vide
   ...(() => {
@@ -212,10 +220,21 @@ export const useGraphStore = create<GraphState>()((...a) => {
   },
   onConnect: (connection) => {
     get().pushHistory();
+    // Arité-1 mirror du validator : un port d'entrée ne prend qu'une
+    // edge. Re-câbler dans un input occupé remplace l'edge existante
+    // (sémantique standard des éditeurs nodaux) — sinon le graphe passe
+    // en UI mais est rejeté par le backend. On déduplique aussi l'edge
+    // identique (même source/cible/ports).
     set({
       edges: rfAddEdge(
         { ...connection, markerEnd: { type: MarkerType.ArrowClosed } },
-        get().edges,
+        get().edges.filter(
+          (e) =>
+            !(
+              e.target === connection.target &&
+              (e.targetHandle ?? null) === (connection.targetHandle ?? null)
+            ),
+        ),
       ) as Edge[],
     });
     autoSaveToEditingSlot();
@@ -283,15 +302,12 @@ export const useGraphStore = create<GraphState>()((...a) => {
   setNodes: (nodes) => set({ nodes }),
   setEdges: (edges) => set({ edges }),
 
-  isPlaying: false,
   status: 'idle',
-  currentTime: 0,
-  setCurrentTime: (t) => set({ currentTime: t }),
   duration: 4.0,
   compileError: null,
   playError: null,
-  clearCompileError: () => set({ compileError: null, status: get().isPlaying ? 'playing' : 'idle' }),
-  clearPlayError: () => set({ playError: null, status: get().isPlaying ? 'playing' : 'idle' }),
+  clearCompileError: () => set({ compileError: null, status: get().movements.length > 0 ? 'playing' : 'idle' }),
+  clearPlayError: () => set({ playError: null, status: get().movements.length > 0 ? 'playing' : 'idle' }),
   graphCompileVersion: 0,
 
   updateGraphLive: async (fadeDuration?: number) => {
@@ -344,6 +360,9 @@ export const useGraphStore = create<GraphState>()((...a) => {
     } catch (error: any) {
       console.error('Live update failed:', error);
       toast.error('Live update failed: ' + (error?.message ?? String(error)));
+      // La pill StatusBar/Toolbar persiste l'erreur après le toast —
+      // un hot-swap raté silencieux = graphe UI ≠ graphe runtime.
+      set({ compileError: String(error?.message ?? error), status: 'error' });
     }
   },
 
@@ -432,264 +451,17 @@ export const useGraphStore = create<GraphState>()((...a) => {
     get().updateGraphLive(0.3).catch((e) => console.error('[redo] hot-swap failed:', e));
   },
 
-  // ─── Panic ───
-  panic: async () => {
-    const { holProject, manualOscIds } = get();
-    let failedStops = 0;
-    // Stop immédiat — inconditionnel. `deactivate_all_moves` est idempotent et
-    // le cache `movements` peut être stale : ne JAMAIS s'en servir de garde.
-    // Un throw ici ne doit PAS empêcher l'envoi des positions d'origine (sinon
-    // le spatializer garde les dernières positions et les sources restent "en
-    // l'air").
-    try {
-      await get().stopAllMovements();
-    } catch (e) {
-      failedStops += 1;
-      console.error('Panic: stop all failed:', e);
-    }
-    // Envoyer les positions d'origine à tous les récepteurs OSC — en
-    // parallèle (64 awaits séquentiels dans un arrêt d'urgence = latence
-    // inutile). `send_osc_position` route via le MergeRuntime (cible live).
-    const sends: Promise<unknown>[] = [];
-    if (holProject) {
-      for (const track of holProject.tracks) {
-        sends.push(
-          invoke('send_osc_position', {
-            oscId: track.id,
-            x: track.position[0],
-            y: track.position[1],
-            z: track.position[2],
-          }),
-        );
-      }
-    } else {
-      // Sans .hol: envoyer position (0,0,0) pour tous les manualOscIds
-      for (const id of manualOscIds) {
-        sends.push(invoke('send_osc_position', { oscId: id, x: 0, y: 0, z: 0 }));
-      }
-    }
-    const results = await Promise.allSettled(sends);
-    const failedSends = results.filter((r) => r.status === 'rejected').length;
-    for (const r of results) {
-      if (r.status === 'rejected') console.error('Panic: position reset failed:', r.reason);
-    }
-    // Feedback obligatoire — un panic silencieux est un panic douteux.
-    // Ne jamais prétendre que les positions ont été reset si aucun envoi
-    // n'était possible (pas de .hol ni de manualOscIds).
-    if (failedStops === 0 && failedSends === 0) {
-      const msg = sends.length > 0
-        ? 'PANIC — all moves stopped, positions reset'
-        : 'PANIC — all moves stopped';
-      toast.warning(msg, 4000);
-    } else {
-      toast.error(
-        `PANIC partially failed — ${failedStops} stop error(s), ${failedSends} position reset(s) lost. Verify the spatializer state.`,
-        0,
-      );
-    }
-  },
 
   };
 });
 
-// ── Audio error listener — surface les pannes de capture (micro débranché,
-// stream mort) pendant un show. Sans cet écouteur l'event `audio-error` émis
-// par le poller Rust tombait dans le vide.
-let lastAudioError = '';
-let lastAudioErrorAt = 0;
-export const useAudioErrorListener = () => {
-  React.useEffect(() => {
-    const unlisten = listen<string>('audio-error', (event) => {
-      const message = typeof event.payload === 'string' ? event.payload : String(event.payload);
-      // Dedup : le poller peut renvoyer la même erreur en boucle — un toast
-      // identique toutes les 5s max, sinon jamais.
-      const now = Date.now();
-      if (message === lastAudioError && now - lastAudioErrorAt < 5000) return;
-      lastAudioError = message;
-      lastAudioErrorAt = now;
-      toast.error(`Audio capture failed: ${message}`);
-    });
-    const unlistenRecovered = listen('audio-recovered', () => {
-      lastAudioError = '';
-      toast.success('Audio capture recovered');
-    });
-    return () => {
-      unlisten.then((fn) => fn()).catch(() => {});
-      unlistenRecovered.then((fn) => fn()).catch(() => {});
-    };
-  }, []);
-};
 
-// ── Audio state listener — flux `audio-state-update` (amplitude/BPM/spectre).
-// Monté au niveau App, pas dans AudioPanel : le panneau peut être replié,
-// masqué ou absent (Perform) alors que des CustomNode AudioSpectrum affichent
-// encore le spectre. Le listener vit tant que l'app vit.
-export const useAudioStateListener = () => {
-  const setAudioState = useGraphStore((s) => s.setAudioState);
-  React.useEffect(() => {
-    const unlisten = listen<AudioState>('audio-state-update', (event) => {
-      setAudioState(event.payload);
-    });
-    return () => {
-      unlisten.then((fn) => fn()).catch(() => {});
-    };
-  }, [setAudioState]);
-};
-
-// ── Cue recall listener — surface les respawns échoués d'un recall partiel.
-// Le backend continue un recall même si un move échoue (partial recall) —
-// sans ce listener l'échec passerait pour un succès complet.
-export const useCueRecallListener = () => {
-  const refreshMovements = useGraphStore((s) => s.refreshMovements);
-  React.useEffect(() => {
-    const unlisten = listen<{ cue_id: string; failed_moves: string[] }>(
-      'cue-recalled',
-      (event) => {
-        refreshMovements();
-        const failed = event.payload?.failed_moves ?? [];
-        if (failed.length > 0) {
-          toast.error(
-            `Cue recall partial — ${failed.length} move(s) failed to restart (${failed.join(', ')}). Check the spatializer.`,
-            0,
-          );
-        }
-      },
-    );
-    return () => { unlisten.then((fn) => fn()).catch(() => {}); };
-  }, [refreshMovements]);
-};
-
-// ── Supervisor listener — events du watchdog backend (audits C5/C7) :
-// worker zombie arrêté, merge thread redémarré sans le frontend.
-export const useSupervisorListener = () => {
-  React.useEffect(() => {
-    const unStale = listen<string>('move-stale-killed', (event) => {
-      toast.warning(
-        `Move "${event.payload}" was stopped — its engine worker froze. Check graph complexity.`,
-      );
-    });
-    const unRestart = listen('merge-restarted', () => {
-      toast.warning('Output engine restarted automatically after a crash — playback resumed.');
-    });
-    const unRestartFailed = listen<string>('merge-restart-failed', (event) => {
-      toast.error(
-        `Output engine failed to restart — OSC output is DOWN: ${event.payload}`,
-        0,
-      );
-    });
-    return () => {
-      unStale.then((fn) => fn()).catch(() => {});
-      unRestart.then((fn) => fn()).catch(() => {});
-      unRestartFailed.then((fn) => fn()).catch(() => {});
-    };
-  }, []);
-};
-
-// ── Global positions listener — écoute l'event global-positions du MergeRuntime ──
-// Une seule source de positions (déjà mergées + transformées), au lieu de N events par movement.
-export const useMovementPositionsListener = () => {
-  const setMovementPositions = useGraphStore((s) => s.setMovementPositions);
-  const movements = useGraphStore((s) => s.movements);
-  const refreshMovements = useGraphStore((s) => s.refreshMovements);
-
-  // Écouter active-moves-update pour sync la liste des moves (activate/deactivate côté backend)
-  React.useEffect(() => {
-    const unlisten = listen('active-moves-update', async () => {
-      await refreshMovements();
-      // Sync les slots après refresh — nettoie les movementIds stale
-      useGraphStore.getState().syncSlotMovements();
-    });
-    return () => { unlisten.then((fn) => fn()).catch(() => {}); };
-  }, [refreshMovements]);
-
-  // Ref partagé pour les effects qui doivent connaître l'état playback sans
-  // y souscrire (évite de déclencher les invokes de config pendant le show).
-  const movementsCount = useGraphStore((s) => s.movements.length);
-  const movementsCountRef = React.useRef(movementsCount);
-  movementsCountRef.current = movementsCount;
-
-  // Appliquer la config OSC au backend (au démarrage + à chaque changement)
-  const oscAddress = useGraphStore((s) => s.oscAddress);
-  const oscPort = useGraphStore((s) => s.oscPort);
-  const oscProfile = useGraphStore((s) => s.oscProfile);
-  React.useEffect(() => {
-    // Pendant le playback la config OSC est lockée backend-side — ne pas
-    // invoquer (évite un faux toast d'erreur à chaque transition).
-    if (movementsCountRef.current > 0) return;
-    // Debounce : la saisie clavier produit un invoke par keystroke sinon.
-    const t = setTimeout(() => {
-      invoke('set_osc_output', { address: oscAddress, port: oscPort, profile: oscProfile })
-        .catch((e: any) => {
-          console.error('Failed to set OSC output:', e);
-          // Zéro OSC sortant = show silencieux — l'utilisateur DOIT le voir.
-          toast.error(`OSC output config failed — no positions will be sent: ${e}`);
-        });
-    }, 300);
-    return () => clearTimeout(t);
-  }, [oscAddress, oscPort, oscProfile]);
-
-  // Pousser les osc_ids globaux (manualOscIds ou hol track ids) au backend.
-  // CRITICAL: le MergeRuntime utilise cette liste pour mapper track_indices → osc_id
-  // lors de l'OSC output. Si cette liste ne correspond pas aux track_indices,
-  // les positions ne sont pas envoyées en OSC.
-  const manualOscIds = useGraphStore((s) => s.manualOscIds);
-  const holProject = useGraphStore((s) => s.holProject);
-  React.useEffect(() => {
-    // Pendant le playback le backend rejette set_global_osc_ids — ne pas
-    // invoquer (évitait le toast "OSC track mapping failed" à chaque play).
-    // movementsCount dans les deps : quand le dernier move s'arrête, l'effect
-    // refire et pousse les ids en attente.
-    if (movementsCount > 0) return;
-    // Debounce : manualOscIds change à chaque keystroke dans le champ.
-    const t = setTimeout(() => {
-      // Utiliser les track ids du hol project si disponible, sinon manualOscIds
-      const globalIds = holProject?.tracks?.map((t: any) => t.id) ?? manualOscIds;
-      invoke('set_global_osc_ids', { oscIds: globalIds })
-        .catch((e: any) => {
-          console.error('Failed to set global osc ids:', e);
-          // Sans mapping track→osc_id, le MergeRuntime n'émet rien — critique.
-          toast.error(`OSC track mapping failed — output may be silent: ${e}`);
-        });
-    }, 300);
-    return () => clearTimeout(t);
-  }, [manualOscIds, holProject, movementsCount]);
-
-  // Écouter global-positions (un seul event avec toutes les positions mergées)
-  React.useEffect(() => {
-    if (movements.length === 0) return;
-    let ipcFrameCount = 0;
-    let ipcLastPerf = performance.now();
-    let ipcMaxDelta = 0;
-    let ipcLastTime = performance.now();
-    const unlisten = listen('global-positions', (event: any) => {
-      const now = performance.now();
-      const delta = now - ipcLastTime;
-      if (delta > ipcMaxDelta) ipcMaxDelta = delta;
-      ipcLastTime = now;
-      ipcFrameCount++;
-      if (now - ipcLastPerf > 2000) {
-        const ipcFps = ipcFrameCount / ((now - ipcLastPerf) / 1000);
-        const dp = (window as any).__debugPerf;
-        if (dp) {
-          dp.ipcFps = ipcFps;
-          dp.ipcMaxGap = ipcMaxDelta;
-        }
-        ipcFrameCount = 0;
-        ipcMaxDelta = 0;
-        ipcLastPerf = now;
-      }
-      const { positions } = event.payload as {
-        time: number;
-        positions: Array<[number, [number, number, number]]>;
-      };
-      // Les positions sont déjà mergées + transformées par le MergeRuntime.
-      // On les stocke sous un pseudo-movement-id "global" pour compat avec le render loop.
-      setMovementPositions(
-        'global',
-        positions.map(([index, [x, y, z]]) => ({ index, x, y, z })),
-      );
-    });
-    return () => { unlisten.then((fn) => fn()).catch(() => {}); };
-  }, [movements.length, setMovementPositions]);
-};
-
+// Listeners backend → store/toasts — module extrait (règle modularisation),
+// ré-exporté ici pour compatibilité des imports existants.
+export {
+  useAudioErrorListener,
+  useAudioStateListener,
+  useCueRecallListener,
+  useSupervisorListener,
+  useMovementPositionsListener,
+} from './backendListeners';

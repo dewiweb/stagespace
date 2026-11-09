@@ -10,4 +10,10 @@ export type ParamSpec = { key: string, label: string, kind: ParamKind, options: 
  * Défaut à la création du node, encodé en JSON (parsed côté frontend).
  * None → fallback par type (0/false/première option/…).
  */
-default_json: string | null, };
+default_json: string | null, 
+/**
+ * Le param est-il ciblable par le domaine signal (`param:<node>:<key>`)
+ * et relu live à chaque eval ? `false` pour les params structurels
+ * (n_objects, duration, seeds, init de sims — bakés au compile/init).
+ */
+modulable: boolean, };

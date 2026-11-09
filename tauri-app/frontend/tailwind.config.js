@@ -9,6 +9,17 @@ export default {
           panel: '#12121a',
           border: '#1e1e2e',
           accent: '#3b82f6',
+          // Tokens de rôle — la couleur code la fonction, pas le goût.
+          // live = playing/armé/GO · conduite = cues NOW/NEXT · osc = liens
+          // réseau · warning = partagé/orphelin · danger = panic/delete ·
+          // tracking = cues tracking/expert · dim = secondaire.
+          live: '#22c55e',
+          conduite: '#f59e0b',
+          osc: '#22d3ee',
+          warning: '#f97316',
+          danger: '#ef4444',
+          tracking: '#a855f7',
+          dim: '#6b7280',
         },
       },
       // Échelle de z-index nommée — fini les z-10/z-50/z-[9999] ad hoc.

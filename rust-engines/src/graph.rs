@@ -36,8 +36,6 @@ pub enum NodeType {
     Mix,
     Sequence,
     Crossfade,
-    /// Point d'entrée du graph global (représente les positions mergées)
-    Input,
 
     // Moteurs math
     Circular,
@@ -88,6 +86,20 @@ pub enum NodeType {
     Clamp,
     LFO,
     Jitter,
+    /// Multiplie le temps en amont — `upstream(t × factor, i)`.
+    /// t<0 reste dans le domaine : les engines périodiques wrapent,
+    /// les engines bornés clament à leur début.
+    SpeedScale,
+    /// Retarde l'upstream — `upstream(t − delay, i)`. Sur un engine
+    /// stateful, évaluer dans le passé force un reset de sa simulation
+    /// (voir `NodeSpec.stateful`).
+    Delay,
+    /// Fige la sortie sur la dernière position calculée quand `enabled`
+    /// — hold de sécurité live.
+    Freeze,
+    /// Composite binaire de sélection — `select < 0.5` → `a`, sinon `b`.
+    /// Choix manuel/OSC-driven, contrairement à Sequence (temporel).
+    Switch,
 
     // Post-processing nodes (graph global — appliqués après merge)
     RadiusScale,
@@ -188,6 +200,16 @@ pub enum NodeType {
     /// hysteresis, conserve l'état entre les deux.
     /// Params : threshold, hysteresis.
     SignalThreshold,
+    /// Impulsion rythmique depuis l'audio détecté (bpm + last_beat_time) —
+    /// 1.0 pendant `width` fraction de la période du beat, sinon 0.0.
+    SignalBeat,
+    /// Sample & hold — retient `signal` pendant que `trigger` est bas,
+    /// rééchantillonne sur front montant.
+    SignalSampleHold,
+    /// Sélection entre deux signaux — `sel < 0.5` → `a`, sinon `b`.
+    SignalMux,
+    /// Compte les fronts montants de `trigger` — wrap sur `max` si > 0.
+    SignalCounter,
 
     // Terminal
     /// Sink : écrit le signal en DELTA additif sur une macro.
@@ -273,10 +295,10 @@ impl Graph {
     }
 
     /// Entrées d'un composite binaire (Mix, Group, Sequence, Crossfade)
-    /// ordonnées par port : le node connecté à `input_a` en premier, celui
-    /// connecté à `input_b` ensuite. Les edges sans port explicite (legacy
-    /// "input") remplissent les slots restants dans l'ordre d'insertion —
-    /// le résultat est déterministe quelle que soit la convention de ports.
+    /// ordonnées par port : le node connecté à `a` en premier, celui
+    /// connecté à `b` ensuite. Les edges sur d'autres ports (inattendu —
+    /// le validator les rejette) remplissent les slots restants dans
+    /// l'ordre d'insertion — résultat déterministe dans tous les cas.
     pub fn get_binary_inputs(&self, id: NodeId) -> Vec<NodeId> {
         let mut port_a: Option<NodeId> = None;
         let mut port_b: Option<NodeId> = None;
@@ -284,8 +306,8 @@ impl Graph {
 
         for e in self.edges.iter().filter(|e| e.to == id) {
             match e.to_port.as_str() {
-                "input_a" if port_a.is_none() => port_a = Some(e.from),
-                "input_b" if port_b.is_none() => port_b = Some(e.from),
+                "a" if port_a.is_none() => port_a = Some(e.from),
+                "b" if port_b.is_none() => port_b = Some(e.from),
                 _ => unnamed.push(e.from),
             }
         }

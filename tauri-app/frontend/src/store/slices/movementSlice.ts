@@ -53,6 +53,7 @@ type MovementStore = MovementSlice & {
   holProject: HolProject | null;
   manualOscIds: number[];
   graphCompileVersion: number;
+  status?: 'idle' | 'compiling' | 'compiled' | 'playing' | 'error';
   refreshMovements: () => Promise<void>;
   // Undo + auto-save du slot édité — optionnels dans la vue structurelle,
   // présents sur le store combiné.
@@ -121,10 +122,15 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
 
   stopMovement: async (movementId) => {
     try {
+      // Un stop opérateur désarme les timers pendus — sinon une cue
+      // armée ressuscite le move N secondes après le stop (revue M3).
+      void import('../useCuelistStore').then((m) =>
+        m.useCuelistStore.getState().cancelPendingTimers(),
+      );
+      void import('../../utils/timerBroadcast').then((m) => m.broadcastTimerCancel());
       await invoke('deactivate_move', { movementId, fadeDuration: 0.0 });
       // Nettoyer l'objet mutable directement (pas de set())
       delete _movementPositionsExternal[movementId];
-      delete _movementPositionsExternal['global'];
       set((s) => {
         const newSaved = { ...s.savedGraphs };
         delete newSaved[movementId];
@@ -142,9 +148,14 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
 
   stopMovementWithFade: async (movementId, fadeDuration) => {
     try {
+      // Un stop opérateur désarme les timers pendus — sinon une cue
+      // armée ressuscite le move N secondes après le stop (revue M3).
+      void import('../useCuelistStore').then((m) =>
+        m.useCuelistStore.getState().cancelPendingTimers(),
+      );
+      void import('../../utils/timerBroadcast').then((m) => m.broadcastTimerCancel());
       await invoke('deactivate_move', { movementId, fadeDuration });
       delete _movementPositionsExternal[movementId];
-      delete _movementPositionsExternal['global'];
       set((s) => {
         const newSaved = { ...s.savedGraphs };
         delete newSaved[movementId];
@@ -160,6 +171,12 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
 
   stopAllMovements: async () => {
     try {
+      // Un stop opérateur désarme les timers pendus — sinon une cue
+      // armée ressuscite le move N secondes après le stop (revue M3).
+      void import('../useCuelistStore').then((m) =>
+        m.useCuelistStore.getState().cancelPendingTimers(),
+      );
+      void import('../../utils/timerBroadcast').then((m) => m.broadcastTimerCancel());
       await invoke('deactivate_all_moves', { fadeDuration: 0.0 });
       // Vider l'objet mutable
       for (const k of Object.keys(_movementPositionsExternal)) delete _movementPositionsExternal[k];
@@ -177,7 +194,17 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
   refreshMovements: async () => {
     try {
       const movements = await invoke<MovementInfo[]>('list_active_moves');
-      set({ movements });
+      // status suit la réalité backend — 'error' persiste jusqu'au clear
+      // (clearCompileError/clearPlayError restaurent playing/idle).
+      set((s) => ({
+        movements,
+        status:
+          s.status === 'error'
+            ? 'error'
+            : movements.length > 0
+              ? 'playing'
+              : 'idle',
+      }));
     } catch (e) {
       console.error('Failed to list movements:', e);
       const now = Date.now();

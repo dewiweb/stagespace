@@ -3,7 +3,7 @@ use super::state::lock_or_recover;
 use crate::AppState;
 use stagespace_engines::{OscInStatsSnapshot, OscMapping, OscProfile, OscReceiver, OscSender};
 use std::str::FromStr;
-use tauri::State;
+use tauri::{Emitter, State};
 
 // OSC Receiver Commands
 
@@ -25,6 +25,20 @@ pub async fn osc_remove_mapping(
 ) -> Result<(), IpcError> {
     let receiver = lock_or_recover(&state.osc_receiver);
     receiver.remove_mapping(&address);
+    Ok(())
+}
+
+/// Active/désactive un mapping sans le supprimer (toggle dans l'éditeur).
+#[tauri::command]
+pub async fn osc_set_mapping_enabled(
+    address: String,
+    enabled: bool,
+    state: State<'_, AppState>,
+) -> Result<(), IpcError> {
+    let receiver = lock_or_recover(&state.osc_receiver);
+    if !receiver.set_mapping_enabled(&address, enabled) {
+        return Err(IpcError::not_found(format!("mapping '{address}'")));
+    }
     Ok(())
 }
 
@@ -124,6 +138,10 @@ pub async fn set_osc_receiver_port(port: u16, state: State<'_, AppState>) -> Res
     let mut new_receiver = OscReceiver::new(port);
     new_receiver.set_targets(targets);
     new_receiver.set_in_enabled(enabled);
+    // Le receiver est aussi le transport `/stagespace/*` — sans
+    // migration du show_sink, des contrôleurs, de media_sync et du fps
+    // TC, les commandes restent ACKées mais meurent en silence.
+    lock_or_recover(&state.osc_receiver).migrate_show_control_to(&mut new_receiver);
     for mapping in mappings {
         new_receiver
             .add_mapping(mapping)
@@ -219,13 +237,20 @@ pub async fn send_osc_position(
 /// désarmé, aucun paquet OSC ne part (preview 3D vivante, silence réseau).
 /// Indépendant des flags `is_preview` par move.
 #[tauri::command]
-pub async fn set_osc_armed(armed: bool, state: State<'_, AppState>) -> Result<(), IpcError> {
+pub async fn set_osc_armed(
+    armed: bool,
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), IpcError> {
     let merge_rt = lock_or_recover(&state.merge_runtime);
     merge_rt.set_osc_armed(armed);
     eprintln!(
         "[INFO] OSC master arm: {}",
         if armed { "ARMED" } else { "DISARMED" }
     );
+    // L'état armé est broadcasté — les toggles/chips UI restent synchronisés
+    // quelle que soit la source de l'écriture (bouton, OSC /stagespace/arm).
+    let _ = app.emit("osc-armed-changed", armed);
     Ok(())
 }
 
@@ -233,4 +258,312 @@ pub async fn set_osc_armed(armed: bool, state: State<'_, AppState>) -> Result<()
 pub async fn get_osc_armed(state: State<'_, AppState>) -> Result<bool, IpcError> {
     let merge_rt = lock_or_recover(&state.merge_runtime);
     Ok(merge_rt.osc_armed())
+}
+
+/// Feedback cue vers les contrôleurs show-control : le frontend envoie
+/// la cue courante/prochaine après chaque changement — le backend l'envoie
+/// aux adresses ayant envoyé des commandes `/stagespace/*` (ack déjà
+/// immédiat côté receiver).
+#[derive(serde::Deserialize, ts_rs::TS)]
+#[ts(export)]
+pub struct CueFeedbackEntry {
+    pub number: String,
+    pub name: String,
+}
+
+#[tauri::command]
+pub async fn send_show_feedback(
+    current: Option<CueFeedbackEntry>,
+    next: Option<CueFeedbackEntry>,
+    state: State<'_, AppState>,
+) -> Result<(), IpcError> {
+    let receiver = lock_or_recover(&state.osc_receiver);
+    receiver.send_show_feedback(
+        current.map(|c| (c.number, c.name)),
+        next.map(|n| (n.number, n.name)),
+    );
+    Ok(())
+}
+
+/// Âge (s) de la dernière commande `/stagespace/*` — voyant console.
+#[tauri::command]
+pub async fn get_last_show_cmd_age(state: State<'_, AppState>) -> Result<Option<f64>, IpcError> {
+    Ok(lock_or_recover(&state.osc_receiver).last_show_cmd_age())
+}
+
+/// Dernier message OSC reçu hors `/stagespace/` — pour le learn :
+/// le frontend poll pendant que l'opérateur bouge son fader.
+#[tauri::command]
+pub async fn get_last_osc_message(
+    state: State<'_, AppState>,
+) -> Result<Option<(String, Vec<f64>, f64)>, IpcError> {
+    Ok(lock_or_recover(&state.osc_receiver).last_received())
+}
+
+/// NACK : `/stagespace/nack <reason>` vers l'expéditeur d'une commande
+/// rejetée (busy/not-found) — addr = le `from` de l'évènement show-control.
+#[tauri::command]
+pub async fn send_show_nack(
+    addr: String,
+    reason: String,
+    state: State<'_, AppState>,
+) -> Result<(), IpcError> {
+    let parsed: std::net::SocketAddr = addr
+        .parse()
+        .map_err(|_| IpcError::validation(format!("invalid controller addr '{addr}'")))?;
+    lock_or_recover(&state.osc_receiver).send_show_nack(parsed, &reason);
+    Ok(())
+}
+
+/// FPS utilisé pour la forme string `HH:MM:SS:FF` du timecode
+/// (`/stagespace/timecode`) — non-drop, 24/25/30 ; défaut 25.
+#[tauri::command]
+pub async fn set_timecode_fps(fps: f64, state: State<'_, AppState>) -> Result<(), IpcError> {
+    let receiver = lock_or_recover(&state.osc_receiver);
+    receiver.set_timecode_fps(fps);
+    Ok(())
+}
+
+// ─── PSN/RTTrP (PosiStageNet) — tracking industrie ───
+
+/// Configure et démarre/arrête le récepteur PSN. Le mapping
+/// `tracker_id → object_index` s'applique immédiatement ; les positions
+/// reçues sont injectées en positions manuelles (lissées par la couche
+/// cinématique du merge).
+#[tauri::command]
+pub async fn set_psn_config(
+    enabled: bool,
+    group: String,
+    port: u16,
+    tracker_map: std::collections::HashMap<u32, usize>,
+    axes: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<(), IpcError> {
+    let psn = state.psn_receiver.clone();
+    // Axes "x,-y,z" → permutation+signe PSN→stage (conventions BlackTrax/
+    // Zactrack variables selon l'installateur).
+    if let Some(a) = axes {
+        let mut order = [0usize; 3];
+        let mut signs = [1.0f64; 3];
+        let parts: Vec<&str> = a.split(',').map(|s| s.trim()).collect();
+        if parts.len() == 3 {
+            let mut ok = true;
+            for (i, p) in parts.iter().enumerate() {
+                let (sign, ch) = if let Some(c) = p.strip_prefix('-') {
+                    (-1.0, c)
+                } else {
+                    (1.0, *p)
+                };
+                match ch {
+                    "x" => {
+                        order[i] = 0;
+                        signs[i] = sign;
+                    }
+                    "y" => {
+                        order[i] = 1;
+                        signs[i] = sign;
+                    }
+                    "z" => {
+                        order[i] = 2;
+                        signs[i] = sign;
+                    }
+                    _ => ok = false,
+                }
+            }
+            if ok {
+                psn.set_axes(order, signs);
+            }
+        }
+    }
+    // Source-de-contrôle : informe le merge des objets pilotés par PSN —
+    // vidé à l'OFF sinon les objets gardent le label "psn" après arrêt.
+    let tracked: std::collections::HashSet<usize> = if enabled {
+        tracker_map.values().copied().collect()
+    } else {
+        std::collections::HashSet::new()
+    };
+    lock_or_recover(&state.merge_runtime).set_psn_objects(tracked);
+    psn.set_tracker_map(tracker_map);
+    if enabled {
+        let merge_rt = state.merge_runtime.clone();
+        psn.start(&group, port, move |obj, pos| {
+            if let Ok(rt) = merge_rt.lock() {
+                rt.set_manual_position(obj, pos);
+            }
+        })
+        .map_err(IpcError::internal)?;
+    } else {
+        psn.stop();
+    }
+    Ok(())
+}
+
+/// Santé du flux PSN — `last_packet_age_ms` (None = jamais reçu) +
+/// `running`. Utilisé par le bandeau de santé des flux.
+#[tauri::command]
+pub async fn get_psn_health(state: State<'_, AppState>) -> Result<(bool, Option<u64>), IpcError> {
+    let psn = &state.psn_receiver;
+    Ok((psn.is_running(), psn.last_packet_age_ms()))
+}
+
+/// Source-de-contrôle par objet — *pourquoi cet objet est là*
+/// (park/psn/hold/manual/move/track). La lecture opérateur du modèle
+/// de contrôle, exposée à la GUI pour badges par objet.
+#[tauri::command]
+pub async fn get_object_states(
+    state: State<'_, AppState>,
+) -> Result<std::collections::HashMap<usize, String>, IpcError> {
+    Ok(lock_or_recover(&state.merge_runtime).object_control_sources())
+}
+
+/// Positions réellement émises en OSC par objet — le côté "commanded" de
+/// la confidence view (ce que le renderer a reçu, pas ce qu'on croit
+/// avoir envoyé).
+#[tauri::command]
+pub async fn get_emitted_positions(
+    state: State<'_, AppState>,
+) -> Result<std::collections::HashMap<usize, [f64; 3]>, IpcError> {
+    Ok(lock_or_recover(&state.merge_runtime).emitted_positions())
+}
+
+/// Position manuelle d'un objet — le soundcheck sauvegarde la reprise
+/// opérateur avant d'écrire son ping et la restaure après (le ping ne
+/// doit jamais détruire une position de l'opérateur).
+#[tauri::command]
+pub async fn get_manual_position(
+    obj: usize,
+    state: State<'_, AppState>,
+) -> Result<Option<[f64; 3]>, IpcError> {
+    Ok(lock_or_recover(&state.merge_runtime).manual_position(obj))
+}
+
+/// Toutes les positions manuelles — vérité backend que le frontend poll
+/// pour synchroniser son cache (cue capture, .hfg, fallback 3D). Les
+/// écritures OSC/hold/tape/attention n'atteignent jamais le store sinon.
+#[tauri::command]
+pub async fn get_manual_positions(
+    state: State<'_, AppState>,
+) -> Result<std::collections::HashMap<usize, [f64; 3]>, IpcError> {
+    Ok(lock_or_recover(&state.merge_runtime).manual_positions())
+}
+
+/// Auto-venue : mappe l'espace canonique du show vers la salle réelle.
+/// `enabled=false` → passthrough (espace canonique identique à la salle).
+/// Le transform ne touche que le payload OSC — anchors/zones/kinematics
+/// restent en canonique.
+#[tauri::command]
+pub async fn set_venue_config(
+    enabled: bool,
+    scale: [f64; 3],
+    offset: [f64; 3],
+    yaw: f64,
+    state: State<'_, AppState>,
+) -> Result<(), IpcError> {
+    let merge = lock_or_recover(&state.merge_runtime);
+    merge.set_venue_map(if enabled {
+        Some((scale, offset, yaw))
+    } else {
+        None
+    });
+    Ok(())
+}
+
+/// Vu-mètre perceptuel — vitesse angulaire perçue par objet (legibility
+/// MAMA), looming, vection. Calculé à 60fps dans le frame loop du merge.
+#[tauri::command]
+pub async fn get_perceptual_metrics(
+    state: State<'_, AppState>,
+) -> Result<stagespace_engines::merge_runtime::PerceptualMetrics, IpcError> {
+    Ok(lock_or_recover(&state.merge_runtime).perceptual_metrics())
+}
+
+/// Couche réalité-distance (Zahorik ×0.7 de compression perçue) —
+/// (exagération, gain_atten, air_loss). None = désactivé.
+#[tauri::command]
+pub async fn set_distance_reality(
+    cfg: Option<(f64, f64, f64)>,
+    state: State<'_, AppState>,
+) -> Result<(), IpcError> {
+    lock_or_recover(&state.merge_runtime).set_distance_reality(cfg);
+    Ok(())
+}
+
+/// Dynamique spatiale — le compresseur spatial : k<1 resserre le champ
+/// vers l'origine, k>1 l'étend. Geste live (busking), pas un setup.
+#[tauri::command]
+pub async fn set_spatial_compression(k: f64, state: State<'_, AppState>) -> Result<(), IpcError> {
+    lock_or_recover(&state.merge_runtime).set_spatial_compression(k);
+    Ok(())
+}
+
+/// Attention orchestration — Some(obj) fige tous les autres à leur
+/// position (stase pour change blindness), None libère la stase.
+#[tauri::command]
+pub async fn set_attention(obj: Option<usize>, state: State<'_, AppState>) -> Result<(), IpcError> {
+    let merge = lock_or_recover(&state.merge_runtime);
+    match obj {
+        Some(o) => merge.attention_focus(o),
+        None => merge.attention_release(),
+    }
+    Ok(())
+}
+
+/// Position gestures — explode/converge/orbit/front en une commande.
+/// Chaque objet émis reçoit une vélocité calculée (balistique `thrown`).
+#[tauri::command]
+pub async fn set_gesture(
+    name: String,
+    strength: f64,
+    state: State<'_, AppState>,
+) -> Result<(), IpcError> {
+    lock_or_recover(&state.merge_runtime).gesture(&name, strength);
+    Ok(())
+}
+
+/// Position stream tape — enregistre les positions émises (~30Hz) pour
+/// replay vers un renderer externe (bounce binaural côté renderer).
+#[tauri::command]
+pub async fn set_pos_tape_record(on: bool, state: State<'_, AppState>) -> Result<(), IpcError> {
+    lock_or_recover(&state.merge_runtime).set_tape_recording(on);
+    Ok(())
+}
+
+/// La bande enregistrée, sérialisée JSON (t, {obj: pos}).
+#[tauri::command]
+pub async fn get_pos_tape(state: State<'_, AppState>) -> Result<String, IpcError> {
+    let tape = lock_or_recover(&state.merge_runtime).position_tape();
+    serde_json::to_string(&tape).map_err(|e| IpcError::internal(e.to_string()))
+}
+
+/// Replay de la bande JSON — injection au rythme réel par le frame loop.
+#[tauri::command]
+pub async fn play_pos_tape(json: String, state: State<'_, AppState>) -> Result<(), IpcError> {
+    type Tape = Vec<(f64, std::collections::HashMap<usize, [f64; 3]>)>;
+    let entries: Tape =
+        serde_json::from_str(&json).map_err(|e| IpcError::internal(e.to_string()))?;
+    lock_or_recover(&state.merge_runtime).play_tape(entries);
+    Ok(())
+}
+
+/// Media sync out — cible dédiée (desk lumière/vidéo) + préfixe
+/// d'adresse. `enabled=false` → désactivé. Le trigger `{prefix}/cue
+/// <num> <name>` est émis à chaque changement de cue courante.
+#[tauri::command]
+pub async fn set_media_sync(
+    enabled: bool,
+    target: String,
+    prefix: String,
+    state: State<'_, AppState>,
+) -> Result<(), IpcError> {
+    let addr: Option<std::net::SocketAddr> = if enabled {
+        Some(
+            target
+                .parse()
+                .map_err(|_| IpcError::validation(format!("invalid media target '{target}'")))?,
+        )
+    } else {
+        None
+    };
+    lock_or_recover(&state.osc_receiver).set_media_sync(addr, prefix);
+    Ok(())
 }

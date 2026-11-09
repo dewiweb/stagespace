@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pin } from 'lucide-react';
-import { Slider } from './ui/Slider';
+import { ParamInput } from './ParamInput';
 import { PARAM_SCHEMA, ENGINE_TYPES, NON_PARAM_NODES, pluginNodeSchema, pluginParamsOnSwitch, type NodeParamValue, type GraphNodeData, type ParamDef } from './nodeParamSchema';
 import { useGraphStore } from '../store/useGraphStore';
 import type { NodeType } from '../store/types/index';
@@ -63,7 +63,7 @@ export const NodeParamsPanel: React.FC<{
   // car `pinned` est un champ data à part entière (pas une clé de params).
   const updateNodeData = useGraphStore((s) => s.updateNodeData);
   const pinned = ((paramNode?.data as GraphNodeData | undefined)?.pinned ?? []) as string[];
-  const pinnedSet = React.useMemo(() => new Set(pinned), [pinned]);
+  const pinnedSet = new Set(pinned);
   const visibleSchema = performMode && pinned.length > 0
     ? paramSchema.filter((d) => pinnedSet.has(d.key))
     : paramSchema;
@@ -201,105 +201,15 @@ export const NodeParamsPanel: React.FC<{
   );
 };
 
-/// Champ de paramètre de node : sliders bornés pour les numbers, toggle
-/// pour boolean, select pour enum, input compact pour le reste. `live`
-/// colore le slider quand le move tourne (hot-swap actif).
+/// Champ de paramètre de node — délégué au rendu unique ParamInput
+/// (variante 'field'). Conservé comme export nommant le contexte panel.
 export const NodeParamField: React.FC<{
   def: ParamDef;
   value: NodeParamValue;
   live: boolean;
   onChange: (v: NodeParamValue) => void;
-}> = ({ def, value, live, onChange }) => {
-  switch (def.type) {
-    case 'number':
-      if (typeof def.min === 'number' && typeof def.max === 'number') {
-        return (
-          <Slider
-            label={def.label}
-            value={typeof value === 'number' ? value : 0}
-            min={def.min}
-            max={def.max}
-            step={def.step ?? 0.1}
-            accent="cyan"
-            layout="stack"
-            live={live}
-            onChange={onChange}
-          />
-        );
-      }
-      return (
-        <div className="flex items-center gap-2">
-          <span className="text-gray-400 text-xs w-20 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
-          <input
-            type="number"
-            step={def.step ?? 0.1}
-            min={def.min}
-            max={def.max}
-            value={typeof value === 'number' ? value : 0}
-            onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-            className="flex-1 min-w-0 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
-          />
-        </div>
-      );
-    case 'boolean':
-      return (
-        <div className="flex items-center gap-2">
-          <span className="text-gray-400 text-xs w-20 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
-          <button
-            onClick={() => onChange(value !== true)}
-            className={`relative w-9 h-5 rounded-full transition-colors ${value === true ? 'bg-cyan-600' : 'bg-gray-700'}`}
-          >
-            <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${value === true ? 'translate-x-4' : ''}`} />
-          </button>
-        </div>
-      );
-    case 'enum':
-      return (
-        <div className="flex items-center gap-2">
-          <span className="text-gray-400 text-xs w-20 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
-          <select
-            value={typeof value === 'string' ? value : ''}
-            onChange={(e) => onChange(e.target.value)}
-            className="flex-1 min-w-0 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
-          >
-            {def.options?.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-          </select>
-        </div>
-      );
-    case 'vec3': {
-      const arr = Array.isArray(value) ? value : [0, 0, 0];
-      return (
-        <div className="flex items-center gap-2 col-span-2">
-          <span className="text-gray-400 text-xs w-20 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
-          <input
-            type="text"
-            value={arr.join(', ')}
-            onChange={(e) => {
-              const parsed = e.target.value.split(',').map((v) => parseFloat(v.trim()));
-              if (parsed.length === 3 && parsed.every((n) => !isNaN(n))) onChange(parsed);
-            }}
-            className="flex-1 min-w-0 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none font-mono"
-            placeholder="x, y, z"
-          />
-        </div>
-      );
-    }
-    case 'text':
-    case 'string':
-      return (
-        <div className="flex items-center gap-2 col-span-2">
-          <span className="text-gray-400 text-xs w-20 flex-shrink-0 truncate" title={def.label}>{def.label}</span>
-          <input
-            type="text"
-            value={typeof value === 'string' ? value : ''}
-            onChange={(e) => onChange(e.target.value)}
-            className="flex-1 min-w-0 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none font-mono"
-          />
-        </div>
-      );
-    default:
-      return null;
-  }
-};
+}> = ({ def, value, live, onChange }) => (
+  <ParamInput def={def} value={value} live={live} onChange={onChange} variant="field" />
+);
 
 export default NodeParamsPanel;

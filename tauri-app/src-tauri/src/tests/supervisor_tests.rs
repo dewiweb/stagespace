@@ -28,6 +28,7 @@ mod supervisor_tests {
             move_generation: Arc::new(AtomicU64::new(0)),
             merge_runtime: Arc::new(Mutex::new(merge)),
             recall_in_progress: Arc::new(AtomicBool::new(false)),
+            deactivate_gen: Arc::new(AtomicU64::new(0)),
             osc_receiver: Arc::new(Mutex::new(OscReceiver::new(0))),
             plugin_registry: None,
             plugins_dir: None,
@@ -55,6 +56,9 @@ mod supervisor_tests {
             direction: "forward".to_string(),
             origin: None,
             generation: 1,
+            end_mode: stagespace_engines::EndMode::default(),
+            anchor_mode: stagespace_engines::AnchorMode::default(),
+            anchor_target: None,
         }
     }
 
@@ -129,7 +133,14 @@ mod supervisor_tests {
         {
             let mut merge = sh.merge_runtime.lock().unwrap();
             let buffer = Arc::new(PositionBuffer::new());
-            merge.register_move("m1".to_string(), buffer, vec![1], vec![0], false);
+            merge.register_move(
+                "m1".to_string(),
+                buffer,
+                vec![1],
+                vec![0],
+                false,
+                stagespace_engines::EndMode::default(),
+            );
             merge.start().expect("start");
             merge.stop(); // thread mort, move encore actif dans le merge
             assert!(!merge.is_running());

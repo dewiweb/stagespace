@@ -1,15 +1,22 @@
 import React from 'react';
-import { Play, Square, Globe, SlidersHorizontal, ListOrdered, AudioLines, Pin } from 'lucide-react';
-import { TrackGrid } from './TrackGrid';
-import { AudioModList } from './AudioModControls';
+import { Play } from 'lucide-react';
 import Scene3D from './Scene3D';
 import CuelistPanel from './CuelistPanel';
-import { Slider } from './ui/Slider';
+import EmptyState from './ui/EmptyState';
+import { StatusChip } from './ui/StatusChip';
+import { SlotTile } from './show/SlotTile';
+import { LiveDrawer } from './perform/LiveDrawer';
+import { ParkedChip } from './perform/ParkedChip';
+import { useShowStatusStore, startShowStatusPolling } from '../store/useShowStatusStore';
+import { cueLabel, tcStr } from '../utils/showFormat';
 import { useGraphStore } from '../store/useGraphStore';
 import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { useCuelistStore } from '../store/useCuelistStore';
-import { type NodeParamValue } from './nodeParamSchema';
-import { NodeParamsPanel } from './NodeParamsPanel';
+import { doSolo, doStop, doUnsolo, getSoloRestoreIds, doAttention } from '../utils/liveActions';
+import { Radar2D } from './jeu/Radar2D';
+import { GestureStrip } from './jeu/GestureStrip';
+import { isDetachedWindow } from '../utils/safeStorage';
+import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { PanicButton } from './ui/PanicButton';
 import { OscArmToggle } from './ui/OscArmToggle';
 
@@ -28,14 +35,40 @@ export const PerformView: React.FC = () => {
   const editingSlotId = useGraphStore((s) => s.editingSlotId);
   const selectSlotForEditing = useGraphStore((s) => s.selectSlotForEditing);
   const playSlot = useGraphStore((s) => s.playSlot);
-  const stopSlot = useGraphStore((s) => s.stopSlot);
+  const stopSlotWithFade = useGraphStore((s) => s.stopSlotWithFade);
   const goToNextMove = useGraphStore((s) => s.goToNextMove);
   const pendingPlays = useGraphStore((s) => s.pendingPlays);
   const addMoveSlot = useGraphStore((s) => s.addMoveSlot);
   const addToSetlist = useGraphStore((s) => s.addToSetlist);
   const isRecalling = useCuelistStore((s) => s.isRecalling);
-
+  const cues = useCuelistStore((s) => s.cues);
+  const currentCueIndex = useCuelistStore((s) => s.currentCueIndex);
+  const lastTimecode = useCuelistStore((s) => s.lastTimecode);
+  const lastTimecodeAt = useCuelistStore((s) => s.lastTimecodeAt);
+  const tcChaseEnabled = useCuelistStore((s) => s.tcChaseEnabled);
+  const tcFps = useGraphStore((s) => s.timecodeFps);
   const [goFeedback, setGoFeedback] = React.useState<{ ok: boolean; message: string } | null>(null);
+  // Mode touch : pads numérotés (busking) + cibles agrandies (tablette).
+  // Mode tactile/busking plein écran supprimés — la surface Jeu EST
+  // l'instrument (pads permanents au centre, gestes en strip). La
+  // conduite est une surface de première classe (nav ATELIER/CONDUITE/
+  // JEU) — le bouton y navigue au lieu de l'overlay interne redondant.
+  const setSurface = useMoveEditorStore((s) => s.setSurface);
+  // État de santé show (parked / consoleAge / armed) — poll unique partagé
+  // via useShowStatusStore au lieu d'un setInterval par composant.
+  const parked = useShowStatusStore((s) => s.parked);
+  const consoleAge = useShowStatusStore((s) => s.consoleAge);
+  // Source-de-contrôle par track (badges pads) + solo actif — même
+  // sémantique que l'ex-RunView : objectStates keyed par obj_index.
+  const objectStates = useGraphStore((s) => s.objectStates);
+  const manualOscIds = useGraphStore((s) => s.manualOscIds);
+  const soloSavedIds = useGraphStore((s) => s.soloSavedIds);
+  // Panneau central : pads (l'instrument, défaut) ou canvas 3D.
+  const [centerView, setCenterView] = React.useState<'pads' | '3d'>('pads');
+  // Fenêtre détachée (?view=run) — l'édition pure est masquée : le
+  // storage est read-only là-bas, créer divergerait sans persister.
+  const detached = isDetachedWindow();
+  React.useEffect(() => { startShowStatusPolling(); }, []);
 
   const playingCount = moveSlots.filter((s) => s.movementId).length;
 
@@ -55,6 +88,13 @@ export const PerformView: React.FC = () => {
     : null;
   const armedPlaying = !!armedSlot?.movementId || (armedSlot ? pendingPlays.includes(armedSlot.id) : false);
 
+  // Conduite : cue courante + suivante (affichage console dans la top bar).
+  const curCue = currentCueIndex >= 0 ? cues[currentCueIndex] : null;
+  const nextCue = currentCueIndex + 1 < cues.length ? cues[currentCueIndex + 1] : null;
+  // Timecode : HH:MM:SS:FF au fps configuré, "lost" si silence >1s.
+  const tcActive = lastTimecode != null && Date.now() - lastTimecodeAt < 1000;
+  const tc = lastTimecode == null ? 'TC —' : tcStr(lastTimecode, tcFps);
+
   const handleGO = async () => {
     const res = await goToNextMove();
     setGoFeedback(res);
@@ -68,81 +108,61 @@ export const PerformView: React.FC = () => {
     .filter(Boolean) as typeof moveSlots;
   const layerSlots = moveSlots.filter((s) => !setlistOrder.includes(s.id));
 
+  // Pad jeu — SlotTile + badges source-de-contrôle (P/H/S) + attention ◎.
+  // objectStates est keyed par obj_index : trackId → indexOf(manualOscIds).
+  const srcOf = (trackId: number) => objectStates[manualOscIds.indexOf(trackId)];
+  const soloId =
+    soloSavedIds.length > 0 ? (moveSlots.find((s) => s.movementId)?.id ?? null) : null;
+  const renderPad = (slot: (typeof moveSlots)[number], big = false) => {
+    const isPlaying = !!slot.movementId || pendingPlays.includes(slot.id);
+    const oscNum = slot.oscIndex || moveSlots.indexOf(slot) + 1;
+    const parkedTracks = slot.trackIds.filter((t) => srcOf(t) === 'park');
+    const heldTracks = slot.trackIds.filter((t) => srcOf(t) === 'hold');
+    const firstObj = manualOscIds.indexOf(slot.trackIds[0]);
+    return (
+      <SlotTile
+        key={slot.id}
+        slot={slot}
+        oscNum={oscNum}
+        density="pad"
+        big={big}
+        isPlaying={isPlaying}
+        isSolo={soloId === slot.id}
+        canSolo={playingCount > 1}
+        parkedTracks={parkedTracks}
+        heldTracks={heldTracks}
+        onAttention={firstObj >= 0 ? () => doAttention(firstObj) : undefined}
+        onPlay={() => void playSlot(slot.id)}
+        onStop={() => void stopSlotWithFade(slot.id, slot.fadeOut ?? 1)}
+        onSolo={() => (soloId === slot.id ? doUnsolo() : doSolo(oscNum))}
+      />
+    );
+  };
+
   // Row partagée setlist/layers — même interactions (tap = params, ▶/■ = layer)
   const renderSlotRow = (slot: (typeof moveSlots)[number], showSetlistAdd = false) => {
     const isPlaying = !!slot.movementId || pendingPlays.includes(slot.id);
     const isSelected = editingSlotId === slot.id;
     const setlistIdx = setlistOrder.indexOf(slot.id);
-    const isCurrentSetlist = setlistIdx === currentSetlistIndex;
-    const isNextSetlist = setlistIdx === currentSetlistIndex + 1
-      || (currentSetlistIndex < 0 && setlistIdx === 0);
+    const oscNum = slot.oscIndex || moveSlots.indexOf(slot) + 1;
     return (
-      <div
+      <SlotTile
         key={slot.id}
-        onClick={() => selectSlotForEditing(isSelected ? null : slot.id)}
-        title="Live params of this move"
-        className={`group flex items-center gap-2 px-3 py-2.5 cursor-pointer border-b border-gray-800/40 transition-colors ${
-          isSelected
-            ? 'bg-indigo-900/30 ring-1 ring-inset ring-indigo-600/60'
-            : isCurrentSetlist
-              ? 'bg-purple-900/20 hover:bg-purple-900/30'
-              : isPlaying
-                ? 'bg-green-900/10 hover:bg-green-900/20'
-                : 'hover:bg-gray-800/30'
-        }`}
-      >
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            if (isPlaying) stopSlot(slot.id);
-            else playSlot(slot.id);
-          }}
-          className={`w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0 transition-colors active:scale-95 ${
-            isPlaying
-              ? 'bg-red-800/80 hover:bg-red-700 text-red-200'
-              : 'bg-green-800/80 hover:bg-green-700 text-green-200'
-          }`}
-          title={isPlaying ? 'Stop this move' : 'Launch (layered — others keep running)'}
-        >
-          {isPlaying ? <Square size={11} fill="currentColor" /> : <Play size={11} fill="currentColor" />}
-        </button>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="text-white text-xs font-medium truncate">{slot.name}</span>
-            {isPlaying && (
-              <span
-                className={`text-xs px-1 rounded ${
-                  slot.isPreview ? 'bg-cyan-900 text-cyan-300' : 'bg-green-900 text-green-300'
-                }`}
-              >
-                {slot.isPreview ? 'PREV' : 'LIVE'}
-              </span>
-            )}
-          </div>
-          <div className="text-gray-500 text-xs">
-            {slot.trackIds.length} trk
-          </div>
-        </div>
-        {isCurrentSetlist && (
-          <span className="text-purple-400 text-xs font-bold flex-shrink-0" title="Current setlist">◉ NOW</span>
-        )}
-        {isNextSetlist && !isCurrentSetlist && (
-          <span className="text-green-400/80 text-xs font-bold flex-shrink-0" title="Prochain GO">→ NEXT</span>
-        )}
-        {showSetlistAdd && (
-          <button
-            onClick={(e) => { e.stopPropagation(); addToSetlist(slot.id); }}
-            className="flex-shrink-0 w-6 h-6 rounded text-gray-400 hover:bg-purple-600/30 hover:text-white text-xs transition-colors"
-            title="Add to setlist (jouable via GO)"
-          >
-            →
-          </button>
-        )}
-        <SlidersHorizontal
-          size={12}
-          className={`flex-shrink-0 ${isSelected ? 'text-indigo-300' : 'text-gray-400 group-hover:text-gray-400'}`}
-        />
-      </div>
+        slot={slot}
+        oscNum={oscNum}
+        density="row"
+        isPlaying={isPlaying}
+        isSelected={isSelected}
+        isCurrentSetlist={setlistIdx === currentSetlistIndex}
+        isNextSetlist={setlistIdx === currentSetlistIndex + 1 || (currentSetlistIndex < 0 && setlistIdx === 0)}
+        canSolo={playingCount > 1}
+        showSetlistAdd={showSetlistAdd}
+        onPlay={() => void playSlot(slot.id)}
+        onStop={() => void stopSlotWithFade(slot.id, slot.fadeOut ?? 1)}
+        onSolo={() => doSolo(oscNum)}
+        onSelect={() => selectSlotForEditing(isSelected ? null : slot.id)}
+        onAddToSetlist={() => addToSetlist(slot.id)}
+      />
     );
   };
 
@@ -170,9 +190,21 @@ export const PerformView: React.FC = () => {
           <span className="text-gray-400 text-xs uppercase tracking-wider flex-shrink-0">
             Setlist {currentSetlistIndex + 1}/{setlistOrder.length}
           </span>
+          {parked.length > 0 && <ParkedChip parked={parked} compact />}
           {isRecalling && (
             <span className="text-purple-400 text-xs font-bold animate-pulse flex-shrink-0">
               RECALLING…
+            </span>
+          )}
+          {cues.length > 0 && (
+            <span
+              className="text-xs flex-shrink-0 min-w-0"
+              title="Conduite — cue courante / cue suivante (armée)"
+            >
+              <span className="text-gray-500 uppercase">Cue </span>
+              <span className="text-amber-300 font-semibold truncate">{cueLabel(curCue, currentCueIndex)}</span>
+              <span className="text-gray-500 mx-1">→</span>
+              <span className="text-gray-400 truncate">{nextCue ? cueLabel(nextCue, currentCueIndex + 1) : '—'}</span>
             </span>
           )}
           {goFeedback && (
@@ -193,11 +225,11 @@ export const PerformView: React.FC = () => {
         <button
           onClick={() => {
             if (!armedSlot) return;
-            if (armedPlaying) stopSlot(armedSlot.id);
+            if (armedPlaying) stopSlotWithFade(armedSlot.id, armedSlot.fadeOut ?? 1);
             else playSlot(armedSlot.id);
           }}
           disabled={!armedSlot}
-          className={`px-6 py-1.5 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 text-left min-w-[140px] text-white ${
+          className={`px-6 py-2.5 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 text-left min-w-[140px] text-white ${
             armedPlaying
               ? 'bg-red-600 hover:bg-red-500'
               : 'bg-indigo-600 hover:bg-indigo-500'
@@ -214,46 +246,146 @@ export const PerformView: React.FC = () => {
           </div>
         </button>
 
-        {/* GO — affiche sa cible comme sur une console de show :
-            l'opérateur sait ce qui part avant d'appuyer. */}
+        {/* SETLIST GO — crossfade vers le prochain move de la setlist.
+            Distinct du GO de la station Conduite (cue recall) : même
+            couleur, sémantique opposée — le label DOIT différer. */}
         <button
           onClick={handleGO}
           disabled={!nextSetlistSlotId}
-          className="px-6 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 text-left min-w-[160px]"
-          title="GO : prochain move de la setlist (Enter) — RECALL cue = Shift+Enter"
+          className="px-6 py-2.5 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 text-left min-w-[160px]"
+          title="SETLIST GO — crossfade vers le prochain move, les layers continuent (Enter). Cue recall (tue la scène) = Shift+Enter ou Conduite"
         >
-          <div className="text-lg font-black leading-tight">GO ▶</div>
+          <div className="text-lg font-black leading-tight">SETLIST ▶</div>
           <div className="text-xs font-medium text-green-100/80 truncate leading-tight">
             {nextSetlistSlot ? nextSetlistSlot.name : 'end of setlist'}
           </div>
         </button>
+        {tcChaseEnabled && (
+          <span
+            className={`font-mono text-xs px-1.5 py-0.5 rounded border flex-shrink-0 ${
+              tcActive ? 'border-emerald-600 text-emerald-400' : 'border-gray-600 text-gray-500'
+            }`}
+            title={tcActive ? 'Timecode actif (chase on)' : 'TC lost — pas de message depuis >1s'}
+          >
+            {tcActive ? tc : 'TC lost'}
+          </span>
+        )}
+        <button
+          onClick={() => {
+            // Fenêtre détachable : même vue conduite, propre process
+            // webview — posée sur un écran dédié au FOH.
+            WebviewWindow.getByLabel('conduite').then((w) => {
+              if (w) void w.setFocus();
+              else new WebviewWindow('conduite', {
+                url: '/?view=conduite',
+                title: 'STAGESPACE — Conduite',
+                width: 1100,
+                height: 720,
+                resizable: true,
+              });
+            });
+          }}
+          className="px-3 py-2.5 rounded-lg flex-shrink-0 bg-amber-800/40 hover:bg-amber-700/60 text-amber-200/80 transition-colors active:scale-95"
+          title="Conduite dans une fenêtre détachable (écran dédié)"
+        >
+          ⧉
+        </button>
+        <button
+          onClick={() => {
+            // Surface de jeu détachable — pads + radar + transport sur
+            // écran dédié (la surface à jouer, pas l'admin).
+            WebviewWindow.getByLabel('run').then((w) => {
+              if (w) void w.setFocus();
+              else new WebviewWindow('run', {
+                url: '/?view=run',
+                title: 'STAGESPACE — Run',
+                width: 1200,
+                height: 760,
+                resizable: true,
+              });
+            });
+          }}
+          className="px-3 py-2.5 rounded-lg flex-shrink-0 bg-green-800/40 hover:bg-green-700/60 text-green-200/80 transition-colors active:scale-95"
+          title="Surface de jeu (pads + radar) dans une fenêtre détachable"
+        >
+          ▶
+        </button>
+        {!detached && (
+          <button
+            onClick={() => setSurface('conduite')}
+            className="px-3 py-2.5 rounded-lg flex-shrink-0 bg-amber-800/60 hover:bg-amber-700/80 text-amber-100 text-xs font-bold uppercase tracking-wide transition-colors active:scale-95"
+            title="Vue conduite plein écran — NOW/NEXT cue, TC, ARM (lisible à distance)"
+          >
+            Conduite
+          </button>
+        )}
+        {consoleAge !== null && (
+          <StatusChip
+            variant={consoleAge < 5 ? 'live' : 'dim'}
+            className="flex-shrink-0"
+            title={consoleAge < 5 ? 'Console connectée — dernière commande OSC show-control' : `Console idle — dernière commande il y a ${consoleAge.toFixed(0)}s`}
+          >
+            CONSOLE {consoleAge < 5 ? '●' : '○'}
+          </StatusChip>
+        )}
         <OscArmToggle />
         <PanicButton size="lg" />
+      </div>
+
+      {/* ═══ Strip gestes — les gestes du jeu (spatial, attention
+          release) + les actions de secours ex-busking (unsolo/stop all). ═══ */}
+      <div className="flex gap-3 px-4 py-2 border-b border-stagespace-border flex-shrink-0 items-stretch">
+        <div className="flex-1">
+          <GestureStrip />
+        </div>
+        {getSoloRestoreIds().length > 0 && (
+          <button
+            onClick={() => doUnsolo()}
+            className="px-4 rounded-lg bg-orange-700/80 hover:bg-orange-600 text-orange-100 text-xs font-bold active:scale-95"
+            title={`UNSOLO — rejoue les ${getSoloRestoreIds().length} slots stoppés par le solo`}
+          >
+            UNSOLO
+          </button>
+        )}
+        {playingCount > 0 && (
+          <button
+            onClick={() => doStop()}
+            className="px-4 rounded-lg bg-red-800/70 hover:bg-red-700 text-red-100 text-xs font-bold active:scale-95"
+            title="Stop all moves en fondu — moins brutal que PANIC (le renderer reste armé)"
+          >
+            STOP ALL
+          </button>
+        )}
       </div>
 
       {/* ═══ Corps : setlist | canvas ═══ */}
       <div className="flex-1 flex overflow-hidden">
         {/* Colonne gauche : SETLIST (flux du show) + LAYERS (ad-hoc) + cues */}
-        <div className="w-72 flex-shrink-0 border-r border-stagespace-border flex flex-col bg-stagespace-panel min-h-0">
+        <div className="w-80 flex-shrink-0 border-r border-stagespace-border flex flex-col bg-stagespace-panel min-h-0">
           <div className="flex-1 overflow-y-auto min-h-0">
             <div className="px-3 py-2 text-gray-400 text-xs uppercase tracking-wider border-b border-stagespace-border bg-purple-950/20 flex items-center justify-between">
               <span>Setlist — GO avance ici</span>
-              <button
-                onClick={() => {
-                  addMoveSlot();
-                  const ms = useGraphStore.getState().moveSlots; const last = ms[ms.length - 1];
-                  if (last) addToSetlist(last.id);
-                }}
-                className="px-1.5 py-0.5 rounded text-[10px] text-indigo-300 hover:bg-indigo-600/30 hover:text-white transition-colors normal-case"
-                title="New move added to the setlist"
-              >
-                + Move
-              </button>
+              {/* "+ Move" masqué en fenêtre détachée — créer un slot y
+                  serait non persisté (read-only storage) et divergerait
+                  de la fenêtre principale. L'édition vit à l'atelier. */}
+              {!detached && (
+                <button
+                  onClick={() => {
+                    addMoveSlot();
+                    const ms = useGraphStore.getState().moveSlots; const last = ms[ms.length - 1];
+                    if (last) addToSetlist(last.id);
+                  }}
+                  className="px-1.5 py-0.5 rounded text-[10px] text-indigo-300 hover:bg-indigo-600/30 hover:text-white transition-colors normal-case"
+                  title="New move added to the setlist"
+                >
+                  + Move
+                </button>
+              )}
             </div>
             {setlistSlots.map((slot) => renderSlotRow(slot))}
             {setlistSlots.length === 0 && moveSlots.length > 0 && (
-              <div className="px-3 py-4 text-gray-400 text-xs italic">
-                Empty setlist — <span className="text-indigo-300">+ Move</span> creates one, or use → on a layer.
+              <div className="px-3 py-4">
+                <EmptyState size="sm" title="Empty setlist" hint="+ Move creates one, or use → on a layer." />
               </div>
             )}
             {layerSlots.length > 0 && (
@@ -265,354 +397,82 @@ export const PerformView: React.FC = () => {
               </>
             )}
             {moveSlots.length === 0 && (
-              <div className="px-3 py-4 space-y-2.5">
-                <p className="text-gray-300 text-xs font-medium">No moves yet</p>
-                <button
-                  onClick={() => {
+              <div className="px-3 py-4">
+                <EmptyState
+                  title="No moves yet"
+                  hint="A circular trajectory on all tracks — press Space or ▶ to launch it, Enter/GO to advance the setlist."
+                  actionLabel="+ Create your first move"
+                  onAction={() => {
                     addMoveSlot();
-                    // Le slot vient d'être pushé — l'ajouter à la setlist
-                    // pour que GO/Enter fonctionne tout de suite.
                     const ms = useGraphStore.getState().moveSlots; const last = ms[ms.length - 1];
                     if (last) addToSetlist(last.id);
                   }}
-                  className="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors"
-                >
-                  + Create your first move
-                </button>
-                <p className="text-gray-500 text-[10px] leading-snug">
-                  A circular trajectory on all tracks — press <kbd className="px-1 bg-gray-800 rounded">Space</kbd> or ▶ to launch it, Enter/GO to advance the setlist.
-                </p>
+                />
               </div>
             )}
           </div>
-          {/* Cues — arm + double-clic recall (déjà protégé) */}
-          <div className="h-56 flex-shrink-0 border-t border-stagespace-border flex flex-col min-h-0">
-            <CuelistPanel />
+          {/* Cues — arm + double-clic recall (déjà protégé). Partage
+              flexible de la colonne : la cue list est l'objet central du
+              show, elle ne tient pas en 224px (ex-h-56 confiné). */}
+          <div className="flex-1 min-h-0 basis-2/5 border-t border-stagespace-border flex flex-col">
+            <CuelistPanel readonly />
           </div>
         </div>
 
-        {/* Canvas 3D */}
-        <div className="flex-1 min-w-0">
-          <Scene3D width="100%" height="100%" />
+        {/* Centre — l'instrument : pads permanents (ex-busking, la
+            surface EST le jeu) ou canvas 3D via toggle, + radar. */}
+        <div className="flex-1 min-w-0 flex flex-col">
+          <div className="flex items-center gap-2 px-3 py-1 border-b border-stagespace-border flex-shrink-0">
+            <button
+              onClick={() => setCenterView('pads')}
+              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${centerView === 'pads' ? 'bg-indigo-700 text-white' : 'text-gray-500 hover:text-gray-300'}`}
+            >
+              Pads
+            </button>
+            <button
+              onClick={() => setCenterView('3d')}
+              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${centerView === '3d' ? 'bg-indigo-700 text-white' : 'text-gray-500 hover:text-gray-300'}`}
+            >
+              3D
+            </button>
+          </div>
+          {/* Scene3D reste MONTÉ en permanence (hidden quand pads) —
+              le ternaire détruisait le contexte WebGL à chaque bascule
+              (perte caméra, positions, marqueurs .hol, re-init). Même
+              pattern que focusActive dans App.tsx. */}
+          <div className={`flex-1 min-h-0 ${centerView === '3d' ? '' : 'hidden'}`}>
+            <Scene3D width="100%" height="100%" />
+          </div>
+          {centerView === 'pads' && (
+            <div className={`flex-1 overflow-y-auto p-3 grid gap-3 auto-rows-min content-start ${
+              moveSlots.length > 12 ? 'grid-cols-4' : moveSlots.length > 6 ? 'grid-cols-3' : 'grid-cols-2'
+            }`}>
+              {moveSlots.map((slot) => renderPad(slot))}
+              {moveSlots.length === 0 && (
+                <div className="col-span-4 py-16">
+                  <EmptyState title="Aucun slot" hint="Crée des moves pour remplir les pads." />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Radar — positions réellement émises + grab & throw. */}
+        <div className="w-64 flex-shrink-0 border-l border-stagespace-border bg-gray-900/50 p-2 flex flex-col">
+          <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1 flex justify-between">
+            <span>radar · top</span>
+            <span className="normal-case text-gray-600">drag = throw</span>
+          </div>
+          <Radar2D />
         </div>
       </div>
 
       {/* ═══ Bottom : chips live + drawer params ═══ */}
       <LiveDrawer />
-    </div>
-  );
-};
 
-/// Drawer live à scopes — gros boutons à la demande (Params / Tracks /
-/// Audio du move sélectionné + Global merge-scope). Panneau bas, PAS modal :
-/// le canvas reste visible pendant le tweak — c'est le point de l'app.
-const LiveDrawer: React.FC = () => {
-  const moveSlots = useGraphStore((s) => s.moveSlots);
-  const editingSlotId = useGraphStore((s) => s.editingSlotId);
-  const selectSlotForEditing = useGraphStore((s) => s.selectSlotForEditing);
-  const setSlotMacros = useGraphStore((s) => s.setSlotMacros);
-  const setSlotDirection = useGraphStore((s) => s.setSlotDirection);
-  const setSlotLoopMode = useGraphStore((s) => s.setSlotLoopMode);
-  const setSlotTracks = useGraphStore((s) => s.setSlotTracks);
-  const holProject = useGraphStore((s) => s.holProject);
-  const manualOscIds = useGraphStore((s) => s.manualOscIds);
-  const nodes = useGraphStore((s) => s.nodes);
-  const updateNodeData = useGraphStore((s) => s.updateNodeData);
-  const updateCurrent = useMoveEditorStore((s) => s.updateCurrent);
-  const updateAssignment = useMoveEditorStore((s) => s.updateAssignment);
-  const current = useMoveEditorStore((s) => s.current);
-
-  const macros = useGraphStore((s) => s.macros);
-  const setMacros = useGraphStore((s) => s.setMacros);
-  const pushMacrosToRuntime = useGraphStore((s) => s.pushMacrosToRuntime);
-  const macroDebounce = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  type Scope = 'params' | 'playback' | 'tracks' | 'audio' | 'global';
-  const [scope, setScope] = React.useState<Scope | null>(null);
-
-  const slot = moveSlots.find((s) => s.id === editingSlotId);
-  const playingSlots = moveSlots.filter((s) => s.movementId);
-
-  // Macros GLOBALES (merge — affectent tous les moves live). Debounce 100ms
-  // comme l'Inspector : un drag de slider ne doit pas spammer l'IPC.
-  const setGlobalMacro = (key: string, value: number) => {
-    setMacros({ [key]: value } as Partial<typeof macros>);
-    if (macroDebounce.current) clearTimeout(macroDebounce.current);
-    macroDebounce.current = setTimeout(() => { pushMacrosToRuntime(); }, 100);
-  };
-
-  // Params du graphe du slot — chips de nodes + grille de champs via le
-  // NodeParamsPanel partagé (même mécanique dans l'Inspector Edit).
-  const setNodeParam = (nodeId: string, key: string, value: NodeParamValue, params: Record<string, NodeParamValue>) => {
-    // Hot-swap debouncé intégré dans updateNodeData (updateGraphLive interne)
-    updateNodeData(nodeId, { params: { ...params, [key]: value } });
-  };
-
-  // Tracks du projet (.hol) ou IDs manuels — pour la grille d'assignation
-  const trackInfos = (holProject?.tracks ?? []).map((t) => ({
-    id: t.id, name: t.name, color: t.color, position: t.position,
-  }));
-  const allTrackInfos = trackInfos.length > 0
-    ? trackInfos
-    : manualOscIds.map((id) => ({ id, name: `#${id}` }));
-
-  const selectMove = (slotId: string) => {
-    if (editingSlotId === slotId) {
-      // Re-tap sur le chip actif → referme le drawer params
-      if (scope === 'params') setScope(null);
-      else setScope('params');
-    } else {
-      selectSlotForEditing(slotId);
-      setScope('params');
-    }
-  };
-
-  const toggleScope = (sc: Scope) => setScope((prev) => (prev === sc ? null : sc));
-
-  const scopeBtn = (sc: Scope, label: React.ReactNode, needsSlot: boolean, title: string) => (
-    <button
-      onClick={() => toggleScope(sc)}
-      disabled={needsSlot && !slot}
-      className={`px-4 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors active:scale-95 ${
-        scope === sc
-          ? sc === 'global' ? 'bg-orange-600 text-white' : 'bg-indigo-600 text-white'
-          : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white border border-gray-700'
-      } disabled:opacity-30 disabled:cursor-not-allowed`}
-      title={title}
-    >
-      {label}
-    </button>
-  );
-
-  return (
-    <div className="flex-shrink-0 border-t border-stagespace-border bg-stagespace-panel">
-      {/* Barre : chips des moves live + gros boutons de scope */}
-      <div className="flex items-center gap-2 px-3 py-1.5 overflow-x-auto">
-        <span className="text-gray-500 text-xs uppercase tracking-wider flex-shrink-0">
-          Live{playingSlots.length > 0 ? ` ${playingSlots.length}` : ''}
-        </span>
-        {playingSlots.length > 0 && (
-          <button
-            onClick={() => { selectSlotForEditing(null); setScope(null); }}
-            className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
-              !editingSlotId
-                ? 'bg-indigo-600 text-white'
-                : 'bg-gray-800 text-gray-400 hover:text-white border border-gray-700'
-            }`}
-            title="Overview — all tracks of all moves"
-          >
-            All
-          </button>
-        )}
-        {playingSlots.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => selectMove(s.id)}
-            className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
-              editingSlotId === s.id && scope !== 'global'
-                ? 'bg-indigo-600 text-white'
-                : 'bg-green-900/40 text-green-300 hover:bg-green-800/50 border border-green-800/50'
-            }`}
-            title="Live params of this move"
-          >
-            {s.isPreview ? '◌' : '●'} {s.name}
-          </button>
-        ))}
-
-        <div className="w-px h-6 bg-stagespace-border mx-1 flex-shrink-0" />
-
-        {scopeBtn('params', <><SlidersHorizontal size={12} className="inline -mt-0.5" /> Params</>, true,
-          'Node params of the selected move graph')}
-        {scopeBtn('playback', <><Play size={12} className="inline -mt-0.5" /> Playback</>, true,
-          'Playback of the selected move (speed, direction, loop, fades)')}
-        {scopeBtn('tracks', <><ListOrdered size={12} className="inline -mt-0.5" /> Tracks</>, true,
-          'Track assignment + depth/phase of the selected move')}
-        {scopeBtn('audio', <><AudioLines size={12} className="inline -mt-0.5" /> Audio</>, true,
-          'Audio-reactive mods of the selected move')}
-        {scopeBtn('global', <><Globe size={12} className="inline -mt-0.5" /> Global</>, false,
-          'Macros globales — affectent TOUS les moves live (merge)')}
-
-        {!slot && playingSlots.length === 0 && (
-          <span className="text-gray-400 text-xs ml-2">
-            tap a move for its params · <Play size={9} className="inline -mt-0.5" /> = layer live
-            {' · '}<Pin size={9} className="inline -mt-0.5" /> in Edit = curate this surface
-          </span>
-        )}
-        {!slot && playingSlots.length > 0 && (
-          <span className="text-gray-400 text-xs ml-2">tap a chip to edit a move</span>
-        )}
-        {slot && (
-          <span className="text-indigo-400/70 text-xs ml-2 flex items-center gap-1.5">
-            editing: {slot.name}
-            {slot.movementId
-              ? <span className={`px-1 rounded ${slot.isPreview ? 'bg-cyan-900 text-cyan-300' : 'bg-green-900 text-green-300'}`}>{slot.isPreview ? 'PREV' : 'LIVE'}</span>
-              : <span className="text-gray-400">(stopped)</span>}
-          </span>
-        )}
-      </div>
-
-      {/* ── Drawer GLOBAL — scope merge : affecte TOUS les moves live ── */}
-      {scope === 'global' && (
-        <div className="border-t border-orange-900/40 px-4 py-2 flex items-start gap-6 overflow-x-auto max-h-[42vh] overflow-y-auto">
-          <div className="flex-shrink-0 w-64 space-y-1">
-            <Slider label="Scale" value={macros.scale} min={0.1} max={3} step={0.05} accent="orange" live onChange={(v) => setGlobalMacro('scale', v)} />
-            <Slider label="Speed all" value={macros.speed} min={0} max={3} step={0.05} unit="x" accent="orange" live onChange={(v) => setGlobalMacro('speed', v)} />
-            <Slider label="Radius ×" value={macros.radius_scale} min={0.1} max={3} step={0.05} accent="orange" live onChange={(v) => setGlobalMacro('radius_scale', v)} />
-            <Slider label="Height +" value={macros.height_offset} min={-5} max={5} step={0.1} unit="m" accent="orange" live onChange={(v) => setGlobalMacro('height_offset', v)} />
-          </div>
-          <div className="flex-shrink-0 w-64 space-y-1">
-            <div className="text-gray-500 text-xs uppercase tracking-wider">Shift (global)</div>
-            <Slider label="X" value={macros.shiftX} min={-10} max={10} step={0.1} unit="m" accent="orange" live onChange={(v) => setGlobalMacro('shiftX', v)} />
-            <Slider label="Y" value={macros.shiftY} min={-10} max={10} step={0.1} unit="m" accent="orange" live onChange={(v) => setGlobalMacro('shiftY', v)} />
-            <Slider label="Z" value={macros.shiftZ} min={-10} max={10} step={0.1} unit="m" accent="orange" live onChange={(v) => setGlobalMacro('shiftZ', v)} />
-          </div>
-          <div className="flex-shrink-0 w-64 space-y-1">
-            <div className="text-gray-500 text-xs uppercase tracking-wider">Rotation (global)</div>
-            <Slider label="Yaw" value={macros.yaw} min={-180} max={180} step={1} unit="°" accent="orange" live onChange={(v) => setGlobalMacro('yaw', v)} />
-            <Slider label="Pitch" value={macros.pitch} min={-180} max={180} step={1} unit="°" accent="orange" live onChange={(v) => setGlobalMacro('pitch', v)} />
-            <Slider label="Roll" value={macros.roll} min={-180} max={180} step={1} unit="°" accent="orange" live onChange={(v) => setGlobalMacro('roll', v)} />
-          </div>
-        </div>
-      )}
-
-      {/* ── Drawer PLAYBACK — lecture du move sélectionné ── */}
-      {scope === 'playback' && slot && (
-        <div className="border-t border-indigo-900/40 px-4 py-2 flex items-start gap-6 overflow-x-auto max-h-[42vh] overflow-y-auto">
-          {/* Speed — gros fader du move */}
-          <div className="flex-shrink-0 w-64 space-y-1">
-            <div className="text-gray-500 text-xs uppercase tracking-wider">Speed</div>
-            <Slider
-              value={slot.macros.speed}
-              min={0}
-              max={3}
-              step={0.05}
-              unit="x"
-              accent="green"
-              layout="stack"
-              live={!!slot.movementId}
-              onChange={(v) => setSlotMacros(slot.id, { speed: v })}
-            />
-          </div>
-          {/* Direction + loop — groupes de boutons */}
-          <div className="flex-shrink-0 w-56 space-y-2">
-            <div>
-              <div className="text-gray-500 text-xs uppercase tracking-wider mb-1">Direction</div>
-              <div className="flex gap-1">
-                {(['forward', 'backward', 'ping_pong'] as const).map((d) => (
-                  <button
-                    key={d}
-                    onClick={() => setSlotDirection(slot.id, d)}
-                    className={`flex-1 py-1.5 text-xs rounded ${
-                      slot.direction === d
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-800 text-gray-500 hover:text-gray-300'
-                    }`}
-                  >
-                    {d === 'ping_pong' ? 'pingpong' : d}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <div className="text-gray-500 text-xs uppercase tracking-wider mb-1">Mode</div>
-              <div className="flex gap-1">
-                {(['loop', 'oneshot'] as const).map((l) => (
-                  <button
-                    key={l}
-                    onClick={() => setSlotLoopMode(slot.id, l)}
-                    className={`flex-1 py-1.5 text-xs rounded ${
-                      slot.loopMode === l
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-800 text-gray-500 hover:text-gray-300'
-                    }`}
-                  >
-                    {l}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-          {/* Fades de cycle */}
-          <div className="flex-shrink-0 w-64 space-y-1">
-            <div className="text-gray-500 text-xs uppercase tracking-wider">Fades</div>
-            <Slider
-              label="In"
-              value={current.fade_in}
-              min={0}
-              max={5}
-              step={0.1}
-              unit="s"
-              accent="purple"
-              live={!!slot.movementId}
-              onChange={(v) => updateCurrent({ fade_in: v })}
-            />
-            <Slider
-              label="Out"
-              value={current.fade_out}
-              min={0}
-              max={5}
-              step={0.1}
-              unit="s"
-              accent="purple"
-              live={!!slot.movementId}
-              onChange={(v) => updateCurrent({ fade_out: v })}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* ── Drawer PARAMS — chips de nodes + tous les params du node choisi ── */}
-      {scope === 'params' && slot && (
-        <div className="border-t border-indigo-900/40 px-4 py-2 max-h-[42vh] overflow-y-auto">
-          <NodeParamsPanel
-            nodes={nodes}
-            live={!!slot.movementId}
-            resetKey={editingSlotId}
-            performMode
-            onParam={setNodeParam}
-            emptyHint="No parametric node in this graph — see Playback / Tracks."
-          />
-        </div>
-      )}
-
-      {/* ── Drawer TRACKS — assignation + depth/phase du move sélectionné ── */}
-      {scope === 'tracks' && slot && (
-        <div className="border-t border-indigo-900/40 px-4 py-2 max-h-[42vh] overflow-y-auto">
-          <TrackGrid
-            compact
-            tracks={allTrackInfos}
-            selectedTrackIds={new Set(slot.trackIds)}
-            // IMPORTANT : lire l'état frais du store à chaque appel — les
-            // patterns (even/odd/inverse) font une rafale de toggles dans le
-            // même tick ; slot.trackIds (prop) serait stale et chaque toggle
-            // écraserait le précédent (seul le dernier survivait).
-            toggleTrackSelection={(tid) => {
-              const fresh = useGraphStore.getState().moveSlots.find((s) => s.id === slot.id)?.trackIds ?? [];
-              setSlotTracks(slot.id, fresh.includes(tid)
-                ? fresh.filter((t) => t !== tid)
-                : [...fresh, tid]);
-            }}
-            selectAllTracks={() => setSlotTracks(slot.id, allTrackInfos.map((t) => t.id))}
-            deselectAllTracks={() => setSlotTracks(slot.id, [])}
-            assignments={current.assignments}
-            updateAssignment={updateAssignment}
-          />
-          {slot.movementId && (
-            <div className="text-green-700 text-xs mt-1">
-              live — toggles appliqués via hot-swap, depth/phase via update_animation_state
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Drawer AUDIO — mods audio-réactifs du move sélectionné ── */}
-      {scope === 'audio' && slot && (
-        <div className="border-t border-indigo-900/40 px-4 py-2 max-h-[42vh] overflow-y-auto">
-          <AudioModList />
-        </div>
-      )}
     </div>
   );
 };
 
 export default PerformView;
+

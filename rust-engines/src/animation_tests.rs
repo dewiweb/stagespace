@@ -75,20 +75,20 @@ mod tests {
         graph.add_edge(Edge {
             from: objects_id,
             to: engine_id,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "objects".to_string(),
+            to_port: "objects".to_string(),
         });
         graph.add_edge(Edge {
             from: duration_id,
             to: engine_id,
-            from_port: "output".to_string(),
+            from_port: "duration".to_string(),
             to_port: "duration".to_string(),
         });
         graph.add_edge(Edge {
             from: engine_id,
             to: output_id,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
 
         graph

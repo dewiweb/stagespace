@@ -28,20 +28,20 @@ mod tests {
         graph.add_edge(Edge {
             from: id_objects,
             to: id_circular,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "objects".to_string(),
+            to_port: "objects".to_string(),
         });
         graph.add_edge(Edge {
             from: id_duration,
             to: id_circular,
-            from_port: "output".to_string(),
+            from_port: "duration".to_string(),
             to_port: "duration".to_string(),
         });
         graph.add_edge(Edge {
             from: id_circular,
             to: id_output,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
 
         let result = Compiler::compile(&graph);
@@ -71,20 +71,20 @@ mod tests {
         graph.add_edge(Edge {
             from: id1,
             to: id2,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
         graph.add_edge(Edge {
             from: id2,
             to: id3,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "duration".to_string(),
+            to_port: "in".to_string(),
         });
         graph.add_edge(Edge {
             from: id3,
             to: id1,
-            from_port: "output".to_string(),
-            to_port: "input".to_string(),
+            from_port: "out".to_string(),
+            to_port: "in".to_string(),
         });
 
         let result = Compiler::compile(&graph);
@@ -142,20 +142,20 @@ mod tests {
             graph.add_edge(Edge {
                 from: id_objects,
                 to: id_engine,
-                from_port: "output".to_string(),
-                to_port: "input".to_string(),
+                from_port: "objects".to_string(),
+                to_port: "objects".to_string(),
             });
             graph.add_edge(Edge {
                 from: id_duration,
                 to: id_engine,
-                from_port: "output".to_string(),
+                from_port: "duration".to_string(),
                 to_port: "duration".to_string(),
             });
             graph.add_edge(Edge {
                 from: id_engine,
                 to: id_output,
-                from_port: "output".to_string(),
-                to_port: "input".to_string(),
+                from_port: "out".to_string(),
+                to_port: "in".to_string(),
             });
 
             let result = Compiler::compile(&graph);
@@ -186,20 +186,20 @@ mod tests {
             graph.add_edge(Edge {
                 from: id_o,
                 to: id_f,
-                from_port: "output".to_string(),
-                to_port: "input".to_string(),
+                from_port: "objects".to_string(),
+                to_port: "objects".to_string(),
             });
             graph.add_edge(Edge {
                 from: id_d,
                 to: id_f,
-                from_port: "output".to_string(),
+                from_port: "duration".to_string(),
                 to_port: "duration".to_string(),
             });
             graph.add_edge(Edge {
                 from: id_f,
                 to: id_out,
-                from_port: "output".to_string(),
-                to_port: "input".to_string(),
+                from_port: "out".to_string(),
+                to_port: "in".to_string(),
             });
 
             let result = Compiler::compile(&graph);
@@ -233,26 +233,26 @@ mod tests {
             graph.add_edge(Edge {
                 from: id_o,
                 to: id_f,
-                from_port: "output".to_string(),
-                to_port: "input".to_string(),
+                from_port: "objects".to_string(),
+                to_port: "objects".to_string(),
             });
             graph.add_edge(Edge {
                 from: id_d,
                 to: id_f,
-                from_port: "output".to_string(),
+                from_port: "duration".to_string(),
                 to_port: "duration".to_string(),
             });
             graph.add_edge(Edge {
                 from: id_f,
                 to: id_r,
-                from_port: "output".to_string(),
-                to_port: "input".to_string(),
+                from_port: "out".to_string(),
+                to_port: "in".to_string(),
             });
             graph.add_edge(Edge {
                 from: id_r,
                 to: id_out,
-                from_port: "output".to_string(),
-                to_port: "input".to_string(),
+                from_port: "out".to_string(),
+                to_port: "in".to_string(),
             });
 
             let result = Compiler::compile(&graph);
@@ -287,15 +287,15 @@ mod tests {
             graph.add_node(duration);
             graph.add_node(osc);
             graph.add_node(output);
-            for (from, to, to_port) in [
-                (id_o, id_s, "input"),
-                (id_d, id_s, "duration"),
-                (id_s, id_out, "input"),
+            for (from, to, from_port, to_port) in [
+                (id_o, id_s, "objects", "objects"),
+                (id_d, id_s, "duration", "duration"),
+                (id_s, id_out, "out", "in"),
             ] {
                 graph.add_edge(Edge {
                     from,
                     to,
-                    from_port: "output".to_string(),
+                    from_port: from_port.to_string(),
                     to_port: to_port.to_string(),
                 });
             }
@@ -362,15 +362,15 @@ mod tests {
             graph.add_node(duration);
             graph.add_node(engine);
             graph.add_node(output);
-            for (from, to, to_port) in [
-                (id_o, id_e, "input"),
-                (id_d, id_e, "duration"),
-                (id_e, id_out, "input"),
+            for (from, to, from_port, to_port) in [
+                (id_o, id_e, "objects", "objects"),
+                (id_d, id_e, "duration", "duration"),
+                (id_e, id_out, "out", "in"),
             ] {
                 graph.add_edge(Edge {
                     from,
                     to,
-                    from_port: "output".to_string(),
+                    from_port: from_port.to_string(),
                     to_port: to_port.to_string(),
                 });
             }

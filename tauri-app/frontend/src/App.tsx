@@ -3,6 +3,8 @@ import NodeEditor from './components/NodeEditor';
 import Scene3D from './components/Scene3D';
 import MovesTable from './components/MovesTable';
 import CuelistPanel from './components/CuelistPanel';
+import ScorePanel from './components/ScorePanel';
+import ShowLogPanel from './components/ShowLogPanel';
 import SpatialFxPanel from './components/SpatialFxPanel';
 import AnimationList from './components/AnimationList';
 import Inspector from './components/Inspector';
@@ -11,22 +13,87 @@ import TabPanel from './components/TabPanel';
 import Toolbar from './components/Toolbar';
 import StatusBar from './components/StatusBar';
 import ToastContainer from './components/ToastContainer';
+import { ManualReleaseBar } from './components/ManualReleaseBar';
 import PerformView from './components/PerformView';
 import WelcomeModal, { shouldShowWelcome } from './components/WelcomeModal';
+const ConduiteSurface = React.lazy(() => import('./components/conduite/ConduiteSurface'));
 import ShortcutsModal from './components/ShortcutsModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Workflow, ChevronRight, ChevronDown, PanelRightClose, PanelLeftClose, PanelLeftOpen, PanelRightOpen, Maximize2, Minimize2, Activity } from 'lucide-react';
 import { useLiveShortcuts, usePerfStatsPolling } from './hooks/useLiveShortcuts';
+import { useShowControl } from './hooks/useShowControl';
+import { useConduiteBroadcast } from './hooks/useConduiteBroadcast';
 import { prepareGraphForSave } from './components/nodeParamSchema';
 import { usePersistedState } from './utils/usePersistedState';
 import { useGraphStore, useMovementPositionsListener, useAudioErrorListener, useAudioStateListener, useCueRecallListener, useSupervisorListener } from './store/useGraphStore';
 import { useMoveEditorStore } from './store/useMoveEditorStore';
 
+/// Fenêtre run détachée — la MÊME surface jeu que l'app principale
+/// (instrument unifié, pas de seconde implémentation divergente). Monte
+/// les listeners live nécessaires aux stores — SANS useShowControl :
+/// l'event `show-control` OSC est global Tauri, deux fenêtres qui
+/// dispatcheraient doubleraient chaque commande (le dispatch reste
+/// l'apanage de la fenêtre principale).
+const RunWindow: React.FC = () => {
+  useMovementPositionsListener();
+  useCueRecallListener();
+  useSupervisorListener();
+  useLiveShortcuts();
+  return (
+    <div className="h-screen w-screen flex flex-col">
+      <div className="flex-1 min-h-0 flex flex-col">
+        <PerformView />
+      </div>
+      {/* StatusBar — sans elle la fenêtre de jeu dédiée est aveugle aux
+          pannes moteur (FPS/OSC/backendDown/MERGE DEAD). */}
+      <StatusBar />
+      {/* Toasts — un GO refusé / erreur backend doit être visible dans
+          la fenêtre de jeu dédiée, pas seulement dans la principale. */}
+      <ManualReleaseBar />
+      <ToastContainer />
+    </div>
+  );
+};
+
 function App() {
+  // Fenêtre détachable ?view=run → même surface jeu que la principale.
+  if (new URLSearchParams(window.location.search).get('view') === 'run') {
+    return (
+      <ErrorBoundary zone="Run">
+        <RunWindow />
+      </ErrorBoundary>
+    );
+  }
+
+  // Fenêtre détachable ?view=conduite → rendu dédié sans le reste de l'app.
+  if (new URLSearchParams(window.location.search).get('view') === 'conduite') {
+    const ConduitePage = React.lazy(() => import('./pages/ConduitePage'));
+    return (
+      <ErrorBoundary zone="Conduite">
+        <React.Suspense
+          fallback={
+            <div className="h-screen w-screen bg-stagespace-bg flex items-center justify-center text-gray-500 text-sm">
+              Chargement de la conduite…
+            </div>
+          }
+        >
+          <ConduitePage />
+          <ToastContainer />
+        </React.Suspense>
+      </ErrorBoundary>
+    );
+  }
+  return <AppMain />;
+}
+
+function AppMain() {
   const showExpert = useMoveEditorStore((s) => s.showExpert);
   const setShowExpert = useMoveEditorStore((s) => s.setShowExpert);
-  const performMode = useMoveEditorStore((s) => s.performMode);
-  const setPerformMode = useMoveEditorStore((s) => s.setPerformMode);
+  // La refonte 3 phases : ATELIER (mise en boîte) · CONDUITE (faire
+  // avancer le show) · JEU (interagir avec les objets) — la nav
+  // première remplace l'ancien toggle PERFORM/Edit.
+  const surface = useMoveEditorStore((s) => s.surface);
+  const setSurface = useMoveEditorStore((s) => s.setSurface);
   const debugPerfVisible = useMoveEditorStore((s) => s.debugPerfVisible);
   const setDebugPerfVisible = useMoveEditorStore((s) => s.setDebugPerfVisible);
   const shortcutsOpen = useMoveEditorStore((s) => s.shortcutsOpen);
@@ -51,6 +118,10 @@ function App() {
   // Sections collapsibles du panneau gauche
   const [graphsExpanded, setGraphsExpanded] = usePersistedState<boolean>('ss-layout-graphsExpanded', true);
   const [movesExpanded, setMovesExpanded] = usePersistedState<boolean>('ss-layout-movesExpanded', true);
+  /// Tab actif du panneau Show — persisté : Templates ne s'affiche qu'avec
+  /// le tab Moves (bibliothèque → création de slots), les autres tabs
+  /// récupèrent la colonne entière.
+  const [showTab, setShowTab] = usePersistedState<string>('ss-leftpanel-showTab', 'moves');
   // AudioPanel = monitoring/config — collapsible pour rendre la hauteur à
   // l'Inspector (outil de travail principal de la colonne droite).
   const [audioExpanded, setAudioExpanded] = usePersistedState<boolean>('ss-layout-audioExpanded', false);
@@ -70,10 +141,22 @@ function App() {
   // Events du superviseur backend : worker zombie arrêté, merge thread
   // redémarré de lui-même (le frontend n'est plus dans la boucle de vie).
   useSupervisorListener();
+
+  // Le menu contextuel natif de la webview (back/forward/reload/inspect)
+  // n'a pas de sens dans une app de show — et il masquait le release
+  // clic-droit des objets (radar + 3D). Suppression globale : les handlers
+  // surface (contextmenu → doClearPosition) continuent de fonctionner.
+  React.useEffect(() => {
+    const onCtx = (e: MouseEvent) => e.preventDefault();
+    document.addEventListener('contextmenu', onCtx);
+    return () => document.removeEventListener('contextmenu', onCtx);
+  }, []);
   // Raccourcis live (Esc=panic, Enter=GO, Shift+Enter=recall) + polling perf —
   // au niveau App : ils doivent fonctionner aussi en mode Perform (le Toolbar
   // et sa stack se démontent).
   useLiveShortcuts();
+  useShowControl();
+  useConduiteBroadcast();
   usePerfStatsPolling();
 
   // ── Resize des panneaux gauche et droit ──
@@ -105,7 +188,7 @@ function App() {
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     };
-  }, []);
+  }, [setRightWidth, setExpertSplit, setLeftWidth]);
 
   const startRightResize = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -127,6 +210,16 @@ function App() {
   React.useEffect(() => {
     if (!showExpert && editorFocus) setEditorFocus(false);
   }, [showExpert, editorFocus]);
+
+  // Modes d'interaction = état armé pour Scene3D. Si la scène devient
+  // invisible (surface ≠ atelier, ou editorFocus masque le 3D), un mode
+  // resté armé est un piège : inciblable, seul Esc le désarme — et un
+  // second Esc = panic. On purge à chaque masquage.
+  React.useEffect(() => {
+    if (surface !== 'atelier' || focusActive) {
+      useGraphStore.getState().cancelInteractionModes();
+    }
+  }, [surface, focusActive]);
 
   const startExpertResize = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -173,6 +266,8 @@ function App() {
     { id: 'moves', label: 'Moves', content: <MovesTable /> },
     { id: 'cues', label: 'Cues', content: <CuelistPanel /> },
     { id: 'fx', label: 'FX', content: <SpatialFxPanel /> },
+    { id: 'score', label: 'Score', content: <ScorePanel /> },
+    { id: 'log', label: 'Log', content: <ShowLogPanel /> },
   ];
 
   return (
@@ -186,44 +281,82 @@ function App() {
           <h1 className="text-white font-bold text-base tracking-tight">STAGESPACE</h1>
           <span className="text-gray-400 text-xs ml-1 italic">Play the space</span>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setPerformMode(!performMode)}
-            className={`px-3 py-1 text-xs font-bold rounded transition-all flex items-center gap-1.5 ${
-              performMode ? 'bg-gray-800 text-gray-400 hover:text-white' : 'bg-green-700 text-white'
-            }`}
-            title={performMode
-              ? 'Atelier — edit moves and graphs (leave the live surface)'
-              : 'Perform mode — live surface: setlist, GO, panic, on-demand live params'}
-          >
-            {performMode ? (
-              <><Workflow size={11} /> Atelier</>
-            ) : (
-              <><span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> PERFORM</>
-            )}
-          </button>
-          {!performMode && (
+        {/* Nav 3 phases — les surfaces de travail de l'opérateur :
+            ATELIER (composer/préparer) · CONDUITE (faire avancer le show)
+            · JEU (interagir live). La phase courante est colorée. */}
+        <nav className="flex items-center gap-1 bg-gray-900/60 rounded-lg p-0.5">
+          {(
+            [
+              { id: 'atelier', label: 'Atelier', color: 'bg-purple-600', title: 'Composer/préparer — graphes, moves, cues, score, réglages' },
+              { id: 'conduite', label: 'Conduite', color: 'bg-amber-600', title: 'Faire avancer le show — cues, GO, surveillance, log' },
+              { id: 'jeu', label: 'Jeu', color: 'bg-green-600', title: 'Interagir live — pads, gestes, radar, sources' },
+            ] as const
+          ).map((tab) => (
             <button
-              onClick={() => setShowExpert(!showExpert)}
-              className={`px-3 py-1 text-xs font-bold rounded transition-all flex items-center gap-1.5 ${
-                showExpert ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+              key={tab.id}
+              onClick={() => setSurface(tab.id)}
+              title={tab.title}
+              className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
+                surface === tab.id
+                  ? `${tab.color} text-white`
+                  : 'text-gray-400 hover:text-white'
               }`}
-              title="Expert mode — advanced graph editor (nodes, connections, custom trajectories)"
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+        <div className="flex items-center gap-3">
+          {surface === 'atelier' && (
+            // Même convention que PERFORM/Edit : le bouton affiche la
+            // CIBLE, la couleur signale le mode courant.
+            <button
+              onClick={() => {
+                const next = !showExpert;
+                setShowExpert(next);
+                // Entrer en Expert = intention d'éditer le graphe — activer
+                // le Focus directement (le split 50/50 écrase le canvas
+                // React Flow ; la 3D reste à un clic via Focus).
+                if (next) setEditorFocus(true);
+              }}
+              className={`px-3 py-1 text-xs font-bold rounded transition-all flex items-center gap-1.5 ${
+                showExpert ? 'bg-gray-800 text-gray-400 hover:text-white' : 'bg-purple-600 text-white'
+              }`}
+              title={showExpert
+                ? 'Simple mode — move form editor (no graph nodes)'
+                : 'Expert mode — advanced graph editor (nodes, connections, custom trajectories)'}
             >
               <Workflow size={12} />
-              {showExpert ? 'Expert' : 'Simple'}
+              {showExpert ? 'Simple' : 'Expert'}
             </button>
           )}
         </div>
       </header>
 
-      {performMode ? (
-        /* Mode Perform — surface live filtrée : Toolbar et édition absents,
-           les raccourcis live restent actifs (montés ci-dessus). */
-        <ErrorBoundary zone="Perform">
+      {surface === 'conduite' ? (
+        /* Surface Conduite — la station opérable interne : lit les
+           stores directement (pas le broadcast réservé à la fenêtre
+           détachée ?view=conduite, qui monte ConduitePage). */
+        <ErrorBoundary zone="Conduite">
+          <React.Suspense
+            fallback={
+              <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">
+                Chargement de la conduite…
+              </div>
+            }
+          >
+            <ConduiteSurface />
+          </React.Suspense>
+        </ErrorBoundary>
+      ) : surface === 'jeu' ? (
+        /* Surface Jeu — l'instrument live : pads, gestes, radar,
+           sources. Toolbar et édition absents, raccourcis live actifs. */
+        <ErrorBoundary zone="Jeu">
           <PerformView />
         </ErrorBoundary>
       ) : (
+        /* Surface Atelier — la mise en boîte : graphes, moves, cues,
+           templates, 3D, réglages. */
         <>
       {/* Toolbar (OSC settings, import .hol) */}
       <Toolbar />
@@ -267,13 +400,17 @@ function App() {
               </div>
               {movesExpanded && (
                 <div className="flex-1 min-h-0 overflow-hidden">
-                  <TabPanel tabs={secondaryTabs} defaultTab="moves" />
+                  <TabPanel tabs={secondaryTabs} defaultTab={showTab} onTabChange={setShowTab} />
                 </div>
               )}
             </div>
             {/* Section 2: Templates (AnimationList) — secondaire. Partage
                 proportionnel avec Show (flex-1 chacun) au lieu d'une hauteur
-                fixe : sur petit écran aucune section n'écrase l'autre. */}
+                fixe : sur petit écran aucune section n'écrase l'autre.
+                Visible UNIQUEMENT sur le tab Moves : les templates sont la
+                matière première des slots — sous Cues/FX/Score/Log elles
+                volaient la moitié de la colonne aux panneaux concernés. */}
+            {showTab === 'moves' && (
             <div className={`${graphsExpanded ? 'flex-1' : 'flex-shrink-0'} flex flex-col min-h-0 border-t border-stagespace-border`}>
               <div className="flex items-center gap-1 px-3 py-1.5 border-b border-stagespace-border flex-shrink-0 bg-gray-900/30">
                 <button
@@ -289,6 +426,7 @@ function App() {
                 </div>
               )}
             </div>
+            )}
           </div>
           {/* Splitter — poignée de redimensionnement */}
           <div
@@ -483,6 +621,10 @@ function App() {
           modes (Edit et Perform). Le statut/FPS/erreurs ne dépendent plus
           des composants démontés par le mode live. */}
       <StatusBar />
+
+      {/* Release des objets tenus en manuel — visible dans tous les modes
+          (un objet figé doit pouvoir être relâché où qu'on soit). */}
+      <ManualReleaseBar />
 
       {/* Toast notifications — erreurs backend, alerts OSC, etc. */}
       <ToastContainer />

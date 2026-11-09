@@ -24,6 +24,7 @@ mod helpers;
 mod move_state;
 #[cfg(test)]
 mod tests;
+mod transition;
 
 pub use helpers::{default_post_process_fn, merge_positions, MoveEntry};
 pub use move_state::{MergeStrategy, MoveState};
@@ -35,7 +36,7 @@ use crate::position_buffer::PositionBuffer;
 use crate::runtime::{
     MacroState, PerfMonitor, PerfStats, PositionCallback, PostProcessContext, PostProcessFn,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
@@ -105,6 +106,13 @@ const CATCHUP_FRAME_LIMIT: u128 = 30;
 ///
 /// Une seule thread, une seule socket OSC. Lit les PositionBuffers de tous les
 /// moves actifs, merge les positions, applique les macros spatiales, envoie l'OSC.
+/// (scale, offset, yaw) — transform venue appliqué au payload OSC uniquement.
+type VenueMap = ([f64; 3], [f64; 3], f64);
+/// Frame de tape : (temps, positions canoniques par objet).
+type TapeFrame = (f64, HashMap<usize, [f64; 3]>);
+/// État du replay tape : (départ, frames, index courant).
+type TapePlayState = (Instant, Vec<TapeFrame>, usize);
+
 pub struct MergeRuntime {
     thread: Option<std::thread::JoinHandle<()>>,
     running: Arc<AtomicBool>,
@@ -159,6 +167,67 @@ pub struct MergeRuntime {
     /// yaw, aperture, lfe) — object_index → SpatialChannels.
     /// Type figé par `OscInTargets` (osc_receiver).
     object_channels: Arc<RwLock<HashMap<usize, SpatialChannels>>>,
+    /// Objets « parkés » — les recalls de cues (Full et Tracking) n'écrivent
+    /// jamais leurs canaux : la reprise manuelle d'un opérateur a priorité
+    /// sur la mémoire enregistrée (sémantique Park des consoles).
+    parked_objects: Arc<RwLock<HashSet<usize>>>,
+    /// End-mode par move (Revert | Hold) — posé au register_move, lu au
+    /// retrait : Hold écrit la dernière position en manual_positions.
+    move_end_modes: Arc<RwLock<HashMap<String, crate::EndMode>>>,
+    /// Dernières positions monde émises par objet — source des ancres
+    /// `AnchorMode::Current` au spawn du move suivant.
+    last_out_positions: Arc<RwLock<HashMap<usize, [f64; 3]>>>,
+    /// Derniers canaux spatiaux effectifs calculés par objet (statiques ⊕
+    /// modulés ⊕ zones) — readback opérateur : rend l'effet des FX visible
+    /// sans écouter le rendu (audit : les réglages semblaient inertes).
+    last_effective_channels: Arc<RwLock<HashMap<usize, SpatialChannels>>>,
+    /// Positions canoniques pré-post-process (merged ∪ manual — manual
+    /// gagne, comme le post-process). Graine des anchors/freeze/throw :
+    /// seed depuis last_out (post-macro) provoquerait un double-transform.
+    last_canonical_positions: Arc<RwLock<HashMap<usize, [f64; 3]>>>,
+    /// Objets dont la position manuelle vient d'un hold de fin de move
+    /// (end_mode=Hold) — distingue "tenu par la mémoire" de "reprise
+    /// opérateur" dans la source-de-contrôle.
+    held_objects: Arc<RwLock<HashSet<usize>>>,
+    /// Objets pilotés par flux PSN — posés par set_psn_config, lus pour
+    /// la source-de-contrôle (PSN > manuel dans la priorité).
+    psn_objects: Arc<RwLock<HashSet<usize>>>,
+    /// Auto-venue : (scale, offset) appliqués UNIQUEMENT au payload OSC
+    /// — l'espace interne reste canonique (anchors, zones, kinematics,
+    /// last_out). None = passthrough.
+    venue_map: Arc<RwLock<Option<VenueMap>>>,
+    /// Vu-mètre perceptuel — calculé par frame depuis les vraies
+    /// positions : vitesse angulaire perçue (legibility MAMA °/s),
+    /// looming (vitesse radiale d'approche m/s), vection (cohérence
+    /// rotationnelle du champ 0..1).
+    perceptual: Arc<RwLock<PerceptualMetrics>>,
+    /// Couche réalité-distance (Zahorik : distance perçue compressée
+    /// ~×0.7) — exagération géométrique + couplage distance→canaux
+    /// (gain 1/(1+a·r), presence e^(-air·r) air-EQ, distance=r DRR).
+    /// None = désactivé.
+    distance_reality: Arc<RwLock<Option<(f64, f64, f64)>>>,
+    /// Objets "lancés" (grab & throw) : obj_index → vélocité m/s.
+    /// Le frame loop intègre pos += v·dt avec amortissement ; quand
+    /// |v| < eps l'objet devient une position manuelle au repos.
+    thrown: Arc<RwLock<HashMap<usize, [f64; 3]>>>,
+    /// Dynamique spatiale — le "compresseur spatial" : scalaire global
+    /// appliqué au payload OSC (1.0 = neutre, <1 resserre le champ vers
+    /// l'origine, >1 l'étend). Geste live, pas un setup.
+    spatial_compression: Arc<RwLock<f64>>,
+    /// Position stream tape — enregistre les positions émises à ~30Hz
+    /// (t, {obj: pos}) pour replay vers un renderer externe (bounce
+    /// binaural côté renderer — STAGESPACE ne rend pas l'audio).
+    tape_recording: Arc<std::sync::atomic::AtomicBool>,
+    pos_tape: Arc<RwLock<Vec<TapeFrame>>>,
+    /// Replay : (start, entries, curseur) — injecté en positions
+    /// manuelles par le frame loop au rythme réel.
+    tape_play: Arc<RwLock<Option<TapePlayState>>>,
+
+    /// Attention orchestration — objets figés par `attention_focus`
+    /// (stase pour le change blindness : un seul objet bouge). Le set
+    /// distingue les figés de la feature des positions manuelles de
+    /// l'opérateur — clear ne touche que les nôtres.
+    attention_frozen: Arc<RwLock<HashSet<usize>>>,
     /// Règles de modulation cinématique (source cinématique → canal spatial)
     /// — Arc<Vec> : snapshot par frame = clone d'Arc.
     channel_modulations: Arc<RwLock<Arc<Vec<ChannelModulation>>>>,
@@ -176,7 +245,6 @@ pub struct MergeRuntime {
     /// Node `Barycenter` du graph global : l'origin passée au ctx est
     /// recalculée chaque frame = isobarycentre des `track_positions`
     /// (audit T2 — le node était un no-op silencieux).
-    barycenter_pivot: Arc<AtomicBool>,
     /// Node `MoveRef` avec `move_id` non vide : la chaîne post-process ne
     /// reçoit que les positions de ce move au lieu du merge complet
     /// (audit T2 — le param était décoratif).
@@ -196,6 +264,11 @@ pub struct MergeRuntime {
     /// Mutex (pas RwLock) : `SignalFn` est `FnMut` — les nodes à état
     /// mutent à chaque eval. Hot-swappable via `update_signal_graph`.
     signal_fn: Arc<Mutex<crate::signal_compiler::SignalFn>>,
+    /// Transition de recall en cours — arbre de layers (Live/Frozen/Blend)
+    /// crossfadant tout l'output post-merge : post-process, macros,
+    /// positions manuelles, depths, canaux, zones, modulations. `Live`
+    /// hors transition = chemin à coût nul inchangé.
+    output_layer: Arc<Mutex<transition::Layer>>,
     /// Dernières valeurs OSC reçues (`OscReceiver::address_values_handle`)
     /// — source des nodes `SignalOsc`. L'Arc interne est re-pointé via
     /// `set_osc_values_handle` quand le receiver est recréé (rebind port).
@@ -209,6 +282,21 @@ pub struct MergeRuntime {
 pub type StaleKill = (String, Arc<PositionBuffer>);
 /// File partagée merge → superviseur backend.
 type StaleKillQueue = Arc<Mutex<Vec<StaleKill>>>;
+
+/// Vu-mètre perceptuel — un objet qui dépasse ~5°/s de vitesse
+/// angulaire devient flou (MAMA/localization blur) ; un objet qui
+/// s'approche rapidement est l'accent émotionnel #1 (looming) ; un
+/// champ qui tourne en bloc induit l'auto-mouvement (vection).
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct PerceptualMetrics {
+    /// Vitesse angulaire perçue par objet (°/s) — >5°/s = illisible.
+    pub legibility_deg_s: std::collections::HashMap<usize, f64>,
+    /// Pire vitesse d'approche vers l'origine (m/s, 0 = aucune).
+    pub looming_ms: f64,
+    /// Fraction des objets en mouvement tournant dans le même sens
+    /// autour du centre (0..1) — >0.7 = risque vection.
+    pub vection: f64,
+}
 
 impl MergeRuntime {
     /// Crée un nouveau MergeRuntime
@@ -263,15 +351,31 @@ impl MergeRuntime {
             track_positions: Arc::new(RwLock::new(Arc::new(HashMap::new()))),
             manual_positions: Arc::new(RwLock::new(HashMap::new())),
             object_channels: Arc::new(RwLock::new(HashMap::new())),
+            parked_objects: Arc::new(RwLock::new(HashSet::new())),
+            move_end_modes: Arc::new(RwLock::new(HashMap::new())),
+            last_out_positions: Arc::new(RwLock::new(HashMap::new())),
+            last_effective_channels: Arc::new(RwLock::new(HashMap::new())),
+            last_canonical_positions: Arc::new(RwLock::new(HashMap::new())),
+            held_objects: Arc::new(RwLock::new(HashSet::new())),
+            psn_objects: Arc::new(RwLock::new(HashSet::new())),
+            venue_map: Arc::new(RwLock::new(None)),
+            perceptual: Arc::new(RwLock::new(PerceptualMetrics::default())),
+            distance_reality: Arc::new(RwLock::new(None)),
+            thrown: Arc::new(RwLock::new(HashMap::new())),
+            spatial_compression: Arc::new(RwLock::new(1.0)),
+            attention_frozen: Arc::new(RwLock::new(HashSet::new())),
+            tape_recording: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            pos_tape: Arc::new(RwLock::new(Vec::new())),
+            tape_play: Arc::new(RwLock::new(None)),
             channel_modulations: Arc::new(RwLock::new(Arc::new(Vec::new()))),
             kinematic_smoothing: Arc::new(RwLock::new(0.5)),
             zones: Arc::new(RwLock::new(Arc::new(Vec::new()))),
             graph_zones: Arc::new(RwLock::new(Arc::new(Vec::new()))),
             graph_modulations: Arc::new(RwLock::new(Arc::new(Vec::new()))),
-            barycenter_pivot: Arc::new(AtomicBool::new(false)),
             move_ref_id: Arc::new(RwLock::new(None)),
             stale_kill_ids: Arc::new(Mutex::new(Vec::new())),
             signal_fn: Arc::new(Mutex::new(crate::signal_compiler::empty_signal_fn())),
+            output_layer: Arc::new(Mutex::new(transition::Layer::Live)),
             osc_values: Arc::new(RwLock::new(Arc::new(Mutex::new(HashMap::new())))),
         })
     }
@@ -346,11 +450,28 @@ impl MergeRuntime {
         osc_id: u32,
         pos: nalgebra::Vector3<f64>,
     ) -> crate::error::Result<()> {
+        // Mêmes contrats que la boucle d'envoi : dry-run = rien ne part
+        // (panic inclus — un mute qui émet n'est pas un mute), et la
+        // position passe par venue_map (sinon le panic envoie du
+        // canonique sur une salle adaptée → mauvaise position).
+        if !self.osc_armed() {
+            return Ok(());
+        }
+        let send_pos = self
+            .venue_map
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .map(|(s, o, yaw)| {
+                let (c, sn) = (yaw.cos(), yaw.sin());
+                let (x, y) = (pos.x * c - pos.y * sn, pos.x * sn + pos.y * c);
+                nalgebra::Vector3::new(x * s[0] + o[0], y * s[1] + o[1], pos.z * s[2] + o[2])
+            })
+            .unwrap_or(pos);
         let report = self
             .sink
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .send_state(osc_id, pos, None);
+            .send_state(osc_id, send_pos, None);
         if report.sent == 0 && report.errors > 0 {
             return Err(crate::error::StagespaceError::NetworkError(
                 std::io::Error::other("position sink send failed"),
@@ -462,6 +583,7 @@ impl MergeRuntime {
             audio_state: &audio_state,
             osc_values: &osc_vals,
         })
+        .macros
     }
 
     pub fn swap_post_process_fn(&self, new_fn: PostProcessFn) {
@@ -479,12 +601,64 @@ impl MergeRuntime {
             .unwrap_or_else(|e| e.into_inner()) = Arc::new(positions);
     }
 
+    /// Définit l'origine d'UNE track — merge dans la map existante
+    /// (contrairement à set_track_positions qui remplace tout : un set
+    /// unitaire par OSC ne doit pas effacer les autres origines).
+    pub fn set_track_position(&self, track: u32, pos: [f64; 3]) {
+        let mut map = (**self
+            .track_positions
+            .read()
+            .unwrap_or_else(|e| e.into_inner()))
+        .clone();
+        map.insert(track, pos);
+        *self
+            .track_positions
+            .write()
+            .unwrap_or_else(|e| e.into_inner()) = Arc::new(map);
+    }
+
+    /// Positions d'origine des tracks — pour panic hors-.hol : les
+    /// origines posées par /stagespace/trackpos ou l'import .hol sont
+    /// la vérité, pas un (0,0,0) en dur.
+    pub fn track_positions(&self) -> HashMap<u32, [f64; 3]> {
+        (**self
+            .track_positions
+            .read()
+            .unwrap_or_else(|e| e.into_inner()))
+        .clone()
+    }
+
     /// Définit une position manuelle pour un objet (pour ManualPosition)
     pub fn set_manual_position(&self, obj_index: usize, pos: [f64; 3]) {
         self.manual_positions
             .write()
             .unwrap_or_else(|e| e.into_inner())
             .insert(obj_index, pos);
+        // Une reprise manuelle fraîche remplace un hold éventuel.
+        self.held_objects
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&obj_index);
+    }
+
+    /// Position manuelle d'un objet (None = pas de reprise manuelle) —
+    /// sert au soundcheck pour restaurer la position avant le ping.
+    pub fn manual_position(&self, obj_index: usize) -> Option<[f64; 3]> {
+        self.manual_positions
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&obj_index)
+            .copied()
+    }
+
+    /// Toutes les positions manuelles — le frontend synchronise son cache
+    /// depuis cette vérité backend (OSC /position, hold, tape, attention…
+    /// n'atteignent jamais le store frontend autrement).
+    pub fn manual_positions(&self) -> HashMap<usize, [f64; 3]> {
+        self.manual_positions
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     /// Efface la position manuelle pour un objet
@@ -493,11 +667,19 @@ impl MergeRuntime {
             .write()
             .unwrap_or_else(|e| e.into_inner())
             .remove(&obj_index);
+        self.held_objects
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&obj_index);
     }
 
     /// Efface toutes les positions manuelles
     pub fn clear_all_manual_positions(&self) {
         self.manual_positions
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
+        self.held_objects
             .write()
             .unwrap_or_else(|e| e.into_inner())
             .clear();
@@ -545,6 +727,37 @@ impl MergeRuntime {
     }
 
     /// Efface tous les canaux spatiaux de tous les objets
+    /// Parke/déparke un objet — les recalls de cues ne touchent pas ses
+    /// canaux (reprise manuelle prioritaire, sémantique Park des consoles).
+    pub fn park_object(&self, obj: usize) {
+        self.parked_objects
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(obj);
+    }
+
+    pub fn unpark_object(&self, obj: usize) {
+        self.parked_objects
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&obj);
+    }
+
+    pub fn parked_objects(&self) -> HashSet<usize> {
+        self.parked_objects
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// Efface le park d'un objet (panic / nouveau show).
+    pub fn clear_parked(&self) {
+        self.parked_objects
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
+    }
+
     pub fn clear_all_object_channels(&self) {
         self.object_channels
             .write()
@@ -703,7 +916,6 @@ impl MergeRuntime {
         &self,
         zones: Vec<crate::zones::Zone>,
         modulations: Vec<ChannelModulation>,
-        barycenter: bool,
         move_ref: Option<String>,
     ) {
         *self.graph_zones.write().unwrap_or_else(|e| e.into_inner()) = Arc::new(zones);
@@ -711,7 +923,6 @@ impl MergeRuntime {
             .graph_modulations
             .write()
             .unwrap_or_else(|e| e.into_inner()) = Arc::new(modulations);
-        self.barycenter_pivot.store(barycenter, Ordering::SeqCst);
         *self.move_ref_id.write().unwrap_or_else(|e| e.into_inner()) = move_ref;
     }
 
@@ -723,6 +934,81 @@ impl MergeRuntime {
             .read()
             .unwrap_or_else(|e| e.into_inner());
         ((**z).clone(), (**m).clone())
+    }
+
+    /// Snapshot immuable de l'output layer courant — utilisé par
+    /// `begin_transition` pour figer le `from` du crossfade.
+    fn snapshot_layer(&self) -> transition::OutputLayer {
+        transition::OutputLayer {
+            post_process_fn: self
+                .post_process_fn
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone(),
+            macros: self.macros.snapshot(),
+            manual_positions: self
+                .manual_positions
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone(),
+            track_depths: (**self.track_depths.read().unwrap_or_else(|e| e.into_inner())).clone(),
+            object_channels: self
+                .object_channels
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone(),
+            zones: {
+                let mut z = (**self.graph_zones.read().unwrap_or_else(|e| e.into_inner())).clone();
+                z.extend(
+                    self.zones
+                        .read()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .iter()
+                        .cloned(),
+                );
+                z
+            },
+            modulations: {
+                let mut m = (**self
+                    .graph_modulations
+                    .read()
+                    .unwrap_or_else(|e| e.into_inner()))
+                .clone();
+                m.extend(
+                    self.channel_modulations
+                        .read()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .iter()
+                        .cloned(),
+                );
+                m
+            },
+            origin: *self.origin.lock().unwrap_or_else(|e| e.into_inner()),
+        }
+    }
+
+    /// Démarre un crossfade de l'output layer : tout ce que le post-merge
+    /// lit en dehors des positions mergées (post-process graph, macros,
+    /// positions manuelles, depths, canaux, zones, modulations, origin)
+    /// est figé en `from` ; les setters suivants écrivent le nouvel état
+    /// dans `Live` (= cible). `duration <= 0` → no-op.
+    /// GO rapides en chaîne : l'ancienne transition continue à l'intérieur
+    /// du nouvel arbre — continuité garantie (pas de saut).
+    pub fn begin_transition(&self, duration: f64) {
+        if duration <= 0.0 {
+            return;
+        }
+        let frozen = self.snapshot_layer();
+        let mut g = self.output_layer.lock().unwrap_or_else(|e| e.into_inner());
+        *g = std::mem::replace(&mut *g, transition::Layer::Live).begin(frozen, duration);
+    }
+
+    /// Une transition d'output layer est-elle en cours ? (tests / perf).
+    pub fn has_active_transition(&self) -> bool {
+        !matches!(
+            *self.output_layer.lock().unwrap_or_else(|e| e.into_inner()),
+            transition::Layer::Live
+        )
     }
 
     /// Récupère les macros (pour modification temps réel — fast path atomic)
@@ -759,12 +1045,19 @@ impl MergeRuntime {
         osc_ids: Vec<u32>,
         track_indices: Vec<usize>,
         is_preview: bool,
+        end_mode: crate::EndMode,
     ) {
         let state = MoveState::new(osc_ids, track_indices, is_preview);
         self.active_moves
             .write()
             .unwrap_or_else(|e| e.into_inner())
             .insert(move_id.clone(), state);
+        if end_mode == crate::EndMode::Hold {
+            self.move_end_modes
+                .write()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(move_id.clone(), end_mode);
+        }
         self.move_buffers
             .write()
             .unwrap_or_else(|e| e.into_inner())
@@ -858,10 +1151,320 @@ impl MergeRuntime {
             .write()
             .unwrap_or_else(|e| e.into_inner())
             .remove(move_id);
+        self.move_end_modes
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(move_id);
         self.move_buffers
             .write()
             .unwrap_or_else(|e| e.into_inner())
             .remove(move_id);
+    }
+
+    /// Dernières positions émises par objet (tentées — pas de confirmation
+    /// renderer) — le côté "commanded" de la confidence view.
+    pub fn emitted_positions(&self) -> HashMap<usize, [f64; 3]> {
+        self.last_out_positions
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// Canaux spatiaux effectifs calculés par objet (statiques ⊕ modulés ⊕
+    /// zones) — readback opérateur pour le panneau FX.
+    pub fn effective_channels(&self) -> HashMap<usize, SpatialChannels> {
+        self.last_effective_channels
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// Position tape : record start/stop (start vide la bande).
+    pub fn set_tape_recording(&self, on: bool) {
+        if on {
+            self.pos_tape
+                .write()
+                .unwrap_or_else(|e| e.into_inner())
+                .clear();
+        }
+        self.tape_recording
+            .store(on, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// La bande enregistrée (t, {obj: pos}) — export JSON côté IPC.
+    pub fn position_tape(&self) -> Vec<(f64, HashMap<usize, [f64; 3]>)> {
+        self.pos_tape
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// Replay de la bande — injectée en positions manuelles au rythme
+    /// réel par le frame loop (timing backend, pas de setTimeout).
+    pub fn play_tape(&self, entries: Vec<(f64, HashMap<usize, [f64; 3]>)>) {
+        *self.tape_play.write().unwrap_or_else(|e| e.into_inner()) =
+            Some((Instant::now(), entries, 0));
+    }
+
+    /// Attention orchestration — fige tous les objets SAUF `focus` à
+    /// leur dernière position émise (stase pour change blindness : le
+    /// seul objet en mouvement capte toute l'attention).
+    /// Seed canonique pré-pp — last_out (post-macro) double-transformerait
+    /// le gel quand les macros globales ≠ identité.
+    pub fn attention_focus(&self, focus: usize) {
+        let last_out = self
+            .last_canonical_positions
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let mut frozen = self
+            .attention_frozen
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
+        let mut manual = self
+            .manual_positions
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
+        for (obj, pos) in last_out {
+            if obj != focus {
+                manual.insert(obj, pos);
+                frozen.insert(obj);
+            }
+        }
+    }
+
+    /// Libère la stase d'attention — retire uniquement les positions
+    /// que `attention_focus` a figées (jamais les manuelles opérateur).
+    pub fn attention_release(&self) {
+        let frozen = std::mem::take(
+            &mut *self
+                .attention_frozen
+                .write()
+                .unwrap_or_else(|e| e.into_inner()),
+        );
+        let mut manual = self
+            .manual_positions
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
+        for obj in frozen {
+            manual.remove(&obj);
+        }
+    }
+
+    /// Dynamique spatiale — le compresseur spatial : k<1 resserre le
+    /// champ, k>1 l'étend. Clampé [0.1, 4].
+    pub fn set_spatial_compression(&self, k: f64) {
+        if k.is_finite() {
+            *self
+                .spatial_compression
+                .write()
+                .unwrap_or_else(|e| e.into_inner()) = k.clamp(0.1, 4.0);
+        }
+    }
+
+    /// Position gestures — applique une vélocité calculée à tous les
+    /// objets émis (réutilise la balistique `thrown`).
+    /// `explode` radiale · `converge` vers l'origine · `orbit`
+    /// tangentielle · `front` pousse vers l'avant (y<0).
+    pub fn gesture(&self, name: &str, strength: f64) {
+        let last_out = self
+            .last_canonical_positions
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        for (obj, p) in last_out {
+            let r = (p[0] * p[0] + p[1] * p[1]).sqrt().max(0.5);
+            let vel = match name {
+                "explode" => [p[0] / r * strength, p[1] / r * strength, 0.0],
+                "converge" => [-p[0] / r * strength, -p[1] / r * strength, 0.0],
+                "orbit" => [-p[1] / r * strength, p[0] / r * strength, 0.0],
+                "front" => [0.0, -strength, 0.0],
+                _ => continue,
+            };
+            self.throw_object(obj, vel);
+        }
+    }
+
+    /// Grab & throw : lance un objet avec une vélocité initiale.
+    /// L'objet part de sa dernière position émise (ou manuelle/base)
+    /// et continue balistique avec amortissement.
+    pub fn throw_object(&self, obj: usize, vel: [f64; 3]) {
+        if !vel.iter().all(|v| v.is_finite()) {
+            return;
+        }
+        let vel: [f64; 3] = vel.map(|v| v.clamp(-50.0, 50.0));
+        // Seed la position manuelle au point de départ si pas déjà tenue
+        // — canonique pré-pp, sinon le point de départ double-transforme.
+        if self
+            .manual_positions
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&obj)
+            .is_none()
+        {
+            if let Some(p) = self
+                .last_canonical_positions
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .get(&obj)
+                .copied()
+            {
+                self.set_manual_position(obj, p);
+            }
+        }
+        self.thrown
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(obj, vel);
+    }
+
+    /// Couche réalité-distance — (exagération, gain_atten, air_loss).
+    /// Validé : fini + bornes [0,4], [0,2], [0,0.5].
+    pub fn set_distance_reality(&self, cfg: Option<(f64, f64, f64)>) {
+        if let Some((ex, ga, al)) = cfg {
+            if ex.is_finite() && ga.is_finite() && al.is_finite() {
+                *self
+                    .distance_reality
+                    .write()
+                    .unwrap_or_else(|e| e.into_inner()) =
+                    Some((ex.clamp(0.0, 4.0), ga.clamp(0.0, 2.0), al.clamp(0.0, 0.5)));
+            }
+        } else {
+            *self
+                .distance_reality
+                .write()
+                .unwrap_or_else(|e| e.into_inner()) = None;
+        }
+    }
+
+    /// Métriques perceptuelles calculées à 60fps dans le frame loop.
+    pub fn perceptual_metrics(&self) -> PerceptualMetrics {
+        self.perceptual
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// Auto-venue : mappe l'espace canonique du show vers la salle
+    /// réelle. `scale`/`offset` par axe — `p_out = p*s + o`. None =
+    /// passthrough. Validé : fini + scale > 0.
+    /// Auto-venue : mappe l'espace canonique du show vers la salle
+    /// réelle. (scale, offset, yaw) — yaw = rotation dans le plan
+    /// x-y (le sol) en radians, appliqué AVANT scale+offset.
+    /// Validé : fini + scale > 0.
+    pub fn set_venue_map(&self, map: Option<([f64; 3], [f64; 3], f64)>) {
+        if let Some((scale, offset, yaw)) = map {
+            if scale
+                .iter()
+                .all(|s| s.is_finite() && *s > 0.0 && *s <= 100.0)
+                && offset.iter().all(|o| o.is_finite() && o.abs() <= 1000.0)
+                && yaw.is_finite()
+            {
+                *self.venue_map.write().unwrap_or_else(|e| e.into_inner()) =
+                    Some((scale, offset, yaw.clamp(-6.3, 6.3)));
+            }
+        } else {
+            *self.venue_map.write().unwrap_or_else(|e| e.into_inner()) = None;
+        }
+    }
+
+    /// Marque les objets pilotés par flux PSN (source-de-contrôle) —
+    /// appelé par `set_psn_config` avec les object_index du mapping.
+    pub fn set_psn_objects(&self, objs: HashSet<usize>) {
+        *self.psn_objects.write().unwrap_or_else(|e| e.into_inner()) = objs;
+    }
+
+    /// Source-de-contrôle par objet — *pourquoi cet objet est là*.
+    /// Priorité : park > psn > hold > manual > move > track(origine).
+    /// Utilisé par `get_object_states` — la lecture opérateur du modèle
+    /// de contrôle.
+    pub fn object_control_sources(&self) -> HashMap<usize, String> {
+        let parked = self
+            .parked_objects
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
+        let psn = self.psn_objects.read().unwrap_or_else(|e| e.into_inner());
+        let held = self.held_objects.read().unwrap_or_else(|e| e.into_inner());
+        let manual = self
+            .manual_positions
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
+        let moves = self.active_moves.read().unwrap_or_else(|e| e.into_inner());
+        let tracks = self
+            .track_positions
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
+        let mut objs: HashSet<usize> = HashSet::new();
+        objs.extend(parked.iter().copied());
+        objs.extend(psn.iter().copied());
+        objs.extend(held.iter().copied());
+        objs.extend(manual.keys().copied());
+        objs.extend(tracks.keys().map(|&t| t as usize));
+        let frozen_attn = self
+            .attention_frozen
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
+        for s in moves.values() {
+            objs.extend(s.track_indices.iter().copied());
+        }
+        let mut out = HashMap::with_capacity(objs.len());
+        for &obj in &objs {
+            let src = if parked.contains(&obj) {
+                "park"
+            } else if psn.contains(&obj) {
+                "psn"
+            } else if held.contains(&obj) {
+                "hold"
+            } else if frozen_attn.contains(&obj) {
+                "freeze"
+            } else if manual.contains_key(&obj) {
+                "manual"
+            } else if moves
+                .values()
+                .any(|s| s.is_active && s.track_indices.contains(&obj))
+            {
+                "move"
+            } else {
+                "track"
+            };
+            out.insert(obj, src.to_string());
+        }
+        out
+    }
+
+    /// Handle partagé des dernières positions émises — injecté dans le
+    /// worker pour `AnchorMode::Follow` (origine suit la cible par frame).
+    pub fn last_positions_handle(&self) -> Arc<RwLock<HashMap<usize, [f64; 3]>>> {
+        // Le worker (Follow) travaille en espace canonique — handle sur la
+        // map pré-pp, pas sur last_out (post-macro).
+        self.last_canonical_positions.clone()
+    }
+
+    /// Dernière position monde connue d'un objet — source des ancres
+    /// `AnchorMode::Current`. Ordre : canonique pré-pp (émission merge,
+    /// manuelles incluses) → manuelle → origine track → None (jamais vu).
+    pub fn last_position(&self, obj: usize) -> Option<[f64; 3]> {
+        if let Some(p) = self
+            .last_canonical_positions
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&obj)
+        {
+            return Some(*p);
+        }
+        if let Some(p) = self
+            .manual_positions
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&obj)
+        {
+            return Some(*p);
+        }
+        self.track_positions
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&(obj as u32))
+            .copied()
     }
 
     /// Règle le poids d'un move actif — fade effectif = fade × weight
@@ -987,18 +1590,35 @@ impl MergeRuntime {
         let post_process_fn_arc = self.post_process_fn.clone();
         let track_positions_arc = self.track_positions.clone();
         let manual_positions_arc = self.manual_positions.clone();
+        let move_end_modes_arc = self.move_end_modes.clone();
+        let last_out_positions_arc = self.last_out_positions.clone();
+        let last_effective_channels_arc = self.last_effective_channels.clone();
+        let last_canonical_arc = self.last_canonical_positions.clone();
+        let held_objects_arc = self.held_objects.clone();
+        let venue_map_arc = self.venue_map.clone();
+        let perceptual_arc = self.perceptual.clone();
+        let distance_reality_arc = self.distance_reality.clone();
+        let thrown_arc = self.thrown.clone();
+        let spatial_comp_arc = self.spatial_compression.clone();
+        let tape_rec_arc = self.tape_recording.clone();
+        let pos_tape_arc = self.pos_tape.clone();
+        let tape_play_arc = self.tape_play.clone();
         let object_channels_arc = self.object_channels.clone();
         let zones_arc = self.zones.clone();
         let channel_modulations_arc = self.channel_modulations.clone();
         let kinematic_smoothing_arc = self.kinematic_smoothing.clone();
         let graph_zones_arc = self.graph_zones.clone();
         let graph_modulations_arc = self.graph_modulations.clone();
-        let barycenter_pivot_arc = self.barycenter_pivot.clone();
         let move_ref_id_arc = self.move_ref_id.clone();
         let stale_kill_ids = self.stale_kill_ids.clone();
         let signal_fn_arc = self.signal_fn.clone();
+        let output_layer_arc = self.output_layer.clone();
         let osc_values_arc = self.osc_values.clone();
 
+        let mut prev_transformed: HashMap<usize, nalgebra::Vector3<f64>> = HashMap::new();
+        let mut prev_perceptual_instant: Option<Instant> = None;
+        let mut tape_frame_ctr: u64 = 0;
+        let mut tape_t0: Option<Instant> = None;
         let handle = std::thread::spawn(move || {
             let mut start = Instant::now();
             let frame_duration = Duration::from_secs_f64(1.0 / fps);
@@ -1057,6 +1677,52 @@ impl MergeRuntime {
                     .map(|p| (frame_start - p).as_secs_f64().max(1e-6))
                     .unwrap_or_else(|| frame_duration.as_secs_f64());
                 prev_frame = Some(frame_start);
+
+                // Position tape replay — avance le curseur et injecte
+                // les entrées échues en positions manuelles (rythme
+                // réel, timing backend).
+                {
+                    let mut play = tape_play_arc.write().unwrap_or_else(|e| e.into_inner());
+                    if let Some((start, entries, cursor)) = play.as_mut() {
+                        let elapsed = start.elapsed().as_secs_f64();
+                        let mut manual = manual_positions_arc
+                            .write()
+                            .unwrap_or_else(|e| e.into_inner());
+                        while *cursor < entries.len() && entries[*cursor].0 <= elapsed {
+                            for (obj, pos) in &entries[*cursor].1 {
+                                manual.insert(*obj, *pos);
+                            }
+                            *cursor += 1;
+                        }
+                        if *cursor >= entries.len() {
+                            *play = None; // bande finie
+                        }
+                    }
+                }
+
+                // Grab & throw : intègre les lancés — pos += v·dt avec
+                // amortissement ; |v| < eps → position manuelle au repos.
+                {
+                    let mut thrown = thrown_arc.write().unwrap_or_else(|e| e.into_inner());
+                    if !thrown.is_empty() {
+                        let damp = (-2.0 * dt).exp(); // ~amortissement 2/s
+                        let mut manual = manual_positions_arc
+                            .write()
+                            .unwrap_or_else(|e| e.into_inner());
+                        thrown.retain(|obj, vel| {
+                            if let Some(p) = manual.get_mut(obj) {
+                                p[0] += vel[0] * dt;
+                                p[1] += vel[1] * dt;
+                                p[2] += vel[2] * dt;
+                            }
+                            vel[0] *= damp;
+                            vel[1] *= damp;
+                            vel[2] *= damp;
+                            let speed2 = vel[0] * vel[0] + vel[1] * vel[1] + vel[2] * vel[2];
+                            speed2 > 1e-4 // retiré quand quasi-arrêté
+                        });
+                    }
+                }
 
                 // 1. Lire tous les buffers (read lock très court)
                 let buffers = timed_lock!(
@@ -1148,6 +1814,32 @@ impl MergeRuntime {
                             ));
                             state.is_active = false;
                             moves_to_remove.push(move_id.clone());
+                            // EndMode::Hold — figer les dernières positions
+                            // du buffer en positions manuelles : l'objet
+                            // reste où le move l'a laissé (sémantique
+                            // « continue » au lieu du retour à la base).
+                            if move_end_modes_arc
+                                .read()
+                                .unwrap_or_else(|e| e.into_inner())
+                                .get(move_id)
+                                .is_some_and(|m| *m == crate::EndMode::Hold)
+                            {
+                                if let Some(buf) = buffers.get(move_id) {
+                                    let positions = buf.read();
+                                    let mut mp = manual_positions_arc
+                                        .write()
+                                        .unwrap_or_else(|e| e.into_inner());
+                                    for (i, (_, pos)) in positions.iter().enumerate() {
+                                        if let Some(&track) = state.track_indices.get(i) {
+                                            mp.insert(track, [pos.x, pos.y, pos.z]);
+                                            held_objects_arc
+                                                .write()
+                                                .unwrap_or_else(|e| e.into_inner())
+                                                .insert(track);
+                                        }
+                                    }
+                                }
+                            }
                             // Audit C5 : publier l'ID + le buffer (test
                             // d'identité côté superviseur) pour arrêter
                             // réellement le thread worker — sinon il
@@ -1247,16 +1939,42 @@ impl MergeRuntime {
                         "move_buffers.write",
                         move_buffers.write().unwrap_or_else(|e| e.into_inner())
                     );
+                    let mut end_modes = move_end_modes_arc
+                        .write()
+                        .unwrap_or_else(|e| e.into_inner());
                     for id in &moves_to_remove {
-                        bufs.remove(id);
+                        // TOCTOU (revue des fixs F2) : le move_id a pu être
+                        // réenregistré entre la suppression de active_moves
+                        // et ici — ne supprimer buffer/end_mode que si c'est
+                        // ENCORE le buffer observé stale, sinon on tue le
+                        // nouveau move (buffers.get → None → jamais mergé,
+                        // jamais stale-killé = blackout silencieux).
+                        let same_buffer = match (bufs.get(id), buffers.get(id)) {
+                            (Some(cur), Some(observed)) => Arc::ptr_eq(cur, observed),
+                            (None, _) => true, // rien à protéger
+                            (Some(_), None) => false,
+                        };
+                        if same_buffer {
+                            bufs.remove(id);
+                            // Sans ça un Hold stale survivrait : id réutilisé
+                            // en Revert + stale-kill → Hold appliqué à tort.
+                            // Couplée à same_buffer : le end_mode d'un move
+                            // réenregistré appartient au nouveau, pas au stale.
+                            end_modes.remove(id);
+                        }
                     }
                 }
 
-                // Idle : aucun move live ni preview → sauter le travail lourd,
-                // mais garder la boucle vivante (liveness observable via
-                // merge_frames) ET le pacing — sans sleep ici la boucle
+                // Idle : aucun move live ni preview NI position manuelle →
+                // sauter le travail lourd. Des manual_positions seules DOIVENT
+                // émettre (reprise opérateur/PSN/tape/throw : l'opérateur peut
+                // reprendre un objet sans move). Sans sleep ici la boucle
                 // spinne à 100% CPU et martèle les locks.
-                if move_positions.is_empty() && preview_positions.is_empty() {
+                let manual_empty = manual_positions_arc
+                    .read()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .is_empty();
+                if move_positions.is_empty() && preview_positions.is_empty() && manual_empty {
                     frame_count += 1;
                     let target_time = frame_count as u128 * frame_duration.as_nanos();
                     let current_time = start.elapsed().as_nanos();
@@ -1291,7 +2009,11 @@ impl MergeRuntime {
                     merge_strategy_arc.read().unwrap_or_else(|e| e.into_inner())
                 );
                 // merge_positions trie ses candidats par move_id → déterministe.
+                // full_merged = le merge complet, avant MoveRef — last_canonical
+                // (anchors/attention/throw/tape) doit couvrir TOUS les objets,
+                // pas seulement celui du move référencé.
                 let merged = merge_positions(&move_positions, strategy);
+                let full_merged = merged.clone();
 
                 // MoveRef (audit T2) : un node MoveRef avec `move_id`
                 // déclaré dans le graph global remplace la source — la
@@ -1299,7 +2021,7 @@ impl MergeRuntime {
                 // move. Move absent → positions vides (pas de fallback
                 // silencieux sur le merge complet : le graphe demande
                 // explicitement ce move).
-                let merged = {
+                let mut merged = {
                     let move_ref = timed_lock!(
                         lock_wait_ns,
                         lock_sites,
@@ -1345,21 +2067,6 @@ impl MergeRuntime {
                         .unwrap_or_else(|e| e.into_inner())
                 )
                 .clone();
-                // Barycenter (audit T2) : le node recalcule le pivot =
-                // isobarycentre des track_positions à chaque frame — les
-                // transforms pivotent autour du centre réel du groupe.
-                let origin =
-                    if barycenter_pivot_arc.load(Ordering::SeqCst) && !track_positions.is_empty() {
-                        let n = track_positions.len() as f64;
-                        track_positions
-                            .values()
-                            .fold(nalgebra::Vector3::zeros(), |acc, p| {
-                                acc + nalgebra::Vector3::new(p[0], p[1], p[2])
-                            })
-                            / n
-                    } else {
-                        origin
-                    };
                 let manual_positions = timed_lock!(
                     lock_wait_ns,
                     lock_sites,
@@ -1370,6 +2077,34 @@ impl MergeRuntime {
                         .unwrap_or_else(|e| e.into_inner())
                 )
                 .clone();
+
+                // Objets en manual_positions hors merge (aucun move ne les
+                // couvre) : reprise opérateur / PSN / tape / throw doivent
+                // émettre même sans move live. Injecté DANS merged avant le
+                // post-process → mêmes macros + sanitize que les objets
+                // couverts (injecter en sortie post-sanitize laissait passer
+                // du NaN et sautait l'espace macro — revue des fixs F1).
+                for (obj_idx, pos) in manual_positions.iter() {
+                    if !merged.iter().any(|(i, _)| i == obj_idx) {
+                        merged.push((*obj_idx, nalgebra::Vector3::new(pos[0], pos[1], pos[2])));
+                    }
+                }
+
+                // Positions canoniques pré-post-process — full_merged ∪ manual
+                // (manual gagne, comme le pp). Graine des anchors/freeze/
+                // throw : seed depuis last_out (post-macro) double-transforme.
+                // full_merged (pas merged filtré par MoveRef) — sinon les
+                // seeds perdent tous les objets hors move référencé.
+                {
+                    let mut canonical: HashMap<usize, [f64; 3]> = full_merged
+                        .iter()
+                        .map(|(i, p)| (*i, [p.x, p.y, p.z]))
+                        .collect();
+                    canonical.extend(manual_positions.iter().map(|(i, p)| (*i, *p)));
+                    *last_canonical_arc
+                        .write()
+                        .unwrap_or_else(|e| e.into_inner()) = canonical;
+                }
                 let audio_state = timed_lock!(
                     lock_wait_ns,
                     lock_sites,
@@ -1384,7 +2119,7 @@ impl MergeRuntime {
                 // La base (panel/OSC/cue) n'est jamais écrasée — couche
                 // additive pure, les transforms lisent `ctx.macros` sans
                 // changement.
-                let eff_macros = {
+                let signal_deltas = {
                     let mut signal = timed_lock!(
                         lock_wait_ns,
                         lock_sites,
@@ -1415,11 +2150,15 @@ impl MergeRuntime {
                             osc_values: &osc_vals,
                         })
                     };
-                    if deltas.is_empty() {
-                        None
-                    } else {
-                        Some(crate::signal_compiler::macro_with_deltas(&macros, &deltas))
-                    }
+                    deltas
+                };
+                let eff_macros = if signal_deltas.macros.is_empty() {
+                    None
+                } else {
+                    Some(crate::signal_compiler::macro_with_deltas(
+                        &macros,
+                        &signal_deltas.macros,
+                    ))
                 };
 
                 let ctx = PostProcessContext {
@@ -1432,7 +2171,25 @@ impl MergeRuntime {
                     track_depths: &track_depths,
                 };
 
-                let transformed_raw: Vec<(usize, nalgebra::Vector3<f64>)> = {
+                // Transition de recall en cours ? Snapshot de l'arbre —
+                // `Live` = chemin classique inchangé ; un Blend terminé
+                // retombe à Live (l'arbre n'accumule rien).
+                let layer_snap = {
+                    let mut g = timed_lock!(
+                        lock_wait_ns,
+                        lock_sites,
+                        lock_profiling,
+                        "output_layer.lock",
+                        output_layer_arc.lock().unwrap_or_else(|e| e.into_inner())
+                    );
+                    if transition::layer_finished(&g) {
+                        *g = transition::Layer::Live;
+                    }
+                    g.clone()
+                };
+                let transition_active = !matches!(layer_snap, transition::Layer::Live);
+                // Les valeurs propres vivent ici (référencées par LiveInputs).
+                let transition_owned = if transition_active {
                     let pp_fn = timed_lock!(
                         lock_wait_ns,
                         lock_sites,
@@ -1441,14 +2198,119 @@ impl MergeRuntime {
                         post_process_fn_arc
                             .read()
                             .unwrap_or_else(|e| e.into_inner())
-                    );
-                    pp_fn(&ctx, merged)
+                    )
+                    .clone();
+                    let live_channels = timed_lock!(
+                        lock_wait_ns,
+                        lock_sites,
+                        lock_profiling,
+                        "object_channels.read",
+                        object_channels_arc
+                            .read()
+                            .unwrap_or_else(|e| e.into_inner())
+                    )
+                    .clone();
+                    let live_zones: Vec<crate::zones::Zone> = {
+                        let mut z = (**timed_lock!(
+                            lock_wait_ns,
+                            lock_sites,
+                            lock_profiling,
+                            "graph_zones.read",
+                            graph_zones_arc.read().unwrap_or_else(|e| e.into_inner())
+                        ))
+                        .clone();
+                        z.extend(
+                            timed_lock!(
+                                lock_wait_ns,
+                                lock_sites,
+                                lock_profiling,
+                                "zones.read",
+                                zones_arc.read().unwrap_or_else(|e| e.into_inner())
+                            )
+                            .iter()
+                            .cloned(),
+                        );
+                        z
+                    };
+                    let live_mods: Vec<ChannelModulation> = {
+                        let mut m = (**timed_lock!(
+                            lock_wait_ns,
+                            lock_sites,
+                            lock_profiling,
+                            "graph_modulations.read",
+                            graph_modulations_arc
+                                .read()
+                                .unwrap_or_else(|e| e.into_inner())
+                        ))
+                        .clone();
+                        m.extend(
+                            timed_lock!(
+                                lock_wait_ns,
+                                lock_sites,
+                                lock_profiling,
+                                "channel_modulations.read",
+                                channel_modulations_arc
+                                    .read()
+                                    .unwrap_or_else(|e| e.into_inner())
+                            )
+                            .iter()
+                            .cloned(),
+                        );
+                        m
+                    };
+                    Some((pp_fn, live_channels, live_zones, live_mods))
+                } else {
+                    None
                 };
+                let live_common = transition_owned.as_ref().map(|_| transition::EvalCommon {
+                    t: t_real,
+                    audio_state: &audio_state,
+                    track_positions: &track_positions,
+                    macros_deltas: &signal_deltas.macros,
+                });
+                let live_layer =
+                    transition_owned
+                        .as_ref()
+                        .map(|(pp_fn, ch, zo, mo)| transition::LiveInputs {
+                            post_process_fn: pp_fn,
+                            macros: eff_macros.as_ref().unwrap_or_else(|| macros.as_ref()),
+                            manual_positions: &manual_positions,
+                            track_depths: &track_depths,
+                            object_channels: ch,
+                            zones: zo,
+                            modulations: mo,
+                            origin,
+                        });
+
+                let transformed_raw: Vec<(usize, nalgebra::Vector3<f64>)> =
+                    match (&live_layer, &live_common) {
+                        (Some(live), Some(common)) => {
+                            // Transition : positions = blend des feuilles
+                            // (chaque feuille = son propre post-process /
+                            // macros / manual / depths / origin).
+                            transition::eval_positions_tree(&layer_snap, live, &merged, common)
+                        }
+                        _ => {
+                            let pp_fn = timed_lock!(
+                                lock_wait_ns,
+                                lock_sites,
+                                lock_profiling,
+                                "post_process_fn.read",
+                                post_process_fn_arc
+                                    .read()
+                                    .unwrap_or_else(|e| e.into_inner())
+                            );
+                            // `merged` est consommé ici — les bras
+                            // transition/preview qui le relisent sont
+                            // mutuellement exclusifs avec le bras Live.
+                            pp_fn(&ctx, std::mem::take(&mut merged))
+                        }
+                    };
 
                 // Sanitize : une position NaN/inf ne doit jamais partir en OSC
                 // (f64::clamp ne panique pas ici — on droppe l'objet). Le
                 // compteur dropped_positions rend la perte observable.
-                let transformed: Vec<(usize, nalgebra::Vector3<f64>)> = transformed_raw
+                let mut transformed: Vec<(usize, nalgebra::Vector3<f64>)> = transformed_raw
                     .into_iter()
                     .filter(|(_, pos)| {
                         if pos.iter().all(|v| v.is_finite()) {
@@ -1459,6 +2321,9 @@ impl MergeRuntime {
                         }
                     })
                     .collect();
+
+                // (last_out est écrit dans le gate osc_armed — il doit
+                // refléter les envois réellement tentés, pas le computed.)
 
                 // 4.5 Cinématique : vitesse/accélération/jerk sur les positions
                 // finales (celles réellement envoyées au renderer), dt réel
@@ -1507,6 +2372,82 @@ impl MergeRuntime {
                     kinematic_states.retain(|idx, _| present.contains(idx));
                 } else if !kinematic_states.is_empty() {
                     kinematic_states.clear();
+                }
+                // Vu-mètre perceptuel — vitesses par frame sur `transformed`
+                // (espace canonique — ce que l'opérateur perçoit, pas le
+                // payload venue-mappé).
+                {
+                    let now = Instant::now();
+                    let dt = prev_perceptual_instant
+                        .map(|p: Instant| (now - p).as_secs_f64())
+                        .unwrap_or(0.0);
+                    if dt > 1e-3 {
+                        let mut metrics = PerceptualMetrics::default();
+                        let mut pos_count = 0usize;
+                        let mut same_sign = 0usize;
+                        let mut dominant = 0i32;
+                        for (obj_idx, pos) in &transformed {
+                            let Some(prev) = prev_transformed.get(obj_idx) else {
+                                continue;
+                            };
+                            let v = (pos - prev) / dt;
+                            let r = pos.norm();
+                            if r < 0.01 {
+                                continue;
+                            }
+                            let radial = v.dot(pos) / r;
+                            let tangential = (v - pos * (radial / r)).norm();
+                            metrics
+                                .legibility_deg_s
+                                .insert(*obj_idx, (tangential / r).to_degrees());
+                            if -radial > metrics.looming_ms {
+                                metrics.looming_ms = -radial;
+                            }
+                            let az = pos.x * v.y - pos.y * v.x; // composante azimutale
+                            if az.abs() > 1e-4 {
+                                pos_count += 1;
+                                let s = if az > 0.0 { 1 } else { -1 };
+                                if dominant == 0 {
+                                    dominant = s;
+                                }
+                                if s == dominant {
+                                    same_sign += 1;
+                                }
+                            }
+                        }
+                        metrics.vection = if pos_count > 0 {
+                            same_sign as f64 / pos_count as f64
+                        } else {
+                            0.0
+                        };
+                        *perceptual_arc.write().unwrap_or_else(|e| e.into_inner()) = metrics;
+                    }
+                    prev_transformed = transformed.iter().map(|(i, p)| (*i, *p)).collect();
+                    prev_perceptual_instant = Some(now);
+                }
+                // Position tape record — snapshot décimé (~30Hz) des
+                // positions émises (t depuis le début de la bande).
+                if tape_rec_arc.load(std::sync::atomic::Ordering::Relaxed) {
+                    tape_frame_ctr = tape_frame_ctr.wrapping_add(1);
+                    if tape_frame_ctr.is_multiple_of(2) {
+                        let t = tape_t0
+                            .map(|t0| t0.elapsed().as_secs_f64())
+                            .unwrap_or_else(|| {
+                                tape_t0 = Some(Instant::now());
+                                0.0
+                            });
+                        // On enregistre le canonique pré-pp — sinon le
+                        // replay en manual_positions subirait les macros
+                        // une seconde fois (double-transform).
+                        let snap: HashMap<usize, [f64; 3]> = last_canonical_arc
+                            .read()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .clone();
+                        pos_tape_arc
+                            .write()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .push((t, snap));
+                    }
                 }
                 // Règles = graph-déclarées puis manuelles — les manuelles
                 // écrasent le graph sur les canaux qu'elles ciblent.
@@ -1560,6 +2501,64 @@ impl MergeRuntime {
                     z
                 };
 
+                // 4.6b Effets positionnels des zones (repel/attract/dampen/
+                // vortex) — déplacement blendé par l'influence SDF sur la
+                // position mergée. Objets sous override opérateur exclus :
+                // positions manuelles + hold gardent priorité — un effet ne
+                // doit JAMAIS déplacer ce que l'opérateur tient (même
+                // sémantique que le panic, qui épargne les overrides).
+                // Court-circuit : aucune zone à effet → coût nul.
+                if zones.iter().any(|z| z.effect.is_some()) {
+                    let held = timed_lock!(
+                        lock_wait_ns,
+                        lock_sites,
+                        lock_profiling,
+                        "held_objects.read",
+                        held_objects_arc.read().unwrap_or_else(|e| e.into_inner())
+                    );
+                    let manual = timed_lock!(
+                        lock_wait_ns,
+                        lock_sites,
+                        lock_profiling,
+                        "manual_positions.read",
+                        manual_positions_arc
+                            .read()
+                            .unwrap_or_else(|e| e.into_inner())
+                    );
+                    for (obj_idx, pos) in transformed.iter_mut() {
+                        if held.contains(obj_idx) || manual.contains_key(obj_idx) {
+                            continue;
+                        }
+                        let d = crate::zones::zone_displacement(&zones, *obj_idx, pos);
+                        if d.norm() > 0.0 {
+                            *pos += d;
+                            // Post-transform NaN/inf : le clamp MAX_ZONE_
+                            // DISPLACEMENT borne la norme mais un strength
+                            // infini glissé dans les données casserait —
+                            // on garde la position canonique dans ce cas.
+                            if !pos.iter().all(|v| v.is_finite()) {
+                                *pos -= d;
+                            }
+                        }
+                    }
+                }
+
+                // Transition : canaux effectifs = blend des feuilles —
+                // chaque feuille évalue statiques ⊕ modulations ⊕ zones sur
+                // SES positions ; les deux côtés partagent `kinematic_states`
+                // (déjà à jour sur les positions blendées).
+                let eff_channels_override: Option<HashMap<usize, SpatialChannels>> =
+                    match (&live_layer, &live_common) {
+                        (Some(live), Some(common)) => Some(transition::eval_channels_tree(
+                            &layer_snap,
+                            live,
+                            &merged,
+                            common,
+                            &kinematic_states,
+                        )),
+                        _ => None,
+                    };
+
                 // 5. Output — le sink est locké pour la frame entière : les
                 // sends par objet sont non-bloquants (~µs), et un set_sink
                 // mid-show ne peut pas swaper en plein milieu d'une frame.
@@ -1597,7 +2596,28 @@ impl MergeRuntime {
                             if let Some(&(obj_idx, pos)) =
                                 transformed.iter().find(|(i, _)| osc_ids.get(*i).is_some())
                             {
-                                let report = sink_guard.send_state(osc_ids[obj_idx], pos, None);
+                                // En circuit ouvert, seule la sonde part —
+                                // last_out ne doit pas prétendre que tout
+                                // `transformed` a été tenté (revue F3).
+                                last_out_positions_arc
+                                    .write()
+                                    .unwrap_or_else(|e| e.into_inner())
+                                    .insert(obj_idx, [pos.x, pos.y, pos.z]);
+                                let report = sink_guard.send_state(
+                                    osc_ids[obj_idx],
+                                    venue_map_arc
+                                        .read()
+                                        .unwrap_or_else(|e| e.into_inner())
+                                        .map(|(s, o, yaw)| {
+                                            let (c, sn) = (yaw.cos(), yaw.sin());
+                                            let (x, y) =
+                                                (pos.x * c - pos.y * sn, pos.x * sn + pos.y * c);
+                                            [x * s[0] + o[0], y * s[1] + o[1], pos.z * s[2] + o[2]]
+                                        })
+                                        .unwrap_or([pos.x, pos.y, pos.z])
+                                        .into(),
+                                    None,
+                                );
                                 if report.sent > 0 && report.refused == 0 && report.errors == 0 {
                                     osc_circuit_open = false;
                                     osc_bad_windows = 0;
@@ -1608,30 +2628,111 @@ impl MergeRuntime {
                             }
                         }
                     } else {
+                        // Positions réellement tentées — la confidence view
+                        // ne montre que ce qui part au renderer (dry-run et
+                        // circuit ouvert = rien n'est émis, last_out se fige).
+                        {
+                            let mut last_out = last_out_positions_arc
+                                .write()
+                                .unwrap_or_else(|e| e.into_inner());
+                            for (obj, pos) in &transformed {
+                                last_out.insert(*obj, [pos.x, pos.y, pos.z]);
+                            }
+                        }
                         for (obj_idx, pos) in &transformed {
                             if let Some(&osc_id) = osc_ids.get(*obj_idx) {
                                 // Canaux effectifs = statiques + modulés (modulation
                                 // prioritaire sur les canaux qu'elle cible) + zones
                                 // (blend par influence, prioritaires sur le reste)
-                                let has_zones =
-                                    crate::zones::any_zone_applies(&zones, *obj_idx, pos);
-                                let effective: Option<SpatialChannels> = match (
-                                    object_channels.get(obj_idx),
-                                    modulated_channels.get(obj_idx),
-                                    has_zones,
-                                ) {
-                                    (None, None, false) => None,
-                                    (s, m, _) => {
-                                        let mut eff = s.copied().unwrap_or_default();
-                                        if let Some(mc) = m {
-                                            eff.overlay(mc);
+                                let effective: Option<SpatialChannels> =
+                                    if let Some(over) = &eff_channels_override {
+                                        over.get(obj_idx).copied()
+                                    } else {
+                                        let has_zones =
+                                            crate::zones::any_zone_applies(&zones, *obj_idx, pos);
+                                        match (
+                                            object_channels.get(obj_idx),
+                                            modulated_channels.get(obj_idx),
+                                            has_zones,
+                                        ) {
+                                            (None, None, false) => None,
+                                            (s, m, _) => {
+                                                let mut eff = s.copied().unwrap_or_default();
+                                                if let Some(mc) = m {
+                                                    eff.overlay(mc);
+                                                }
+                                                crate::zones::apply_zones(
+                                                    &zones, *obj_idx, pos, &mut eff,
+                                                );
+                                                Some(eff)
+                                            }
                                         }
-                                        crate::zones::apply_zones(&zones, *obj_idx, pos, &mut eff);
-                                        Some(eff)
+                                    };
+                                // Readback opérateur — les canaux FX calculés
+                                // (statiques ⊕ modulés ⊕ zones) rendent l'effet
+                                // visible sans écouter le rendu.
+                                {
+                                    let mut ec = last_effective_channels_arc
+                                        .write()
+                                        .unwrap_or_else(|e| e.into_inner());
+                                    match &effective {
+                                        Some(e) => {
+                                            ec.insert(*obj_idx, *e);
+                                        }
+                                        None => {
+                                            ec.remove(obj_idx);
+                                        }
                                     }
+                                }
+                                let report = {
+                                    // Auto-venue + réalité-distance : seul
+                                    // le payload OSC est transformé —
+                                    // zones/canaux évalués sur `pos`
+                                    // canonique (correct).
+                                    let reality = *distance_reality_arc
+                                        .read()
+                                        .unwrap_or_else(|e| e.into_inner());
+                                    let r = pos.norm();
+                                    let mut send_pos = venue_map_arc
+                                        .read()
+                                        .unwrap_or_else(|e| e.into_inner())
+                                        .map(|(s, o, yaw)| {
+                                            let (c, sn) = (yaw.cos(), yaw.sin());
+                                            let (x, y) =
+                                                (pos.x * c - pos.y * sn, pos.x * sn + pos.y * c);
+                                            nalgebra::Vector3::new(
+                                                x * s[0] + o[0],
+                                                y * s[1] + o[1],
+                                                pos.z * s[2] + o[2],
+                                            )
+                                        })
+                                        .unwrap_or(*pos);
+                                    let mut eff_out = effective;
+                                    if let Some((ex, ga, al)) = reality {
+                                        // Exagération géométrique — la
+                                        // distance perçue compresse ~×0.7 :
+                                        // pousser les objets lointains pour
+                                        // retrouver l'échelle perçue.
+                                        send_pos *= r.max(1.0).powf(ex);
+                                        let eff = eff_out.get_or_insert_with(Default::default);
+                                        // distance → DRR renderer (reverb)
+                                        eff.distance = Some(r);
+                                        // gain 1/(1+a·r) — atténuation
+                                        eff.gain = Some(eff.gain.unwrap_or(1.0) / (1.0 + ga * r));
+                                        // presence e^(-air·r) — air-EQ
+                                        if let Some(p) = eff.presence {
+                                            eff.presence = Some(p * (-al * r).exp());
+                                        }
+                                    }
+                                    // Dynamique spatiale — le compresseur
+                                    // spatial global (k<1 resserre le champ).
+                                    let k =
+                                        *spatial_comp_arc.read().unwrap_or_else(|e| e.into_inner());
+                                    if (k - 1.0).abs() > 1e-6 {
+                                        send_pos *= k;
+                                    }
+                                    sink_guard.send_state(osc_id, send_pos, eff_out.as_ref())
                                 };
-                                let report =
-                                    sink_guard.send_state(osc_id, *pos, effective.as_ref());
                                 osc_since_perf += report.sent as u64;
                                 osc_errors_perf += report.errors as u64;
                                 osc_refused_perf += report.refused as u64;
@@ -1661,17 +2762,30 @@ impl MergeRuntime {
                         if preview_positions.is_empty() {
                             Vec::new()
                         } else {
-                            let pp_fn = timed_lock!(
-                                lock_wait_ns,
-                                lock_sites,
-                                lock_profiling,
-                                "post_process_fn.read",
-                                post_process_fn_arc
-                                    .read()
-                                    .unwrap_or_else(|e| e.into_inner())
-                            );
-                            pp_fn(&ctx, preview_positions.clone())
-                                .into_iter()
+                            let raw = match (&live_layer, &live_common) {
+                                // Parité : le preview suit le même blend
+                                // de layers que le live pendant une
+                                // transition (sinon le 3D ment).
+                                (Some(live), Some(common)) => transition::eval_positions_tree(
+                                    &layer_snap,
+                                    live,
+                                    &preview_positions,
+                                    common,
+                                ),
+                                _ => {
+                                    let pp_fn = timed_lock!(
+                                        lock_wait_ns,
+                                        lock_sites,
+                                        lock_profiling,
+                                        "post_process_fn.read",
+                                        post_process_fn_arc
+                                            .read()
+                                            .unwrap_or_else(|e| e.into_inner())
+                                    );
+                                    pp_fn(&ctx, preview_positions.clone())
+                                }
+                            };
+                            raw.into_iter()
                                 .filter(|(_, pos)| pos.iter().all(|v| v.is_finite()))
                                 .collect()
                         };
@@ -1822,15 +2936,31 @@ impl MergeRuntime {
                     );
                     // Parking : envoyer l'origin à toutes les tracks (même
                     // comportement que le panic côté app) avant de mourir.
-                    {
+                    // Mêmes contrats que la boucle d'envoi : dry-run = rien
+                    // ne part, et venue_map s'applique (salle adaptée).
+                    if osc_armed_arc.load(Ordering::SeqCst) {
                         let origin = *origin_arc.lock().unwrap_or_else(|e| e.into_inner());
+                        let send_origin = venue_map_arc
+                            .read()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .map(|(s, o, yaw)| {
+                                let (c, sn) = (yaw.cos(), yaw.sin());
+                                let (x, y) =
+                                    (origin.x * c - origin.y * sn, origin.x * sn + origin.y * c);
+                                nalgebra::Vector3::new(
+                                    x * s[0] + o[0],
+                                    y * s[1] + o[1],
+                                    origin.z * s[2] + o[2],
+                                )
+                            })
+                            .unwrap_or(origin);
                         let ids = osc_ids_arc
                             .read()
                             .unwrap_or_else(|e| e.into_inner())
                             .clone();
                         let mut sink_guard = sink_arc.lock().unwrap_or_else(|e| e.into_inner());
                         for osc_id in ids.iter() {
-                            let _ = sink_guard.send_state(*osc_id, origin, None);
+                            let _ = sink_guard.send_state(*osc_id, send_origin, None);
                         }
                     }
                     let cb = position_callback

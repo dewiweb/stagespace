@@ -4,6 +4,7 @@ import type { GraphNode } from '../components/nodeParamSchema';
 import type { NodeType } from '../types/generated/NodeType';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { safeSetItem, safeParseStoredJson } from '../utils/safeStorage';
+import { migrateStoredGraph } from '../utils/graphMigration';
 
 // ─── Helpers ───
 
@@ -17,7 +18,7 @@ const makeNode = (type: NodeType, position: { x: number; y: number }, params: Re
   data: { label: type, type, params },
 });
 
-const makeEdge = (from: string, to: string, fromPort = 'output', toPort = 'input'): Edge => ({
+const makeEdge = (from: string, to: string, fromPort = 'out', toPort = 'in'): Edge => ({
   id: `${from}-${to}`,
   source: from,
   target: to,
@@ -31,8 +32,8 @@ const makeEdge = (from: string, to: string, fromPort = 'output', toPort = 'input
 // radius_scale → height_offset → per_track_depth → scale → rotate → offset → output
 
 export function buildDefaultGlobalGraph(): { nodes: GraphNode[]; edges: Edge[] } {
-  const input = makeNode('Input', { x: 50, y: 250 }, { label: 'Merged Positions' });
-  input.data.type = 'Input';
+  const input = makeNode('Merge', { x: 50, y: 250 }, { label: 'Merged Positions' });
+  input.data.type = 'Merge';
   input.data.label = 'Merged';
 
   // ManualPosition first — override positions from drag 3D
@@ -73,7 +74,7 @@ interface GlobalGraphState {
   toggleEnabled: () => void;
 
   // Compiler et pousser le graph global au backend
-  pushGlobalGraph: () => Promise<void>;
+  pushGlobalGraph: () => Promise<boolean>;
 
   // Reset au graph par défaut
   resetToDefault: () => void;
@@ -83,17 +84,10 @@ const STORAGE_KEY = 'stagespace-global-graph-v4';
 
 function loadFromStorage(): { nodes: GraphNode[]; edges: Edge[] } | null {
   const parsed = safeParseStoredJson<{ nodes: GraphNode[]; edges: Edge[] } | null>(STORAGE_KEY, null);
-  if (!parsed?.nodes || !parsed?.edges) return null;
-  // Validation : vérifier que tous les edges référencent des nodes existants
-  const nodeIds = new Set(parsed.nodes.map((n: GraphNode) => n.id));
-  const validEdges = parsed.edges.filter(
-    (e: Edge) => nodeIds.has(e.source) && nodeIds.has(e.target),
-  );
-  if (validEdges.length !== parsed.edges.length) {
-    console.warn('[globalGraph] Cached graph has invalid edges, discarding');
-    return null;
-  }
-  return { nodes: parsed.nodes, edges: parsed.edges };
+  // Migre les types renommés (Input→Merge), drop les inconnus et les
+  // edges orphelins — un graphe stale doit se réparer, pas spammer des
+  // toasts ParseError à chaque push.
+  return migrateStoredGraph(parsed, 'globalGraph');
 }
 
 function saveToStorage(nodes: GraphNode[], edges: Edge[]) {
@@ -142,7 +136,7 @@ export const useGlobalGraphStore = create<GlobalGraphState>((set, get) => ({
 
   pushGlobalGraph: async () => {
     const { nodes, edges, isGlobalGraphEnabled } = get();
-    if (!isGlobalGraphEnabled) return;
+    if (!isGlobalGraphEnabled) return true;
 
     // Préparer le graph pour le backend — format React Flow (data.type, data.params)
     // Le parser Rust (build_graph_from_json) attend ce format
@@ -161,8 +155,8 @@ export const useGlobalGraphStore = create<GlobalGraphState>((set, get) => ({
         id: e.id,
         source: e.source,
         target: e.target,
-        sourceHandle: e.sourceHandle ?? 'output',
-        targetHandle: e.targetHandle ?? 'input',
+        sourceHandle: e.sourceHandle ?? 'out',
+        targetHandle: e.targetHandle ?? 'in',
       })),
     };
 
@@ -175,11 +169,13 @@ export const useGlobalGraphStore = create<GlobalGraphState>((set, get) => ({
       const { holProject, manualOscIds } = useGraphStore.getState();
       const origin = computeCentroid(holProject, [], manualOscIds);
       await invoke('set_global_origin', { origin });
+      return true;
     } catch (e) {
       console.error('[pushGlobalGraph] Failed:', e);
       // Le post-process global ne correspond plus à l'éditeur — critique en live.
       const { toast } = await import('../utils/toast-helpers');
       toast.error(`Global graph push failed — post-processing may be stale: ${e}`);
+      return false;
     }
   },
 

@@ -64,10 +64,11 @@ export interface UseRenderLoopParams {
   holProject: HolProject | null;
   drawnPoints: DrawnPointsValue;
   draggingObjectRef: MutableRefObject<number | null>;
-  manualPositions: Record<number, [number, number, number]>;
   // Pour signaler l'échec WebGL
   setWebglFailed: (v: boolean) => void;
   dimensions: { width: number; height: number };
+  /// Incrémenté pour forcer une ré-init (bouton Retry après échec WebGL).
+  initKey?: number;
 }
 
 /**
@@ -97,15 +98,14 @@ export function useRenderLoop({
   holProject,
   drawnPoints,
   draggingObjectRef,
-  manualPositions,
   setWebglFailed,
+  initKey = 0,
 }: UseRenderLoopParams) {
   // Refs internes pour les valeurs changeantes — lues dans le render loop à 60fps
   const macrosRef = useRef(macros);
   const manipulateModeRef = useRef(manipulateMode);
   const holProjectRef = useRef(holProject);
   const drawnPointsRef = useRef(drawnPoints);
-  const manualPositionsRef = useRef(manualPositions);
   const lastDrawnKeyRef = useRef('');
 
   // Sync des refs à chaque render React (cheap — pas d'effet de bord)
@@ -113,7 +113,6 @@ export function useRenderLoop({
   manipulateModeRef.current = manipulateMode;
   holProjectRef.current = holProject;
   drawnPointsRef.current = drawnPoints;
-  manualPositionsRef.current = manualPositions;
 
   // Init scene — ne se déclenche qu'une seule fois (deps = [])
   // Les dimensions initiales sont lues directement depuis le container
@@ -337,9 +336,14 @@ export function useRenderLoop({
             // toute la scène cyan, on ne distinguait plus ce qui était on air).
             const isPreviewTrack = previewTracks.has(objIdx) && !liveTracks.has(objIdx);
             const isHighlighted = highlightedTracks.has(objIdx);
+            const isSelected = storeState.selectedObjIndex === objIdx;
             if (isPreviewTrack) {
               mat.color.setHex(0x00ccff);
               mat.emissive.setHex(0x003344);
+            } else if (isSelected) {
+              // Parité radar : l'objet sélectionné (clic proximité) reçoit
+              // le même highlight visible — emissive blanc au lieu de l'anneau.
+              mat.emissive.setHex(0x555555);
             } else if (isHighlighted) {
               // Track du move sélectionné : emissive renforcé (blanc chaud)
               mat.emissive.setHex(0x664400);
@@ -362,8 +366,7 @@ export function useRenderLoop({
             }
           } else {
             // Pas de position pour cet objet → manualPositions (statique)
-            const manualPos = manualPositionsRef.current;
-            const mp = manualPos[objIdx];
+            const mp = storeState.manualPositions[objIdx];
             if (mp) {
               const [tx, ty, tz] = toThree(mp[0], mp[1], mp[2]);
               mesh.position.set(tx, ty, tz);
@@ -386,9 +389,20 @@ export function useRenderLoop({
         // ── Mode statique : aucun move actif, OU positions pas encore arrivées
         // (transition après GO/recall — on montre les positions manuelles
         // plutôt qu'un flash de scène vide) ──
-        const manualPos = manualPositionsRef.current;
+        const manualPos = storeState.manualPositions;
         const manipMode = manipulateModeRef.current;
-        const showObjects = manipMode || mvts.length > 0;
+        // Les modes qui cliquent sur les objets (assign) ou les placent
+        // dans l'espace (zones) ont besoin de LES VOIR — sinon ils opèrent
+        // à l'aveugle sur une scène vide quand aucun move ne tourne.
+        const needsObjects =
+          manipMode ||
+          storeState.assignMode ||
+          storeState.zonePlaceMode ||
+          storeState.zoneEditMode ||
+          // Draw aussi : on dessine une trajectoire AUTOUR des objets —
+          // une scène vide rendrait le geste aveugle.
+          storeState.drawMode;
+        const showObjects = needsObjects || mvts.length > 0;
         objs.forEach((mesh) => { hideMeshAndLabels(mesh); });
         if (showObjects) {
           objs.forEach((mesh, i) => {
@@ -399,8 +413,10 @@ export function useRenderLoop({
             if (p) {
               const [tx, ty, tz] = toThree(p[0], p[1], p[2]);
               mesh.position.set(tx, ty, tz);
-              showMeshAndLabels(mesh);
             }
+            // Sans position manuelle l'objet garde sa position spawn —
+            // affiché quand même : assign/zones doivent viser ce qui existe.
+            if (p || needsObjects) showMeshAndLabels(mesh);
           });
         }
       }
@@ -588,5 +604,6 @@ export function useRenderLoop({
       setWebglFailed(true);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // ← deps vide : la scène n'est créée qu'une fois. Le ResizeObserver gère les resize.
+  }, [initKey]); // ← la scène n'est créée qu'une fois par initKey (Retry WebGL
+  // incrémente → cleanup + ré-init). Le ResizeObserver gère les resize.
 }

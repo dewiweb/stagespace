@@ -48,6 +48,17 @@ pub struct ActivateMoveRequest {
     /// slots elles vont au merge global via `set_global_macro` (sémantique
     /// "appliquées au lancement" — un double report créerait un transform ×2).
     pub animation: Option<Animation>,
+    /// Fin de one-shot : "revert" (défaut) ou "hold" (fige la dernière
+    /// position en position manuelle — sémantique continue).
+    #[serde(default)]
+    pub end_mode: stagespace_engines::EndMode,
+    /// Ancre : "origin" (défaut) ou "current" (capture la position
+    /// courante de chaque objet — chaînage sans saut).
+    #[serde(default)]
+    pub anchor_mode: stagespace_engines::AnchorMode,
+    /// Cible du mode "follow" — la track dont l'origine suit la position.
+    #[serde(default)]
+    pub anchor_target: Option<u32>,
 }
 
 /// Spec complet pour créer un worker move — partagé entre activate_move,
@@ -77,6 +88,12 @@ pub struct MoveSpec {
     /// Graph de modulation per-move (domaine signal → deltas de macros).
     /// Compilé au spawn puis swappé sur le worker (`runtime.swap_signal_fn`).
     pub signal_graph: Option<stagespace_engines::GraphJson>,
+    /// Fin de one-shot : Revert (défaut) ou Hold (fige en position manuelle).
+    pub end_mode: stagespace_engines::EndMode,
+    /// Ancre : Origin (défaut) ou Current (capture la position courante).
+    pub anchor_mode: stagespace_engines::AnchorMode,
+    /// Cible du mode Follow — la track suivie (None = pas de follow).
+    pub anchor_target: Option<u32>,
 }
 
 /// Macros spatiales initiales d'un worker (système Animation).
@@ -266,21 +283,74 @@ fn spawn_move_inner(
         })?
     };
 
+    // 1b. Engines stateful (physique) : un t décroissant force un reset +
+    //    re-simulation à chaque frame (O(t·n²)) → le worker rampe puis meurt
+    //    en stale-kill. Backward/PingPong et le phase spread (t différent
+    //    par objet) déclenchent ce re-sim — refus explicite au spawn.
+    if graph
+        .nodes
+        .values()
+        .any(|n| stagespace_engines::node_spec::node_spec(&n.node_type).stateful)
+    {
+        let spread = spec
+            .animation_state
+            .as_ref()
+            .map(|a| a.track_phase_offsets.iter().any(|o| o.abs() > 1e-9))
+            .unwrap_or(false);
+        if spec.direction != PlayDirection::Forward || spread {
+            return Err(IpcError::validation(
+                "Physics engines (stateful) cannot run backward, ping-pong or with phase spread — every backward eval re-simulates from t=0".to_string(),
+            ));
+        }
+    }
+
+    // 1c. spec.duration (durée du wrap du worker) vs durée résolue du
+    //    graphe (param propre > node Duration > propagation composites) :
+    //    si le graphe demande plus (ex. Sequence a+b), le wrap tronquait
+    //    la branche B — on prend le max.
+    let mut spec = spec;
+    if let Some(resolved) = stagespace_engines::Compiler::resolved_cycle_duration(&graph) {
+        if resolved > spec.duration {
+            spec.duration = resolved;
+        }
+    }
+
     // 2. Créer le worker Runtime — pas de socket propre : les positions
     //    partent dans le PositionBuffer, l'OSC est envoyé uniquement par
     //    le MergeRuntime via son PositionSink.
     // L'AudioState maître est injecté — le worker lit l'état audio à jour à
     // chaque frame sans propagation par polling (une seule source de vérité).
-    let runtime = Runtime::new_with_audio_state(sh.audio_state.clone());
+    let mut runtime = Runtime::new_with_audio_state(sh.audio_state.clone());
 
     // 3. Compiler avec toutes les entrées live : audio, valeurs OSC reçues
     //    (nodes OSCInput lisent extra["osc_value"] — sans handle ils
     //    produisent un cercle statique) et registry de plugins WASM
     //    (nodes Plugin → params.plugin_id).
-    let compiled = compile_graph_live(&graph, sh).map_err(|e| {
+    // Table de slots de params modulables — une seule par compile, partagée
+    // entre position_fn, sample_fn et la signal_fn du move (binding
+    // compile-time des cibles `param:`).
+    let slots = stagespace_engines::param_slots::ParamSlots::build(&graph);
+    let compiled = compile_graph_live(
+        &graph,
+        sh,
+        Some(slots.clone()),
+        Some(runtime.held_positions()),
+    )
+    .map_err(|e| {
         eprintln!("[ACTIVATE-ERROR] compile_graph failed: {e}");
         IpcError::validation(e)
     })?;
+    // Instance jetable pour le TrajectorySampler — les evals de preview
+    // n'avancent pas sim_t des engines stateful de la fn live. Partage la
+    // même table de slots (read-only) : le preview reflète la modulation.
+    if let Ok(sample_fn) = compile_graph_live(
+        &graph,
+        sh,
+        Some(slots.clone()),
+        Some(runtime.held_positions()),
+    ) {
+        runtime.set_sample_fn(sample_fn);
+    }
 
     // 4. Configurer le worker
     runtime.set_preview_mode(spec.is_preview);
@@ -307,22 +377,55 @@ fn spawn_move_inner(
         None => lock_or_recover(&sh.merge_runtime).origin(),
     };
     runtime.set_origin(move_origin);
+    // AnchorMode::Current — capture par index LOCAL : last_position du
+    // track global correspondant (le worker émet en index local, le merge
+    // remappe vers les tracks via track_indices).
+    if spec.anchor_mode == stagespace_engines::AnchorMode::Current {
+        let merge_rt = lock_or_recover(&sh.merge_runtime);
+        let captured: std::collections::HashMap<usize, nalgebra::Vector3<f64>> = spec
+            .track_indices
+            .iter()
+            .enumerate()
+            .filter_map(|(local, &global)| {
+                merge_rt
+                    .last_position(global)
+                    .map(|p| (local, nalgebra::Vector3::new(p[0], p[1], p[2])))
+            })
+            .collect();
+        if !captured.is_empty() {
+            runtime.set_anchor_capture(captured);
+        }
+    }
+    // AnchorMode::Follow — l'origine suit la dernière position émise de la
+    // track cible à chaque frame. Injecte le handle last_out du merge.
+    if spec.anchor_mode == stagespace_engines::AnchorMode::Follow {
+        let merge_rt = lock_or_recover(&sh.merge_runtime);
+        runtime.set_last_positions_handle(merge_rt.last_positions_handle());
+        runtime.set_anchor_follow(spec.anchor_target.map(|t| t as usize));
+    }
     if let Some(anim_state) = spec.animation_state {
         runtime.set_animation_state(anim_state);
     }
 
     // Signal graph per-move : branche le cache OSC (source SignalOsc —
     // l'Arc interne peut être re-pointé après un rebind du receiver) puis
-    // compile + swap la SignalFn (deltas additifs sur les macros du move).
+    // compile + swap la SignalFn liée à la table de slots (les cibles
+    // `param:` sont résolues à la compile — erreurs explicites).
     runtime.set_osc_values_handle(lock_or_recover(&sh.osc_receiver).address_values_handle());
-    if let Some(ref sig_json) = spec.signal_graph {
-        let audio_state = lock_or_recover(&sh.audio_state);
-        let sig_graph = build_graph_from_json(sig_json, &audio_state)
-            .map_err(|e| IpcError::validation(format!("Signal graph parse failed: {e}")))?;
-        drop(audio_state);
-        let sig_fn = stagespace_engines::compile_signal_graph(&sig_graph)
-            .map_err(|e| IpcError::validation(format!("Signal graph compile failed: {e:?}")))?;
-        runtime.swap_signal_fn(sig_fn);
+    {
+        let sig_fn = match spec.signal_graph {
+            Some(ref sig_json) => {
+                let audio_state = lock_or_recover(&sh.audio_state);
+                let sig_graph = build_graph_from_json(sig_json, &audio_state)
+                    .map_err(|e| IpcError::validation(format!("Signal graph parse failed: {e}")))?;
+                drop(audio_state);
+                stagespace_engines::compile_move_signal_graph(&sig_graph, &graph, &slots).map_err(
+                    |e| IpcError::validation(format!("Signal graph compile failed: {e:?}")),
+                )?
+            }
+            None => stagespace_engines::empty_signal_fn(),
+        };
+        runtime.swap_signal_fn(sig_fn, slots);
     }
 
     // 5. PositionBuffer → mode worker (le merge thread collecte les positions)
@@ -386,6 +489,9 @@ fn spawn_move_inner(
                 loop_mode: loop_mode_str,
                 direction: direction_str,
                 origin: spec.origin,
+                end_mode: spec.end_mode,
+                anchor_mode: spec.anchor_mode,
+                anchor_target: spec.anchor_target,
                 generation,
             },
         );
@@ -401,6 +507,7 @@ fn spawn_move_inner(
             spec.osc_ids.clone(),
             spec.track_indices.clone(),
             spec.is_preview,
+            spec.end_mode,
         );
         // L'origin du move est passée au WORKER (runtime.set_origin, étape 4)
         // — le merge garde SON origin globale (set_global_origin, centroïde
@@ -485,6 +592,9 @@ pub async fn activate_move(
             .animation
             .as_ref()
             .and_then(|a| a.signal_graph.clone()),
+        end_mode: request.end_mode,
+        anchor_mode: request.anchor_mode,
+        anchor_target: request.anchor_target,
     };
     let sh = Shared::from_state(&state);
     tauri::async_runtime::spawn_blocking(move || spawn_move(spec, &sh))
@@ -625,6 +735,12 @@ pub async fn deactivate_all_moves(
     state: State<'_, AppState>,
 ) -> Result<String, IpcError> {
     let fade = fade_duration.unwrap_or(0.5);
+
+    // Panic beat — un recall en cours doit détecter ça et s'avorter
+    // avant de respawner (le panic gagne toujours).
+    state
+        .deactivate_gen
+        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
     // Snapshot (id, génération) — le sleeper ne tuera que ces instances-là.
     let move_entries: Vec<(String, u64)> = {

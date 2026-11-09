@@ -1,6 +1,11 @@
 import React from 'react';
 import { TriangleAlert } from 'lucide-react';
 import { useGraphStore } from '../store/useGraphStore';
+import { useMoveEditorStore } from '../store/useMoveEditorStore';
+import { useOscArmed } from '../hooks/useOscArmed';
+import { useShowStatusStore } from '../store/useShowStatusStore';
+import { useCuelistStore } from '../store/useCuelistStore';
+import { doPanic } from '../utils/liveActions';
 
 /// StatusBar — bandeau persistant en bas de fenêtre, monté dans App pour
 /// TOUS les modes (Edit et Perform). C'est la console de monitoring moteur :
@@ -8,7 +13,7 @@ import { useGraphStore } from '../store/useGraphStore';
 /// + topbar Perform) laissait les infos vitales démontées en mode live.
 ///
 /// Volontairement compacte (h-7) : elle informe, elle n'actionne pas —
-/// le PANIC reste dans la Toolbar/Perform top bar.
+/// PANIC vit ici — global, toutes surfaces (Toolbar = Atelier seul).
 export const StatusBar: React.FC = () => {
   // Sélecteurs granulaires — perfStats rafraîchit à 2 Hz pendant le play.
   const movements = useGraphStore((s) => s.movements);
@@ -20,6 +25,12 @@ export const StatusBar: React.FC = () => {
   const clearPlayError = useGraphStore((s) => s.clearPlayError);
   const oscAddress = useGraphStore((s) => s.oscAddress);
   const oscPort = useGraphStore((s) => s.oscPort);
+  const [armed] = useOscArmed();
+  const flowHealth = useGraphStore((s) => s.flowHealth);
+  const perceptual = useGraphStore((s) => s.perceptual);
+  const debugPerfVisible = useMoveEditorStore((s) => s.debugPerfVisible);
+  const backendDown = useShowStatusStore((s) => s.backendDown);
+  const isRecalling = useCuelistStore((s) => s.isRecalling);
 
   const activeCount = movements.length;
   const hasError = !!(compileError || playError);
@@ -41,11 +52,108 @@ export const StatusBar: React.FC = () => {
 
   return (
     <footer className="h-7 flex items-center gap-3 px-3 border-t border-stagespace-border bg-stagespace-panel flex-shrink-0 text-xs select-none">
+      {/* PANIC — arrêt d'urgence, global sur toutes les surfaces (le
+          bouton Toolbar n'existe qu'en Atelier : le panic du show ne doit
+          jamais dépendre de la phase de travail). */}
+      <button
+        onClick={() => doPanic()}
+        className="px-3 py-0.5 rounded bg-red-700 hover:bg-red-600 text-white text-[10px] font-black tracking-wider flex-shrink-0"
+        title="PANIC — stop all + positions d'origine (Esc)"
+      >
+        PANIC
+      </button>
+
       {/* Statut moteur */}
       <div className="flex items-center gap-1.5 flex-shrink-0">
         <span className={`w-2 h-2 rounded-full ${statusColor}`} />
         <span className="text-gray-300 font-medium">{statusLabel}</span>
       </div>
+
+      {/* État arm/disarm — LA métrique de sécurité live : un dry-run sans
+          indicateur visible est un silence réseau impossible à diagnostiquer. */}
+      <span
+        className={`px-1.5 py-0.5 rounded font-bold flex-shrink-0 ${
+          armed
+            ? 'text-red-300 bg-red-900/40 border border-red-700/40'
+            : 'text-emerald-400 bg-emerald-900/40 border border-emerald-700/40 animate-pulse'
+        }`}
+        title={armed ? 'OSC LIVE — positions attempted; UDP cannot confirm delivery (a powered-off renderer host stays invisible)' : 'DRY-RUN — OSC muted, nothing is sent'}
+      >
+        {armed ? 'LIVE' : 'DRY-RUN'}
+      </span>
+
+      {/* Recall en cours — le backend supprime les /stagespace/* entrants
+          (hors panic) : sans cet indicateur, un desk dont les commandes
+          sont avalées jusqu'à 120s ressemble à un bug. */}
+      {isRecalling && (
+        <span
+          className="px-1.5 py-0.5 rounded font-bold flex-shrink-0 text-purple-300 bg-purple-900/40 border border-purple-700/40 animate-pulse"
+          title="Cue recall in progress — incoming show-control commands are suppressed (except panic)"
+        >
+          RECALL
+        </span>
+      )}
+
+      {/* Santé des flux — PSN tracking + last show-cmd (inclut TC). Un flux
+          mort en silence = un follow-me gelé sans alerte : visible en
+          permanence, pas en toast. */}
+      {flowHealth.psnRunning && (
+        <span
+          className={`px-1.5 py-0.5 rounded font-bold flex-shrink-0 border ${
+            flowHealth.psnAge != null && flowHealth.psnAge < 2000
+              ? 'text-purple-300 bg-purple-900/40 border-purple-700/40'
+              : 'text-amber-300 bg-amber-900/40 border-amber-700/40 animate-pulse'
+          }`}
+          title={flowHealth.psnAge != null ? `PSN tracking — dernière trame il y a ${flowHealth.psnAge}ms` : 'PSN actif, aucune trame reçue'}
+        >
+          {flowHealth.psnAge != null && flowHealth.psnAge < 2000 ? 'PSN ●' : 'PSN ✕'}
+        </span>
+      )}
+      {flowHealth.showCmdAgeS != null && flowHealth.showCmdAgeS < 10 && (
+        <span
+          className="px-1.5 py-0.5 rounded font-bold flex-shrink-0 text-cyan-300 bg-cyan-900/40 border border-cyan-700/40"
+          title={`Show-control OSC actif — dernière commande il y a ${flowHealth.showCmdAgeS.toFixed(1)}s (toute commande, pas spécifiquement le timecode)`}
+        >
+          OSC ●
+        </span>
+      )}
+
+      {/* Vu-mètre perceptuel — legibility (vitesse angulaire perçue,
+          >5°/s = illisible), looming (approche rapide), vection (champ
+          tournant en bloc). Calculé à 60fps côté merge. */}
+      {(() => {
+        const leg = Math.max(0, ...Object.values(perceptual.legibility_deg_s));
+        const parts: { label: string; warn: boolean; tip: string }[] = [];
+        if (leg > 0.1)
+          parts.push({ label: `${leg.toFixed(0)}°/s`, warn: leg > 5, tip: 'legibility — vitesse angulaire max perçue (MAMA)' });
+        if (perceptual.looming_ms > 0.3)
+          parts.push({ label: `loom ${perceptual.looming_ms.toFixed(1)}`, warn: perceptual.looming_ms > 3, tip: 'looming — vitesse d\'approche max (m/s)' });
+        if (perceptual.vection > 0.7)
+          parts.push({ label: `vec ${Math.round(perceptual.vection * 100)}%`, warn: true, tip: 'vection — champ en rotation cohérente' });
+        return parts.length > 0 ? (
+          <span
+            className={`px-1.5 py-0.5 rounded font-mono flex-shrink-0 border ${
+              parts.some((p) => p.warn)
+                ? 'text-amber-300 bg-amber-900/40 border-amber-700/40'
+                : 'text-gray-400 bg-gray-800/40 border-gray-700/40'
+            }`}
+            title={parts.map((p) => p.tip).join(' · ')}
+          >
+            {parts.map((p) => p.label).join(' ')}
+          </span>
+        ) : null;
+      })()}
+
+      {/* Backend absent — un silentCatch a avalé un échec IPC. Plus de
+          backend = plus d'OSC, plus de recall, plus rien : visible partout. */}
+      {backendDown && (
+        <span
+          className="px-1.5 py-0.5 rounded font-bold flex-shrink-0 text-red-300 bg-red-950/60 border border-red-800 animate-pulse"
+          title="Une commande backend a échoué silencieusement — le moteur ne répond probablement plus"
+        >
+          BACKEND ✕
+        </span>
+      )}
 
       {/* Perf en direct — visible dès qu'un mouvement tourne */}
       {activeCount > 0 && perfStats && (
@@ -53,28 +161,37 @@ export const StatusBar: React.FC = () => {
           <span className={perfStats.fps >= 55 ? 'text-green-400' : perfStats.fps >= 30 ? 'text-yellow-400' : 'text-red-400'}>
             {perfStats.fps.toFixed(0)} FPS
           </span>
-          <span className={perfStats.oscErrorRate > 0.05 ? 'text-red-400' : 'text-cyan-400'}>
+          <span
+            className={perfStats.oscErrorRate > 0.05 ? 'text-red-400' : 'text-cyan-400'}
+            title="OSC packets attempted — send() succeeding does NOT prove delivery. Only a refused port (OSC SUSPENDED) is detectable; a dead/offline renderer host is invisible to UDP."
+          >
             {perfStats.oscRate.toFixed(0)} osc/s
           </span>
           <span className={perfStats.cpuPercent < 50 ? 'text-gray-400' : 'text-yellow-400'}>
             {perfStats.cpuPercent.toFixed(0)}% cpu
           </span>
-          <span
-            className={perfStats.mergeFrameUs < 2000 ? 'text-gray-400' : perfStats.mergeFrameUs < 8000 ? 'text-yellow-400' : 'text-red-400'}
-            title="Temps de travail réel de la frame merge (µs) — budget 16.6ms"
-          >
-            {perfStats.mergeFrameUs < 1000
-              ? `${perfStats.mergeFrameUs.toFixed(0)}µs`
-              : `${(perfStats.mergeFrameUs / 1000).toFixed(1)}ms`} merge
-          </span>
-          <span
-            className={perfStats.mergeLockUs < 100 ? 'text-gray-500' : perfStats.mergeLockUs < 500 ? 'text-yellow-400' : 'text-red-400'}
-            title="Temps d'attente cumulé en acquisition de locks pendant la frame merge (µs) — contention"
-          >
-            {perfStats.mergeLockUs < 1000
-              ? `${perfStats.mergeLockUs.toFixed(0)}µs`
-              : `${(perfStats.mergeLockUs / 1000).toFixed(1)}ms`} lock
-          </span>
+          {/* Télémétrie dev (merge/lock µs) — gatée derrière debugPerfVisible :
+              utile au bench, pas à l'opérateur en live. */}
+          {debugPerfVisible && (
+            <>
+              <span
+                className={perfStats.mergeFrameUs < 2000 ? 'text-gray-400' : perfStats.mergeFrameUs < 8000 ? 'text-yellow-400' : 'text-red-400'}
+                title="Temps de travail réel de la frame merge (µs) — budget 16.6ms"
+              >
+                {perfStats.mergeFrameUs < 1000
+                  ? `${perfStats.mergeFrameUs.toFixed(0)}µs`
+                  : `${(perfStats.mergeFrameUs / 1000).toFixed(1)}ms`} merge
+              </span>
+              <span
+                className={perfStats.mergeLockUs < 100 ? 'text-gray-500' : perfStats.mergeLockUs < 500 ? 'text-yellow-400' : 'text-red-400'}
+                title="Temps d'attente cumulé en acquisition de locks pendant la frame merge (µs) — contention"
+              >
+                {perfStats.mergeLockUs < 1000
+                  ? `${perfStats.mergeLockUs.toFixed(0)}µs`
+                  : `${(perfStats.mergeLockUs / 1000).toFixed(1)}ms`} lock
+              </span>
+            </>
+          )}
           {perfStats.oscSuspended && (
             <span className="text-orange-400 font-bold animate-pulse">OSC SUSPENDED</span>
           )}
@@ -100,8 +217,8 @@ export const StatusBar: React.FC = () => {
       <div className="flex-1" />
 
       {/* Destination OSC — rappel discret de où partent les positions */}
-      <span className="text-gray-500 font-mono flex-shrink-0" title="OSC output destination">
-        → {oscAddress}:{oscPort}
+      <span className="text-gray-500 font-mono flex-shrink-0" title="OSC output destination — UDP: delivery unverified; OSC SUSPENDED only fires on refused port, not on a dead host">
+        → {oscAddress}:{oscPort} ·unverified
       </span>
       <span className="text-gray-400 font-mono flex-shrink-0" title="STAGESPACE version">
         v{__APP_VERSION__}

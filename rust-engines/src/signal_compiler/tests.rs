@@ -43,7 +43,7 @@ fn edge(from: &Node, to: &Node, to_port: &str) -> Edge {
     Edge {
         from: from.id,
         to: to.id,
-        from_port: "output".to_string(),
+        from_port: "out".to_string(),
         to_port: to_port.to_string(),
     }
 }
@@ -92,7 +92,7 @@ fn lfo_to_out_produces_oscillating_delta() {
     for i in 0..16 {
         let c = ctx(i as f64 / 16.0, &audio);
         let d = f(&c);
-        let v = d.get("yaw").copied().unwrap_or(0.0);
+        let v = d.macros.get("yaw").copied().unwrap_or(0.0);
         if v > 10.0 {
             seen_pos = true;
         }
@@ -118,7 +118,7 @@ fn const_source_and_amount() {
     let mut f = compile_signal_graph(&g).expect("compiles");
     let c0 = ctx(0.0, &audio);
     let d = f(&c0);
-    assert!((d["scale"] - 0.5).abs() < 1e-9, "2.0 * 0.25 = 0.5");
+    assert!((d.macros["scale"] - 0.5).abs() < 1e-9, "2.0 * 0.25 = 0.5");
 }
 
 #[test]
@@ -148,7 +148,11 @@ fn math_chain_composition() {
     let mut f = compile_signal_graph(&g).expect("compiles");
     let c = ctx(0.25, &audio); // sin(π/2) = 1 → 0.5 + 0.8 = 1.3
     let d = f(&c);
-    assert!((d["yaw"] - 1.3).abs() < 1e-9, "got {}", d["yaw"]);
+    assert!(
+        (d.macros["yaw"] - 1.3).abs() < 1e-9,
+        "got {}",
+        d.macros["yaw"]
+    );
 }
 
 #[test]
@@ -168,7 +172,7 @@ fn map_and_clamp() {
     g.add_edge(edge(&map, &out, "signal"));
     let mut f = compile_signal_graph(&g).expect("compiles");
     let c0 = ctx(0.0, &audio);
-    assert!((f(&c0)["pitch"]).abs() < 1e-9, "0.5 → 0 en [-90,90]");
+    assert!((f(&c0).macros["pitch"]).abs() < 1e-9, "0.5 → 0 en [-90,90]");
 }
 
 #[test]
@@ -196,14 +200,14 @@ fn envelope_follower_asymmetric() {
     let mut last = 0.0;
     for _ in 0..10 {
         let c = ctx(0.0, &loud);
-        last = f(&c)["scale"];
+        last = f(&c).macros["scale"];
     }
     assert!(last > 0.9, "attack doit approcher 1, got {last}");
 
     // rms = 0 → release lente : après quelques frames, encore > 0.5
     let quiet = audio_with(0.0, 0.0);
     let c = ctx(0.0, &quiet);
-    let v = f(&c)["scale"];
+    let v = f(&c).macros["scale"];
     assert!(v > 0.5, "release lente, got {v}");
 }
 
@@ -226,7 +230,7 @@ fn slew_limits_step() {
     let mut f = compile_signal_graph(&g).expect("compiles");
 
     let c = ctx(1.0, &audio); // input = 100, dt = 1/60 → step = 10/60
-    let v = f(&c)["scale"];
+    let v = f(&c).macros["scale"];
     assert!(
         (v - 10.0 / 60.0).abs() < 1e-9,
         "step limité à rate*dt, got {v}"
@@ -250,10 +254,10 @@ fn threshold_hysteresis() {
     g.add_edge(edge(&th, &out, "signal"));
     let mut f = compile_signal_graph(&g).expect("compiles");
     let c0 = ctx(0.0, &audio);
-    assert_eq!(f(&c0)["scale"], 1.0, "0.52 > 0.5 → 1");
+    assert_eq!(f(&c0).macros["scale"], 1.0, "0.52 > 0.5 → 1");
     // l'état persiste tant que > 0.4 — signal identique → toujours 1
     let c1 = ctx(0.016, &audio);
-    assert_eq!(f(&c1)["scale"], 1.0);
+    assert_eq!(f(&c1).macros["scale"], 1.0);
 }
 
 #[test]
@@ -279,7 +283,7 @@ fn osc_source_reads_values() {
         audio_state: &audio,
         osc_values: &osc,
     };
-    assert!((f(&c)["yaw"] - 0.75).abs() < 1e-9);
+    assert!((f(&c).macros["yaw"] - 0.75).abs() < 1e-9);
 }
 
 #[test]
@@ -298,9 +302,17 @@ fn random_deterministic() {
     let mut fa = compile_signal_graph(&g).expect("a");
     let mut fb = compile_signal_graph(&g).expect("b");
     let c = ctx(3.7, &audio);
-    assert_eq!(fa(&c)["scale"], fb(&c)["scale"], "même seed → même valeur");
+    assert_eq!(
+        fa(&c).macros["scale"],
+        fb(&c).macros["scale"],
+        "même seed → même valeur"
+    );
     let c2 = ctx(3.8, &audio);
-    assert_ne!(fa(&c)["scale"], fb(&c2)["scale"], "le bruit varie avec t");
+    assert_ne!(
+        fa(&c).macros["scale"],
+        fb(&c2).macros["scale"],
+        "le bruit varie avec t"
+    );
 }
 
 #[test]
@@ -318,7 +330,7 @@ fn multiple_sinks_sum_to_same_target() {
     g.add_edge(edge(&c2, &o2, "signal"));
     let mut f = compile_signal_graph(&g).expect("compiles");
     let c = ctx(0.0, &audio);
-    assert!((f(&c)["yaw"] - 15.0).abs() < 1e-9, "10 + 5 = 15");
+    assert!((f(&c).macros["yaw"] - 15.0).abs() < 1e-9, "10 + 5 = 15");
 }
 
 #[test]
@@ -342,7 +354,7 @@ fn non_finite_signal_dropped() {
     let c = ctx(0.0, &audio);
     let deltas = f(&c);
     // div by zero → 0.0 (guard), pas de NaN
-    let v = deltas.get("scale").copied().unwrap_or(0.0);
+    let v = deltas.macros.get("scale").copied().unwrap_or(0.0);
     assert!(v.is_finite());
 }
 
@@ -357,5 +369,5 @@ fn audio_band_sources() {
     g.add_edge(edge(&bass, &out, "signal"));
     let mut f = compile_signal_graph(&g).expect("compiles");
     let c = ctx(0.0, &audio);
-    assert!((f(&c)["scale"] - 0.9).abs() < 1e-9);
+    assert!((f(&c).macros["scale"] - 0.9).abs() < 1e-9);
 }
