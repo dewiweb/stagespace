@@ -307,7 +307,14 @@ function AppMain() {
             // Même convention que PERFORM/Edit : le bouton affiche la
             // CIBLE, la couleur signale le mode courant.
             <button
-              onClick={() => setShowExpert(!showExpert)}
+              onClick={() => {
+                const next = !showExpert;
+                setShowExpert(next);
+                // Entrer en Expert = intention d'éditer le graphe — activer
+                // le Focus directement (le split 50/50 écrase le canvas
+                // React Flow ; la 3D reste à un clic via Focus).
+                if (next) setEditorFocus(true);
+              }}
               className={`px-3 py-1 text-xs font-bold rounded transition-all flex items-center gap-1.5 ${
                 showExpert ? 'bg-gray-800 text-gray-400 hover:text-white' : 'bg-purple-600 text-white'
               }`}

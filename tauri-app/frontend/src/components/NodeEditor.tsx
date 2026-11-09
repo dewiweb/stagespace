@@ -63,7 +63,14 @@ export const NodeEditor: React.FC = () => {
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   // Palette repliable — QuickAdd couvre l'ajout rapide ; la palette sert
   // la découverte. Repliée elle rend ~220px au canvas en split expert.
-  const [paletteCollapsed, setPaletteCollapsed] = useState(false);
+  // État persisté : sans ça elle repartait dépliée à chaque session et
+  // écrasait le canvas en split (240px de palette pour ~430px de colonne).
+  const [paletteCollapsed, _setPaletteCollapsed] = useState(() =>
+    localStorage.getItem('stagespace:node-palette-collapsed') === '1');
+  const setPaletteCollapsed = useCallback((v: boolean) => {
+    _setPaletteCollapsed(v);
+    localStorage.setItem('stagespace:node-palette-collapsed', v ? '1' : '0');
+  }, []);
 
   // Tab: "sub" = graph du slot édité, "global" = graph global (post-processing),
   // "signal" = graph de modulation (domaine scalaire → deltas de macros)
