@@ -88,8 +88,156 @@
   }
  ],
  "globalGraph": {
-  "nodes": [],
-  "edges": []
+  "nodes": [
+   {
+    "id": "merge-g",
+    "type": "custom",
+    "position": {
+     "x": 0,
+     "y": 110
+    },
+    "data": {
+     "label": "Merge",
+     "type": "Merge",
+     "params": {
+      "strategy": "crossfade"
+     }
+    }
+   },
+   {
+    "id": "rs-g",
+    "type": "custom",
+    "position": {
+     "x": 220,
+     "y": 110
+    },
+    "data": {
+     "label": "RadiusScale",
+     "type": "RadiusScale",
+     "params": {
+      "radius_scale": 1.0
+     }
+    }
+   },
+   {
+    "id": "off-g",
+    "type": "custom",
+    "position": {
+     "x": 420,
+     "y": 110
+    },
+    "data": {
+     "label": "Offset",
+     "type": "Offset",
+     "params": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+     }
+    }
+   },
+   {
+    "id": "zone-g",
+    "type": "custom",
+    "position": {
+     "x": 620,
+     "y": 30
+    },
+    "data": {
+     "label": "Zone",
+     "type": "Zone",
+     "params": {
+      "shape": "sphere",
+      "center": [
+       0,
+       0,
+       0
+      ],
+      "radius": 2.5,
+      "falloff": 0.8,
+      "channels": {
+       "spread": 1
+      },
+      "enabled": true
+     }
+    }
+   },
+   {
+    "id": "vel-g",
+    "type": "custom",
+    "position": {
+     "x": 620,
+     "y": 190
+    },
+    "data": {
+     "label": "Velocity",
+     "type": "Velocity",
+     "params": {
+      "source": "speed",
+      "channel": "spread",
+      "scale": 0.12,
+      "offset": 0,
+      "min": 0,
+      "max": 1,
+      "listener": [
+       0,
+       0,
+       0
+      ]
+     }
+    }
+   },
+   {
+    "id": "out-g",
+    "type": "custom",
+    "position": {
+     "x": 620,
+     "y": 110
+    },
+    "data": {
+     "label": "Output",
+     "type": "Output",
+     "params": {}
+    }
+   }
+  ],
+  "edges": [
+   {
+    "id": "merge-g-rs-g-in",
+    "source": "merge-g",
+    "target": "rs-g",
+    "sourceHandle": "out",
+    "targetHandle": "in"
+   },
+   {
+    "id": "rs-g-off-g-in",
+    "source": "rs-g",
+    "target": "off-g",
+    "sourceHandle": "out",
+    "targetHandle": "in"
+   },
+   {
+    "id": "off-g-zone-g-in",
+    "source": "off-g",
+    "target": "zone-g",
+    "sourceHandle": "out",
+    "targetHandle": "in"
+   },
+   {
+    "id": "off-g-vel-g-in",
+    "source": "off-g",
+    "target": "vel-g",
+    "sourceHandle": "out",
+    "targetHandle": "in"
+   },
+   {
+    "id": "off-g-out-g-in",
+    "source": "off-g",
+    "target": "out-g",
+    "sourceHandle": "out",
+    "targetHandle": "in"
+   }
+  ]
  },
  "slots": [
   {
@@ -1633,7 +1781,21 @@
     "macros": true,
     "osc_mappings": true
    },
-   "timecode": 0.0
+   "timecode": 0.0,
+   "timestamp": 0,
+   "macros": null,
+   "global_graph": null,
+   "signal_graph": null,
+   "per_track_depths": [],
+   "manual_positions": {},
+   "spatial_macros": null,
+   "object_channels": {},
+   "follow": null,
+   "pre_wait": null,
+   "graph": null,
+   "channel_modulations": null,
+   "zones": null,
+   "osc_mappings": null
   },
   {
    "id": "cue-d3",
@@ -1775,7 +1937,21 @@
     "macros": true,
     "osc_mappings": true
    },
-   "timecode": 340.0
+   "timecode": 340.0,
+   "timestamp": 0,
+   "macros": null,
+   "global_graph": null,
+   "signal_graph": null,
+   "per_track_depths": [],
+   "manual_positions": {},
+   "spatial_macros": null,
+   "object_channels": {},
+   "follow": null,
+   "pre_wait": null,
+   "graph": null,
+   "channel_modulations": null,
+   "zones": null,
+   "osc_mappings": null
   },
   {
    "id": "cue-d4",
@@ -1813,7 +1989,23 @@
     "macros": false,
     "osc_mappings": false
    },
-   "timecode": 1005.0
+   "timecode": 1005.0,
+   "timestamp": 0,
+   "macros": null,
+   "global_graph": null,
+   "signal_graph": null,
+   "active_move_ids": [],
+   "per_track_depths": [],
+   "manual_positions": {},
+   "spatial_macros": null,
+   "object_channels": {},
+   "moves": [],
+   "follow": null,
+   "pre_wait": null,
+   "graph": null,
+   "channel_modulations": null,
+   "zones": null,
+   "osc_mappings": null
   },
   {
    "id": "cue-d6",
@@ -1954,7 +2146,21 @@
     "macros": true,
     "osc_mappings": true
    },
-   "timecode": 2280.0
+   "timecode": 2280.0,
+   "timestamp": 0,
+   "macros": null,
+   "global_graph": null,
+   "signal_graph": null,
+   "per_track_depths": [],
+   "manual_positions": {},
+   "spatial_macros": null,
+   "object_channels": {},
+   "follow": null,
+   "pre_wait": null,
+   "graph": null,
+   "channel_modulations": null,
+   "zones": null,
+   "osc_mappings": null
   },
   {
    "id": "cue-d7",
@@ -2095,7 +2301,21 @@
     "macros": true,
     "osc_mappings": true
    },
-   "timecode": 3390.0
+   "timecode": 3390.0,
+   "timestamp": 0,
+   "macros": null,
+   "global_graph": null,
+   "signal_graph": null,
+   "per_track_depths": [],
+   "manual_positions": {},
+   "spatial_macros": null,
+   "object_channels": {},
+   "follow": null,
+   "pre_wait": null,
+   "graph": null,
+   "channel_modulations": null,
+   "zones": null,
+   "osc_mappings": null
   },
   {
    "id": "cue-d9",
@@ -2224,7 +2444,21 @@
     "macros": true,
     "osc_mappings": true
    },
-   "timecode": 4320.0
+   "timecode": 4320.0,
+   "timestamp": 0,
+   "macros": null,
+   "global_graph": null,
+   "signal_graph": null,
+   "per_track_depths": [],
+   "manual_positions": {},
+   "spatial_macros": null,
+   "object_channels": {},
+   "follow": null,
+   "pre_wait": null,
+   "graph": null,
+   "channel_modulations": null,
+   "zones": null,
+   "osc_mappings": null
   }
  ],
  "osc": {

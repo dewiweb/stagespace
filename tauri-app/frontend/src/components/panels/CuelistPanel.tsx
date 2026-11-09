@@ -288,8 +288,8 @@ export const CuelistPanel: React.FC<{ readonly?: boolean }> = ({ readonly = fals
                     )}
                   </div>
                   <div className="text-gray-400 text-xs truncate flex items-center gap-1.5">
-                    {cue.active_move_ids.length > 0 && (
-                      <span>{cue.active_move_ids.length} move(s)</span>
+                    {(cue.active_move_ids?.length ?? 0) > 0 && (
+                      <span>{cue.active_move_ids?.length} move(s)</span>
                     )}
                     {!readonly && cue.id === armedCueId ? (
                       <label
