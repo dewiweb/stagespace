@@ -186,12 +186,8 @@ impl Zone {
             return Vector3::zeros();
         }
         match effect {
-            ZoneEffect::Repel { strength } => {
-                self.shape.gradient(pos) * (strength * influence)
-            }
-            ZoneEffect::Attract { strength } => {
-                -self.shape.gradient(pos) * (strength * influence)
-            }
+            ZoneEffect::Repel { strength } => self.shape.gradient(pos) * (strength * influence),
+            ZoneEffect::Attract { strength } => -self.shape.gradient(pos) * (strength * influence),
             ZoneEffect::Dampen { strength } => {
                 let k = (strength * influence).clamp(0.0, 1.0);
                 (self.shape.center() - pos) * k
@@ -583,7 +579,10 @@ mod tests {
         let d = z.effect_displacement(&Vector3::new(1.0, 0.0, 0.0));
         assert!((d.x - 1.0).abs() < 1e-3 && d.y.abs() < 1e-3, "d={d:?}");
         // Hors influence → nul
-        assert_eq!(z.effect_displacement(&Vector3::new(5.0, 0.0, 0.0)), Vector3::zeros());
+        assert_eq!(
+            z.effect_displacement(&Vector3::new(5.0, 0.0, 0.0)),
+            Vector3::zeros()
+        );
     }
 
     #[test]

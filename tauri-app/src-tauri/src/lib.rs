@@ -27,14 +27,13 @@ use commands::merge_commands::{
     activate_move, add_channel_modulation, add_zone, clear_all_manual_positions,
     clear_all_spatial_channels, clear_channel_modulations, clear_manual_position,
     clear_spatial_channel, clear_zones, deactivate_all_moves, deactivate_move, diagnose_graph,
-    get_merge_perf_stats, get_track_positions, list_active_moves, list_channel_modulations,
-    list_graph_effects, list_spatial_channels, list_zones, get_profile_channels,
-    list_effective_channels, remove_channel_modulation, remove_zone,
-    set_global_macro, set_global_origin, set_global_osc_ids, set_kinematic_smoothing,
-    set_manual_position, set_merge_strategy, set_move_playback_mode, set_move_priority,
-    set_move_speed, set_move_weight, set_spatial_channel, set_track_depths, set_track_position,
-    set_track_positions, throw_object, update_global_graph, update_move_graph_merged,
-    update_signal_graph, update_zone,
+    get_merge_perf_stats, get_profile_channels, get_track_positions, list_active_moves,
+    list_channel_modulations, list_effective_channels, list_graph_effects, list_spatial_channels,
+    list_zones, remove_channel_modulation, remove_zone, set_global_macro, set_global_origin,
+    set_global_osc_ids, set_kinematic_smoothing, set_manual_position, set_merge_strategy,
+    set_move_playback_mode, set_move_priority, set_move_speed, set_move_weight,
+    set_spatial_channel, set_track_depths, set_track_position, set_track_positions, throw_object,
+    update_global_graph, update_move_graph_merged, update_signal_graph, update_zone,
 };
 use commands::network::discover_osc_targets;
 use commands::osc::{

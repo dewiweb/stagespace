@@ -2514,9 +2514,7 @@ impl MergeRuntime {
                         lock_sites,
                         lock_profiling,
                         "held_objects.read",
-                        held_objects_arc
-                            .read()
-                            .unwrap_or_else(|e| e.into_inner())
+                        held_objects_arc.read().unwrap_or_else(|e| e.into_inner())
                     );
                     let manual = timed_lock!(
                         lock_wait_ns,
