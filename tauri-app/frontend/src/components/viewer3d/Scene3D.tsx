@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
@@ -24,10 +24,10 @@ import { useInteractionModes } from '../../hooks/useInteractionModes';
 import { useDrawMode } from '../../hooks/useDrawMode';
 import { useManipulateMode } from '../../hooks/useManipulateMode';
 import { useRenderLoop } from '../../hooks/useRenderLoop';
-import { fromThree, toThree } from '../../utils/coords';
-import { dollyCamera } from '../../utils/three';
-import { zoneToParams, zoneToParamsResized } from '../../store/slices/spatialFxSlice';
-import { doClearPosition } from '../../utils/liveActions';
+import { useScenePicking } from '../../hooks/useScenePicking';
+import { useZoneGestures } from '../../hooks/useZoneGestures';
+import { useSceneGestures } from '../../hooks/useSceneGestures';
+import { SceneInteractionLayers } from './SceneInteractionLayers';
 
 interface Scene3DProps {
   width?: string | number;
@@ -136,232 +136,21 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
     manipulateMode,
   });
 
-  // Zoom manuel (dolly vers controls.target) — OrbitControls est désactivé
-  // pendant les modes interactifs : sans ça la molette ne zoomait plus.
-  const handleZoomWheel = useCallback((e: React.WheelEvent) => {
-    dollyCamera(controlsRef.current, e.deltaY < 0 ? 0.92 : 1.08);
-  }, []);
-
-  // Pick partagé — NDC→raycast sur les objets visibles, avec fallback
-  // proximité écran : une sphère en mouvement est dure à viser, l'objet
-  // le plus proche du clic (< proximityPx) est retourné. Utilisé par
-  // assign, release clic-droit — même sémantique que useManipulateMode.
-  const pickObjectIndexAt = useCallback(
-    (
-      e: { clientX: number; clientY: number },
-      opts?: { proximityPx?: number },
-    ): number | null => {
-      const camera = cameraRef.current;
-      const container = containerRef.current;
-      if (!camera || !container) return null;
-      const rect = container.getBoundingClientRect();
-      const ndc = new THREE.Vector2(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1,
-      );
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(ndc, camera);
-      const visibleObjs = objectsRef.current.filter((o) => o.visible);
-      const hits = raycaster.intersectObjects(visibleObjs, true);
-      if (hits.length > 0) {
-        let hitObj = hits[0].object as THREE.Mesh;
-        let idx = objectsRef.current.indexOf(hitObj);
-        while (idx < 0 && hitObj.parent) {
-          hitObj = hitObj.parent as THREE.Mesh;
-          idx = objectsRef.current.indexOf(hitObj);
-        }
-        if (idx >= 0) return idx;
-      }
-      const maxPx = opts?.proximityPx ?? 0;
-      if (maxPx <= 0) return null;
-      let bd = maxPx;
-      let best: number | null = null;
-      for (const o of visibleObjs) {
-        const p = o.position.clone().project(camera);
-        if (p.z < -1 || p.z > 1) continue; // derrière la caméra
-        const sx = ((p.x + 1) / 2) * rect.width;
-        const sy = ((1 - p.y) / 2) * rect.height;
-        const d = Math.hypot(sx - (e.clientX - rect.left), sy - (e.clientY - rect.top));
-        if (d < bd) {
-          bd = d;
-          best = objectsRef.current.indexOf(o);
-        }
-      }
-      return best;
-    },
-    [cameraRef, containerRef, objectsRef],
-  );
-
-  // Assign mode — clic sur un objet 3D = toggle de sa track via la même
-  const handleAssignDown = useCallback(
-    (e: React.PointerEvent) => {
-      if (e.button !== 0) return; // clic droit = release, pas assign
-      const idx = pickObjectIndexAt(e, { proximityPx: 40 });
-      if (idx === null) return;
-      const s = useGraphStore.getState();
-      const trackId = s.holProject?.tracks[idx]?.id ?? s.manualOscIds[idx] ?? idx + 1;
-      s.toggleTrackSelection(trackId);
-    },
-    [pickObjectIndexAt],
-  );
-
-  // Zone place mode — clic sur le sol (plan y=0 côté Three = z=0 backend)
-  // → enregistre le centre en coords backend pour le formulaire SpatialFX.
-  const handleZonePlaceDown = useCallback(
-    (e: React.PointerEvent) => {
-      if (e.button !== 0) return; // clic droit = release, pas place
-      const camera = cameraRef.current;
-      const container = containerRef.current;
-      if (!camera || !container) return;
-      const rect = container.getBoundingClientRect();
-      const ndc = new THREE.Vector2(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1,
-      );
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(ndc, camera);
-      const pt = new THREE.Vector3();
-      if (!raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), pt)) return;
-      const s = useGraphStore.getState();
-      const [bx, by, bz] = fromThree(pt.x, pt.y, pt.z);
-      s.setPendingZonePoint([bx, by, bz]);
-      s.setZonePlaceMode(false);
-    },
-    [],
-  );
-
-  // Zone edit mode — drag d'un mesh de zone (tagué userData.isZone par
-  // ZoneVisualization) : le centre suit le curseur sur le plan horizontal
-  // à la hauteur de la zone (backend z = three y), resize à la molette.
-  // updateZone throttlé ~30Hz — un invoke par pointermove saturerait l'IPC
-  // (même discipline que le drag d'objets dans useManipulateMode).
-  const draggingZoneRef = useRef<number | null>(null);
-  const lastZoneUpdateRef = useRef(0);
-  const zoneRaycast = useCallback(
-    (e: { clientX: number; clientY: number }): THREE.Raycaster | null => {
-      const camera = cameraRef.current;
-      const container = containerRef.current;
-      if (!camera || !container) return null;
-      const rect = container.getBoundingClientRect();
-      const ndc = new THREE.Vector2(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1,
-      );
-      const r = new THREE.Raycaster();
-      r.setFromCamera(ndc, camera);
-      return r;
-    },
-    [],
-  );
-  const zoneIndexAt = useCallback(
-    (raycaster: THREE.Raycaster): number | null => {
-      const scene = sceneRef.current;
-      if (!scene) return null;
-      const hits = raycaster.intersectObjects(scene.children, true);
-      for (const h of hits) {
-        let o: THREE.Object3D | null = h.object;
-        while (o && o.userData.isZone !== true) o = o.parent;
-        if (o?.userData.isZone === true) return o.userData.zoneIndex as number;
-      }
-      return null;
-    },
-    [],
-  );
-  const handleZoneEditDown = useCallback(
-    (e: React.PointerEvent) => {
-      if (e.button !== 0) return; // clic droit = release, pas edit
-      const r = zoneRaycast(e);
-      if (!r) return;
-      const idx = zoneIndexAt(r);
-      if (idx !== null) {
-        draggingZoneRef.current = idx;
-        (e.target as HTMLElement).setPointerCapture(e.pointerId);
-      }
-    },
-    [zoneRaycast, zoneIndexAt],
-  );
-  const handleZoneEditMove = useCallback(
-    (e: React.PointerEvent) => {
-      const zi = draggingZoneRef.current;
-      if (zi === null) return;
-      const r = zoneRaycast(e);
-      if (!r) return;
-      const s = useGraphStore.getState();
-      const zone = s.zones[zi];
-      if (!zone) return;
-      // Plan horizontal à la hauteur de la zone — le drag conserve z (up).
-      const centerB = zone.shape.shape === 'sphere'
-        ? zone.shape.center
-        : zone.shape.shape === 'box'
-          ? [(zone.shape.min[0] + zone.shape.max[0]) / 2, (zone.shape.min[1] + zone.shape.max[1]) / 2, (zone.shape.min[2] + zone.shape.max[2]) / 2] as [number, number, number]
-          : [0, 0, 0] as [number, number, number];
-      const [, cy] = toThree(centerB[0], centerB[1], centerB[2]);
-      const pt = new THREE.Vector3();
-      if (!r.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -cy), pt)) return;
-      const now = performance.now();
-      if (now - lastZoneUpdateRef.current < 33) return;
-      lastZoneUpdateRef.current = now;
-      const [bx, by, bz] = fromThree(pt.x, pt.y, pt.z);
-      s.updateZone(zi, zoneToParams(zone, [bx, by, bz]))
-        .catch((err) => console.error('zone drag update failed:', err));
-    },
-    [zoneRaycast],
-  );
-  const handleZoneEditUp = useCallback(() => { draggingZoneRef.current = null; }, []);
-  const handleZoneEditWheel = useCallback(
-    (e: React.WheelEvent) => {
-      const r = zoneRaycast(e);
-      if (!r) return;
-      const zi = zoneIndexAt(r);
-      if (zi === null) return;
-      const s = useGraphStore.getState();
-      const zone = s.zones[zi];
-      if (!zone) return;
-      const dir = e.deltaY < 0 ? 1 : -1;
-      const params = zone.shape.shape === 'sphere'
-        ? zoneToParamsResized(zone, { radius: zone.shape.radius + dir * 0.25 })
-        : zoneToParamsResized(zone, { scale: 1 + dir * 0.05 });
-      s.updateZone(zi, params).catch((err) => console.error('zone resize failed:', err));
-    },
-    [zoneRaycast, zoneIndexAt],
-  );
-
-  // Release uniforme — clic-droit (SANS drag) sur un objet = relâche sa
-  // position manuelle, dans TOUS les modes (pas seulement manipulate).
-  // Le pan OrbitControls utilise le drag droit : on distingue le clic
-  // du drag par le déplacement (<6px) et la durée (<500ms). Le contexte
-  // menu natif est déjà supprimé globalement dans App.tsx.
-  const rightDownRef = useRef<{ x: number; y: number; t: number } | null>(null);
-  // Clic-gauche SANS drag = sélection de l'objet le plus proche — parité
-  // avec le radar (tap-select) : clic = sélection, drag = orbit caméra.
-  const leftDownRef = useRef<{ x: number; y: number; t: number } | null>(null);
-  const handleScenePointerDown = useCallback((e: React.PointerEvent) => {
-    if (e.button === 2) rightDownRef.current = { x: e.clientX, y: e.clientY, t: Date.now() };
-    if (e.button === 0) leftDownRef.current = { x: e.clientX, y: e.clientY, t: Date.now() };
-  }, []);
-  const handleScenePointerUp = useCallback((e: React.PointerEvent) => {
-    if (e.button === 2) {
-      const d = rightDownRef.current;
-      rightDownRef.current = null;
-      if (!d) return;
-      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6 || Date.now() - d.t > 500) return;
-      const idx = pickObjectIndexAt(e, { proximityPx: 40 });
-      if (idx !== null) doClearPosition(idx);
-      return;
-    }
-    if (e.button === 0) {
-      const d = leftDownRef.current;
-      leftDownRef.current = null;
-      // Clic-gauche sans drag SÉLECTIONNE — seulement hors modes
-      // interactifs (manipulate drag/assign/draw gèrent leur propre clic).
-      if (!d) return;
-      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6 || Date.now() - d.t > 500) return;
-      const s = useGraphStore.getState();
-      if (s.manipulateMode || s.assignMode || s.drawMode || s.zonePlaceMode || s.zoneEditMode) return;
-      const idx = pickObjectIndexAt(e, { proximityPx: 40 });
-      s.setSelectedObjIndex(idx);
-    }
-  }, [pickObjectIndexAt]);
+  // ── Gestes extraits — pick/raycast, zones, gestes transverses ──
+  // useScenePicking : NDC→raycast + pick objet proximité + zone index + zoom
+  // useZoneGestures : place + drag/resize des zones manuelles
+  // useSceneGestures : tap-select + release clic-droit + assign
+  const { handleZoomWheel, raycastAt, pickObjectIndexAt, zoneIndexAt } =
+    useScenePicking({ cameraRef, controlsRef, containerRef, sceneRef, objectsRef });
+  const {
+    handleZonePlaceDown,
+    handleZoneEditDown,
+    handleZoneEditMove,
+    handleZoneEditUp,
+    handleZoneEditWheel,
+  } = useZoneGestures({ raycastAt, zoneIndexAt });
+  const { handleScenePointerDown, handleScenePointerUp, handleAssignDown } =
+    useSceneGestures({ pickObjectIndexAt });
 
   // Resize observer — merge du handle resize en un seul effect
   // Met à jour directement les refs Three.js (pas de re-render React)
@@ -493,67 +282,34 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
       />
       {/* Zones d'effets spatiaux — volumes translucides (sphere/box + falloff) */}
       <ZoneVisualization sceneRef={sceneRef} />
-      <canvas
-        ref={drawCanvasRef}
-        className="absolute inset-0 z-overlay"
-        style={{
-          width: '100%',
-          height: '100%',
-          pointerEvents: drawMode ? 'auto' : 'none',
-          cursor: drawMode ? 'crosshair' : 'default',
-        }}
-        onPointerDown={handleDrawStart}
-        onPointerMove={handleDrawMove}
-        onPointerUp={handleDrawEnd}
-        onPointerCancel={handleDrawEnd}
-        onWheel={handleZoomWheel}
+      {/* Interaction layer — canvas draw + overlays des modes
+          (exclusifs par le slice) : manipulate, assign, place-zone, edit-zone */}
+      <SceneInteractionLayers
+        drawMode={drawMode}
+        zoneEditMode={zoneEditMode}
+        zonePlaceMode={zonePlaceMode}
+        assignMode={assignMode}
+        manipulateMode={manipulateMode}
+        draggingHandle={draggingHandle}
+        draggingObject={draggingObject}
+        drawCanvasRef={drawCanvasRef}
+        handleDrawStart={handleDrawStart}
+        handleDrawMove={handleDrawMove}
+        handleDrawEnd={handleDrawEnd}
+        handleZoomWheel={handleZoomWheel}
+        raycastAt={raycastAt}
+        zoneIndexAt={zoneIndexAt}
+        handleZoneEditDown={handleZoneEditDown}
+        handleZoneEditMove={handleZoneEditMove}
+        handleZoneEditUp={handleZoneEditUp}
+        handleZoneEditWheel={handleZoneEditWheel}
+        handleZonePlaceDown={handleZonePlaceDown}
+        handleAssignDown={handleAssignDown}
+        handleManipulateDown={handleManipulateDown}
+        handleManipulateMove={handleManipulateMove}
+        handleManipulateUp={handleManipulateUp}
+        handleManipulateWheel={handleManipulateWheel}
       />
-      {/* Interaction layer — manipulate, assign, place-zone ou edit-zone */}
-      {zoneEditMode && (
-        <div
-          className="absolute inset-0 z-overlay"
-          style={{ cursor: 'move' }}
-          onPointerDown={handleZoneEditDown}
-          onPointerMove={handleZoneEditMove}
-          onPointerUp={handleZoneEditUp}
-          onPointerCancel={handleZoneEditUp}
-          onWheel={(e) => {
-            // Resize si la molette est au-dessus d'une zone — sinon zoom.
-            const r = zoneRaycast(e);
-            if (r && zoneIndexAt(r) !== null) handleZoneEditWheel(e);
-            else handleZoomWheel(e);
-          }}
-        />
-      )}
-      {zonePlaceMode && (
-        <div
-          className="absolute inset-0 z-overlay"
-          style={{ cursor: 'crosshair' }}
-          onPointerDown={handleZonePlaceDown}
-          onWheel={handleZoomWheel}
-        />
-      )}
-      {assignMode && (
-        <div
-          className="absolute inset-0 z-overlay"
-          style={{ cursor: 'pointer' }}
-          onPointerDown={handleAssignDown}
-          onWheel={handleZoomWheel}
-        />
-      )}
-      {manipulateMode && (
-        <div
-          className="absolute inset-0 z-overlay"
-          style={{
-            cursor: draggingHandle || draggingObject !== null ? 'grabbing' : 'grab',
-          }}
-          onPointerDown={handleManipulateDown}
-          onPointerMove={handleManipulateMove}
-          onPointerUp={handleManipulateUp}
-          onPointerCancel={handleManipulateUp}
-          onWheel={handleManipulateWheel}
-        />
-      )}
       {/* Active movements indicator — bottom right */}
       {movements.length > 0 && (
         <div className="absolute bottom-2 right-2 z-overlay bg-gray-900/80 backdrop-blur rounded-lg px-2 py-1 border border-gray-700/50 flex items-center gap-1.5">
