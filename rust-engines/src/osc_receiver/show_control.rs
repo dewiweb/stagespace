@@ -3,6 +3,9 @@
 
 use super::*;
 
+/// Commande show-control reçue via `/stagespace/*` — transmise telle
+/// quelle au frontend qui la dispatche vers les mêmes fonctions que
+/// les raccourcis clavier (backend = routeur seulement).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[ts(export)]
 #[serde(tag = "command", content = "value")]
