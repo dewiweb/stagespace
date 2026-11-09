@@ -11,7 +11,16 @@ export const Radar2D: React.FC = () => {
   const emittedPositions = useGraphStore((s) => s.emittedPositions);
   const objectStates = useGraphStore((s) => s.objectStates);
   const manualOscIds = useGraphStore((s) => s.manualOscIds);
-  const throwDrag = React.useRef<{ id: number; x: number; y: number; t: number } | null>(null);
+  // Trail des derniers échantillons du geste — la vélocité de lancer se
+  // calcule sur la fenêtre ~200ms (flick), pas sur le déplacement total :
+  // tenir l'objet avant de relâcher ne doit pas tuer la vélocité.
+  const throwDrag = React.useRef<{
+    id: number;
+    x: number;
+    y: number;
+    t: number;
+    trail: { x: number; y: number; t: number }[];
+  } | null>(null);
 
   // Positions LIVE : l'event backend 'global-positions' remplit
   // movementPositions['global'] à 60fps. emittedPositions n'est qu'un
@@ -22,7 +31,12 @@ export const Radar2D: React.FC = () => {
   React.useEffect(() => {
     const t = setInterval(() => {
       const g = useGraphStore.getState().movementPositions?.['global'];
-      if (!g?.length) return;
+      if (!g?.length) {
+        // Flux arrêté (stop-all / panic) — ne pas figer le radar sur le
+        // dernier frame : vider → fallback emittedPositions (état réel).
+        setLivePositions((prev) => (Object.keys(prev).length ? {} : prev));
+        return;
+      }
       const m: Record<number, [number, number, number]> = {};
       for (const p of g) m[p.index] = [p.x, p.y, p.z];
       setLivePositions(m);
@@ -74,18 +88,55 @@ export const Radar2D: React.FC = () => {
         }
         setSelectedObj(best >= 0 ? best : null);
       }}
+      onPointerMove={(e) => {
+        const drag = throwDrag.current;
+        if (!drag) return;
+        drag.trail.push({ x: e.clientX, y: e.clientY, t: Date.now() });
+        if (drag.trail.length > 12) drag.trail.shift();
+      }}
       onPointerUp={(e) => {
         const drag = throwDrag.current;
         if (!drag) return;
         throwDrag.current = null;
         const rect = e.currentTarget.getBoundingClientRect();
-        const dt = Math.max(0.05, (Date.now() - drag.t) / 1000);
+        const totalDt = (Date.now() - drag.t) / 1000;
+        const totalDx = e.clientX - drag.x;
+        const totalDy = e.clientY - drag.y;
+        // Tap (<6px, <0.5s) sur l'objet = SÉLECTION — avant, le <g>
+        // interceptait tout pointerdown et un clic direct ne sélectionnait
+        // jamais (il fallait viser à côté). Tap = select, fling = throw.
+        if (Math.hypot(totalDx, totalDy) < 6 && totalDt < 0.5) {
+          setSelectedObj(drag.id);
+          return;
+        }
+        // Vélocité = fenêtre trailing ~200ms du geste (flick), pas la
+        // durée totale du press — tenir avant de lâcher ne tue pas le lancer.
+        const now = Date.now();
+        const recent = drag.trail.filter((s) => now - s.t < 200);
+        const from = recent.length > 0 ? recent[0] : { x: drag.x, y: drag.y, t: drag.t };
+        const dt = Math.max(0.05, (now - from.t) / 1000);
         const scale = 220 / rect.width / k; // px → viewBox → mètres
-        const vx = ((e.clientX - drag.x) * scale) / dt;
+        const vx = ((e.clientX - from.x) * scale) / dt;
         // cy = worldY*k — le +y monde rend vers le BAS de l'écran (FRONT
         // en haut = -y). Drag vers le haut (dy<0) → vy<0 : PAS de négation.
-        const vy = ((e.clientY - drag.y) * scale) / dt;
+        const vy = ((e.clientY - from.y) * scale) / dt;
         if (Math.hypot(vx, vy) > 0.5) doThrow(drag.id, vx, vy, 0);
+      }}
+      onContextMenu={(e) => {
+        // Clic-droit proximité — comme le 3D : relâcher l'objet le plus
+        // proche sans viser le cercle r=4 en mouvement. Le handler du <g>
+        // fait le release précis ; celui-ci est le fallback large.
+        e.preventDefault();
+        const rect = e.currentTarget.getBoundingClientRect();
+        const vx = ((e.clientX - rect.left) / rect.width) * 220 - 110;
+        const vy = ((e.clientY - rect.top) / rect.height) * 220 - 110;
+        let best = -1;
+        let bd = 18;
+        for (const [id, [x, y]] of Object.entries(positions)) {
+          const d = Math.hypot(x * k - vx, y * k - vy);
+          if (d < bd) { bd = d; best = Number(id); }
+        }
+        if (best >= 0) doClearPosition(best);
       }}
     >
       <circle cx="0" cy="0" r="105" fill="none" stroke="#1f2937" strokeWidth="1" />
@@ -120,7 +171,7 @@ export const Radar2D: React.FC = () => {
                 doClearPosition(t);
                 return;
               }
-              throwDrag.current = { id: t, x: e.clientX, y: e.clientY, t: Date.now() };
+              throwDrag.current = { id: t, x: e.clientX, y: e.clientY, t: Date.now(), trail: [] };
               e.stopPropagation();
             }}
           >
@@ -128,24 +179,24 @@ export const Radar2D: React.FC = () => {
               <circle cx={cx} cy={cy} r={8} fill="none" stroke="#fff" strokeWidth="1.5" opacity="0.9" />
             )}
             <circle cx={cx} cy={cy} r="4" fill={sourceHex(src)}>
-              <title>{id} · {SOURCE_LABEL[src] ?? src}</title>
-              {isManual && (
-                <text
-                  x={12}
-                  y={-8}
-                  fill="#f97316"
-                  fontSize="11"
-                  fontWeight="bold"
-                  style={{ cursor: 'pointer' }}
-                  onPointerDown={(e) => {
-                    e.stopPropagation();
-                        doClearPosition(t);
-                  }}
-                >
-                  ×
-                </text>
-              )}
+              <title>#{manualOscIds[t] ?? t + 1} · {SOURCE_LABEL[src] ?? src}</title>
             </circle>
+            {isManual && (
+              <text
+                x={cx + 8}
+                y={cy - 6}
+                fill="#f97316"
+                fontSize="11"
+                fontWeight="bold"
+                style={{ cursor: 'pointer' }}
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  doClearPosition(t);
+                }}
+              >
+                ×
+              </text>
+            )}
             <text x={cx} y={cy - 7} fill="#9ca3af" fontSize="7" textAnchor="middle">
               {/* track_id (même numérotation que les pads et la 3D) — pas obj_index */}
               {manualOscIds[t] ?? t + 1}
