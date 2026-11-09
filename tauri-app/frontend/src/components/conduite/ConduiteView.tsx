@@ -13,10 +13,14 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
   onPanic,
   onArmToggle,
   onRecallCue,
+  onGoSetlist,
+  onUnpark,
+  onUnsolo,
 }) => {
   // Arm local — click = arm (outline), double-click = RECALL : le même
   // contrat que CuelistPanel, jamais de scene-kill au simple clic.
   const [armedCueId, setArmedCueId] = React.useState<string | null>(null);
+  const [parkedOpen, setParkedOpen] = React.useState(false);
 
   // Modèle console : Prev/Next déplacent le marqueur d'armement SANS
   // tirer — on se positionne dans la cue list sans casser la scène.
@@ -56,9 +60,41 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
             </button>
           )}
           {st && st.parked.length > 0 && (
-            <StatusChip variant="osc" className="text-xl px-3 py-1.5" title={`Objets parkés : ${st.parked.join(', ')}`}>
-              {st.parked.length} PARKED
-            </StatusChip>
+            <div className="relative">
+              <button
+                onClick={() => setParkedOpen(!parkedOpen)}
+                className="text-xl px-3 py-1.5 rounded font-bold border border-cyan-600/60 text-cyan-200 bg-cyan-900/30 hover:bg-cyan-800/40"
+                title={`Objets parkés : ${st.parked.join(', ')} — cliquer pour dégeler`}
+              >
+                {st.parked.length} PARKED
+              </button>
+              {parkedOpen && (
+                <div className="absolute right-0 top-full mt-1 z-menu bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-2 min-w-[180px]">
+                  <div className="text-gray-400 text-[10px] uppercase tracking-wider px-1 pb-1">
+                    Parked — cliquer pour dégeler
+                  </div>
+                  {st.parked.map((obj) => (
+                    <div key={obj} className="flex items-center justify-between gap-2 px-1 py-1">
+                      <span className="text-cyan-200 font-mono text-sm">obj {obj}</span>
+                      <button
+                        onClick={() => onUnpark(obj)}
+                        className="px-2 py-0.5 rounded bg-gray-700 hover:bg-cyan-700 text-xs text-gray-200"
+                      >
+                        unpark
+                      </button>
+                    </div>
+                  ))}
+                  {st.parked.length > 1 && (
+                    <button
+                      onClick={() => st.parked.forEach((obj) => onUnpark(obj))}
+                      className="w-full mt-1 px-2 py-1 rounded bg-cyan-800 hover:bg-cyan-700 text-xs font-semibold text-white"
+                    >
+                      Unpark all
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           )}
           {st && st.consoleAge !== null && (
             <StatusChip variant={st.consoleAge < 5 ? 'live' : 'dim'} className="text-xl px-3 py-1.5">
@@ -149,6 +185,32 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
               </button>
             }
           />
+
+          {/* SETLIST GO — crossfade vers le prochain move (≠ CUE GO au-dessus
+              qui tire la cue armée). Sur un écran FOH dédié, avancer la
+              setlist sans retour à la fenêtre principale est indispensable. */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onGoSetlist}
+              disabled={!st?.nextSetlistName}
+              className="px-8 py-3 rounded-xl bg-green-700 hover:bg-green-600 text-white font-bold text-lg disabled:opacity-30 disabled:cursor-not-allowed active:scale-95"
+              title="SETLIST GO — crossfade vers le prochain move de la setlist, les layers continuent. ≠ CUE GO (recall = tue la scène)"
+            >
+              SETLIST ▶
+            </button>
+            <span className="text-green-200/70 text-base truncate max-w-[30vw]">
+              {st?.nextSetlistName ?? 'fin de setlist'}
+            </span>
+            {st && st.soloRestoreCount > 0 && (
+              <button
+                onClick={onUnsolo}
+                className="px-4 py-2 rounded-lg bg-orange-700/80 hover:bg-orange-600 text-orange-100 text-sm font-bold active:scale-95"
+                title={`UNSOLO — rejoue les ${st.soloRestoreCount} slots stoppés par le solo`}
+              >
+                UNSOLO
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

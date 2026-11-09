@@ -40,19 +40,18 @@ const RunWindow: React.FC = () => {
   useSupervisorListener();
   useLiveShortcuts();
   return (
-    <React.Suspense
-      fallback={
-        <div className="h-screen w-screen bg-gray-950 flex items-center justify-center text-gray-500 text-sm">
-          Chargement de la surface de jeu…
-        </div>
-      }
-    >
-      <PerformView />
+    <div className="h-screen w-screen flex flex-col">
+      <div className="flex-1 min-h-0 flex flex-col">
+        <PerformView />
+      </div>
+      {/* StatusBar — sans elle la fenêtre de jeu dédiée est aveugle aux
+          pannes moteur (FPS/OSC/backendDown/MERGE DEAD). */}
+      <StatusBar />
       {/* Toasts — un GO refusé / erreur backend doit être visible dans
           la fenêtre de jeu dédiée, pas seulement dans la principale. */}
       <ManualReleaseBar />
       <ToastContainer />
-    </React.Suspense>
+    </div>
   );
 };
 
@@ -207,6 +206,16 @@ function AppMain() {
   React.useEffect(() => {
     if (!showExpert && editorFocus) setEditorFocus(false);
   }, [showExpert, editorFocus]);
+
+  // Modes d'interaction = état armé pour Scene3D. Si la scène devient
+  // invisible (surface ≠ atelier, ou editorFocus masque le 3D), un mode
+  // resté armé est un piège : inciblable, seul Esc le désarme — et un
+  // second Esc = panic. On purge à chaque masquage.
+  React.useEffect(() => {
+    if (surface !== 'atelier' || focusActive) {
+      useGraphStore.getState().cancelInteractionModes();
+    }
+  }, [surface, focusActive]);
 
   const startExpertResize = (e: React.MouseEvent) => {
     e.preventDefault();

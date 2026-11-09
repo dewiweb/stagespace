@@ -21,6 +21,10 @@ export type ConduiteViewState = {
   armed: boolean;
   parked: number[];
   consoleAge: number | null;
+  /// Prochain move de la setlist (nom) — pour le bouton SETLIST GO.
+  nextSetlistName: string | null;
+  /// Slots à rejouer après un solo — >0 = bouton UNSOLO visible.
+  soloRestoreCount: number;
 };
 
 export type ConduiteHandlers = {
@@ -30,4 +34,10 @@ export type ConduiteHandlers = {
   onPanic: () => void;
   onArmToggle: () => void;
   onRecallCue: (id: string) => void;
+  /// SETLIST GO — crossfade vers le prochain move (≠ onGo = cue recall).
+  onGoSetlist: () => void;
+  /// Dégèle un objet parké (obj_index backend).
+  onUnpark: (obj: number) => void;
+  /// Rejoue les slots stoppés par le dernier solo.
+  onUnsolo: () => void;
 };

@@ -4,7 +4,7 @@
 /// Partagé par la surface Jeu et la fenêtre ?view=run.
 import React from 'react';
 import { useGraphStore } from '../../store/useGraphStore';
-import { doThrow, doClearPosition } from '../../utils/liveActions';
+import { doThrow, doClearPosition, doPark, doUnpark, doAttention } from '../../utils/liveActions';
 import { sourceHex, SOURCE_LABEL } from '../../utils/sourceColors';
 
 export const Radar2D: React.FC = () => {
@@ -33,6 +33,17 @@ export const Radar2D: React.FC = () => {
   const selectedObj = useGraphStore((s) => s.selectedObjIndex);
   const setSelectedObj = useGraphStore((s) => s.setSelectedObjIndex);
 
+  // Inspect de l'objet sélectionné — sans lui le clic-proximité ne
+  // produisait qu'un anneau sans effet (state mort). Une ligne d'info +
+  // actions sous le radar : release selon l'état, park/unpark.
+  const selSrc = selectedObj != null ? (objectStates[selectedObj] ?? 'track') : null;
+  const selPos = selectedObj != null ? positions[selectedObj] : undefined;
+  const selTrackId = selectedObj != null ? (manualOscIds[selectedObj] ?? selectedObj + 1) : null;
+  const OVERRIDE_RELEASE: Record<string, (i: number) => void> = {
+    manual: doClearPosition, hold: doClearPosition,
+    park: doUnpark, freeze: () => doAttention(null),
+  };
+
   // Auto-fit : échelle sur les bounds réels (venues >10m ne sortent plus
   // du cadre).
   const maxR = Math.max(
@@ -42,6 +53,7 @@ export const Radar2D: React.FC = () => {
   const k = 100 / maxR;
 
   return (
+    <>
     <svg
       viewBox="-110 -110 220 220"
       className="flex-1 min-h-0"
@@ -142,6 +154,47 @@ export const Radar2D: React.FC = () => {
         );
       })}
     </svg>
+    {selectedObj != null && selSrc && (
+      <div className="mt-1 px-1.5 py-1 rounded bg-gray-800/80 border border-gray-700 text-[10px] flex items-center gap-1.5 flex-shrink-0">
+        <span className="text-white font-bold">#{selTrackId}</span>
+        <span
+          className="px-1 rounded font-semibold"
+          style={{ backgroundColor: sourceHex(selSrc) + '33', color: sourceHex(selSrc) }}
+        >
+          {SOURCE_LABEL[selSrc] ?? selSrc}
+        </span>
+        {selPos && (
+          <span className="text-gray-500 font-mono">
+            {selPos[0].toFixed(1)},{selPos[1].toFixed(1)}
+          </span>
+        )}
+        <span className="flex-1" />
+        {OVERRIDE_RELEASE[selSrc] && (
+          <button
+            onClick={() => OVERRIDE_RELEASE[selSrc](selectedObj)}
+            className="px-1.5 py-0.5 rounded bg-orange-900/70 text-orange-200 hover:bg-orange-600 text-[10px] font-bold"
+            title={`Release obj ${selectedObj} (${selSrc}) — le moteur reprend`}
+          >
+            release
+          </button>
+        )}
+        <button
+          onClick={() => (selSrc === 'park' ? doUnpark(selectedObj) : doPark(selectedObj))}
+          className="px-1.5 py-0.5 rounded bg-cyan-900/70 text-cyan-200 hover:bg-cyan-700 text-[10px] font-bold"
+          title={selSrc === 'park' ? 'Unpark — l\'objet rejoint recalls/stop' : 'Park — gèle l\'objet hors recalls/stop/panic'}
+        >
+          {selSrc === 'park' ? 'unpark' : 'park'}
+        </button>
+        <button
+          onClick={() => setSelectedObj(null)}
+          className="px-1 text-gray-500 hover:text-white"
+          title="Désélectionner"
+        >
+          ×
+        </button>
+      </div>
+    )}
+    </>
   );
 };
 

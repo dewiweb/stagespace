@@ -5,7 +5,7 @@ import React from 'react';
 import { useCuelistStore } from '../../store/useCuelistStore';
 import { useGraphStore } from '../../store/useGraphStore';
 import { useShowStatusStore } from '../../store/useShowStatusStore';
-import { doArm, doCueNext, doCueRecallById, doPanic } from '../../utils/liveActions';
+import { doArm, doCueNext, doCueRecallById, doPanic, doGo, doUnpark, doUnsolo } from '../../utils/liveActions';
 import { cueLabel, tcStr } from '../../utils/showFormat';
 import { ConduiteView } from './ConduiteView';
 import type { ConduiteViewState } from './types';
@@ -19,6 +19,9 @@ export const ConduiteSurface: React.FC = () => {
   const lastTimecode = useCuelistStore((s) => s.lastTimecode);
   const lastTimecodeAt = useCuelistStore((s) => s.lastTimecodeAt);
   const moveSlots = useGraphStore((s) => s.moveSlots);
+  const setlistOrder = useGraphStore((s) => s.setlistOrder);
+  const currentSetlistIndex = useGraphStore((s) => s.currentSetlistIndex);
+  const soloSavedIds = useGraphStore((s) => s.soloSavedIds);
   const showLog = useGraphStore((s) => s.showLog);
   const timecodeFps = useGraphStore((s) => s.timecodeFps);
   const parked = useShowStatusStore((s) => s.parked);
@@ -45,6 +48,16 @@ export const ConduiteSurface: React.FC = () => {
     armed,
     parked,
     consoleAge,
+    nextSetlistName: (() => {
+      const nextId =
+        currentSetlistIndex >= 0 && currentSetlistIndex + 1 < setlistOrder.length
+          ? setlistOrder[currentSetlistIndex + 1]
+          : setlistOrder.length > 0 && currentSetlistIndex < 0
+            ? setlistOrder[0]
+            : null;
+      return nextId ? (moveSlots.find((s) => s.id === nextId)?.name ?? null) : null;
+    })(),
+    soloRestoreCount: soloSavedIds.length,
   };
 
   return (
@@ -56,6 +69,9 @@ export const ConduiteSurface: React.FC = () => {
       onPanic={() => doPanic()}
       onArmToggle={() => doArm(!armed)}
       onRecallCue={(id) => doCueRecallById(id, undefined, 'conduite')}
+      onGoSetlist={() => doGo('conduite')}
+      onUnpark={(obj) => doUnpark(obj, 'conduite')}
+      onUnsolo={() => doUnsolo('conduite')}
     />
   );
 };

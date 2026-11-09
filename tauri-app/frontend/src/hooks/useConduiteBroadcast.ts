@@ -7,7 +7,7 @@ import { emit } from '@tauri-apps/api/event';
 import { safeListen } from '../utils/tauri';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { useGraphStore } from '../store/useGraphStore';
-import { doArm, doCueNext, doCuePrev, doCueRecall, doCueRecallById, doCueArm, doCueGo, doGo, doMacro, doTcChase, doTcFps, doPanic, doSlot, doSlotStop, doSolo, doUnsolo } from '../utils/liveActions';
+import { doArm, doCueNext, doCuePrev, doCueRecall, doCueRecallById, doCueArm, doCueGo, doGo, doMacro, doTcChase, doTcFps, doPanic, doSlot, doSlotStop, doSolo, doUnsolo, doUnpark } from '../utils/liveActions';
 import { useShowStatusStore } from '../store/useShowStatusStore';
 import { cueLabel, tcStr } from '../utils/showFormat';
 
@@ -34,6 +34,16 @@ export function useConduiteBroadcast() {
         tcChaseEnabled: cs.tcChaseEnabled,
         tcActive,
         tcStr: tc,
+        nextSetlistName: (() => {
+          const nextId =
+            gs.currentSetlistIndex >= 0 && gs.currentSetlistIndex + 1 < gs.setlistOrder.length
+              ? gs.setlistOrder[gs.currentSetlistIndex + 1]
+              : gs.setlistOrder.length > 0 && gs.currentSetlistIndex < 0
+                ? gs.setlistOrder[0]
+                : null;
+          return nextId ? (gs.moveSlots.find((s) => s.id === nextId)?.name ?? null) : null;
+        })(),
+        soloRestoreCount: gs.soloSavedIds.length,
       }).catch(() => {});
     }, 500);
 
@@ -64,6 +74,10 @@ export function useConduiteBroadcast() {
       }
       if (p.startsWith('cuearm:')) {
         doCueArm(p.slice(7), 'conduite-window');
+        return;
+      }
+      if (p.startsWith('unpark:')) {
+        doUnpark(Number(p.slice(7)), 'conduite-window');
         return;
       }
       if (p.startsWith('macro:')) {

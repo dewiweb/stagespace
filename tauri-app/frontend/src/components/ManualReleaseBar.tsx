@@ -24,7 +24,7 @@ export const ManualReleaseBar: React.FC = () => {
     .sort((a, b) => a - b);
   if (held.length === 0) return null;
   return (
-    <div className="fixed bottom-16 left-4 z-50 flex items-center gap-1.5 bg-gray-900/95 border border-orange-500/50 rounded-lg px-2.5 py-1.5 shadow-xl">
+    <div className="fixed bottom-16 left-4 z-raised flex items-center gap-1.5 bg-gray-900/95 border border-orange-500/50 rounded-lg px-2.5 py-1.5 shadow-xl">
       <span className="text-orange-400 text-[9px] font-bold uppercase tracking-wider">manual</span>
       {held.slice(0, 12).map((i) => (
         <button

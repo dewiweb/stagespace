@@ -21,6 +21,8 @@ type BroadcastState = {
   tcChaseEnabled: boolean;
   tcActive: boolean;
   tcStr: string;
+  nextSetlistName: string | null;
+  soloRestoreCount: number;
 };
 
 const cmd = (c: string) => void emit('conduite:cmd', c);
@@ -51,6 +53,9 @@ export const ConduitePage: React.FC = () => {
         onPanic={() => cmd('panic')}
         onArmToggle={() => cmd('arm')}
         onRecallCue={(id) => cmd(`recall:${id}`)}
+        onGoSetlist={() => cmd('go')}
+        onUnpark={(obj) => cmd(`unpark:${obj}`)}
+        onUnsolo={() => cmd('unsolo')}
       />
     </div>
   );

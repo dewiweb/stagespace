@@ -64,6 +64,7 @@ export function useManipulateMode({
   const handleManipulateDown = useCallback(
     (e: React.PointerEvent) => {
       if (!manipulateMode) return;
+      if (e.button !== 0) return; // clic droit = release (handler conteneur), pas drag
       const camera = cameraRef.current;
       const container = containerRef.current;
       if (!camera || !container) return;

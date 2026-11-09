@@ -54,9 +54,9 @@ export const ShowTransport: React.FC<ShowTransportProps> = ({
       <button
         onClick={onGo}
         className={`${goCls} bg-green-600 text-white active:scale-95`}
-        title="GO — tire la cue armée (ou la suivante)"
+        title="CUE GO — tire la cue armée (ou la suivante). ≠ SETLIST GO de la surface Jeu (crossfade)"
       >
-        GO ▶
+        CUE GO ▶
       </button>
       <button
         onClick={onNext}

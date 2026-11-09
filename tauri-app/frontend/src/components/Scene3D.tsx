@@ -25,6 +25,7 @@ import { useManipulateMode } from '../hooks/useManipulateMode';
 import { useRenderLoop } from '../hooks/useRenderLoop';
 import { fromThree, toThree } from '../utils/coords';
 import { zoneToParams, zoneToParamsResized } from '../store/slices/spatialFxSlice';
+import { doClearPosition } from '../utils/liveActions';
 
 interface Scene3DProps {
   width?: string | number;
@@ -116,7 +117,6 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
     handleManipulateMove,
     handleManipulateUp,
     handleManipulateWheel,
-    handleManipulateContextMenu,
   } = useManipulateMode({
     cameraRef,
     containerRef,
@@ -131,6 +131,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   // ne peut pas diverger entre scène et grille.
   const handleAssignDown = useCallback(
     (e: React.PointerEvent) => {
+      if (e.button !== 0) return; // clic droit = release, pas assign
       const camera = cameraRef.current;
       const container = containerRef.current;
       if (!camera || !container) return;
@@ -165,6 +166,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   // → enregistre le centre en coords backend pour le formulaire SpatialFX.
   const handleZonePlaceDown = useCallback(
     (e: React.PointerEvent) => {
+      if (e.button !== 0) return; // clic droit = release, pas place
       const camera = cameraRef.current;
       const container = containerRef.current;
       if (!camera || !container) return;
@@ -224,6 +226,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   );
   const handleZoneEditDown = useCallback(
     (e: React.PointerEvent) => {
+      if (e.button !== 0) return; // clic droit = release, pas edit
       const r = zoneRaycast(e);
       if (!r) return;
       const idx = zoneIndexAt(r);
@@ -279,6 +282,42 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
     },
     [zoneRaycast, zoneIndexAt],
   );
+
+  // Release uniforme — clic-droit (SANS drag) sur un objet = relâche sa
+  // position manuelle, dans TOUS les modes (pas seulement manipulate).
+  // Le pan OrbitControls utilise le drag droit : on distingue le clic
+  // du drag par le déplacement (<6px) et la durée (<500ms). Le contexte
+  // menu natif est déjà supprimé globalement dans App.tsx.
+  const rightDownRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  const handleScenePointerDown = useCallback((e: React.PointerEvent) => {
+    if (e.button === 2) rightDownRef.current = { x: e.clientX, y: e.clientY, t: Date.now() };
+  }, []);
+  const handleScenePointerUp = useCallback((e: React.PointerEvent) => {
+    const d = rightDownRef.current;
+    rightDownRef.current = null;
+    if (e.button !== 2 || !d) return;
+    if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6 || Date.now() - d.t > 500) return;
+    const camera = cameraRef.current;
+    const container = containerRef.current;
+    if (!camera || !container) return;
+    const rect = container.getBoundingClientRect();
+    const ndc = new THREE.Vector2(
+      ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      -((e.clientY - rect.top) / rect.height) * 2 + 1,
+    );
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(ndc, camera);
+    const visibleObjs = objectsRef.current.filter((o) => o.visible);
+    const objHits = raycaster.intersectObjects(visibleObjs, true);
+    if (objHits.length === 0) return;
+    let hitObj = objHits[0].object as THREE.Mesh;
+    let idx = objectsRef.current.indexOf(hitObj);
+    while (idx < 0 && hitObj.parent) {
+      hitObj = hitObj.parent as THREE.Mesh;
+      idx = objectsRef.current.indexOf(hitObj);
+    }
+    if (idx >= 0) doClearPosition(idx);
+  }, [cameraRef, containerRef, objectsRef]);
 
   // Resize observer — merge du handle resize en un seul effect
   // Met à jour directement les refs Three.js (pas de re-render React)
@@ -354,7 +393,12 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   // Draw handlers → useDrawMode hook
 
   return (
-    <div ref={containerRef} style={{ width, height, overflow: 'hidden', position: 'relative' }}>
+    <div
+      ref={containerRef}
+      style={{ width, height, overflow: 'hidden', position: 'relative' }}
+      onPointerDown={handleScenePointerDown}
+      onPointerUp={handleScenePointerUp}
+    >
       {webglFailed && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-900/90 z-raised p-4">
           <TriangleAlert size={32} className="text-amber-400" />
@@ -454,7 +498,6 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
           onPointerUp={handleManipulateUp}
           onPointerCancel={handleManipulateUp}
           onWheel={handleManipulateWheel}
-          onContextMenu={handleManipulateContextMenu}
         />
       )}
       {/* Active movements indicator — bottom right */}
