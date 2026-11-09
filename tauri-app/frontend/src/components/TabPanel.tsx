@@ -9,13 +9,17 @@ interface Tab {
 interface TabPanelProps {
   tabs: Tab[];
   defaultTab?: string;
+  /// Notifie le parent du tab actif — permet de conditionner du contenu
+  /// externe (ex: Templates visible seulement sur le tab Moves).
+  onTabChange?: (id: string) => void;
 }
 
 /// Conteneur d'onglets — tous les contenus restent montés (hidden quand
 /// inactif) : l'état local des panels (armedCueId, timers, scroll) survit
 /// au switch, et rien ne se re-synchronise à chaque changement d'onglet.
-export default function TabPanel({ tabs, defaultTab }: TabPanelProps) {
-  const [activeTab, setActiveTab] = React.useState(defaultTab || tabs[0]?.id || '');
+export default function TabPanel({ tabs, defaultTab, onTabChange }: TabPanelProps) {
+  const [activeTab, setActiveTabState] = React.useState(defaultTab || tabs[0]?.id || '');
+  const setActiveTab = (id: string) => { setActiveTabState(id); onTabChange?.(id); };
 
   const move = (dir: number) => {
     const idx = tabs.findIndex((t) => t.id === activeTab);

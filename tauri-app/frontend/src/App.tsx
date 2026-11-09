@@ -118,6 +118,10 @@ function AppMain() {
   // Sections collapsibles du panneau gauche
   const [graphsExpanded, setGraphsExpanded] = usePersistedState<boolean>('ss-layout-graphsExpanded', true);
   const [movesExpanded, setMovesExpanded] = usePersistedState<boolean>('ss-layout-movesExpanded', true);
+  /// Tab actif du panneau Show — persisté : Templates ne s'affiche qu'avec
+  /// le tab Moves (bibliothèque → création de slots), les autres tabs
+  /// récupèrent la colonne entière.
+  const [showTab, setShowTab] = usePersistedState<string>('ss-leftpanel-showTab', 'moves');
   // AudioPanel = monitoring/config — collapsible pour rendre la hauteur à
   // l'Inspector (outil de travail principal de la colonne droite).
   const [audioExpanded, setAudioExpanded] = usePersistedState<boolean>('ss-layout-audioExpanded', false);
@@ -396,13 +400,17 @@ function AppMain() {
               </div>
               {movesExpanded && (
                 <div className="flex-1 min-h-0 overflow-hidden">
-                  <TabPanel tabs={secondaryTabs} defaultTab="moves" />
+                  <TabPanel tabs={secondaryTabs} defaultTab={showTab} onTabChange={setShowTab} />
                 </div>
               )}
             </div>
             {/* Section 2: Templates (AnimationList) — secondaire. Partage
                 proportionnel avec Show (flex-1 chacun) au lieu d'une hauteur
-                fixe : sur petit écran aucune section n'écrase l'autre. */}
+                fixe : sur petit écran aucune section n'écrase l'autre.
+                Visible UNIQUEMENT sur le tab Moves : les templates sont la
+                matière première des slots — sous Cues/FX/Score/Log elles
+                volaient la moitié de la colonne aux panneaux concernés. */}
+            {showTab === 'moves' && (
             <div className={`${graphsExpanded ? 'flex-1' : 'flex-shrink-0'} flex flex-col min-h-0 border-t border-stagespace-border`}>
               <div className="flex items-center gap-1 px-3 py-1.5 border-b border-stagespace-border flex-shrink-0 bg-gray-900/30">
                 <button
@@ -418,6 +426,7 @@ function AppMain() {
                 </div>
               )}
             </div>
+            )}
           </div>
           {/* Splitter — poignée de redimensionnement */}
           <div

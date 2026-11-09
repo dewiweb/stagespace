@@ -94,8 +94,6 @@ export default function AnimationList() {
       <div className="flex-1 overflow-y-auto">
         {/* ═══ TEMPLATES (built-in presets) ═══ */}
         <div className="p-2 space-y-1">
-          <div className="text-gray-500 text-xs uppercase tracking-wider mb-1 px-1">Templates</div>
-
           {presetsByCategory.map((group) => {
             const isCollapsed = collapsedCats.has(group.cat);
             const catLabel = CATEGORY_LABELS[group.cat];
