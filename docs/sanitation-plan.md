@@ -7,9 +7,10 @@ deux chantiers : hygiène racine + modularisation des gros fichiers (règle
 Ordre : du plus sûr/rapide au plus risqué. Chaque phase est un livrable
 indépendant (commit + vérif complète avant de passer).
 
-**État au 2026-11-09 : phases 0–5 terminées.** Reste la phase 6 (taille
-moyenne, opportuniste) + `merge_runtime/loop_core.rs` (1510l, >1200 —
-repassé au-dessus du seuil critique après la phase 4).
+**État au 2026-11-09 : phases 0–5 terminées + rattrapage >1200 fait.**
+`compiler.rs` 1569 → `compiler/` 7 fichiers (mod.rs 322) et
+`merge_runtime/loop_core.rs` 1510 → 1118 (+ frame_helpers.rs, emit.rs).
+Reste la phase 6 (taille moyenne, opportuniste).
 
 ---
 
@@ -88,9 +89,9 @@ Résultat : `osc_receiver/` = mod.rs 612 + pipeline.rs 365 + show_control.rs 353
 ## Phase 6 — Taille moyenne (800-1200, opportuniste) + rattrapage critique
 
 À traiter quand on les touche pour autre chose (pas de chantier dédié) :
-`compiler.rs` 1569 · **`merge_runtime/loop_core.rs` 1510 — >1200, repassé
-critique après la phase 4 (la boucle a grossi lors des splits)** ·
-`node_spec.rs` 1439 · `validator.rs` 1111 · `runtime/mod.rs` 1082 ·
+~~`compiler.rs` 1569~~ ✅ · ~~`loop_core.rs` 1510~~ ✅ 1118 ·
+`node_spec.rs` 1439 (définitions cohérentes — exempt probable) ·
+`validator.rs` 1111 · `runtime/mod.rs` 1082 · `merge_runtime/tests.rs` 1078 ·
 `cli/commands/moves.rs` 933 · `audio_capture.rs` 922 · `osc_sender.rs` 829 ·
 `signal_compiler.rs` 818 · `cue_commands.rs` 762 · `moves/SpatialFxPanel/NodeEditor/App` 600-700.
 
