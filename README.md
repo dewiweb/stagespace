@@ -217,8 +217,8 @@ en messages séparés selon la matrice de capacités du profil
 - [TESTING.md](rust-engines/TESTING.md) - Guide des tests
 - [BENCHMARKS.md](rust-engines/BENCHMARKS.md) - Guide des benchmarks
 - [CONTRIBUTING.md](CONTRIBUTING.md) - Guide pour contribuer
-- [ROADMAP_GRAPH_GLOBAL.md](ROADMAP_GRAPH_GLOBAL.md) - Roadmap de l'architecture graphe global
-- [ARCHITECTURE_FUTURE.md](ARCHITECTURE_FUTURE.md) - Document de design (partiellement implémenté)
+- [ROADMAP_GRAPH_GLOBAL.md](docs/ROADMAP_GRAPH_GLOBAL.md) - Roadmap de l'architecture graphe global
+- [ARCHITECTURE_FUTURE.md](docs/ARCHITECTURE_FUTURE.md) - Document de design (partiellement implémenté)
 
 ## Tests
 

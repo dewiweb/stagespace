@@ -1,6 +1,6 @@
 //! Système de plugins WASM — nodes custom embarqués dans des bundles `.ssx`.
 //!
-//! Voir `PLUGINS_WASM.md` pour le design complet. Résumé :
+//! Voir `docs/PLUGINS_WASM.md` pour le design complet. Résumé :
 //! - un plugin = archive zip (`manifest.json` + `module.wasm`)
 //! - ABI v1 : buffers statiques en mémoire linéaire, pas d'alloc invité
 //! - sandbox : wasmtime + fuel, traps convertis en position zero

@@ -114,7 +114,7 @@ npm run lint       # eslint
 Les développeurs tiers peuvent créer des nodes WASM packagés en bundle `.ssx`
 (zip : `manifest.json` + `module.wasm`) — chargés au runtime, sandboxés
 (fuel wasmtime, traps → position zero, pas d'imports host), sans recompiler
-STAGESPACE. Voir `PLUGINS_WASM.md` pour l'architecture et `plugin-sdk/README.md`
+STAGESPACE. Voir `docs/PLUGINS_WASM.md` pour l'architecture et `plugin-sdk/README.md`
 pour le guide auteur complet. En résumé :
 
 ```bash
