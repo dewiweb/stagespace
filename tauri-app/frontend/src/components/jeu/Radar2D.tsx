@@ -6,6 +6,21 @@ import React from 'react';
 import { useGraphStore } from '../../store/useGraphStore';
 import { doThrow, doClearPosition, doPark, doUnpark, doAttention } from '../../utils/liveActions';
 import { sourceHex, SOURCE_LABEL } from '../../utils/sourceColors';
+import type { Zone } from '../../store/slices/spatialFxSlice';
+
+/// Empreinte top-down d'une zone en coords monde (x, y) — bounds utilisés
+/// par l'auto-fit du radar (une zone lointaine ne doit pas clipper).
+function zoneBounds(z: Zone): number[] {
+  if (z.shape.shape === 'sphere') {
+    const r = z.shape.radius + z.falloff;
+    return [Math.abs(z.shape.center[0]) + r, Math.abs(z.shape.center[1]) + r];
+  }
+  const f = z.falloff;
+  return [
+    Math.max(Math.abs(z.shape.min[0]), Math.abs(z.shape.max[0])) + f,
+    Math.max(Math.abs(z.shape.min[1]), Math.abs(z.shape.max[1])) + f,
+  ];
+}
 
 export const Radar2D: React.FC = () => {
   const emittedPositions = useGraphStore((s) => s.emittedPositions);
@@ -46,6 +61,26 @@ export const Radar2D: React.FC = () => {
   const positions = Object.keys(livePositions).length > 0 ? livePositions : emittedPositions;
   const selectedObj = useGraphStore((s) => s.selectedObjIndex);
   const setSelectedObj = useGraphStore((s) => s.setSelectedObjIndex);
+  const zones = useGraphStore((s) => s.zones);
+  const graphZones = useGraphStore((s) => s.graphZones);
+
+  // Auto-fit : échelle sur les bounds réels, AVEC hystérésis — un objet
+  // lancé loin ne rescale pas la vue d'un coup : zoom-out immédiat (on
+  // doit voir l'objet), zoom-in amorti (la vue revient doucement).
+  const maxRef = React.useRef(5);
+  const targetR = Math.max(
+    5,
+    ...Object.values(positions).flatMap((p) => [Math.abs(p[0]), Math.abs(p[1])]),
+    // Les zones incluent leur empreinte dans le fit — sinon une zone
+    // lointaine clipperait hors cadre.
+    ...zones.flatMap((z) => zoneBounds(z)),
+    ...graphZones.flatMap((z) => zoneBounds(z)),
+  );
+  maxRef.current = targetR > maxRef.current
+    ? targetR
+    : maxRef.current + (targetR - maxRef.current) * 0.08;
+  const maxR = maxRef.current;
+  const k = 100 / maxR;
 
   // Inspect de l'objet sélectionné — sans lui le clic-proximité ne
   // produisait qu'un anneau sans effet (state mort). Une ligne d'info +
@@ -57,14 +92,6 @@ export const Radar2D: React.FC = () => {
     manual: doClearPosition, hold: doClearPosition,
     park: doUnpark, freeze: () => doAttention(null),
   };
-
-  // Auto-fit : échelle sur les bounds réels (venues >10m ne sortent plus
-  // du cadre).
-  const maxR = Math.max(
-    5,
-    ...Object.values(positions).flatMap((p) => [Math.abs(p[0]), Math.abs(p[1])]),
-  );
-  const k = 100 / maxR;
 
   return (
     <>
@@ -144,6 +171,45 @@ export const Radar2D: React.FC = () => {
       <line x1="0" y1="-105" x2="0" y2="105" stroke="#1f2937" strokeWidth="0.5" />
       <line x1="-105" y1="0" x2="105" y2="0" stroke="#1f2937" strokeWidth="0.5" />
       <text x="0" y="-99" fill="#4b5563" fontSize="8" textAnchor="middle">FRONT · {maxR.toFixed(0)}m</text>
+      {/* Empreintes des zones — cyan manuelles, violet graph-déclarées.
+          Plein = noyau (influence 1), pointillé = falloff externe.
+          Les zones à effet positionnel (repel/vortex…) reçoivent un
+          contour renforcé — elles DÉPLACENT les objets maintenant. */}
+      {[
+        ...graphZones.map((z) => ({ z, color: '#8b5cf6' })),
+        ...zones.map((z) => ({ z, color: '#22d3ee' })),
+      ].map(({ z, color }, zi) => {
+        if (!z.enabled) return null;
+        const strokeW = z.effect ? 1.6 : 0.7;
+        const dash = z.effect ? 'none' : '3 2';
+        if (z.shape.shape === 'sphere') {
+          const cx = z.shape.center[0] * k;
+          const cy = z.shape.center[1] * k;
+          const r = z.shape.radius * k;
+          const rf = (z.shape.radius + z.falloff) * k;
+          return (
+            <g key={`z${zi}`} pointerEvents="none">
+              <circle cx={cx} cy={cy} r={r} fill={color} fillOpacity={0.05} stroke={color} strokeOpacity={0.5} strokeWidth={strokeW} strokeDasharray={dash} />
+              {z.falloff > 0 && (
+                <circle cx={cx} cy={cy} r={rf} fill="none" stroke={color} strokeOpacity={0.25} strokeWidth={0.5} strokeDasharray="3 3" />
+              )}
+            </g>
+          );
+        }
+        const w = (z.shape.max[0] - z.shape.min[0]) * k;
+        const h = (z.shape.max[1] - z.shape.min[1]) * k;
+        const x = z.shape.min[0] * k;
+        const y = z.shape.min[1] * k;
+        const f = z.falloff * k;
+        return (
+          <g key={`z${zi}`} pointerEvents="none">
+            <rect x={x} y={y} width={w} height={h} fill={color} fillOpacity={0.05} stroke={color} strokeOpacity={0.5} strokeWidth={strokeW} strokeDasharray={dash} />
+            {z.falloff > 0 && (
+              <rect x={x - f} y={y - f} width={w + 2 * f} height={h + 2 * f} fill="none" stroke={color} strokeOpacity={0.25} strokeWidth={0.5} strokeDasharray="3 3" />
+            )}
+          </g>
+        );
+      })}
       {Object.entries(positions).map(([id, [x, y]]) => {
         const t = Number(id);
         const src = objectStates[t] ?? 'track';
