@@ -187,7 +187,12 @@ Commandes d'expression directe — utilisables depuis la console ou le busking :
 | `/stagespace/attention <obj>` | fige tous les autres objets — un seul bouge (*change blindness*) ; `/attention/clear` libère |
 | `/stagespace/gesture <name> [strength]` | geste composé en une commande : `explode` · `converge` · `orbit` · `front` — vélocité calculée par objet |
 | `/stagespace/soundcheck [stop]` | sonde cyclique des objets (passe chaque track en revue — vérification des canaux) |
-| `/stagespace/rehearsal <action>` | mode répétition — contrôles de répétition (marqueurs, navigation) |
+| `/stagespace/rehearsal <action>` | mode répétition & **pos-tape** — enregistrement/rejeu de positions :
+
+- `record` — capture les positions émises @30 Hz (simulation de jeu sans acteurs)
+- `stop` — arrête la capture
+- `play` — rejoue la bande au rythme réel (injectée dans le merge)
+- `export` — exporte la bande en `.sstape.json` |
 
 ## 4ter. Sémantique « continue » d'un move
 
@@ -467,6 +472,23 @@ Le scénario `sillage-theatre` l'utilise pour suivre les danseurs.
 Les moteurs externes packagés `.ssx` (WASM) se placent dans le dossier
 `plugins` de l'app — ils apparaissent comme nœud `Plugin` dans le graphe
 et compilent comme les moteurs natifs. SDK : `plugin-sdk/` + `plugin-examples/`.
+
+## E4. Config avancée (backend)
+
+| Commande / setting | Rôle |
+|--------------------|------|
+| **Venue mapping** (`set_venue_config`) | transform sortante : `enabled` + `scale [x,y,z]` + `offset [x,y,z]` + `yaw` — mappage espace canonique → géométrie de la salle |
+| **Distance reality** (`set_distance_reality`) | effets perceptuels selon la distance : exagération, gain_atten, air_loss — `None` = désactivé |
+| **Media sync** (`set_media_sync`) | synchronisation média externe (source TC/timecode) |
+| **Presets** (`preset_save/load/list/delete`) | configurations nommées sauvegardées — rappel rapide de réglages |
+| **Découverte renderer** | `Discover renderers` en Settings — scan OSC out disponibles |
+
+## E5. Panneaux de monitoring
+
+- **Score** — partition/timeline des cues et événements du show.
+- **Log** — historique des commandes show (GUI + OSC `/stagespace/*` reçues) —
+  chaque entrée horodatée. Le voyant **CONSOLE ●** reflète l'activité.
+- **Audio** — état de la capture audio (périphérique, niveau, BPM détecté).
 
 ## E. Référence Settings
 
