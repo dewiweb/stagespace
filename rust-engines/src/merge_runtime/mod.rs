@@ -2295,7 +2295,7 @@ impl MergeRuntime {
                 // Sanitize : une position NaN/inf ne doit jamais partir en OSC
                 // (f64::clamp ne panique pas ici — on droppe l'objet). Le
                 // compteur dropped_positions rend la perte observable.
-                let transformed: Vec<(usize, nalgebra::Vector3<f64>)> = transformed_raw
+                let mut transformed: Vec<(usize, nalgebra::Vector3<f64>)> = transformed_raw
                     .into_iter()
                     .filter(|(_, pos)| {
                         if pos.iter().all(|v| v.is_finite()) {
@@ -2485,6 +2485,50 @@ impl MergeRuntime {
                     z.extend(manual.iter().cloned());
                     z
                 };
+
+                // 4.6b Effets positionnels des zones (repel/attract/dampen/
+                // vortex) — déplacement blendé par l'influence SDF sur la
+                // position mergée. Objets sous override opérateur exclus :
+                // positions manuelles + hold gardent priorité — un effet ne
+                // doit JAMAIS déplacer ce que l'opérateur tient (même
+                // sémantique que le panic, qui épargne les overrides).
+                // Court-circuit : aucune zone à effet → coût nul.
+                if zones.iter().any(|z| z.effect.is_some()) {
+                    let held = timed_lock!(
+                        lock_wait_ns,
+                        lock_sites,
+                        lock_profiling,
+                        "held_objects.read",
+                        held_objects_arc
+                            .read()
+                            .unwrap_or_else(|e| e.into_inner())
+                    );
+                    let manual = timed_lock!(
+                        lock_wait_ns,
+                        lock_sites,
+                        lock_profiling,
+                        "manual_positions.read",
+                        manual_positions_arc
+                            .read()
+                            .unwrap_or_else(|e| e.into_inner())
+                    );
+                    for (obj_idx, pos) in transformed.iter_mut() {
+                        if held.contains(obj_idx) || manual.contains_key(obj_idx) {
+                            continue;
+                        }
+                        let d = crate::zones::zone_displacement(&zones, *obj_idx, pos);
+                        if d.norm() > 0.0 {
+                            *pos += d;
+                            // Post-transform NaN/inf : le clamp MAX_ZONE_
+                            // DISPLACEMENT borne la norme mais un strength
+                            // infini glissé dans les données casserait —
+                            // on garde la position canonique dans ce cas.
+                            if !pos.iter().all(|v| v.is_finite()) {
+                                *pos -= d;
+                            }
+                        }
+                    }
+                }
 
                 // Transition : canaux effectifs = blend des feuilles —
                 // chaque feuille évalue statiques ⊕ modulations ⊕ zones sur

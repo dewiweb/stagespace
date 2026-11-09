@@ -733,6 +733,7 @@ mod zone_tests {
             },
             objects: None,
             enabled: true,
+            effect: None,
         };
         let live = LiveInputs {
             post_process_fn: &pp,

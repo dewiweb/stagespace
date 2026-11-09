@@ -109,6 +109,9 @@ export default function SpatialFxPanel() {
   const [zcValue, setZcValue] = React.useState('1');
   const [zChannelRows, setZChannelRows] = React.useState<[SpatialChannelName, number][]>([]);
   const [zObjects, setZObjects] = React.useState('');
+  /// Effet positionnel : 'none' = zone canaux-only (comportement historique).
+  const [zEffect, setZEffect] = React.useState<'none' | 'repel' | 'attract' | 'dampen' | 'vortex'>('none');
+  const [zStrength, setZStrength] = React.useState('1');
 
   // ── Modulation form state ──
   const [mSource, setMSource] = React.useState<KinematicSourceName>('Speed');
@@ -157,13 +160,15 @@ export default function SpatialFxPanel() {
   const zoneChannels = Object.fromEntries(
     zChannelRows.map(([c, v]) => [c.toLowerCase(), v])
   );
-  const zoneChannelsValid = zChannelRows.length > 0;
+  /// Une zone est valide avec des canaux OU un effet positionnel (ou les
+  /// deux — une zone repel-only sans canal est légitime).
+  const zoneChannelsValid = zChannelRows.length > 0 || zEffect !== 'none';
   const zoneHint = !zoneCenterValid
     ? zShape === 'sphere'
       ? 'invalid center — format x,y,z (ex: 0,0,0)'
       : 'invalid min — format x,y,z'
     : !zoneChannelsValid
-      ? 'add at least one channel (e.g. spread = 1)'
+      ? 'add at least one channel (e.g. spread = 1) or pick an effect'
       : null;
 
   const handleAddChannelRow = () => {
@@ -188,8 +193,12 @@ export default function SpatialFxPanel() {
         falloff: parseFloat(zFalloff) || 0,
         channels: zoneChannels,
         objects: parseObjectsSpec(zObjects),
+        effect: zEffect === 'none'
+          ? null
+          : { kind: zEffect, strength: parseFloat(zStrength) || 1 },
       });
       setZChannelRows([]);
+      setZEffect('none');
     } catch (e) {
       console.error('Failed to add zone:', e);
       toast.error(`Add zone failed: ${e}`);
@@ -347,6 +356,33 @@ export default function SpatialFxPanel() {
             placeholder="objects (optional: 0,1,2 — empty = all)"
             className={`${inputCls} font-mono`}
           />
+          {/* Effet positionnel — déplace les objets mergés à travers la
+              zone (blendé par l'influence SDF+falloff). Séparé des canaux :
+              une zone peut déplacer ET envoyer des canaux au renderer. */}
+          <div className="flex gap-1.5">
+            <select
+              value={zEffect}
+              onChange={(e) => setZEffect(e.target.value as typeof zEffect)}
+              className={selectCls}
+              title="Position effect — displaces objects through the zone (blended by falloff)"
+            >
+              <option value="none">no position effect</option>
+              <option value="repel">repel — push objects out</option>
+              <option value="attract">attract — pull toward center</option>
+              <option value="dampen">dampen — damp toward center</option>
+              <option value="vortex">vortex — swirl around center</option>
+            </select>
+            {zEffect !== 'none' && (
+              <input
+                type="text"
+                value={zStrength}
+                onChange={(e) => setZStrength(e.target.value)}
+                placeholder="strength"
+                className={`${inputCls} font-mono w-20`}
+                title="Effect strength — displacement magnitude (units/radians)"
+              />
+            )}
+          </div>
           <button
             onClick={handleAddZone}
             disabled={!zoneCenterValid || !zoneChannelsValid}
@@ -391,6 +427,7 @@ export default function SpatialFxPanel() {
                     <div className="text-white text-xs font-mono">{describeZoneShape(zone.shape)}</div>
                     <div className="text-gray-500 text-xs truncate">
                       {describeChannels(zone.channels)}
+                      {zone.effect && ` · ${zone.effect.kind}=${zone.effect.strength}`}
                       {zone.falloff > 0 && ` · falloff=${zone.falloff}`}
                       {zone.objects && ` · objs=[${zone.objects.join(',')}]`}
                       {!zone.enabled && ' · disabled'}

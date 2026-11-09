@@ -766,6 +766,7 @@ pub fn cmd_zone_add(args: &[&str]) -> Result<String, String> {
         channels,
         objects,
         enabled: !opts.contains_key("disabled"),
+        effect: None,
     };
     let state = cli_state::state();
     let merge_rt = state

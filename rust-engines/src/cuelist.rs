@@ -555,6 +555,7 @@ mod tests {
                 channels: zone_channels,
                 objects: None,
                 enabled: true,
+                effect: None,
             }]),
             moves: vec![],
             ..Default::default()

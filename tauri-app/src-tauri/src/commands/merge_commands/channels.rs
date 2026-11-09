@@ -6,7 +6,7 @@ use crate::AppState;
 use serde::Deserialize;
 use stagespace_engines::kinematics::{ChannelModulation, KinematicSource};
 use stagespace_engines::osc_sender::{SpatialChannel, SpatialChannels};
-use stagespace_engines::zones::{Zone, ZoneShape};
+use stagespace_engines::zones::{Zone, ZoneEffect, ZoneShape};
 use std::str::FromStr;
 use tauri::State;
 
@@ -179,6 +179,9 @@ pub struct ZoneParams {
     pub channels: std::collections::HashMap<String, f64>,
     /// Objets concernés (défaut : tous)
     pub objects: Option<Vec<usize>>,
+    /// Effet positionnel optionnel : {"kind": "repel|attract|dampen|vortex",
+    /// "strength": f64} — déplace les objets mergés blendé par l'influence.
+    pub effect: Option<ZoneEffect>,
 }
 
 /// ZoneParams → Zone : parsing partagé par add_zone et update_zone —
@@ -212,8 +215,20 @@ fn build_zone(params: ZoneParams) -> Result<Zone, IpcError> {
             require_finite(&format!("channel '{name}'"), *value)?,
         );
     }
-    if channels.is_empty() {
-        return Err(IpcError::validation("Zone requires at least one channel"));
+    if channels.is_empty() && params.effect.is_none() {
+        return Err(IpcError::validation(
+            "Zone requires at least one channel or an effect",
+        ));
+    }
+    // Strength finite obligatoire — un inf/NaN casserait le merge à chaque frame.
+    match params.effect {
+        Some(ZoneEffect::Repel { strength: s })
+        | Some(ZoneEffect::Attract { strength: s })
+        | Some(ZoneEffect::Dampen { strength: s })
+        | Some(ZoneEffect::Vortex { strength: s }) => {
+            require_finite("effect strength", s)?;
+        }
+        None => {}
     }
     Ok(Zone {
         shape,
@@ -221,6 +236,7 @@ fn build_zone(params: ZoneParams) -> Result<Zone, IpcError> {
         channels,
         objects: params.objects,
         enabled: true,
+        effect: params.effect,
     })
 }
 

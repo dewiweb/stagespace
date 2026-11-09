@@ -27,6 +27,62 @@ pub enum ZoneShape {
     Box { min: [f64; 3], max: [f64; 3] },
 }
 
+/// Effet positionnel d'une zone — optionnel ; appliqué par le merge sur la
+/// position mergée des objets non-overridés, blendé par l'influence SDF.
+/// Sémantique déterministe : `f(pos, t)` pur, pas d'état intégrateur.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+#[ts(export)]
+pub enum ZoneEffect {
+    /// Repousse les objets hors de la zone (le long de ∇SDF)
+    Repel { strength: f64 },
+    /// Tire les objets vers l'intérieur (−∇SDF — face/centre proche)
+    Attract { strength: f64 },
+    /// Amortit la position vers le centre de la zone (lerp pos→centre × k)
+    Dampen { strength: f64 },
+    /// Déflexion tangentielle autour de l'axe vertical du centre (radians)
+    Vortex { strength: f64 },
+}
+
+/// Déplacement combiné plafonné — garde-fou contre l'empilement de zones
+/// fortes : |ΣΔpos| ne dépasse jamais cette valeur (unités scène).
+pub const MAX_ZONE_DISPLACEMENT: f64 = 8.0;
+
+impl ZoneShape {
+    /// Centre géométrique de la forme (centre sphère / centre boîte).
+    pub fn center(&self) -> Vector3<f64> {
+        match self {
+            ZoneShape::Sphere { center, .. } => Vector3::new(center[0], center[1], center[2]),
+            ZoneShape::Box { min, max } => Vector3::new(
+                (min[0] + max[0]) / 2.0,
+                (min[1] + max[1]) / 2.0,
+                (min[2] + max[2]) / 2.0,
+            ),
+        }
+    }
+
+    /// Gradient numérique ∇SDF — direction "vers l'extérieur" normalisée.
+    /// Shape-agnostique (différence finie) : même code pour toute forme.
+    /// Norme nulle (centre exact, symétrie) → vecteur nul = pas de déplacement.
+    pub fn gradient(&self, p: &Vector3<f64>) -> Vector3<f64> {
+        const E: f64 = 1e-4;
+        let mut g = Vector3::zeros();
+        for k in 0..3 {
+            let (mut pp, mut pm) = (*p, *p);
+            pp[k] += E;
+            pm[k] -= E;
+            g[k] = self.signed_distance(&pp) - self.signed_distance(&pm);
+        }
+        g /= 2.0 * E;
+        let n = g.norm();
+        if n > 1e-9 {
+            g / n
+        } else {
+            Vector3::zeros()
+        }
+    }
+}
+
 impl ZoneShape {
     /// Distance signée au bord : < 0 à l'intérieur, 0 au bord, > 0 dehors.
     /// SDF standard pour la boîte (pénétration négative à l'intérieur).
@@ -73,6 +129,11 @@ pub struct Zone {
     /// Zone active
     #[serde(default = "default_enabled")]
     pub enabled: bool,
+    /// Effet positionnel optionnel (repel/attract/dampen/vortex) —
+    /// appliqué par le merge sur les positions non-overridées.
+    /// `None` = zone canaux-only (comportement historique).
+    #[serde(default)]
+    pub effect: Option<ZoneEffect>,
 }
 
 fn default_enabled() -> bool {
@@ -111,6 +172,44 @@ impl Zone {
                 .objects
                 .as_ref()
                 .is_none_or(|o| o.is_empty() || o.contains(&obj))
+    }
+
+    /// Déplacement positionnel de l'effet à `pos` (blendé par l'influence
+    /// SDF+falloff). Sans effet ou hors influence → vecteur nul.
+    /// Déterministe : `f(pos)` pur, pas d'accumulation entre frames.
+    pub fn effect_displacement(&self, pos: &Vector3<f64>) -> Vector3<f64> {
+        let Some(effect) = self.effect else {
+            return Vector3::zeros();
+        };
+        let influence = self.influence(pos);
+        if influence <= 0.0 {
+            return Vector3::zeros();
+        }
+        match effect {
+            ZoneEffect::Repel { strength } => {
+                self.shape.gradient(pos) * (strength * influence)
+            }
+            ZoneEffect::Attract { strength } => {
+                -self.shape.gradient(pos) * (strength * influence)
+            }
+            ZoneEffect::Dampen { strength } => {
+                let k = (strength * influence).clamp(0.0, 1.0);
+                (self.shape.center() - pos) * k
+            }
+            ZoneEffect::Vortex { strength } => {
+                // Rotation autour de l'axe Z passant par le centre —
+                // déflexion tangentielle proportionnelle à l'influence.
+                let c = self.shape.center();
+                let (x, y) = (pos.x - c.x, pos.y - c.y);
+                let a = strength * influence;
+                let (ca, sa) = (a.cos(), a.sin());
+                Vector3::new(
+                    c.x + x * ca - y * sa - pos.x,
+                    c.y + x * sa + y * ca - pos.y,
+                    0.0, // rotation Z : dz = 0
+                )
+            }
+        }
     }
 
     /// Construit une Zone depuis les params d'un node graphe :
@@ -154,8 +253,28 @@ impl Zone {
         {
             channels.set(SpatialChannel::from_str(&name)?, v);
         }
-        if channels.is_empty() {
-            return Err("Zone requires at least one channel".to_string());
+        // Effet positionnel optionnel : `"effect": "repel|attract|dampen|vortex"`
+        // + `"effect_strength": <f64>` (défaut 1.0).
+        let effect = match params.get("effect").and_then(|v| v.as_str()) {
+            None => None,
+            Some(s) => {
+                let strength = np::param_f64_or(params, "effect_strength", 1.0);
+                match s.to_lowercase().as_str() {
+                    "repel" => Some(ZoneEffect::Repel { strength }),
+                    "attract" => Some(ZoneEffect::Attract { strength }),
+                    "dampen" => Some(ZoneEffect::Dampen { strength }),
+                    "vortex" => Some(ZoneEffect::Vortex { strength }),
+                    "none" => None,
+                    other => {
+                        return Err(format!(
+                            "Unknown zone effect '{other}' (repel|attract|dampen|vortex|none)"
+                        ))
+                    }
+                }
+            }
+        };
+        if channels.is_empty() && effect.is_none() {
+            return Err("Zone requires at least one channel or an effect".to_string());
         }
         Ok(Zone {
             shape,
@@ -166,6 +285,7 @@ impl Zone {
                 .get("enabled")
                 .and_then(np::flex_bool)
                 .unwrap_or(true),
+            effect,
         })
     }
 }
@@ -202,6 +322,24 @@ pub fn any_zone_applies(zones: &[Zone], obj: usize, pos: &Vector3<f64>) -> bool 
         .any(|z| z.applies_to(obj) && z.influence(pos) > 0.0 && !z.channels.is_empty())
 }
 
+/// Déplacement positionnel combiné de toutes les zones à effet pour cet
+/// objet — somme des déplacements individuels, plafonnée à
+/// `MAX_ZONE_DISPLACEMENT` (garde-fou contre l'empilement de zones fortes).
+pub fn zone_displacement(zones: &[Zone], obj: usize, pos: &Vector3<f64>) -> Vector3<f64> {
+    let mut d = Vector3::zeros();
+    for zone in zones {
+        if zone.applies_to(obj) && zone.effect.is_some() {
+            d += zone.effect_displacement(pos);
+        }
+    }
+    let n = d.norm();
+    if n > MAX_ZONE_DISPLACEMENT {
+        d * (MAX_ZONE_DISPLACEMENT / n)
+    } else {
+        d
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::field_reassign_with_default)]
 mod tests {
@@ -219,6 +357,7 @@ mod tests {
             channels,
             objects: None,
             enabled: true,
+            effect: None,
         }
     }
 
@@ -313,6 +452,7 @@ mod tests {
             channels: ch2,
             objects: None,
             enabled: true,
+            effect: None,
         };
         let mut eff = SpatialChannels::default();
         apply_zones(&[z1, z2], 0, &Vector3::new(0.0, 0.0, 0.0), &mut eff);
@@ -420,5 +560,72 @@ mod tests {
         let mut eff = SpatialChannels::default();
         apply_zones(&[z], 7, &Vector3::new(0.0, 0.0, 0.0), &mut eff);
         assert_eq!(eff.gain, Some(0.0));
+    }
+
+    fn effect_zone(effect: ZoneEffect) -> Zone {
+        Zone {
+            shape: ZoneShape::Sphere {
+                center: [0.0, 0.0, 0.0],
+                radius: 2.0,
+            },
+            falloff: 0.0,
+            channels: SpatialChannels::default(),
+            objects: None,
+            enabled: true,
+            effect: Some(effect),
+        }
+    }
+
+    #[test]
+    fn test_effect_repel_pushes_outward() {
+        // Objet à (1,0,0) dedans une sphère centrée origine : ∇SDF = +x.
+        let z = effect_zone(ZoneEffect::Repel { strength: 1.0 });
+        let d = z.effect_displacement(&Vector3::new(1.0, 0.0, 0.0));
+        assert!((d.x - 1.0).abs() < 1e-3 && d.y.abs() < 1e-3, "d={d:?}");
+        // Hors influence → nul
+        assert_eq!(z.effect_displacement(&Vector3::new(5.0, 0.0, 0.0)), Vector3::zeros());
+    }
+
+    #[test]
+    fn test_effect_dampen_pulls_to_center() {
+        // strength 1.0 à influence 1.0 → k=1 → déplacement vers le centre.
+        let z = effect_zone(ZoneEffect::Dampen { strength: 1.0 });
+        let p = Vector3::new(1.0, 0.0, 0.0);
+        let d = z.effect_displacement(&p);
+        let moved = p + d;
+        assert!(moved.norm() < 1e-9, "moved={moved:?}");
+    }
+
+    #[test]
+    fn test_effect_vortex_tangential() {
+        // À (1,0,0), rotation d'angle a autour de l'axe Z du centre.
+        let z = effect_zone(ZoneEffect::Vortex { strength: 0.5 });
+        let d = z.effect_displacement(&Vector3::new(1.0, 0.0, 0.0));
+        assert!(d.y.abs() > 0.0, "tangential deflection expected, d={d:?}");
+        assert_eq!(d.z, 0.0);
+    }
+
+    #[test]
+    fn test_zone_displacement_clamped() {
+        // Deux zones repel empilées → déplacement combiné plafonné.
+        let zones = vec![
+            effect_zone(ZoneEffect::Repel { strength: 100.0 }),
+            effect_zone(ZoneEffect::Repel { strength: 100.0 }),
+        ];
+        let d = zone_displacement(&zones, 0, &Vector3::new(1.0, 0.0, 0.0));
+        assert!((d.norm() - MAX_ZONE_DISPLACEMENT).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_from_node_params_effect_only() {
+        // Une zone à effet seul (sans canal) est légitime.
+        let z = Zone::from_node_params(&serde_json::json!({
+            "shape": "sphere", "center": [0,0,0], "radius": 2,
+            "effect": "vortex", "effect_strength": 0.7
+        }))
+        .unwrap();
+        assert_eq!(z.effect, Some(ZoneEffect::Vortex { strength: 0.7 }));
+        // channels reste vide — any_zone_applies ne la voit pas (canaux only)
+        assert!(z.channels.is_empty());
     }
 }
