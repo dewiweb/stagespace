@@ -102,25 +102,21 @@ Le toggle **Expert/Simple** ouvre le node editor :
 - **Save** sauvegarde le graphe dans le slot — hot-swap : si le move tourne,
   le nouveau graphe remplace l'ancien en fondu.
 
-### 2.5 Busking — pads plein écran
+### 2.5 Jeu — pads busking
 
-![Busking](screenshots/07-busking.png)
+![Jeu — pads live](screenshots/14-jeu-live-radar.png)
 
-Bouton **BUSKING** (topbar Perform) : pads géants numérotés `#n`
-(= `oscIndex` stable — ne change pas au réordonnancement).
+La surface **Jeu** est le busking : pads numérotés `#n`
+(= `oscIndex` stable — ne change pas au réordonnancement), setlist à
+gauche, radar 2D à droite.
 
 - **Tap** = play/stop · **hold ≥350 ms** = bump momentané (joue tant que tenu)
-- **S** = solo (visible quand plusieurs moves jouent)
+- **S** = solo · `/stagespace/slot <n>` · `/solo` · `/unsolo` depuis la console
 - Fades propres à chaque slot (configurés en Edit/PERFORM)
-- Header : LIVE · PANIC · Fermer — le strict nécessaire en FOH.
 
 ### 2.6 Conduite — la vue FOH
 
 ![Conduite — cue armée + log OSC](screenshots/15-conduite-armed.png)
-
-![Conduite — surface réelle](screenshots/11-conduite.png)
-
-![Conduite overlay](screenshots/08-conduite-overlay.png)
 
 Bouton **CONDUITE** : NOW (cue courante, amber), NEXT (armée), *then*,
 timers `pre_wait`/`follow`, TC, statut. Le transport **Prev | GO | Next |
