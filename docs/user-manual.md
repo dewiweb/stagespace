@@ -114,6 +114,8 @@ Bouton **BUSKING** (topbar Perform) : pads géants numérotés `#n`
 
 ### 2.6 Conduite — la vue FOH
 
+![Conduite — surface réelle](screenshots/11-conduite.png)
+
 ![Conduite overlay](screenshots/08-conduite-overlay.png)
 
 Bouton **CONDUITE** : NOW (cue courante, amber), NEXT (armée), *then*,
@@ -190,6 +192,13 @@ vos mappings utilisateur.
 | `/stagespace/position <i> <x> <y> <z>` | position manuelle de l'objet *i* (reprise opérateur) |
 | `/stagespace/position/clear <i>` · `/position/clearall` | retire la position manuelle |
 | `/stagespace/trackpos <t> <x> <y> <z>` | position d'origine de la track *t* (où panic renvoie) |
+| `/stagespace/macro <name> <v>` | macro merge : speed, scale, shift_x/y/z, yaw/pitch/roll, radius_scale, height_offset |
+| `/stagespace/cue/arm <n>` · `/cue/go` | armer une cue sans la tirer · tirer l'armée (modèle console) |
+| `/stagespace/positions` | dump positions émises → `/stagespace/pos/state <obj> <x> <y> <z>` (backend-direct) |
+| `/stagespace/view <s>` | bascule la surface opérateur : `atelier` · `conduite` · `jeu` |
+| `/stagespace/show/load <path>` | charge un `.hfg` — **chemin local à la machine STAGESPACE** (alias `/stagespace/load`) |
+| `/stagespace/timecode/chase <0\|1>` · `/timecode/fps <n>` | chase on/off · fps du format string (24/25/30, défaut 25) |
+| `/stagespace/spatial` `attention` `throw` `gesture` `soundcheck` `rehearsal` | actions spatiales & répétition |
 | `/stagespace/arm` · `/disarm` | envoi OSC / **dry-run** |
 | `/stagespace/status` | renvoie cue courante/suivante au demandeur |
 | `/stagespace/timecode <s \| "HH:MM:SS:FF">` | timecode → chase |
@@ -264,7 +273,7 @@ Brancher un fader externe — onglet *OSC IN* (PerformView) :
 
 | Quoi | Où |
 |------|-----|
-| Show complet (graphes, slots, cues, OSC, FX) | fichier `.hfg` — Toolbar save/load |
+| Show complet (graphes, slots, cues, OSC, FX) | fichier `.hfg` — Toolbar save/load ou `/stagespace/show/load <path>` |
 | Projet Holophonix | `.hol` (import — source de vérité des tracks) |
 | Auto-save du graphe en édition | à chaque changement structurel |
 | Slots | localStorage (persistés entre sessions) |
@@ -277,6 +286,14 @@ Brancher un fader externe — onglet *OSC IN* (PerformView) :
 `examples/conduite-epilogue.hfg` (+ `.md`) : spectacle ~1 h 25, 19 cues,
 14 moves, deux actes + entracte — TC, follow, tracking, safety cue S1.
 Importez-le pour explorer tous les mécanismes.
+
+Quatre conduites scénarisées supplémentaires (`docs/conduites/*.md`) :
+`orbe-acousmatique.hfg` (24 tracks, 8 slots, 6 cues) · `grid-dj-spatial.hfg`
+(16 tracks, TC chase, busking) · `sillage-theatre.hfg` (tracking cues, PSN) ·
+`traverse-multimedia.hfg` (TC maître, canon, finale). Elles se chargent aussi
+via `/stagespace/show/load examples/orbe-acousmatique.hfg`.
+
+![Jeu — pads Orbe live](screenshots/12-jeu.png)
 
 ---
 
@@ -394,6 +411,8 @@ Le graphe *Global FX* (tab du node editor) ne produit pas de trajectoire — il
   (tab FX, colonne SHOW) affiche et édite.
 - Les modulations globales (macros d'ensemble) s'appliquent après merge —
   `macro:scale` d'un fader agit sur tous les moves simultanément.
+
+![Spatial FX](screenshots/11-spatial-fx.png)
 
 ## D. Spatial FX (tab FX)
 
