@@ -16,10 +16,21 @@ const SHORTCUTS: { keys: string; action: string }[] = [
   { keys: '?', action: 'This shortcuts panel' },
 ];
 
+/// Gestes souris — la moitié "live" de l'interface n'est pas au clavier.
+const MOUSE_GESTURES: { gesture: string; action: string }[] = [
+  { gesture: 'Drag object (3D / radar)', action: 'Grab → manual position (engine loses control)' },
+  { gesture: 'MANUAL bar / radar × badge', action: 'Release object(s) — engine resumes trajectory' },
+  { gesture: 'Ctrl+click object', action: 'Release a held object (same as the bar)' },
+  { gesture: 'Click radar (near object)', action: 'Select nearest object → inspect bar (state, release/park)' },
+  { gesture: 'Assign mode (3D)', action: 'Click objects to toggle their track in the move' },
+  { gesture: 'Draw mode (3D)', action: 'Draw a freehand spline trajectory' },
+  { gesture: 'Manipulate mode (3D)', action: 'Grab objects directly — proximity grab (~40px)' },
+];
+
 export const ShortcutsModal: React.FC = () => {
   const setOpen = useMoveEditorStore((s) => s.setShortcutsOpen);
   return (
-    <Modal title="Keyboard shortcuts" onClose={() => setOpen(false)}>
+    <Modal title="Shortcuts & gestures" onClose={() => setOpen(false)}>
       <div className="px-5 py-4">
         <table className="w-full text-xs">
           <tbody>
@@ -35,6 +46,19 @@ export const ShortcutsModal: React.FC = () => {
             ))}
           </tbody>
         </table>
+        <div className="mt-4 pt-3 border-t border-gray-800">
+          <div className="text-gray-300 text-xs font-semibold mb-1">Mouse</div>
+          <table className="w-full text-xs">
+            <tbody>
+              {MOUSE_GESTURES.map((g) => (
+                <tr key={g.gesture} className="border-b border-gray-800/50 last:border-0">
+                  <td className="py-1.5 pr-4 whitespace-nowrap text-gray-200">{g.gesture}</td>
+                  <td className="py-1.5 text-gray-400">{g.action}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <p className="text-gray-400 text-xs mt-3">
           Shortcuts are inactive while typing in a field. Esc closes any open panel before panicking.
         </p>

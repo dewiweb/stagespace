@@ -76,11 +76,18 @@ export const ModeButtons: React.FC<ModeButtonsProps> = ({
             <MousePointerClick size={11} className="inline -mt-0.5" /> Assign
           </button>
         )}
-        {!detached && hasDrawableNode && (
+        {!detached && (
           <button
-            onClick={() => setDrawMode(true)}
-            className="px-2.5 py-1 text-xs rounded font-medium transition-colors bg-gray-900/80 text-gray-400 hover:text-white border border-gray-700"
-            title="Draw a freehand spline trajectory (or flow line for a drawn VectorField)"
+            onClick={() => hasDrawableNode && setDrawMode(true)}
+            disabled={!hasDrawableNode}
+            className={`px-2.5 py-1 text-xs rounded font-medium transition-colors ${
+              hasDrawableNode
+                ? 'bg-gray-900/80 text-gray-400 hover:text-white border border-gray-700'
+                : 'bg-gray-900/40 text-gray-600 border border-gray-800 cursor-not-allowed'
+            }`}
+            title={hasDrawableNode
+              ? 'Draw a freehand spline trajectory (or flow line for a drawn VectorField)'
+              : 'No drawable node — add a DrawSpline / EvaluateSpline / VectorField(drawn) node first'}
           >
             <Pencil size={11} className="inline -mt-0.5" /> Draw
           </button>
