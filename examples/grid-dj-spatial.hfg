@@ -449,7 +449,8 @@
      "phase_offset": 0.0
     }
    ],
-   "audioMods": []
+   "audioMods": [],
+   "oscIndex": 1
   },
   {
    "id": "slot-spiral",
@@ -570,7 +571,8 @@
      "phase_offset": 0.0
     }
    ],
-   "audioMods": []
+   "audioMods": [],
+   "oscIndex": 2
   },
   {
    "id": "slot-orbitb",
@@ -691,7 +693,8 @@
      "phase_offset": 0.0
     }
    ],
-   "audioMods": []
+   "audioMods": [],
+   "oscIndex": 3
   },
   {
    "id": "slot-lead",
@@ -811,7 +814,8 @@
      "phase_offset": 0.0
     }
    ],
-   "audioMods": []
+   "audioMods": [],
+   "oscIndex": 4
   },
   {
    "id": "slot-transa",
@@ -938,7 +942,8 @@
      "phase_offset": 0.0
     }
    ],
-   "audioMods": []
+   "audioMods": [],
+   "oscIndex": 5
   },
   {
    "id": "slot-transb",
@@ -1065,7 +1070,8 @@
      "phase_offset": 0.0
     }
    ],
-   "audioMods": []
+   "audioMods": [],
+   "oscIndex": 6
   },
   {
    "id": "slot-vection",
@@ -1186,7 +1192,8 @@
      "phase_offset": 0.0
     }
    ],
-   "audioMods": []
+   "audioMods": [],
+   "oscIndex": 7
   },
   {
    "id": "slot-scatter",
@@ -1397,7 +1404,8 @@
      "phase_offset": 0.0
     }
    ],
-   "audioMods": []
+   "audioMods": [],
+   "oscIndex": 8
   },
   {
    "id": "slot-pads",
@@ -1536,7 +1544,8 @@
      "phase_offset": 0.0
     }
    ],
-   "audioMods": []
+   "audioMods": [],
+   "oscIndex": 9
   },
   {
    "id": "slot-stase",
@@ -1746,7 +1755,8 @@
      "phase_offset": 0.0
     }
    ],
-   "audioMods": []
+   "audioMods": [],
+   "oscIndex": 10
   }
  ],
  "setlistOrder": [
@@ -2341,7 +2351,46 @@
   "oscInPort": 8001
  },
  "spatialFx": [],
- "tracks": [],
+ "tracks": {
+  "holProject": null,
+  "manualOscIds": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11,
+   12,
+   13,
+   14,
+   15,
+   16
+  ],
+  "manualPositions": {},
+  "selectedTrackIds": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11,
+   12,
+   13,
+   14,
+   15,
+   16
+  ]
+ },
  "oscMappings": [],
  "macros": {}
 }

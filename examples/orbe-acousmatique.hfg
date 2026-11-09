@@ -375,7 +375,8 @@
      "phase_offset": 0.0
     }
    ],
-   "audioMods": []
+   "audioMods": [],
+   "oscIndex": 1
   },
   {
    "id": "slot-orbit",
@@ -514,7 +515,8 @@
      "phase_offset": 0.0
     }
    ],
-   "audioMods": []
+   "audioMods": [],
+   "oscIndex": 2
   },
   {
    "id": "slot-loom",
@@ -652,7 +654,8 @@
      "phase_offset": 0.0
     }
    ],
-   "audioMods": []
+   "audioMods": [],
+   "oscIndex": 3
   },
   {
    "id": "slot-respir",
@@ -803,7 +806,8 @@
      "phase_offset": 0.0
     }
    ],
-   "audioMods": []
+   "audioMods": [],
+   "oscIndex": 4
   },
   {
    "id": "slot-nuages",
@@ -942,7 +946,8 @@
      "phase_offset": 0.0
     }
    ],
-   "audioMods": []
+   "audioMods": [],
+   "oscIndex": 5
   },
   {
    "id": "slot-canon",
@@ -1080,7 +1085,8 @@
      "phase_offset": 0.0
     }
    ],
-   "audioMods": []
+   "audioMods": [],
+   "oscIndex": 6
   },
   {
    "id": "slot-elevation",
@@ -1314,7 +1320,8 @@
      "phase_offset": 0.0
     }
    ],
-   "audioMods": []
+   "audioMods": [],
+   "oscIndex": 7
   },
   {
    "id": "slot-scatter",
@@ -1477,7 +1484,8 @@
      "phase_offset": 0.0
     }
    ],
-   "audioMods": []
+   "audioMods": [],
+   "oscIndex": 8
   }
  ],
  "setlistOrder": [
@@ -2321,7 +2329,62 @@
   "oscInPort": 8001
  },
  "spatialFx": [],
- "tracks": [],
+ "tracks": {
+  "holProject": null,
+  "manualOscIds": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11,
+   12,
+   13,
+   14,
+   15,
+   16,
+   17,
+   18,
+   19,
+   20,
+   21,
+   22,
+   23,
+   24
+  ],
+  "manualPositions": {},
+  "selectedTrackIds": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11,
+   12,
+   13,
+   14,
+   15,
+   16,
+   17,
+   18,
+   19,
+   20,
+   21,
+   22,
+   23,
+   24
+  ]
+ },
  "oscMappings": [],
  "macros": {}
 }
