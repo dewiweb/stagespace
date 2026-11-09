@@ -176,6 +176,35 @@ Les slots se préparent à la balance, se tirent au numéro ou au doigt.
 
 ---
 
+## 4bis. Gestes spatiaux & expression live
+
+Commandes d'expression directe — utilisables depuis la console ou le busking :
+
+| Message | Effet |
+|---------|-------|
+| `/stagespace/throw <obj> <vx> <vy> <vz>` | lance l'objet *obj* avec une vélocité (balistique — il dérive et revient) |
+| `/stagespace/spatial <k>` | compresseur spatial global : `k<1` resserre le champ, `k>1` l'étend — geste live |
+| `/stagespace/attention <obj>` | fige tous les autres objets — un seul bouge (*change blindness*) ; `/attention/clear` libère |
+| `/stagespace/gesture <name> [strength]` | geste composé en une commande : `explode` · `converge` · `orbit` · `front` — vélocité calculée par objet |
+| `/stagespace/soundcheck [stop]` | sonde cyclique des objets (passe chaque track en revue — vérification des canaux) |
+| `/stagespace/rehearsal <action>` | mode répétition — contrôles de répétition (marqueurs, navigation) |
+
+## 4ter. Sémantique « continue » d'un move
+
+Deux flags par move/slot (onglet **Playback**) :
+
+- **`End: hold`** — à la fin d'un one-shot, les dernières positions deviennent
+  des positions manuelles : l'objet **reste où le move l'a laissé**
+  (`revert` par défaut = retour à la position de base).
+- **`Anchor: current`** — au lancement, chaque objet capture sa position
+  courante comme ancre (`delta = capturée − traj(0)`) : le move part **de là
+  où l'objet est**, sans saut — chaînage move→move façon release/peg-out.
+
+Combinés, `hold` fige l'objet au point d'arrivée et `current` fait démarrer
+le move suivant depuis ce point — conduite « continue » sans téléportations.
+
+---
+
 ## 5. Référence OSC show-control (`/stagespace/*`)
 
 Port entrant = `oscInPort` (défaut 8001). Préfixe réservé — intercepté avant
@@ -425,6 +454,19 @@ objet déclarés par le graphe global :
 - **Modulations** : canaux déclarés par les nœuds `Velocity` du graphe global.
 - **Canaux objet** : gain/spread/distance/presence par objet — l'équivalent
   spatial d'un fader par track.
+
+## E2. Trackers externes (PSN)
+
+STAGESPACE consomme le protocole **PosiStageNet** (PSN) pour le tracking
+d'acteurs/danseurs — les trackers apparaissent comme sources de position
+(tracker_map) et peuvent piloter des moves Follow ou des positions d'objets.
+Le scénario `sillage-theatre` l'utilise pour suivre les danseurs.
+
+## E3. Plugins `.ssx` (moteurs WASM)
+
+Les moteurs externes packagés `.ssx` (WASM) se placent dans le dossier
+`plugins` de l'app — ils apparaissent comme nœud `Plugin` dans le graphe
+et compilent comme les moteurs natifs. SDK : `plugin-sdk/` + `plugin-examples/`.
 
 ## E. Référence Settings
 
