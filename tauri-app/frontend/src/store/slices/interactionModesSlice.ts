@@ -39,14 +39,18 @@ type Store = InteractionModesSlice & { drawMode: boolean };
 
 export const createInteractionModesSlice: StateCreator<Store, [], [], InteractionModesSlice> = (set, get) => ({
   manipulateMode: false,
+  // Chaque setter purge TOUS les autres modes — sinon deux modes armés
+  // empilent leurs overlays : celui peint au-dessus capture les events et
+  // l'autre reste "actif" (banner) mais mort. zoneEdit l'avait, pas les
+  // autres (bug : zoneEdit + manipulate coexistaient).
   setManipulateMode: (v) =>
-    set(v ? { manipulateMode: true, drawMode: false, assignMode: false } : { manipulateMode: false }),
+    set(v ? { manipulateMode: true, drawMode: false, assignMode: false, zonePlaceMode: false, zoneEditMode: false } : { manipulateMode: false }),
   assignMode: false,
   setAssignMode: (v) =>
-    set(v ? { assignMode: true, drawMode: false, manipulateMode: false, zonePlaceMode: false } : { assignMode: false }),
+    set(v ? { assignMode: true, drawMode: false, manipulateMode: false, zonePlaceMode: false, zoneEditMode: false } : { assignMode: false }),
   zonePlaceMode: false,
   setZonePlaceMode: (v) =>
-    set(v ? { zonePlaceMode: true, drawMode: false, manipulateMode: false, assignMode: false } : { zonePlaceMode: false }),
+    set(v ? { zonePlaceMode: true, drawMode: false, manipulateMode: false, assignMode: false, zoneEditMode: false } : { zonePlaceMode: false }),
   pendingZonePoint: null,
   setPendingZonePoint: (p) => set({ pendingZonePoint: p }),
   zonePlaceTarget: null,

@@ -398,7 +398,10 @@ export function useRenderLoop({
           manipMode ||
           storeState.assignMode ||
           storeState.zonePlaceMode ||
-          storeState.zoneEditMode;
+          storeState.zoneEditMode ||
+          // Draw aussi : on dessine une trajectoire AUTOUR des objets —
+          // une scène vide rendrait le geste aveugle.
+          storeState.drawMode;
         const showObjects = needsObjects || mvts.length > 0;
         objs.forEach((mesh) => { hideMeshAndLabels(mesh); });
         if (showObjects) {
