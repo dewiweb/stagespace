@@ -39,7 +39,7 @@ jobs:
             bundles: deb,appimage
           # Windows/macOS unsigned fonctionnent mais affichent un
           # avertissement (SmartScreen / Gatekeeper).
-          - os: macos-14
+          - os: macos-15
             bundles: dmg,app
           - os: windows-latest
             bundles: msi,nsis
