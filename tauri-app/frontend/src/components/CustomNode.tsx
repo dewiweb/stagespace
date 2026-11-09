@@ -1,14 +1,14 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { X, Check } from 'lucide-react';
 import { Handle, Position, NodeProps, type Node } from '@xyflow/react';
-import { Slider } from './ui/Slider';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import { useSignalGraphStore } from '../store/useSignalGraphStore';
 import { PARAM_SCHEMA, getCategoryColor, pluginNodeSchema, pluginParamsOnSwitch, type ParamDef, type NodeParamValue, type GraphNode } from './nodeParamSchema';
 import { isSourceNode, isTerminalNode, isBinaryComposite, getInputPorts, getOutputPorts, PORT_COLORS } from '../utils/connectionRules';
 import { signalTargetOptions, modulatedParamKeys } from '../utils/signalTargets';
-import { LinkedTracksField, NODE_INPUT_CLS, NODE_INPUT_MONO_CLS } from './editor/LinkedTracksField';
+import { LinkedTracksField, NODE_INPUT_CLS } from './editor/LinkedTracksField';
+import { ParamInput } from './ParamInput';
 
 const AUDIO_NODE_TYPES = new Set(['BPM', 'AudioAmplitude', 'AudioSpectrum', 'AudioAmplitudeFalloff']);
 
@@ -122,122 +122,41 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
   const renderInput = (def: ParamDef) => {
     const value = data.params?.[def.key];
 
-    switch (def.type) {
-      case 'number':
-        // Param borné → slider (plus intuitif qu'un input nu : la plage
-        // est visible d'un coup d'œil, cohérent avec le panel Params).
-        if (typeof def.min === 'number' && typeof def.max === 'number') {
-          return (
-            <Slider
-              label={def.label}
-              value={typeof value === 'number' ? value : 0}
-              min={def.min}
-              max={def.max}
-              step={def.step ?? 0.1}
-              accent="cyan"
-              layout="stack"
-              onChange={(v) => handleChange(def.key, v)}
-            />
-          );
-        }
-        return (
-          <input
-            type="number"
-            step={def.step ?? 0.1}
-            min={def.min}
-            max={def.max}
-            value={typeof value === 'number' ? value : 0}
-            onChange={(e) => handleChange(def.key, parseFloat(e.target.value) || 0)}
-            onKeyDown={blurOnEnter}
-            className={NODE_INPUT_CLS}
-          />
-        );
-      case 'boolean':
-        return (
-          <button
-            onClick={() => handleChange(def.key, value !== true)}
-            className={`relative w-9 h-5 rounded-full transition-colors ${value === true ? 'bg-blue-600' : 'bg-gray-700'}`}
-            aria-label={def.label}
-          >
-            <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${value === true ? 'translate-x-4' : ''}`} />
-          </button>
-        );
-      case 'enum':
-        return (
-          <select
-            value={typeof value === 'string' ? value : ''}
-            onChange={(e) => {
-              handleChange(def.key, e.target.value);
-              // Rendre le focus : sinon le select garde la main (flèches/
-              // space continuent de changer la valeur au lieu d'agir sur
-              // le canvas — sensation d'être "coincé" dans le dropdown).
-              e.currentTarget.blur();
-            }}
-            onKeyDown={blurOnEnter}
-            className={NODE_INPUT_CLS}
-          >
-            {def.options?.map((opt) => (
-              <option key={opt} value={opt}>{opt}</option>
-            ))}
-          </select>
-        );
-      case 'vec3': {
-        const arr = Array.isArray(value) ? value : [0, 0, 0];
-        return (
-          <input
-            type="text"
-            value={arr.join(', ')}
-            onChange={(e) => {
-              const parsed = e.target.value.split(',').map((v) => parseFloat(v.trim()));
-              if (parsed.length === 3 && parsed.every((n) => !isNaN(n))) {
-                handleChange(def.key, parsed);
-              }
-            }}
-            onKeyDown={blurOnEnter}
-            className={NODE_INPUT_MONO_CLS}
-            placeholder="x, y, z"
-          />
-        );
-      }
-      case 'text':
-      case 'string': {
-        if (data.type === 'SignalOut' && def.key === 'target') {
-          // Cibles : macros + params modulables du graphe du move édité.
-          const options = signalTargetOptions(moveNodes as unknown as GraphNode[]);
-          const current = typeof value === 'string' ? value : '';
-          return (
-            <select
-              value={current}
-              onChange={(e) => {
-                handleChange(def.key, e.target.value);
-                e.currentTarget.blur();
-              }}
-              onKeyDown={blurOnEnter}
-              className={NODE_INPUT_CLS}
-            >
-              <option value="">(inert)</option>
-              {current !== '' && !options.some((o) => o.value === current) && (
-                <option value={current}>{current}</option>
-              )}
-              {options.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          );
-        }
-        return (
-          <input
-            type="text"
-            value={typeof value === 'string' ? value : ''}
-            onChange={(e) => handleChange(def.key, e.target.value)}
-            onKeyDown={blurOnEnter}
-            className={NODE_INPUT_MONO_CLS}
-          />
-        );
-      }
-      default:
-        return null;
+    // Cible SignalOut : select macros + params modulables du graphe du
+    // move édité — cas node-spécifique, pas un type ParamDef générique.
+    if ((def.type === 'text' || def.type === 'string') && data.type === 'SignalOut' && def.key === 'target') {
+      const options = signalTargetOptions(moveNodes as unknown as GraphNode[]);
+      const current = typeof value === 'string' ? value : '';
+      return (
+        <select
+          value={current}
+          onChange={(e) => {
+            handleChange(def.key, e.target.value);
+            e.currentTarget.blur();
+          }}
+          onKeyDown={blurOnEnter}
+          className={NODE_INPUT_CLS}
+        >
+          <option value="">(inert)</option>
+          {current !== '' && !options.some((o) => o.value === current) && (
+            <option value={current}>{current}</option>
+          )}
+          {options.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+      );
     }
+
+    // Rendu générique unique — variante 'compact' (inputs nus du node).
+    return (
+      <ParamInput
+        def={def}
+        value={value}
+        variant="compact"
+        onChange={(v) => handleChange(def.key, v)}
+      />
+    );
   };
 
   const trackIdsValue = trackIdsText !== null ? trackIdsText : ((data.params?.track_ids as number[]) ?? []).join(', ');

@@ -4,6 +4,7 @@ import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { TrackGrid } from './TrackGrid';
 import { PARAM_SCHEMA, NODE_DESCRIPTIONS, getCategoryColor, type ParamDef, type NodeParamValue, type GraphNodeData } from './nodeParamSchema';
 import { NodeParamsPanel } from './NodeParamsPanel';
+import { ParamInput } from './ParamInput';
 import type { MacrosState } from '../store/slices/macrosSlice';
 import { silentCatch } from '../utils/tauri';
 
@@ -152,68 +153,17 @@ export default function Inspector() {
     graphHotSwapDebounce.current = setTimeout(() => { updateGraphLive(); }, 150);
   };
 
-  const renderNodeParamInput = (def: ParamDef, params: Record<string, NodeParamValue>, onChange: (key: string, value: NodeParamValue) => void) => {
-    const value = params?.[def.key];
-    switch (def.type) {
-      case 'number':
-        return (
-          <div className="flex items-center gap-2">
-            <span className="text-gray-400 text-xs w-20 flex-shrink-0">{def.label}</span>
-            <input type="number" step={def.step ?? 0.1} min={def.min} max={def.max}
-              value={typeof value === 'number' ? value : 0}
-              onChange={(e) => onChange(def.key, parseFloat(e.target.value) || 0)}
-              className="flex-1 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none" />
-          </div>
-        );
-      case 'boolean':
-        return (
-          <div className="flex items-center gap-2">
-            <span className="text-gray-400 text-xs w-20 flex-shrink-0">{def.label}</span>
-            <button onClick={() => onChange(def.key, value !== true)}
-              className={`relative w-9 h-5 rounded-full transition-colors ${value === true ? 'bg-blue-600' : 'bg-gray-700'}`}>
-              <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${value === true ? 'translate-x-4' : ''}`} />
-            </button>
-          </div>
-        );
-      case 'enum':
-        return (
-          <div className="flex items-center gap-2">
-            <span className="text-gray-400 text-xs w-20 flex-shrink-0">{def.label}</span>
-            <select value={typeof value === 'string' ? value : ''}
-              onChange={(e) => onChange(def.key, e.target.value)}
-              className="flex-1 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none">
-              {def.options?.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-            </select>
-          </div>
-        );
-      case 'vec3': {
-        const arr = Array.isArray(value) ? value : [0, 0, 0];
-        return (
-          <div className="flex items-center gap-2">
-            <span className="text-gray-400 text-xs w-20 flex-shrink-0">{def.label}</span>
-            <input type="text" value={arr.join(', ')}
-              onChange={(e) => {
-                const parsed = e.target.value.split(',').map((v) => parseFloat(v.trim()));
-                if (parsed.length === 3 && parsed.every((n) => !isNaN(n))) onChange(def.key, parsed);
-              }}
-              className="flex-1 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
-              placeholder="x, y, z" />
-          </div>
-        );
-      }
-      case 'text':
-      case 'string':
-        return (
-          <div className="flex items-center gap-2">
-            <span className="text-gray-400 text-xs w-20 flex-shrink-0">{def.label}</span>
-            <input type="text" value={typeof value === 'string' ? value : ''}
-              onChange={(e) => onChange(def.key, e.target.value)}
-              className="flex-1 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono" />
-          </div>
-        );
-      default: return null;
-    }
-  };
+  // Rendu param unifié — ParamInput variante 'field' (sliders bornés
+  // comme le drawer Params, live = hot-swap actif sur le slot édité).
+  const renderNodeParamInput = (def: ParamDef, params: Record<string, NodeParamValue>, onChange: (key: string, value: NodeParamValue) => void) => (
+    <ParamInput
+      def={def}
+      value={params?.[def.key]}
+      live={editingIsLive}
+      onChange={(v) => onChange(def.key, v)}
+      variant="field"
+    />
+  );
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-stagespace-panel">
