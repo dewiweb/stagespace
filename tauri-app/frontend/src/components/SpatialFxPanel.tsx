@@ -102,6 +102,22 @@ export default function SpatialFxPanel() {
   const sentLabel = (c: SpatialChannelName) =>
     profileChannels && !profileChannels.includes(c) ? ' (not sent)' : '';
 
+  // Readback live : canaux effectifs calculés par le merge par objet
+  // (statiques ⊕ modulés ⊕ zones) — rend l'effet des FX visible sans
+  // écouter le rendu. Poll ~2Hz comme les perf stats.
+  const [liveChannels, setLiveChannels] = React.useState<Record<number, Record<string, number>>>({});
+  React.useEffect(() => {
+    const tick = () => {
+      invoke<Record<number, Record<string, number>>>('list_effective_channels')
+        .then(setLiveChannels)
+        .catch(() => {});
+    };
+    tick();
+    const iv = setInterval(tick, 500);
+    return () => clearInterval(iv);
+  }, []);
+  const liveEntries = Object.entries(liveChannels);
+
   // Modes interactifs → reset au démontage : sinon un mode place/edit
   // oublié survive au switch de tab et intercepte les clics du canvas 3D.
   React.useEffect(() => {
@@ -597,6 +613,21 @@ export default function SpatialFxPanel() {
             Set Channel
           </button>
         </div>
+        {/* Readback live — canaux effectifs calculés par le merge
+            (statiques ⊕ modulés ⊕ zones) : l'effet réel des réglages,
+            visible sans écouter le rendu. */}
+        {liveEntries.length > 0 && (
+          <div className="mb-2 px-2 py-1.5 bg-cyan-950/30 rounded border border-cyan-900/40">
+            <div className="text-[9px] text-cyan-500/80 uppercase tracking-widest mb-1">live — computed by merge</div>
+            <div className="space-y-0.5 max-h-28 overflow-y-auto">
+              {liveEntries.map(([obj, ch]) => (
+                <div key={obj} className="text-[10px] font-mono text-cyan-200/80 truncate">
+                  #{obj} · {describeChannels(ch)}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {channelEntries.length === 0 ? (
           <EmptyState
             size="sm"

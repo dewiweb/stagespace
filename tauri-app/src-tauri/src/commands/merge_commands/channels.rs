@@ -59,6 +59,17 @@ pub async fn list_spatial_channels(
     Ok(merge_rt.object_channels())
 }
 
+/// Canaux effectifs calculés par objet (statiques ⊕ modulés ⊕ zones) —
+/// readback live pour l'UI : montre l'effet réel des réglages sans
+/// écouter le rendu (audit : les FX semblaient inertes).
+#[tauri::command]
+pub async fn list_effective_channels(
+    state: State<'_, AppState>,
+) -> Result<std::collections::HashMap<usize, SpatialChannels>, IpcError> {
+    let merge_rt = lock_or_recover(&state.merge_runtime);
+    Ok(merge_rt.effective_channels())
+}
+
 /// Liste les règles de modulation cinématique actives
 #[tauri::command]
 pub async fn list_channel_modulations(

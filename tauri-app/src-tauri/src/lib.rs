@@ -29,7 +29,7 @@ use commands::merge_commands::{
     clear_spatial_channel, clear_zones, deactivate_all_moves, deactivate_move, diagnose_graph,
     get_merge_perf_stats, get_track_positions, list_active_moves, list_channel_modulations,
     list_graph_effects, list_spatial_channels, list_zones, get_profile_channels,
-    remove_channel_modulation, remove_zone,
+    list_effective_channels, remove_channel_modulation, remove_zone,
     set_global_macro, set_global_origin, set_global_osc_ids, set_kinematic_smoothing,
     set_manual_position, set_merge_strategy, set_move_playback_mode, set_move_priority,
     set_move_speed, set_move_weight, set_spatial_channel, set_track_depths, set_track_position,
@@ -575,6 +575,7 @@ pub fn run() {
             // Effets déclarés par le graph global (nodes Zone/Velocity)
             list_graph_effects,
             get_profile_channels,
+            list_effective_channels,
             // Cue commands (Phase 3 — cue system étendu)
             store_cue,
             recall_cue,

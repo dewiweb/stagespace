@@ -177,6 +177,10 @@ pub struct MergeRuntime {
     /// Dernières positions monde émises par objet — source des ancres
     /// `AnchorMode::Current` au spawn du move suivant.
     last_out_positions: Arc<RwLock<HashMap<usize, [f64; 3]>>>,
+    /// Derniers canaux spatiaux effectifs calculés par objet (statiques ⊕
+    /// modulés ⊕ zones) — readback opérateur : rend l'effet des FX visible
+    /// sans écouter le rendu (audit : les réglages semblaient inertes).
+    last_effective_channels: Arc<RwLock<HashMap<usize, SpatialChannels>>>,
     /// Positions canoniques pré-post-process (merged ∪ manual — manual
     /// gagne, comme le post-process). Graine des anchors/freeze/throw :
     /// seed depuis last_out (post-macro) provoquerait un double-transform.
@@ -350,6 +354,7 @@ impl MergeRuntime {
             parked_objects: Arc::new(RwLock::new(HashSet::new())),
             move_end_modes: Arc::new(RwLock::new(HashMap::new())),
             last_out_positions: Arc::new(RwLock::new(HashMap::new())),
+            last_effective_channels: Arc::new(RwLock::new(HashMap::new())),
             last_canonical_positions: Arc::new(RwLock::new(HashMap::new())),
             held_objects: Arc::new(RwLock::new(HashSet::new())),
             psn_objects: Arc::new(RwLock::new(HashSet::new())),
@@ -1165,6 +1170,15 @@ impl MergeRuntime {
             .clone()
     }
 
+    /// Canaux spatiaux effectifs calculés par objet (statiques ⊕ modulés ⊕
+    /// zones) — readback opérateur pour le panneau FX.
+    pub fn effective_channels(&self) -> HashMap<usize, SpatialChannels> {
+        self.last_effective_channels
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
     /// Position tape : record start/stop (start vide la bande).
     pub fn set_tape_recording(&self, on: bool) {
         if on {
@@ -1578,6 +1592,7 @@ impl MergeRuntime {
         let manual_positions_arc = self.manual_positions.clone();
         let move_end_modes_arc = self.move_end_modes.clone();
         let last_out_positions_arc = self.last_out_positions.clone();
+        let last_effective_channels_arc = self.last_effective_channels.clone();
         let last_canonical_arc = self.last_canonical_positions.clone();
         let held_objects_arc = self.held_objects.clone();
         let venue_map_arc = self.venue_map.clone();
@@ -2655,6 +2670,22 @@ impl MergeRuntime {
                                             }
                                         }
                                     };
+                                // Readback opérateur — les canaux FX calculés
+                                // (statiques ⊕ modulés ⊕ zones) rendent l'effet
+                                // visible sans écouter le rendu.
+                                {
+                                    let mut ec = last_effective_channels_arc
+                                        .write()
+                                        .unwrap_or_else(|e| e.into_inner());
+                                    match &effective {
+                                        Some(e) => {
+                                            ec.insert(*obj_idx, *e);
+                                        }
+                                        None => {
+                                            ec.remove(obj_idx);
+                                        }
+                                    }
+                                }
                                 let report = {
                                     // Auto-venue + réalité-distance : seul
                                     // le payload OSC est transformé —
