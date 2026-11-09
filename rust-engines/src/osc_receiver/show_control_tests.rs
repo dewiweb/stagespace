@@ -239,7 +239,11 @@ fn ack_goes_back_to_sender() {
 #[test]
 fn view_parse() {
     assert_eq!(
-        parse_show_command("/stagespace/view", &[OscType::String("conduite".into())], 25.0),
+        parse_show_command(
+            "/stagespace/view",
+            &[OscType::String("conduite".into())],
+            25.0
+        ),
         Some(ShowCommand::View("conduite".into()))
     );
     // Sans arg → refusé.
@@ -249,7 +253,11 @@ fn view_parse() {
 #[test]
 fn show_load_parse() {
     assert_eq!(
-        parse_show_command("/stagespace/show/load", &[OscType::String("/tmp/s.hfg".into())], 25.0),
+        parse_show_command(
+            "/stagespace/show/load",
+            &[OscType::String("/tmp/s.hfg".into())],
+            25.0
+        ),
         Some(ShowCommand::ShowLoad("/tmp/s.hfg".into()))
     );
     assert_eq!(
