@@ -187,7 +187,7 @@ Commandes d'expression directe — utilisables depuis la console ou le busking :
 | `/stagespace/attention <obj>` | fige tous les autres objets — un seul bouge (*change blindness*) ; `/attention/clear` libère |
 | `/stagespace/gesture <name> [strength]` | geste composé en une commande : `explode` · `converge` · `orbit` · `front` — vélocité calculée par objet |
 | `/stagespace/soundcheck [stop]` | sonde cyclique des objets (passe chaque track en revue — vérification des canaux) |
-| `/stagespace/rehearsal <action>` | mode répétition & pos-tape (voir ci-dessous) |
+| `/stagespace/rehearsal <action>` | mode répétition & pos-tape — alias `/stagespace/record` (voir ci-dessous) |
 
 **Pos-tape** (`/stagespace/rehearsal <action>`) — enregistrement/rejeu de positions :
 
@@ -422,6 +422,7 @@ par bande) · `OSCInput` (valeur OSC entrante)
 | `Merge` | stratégie de résolution quand plusieurs moves ciblent la même track (override/crossfade/blend/priority — le dernier écrivain gagne) |
 | `Zone` | déclare une zone spatiale pour le panel Spatial FX |
 | `Velocity` | déclare un canal de modulation vélocité |
+| `ManualPosition` | override de position manuelle — lit les drags 3D (positionnement à la main) |
 
 ### A.9 Composite & plugins
 
