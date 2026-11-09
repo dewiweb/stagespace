@@ -308,6 +308,8 @@ Brancher un fader externe — onglet *OSC IN* (PerformView) :
   zones/modulations/channels, remove par-item) passe par une boîte de
   confirmation — fini les deletes en un clic.
 
+![Confirmation de suppression](screenshots/09-confirm-delete.png)
+
 - **Guards recall** : pendant un recall, les commandes slot/cue sont rejetées
   (`nack busy`) plutôt qu'intercalées — jamais de mouvement orphelin.
 
