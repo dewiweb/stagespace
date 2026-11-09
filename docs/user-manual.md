@@ -86,6 +86,8 @@ conduite détachable**. Le mode **Edit** sert à la préparation.
 
 ### 2.4 Expert — l'éditeur de graphe
 
+![Éditeur de nœuds](screenshots/05-node-editor.png)
+
 Le toggle **Expert/Simple** ouvre le node editor :
 
 - **Tabs** : `Move graph` (le graphe du slot édité) · `Global FX` (post-traitement
