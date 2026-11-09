@@ -20,6 +20,7 @@
 //! - OSC output : une seule socket
 //! - Callback : un seul event Tauri pour le 3D preview
 
+mod frame_helpers;
 mod helpers;
 mod loop_core;
 mod move_state;

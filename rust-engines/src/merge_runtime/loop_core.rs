@@ -124,48 +124,11 @@ impl MergeRuntime {
                 // Position tape replay — avance le curseur et injecte
                 // les entrées échues en positions manuelles (rythme
                 // réel, timing backend).
-                {
-                    let mut play = tape_play_arc.write().unwrap_or_else(|e| e.into_inner());
-                    if let Some((start, entries, cursor)) = play.as_mut() {
-                        let elapsed = start.elapsed().as_secs_f64();
-                        let mut manual = manual_positions_arc
-                            .write()
-                            .unwrap_or_else(|e| e.into_inner());
-                        while *cursor < entries.len() && entries[*cursor].0 <= elapsed {
-                            for (obj, pos) in &entries[*cursor].1 {
-                                manual.insert(*obj, *pos);
-                            }
-                            *cursor += 1;
-                        }
-                        if *cursor >= entries.len() {
-                            *play = None; // bande finie
-                        }
-                    }
-                }
+                frame_helpers::advance_tape_replay(&tape_play_arc, &manual_positions_arc);
 
                 // Grab & throw : intègre les lancés — pos += v·dt avec
                 // amortissement ; |v| < eps → position manuelle au repos.
-                {
-                    let mut thrown = thrown_arc.write().unwrap_or_else(|e| e.into_inner());
-                    if !thrown.is_empty() {
-                        let damp = (-2.0 * dt).exp(); // ~amortissement 2/s
-                        let mut manual = manual_positions_arc
-                            .write()
-                            .unwrap_or_else(|e| e.into_inner());
-                        thrown.retain(|obj, vel| {
-                            if let Some(p) = manual.get_mut(obj) {
-                                p[0] += vel[0] * dt;
-                                p[1] += vel[1] * dt;
-                                p[2] += vel[2] * dt;
-                            }
-                            vel[0] *= damp;
-                            vel[1] *= damp;
-                            vel[2] *= damp;
-                            let speed2 = vel[0] * vel[0] + vel[1] * vel[1] + vel[2] * vel[2];
-                            speed2 > 1e-4 // retiré quand quasi-arrêté
-                        });
-                    }
-                }
+                frame_helpers::integrate_thrown(&thrown_arc, &manual_positions_arc, dt);
 
                 // 1. Lire tous les buffers (read lock très court)
                 let buffers = timed_lock!(
@@ -819,79 +782,21 @@ impl MergeRuntime {
                 // Vu-mètre perceptuel — vitesses par frame sur `transformed`
                 // (espace canonique — ce que l'opérateur perçoit, pas le
                 // payload venue-mappé).
-                {
-                    let now = Instant::now();
-                    let dt = prev_perceptual_instant
-                        .map(|p: Instant| (now - p).as_secs_f64())
-                        .unwrap_or(0.0);
-                    if dt > 1e-3 {
-                        let mut metrics = PerceptualMetrics::default();
-                        let mut pos_count = 0usize;
-                        let mut same_sign = 0usize;
-                        let mut dominant = 0i32;
-                        for (obj_idx, pos) in &transformed {
-                            let Some(prev) = prev_transformed.get(obj_idx) else {
-                                continue;
-                            };
-                            let v = (pos - prev) / dt;
-                            let r = pos.norm();
-                            if r < 0.01 {
-                                continue;
-                            }
-                            let radial = v.dot(pos) / r;
-                            let tangential = (v - pos * (radial / r)).norm();
-                            metrics
-                                .legibility_deg_s
-                                .insert(*obj_idx, (tangential / r).to_degrees());
-                            if -radial > metrics.looming_ms {
-                                metrics.looming_ms = -radial;
-                            }
-                            let az = pos.x * v.y - pos.y * v.x; // composante azimutale
-                            if az.abs() > 1e-4 {
-                                pos_count += 1;
-                                let s = if az > 0.0 { 1 } else { -1 };
-                                if dominant == 0 {
-                                    dominant = s;
-                                }
-                                if s == dominant {
-                                    same_sign += 1;
-                                }
-                            }
-                        }
-                        metrics.vection = if pos_count > 0 {
-                            same_sign as f64 / pos_count as f64
-                        } else {
-                            0.0
-                        };
-                        *perceptual_arc.write().unwrap_or_else(|e| e.into_inner()) = metrics;
-                    }
-                    prev_transformed = transformed.iter().map(|(i, p)| (*i, *p)).collect();
-                    prev_perceptual_instant = Some(now);
-                }
+                frame_helpers::update_perceptual(
+                    &transformed,
+                    &mut prev_transformed,
+                    &mut prev_perceptual_instant,
+                    &perceptual_arc,
+                );
                 // Position tape record — snapshot décimé (~30Hz) des
                 // positions émises (t depuis le début de la bande).
-                if tape_rec_arc.load(std::sync::atomic::Ordering::Relaxed) {
-                    tape_frame_ctr = tape_frame_ctr.wrapping_add(1);
-                    if tape_frame_ctr.is_multiple_of(2) {
-                        let t = tape_t0
-                            .map(|t0| t0.elapsed().as_secs_f64())
-                            .unwrap_or_else(|| {
-                                tape_t0 = Some(Instant::now());
-                                0.0
-                            });
-                        // On enregistre le canonique pré-pp — sinon le
-                        // replay en manual_positions subirait les macros
-                        // une seconde fois (double-transform).
-                        let snap: HashMap<usize, [f64; 3]> = last_canonical_arc
-                            .read()
-                            .unwrap_or_else(|e| e.into_inner())
-                            .clone();
-                        pos_tape_arc
-                            .write()
-                            .unwrap_or_else(|e| e.into_inner())
-                            .push((t, snap));
-                    }
-                }
+                frame_helpers::maybe_record_tape(
+                    &tape_rec_arc,
+                    &mut tape_frame_ctr,
+                    &mut tape_t0,
+                    &last_canonical_arc,
+                    &pos_tape_arc,
+                );
                 // Règles = graph-déclarées puis manuelles — les manuelles
                 // écrasent le graph sur les canaux qu'elles ciblent.
                 let modulated_channels: HashMap<usize, SpatialChannels> = {
@@ -1318,47 +1223,19 @@ impl MergeRuntime {
                 // les 5 s, top des sites par attente cumulée ramenée à la
                 // frame — attribution fine de la contention sans coût quand
                 // le flag est absent (lock_sites reste vide).
-                if lock_profiling {
-                    lock_profile_frames += 1;
-                    lock_profile_total_ns += lock_wait_ns;
-                    if last_lock_dump.elapsed() >= Duration::from_secs(5) {
-                        let frames = lock_profile_frames.max(1) as f64;
-                        let mut ranked: Vec<(&'static str, u64)> = lock_sites.drain().collect();
-                        ranked.sort_by_key(|entry| std::cmp::Reverse(entry.1));
-                        let top = ranked
-                            .iter()
-                            .take(10)
-                            .map(|(name, ns)| format!("{name}={:.0}", *ns as f64 / frames))
-                            .collect::<Vec<_>>()
-                            .join(" ");
-                        eprintln!(
-                            "[lock-prof] {} frames, wait_total={:.0} ns/frame :: {}",
-                            lock_profile_frames,
-                            lock_profile_total_ns as f64 / frames,
-                            top
-                        );
-                        lock_profile_frames = 0;
-                        lock_profile_total_ns = 0;
-                        last_lock_dump = Instant::now();
-                    }
-                }
+                frame_helpers::maybe_dump_lock_prof(
+                    lock_profiling,
+                    &mut lock_profile_frames,
+                    &mut lock_profile_total_ns,
+                    &mut last_lock_dump,
+                    &mut lock_sites,
+                    lock_wait_ns,
+                );
 
                 // Timing précis + re-ancrage : après un stall (pause debug,
                 // emit bloquant, préemption), on ne burst pas des centaines de
                 // frames obsolètes — on ré-ancre frame_count sur le temps réel.
-                let target_time = frame_count as u128 * frame_duration.as_nanos();
-                let current_time = start.elapsed().as_nanos();
-                if target_time > current_time {
-                    let sleep_ns = (target_time - current_time) as u64;
-                    // std::thread::sleep au lieu de spin_sleep — rend la main à
-                    // l'OS. Précision ~1-2ms suffisante pour 60 FPS.
-                    std::thread::sleep(Duration::from_nanos(sleep_ns));
-                } else if current_time - target_time
-                    > CATCHUP_FRAME_LIMIT * frame_duration.as_nanos()
-                {
-                    start = Instant::now();
-                    frame_count = 0;
-                }
+                frame_helpers::pace_frame(&mut start, &mut frame_count, frame_duration);
             };
 
             while running.load(Ordering::SeqCst) {
@@ -1381,40 +1258,14 @@ impl MergeRuntime {
                     // comportement que le panic côté app) avant de mourir.
                     // Mêmes contrats que la boucle d'envoi : dry-run = rien
                     // ne part, et venue_map s'applique (salle adaptée).
-                    if osc_armed_arc.load(Ordering::SeqCst) {
-                        let origin = *origin_arc.lock().unwrap_or_else(|e| e.into_inner());
-                        let send_origin = venue_map_arc
-                            .read()
-                            .unwrap_or_else(|e| e.into_inner())
-                            .map(|(s, o, yaw)| {
-                                let (c, sn) = (yaw.cos(), yaw.sin());
-                                let (x, y) =
-                                    (origin.x * c - origin.y * sn, origin.x * sn + origin.y * c);
-                                nalgebra::Vector3::new(
-                                    x * s[0] + o[0],
-                                    y * s[1] + o[1],
-                                    origin.z * s[2] + o[2],
-                                )
-                            })
-                            .unwrap_or(origin);
-                        let ids = osc_ids_arc
-                            .read()
-                            .unwrap_or_else(|e| e.into_inner())
-                            .clone();
-                        let mut sink_guard = sink_arc.lock().unwrap_or_else(|e| e.into_inner());
-                        for osc_id in ids.iter() {
-                            let _ = sink_guard.send_state(*osc_id, send_origin, None);
-                        }
-                    }
-                    let cb = position_callback
-                        .lock()
-                        .unwrap_or_else(|e| e.into_inner())
-                        .clone();
-                    if let Some(tx) = cb {
-                        // send (bloquant borné) plutôt que try_send : la frame
-                        // de parking DOIT passer — le pump est en général vide.
-                        let _ = tx.send((0.0, Vec::new()));
-                    }
+                    frame_helpers::park_all_objects(
+                        &osc_armed_arc,
+                        &sink_arc,
+                        &osc_ids_arc,
+                        &origin_arc,
+                        &venue_map_arc,
+                        &position_callback,
+                    );
                     break;
                 }
             }
