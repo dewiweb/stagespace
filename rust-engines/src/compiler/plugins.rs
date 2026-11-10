@@ -100,13 +100,16 @@ impl Compiler {
             PluginKind::Engine => Self::compile_engine(graph, node, live),
             PluginKind::Modifier => {
                 let inputs = Self::plugin_trajectory_inputs(graph, node);
-                let upstream_id = inputs.first().ok_or_else(|| {
-                    CompilationError::MissingParameter(format!(
-                        "plugin '{plugin_id}' (modifier) requires 1 trajectory input, got {}",
+                // Arité stricte comme composite — le validator rejette déjà
+                // les entrées en trop, mais sans validation préalable un
+                // deuxième upstream serait silencieusement ignoré.
+                if inputs.len() != 1 {
+                    return Err(CompilationError::MissingParameter(format!(
+                        "plugin '{plugin_id}' (modifier) requires exactly 1 trajectory input, got {}",
                         inputs.len()
-                    ))
-                })?;
-                let upstream_node = Self::node_ref(graph, *upstream_id)?;
+                    )));
+                }
+                let upstream_node = Self::node_ref(graph, inputs[0])?;
                 let upstream_fn = Self::compile_node(graph, upstream_node, live)?;
                 let engine =
                     crate::plugins::PluginEngine::new(plugin, &wasm_engine).map_err(|e| {

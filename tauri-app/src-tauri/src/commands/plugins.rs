@@ -103,6 +103,17 @@ fn install_bundle(src: &std::path::Path, dir: &std::path::Path) -> Result<(), Ip
 
     // file_name ne peut pas contenir de séparateur → pas de traversal.
     let dest = dir.join(file_name);
+    // Un symlink `dest` déposé dans le dossier plugins ferait écrire
+    // `fs::copy` sur sa cible — refus explicite plutôt qu'écrasement.
+    if std::fs::symlink_metadata(&dest)
+        .map(|m| m.file_type().is_symlink())
+        .unwrap_or(false)
+    {
+        return Err(IpcError::validation(format!(
+            "Refusing to overwrite symlink: {}",
+            dest.display()
+        )));
+    }
     // canonicalize résout les ./.. et symlinks pour la comparaison. Si dest
     // n'existe pas encore (cas normal) → chemins différents → copie.
     let same_file = std::fs::canonicalize(src).ok() == std::fs::canonicalize(&dest).ok();
@@ -113,10 +124,10 @@ fn install_bundle(src: &std::path::Path, dir: &std::path::Path) -> Result<(), Ip
     Ok(())
 }
 
-/// Importe un bundle `.ssx` : copie dans le dossier plugins + rescan.
-/// Un bundle invalide n'échoue pas l'import — il est copié puis rapporté
-/// dans `errors` du report (comme tout `.ssx` cassé du dossier), ce qui
-/// permet à l'utilisateur de voir pourquoi son fichier est refusé.
+/// Importe un bundle `.ssx` : validation, puis copie dans le dossier
+/// plugins + rescan. Un bundle invalide ou un `manifest.id` déjà installé
+/// sont **refusés avant la copie** — pas de fichier reliquat qui
+/// re-échouerait silencieusement à chaque scan futur.
 ///
 /// `spawn_blocking` : copie fichier + scan (compile un Module par bundle)
 /// hors de l'executor async — convention `graph_updates.rs`.
@@ -149,9 +160,23 @@ pub async fn import_plugin(
             .as_ref()
             .ok_or_else(|| IpcError::internal("Plugin registry unavailable".to_string()))?;
 
-        install_bundle(std::path::Path::new(&source_path), &dir)?;
-
+        let src = std::path::Path::new(&source_path);
         let mut reg = lock_or_recover(registry);
+        // Validation AVANT copie : un bundle invalide n'a pas sa place dans
+        // le dossier (reliquat cassé à vie), et un id déjà pris échouerait
+        // au scan en "duplicate id" — refus explicite ici, sans copie.
+        let manifest = reg
+            .validate_bundle(src)
+            .map_err(|e| IpcError::validation(format!("Invalid plugin bundle: {e}")))?;
+        if reg.get(&manifest.id).is_some() {
+            return Err(IpcError::validation(format!(
+                "Plugin '{}' is already installed — remove it from the plugins folder first",
+                manifest.id
+            )));
+        }
+
+        install_bundle(src, &dir)?;
+
         reg.scan_dir(&dir);
         drop(reg);
         Ok(registry_report(
@@ -233,6 +258,28 @@ mod tests {
         let src = dir.join("does-not-exist.ssx");
         assert!(install_bundle(&src, &dir).is_err());
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// `dest` symlink dans le dossier plugins → refus : `fs::copy` écrirait
+    /// sur la cible du lien. La cible reste intacte.
+    #[test]
+    #[cfg(unix)]
+    fn install_bundle_refuses_symlink_dest() {
+        let base = std::env::temp_dir().join(format!("ssx-symlink-{}", std::process::id()));
+        let src_dir = base.join("src");
+        let dst_dir = base.join("plugins");
+        std::fs::create_dir_all(&src_dir).expect("src dir");
+        std::fs::create_dir_all(&dst_dir).expect("dst dir");
+        let src = src_dir.join("plugin.ssx");
+        std::fs::write(&src, b"bundle-bytes").expect("write src");
+        let target = base.join("victim.txt");
+        std::fs::write(&target, b"keep-me").expect("write target");
+        std::os::unix::fs::symlink(&target, dst_dir.join("plugin.ssx")).expect("symlink");
+
+        assert!(install_bundle(&src, &dst_dir).is_err());
+        assert_eq!(std::fs::read(&target).expect("read target"), b"keep-me");
+
+        std::fs::remove_dir_all(&base).ok();
     }
 
     /// Copie réelle d'un fichier externe dans le dossier plugins.

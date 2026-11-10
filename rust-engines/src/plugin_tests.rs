@@ -468,6 +468,52 @@ mod tests {
         }
     }
 
+    /// Deux upstreams sur un modifier : le validator rejette, mais le
+    /// compile doit échouer proprement aussi (arité stricte, comme
+    /// composite — pas d'input silencieusement ignoré).
+    #[test]
+    fn modifier_plugin_with_two_inputs_fails() {
+        let reg = registry_all(&[
+            ("echo", manifest("echo"), ECHO_WAT),
+            (
+                "double",
+                manifest_v2("double", PluginKind::Modifier),
+                DOUBLE_WAT,
+            ),
+        ]);
+        let mut g = modifier_graph("echo", "double");
+        let mod_id = g
+            .nodes
+            .values()
+            .find(|n| n.params.get("plugin_id").and_then(|v| v.as_str()) == Some("double"))
+            .map(|n| n.id)
+            .expect("modifier node");
+        let extra = Node::with_params(NodeType::Plugin, json!({"plugin_id": "echo"}));
+        let extra_id = extra.id;
+        g.add_node(extra);
+        g.add_edge(Edge {
+            from: extra_id,
+            to: mod_id,
+            from_port: "out".to_string(),
+            to_port: "a".to_string(),
+        });
+        // compile_with_live_inputs valide d'abord (le port 'a' n'existe
+        // pas sur un modifier) — on appelle compile_plugin directement
+        // pour exercer le check d'arité defense-in-depth.
+        let live = LiveInputs {
+            plugins: Some(reg),
+            ..Default::default()
+        };
+        let node = g.nodes.get(&mod_id).expect("modifier node");
+        match Compiler::compile_plugin(&g, node, &live) {
+            Ok(_) => panic!("modifier with 2 trajectory inputs should fail"),
+            Err(e) => assert!(
+                format!("{e:?}").contains("exactly 1 trajectory input"),
+                "unexpected: {e:?}"
+            ),
+        }
+    }
+
     #[test]
     fn v2_module_without_inputs_ptr_rejected() {
         let wat = r#"
@@ -701,6 +747,46 @@ mod tests {
             "obj2 y = 0.75·2 + 0.25·0, got {}",
             p2.y
         );
+    }
+
+    /// `validate_bundle` : fichier invalide → Err (utilisé par
+    /// `import_plugin` pour refuser avant copie) ; fixture réelle → Ok.
+    #[test]
+    fn validate_bundle_checks_before_install() {
+        let dir = std::env::temp_dir().join(format!("ssx-validate-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let broken = dir.join("broken.ssx");
+        std::fs::write(&broken, b"not a zip").expect("write broken");
+
+        let reg = PluginRegistry::new().expect("registry");
+        assert!(reg.validate_bundle(&broken).is_err());
+        let fixture =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/lemniscate.ssx");
+        assert_eq!(
+            reg.validate_bundle(&fixture).expect("fixture valid").id,
+            "lemniscate"
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Plus de 256 `.ssx` dans le dossier : les extras sont ignorés MAIS
+    /// rapportés dans `errors()` — pas de troncature silencieuse.
+    #[test]
+    fn scan_dir_reports_truncation_beyond_cap() {
+        let dir = std::env::temp_dir().join(format!("ssx-many-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        for i in 0..=256 {
+            std::fs::write(dir.join(format!("p{i:03}.ssx")), b"x").expect("write");
+        }
+        let mut reg = PluginRegistry::new().expect("registry");
+        reg.scan_dir(&dir);
+        assert!(
+            reg.errors().iter().any(|(_, e)| e.contains("more than")),
+            "truncation should be reported: {:?}",
+            reg.errors()
+        );
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

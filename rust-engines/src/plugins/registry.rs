@@ -76,7 +76,13 @@ impl PluginRegistry {
             })
             .collect();
         paths.sort();
-        paths.truncate(MAX_SCAN_ENTRIES);
+        if paths.len() > MAX_SCAN_ENTRIES {
+            self.load_errors.push((
+                dir.to_path_buf(),
+                format!("more than {MAX_SCAN_ENTRIES} .ssx files — extras ignored"),
+            ));
+            paths.truncate(MAX_SCAN_ENTRIES);
+        }
 
         let mut loaded = 0;
         let mut seen_ids: HashSet<String> = HashSet::new();
@@ -98,6 +104,14 @@ impl PluginRegistry {
             }
         }
         loaded
+    }
+
+    /// Valide un bundle `.ssx` sans l'enregistrer — utilisé par
+    /// `import_plugin` pour refuser un fichier invalide AVANT de le copier
+    /// dans le dossier plugins (sinon il y resterait et re-échouerait à
+    /// chaque scan futur).
+    pub fn validate_bundle(&self, path: &Path) -> Result<PluginManifest, PluginError> {
+        Ok(load_bundle(&self.engine, path)?.manifest.clone())
     }
 
     /// Charge un bundle `.ssx` depuis un fichier.

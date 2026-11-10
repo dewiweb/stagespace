@@ -26,7 +26,8 @@ export interface PluginSlice {
   fetchPlugins: () => Promise<void>;
   reloadPlugins: () => Promise<void>;
   /// Copie un `.ssx` choisi via dialog dans le dossier plugins + rescan.
-  /// Un bundle invalide n'échoue pas : copié puis rapporté dans pluginErrors.
+  /// Le backend valide AVANT la copie — bundle invalide ou id déjà
+  /// installé → erreur (catch), aucun reliquat dans le dossier.
   importPlugin: (sourcePath: string) => Promise<void>;
 }
 
@@ -87,8 +88,12 @@ export const createPluginSlice: StateCreator<
         pluginsDir: r.plugins_dir,
         pluginsLoaded: true,
       });
+      // Le fichier importé est validé avant copie — les erreurs du report
+      // ne peuvent venir que d'autres bundles déjà cassés dans le dossier.
       if (r.errors.length > 0) {
-        toast.warning('Plugin imported with errors — see palette');
+        toast.warning(
+          `Plugin imported — ${r.errors.length} broken bundle(s) in plugins folder`,
+        );
       } else {
         toast.success('Plugin imported');
       }
