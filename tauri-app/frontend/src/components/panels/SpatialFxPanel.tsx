@@ -13,6 +13,7 @@ import {
   parseVec3,
   type KinematicSourceName,
   type SpatialChannelName,
+  type ZoneParams,
   zoneToParams,
 } from '../../store/slices/spatialFxSlice';
 
@@ -142,6 +143,18 @@ export default function SpatialFxPanel() {
   /// Effet positionnel : 'none' = zone canaux-only (comportement historique).
   const [zEffect, setZEffect] = React.useState<'none' | 'repel' | 'attract' | 'dampen' | 'vortex'>('none');
   const [zStrength, setZStrength] = React.useState('1');
+  /// Mode édition : l'index de la zone chargée dans le formulaire —
+  /// `null` = création. Sans ça impossible de savoir si les champs
+  /// préparent une nouvelle zone ou modifient une existante.
+  const [editingZoneIdx, setEditingZoneIdx] = React.useState<number | null>(null);
+
+  // La zone éditée peut être supprimée par ailleurs (clear all, ×, autre
+  // client) → retomber en création plutôt qu'updater un index mort.
+  React.useEffect(() => {
+    if (editingZoneIdx !== null && editingZoneIdx >= zones.length) {
+      setEditingZoneIdx(null);
+    }
+  }, [zones.length, editingZoneIdx]);
 
   // ── Modulation form state ──
   const [mSource, setMSource] = React.useState<KinematicSourceName>('Speed');
@@ -211,27 +224,77 @@ export default function SpatialFxPanel() {
     });
   };
 
-  const handleAddZone = async () => {
+  /// Formulaire → ZoneParams (partagé Add/Update) — null si invalide.
+  const zoneParamsFromForm = (): ZoneParams | null => {
     const a = parseVec3(zA);
-    if (!a || !zoneChannelsValid) return;
+    if (!a || !zoneChannelsValid) return null;
+    return {
+      shape: zShape,
+      a,
+      radius: zShape === 'sphere' ? parseFloat(zRadius) || 1 : null,
+      b: zShape === 'box' ? parseVec3(zB) : null,
+      falloff: parseFloat(zFalloff) || 0,
+      channels: zoneChannels,
+      objects: parseObjectsSpec(zObjects),
+      effect: zEffect === 'none'
+        ? null
+        : { kind: zEffect, strength: parseFloat(zStrength) || 1 },
+    };
+  };
+
+  /// Retour en mode création — champs remis aux défauts.
+  const resetZoneForm = () => {
+    setEditingZoneIdx(null);
+    setZChannelRows([]);
+    setZEffect('none');
+  };
+
+  /// Charge une zone existante dans le formulaire — entrée du mode édition.
+  const loadZoneIntoForm = (i: number) => {
+    const z = zones[i];
+    if (!z) return;
+    setZShape(z.shape.shape);
+    if (z.shape.shape === 'sphere') {
+      setZA(z.shape.center.join(','));
+      setZRadius(String(z.shape.radius));
+    } else {
+      setZA(z.shape.min.join(','));
+      setZB(z.shape.max.join(','));
+    }
+    setZFalloff(String(z.falloff));
+    setZChannelRows(
+      (Object.entries(z.channels) as [string, number | null][])
+        .filter(([, v]) => v !== null && v !== undefined)
+        .map(([k, v]) => [(k[0].toUpperCase() + k.slice(1)) as SpatialChannelName, v as number]),
+    );
+    setZObjects((z.objects ?? []).join(','));
+    setZEffect(z.effect?.kind ?? 'none');
+    setZStrength(String(z.effect?.strength ?? 1));
+    setEditingZoneIdx(i);
+  };
+
+  const handleAddZone = async () => {
+    const params = zoneParamsFromForm();
+    if (!params) return;
     try {
-      await addZone({
-        shape: zShape,
-        a,
-        radius: zShape === 'sphere' ? parseFloat(zRadius) || 1 : null,
-        b: zShape === 'box' ? parseVec3(zB) : null,
-        falloff: parseFloat(zFalloff) || 0,
-        channels: zoneChannels,
-        objects: parseObjectsSpec(zObjects),
-        effect: zEffect === 'none'
-          ? null
-          : { kind: zEffect, strength: parseFloat(zStrength) || 1 },
-      });
+      await addZone(params);
       setZChannelRows([]);
       setZEffect('none');
     } catch (e) {
       console.error('Failed to add zone:', e);
       toast.error(`Add zone failed: ${e}`);
+    }
+  };
+
+  const handleUpdateZone = async () => {
+    if (editingZoneIdx === null) return;
+    const params = zoneParamsFromForm();
+    if (!params) return;
+    try {
+      await updateZone(editingZoneIdx, params);
+      resetZoneForm();
+    } catch (e) {
+      toast.error(`Update zone failed: ${e}`);
     }
   };
 
@@ -297,7 +360,28 @@ export default function SpatialFxPanel() {
 
       {/* ── Zones ── */}
       <Section title="Zones" count={zones.length} onClear={() => clearZones().catch((e) => toast.error(`Spatial FX failed: ${e}`))}>
-        <div className="space-y-1.5 mb-2">
+        <div className={`space-y-1.5 mb-2 rounded transition-colors ${editingZoneIdx !== null ? 'border border-cyan-700/60 bg-cyan-950/20 p-1.5' : ''}`}>
+          {/* Mode du formulaire — lever l'ambiguïté création/édition :
+              un chip indique toujours ce que les champs vont faire. */}
+          <div className="flex items-center gap-1.5 px-0.5">
+            {editingZoneIdx !== null ? (
+              <>
+                <span className="text-cyan-300 text-[11px] font-mono font-semibold">
+                  ✎ Editing zone {editingZoneIdx}
+                </span>
+                <span className="flex-1" />
+                <button
+                  onClick={resetZoneForm}
+                  className="text-gray-500 hover:text-white text-[11px] font-mono"
+                  title="Back to creating a new zone"
+                >
+                  ✕ new zone
+                </button>
+              </>
+            ) : (
+              <span className="text-gray-500 text-[11px] font-mono">+ New zone</span>
+            )}
+          </div>
           <div className="flex gap-1.5">
             <select value={zShape} onChange={(e) => setZShape(e.target.value as 'sphere' | 'box')} className={selectCls}>
               <option value="sphere">Sphere</option>
@@ -424,11 +508,15 @@ export default function SpatialFxPanel() {
             )}
           </div>
           <button
-            onClick={handleAddZone}
+            onClick={editingZoneIdx !== null ? handleUpdateZone : handleAddZone}
             disabled={!zoneCenterValid || !zoneChannelsValid}
-            className="w-full py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white text-xs rounded font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className={`w-full py-1.5 text-white text-xs rounded font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+              editingZoneIdx !== null
+                ? 'bg-cyan-700 hover:bg-cyan-600 ring-1 ring-cyan-500/50'
+                : 'bg-cyan-600 hover:bg-cyan-700'
+            }`}
           >
-            Add Zone
+            {editingZoneIdx !== null ? `Update zone ${editingZoneIdx}` : 'Add Zone'}
           </button>
           {zoneHint && (
             <div className="text-amber-500/90 text-xs font-mono px-0.5">{zoneHint}</div>
@@ -461,7 +549,11 @@ export default function SpatialFxPanel() {
         ) : (
           <div className="space-y-1">
             {zones.map((zone, i) => (
-              <div key={i} className="p-2 bg-gray-800/50 rounded border border-gray-700/50">
+              <div key={i} className={`p-2 rounded border transition-colors ${
+                editingZoneIdx === i
+                  ? 'bg-cyan-950/40 border-cyan-600/70'
+                  : 'bg-gray-800/50 border-gray-700/50'
+              }`}>
                 <div className="flex justify-between items-start">
                   <div className="flex-1 min-w-0">
                     <div className="text-white text-xs font-mono">{describeZoneShape(zone.shape)}</div>
@@ -474,12 +566,24 @@ export default function SpatialFxPanel() {
                     </div>
                   </div>
                   <button
+                    onClick={() => (editingZoneIdx === i ? resetZoneForm() : loadZoneIntoForm(i))}
+                    className={removeBtnCls}
+                    title={editingZoneIdx === i ? 'Stop editing — back to new zone' : 'Edit this zone in the form above'}
+                    aria-label={`Edit zone ${i}`}
+                  >✎</button>
+                  <button
                     onClick={() => { setZonePlaceTarget(i); setZonePlaceMode(true); }}
                     className={removeBtnCls}
                     title="Re-place this zone's center on the scene — then click the floor"
                     aria-label={`Re-place zone ${i}`}
                   >⌖</button>
-                  <button onClick={() => setConfirmRemove({ label: `zone ${i}`, action: () => removeZone(i).catch((e) => toast.error(`Spatial FX failed: ${e}`)) })} className={removeBtnCls} aria-label="Remove zone"><X size={11} /></button>
+                  <button onClick={() => setConfirmRemove({ label: `zone ${i}`, action: () => {
+                    // Index décalés par la suppression — réaligner la zone
+                    // en cours d'édition (ou sortir d'édition si c'est elle).
+                    if (editingZoneIdx === i) setEditingZoneIdx(null);
+                    else if (editingZoneIdx !== null && i < editingZoneIdx) setEditingZoneIdx(editingZoneIdx - 1);
+                    removeZone(i).catch((e) => toast.error(`Spatial FX failed: ${e}`));
+                  } })} className={removeBtnCls} aria-label="Remove zone"><X size={11} /></button>
                 </div>
               </div>
             ))}

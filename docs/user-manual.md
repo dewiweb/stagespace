@@ -515,9 +515,12 @@ s'additionnent dans le merge runtime.
 
 ### D.2 Le panel FX (colonne SHOW)
 
-- **Zones** : liste + `Place` (placement par clic 3D) + `Edit zones`
-  (déplacement/resize direct en 3D). `clear all` et chaque `×` passent par
-  une confirmation.
+- **Zones** : le formulaire a deux modes, toujours indiqués — `+ New zone`
+  (création) ou `✎ Editing zone n` (modification, bouton `Update zone n`,
+  `✕ new zone` pour en sortir). `✎` sur une ligne de zone charge ses
+  paramètres dans le formulaire ; `⌖` re-place le centre en 3D ;
+  `Edit zones` = déplacement/resize direct en 3D. `clear all` et chaque `×`
+  passent par une confirmation.
 - **Modulations** : cinématiques — `speed`/`accel`/`jerk`/`angvel` → canal.
   **Déclarées par les nodes `Velocity` du graphe global** (édition dans le
   node editor, tab Global FX) ; le panel les liste en lecture.
