@@ -561,25 +561,42 @@ export const NodeEditor: React.FC = () => {
   );
 
   /// Collage dans le graphe actif — nodes désélectionnés au profit des
-  /// nouveaux (retour visuel standard des patchers).
+  /// nouveaux (retour visuel standard des patchers). Les nodes hors scope
+  /// du domaine courant (Signal ≠ Positions, global ≠ sub-only) sont
+  /// filtrés — sinon le backend les rejetterait au prochain diagnose.
   const pastePayload = useCallback(
     (payload: GraphClipboardPayload) => {
       const clip = cloneForPaste(payload, Date.now());
       if (!clip) return;
+      const inScope = (t: NodeType) =>
+        activeTab === 'signal'
+          ? SIGNAL_ONLY_NODES.has(t)
+          : activeTab === 'global'
+            ? !SUB_ONLY_NODES.has(t) && !SIGNAL_ONLY_NODES.has(t)
+            : !GLOBAL_ONLY_NODES.has(t) && !SIGNAL_ONLY_NODES.has(t);
+      const kept = clip.nodes.filter((n) => inScope(n.data.type as NodeType));
+      const skipped = clip.nodes.length - kept.length;
+      if (skipped > 0) {
+        toast.warning(`${skipped} node${skipped > 1 ? 's' : ''} skipped — not valid in the ${activeTab === 'signal' ? 'Modulation' : activeTab === 'global' ? 'Global FX' : 'Move'} graph`);
+      }
+      const keptIds = new Set(kept.map((n) => n.id));
+      const clipNodes = kept;
+      const clipEdges = clip.edges.filter((e) => keptIds.has(e.source) && keptIds.has(e.target));
+      if (clipNodes.length === 0) return;
       const deselect = <T extends { selected?: boolean }>(arr: T[]): T[] =>
         arr.map((x) => (x.selected ? { ...x, selected: false } : x));
       if (activeTab === 'global') {
-        setGlobalNodes([...deselect(globalNodes), ...clip.nodes]);
-        setGlobalEdges([...globalEdges, ...clip.edges]);
+        setGlobalNodes([...deselect(globalNodes), ...clipNodes]);
+        setGlobalEdges([...globalEdges, ...clipEdges]);
       } else if (activeTab === 'signal') {
-        setSignalNodes([...deselect(signalNodes), ...clip.nodes]);
-        setSignalEdges([...signalEdges, ...clip.edges]);
+        setSignalNodes([...deselect(signalNodes), ...clipNodes]);
+        setSignalEdges([...signalEdges, ...clipEdges]);
       } else {
         const st = useGraphStore.getState();
         st.onNodesChange(
           st.nodes.filter((n) => n.selected).map((n) => ({ type: 'select' as const, id: n.id, selected: false })),
         );
-        st.addNodesAndEdges(clip.nodes, clip.edges);
+        st.addNodesAndEdges(clipNodes, clipEdges);
       }
     },
     [activeTab, globalNodes, globalEdges, setGlobalNodes, setGlobalEdges, signalNodes, signalEdges, setSignalNodes, setSignalEdges],
