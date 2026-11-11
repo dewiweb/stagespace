@@ -38,14 +38,37 @@ A file should be split if:
 - The split would create **circular dependencies**
 - The file is **automatically generated**
 
-### Current targets (August 2025)
+### Completed work (2025)
 
-| File | Lines before | Lines after Phase 4 | Status | Recommended action |
-|---------|-------------|----------------------|--------|---------------------|
-| `tauri-app/src-tauri/src/lib.rs` | 2178 | 361 | OK (<500) | Phases 1-4 done (20 modules extracted). Done! |
-| `tauri-app/frontend/src/store/useGraphStore.ts` | 1146 | 452 | OK (<500) | Phases 1-4 done (13 slices + utils + types). Done! |
-| `tauri-app/frontend/src/components/Scene3D.tsx` | 972 | 232 | OK (<500) | Phases 1-3 done (8 hooks extracted). Done! |
-| `rust-engines/src/runtime.rs` | 698 | 499 | OK (<500) | Phases 1-2 done (5 modules extracted). Done! |
+| File | Lines before | Lines after | Status |
+|---------|-------------|-------------|--------|
+| `tauri-app/src-tauri/src/lib.rs` | 2178 | 361 | Done (20 modules extracted) |
+| `tauri-app/frontend/src/store/useGraphStore.ts` | 1146 | 452 | Done (13 slices + utils + types) |
+| `tauri-app/frontend/src/components/Scene3D.tsx` | 972 | 232 | Done (8 hooks extracted) |
+| `rust-engines/src/runtime.rs` | 698 | split | Done (5 modules extracted) |
+| `rust-engines/src/compiler.rs` | 1569 | `compiler/` 7 files | Done |
+| `tauri-app/frontend/src/components/NodeEditor.tsx` | 985 | 747 | In progress — `useNodeInsertion` + `useGraphClipboard` extracted |
+
+### Current targets (measured)
+
+>1200 critical · >800 priority · >500 review. Test files excluded.
+
+| File | Lines | Severity |
+|------|-------|----------|
+| `rust-engines/src/node_spec.rs` | 1439 | **critical** |
+| `rust-engines/src/merge_runtime/loop_core.rs` | 1118 | priority |
+| `rust-engines/src/validator.rs` | 1111 | priority |
+| `rust-engines/src/runtime/mod.rs` | 1082 | priority |
+| `tauri-app/src-tauri/src/cli/commands/moves.rs` | 933 | priority |
+| `rust-engines/src/audio_capture.rs` | 922 | priority |
+| `rust-engines/src/merge_runtime/transition.rs` | 882 | priority |
+| `tauri-app/src-tauri/src/commands/merge_commands/move_management.rs` | 861 | priority |
+| `tauri-app/frontend/src/components/panels/SpatialFxPanel.tsx` | 835 | priority |
+| `rust-engines/src/osc_sender.rs` | 829 | priority |
+| `rust-engines/src/signal_compiler.rs` | 818 | priority |
+| `rust-engines/src/cuelist.rs` | 796 | review |
+| `tauri-app/src-tauri/src/commands/cue_commands.rs` | 762 | review |
+| `tauri-app/frontend/src/components/NodeEditor.tsx` | 747 | review |
 
 ### Application
 

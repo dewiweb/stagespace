@@ -79,7 +79,7 @@ STAGESPACE is organized around a **base live view** (Perform) and two
 
 ### 2.3 Creating a move
 
-![Move + Inspector](screenshots/03-edit.png)
+![Atelier — moves, templates and 3D canvas](screenshots/02-atelier-example.png)
 
 `+ Move` creates a slot — pick a **template** (left), assign **tracks**
 (numbered grid), set the **params** and **fades** (slot fade in/out),
@@ -364,6 +364,12 @@ Wiring an external fader — *OSC IN* tab (PerformView):
 | "I pressed and nothing happened" | Recall in progress or missing slot/cue | `nack` sent back to the controller |
 | Console unresponsive | Dead OSC link | **CONSOLE ●** indicator gray = >5 s |
 | `TC lost` | No `/stagespace/timecode` for >1 s | TC source + `oscInPort` |
+
+Backend failures surface as **sticky toasts** (bottom-right) — graph
+validation, failed show load, panel crash. A rejected OSC command gets a
+`/stagespace/nack <reason>` back to the sender.
+
+![Error toasts — graph push failed, show load reverted, panel crash](screenshots/13-atelier-orbe.png)
 | Move playing in silence | Tracks outside OSC list / dry-run | `LIVE` vs `DRY-RUN` + OSC destination in StatusBar |
 | Everything frozen, unresponsive | Dead backend | **BACKEND ✕** chip in StatusBar |
 | Black conduite window | Main window closed / not broadcasting | "WAITING FOR MAIN WINDOW…" |

@@ -17,6 +17,9 @@ laptop is only for soundcheck and monitoring.
 | `/stagespace/park <n>` · `/unpark <n>` | **object index n (0-based)** escapes recalls (manual override preserved) |
 | `/stagespace/panic` · `/stop` | blackout / stop all |
 | `/stagespace/timecode <s\|"HH:MM:SS:FF">` | timecode → chase (fps via `set_timecode_fps`) |
+| `/stagespace/cue/arm <n>` · `/stagespace/cue/go` | arm without firing · fire the armed cue (console arm/go model) |
+| `/stagespace/view <atelier\|conduite\|jeu>` | switch the operator surface from the console |
+| `/stagespace/show/load <path.hfg>` · `/stagespace/load` | load a show file **from the STAGESPACE machine's disk** |
 
 ## Feedback sent to the controller
 

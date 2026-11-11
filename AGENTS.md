@@ -33,7 +33,7 @@ stagespace/
 ```bash
 cd rust-engines
 cargo build              # Build
-cargo test --lib         # Run tests (519 tests, incl. ts-rs export tests)
+cargo test --lib         # Run tests (545 tests, incl. ts-rs export tests)
 cargo clippy --all-targets -- -D warnings  # Lint (CI: --all-targets inclut tests/benches)
 cargo fmt -- --check     # Format check
 ```
@@ -43,7 +43,7 @@ cargo fmt -- --check     # Format check
 ```bash
 cd tauri-app/src-tauri
 cargo build              # Build
-cargo test --lib         # Run tests (72 tests)
+cargo test --lib         # Run tests (75 tests)
 cargo clippy --all-targets -- -D warnings  # Lint (CI: --all-targets inclut tests)
 ```
 
@@ -53,7 +53,7 @@ cargo clippy --all-targets -- -D warnings  # Lint (CI: --all-targets inclut test
 cd tauri-app/src-tauri
 cargo build --bin stagespace-cli                    # Build CLI
 cargo clippy --bin stagespace-cli -- -D warnings    # Lint CLI
-bash tests/e2e_cli_test.sh                          # Run E2E workflow tests (122 tests)
+bash tests/e2e_cli_test.sh                          # Run E2E workflow tests (~100 assertions)
 
 # Usage
 ./target/debug/stagespace-cli "templates"                                          # List templates
@@ -69,7 +69,7 @@ cd tauri-app/frontend
 npm install              # Install deps
 npm run dev              # Dev server (Vite)
 npm run build            # Production build (tsc + vite build)
-npm test                 # Run tests (383 tests, vitest)
+npm test                 # Run tests (444 tests, vitest)
 npm run contracts        # Regenerate TS types from Rust (ts-rs → src/types/generated/)
 npm run test:watch       # Watch mode
 npx tsc -b               # Type check (build mode — `tsc --noEmit` is vacuous on the solution-style root tsconfig)
@@ -123,11 +123,11 @@ CI fails if the committed files drift from the Rust sources.
 
 | Suite | Count |
 |-------|-------|
-| Rust engines | 519 |
-| Tauri backend | 72 |
-| Frontend (vitest) | 383 |
-| E2E CLI | 125 |
-| **Total** | **1099** |
+| Rust engines | 545 |
+| Tauri backend | 75 |
+| Frontend (vitest) | 444 |
+| E2E CLI | ~100 assertions |
+| **Total** | **~1164** |
 
 ## Live Show Safety Features
 
@@ -160,7 +160,8 @@ CI fails if the committed files drift from the Rust sources.
 - `Shift+Enter` — RECALL next cue (kills all moves + respawns snapshot)
 - `Backspace` — previous cue (recall)
 - `Esc` — Panic (stop all + send origin positions)
-- `Ctrl+Z` / `Ctrl+Y` — Undo/Redo
+- `?` — keyboard shortcuts cheatsheet
+- `Ctrl+Z` / `Ctrl+Y` — Undo/Redo (move graph; also Ctrl+Shift+Z)
 - Cue list: click = arm, double-click = recall (no single-click scene kill)
 - Shortcuts disabled when typing in input fields
 
@@ -199,6 +200,14 @@ dispatches to the same functions as the keyboard shortcuts (`liveActions.ts`).
 | `/stagespace/position/clear <obj>` | remove the manual position | — |
 | `/stagespace/position/clearall` | all manual positions | — |
 | `/stagespace/trackpos <track> <x> <y> <z>` | origin position of a track (where panic returns it) | — |
+| `/stagespace/view <atelier\|conduite\|jeu>` | switch the operator surface | — |
+| `/stagespace/show/load <path.hfg>` · `/stagespace/load` | load a show file from the STAGESPACE machine's disk | — |
+| `/stagespace/soundcheck [start\|stop\|next\|prev]` | cyclic per-track probe (spatial identification); default `start` | — |
+| `/stagespace/throw <obj> <vx> <vy> <vz>` | ballistic grab & throw — initial velocity (m/s), damped to rest | — |
+| `/stagespace/spatial <k>` | spatial compressor: `k<1` tightens the field, `k>1` expands it | — |
+| `/stagespace/attention <obj>` · `/stagespace/attention/clear` | freeze all other objects (change blindness) / release stasis | — |
+| `/stagespace/gesture <name> [strength]` | composed gesture `explode`/`converge`/`orbit`/`front` — per-object ballistic velocity | — |
+| `/stagespace/rehearsal <record\|stop\|play\|clear>` · alias `/stagespace/record` | timestamped busking-capture tape, replayable | — |
 
 ### "Continuous" semantics (per-move)
 
