@@ -38,14 +38,17 @@ jobs:
 
       - name: Install system dependencies (ALSA for cpal)
         run: |
-          # Le mirror par défaut (azure.archive.ubuntu.com) est parfois
-          # injoignable ("Temporary failure resolving") : fallback vers
-          # archive.ubuntu.com à la 2e tentative, échec explicite sinon.
+          # Quand le DNS des *.ubuntu.com est en panne sur les runners
+          # ("Temporary failure resolving"), on bascule les sources sur
+          # archive.ubuntu.com avec IP pinnée dans /etc/hosts (rotation).
           ok=0
           for i in 1 2 3; do
             if [ "$i" -gt 1 ]; then
+              ip=$( [ "$i" = 2 ] && echo 185.125.190.81 || echo 91.189.91.82 )
               sudo sed -i 's|mirror+file:/etc/apt/apt-mirrors.txt|http://archive.ubuntu.com/ubuntu|g' \
                 /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null || true
+              sudo sed -i '/archive\.ubuntu\.com/d;/security\.ubuntu\.com/d' /etc/hosts
+              printf '%s archive.ubuntu.com\n%s security.ubuntu.com\n' "$ip" "$ip" | sudo tee -a /etc/hosts
             fi
             sudo apt-get update && sudo apt-get install -y libasound2-dev && { ok=1; break; }
             echo "apt attempt $i failed — retrying in 15s"; sleep 15
@@ -96,8 +99,11 @@ jobs:
           ok=0
           for i in 1 2 3; do
             if [ "$i" -gt 1 ]; then
+              ip=$( [ "$i" = 2 ] && echo 185.125.190.81 || echo 91.189.91.82 )
               sudo sed -i 's|mirror+file:/etc/apt/apt-mirrors.txt|http://archive.ubuntu.com/ubuntu|g' \
                 /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null || true
+              sudo sed -i '/archive\.ubuntu\.com/d;/security\.ubuntu\.com/d' /etc/hosts
+              printf '%s archive.ubuntu.com\n%s security.ubuntu.com\n' "$ip" "$ip" | sudo tee -a /etc/hosts
             fi
             sudo apt-get update && sudo apt-get install -y \
               libwebkit2gtk-4.1-dev \
