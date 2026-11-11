@@ -42,15 +42,18 @@ jobs:
           # ("Temporary failure resolving"), on bascule les sources sur
           # archive.ubuntu.com avec IP pinnée dans /etc/hosts (rotation).
           ok=0
+          APT="apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15"
           for i in 1 2 3; do
             if [ "$i" -gt 1 ]; then
               ip=$( [ "$i" = 2 ] && echo 185.125.190.81 || echo 91.189.91.82 )
-              sudo sed -i 's|mirror+file:/etc/apt/apt-mirrors.txt|http://archive.ubuntu.com/ubuntu|g' \
-                /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null || true
+              sudo rm -f /etc/apt/sources.list.d/*.list
+              sudo sed -i 's|mirror+file:/etc/apt/apt-mirrors.txt|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list
               sudo sed -i '/archive\.ubuntu\.com/d;/security\.ubuntu\.com/d' /etc/hosts
               printf '%s archive.ubuntu.com\n%s security.ubuntu.com\n' "$ip" "$ip" | sudo tee -a /etc/hosts
             fi
-            sudo apt-get update && sudo apt-get install -y libasound2-dev && { ok=1; break; }
+            sudo timeout 240 $APT update && \
+              sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a \
+                timeout 600 $APT install -y libasound2-dev && { ok=1; break; }
             echo "apt attempt $i failed — retrying in 15s"; sleep 15
           done
           [ "$ok" = 1 ] || { echo "apt install failed after 3 attempts"; exit 1; }
@@ -97,21 +100,24 @@ jobs:
       - name: Install system dependencies (Tauri)
         run: |
           ok=0
+          APT="apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15"
           for i in 1 2 3; do
             if [ "$i" -gt 1 ]; then
               ip=$( [ "$i" = 2 ] && echo 185.125.190.81 || echo 91.189.91.82 )
-              sudo sed -i 's|mirror+file:/etc/apt/apt-mirrors.txt|http://archive.ubuntu.com/ubuntu|g' \
-                /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null || true
+              sudo rm -f /etc/apt/sources.list.d/*.list
+              sudo sed -i 's|mirror+file:/etc/apt/apt-mirrors.txt|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list
               sudo sed -i '/archive\.ubuntu\.com/d;/security\.ubuntu\.com/d' /etc/hosts
               printf '%s archive.ubuntu.com\n%s security.ubuntu.com\n' "$ip" "$ip" | sudo tee -a /etc/hosts
             fi
-            sudo apt-get update && sudo apt-get install -y \
-              libwebkit2gtk-4.1-dev \
-              libgtk-3-dev \
-              libayatana-appindicator3-dev \
-              librsvg2-dev \
-              libasound2-dev \
-              patchelf && { ok=1; break; }
+            sudo timeout 240 $APT update && \
+              sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a \
+                timeout 600 $APT install -y \
+                libwebkit2gtk-4.1-dev \
+                libgtk-3-dev \
+                libayatana-appindicator3-dev \
+                librsvg2-dev \
+                libasound2-dev \
+                patchelf && { ok=1; break; }
             echo "apt attempt $i failed — retrying in 15s"; sleep 15
           done
           [ "$ok" = 1 ] || { echo "apt install failed after 3 attempts"; exit 1; }
