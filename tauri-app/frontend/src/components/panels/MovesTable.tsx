@@ -3,6 +3,7 @@ import { CircleDot, Play, Square, RefreshCw, Pencil, SlidersHorizontal, X, Star,
 import { useGraphStore } from '../../store/useGraphStore';
 import { useMoveEditorStore } from '../../store/useMoveEditorStore';
 import { SHAPE_PRESETS } from '../../utils/shapePresets';
+import { detectSlotPreset } from '../../utils/detectPreset';
 import { useModalGuardOn } from '../../utils/modalGuard';
 import Modal from '../ui/Modal';
 import Slider from '../ui/Slider';
@@ -269,7 +270,14 @@ export default function MovesTable() {
               {moveSlots.map((slot, idx) => {
                 const isPlaying = !!slot.movementId || pendingPlays.includes(slot.id);
                 const mv = movements.find((m) => m.id === slot.movementId);
-                const preset = SHAPE_PRESETS.find((p) => p.id === slot.templateId);
+                // Le template affiché suit le graphe réel, pas `templateId`
+                // (métadonnée figée — un graphe édité après coup diverge du
+                // preset d'origine). Fallback templateId pour les vieux
+                // slots sans graphJson.
+                const detected = detectSlotPreset(slot.graphJson);
+                const preset = slot.graphJson?.nodes?.length
+                  ? detected
+                  : SHAPE_PRESETS.find((p) => p.id === slot.templateId);
                 const isSelected = editingTemplateFor === slot.id;
                 const isEditing = editingSlotId === slot.id;
                 const setlistIdx = setlistOrder.indexOf(slot.id);
@@ -347,7 +355,7 @@ export default function MovesTable() {
                           className="text-indigo-300 hover:text-indigo-200 text-xs font-mono px-1 py-0.5 rounded hover:bg-indigo-900/30 transition-colors"
                           title="Changer de template"
                         >
-                          {preset?.name ?? slot.templateId}
+                          {preset?.name ?? (slot.graphJson?.nodes?.length ? 'Custom' : slot.templateId)}
                         </button>
                       )}
                     </td>

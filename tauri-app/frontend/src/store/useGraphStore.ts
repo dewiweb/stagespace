@@ -428,6 +428,15 @@ export const useGraphStore = create<GraphState>()((...a) => {
         if (setSlotTemplate) {
           setSlotTemplate(editingSlotId, presetId);
         }
+      } else {
+        // Aucun slot édité : créer un move dédié au preset — sinon le clic
+        // ne repeignait que le canvas (graphe perdu à la prochaine
+        // sélection, nom `current` trompeur sans écriture durable).
+        // addMoveSlot sélectionne déjà le nouveau slot → setSlotTemplate
+        // le fait passer circle → preset (rebuild graphe + rename).
+        get().addMoveSlot();
+        const created = get().moveSlots[get().moveSlots.length - 1];
+        if (created) get().setSlotTemplate?.(created.id, presetId);
       }
 
       // Sync l'animation store

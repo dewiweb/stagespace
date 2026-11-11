@@ -231,7 +231,7 @@ export default function AnimationList() {
         <div className="text-gray-500 text-xs text-center py-2 px-2">
           Templates &amp; library = presets applied to the selected slot
           <div className="mt-0.5">
-            {editingSlotId ? 'Loading → writes into the editing slot' : 'Select a slot (Moves) to apply'}
+            {editingSlotId ? 'Loading → writes into the editing slot' : 'No slot selected → creates a new move'}
             {' '}· double-clic pour renommer
           </div>
         </div>
