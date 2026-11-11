@@ -49,7 +49,10 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
   const schema = isPluginNode
     ? pluginNodeSchema(data.params, pluginManifest ? [pluginManifest] : [])
     : (PARAM_SCHEMA[data.type] ?? []);
-  const displayLabel = isPluginNode ? (pluginManifest?.name ?? data.label) : data.label;
+  // Label affiché : le nom d'instance (renommable, persisté dans le
+  // graphe) — le manifeste plugin ne sert que de fallback.
+  const displayLabel = data.label || pluginManifest?.name || String(data.type);
+  const [editingLabel, setEditingLabel] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const pluginKind = pluginManifest?.kind;
@@ -118,6 +121,17 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
   const blurOnEnter = (e: React.KeyboardEvent<HTMLElement>) => {
     if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur();
   };
+
+  /// Renommage d'instance (double-clic header) — écrit `data.label` dans
+  /// le store du graphe propriétaire ; le backend ne lit que type+params,
+  /// le label est purement documentaire (et persisté dans le .hfg).
+  const commitLabel = useCallback((raw: string) => {
+    const setData = isGlobalNode
+      ? updateGlobalNodeData
+      : isSignalNode ? updateSignalNodeData : updateNodeData;
+    setData(id, { label: raw.trim() || pluginManifest?.name || String(data.type) });
+    setEditingLabel(false);
+  }, [id, isGlobalNode, updateGlobalNodeData, isSignalNode, updateSignalNodeData, updateNodeData, pluginManifest, data.type]);
 
   const renderInput = (def: ParamDef) => {
     const value = data.params?.[def.key];
@@ -210,7 +224,35 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
               <span className="text-red-400 text-xs font-bold tracking-wider">LIVE</span>
             </span>
           )}
-          <span className="text-white text-sm font-semibold truncate">{displayLabel}</span>
+          {editingLabel ? (
+            <input
+              autoFocus
+              defaultValue={displayLabel}
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              onBlur={(e) => commitLabel(e.target.value)}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === 'Enter') commitLabel(e.currentTarget.value);
+                if (e.key === 'Escape') setEditingLabel(false);
+              }}
+              className="nodrag nowheel bg-gray-900 text-white text-sm font-semibold rounded px-1 w-32 border border-cyan-600 focus:outline-none"
+              aria-label="Rename node"
+            />
+          ) : (
+            <span
+              className="text-white text-sm font-semibold truncate cursor-text"
+              title="Double-click to rename"
+              onDoubleClick={(e) => {
+                // stopPropagation : le dblclick node sert au switch
+                // MoveRef — le label, lui, renomme.
+                e.stopPropagation();
+                setEditingLabel(true);
+              }}
+            >
+              {displayLabel}
+            </span>
+          )}
           {pluginMissing && (
             <span
               className="flex-shrink-0 px-1 py-px rounded bg-red-900/60 text-red-300 text-[11px] font-bold tracking-wide"

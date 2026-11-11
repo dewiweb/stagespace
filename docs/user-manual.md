@@ -92,19 +92,27 @@ Le toggle **Expert/Simple** ouvre le node editor :
 
 - **Tabs** : `Move graph` (le graphe du slot édité) · `Global FX` (post-traitement
   global) · `Modulation` (graphe signal).
-- **Palette** (gauche) : nodes par catégorie — clic pour ajouter,
-  **Ctrl+K** quick-add, clic-droit sur un node du canvas = exemples runnables.
+- **Palette** (gauche) : nodes par catégorie — clic pour ajouter, ou
+  **drag vers le canvas** (posé au curseur ; **déposé sur un fil = inséré
+  dans la chaîne**). **Ctrl+K** quick-add, clic-droit sur un node du
+  canvas = exemples runnables.
 - **Canvas** : connexions par drag entre ports — **inputs en haut, outputs
   en bas** (convention Max/MSP). Légende `Ports` en haut à gauche, minimap
   en bas. Un node sélectionné s'édite dans l'Inspector (section NODE).
+  **Double-clic sur le titre d'un node = renommer l'instance** (le nom est
+  documentaire — persisté dans le show, ignoré du backend).
 - **Wire-drop → quick-add** : lâcher un fil sur le canvas vide ouvre le
   quick-add **filtré au type de port du fil** — le node choisi est posé au
   point de drop et déjà câblé (geste plugdata). Marche dans les deux sens
-  (tiré depuis une sortie ou une entrée).
-- **Autopatch** : edge sélectionnée + clic palette = le node s'insère dans
-  la chaîne (`A → B` devient `A → M → B`).
+  (tiré depuis une sortie ou une entrée). Exception : tirer le fil d'une
+  **entrée déjà câblée** et le lâcher dans le vide **supprime la
+  connexion** (« tirer le cable », sémantique Max).
+- **Autopatch** : trois façons d'insérer `A → M → B` — edge sélectionnée +
+  clic palette, **drag palette déposé sur le fil**, ou **double-clic sur
+  le fil** (quick-add filtré aux types des deux bouts, inséré au point
+  du clic).
 - **Reconnect** : re-tirer le endpoint d'une edge la déplace vers une
-  nouvelle cible — pas besoin de supprimer puis re-câbler.
+  nouvelle cible — lâché sur le vide, il **supprime** l'edge.
 - **Clipboard** : `Ctrl+C/X/V` copy/cut/paste des nodes sélectionnés (avec
   leurs edges internes — paste possible dans un autre tab), `Ctrl+D`
   duplicate.

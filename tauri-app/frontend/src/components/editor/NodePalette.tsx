@@ -7,6 +7,7 @@ import {
 } from '../nodeParamSchema';
 import type { NodeType } from '../../store/useGraphStore';
 import type { PluginManifest } from '../../types/generated/PluginManifest';
+import { PALETTE_DRAG_MIME, type PaletteDragPayload } from '../../hooks/useNodeInsertion';
 
 /// Palette de nodes — extraite de NodeEditor (P2.4). Gère le rail replié,
 /// les catégories filtrées par tab (sub/global/signal), les items natifs +
@@ -32,6 +33,13 @@ interface NodePaletteProps {
   importPlugin: (path: string) => Promise<unknown>;
   reloadPlugins: () => Promise<unknown>;
 }
+
+/// Amorce le drag palette → canvas (dataTransfer typé — le drop est
+/// filtré côté canvas sur ce MIME). Poser sur un fil = splice direct.
+const startNodeDrag = (e: React.DragEvent, payload: PaletteDragPayload) => {
+  e.dataTransfer.setData(PALETTE_DRAG_MIME, JSON.stringify(payload));
+  e.dataTransfer.effectAllowed = 'copy';
+};
 
 export const NodePalette: React.FC<NodePaletteProps> = (p) => {
   if (p.collapsed) {
@@ -63,7 +71,7 @@ export const NodePalette: React.FC<NodePaletteProps> = (p) => {
           <p className="text-gray-500 text-xs mt-0.5">
             {p.edgeSelected
               ? 'Edge selected — click a modifier to insert it into the chain'
-              : 'Click to add · Ctrl+K quick-add · Hover for info'}
+              : 'Click or drag onto canvas · Ctrl+K quick-add · Hover for info'}
           </p>
         </div>
         <button
@@ -113,7 +121,9 @@ export const NodePalette: React.FC<NodePaletteProps> = (p) => {
                     >
                       <button
                         onClick={() => p.onAddNode(type)}
-                        className="w-full text-left px-2.5 py-1.5 text-white text-xs rounded transition-all hover:translate-x-0.5 flex items-center gap-2 group"
+                        draggable
+                        onDragStart={(e) => startNodeDrag(e, { kind: 'type', type })}
+                        className="w-full text-left px-2.5 py-1.5 text-white text-xs rounded transition-all hover:translate-x-0.5 flex items-center gap-2 group cursor-grab active:cursor-grabbing"
                         style={{ background: 'transparent' }}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.background = getCategoryColor(type) + '20';
@@ -169,7 +179,9 @@ export const NodePalette: React.FC<NodePaletteProps> = (p) => {
                     >
                       <button
                         onClick={() => p.onAddPluginNode(m)}
-                        className="w-full text-left px-2.5 py-1.5 text-white text-xs rounded transition-all hover:translate-x-0.5 flex items-center gap-2"
+                        draggable
+                        onDragStart={(e) => startNodeDrag(e, { kind: 'plugin', manifest: m })}
+                        className="w-full text-left px-2.5 py-1.5 text-white text-xs rounded transition-all hover:translate-x-0.5 flex items-center gap-2 cursor-grab active:cursor-grabbing"
                         style={{ background: 'transparent' }}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.background = (NODE_COLORS.yellow ?? '#ca8a04') + '20';

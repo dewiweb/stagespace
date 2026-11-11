@@ -37,6 +37,11 @@ interface GraphCanvasProps {
   onInit: (instance: ReactFlowInstance) => void;
   onNodeDoubleClick: (event: React.MouseEvent, node: Node) => void;
   onNodeContextMenu: (event: React.MouseEvent, node: Node) => void;
+  /// Double-clic sur un fil → QuickAdd filtré aux 2 bouts (insertion).
+  onEdgeDoubleClick: (event: React.MouseEvent, edge: Edge) => void;
+  /// Drop palette → canvas (node posé au curseur, ou splice sur un fil).
+  onPaletteDrop: (e: React.DragEvent) => void;
+  onPaletteDragOver: (e: React.DragEvent) => void;
   onDismissNodeMenu: () => void;
   onPaneDoubleClick: (e: React.MouseEvent) => void;
   isValidConnection: (connection: Edge | Connection) => boolean;
@@ -54,7 +59,11 @@ interface GraphCanvasProps {
 
 export const GraphCanvas: React.FC<GraphCanvasProps> = (p) => {
   return (
-    <div className="flex-1 bg-stagespace-bg relative">
+    <div
+      className="flex-1 bg-stagespace-bg relative"
+      onDrop={p.onPaletteDrop}
+      onDragOver={p.onPaletteDragOver}
+    >
       <ReactFlow
         nodes={p.nodes}
         edges={p.edges}
@@ -69,6 +78,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = (p) => {
         onInit={p.onInit}
         edgesReconnectable
         onNodeDoubleClick={p.onNodeDoubleClick}
+        onEdgeDoubleClick={p.onEdgeDoubleClick}
         onNodeContextMenu={p.onNodeContextMenu}
         onNodeClick={p.onDismissNodeMenu}
         onPaneClick={p.onDismissNodeMenu}
