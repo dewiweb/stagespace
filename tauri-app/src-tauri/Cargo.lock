@@ -3951,7 +3951,7 @@ dependencies = [
 
 [[package]]
 name = "stagespace-tauri"
-version = "0.5.2"
+version = "0.5.3"
 dependencies = [
  "dirs 7.0.0",
  "glib",
