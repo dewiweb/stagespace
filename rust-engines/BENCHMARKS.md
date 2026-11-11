@@ -1,34 +1,34 @@
 # Benchmarks
 
-STAGESPACE utilise Criterion pour mesurer la performance des moteurs de trajectoires.
+STAGESPACE uses Criterion to measure trajectory engine performance.
 
-## Exécuter les benchmarks
+## Running the benchmarks
 
 ```bash
 cd rust-engines
 cargo bench
 ```
 
-## Résultats actuels
+## Current results
 
-### Moteurs math (9 objets)
+### Math engines (9 objects)
 
-| Moteur | Temps moyen |
+| Engine | Average time |
 |--------|-------------|
 | Circular | ~540 ns |
 | Spiral | ~540 ns |
 | Lissajous | ~640 ns |
 | Perlin Noise | ~720 ns |
 
-### Moteurs physiques (9 objets)
+### Physics engines (9 objects)
 
-| Moteur | Temps moyen |
+| Engine | Average time |
 |--------|-------------|
 | Swarm | ~1.2 µs |
 
 ### Scaling (Circular)
 
-| Objets | Temps moyen |
+| Objects | Average time |
 |--------|-------------|
 | 9 | ~484 ns |
 | 50 | ~2.8 µs |
@@ -36,20 +36,20 @@ cargo bench
 | 500 | ~27.7 µs |
 | 1000 | ~55.6 µs |
 
-## Interprétation
+## Interpretation
 
-- **Moteurs math** : très performants (< 1 µs pour 9 objets)
-- **Moteurs physiques** : plus lents mais encore très performants (~1.2 µs pour 9 objets)
-- **Scaling** : temps linéaire avec le nombre d'objets (O(n))
-- **60 FPS** : 16.67 ms par frame → STAGESPACE peut gérer facilement 1000+ objets en temps réel
+- **Math engines**: very fast (< 1 µs for 9 objects)
+- **Physics engines**: slower but still very fast (~1.2 µs for 9 objects)
+- **Scaling**: linear time with object count (O(n))
+- **60 FPS**: 16.67 ms per frame → STAGESPACE can easily handle 1000+ objects in real time
 
-## Comparaison
+## Comparison
 
-STAGESPACE est optimisé pour le temps réel :
-- **Python (OSCAI)** : ~100-500 µs par position (100-1000x plus lent)
-- **STAGESPACE (Rust)** : ~50-500 ns par position (1000x plus rapide)
+STAGESPACE is optimized for real time:
+- **Python (OSCAI)**: ~100-500 µs per position (100-1000x slower)
+- **STAGESPACE (Rust)**: ~50-500 ns per position (1000x faster)
 
-## Ajouter un nouveau benchmark
+## Adding a new benchmark
 
 ```rust
 fn bench_my_engine(c: &mut Criterion) {
@@ -71,6 +71,6 @@ fn bench_my_engine(c: &mut Criterion) {
 }
 ```
 
-## Historique
+## History
 
-Les benchmarks sont automatiquement enregistrés dans `target/criterion/` pour suivre l'évolution des performances au fil du temps.
+Benchmarks are automatically recorded in `target/criterion/` to track performance over time.

@@ -1,27 +1,27 @@
-# Reviews de modularisation — 4 fichiers > 500 lignes
+# Modularization reviews — 4 files > 500 lines
 
-Date : août 2025
+Date: August 2025
 
-## Synthèse
+## Summary
 
-| Fichier | Lignes | Modules proposés | Lignes finales estimées | Difficulté |
+| File | Lines | Proposed modules | Estimated final lines | Difficulty |
 |---------|--------|-----------------|------------------------|------------|
 | `tauri-app/src-tauri/src/lib.rs` | 2178 | 21 modules | ~100 | ⭐⭐⭐⭐ |
 | `tauri-app/frontend/src/store/useGraphStore.ts` | 1146 | 17 modules | ~50 | ⭐⭐⭐⭐ |
 | `tauri-app/frontend/src/components/Scene3D.tsx` | 972 | 10 modules | ~150-200 | ⭐⭐⭐ |
 | `rust-engines/src/runtime.rs` | 698 | 8 modules | ~150 | ⭐⭐⭐ |
 
-**Total : 4994 lignes → ~400 lignes** (réduction de 92%)
+**Total: 4994 lines → ~400 lines** (92% reduction)
 
 ---
 
-## 1. lib.rs (2178 → ~100 lignes)
+## 1. lib.rs (2178 → ~100 lines)
 
-### Structure proposée
+### Proposed structure
 
 ```
 src-tauri/src/
-├── lib.rs                    # run() + registration (~100 lignes)
+├── lib.rs                    # run() + registration (~100 lines)
 ├── state.rs                  # AppState struct
 ├── commands/
 │   ├── mod.rs                # Re-exports
@@ -50,9 +50,9 @@ src-tauri/src/
     └── animation_tests.rs
 ```
 
-### Plan par phases
+### Phased plan
 
-| Phase | Modules | Lignes déplacées | Risque | lib.rs après |
+| Phase | Modules | Lines moved | Risk | lib.rs after |
 |-------|---------|-----------------|--------|-------------|
 | 1 | file_io, network, bpm, audio | ~300 | ⭐ | ~1900 |
 | 2 | audio_reactor, osc, cuelist, presets, modulator, patch | ~400 | ⭐⭐ | ~1500 |
@@ -64,21 +64,21 @@ src-tauri/src/
 | 8 | animations | ~200 | ⭐⭐⭐⭐ | ~500 |
 | 9 | legacy, state, tests | ~300 | ⭐ | ~100 |
 
-### Risques clés
-- **AppState partagé** : tous les modules accèdent à `State<'_, AppState>` → documenter l'ordre des locks
-- **Callbacks position** : 4 modules créent des callbacks → extraire un helper `create_position_callback`
-- **Struct Movement** : contient Runtime + JoinHandle → déclarer `pub` dans `movements.rs`
-- **Tests** : utilisent `build_graph_from_shape` → mettre à jour les imports
+### Key risks
+- **Shared AppState**: all modules access `State<'_, AppState>` → document lock ordering
+- **Position callbacks**: 4 modules create callbacks → extract a `create_position_callback` helper
+- **Movement struct**: contains Runtime + JoinHandle → declare `pub` in `movements.rs`
+- **Tests**: use `build_graph_from_shape` → update imports
 
 ---
 
-## 2. useGraphStore.ts (1146 → ~50 lignes)
+## 2. useGraphStore.ts (1146 → ~50 lines)
 
-### Structure proposée
+### Proposed structure
 
 ```
 frontend/src/store/
-├── useGraphStore.ts          # combine tous les slices (~50 lignes)
+├── useGraphStore.ts          # combines all slices (~50 lines)
 ├── slices/
 │   ├── graphCoreSlice.ts     # nodes/edges + undo/redo
 │   ├── playbackSlice.ts      # compile, play/stop/preview, updateGraphLive
@@ -102,85 +102,85 @@ frontend/src/store/
     └── index.ts              # NodeType, AudioState, AppStatus, MovementInfo, CueInfo, HolTrack, HolProject
 ```
 
-### Plan par phases
+### Phased plan
 
-| Phase | Modules | Risque | Description |
+| Phase | Modules | Risk | Description |
 |-------|---------|--------|-------------|
-| 1 | perfSlice, audioSlice, oscSlice, persistenceSlice | ⭐ | Modules autonomes |
-| 2 | geometryUtils, types/index | ⭐ | Fonctions pures + types |
-| 3 | macrosSlice, holProjectSlice, drawModeSlice | ⭐⭐ | Dépendances unidirectionnelles |
-| 4 | movementSlice, cueSlice, setlistSlice | ⭐⭐⭐ | Dépendances croisées |
+| 1 | perfSlice, audioSlice, oscSlice, persistenceSlice | ⭐ | Self-contained modules |
+| 2 | geometryUtils, types/index | ⭐ | Pure functions + types |
+| 3 | macrosSlice, holProjectSlice, drawModeSlice | ⭐⭐ | Unidirectional dependencies |
+| 4 | movementSlice, cueSlice, setlistSlice | ⭐⭐⭐ | Cross dependencies |
 | 5 | playbackSlice, graphCoreSlice, panicSlice | ⭐⭐⭐⭐ | Core + orchestration |
-| 6 | hooks/useTauriListeners | ⭐⭐ | Finalisation |
+| 6 | hooks/useTauriListeners | ⭐⭐ | Finalization |
 
-### Risques clés
-- **Dépendance circulaire** : `graphCoreSlice.syncObjectsNode` → `playbackSlice.updateGraphLive` → `graphCoreSlice.nodes/edges` → utiliser pattern thunk avec `get()`
-- **Paramètres OSC manquants** : `oscAddress`, `oscPort`, `oscProfile` ne sont pas dans le store → créer un `settingsSlice`
-- **Imports dynamiques** : `prepareGraphForSave` importé dynamiquement à 8 endroits → extraire en utilitaire statique
-- **Maps non-sérialisables** : `oscMappings`, `oscValues` sont des Maps → middleware de sérialisation
+### Key risks
+- **Circular dependency**: `graphCoreSlice.syncObjectsNode` → `playbackSlice.updateGraphLive` → `graphCoreSlice.nodes/edges` → use thunk pattern with `get()`
+- **Missing OSC params**: `oscAddress`, `oscPort`, `oscProfile` aren't in the store → create a `settingsSlice`
+- **Dynamic imports**: `prepareGraphForSave` dynamically imported in 8 places → extract as a static utility
+- **Non-serializable Maps**: `oscMappings`, `oscValues` are Maps → serialization middleware
 
 ---
 
-## 3. Scene3D.tsx (972 → ~150-200 lignes)
+## 3. Scene3D.tsx (972 → ~150-200 lines)
 
-### Structure proposée
+### Proposed structure
 
 ```
 frontend/src/
 ├── components/
-│   ├── Scene3D.tsx              # orchestration (~150-200 lignes)
-│   ├── MovementsIndicator.tsx   # UI overlay movements
-│   ├── WebGLFallback.tsx        # UI erreur WebGL
-│   └── (déjà extraits: TrajectoryVisualization, ModeButtons, MacrosPanel, DrawModeOverlay)
+│   ├── Scene3D.tsx              # orchestration (~150-200 lines)
+│   ├── MovementsIndicator.tsx   # movements UI overlay
+│   ├── WebGLFallback.tsx        # WebGL error UI
+│   └── (already extracted: TrajectoryVisualization, ModeButtons, MacrosPanel, DrawModeOverlay)
 ├── hooks/
-│   ├── useThreeSceneSetup.ts    # scène, caméra, renderer, lumières, controls, resize, cleanup
-│   ├── useObjects3D.ts          # sphères + labels CSS2D
-│   ├── useHolMarkers.ts         # anneaux holophonix + labels
+│   ├── useThreeSceneSetup.ts    # scene, camera, renderer, lights, controls, resize, cleanup
+│   ├── useObjects3D.ts          # spheres + CSS2D labels
+│   ├── useHolMarkers.ts         # holophonix rings + labels
 │   ├── useManipulateHandle.ts   # octahedron handle + trajectory line
-│   ├── useRenderLoop.ts         # boucle 60fps + sync refs
-│   ├── useManipulateMode.ts     # handlers drag (down/move/up/wheel)
-│   ├── useDrawMode.ts           # handlers draw + screenToWorld
-│   └── useInteractionModes.ts   # toggle OrbitControls selon mode
+│   ├── useRenderLoop.ts         # 60fps loop + ref sync
+│   ├── useManipulateMode.ts     # drag handlers (down/move/up/wheel)
+│   ├── useDrawMode.ts           # draw handlers + screenToWorld
+│   └── useInteractionModes.ts   # toggle OrbitControls per mode
 ```
 
-### Plan par phases
+### Phased plan
 
-| Phase | Modules | Risque | Description |
+| Phase | Modules | Risk | Description |
 |-------|---------|--------|-------------|
-| 1 | useHolMarkers, useObjects3D, useManipulateHandle, useInteractionModes | ⭐ | Hooks indépendants |
-| 2 | useDrawMode, useManipulateMode | ⭐⭐ | Handlers interaction |
-| 3 | useRenderLoop | ⭐⭐⭐ | Render loop critique 60fps |
-| 4 | useThreeSceneSetup | ⭐⭐ | Setup scène (stable) |
-| 5 | MovementsIndicator, WebGLFallback | ⭐ | Composants UI |
+| 1 | useHolMarkers, useObjects3D, useManipulateHandle, useInteractionModes | ⭐ | Independent hooks |
+| 2 | useDrawMode, useManipulateMode | ⭐⭐ | Interaction handlers |
+| 3 | useRenderLoop | ⭐⭐⭐ | Critical 60fps render loop |
+| 4 | useThreeSceneSetup | ⭐⭐ | Scene setup (stable) |
+| 5 | MovementsIndicator, WebGLFallback | ⭐ | UI components |
 
-### Risques clés
-- **Refs Three.js partagées** : passer les refs en paramètres, ne jamais recréer dans les hooks
-- **Render loop 60fps** : ne jamais inclure de dépendances React dans le useEffect du render loop — utiliser des refs internes
-- **Lifecycle GPU** : chaque hook doit disposer ses objets Three.js dans son cleanup
-- **Coordination entre hooks** : `useRenderLoop` dépend de toutes les refs → ordre d'appel stable
+### Key risks
+- **Shared Three.js refs**: pass refs as parameters, never recreate in hooks
+- **60fps render loop**: never include React dependencies in the render loop useEffect — use internal refs
+- **GPU lifecycle**: each hook must dispose its Three.js objects in its cleanup
+- **Hook coordination**: `useRenderLoop` depends on all refs → stable call order
 
 ---
 
-## 4. runtime.rs (698 → ~150 lignes)
+## 4. runtime.rs (698 → ~150 lines)
 
-### Structure proposée
+### Proposed structure
 
 ```
 rust-engines/src/
-├── runtime.rs                  # facade Runtime + new() + stop() (~150 lignes)
+├── runtime.rs                  # Runtime facade + new() + stop() (~150 lines)
 ├── runtime/
 │   ├── mod.rs                  # re-exports
 │   ├── types.rs                # LoopMode, PlayDirection, PerfStats, PositionFn, PositionCallback
-│   ├── macros.rs               # MacroState (atomics lock-free)
+│   ├── macros.rs               # MacroState (lock-free atomics)
 │   ├── overrides.rs            # OverrideManager (HashMap<usize, Vector3>)
 │   ├── perf.rs                 # PerfMonitor (4x AtomicU64)
 │   ├── config.rs               # RuntimeConfig (loop_mode, direction, fade, preview)
 │   ├── sample.rs               # sample_trajectory()
 │   ├── cue.rs                  # CueManager + crossfade
-│   └── playback.rs             # PlaybackLoop + sous-fonctions
+│   └── playback.rs             # PlaybackLoop + sub-functions
 ```
 
-### Sous-fonctions à extraire de `play_compiled()` (268 lignes)
+### Sub-functions to extract from `play_compiled()` (268 lines)
 
 ```rust
 fn compute_virtual_time(t_real, speed, duration, loop_mode, direction) -> f64;
@@ -189,30 +189,30 @@ fn apply_macros_to_position(pos, scale, rotation, shift, origin) -> Vector3<f64>
 fn send_osc_positions(socket, sender, positions, osc_ids, scale, rotation, origin, shift);
 ```
 
-### Plan par phases
+### Phased plan
 
-| Phase | Modules | Risque | Description |
+| Phase | Modules | Risk | Description |
 |-------|---------|--------|-------------|
-| 1 | types.rs, macros.rs | ⭐ | Types purs, aucune dépendance |
-| 2 | overrides.rs, perf.rs, config.rs | ⭐⭐ | Encapsulation simple de Arc/Mutex |
-| 3 | sample.rs, cue.rs, playback.rs | ⭐⭐⭐ | Logique de playback complexe |
-| 4 | Découpage play_compiled() en sous-fonctions | ⭐⭐⭐ | Refactor boucle |
-| 5 | Tests par module | ⭐ | Qualité |
+| 1 | types.rs, macros.rs | ⭐ | Pure types, no dependencies |
+| 2 | overrides.rs, perf.rs, config.rs | ⭐⭐ | Simple Arc/Mutex encapsulation |
+| 3 | sample.rs, cue.rs, playback.rs | ⭐⭐⭐ | Complex playback logic |
+| 4 | Split play_compiled() into sub-functions | ⭐⭐⭐ | Loop refactor |
+| 5 | Per-module tests | ⭐ | Quality |
 
-### Risques clés
-- **Thread safety** : 14 Arc clonés au début de `play_compiled()` → préserver l'ordre des locks
-- **Double lock origin** : lignes 426 et 471 lockent `origin_arc` deux fois par frame → optimiser en stockant `origin_local`
-- **Hot-swap PositionFn** : `recall_cue()` utilise `std::mem::replace` → préserver dans CueManager
-- **Timing précis** : `spin_sleep` ne doit pas être affecté par le refactor
+### Key risks
+- **Thread safety**: 14 Arcs cloned at the start of `play_compiled()` → preserve lock ordering
+- **Double origin lock**: lines 426 and 471 lock `origin_arc` twice per frame → optimize by storing `origin_local`
+- **PositionFn hot-swap**: `recall_cue()` uses `std::mem::replace` → preserve in CueManager
+- **Precise timing**: `spin_sleep` must not be affected by the refactor
 
 ---
 
-## Recommandations transversales
+## Cross-cutting recommendations
 
-1. **Commencer par les modules autonomes** (Phase 1 de chaque fichier) — risque minimal, valide l'approche
-2. **Tester après chaque phase** — compiler + tests Playwright après chaque extraction
-3. **Documenter les dépendances** entre modules (graphe de dépendances)
-4. **Créer un `settingsSlice`** frontend pour `oscAddress`, `oscPort`, `oscProfile`
-5. **Extraire `prepareGraphForSave`** en utilitaire statique (au lieu d'import dynamique)
-6. **Extraire `create_position_callback`** en helper Rust partagé
-7. **Profiter des sessions de modification** pour extraire au moins un module à chaque fois
+1. **Start with self-contained modules** (Phase 1 of each file) — minimal risk, validates the approach
+2. **Test after each phase** — compile + Playwright tests after each extraction
+3. **Document dependencies** between modules (dependency graph)
+4. **Create a `settingsSlice`** frontend for `oscAddress`, `oscPort`, `oscProfile`
+5. **Extract `prepareGraphForSave`** as a static utility (instead of dynamic import)
+6. **Extract `create_position_callback`** as a shared Rust helper
+7. **Take advantage of modification sessions** to extract at least one module each time

@@ -1,79 +1,79 @@
-# Tests
+# Testing
 
-STAGESPACE utilise une suite de tests complète pour assurer la qualité du code.
+STAGESPACE uses a comprehensive test suite to ensure code quality.
 
-## Types de tests
+## Test types
 
-### Tests unitaires
+### Unit tests
 
-Les tests unitaires testent des composants individuels isolés.
+Unit tests test isolated individual components.
 
-- **Moteurs** : chaque moteur a des tests pour vérifier les positions calculées
-- **Validator** : tests de validation de graphes
-- **Compiler** : tests de compilation de graphes
-- **Runtime** : tests de création et de playback
-- **Audio** : tests de traitement audio
-- **Config** : tests de configuration
+- **Engines**: each engine has tests verifying computed positions
+- **Validator**: graph validation tests
+- **Compiler**: graph compilation tests
+- **Runtime**: creation and playback tests
+- **Audio**: audio processing tests
+- **Config**: configuration tests
 
-### Tests d'intégration
+### Integration tests
 
-Les tests d'intégration testent l'interaction entre plusieurs composants.
+Integration tests test the interaction between multiple components.
 
-- **Compilation complète** : test de la compilation d'un graphe complet
-- **Profils OSC** : test de tous les profils OSC
-- **Sérialisation** : test de la sérialisation/désérialisation de graphes
-- **Configuration** : test de la configuration JSON
+- **Full compilation**: testing compilation of a complete graph
+- **OSC profiles**: testing all OSC profiles
+- **Serialization**: graph serialization/deserialization tests
+- **Configuration**: JSON configuration tests
 
-## Exécuter les tests
+## Running the tests
 
-### Tous les tests
+### All tests
 
 ```bash
 cd rust-engines
 cargo test --lib
 ```
 
-### Tests spécifiques
+### Specific tests
 
 ```bash
-# Tests d'intégration uniquement
+# Integration tests only
 cargo test --lib integration_tests
 
-# Tests de configuration uniquement
+# Configuration tests only
 cargo test --lib config_tests
 
-# Tests d'un moteur spécifique
+# Tests for a specific engine
 cargo test --lib circular
 ```
 
-### Tests avec sortie détaillée
+### Tests with verbose output
 
 ```bash
 cargo test --lib -- --nocapture
 ```
 
-### Tests avec backtrace
+### Tests with backtrace
 
 ```bash
 RUST_BACKTRACE=1 cargo test --lib
 ```
 
-## Couverture de tests
+## Test coverage
 
-Actuellement, STAGESPACE a **519 tests** qui couvrent :
+STAGESPACE currently has **519 tests** covering:
 
-- 22 moteurs (tests unitaires)
-- Validation de graphes
-- Compilation de graphes
-- Runtime et playback
+- 22 engines (unit tests)
+- Graph validation
+- Graph compilation
+- Runtime and playback
 - Audio IN
 - OSC IN/OUT
 - Configuration
-- Sérialisation
+- Serialization
 
-## Ajouter un nouveau test
+## Adding a new test
 
-### Test unitaire
+### Unit test
 
 ```rust
 #[cfg(test)]
@@ -88,7 +88,7 @@ mod tests {
 }
 ```
 
-### Test d'intégration
+### Integration test
 
 ```rust
 #[test]
@@ -104,14 +104,14 @@ fn test_integration_scenario() {
 }
 ```
 
-## Bonnes pratiques
+## Best practices
 
-1. **Noms descriptifs** : utilisez des noms de tests qui décrivent ce qui est testé
-2. **AAA pattern** : Arrange, Act, Assert
-3. **Tests isolés** : chaque test doit être indépendant
-4. **Assertions claires** : utilisez des messages d'erreur explicites
-5. **Edge cases** : testez les cas limites et les erreurs
+1. **Descriptive names**: use test names that describe what is being tested
+2. **AAA pattern**: Arrange, Act, Assert
+3. **Isolated tests**: each test must be independent
+4. **Clear assertions**: use explicit error messages
+5. **Edge cases**: test boundary cases and errors
 
 ## CI/CD
 
-Les tests sont exécutés automatiquement dans le pipeline CI/CD pour s'assurer que chaque commit ne casse pas la fonctionnalité existante.
+Tests run automatically in the CI/CD pipeline to ensure each commit doesn't break existing functionality.

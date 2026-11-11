@@ -1,81 +1,81 @@
-# Contribuer à STAGESPACE
+# Contributing to STAGESPACE
 
-Merci de votre intérêt pour contribuer à STAGESPACE !
-Voir aussi [AGENTS.md](AGENTS.md) pour les conventions détaillées.
+Thanks for your interest in contributing to STAGESPACE!
+See also [AGENTS.md](AGENTS.md) for the detailed conventions.
 
-## Développement
+## Development
 
-### Prérequis
+### Prerequisites
 
 - Rust 1.88+ (stable)
 - Node.js 20+
-- Deps système (Linux) : `libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libasound2-dev patchelf`
+- System deps (Linux): `libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libasound2-dev patchelf`
 
-### Installation
+### Setup
 
 ```bash
-# Clone le repository
+# Clone the repository
 git clone https://github.com/dewiweb/stagespace.git
 cd stagespace
 
-# Build les moteurs Rust
+# Build the Rust engines
 cd rust-engines
 cargo build
 
-# Installe le frontend (requis par beforeBuildCommand)
+# Install the frontend (required by beforeBuildCommand)
 cd ../tauri-app/frontend
 npm install
 
-# Lance l'application Tauri
+# Run the Tauri application
 cd ..
 npm install
 npm run tauri dev
 ```
 
-### Structure du projet
+### Project structure
 
 ```
 stagespace/
-├── rust-engines/          # Moteurs Rust purs
+├── rust-engines/          # Pure Rust engines
 │   ├── src/
-│   │   ├── engines/       # Moteurs de trajectoires
-│   │   ├── runtime/       # Runtime temps réel + MergeRuntime
-│   │   ├── compiler.rs    # Compilateur de graphe
-│   │   ├── validator.rs   # Validation de graphe
-│   │   ├── osc_sender.rs  # OSC out (+ canaux spatiaux étendus)
+│   │   ├── engines/       # Trajectory engines
+│   │   ├── runtime/       # Real-time runtime + MergeRuntime
+│   │   ├── compiler.rs    # Graph compiler
+│   │   ├── validator.rs   # Graph validation
+│   │   ├── osc_sender.rs  # OSC out (+ extended spatial channels)
 │   │   ├── osc_receiver.rs # OSC in (mappings, transforms, anti-loop)
-│   │   ├── zones.rs       # Zones d'effets spatiaux
-│   │   ├── kinematics.rs  # Modulations cinématiques
+│   │   ├── zones.rs       # Spatial effect zones
+│   │   ├── kinematics.rs  # Kinematic modulations
 │   │   ├── audio.rs       # Audio IN (cpal + realfft)
-│   │   ├── logging.rs     # Logging structuré
-│   │   └── error.rs       # Gestion d'erreurs
+│   │   ├── logging.rs     # Structured logging
+│   │   └── error.rs       # Error handling
 │   └── Cargo.toml
 ├── tauri-app/
-│   ├── src-tauri/         # Shell Tauri (Rust)
-│   │   ├── src/           # Commands Tauri, AppState, CLI
-│   │   └── tests/         # Tests E2E CLI (e2e_cli_test.sh)
-│   └── frontend/          # UI React + TypeScript
+│   ├── src-tauri/         # Tauri shell (Rust)
+│   │   ├── src/           # Tauri commands, AppState, CLI
+│   │   └── tests/         # CLI E2E tests (e2e_cli_test.sh)
+│   └── frontend/          # React + TypeScript UI
 │       ├── src/
-│       │   ├── components/ # Composants React
+│       │   ├── components/ # React components
 │       │   └── store/      # Zustand store
 │       └── package.json
-├── _archive/              # Anciens prototypes (OSCAI, POC) — référence seulement
+├── _archive/              # Old prototypes (OSCAI, POC) — reference only
 └── README.md
 ```
 
 ## Tests
 
-### Tests Rust
+### Rust tests
 
 ```bash
 cd rust-engines
 cargo test --lib
 cd ../tauri-app/src-tauri
 cargo test --lib
-bash tests/e2e_cli_test.sh   # tests E2E du workflow CLI
+bash tests/e2e_cli_test.sh   # CLI workflow E2E tests
 ```
 
-### Tests TypeScript
+### TypeScript tests
 
 ```bash
 cd tauri-app/frontend
@@ -84,68 +84,68 @@ npx tsc --noEmit   # type check
 npm run lint       # eslint
 ```
 
-## Style de code
+## Code style
 
 ### Rust
 
-- Utiliser `cargo fmt` pour le formatage (vérifié en CI)
-- Utiliser `cargo clippy --all-targets` pour les warnings (vérifié en CI, `-D warnings`)
-- Suivre les conventions Rust standard
-- Pas de `unwrap()` en production (modules de test uniquement)
+- Use `cargo fmt` for formatting (checked in CI)
+- Use `cargo clippy --all-targets` for warnings (checked in CI, `-D warnings`)
+- Follow standard Rust conventions
+- No `unwrap()` in production (test modules only)
 
 ### TypeScript
 
-- Utiliser ESLint (vérifié en CI)
-- Suivre les conventions TypeScript standard
-- Utiliser des types stricts
-- IPC Tauri via `safeInvoke` (`utils/tauri.ts`), pas `invoke` direct
+- Use ESLint (checked in CI)
+- Follow standard TypeScript conventions
+- Use strict types
+- Tauri IPC via `safeInvoke` (`utils/tauri.ts`), not raw `invoke`
 
-## Ajouter un nouveau moteur
+## Adding a new engine
 
-1. Créer un fichier dans `rust-engines/src/engines/`
-2. Implémenter le trait `Engine`
-3. Ajouter des tests unitaires
-4. Ajouter le module dans `rust-engines/src/engines/mod.rs`
-5. Ajouter le type dans le parser de graphe (`tauri-app/src-tauri/src/graph/`)
-6. Ajouter le nœud dans le frontend (`nodeParamSchema.ts`, `NodeType` dans `store/types/`)
+1. Create a file in `rust-engines/src/engines/`
+2. Implement the `Engine` trait
+3. Add unit tests
+4. Register the module in `rust-engines/src/engines/mod.rs`
+5. Add the type to the graph parser (`tauri-app/src-tauri/src/graph/`)
+6. Add the node in the frontend (`nodeParamSchema.ts`, `NodeType` in `store/types/`)
 
-## Ajouter un nœud sans modifier l'app — plugins WASM (`.ssx`)
+## Adding a node without modifying the app — WASM plugins (`.ssx`)
 
-Les développeurs tiers peuvent créer des nodes WASM packagés en bundle `.ssx`
-(zip : `manifest.json` + `module.wasm`) — chargés au runtime, sandboxés
-(fuel wasmtime, traps → position zero, pas d'imports host), sans recompiler
-STAGESPACE. Voir `docs/PLUGINS_WASM.md` pour l'architecture et `plugin-sdk/README.md`
-pour le guide auteur complet. En résumé :
+Third-party developers can create WASM nodes packaged as a `.ssx` bundle
+(zip: `manifest.json` + `module.wasm`) — loaded at runtime, sandboxed
+(wasmtime fuel, traps → zero position, no host imports), without
+recompiling STAGESPACE. See `docs/PLUGINS_WASM.md` for the architecture
+and `plugin-sdk/README.md` for the full author guide. In short:
 
 ```bash
-# 1. Crate cdylib, cible wasm32-unknown-unknown, dep stagespace-plugin-sdk
+# 1. cdylib crate, wasm32-unknown-unknown target, stagespace-plugin-sdk dep
 # 2. fn position(t, i, n, d, params) -> (x, y, z) + stagespace_plugin!(position);
 # 3. manifest.json (id, abi_version: 1, kind: "engine", params[])
 cargo build --release --target wasm32-unknown-unknown
-stagespace-pack manifest.json target/wasm32-unknown-unknown/release/mon.wasm -o mon.ssx
-# 4. Installer via la palette "Plugins" → "+ Import .ssx…" dans l'app,
-#    ou copier dans <data_dir>/com.stagespace.studio/plugins/ puis Rescan
+stagespace-pack manifest.json target/wasm32-unknown-unknown/release/my.wasm -o my.ssx
+# 4. Install via the "Plugins" palette → "+ Import .ssx…" in the app,
+#    or copy into <data_dir>/com.stagespace.studio/plugins/ then Rescan
 ```
 
-Exemple complet : `plugin-examples/lemniscate/`. ABI v1 = engines
-uniquement (modifiers/composites → ABI v2 future).
+Complete example: `plugin-examples/lemniscate/`. ABI v1 = engines
+only (modifiers/composites → future ABI v2).
 
-## Ajouter une nouvelle fonctionnalité
+## Adding a new feature
 
-1. Ouvrir une issue pour discuter de la fonctionnalité
-2. Fork le repository
-3. Créer une branche pour votre fonctionnalité
-4. Implémenter la fonctionnalité avec des tests
-5. Soumettre une pull request
+1. Open an issue to discuss the feature
+2. Fork the repository
+3. Create a branch for your feature
+4. Implement the feature with tests
+5. Submit a pull request
 
 ## Logging
 
-STAGESPACE utilise `tracing` pour le logging. Voir `rust-engines/LOGGING.md` pour plus de détails.
+STAGESPACE uses `tracing` for logging. See `rust-engines/LOGGING.md` for details.
 
-## Gestion d'erreurs
+## Error handling
 
-STAGESPACE utilise `thiserror` pour la gestion d'erreurs. Voir `rust-engines/ERROR_HANDLING.md` pour plus de détails.
+STAGESPACE uses `thiserror` for error handling. See `rust-engines/ERROR_HANDLING.md` for details.
 
 ## Questions
 
-Pour toute question, ouvrez une issue sur GitHub.
+For any question, open an issue on GitHub.

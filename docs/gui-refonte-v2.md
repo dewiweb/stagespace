@@ -1,232 +1,240 @@
-# Refonte GUI v2 — plan post-review approfondie
+# GUI redesign v2 — post-deep-review plan
 
-Remplace `gui-refactor-plan.md` (obsolète) — écrit sur review complète du
-code à `cf4749a`+ , toutes dimensions : structure, flux de données, état
-detaché, code mort, couverture tests, style.
+Replaces `gui-refactor-plan.md` (obsolete) — written from a full code
+review at `cf4749a`+, all dimensions: structure, data flow, detached
+state, dead code, test coverage, style.
 
-## État réel vérifié (constats, pas opinions)
+## Verified real state (findings, not opinions)
 
 ### Structure
 
-| Surface | Contenu | Trou |
+| Surface | Contents | Gap |
 |---|---|---|
-| **ATELIER** | 3 col : [Show:Moves/Cues/FX + Templates] · [3D/NodeEditor] · [Inspector/Audio] | layout sain — CuelistPanel = 6 métiers |
-| **CONDUITE** | ConduitePage (Now/Next/transport/TC) | **display-only** : pas de cue list, arm, log, santé → impossible de conduire |
-| **JEU** | PerformView (setlist+pads+drawer+busking) | diverge de RunView détaché (pads+radar+gestes) — instrument coupé en deux |
+| **ATELIER** | 3 cols: [Show:Moves/Cues/FX + Templates] · [3D/NodeEditor] · [Inspector/Audio] | healthy layout — CuelistPanel = 6 domains |
+| **CONDUITE** | ConduitePage (Now/Next/transport/TC) | **display-only**: no cue list, arm, log, health → impossible to run the show |
+| **JEU** | PerformView (setlist+pads+drawer+busking) | diverges from detached RunView (pads+radar+gestures) — the instrument split in two |
 
-### Duplications mesurées
+### Measured duplications
 
-- **Cues ×3** : CuelistPanel (écriture+arm+transport+audition),
-  PerformView (colonne cues+recall), ConduitePage (display) — aucune
-  complète pour sa phase
-- **Sécurité live Atelier-only** : panic+arm+santé+backend-mort visibles
-  uniquement en Atelier — invisibles où le show tourne
-- **Overlays PerformView** : `buskingMode` reste le dernier `absolute
-  inset-0` interne (touchMode déjà supprimé)
-- **Score/tape** dans CuelistPanel (panneau d'écriture) — leur métier
-  est la répétition/conduite
-- **Log** dans CuelistPanel — invisible hors Atelier
+- **Cues ×3**: CuelistPanel (writing+arm+transport+audition),
+  PerformView (cue column+recall), ConduitePage (display) — none
+  complete for its phase
+- **Atelier-only live safety**: panic+arm+health+dead-backend visible
+  only in Atelier — invisible where the show runs
+- **PerformView overlays**: `buskingMode` remains the last internal
+  `absolute inset-0` (touchMode already removed)
+- **Score/tape** in CuelistPanel (a writing panel) — their domain is
+  rehearsal/conduite
+- **Log** in CuelistPanel — invisible outside Atelier
 
-### Flux de données
+### Data flow
 
-- **Hooks globaux montés dans AppMain** (useShowControl, liveShortcuts,
-  conduiteBroadcast, listeners) — présents sur toutes les surfaces ✓
-- **Fenêtres détachées** = instances zustand propres :
-  - `conduite:state` broadcast 500ms + `conduite:cmd` → main dispatche
-  - MAIS les slices polleurs (perfSlice intervalle module) tournent
-    **dans chaque fenêtre** → N fenêtres = N× charge de poll backend
-  - `?view=run` n'a ni useShowControl ni conduite:cmd (invoke IPC direct
-    — fonctionne, mais pas de dispatch OSC, pas de log partagé)
-- **Fenêtre détachée = display+commande, jamais owner** — à figer comme
-  règle (l'arm/store/modifs vivent dans la fenêtre maître)
+- **Global hooks mounted in AppMain** (useShowControl, liveShortcuts,
+  conduiteBroadcast, listeners) — present on all surfaces ✓
+- **Detached windows** = their own zustand instances:
+  - `conduite:state` broadcast 500ms + `conduite:cmd` → main dispatches
+  - BUT the polling slices (perfSlice module interval) run **in each
+    window** → N windows = N× backend poll load
+  - `?view=run` has neither useShowControl nor conduite:cmd (direct IPC
+    invoke — works, but no OSC dispatch, no shared log)
+- **Detached window = display+command, never owner** — to freeze as a
+  rule (arm/store/edits live in the master window)
 
-### Dette mesurée
+### Measured debt
 
-| Dette | Volume |
+| Debt | Volume |
 |---|---|
-| Ad-hoc colors (6 fichiers live) | ~112 : PerformView 47, StatusBar 19, SettingsModal 17, CuelistPanel 16, RunView 10 |
-| Fichiers >400 lignes | 9 : PerformView 1017, NodeEditor 686, Inspector 647, MovesTable 617, SpatialFxPanel 615, CustomNode 589, CuelistPanel 570, SettingsModal 496, Scene3D 494 |
-| z-index numériques | 0 (déjà propre) |
-| `oscSlice` mort | aucun consumer — à supprimer |
-| Tests | 7 fichiers seulement — PerformView, CuelistPanel, RunView, liveActions, useShowControl (le dispatch live!) : **zéro couverture** |
-| useEffect | sain (2-5/fichier) — la discipline poll-slice tient |
+| Ad-hoc colors (6 live files) | ~112: PerformView 47, StatusBar 19, SettingsModal 17, CuelistPanel 16, RunView 10 |
+| Files >400 lines | 9: PerformView 1017, NodeEditor 686, Inspector 647, MovesTable 617, SpatialFxPanel 615, CustomNode 589, CuelistPanel 570, SettingsModal 496, Scene3D 494 |
+| Numeric z-index | 0 (already clean) |
+| Dead `oscSlice` | no consumer — delete |
+| Tests | 7 files only — PerformView, CuelistPanel, RunView, liveActions, useShowControl (the live dispatch!): **zero coverage** |
+| useEffect | healthy (2-5/file) — the poll-slice discipline holds |
 
-## Analyse attendu vs effectif — là où l'interface promet plus qu'elle ne tient
+## Expected vs actual analysis — where the interface promises more than it delivers
 
-| Attendu | Effectif | Écart |
+| Expected | Actual | Gap |
 |---|---|---|
-| Conduire depuis CONDUITE | `cmd('prev/go/next/panic')` seulement — pas de cue list, pas d'arm → GO existe mais on ne choisit pas ce qu'on GO au-delà de Now/Next | la surface promet la conduite, livre le display |
-| **Unsolo** "restaure" | restaure `soloSavedIds` (capturé au solo) — les slots joués PENDANT le solo ne sont pas repris → restore partiel si l'opérateur a joué entre-temps | promesse de round-trip, livre une photo |
-| **Audition** "à quoi ressemble cue 3" | radar de `manual_positions`+`origin` — les objets **sous move** bougeront (trajectoires, pas positions) → l'image statique omet le contenu animé de la cue | l'audition montre le repos, pas le mouvement |
-| **Pad** = joue | `movementId` = vrai état backend ✓ mais reste "playing" pendant le fade-out et même si le spawn a échoué (id posé jusqu'au stop) | état vrai mais non granulaire |
-| **"émis"** tooltip | = dernier envoyé, pas reçu/ack par le renderer | corrigé en libellé, la confusion reste dans les attentes |
-| **Perceptual** 5°/s warning | valeurs vraies, mais le seuil "illisible" est arbitraire et non calibré à la salle — risque de chip bruitée | vérité technique, utilité UX non prouvée |
-| **Settings** toggles | envoient la config au backend — pas de feedback d'acceptation réelle (sauf revert-on-error du slice) | fire-and-forget masqué par un revert propre |
-| **Solo/park/hold chips** | `objectStates` backend = vraie source ✓ (pas d'inférence) | correct — à garder comme référence |
-| **Track colors** | une couleur = une track, cohérent entre radar/chips/3D | correct |
+| Run the show from CONDUITE | `cmd('prev/go/next/panic')` only — no cue list, no arm → GO exists but you don't choose what you GO beyond Now/Next | the surface promises conduite, delivers display |
+| **Unsolo** "restores" | restores `soloSavedIds` (captured at solo) — slots played DURING the solo are not resumed → partial restore if the operator played meanwhile | promises a round-trip, delivers a snapshot |
+| **Audition** "what does cue 3 look like" | radar of `manual_positions`+`origin` — objects **under move** will move (trajectories, not positions) → the static image omits the cue's animated content | audition shows rest, not motion |
+| **Pad** = playing | `movementId` = true backend state ✓ but stays "playing" during fade-out and even if spawn failed (id set until stop) | true but non-granular state |
+| **"emitted"** tooltip | = last sent, not received/ack'd by the renderer | fixed in label, confusion remains in expectations |
+| **Perceptual** 5°/s warning | true values, but the "illegible" threshold is arbitrary and uncalibrated to the venue — risk of a noisy chip | technical truth, unproven UX utility |
+| **Settings** toggles | send config to backend — no real acceptance feedback (except slice revert-on-error) | fire-and-forget masked by a clean revert |
+| **Solo/park/hold chips** | `objectStates` backend = true source ✓ (no inference) | correct — keep as reference |
+| **Track colors** | one color = one track, consistent across radar/chips/3D | correct |
 
-## Analyse architecture globale — les vraies questions
+## Global architecture analysis — the real questions
 
-| Question | État | Risque |
+| Question | State | Risk |
 |---|---|---|
-| **Store par fenêtre** = zustand indépendant + localStorage partagé | deux fenêtres éditent la même config → last-write-wins silencieux | divergence silencieuse de config (venue/PSN/reality en double) |
-| **`conduite:` master→conduite seulement** | RunView détaché n'a ni `conduite:cmd` ni broadcast dédié — invoke direct | schéma pair-à-pair incohérent par fenêtre |
-| **`useGraphStore` god-store** (15 slices) | toute surface lit tout — couplage implicite entre métier et surface | une erreur de slice casse toutes les surfaces |
-| **`liveActions` injecté par codegen regex** (`logAction`/`rec`) | l'injection sédimente — casser une signature casse le log/tape | pattern fragile qui survivra mal aux refactos |
-| **N fenêtres = N× poll** | perfSlice intervalle par fenêtre | charge backend multipliée, non plafonnée |
-| **`conduite:state` computed in main** | Now/Next = store de la fenêtre maître — correct si seule la maître est owner | dépend du fait que la conduite détachée n'édite pas — à figer |
+| **Per-window store** = independent zustand + shared localStorage | two windows edit the same config → silent last-write-wins | silent config divergence (venue/PSN/reality duplicated) |
+| **`conduite:` master→conduite only** | detached RunView has neither `conduite:cmd` nor a dedicated broadcast — direct invoke | inconsistent peer scheme per window |
+| **`useGraphStore` god-store** (15 slices) | every surface reads everything — implicit coupling between domain and surface | one slice error breaks all surfaces |
+| **`liveActions` injected by regex codegen** (`logAction`/`rec`) | the injection sediments — breaking a signature breaks log/tape | fragile pattern that won't survive refactors |
+| **N windows = N× poll** | perfSlice interval per window | multiplied, uncapped backend load |
+| **`conduite:state` computed in main** | Now/Next = master window's store — correct if only the master is owner | depends on the detached conduite not editing — to freeze |
 
-## Pertinence des layouts — composant par composant
+## Layout relevance — component by component
 
-| Composant | Métier vrai | Pertinence | Verdict |
+| Component | True domain | Relevance | Verdict |
 |---|---|---|---|
-| Toolbar | fichier/undo/save/load/help/panic | panic y est mal placé (Atelier-only) | garder les items fichier, PANIC part en SafetyBar |
-| StatusBar | moteur+arm+flux+perceptuel+perf+erreurs+OSC-dest | tout est bien mais Atelier-only | splitter : sécurité → SafetyBar global, perf/erreurs reste |
-| CuelistPanel | cues + score + tape + log + audition + transport | 6 métiers | découper : cues+audition → Atelier ; arm+GO+log → Conduite ; score/tape → Répétition |
-| PerformView | pads+setlist+drawer+busking+chips | l'instrument, mais sans radar/gestes | absorber RunView — un seul instrument |
-| RunView | pads+radar+gestes+transport | l'instrument léger, détaché | variante du même composant, pas un autre |
-| ConduitePage | Now/Next+transport+TC | le display FOH | + cue list armée + log pour être la surface |
-| SettingsModal | config 16 sections | monolithe | tabs par domaine |
-| MovesTable | gestion moves | sain, un métier | reste |
-| Inspector | params move/node | sain, un métier | reste |
-| SpatialFxPanel | zones/modulations | un métier mais home = tab secondaire | peut rester en tab ou être promu |
-| AnimationList | library/presets | sain | reste |
-| Scene3D | canvas 3D + draw modes | sain | reste |
-| AudioPanel | capture audio config | sain, replié | reste |
+| Toolbar | file/undo/save/load/help/panic | panic is misplaced (Atelier-only) | keep file items, PANIC moves to SafetyBar |
+| StatusBar | engine+arm+flows+perceptual+perf+errors+OSC-dest | all good but Atelier-only | split: safety → global SafetyBar, perf/errors stays |
+| CuelistPanel | cues + score + tape + log + audition + transport | 6 domains | cut: cues+audition → Atelier; arm+GO+log → Conduite; score/tape → Rehearsal |
+| PerformView | pads+setlist+drawer+busking+chips | the instrument, but no radar/gestures | absorb RunView — one instrument |
+| RunView | pads+radar+gestures+transport | the light instrument, detached | variant of the same component, not another |
+| ConduitePage | Now/Next+transport+TC | the FOH display | + armed cue list + log to be the surface |
+| SettingsModal | 16-section config | monolith | domain tabs |
+| MovesTable | move management | healthy, one domain | stays |
+| Inspector | move/node params | healthy, one domain | stays |
+| SpatialFxPanel | zones/modulations | one domain but home = secondary tab | can stay as tab or be promoted |
+| AnimationList | library/presets | healthy | stays |
+| Scene3D | 3D canvas + draw modes | healthy | stays |
+| AudioPanel | audio capture config | healthy, collapsed | stays |
 
-## Le modèle cible — une phase = une surface complète
+## The target model — one phase = one complete surface
 
-### R0 — SafetyBar global (PRIO 1)
+### R0 — Global SafetyBar (PRIO 1)
 
-`SafetyBar` extrait de StatusBar : PANIC + arm LIVE/DRYRUN + PSN + OSC
-activity + perceptuel + backend-mort → footer **app-level, toutes
-surfaces**. La sécurité du show ne doit jamais dépendre de la phase.
+`SafetyBar` extracted from StatusBar: PANIC + LIVE/DRYRUN arm + PSN + OSC
+activity + perceptual + dead-backend → footer **app-level, all
+surfaces**. Show safety must never depend on the phase.
 
-### R1 — CONDUITE opérable (PRIO 1)
+### R1 — Operable CONDUITE (PRIO 1)
 
-ConduitePage devient la surface de conduite réelle :
+ConduitePage becomes the real conduite surface:
 
 ```
 ┌──────────────┬──────────────────────────┐
-│ Cuelist      │ Now géant · Next · then  │
+│ Cuelist      │ Giant Now · Next · then  │
 │ (arm+GO+     │ TC · transport           │
 │  audition)   │                          │
 ├──────────────┴──────────────────────────┤
-│ Log opérationnel                        │
+│ Operational log                         │
 └─────────────────────────────────────────┘
 ```
 
-- CuelistPanel prop `variant="conduite"` : arm/GO/audition/log, sans
-  score/tape/écriture
-- Log sort de CuelistPanel → ligne dédiée en bas de surface
+- CuelistPanel `variant="conduite"` prop: arm/GO/audition/log, without
+  score/tape/writing
+- Log leaves CuelistPanel → dedicated row at the bottom of the surface
 
-### R2 — JEU : un seul instrument (PRIO 1)
+### R2 — JEU: one instrument (PRIO 1)
 
-Fusion PerformView+RunView : pads+radar+gestes+sources+transport+drawer
-replié. La radar+gestes migrent dans PerformView ; `?view=run` devient la
-variante detached du même composant (prop). buskingMode → variante de
-densité des pads, plus un overlay.
+PerformView+RunView merge: pads+radar+gestures+sources+transport+
+collapsed drawer. Radar+gestures migrate into PerformView; `?view=run`
+becomes the detached variant of the same component (prop). buskingMode →
+a pad density variant, no longer an overlay.
 
-### R3 — ATELIER : un métier par panneau (PRIO 2)
+### R3 — ATELIER: one domain per panel (PRIO 2)
 
-- CuelistPanel prop `variant="compose"` : écriture+scope+audition
-- Score/tape → panneau "Répétition" dédié (Atelier) ou Conduite
-- Log partagé (même composant, monté en Conduite ET accessible Atelier)
+- CuelistPanel `variant="compose"` prop: writing+scope+audition
+- Score/tape → dedicated "Rehearsal" panel (Atelier) or Conduite
+- Shared log (same component, mounted in Conduite AND reachable in
+  Atelier)
 
-### R4 — SettingsModal : 16 sections → 5 tabs (PRIO 2)
+### R4 — SettingsModal: 16 sections → 5 tabs (PRIO 2)
 
-Connexion (OSC out/in/profils) · Tracking (PSN) · Espace (venue+reality+
-merge) · Show (media+TC) · Audio. Contenu inchangé, navigation par domaine.
+Connection (OSC out/in/profiles) · Tracking (PSN) · Venue (venue+reality+
+merge) · Show (media+TC) · Audio. Content unchanged, domain navigation.
 
-### R5 — Hygiène + tokens (PRIO 3, continu)
+### R5 — Hygiene + tokens (PRIO 3, ongoing)
 
-- Supprimer `oscSlice` (mort)
-- Tokens de rôle tailwind (live/conduite/osc/warning/danger/tracking/dim)
-  — les 112 ad-hoc migrent par fichier touché (PerformView 47 d'abord)
-- buskingMode → densité pads (supprime le dernier overlay interne)
-- floor `text-[10px]` en surface live (supprimer 8px/9px)
+- Delete `oscSlice` (dead)
+- Tailwind role tokens (live/conduite/osc/warning/danger/tracking/dim)
+  — the 112 ad-hoc migrate per touched file (PerformView 47 first)
+- buskingMode → pad density (removes the last internal overlay)
+- `text-[10px]` floor on live surfaces (remove 8px/9px)
 
-### R6 — Couverture tests (PRIO 2 pour la fiabilité)
+### R6 — Test coverage (PRIO 2 for reliability)
 
-| Cible | Tests à écrire |
+| Target | Tests to write |
 |---|---|
-| `liveActions` + dispatch `useShowControl` | le chemin live critique — show-control event → invoke attendu |
+| `liveActions` + `useShowControl` dispatch | the critical live path — show-control event → expected invoke |
 | `CuelistPanel` variants | arm/GO/audition/score strip |
-| `PerformView`/`RunView` | pads, gestes, source chips |
-| `SettingsModal` | sections persistées |
-| **Poll multi-fenêtres** | N windows ne doivent pas N-multiplier le poll backend (dedup ou broadcast) |
+| `PerformView`/`RunView` | pads, gestures, source chips |
+| `SettingsModal` | persisted sections |
+| **Multi-window poll** | N windows must not N-multiply the backend poll (dedup or broadcast) |
 
-## R7 — Fenêtres détachées : le modèle figé (PRIO 2)
+## R7 — Detached windows: the frozen model (PRIO 2)
 
-- Une fenêtre détachée = display+commande, jamais owner de vérité
-- Polls dedupliqués OU état reçu par broadcast (comme conduite:state) —
-  sinon 3 fenêtres = 3× le poll IPC backend
-- `?view=run` rejoint le schéma conduite:state/cmd partagé
+- A detached window = display+command, never owner of truth
+- Polls deduplicated OR state received via broadcast (like
+  conduite:state) — otherwise 3 windows = 3× the backend IPC poll
+- `?view=run` joins the shared conduite:state/cmd scheme
 
-## Actions issues de l'analyse attendu/effectif
+## Actions from the expected/actual analysis
 
-| Écart | Action | Où |
+| Gap | Action | Where |
 |---|---|---|
-| Conduite = display | cue list + arm + log dans la surface | **R1** |
-| Unsolo partiel | capture `soloSavedIds` à l'unsolo (ou documenter "restore = photo au solo") | R2 + backend |
-| Audition = repos | libeller "positions au recall" honnêtement ; extension future = trajectoires simulées | R3 |
-| Pad non-granulaire | `playing` vs `fading`/`spawn-failed` états distincts | R2 |
-| Perceptuel arbitraire | seuils documentés + option désactivation | Settings |
-| Config multi-fenêtres | fenêtre détachée = lecture seule sur config (règle figée) | **R7** |
-| Settings fire-and-forget | indicateur d'acceptation backend par toggle | R4 |
+| Conduite = display | cue list + arm + log in the surface | **R1** |
+| Partial unsolo | capture `soloSavedIds` at unsolo (or document "restore = snapshot at solo") | R2 + backend |
+| Audition = rest | label "positions at recall" honestly; future extension = simulated trajectories | R3 |
+| Non-granular pad | distinct `playing` vs `fading`/`spawn-failed` states | R2 |
+| Arbitrary perceptual | documented thresholds + disable option | Settings |
+| Multi-window config | detached window = read-only on config (frozen rule) | **R7** |
+| Settings fire-and-forget | backend acceptance indicator per toggle | R4 |
 
-## Ordre
+## Order
 
 ```
 R0 SafetyBar ─┐
-R1 Conduite  ─┼─→ le show tourne sur ces deux
+R1 Conduite  ─┼─→ the show runs on these two
 R2 Jeu       ─┘
    ↓
-R3 Atelier · R4 Settings · R6 tests · R7 détaché
+R3 Atelier · R4 Settings · R6 tests · R7 detached
    ↓
-R5 hygiène continue
+R5 ongoing hygiene
 ```
 
-## Hors scope
+## Out of scope
 
-- A1.6 vue partition (reportée)
-- Réécriture autorisée si nécessaire (décision utilisateur) — NodeEditor,
-  Scene3D, Inspector inclus ; la règle reste : on réécrit pour une raison
-  structurelle, pas par esthétique
-- Pas de redesign cosmétique — structure + cohérence, le look suit les
+- A1.6 score view (postponed)
+- Rewriting allowed if necessary (user decision) — NodeEditor,
+  Scene3D, Inspector included; the rule stays: we rewrite for a
+  structural reason, not aesthetics
+- No cosmetic redesign — structure + coherence, the look follows the
   tokens
 
-## Critère de fin
+## Done criteria
 
-1. Panic/arm/santé visibles partout, tout le temps
-2. Show complet conduit depuis CONDUITE sans quitter la surface
-3. Instrument entier jouable depuis JEU (`?view=run` = variante, pas
-   nécessaire)
-4. Un métier identifiable par panneau
-5. Tests sur les chemins live (dispatch, cues, gestes)
-6. Fenêtres détachées sans N× poll
+1. Panic/arm/health visible everywhere, all the time
+2. Full show run from CONDUITE without leaving the surface
+3. Entire instrument playable from JEU (`?view=run` = variant, not
+   required)
+4. One identifiable domain per panel
+5. Tests on live paths (dispatch, cues, gestures)
+6. Detached windows without N× poll
 
 ---
 
-## Exécution (2026-11-01) — R0→R7 livrés
+## Execution (2026-11-01) — R0→R7 delivered
 
-| Item | Commit | Livré |
+| Item | Commit | Delivered |
 |---|---|---|
-| R0 | `403b163`+`71d85a5` | PANIC global dans StatusBar (déjà montée sur toutes surfaces — le seul trou était panic, Toolbar-only) |
-| R1 | `0db0668` | `ConduiteView` partagée + `ConduiteSurface` (stores) + `ConduitePage` (events) — cue list opérable, arm, log, transport ; `doCueRecallById` |
-| R2 | `9e3f493` | PerformView = instrument complet (pads+badges+radar+throw+gestes+drawer) ; `?view=run` = même surface via RunWindow ; RunView.tsx supprimé ; **fix panic** (crash sur get_track_positions undefined) |
-| R3 | `9859a68` | CuelistPanel recentré cues-only ; ScorePanel + ShowLogPanel en tabs ; **fix recall par id cassé depuis toujours** |
-| R4 | `3dc628e` | Settings 8 sections → 5 tabs (Réseau/Tracking/Salle/Show/Audio) |
-| R5 | `a848739` | sourceColors.ts (hex/text/chip/label) — radar+pads+chips unifiés |
-| R6 | `f7d0de3` | useShowControl.test 11 tests — dispatch OSC→liveActions→IPC + guards ; 391/391 |
-| R7 | `a1d80ff` | fenêtres détachées read-only (isDetachedWindow + guards storage) ; ss-surface non persisté ; +Move masqué en détaché |
+| R0 | `403b163`+`71d85a5` | Global PANIC in StatusBar (already mounted on all surfaces — the only gap was panic, Toolbar-only) |
+| R1 | `0db0668` | Shared `ConduiteView` + `ConduiteSurface` (stores) + `ConduitePage` (events) — operable cue list, arm, log, transport; `doCueRecallById` |
+| R2 | `9e3f493` | PerformView = full instrument (pads+badges+radar+throw+gestures+drawer); `?view=run` = same surface via RunWindow; RunView.tsx deleted; **panic fix** (crash on get_track_positions undefined) |
+| R3 | `9859a68` | CuelistPanel refocused cues-only; ScorePanel + ShowLogPanel as tabs; **fix for recall-by-id broken since forever** |
+| R4 | `3dc628e` | Settings 8 sections → 5 tabs (Network/Tracking/Venue/Show/Audio) |
+| R5 | `a848739` | sourceColors.ts (hex/text/chip/label) — radar+pads+chips unified |
+| R6 | `f7d0de3` | useShowControl.test 11 tests — OSC→liveActions→IPC dispatch + guards; 391/391 |
+| R7 | `a1d80ff` | detached windows read-only (isDetachedWindow + storage guards); ss-surface not persisted; +Move hidden in detached |
 
-### Bugs réels découverts en route
-- `panic` crashait si `get_track_positions` résolvait undefined
-- `doCueRecall(cue.id)` dans CuelistPanel — cassé depuis le début (id ≠ cue_number/index)
-- `?view=run` n'avait pas les listeners live (états potentiellement figés) → RunWindow monte les listeners sans useShowControl (double dispatch évité)
+### Real bugs discovered along the way
+- `panic` crashed if `get_track_positions` resolved undefined
+- `doCueRecall(cue.id)` in CuelistPanel — broken since the beginning
+  (id ≠ cue_number/index)
+- `?view=run` lacked the live listeners (potentially frozen states) →
+  RunWindow mounts the listeners without useShowControl (double
+  dispatch avoided)
 
-### Reste hors-scope assumé
-- Fenêtre run : le `N×poll` perfSlice persiste (module-level, par fenêtre) — R7 fige l'écriture, pas la lecture ; un stream backend unique resterait l'idéal
-- logAction/rec injecté par regex dans liveActions — pattern fragile au refacto
-- Validation Tauri runtime réel toujours pendante (events/listeners inter-webview)
+### Accepted out-of-scope remains
+- Run window: the `N×poll` perfSlice persists (module-level, per
+  window) — R7 freezes writing, not reading; a single backend stream
+  would remain ideal
+- logAction/rec injected by regex into liveActions — fragile pattern
+  on refactor
+- Real Tauri runtime validation still pending (inter-webview
+  events/listeners)

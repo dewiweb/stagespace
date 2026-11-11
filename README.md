@@ -1,11 +1,11 @@
 # STAGESPACE — Spatial Trajectory Engine
 
-Moteur de trajectoires spatiales temps réel **renderer-agnostic** : un graphe de
-nœuds compilé en fonctions continues `f(t)` orchestre le mouvement **et** les
-effets spatiaux (gain, spread, zones, modulations cinématiques) de sources audio
-contrôlées en OSC — Holophonix, SPAT Revolution, IEM, ADM-OSC ou tout récepteur
-OSC générique.
-**100% Rust + Tauri + React.** Performance temps réel, 60 FPS.
+A **renderer-agnostic** real-time spatial trajectory engine: a node graph
+compiled into continuous `f(t)` functions orchestrates the movement **and**
+the spatial effects (gain, spread, zones, kinematic modulations) of
+OSC-controlled audio sources — Holophonix, SPAT Revolution, IEM, ADM-OSC or
+any generic OSC receiver.
+**100% Rust + Tauri + React.** Real-time performance, 60 FPS.
 
 ---
 
@@ -19,7 +19,7 @@ OSC générique.
 └───────────────────┬──────────────────────────────┘
                     │ Tauri IPC
           ┌─────────▼──────────┐
-          │   Graph Compiler   │   ← Rust: nœuds → fonction composite
+          │   Graph Compiler   │   ← Rust: nodes → composite function
           └────┬──────────┬────┘
                │          │
     ┌──────────▼───┐  ┌───▼──────────┐
@@ -29,84 +29,84 @@ OSC générique.
     │ spiral       │  │ spring       │
     │ perlin_noise │  │ follow       │ ← pursue/evade/orbit/arrive
     │ pendulum     │  │ avoidance    │
-    │ formation    │  │ vectorfield  │ ← champs procéduraux + drawn
+    │ formation    │  │ vectorfield  │ ← procedural + drawn fields
     │ converge     │  └─────────────┘
     │ figure8      │
-    │ linear       │  Splines : DrawSpline / EvaluateSpline /
+    │ linear       │  Splines: DrawSpline / EvaluateSpline /
     │ oscillation  │             TrimSpline / OffsetSpline
-    │ BPM          │  ← Audio IN (cpal + FFT natifs)
+    │ BPM          │  ← Audio IN (native cpal + FFT)
     │ AudioAmp     │  ← Audio IN
     │ TimeFalloff  │  ← Falloffs
     │ PointDist    │  ← Falloffs
     └──────────────┘
                     │
          ┌──────────▼──────────┐
-         │  MergeRuntime 60 FPS │   ← workers parallèles → merge → OSC
+         │  MergeRuntime 60 FPS │   ← parallel workers → merge → OSC
          │  Post-process graph  │   ← Scale/Rotate/Shift/Zone/Velocity…
-         │  OSC Out (rosc)      │   → 6 profils (Holophonix, IEM, IRCAM,
-         │                      │      ADM, Generic XYZ/AED) + canaux
-         │                      │      étendus (gain, spread, distance…)
-         │  3D Preview          │   ← Three.js temps réel (+ viz zones)
+         │  OSC Out (rosc)      │   → 6 profiles (Holophonix, IEM, IRCAM,
+         │                      │      ADM, Generic XYZ/AED) + extended
+         │                      │      channels (gain, spread, distance…)
+         │  3D Preview          │   ← real-time Three.js (+ zone viz)
          └─────────────────────┘
 ```
 
 ---
 
-## Moteurs disponibles
+## Available engines
 
 ### Math Engine
-| Moteur | Description |
+| Engine | Description |
 |--------|-------------|
-| `circular` | Orbite circulaire uniforme |
-| `spiral` | Hélicoïde montante/descendante |
-| `lissajous` | Courbes de Lissajous 3D |
-| `figure8` | Lemniscate de Bernoulli |
-| `linear` | Pan linéaire A→B |
-| `oscillation` | Oscillation sinusoïdale |
-| `perlin_noise` | Mouvement organique |
-| `formation` | Formation géométrique |
+| `circular` | Uniform circular orbit |
+| `spiral` | Rising/falling helix |
+| `lissajous` | 3D Lissajous curves |
+| `figure8` | Bernoulli lemniscate |
+| `linear` | Linear A→B pan |
+| `oscillation` | Sinusoidal oscillation |
+| `perlin_noise` | Organic movement |
+| `formation` | Geometric formation |
 | `converge` | Convergence/divergence |
-| `pendulum` | Simulation pendule |
+| `pendulum` | Pendulum simulation |
 
 ### Physics Engine
-| Moteur | Description |
+| Engine | Description |
 |--------|-------------|
-| `bouncing` | Rebonds dans conteneur |
-| `avoidance` | Répulsion mutuelle |
-| `spring` | Attraction vers cible |
-| `follow` | File indienne — modes `pursue`/`evade`/`orbit`/`arrive` |
-| `swarm` | Essaim de Boids |
-| `vectorfield` | Advection par champ de vitesses (vortex/sink/flow/noise/**drawn**) |
+| `bouncing` | Bounces inside a container |
+| `avoidance` | Mutual repulsion |
+| `spring` | Attraction toward a target |
+| `follow` | Single file — `pursue`/`evade`/`orbit`/`arrive` modes |
+| `swarm` | Boids flock |
+| `vectorfield` | Advection by velocity field (vortex/sink/flow/noise/**drawn**) |
 
-### Splines & trajectoires dessinées
+### Splines & drawn trajectories
 | Node | Description |
 |------|-------------|
-| `DrawSpline` | Dessin libre → spline |
-| `EvaluateSpline` | Échantillonnage d'une spline |
-| `TrimSpline` / `OffsetSpline` | Édition de spline |
+| `DrawSpline` | Freehand drawing → spline |
+| `EvaluateSpline` | Spline sampling |
+| `TrimSpline` / `OffsetSpline` | Spline editing |
 
-### Modificateurs & post-process (graph global)
+### Modifiers & post-process (global graph)
 | Node | Description |
 |------|-------------|
-| `Scale` / `Rotate` / `Offset` | Transformations spatiales |
-| `RadiusScale` / `HeightOffset` / `PerTrackDepth` | Macros spatiales |
-| `Barycenter` / `ManualPosition` | Origin / override manuel |
-| `AudioFalloff` | Modulation audio des params |
-| `Zone` | Région d'espace → canaux spatiaux (sphere/box, falloff) |
-| `Velocity` | Modulation cinématique (speed/accel/jerk/**angvel**) → canaux |
-| `MoveRef` / `Merge` | Référence de sub-graph / merge strategies |
+| `Scale` / `Rotate` / `Offset` | Spatial transforms |
+| `RadiusScale` / `HeightOffset` / `PerTrackDepth` | Spatial macros |
+| `Barycenter` / `ManualPosition` | Origin / manual override |
+| `AudioFalloff` | Audio modulation of params |
+| `Zone` | Region of space → spatial channels (sphere/box, falloff) |
+| `Velocity` | Kinematic modulation (speed/accel/jerk/**angvel**) → channels |
+| `MoveRef` / `Merge` | Sub-graph reference / merge strategies |
 
 ### Audio Sources
-| Moteur | Description |
+| Engine | Description |
 |--------|-------------|
-| `BPM` | Synchronisation sur BPM audio |
-| `AudioAmplitude` | Modulation par amplitude audio |
+| `BPM` | Sync to audio BPM |
+| `AudioAmplitude` | Modulation by audio amplitude |
 
 ### Falloffs
-| Moteur | Description |
+| Engine | Description |
 |--------|-------------|
-| `TimeFalloff` | Influence temporelle avec easing |
-| `PointDistanceFalloff` | Influence spatiale par distance |
+| `TimeFalloff` | Temporal influence with easing |
+| `PointDistanceFalloff` | Spatial influence by distance |
 
 ---
 
@@ -128,97 +128,97 @@ npm install
 
 ---
 
-## Démarrage
+## Getting started
 
 ```bash
 cd tauri-app
-npm run tauri dev     # ou : npx tauri dev
+npm run tauri dev     # or: npx tauri dev
 ```
 
-L'application s'ouvre dans une fenêtre native.
+The application opens in a native window.
 
-### CLI (workflow testing sans UI)
+### CLI (UI-free workflow testing)
 
 ```bash
 cd tauri-app/src-tauri
 cargo build --bin stagespace-cli
 ./target/debug/stagespace-cli "templates"
 ./target/debug/stagespace-cli "activate-move circle --tracks 1-5; sample --move circle-1 --obj 0; stop-all"
-bash tests/e2e_cli_test.sh    # suite E2E complète
+bash tests/e2e_cli_test.sh    # full E2E suite
 ```
 
 ---
 
-## Fonctionnalités
+## Features
 
-- **Node Editor** : éditeur de graphe React Flow avec nœuds custom éditables,
-  deux onglets (sub-graph par move + **global graph** post-merge)
-- **Compilation** : validation et compilation en fonctions composites
-- **Playback** : lecture temps réel à 60 FPS, workers parallèles + MergeRuntime
-- **Merge strategies** : override / crossfade / blend / priority
-- **3D Preview** : visualisation Three.js connectée au runtime, **visualisation
-  3D des zones** d'effets
-- **Spatial channels** : gain, spread, distance, presence, yaw, aperture, lfe
-  par objet et par profil OSC
-- **Kinematic modulations** : speed/accel/jerk/**angvel** (vitesse angulaire
-  autour d'un listener paramétrable) → canaux spatiaux
-- **Zones** : sphere/box + falloff smoothstep → pilotent les canaux des objets
-  présents ; déclarables en FX panel ou en node `Zone` du graph global
-- **OSC IN mappings** : n'importe quelle adresse OSC → macro / canal / position
-  (wildcards, transforms scale/offset/clamp/smooth, anti-loop)
-- **Audio IN** : capture microphone native (cpal) avec BPM et amplitude
-- **Cue System** : snapshots complets (graphes, moves actifs, effets runtime)
-  avec rappel atomique
-- **Save/Load** : persistance localStorage des graphes
+- **Node Editor**: React Flow graph editor with editable custom nodes,
+  two tabs (per-move sub-graph + post-merge **global graph**)
+- **Compilation**: validation and compilation into composite functions
+- **Playback**: real-time 60 FPS playback, parallel workers + MergeRuntime
+- **Merge strategies**: override / crossfade / blend / priority
+- **3D Preview**: Three.js visualization connected to the runtime,
+  **3D zone visualization** for effects
+- **Spatial channels**: gain, spread, distance, presence, yaw, aperture, lfe
+  per object and per OSC profile
+- **Kinematic modulations**: speed/accel/jerk/**angvel** (angular velocity
+  around a configurable listener) → spatial channels
+- **Zones**: sphere/box + smoothstep falloff → drive the channels of objects
+  inside; declarable in the FX panel or as a `Zone` node in the global graph
+- **OSC IN mappings**: any OSC address → macro / channel / position
+  (wildcards, scale/offset/clamp/smooth transforms, anti-loop)
+- **Audio IN**: native microphone capture (cpal) with BPM and amplitude
+- **Cue System**: full snapshots (graphs, active moves, runtime effects)
+  with atomic recall
+- **Save/Load**: localStorage persistence of graphs
 
 ---
 
-## Profils OSC
+## OSC profiles
 
-| Profil | Adresse position | Args |
+| Profile | Position address | Args |
 |--------|------------------|------|
-| **Holophonix** | `/track/{id}/xyz` | x, y, z (message unique) |
-| **IEM MultiEncoder** | `/MultiEncoder/{id}/aed` | azimuth°, elevation°, distance (message unique) |
-| **IRCAM Spat** | `/source/{id}/xyz` | x, y, z (message unique) |
+| **Holophonix** | `/track/{id}/xyz` | x, y, z (single message) |
+| **IEM MultiEncoder** | `/MultiEncoder/{id}/aed` | azimuth°, elevation°, distance (single message) |
+| **IRCAM Spat** | `/source/{id}/xyz` | x, y, z (single message) |
 | **ADM-OSC** | `/adm/source/{id}/aed` | azimuth°, elevation°, distance |
-| **Generic Cartesian** | `/object/{id}/xyz` | x, y, z (message unique) |
+| **Generic Cartesian** | `/object/{id}/xyz` | x, y, z (single message) |
 | **Generic Polar** | `/object/{id}` | azimuth°, elevation°, distance |
 
-Canaux étendus (gain, spread, distance, presence, yaw, aperture, lfe) envoyés
-en messages séparés selon la matrice de capacités du profil
-(ex. IRCAM `/source/{id}/spread`, Holophonix `/track/{id}/gain`).
+Extended channels (gain, spread, distance, presence, yaw, aperture, lfe) are
+sent as separate messages per the profile's capability matrix
+(e.g. IRCAM `/source/{id}/spread`, Holophonix `/track/{id}/gain`).
 
 ---
 
-## Stack technique
+## Tech stack
 
-- **Shell** : Tauri (Rust)
-- **UI** : React 18 + TypeScript
-- **Node editor** : React Flow
-- **3D Preview** : Three.js
-- **State** : Zustand
-- **Styles** : TailwindCSS
-- **OSC** : `rosc` (Rust)
-- **Audio IN** : `cpal` + `realfft` (capture + FFT natives, Rust)
-- **Moteurs** : Rust pur (performance temps réel)
+- **Shell**: Tauri (Rust)
+- **UI**: React 18 + TypeScript
+- **Node editor**: React Flow
+- **3D Preview**: Three.js
+- **State**: Zustand
+- **Styles**: TailwindCSS
+- **OSC**: `rosc` (Rust)
+- **Audio IN**: `cpal` + `realfft` (native capture + FFT, Rust)
+- **Engines**: pure Rust (real-time performance)
 
 ---
 
 ## Documentation
 
-- [AGENTS.md](AGENTS.md) — conventions, commandes de build, CI
-- [docs/user-manual.md](docs/user-manual.md) — manuel opérateur (vues, OSC show-control, OSC-IN + learn, sécurité live, dépannage)
-- [docs/console-integration.md](docs/console-integration.md) — piloter STAGESPACE depuis une console/QLab/Companion
-- [docs/use-cases.md](docs/use-cases.md) — cas d'usage terrain et limites ouvertes
-- [MANUAL_TESTING.md](MANUAL_TESTING.md) - Checklist de tests manuels
-- [LOGGING.md](rust-engines/LOGGING.md) - Guide du système de logging
-- [ERROR_HANDLING.md](rust-engines/ERROR_HANDLING.md) - Guide de la gestion d'erreurs
-- [CONFIG.md](rust-engines/CONFIG.md) - Guide de la configuration
-- [TESTING.md](rust-engines/TESTING.md) - Guide des tests
-- [BENCHMARKS.md](rust-engines/BENCHMARKS.md) - Guide des benchmarks
-- [CONTRIBUTING.md](CONTRIBUTING.md) - Guide pour contribuer
-- [ROADMAP_GRAPH_GLOBAL.md](docs/ROADMAP_GRAPH_GLOBAL.md) - Roadmap de l'architecture graphe global
-- [ARCHITECTURE_FUTURE.md](docs/ARCHITECTURE_FUTURE.md) - Document de design (partiellement implémenté)
+- [AGENTS.md](AGENTS.md) — conventions, build commands, CI
+- [docs/user-manual.md](docs/user-manual.md) — operator manual (views, OSC show-control, OSC-IN + learn, live safety, troubleshooting)
+- [docs/console-integration.md](docs/console-integration.md) — driving STAGESPACE from a console/QLab/Companion
+- [docs/use-cases.md](docs/use-cases.md) — field use cases and open limits
+- [MANUAL_TESTING.md](MANUAL_TESTING.md) - Manual testing checklist
+- [LOGGING.md](rust-engines/LOGGING.md) - Logging system guide
+- [ERROR_HANDLING.md](rust-engines/ERROR_HANDLING.md) - Error handling guide
+- [CONFIG.md](rust-engines/CONFIG.md) - Configuration guide
+- [TESTING.md](rust-engines/TESTING.md) - Testing guide
+- [BENCHMARKS.md](rust-engines/BENCHMARKS.md) - Benchmarks guide
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Contribution guide
+- [ROADMAP_GRAPH_GLOBAL.md](docs/ROADMAP_GRAPH_GLOBAL.md) - Global graph architecture roadmap
+- [ARCHITECTURE_FUTURE.md](docs/ARCHITECTURE_FUTURE.md) - Design document (partially implemented)
 
 ## Tests
 
@@ -227,8 +227,8 @@ cd rust-engines
 cargo test --lib
 ```
 
-519 tests passent côté moteurs (suites complètes : voir le tableau "Test
-Counts" dans [AGENTS.md](AGENTS.md)).
+519 tests pass on the engine side (full suites: see the "Test
+Counts" table in [AGENTS.md](AGENTS.md)).
 
 ---
 

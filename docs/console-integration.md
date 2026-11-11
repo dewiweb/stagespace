@@ -1,45 +1,46 @@
-# Intégration console — piloter STAGESPACE depuis le FOH
+# Console integration — driving STAGESPACE from the FOH
 
-L'ingé son garde sa console comme **conduite maîtresse** : chaque scène/snapshot
-console émet un message OSC, STAGESPACE exécute. Le laptop ne sert que pour le
-soundcheck et la surveillance.
+The sound engineer keeps their console as the **master conduite**: each
+console scene/snapshot emits an OSC message, STAGESPACE executes. The
+laptop is only for soundcheck and monitoring.
 
-## Commandes (`/stagespace/*`, UDP vers `oscInPort`, défaut 8001)
+## Commands (`/stagespace/*`, UDP to `oscInPort`, default 8001)
 
-| Message | Effet |
+| Message | Effect |
 |---------|-------|
-| `/stagespace/go` | GO setlist (= Enter) |
-| `/stagespace/cue/next` · `/prev` | cue suivante / précédente |
-| `/stagespace/cue/recall <n> [fade]` | recall par `cue_number` ou index ; `fade` optionnel écrase le fade stocké |
-| `/stagespace/slot <n>` · `/slot/stop <n>` · `/solo <n>` · `/unsolo` | busking : joue / coupe / solo le slot d'`oscIndex` n (stable, 1-based, fades du slot) ; `unsolo` = restore des slots coupés |
-| `/stagespace/arm` · `/disarm` | ARM = envoi OSC ; DISARM = **dry-run** (répétition silencieuse) |
-| `/stagespace/status` | renvoie cue courante/suivante au demandeur |
-| `/stagespace/park <n>` · `/unpark <n>` | l'objet **index n (0-based)** échappe aux recalls (override manuel préservé) |
+| `/stagespace/go` | setlist GO (= Enter) |
+| `/stagespace/cue/next` · `/prev` | next / previous cue |
+| `/stagespace/cue/recall <n> [fade]` | recall by `cue_number` or index; optional `fade` overrides the stored fade |
+| `/stagespace/slot <n>` · `/slot/stop <n>` · `/solo <n>` · `/unsolo` | busking: play / stop / solo the slot of `oscIndex` n (stable, 1-based, slot fades); `unsolo` = restore stopped slots |
+| `/stagespace/arm` · `/disarm` | ARM = OSC output; DISARM = **dry-run** (silent rehearsal) |
+| `/stagespace/status` | re-send current/next cue to the requester |
+| `/stagespace/park <n>` · `/unpark <n>` | **object index n (0-based)** escapes recalls (manual override preserved) |
 | `/stagespace/panic` · `/stop` | blackout / stop all |
 | `/stagespace/timecode <s\|"HH:MM:SS:FF">` | timecode → chase (fps via `set_timecode_fps`) |
 
-## Feedback envoyé au contrôleur
+## Feedback sent to the controller
 
-- `/stagespace/ack <addr>` — accusé sur chaque commande acceptée
-- `/stagespace/nack <reason>` — commande rejetée : `busy: recall-in-progress`, `not-found: …` (ciblé sur l'expéditeur)
-- `/stagespace/cue/current <n> <name>` et `/stagespace/cue/next <n> <name>` — à chaque changement de cue et sur `/stagespace/status`
+- `/stagespace/ack <addr>` — acknowledgement on every accepted command
+- `/stagespace/nack <reason>` — rejected command: `busy: recall-in-progress`, `not-found: …` (targeted at the sender)
+- `/stagespace/cue/current <n> <name>` and `/stagespace/cue/next <n> <name>` — on every cue change and on `/stagespace/status`
 
-Les 4 derniers contrôleurs reçoivent le feedback — la console ET une tablette
-Companion peuvent écouter en même temps.
+The 4 most recent controllers receive feedback — the console AND a
+Companion tablet can listen at the same time.
 
-## Recettes par console
+## Recipes per console
 
-- **DiGiCo (SD/Quantum)** : External Control → OSC command par snapshot.
-  `/stagespace/cue/recall 5` dans le snapshot = la cue spatiale suit la scène.
-- **A&H dLive / Behringer X32** : string/TCP-UDP message par scène vers le port
-  `oscInPort`. X32 envoie nativement des floats — compatibles.
-- **QLab / Companion** : cue OSC par-dessus la conduite ; bouton « SAFETY »
-  mappé sur `/stagespace/cue/recall S1`.
-- **Timecode** : envoyer `/stagespace/timecode <s>` (~25 msg/s) et activer
-  *TC chase* dans le panneau cues — locate + franchissement gérés.
+- **DiGiCo (SD/Quantum)**: External Control → OSC command per snapshot.
+  `/stagespace/cue/recall 5` in the snapshot = the spatial cue follows
+  the scene.
+- **A&H dLive / Behringer X32**: string/TCP-UDP message per scene to the
+  `oscInPort` port. X32 natively sends floats — compatible.
+- **QLab / Companion**: OSC cue on top of the conduite; a "SAFETY" button
+  mapped to `/stagespace/cue/recall S1`.
+- **Timecode**: send `/stagespace/timecode <s>` (~25 msg/s) and enable
+  *TC chase* in the cues panel — locate + crossing handled.
 
-## Ce qui reste sur le laptop
+## What stays on the laptop
 
-Édition des graphes, positions manuelles (SpaceMouse / OSC-IN `Position`),
-monitoring 3D, store/édition de cues. En live, tout le pilotage de conduite est
-possible sans toucher l'UI.
+Graph editing, manual positions (SpaceMouse / OSC-IN `Position`), 3D
+monitoring, cue store/editing. Live, all conduite driving is possible
+without touching the UI.

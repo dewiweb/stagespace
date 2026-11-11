@@ -1,189 +1,193 @@
-# Plan de refactor GUI — basé sur l'audit complet (7 lots)
+# GUI refactor plan — based on the complete audit (7 lots)
 
-Chaque action référence les bugs **F1-F16** et structurels **S1-S14** de
-`docs/gui-audit.md` + le détail ligne par ligne des annexes `gui-audit/lot-*.md`.
+Each action references bugs **F1-F16** and structural items **S1-S14** from
+`docs/gui-audit.md` + the line-by-line detail of the `gui-audit/lot-*.md`
+annexes.
 
-Principe : **fonctionnel avant cosmétique** — un reskin sur des bugs de
-sortie de mode ou de recall ne vaut rien. Le métier est sain ; on ne touche
-ni `moveSlotsSlice`/`useCuelistStore`/`liveActions` dans leur sémantique,
-ni le backend (sauf F9 : event `osc-armed-changed`).
+Principle: **functional before cosmetic** — a reskin on top of
+mode-exit or recall bugs is worthless. The domain logic is sound; we touch
+neither `moveSlotsSlice`/`useCuelistStore`/`liveActions` semantics nor the
+backend (except F9: `osc-armed-changed` event).
 
 ---
 
-## P0 — Sécurité live (bugs fonctionnels)
+## P0 — Live safety (functional bugs)
 
-*Critère : aucune action destructive sans garde cohérente, aucun mode sans
-sortie visible, aucun état contradictoire à l'écran.*
+*Criterion: no destructive action without a consistent guard, no mode
+without a visible exit, no contradictory state on screen.*
 
-| # | Action | Fichiers | Bugs |
+| # | Action | Files | Bugs |
 |---|---|---|---|
-| P0.1 | **Overlays 3D ne couvrent plus les ModeButtons** : rendre les boutons et banners **après** les couches `inset-0` dans le JSX de Scene3D (ou `z-raised` + `pointer-events-auto`) | `Scene3D.tsx`, `ModeButtons.tsx` | F1 |
-| P0.2 | **`setDrawMode` exclusif** : purge assign/zonePlace/zoneEdit comme les autres setters du slice | `interactionModesSlice.ts` (ou `drawModeSlice.ts:38`), `ModeButtons.tsx:57` | F2 |
-| P0.3 | **Sortie de draw visible** : `ModeButtons` ne retourne plus `null` en drawMode — affiche "Exit Draw" ; banner manipulate ajoute "Esc to cancel" | `ModeButtons.tsx:33,66-70` | F15 |
-| P0.4 | **Cleanup trajectoires** : déplacer la purge `pathLinesRef` **avant** l'early-return | `TrajectoryVisualization.tsx:64` | F3 |
-| P0.5 | **Dispatch unifié** : `goToNextCue`/`goToPreviousCue`/`goToNextMove` absorbe les guards dans les stores (`cancelPendingTimers` + `isRecalling` check) **ou** tous les boutons passent par `liveActions` — une seule voie, pas deux | `useCuelistStore.ts`, `moveSlotsSlice.ts`, `PerformView.tsx:111/648/661`, `CuelistPanel.tsx:120/131/193`, `liveActions.ts:87` (`doSlotStop` + `recallBusy`) | F4, F5 |
-| P0.6 | **RECALL header garde-arm** : les `◀`/`RECALL ▶` passent par le dispatch unifié (P0.5) — l'arm-first reste sur les rows, les boutons header héritent du guard recall | `CuelistPanel.tsx:119-137` | F4 |
-| P0.7 | **État OSC arm unique** : event backend `osc-armed-changed` émis par `set_osc_armed` + `doArm` ; `OscArmToggle`/`DryRunChip` écoutent l'event au lieu de lire au mount ; **fusionner les deux composants** (DryRunChip = variante chip du toggle) | `commands/osc.rs:239`, `OscArmToggle.tsx`, `CuelistPanel.tsx:382-393`, `useGraphStore` listener | F9, F16 |
-| P0.8 | **Un timer par action** : `macroDebounce` devient 3 refs (pushMacros / updateGraphLive / saveSpline) | `Inspector.tsx:104,135-147,402-403` | F6 |
-| P0.9 | **ARM dans StatusBar** : indicateur LIVE/DRY-RUN permanent (à côté du dot) ; block merge/lock µs derrière `debugPerfVisible` | `StatusBar.tsx:51-85` | F16 |
+| P0.1 | **3D overlays no longer cover ModeButtons**: render buttons and banners **after** the `inset-0` layers in Scene3D's JSX (or `z-raised` + `pointer-events-auto`) | `Scene3D.tsx`, `ModeButtons.tsx` | F1 |
+| P0.2 | **Exclusive `setDrawMode`**: purge assign/zonePlace/zoneEdit like the slice's other setters | `interactionModesSlice.ts` (or `drawModeSlice.ts:38`), `ModeButtons.tsx:57` | F2 |
+| P0.3 | **Visible draw exit**: `ModeButtons` no longer returns `null` in drawMode — shows "Exit Draw"; manipulate banner adds "Esc to cancel" | `ModeButtons.tsx:33,66-70` | F15 |
+| P0.4 | **Trajectory cleanup**: move the `pathLinesRef` purge **before** the early-return | `TrajectoryVisualization.tsx:64` | F3 |
+| P0.5 | **Unified dispatch**: `goToNextCue`/`goToPreviousCue`/`goToNextMove` absorb the guards into the stores (`cancelPendingTimers` + `isRecalling` check) **or** all buttons go through `liveActions` — one path, not two | `useCuelistStore.ts`, `moveSlotsSlice.ts`, `PerformView.tsx:111/648/661`, `CuelistPanel.tsx:120/131/193`, `liveActions.ts:87` (`doSlotStop` + `recallBusy`) | F4, F5 |
+| P0.6 | **RECALL header arm-guard**: `◀`/`RECALL ▶` go through the unified dispatch (P0.5) — arm-first stays on rows, header buttons inherit the recall guard | `CuelistPanel.tsx:119-137` | F4 |
+| P0.7 | **Single OSC armed state**: backend `osc-armed-changed` event emitted by `set_osc_armed` + `doArm`; `OscArmToggle`/`DryRunChip` listen to the event instead of reading at mount; **merge the two components** (DryRunChip = chip variant of the toggle) | `commands/osc.rs:239`, `OscArmToggle.tsx`, `CuelistPanel.tsx:382-393`, `useGraphStore` listener | F9, F16 |
+| P0.8 | **One timer per action**: `macroDebounce` becomes 3 refs (pushMacros / updateGraphLive / saveSpline) | `Inspector.tsx:104,135-147,402-403` | F6 |
+| P0.9 | **ARM in StatusBar**: permanent LIVE/DRY-RUN indicator (next to the dot); merge/lock µs block behind `debugPerfVisible` | `StatusBar.tsx:51-85` | F16 |
 
-**Livrable P0** : sortie de mode toujours possible, recall protégé partout,
-état arm visible et cohérent partout. ~1 commit par ligne.
+**P0 deliverable**: mode exit always possible, recall protected
+everywhere, armed state visible and consistent everywhere. ~1 commit per
+line.
 
 ---
 
-## P1 — Tokens de rôle + primitives déployées
+## P1 — Role tokens + deployed primitives
 
-*Critère : zéro couleur ad hoc dans les 5 fichiers top-couleurs ; les
-primitives ui/ sont les seuls moyens de faire un bouton/slider/empty.*
+*Criterion: zero ad hoc colors in the top-5 color files; the ui/
+primitives are the only way to make a button/slider/empty.*
 
-### P1.1 — Tokens de rôle (`tailwind.config.js`)
+### P1.1 — Role tokens (`tailwind.config.js`)
 ```js
 stagespace: {
-  bg, panel, border,               // existants
-  accent,                          // #3b82f6 existant = primary unique (IconButton passe à blue, plus indigo)
+  bg, panel, border,               // existing
+  accent,                          // existing #3b82f6 = single primary (IconButton moves to blue, no more indigo)
   live:    '#22c55e',  // playing, GO, armed
   conduite:'#f59e0b',  // cues, NOW/NEXT, pending (amber)
   osc:     '#22d3ee',  // OSC in/out, console link (cyan)
-  warning: '#f97316',  // shared tracks, hot-swap, orphelin (orange)
+  warning: '#f97316',  // shared tracks, hot-swap, orphan (orange)
   danger:  '#ef4444',  // panic, delete, errors (red)
   tracking:'#a855f7',  // tracking cues, expert, plugins (purple)
-  dim:     '#6b7280',  // secondaire
+  dim:     '#6b7280',  // secondary
 }
 ```
-Migration par fichier, ordre = volume de couleurs ad hoc :
+Migration by file, order = ad hoc color volume:
 `PerformView` (81) → `MovesTable` (46) → `Inspector` (36) → `CustomNode` (31)
-→ `SpatialFxPanel` (26) → reste. Les hex Three.js (`0x22d3ee`…) reçoivent
-des constantes liées aux mêmes valeurs (`utils/showColors.ts`).
+→ `SpatialFxPanel` (26) → rest. The Three.js hex values (`0x22d3ee`…) get
+constants bound to the same values (`utils/showColors.ts`).
 
-### P1.2 — Z-index : purge numérique
+### P1.2 — Z-index: numeric purge
 `z-10` (Scene3D:418,490), `z-50` (PerformView:539), `z-[60]` → tokens
-`z-overlay`/`z-raised`/`z-popover`/`z-menu`. Règle déjà dans la config.
+`z-overlay`/`z-raised`/`z-popover`/`z-menu`. Rule already in the config.
 
-### P1.3 — Nouveaux composants partagés (`components/show/`)
-| Composant | Remplace | Sources |
+### P1.3 — New shared components (`components/show/`)
+| Component | Replaces | Sources |
 |---|---|---|
-| `ShowTransport` | GO/Prev/Next/Panic dupliqués ×3 | PerformView topbar/conduite/busking + ConduitePage — **sémantique unique GO** (résout GO≠GO de ConduitePage:86) |
-| `PadButton` | `renderPad` + `renderSlotRow` actions | PerformView:486-… — **un seul rendu de slot** partagé avec MovesTable |
+| `ShowTransport` | duplicated GO/Prev/Next/Panic ×3 | PerformView topbar/conduite/busking + ConduitePage — **single GO semantics** (resolves GO≠GO of ConduitePage:86) |
+| `PadButton` | `renderPad` + `renderSlotRow` actions | PerformView:486-… — **one slot render** shared with MovesTable |
 | `StatusChip` | PARKED/CONSOLE/TC/ARM/DRY-RUN chips | PerformView + ConduitePage + StatusBar |
-| `ModeBanner` | 4 copies top-center | ModeButtons:66 + Scene3D:380/387/394 |
-| `Badge` | micro-badges cues `text-[9px]` | CuelistPanel:204-229 — floor à `text-[10px]` min |
-| `ui/Section` | Inspector.Section + SpatialFxPanel.Section | deux sémantiques → une |
+| `ModeBanner` | 4 top-center copies | ModeButtons:66 + Scene3D:380/387/394 |
+| `Badge` | cues micro-badges `text-[9px]` | CuelistPanel:204-229 — floor at `text-[10px]` min |
+| `ui/Section` | Inspector.Section + SpatialFxPanel.Section | two semantics → one |
 
-### P1.4 — Primitives existantes déployées
-- `IconButton` → les ~40 boutons ad hoc (PerformView scope buttons, chips,
-  slot actions, NodeEditor rail). Variant `primary` = token `accent`
-  (**supprime le second primaire indigo**).
+### P1.4 — Existing primitives deployed
+- `IconButton` → the ~40 ad hoc buttons (PerformView scope buttons, chips,
+  slot actions, NodeEditor rail). `primary` variant = `accent` token
+  (**removes the indigo second primary**).
 - `EmptyState` → PerformView ×4 (465-585), NodeEditor (923-941),
   SettingsModal (276-278).
-- `Slider` : typer `ACCENTS` (`Record<Accent,string>`), prop `decimals` sur
-  les cas tronqués, `aria-label` requis en `bare`.
+- `Slider`: type `ACCENTS` (`Record<Accent,string>`), `decimals` prop on
+  truncated cases, `aria-label` required in `bare`.
 
 ---
 
-## P2 — Convergences (duplications métier)
+## P2 — Convergences (domain duplications)
 
-*Critère : une action = une implémentation = un vocabulaire.*
+*Criterion: one action = one implementation = one vocabulary.*
 
-| # | Action | Fichiers | Réfs |
+| # | Action | Files | Refs |
 |---|---|---|---|
-| P2.1 | **`MacrosSurface` unique** : un composant (prop `scope: 'global'|'slot'`, un accent `tracking`, plages unifiées ±5 shift / ±180 rotation, Speed inclus partout où global) ; pacing unifié **dans** `pushMacrosToRuntime` (debounce 100ms, plus au composant) ; **supprimer `MacroControls.tsx` + son test** ; MacrosPanel conserve la partie "manipulate" (clear overrides) et délègue les sliders | `Inspector`, `MacrosPanel`, `PerformView:828-934`, `macrosSlice` | S3 |
-| P2.2 | **Un rendu de slot** : `PadButton`/`SlotRow` partagé ; `renderSlotRow` PerformView et rows MovesTable convergent (même set d'actions, densité paramétrable `compact|pad`) ; badges `#oscIndex` identiques | `MovesTable`, `PerformView:486` | S2 |
-| P2.3 | **`showStatusSlice`** : `parked`/`consoleAge`/`armed` — un poll unique dans le store, souscrit par PerformView, ConduitePage (via broadcast), StatusBar ; `armed` event-driven (P0.7) | nouveau slice, `PerformView:73`, `ConduitePage:39`, `StatusBar` | S10, F9 |
-| P2.4 | **NodeEditor split** : `NodePalette` (611-838), `GraphCanvas` (841-997), `useActiveGraphStore()` (dispatch sub/global/signal — tue la triplication 209-251/316-324/474-657) ; edge-id inclut handles ; `onPaneDoubleClick` sur ReactFlow (pas wrapper) ; hover palette en classes | `NodeEditor.tsx` | S1, F11, F12 |
-| P2.5 | **CustomNode sections** : `NodeParamField` (existant, réutilisé — supprime `renderNodeParamInput` Inspector et les 7 classes dupliquées), `LinkedTracksSection`, `TrackRangeSection` (util testé pour le parser), mutualisation expanded/collapsed (un seuil), `nodrag` sur inputs | `CustomNode.tsx`, `Inspector.tsx:150-211`, `nodeParamSchema.ts` | S2, lot-2 P2 |
-| P2.6 | **TabPanel sans re-key** : contenu monté, `hidden` quand inactif — état local préservé, pas de refreshMovements au switch ; ARIA tablist | `TabPanel.tsx:41` | S4 |
-| P2.7 | **Couleur track unifiée** : `trackColor(oscId)` dans `utils/` utilisé par TrackGrid, TrajectoryVisualization, chips Scene3D, HolMarkers | `TrackGrid:26`, `TrajectoryViz:109` | S9 |
-| P2.8 | **IPC batching TrackGrid** : patterns appliqués en un `updateAssignment` groupé (set local + un `updateLiveAnimation`) ; slider depth throttlé 33ms | `TrackGrid:53-102,196-203` | S7 |
-| P2.9 | **Vocabulaire** : un terme pour le graphe ("preset" recommandé — couvre template/animation/library), "Shift" partout (supprime "Offset X" des targets audio → `shiftX`), `one_shot` unique, anglais partout ou glossaire — décision à trancher | repo-entier | S12, S13 |
-| P2.10 | **Utils partagés** : `cueLabel`/`tcStr` (PerformView:96-109 = useConduiteBroadcast:11-38), `DRAWABLE_NODE_TYPES` (ModeButtons:22-31 = objectsNodeSync:15), `drawZ` doc axes | nouveau `utils/showFormat.ts` | duplications |
+| P2.1 | **Single `MacrosSurface`**: one component (`scope: 'global'|'slot'` prop, one `tracking` accent, unified ranges ±5 shift / ±180 rotation, Speed included wherever global); unified pacing **inside** `pushMacrosToRuntime` (100ms debounce, no longer in the component); **delete `MacroControls.tsx` + its test**; MacrosPanel keeps the "manipulate" part (clear overrides) and delegates the sliders | `Inspector`, `MacrosPanel`, `PerformView:828-934`, `macrosSlice` | S3 |
+| P2.2 | **One slot render**: shared `PadButton`/`SlotRow`; PerformView `renderSlotRow` and MovesTable rows converge (same action set, parameterizable density `compact|pad`); identical `#oscIndex` badges | `MovesTable`, `PerformView:486` | S2 |
+| P2.3 | **`showStatusSlice`**: `parked`/`consoleAge`/`armed` — one poll in the store, subscribed by PerformView, ConduitePage (via broadcast), StatusBar; `armed` event-driven (P0.7) | new slice, `PerformView:73`, `ConduitePage:39`, `StatusBar` | S10, F9 |
+| P2.4 | **NodeEditor split**: `NodePalette` (611-838), `GraphCanvas` (841-997), `useActiveGraphStore()` (sub/global/signal dispatch — kills the triplication 209-251/316-324/474-657); edge-id includes handles; `onPaneDoubleClick` on ReactFlow (not wrapper); palette hover in classes | `NodeEditor.tsx` | S1, F11, F12 |
+| P2.5 | **CustomNode sections**: `NodeParamField` (existing, reused — removes `renderNodeParamInput` Inspector and the 7 duplicated classes), `LinkedTracksSection`, `TrackRangeSection` (tested util for the parser), shared expanded/collapsed (one threshold), `nodrag` on inputs | `CustomNode.tsx`, `Inspector.tsx:150-211`, `nodeParamSchema.ts` | S2, lot-2 P2 |
+| P2.6 | **TabPanel without re-key**: content mounted, `hidden` when inactive — local state preserved, no refreshMovements on switch; ARIA tablist | `TabPanel.tsx:41` | S4 |
+| P2.7 | **Unified track color**: `trackColor(oscId)` in `utils/` used by TrackGrid, TrajectoryVisualization, Scene3D chips, HolMarkers | `TrackGrid:26`, `TrajectoryViz:109` | S9 |
+| P2.8 | **TrackGrid IPC batching**: patterns applied in one grouped `updateAssignment` (local set + one `updateLiveAnimation`); depth slider throttled 33ms | `TrackGrid:53-102,196-203` | S7 |
+| P2.9 | **Vocabulary**: one term for the graph ("preset" recommended — covers template/animation/library), "Shift" everywhere (removes "Offset X" from audio targets → `shiftX`), single `one_shot`, English everywhere or glossary — decision to be made | repo-wide | S12, S13 |
+| P2.10 | **Shared utils**: `cueLabel`/`tcStr` (PerformView:96-109 = useConduiteBroadcast:11-38), `DRAWABLE_NODE_TYPES` (ModeButtons:22-31 = objectsNodeSync:15), `drawZ` axes doc | new `utils/showFormat.ts` | duplications |
 
 ---
 
-## P3 — Modes et surfaces
+## P3 — Modes and surfaces
 
-*Critère : deux modes clairs, vocabulaire stable, cibles live ≥44px.*
+*Criterion: two clear modes, stable vocabulary, live targets ≥44px.*
 
-- **P3.1 Deux modes** : `EDIT` (colonnes) / `LIVE` (PerformView). Renommer le
-  toggle ("Édition" ⇄ "Live", bouton affiche la **destination**, pas l'état) ;
-  Simple/Expert reste un sous-état d'EDIT, libellé déambiguïsé.
-- **P3.2 Overlays live unifiés** : touch/busking/conduite = **une surface**
-  à zones (transport / pads / conduite / détails repliés) au lieu de 3
-  `absolute inset-0` — PadButton/ShowTransport de P1 en font le squelette.
-- **P3.3 Tailles** : PerformView et surfaces live : actions ≥44px, infos de
-  conduite ≥`text-sm`/`base`, badges ≥10px (floor absolu : supprimer
-  `text-[8px]`/`[9px]` en live).
-- **P3.4 CuelistPanel dégagé** : `h-56` fixe → flexible (`min-h`/`flex-1`) ;
-  en EDIT, stack Moves+Cues co-visibles au lieu de tabs exclusifs
-  (complète P2.6).
-- **P3.5 Toolbar zonée** : fichier (import/save/load) / projet (OSC chip,
-  undo) / live-safety (arm, panic) — Import `.hol` perd la proéminence une
-  fois un projet chargé ; erreurs affichées en un seul endroit (StatusBar).
-- **P3.6 AudioPanel** : supprimer le collapse interne (celui d'App suffit) ;
-  `h-15`→`h-14` ; mini-RMS dans le header App pour niveau persistant replié.
-
----
-
-## P4 — Fallbacks et hygiene
-
-- **P4.1** ErrorBoundary autour de `?view=conduite` + fallback "waiting for
-  main window" quand `st===null` ; `safeListen`/`safeEmit` au lieu de raw API ;
-  panic → `PanicButton` partagé. *(F10)*
-- **P4.2** `Modal` : focus initial = `[autofocus]` ou premier focusable du
-  **contenu** (jamais le X) ; `aria-labelledby` ; Esc dans Modal lui-même
-  (garde si pas de hook). *(F7)*
-- **P4.3** ConfirmModal partout : `deleteAnimation`, `removeZone/Modulation/
-  Channel`, `clear all` ×3 ; toast-undo en alternative légère. *(F8)*
-- **P4.4** `h-15`→`h-14` (AudioPanel:211) ; `catch(()=>{})` → indicateur
-  "backend absent" ; `sceneReady` re-check borné ; `JSON.parse` default_json
-  try/catch ; `getValidTargetTypes` n'exclut plus self. *(F14 + latents)*
-- **P4.5** État mort : `isPlaying`, `status`, `compileError`, `playError`,
-  `currentTime`, `duration`, API morte `oscSlice`, `[DBG-playSlot]` — purge
-  ou réactivation délibérée. *(F13)*
-- **P4.6** Zone/mode état : `zonePlaceMode`/`zoneEditMode` réinitialisés au
-  démontage du tab ; `soloSavedIds` → slice. *(S11)*
+- **P3.1 Two modes**: `EDIT` (columns) / `LIVE` (PerformView). Rename the
+  toggle ("Édition" ⇄ "Live", button shows the **destination**, not the
+  state); Simple/Expert remains an EDIT sub-state, deambiguated label.
+- **P3.2 Unified live overlays**: touch/busking/conduite = **one zoned
+  surface** (transport / pads / conduite / collapsed details) instead of 3
+  `absolute inset-0` — P1's PadButton/ShowTransport form its skeleton.
+- **P3.3 Sizes**: PerformView and live surfaces: actions ≥44px, conduite
+  info ≥`text-sm`/`base`, badges ≥10px (absolute floor: remove
+  `text-[8px]`/`[9px]` in live).
+- **P3.4 CuelistPanel freed**: fixed `h-56` → flexible (`min-h`/`flex-1`);
+  in EDIT, Moves+Cues stack co-visible instead of exclusive tabs
+  (completes P2.6).
+- **P3.5 Zoned toolbar**: file (import/save/load) / project (OSC chip,
+  undo) / live-safety (arm, panic) — Import `.hol` loses prominence once
+  a project is loaded; errors displayed in a single place (StatusBar).
+- **P3.6 AudioPanel**: remove the internal collapse (App's is enough);
+  `h-15`→`h-14`; mini-RMS in the App header for persistent collapsed level.
 
 ---
 
-## Dépendances et ordre
+## P4 — Fallbacks and hygiene
+
+- **P4.1** ErrorBoundary around `?view=conduite` + "waiting for main
+  window" fallback when `st===null`; `safeListen`/`safeEmit` instead of
+  raw API; panic → shared `PanicButton`. *(F10)*
+- **P4.2** `Modal`: initial focus = `[autofocus]` or first focusable in
+  the **content** (never the X); `aria-labelledby`; Esc in Modal itself
+  (guard if no hook). *(F7)*
+- **P4.3** ConfirmModal everywhere: `deleteAnimation`, `removeZone/
+  Modulation/Channel`, `clear all` ×3; toast-undo as light alternative. *(F8)*
+- **P4.4** `h-15`→`h-14` (AudioPanel:211); `catch(()=>{})` → "backend
+  absent" indicator; bounded `sceneReady` re-check; `JSON.parse`
+  default_json try/catch; `getValidTargetTypes` no longer excludes self.
+  *(F14 + latents)*
+- **P4.5** Dead state: `isPlaying`, `status`, `compileError`, `playError`,
+  `currentTime`, `duration`, dead `oscSlice` API, `[DBG-playSlot]` —
+  purge or deliberate reactivation. *(F13)*
+- **P4.6** Zone/mode state: `zonePlaceMode`/`zoneEditMode` reset on tab
+  unmount; `soloSavedIds` → slice. *(S11)*
+
+---
+
+## Dependencies and order
 
 ```
-P0 (fonctionnel)  ──┐
-                    ├─→ P1 (tokens+primitives) ─→ P2 (convergences) ─→ P3 (modes) ─→ P4
-P0.7 (armed event) ─┘         ↑ nécessite P0.5 pour ShowTransport
-                              ↑ nécessite P0.7 pour StatusChip armed
+P0 (functional)  ──┐
+                   ├─→ P1 (tokens+primitives) ─→ P2 (convergences) ─→ P3 (modes) ─→ P4
+P0.7 (armed event)─┘         ↑ requires P0.5 for ShowTransport
+                             ↑ requires P0.7 for StatusChip armed
 ```
 
-- **P1 sans P0** : risque de reskiner des interactions cassées.
-- **P2.4/P2.5 (split éditeur) indépendants** du reste — faisables en parallèle.
-- **Vocabulaire (P2.9) à trancher avant P3** (renommage des modes).
-- Chaque étape = un commit isolé + tests verts (383 vitest + les suites Rust).
+- **P1 without P0**: risk of reskinning broken interactions.
+- **P2.4/P2.5 (editor split) independent** of the rest — can run in parallel.
+- **Vocabulary (P2.9) to be decided before P3** (mode renaming).
+- Each step = isolated commit + green tests (383 vitest + Rust suites).
 
-## Risques identifiés
+## Identified risks
 
-- **Hot-path 60fps** : toute modification de `useRenderLoop`/`movementPositions`
-  reste hors-store et hors-render (ne pas réintroduire de re-render).
-- **Persisted state** : renommage de slices/flags → migration localStorage
-  (clés `ss-*`, `stagespace-*`).
-- **Tests creux à rattraper** : QuickAddModal assertion tautologique ;
-  ajouter des tests sur les guards (P0.5) et `setDrawMode` exclusif (P0.2).
-- **ConduitePage** : valider en vraie fenêtre Tauri — le browser ne couvre
-  ni `listen` ni `emit`.
+- **60fps hot path**: any change to `useRenderLoop`/`movementPositions`
+  stays out-of-store and out-of-render (do not reintroduce re-renders).
+- **Persisted state**: slice/flag renaming → localStorage migration
+  (`ss-*`, `stagespace-*` keys).
+- **Shallow tests to backfill**: QuickAddModal tautological assertion;
+  add tests on the guards (P0.5) and exclusive `setDrawMode` (P0.2).
+- **ConduitePage**: validate in a real Tauri window — the browser covers
+  neither `listen` nor `emit`.
 
-## Lexique (P2.9) — conventions de nommage figées
+## Glossary (P2.9) — frozen naming conventions
 
-- **Deux modes seulement** : `PERFORM` (surface live) ↔ `Edit` (atelier).
-  « Atelier »/« Workshop » ne sont plus utilisés dans l'UI.
-- **Sous-modes d'édition** : `Simple` (formulaire de move) / `Expert`
-  (graphe de nœuds). Les boutons affichent la CIBLE, la couleur signale
-  l'état courant — même convention que le toggle PERFORM/Edit.
-- **`move`** = un slot jouable (objet du show) · **`slot`** = sa place
-  dans le workspace (oscIndex, numéro de commande OSC) ·
-  **`template`/`animation`** = le contenu édité dans le panneau gauche ·
-  **`setlist`** = la séquence ordonnée de moves jouée par GO.
-- **`cue`** = l'objet conduite (scope + fade + pre_wait/follow/timecode) ·
-  **`recall`** = l'action de l'appliquer · **`armed`** = la cue sélectionnée
-  en attente du prochain tir.
-- **`GO`** = avance la SETLIST (crossfade) — partout, y compris la
-  fenêtre conduite détachée · **`Prev/Next`** = recall cue.
-- **`parked`** = objet gelé hors recalls · **`dry-run`** = OSC désarmé.
+- **Two modes only**: `PERFORM` (live surface) ↔ `Edit` (atelier).
+  "Atelier"/"Workshop" are no longer used in the UI.
+- **Edit sub-modes**: `Simple` (move form) / `Expert` (node graph).
+  Buttons show the TARGET, color signals the current state — same
+  convention as the PERFORM/Edit toggle.
+- **`move`** = a playable slot (show object) · **`slot`** = its place
+  in the workspace (oscIndex, OSC command number) ·
+  **`template`/`animation`** = the content edited in the left panel ·
+  **`setlist`** = the ordered sequence of moves played by GO.
+- **`cue`** = the conduite object (scope + fade + pre_wait/follow/
+  timecode) · **`recall`** = the action of applying it · **`armed`** =
+  the cue selected awaiting the next fire.
+- **`GO`** = advances the SETLIST (crossfade) — everywhere, including
+  the detached conduite window · **`Prev/Next`** = cue recall.
+- **`parked`** = object frozen out of recalls · **`dry-run`** = OSC
+  disarmed.

@@ -300,19 +300,19 @@ Expected output: `✓ PASS: All packets valid, rate OK, all tracks covered`
 
 ---
 
-## Phase 0 — Smoke test automatisé (validé 2026-11-01)
+## Phase 0 — Automated smoke test (validated 2026-11-01)
 
-Boot réel + chaîne OSC-IN bout-à-bout, sans UI automation :
+Real boot + end-to-end OSC-IN chain, without UI automation:
 
 ```bash
-cd tauri-app/frontend && npm run build            # dist frais
-cd ../src-tauri && cargo build --bin stagespace-tauri  # ~2min incrémental
+cd tauri-app/frontend && npm run build            # fresh dist
+cd ../src-tauri && cargo build --bin stagespace-tauri  # ~2min incremental
 
-# Lancer 30s sur le display réel
+# Launch for 30s on the real display
 (timeout 30 ./target/debug/stagespace-tauri > /tmp/stagespace-smoke.log 2>&1 &)
 sleep 4
 
-# Envoyer un vrai paquet OSC-IN — show-control bout-à-bout
+# Send a real OSC-IN packet — end-to-end show-control
 python3 -c "
 import socket
 def osc_str(s):
@@ -325,22 +325,22 @@ for a in ['/stagespace/disarm', '/stagespace/arm']:
 sleep 6 && tail -10 /tmp/stagespace-smoke.log
 ```
 
-**Attendu** : plugins chargés · `OSC receiver listening on port 8001` ·
-supervisor actif · `OSC output now sending to …` · `OSC master arm:
-DISARMED` puis `ARMED`. Prouve : boot sain, webview vivante, backend
-show-control réel (UDP → commande → état).
+**Expected**: plugins loaded · `OSC receiver listening on port 8001` ·
+supervisor active · `OSC output now sending to …` · `OSC master arm:
+DISARMED` then `ARMED`. Proves: healthy boot, live webview, real
+show-control backend (UDP → command → state).
 
-**Non couvert** : les events inter-webview (`conduite:state/cmd`,
-`live:state`) — ouvrir la fenêtre détachée demande un clic UI
-(xdotool absent). Couvert en jsdom : `useConduiteBroadcast.test`,
+**Not covered**: inter-webview events (`conduite:state/cmd`,
+`live:state`) — opening the detached window needs a UI click
+(no xdotool). Covered in jsdom: `useConduiteBroadcast.test`,
 `liveStateChannel.*.test` (14 tests).
 
-### Checklist fenêtres détachées (manuelle)
+### Detached windows checklist (manual)
 
-- [ ] `▶` dans PerformView ouvre `?view=run` — pads/radar/gestes à l'état
-      réel (pas figés — le canal `live:state` doit alimenter)
-- [ ] `⧉` ouvre `?view=conduite` — cue list peuplée, NOW/NEXT vivants
-- [ ] Dbl-click cue dans la détachée → recall dans la principale
-- [ ] Bouton DRY-RUN détachée → toggle arm dans la principale
-- [ ] Fermer la principale : la détachée continue (watchdog repoll >5s)
-- [ ] Fermer la détachée : `live:state` continue dans la principale
+- [ ] `▶` in PerformView opens `?view=run` — pads/radar/gestures at live
+      state (not frozen — the `live:state` channel must feed them)
+- [ ] `⧉` opens `?view=conduite` — populated cue list, live NOW/NEXT
+- [ ] Dbl-click cue in the detached window → recall in the main one
+- [ ] Detached DRY-RUN button → toggles arm in the main one
+- [ ] Closing the main window: the detached one continues (watchdog repoll >5s)
+- [ ] Closing the detached window: `live:state` continues in the main one

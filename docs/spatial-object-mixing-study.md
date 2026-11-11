@@ -1,183 +1,186 @@
-# STAGESPACE — tour de contrôle du mix orienté objet
+# STAGESPACE — control tower for object-oriented mixing
 
-Étude de positionnement : littérature scientifique, état de l'art, conduites-types,
-audit capacité + ergonomie, gaps et roadmap.
-
----
-
-## 1. Fondements perceptuels (littérature)
-
-Ce que la recherche impose au design d'un système de positions pour mix objet :
-
-### 1.1 Localisation dynamique
-
-- **MAMA** (Minimum Audible Movement Angle — Harris & Sergeant 1971 ; Perrey &
-  Nobbe 2001) : ~1–3° de déplacement minimum pour percevoir un mouvement ; la
-  perception se dégrade avec la vitesse.
-- **Localization blur** (Rakerd & Hartmann 1986) : au-delà d'un seuil de
-  vitesse angulaire, l'image spatiale devient floue. La **vitesse angulaire
-  perçue** (pas métrique) est le paramètre cardinal : un move à 8 m/s est
-  illisible à 2 m, fluide à 15 m → métrique « legibility » implémentable.
-- **Looming asymmetry** (Neuhoff 2001 ; Bach, Neuhoff et al. 2009) : l'approche
-  est systématiquement surestimée (sous-estimation du temps de contact de
-  15–40 %) avec réponse affective mesurable (GSR). Le **loom** est le seul
-  geste spatial à signature émotionnelle prouvée — sous-exploité partout.
-- **Vection** (Riecke et al.) : la rotation cohérente du champ entier induit
-  l'auto-mouvement ; seuil de tolérance ~10–15 s. Puissant, à doser.
-- **Distance perception** (Zahorik, Brungart & Bronkhorst 2005 ; Klatzky et
-  al.) : compression systématique (~×0.7). Pour un recul perçu de 10 m, il
-  faut ~14 m de trajet → *distance exaggeration factor* comme paramètre —
-  absent de tous les outils commerciaux.
-- **Front-back confusions** (Wightman & Kistler 1989) : résolues par
-  micro-mouvements de tête ou asymétries spectrales/d'élévation. Les trajets
-  front-back parfaitement symétriques sur le plan médian sont fragiles.
-- **Multi-indicialité de la distance** (Begault 1991 ; DRR direct/réverbéré) :
-  intensité + spectre + DRR + parallaxe de mouvement — la position seule est
-  un indice faible → couplage position→reverb/send/absorption nécessaire.
-- **Spatiomorphology** (Smalley 1986–2007) : source bonding, spatial texture,
-  **gestural surrogacy** (remote/1er/2e/3e ordre). Le mouvement spatial en
-  diffusion acousmatique *est* la structure formelle — le cadre théorique le
-  plus profond du domaine.
-- **Stream segregation** (Bregman 1990) : la continuité spatio-temporelle
-  préserve l'identité de l'objet auditif ; les sauts la cassent. Le mécanisme
-  `anchor:current`/`end:hold` de STAGESPACE est littéralement l'implémentation
-  de Bregman — la continuité d'objet rendue opérationnelle.
-- **Change blindness / attention** (Mack & Rock 1998) : un seul mouvement
-  saillant est perçu — la règle « un seul objet bouge à la fois » est
-  perceptuellement fondée.
-
-### 1.2 Composition / dramaturgie spatiale
-
-- **Kendall (2010)** : la spatialisation comme outil compositionnel —
-  taxonomie des gestes (orbiter, approcher, disperser, converger).
-- **Peters, Schacher (spatDIF, 2013)** : la trajectoire comme geste musical —
-  une phrase avec accent/phrasing, pas un automate.
-- **Vande Gorne** (espace du son, diffusion acousmatique) : la *partition de
-  diffusion* — la conduite spatiale se note comme une partition.
-- Stockhausen (Gruppen, Kontakte), Boulez (Répons) : le contrepoint spatial =
-  rythmes trajectoires indépendants ; l'élévation comme registre.
+Positioning study: scientific literature, state of the art, typical
+conduites, capability + ergonomics audit, gaps and roadmap.
 
 ---
 
-## 2. État de l'art — benchmarks
+## 1. Perceptual foundations (literature)
 
-| Outil | Force | Ce que STAGESPACE en tire |
+What research imposes on the design of a position system for object mixing:
+
+### 1.1 Dynamic localization
+
+- **MAMA** (Minimum Audible Movement Angle — Harris & Sergeant 1971;
+  Perrey & Nobbe 2001): ~1–3° minimum displacement to perceive motion;
+  perception degrades with speed.
+- **Localization blur** (Rakerd & Hartmann 1986): beyond an angular
+  speed threshold, the spatial image blurs. **Perceived angular speed**
+  (not metric) is the cardinal parameter: a move at 8 m/s is illegible
+  at 2 m, fluid at 15 m → implementable "legibility" metric.
+- **Looming asymmetry** (Neuhoff 2001; Bach, Neuhoff et al. 2009):
+  approach is systematically overestimated (contact-time
+  underestimation of 15–40%) with measurable affective response (GSR).
+  The **loom** is the only spatial gesture with a proven emotional
+  signature — underexploited everywhere.
+- **Vection** (Riecke et al.): coherent rotation of the entire field
+  induces self-motion; tolerance threshold ~10–15 s. Powerful, to be
+  dosed.
+- **Distance perception** (Zahorik, Brungart & Bronkhorst 2005;
+  Klatzky et al.): systematic compression (~×0.7). For a perceived 10 m
+  recede, ~14 m of travel is needed → *distance exaggeration factor* as
+  a parameter — absent from all commercial tools.
+- **Front-back confusions** (Wightman & Kistler 1989): resolved by head
+  micro-movements or spectral/elevation asymmetries. Perfectly
+  symmetric front-back trajectories on the median plane are fragile.
+- **Distance multi-cue** (Begault 1991; DRR direct/reverberant):
+  intensity + spectrum + DRR + motion parallax — position alone is a
+  weak cue → position→reverb/send/absorption coupling required.
+- **Spatiomorphology** (Smalley 1986–2007): source bonding, spatial
+  texture, **gestural surrogacy** (remote/1st/2nd/3rd order). Spatial
+  motion in acousmatic diffusion *is* the formal structure — the
+  domain's deepest theoretical framework.
+- **Stream segregation** (Bregman 1990): spatio-temporal continuity
+  preserves the auditory object's identity; jumps break it. STAGESPACE's
+  `anchor:current`/`end:hold` mechanism is literally the implementation
+  of Bregman — object continuity made operational.
+- **Change blindness / attention** (Mack & Rock 1998): a single salient
+  movement is perceived — the "only one object moves at a time" rule
+  is perceptually founded.
+
+### 1.2 Composition / spatial dramaturgy
+
+- **Kendall (2010)**: spatialization as a compositional tool — gesture
+  taxonomy (orbiting, approaching, dispersing, converging).
+- **Peters, Schacher (spatDIF, 2013)**: the trajectory as a musical
+  gesture — a phrase with accent/phrasing, not an automaton.
+- **Vande Gorne** (space of sound, acousmatic diffusion): the
+  *diffusion score* — spatial conduite notated like a score.
+- Stockhausen (Gruppen, Kontakte), Boulez (Répons): spatial
+  counterpoint = independent trajectory rhythms; elevation as register.
+
+---
+
+## 2. State of the art — benchmarks
+
+| Tool | Strength | What STAGESPACE takes from it |
 |---|---|---|
-| **L-ISA** (L-Acoustics) | pan/width/elevation/distance par objet, snapshots DeskLink | object_channels ✓ ; distance-coupling à expliciter |
-| **d&b Soundscape** | En-Scene positions + En-Space reverb couplée | zones ✓ ; position→send via signal graph |
-| **TiMax SoundHub** | image definition par cue, PanSpace multi-touch, Tracker UWB | cues ✓ ; le park = protection image |
-| **SPAT Revolution** (Flux) | source→room→master, prelisten binaural, multi-renderer | positions-only = compatible ; bounce à faire |
-| **Spacemap Go** (Meyer) | spacemaps = proximity-weights entre enceintes | zones ✓ |
-| **Holophonix** (Amadeus) | trajectoires embarquées + hardware | ancêtre direct — on dépasse (graphe compilé) |
-| **4DSOUND/MONOM** | spatial dynamics, "instrument" | compression d'énergie spatiale — à faire |
-| **Zactrack/BlackTrax** | tracking PSN/RTTrP | **protocole manquant** |
-| **dearVR SPATIAL CONNECT** | positionnement VR+gestes | concept : dessin dans l'espace |
-| **Sound Particles** | champs particules + physique | swarm ✓ proche |
-| **Klang** | monitoring 3D IEM | monitoring spatial (pas juste rendu) |
-| **Panoramix, Compass/SPARTA** | recherche libre (IRCAM, Aalto) | références implémentation |
-| **Zirkonium, TOSC, spatDIF** | ancêtres éditeurs spatiaux | historique |
+| **L-ISA** (L-Acoustics) | per-object pan/width/elevation/distance, DeskLink snapshots | object_channels ✓; distance-coupling to make explicit |
+| **d&b Soundscape** | En-Scene positions + coupled En-Space reverb | zones ✓; position→send via signal graph |
+| **TiMax SoundHub** | per-cue image definition, PanSpace multi-touch, UWB Tracker | cues ✓; park = image protection |
+| **SPAT Revolution** (Flux) | source→room→master, binaural prelisten, multi-renderer | positions-only = compatible; bounce to do |
+| **Spacemap Go** (Meyer) | spacemaps = speaker proximity-weights | zones ✓ |
+| **Holophonix** (Amadeus) | embedded trajectories + hardware | direct ancestor — we surpass (compiled graph) |
+| **4DSOUND/MONOM** | spatial dynamics, "instrument" | spatial energy compression — to do |
+| **Zactrack/BlackTrax** | PSN/RTTrP tracking | **missing protocol** |
+| **dearVR SPATIAL CONNECT** | VR+gesture positioning | concept: drawing in space |
+| **Sound Particles** | particle fields + physics | swarm ✓ close |
+| **Klang** | 3D IEM monitoring | spatial monitoring (not just rendering) |
+| **Panoramix, Compass/SPARTA** | open research (IRCAM, Aalto) | implementation references |
+| **Zirkonium, TOSC, spatDIF** | spatial editor ancestors | history |
 
 ---
 
-## 3. Les quatre conduites (`docs/conduites/`)
+## 3. The four conduites (`docs/conduites/`)
 
-| Doc | Genre | Ce qu'elle exige |
+| Doc | Genre | What it requires |
 |---|---|---|
-| **A — ORBE** | Acousmatique, œuvre fixée | cue list + partition, gestes notés, park, canon, loom |
-| **B — GRID** | DJ spatialisé | busking, solo, chaînage hold/anchor, TC, panic, soundcheck |
-| **C — SILLAGE** | Théâtre dansé | follow-me PSN, tracking cues, park protecteur, dry-run |
-| **D — TRAVERSE** | Multimédia 75' | vidéo TC maître, live parkés, generatif+cues+busking, media sync |
+| **A — ORBE** | Acousmatic, fixed work | cue list + score, notated gestures, park, canon, loom |
+| **B — GRID** | Spatialized DJ | busking, solo, hold/anchor chaining, TC, panic, soundcheck |
+| **C — SILLAGE** | Danced theatre | PSN follow-me, tracking cues, protective park, dry-run |
+| **D — TRAVERSE** | 75' multimedia | master video TC, parked live objects, generative+cues+busking, media sync |
 
-Couverture complète du domaine : composition (A), performance (B),
-scénographie vivante (C), multimédia (D).
+Full domain coverage: composition (A), performance (B),
+living scenography (C), multimedia (D).
 
 ---
 
-## 4. Audit capacité — moteur vs conduites
+## 4. Capability audit — engine vs conduites
 
-**Jouable intégralement : A** (ORBE).
-**Jouable ~85 % : B, C, D** — deux trous fonctionnels :
+**Fully playable: A** (ORBE).
+**~85% playable: B, C, D** — two functional gaps:
 
-| Gap | Bloque | Effort |
+| Gap | Blocks | Effort |
 |---|---|---|
-| **`anchor:follow`** — ancre qui suit la cible (orbit autour du mobile) | C, D | moyen — lire `last_position` par frame |
-| **PSN/RTTrP ingest** — protocole industrie | C, D | moyen |
+| **`anchor:follow`** — anchor tracking the target (orbit around the mobile) | C, D | medium — read `last_position` per frame |
+| **PSN/RTTrP ingest** — industry protocol | C, D | medium |
 | Soundcheck walk | B | trivial |
-| Media sync out (cue→trigger) | D | moyen |
-| Confidence view / legibility meter | toutes | petit–moyen |
-| Vection gesture | B | petit |
+| Media sync out (cue→trigger) | D | medium |
+| Confidence view / legibility meter | all | small–medium |
+| Vection gesture | B | small |
 
-**Verdict capacité** : le moteur tient les 4 conduites. Le graphe compilé
-`f(t)` + `anchor`/`hold` = continuité d'objet implémentée — en avance sur
-l'état de l'art.
-
----
-
-## 5. Audit ergonomie — l'opérateur dans la conduite
-
-L'audit fonctionnel ne suffit pas : **la question est ce que l'opérateur
-peut faire voir/faire en show.**
-
-### Par conduite
-
-**A (diffusion)** : cue/current visible ✓ ; manque **audition avant émission**
-(voir la cue suivante sans la jouer), **vue radar 2D fixe** (le 3D manipulable
-n'est pas un outil de conduite), **marquage park** par objet.
-
-**B (busking)** : slots jouables ~ ; manque **surface de jeu** (grille de
-pads lisible à distance, états couleur playing/fading/solo'd), **indicateur
-position manuelle** (« vous tenez cet objet »).
-
-**C (théâtre)** : manque **source-de-contrôle par objet** (move/manuel/PSN/
-park/hold — *pourquoi cet objet est là*, LE manque majeur), **santé PSN**
-(age de la dernière trame — un flux coupé fige silencieusement), **diff de
-scope** (ce que la tracking cue va écrire vs protéger).
-
-**D (multimédia)** : manque **dashboard unique** (transport+pads+cues+santé
-sur UN écran — aujourd'hui dispersé), **TC lock visible**, **log
-opérationnel** (qui a GO quand, quel NACK).
-
-### Les 5 manques transverses
-
-1. **Source-de-contrôle par objet** — pourquoi il est là (move/manuel/PSN/
-   park/hold) — badge couleur par objet. *La question que chaque opérateur
-   pose 100 fois par show.*
-2. **Vue radar 2D fixe** — plan fixe lisible vs 3D manipulable.
-3. **Santé des flux** — PSN/TC/OSC : age dernière trame, lock, error rate —
-   bandeau d'état, pas des toasts.
-4. **Audition avant émission** — preview de cue (pas juste de move).
-5. **Surface de jeu dédiée** — Conduite window = début ; pads/holds/solos
-   conçus pour être *joués*, pas administrés.
-
-**Verdict ergonomie** : le moteur tient les conduites ; l'**expérience
-opérateur** ne les tient pas. On a la piste — pas encore la tour.
+**Capability verdict**: the engine holds the 4 conduites. The compiled
+`f(t)` graph + `anchor`/`hold` = implemented object continuity — ahead
+of the state of the art.
 
 ---
 
-## 6. Gaps consolidés + roadmap
+## 5. Ergonomics audit — the operator in the conduite
 
-**Moteur (capacité)** — ordre :
-1. `anchor:follow` (orbit dynamique — débloque C/D)
-2. PSN/RTTrP ingest (tracking industrie)
+The functional audit isn't enough: **the question is what the operator
+can see/do during the show.**
+
+### By conduite
+
+**A (diffusion)**: cue/current visible ✓; missing **audition before
+emission** (see the next cue without playing it), **fixed 2D radar
+view** (manipulable 3D isn't a conduite tool), **per-object park
+marking**.
+
+**B (busking)**: playable slots ~; missing **play surface** (pad grid
+readable at distance, colored playing/fading/solo'd states), **manual
+position indicator** ("you are holding this object").
+
+**C (theatre)**: missing **per-object control source** (move/manual/
+PSN/park/hold — *why this object is there*, THE major gap), **PSN
+health** (age of last frame — a cut stream silently freezes), **scope
+diff** (what the tracking cue will write vs protect).
+
+**D (multimedia)**: missing **single dashboard** (transport+pads+cues+
+health on ONE screen — currently scattered), **visible TC lock**,
+**operational log** (who GO'd when, which NACK).
+
+### The 5 cross-cutting gaps
+
+1. **Per-object control source** — why it's there (move/manual/PSN/
+   park/hold) — colored badge per object. *The question every operator
+   asks 100 times per show.*
+2. **Fixed 2D radar view** — readable fixed plan vs manipulable 3D.
+3. **Stream health** — PSN/TC/OSC: last-frame age, lock, error rate —
+   a status banner, not toasts.
+4. **Audition before emission** — cue preview (not just move).
+5. **Dedicated play surface** — Conduite window = a start;
+   pads/holds/solos designed to be *played*, not administered.
+
+**Ergonomics verdict**: the engine holds the conduites; the **operator
+experience** doesn't. We have the track — not yet the tower.
+
+---
+
+## 6. Consolidated gaps + roadmap
+
+**Engine (capability)** — order:
+1. `anchor:follow` (dynamic orbit — unblocks C/D)
+2. PSN/RTTrP ingest (industry tracking)
 3. Soundcheck walk, media sync out, vection gesture, confidence view
 
-**Métier (outillage)** :
-4. Legibility/looming/vection meters (vu-mètre perceptuel)
+**Domain (tooling)**:
+4. Legibility/looming/vection meters (perceptual vu-meter)
 5. Distance reality layer (Zahorik ×1.4)
-6. Auto-venue adaptation (même conduite, salles différentes — *le
-   différenciateur absent du marché*)
+6. Auto-venue adaptation (same conduite, different venues — *the
+   differentiator absent from the market*)
 7. Diffusion score view, trajectory library (Peters taxonomy), rehearsal
    capture, binaural bounce
 
-**Ergonomie (la tour)** :
-8. Source-de-contrôle par objet (le manque n°1)
-9. Vue radar 2D, santé des flux, audition cue, surface de jeu
+**Ergonomics (the tower)**:
+8. Per-object control source (gap #1)
+9. 2D radar view, stream health, cue audition, play surface
 
 ---
 
-## 7. Bibliographie
+## 7. Bibliography
 
-**Perception spatiale**
+**Spatial perception**
 - Harris, J.D. & Sergeant, R.L. (1971). "Monaural/binaural minimum audible
   angles for a moving sound source." *J. Speech Hearing Res.*
 - Perrey, S. & Nobbe, S. (2001). "Minimum audible angle revisited." *JASA*.
@@ -195,7 +198,7 @@ opérateur** ne les tient pas. On a la piste — pas encore la tour.
 - Riecke, B.E. et al. — studies on auditory vection / self-motion.
 - Blauert, J. (1997). *Spatial Hearing*. MIT Press.
 
-**Théorie compositionnelle**
+**Compositional theory**
 - Bregman, A.S. (1990). *Auditory Scene Analysis*. MIT Press.
 - Smalley, D. (1986–2007). "Spectromorphology and spatiomorphology."
   *Organised Sound*.
@@ -203,10 +206,10 @@ opérateur** ne les tient pas. On a la piste — pas encore la tour.
   *Organised Sound*.
 - Peters, N. & Schacher, J. (2013). "SpatDIF — Spatial Sound Description
   Interchange Format." *ICMC*.
-- Vande Gorne, A. — écrits sur l'espace du son / diffusion acousmatique.
+- Vande Gorne, A. — writings on the space of sound / acousmatic diffusion.
 - Truax, B. (2001). *Acoustic Communication*. Ablex.
 
-**Outils / systèmes**
+**Tools / systems**
 - Pulkki, V. (1997). "Virtual sound source positioning using VBAP." *JAES*.
 - SPAT (Jot, IRCAM) · spatDIF · Zirkonium (Hannover WFS) · TOSC · MNTN ·
   OpenMixer · Compass/SPARTA (McCormack, Politis — Aalto) · Panoramix.
@@ -214,6 +217,6 @@ opérateur** ne les tient pas. On a la piste — pas encore la tour.
   Tracker · Meyer Spacemap Go · SPAT Revolution (Flux) · Holophonix
   (Amadeus) · 4DSOUND/MONOM · Sound Particles · dearVR SPATIAL CONNECT ·
   Klang:technologies · Usomo (Fraunhofer) · Sonic Emotion · Yamaha AFC.
-- **PSN/RTTrP** — PosiStageNet : protocole industrie de tracking
+- **PSN/RTTrP** — PosiStageNet: industry tracking protocol
   (BlackTrax, Zactrack, Follow-Me, StagePrecision).
 - MPEG-H · ADM/S-ADM — object-based audio standards.

@@ -1,168 +1,171 @@
-# Lot 5 — Store, IPC, câblage (audit complet)
+# Lot 5 — Store, IPC, wiring (full audit)
 
-## 1. Carte des stores et slices
+## 1. Stores and slices map
 
-### Stores racine
+### Root stores
 
-| Store | Taille | Rôle |
+| Store | Size | Role |
 |---|---|---|
-| `useGraphStore` | 719 l. | **Mégastore** : 14 slices + graphe React Flow, undo/redo, panic, `updateGraphLive`, 5 hooks listeners Tauri (519-718) |
-| `useMoveEditorStore` | 488 l. | Bibliothèque `animations[]`, projection `current` (write-through), flags UI, `launchAnimation` legacy |
-| `useCuelistStore` | 267 l. | Cues (frontend-owned), `isRecalling`, timers pre_wait/follow, TC chase, feedback OSC |
-| `useGlobalGraphStore` | 191 l. | Graphe post-process global, persisté |
-| `useSignalGraphStore` | 216 l. | Graphe modulation (`'global'` ou slotId) |
-| `useToastStore` | 65 l. | Toasts dédupliqués, sticky capés |
+| `useGraphStore` | 719 l. | **Megastore**: 14 slices + React Flow graph, undo/redo, panic, `updateGraphLive`, 5 Tauri listener hooks (519-718) |
+| `useMoveEditorStore` | 488 l. | `animations[]` library, `current` projection (write-through), UI flags, legacy `launchAnimation` |
+| `useCuelistStore` | 267 l. | Cues (frontend-owned), `isRecalling`, pre_wait/follow timers, TC chase, OSC feedback |
+| `useGlobalGraphStore` | 191 l. | Global post-process graph, persisted |
+| `useSignalGraphStore` | 216 l. | Modulation graph (`'global'` or slotId) |
+| `useToastStore` | 65 l. | Deduplicated toasts, capped sticky |
 
-### Slices de `useGraphStore`
+### `useGraphStore` slices
 
-| Slice | Taille | Responsabilité | Notes |
+| Slice | Size | Responsibility | Notes |
 |---|---|---|---|
-| `perfSlice` | 17 | Miroir `get_perf_stats` | runtime → affichage |
-| `audioSlice` | 66 | Capture audio + device persisté | bridge backend |
-| `oscSlice` | 172 | CRUD mappings + parsers | **`oscValues`/`setOscValues`/`getOscValue`/`setOscInEnabled`/`suppressOscIn` = API morte** |
-| `persistenceSlice` | 555 | Save/load `.hfg` v2 | GUI fichiers |
-| `macrosSlice` | 104 | Macros globales → `set_global_macro` | runtime |
-| `holProjectSlice` | 206 | Import `.hol`, tracks, `manualOscIds` | données show |
-| `drawModeSlice` | 171 | Dessin libre → DrawSpline | GUI édition |
-| `movementSlice` | 219 | Miroir moves, `movementPositions` mutable hors-store 60fps | runtime |
-| `moveSlotsSlice` | **1065** | **Cœur show** : slots, setlist, GO, play/stop optimistic, hot-swap | métier show |
-| `oscConfigSlice` | 137 | Config OSC persistée, lock en playback | config |
-| `splineLibrarySlice` | 59 | Bibliothèque splines | GUI |
-| `spatialFxSlice` | 255 | Zones/modulations/channels | bridge backend |
-| `interactionModesSlice` | 65 | Modes 3D exclusifs | GUI |
-| `pluginSlice` | 99 | Registry plugins WASM | bridge backend |
-| `objectsNodeSync` | 64 | Helper partagé sync nodes | interne |
+| `perfSlice` | 17 | `get_perf_stats` mirror | runtime → display |
+| `audioSlice` | 66 | Audio capture + persisted device | backend bridge |
+| `oscSlice` | 172 | Mappings CRUD + parsers | **`oscValues`/`setOscValues`/`getOscValue`/`setOscInEnabled`/`suppressOscIn` = dead API** |
+| `persistenceSlice` | 555 | `.hfg` v2 save/load | file GUI |
+| `macrosSlice` | 104 | Global macros → `set_global_macro` | runtime |
+| `holProjectSlice` | 206 | `.hol` import, tracks, `manualOscIds` | show data |
+| `drawModeSlice` | 171 | Free drawing → DrawSpline | edit GUI |
+| `movementSlice` | 219 | Moves mirror, out-of-store mutable `movementPositions` 60fps | runtime |
+| `moveSlotsSlice` | **1065** | **Show core**: slots, setlist, GO, optimistic play/stop, hot-swap | show domain |
+| `oscConfigSlice` | 137 | Persisted OSC config, playback lock | config |
+| `splineLibrarySlice` | 59 | Spline library | GUI |
+| `spatialFxSlice` | 255 | Zones/modulations/channels | backend bridge |
+| `interactionModesSlice` | 65 | Exclusive 3D modes | GUI |
+| `pluginSlice` | 99 | WASM plugin registry | backend bridge |
+| `objectsNodeSync` | 64 | Shared node sync helper | internal |
 
-## 2. Flux liveActions — chaîne complète
+## 2. liveActions flow — complete chain
 
 ```
-Clavier (useLiveShortcuts:87-113)
+Keyboard (useLiveShortcuts:87-113)
    Enter → doGo() / Shift+Enter → doCueNext() / Backspace → doCuePrev()
    Esc → panic() / Space → playSlot|stopSlot / ? → shortcutsOpen
 
-OSC /stagespace/* (backend → event 'show-control')
+OSC /stagespace/* (backend → 'show-control' event)
    useShowControl:21 → ShowCommand → doGo/doCueNext/doCueRecall/doSlot/
    doSlotStop/doSolo/doUnsolo/doArm/doStatus/doPark/doUnpark/doPanic/
    doStop/handleTimecode → NACK via send_show_nack
 
-Fenêtre conduite (ConduitePage → emit 'conduite:cmd')
+Conduite window (ConduitePage → emit 'conduite:cmd')
    useConduiteBroadcast:42-54 → doCueNext/doCuePrev/doPanic
 
-liveActions.ts (dispatch commun)
+liveActions.ts (common dispatch)
    → cancelPendingTimers() + recallBusy() [isRecalling → NACK]
    → useCuelistStore: recallCue/goToNextCue/goToPreviousCue/sendStatusNow
    → useGraphStore: goToNextMove/playSlot/stopSlotWithFade/stopAllMovements/panic
    → IPC: set_osc_armed, park_object, unpark_object
 ```
 
-**Le flux est bien factorisé** — clavier, OSC, conduite convergent sur les
-mêmes `doX`. Deux trous dans le filet (§5).
+**The flow is well factored** — keyboard, OSC, conduite converge on the
+same `doX`. Two holes in the net (§5).
 
-## 3. Persistance (localStorage)
+## 3. Persistence (localStorage)
 
-| Clé | État |
+| Key | State |
 |---|---|
-| `stagespace-animations` (v2) | Bibliothèque `Move[]` |
-| `stagespace-move-slots` | `moveSlots` + `movementId` (stale nettoyé par `syncSlotMovements`) |
+| `stagespace-animations` (v2) | `Move[]` library |
+| `stagespace-move-slots` | `moveSlots` + `movementId` (stale cleaned by `syncSlotMovements`) |
 | `stagespace-move-setlist` | `setlistOrder` |
 | `stagespace-cuelist` + `-tc-chase` | `cues`, `tcChaseEnabled` |
 | `stagespace-osc-config` | osc + timecodeFps |
-| `stagespace-global-graph-v4` | graphe global |
-| `stagespace-signal-graph-v1` | signal graph **contexte global seulement** (per-slot → `slot.signalGraph`) |
+| `stagespace-global-graph-v4` | global graph |
+| `stagespace-signal-graph-v1` | signal graph **global context only** (per-slot → `slot.signalGraph`) |
 | `stagespace-spline-library` | splines |
 | `stagespace-audio-device` | deviceId |
-| `stagespace_graph_<name>` | graphes nommés legacy |
-| `stagespace-welcomed`, `portLegend.collapsed`, `ss-layout-*` (8 clés) | flags/layout |
+| `stagespace_graph_<name>` | legacy named graphs |
+| `stagespace-welcomed`, `portLegend.collapsed`, `ss-layout-*` (8 keys) | flags/layout |
 
-**Non persisté** : `editingSlotId`, `pendingPlays`, `movements`, `perfStats`,
-`audioState`, `macros` (hors .hfg), `performMode`/`showExpert`, modes
-d'interaction, `parked`/`armed` (backend-only), `soloSavedIds` (module-level).
+**Not persisted**: `editingSlotId`, `pendingPlays`, `movements`,
+`perfStats`, `audioState`, `macros` (outside .hfg),
+`performMode`/`showExpert`, interaction modes, `parked`/`armed`
+(backend-only), `soloSavedIds` (module-level).
 
-## 4. Polling actif & listeners — inventaire complet
+## 4. Active polling & listeners — complete inventory
 
 ### setInterval / poll loops
-| Où | Intervalle | Quoi |
+| Where | Interval | What |
 |---|---|---|
-| `useLiveShortcuts:162` (usePerfStatsPolling) | 500ms si `movements>0` | `get_perf_stats` + toasts |
+| `useLiveShortcuts:162` (usePerfStatsPolling) | 500ms if `movements>0` | `get_perf_stats` + toasts |
 | `useConduiteBroadcast:16` | 500ms | `emit('conduite:state')` |
 | `PerformView:73` | 1500ms | `get_parked_objects` + `get_last_show_cmd_age` |
-| `ConduitePage:39` | 1500ms | idem + `get_osc_armed` |
-| `PerformView:1012` (OscMappingsPanel) | 500ms | `osc_get_all_values` (**bypasse le slice**) |
-| `CuelistPanel:368` | 200ms | tick countdown |
-| `CuelistPanel:405` | 500ms | tick TC lost |
+| `ConduitePage:39` | 1500ms | same + `get_osc_armed` |
+| `PerformView:1012` (OscMappingsPanel) | 500ms | `osc_get_all_values` (**bypasses the slice**) |
+| `CuelistPanel:368` | 200ms | countdown tick |
+| `CuelistPanel:405` | 500ms | TC lost tick |
 | `oscLearn:18` | 120ms × 10s | `get_last_osc_message` |
 
 ### Debounces/throttles
-`update_animation_state` 33ms ; `set_move_speed` 33ms keyed ; auto-save slot
-400ms ; hot-swap 200ms ; `set_osc_output`/`set_global_osc_ids` 300ms ;
-localStorage slots 250ms ; macros debounce 100ms **au niveau composant**
-(Inspector:135, LiveDrawer:709) ; `markFading` fade+1500ms.
+`update_animation_state` 33ms; `set_move_speed` 33ms keyed; slot
+auto-save 400ms; hot-swap 200ms; `set_osc_output`/`set_global_osc_ids`
+300ms; localStorage slots 250ms; macros debounce 100ms **at component
+level** (Inspector:135, LiveDrawer:709); `markFading` fade+1500ms.
 
-### Listeners Tauri (montés `App.tsx:72-90`, survivent au mode Perform)
+### Tauri listeners (mounted `App.tsx:72-90`, survive Perform mode)
 `audio-error`/`audio-recovered` (524), `audio-state-update` (551),
 `cue-recalled` (566), `move-stale-killed`/`merge-restarted`/
 `merge-restart-failed` (588), `active-moves-update` → `refreshMovements` +
 `syncSlotMovements` (620), `global-positions` → `setMovementPositions` (688),
 `show-control` (useShowControl:21), `conduite:cmd`/`conduite:state`.
 
-## 5. Problèmes précis
+## 5. Precise problems
 
-### État mort dans `useGraphStore`
-`isPlaying` (310) **jamais `true` en prod** — lu par Scene3D:44,
-MacroControls:11, useManipulateMode:40, tous compensés par `|| movements>0`.
-Idem `status`, `compileError`/`playError` (jamais settés — la bande d'erreur
-Toolbar:166 et StatusBar:89 = **code mort**), `currentTime`/`duration`.
-Résidu du pipeline pré-multi-moves.
+### Dead state in `useGraphStore`
+`isPlaying` (310) **never `true` in prod** — read by Scene3D:44,
+MacroControls:11, useManipulateMode:40, all compensated by `|| movements>0`.
+Same for `status`, `compileError`/`playError` (never set — the
+Toolbar:166 error strip and StatusBar:89 = **dead code**),
+`currentTime`/`duration`. Residue of the pre-multi-moves pipeline.
 
-### F5 — Dispatch incohérent : liveActions contournés par l'UI
-- `PerformView:648,661` : Prev/Next conduite appellent `goToPreviousCue()`/
-  `goToNextCue()` **directement** → pas de `cancelPendingTimers()`, pas de
-  guard `recallBusy` → timer pendu peut tirer **pendant** un recall.
-- `PerformView:111` (`handleGO`) : `goToNextMove()` direct → pas de guard →
-  GO peut intercaler stop/play avec un `recall_cue` en cours.
-- `CuelistPanel:120,131,193` : même contournement (boutons + dbl-click).
-- `liveActions:87` : `doSlotStop` **sans** `recallBusy` → stop peut tuer un
-  move que le recall vient de respawner.
+### F5 — Inconsistent dispatch: liveActions bypassed by the UI
+- `PerformView:648,661`: conduite Prev/Next call `goToPreviousCue()`/
+  `goToNextCue()` **directly** → no `cancelPendingTimers()`, no
+  `recallBusy` guard → a pending timer can fire **during** a recall.
+- `PerformView:111` (`handleGO`): direct `goToNextMove()` → no guard →
+  GO can interleave stop/play with an in-flight `recall_cue`.
+- `CuelistPanel:120,131,193`: same bypass (buttons + dbl-click).
+- `liveActions:87`: `doSlotStop` **without** `recallBusy` → a stop can
+  kill a move the recall just respawned.
 
-### Duplications d'état
-- **`parked`/`consoleAge`/`armed`** : poll dupliqué PerformView↔ConduitePage ;
-  `OscArmToggle` (12-14) et `DryRunChip` (383) ne lisent `get_osc_armed`
-  **qu'au mount** → stale dès `/stagespace/arm` ailleurs ; aucun event
-  d'invalidation backend.
-- **`current` vs slot** : duplication intentionnelle documentée ; mais
-  `Inspector:122-137` maintient DEUX mappings manuels `SIMPLE_TO_MACRO`/
-  `MACRO_TO_SIMPLE` et écrit dans `updateCurrent` ET `setMacros`.
-- `activeMovementIds` : copie de `movements` via subscribe (482-487) —
-  doublon hérité du chemin legacy.
-- **Formatage TC/cueLabel dupliqué** : `useConduiteBroadcast:11-38` recopie
-  `PerformView:96-109` à l'identique.
-- `osc_get_all_values` : `OscMappingsPanel` invoque l'IPC directement au lieu
-  de `getAllOscValues` du slice — `oscValues` jamais alimenté.
+### State duplications
+- **`parked`/`consoleAge`/`armed`**: duplicated PerformView↔ConduitePage
+  poll; `OscArmToggle` (12-14) and `DryRunChip` (383) only read
+  `get_osc_armed` **at mount** → stale as soon as `/stagespace/arm` is
+  called elsewhere; no backend invalidation event.
+- **`current` vs slot**: documented intentional duplication; but
+  `Inspector:122-137` maintains TWO manual `SIMPLE_TO_MACRO`/
+  `MACRO_TO_SIMPLE` mappings and writes into `updateCurrent` AND
+  `setMacros`.
+- `activeMovementIds`: copy of `movements` via subscribe (482-487) —
+  duplicated inherited from the legacy path.
+- **Duplicated TC/cueLabel formatting**: `useConduiteBroadcast:11-38`
+  copies `PerformView:96-109` verbatim.
+- `osc_get_all_values`: `OscMappingsPanel` invokes the IPC directly
+  instead of the slice's `getAllOscValues` — `oscValues` never fed.
 
-### Divers
-`soloSavedIds` module-level non réactif (liveActions:102) ; `feLog` debug
-`[DBG-playSlot]` en prod (moveSlotsSlice:616-804) ; dépendances circulaires
-gérées par imports dynamiques partout — fragile.
+### Misc
+`soloSavedIds` non-reactive module-level (liveActions:102); `[DBG-playSlot]`
+debug `feLog` in prod (moveSlotsSlice:616-804); circular dependencies
+managed by dynamic imports everywhere — fragile.
 
-## 6. Séparation métier/rendu
+## 6. Domain/rendering separation
 
-La logique show vit **dans les stores + liveActions** : sémantique
-recall/GO/fades/TC → cuelist+moveSlots+liveActions ; optimistic UI +
-reconciliation → `playSlot`/`syncSlotMovements` ; config-lock → oscConfigSlice.
-Composants = sélecteurs granulaires + rendu (bonne discipline, commentée).
+Show logic lives **in the stores + liveActions**: recall/GO/fades/TC
+semantics → cuelist+moveSlots+liveActions; optimistic UI +
+reconciliation → `playSlot`/`syncSlotMovements`; config-lock →
+oscConfigSlice. Components = granular selectors + rendering (good,
+commented discipline).
 
-Exceptions : `OscMappingsPanel` IPC direct, `ParkedChip`, `handleAssignDown`
-(acceptable), `useMovementPositionsListener` qui **pousse aussi la config
-OSC** (misnamed).
+Exceptions: `OscMappingsPanel` direct IPC, `ParkedChip`,
+`handleAssignDown` (acceptable), `useMovementPositionsListener` which
+**also pushes the OSC config** (misnamed).
 
 ## Verdict
 
-**Oui — le câblage soutient un refactor de design sans réécriture métier.**
-Noyau show = `moveSlotsSlice` + `useCuelistStore` + `liveActions` ; reskin
-PerformView/ConduitePage = mêmes `doX` + sélecteurs.
+**Yes — the wiring supports a design refactor without a domain
+rewrite.** Show core = `moveSlotsSlice` + `useCuelistStore` +
+`liveActions`; PerformView/ConduitePage reskin = same `doX` + selectors.
 
-À durcir : (1) tous les boutons UI par `liveActions` ou absorber les guards
-dans `goToNextCue`/`recallCue` ; (2) `showStatusSlice` pour
-`parked`/`consoleAge`/`armed` — un poll partagé ou event-driven ;
-(3) nettoyer l'état mort ; (4) mutualiser `cueLabel`/`tcStr` ;
-(5) documenter/résoudre les imports cycliques.
+To harden: (1) all UI buttons through `liveActions` or absorb the
+guards into `goToNextCue`/`recallCue`; (2) `showStatusSlice` for
+`parked`/`consoleAge`/`armed` — one shared poll or event-driven; (3)
+clean dead state; (4) share `cueLabel`/`tcStr`; (5) document/resolve
+the cyclic imports.

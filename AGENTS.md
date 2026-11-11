@@ -24,7 +24,7 @@ stagespace/
 
 - **Rust**: stable toolchain (1.88+)
 - **Node.js**: 20+
-- **System deps (Linux)**: `libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libasound2-dev patchelf` (`libasound2-dev` requis par `cpal`/`alsa-sys` pour la capture audio native)
+- **System deps (Linux)**: `libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libasound2-dev patchelf` (`libasound2-dev` required by `cpal`/`alsa-sys` for native audio capture)
 
 ## Build Commands
 
@@ -105,7 +105,7 @@ See `.github/workflows/ci.yml`.
 - Async Tauri command tests: use `tauri::async_runtime::block_on` inside ordinary `#[test]` functions; no direct Tokio dependency is needed.
 
 ### Frontend (TypeScript/React)
-- **Namespace boundary** — `obj_index` (0-based position dans `osc_ids`) vs `track_id` (le N de `/track/N`) sont DEUX espaces distincts. Wire/backend parle `obj_index` partout (`manual_positions`, `objectStates`, `emittedPositions`, `anchor_target`, `psn tracker_map`, `/stagespace/position <obj>`) ; les UIs opérateur parlent `track_id` (`slot.trackIds`, `manualOscIds`, `trackpos`). Conversion obligatoire à la frontière : `objIdx = manualOscIds.indexOf(trackId)` — jamais `objectStates[trackId]` (off-by-one pour tracks 1-based).
+- **Namespace boundary** — `obj_index` (0-based position in `osc_ids`) vs `track_id` (the N in `/track/N`) are TWO distinct spaces. Wire/backend speaks `obj_index` everywhere (`manual_positions`, `objectStates`, `emittedPositions`, `anchor_target`, `psn tracker_map`, `/stagespace/position <obj>`); operator UIs speak `track_id` (`slot.trackIds`, `manualOscIds`, `trackpos`). Mandatory conversion at the boundary: `objIdx = manualOscIds.indexOf(trackId)` — never `objectStates[trackId]` (off-by-one for 1-based tracks).
 - State management: Zustand with slice pattern (`src/store/slices/`)
 - Tests: vitest + jsdom, mocks in `src/test/setup.ts`, helpers in `src/store/__tests__/testHelpers.ts`
 - Tauri IPC: use `safeInvoke` from `utils/tauri.ts` (not raw `invoke`)
@@ -181,42 +181,38 @@ dispatches to the same functions as the keyboard shortcuts (`liveActions.ts`).
 | `/stagespace/stop` | stop all moves | — |
 | `/stagespace/timecode <s|"HH:MM:SS:FF">` | TC chase (fps 24/25/30, default 25, `set_timecode_fps`) | — |
 | `/stagespace/timecode/chase <0|1>` | chase TC on/off | — |
-| `/stagespace/timecode/fps <n>` | fps du format TC string | — |
-| `/stagespace/cue/arm <n>` | arme une cue sans la tirer (modèle console) | — |
-| `/stagespace/cue/go` | tire la cue armée (ou la suivante si rien d'armé) | — |
-| `/stagespace/macro <name> <v>` | macro globale : speed, scale, shift_x/y/z, yaw, pitch, roll, radius_scale, height_offset | — |
-| `/stagespace/positions` | dump positions émises → `/stagespace/pos/state <obj> <x> <y> <z>` par objet (backend-direct, pas de webview) | — |
-| `/stagespace/arm` | re-arm OSC output (quitte le dry-run) | — |
-| `/stagespace/disarm` | dry-run — tout tourne, rien ne part au renderer | — |
-| `/stagespace/status` | force le renvoi du feedback cue au contrôleur | — |
-| `/stagespace/park <obj>` | geler un objet (survit aux recalls Full/Tracking, panic, arm) | — |
-| `/stagespace/unpark <obj>` | dégeler l'objet | — |
-| `/stagespace/slot <n>` | jouer le slot d'`oscIndex` n (busking, fade_in du slot) | — |
-| `/stagespace/slot/stop <n>` | stopper le slot n (fade_out du slot) | — |
-| `/stagespace/solo <n>` | fade-out tous les autres slots puis jouer n | — |
-| `/stagespace/unsolo` | rejoue les slots stoppés par le dernier solo (restore) | — |
-| `/stagespace/position <obj> <x> <y> <z>` | position manuelle d'un objet (reprise opérateur) | — |
-| `/stagespace/position/clear <obj>` | retire la position manuelle | — |
-| `/stagespace/position/clearall` | toutes les positions manuelles | — |
-| `/stagespace/trackpos <track> <x> <y> <z>` | position d'origine d'une track (là où panic la renvoie) | — |
+| `/stagespace/timecode/fps <n>` | fps of the TC string format | — |
+| `/stagespace/cue/arm <n>` | arm a cue without firing it (console model) | — |
+| `/stagespace/cue/go` | fire the armed cue (or the next one if none armed) | — |
+| `/stagespace/macro <name> <v>` | global macro: speed, scale, shift_x/y/z, yaw, pitch, roll, radius_scale, height_offset | — |
+| `/stagespace/positions` | dump emitted positions → `/stagespace/pos/state <obj> <x> <y> <z>` per object (backend-direct, no webview) | — |
+| `/stagespace/arm` | re-arm OSC output (leaves dry-run) | — |
+| `/stagespace/disarm` | dry-run — everything runs, nothing goes out to the renderer | — |
+| `/stagespace/status` | force re-send of cue feedback to the controller | — |
+| `/stagespace/park <obj>` | freeze an object (survives Full/Tracking recalls, panic, arm) | — |
+| `/stagespace/unpark <obj>` | unfreeze the object | — |
+| `/stagespace/slot <n>` | play the slot of `oscIndex` n (busking, slot fade_in) | — |
+| `/stagespace/slot/stop <n>` | stop slot n (slot fade_out) | — |
+| `/stagespace/solo <n>` | fade-out all other slots then play n | — |
+| `/stagespace/unsolo` | replay the slots stopped by the last solo (restore) | — |
+| `/stagespace/position <obj> <x> <y> <z>` | manual position of an object (operator takeover) | — |
+| `/stagespace/position/clear <obj>` | remove the manual position | — |
+| `/stagespace/position/clearall` | all manual positions | — |
+| `/stagespace/trackpos <track> <x> <y> <z>` | origin position of a track (where panic returns it) | — |
 
-### Sémantique « continue » (per-move)
+### "Continuous" semantics (per-move)
 
-Chaque move/slot porte deux flags (Playback tab : `End`, `Anchor`) :
+Each move/slot carries two flags (Playback tab: `End`, `Anchor`):
 
-- **`End: hold`** — à la fin d'un one-shot, les dernières positions sont
-  écrites en positions manuelles : l'objet reste où le move l'a laissé
-  (au lieu de revenir à la base — `revert` par défaut).
-- **`Anchor: current`** — au spawn, chaque objet capture sa dernière
-  position émise comme ancre (`delta = capturée − traj(0)`) : le move
-  part de là où l'objet est, sans saut — chaînage move→move.
+- **`End: hold`** — at the end of a one-shot, the last positions are
+  written as manual positions: the object stays where the move left it
+  (instead of returning to base — `revert` by default).
+- **`Anchor: current`** — at spawn, each object captures its last
+  emitted position as anchor (`delta = captured − traj(0)`): the move
+  starts from where the object is, no jump — move→move chaining.
 
-Combinés : `hold` fige l'objet à `f(T)`, `current` sur le move suivant
-continue depuis ce point — sémantique « release/peg-out » des consoles.
-| `/stagespace/position <obj> <x> <y> <z>` | position manuelle (reprise opérateur — prioritaire) | — |
-| `/stagespace/position/clear <obj>` | retire la position manuelle de l'objet | — |
-| `/stagespace/position/clearall` | retire toutes les positions manuelles | — |
-| `/stagespace/trackpos <track> <x> <y> <z>` | position d'origine d'une track (où panic renvoie) | — |
+Combined: `hold` freezes the object at `f(T)`, `current` on the next
+move continues from that point — "release/peg-out" console semantics.
 
 Rejection & feedback: commands refused while `isRecalling` or on unknown
 cue/slot get `/stagespace/nack <reason>` back to the sender (`busy:…`,

@@ -1,10 +1,10 @@
 # stagespace-plugin-sdk
 
-SDK pour écrire des plugins WASM STAGESPACE (nodes custom, bundles `.ssx`).
+SDK for writing STAGESPACE WASM plugins (custom nodes, `.ssx` bundles).
 
-## Écrire un plugin
+## Writing a plugin
 
-Crate `cdylib`, cible `wasm32-unknown-unknown` :
+`cdylib` crate, `wasm32-unknown-unknown` target:
 
 ```toml
 # Cargo.toml
@@ -26,8 +26,8 @@ panic = "abort"
 use stagespace_plugin_sdk::{get_f64, stagespace_plugin};
 
 /// f(t, i, n, d, params) -> (x, y, z)
-/// t = temps (s), i = index objet, n = n_objects, d = duration du graphe.
-/// params = le JSON des params du node (ceux du manifeste + plugin_id).
+/// t = time (s), i = object index, n = n_objects, d = graph duration.
+/// params = the node's params JSON (manifest params + plugin_id).
 fn position(t: f64, i: usize, n: usize, d: f64, params: &serde_json::Value) -> (f64, f64, f64) {
     let radius = get_f64(params, "radius", 1.0);
     let phase = 2.0 * std::f64::consts::PI * (t / d.max(f64::EPSILON) + i as f64 / n.max(1) as f64);
@@ -37,41 +37,41 @@ fn position(t: f64, i: usize, n: usize, d: f64, params: &serde_json::Value) -> (
 stagespace_plugin!(position);
 ```
 
-`manifest.json` — voir `plugin-examples/lemniscate/manifest.json` pour le
-format complet (`id`, `abi_version: 1`, `kind: "engine"`, `params[]`).
+`manifest.json` — see `plugin-examples/lemniscate/manifest.json` for the
+full format (`id`, `abi_version: 1`, `kind: "engine"`, `params[]`).
 
-## Builder + packager
+## Build + package
 
 ```bash
-cd mon-plugin
+cd my-plugin
 cargo build --release --target wasm32-unknown-unknown
 
-# packer (depuis plugin-sdk)
+# packer (from plugin-sdk)
 cargo run --release --features packer --bin stagespace-pack -- \
     manifest.json target/wasm32-unknown-unknown/release/mon_plugin.wasm \
     -o mon_plugin.ssx
 ```
 
-## Installer
+## Install
 
-Déposer le `.ssx` dans le dossier plugins :
+Drop the `.ssx` into the plugins folder:
 
-| OS | Chemin |
+| OS | Path |
 |---|---|
 | Linux | `~/.local/share/com.stagespace.studio/plugins/` |
 | macOS | `~/Library/Application Support/com.stagespace.studio/plugins/` |
 | Windows | `%APPDATA%/com.stagespace.studio/plugins/` |
 
-Puis `reload_plugins` (UI ou CLI) — le node `Plugin` du graphe référence le
-plugin via `params.plugin_id = "<id du manifeste>"`.
+Then `reload_plugins` (UI or CLI) — the graph's `Plugin` node references
+the plugin via `params.plugin_id = "<manifest id>"`.
 
-## Règles d'un bon plugin
+## Rules of a good plugin
 
-- **Déterministe** : `position(t, i, params)` doit retourner la même valeur
-  pour les mêmes entrées (le runtime échantillonne en parallèle et compare).
-- **Pas d'état mutable global** au-delà des buffers ABI.
-- **Rapide** : appelé à 60 FPS × n_objects — un appel > ~100k instructions
-  est tué par le fuel (position zero pour la frame).
-- **Params robustes** : toujours des défauts via `get_f64`/`get_bool`/`get_str`
-  — les params peuvent être absents (vieux graphes, valeur non saisie).
-- Retours finis : `NaN`/`inf` → l'host convertit en (0,0,0) mais c'est un bug.
+- **Deterministic**: `position(t, i, params)` must return the same value
+  for the same inputs (the runtime samples in parallel and compares).
+- **No mutable global state** beyond the ABI buffers.
+- **Fast**: called at 60 FPS × n_objects — a call > ~100k instructions
+  is killed by fuel (zero position for the frame).
+- **Robust params**: always use defaults via `get_f64`/`get_bool`/`get_str`
+  — params may be absent (old graphs, unset value).
+- Finite returns: `NaN`/`inf` → the host converts to (0,0,0) but it's a bug.

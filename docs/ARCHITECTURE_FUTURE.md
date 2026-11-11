@@ -1,46 +1,46 @@
-# Architecture Future : Graph Global Hybride
+# Future Architecture: Hybrid Global Graph
 
-## Contexte
+## Context
 
-Stagespace compile des graphs de nodes en fonctions continues `f(t, i) → Vec3` pour le contrôle spatial temps réel. Le système actuel a une tension fondamentale : les macros et audio mods sont des couches **externes** au graph, hardcodées dans le runtime, alors que les nodes `Scale`, `Rotate`, `Offset`, `AudioAmplitudeFalloff` existent déjà dans le compiler.
+Stagespace compiles node graphs into continuous functions `f(t, i) → Vec3` for real-time spatial control. The current system has a fundamental tension: macros and audio mods are layers **external** to the graph, hardcoded in the runtime, while the `Scale`, `Rotate`, `Offset`, `AudioAmplitudeFalloff` nodes already exist in the compiler.
 
-Ce document décrit l'évolution vers un **graph global** qui englobe tous les moves, avec les macros et audio mods comme nodes du graph. Inspiré de Max/PureData mais avec compilation des engines pour la performance.
+This document describes the evolution toward a **global graph** encompassing all moves, with macros and audio mods as graph nodes. Inspired by Max/PureData but with engine compilation for performance.
 
-L'architecture retenue est **hybride multi-threadée** : les engines (math complexe) tournent dans des worker threads parallèles, le merge + post-processing tournent dans un thread unique. Compilation pour les engines, interprétation pour le post-processing, fast path atomique pour le live control.
+The chosen architecture is **hybrid multi-threaded**: engines (complex math) run in parallel worker threads, merge + post-processing run in a single thread. Compilation for engines, interpretation for post-processing, atomic fast path for live control.
 
-**Objectifs de design** : souplesse (per-move ou global, au choix) et intuitivité (le musicien ne manipule pas des nodes en concert — il a des sliders).
+**Design goals**: flexibility (per-move or global, your choice) and intuitiveness (the musician doesn't manipulate nodes in concert — they have sliders).
 
 ---
 
-## État actuel — tensions identifiées
+## Current state — identified tensions
 
-### Tension 1 : Deux systèmes de transformation parallèles
+### Tension 1: Two parallel transformation systems
 
 ```
-COUCHE GRAPH (compilé)          COUCHE RUNTIME (hardcoded)
+GRAPH LAYER (compiled)          RUNTIME LAYER (hardcoded)
 ─────────────────────           ──────────────────────────
 Circular → Scale → Rotate       radius_scale → height_offset
   → Output → PositionFn         → depth → scale → rotation
                                 → origin + shift → OSC
 ```
 
-Le graph compile `f(t, i) → Vec3`. Le runtime applique **ensuite** 6 transformations hardcodées (runtime.rs lignes 341-399) : `radius_scale → height_offset → depth → scale → rotation → origin + shift`. Non visible dans le graph, non composable, non réordonnable.
+The graph compiles `f(t, i) → Vec3`. The runtime **then** applies 6 hardcoded transformations (runtime.rs lines 341-399): `radius_scale → height_offset → depth → scale → rotation → origin + shift`. Not visible in the graph, not composable, not reorderable.
 
-Si on met un node `Scale(2.0)` dans le graph ET un macro scale à 1.5 → position scalée deux fois. Confusant.
+If you put a `Scale(2.0)` node in the graph AND a macro scale at 1.5 → position scaled twice. Confusing.
 
-### Tension 2 : Isolation des movements → conflits non résolus
+### Tension 2: Movement isolation → unresolved conflicts
 
 ```
 Movement A (tracks 1-5) → OSC socket A → /track/3/xyz
 Movement B (tracks 3-9) → OSC socket B → /track/3/xyz
                                                     ↑
-                                        Dernier qui parle gagne.
-                                        Pas de blend, pas de priorité.
+                                        Last one speaking wins.
+                                        No blend, no priority.
 ```
 
-Chaque movement est un `Runtime` indépendant avec thread + socket propres. Deux moves sur le même track → positions contradictoires à 60fps → tremblement.
+Each movement is an independent `Runtime` with its own thread + socket. Two moves on the same track → contradictory positions at 60fps → jitter.
 
-### Tension 3 : Macros globales appliquées per-movement
+### Tension 3: Global macros applied per-movement
 
 ```typescript
 // macrosSlice.ts — pushMacrosToRuntime
@@ -49,167 +49,167 @@ await Promise.all(movements.map((mv) =>
 ));
 ```
 
-Mêmes macros poussées à tous les movements. Ni vraiment globales (appliquées N fois), ni vraiment per-move (même valeur). Accident d'implémentation.
+Same macros pushed to all movements. Neither truly global (applied N times) nor truly per-move (same value). Implementation accident.
 
-### Tension 4 : Audio mods = couche externe alors que les nodes existent
+### Tension 4: Audio mods = external layer while the nodes exist
 
-Le compiler a `AudioAmplitudeFalloff`, `AudioSpectrum`, `BPM`. Mais les "audio mods" de l'Inspector sont un système séparé (`AnimationState.audio_mods`) qui calcule des deltas en dehors du graph. Deux systèmes pour la même chose.
+The compiler has `AudioAmplitudeFalloff`, `AudioSpectrum`, `BPM`. But the Inspector's "audio mods" are a separate system (`AnimationState.audio_mods`) computing deltas outside the graph. Two systems for the same thing.
 
-### Tension 5 : Objects node = vestige
+### Tension 5: Objects node = vestige
 
-Le node `Objects` existe pour fournir `n_objects` au compiler. Mais le vrai count est `osc_ids.len()`. Le compiler résout `n_objects` depuis le node Objects, puis le runtime l'ignore et utilise `osc_ids.len()`.
+The `Objects` node exists to provide `n_objects` to the compiler. But the real count is `osc_ids.len()`. The compiler resolves `n_objects` from the Objects node, then the runtime ignores it and uses `osc_ids.len()`.
 
-### Tension 6 : Origin calculé en dehors du graph
+### Tension 6: Origin computed outside the graph
 
 ```typescript
 const origin = computeCentroid(holProject, trackIndices, manualOscIds);
-// → passé en paramètre au runtime
+// → passed as a parameter to the runtime
 ```
 
-L'isobarycentre est calculé en TypeScript. Concept spatial qui devrait être un node.
+The centroid is computed in TypeScript. A spatial concept that should be a node.
 
-### Tension 7 : Per-track parameters non représentés dans le graph
+### Tension 7: Per-track parameters not represented in the graph
 
-`AnimationState` a `track_depths: Vec<f64>` et `track_phase_offsets: Vec<f64>` — des **arrays per-track**, pas des valeurs globales. La depth et le phase_offset sont différents pour chaque objet. Ces paramètres sont appliqués dans le runtime (lignes 247-257), pas dans le graph. Un node du graph global doit pouvoir retourner des valeurs **indexées par object_index**.
+`AnimationState` has `track_depths: Vec<f64>` and `track_phase_offsets: Vec<f64>` — **per-track arrays**, not global values. Depth and phase_offset differ per object. These parameters are applied in the runtime (lines 247-257), not in the graph. A global-graph node must be able to return values **indexed by object_index**.
 
-### Tension 8 : Speed est per-move, pas global
+### Tension 8: Speed is per-move, not global
 
-Speed est dans `MacroState` et affecte `t` (time scaling). Chaque runtime applique son propre speed. Si les macros deviennent globales, speed devient global — tous les moves à la même vitesse. C'est une régression : deux moves peuvent vouloir des vitesses différentes. **Speed doit rester per-move.**
+Speed is in `MacroState` and affects `t` (time scaling). Each runtime applies its own speed. If macros become global, speed becomes global — all moves at the same speed. That's a regression: two moves may want different speeds. **Speed must remain per-move.**
 
-### Tension 9 : Cue system incomplet
+### Tension 9: Incomplete cue system
 
-Un cue snapshot contient : `graph + macros + track_indices + fade_duration`. Mais **audio mods ne sont pas dans les cues**. Avec un graph global, un cue doit aussi snapshotter quels moves sont actifs et l'état du graph global.
+A cue snapshot contains: `graph + macros + track_indices + fade_duration`. But **audio mods aren't in cues**. With a global graph, a cue must also snapshot which moves are active and the global graph state.
 
-### Tension 10 : ManualPositions non représentées
+### Tension 10: ManualPositions not represented
 
-Le drag d'objets individuels dans le 3D view modifie `manualPositions` (positions manuelles per-objet). Ça ne mappe pas à un Transform node — c'est un **override de position**. Il faut un node `ManualPosition` qui override la position calculée pour certains objets.
+Dragging individual objects in the 3D view modifies `manualPositions` (per-object manual positions). That doesn't map to a Transform node — it's a **position override**. We need a `ManualPosition` node that overrides the computed position for certain objects.
 
 ---
 
-## Architecture proposée — Sweet Spot Hybride
+## Proposed architecture — Hybrid Sweet Spot
 
 ```
-TOUT COMPILÉ                    TOUT INTERPRÉTÉ
-(f(t,i) monolithique)           (Max/PureData)
+ALL COMPILED                    ALL INTERPRETED
+(f(t,i) monolithic)             (Max/PureData)
      │                               │
      │  ┌──────────────────────────┐ │
-     │  │ SWEET SPOT HYBRIDE       │ │
-     │  │ Engines compilés         │ │
-     │  │ Post-processing interprété│ │
-     │  │ Fast path pour live      │ │
-     │  │ Worker threads parallèles│ │
-     │  │ Merge thread unique      │ │
+     │  │ HYBRID SWEET SPOT        │ │
+     │  │ Compiled engines         │ │
+     │  │ Interpreted post-process │ │
+     │  │ Fast path for live       │ │
+     │  │ Parallel worker threads  │ │
+     │  │ Single merge thread      │ │
      │  └──────────────────────────┘ │
      │                               │
-     ←── Stagespace actuel           ←── Stagespace proposé
+     ←── Current Stagespace          ←── Proposed Stagespace
 ```
 
-### Principe : 3 couches, 2 niveaux de threading
+### Principle: 3 layers, 2 threading levels
 
-**Couche 1 — Engine (compilé, worker threads parallèles)**
+**Layer 1 — Engine (compiled, parallel worker threads)**
 ```
-Sub-graph du move → compile → f(t, i) → Vec3
-Évalué en parallèle dans des worker threads (1 par move actif)
-Résultat écrit dans un buffer partagé
-N'envoie PAS d'OSC
-Applique speed (per-move), loop_mode, direction, phase_offset (per-move)
-N'applique PAS scale/rotation/shift/depth (ces transforms montent dans le graph global)
+Move sub-graph → compile → f(t, i) → Vec3
+Evaluated in parallel in worker threads (1 per active move)
+Result written to a shared buffer
+Does NOT send OSC
+Applies speed (per-move), loop_mode, direction, phase_offset (per-move)
+Does NOT apply scale/rotation/shift/depth (those transforms move up to the global graph)
 ```
 
-**Couche 2 — Merge + Post-processing (closure compilée, merge thread unique)**
+**Layer 2 — Merge + Post-processing (compiled closure, single merge thread)**
 ```
-Lire tous les buffers (latest frame)
-  → Merge (résoudre conflits par track)
-  → Post-processing (closure compilée, params atomiques) :
+Read all buffers (latest frame)
+  → Merge (resolve per-track conflicts)
+  → Post-processing (compiled closure, atomic params):
     Scale → Rotate → Shift → AudioMod → Depth → ManualPosition
-  → Une seule socket OSC
-  → Un seul callback pour le visualizer
+  → Single OSC socket
+  → Single callback for the visualizer
 ```
 
-**Couche 3 — Output (routing OSC, merge thread)**
+**Layer 3 — Output (OSC routing, merge thread)**
 ```
-Output → format OSC (Holophonix/IEM/Spat) → UDP (une seule socket)
+Output → OSC format (Holophonix/IEM/Spat) → UDP (single socket)
 ```
 
-### Architecture multi-threadée
+### Multi-threaded architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ WORKER THREADS (une par move actif)                          │
+│ WORKER THREADS (one per active move)                        │
 │                                                              │
 │  Thread A: f_a(t,i) ──→ [buffer A]                          │
 │  Thread B: f_b(t,i) ──→ [buffer B]                          │
 │  Thread C: f_c(t,i) ──→ [buffer C]                          │
 │                                                              │
-│  Chaque thread:                                              │
-│  - Évalue son sub-graph compilé (engine math)               │
-│  - Applique speed (per-move), loop_mode, direction           │
-│  - Applique phase_offset (per-track, dans le sub-graph)      │
-│  - Écrit positions dans son buffer                          │
-│  - N'envoie PAS d'OSC                                       │
-│  - N'applique PAS scale/rotation/shift/depth (graph global) │
-│  - A accès à AudioState (pour les engines audio)            │
+│  Each thread:                                                │
+│  - Evaluates its compiled sub-graph (engine math)            │
+│  - Applies speed (per-move), loop_mode, direction            │
+│  - Applies phase_offset (per-track, in the sub-graph)        │
+│  - Writes positions to its buffer                            │
+│  - Does NOT send OSC                                         │
+│  - Does NOT apply scale/rotation/shift/depth (global graph)  │
+│  - Has access to AudioState (for audio engines)              │
 └────────────────────────┬────────────────────────────────────┘
-                         │  (Mutex<Vec>, lock simple, ~200 bytes)
+                         │  (Mutex<Vec>, simple lock, ~200 bytes)
                          ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ MERGE + POST-PROCESS THREAD (unique)                         │
+│ MERGE + POST-PROCESS THREAD (single)                        │
 │                                                              │
-│  1. Read all buffers (latest frame)                         │
-│  2. Merge: resolve conflicts per track                      │
-│  3. Post-process (compiled closure, atomic params):         │
-│     Scale → Rotate → Shift → AudioMod → Depth → ManualPos   │
-│  4. OSC output (une seule socket)                           │
-│  5. Callback (un seul event Tauri)                          │
-│  - A accès à AudioState (pour les AudioFalloff nodes)       │
-│  - A accès à track positions (pour Barycenter node)         │
+│  1. Read all buffers (latest frame)                          │
+│  2. Merge: resolve conflicts per track                       │
+│  3. Post-process (compiled closure, atomic params):          │
+│     Scale → Rotate → Shift → AudioMod → Depth → ManualPos    │
+│  4. OSC output (single socket)                               │
+│  5. Callback (single Tauri event)                            │
+│  - Has access to AudioState (for AudioFalloff nodes)         │
+│  - Has access to track positions (for Barycenter node)       │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Pourquoi hybride plutôt que single-thread
+### Why hybrid rather than single-thread
 
-| Aspect | Single-thread global | Hybride multi-thread |
+| Aspect | Single-thread global | Hybrid multi-thread |
 |---|---|---|
-| Engine evaluation | Séquentiel (6.7ms pour 3 moves) | **Parallèle** (3ms max, le plus lent) |
-| Crash isolation | Tout s'arrête | **Worker crash → merge skip ce buffer, autres continuent** |
-| Refactor | Massif (tout réécrire) | **Minimal** (garder Runtime existant, ajouter merge) |
-| OSC conflicts | Résolu (1 socket) | Résolu (1 socket) |
-| Latency | 0 frame | **0-1 frame** (buffer, acceptable à 60fps) |
-| Complexité | Moyenne | **Moyenne** (Mutex simple, pas critique) |
-| Scalability | Limité (1 core) | **Multi-core** (Rayon pour post-processing par objet) |
+| Engine evaluation | Sequential (6.7ms for 3 moves) | **Parallel** (3ms max, the slowest) |
+| Crash isolation | Everything stops | **Worker crash → merge skips its buffer, others continue** |
+| Refactor | Massive (rewrite everything) | **Minimal** (keep existing Runtime, add merge) |
+| OSC conflicts | Solved (1 socket) | Solved (1 socket) |
+| Latency | 0 frames | **0-1 frame** (buffer, acceptable at 60fps) |
+| Complexity | Medium | **Medium** (simple Mutex, not critical) |
+| Scalability | Limited (1 core) | **Multi-core** (Rayon for per-object post-processing) |
 
-### Compilation vs interprétation — la frontière
+### Compilation vs interpretation — the boundary
 
 ```
-COUCHES          MODE D'EXÉCUTION       THREADS
+LAYERS           EXECUTION MODE         THREADS
 ─────────        ───────────────        ───────
-Sub-graphs       Compilé (f(t,i))       Worker threads (1 par move)
-  ↓              + speed, loop, dir, phase (per-move, dans le worker)
-Merge            Interprété             Merge thread
-  ↓                (structure dynamique:
-Post-processing    N moves variables)
-                  Compilé pour les       Merge thread
-                  transforms (closures   (optionnel: Rayon
-                  avec params atomiques)  par objet)
+Sub-graphs       Compiled (f(t,i))      Worker threads (1 per move)
+  ↓              + speed, loop, dir, phase (per-move, in the worker)
+Merge            Interpreted            Merge thread
+  ↓                (dynamic structure:
+Post-processing    N variable moves)
+                  Compiled for          Merge thread
+                  transforms (closures   (optional: Rayon
+                  with atomic params)    per object)
   ↓
-OSC output       Direct                  Merge thread
+OSC output       Direct                 Merge thread
 ```
 
-**Sub-graphs** : compilés en `f(t, i) → Vec3`. Structure figée pendant le playback. Hot-swappable avec crossfade. Évalués en parallèle dans des worker threads. **Speed, loop_mode, direction, phase_offset restent per-move dans le worker** — ce sont des transformations du temps et de la phase, pas de l'espace.
+**Sub-graphs**: compiled into `f(t, i) → Vec3`. Structure frozen during playback. Hot-swappable with crossfade. Evaluated in parallel in worker threads. **Speed, loop_mode, direction, phase_offset stay per-move in the worker** — they're time and phase transformations, not space.
 
-**Merge** : interprété. Le nombre de moves actifs change en temps réel (play/stop). Le merge ne peut pas être compilé car ses inputs sont dynamiques. Mais c'est trivial : pour chaque track, prendre la position du move avec le poids le plus élevé.
+**Merge**: interpreted. The number of active moves changes in real time (play/stop). The merge can't be compiled because its inputs are dynamic. But it's trivial: for each track, take the position of the move with the highest weight.
 
-**Post-processing** : **hybride compilation/interprétation**.
-- La **structure** (quels nodes, quel ordre) est compilée en une closure → pas d'overhead d'interprétation
-- Les **paramètres** (scale value, rotation angle, audio amount) sont des `Arc<AtomicU64>` → modifiables sans recompilation
-- La **audio data** est lue en live via `Arc<Mutex<AudioState>>` → pas de recompilation quand l'audio change
-- Hot-swap de la closure quand le graph global change (rare, ~1ms)
+**Post-processing**: **hybrid compilation/interpretation**.
+- The **structure** (which nodes, which order) is compiled into a closure → no interpretation overhead
+- The **parameters** (scale value, rotation angle, audio amount) are `Arc<AtomicU64>` → modifiable without recompilation
+- The **audio data** is read live via `Arc<Mutex<AudioState>>` → no recompilation when audio changes
+- Hot-swap of the closure when the global graph changes (rare, ~1ms)
 
-### Graph Global conceptuel
+### Conceptual Global Graph
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│ GRAPH GLOBAL                                                         │
+│ GLOBAL GRAPH                                                        │
 │                                                                      │
 │  [MoveRef A] ──→ f_a(t,i) ──┐                                       │
 │                              ├── [Merge] ── [Scale] ── [Rotate]     │
@@ -223,75 +223,75 @@ OSC output       Direct                  Merge thread
 │                                       ↓              ↓              │
 │                                    [Barycenter] ──→ [Output] ──→ OSC│
 │                                                                      │
-│  Sub-graph A: [Circular] → [PhaseShift(per-track)] → [Output]        │
+│  Sub-graph A: [Circular] → [PhaseShift(per-track)] → [Output]       │
 │  Sub-graph B: [Spiral] → [Jitter] → [Output]                        │
 │                                                                      │
-│  Inputs globaux: AudioState, TrackPositions (.hol), ManualPositions  │
+│  Global inputs: AudioState, TrackPositions (.hol), ManualPositions  │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Sub-graphs** (moves) : compilés en `f(t, i) → Vec3`, évalués en worker threads. Speed, loop, direction, phase_offset per-move.
-- **Graph global** (post-processing) : closure compilée, params atomiques, évalué dans le merge thread.
-- **MoveRef nodes** : références vers des sub-graphs (abstractions).
-- **PerTrack nodes** : retournent des valeurs indexées par object_index (depth, phase_offset).
-- **ManualPosition node** : override la position pour certains objets (drag manuel).
+- **Sub-graphs** (moves): compiled to `f(t, i) → Vec3`, evaluated in worker threads. Speed, loop, direction, phase_offset per-move.
+- **Global graph** (post-processing): compiled closure, atomic params, evaluated in the merge thread.
+- **MoveRef nodes**: references to sub-graphs (abstractions).
+- **PerTrack nodes**: return values indexed by object_index (depth, phase_offset).
+- **ManualPosition node**: overrides the position for certain objects (manual drag).
 
 ---
 
-## Séparation speed vs transforms — le point critique
+## Speed vs transforms separation — the critical point
 
-### Ce qui reste per-move (dans les workers)
+### What stays per-move (in the workers)
 
-| Paramètre | Pourquoi | Où |
+| Parameter | Why | Where |
 |---|---|---|
-| `speed` | Affecte `t` (time scaling). Deux moves à des vitesses différentes. | Worker |
+| `speed` | Affects `t` (time scaling). Two moves at different speeds. | Worker |
 | `loop_mode` | Loop vs OneShot. Per-move. | Worker |
 | `direction` | Forward/Backward/PingPong. Per-move. | Worker |
-| `phase_offset` | Per-track, décalage temporel. Déjà dans le sub-graph. | Worker (sub-graph) |
-| `fade_in/out` | Per-move, cycle de vie du move. | Worker |
+| `phase_offset` | Per-track, temporal offset. Already in the sub-graph. | Worker (sub-graph) |
+| `fade_in/out` | Per-move, move lifecycle. | Worker |
 
-### Ce qui monte dans le graph global (merge thread)
+### What moves up to the global graph (merge thread)
 
-| Paramètre | Pourquoi | Où |
+| Parameter | Why | Where |
 |---|---|---|
-| `scale` | Transformation spatiale globale. | Graph global (Transform node) |
-| `rotation` (yaw/pitch/roll) | Transformation spatiale globale. | Graph global (Transform node) |
-| `shift` (x/y/z) | Transformation spatiale globale. | Graph global (Transform node) |
-| `radius_scale` | Transformation spatiale globale. | Graph global (Transform node) |
-| `height_offset` | Transformation spatiale globale. | Graph global (Transform node) |
-| `depth` | Per-track, mais spatial. | Graph global (PerTrack node) |
-| `audio mods` | Modulation globale. | Graph global (AudioFalloff node) |
-| `origin` | Calcul spatial global. | Graph global (Barycenter node) |
+| `scale` | Global spatial transformation. | Global graph (Transform node) |
+| `rotation` (yaw/pitch/roll) | Global spatial transformation. | Global graph (Transform node) |
+| `shift` (x/y/z) | Global spatial transformation. | Global graph (Transform node) |
+| `radius_scale` | Global spatial transformation. | Global graph (Transform node) |
+| `height_offset` | Global spatial transformation. | Global graph (Transform node) |
+| `depth` | Per-track, but spatial. | Global graph (PerTrack node) |
+| `audio mods` | Global modulation. | Global graph (AudioFalloff node) |
+| `origin` | Global spatial computation. | Global graph (Barycenter node) |
 
-### Souplesse : per-move OU global
+### Flexibility: per-move OR global
 
-L'utilisateur peut choisir le niveau d'application :
-- **Transform dans le sub-graph** : s'applique per-move (le worker l'applique avant d'écrire dans le buffer)
-- **Transform dans le graph global** : s'applique global (le merge thread l'applique après le merge)
+The user chooses the application level:
+- **Transform in the sub-graph**: applies per-move (the worker applies it before writing to the buffer)
+- **Transform in the global graph**: applies globally (the merge thread applies it after the merge)
 
-Exemple : un node `Scale` dans le sub-graph de Move A scale seulement A. Un node `Scale` dans le graph global scale tous les moves mergés. **Mêmes nodes, deux niveaux d'application.**
+Example: a `Scale` node in Move A's sub-graph scales only A. A `Scale` node in the global graph scales all merged moves. **Same nodes, two application levels.**
 
 ---
 
-## Per-track parameters — modélisation
+## Per-track parameters — modeling
 
-### Le problème
+### The problem
 
-`depth` et `phase_offset` sont des arrays per-track :
+`depth` and `phase_offset` are per-track arrays:
 ```
-Objet 0 → depth 0.3
-Objet 1 → depth 1.0
-Objet 2 → depth 0.7
+Object 0 → depth 0.3
+Object 1 → depth 1.0
+Object 2 → depth 0.7
 ```
 
-Un Transform node standard retourne une valeur globale. Il faut un node qui **indexe par object_index**.
+A standard Transform node returns a global value. We need a node that **indexes by object_index**.
 
-### Solution : PerTrackParameter node
+### Solution: PerTrackParameter node
 
 ```rust
 NodeType::PerTrackDepth => {
-    // Prend un array de valeurs per-track
-    // Retourne values[object_index]
+    // Takes an array of per-track values
+    // Returns values[object_index]
     let depths = node.params.get("depths").as_array();
     Box::new(move |t, i, merged, macros, audio| {
         let depth = depths.get(i).unwrap_or(1.0);
@@ -300,182 +300,182 @@ NodeType::PerTrackDepth => {
 }
 ```
 
-**Phase_offset** reste dans le sub-graph (per-move, temporel). **Depth** monte dans le graph global (spatial, post-merge).
+**Phase_offset** stays in the sub-graph (per-move, temporal). **Depth** moves up to the global graph (spatial, post-merge).
 
-### UI : depth per-track
+### UI: per-track depth
 
-Dans le Perform Panel, un slider par track pour la depth. Pas un node qu'on connecte — une **vue projetée** du PerTrackDepth node.
+In the Perform Panel, one slider per track for depth. Not a node you connect — a **projected view** of the PerTrackDepth node.
 
 ---
 
-## ManualPositions — override de position
+## ManualPositions — position override
 
-### Le problème
+### The problem
 
-Le drag d'objets individuels dans le 3D view modifie `manualPositions`. C'est un override : la position manuelle remplace la position calculée, pour certains objets seulement.
+Dragging individual objects in the 3D view modifies `manualPositions`. It's an override: the manual position replaces the computed position, for certain objects only.
 
-### Solution : ManualPosition node
+### Solution: ManualPosition node
 
 ```rust
 NodeType::ManualPosition => {
-    // Pour chaque objet, si manual_position[i] existe, l'utiliser
-    // Sinon, garder la position calculée
+    // For each object, if manual_position[i] exists, use it
+    // Otherwise, keep the computed position
     let manual = manual_positions_ref.lock();  // Arc<Mutex<HashMap<usize, Vec3>>>
     Box::new(move |t, i, merged, macros, audio| {
         if let Some(manual_pos) = manual.get(&i) {
             *manual_pos  // override
         } else {
-            merged[i]  // position calculée
+            merged[i]  // computed position
         }
     })
 }
 ```
 
-Placé **après** le merge, **avant** l'output. L'utilisateur peut le bypass en le déconnectant.
+Placed **after** the merge, **before** the output. The user can bypass it by disconnecting it.
 
-### Interaction avec le 3D view
+### Interaction with the 3D view
 
-Quand l'utilisateur drag un objet dans le 3D view :
-1. La position est écrite dans `manual_positions_ref` (atomic, fast path)
-2. Le ManualPosition node la lit à la frame suivante
-3. L'objet saute à la position manuelle
-4. Pour "libérer" l'objet : retirer l'entry du HashMap → l'objet revient à la position calculée
+When the user drags an object in the 3D view:
+1. The position is written to `manual_positions_ref` (atomic, fast path)
+2. The ManualPosition node reads it at the next frame
+3. The object jumps to the manual position
+4. To "release" the object: remove the HashMap entry → the object returns to the computed position
 
 ---
 
-## AudioState — partagé entre workers et merge thread
+## AudioState — shared between workers and merge thread
 
-### Le problème
+### The problem
 
-Les engines audio (BPM, AudioAmplitude, AudioSpectrum) utilisent des closures qui capturent `Arc<Mutex<AudioState>>`. Les workers ont besoin d'AudioState pour ces engines. Le merge thread a besoin d'AudioState pour les AudioFalloff nodes du graph global.
+The audio engines (BPM, AudioAmplitude, AudioSpectrum) use closures capturing `Arc<Mutex<AudioState>>`. Workers need AudioState for these engines. The merge thread needs AudioState for the global graph's AudioFalloff nodes.
 
-### Solution : un seul AudioState partagé
+### Solution: one shared AudioState
 
 ```rust
 // AppState
-audio_state: Arc<Mutex<AudioState>>,  // un seul, partagé
+audio_state: Arc<Mutex<AudioState>>,  // one, shared
 
-// Chaque worker reçoit un clone du Arc
+// Each worker receives a clone of the Arc
 worker_runtime.set_audio_state(audio_state.clone());
 
-// Le merge thread reçoit aussi un clone
+// The merge thread also receives a clone
 merge_runtime.set_audio_state(audio_state.clone());
 ```
 
-Déjà le cas aujourd'hui (chaque runtime a un clone du Arc). **Pas de changement nécessaire.**
+Already the case today (each runtime has a clone of the Arc). **No change needed.**
 
 ---
 
 ## Cue system — adaptation
 
-### Cue snapshot étendu
+### Extended cue snapshot
 
 ```rust
 pub struct Cue {
-    // Actuel
-    pub graph: GraphJson,           // sub-graph du move
+    // Current
+    pub graph: GraphJson,           // move sub-graph
     pub macros: MacroSnapshot,      // macros (scale, rotation, shift)
     pub track_indices: Vec<usize>,
     pub fade_duration: f64,
     pub cue_number: String,
     
-    // Nouveau (Phase 2+)
-    pub global_graph: Option<GraphJson>,     // graph global (Transform nodes)
-    pub active_move_ids: Vec<String>,        // quels moves sont actifs
-    pub audio_mods: Option<AudioModSnapshot>, // audio mods (devenus nodes)
-    pub per_track_depths: Vec<f64>,          // depth per-track
-    pub manual_positions: HashMap<usize, [f64; 3]>, // overrides manuels
+    // New (Phase 2+)
+    pub global_graph: Option<GraphJson>,     // global graph (Transform nodes)
+    pub active_move_ids: Vec<String>,        // which moves are active
+    pub audio_mods: Option<AudioModSnapshot>, // audio mods (now nodes)
+    pub per_track_depths: Vec<f64>,          // per-track depth
+    pub manual_positions: HashMap<usize, [f64; 3]>, // manual overrides
 }
 ```
 
 ### Recall
 
-1. Désactiver les moves qui ne sont pas dans `active_move_ids`
-2. Activer les moves qui y sont (avec fade)
-3. Hot-swap le graph global si `global_graph` est présent
-4. Restaurer les macros (fast path atomic)
-5. Restaurer les per-track depths
-6. Restaurer les manual positions
+1. Deactivate moves not in `active_move_ids`
+2. Activate moves that are (with fade)
+3. Hot-swap the global graph if `global_graph` is present
+4. Restore macros (atomic fast path)
+5. Restore per-track depths
+6. Restore manual positions
 
 ---
 
-## Implications Backend
+## Backend Implications
 
 ### Compiler
 
-**Actuel** :
+**Current**:
 ```rust
 compile_graph(graph, audio) → PositionFn  // fn(t, i) → Vec3
 ```
 
-**Proposé** :
+**Proposed**:
 ```rust
-// Phase 1 : compiler chaque sub-graph indépendamment (inchangé)
+// Phase 1: compile each sub-graph independently (unchanged)
 compile_sub_graph(move_graph_a, audio) → PositionFn  // f_a
 compile_sub_graph(move_graph_b, audio) → PositionFn  // f_b
 
-// Phase 2 : compiler le graph global (post-processing)
+// Phase 2: compile the global graph (post-processing)
 compile_post_process(global_graph, audio, track_positions) → PostProcessFn
 // PostProcessFn: fn(t, merged_positions, &macros, &audio, &track_positions) → transformed_positions
 ```
 
-### Merge Node (nouveau)
+### Merge Node (new)
 
-Stratégies de merge :
-- `Override` : dernier move actif gagne
-- `Crossfade` : blend avec durée de fondu
-- `Blend` : moyenne pondérée
-- `Priority` : move avec priorité la plus haute gagne
-- `Spatial` : position la plus proche de l'origin gagne
+Merge strategies:
+- `Override`: last active move wins
+- `Crossfade`: blend with fade duration
+- `Blend`: weighted average
+- `Priority`: highest-priority move wins
+- `Spatial`: position closest to origin wins
 
-Le compiler a déjà Mix (blend), Group (split), Sequence (temporal), Crossfade (fade). Le Merge node généralise : au lieu de mixer 2 branches d'un même graph, il merge N sub-graphs indépendants.
+The compiler already has Mix (blend), Group (split), Sequence (temporal), Crossfade (fade). The Merge node generalizes: instead of mixing 2 branches of the same graph, it merges N independent sub-graphs.
 
-### Runtime — Architecture hybride
+### Runtime — Hybrid architecture
 
-**Actuel** : N `Runtime` indépendants avec threads + sockets séparés.
+**Current**: N independent `Runtime`s with separate threads + sockets.
 
-**Proposé** : N `Runtime` workers (sans OSC, sans post-processing spatial) + 1 `MergeRuntime`.
+**Proposed**: N `Runtime` workers (no OSC, no spatial post-processing) + 1 `MergeRuntime`.
 
 ```rust
-// Workers existants — modifiés minimalement
-// Le Runtime existant continue d'évaluer f(t,i) avec speed, loop, direction, phase_offset
-// Mais au lieu d'envoyer OSC + post-process spatial :
-// → écrit dans un buffer
+// Existing workers — minimally modified
+// The existing Runtime keeps evaluating f(t,i) with speed, loop, direction, phase_offset
+// But instead of sending OSC + spatial post-process:
+// → writes to a buffer
 struct PositionBuffer {
     positions: Mutex<Vec<(usize, Vector3<f64>)>>,
 }
 
-// Nouveau : MergeRuntime
+// New: MergeRuntime
 struct MergeRuntime {
     thread: Option<JoinHandle<()>>,
     running: Arc<AtomicBool>,
     socket: UdpSocket,
     osc_sender: Arc<Mutex<OscSender>>,
-    // Buffers par move (lock simple, ~200 bytes par buffer)
+    // Per-move buffers (simple lock, ~200 bytes per buffer)
     move_buffers: Arc<RwLock<HashMap<String, Arc<PositionBuffer>>>>,
     // Active moves with fade state
     active_moves: Arc<RwLock<HashMap<String, MoveState>>>,
     // Post-processing (compiled closure, atomic params)
     post_process_fn: Arc<Mutex<PostProcessFn>>,
-    // Macros = fast path (atomic, pas de recompilation)
-    // Seulement scale, rotation, shift, radius_scale, height_offset
-    // PAS speed (speed reste per-move dans les workers)
+    // Macros = fast path (atomic, no recompilation)
+    // Only scale, rotation, shift, radius_scale, height_offset
+    // NOT speed (speed stays per-move in workers)
     macros: Arc<MacroState>,
-    // Audio state partagé (workers + merge thread)
+    // Shared audio state (workers + merge thread)
     audio_state: Arc<Mutex<AudioState>>,
-    // Track positions depuis .hol (pour Barycenter node)
+    // Track positions from .hol (for Barycenter node)
     track_positions: Arc<RwLock<HashMap<u32, [f64; 3]>>>,
-    // Manual positions (pour ManualPosition node)
+    // Manual positions (for ManualPosition node)
     manual_positions: Arc<Mutex<HashMap<usize, [f64; 3]>>>,
-    // Origin global
+    // Global origin
     origin: Arc<Mutex<Vector3<f64>>>,
-    // OSC ids (tracks sélectionnées)
+    // OSC ids (selected tracks)
     osc_ids: Arc<RwLock<Vec<u32>>>,
     // Merge strategy
     merge_strategy: Arc<RwLock<MergeStrategy>>,
-    // Performance monitor global
+    // Global performance monitor
     perf: Arc<PerfMonitor>,
-    // Position callback (un seul event Tauri)
+    // Position callback (single Tauri event)
     position_callback: Arc<Mutex<Option<Box<dyn Fn(f64, &[(usize, Vector3<f64>)]) + Send + Sync>>>>,
 }
 
@@ -492,33 +492,33 @@ struct MoveState {
 }
 ```
 
-**Boucle du MergeRuntime** :
+**MergeRuntime loop**:
 ```rust
 loop {
-    // 1. Lire tous les buffers (latest frame)
+    // 1. Read all buffers (latest frame)
     let all_positions: HashMap<String, Vec<(usize, Vec3)>> = 
         move_buffers.iter().map(|(id, buf)| (id.clone(), buf.read())).collect();
     
-    // 2. Merge par track (résoudre conflits)
+    // 2. Merge by track (resolve conflicts)
     let merged = merge_strategy.resolve(&all_positions, &active_moves);
     
     // 3. Post-process (compiled closure, atomic params)
     //    Scale → Rotate → Shift → AudioMod → PerTrackDepth → ManualPos → Barycenter
     let transformed = post_process_fn(t, merged, &macros, &audio_state, &track_positions);
     
-    // 4. Séparer display vs OSC (preview mode)
-    let display_positions = transformed.clone();  // 3D voit tout
+    // 4. Separate display vs OSC (preview mode)
+    let display_positions = transformed.clone();  // 3D sees everything
     let osc_positions: Vec<_> = transformed.iter()
         .filter(|(i, _)| !is_preview(i))
-        .collect();  // OSC exclut les moves en preview
+        .collect();  // OSC excludes previewing moves
     
-    // 5. OSC output (une seule socket)
+    // 5. OSC output (single socket)
     for (i, pos) in &osc_positions {
         let osc_id = osc_ids[i];
         sender.send(osc_id, pos);
     }
     
-    // 6. Callback (un seul event Tauri)
+    // 6. Callback (single Tauri event)
     emit("global-positions", display_positions);
     
     // 7. Perf monitor
@@ -528,16 +528,16 @@ loop {
 }
 ```
 
-**Avantages** :
-- Workers en parallèle → engines complexes (Swarm O(n²)) ne bloquent pas les autres moves
-- Crash isolation → un worker crash, le merge skip son buffer, les autres continuent
-- Une seule socket → plus de conflits OSC
-- Macros spatiales appliquées **une fois** sur l'output merged
-- Speed reste per-move (dans les workers)
-- Un seul callback de position → frontend simplifié
-- Refactor minimal → les `Runtime` existants restent quasi-intacts
+**Advantages**:
+- Workers in parallel → complex engines (Swarm O(n²)) don't block other moves
+- Crash isolation → one worker crashes, the merge skips its buffer, others continue
+- Single socket → no more OSC conflicts
+- Spatial macros applied **once** on the merged output
+- Speed stays per-move (in workers)
+- Single position callback → simplified frontend
+- Minimal refactor → existing `Runtime`s stay quasi-intact
 
-### Buffer — lock simple, pas de double buffer
+### Buffer — simple lock, no double buffer
 
 ```rust
 struct PositionBuffer {
@@ -555,25 +555,25 @@ impl PositionBuffer {
 }
 ```
 
-Pour 9 objets (~200 bytes), la copie prend des nanoses. Pas de contention mesurable. Le double buffer front/back + swap est overkill pour ce volume de données. **Mutex simple suffit.**
+For 9 objects (~200 bytes), the copy takes nanoseconds. No measurable contention. The front/back double buffer + swap is overkill for this data volume. **Simple Mutex is enough.**
 
-### Fast path pour live control
+### Fast path for live control
 
-Les params des Transform nodes du graph global sont stockés dans des `Arc<AtomicU64>` (comme MacroState actuel). Le compiler lie ces refs dans la closure compilée. Changer un slider = update atomique, pas de recompilation.
+The params of the global graph's Transform nodes are stored in `Arc<AtomicU64>` (like the current MacroState). The compiler binds these refs into the compiled closure. Changing a slider = atomic update, no recompilation.
 
 ```
-Slider "Scale" → set_atomic(scale_ref, 1.5) → lu par la closure à chaque frame
+Slider "Scale" → set_atomic(scale_ref, 1.5) → read by the closure each frame
 ```
 
-**Speed** n'est **pas** un AtomicU64 global — il reste per-move dans le `RuntimeConfig` du worker.
+**Speed** is **not** a global AtomicU64 — it stays per-move in the worker's `RuntimeConfig`.
 
-### Post-processing parallèle (optionnel)
+### Optional parallel post-processing
 
-Le post-processing est **indépendant par objet** : Scale, Rotate, Shift appliqués à l'objet 0 ne dépendent pas de l'objet 1. Donc :
+Post-processing is **per-object independent**: Scale, Rotate, Shift applied to object 0 don't depend on object 1. So:
 
 ```rust
 let transformed: Vec<(usize, Vector3<f64>)> = merged
-    .par_iter()  // Rayon: parallèle automatique
+    .par_iter()  // Rayon: automatic parallel
     .map(|(i, pos)| {
         let scaled = pos * scale_atomic.load();
         let rotated = rot_matrix * scaled;
@@ -586,199 +586,199 @@ let transformed: Vec<(usize, Vector3<f64>)> = merged
     .collect();
 ```
 
-Pour 9 objets, Rayon peut paralléliser sur les cores disponibles. Mais honnêtement, le post-processing est si léger (mult/add) que la parallélisation n'apporte presque rien. **Le vrai gain de parallélisation est sur les worker threads** (engines complexes).
+For 9 objects, Rayon can parallelize across available cores. But honestly, post-processing is so light (mult/add) that parallelization brings almost nothing. **The real parallelization gain is on the worker threads** (complex engines).
 
-### Commands IPC
+### IPC Commands
 
-| Actuel | Proposé | Changement |
+| Current | Proposed | Change |
 |---|---|---|
-| `play_movement` | `activate_move` | Démarre worker + enregistre buffer |
-| `stop_movement` | `deactivate_move` | Fade out, retire buffer quand fini |
-| `stop_all_movements` | `deactivate_all_moves` | Fade out tous |
-| `set_macro` | `set_macro` (fast path) | Atomic, une seule fois (scale/rot/shift seulement) |
-| `set_movement_macro` | `set_move_speed` | Speed reste per-move |
+| `play_movement` | `activate_move` | Starts worker + registers buffer |
+| `stop_movement` | `deactivate_move` | Fade out, removes buffer when done |
+| `stop_all_movements` | `deactivate_all_moves` | Fade out all |
+| `set_macro` | `set_macro` (fast path) | Atomic, once (scale/rot/shift only) |
+| `set_movement_macro` | `set_move_speed` | Speed stays per-move |
 | `update_movement_graph` | `update_move_graph` | Hot-swap sub-graph (worker) |
 | — | `update_global_graph` | Hot-swap post-processing (merge) |
-| `set_audio_state` | `set_audio_state` | Inchangé (partagé workers + merge) |
-| — | `set_manual_position` | Override position d'un objet (drag 3D) |
-| — | `clear_manual_position` | Libérer un objet du override |
-| — | `set_track_positions` | Mettre à jour les positions .hol (pour Barycenter) |
+| `set_audio_state` | `set_audio_state` | Unchanged (shared workers + merge) |
+| — | `set_manual_position` | Override an object's position (3D drag) |
+| — | `clear_manual_position` | Release an object from override |
+| — | `set_track_positions` | Update .hol positions (for Barycenter) |
 
 ### Events
 
-| Actuel | Proposé |
+| Current | Proposed |
 |---|---|
 | `movement-positions-{id}` (N events) | `global-positions` (1 event) |
 | `movements-update` | `active-moves-update` |
 
 ---
 
-## Implications Frontend
+## Frontend Implications
 
 ### Node Editor
 
-Deux niveaux :
-- **Vue globale** : graph global avec MoveRef, Merge, Transform, AudioMod, PerTrackDepth, ManualPos, Barycenter, Output
-- **Vue sub-graph** : double-cliquer un MoveRef → ouvre le sub-graph du move
+Two levels:
+- **Global view**: global graph with MoveRef, Merge, Transform, AudioMod, PerTrackDepth, ManualPos, Barycenter, Output
+- **Sub-graph view**: double-click a MoveRef → opens the move's sub-graph
 
-React Flow : tabs (vue globale / vue sub-graph par move).
+React Flow: tabs (global view / per-move sub-graph view).
 
-**Souplesse** : un node `Scale` peut être placé dans le sub-graph (per-move) OU dans le graph global (post-merge). Même node, deux niveaux d'application.
+**Flexibility**: a `Scale` node can be placed in the sub-graph (per-move) OR in the global graph (post-merge). Same node, two application levels.
 
 ### Inspector
 
-- **Section Node** : params du node sélectionné
-- **Section Perform** : duration, direction, loop, fade, **speed** (per-move, reste ici)
-- **Section Tracks** : sélection + depth per-track
-- **Pas de section Macros globales** : macros spatiales = params de Transform nodes du graph global
-- **Pas de section Audio** : audio mods = nodes AudioFalloff
+- **Node section**: selected node's params
+- **Perform section**: duration, direction, loop, fade, **speed** (per-move, stays here)
+- **Tracks section**: selection + per-track depth
+- **No global Macros section**: spatial macros = Transform node params of the global graph
+- **No Audio section**: audio mods = AudioFalloff nodes
 
-### Perform Panel (nouveau)
+### Perform Panel (new)
 
-Vue sliders des params des nodes du graph global. Pour le live — pas de manipulation de nodes en concert.
+Slider view of the global graph node params. For live — no node manipulation in concert.
 
 ```
 Node Editor (design time)          Perform Panel (live time)
 ┌──────────────────────┐          ┌─────────────────────┐
-│ [Scale node]         │ ←même──→ │ Scale: ────●── 1.5  │
+│ [Scale node]         │ ←same──→ │ Scale: ────●── 1.5  │
 │ [Rotate node]        │ ←data──→ │ Yaw:    ──●──── 45° │
-│ [AudioFalloff node]  │ ←même──→ │ Amount: ──●──── 0.7 │
+│ [AudioFalloff node]  │ ←same──→ │ Amount: ──●──── 0.7 │
 │ [PerTrackDepth node] │ ←data──→ │ Depth:   ──●──── 0.8 │
 └──────────────────────┘          └─────────────────────┘
 ```
 
-**Intuitivité** : le musicien voit des sliders, pas des nodes. Mais derrière, ce sont les params des nodes du graph global. Deux vues, mêmes données.
+**Intuitiveness**: the musician sees sliders, not nodes. But underneath, they're the params of the global graph nodes. Two views, same data.
 
 ### State Management
 
 ```
-useGlobalGraphStore: globalNodes, globalEdges (graph global)
+useGlobalGraphStore: globalNodes, globalEdges (global graph)
 useMoveGraphStore: { [moveId]: { nodes, edges } } (sub-graphs)
-useMacroStore: macroValues (vue projetée depuis les Transform nodes du graph global)
-useSpeedStore: { [moveId]: speed } (per-move, reste séparé)
-useManualPositionsStore: { [objIdx]: [x, y, z] } (overrides manuels)
-// useAnimationStore → supprimé (audio mods = nodes, depth = PerTrack node)
+useMacroStore: macroValues (projected view from the global graph's Transform nodes)
+useSpeedStore: { [moveId]: speed } (per-move, stays separate)
+useManualPositionsStore: { [objIdx]: [x, y, z] } (manual overrides)
+// useAnimationStore → removed (audio mods = nodes, depth = PerTrack node)
 ```
 
 ### Visualizer
 
-Un seul callback avec positions déjà mergées et transformées. Render loop simplifié — plus besoin de merger côté frontend.
+A single callback with already-merged and transformed positions. Simplified render loop — no more frontend-side merging.
 
-**ManualPositions** : le drag dans le 3D view écrit dans `useManualPositionsStore` → invoke `set_manual_position` → le ManualPosition node l'applique. L'objet reste à sa position manuelle jusqu'à ce qu'on le "libère" (clear_manual_position).
+**ManualPositions**: the drag in the 3D view writes to `useManualPositionsStore` → invoke `set_manual_position` → the ManualPosition node applies it. The object stays at its manual position until "released" (clear_manual_position).
 
 ### MovesTable
 
-Plus simple : juste template + tracks + play/stop + **speed** (per-move). Macros spatiales et audio mods montent dans le graph global.
+Simpler: just template + tracks + play/stop + **speed** (per-move). Spatial macros and audio mods move up to the global graph.
 
 ---
 
-## Ce qui casse / ce qui est difficile
+## What breaks / what's hard
 
-### Ce qui casse
+### What breaks
 
-1. **Indépendance des movements** : partiellement résolu. Un worker crash → merge skip, autres continuent. Mais si le merge thread crash → tout s'arrête. Mitigation : watchdog + restart du merge thread uniquement.
+1. **Movement independence**: partially resolved. A worker crash → merge skips it, others continue. But if the merge thread crashes → everything stops. Mitigation: watchdog + restart of the merge thread only.
 
-2. **Per-movement macros spatiales** : les macros spatiales (scale, rotation, shift) deviennent globales (appliquées par le merge thread). Mais : les transforms per-move peuvent être des nodes dans le sub-graph (compilés, évalués par le worker). **Souplesse préservée.**
+2. **Per-movement spatial macros**: spatial macros (scale, rotation, shift) become global (applied by the merge thread). But: per-move transforms can be nodes in the sub-graph (compiled, evaluated by the worker). **Flexibility preserved.**
 
-3. **Preview mode per-movement** : géré au niveau du merge thread. Le worker écrit dans le buffer quoi qu'il arrive. Le merge thread sépare display positions (tout) de OSC positions (exclut preview). Le 3D voit le move en preview, l'OSC ne l'envoie pas.
+3. **Per-movement preview mode**: handled at the merge thread level. The worker writes to the buffer regardless. The merge thread separates display positions (everything) from OSC positions (excludes preview). The 3D sees the previewing move, OSC doesn't send it.
 
-4. **Setlist workflow** : le setlist déclenche des activations de MoveRef en séquence. Un cue recall peut activer/désactiver des moves + swapper le graph global.
+4. **Setlist workflow**: the setlist triggers MoveRef activations in sequence. A cue recall can activate/deactivate moves + swap the global graph.
 
-5. **Latence buffer** : 0-1 frame de latence ajoutée (16ms max). Acceptable pour du spatial, mais à documenter.
+5. **Buffer latency**: 0-1 frame of added latency (16ms max). Acceptable for spatial, but to document.
 
-6. **OSC profile globalisé** : actuellement per-movement (host/port/profile). En global, un seul receiver. En pratique, on envoie toujours au même receiver (Holophonix). Si on veut plusieurs receivers, il faudra un routing node dans le graph global (Phase 3+).
+6. **Globalized OSC profile**: currently per-movement (host/port/profile). In global, a single receiver. In practice, we always send to the same receiver (Holophonix). If we want multiple receivers, we'd need a routing node in the global graph (Phase 3+).
 
-### Ce qui est difficile
+### What's hard
 
-1. **Compilation du graph global en temps réel** : post-processing simple (mult/add), compilation rapide (<1ms). Hot-swap avec crossfade.
+1. **Real-time global graph compilation**: simple post-processing (mult/add), fast compilation (<1ms). Hot-swap with crossfade.
 
-2. **UI de nested graphs** : React Flow ne supporte pas nativement le nesting. Tabs ou sub-patches avec double-clic.
+2. **Nested graphs UI**: React Flow doesn't natively support nesting. Tabs or sub-patches with double-click.
 
-3. **Migration des données existantes** : moveSlots actuels ont macros + audio mods. Script de migration → créer des Transform nodes dans le graph global avec les valeurs du slot. Speed reste dans le slot.
+3. **Existing data migration**: current moveSlots have macros + audio mods. Migration script → create Transform nodes in the global graph with the slot's values. Speed stays in the slot.
 
-4. **Fast path pour live control** : params des Transform nodes en `Arc<AtomicU64>`. Compiler lie les refs. Slider = update atomique.
+4. **Fast path for live control**: Transform node params in `Arc<AtomicU64>`. Compiler binds the refs. Slider = atomic update.
 
-5. **Gestion des workers** : démarrage/arrêt propre, gestion des crashes, timeout si un worker est trop lent.
+5. **Worker management**: clean start/stop, crash handling, timeout if a worker is too slow.
 
-6. **Per-track parameters dans le graph** : PerTrackDepth node doit indexer par object_index. L'UI expose un slider par track dans le Perform Panel.
+6. **Per-track parameters in the graph**: PerTrackDepth node must index by object_index. The UI exposes one slider per track in the Perform Panel.
 
-7. **ManualPositions sync** : le drag 3D écrit dans le store → invoke → atomic update → le node lit à la frame suivante. Pas de recompilation. Mais : si le graph global n'a pas de ManualPosition node, le drag ne fait rien. Il faut soit toujours inclure un ManualPosition node (default), soit le créer automatiquement.
+7. **ManualPositions sync**: the 3D drag writes to the store → invoke → atomic update → the node reads at the next frame. No recompilation. But: if the global graph has no ManualPosition node, the drag does nothing. Either always include a ManualPosition node (default), or auto-create it.
 
 ---
 
-## Phases d'implémentation
+## Implementation phases
 
-### Phase 1 : Merge Node + MergeRuntime (court terme)
+### Phase 1: Merge Node + MergeRuntime (short term)
 
-**Objectif** : résoudre les conflits OSC, paralléliser les engines, poser les fondations.
+**Goal**: resolve OSC conflicts, parallelize engines, lay foundations.
 
-**Changements** :
-- Workers existants modifiés : retirer OSC + post-processing spatial, écrire dans buffer
-- Nouveau `MergeRuntime` : lit buffers, merge, applique macros spatiales (encore externes), envoie OSC
-- Une seule socket, un seul event de position
-- Speed, loop, direction, phase_offset restent dans les workers
-- Les macros spatiales restent externes (pour l'instant)
+**Changes**:
+- Existing workers modified: remove OSC + spatial post-processing, write to buffer
+- New `MergeRuntime`: reads buffers, merges, applies spatial macros (still external), sends OSC
+- Single socket, single position event
+- Speed, loop, direction, phase_offset stay in workers
+- Spatial macros stay external (for now)
 
-**Inchangé** :
+**Unchanged**:
 - UI (MovesTable, Inspector, Node Editor)
-- Sub-graphs compilés indépendamment
-- Macros spatiales = sliders (fast path atomic dans le MergeRuntime)
+- Sub-graphs compiled independently
+- Spatial macros = sliders (atomic fast path in MergeRuntime)
 
-**Bénéfice** : plus de conflits OSC, engines en parallèle, crash isolation.
+**Benefit**: no more OSC conflicts, parallel engines, crash isolation.
 
-### Phase 2 : Post-processing graph (moyen terme)
+### Phase 2: Post-processing graph (medium term)
 
-**Objectif** : unifier macros spatiales + audio mods + depth + origin + manual positions dans le graph.
+**Goal**: unify spatial macros + audio mods + depth + origin + manual positions in the graph.
 
-**Changements** :
-- Macros spatiales → Transform nodes dans un graph global
-- Audio mods → AudioFalloff nodes dans le graph global
-- Depth → PerTrackDepth node dans le graph global
-- Origin → Barycenter node dans le graph global
-- ManualPositions → ManualPosition node dans le graph global
-- Le MergeRuntime n'a plus de chaîne hardcoded — tout est dans PostProcessFn
-- Speed reste per-move (dans les workers, pas dans le graph global)
+**Changes**:
+- Spatial macros → Transform nodes in a global graph
+- Audio mods → AudioFalloff nodes in the global graph
+- Depth → PerTrackDepth node in the global graph
+- Origin → Barycenter node in the global graph
+- ManualPositions → ManualPosition node in the global graph
+- The MergeRuntime no longer has a hardcoded chain — everything is in PostProcessFn
+- Speed stays per-move (in workers, not in the global graph)
 
-**Inchangé** :
-- Sub-graphs (moves) compilés indépendamment par les workers
-- Fast path (AtomicU64) pour params live
-- Speed, loop, direction, phase_offset dans les workers
+**Unchanged**:
+- Sub-graphs (moves) compiled independently by workers
+- Fast path (AtomicU64) for live params
+- Speed, loop, direction, phase_offset in workers
 
-**Bénéfice** : ordre configurable, transformations composables, audio mods unifiés, per-track ou global au choix.
+**Benefit**: configurable order, composable transformations, unified audio mods, per-track or global at choice.
 
-### Phase 3 : Unified graph (long terme)
+### Phase 3: Unified graph (long term)
 
-**Objectif** : tout est graph, nested editor, MoveRef nodes.
+**Goal**: everything is graph, nested editor, MoveRef nodes.
 
-**Changements** :
-- MoveRef nodes dans le graph global
+**Changes**:
+- MoveRef nodes in the global graph
 - Nested graph editor (sub-patches)
-- Perform Panel (vue sliders des nodes)
-- Suppression de la distinction move graph / global graph
-- Cue system étendu (snapshot du graph global + moves actifs)
+- Perform Panel (slider view of nodes)
+- Removal of the move graph / global graph distinction
+- Extended cue system (global graph snapshot + active moves)
 
-**Bénéfice** : système unifié, tout est graph, comme Max/PureData mais compilé pour les engines.
+**Benefit**: unified system, everything is graph, like Max/PureData but compiled for engines.
 
 ---
 
-## Référence : Sweet Spot Hybride
+## Reference: Hybrid Sweet Spot
 
 ```
-TOUT COMPILÉ ←─────────────────────────────→ TOUT INTERPRÉTÉ
+ALL COMPILED ←─────────────────────────────→ ALL INTERPRETED
                                                         (Max/PD)
      │                                        │
      │    ┌───────────────────────────────┐   │
-     │    │ SWEET SPOT HYBRIDE            │   │
-     │    │ • Engines compilés (f(t,i))   │   │
-     │    │ • Workers parallèles          │   │
+     │    │ HYBRID SWEET SPOT             │   │
+     │    │ • Compiled engines (f(t,i))   │   │
+     │    │ • Parallel workers            │   │
      │    │ • Speed/loop/dir per-move     │   │
-     │    │ • Post-processing interprété  │   │
-     │    │ • Fast path pour live (atomic)│   │
-     │    │ • Merge explicite (1 thread)  │   │
+     │    │ • Interpreted post-processing │   │
+     │    │ • Fast path for live (atomic) │   │
+     │    │ • Explicit merge (1 thread)   │   │
      │    │ • Crash isolation             │   │
-     │    │ • Per-track ou global au choix│   │
+     │    │ • Per-track or global, choice │   │
      │    └───────────────────────────────┘   │
      │                                        │
-  Stagespace actuel                       Stagespace proposé
-  (trop compilé, macros externes)        (sweet spot hybride)
+  Current Stagespace                     Proposed Stagespace
+  (too compiled, external macros)        (hybrid sweet spot)
 ```

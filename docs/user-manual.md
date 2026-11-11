@@ -1,446 +1,451 @@
-# Manuel utilisateur — STAGESPACE
+# User manual — STAGESPACE
 
-Moteur de **trajectoires et de position spatiale** : STAGESPACE ne produit pas de
-son — il envoie en OSC les positions, canaux et modulations de vos objets audio
-vers un renderer externe (Holophonix, SPAT Revolution, IEM, ADM-OSC, ou tout
-récepteur OSC).
+A **spatial trajectory and position engine**: STAGESPACE produces no
+sound — it sends the positions, channels and modulations of your audio
+objects over OSC to an external renderer (Holophonix, SPAT Revolution,
+IEM, ADM-OSC, or any OSC receiver).
 
 ```
-Graphe de nœuds → moteurs f(t) → merge 60fps → OSC → renderer → enceintes
+Node graph → f(t) engines → 60fps merge → OSC → renderer → speakers
 ```
 
 ---
 
-## 1. Premiers pas
+## 1. Getting started
 
 ### Welcome
 
-Au premier lancement, STAGESPACE propose de charger le **show d'exemple** ou de
-partir de zéro. Le lexique du show est affiché d'emblée — retenez ces 4 mots :
+On first launch, STAGESPACE offers to load the **example show** or to
+start from scratch. The show lexicon is displayed right away — remember
+these 4 words:
 
-| Mot | Signification |
+| Term | Meaning |
 |-----|---------------|
-| **Template** | une forme de trajectoire (Circle, Spiral, Physics…) |
-| **Move** | un template + des tracks assignées + des paramètres |
-| **Setlist** | vos moves ordonnés — GO avance dedans |
-| **Cue** | un snapshot que vous rappellez en live (Shift+Enter) |
+| **Template** | a trajectory shape (Circle, Spiral, Physics…) |
+| **Move** | a template + assigned tracks + parameters |
+| **Setlist** | your ordered moves — GO advances through it |
+| **Cue** | a snapshot you recall live (Shift+Enter) |
 
 ![Welcome](screenshots/01-welcome.png)
 
-### Configuration minimale
+### Minimal setup
 
-1. Importez votre projet **`.hol`** (bouton *Import .hol* dans la toolbar) pour
-   peupler les tracks — ou définissez des **OSC ids manuels** dans Settings.
-2. Configurez **OSC out** : adresse, port, profil du renderer
-   (Holophonix / Spat / IEM / ADM / générique XYZ / générique AED).
-3. Les positions partent à **60 fps** dès qu'un move tourne.
+1. Import your **`.hol`** project (*Import .hol* button in the toolbar) to
+   populate the tracks — or define **manual OSC ids** in Settings.
+2. Configure **OSC out**: address, port, renderer profile
+   (Holophonix / Spat / IEM / ADM / generic XYZ / generic AED).
+3. Positions stream at **60 fps** as soon as a move is playing.
 
 ---
 
-## 2. Les surfaces
+## 2. The surfaces
 
-STAGESPACE est organisé en une **vue live de base** (Perform) et deux
-**surfaces de focus** plein écran (Busking, Conduite), plus la **fenêtre
-conduite détachable**. Le mode **Edit** sert à la préparation.
+STAGESPACE is organized around a **base live view** (Perform) and two
+**full-screen focus surfaces** (Busking, Conduite), plus the
+**detachable conduite window**. **Edit** mode is for preparation.
 
-### 2.1 Perform — la vue live de base
+### 2.1 Perform — the base live view
 
-![Surface Jeu](screenshots/12-jeu.png)
+![Play surface](screenshots/12-jeu.png)
 
-| Zone | Rôle |
+| Zone | Role |
 |------|------|
-| Topbar | PLAY ▶ (slot armé) · GO (setlist) · BUSKING · ⧉ · CONDUITE · LIVE · **PANIC** |
-| Colonne gauche | **Setlist** (GO avance ici) + **Layers** (parallèle) + **Cues** |
-| Centre | Preview 3D — orbite drag, zoom scroll, boutons *Manipulate* / *Assign* |
-| Onglets bas | Params · Playback · Tracks · Audio · OSC IN · Global |
-| StatusBar | statut · **LIVE/DRY-RUN** · **BACKEND ✕** · perf · erreurs · destination OSC |
+| Topbar | PLAY ▶ (armed slot) · GO (setlist) · BUSKING · ⧉ · CONDUITE · LIVE · **PANIC** |
+| Left column | **Setlist** (GO advances here) + **Layers** (parallel) + **Cues** |
+| Center | 3D preview — orbit drag, scroll zoom, *Manipulate* / *Assign* buttons |
+| Bottom tabs | Params · Playback · Tracks · Audio · OSC IN · Global |
+| StatusBar | status · **LIVE/DRY-RUN** · **BACKEND ✕** · perf · errors · OSC destination |
 
-- **PLAY ▶** affiche le move armé — tap = lancer, re-tap = stop.
-- **GO** avance la setlist en crossfade ; les layers jouent en parallèle.
-- La cue list partage la colonne avec la setlist — click = **arm**, double-click
-  = **recall** (jamais de recall en un clic).
-- **Cue** affichée dans la topbar : `Cue n → suivante armée`.
+- **PLAY ▶** shows the armed move — tap = launch, tap again = stop.
+- **GO** advances the setlist with a crossfade; layers play in parallel.
+- The cue list shares the column with the setlist — click = **arm**,
+  double-click = **recall** (never a single-click recall).
+- **Cue** shown in the topbar: `Cue n → next armed`.
 
-![Jeu — slot live + radar](screenshots/14-jeu-live-radar.png)
+![Play — live slot + radar](screenshots/14-jeu-live-radar.png)
 
-### 2.2 Edit — la préparation
+### 2.2 Edit — the preparation
 
 ![Edit](screenshots/03-edit.png)
 
-- **Toolbar** (zonée) : setup (Import .hol, OSC out) · édition (undo/redo,
-  save/load show .hfg) · **sécurité live à droite** (LIVE + PANIC).
-- **Colonne SHOW** : onglets Moves / Cues / FX — bibliothèque de templates
-  (ORBITS, GESTURES, …) en dessous.
-- **Canvas 3D** central.
-- **Inspector** (droite) : PARAMS, PERFORM (duration/fades/loop), MACROS,
-  AUDIO, TRACKS (sélection par patterns : All / None / 1 of 2 / Odd /
+- **Toolbar** (zoned): setup (Import .hol, OSC out) · editing (undo/redo,
+  save/load .hfg show) · **live safety on the right** (LIVE + PANIC).
+- **SHOW column**: Moves / Cues / FX tabs — template library
+  (ORBITS, GESTURES, …) below.
+- **3D canvas** in the center.
+- **Inspector** (right): PARAMS, PERFORM (duration/fades/loop), MACROS,
+  AUDIO, TRACKS (pattern selection: All / None / 1 of 2 / Odd /
   Inverse / 1st half / 2nd half…).
 
-### 2.3 Créer un move
+### 2.3 Creating a move
 
 ![Move + Inspector](screenshots/03-edit.png)
 
-`+ Move` crée un slot — choisissez un **template** (gauche), assignez des
-**tracks** (grille numérotée), réglez les **params** et les **fades**
-(fade in/out du slot), puis `▶ PLAY · Move n`.
+`+ Move` creates a slot — pick a **template** (left), assign **tracks**
+(numbered grid), set the **params** and **fades** (slot fade in/out),
+then `▶ PLAY · Move n`.
 
-### 2.4 Expert — l'éditeur de graphe
+### 2.4 Expert — the graph editor
 
-![Éditeur de nœuds](screenshots/05-node-editor.png)
+![Node editor](screenshots/05-node-editor.png)
 
-Le toggle **Expert/Simple** ouvre le node editor :
+The **Expert/Simple** toggle opens the node editor:
 
-- **Tabs** : `Move graph` (le graphe du slot édité) · `Global FX` (post-traitement
-  global) · `Modulation` (graphe signal).
-- **Palette** (gauche) : nodes par catégorie — clic pour ajouter, ou
-  **drag vers le canvas** (posé au curseur ; **déposé sur un fil = inséré
-  dans la chaîne**). **Ctrl+K** quick-add, clic-droit sur un node du
-  canvas = exemples runnables.
-- **Canvas** : connexions par drag entre ports — **inputs en haut, outputs
-  en bas** (convention Max/MSP). Légende `Ports` en haut à gauche, minimap
-  en bas. Un node sélectionné s'édite dans l'Inspector (section NODE).
-  **Double-clic sur le titre d'un node = renommer l'instance** (le nom est
-  documentaire — persisté dans le show, ignoré du backend).
-- **Wire-drop → quick-add** : lâcher un fil sur le canvas vide ouvre le
-  quick-add **filtré au type de port du fil** — le node choisi est posé au
-  point de drop et déjà câblé (geste plugdata). Marche dans les deux sens
-  (tiré depuis une sortie ou une entrée). Exception : tirer le fil d'une
-  **entrée déjà câblée** et le lâcher dans le vide **supprime la
-  connexion** (« tirer le cable », sémantique Max).
-- **Autopatch** : trois façons d'insérer `A → M → B` — edge sélectionnée +
-  clic palette, **drag palette déposé sur le fil**, ou **double-clic sur
-  le fil** (quick-add filtré aux types des deux bouts, inséré au point
-  du clic).
-- **Reconnect** : re-tirer le endpoint d'une edge la déplace vers une
-  nouvelle cible — lâché sur le vide, il **supprime** l'edge.
-- **Wire-cutting** : **Alt+drag à travers les fils les coupe** (curseur
-  crosshair quand Alt est maintenu).
-- **Delete-heal** : supprimer un node mid-chain (`Delete` ou cut) **recoud
-  ses voisins** `A → B` quand les types de port correspondent — sémantique
-  plugdata. Nodes à plusieurs entrées/sorties ou types incompatibles :
-  coupure franche.
-- **Frames** : le bouton `▭ + Frame` (footer palette) pose un **cadre
-  d'annotation** — déplaçable, redimensionnable (poignées à la sélection),
-  renommable au double-clic du titre. UI-only : jamais envoyé au moteur
-  (filtré de toute sérialisation backend) mais **persisté dans le show**
-  — le cadre survit au save/reload.
-- **Clipboard** : `Ctrl+C/X/V` copy/cut/paste des nodes sélectionnés (avec
-  leurs edges internes — paste possible dans un autre tab), `Ctrl+D`
-  duplicate.
-- **Undo/redo** : `Ctrl+Z` / `Ctrl+Y` dans **les 3 tabs** — l'historique
-  des graphes Global FX et Modulation fusionne les bursts (drag continu =
-  une entrée), cap 50.
-- **Diagnostics** : le badge erreurs/warnings en haut à droite liste les
-  problèmes du graphe — **cliquer une issue focus et sélectionne le node**
-  coupable sur le canvas.
-- **Save** sauvegarde le graphe dans le slot — hot-swap : si le move tourne,
-  le nouveau graphe remplace l'ancien en fondu.
+- **Tabs**: `Move graph` (the edited slot's graph) · `Global FX` (global
+  post-processing) · `Modulation` (signal graph).
+- **Palette** (left): nodes by category — click to add, or **drag to the
+  canvas** (dropped at the cursor; **dropped on a wire = spliced into the
+  chain**). **Ctrl+K** quick-add, right-click a node on the canvas =
+  runnable examples.
+- **Canvas**: drag connections between ports — **inputs on top, outputs
+  on the bottom** (Max/MSP convention). `Ports` legend top-left, minimap
+  bottom-right. A selected node edits in the Inspector (NODE section).
+  **Double-click a node's title = rename the instance** (the name is
+  documentary — persisted in the show, ignored by the backend).
+- **Wire-drop → quick-add**: dropping a wire on empty canvas opens the
+  quick-add **filtered to the wire's port type** — the chosen node is
+  placed at the drop point, already wired (plugdata gesture). Works both
+  ways (dragged from an output or an input). Exception: pulling a wire
+  off an **already-wired input** and dropping it on empty space
+  **removes the connection** ("pulling the cable", Max semantics).
+- **Autopatch**: three ways to insert `A → M → B` — selected edge +
+  palette click, **palette drop onto a wire**, or **double-click a wire**
+  (quick-add filtered to both endpoint types, inserted at the click
+  point).
+- **Reconnect**: dragging an edge endpoint moves it to a new target —
+  dropped on empty space, it **removes** the edge.
+- **Wire-cutting**: **Alt+drag across wires cuts them** (crosshair
+  cursor while Alt is held).
+- **Delete-heal**: deleting a mid-chain node (`Delete` or cut)
+  **re-heals its neighbours** `A → B` when the port types match —
+  plugdata semantics. Nodes with multiple inputs/outputs or incompatible
+  types: clean cut.
+- **Frames**: the `▭ + Frame` button (palette footer) places an
+  **annotation frame** — movable, resizable (handles when selected),
+  renamable by double-clicking its title. UI-only: never sent to the
+  engine (filtered from every backend payload) but **persisted in the
+  show** — the frame survives save/reload.
+- **Clipboard**: `Ctrl+C/X/V` copy/cut/paste selected nodes (with their
+  internal edges — paste works in another tab), `Ctrl+D` duplicate.
+- **Undo/redo**: `Ctrl+Z` / `Ctrl+Y` in **all 3 tabs** — the Global FX
+  and Modulation histories merge bursts (a continuous drag = one
+  entry), cap 50.
+- **Diagnostics**: the errors/warnings badge top-right lists the graph's
+  problems — **clicking an issue focuses and selects the offending
+  node** on the canvas.
+- **Save** stores the graph in the slot — hot-swap: if the move is
+  playing, the new graph replaces the old one with a fade.
 
-### 2.5 Jeu — pads busking
+### 2.5 Jeu — busking pads
 
-![Jeu — pads live](screenshots/14-jeu-live-radar.png)
+![Play — live pads](screenshots/14-jeu-live-radar.png)
 
-La surface **Jeu** est le busking : pads numérotés `#n`
-(= `oscIndex` stable — ne change pas au réordonnancement), setlist à
-gauche, radar 2D à droite.
+The **Jeu** surface is busking: numbered pads `#n`
+(= stable `oscIndex` — doesn't change on reordering), setlist on the
+left, 2D radar on the right.
 
-- **Tap** = play/stop · **hold ≥350 ms** = bump momentané (joue tant que tenu)
-- **S** = solo · `/stagespace/slot <n>` · `/solo` · `/unsolo` depuis la console
-- Fades propres à chaque slot (configurés en Edit/PERFORM)
+- **Tap** = play/stop · **hold ≥350 ms** = momentary bump (plays while held)
+- **S** = solo · `/stagespace/slot <n>` · `/solo` · `/unsolo` from the console
+- Per-slot fades (configured in Edit/PERFORM)
 
-### 2.6 Conduite — la vue FOH
+### 2.6 Conduite — the FOH view
 
-![Conduite — cue armée + log OSC](screenshots/15-conduite-armed.png)
+![Conduite — armed cue + OSC log](screenshots/15-conduite-armed.png)
 
-Bouton **CONDUITE** : NOW (cue courante, amber), NEXT (armée), *then*,
-timers `pre_wait`/`follow`, TC, statut. Le transport **Prev | GO | Next |
-PANIC** en bas — `GO` = crossfade setlist, `Prev/Next` = recall cue.
+**CONDUITE** button: NOW (current cue, amber), NEXT (armed), *then*,
+`pre_wait`/`follow` timers, TC, status. The **Prev | GO | Next |
+PANIC** transport at the bottom — `GO` = setlist crossfade, `Prev/Next`
+= cue recall.
 
-### 2.7 Conduite détachable — le second écran
+### 2.7 Detachable conduite — the second screen
 
-![Conduite détachée](screenshots/10-conduite-detached.png)
+![Detached conduite](screenshots/10-conduite-detached.png)
 
-Bouton **⧉** : la même conduite dans une **fenêtre dédiée** pour un écran FOH
-séparé. Si la fenêtre principale ne broadcast pas encore, la page affiche
-**« WAITING FOR MAIN WINDOW… »** — pas de page blanche. Chips DRY-RUN /
-PARKED / CONSOLE / TC identiques à l'overlay.
+**⧉** button: the same conduite in a **dedicated window** for a separate
+FOH screen. If the main window isn't broadcasting yet, the page shows
+**"WAITING FOR MAIN WINDOW…"** — no blank page. DRY-RUN / PARKED /
+CONSOLE / TC chips identical to the overlay.
 
 ---
 
-## 3. Deux façons de travailler
+## 3. Two ways of working
 
-### A. Conduite console — l'ingé pilote depuis sa console
+### A. Console conduite — the engineer drives from their console
 
-La console émet des commandes OSC `/stagespace/*` ; STAGESPACE chasse.
-Le laptop sert au soundcheck et à la surveillance — pas à piloter en live.
+The console emits `/stagespace/*` OSC commands; STAGESPACE follows.
+The laptop is for soundcheck and monitoring — not for live driving.
 
 ```
-Snapshot console → OSC → STAGESPACE exécute la cue
-                           ↘ feedback → ack/nack + cue courante
+Console snapshot → OSC → STAGESPACE executes the cue
+                           ↘ feedback → ack/nack + current cue
 ```
 
-- **Voyant CONSOLE ●** : vert = dernière commande show-control < 5 s — le lien
-  console se voit à l'œil.
-- **NACK** : toute commande refusée (`busy`, `not-found`) est renvoyée à
-  l'expéditeur — la console sait quand quelque chose n'a pas été exécuté.
-- Docs d'intégration : `docs/console-integration.md`.
+- **CONSOLE ● indicator**: green = last show-control command < 5 s — the
+  console link is visible at a glance.
+- **NACK**: any refused command (`busy`, `not-found`) is sent back to the
+  sender — the console knows when something wasn't executed.
+- Integration docs: `docs/console-integration.md`.
 
-### B. Busking — concert non-timecodé, à l'inspiration
+### B. Busking — non-timecoded concert, on inspiration
 
-Les slots se préparent à la balance, se tirent au numéro ou au doigt.
+Slots are prepared at soundcheck, fired by number or by finger.
 
-- **Layers** : les moves jouent en parallèle — superposez un essaim sur une orbite.
-- **UNSOLO** : rejoue les slots coupés par le dernier solo.
-- **STOP ALL** : coupe tous les moves en fondu (moins brutal que PANIC).
-- **Expression live** : macros (scale/shift/rotation/speed), positions manuelles,
-  faders externes via OSC-IN mappings.
-
----
-
-## 4. Les cues en détail
-
-- **Full** = remplace tout l'état (moves, canaux, graphes, macros, mappings).
-- **Tracking** = merge par index objet — ne touche que ce qui est enregistré
-  dans la cue (scope par catégories). Ne stoppe jamais les moves non listés.
-- `pre_wait` : attente avant exécution (affichée en compte à rebours).
-- `follow` : enchaînement automatique sur la cue suivante.
-- `timecode` : la cue se déclenche quand le TC arrive (fps 24/25/30, TC-originated
-  skips le pre_wait).
-- **Arm** : click simple = arme ; le recall va sur l'armée (ou la suivante).
+- **Layers**: moves play in parallel — overlay a swarm on an orbit.
+- **UNSOLO**: replays the slots stopped by the last solo.
+- **STOP ALL**: stops all moves with a fade (less brutal than PANIC).
+- **Live expression**: macros (scale/shift/rotation/speed), manual
+  positions, external faders via OSC-IN mappings.
 
 ---
 
-## 5. Gestes spatiaux & expression live
+## 4. Cues in detail
 
-Commandes d'expression directe — utilisables depuis la console ou le busking :
+- **Full** = replaces the whole state (moves, channels, graphs, macros,
+  mappings).
+- **Tracking** = merges by object index — only touches what's recorded in
+  the cue (scope by categories). Never stops unlisted moves.
+- `pre_wait`: wait before execution (shown as a countdown).
+- `follow`: automatic chaining to the next cue.
+- `timecode`: the cue fires when the TC arrives (fps 24/25/30,
+  TC-originated skips the pre_wait).
+- **Arm**: single click = arm; the recall goes to the armed cue (or the
+  next one).
 
-| Message | Effet |
+---
+
+## 5. Spatial gestures & live expression
+
+Direct expression commands — usable from the console or busking:
+
+| Message | Effect |
 |---------|-------|
-| `/stagespace/throw <obj> <vx> <vy> <vz>` | lance l'objet *obj* avec une vélocité (balistique — il dérive et revient) |
-| `/stagespace/spatial <k>` | compresseur spatial global : `k<1` resserre le champ, `k>1` l'étend — geste live |
-| `/stagespace/attention <obj>` | fige tous les autres objets — un seul bouge (*change blindness*) ; `/attention/clear` libère |
-| `/stagespace/gesture <name> [strength]` | geste composé en une commande : `explode` · `converge` · `orbit` · `front` — vélocité calculée par objet |
-| `/stagespace/soundcheck [stop]` | sonde cyclique des objets (passe chaque track en revue — vérification des canaux) |
-| `/stagespace/rehearsal <action>` | mode répétition & pos-tape — alias `/stagespace/record` (voir ci-dessous) |
+| `/stagespace/throw <obj> <vx> <vy> <vz>` | throws object *obj* with a velocity (ballistic — it drifts and comes back) |
+| `/stagespace/spatial <k>` | global spatial compressor: `k<1` tightens the field, `k>1` expands it — live gesture |
+| `/stagespace/attention <obj>` | freezes all other objects — a single one moves (*change blindness*); `/attention/clear` releases |
+| `/stagespace/gesture <name> [strength]` | composed gesture in one command: `explode` · `converge` · `orbit` · `front` — velocity computed per object |
+| `/stagespace/soundcheck [stop]` | cyclic object probe (walks through each track — channel check) |
+| `/stagespace/rehearsal <action>` | rehearsal & pos-tape mode — alias `/stagespace/record` (see below) |
 
-![Geste explode](screenshots/16-gesture-explode.png) ![Stase attention](screenshots/17-attention.png)
+![Explode gesture](screenshots/16-gesture-explode.png) ![Attention stasis](screenshots/17-attention.png)
 
-**Pos-tape** (`/stagespace/rehearsal <action>`) — enregistrement/rejeu de positions :
+**Pos-tape** (`/stagespace/rehearsal <action>`) — position recording/replay:
 
-- `record` — capture les positions émises @30 Hz (jeu simulé sans acteurs)
-- `stop` — arrête la capture
-- `play` — rejoue la bande au rythme réel (injectée dans le merge)
-- `export` — exporte la bande en `.sstape.json`
+- `record` — captures emitted positions @30 Hz (simulated play without actors)
+- `stop` — stops the capture
+- `play` — replays the tape at real pace (injected into the merge)
+- `export` — exports the tape as `.sstape.json`
 
-## 6. Contrôles interactifs (surfaces)
+## 6. Interactive controls (surfaces)
 
-Au-delà des boutons, plusieurs contrôles directs sur les surfaces :
+Beyond buttons, several direct controls on the surfaces:
 
-- **Radar 2D** (vue Jeu — panneau droit) : plan top-down X/Y des positions
-  mergées live, colorées par source de contrôle (move/manuel/hold/park/freeze).
-  **Drag un objet = grab & throw** — vous lancez physiquement la source.
-- **GestureStrip** (vue Jeu) : slider de **compression spatiale** `k`
-  (resserre/étend le champ en live) + release de la stase attention —
-  partagé avec la fenêtre `?view=run`.
-- **LiveDrawer** (bas de PerformView) : panneau à scopes — Params / Tracks /
-  Audio du move sélectionné + Global merge — le canvas 3D reste visible
-  pendant le tweak (pas de modal).
-- **Manipulate / Macros** (overlay canvas) : macros **globales** merge
-  (speed, scale, shift, rotation — affecte tous les moves live) +
-  *clear overrides* des positions manuelles.
-- **ManualReleaseBar** (flottante, toutes surfaces) : un objet dragué est
-  **tenu en manuel** (prioritaire au merge, il reste figé) — la barre permet
-  de **libérer** chaque retenue d'un geste.
-- **ObjectInspectBar** : clic sur un objet (3D ou radar) → inspect — état
-  source (manuel/move/hold/park/freeze), position, boutons de release par
-  mode. Le détail par objet sans ouvrir l'Inspector.
+- **2D radar** (Jeu view — right panel): top-down X/Y plan of live merged
+  positions, colored by control source (move/manual/hold/park/freeze).
+  **Drag an object = grab & throw** — you physically throw the source.
+- **GestureStrip** (Jeu view): **spatial compression** slider `k`
+  (tighten/expand the field live) + attention-stasis release —
+  shared with the `?view=run` window.
+- **LiveDrawer** (bottom of PerformView): scoped panels — Params /
+  Tracks / Audio of the selected move + Global merge — the 3D canvas
+  stays visible while tweaking (no modal).
+- **Manipulate / Macros** (canvas overlay): **global** merge macros
+  (speed, scale, shift, rotation — affects all live moves) +
+  *clear overrides* of manual positions.
+- **ManualReleaseBar** (floating, all surfaces): a dragged object is
+  **held manually** (merge-priority, it stays frozen) — the bar lets you
+  **release** each hold with one gesture.
+- **ObjectInspectBar**: clicking an object (3D or radar) → inspect —
+  source state (manual/move/hold/park/freeze), position, per-mode
+  release buttons. Per-object detail without opening the Inspector.
 
-## 7. Sémantique « continue » d'un move
+## 7. "Continuous" move semantics
 
-Deux flags par move/slot (onglet **Playback**) :
+Two flags per move/slot (**Playback** tab):
 
-- **`End: hold`** — à la fin d'un one-shot, les dernières positions deviennent
-  des positions manuelles : l'objet **reste où le move l'a laissé**
-  (`revert` par défaut = retour à la position de base).
-- **`Anchor: current`** — au lancement, chaque objet capture sa position
-  courante comme ancre (`delta = capturée − traj(0)`) : le move part **de là
-  où l'objet est**, sans saut — chaînage move→move façon release/peg-out.
+- **`End: hold`** — at the end of a one-shot, the last positions become
+  manual positions: the object **stays where the move left it**
+  (`revert` by default = return to base position).
+- **`Anchor: current`** — at launch, each object captures its current
+  position as anchor (`delta = captured − traj(0)`): the move starts
+  **from where the object is**, no jump — move→move chaining,
+  release/peg-out style.
 
-Combinés, `hold` fige l'objet au point d'arrivée et `current` fait démarrer
-le move suivant depuis ce point — conduite « continue » sans téléportations.
+Combined, `hold` freezes the object at the arrival point and `current`
+starts the next move from that point — "continuous" conduite without
+teleportations.
 
 ---
 
-## 8. Référence OSC show-control (`/stagespace/*`)
+## 8. OSC show-control reference (`/stagespace/*`)
 
-Port entrant = `oscInPort` (défaut 8001). Préfixe réservé — intercepté avant
-vos mappings utilisateur.
+Incoming port = `oscInPort` (default 8001). Reserved prefix — intercepted
+before your user mappings.
 
-| Message | Effet |
+| Message | Effect |
 |---------|-------|
-| `/stagespace/go` | GO setlist (= Entrée) |
-| `/stagespace/cue/next` · `/prev` | cue suivante / précédente |
-| `/stagespace/cue/recall <n> [fade]` | cue par numéro/nom ou index ; `fade` optionnel |
-| `/stagespace/slot <n>` · `/slot/stop <n>` · `/solo <n>` | busking : joue / coupe / solo le slot `#n` |
-| `/stagespace/unsolo` | restore des slots coupés par le dernier solo |
-| `/stagespace/park <i>` · `/unpark <i>` | objet index *i* (0-based) hors recalls |
-| `/stagespace/position <i> <x> <y> <z>` | position manuelle de l'objet *i* (reprise opérateur) |
-| `/stagespace/position/clear <i>` · `/position/clearall` | retire la position manuelle |
-| `/stagespace/trackpos <t> <x> <y> <z>` | position d'origine de la track *t* (où panic renvoie) |
-| `/stagespace/macro <name> <v>` | macro merge : speed, scale, shift_x/y/z, yaw/pitch/roll, radius_scale, height_offset |
-| `/stagespace/cue/arm <n>` · `/cue/go` | armer une cue sans la tirer · tirer l'armée (modèle console) |
-| `/stagespace/positions` | dump positions émises → `/stagespace/pos/state <obj> <x> <y> <z>` (backend-direct) |
-| `/stagespace/view <s>` | bascule la surface opérateur : `atelier` · `conduite` · `jeu` |
-| `/stagespace/show/load <path>` | charge un `.hfg` — **chemin local à la machine STAGESPACE** (alias `/stagespace/load`) |
-| `/stagespace/timecode/chase <0\|1>` · `/timecode/fps <n>` | chase on/off · fps du format string (24/25/30, défaut 25) |
-| `/stagespace/spatial` `attention` `throw` `gesture` `soundcheck` `rehearsal` | actions spatiales & répétition |
-| `/stagespace/arm` · `/disarm` | envoi OSC / **dry-run** |
-| `/stagespace/status` | renvoie cue courante/suivante au demandeur |
+| `/stagespace/go` | setlist GO (= Enter) |
+| `/stagespace/cue/next` · `/prev` | next / previous cue |
+| `/stagespace/cue/recall <n> [fade]` | cue by number/name or index; optional `fade` |
+| `/stagespace/slot <n>` · `/slot/stop <n>` · `/solo <n>` | busking: play / stop / solo slot `#n` |
+| `/stagespace/unsolo` | restore slots stopped by the last solo |
+| `/stagespace/park <i>` · `/unpark <i>` | object index *i* (0-based) out of recalls |
+| `/stagespace/position <i> <x> <y> <z>` | manual position of object *i* (operator takeover) |
+| `/stagespace/position/clear <i>` · `/position/clearall` | removes the manual position |
+| `/stagespace/trackpos <t> <x> <y> <z>` | origin position of track *t* (where panic returns it) |
+| `/stagespace/macro <name> <v>` | merge macro: speed, scale, shift_x/y/z, yaw/pitch/roll, radius_scale, height_offset |
+| `/stagespace/cue/arm <n>` · `/cue/go` | arm a cue without firing it · fire the armed one (console model) |
+| `/stagespace/positions` | dump emitted positions → `/stagespace/pos/state <obj> <x> <y> <z>` (backend-direct) |
+| `/stagespace/view <s>` | switch the operator surface: `atelier` · `conduite` · `jeu` |
+| `/stagespace/show/load <path>` | load a `.hfg` — **path local to the STAGESPACE machine** (alias `/stagespace/load`) |
+| `/stagespace/timecode/chase <0\|1>` · `/timecode/fps <n>` | chase on/off · fps of the string format (24/25/30, default 25) |
+| `/stagespace/spatial` `attention` `throw` `gesture` `soundcheck` `rehearsal` | spatial & rehearsal actions |
+| `/stagespace/arm` · `/disarm` | OSC output / **dry-run** |
+| `/stagespace/status` | re-send current/next cue to the requester |
 | `/stagespace/timecode <s \| "HH:MM:SS:FF">` | timecode → chase |
 | `/stagespace/panic` · `/stop` | blackout / stop all |
 
-**Feedback** : `ack` sur commande acceptée ; `nack <reason>` sur rejet ;
-`cue/current` + `cue/next` à chaque changement et sur `status`. Les 4 derniers
-contrôleurs reçoivent le feedback.
+**Feedback**: `ack` on accepted command; `nack <reason>` on rejection;
+`cue/current` + `cue/next` on every change and on `status`. The 4 most
+recent controllers receive feedback.
 
-### Raccourcis clavier
+### Keyboard shortcuts
 
-`Space` play/stop du slot sélectionné · `Enter` GO setlist · `Shift+Enter`
-recall cue suivante · `Backspace` cue précédente · `Esc` **panic** ·
-`Ctrl+Z`/`Y` undo/redo · `Ctrl+K` quick-add node · `Ctrl+C/X/V/D` clipboard nodes · `?` cheatsheet
+`Space` play/stop selected slot · `Enter` setlist GO · `Shift+Enter`
+recall next cue · `Backspace` previous cue · `Esc` **panic** ·
+`Ctrl+Z`/`Y` undo/redo · `Ctrl+K` quick-add node · `Ctrl+C/X/V/D` node clipboard · `?` cheatsheet
 
 ---
 
 ## 9. OSC-IN mappings + Learn
 
-Brancher un fader externe — onglet *OSC IN* (PerformView) :
+Wiring an external fader — *OSC IN* tab (PerformView):
 
-| Destination | Effet |
+| Destination | Effect |
 |-------------|-------|
-| `handler:name` | valeur stockée — lisible par le signal graph |
-| `macro:scale` (shift/yaw/speed…) | macro du merge — tous les moves live |
-| `channel:gain:3` (gain/spread/distance/presence…) | canal de l'objet 3 |
-| `position:2` | position manuelle de l'objet 2 (override) |
+| `handler:name` | stored value — readable from the signal graph |
+| `macro:scale` (shift/yaw/speed…) | merge macro — all live moves |
+| `channel:gain:3` (gain/spread/distance/presence…) | channel of object 3 |
+| `position:2` | manual position of object 2 (override) |
 
-- **LEARN** : tapez une destination, cliquez LEARN, bougez le fader —
-  l'adresse se remplit seule (timeout 10 s).
-- **Valeurs live** affichées à côté de chaque mapping.
-- ✎ édite · checkbox `enabled` coupe sans supprimer.
-
----
-
-## 10. Sécurité live
-
-- **Panic (Esc / PANIC)** : stoppe tous les moves + renvoie les positions origine.
-- **Dry-run / ARM** : tout tourne, rien ne part au renderer — l'indicateur
-  `LIVE`/`DRY-RUN` est **toujours visible** dans la StatusBar.
-
-![DRY-RUN — chip topbar + status](screenshots/18-dryrun.png)
-- **BACKEND ✕** : une commande backend a échoué silencieusement — le moteur ne
-  répond probablement plus. Revient au vert au premier IPC réussi.
-- **Park** : un objet repris à la main échappe aux recalls — chip **PARKED**
-  (topbar + conduite). `park` survit au panic par design.
-- **Confirmations** : toute action destructive (delete slot/template, clear-all
-  zones/modulations/channels, remove par-item) passe par une boîte de
-  confirmation — fini les deletes en un clic.
-
-![Confirmation de suppression](screenshots/09-confirm-delete.png)
-
-- **Guards recall** : pendant un recall, les commandes slot/cue sont rejetées
-  (`nack busy`) plutôt qu'intercalées — jamais de mouvement orphelin.
+- **LEARN**: type a destination, click LEARN, move the fader —
+  the address fills itself in (10 s timeout).
+- **Live values** shown next to each mapping.
+- ✎ edits · `enabled` checkbox disables without deleting.
 
 ---
 
-## 11. Dépannage
+## 10. Live safety
 
-| Symptôme | Cause probable | Vérifier |
+- **Panic (Esc / PANIC)**: stops all moves + sends back origin positions.
+- **Dry-run / ARM**: everything runs, nothing goes out to the renderer —
+  the `LIVE`/`DRY-RUN` indicator is **always visible** in the StatusBar.
+
+![DRY-RUN — topbar chip + status](screenshots/18-dryrun.png)
+- **BACKEND ✕**: a backend command failed silently — the engine is
+  probably unresponsive. Returns to green on the first successful IPC.
+- **Park**: a hand-held object escapes recalls — **PARKED** chip
+  (topbar + conduite). `park` survives panic by design.
+- **Confirmations**: every destructive action (delete slot/template,
+  clear-all zones/modulations/channels, per-item remove) goes through a
+  confirmation box — no more single-click deletes.
+
+![Delete confirmation](screenshots/09-confirm-delete.png)
+
+- **Recall guards**: during a recall, slot/cue commands are rejected
+  (`nack busy`) rather than interleaved — never an orphaned movement.
+
+---
+
+## 11. Troubleshooting
+
+| Symptom | Likely cause | Check |
 |----------|----------------|----------|
-| Objet qui ne bouge plus aux recalls | Park oublié | Chip **PARKED** |
-| "J'ai appuyé et rien ne s'est passé" | Recall en cours ou slot/cue inexistant | `nack` renvoyé au contrôleur |
-| Console ne répond pas | Lien OSC mort | Voyant **CONSOLE ●** gris = >5 s |
-| `TC lost` | Pas de `/stagespace/timecode` depuis >1 s | Source TC + `oscInPort` |
-| Move qui joue en silence | Tracks hors liste OSC / dry-run | `LIVE` vs `DRY-RUN` + dest OSC StatusBar |
-| Tout est figé, rien ne répond | Backend mort | Chip **BACKEND ✕** StatusBar |
-| Fenêtre conduite noire | Fenêtre principale fermée / pas de broadcast | « WAITING FOR MAIN WINDOW… » |
-| Graphe pas appliqué au live | Hot-swap raté | Pill erreur StatusBar/Toolbar (persiste après le toast) |
+| Object no longer moves on recalls | Forgotten park | **PARKED** chip |
+| "I pressed and nothing happened" | Recall in progress or missing slot/cue | `nack` sent back to the controller |
+| Console unresponsive | Dead OSC link | **CONSOLE ●** indicator gray = >5 s |
+| `TC lost` | No `/stagespace/timecode` for >1 s | TC source + `oscInPort` |
+| Move playing in silence | Tracks outside OSC list / dry-run | `LIVE` vs `DRY-RUN` + OSC destination in StatusBar |
+| Everything frozen, unresponsive | Dead backend | **BACKEND ✕** chip in StatusBar |
+| Black conduite window | Main window closed / not broadcasting | "WAITING FOR MAIN WINDOW…" |
+| Graph not applied to live | Failed hot-swap | Error pill in StatusBar/Toolbar (persists after the toast) |
 
 ---
 
-## 12. Fichiers & persistance
+## 12. Files & persistence
 
-| Quoi | Où |
+| What | Where |
 |------|-----|
-| Show complet (graphes, slots, cues, OSC, FX) | fichier `.hfg` — Toolbar save/load ou `/stagespace/show/load <path>` |
-| Projet Holophonix | `.hol` (import — source de vérité des tracks) |
-| Auto-save du graphe en édition | à chaque changement structurel |
-| Slots | localStorage (persistés entre sessions) |
-| Préférences UI (legend, collapsed…) | localStorage `stagespace.*` |
+| Full show (graphs, slots, cues, OSC, FX) | `.hfg` file — Toolbar save/load or `/stagespace/show/load <path>` |
+| Holophonix project | `.hol` (import — source of truth for tracks) |
+| Graph auto-save while editing | on every structural change |
+| Slots | localStorage (persisted between sessions) |
+| UI preferences (legend, collapsed…) | localStorage `stagespace.*` |
 
 ---
 
-## 13. Conduite d'exemple
+## 13. Example conduite
 
-`examples/conduite-epilogue.hfg` (+ `.md`) : spectacle ~1 h 25, 19 cues,
-14 moves, deux actes + entracte — TC, follow, tracking, safety cue S1.
-Importez-le pour explorer tous les mécanismes.
+`examples/conduite-epilogue.hfg` (+ `.md`): ~1 h 25 show, 19 cues,
+14 moves, two acts + intermission — TC, follow, tracking, safety cue S1.
+Import it to explore every mechanism.
 
-Quatre conduites scénarisées supplémentaires (`docs/conduites/*.md`) :
+Four additional scripted conduites (`docs/conduites/*.md`):
 `orbe-acousmatique.hfg` (24 tracks, 8 slots, 6 cues) · `grid-dj-spatial.hfg`
 (16 tracks, TC chase, busking) · `sillage-theatre.hfg` (tracking cues, PSN) ·
-`traverse-multimedia.hfg` (TC maître, canon, finale). Elles se chargent aussi
-via `/stagespace/show/load examples/orbe-acousmatique.hfg`.
+`traverse-multimedia.hfg` (master TC, canon, finale). They also load via
+`/stagespace/show/load examples/orbe-acousmatique.hfg`.
 
-![Jeu — pads Orbe live](screenshots/12-jeu.png)
+![Play — Orbe pads live](screenshots/12-jeu.png)
 
 ---
 
 # Appendices
 
-## A. Référence des nœuds
+## A. Node reference
 
-Les nœuds s'ajoutent depuis la palette (ou `Ctrl+K`). **Entrées en haut, sorties
-en bas.** Les ports ont un type (Positions, ObjectSet, Duration, Signal…) —
-seules les connexions valides sont acceptées.
+Nodes are added from the palette (or `Ctrl+K`). **Inputs on top, outputs
+on the bottom.** Ports are typed (Positions, ObjectSet, Duration,
+Signal…) — only valid connections are accepted.
 
-### A.1 Structurels — l'ossature du graphe
+### A.1 Structural — the graph's backbone
 
-| Nœud | Rôle |
+| Node | Role |
 |------|------|
-| `Objects` | source : la liste des objets/tracks du move |
-| `Duration` | durée du move — nécessaire au play |
-| `Output` | sortie : dernier nœud avant le runtime |
-| `Group` | regroupe des nodes en sous-ensemble |
-| `Mix` | mixe deux flux de positions (ponderation) |
-| `Sequence` | chaîne des moves dans le temps |
-| `Crossfade` | fondu entre deux entrées |
+| `Objects` | source: the move's object/track list |
+| `Duration` | move duration — required to play |
+| `Output` | output: last node before the runtime |
+| `Group` | groups nodes into a subset |
+| `Mix` | mixes two position streams (weighting) |
+| `Sequence` | chains moves over time |
+| `Crossfade` | blend between two inputs |
 
-### A.2 Moteurs math — trajectoires générées
+### A.2 Math engines — generated trajectories
 
 `Circular` · `Elliptical` · `Spiral` · `Lissajous` · `Figure8` · `Linear` ·
-`Oscillation` · `PerlinNoise` · `Formation` (formations de groupe :
-ligne/arc/grille) · `Converge` (convergence vers un point) · `Pendulum` ·
+`Oscillation` · `PerlinNoise` · `Formation` (group formations:
+line/arc/grid) · `Converge` (convergence toward a point) · `Pendulum` ·
 `RoseCurve` · `Helix` · `Wave` · `CustomTrajectory`
 
-### A.3 Moteurs physique — simulation
+### A.3 Physics engines — simulation
 
-`Bouncing` (rebonds) · `Spring` (ressort) · `Follow` (poursuite) · `Swarm`
-(essaim/boids) · `Avoidance` (évitement mutuel) · `VectorField` (champ de
-vecteurs)
+`Bouncing` (bounces) · `Spring` (spring) · `Follow` (pursuit) · `Swarm`
+(flock/boids) · `Avoidance` (mutual avoidance) · `VectorField` (vector
+field)
 
-### A.4 Splines — trajectoires dessinées
+### A.4 Splines — drawn trajectories
 
-| Nœud | Rôle |
+| Node | Role |
 |------|------|
-| `DrawSpline` | contient les points dessinés à la main (draw mode) |
-| `EvaluateSpline` | évalue la spline → positions f(t) |
-| `TrimSpline` | extrait une portion de la spline |
-| `OffsetSpline` | décale la spline dans l'espace |
+| `DrawSpline` | holds the hand-drawn points (draw mode) |
+| `EvaluateSpline` | evaluates the spline → f(t) positions |
+| `TrimSpline` | extracts a portion of the spline |
+| `OffsetSpline` | offsets the spline in space |
 
-### A.5 Envelopes (ex-Falloffs) — influence spatiale/temporelle
+### A.5 Envelopes (ex-Falloffs) — spatial/temporal influence
 
-`TimeFalloff` (enveloppe dans le temps) · `PointDistanceFalloff` (influence
-selon la distance à un point) · `DirectionalFalloff` · `AudioAmplitudeFalloff`
-· `AudioFalloff` — une envelope module l'influence de n'importe quel paramètre.
+`TimeFalloff` (envelope over time) · `PointDistanceFalloff` (influence by
+distance to a point) · `DirectionalFalloff` · `AudioAmplitudeFalloff`
+· `AudioFalloff` — an envelope modulates the influence of any parameter.
 
 ### A.6 Modifiers — transformations
 
@@ -448,146 +453,146 @@ selon la distance à un point) · `DirectionalFalloff` · `AudioAmplitudeFalloff
 `Jitter` · `SpeedScale` · `Delay` · `Freeze` · `Switch` · `RadiusScale` ·
 `HeightOffset` · `PerTrackDepth` · `Barycenter`
 
-### A.7 Sources — données externes
+### A.7 Sources — external data
 
-`BPM` (détection tempo audio IN) · `AudioAmplitude` · `AudioSpectrum` (FFT
-par bande) · `OSCInput` (valeur OSC entrante)
+`BPM` (audio-IN tempo detection) · `AudioAmplitude` · `AudioSpectrum`
+(per-band FFT) · `OSCInput` (incoming OSC value)
 
-### A.8 Global (post-process) — graphe Global FX uniquement
+### A.8 Global (post-process) — Global FX graph only
 
-| Nœud | Rôle |
+| Node | Role |
 |------|------|
-| `Merge` | stratégie de résolution quand plusieurs moves ciblent la même track (override/crossfade/blend/priority — le dernier écrivain gagne) |
-| `Zone` | déclare une zone spatiale pour le panel Spatial FX |
-| `Velocity` | déclare un canal de modulation vélocité |
-| `ManualPosition` | override de position manuelle — lit les drags 3D (positionnement à la main) |
+| `Merge` | resolution strategy when several moves target the same track (override/crossfade/blend/priority — last writer wins) |
+| `Zone` | declares a spatial zone for the Spatial FX panel |
+| `Velocity` | declares a velocity modulation channel |
+| `ManualPosition` | manual position override — reads 3D drags (hand positioning) |
 
 ### A.9 Composite & plugins
 
-`MoveRef` (référence un autre move — composition de mouvements) · `Plugin`
-(moteur WASM externe packagé `.ssx`)
+`MoveRef` (references another move — movement composition) · `Plugin`
+(external WASM engine packaged as `.ssx`)
 
-### A.10 Signal — graphe de modulation (tab *Modulation*)
+### A.10 Signal — modulation graph (*Modulation* tab)
 
-Le graphe signal produit des **valeurs scalaires f(t)** qui modulent les
-paramètres de n'importe quel nœud du graphe de positions — LFO sur le radius,
-audio sur le speed, etc.
+The signal graph produces **scalar f(t) values** that modulate the
+parameters of any node in the position graph — LFO on the radius, audio
+on the speed, etc.
 
-Sources : `SignalConst` · `SignalTime` · `SignalLfo` · `SignalAudio` ·
-`SignalOsc` (handlers OSC-IN) · `SignalRandom` · `SignalCounter`
-Traitement : `SignalMath` · `SignalMap` (remappage min/max) · `SignalClamp` ·
-`SignalMix` · `SignalSlew` (lissage) · `SignalEnvelope` · `SignalThreshold` ·
+Sources: `SignalConst` · `SignalTime` · `SignalLfo` · `SignalAudio` ·
+`SignalOsc` (OSC-IN handlers) · `SignalRandom` · `SignalCounter`
+Processing: `SignalMath` · `SignalMap` (min/max remapping) · `SignalClamp` ·
+`SignalMix` · `SignalSlew` (smoothing) · `SignalEnvelope` · `SignalThreshold` ·
 `SignalBeat` · `SignalSampleHold` · `SignalMux`
-Sortie : `SignalOut` — la sortie nommée devient ciblable depuis un paramètre
-de nœud.
+Output: `SignalOut` — the named output becomes targetable from a node
+parameter.
 
-Chaîne typique : `SignalLfo → SignalMap → SignalOut(speed)` puis dans le
-graphe de positions, le paramètre `speed` d'un moteur se lie à cette sortie.
-
----
-
-## B. Draw mode — dessiner une trajectoire
-
-1. Ajoutez un nœud dessinable au graphe édité (`DrawSpline`, `EvaluateSpline`
-   ou `VectorField` en mode `drawn`) — palette Expert ou preset spline.
-2. Le bouton **Draw** du canvas 3D s'active — cliquez-le : le canvas passe en
-   saisie de dessin (Manipulate/Assign sont exclus).
-3. Dessinez à la souris — les points capturés remplissent `DrawSpline.params.points`.
-4. Reliez `DrawSpline → EvaluateSpline → Output` si ce n'est déjà fait.
-5. **Exit Draw** (bouton dédié ou `Esc`) quitte le mode.
-6. La trajectoire fantôme dessinée disparaît à la sortie — ce que vous voyez
-   ensuite est la trajectoire réelle du move.
+Typical chain: `SignalLfo → SignalMap → SignalOut(speed)` then in the
+position graph, an engine's `speed` parameter binds to that output.
 
 ---
 
-## C. Graphe Global FX
+## B. Draw mode — drawing a trajectory
 
-Le graphe *Global FX* (tab du node editor) ne produit pas de trajectoire — il
-**post-traite** le merge final de tous les moves :
+1. Add a drawable node to the edited graph (`DrawSpline`,
+   `EvaluateSpline` or `VectorField` in `drawn` mode) — Expert palette or
+   spline preset.
+2. The canvas 3D's **Draw** button activates — click it: the canvas
+   enters drawing input (Manipulate/Assign are excluded).
+3. Draw with the mouse — captured points fill `DrawSpline.params.points`.
+4. Wire `DrawSpline → EvaluateSpline → Output` if not already done.
+5. **Exit Draw** (dedicated button or `Esc`) leaves the mode.
+6. The drawn ghost trajectory disappears on exit — what you see next is
+   the move's real trajectory.
 
-- `Merge` fixe la stratégie de résolution des tracks contestées.
-- `Zone` injecte des zones *designées* dans le moteur spatial (`graph_zones`,
-  évaluées avant les zones dessinées du panel FX — voir annexe D).
-- `Velocity` déclare les modulations cinématiques (speed/accel→canal) listées
-  par le panel FX.
-- Les modulations globales (macros d'ensemble) s'appliquent après merge —
-  `macro:scale` d'un fader agit sur tous les moves simultanément.
+---
+
+## C. Global FX graph
+
+The *Global FX* graph (node editor tab) produces no trajectory — it
+**post-processes** the final merge of all moves:
+
+- `Merge` sets the resolution strategy for contested tracks.
+- `Zone` injects *designed* zones into the spatial engine (`graph_zones`,
+  evaluated before the panel FX's drawn zones — see appendix D).
+- `Velocity` declares the kinematic modulations (speed/accel→channel)
+  listed by the FX panel.
+- Global modulations (ensemble macros) apply after the merge —
+  a fader's `macro:scale` acts on all moves simultaneously.
 
 ![Spatial FX](screenshots/11-spatial-fx.png)
 
-## D. Spatial FX — workflow de bout en bout
+## D. Spatial FX — end-to-end workflow
 
-Les effets spatiaux partagent le même moteur d'évaluation (influence SDF
-par zone, fusion des canaux) mais ont **deux chemins de création** —
-déclaratif dans le graphe, interactif dans le viewer :
+Spatial effects share the same evaluation engine (per-zone SDF
+influence, channel fusion) but have **two creation paths** —
+declarative in the graph, interactive in the viewer:
 
-### D.1 Deux sources de zones, un moteur
+### D.1 Two zone sources, one engine
 
-| | Node `Zone` (Global FX) | Zones dessinées (panel FX + 3D) |
+| | `Zone` node (Global FX) | Drawn zones (FX panel + 3D) |
 |---|---|---|
-| Création | Node editor, tab **Global FX** | Panel **FX** (colonne SHOW) : `Add Zone` ou `Place` → clic en 3D ; ensuite drag = déplacer, scroll = resize |
-| Paramètres | `shape` sphere/box, centre/radius ou min/max, `falloff`, `channels`, `objects`, `enabled` | idem + **effets positionnels** (`repel`, `attract`, `dampen`, `vortex`) — déplacent les objets, exclusif aux zones dessinées |
-| Évaluation | `graph_zones` — remplacées en bloc à chaque push du graphe, évaluées **avant** les zones dessinées | `zones` — persistantes jusqu'à suppression, évaluées après |
-| Persistence | `globalGraph` dans le `.hfg` | tableau `zones` dans le `.hfg` |
+| Creation | Node editor, **Global FX** tab | **FX** panel (SHOW column): `Add Zone` or `Place` → click in 3D; then drag = move, scroll = resize |
+| Parameters | `shape` sphere/box, center/radius or min/max, `falloff`, `channels`, `objects`, `enabled` | same + **positional effects** (`repel`, `attract`, `dampen`, `vortex`) — move the objects, exclusive to drawn zones |
+| Evaluation | `graph_zones` — replaced wholesale on each graph push, evaluated **before** drawn zones | `zones` — persistent until deleted, evaluated after |
+| Persistence | `globalGraph` in the `.hfg` | `zones` array in the `.hfg` |
 
-**Règle d'usage** : le node `Zone` pour les effets *designés* (reproductibles,
-versionnés dans le show) — les zones dessinées pour le *sculpting live* en
-répétition (et les effets positionnels que le node n'a pas). Les deux
-s'additionnent dans le merge runtime.
+**Rule of thumb**: the `Zone` node for *designed* effects (reproducible,
+versioned in the show) — drawn zones for *live sculpting* in rehearsal
+(and the positional effects the node lacks). Both add up in the runtime
+merge.
 
-### D.2 Le panel FX (colonne SHOW)
+### D.2 The FX panel (SHOW column)
 
-- **Zones** : le formulaire a deux modes, toujours indiqués — `+ New zone`
-  (création) ou `✎ Editing zone n` (modification, bouton `Update zone n`,
-  `✕ new zone` pour en sortir). `✎` sur une ligne de zone charge ses
-  paramètres dans le formulaire — les champs position suivent les
-  déplacements 3D de cette zone pendant l'édition ; `⌖` re-place le centre en 3D ;
-  `Edit zones` = déplacement/resize direct en 3D. `clear all` et chaque `×`
-  passent par une confirmation.
-- **Modulations** : cinématiques — `speed`/`accel`/`jerk`/`angvel` → canal.
-  **Déclarées par les nodes `Velocity` du graphe global** (édition dans le
-  node editor, tab Global FX) ; le panel les liste en lecture.
-- **Canaux objet** : gain/spread/distance/presence par objet — l'équivalent
-  spatial d'un fader par track.
-- **Readback** : les canaux effectifs affichés = statiques ⊕ modulés ⊕
-  zones — l'effet réel combiné des trois sources est visible en live.
+- **Zones**: the form has two modes, always indicated — `+ New zone`
+  (creation) or `✎ Editing zone n` (modification, `Update zone n` button,
+  `✕ new zone` to exit). `✎` on a zone row loads its parameters into the
+  form — the position fields follow that zone's 3D moves while editing;
+  `⌖` re-places the center in 3D; `Edit zones` = direct 3D move/resize.
+  `clear all` and every `×` go through a confirmation.
+- **Modulations**: kinematics — `speed`/`accel`/`jerk`/`angvel` →
+  channel. **Declared by the global graph's `Velocity` nodes** (editing
+  in the node editor, Global FX tab); the panel lists them read-only.
+- **Object channels**: gain/spread/distance/presence per object — the
+  spatial equivalent of a fader per track.
+- **Readback**: the effective channels shown = static ⊕ modulated ⊕
+  zones — the real combined effect of the three sources is visible live.
 
-## E. Trackers externes (PSN)
+## E. External trackers (PSN)
 
-STAGESPACE consomme le protocole **PosiStageNet** (PSN) pour le tracking
-d'acteurs/danseurs — les trackers apparaissent comme sources de position
-(tracker_map) et peuvent piloter des moves Follow ou des positions d'objets.
-Le scénario `sillage-theatre` l'utilise pour suivre les danseurs.
+STAGESPACE consumes the **PosiStageNet** (PSN) protocol for actor/dancer
+tracking — trackers appear as position sources (tracker_map) and can
+drive Follow moves or object positions. The `sillage-theatre` scenario
+uses it to follow the dancers.
 
-## F. Plugins `.ssx` (moteurs WASM)
+## F. `.ssx` plugins (WASM engines)
 
-Les moteurs externes packagés `.ssx` (WASM) se placent dans le dossier
-`plugins` de l'app — ils apparaissent comme nœud `Plugin` dans le graphe
-et compilent comme les moteurs natifs. SDK : `plugin-sdk/` + `plugin-examples/`.
+External engines packaged `.ssx` (WASM) go in the app's `plugins` folder —
+they appear as a `Plugin` node in the graph and compile like native
+engines. SDK: `plugin-sdk/` + `plugin-examples/`.
 
-## G. Config avancée (backend)
+## G. Advanced config (backend)
 
-| Commande / setting | Rôle |
+| Command / setting | Role |
 |--------------------|------|
-| **Venue mapping** (`set_venue_config`) | transform sortante : `enabled` + `scale [x,y,z]` + `offset [x,y,z]` + `yaw` — mappage espace canonique → géométrie de la salle |
-| **Distance reality** (`set_distance_reality`) | effets perceptuels selon la distance : exagération, gain_atten, air_loss — `None` = désactivé |
-| **Media sync** (`set_media_sync`) | synchronisation média externe (source TC/timecode) |
-| **Presets** (`preset_save/load/list/delete`) | configurations nommées sauvegardées — rappel rapide de réglages |
-| **Découverte renderer** | `Discover renderers` en Settings — scan OSC out disponibles |
+| **Venue mapping** (`set_venue_config`) | outgoing transform: `enabled` + `scale [x,y,z]` + `offset [x,y,z]` + `yaw` — canonical space → venue geometry mapping |
+| **Distance reality** (`set_distance_reality`) | perceptual effects by distance: exaggeration, gain_atten, air_loss — `None` = disabled |
+| **Media sync** (`set_media_sync`) | external media sync (TC/timecode source) |
+| **Presets** (`preset_save/load/list/delete`) | saved named configurations — quick settings recall |
+| **Renderer discovery** | `Discover renderers` in Settings — scan available OSC outs |
 
-## H. Panneaux de monitoring
+## H. Monitoring panels
 
-- **Score** — partition/timeline des cues et événements du show.
-- **Log** — historique des commandes show (GUI + OSC `/stagespace/*` reçues) —
-  chaque entrée horodatée. Le voyant **CONSOLE ●** reflète l'activité.
-- **Audio** — état de la capture audio (périphérique, niveau, BPM détecté).
+- **Score** — score/timeline of the show's cues and events.
+- **Log** — history of show commands (GUI + received OSC `/stagespace/*`) —
+  each entry timestamped. The **CONSOLE ●** indicator reflects activity.
+- **Audio** — audio capture state (device, level, detected BPM).
 
-## I. Référence Settings
+## I. Settings reference
 
-| Section | Contenu |
+| Section | Contents |
 |---------|---------|
-| **OSC output** | host:port du renderer + profil (Holophonix/Spat/IEM/ADM/XYZ/AED) + *Discover renderers* |
-| **OSC input** | port de réception des commandes (`oscInPort`, défaut 8001) |
-| **Merge** | stratégie par défaut — override · crossfade · blend · priority |
-| **Track IDs** | IDs virtuels quand aucun `.hol` n'est chargé (ex. `1,2,3,…` ou plages `1-8,12`) |
-| **Audio input** | périphérique d'entrée pour les trajectoires audio-réactives (BPM, amplitude, spectre) |
+| **OSC output** | renderer host:port + profile (Holophonix/Spat/IEM/ADM/XYZ/AED) + *Discover renderers* |
+| **OSC input** | command receive port (`oscInPort`, default 8001) |
+| **Merge** | default strategy — override · crossfade · blend · priority |
+| **Track IDs** | virtual IDs when no `.hol` is loaded (e.g. `1,2,3,…` or ranges `1-8,12`) |
+| **Audio input** | input device for audio-reactive trajectories (BPM, amplitude, spectrum) |

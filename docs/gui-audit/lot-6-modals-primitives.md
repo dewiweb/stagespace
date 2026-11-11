@@ -1,223 +1,242 @@
-# Lot 6 — Modals et primitives ui/ (audit complet)
+# Lot 6 — Modals and ui/ primitives (full audit)
 
 ## 1. `components/SettingsModal.tsx` (294 l.)
 
-Config globale (OSC out/in, merge, track IDs, audio). Monté uniquement
-`Toolbar:115` — inaccessible en Perform (cohérent avec le lock slice).
+Global config (OSC out/in, merge, track IDs, audio). Mounted only at
+`Toolbar:115` — unreachable in Perform (consistent with the slice lock).
 
-- `catch (e: any)` — seul `any` explicite des fichiers audités (94).
-- Détection erreur par `oscInStatus.startsWith('Error')` — fragile (211).
-- `setOscPort(Number(...) || 0)` — impossible de vider, port 0 silencieux (134).
-- `key={i}` index sur targets (164).
-- Tokens mixtes : `border-gray-700`/`bg-gray-900` vs `border-stagespace-border` footer.
-- `max-w-[520px]` arbitraire vs `max-w-sm` QuickAdd — pas de gamme de largeurs.
-- `oscIdsStr` initialisé au mount, pas de resync pendant l'ouverture.
+- `catch (e: any)` — the only explicit `any` in the audited files (94).
+- Error detection by `oscInStatus.startsWith('Error')` — fragile (211).
+- `setOscPort(Number(...) || 0)` — impossible to clear, silent port 0 (134).
+- `key={i}` index on targets (164).
+- Mixed tokens: `border-gray-700`/`bg-gray-900` vs
+  `border-stagespace-border` footer.
+- Arbitrary `max-w-[520px]` vs QuickAdd `max-w-sm` — no width scale.
+- `oscIdsStr` initialized at mount, no resync during opening.
 
-**Verdict : fonctionnel, unique point d'édition OSC — validation laxiste,
-hygiène type/tokens perfectible. Aucun test.**
+**Verdict: functional, single OSC editing point — lax validation,
+perfectible type/token hygiene. No tests.**
 
 ## 2. `components/WelcomeModal.tsx` (86 l.)
 
-Premier lancement → exemple bundlé ou départ vide (`App:504`).
+First launch → bundled example or empty start (`App:504`).
 
-- `loadExample` ferme et marque `welcomed` **même si le load échoue** (30-39).
-- Esc/X = consentir au flag sans distinction.
-- `<kbd>` stylé ad hoc — 3e implémentation du repo.
+- `loadExample` closes and marks `welcomed` **even if the load fails** (30-39).
+- Esc/X = consenting to the flag without distinction.
+- Ad hoc styled `<kbd>` — the repo's 3rd implementation.
 
-**Verdict : propre et documenté ; défaut réel = flag marqué sur échec.**
+**Verdict: clean and documented; real defect = flag marked on failure.**
 
 ## 3. `components/ShortcutsModal.tsx` (46 l.)
 
-Cheatsheet raccourcis, `App:507` (`?` ou bouton Toolbar).
+Shortcut cheatsheet, `App:507` (`?` or Toolbar button).
 
-- Liste **dupliquée à la main** de `useLiveShortcuts` — déjà en dérive
-  (Ctrl+K listé mais handler dans NodeEditor document-level ; Backspace
-  nuance non mentionnée).
-- `?` traité **avant** le guard `isModalOpen` — empile ShortcutsModal par-dessus.
-- Omet les commandes OSC `/stagespace/*`.
+- **Hand-duplicated** list of `useLiveShortcuts` — already drifting
+  (Ctrl+K listed but its handler is NodeEditor document-level;
+  Backspace nuance unmentioned).
+- `?` handled **before** the `isModalOpen` guard — stacks ShortcutsModal
+  on top.
+- Omits the `/stagespace/*` OSC commands.
 
-**Verdict : minimal et correct ; synchronisation manuelle = dette déclarée.**
+**Verdict: minimal and correct; manual synchronization = declared debt.**
 
 ## 4. `components/QuickAddModal.tsx` (138 l.)
 
-Palette searchable plugdata-like, `NodeEditor:943-951`. Triggers : Ctrl+K,
-double-clic pane, bouton + palette, hint.
+Plugdata-like searchable palette, `NodeEditor:943-951`. Triggers:
+Ctrl+K, pane double-click, palette + button, hint.
 
-- **Bug probable de focus** : `Modal:42` focus `focusables[0]` = le **bouton
-  X du header** → vole l'autoFocus de l'input → taper à l'ouverture ne va
-  pas dans le champ. Le test ne le voit pas (`fireEvent` sans focus réel).
-- `expect(calls.length + 0).toBeGreaterThanOrEqual(0)` — **assertion
-  tautologique**, le test clavier ne vérifie rien (test:77).
-- `selIdx` reset sur `query` seulement (54).
-- Couleur plugin `#a855f7` hardcodée (113).
-- Liste plate sans headers de catégorie.
-- Monté **à l'intérieur** de l'ErrorBoundary "Canvas" — un crash tue canvas + éditeur.
+- **Probable focus bug**: `Modal:42` focuses `focusables[0]` = the
+  header **X button** → steals the input's autoFocus → typing on open
+  doesn't go into the field. The test doesn't see it (`fireEvent`
+  without real focus).
+- `expect(calls.length + 0).toBeGreaterThanOrEqual(0)` — **tautological
+  assertion**, the keyboard test verifies nothing (test:77).
+- `selIdx` reset on `query` only (54).
+- Hardcoded plugin color `#a855f7` (113).
+- Flat list without category headers.
+- Mounted **inside** the "Canvas" ErrorBoundary — a crash kills canvas
+  + editor.
 
-**Verdict : bonne UX de palette, mais soupçon réel de bug focus et test creux.**
+**Verdict: good palette UX, but a real suspected focus bug and a
+shallow test.**
 
 ## 5. `components/ui/Modal.tsx` (94 l.)
 
-Shell modal : overlay `bg-black/60 backdrop-blur-sm` z-popover, `role=dialog
-aria-modal`, focus trap, `useModalGuard`.
+Modal shell: overlay `bg-black/60 backdrop-blur-sm` z-popover,
+`role=dialog aria-modal`, focus trap, `useModalGuard`.
 
-- **`focusables[0]` = bouton X** — tout modal s'ouvre avec focus sur "Close",
-  vole l'autoFocus du contenu (42). Devrait privilégier `[autofocus]` ou le
-  premier élément du contenu.
-- **Esc n'est pas géré par Modal** — délégué à `useLiveShortcuts` → hors App
-  (tests, fenêtre conduite), Esc ne ferme rien.
-- Pas de `aria-labelledby`.
-- `closeOnOverlay=false` mais `useModalGuard` reste → Esc ferme quand même.
-- Pas de portal — fragile dans un conteneur transform/overflow.
+- **`focusables[0]` = X button** — every modal opens with focus on
+  "Close", stealing the content's autoFocus (42). Should prefer
+  `[autofocus]` or the first content element.
+- **Esc isn't handled by Modal** — delegated to `useLiveShortcuts` →
+  outside App (tests, conduite window), Esc closes nothing.
+- No `aria-labelledby`.
+- `closeOnOverlay=false` but `useModalGuard` stays → Esc closes anyway.
+- No portal — fragile inside a transform/overflow container.
 
-**Verdict : bon fondement ; 2 défauts réels : focus initial = X, Esc externe.**
+**Verdict: good foundation; 2 real defects: initial focus = X,
+external Esc.**
 
 ## 6. `components/ui/ConfirmModal.tsx` (43 l.)
 
-Confirmation destructive — `CuelistPanel:341`, `MovesTable:599`.
+Destructive confirmation — `CuelistPanel:341`, `MovesTable:599`.
 
-- Commentaire "Focus lands on Cancel" **faux** — focusables[0] = X du header.
-- `onConfirm` ne ferme pas — dépend du caller (non documenté).
-- Boutons sans `transition-colors` — micro-incohérence.
-- Pas de prop `variant` : toujours rouge destructif (design, ok).
+- "Focus lands on Cancel" comment **false** — focusables[0] = header X.
+- `onConfirm` doesn't close — depends on the caller (undocumented).
+- Buttons without `transition-colors` — micro-inconsistency.
+- No `variant` prop: always destructive red (design, ok).
 
-**Verdict : fait exactement une chose bien ; docstring inexacte.**
+**Verdict: does exactly one thing well; inaccurate docstring.**
 
 ## 7. `components/ui/EmptyState.tsx` (52 l.)
 
-Empty state normalisé. **Réutilisé** : CuelistPanel, TrackGrid, MovesTable,
-AnimationList, SpatialFxPanel ×3 — 6 sites.
+Normalized empty state. **Reused**: CuelistPanel, TrackGrid,
+MovesTable, AnimationList, SpatialFxPanel ×3 — 6 sites.
 
-- Le docstring revendique "~8 implémentations remplacées" — il en reste :
-  `PerformView` ×4 (465-585, empty state riche dupliqué), `NodeEditor`
+- The docstring claims "~8 implementations replaced" — some remain:
+  `PerformView` ×4 (465-585, duplicated rich empty state), `NodeEditor`
   (923-941), `SettingsModal` (276-278).
-- Bouton `bg-indigo-900/50` — indigo n'est pas un token.
-- `size:'sm'` ne compacte que le padding.
+- `bg-indigo-900/50` button — indigo isn't a token.
+- `size:'sm'` only compacts padding.
 - 0 tests.
 
-**Verdict : primitive correcte adoptée pour les listes ; la moitié des empty
-states reste ad hoc.**
+**Verdict: correct primitive adopted for lists; half the empty states
+remain ad hoc.**
 
 ## 8. `components/ui/IconButton.tsx` (46 l.)
 
-Bouton toolbar 5 variantes. **Réutilisation : 1 seul fichier** (Toolbar ×5).
+5-variant toolbar button. **Reuse: 1 file only** (Toolbar ×5).
 
-- **22 classes couleur, 0 token** — `bg-gray-800`, `bg-indigo-800`… Le
-  `primary` est **indigo** alors que `stagespace.accent` = bleu — **deux
-  "primaires" dans le design system**.
-- Sous-adoption massive : PerformView seul a ~25 boutons ad hoc similaires.
-- Variantes `danger`/`warning` avec `border` → padding effectif différent.
-- Pas d'`aria-label` requis.
+- **22 color classes, 0 tokens** — `bg-gray-800`, `bg-indigo-800`… The
+  `primary` is **indigo** while `stagespace.accent` = blue — **two
+  "primaries" in the design system**.
+- Massive under-adoption: PerformView alone has ~25 similar ad hoc
+  buttons.
+- `danger`/`warning` variants with `border` → different effective
+  padding.
+- No required `aria-label`.
 
-**Verdict : API sensée mais quasi non déployée — déclaration d'intention.**
+**Verdict: sensible API but almost undeployed — declaration of intent.**
 
 ## 9. `components/ui/Slider.tsx` (109 l.)
 
-Range unifié 3 layouts. **Le mieux adopté** : 9 fichiers.
+Unified 3-layout range. **The most adopted**: 9 files.
 
-- `ACCENTS: Record<string,string>` clé non typée — accent inconnu → classe
-  manquante silencieuse (30-38).
-- `dec` déduit de `step` — step 0.15 → 1 décimale → affichage tronqué (55).
-- Layout `bare` : `className` sur l'input seulement vs wrapper ailleurs —
-  asymétrique (72).
-- Pas d'`aria-label` quand `label` absent — `bare` inaccessible.
-- Label `w-16` tronqué ; valeur `w-12` déborde sur `"-180.00°"`.
+- `ACCENTS: Record<string,string>` untyped key — unknown accent →
+  silently missing class (30-38).
+- `dec` inferred from `step` — step 0.15 → 1 decimal → truncated
+  display (55).
+- `bare` layout: `className` on the input only vs wrapper elsewhere —
+  asymmetric (72).
+- No `aria-label` when `label` is absent — `bare` inaccessible.
+- Truncated `w-16` label; `w-12` value overflows on `"-180.00°"`.
 
-**Verdict : seule primitive vraiment déployée ; formatage/typage à resserrer.**
+**Verdict: the only truly deployed primitive; formatting/typing to
+tighten.**
 
 ## 10. `components/ui/OscArmToggle.tsx` (41 l.)
 
-Interrupteur master OSC LIVE/MUTED — `Toolbar:119`, `PerformView:452` et `:568`.
+OSC master LIVE/MUTED switch — `Toolbar:119`, `PerformView:452` and
+`:568`.
 
-- **F9 — Désynchronisation** : `set_osc_armed` n'émet aucun event
-  (`osc.rs:239-242` = `eprintln!` seul). Trois sources non synchronisées :
-  ce toggle, `DryRunChip` (rendu divergent, **sémantique inversée** — disarmé
-  = vert), `/stagespace/arm|disarm` → `doArm`. Un disarm console → le toggle
-  affiche toujours LIVE ; deux instances simultanées PerformView → états
-  contradictoires.
-- `catch(() => {})` silencieux → "LIVE" mensonger hors Tauri.
+- **F9 — Desynchronization**: `set_osc_armed` emits no event
+  (`osc.rs:239-242` = `eprintln!` only). Three unsynchronized sources:
+  this toggle, `DryRunChip` (divergent render, **inverted semantics** —
+  disarmed = green), `/stagespace/arm|disarm` → `doArm`. A console
+  disarm → the toggle still shows LIVE; two simultaneous PerformView
+  instances → contradictory states.
+- Silent `catch(() => {})` → lying "LIVE" outside Tauri.
 
-**Verdict : UX bonne mais état local non broadcasté + DryRunChip concurrent
-= source d'état contradictoire. À fusionner.**
+**Verdict: good UX but local state not broadcast + competing
+DryRunChip = contradictory state source. To merge.**
 
 ## 11. `components/ui/PanicButton.tsx` (54 l.)
 
-Panic partagé — `Toolbar:161`, `PerformView:453/568/667`. **Les 3 panics de
-PerformView sont bien le même composant** (pas de duplication interne).
+Shared panic — `Toolbar:161`, `PerformView:453/568/667`. **The 3
+PerformView panics are genuinely the same component** (no internal
+duplication).
 
-- `setTimeout` non cleanup (28).
-- Flash : `animate-fade-in` puis unmount sec à 350ms — pas de fade-out.
-- La duplication est **ailleurs** : `ConduitePage:88` réécrit le bouton —
-  pas d'icône, pas de flash, styling divergent, aucun feedback visuel dans la
-  fenêtre conduite elle-même.
-- `PerformView:561` STOP ALL = action différente (fade) — légitimement séparé.
+- `setTimeout` not cleaned up (28).
+- Flash: `animate-fade-in` then hard unmount at 350ms — no fade-out.
+- The duplication is **elsewhere**: `ConduitePage:88` rewrites the
+  button — no icon, no flash, divergent styling, no visual feedback in
+  the conduite window itself.
+- `PerformView:561` STOP ALL = different action (fade) — legitimately
+  separate.
 
-**Verdict : bon composant live-safety ; seul le panic de ConduitePage échappe
-au partage.**
+**Verdict: good live-safety component; only ConduitePage's panic
+escapes the sharing.**
 
 ## 12. `components/ToastContainer.tsx` (51 l.)
 
-Pile bottom-right z-toast, `App:501` — **absente de la branche `?view=conduite`**
-(court-circuit avant AppMain → toasts du panic invisibles dans la fenêtre FOH).
+Bottom-right z-toast stack, `App:501` — **absent from the
+`?view=conduite` branch** (short-circuit before AppMain → panic toasts
+invisible in the FOH window).
 
-- `role="alert"` sur chaque item **et** sur le container + `assertive` —
-  double annonce lecteur d'écran.
-- Icône error = `<X>` — glyphe "fermer", pas d'erreur.
-- **`animate-fadein` dupliquée** : index.css définit `fadeIn`/`animate-fade-in`
-  (4px) ET `fadein`/`animate-fadein` (8px) — deux conventions cohabitent.
-- Pas d'indication sticky vs éphémère, pas de barre de timeout.
+- `role="alert"` on each item **and** on the container + `assertive` —
+  double screen-reader announcement.
+- Error icon = `<X>` — "close" glyph, not error.
+- **Duplicated `animate-fadein`**: index.css defines
+  `fadeIn`/`animate-fade-in` (4px) AND `fadein`/`animate-fadein` (8px) —
+  two conventions coexist.
+- No sticky vs ephemeral indication, no timeout bar.
 
-**Verdict : système solide (dédup, sticky, folding) ; a11y et nommage à nettoyer.**
+**Verdict: solid system (dedup, sticky, folding); a11y and naming to
+clean.**
 
 ## 13. `components/ErrorBoundary.tsx` (48 l.)
 
-Boundary par zone : Perform, Left panel, Canvas, Inspector — volontairement
-pas Toolbar/StatusBar/ToastContainer (panic doit survivre).
+Per-zone boundary: Perform, Left panel, Canvas, Inspector —
+deliberately not Toolbar/StatusBar/ToastContainer (panic must survive).
 
-- **La branche `?view=conduite` n'est PAS wrappée** → crash de ConduitePage =
-  page blanche de l'écran FOH dédié (le pire écran pour ça).
-- Fallback affiche `error.message` brut — stack technique exposée à l'opérateur.
-- Retry sans backoff — boucle crash→retry→crash possible.
+- **The `?view=conduite` branch is NOT wrapped** → ConduitePage crash =
+  blank page on the dedicated FOH screen (the worst screen for that).
+- Fallback shows raw `error.message` — technical stack exposed to the
+  operator.
+- Retry without backoff — possible crash→retry→crash loop.
 
-**Verdict : stratégie de zone correcte ; manque couverture conduite + retry-backoff.**
+**Verdict: correct zone strategy; missing conduite coverage +
+retry-backoff.**
 
 ## 14. `pages/ConduitePage.tsx` (94 l.)
 
-Dumb-view conduite fenêtre secondaire (`?view=conduite`). Reçoit
-`conduite:state` (500ms), émet `conduite:cmd`.
+Secondary-window conduite dumb-view (`?view=conduite`). Receives
+`conduite:state` (500ms), emits `conduite:cmd`.
 
-- **F10 — Page blanche hors Tauri, causes empilées** : (a) `listen`/`emit`
-  **raw** depuis `@tauri-apps/api/event` au lieu de `safeListen` (7) →
-  rejet hors Tauri, `st` reste null → '—' partout ; (b) `poll` catch
-  silencieux → aucun indicateur "backend absent" ; (c) `emit` non géré ;
-  (d) pas d'ErrorBoundary autour du lazy → crash = blanc intégral.
-- `bg-stagespace-bg` **et** `style={{background:'#0b0d12'}}` — l'inline
-  écrase le token avec une valeur **différente** (44).
-- **PANIC dupliqué** — pas `PanicButton` : pas d'icône, pas de flash, aucun
-  ack si la fenêtre principale est fermée (88).
-- **GO ≠ GO** : `cmd('go')` → `doCueNext` (recall cue) vs PerformView "GO" =
-  `goToNextMove` (setlist) — même libellé, actions différentes selon la
-  fenêtre — dangereux opérateur.
-- `disabled` sur Prev/Next pendant `isRecalling` mais **pas sur GO** (85-87).
-- `pending.remainingSec` = snapshot émise — le compte à rebours saute par
-  paliers de 500ms.
+- **F10 — Blank page outside Tauri, stacked causes**: (a) **raw**
+  `listen`/`emit` from `@tauri-apps/api/event` instead of `safeListen`
+  (7) → rejection outside Tauri, `st` stays null → '—' everywhere; (b)
+  silent `poll` catch → no "backend absent" indicator; (c) unhandled
+  `emit`; (d) no ErrorBoundary around the lazy → crash = full blank.
+- `bg-stagespace-bg` **and** `style={{background:'#0b0d12'}}` — the
+  inline overrides the token with a **different** value (44).
+- **Duplicated PANIC** — not `PanicButton`: no icon, no flash, no ack
+  if the main window is closed (88).
+- **GO ≠ GO**: `cmd('go')` → `doCueNext` (cue recall) vs PerformView
+  "GO" = `goToNextMove` (setlist) — same label, different actions
+  depending on the window — operator-dangerous.
+- `disabled` on Prev/Next during `isRecalling` but **not on GO** (85-87).
+- `pending.remainingSec` = emitted snapshot — the countdown jumps in
+  500ms steps.
 
-**Verdict : vue dédiée utile mais le plus fragile des fichiers audités :
-raw API, zéro fallback, token contourné, panic hors-composant, GO ambigu.**
+**Verdict: useful dedicated view but the most fragile audited file:
+raw API, zero fallback, bypassed token, off-component panic, ambiguous
+GO.**
 
-## Qualité des primitives ui/
+## ui/ primitives quality
 
-| Primitive | Consommateurs | Verdict |
+| Primitive | Consumers | Verdict |
 |---|---|---|
-| `Modal` | 5 modals + 2 pickers | ✅ bonne |
-| `ConfirmModal` | CuelistPanel, MovesTable | ✅ adopté (2/2) |
-| `EmptyState` | 6 sites/5 fichiers | ⚠️ moitié des empty states inline |
-| `Slider` | 9 fichiers | ✅ la mieux déployée |
-| `IconButton` | **Toolbar uniquement** | ❌ ~40 boutons ad hoc similaires inchangés |
-| `OscArmToggle` | Toolbar, PerformView×2 | ❌ état non sync + DryRunChip concurrent |
-| `PanicButton` | Toolbar, PerformView×3 | ✅ partagé sauf ConduitePage |
+| `Modal` | 5 modals + 2 pickers | ✅ good |
+| `ConfirmModal` | CuelistPanel, MovesTable | ✅ adopted (2/2) |
+| `EmptyState` | 6 sites/5 files | ⚠️ half the empty states inline |
+| `Slider` | 9 files | ✅ the most deployed |
+| `IconButton` | **Toolbar only** | ❌ ~40 similar ad hoc buttons unchanged |
+| `OscArmToggle` | Toolbar, PerformView×2 | ❌ unsynced state + competing DryRunChip |
+| `PanicButton` | Toolbar, PerformView×3 | ✅ shared except ConduitePage |
 
-**Tokens stagespace** : partiels — `Modal`/`PanicButton`/`ToastContainer` ✓
-mais `IconButton` (0 token, 22 couleurs), `Slider` (accent-* raw),
+**stagespace tokens**: partial — `Modal`/`PanicButton`/`ToastContainer` ✓
+but `IconButton` (0 tokens, 22 colors), `Slider` (accent-* raw),
 `EmptyState` (indigo), `OscArmToggle` (red/gray raw), `ConduitePage`
-(inline) — le design system existe mais n'est pas appliqué aux primitives
-elles-mêmes.
+(inline) — the design system exists but isn't applied to the
+primitives themselves.

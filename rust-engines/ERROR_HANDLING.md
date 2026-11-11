@@ -1,28 +1,28 @@
-# Gestion d'Erreurs
+# Error Handling
 
-STAGESPACE utilise `thiserror` pour une gestion d'erreurs structurée et type-safe.
+STAGESPACE uses `thiserror` for structured, type-safe error handling.
 
-## Types d'Erreurs
+## Error Types
 
 ### `StagespaceError`
 
-Enum principal représentant toutes les erreurs possibles dans STAGESPACE:
+Main enum representing all possible errors in STAGESPACE:
 
-| Variante | Description |
+| Variant | Description |
 |----------|-------------|
-| `ValidationFailed` | Erreur de validation du graphe |
-| `CompilationFailed` | Erreur de compilation du graphe |
-| `RuntimeError` | Erreur de runtime |
-| `OscError` | Erreur OSC |
-| `AudioError` | Erreur audio |
-| `NetworkError` | Erreur de réseau (wraps `std::io::Error`) |
-| `SerializationError` | Erreur de sérialisation (wraps `serde_json::Error`) |
-| `ParseError` | Erreur de parsing |
-| `InvalidParameter` | Erreur de paramètre invalide |
-| `MissingNode` | Erreur de nœud manquant |
-| `InvalidConnection` | Erreur de connexion invalide |
-| `CycleDetected` | Erreur de cycle détecté |
-| `LimitExceeded` | Erreur de limite dépassée |
+| `ValidationFailed` | Graph validation error |
+| `CompilationFailed` | Graph compilation error |
+| `RuntimeError` | Runtime error |
+| `OscError` | OSC error |
+| `AudioError` | Audio error |
+| `NetworkError` | Network error (wraps `std::io::Error`) |
+| `SerializationError` | Serialization error (wraps `serde_json::Error`) |
+| `ParseError` | Parsing error |
+| `InvalidParameter` | Invalid parameter error |
+| `MissingNode` | Missing node error |
+| `InvalidConnection` | Invalid connection error |
+| `CycleDetected` | Detected cycle error |
+| `LimitExceeded` | Exceeded limit error |
 
 ## Type Alias
 
@@ -30,23 +30,23 @@ Enum principal représentant toutes les erreurs possibles dans STAGESPACE:
 pub type Result<T> = std::result::Result<T, StagespaceError>;
 ```
 
-## Exemple d'utilisation
+## Usage example
 
 ```rust
 use stagespace_engines::{StagespaceError, Result};
 
-fn ma_fonction() -> Result<()> {
+fn my_function() -> Result<()> {
     if condition {
-        Err(StagespaceError::InvalidParameter("n_objects doit être > 0".to_string()))
+        Err(StagespaceError::InvalidParameter("n_objects must be > 0".to_string()))
     } else {
         Ok(())
     }
 }
 ```
 
-## Conversion automatique
+## Automatic conversion
 
-Les erreurs standards sont automatiquement converties en `StagespaceError`:
+Standard errors are automatically converted to `StagespaceError`:
 
 ```rust
 // std::io::Error → StagespaceError::NetworkError
@@ -56,17 +56,17 @@ let socket = UdpSocket::bind("0.0.0.0:0")?;
 let data: serde_json::Value = serde_json::from_str(json_str)?;
 ```
 
-## Erreurs dans les logs
+## Errors in logs
 
-Les erreurs sont automatiquement loggées avec leur message:
+Errors are automatically logged with their message:
 
 ```rust
 log_compilation_error(&error.to_string());
 ```
 
-## Propagation d'erreurs
+## Error propagation
 
-Utilisez l'opérateur `?` pour propager les erreurs:
+Use the `?` operator to propagate errors:
 
 ```rust
 fn compile_graph(graph: &Graph) -> Result<CompiledFunction> {
@@ -76,9 +76,9 @@ fn compile_graph(graph: &Graph) -> Result<CompiledFunction> {
 }
 ```
 
-## Erreurs personnalisées
+## Custom errors
 
-Pour ajouter une nouvelle erreur, ajoutez une variante à `StagespaceError`:
+To add a new error, add a variant to `StagespaceError`:
 
 ```rust
 #[derive(Debug, Error)]

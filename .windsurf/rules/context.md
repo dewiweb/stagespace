@@ -1,139 +1,145 @@
----
-trigger: always_on
----
-# Contexte du projet STAGESPACE
+# STAGESPACE project context
 
-## Résumé
+## Summary
 
-**STAGESPACE** est un moteur de trajectoires spatiales temps réel, piloté par un graphe de nœuds,
-compilé en fonctions continues `f(t)` — destiné au contrôle OSC de sources audio spatialisées
-(Holophonix, SPAT Revolution, IEM, tout récepteur OSC).
+**STAGESPACE** is a real-time spatial trajectory engine, driven by a node graph,
+compiled into continuous functions `f(t)` — for OSC control of spatialized audio
+sources (Holophonix, SPAT Revolution, IEM, any OSC receiver).
 
 ---
 
-## Corpus d'inspiration — projets antérieurs
+## Inspiration corpus — earlier projects
 
 ### `holophonix-animator` (`C:\Users\Administrateur\Documents\GitHub\holophonix-animator`)
-- **Stack** : Electron + React + TypeScript + Three.js + Zustand
-- **Apports retenus** :
+- **Stack**: Electron + React + TypeScript + Three.js + Zustand
+- **Retained contributions**:
   - Multi-track mode Barycentric (iso/centered/custom/shared)
-  - Phase offset entre tracks d'un groupe
-  - Formations automatiques (ligne, arc, cercle, grille)
-  - Fade-in/out comme subanimation (→ remplacé par TimeFalloff)
-  - Cue system (→ simplifié en V1 : snapshot de graphe + interpolation par track)
-  - OSC bidirectionnel, batching, systèmes XYZ et AED
-  - Moteur non throttlé (60 FPS)
-- **Erreurs à ne pas reproduire** :
-  - Documenter/architecturer avant d'implémenter (39 docs, fichiers .ts vides)
-  - Surcomplexité prématurée (timeline DAW, 8×8 cues en V1)
-  - Restructurations en cascade sans livrable fonctionnel
-  - **Shell Electron trop lourd** → remplacé par Tauri
+  - Phase offset between tracks of a group
+  - Automatic formations (line, arc, circle, grid)
+  - Fade-in/out as a subanimation (→ replaced by TimeFalloff)
+  - Cue system (→ simplified in V1: graph snapshot + per-track interpolation)
+  - Bidirectional OSC, batching, XYZ and AED systems
+  - Unthrottled engine (60 FPS)
+- **Mistakes not to repeat**:
+  - Document/architect before implementing (39 docs, empty .ts files)
+  - Premature overcomplexity (DAW timeline, 8×8 cues in V1)
+  - Cascading restructurings without a working deliverable
+  - **Electron shell too heavy** → replaced by Tauri
 
 ### `nodes-trajectories` / OSCAI (`C:\Users\Administrateur\Documents\GitHub\nodes-trajectories`)
-- **Stack** : Python FastAPI + React Flow + Three.js + NumPy
-- **Apports retenus** :
-  - Architecture graph compiler propre avec pipeline de validation en 7 étapes
-  - Détection de cycles (DFS GRAY/BLACK), compatibilité statique des comptages
-  - Nœuds Mix / Group / Sequence
-  - Moteurs math (circular, spiral, lissajous, figure8, linear, oscillation, perlin_noise, formation, converge, pendulum)
-  - Moteurs physique (bouncing, spring, follow, swarm/Boids, avoidance)
-  - Macro controls temps réel : TSpeed, Scale, Shift
-  - 5 profils OSC : IEM, Holophonix, IRCAM Spat, Generic
-- **Erreur à ne pas reproduire** :
-  - Génération de tableaux statiques de frames au lieu de fonctions continues f(t)
-  - Pas de vrai runtime temps réel
-  - **Backend Python hybride** → remplacé par Rust pur
+- **Stack**: Python FastAPI + React Flow + Three.js + NumPy
+- **Retained contributions**:
+  - Clean graph compiler architecture with a 7-step validation pipeline
+  - Cycle detection (DFS GRAY/BLACK), static counting compatibility
+  - Mix / Group / Sequence nodes
+  - Math engines (circular, spiral, lissajous, figure8, linear, oscillation, perlin_noise, formation, converge, pendulum)
+  - Physics engines (bouncing, spring, follow, swarm/Boids, avoidance)
+  - Real-time macro controls: TSpeed, Scale, Shift
+  - 5 OSC profiles: IEM, Holophonix, IRCAM Spat, Generic
+- **Mistake not to repeat**:
+  - Generating static frame arrays instead of continuous f(t) functions
+  - No real real-time runtime
+  - **Hybrid Python backend** → replaced by pure Rust
 
 ### `trajectoires-modern` (https://github.com/dewiweb/trajectoires-modern)
-- **Stack** : Node.js + React + WebSocket
-- **Apports retenus** :
-  - Dessin libre → trajectoire (→ nœud DrawSpline dans STAGESPACE)
-  - Streaming OSC immédiat
-  - Déploiement minimaliste comme référence de simplicité
-- **Limite** : 8 sources fixes, pas extensible
+- **Stack**: Node.js + React + WebSocket
+- **Retained contributions**:
+  - Freehand drawing → trajectory (→ DrawSpline node in STAGESPACE)
+  - Immediate OSC streaming
+  - Minimalist deployment as a simplicity reference
+- **Limitation**: 8 fixed sources, not extensible
 
 ### `holophonix-blender-addon` (`C:\Users\Administrateur\AppData\Roaming\Blender Foundation\Blender\5.0\scripts\addons\holophonix_blender_addon`)
-- **Stack** : Python + Blender
-- **Apports retenus** :
-  - Import natif de projets Holophonix (.zip → manifest.json → .hol)
-  - Modèles 3D réels Amadeus (speakers/tracks)
-  - Conversion XYZ ↔ AED
-  - Handlers OSC par track (input/output/bidirectionnel)
-  - Résolution automatique holophonix.local
-- **Limite** : couplage total à Blender, inutilisable standalone
+- **Stack**: Python + Blender
+- **Retained contributions**:
+  - Native Holophonix project import (.zip → manifest.json → .hol)
+  - Real Amadeus 3D models (speakers/tracks)
+  - XYZ ↔ AED conversion
+  - Per-track OSC handlers (input/output/bidirectional)
+  - Automatic holophonix.local resolution
+- **Limitation**: total coupling to Blender, unusable standalone
 
 ### `Holophonix-chataigne-module` (https://github.com/dewiweb/Holophonix-chataigne-module)
-- **Stack** : JSON/Chataigne
-- **Apports retenus** :
-  - Interpolation par courbe par track individuelle lors des transitions de cue
-  - Anti-loop OSC (désactivation OSC-in pendant recall)
-  - Choix exclusif XYZ vs AED (pas les deux simultanément)
-  - Gestion flexible des Track IDs (numéro, plage, liste)
-- **Limite** : enfermé dans l'écosystème Chataigne
+- **Stack**: JSON/Chataigne
+- **Retained contributions**:
+  - Per-curve interpolation per individual track during cue transitions
+  - OSC anti-loop (OSC-in disabled during recall)
+  - Exclusive XYZ vs AED choice (not both simultaneously)
+  - Flexible Track ID management (number, range, list)
+- **Limitation**: locked inside the Chataigne ecosystem
 
 ### `animation_nodes` (`C:\Users\Administrateur\AppData\Roaming\Blender Foundation\Blender\5.0\scripts\addons\animation_nodes`)
-- **Stack** : Python + Cython + Blender
-- **Apports retenus** :
-  - **Compilation du graphe en code natif** (pas d'interprétation nœud par nœud à chaque frame) → principe fondateur du runtime STAGESPACE
-  - **Falloffs** : enveloppes d'influence spatiale/temporelle/audio applicables à tout paramètre
-  - Splines comme trajectoires (SplineFromPoints, EvaluateSpline, avancement uniforme)
-  - Loop nodes : itérateurs paramétriques dans le graphe
-  - Script node : Python custom inline avec live reload
-  - SoundFalloff / SoundSpectrum : audio → paramètre d'animation
-  - DistributeMatrices : distribution d'objets sur chemin/surface
-  - Modes d'exécution : DEFAULT / MONITOR / MEASURE / BAKE
-- **Limite** : couplage total à Blender
+- **Stack**: Python + Cython + Blender
+- **Retained contributions**:
+  - **Graph compilation to native code** (no node-by-node interpretation every frame) → founding principle of the STAGESPACE runtime
+  - **Falloffs**: spatial/temporal/audio influence envelopes applicable to any parameter
+  - Splines as trajectories (SplineFromPoints, EvaluateSpline, uniform advancement)
+  - Loop nodes: parametric iterators in the graph
+  - Script node: custom inline Python with live reload
+  - SoundFalloff / SoundSpectrum: audio → animation parameter
+  - DistributeMatrices: object distribution on path/surface
+  - Execution modes: DEFAULT / MONITOR / MEASURE / BAKE
+- **Limitation**: total coupling to Blender
 
 ### `NodeOSC` (`C:\Users\Administrateur\AppData\Roaming\Blender Foundation\Blender\5.0\scripts\addons\NodeOSC`)
-- **Stack** : Python + Blender
-- **Apports retenus** :
-  - Mapping OSC → n'importe quel paramètre (modèle pour OSC IN dans STAGESPACE)
-  - Filtrage adresse + arguments
-  - Protocoles multiples (oscpy + python-osc)
+- **Stack**: Python + Blender
+- **Retained contributions**:
+  - OSC → any parameter mapping (model for OSC IN in STAGESPACE)
+  - Address + argument filtering
+  - Multiple protocols (oscpy + python-osc)
 
 ---
 
-## Principes fondateurs de STAGESPACE
+## Founding principles of STAGESPACE
 
-### 1. f(t) au lieu de frames[]
-Chaque moteur expose une fonction pure :
+### 1. f(t) instead of frames[]
+Each engine exposes a pure function:
 ```rust
 fn position(t: f64, object_index: usize, params: &EngineParams) -> Vec3
 ```
-Pas de tableau précalculé. Le runtime appelle ça à chaque tick. Paramètres modifiables en temps réel sans recompilation de la trajectoire.
+No precomputed array. The runtime calls it every tick. Parameters
+modifiable in real time without trajectory recompilation.
 
-### 2. Le graphe compile une fois, tourne en continu
-À chaque modification du graphe (connexion/déconnexion/changement de paramètre) : recompilation en une fonction composite. Entre deux compilations : le runtime tourne sans toucher au graphe.
+### 2. The graph compiles once, runs continuously
+On every graph modification (connection/disconnection/parameter change):
+recompilation into a composite function. Between compilations: the
+runtime runs without touching the graph.
 
-### 3. Falloffs comme couche d'expression universelle
-Un Falloff est une fonction `influence(t, position, context) → [0,1]` qui module n'importe quel paramètre de n'importe quel moteur. Remplace les subanimations statiques par un système générique.
+### 3. Falloffs as universal expression layer
+A Falloff is a function `influence(t, position, context) → [0,1]` that
+modulates any parameter of any engine. Replaces static subanimations
+with a generic system.
 
-### 4. DrawSpline comme nœud de première classe
-Le dessin libre devient un nœud `DrawSpline` dont la sortie (spline) connecte à `EvaluateSpline` — compatible avec tout le reste du graphe. Pas un mode séparé.
+### 4. DrawSpline as a first-class node
+Freehand drawing becomes a `DrawSpline` node whose output (spline)
+connects to `EvaluateSpline` — compatible with the rest of the graph.
+Not a separate mode.
 
-### 5. Import .hol comme source de vérité
-L'app lit les fichiers projet Holophonix (.hol) pour découvrir les tracks : IDs, noms, positions initiales, couleurs. Affiché directement dans le 3D preview.
+### 5. .hol import as source of truth
+The app reads Holophonix project files (.hol) to discover tracks:
+IDs, names, initial positions, colors. Displayed directly in the 3D
+preview.
 
-### 6. Audio IN uniquement
-- Entrée audio : détection BPM, amplitude par bande, spectre FFT
-- Aucune sortie audio, aucun traitement audio
-- Utilisable comme source dans le graphe (→ pilotage de Falloffs ou paramètres)
+### 6. Audio IN only
+- Audio input: BPM detection, per-band amplitude, FFT spectrum
+- No audio output, no audio processing
+- Usable as a graph source (→ driving Falloffs or params)
 
-### 7. OSC uniquement (pas de MIDI)
-- OSC out : envoi des positions calculées
-- OSC in : réception de triggers de cues, overrides de paramètres, macro controls
+### 7. OSC only (no MIDI)
+- OSC out: sending computed positions
+- OSC in: receiving cue triggers, parameter overrides, macro controls
 
 ---
 
-## Catalogue de nœuds V1
+## V1 node catalog
 
-### Structurels
+### Structural
 `Objects` · `Duration` · `Output` · `Group` · `Mix` · `Sequence`
 
-### Moteurs math
+### Math engines
 `circular` · `elliptical` · `spiral` · `lissajous` · `figure8` · `linear` · `oscillation` · `perlin_noise` · `formation` · `converge` · `pendulum` · `rose_curve` · `helix`
 
-### Moteurs physique
+### Physics engines
 `bouncing` · `spring` · `follow` · `swarm` · `avoidance`
 
 ### Splines
@@ -142,7 +148,7 @@ L'app lit les fichiers projet Holophonix (.hol) pour découvrir les tracks : IDs
 ### Falloffs
 `TimeFalloff` · `PointDistanceFalloff` · `DirectionalFalloff` · `AudioAmplitudeFalloff`
 
-### Modificateurs
+### Modifiers
 `Scale` · `Rotate` · `Offset` · `PhaseShift` · `BarycentricGroup`
 
 ### Sources
@@ -150,9 +156,9 @@ L'app lit les fichiers projet Holophonix (.hol) pour découvrir les tracks : IDs
 
 ---
 
-## Stack technique
+## Technical stack
 
-| Couche | Choix |
+| Layer | Choice |
 |--------|-------|
 | Shell | Tauri (Rust) |
 | UI | React 18 + TypeScript |
@@ -162,36 +168,36 @@ L'app lit les fichiers projet Holophonix (.hol) pour découvrir les tracks : IDs
 | Styles | TailwindCSS |
 | OSC | `rosc` (Rust) |
 | Audio IN | Web Audio API (via Tauri IPC) |
-| Moteurs | Rust pur (performance temps réel) |
-| Communication | Tauri IPC (natif) |
+| Engines | Pure Rust (real-time performance) |
+| Communication | Tauri IPC (native) |
 
 ---
 
-## Périmètre V1 — hors scope explicite
+## V1 scope — explicit out-of-scope
 
-- ❌ MIDI (définitivement abandonné)
-- ❌ LLM / génération IA (définitivement abandonné)
-- ❌ Timeline DAW → V2
-- ❌ Grille cue 8×8 → V2 (cue list linéaire en V1)
-- ❌ Packaging multi-plateforme → V2
-- ❌ Intégration Blender (l'addon reste séparé, lit l'OSC out)
-- ❌ Backend Python (remplacé par Rust pur)
-- ❌ Electron (remplacé par Tauri)
+- ❌ MIDI (permanently dropped)
+- ❌ LLM / AI generation (permanently dropped)
+- ❌ DAW timeline → V2
+- ❌ 8×8 cue grid → V2 (linear cue list in V1)
+- ❌ Multi-platform packaging → V2
+- ❌ Blender integration (the addon stays separate, reads the OSC out)
+- ❌ Python backend (replaced by pure Rust)
+- ❌ Electron (replaced by Tauri)
 
 ---
 
-## Ordre de build — règle absolue : moteur d'abord, UI ensuite
+## Build order — absolute rule: engine first, UI second
 
 ```
-S1  → Moteurs f(t) Rust pur + tests unitaires
-S2  → Runtime Rust (clock + OSC out via rosc)
-S3  → Graph compiler Rust (nœuds → fonction composite)
-S4  → Setup Tauri (IPC Rust ↔ React)
-S5  → Node editor UI React Flow minimal
-S6  → 3D Preview Three.js + import .hol
+S1  → Pure Rust f(t) engines + unit tests
+S2  → Rust runtime (clock + OSC out via rosc)
+S3  → Rust graph compiler (nodes → composite function)
+S4  → Tauri setup (IPC Rust ↔ React)
+S5  → Minimal React Flow node editor UI
+S6  → Three.js 3D Preview + .hol import
 S7  → Falloffs (Time + PointDistance)
 S8  → Audio IN (BPM + Amplitude via IPC)
-S9  → OSC IN + Cue system minimal + polissage
+S9  → OSC IN + minimal Cue system + polish
 ```
 
-**Rien n'est documenté tant que ça ne tourne pas.**
+**Nothing is documented until it runs.**

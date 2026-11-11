@@ -1,77 +1,78 @@
-# PLUGINS_WASM.md — Système de plugins WASM pour nodes custom
+# PLUGINS_WASM.md — WASM plugin system for custom nodes
 
-Branche : `feat/wasm-plugins`
-Statut : **Phases 1+3+4+5 livrées + ABI v2** — runtime host
-fonctionnel + intégration Tauri (registry dans AppState, commands
-`list_plugins`/`reload_plugins`, `compile_graph_live` = chemin unique de
-compile). 17 tests plugins verts, contrats TS générés.
+Branch: `feat/wasm-plugins`
+Status: **Phases 1+3+4+5 delivered + ABI v2** — functional host
+runtime + Tauri integration (registry in AppState, commands
+`list_plugins`/`reload_plugins`, `compile_graph_live` = single compile
+path). 17 green plugin tests, generated TS contracts.
 
-## Prochaines étapes (ordre recommandé)
+## Next steps (recommended order)
 
-1. ~~**Phase 3 — Tauri**~~ ✅ `343b73d` : `AppState.plugin_registry`
+1. ~~**Phase 3 — Tauri**~~ ✅ `343b73d`: `AppState.plugin_registry`
    (`Arc<Mutex>`) + `plugins_dir` (`<data_dir>/com.stagespace.studio/plugins/`,
-   créé + scanné au boot, erreurs non fatales) ; commands `list_plugins` /
-   `reload_plugins` → `PluginRegistryReport { manifests, errors, plugins_dir }` ;
-   **`compile_graph_live(graph, &Shared)`** = chemin unique (audio + OSC +
-   plugins) pour `activate_move`, `update_move_graph_merged` et le respawn de
-   cues ; `PluginManifest`/`PluginKind`/`PluginParamDef`/`PluginRegistryReport`
-   exportés ts-rs. Note : erreurs rapportées dans le report (toasts frontend)
-   plutôt qu'en events — suffisant tant que le scan est déclenché par l'UI.
-2. **Phase 6/7 restants** — plugin dans le pool `MATH` du fuzzer génératif,
-   test `list_plugins` tauri, import `.ssx` depuis l'UI (dialog → copie dans
-   le dossier + rescan), docs `CONTRIBUTING.md` + `AGENTS.md`, icône bundle.
+   created + scanned at boot, non-fatal errors); commands `list_plugins` /
+   `reload_plugins` → `PluginRegistryReport { manifests, errors, plugins_dir }`;
+   **`compile_graph_live(graph, &Shared)`** = single path (audio + OSC +
+   plugins) for `activate_move`, `update_move_graph_merged` and cue
+   respawn; `PluginManifest`/`PluginKind`/`PluginParamDef`/`PluginRegistryReport`
+   exported via ts-rs. Note: errors reported in the report (frontend toasts)
+   rather than events — sufficient while the scan is UI-triggered.
+2. **Remaining phase 6/7** — plugin in the `MATH` pool of the generative
+   fuzzer, `list_plugins` tauri test, `.ssx` import from the UI (dialog →
+   copy into the folder + rescan), `CONTRIBUTING.md` + `AGENTS.md` docs,
+   bundle icon.
 
-Règle transversale : **ABI v1 = engines uniquement** ; **ABI v2** ajoute
-`kind: "modifier" | "composite"` — l'upstream est passé au guest via un
-buffer mémoire (`plugin_inputs_ptr`), pas de host-callback (l'invité
-reste sans imports). Livré — voir §2.3.
+Cross-cutting rule: **ABI v1 = engines only**; **ABI v2** adds
+`kind: "modifier" | "composite"` — the upstream is passed to the guest
+via a memory buffer (`plugin_inputs_ptr`), no host-callback (the guest
+stays import-free). Delivered — see §2.3.
 
-> Objectif : permettre à des développeurs tiers d'étendre la palette de nodes
-> STAGESPACE sans recompiler l'app, via des modules WebAssembly packagés dans
-> un bundle `.ssx` (zip) contenant code + manifeste déclaratif.
+> Goal: let third-party developers extend STAGESPACE's node palette
+> without recompiling the app, via WebAssembly modules packaged in a
+> `.ssx` bundle (zip) containing code + declarative manifest.
 
-## 1. Principes directeurs
+## 1. Design principles
 
-- **Registry unifié, deux backends** — le compiler ne dispatche plus via un
-  `match NodeType` figé mais via un `NodeRegistry` :
+- **Unified registry, two backends** — the compiler no longer dispatches
+  via a frozen `match NodeType` but via a `NodeRegistry`:
   ```rust
   enum NodeImpl {
-      Native(Box<dyn Engine>),  // built-ins actuels, inchangés
-      Wasm(PluginEngine),       // plugins .ssx
+      Native(Box<dyn Engine>),  // current built-ins, unchanged
+      Wasm(PluginEngine),       // .ssx plugins
   }
   ```
-  Les built-ins sont *enregistrés* au boot (pas recompilés en wasm — sinon
-  dépendance circulaire au build + ABI v2 obligatoire pour les modifiers).
-  Dogfooding réel : si le registry marche pour les built-ins, il marche pour
-  les plugins. Migration vers wasm possible plus tard sans changer l'archi.
-- **Le plugin est un node conteneur `NodeType::Plugin`** — `params.plugin_id`
-  désigne le plugin ; les autres params sont ceux déclarés par le manifeste.
-  `NodeType` reste `Copy` (un variant `Custom(String)` le tuerait), le format
-  `.hfg`/cues/snapshots est inchangé. L'UI affiche le nom du plugin via le
-  registry, pas le type brut.
-- **Le manifeste est la source de vérité UI** — le plugin déclare ses params
-  (schema) et ses ports ; `NodeParamsPanel` est déjà schema-driven
-  (`ParamDef[]`), il suffit de brancher le registry dessus.
-- **Sandbox strict** — code tiers non fiable dans la boucle 60 FPS :
-  wasmtime + fuel + traps. Pas de WASI, calcul pur uniquement.
-- **Pas d'ABI Rust instable** — dylib exclu définitivement (pas d'ABI stable,
-  panic cross-FFI, packaging 3-plateformes inmaintenable).
-- **F(t) respecté** — un plugin implémente la même signature pure
-  `position(t, i, n, d, params) -> Vec3` que les engines natifs.
+  Built-ins are *registered* at boot (not recompiled to wasm — otherwise
+  a build-time circular dependency + mandatory ABI v2 for modifiers).
+  Real dogfooding: if the registry works for built-ins, it works for
+  plugins. Migration to wasm possible later without changing the arch.
+- **The plugin is a container node `NodeType::Plugin`** — `params.plugin_id`
+  designates the plugin; the other params are those declared by the
+  manifest. `NodeType` stays `Copy` (a `Custom(String)` variant would
+  kill it), the `.hfg`/cues/snapshots format is unchanged. The UI shows
+  the plugin name via the registry, not the raw type.
+- **The manifest is the UI source of truth** — the plugin declares its
+  params (schema) and its ports; `NodeParamsPanel` is already
+  schema-driven (`ParamDef[]`), just wire the registry into it.
+- **Strict sandbox** — untrusted third-party code in the 60 FPS loop:
+  wasmtime + fuel + traps. No WASI, pure computation only.
+- **No unstable Rust ABI** — dylib ruled out permanently (no stable ABI,
+  cross-FFI panic, unmaintainable 3-platform packaging).
+- **F(t) respected** — a plugin implements the same pure signature
+  `position(t, i, n, d, params) -> Vec3` as the native engines.
 
-## 2. Format de bundle `.ssx`
+## 2. `.ssx` bundle format
 
-Archive zip à extension dédiée (modèle `.vsix`) :
+Zip archive with a dedicated extension (`.vsix` model):
 
 ```
 lemniscate.ssx
-├── manifest.json      (obligatoire, validé au chargement)
-├── module.wasm        (obligatoire, wasm32-unknown-unknown, pas de WASI)
-├── icon.svg           (optionnel — palette)
-└── README.md          (optionnel — doc affichée dans l'app)
+├── manifest.json      (required, validated at load)
+├── module.wasm        (required, wasm32-unknown-unknown, no WASI)
+├── icon.svg           (optional — palette)
+└── README.md          (optional — doc displayed in the app)
 ```
 
-### 2.1 Manifeste (`manifest.json`)
+### 2.1 Manifest (`manifest.json`)
 
 ```json
 {
@@ -82,7 +83,7 @@ lemniscate.ssx
   "abi_version": 1,
   "kind": "engine",
   "category": "Plugins",
-  "description": "Figure-∞ paramétrique",
+  "description": "Parametric figure-∞",
   "ports": { "inputs": ["input", "duration"], "outputs": ["trajectory"] },
   "params": [
     { "key": "scale",  "type": "number", "default": 1.0, "min": 0.1, "max": 10, "label": "Scale", "live": true },
@@ -92,219 +93,222 @@ lemniscate.ssx
 }
 ```
 
-- `abi_version` : gate de compatibilité — l'host refuse `abi_version > HOST_ABI` (=2).
-- `kind` : `engine` (abi 1+), `modifier` | `composite` (abi 2 requis — refusés en v1).
-- `params[]` : mêmes types que `ParamDef` frontend (`number`, `boolean`,
-  `enum`, `vec3`, `text`) — rendu direct par `NodeParamField` existant.
-- `capabilities` : deny par défaut ; futur `audio`, `osc_in`.
+- `abi_version`: compatibility gate — the host refuses `abi_version > HOST_ABI` (=2).
+- `kind`: `engine` (abi 1+), `modifier` | `composite` (abi 2 required — refused in v1).
+- `params[]`: same types as frontend `ParamDef` (`number`, `boolean`,
+  `enum`, `vec3`, `text`) — rendered directly by the existing `NodeParamField`.
+- `capabilities`: deny by default; future `audio`, `osc_in`.
 
-### 2.2 ABI v1 (contrat host ↔ invité)
+### 2.2 ABI v1 (host ↔ guest contract)
 
-Cible `wasm32-unknown-unknown`, pas de WASI. Buffers **statiques** en mémoire
-linéaire — pas d'alloc/free côté invité (SDK trivial, tests WAT sans
-allocateur) :
+Target `wasm32-unknown-unknown`, no WASI. **Static** buffers in linear
+memory — no alloc/free on the guest side (trivial SDK, allocator-free
+WAT tests):
 
 ```rust
-// Exportés par le plugin
-fn plugin_params_ptr() -> i32;   // buffer ≥ 64 KB réservé dans .data
-fn plugin_result_ptr() -> i32;   // buffer 24 bytes ([f64;3]) dans .data
+// Exported by the plugin
+fn plugin_params_ptr() -> i32;   // ≥ 64 KB buffer reserved in .data
+fn plugin_result_ptr() -> i32;   // 24-byte buffer ([f64;3]) in .data
 fn plugin_position(t: f64, i: i32, n: i32, d: f64, params_len: i32);
 // + export "memory"
 ```
 
-Host : sérialise `params` JSON (cap 64 KB) → écrit à `params_ptr` → appelle
-`plugin_position` → lit 24 bytes à `result_ptr` → `finite_or_zero`. Buffers
-sûrs car le `Store` wasmtime est `Mutex`-guardé par node (accès séquentiel).
-Trap → position zero + erreur loguée (jamais de propagation au worker 60 FPS).
-`fuel` activé : budget par appel, une boucle infinie trap au lieu de geler
-le runtime.
+Host: serializes `params` JSON (64 KB cap) → writes at `params_ptr` →
+calls `plugin_position` → reads 24 bytes at `result_ptr` →
+`finite_or_zero`. Buffers are safe because the wasmtime `Store` is
+`Mutex`-guarded per node (sequential access). Trap → zero position +
+logged error (never propagated to the 60 FPS worker). `fuel` enabled:
+per-call budget, an infinite loop traps instead of freezing the runtime.
 
 ### 2.3 ABI v2 — modifier / composite
 
-ABI v2 ajoute un export et réutilise `plugin_position` inchangée :
+ABI v2 adds one export and reuses `plugin_position` unchanged:
 
 ```rust
-fn plugin_inputs_ptr() -> i32;   // buffer 48 bytes ([f64;6]) dans .data — REQUIS si abi_version ≥ 2
+fn plugin_inputs_ptr() -> i32;   // 48-byte buffer ([f64;6]) in .data — REQUIRED if abi_version ≥ 2
 ```
 
-Avant chaque `plugin_position`, l'host écrit la/les position(s) upstream de
-l'objet courant dans le buffer : slot 0 (indices 0..3) = `input`/`input_a`,
-slot 1 (indices 3..6) = `input_b`. Le guest les lit en mémoire linéaire —
-zéro host-callback, l'invité reste sans imports.
+Before each `plugin_position`, the host writes the current object's
+upstream position(s) into the buffer: slot 0 (indices 0..3) =
+`input`/`input_a`, slot 1 (indices 3..6) = `input_b`. The guest reads
+them in linear memory — zero host-callback, the guest stays import-free.
 
-| `kind` | Ports du node | Inputs écrits | Sémantique |
+| `kind` | Node ports | Inputs written | Semantics |
 |---|---|---|---|
-| `engine` | `input` (Objects), `duration` | — | source `f(t)` |
-| `modifier` | `input` (trajectoire) | 1 | wrap l'upstream (comme `Scale`) |
-| `composite` | `input_a`, `input_b` | 2 | combine 2 upstreams (comme `Mix`) |
+| `engine` | `input` (Objects), `duration` | — | `f(t)` source |
+| `modifier` | `input` (trajectory) | 1 | wraps the upstream (like `Scale`) |
+| `composite` | `input_a`, `input_b` | 2 | combines 2 upstreams (like `Mix`) |
 
-Le validator est kind-aware (map `NodeId → PluginKind` résolue par le
-compiler depuis le registry) : arité trajectoire (modifier=1,
-composite=2), compatibilité `n_objects`, propagation de durée suivent les
-règles des nodes natifs homonymes. Kind inconnu → superset permissif
-(l'arité exacte est garantie au compile). SDK : `stagespace_plugin_modifier!`
-et `stagespace_plugin_composite!` génèrent le buffer inputs + l'export.
+The validator is kind-aware (`NodeId → PluginKind` map resolved by the
+compiler from the registry): trajectory arity (modifier=1,
+composite=2), `n_objects` compatibility, duration propagation follow
+the rules of the same-named native nodes. Unknown kind → permissive
+superset (exact arity is guaranteed at compile). SDK:
+`stagespace_plugin_modifier!` and `stagespace_plugin_composite!`
+generate the inputs buffer + the export.
 
-## 3. Plan d'implémentation par phases
+## 3. Phased implementation plan
 
-### Phase 1 — Runtime host (rust-engines) — ✅ `3527441`
+### Phase 1 — Host runtime (rust-engines) — ✅ `3527441`
 
-- [x] `Cargo.toml` : `wasmtime` v38 (fuel activé via `Config`), `zip` v2.4
+- [x] `Cargo.toml`: `wasmtime` v38 (fuel enabled via `Config`), `zip` v2.4
 - [x] `src/plugins/manifest.rs` — `PluginManifest` (serde) + validation
-      (id, `abi_version ≤ HOST_ABI_VERSION`, kinds, types de params)
+      (id, `abi_version ≤ HOST_ABI_VERSION`, kinds, param types)
 - [x] `src/plugins/loader.rs` — `load_bundle`/`load_bundle_bytes`
-      (zip → manifeste validé → `wasmtime::Module` + check exports ABI)
-- [x] `src/plugins/registry.rs` — `PluginRegistry` : `scan_dir`,
-      `register_wasm` (tests/embarqués), erreurs collectées non fatales
-- [x] `src/plugins/wasm_engine.rs` — `PluginEngine` implémente `Engine` :
-      Store mutex-guardé, buffers statiques, fuel 100k/appel, trap→zeros,
-      premier erreur loguée via `log_plugin_error`
+      (zip → validated manifest → `wasmtime::Module` + ABI exports check)
+- [x] `src/plugins/registry.rs` — `PluginRegistry`: `scan_dir`,
+      `register_wasm` (tests/embedded), collected non-fatal errors
+- [x] `src/plugins/wasm_engine.rs` — `PluginEngine` implements `Engine`:
+      mutex-guarded Store, static buffers, 100k fuel/call, trap→zeros,
+      first error logged via `log_plugin_error`
 - [x] `src/graph.rs` — `NodeType::Plugin` (wire `"Plugin"`)
-- [x] `src/compiler.rs` — arm `NodeType::Plugin` résolvant `params.plugin_id`
-      via `LiveInputs.plugins` ; `compile_with_live_inputs` publique
-- [x] `src/validator.rs` — `Plugin` traité comme engine : ports
-      `input`+`duration`, alimente Output/composites/modifiers, sub-graph
-      only, arité n_objects automatique
-- [x] Frontend minimal : union `'Plugin'`, `connectionRules`, catégorie
-      "Plugins", schema `plugin_id`
-- [x] 14 tests WAT inline (`plugin_tests.rs`) : positions, trap→zero,
-      fuel, roundtrip `.ssx`, intégration validate+compile+sample
+- [x] `src/compiler.rs` — `NodeType::Plugin` arm resolving `params.plugin_id`
+      via `LiveInputs.plugins`; public `compile_with_live_inputs`
+- [x] `src/validator.rs` — `Plugin` treated as engine: `input`+`duration`
+      ports, feeds Output/composites/modifiers, sub-graph only,
+      automatic n_objects arity
+- [x] Minimal frontend: `'Plugin'` union, `connectionRules`, "Plugins"
+      category, `plugin_id` schema
+- [x] 14 inline WAT tests (`plugin_tests.rs`): positions, trap→zero,
+      fuel, `.ssx` roundtrip, validate+compile+sample integration
 
-### Phase 2 — Registry dans le compilateur
+### Phase 2 — Registry in the compiler
 
-`Compiler` reçoit `plugins: Option<Arc<PluginRegistry>>` (builder
-`.with_plugin_registry()`, défaut `None` → les nodes `Plugin` échouent à la
-compile avec `InvalidParameter("plugin_id inconnu ou absent")`). Call sites
-src-tauri mis à jour en Phase 3. Le `match` actuel de `compile_engine` reste
-tel quel en v1 — le registry unifié `NodeImpl::{Native,Wasm}` est une
-refactorisation ultérieure optionnelle ; Phase 1 ajoute seulement l'arm
-`NodeType::Plugin` qui consulte le registry.
+`Compiler` receives `plugins: Option<Arc<PluginRegistry>>` (builder
+`.with_plugin_registry()`, default `None` → `Plugin` nodes fail at
+compile with `InvalidParameter("plugin_id unknown or missing")`). src-tauri
+call sites updated in Phase 3. The current `compile_engine` `match` stays
+as-is in v1 — the unified `NodeImpl::{Native,Wasm}` registry is an
+optional later refactoring; Phase 1 only adds the `NodeType::Plugin` arm
+that consults the registry.
 
 ### Phase 3 — Tauri (src-tauri) — ✅ `343b73d`
 
 - [x] `AppState.plugin_registry: Option<Arc<Mutex<PluginRegistry>>>` +
-      `plugins_dir` — construits dans `.manage` (pas d'AppHandle →
+      `plugins_dir` — built in `.manage` (no AppHandle →
       `dirs::data_dir()` + identifier `com.stagespace.studio`)
-- [x] `Shared.plugin_registry` propagé aux call sites de compile
-- [x] `compile_graph_live(graph, &Shared)` — audio + OSC + plugins, utilisé
-      par `activate_move`, `update_move_graph_merged`, respawn de cues
-- [x] Commands : `list_plugins` / `reload_plugins` → `PluginRegistryReport`
-      (manifestes + erreurs formatées + chemin du dossier)
-- [x] ts-rs : `PluginManifest`/`PluginKind`/`PluginParamDef`/
-      `PluginRegistryReport` exportés → contrats régénérés
+- [x] `Shared.plugin_registry` propagated to compile call sites
+- [x] `compile_graph_live(graph, &Shared)` — audio + OSC + plugins, used
+      by `activate_move`, `update_move_graph_merged`, cue respawn
+- [x] Commands: `list_plugins` / `reload_plugins` → `PluginRegistryReport`
+      (manifests + formatted errors + folder path)
+- [x] ts-rs: `PluginManifest`/`PluginKind`/`PluginParamDef`/
+      `PluginRegistryReport` exported → contracts regenerated
 
-### Phase 4 — Frontend — ✅ livré
+### Phase 4 — Frontend — ✅ delivered
 
-- [x] `store/types/index.ts` : `'Plugin'` dans l'union `NodeType` (Phase 1)
-- [x] `utils/connectionRules.ts` : `Plugin` = règles engine (Phase 1)
-- [x] `nodeParamSchema.ts` : catégorie "Plugins" + `PARAM_SCHEMA['Plugin']`
+- [x] `store/types/index.ts`: `'Plugin'` in the `NodeType` union (Phase 1)
+- [x] `utils/connectionRules.ts`: `Plugin` = engine rules (Phase 1)
+- [x] `nodeParamSchema.ts`: "Plugins" category + `PARAM_SCHEMA['Plugin']`
       + helpers `pluginParamDefs`/`pluginNodeSchema`/`pluginDefaultParams`
-      (manifeste → `ParamDef`, defaults depuis `params[].default`)
-- [x] `slices/pluginSlice.ts` dans `useGraphStore` : `plugins`/`pluginErrors`/
-      `pluginsDir`/`pluginsLoaded`, `fetchPlugins` (boot dans App + lazy au
-      mount du NodeEditor), `reloadPlugins` (toasts + erreurs de scan)
-- [x] `NodeEditor.tsx` : catégorie "Plugins" dynamique — un item par
-      manifeste (nom + version + tooltip description/auteur), création de
-      node pré-remplie (`plugin_id` + defaults), hint du dossier plugins
-      quand vide, erreurs de scan affichées, bouton ↻ Rescan ; l'item
-      générique `Plugin` reste pour saisie manuelle de `plugin_id`
-- [x] `NodeParamsPanel` : schema Plugin = `plugin_id` + defs du manifeste ;
-      chips affichent le nom du plugin (avec occurrence indexée)
-- [x] `CustomNode` : label = nom du manifeste (fallback `data.label`),
-      params inline mergés dans le node expandé
-- [ ] Icône `icon.svg` du bundle dans la palette (optionnel MVP)
+      (manifest → `ParamDef`, defaults from `params[].default`)
+- [x] `slices/pluginSlice.ts` in `useGraphStore`: `plugins`/`pluginErrors`/
+      `pluginsDir`/`pluginsLoaded`, `fetchPlugins` (boot in App + lazy on
+      NodeEditor mount), `reloadPlugins` (toasts + scan errors)
+- [x] `NodeEditor.tsx`: dynamic "Plugins" category — one item per
+      manifest (name + version + description/author tooltip), prefilled
+      node creation (`plugin_id` + defaults), plugins folder hint when
+      empty, scan errors displayed, ↻ Rescan button; the generic `Plugin`
+      item stays for manual `plugin_id` entry
+- [x] `NodeParamsPanel`: Plugin schema = `plugin_id` + manifest defs;
+      chips show the plugin name (with indexed occurrence)
+- [x] `CustomNode`: label = manifest name (fallback `data.label`),
+      inline params merged into the expanded node
+- [ ] `icon.svg` bundle icon in the palette (optional MVP)
 
-### Phase 5 — SDK invité (`stagespace-plugin-sdk`) — ✅ livré
+### Phase 5 — Guest SDK (`stagespace-plugin-sdk`) — ✅ delivered
 
-- [x] Crate `plugin-sdk/` (rlib minimal — `serde_json` seul, zéro dep native)
-      + macro `stagespace_plugin!(fn)` (macro déclarative, pas de proc-macro
-      crate) générant les exports ABI : `plugin_params_ptr`,
-      `plugin_result_ptr`, `plugin_position` — buffers statiques 64 KB/24 B,
-      params désérialisés en `serde_json::Value` + helpers `get_f64`/`get_bool`/
-      `get_str` avec défauts
-- [x] CLI `stagespace-pack` (binaire du même crate, feature-gated `packer` →
-      `zip` optionnel pour ne pas compiler du C dans le graphe wasm32) :
-      `stagespace-pack manifest.json module.wasm -o out.ssx` + `--check`
-- [x] Exemple `plugin-examples/lemniscate/` (figure-∞, params scale/aspect/
-      speed) compilé `wasm32-unknown-unknown`, packagé `lemniscate.ssx`,
-      documenté dans `plugin-sdk/README.md` + README dédié
-- [x] Pipeline prouvé de bout en bout : `real_ssx_fixture_executes` charge le
-      `.ssx` committé (`rust-engines/tests/fixtures/`) via `PluginRegistry` →
-      `compile_with_live_inputs` → positions correctes, params JSON reçus
+- [x] `plugin-sdk/` crate (minimal rlib — `serde_json` alone, zero native
+      deps) + `stagespace_plugin!(fn)` macro (declarative macro, no
+      proc-macro crate) generating the ABI exports: `plugin_params_ptr`,
+      `plugin_result_ptr`, `plugin_position` — static 64 KB/24 B buffers,
+      params deserialized to `serde_json::Value` + `get_f64`/`get_bool`/
+      `get_str` helpers with defaults
+- [x] `stagespace-pack` CLI (binary in the same crate, `packer`
+      feature-gated → optional `zip` so no C compiles into the wasm32
+      graph): `stagespace-pack manifest.json module.wasm -o out.ssx` +
+      `--check`
+- [x] `plugin-examples/lemniscate/` example (figure-∞, scale/aspect/
+      speed params) compiled `wasm32-unknown-unknown`, packaged
+      `lemniscate.ssx`, documented in `plugin-sdk/README.md` + dedicated README
+- [x] End-to-end pipeline proven: `real_ssx_fixture_executes` loads the
+      committed `.ssx` (`rust-engines/tests/fixtures/`) via `PluginRegistry` →
+      `compile_with_live_inputs` → correct positions, JSON params received
 
 ### Phase 6 — Tests
 
-- [x] **rust-engines** : modules WAT inline (`wasmtime` feature `wat`) —
-      pas besoin du toolchain wasm32 en CI. Cas : position correcte, params
-      JSON lus, trap → zero + pas de panic, fuel épuisé → zero, manifeste
-      invalide → erreur propre, `abi_version` incompatible → refus (Phase 1)
-- [x] **Fixture `.ssx` réelle** committée (`tests/fixtures/lemniscate.ssx`) —
-      pipeline SDK→wasm→registry→compile→sample testé en CI sans toolchain
-- [x] **compiler_tests** : graphe `Objects→Plugin→Output` compile et échantillonne
-- [ ] **validator_tests** : Plugin accepté comme engine, rejeté comme cible
-      de modifier upstream invalide
-- [ ] **generative_graph_tests** : `Plugin` dans le pool `MATH` (avec un
-      plugin de test enregistré) → fuzz automatique
-- [ ] **tauri** : `list_plugins` sur dossier fixture (1 valide + 1 manifeste
-      cassé → erreur rapportée sans échec global)
-- [ ] **frontend** : palette affiche le plugin mocké, `NodeParamsPanel`
-      rend le schema dynamique
+- [x] **rust-engines**: inline WAT modules (`wasmtime` `wat` feature) —
+      no wasm32 toolchain needed in CI. Cases: correct position, JSON
+      params read, trap → zero + no panic, fuel exhausted → zero,
+      invalid manifest → clean error, incompatible `abi_version` →
+      refused (Phase 1)
+- [x] **Real `.ssx` fixture** committed (`tests/fixtures/lemniscate.ssx`) —
+      SDK→wasm→registry→compile→sample pipeline tested in CI without toolchain
+- [x] **compiler_tests**: `Objects→Plugin→Output` graph compiles and samples
+- [ ] **validator_tests**: Plugin accepted as engine, rejected as target
+      of an invalid upstream modifier
+- [ ] **generative_graph_tests**: `Plugin` in the `MATH` pool (with a
+      registered test plugin) → automatic fuzz
+- [ ] **tauri**: `list_plugins` on a fixture folder (1 valid + 1 broken
+      manifest → error reported without global failure)
+- [ ] **frontend**: palette shows the mocked plugin, `NodeParamsPanel`
+      renders the dynamic schema
 
 ### Phase 7 — CI / release
 
-- [ ] `ci.yml` : aucun job nouveau requis pour le host (wasmtime compile en
-      natif). Le build du plugin exemple (wasm32 target) = job séparé
-      optionnel ou artefact précompilé committé pour les fixtures
-- [ ] Docs : section "Développer un plugin" dans `CONTRIBUTING.md` +
-      README du SDK
-- [ ] `AGENTS.md` : section plugins (dossier, ABI, commandes de test)
+- [ ] `ci.yml`: no new job required for the host (wasmtime compiles
+      natively). Building the example plugin (wasm32 target) = optional
+      separate job or committed precompiled artifact for fixtures
+- [ ] Docs: "Developing a plugin" section in `CONTRIBUTING.md` +
+      SDK README
+- [ ] `AGENTS.md`: plugins section (folder, ABI, test commands)
 
-## 4. Sécurité & temps réel
+## 4. Safety & real-time
 
-| Risque | Mitigation |
+| Risk | Mitigation |
 |---|---|
-| Boucle infinie dans le plugin | `fuel` wasmtime — 100k instr./appel, posé **avant** `Instance::new` (les sections `start` sont bornées aussi), reset par appel, fail-fast si le moteur n'a pas `consume_fuel` |
-| Panic/crash plugin | Traps wasmtime — jamais de UB host, position zero + log une fois |
-| `memory.grow` hostile | `StoreLimits` : 32 MiB mémoire linéaire, 10k éléments de table, 1 mémoire par instance — le fuel ne borne PAS le grow |
-| Déclaration mémoire hostile | Rejet au load : shared / memory64 / minimum > 512 pages (32 MiB) |
-| Zip bomb | Caps de décompression : fichier `.ssx` ≤ 64 MB, `manifest.json` ≤ 256 KB, `module.wasm` ≤ 16 MB — lecture via `take()` bornée |
-| Import destructeur | `import_plugin` : src == dest détecté par `canonicalize` (la copie est sautée, jamais de troncature), taille bornée, `file_name` seul (pas de traversal) |
-| Scan bloquant | `spawn_blocking` pour scan/import — la compilation wasmtime ne tourne jamais sur l'executor async |
-| Allocation hostiles | Buffers ABI statiques, cap `params_len` 64 KB |
-| I/O depuis le plugin | Pas de WASI, **zéro import** — tout module déclarant un import est rejeté au load |
-| Plugin malveillant | Sandbox wasm = code non fiable sans accès système ; signature/checksum de bundles = phase ultérieure |
+| Infinite loop in the plugin | wasmtime `fuel` — 100k instr./call, set **before** `Instance::new` (`start` sections are bounded too), reset per call, fail-fast if the engine lacks `consume_fuel` |
+| Plugin panic/crash | wasmtime traps — never host UB, zero position + logged once |
+| Hostile `memory.grow` | `StoreLimits`: 32 MiB linear memory, 10k table elements, 1 memory per instance — fuel does NOT bound grow |
+| Hostile memory declaration | Rejected at load: shared / memory64 / minimum > 512 pages (32 MiB) |
+| Zip bomb | Decompression caps: `.ssx` file ≤ 64 MB, `manifest.json` ≤ 256 KB, `module.wasm` ≤ 16 MB — read via bounded `take()` |
+| Destructive import | `import_plugin`: src == dest detected by `canonicalize` (copy skipped, never truncated), bounded size, `file_name` only (no traversal) |
+| Blocking scan | `spawn_blocking` for scan/import — wasmtime compilation never runs on the async executor |
+| Hostile allocation | Static ABI buffers, `params_len` 64 KB cap |
+| I/O from the plugin | No WASI, **zero imports** — any module declaring an import is rejected at load |
+| Malicious plugin | Wasm sandbox = untrusted code with no system access; bundle signature/checksum = later phase |
 
-### Cycle de vie du registry
+### Registry lifecycle
 
-- `scan_dir` **réconcilie** : un `.ssx` supprimé désenregistre son plugin au
-  rescan (désinstallation effective sans redémarrage)
-- Deux fichiers déclarant le même `manifest.id` → erreur collectée
-  ("duplicate plugin id"), first-wins déterministe par ordre alphabétique
-- **Snapshot semantics** : les moves déjà compilés conservent leur
-  `Arc<Plugin>` — un rescan n'affecte que les compilations futures
-- `register_wasm` (tests / futurs embarqués) applique la même validation
-  de module que les bundles fichier
+- `scan_dir` **reconciles**: a deleted `.ssx` unregisters its plugin on
+  rescan (effective uninstall without restart)
+- Two files declaring the same `manifest.id` → collected error
+  ("duplicate plugin id"), deterministic alphabetical first-wins
+- **Snapshot semantics**: already-compiled moves keep their
+  `Arc<Plugin>` — a rescan only affects future compilations
+- `register_wasm` (tests / future embedded) applies the same module
+  validation as file bundles
 
-## 5. Hors scope (v1 plugins)
+## 5. Out of scope (v1 plugins)
 
-- ✅ `kind: "modifier" | "composite"` — livré via ABI v2 (§2.3)
-- ❌ Host functions (`log`, `audio`, `osc_in`) — `capabilities` réservé
-- ❌ Marketplace / signature / sandboxing renforcé
-- ❌ Hot-reload d'un plugin en cours de playback (un rescan n'affecte que
-  les compilations futures — les moves actifs gardent leur snapshot)
+- ✅ `kind: "modifier" | "composite"` — delivered via ABI v2 (§2.3)
+- ❌ Host functions (`log`, `audio`, `osc_in`) — `capabilities` reserved
+- ❌ Marketplace / signing / hardened sandboxing
+- ❌ Hot-reload of a plugin during playback (a rescan only affects
+  future compilations — active moves keep their snapshot)
 
-## 6. Effort estimé
+## 6. Estimated effort
 
-| Phase | Charge | Risque |
+| Phase | Load | Risk |
 |---|---|---|
-| 1 — runtime host | M | ABI mémoire linéaire (gestion ptr/len) |
-| 2 — registry compiler | S | Signature `compile_graph` — toucher call sites |
+| 1 — host runtime | M | Linear memory ABI (ptr/len handling) |
+| 2 — compiler registry | S | `compile_graph` signature — touching call sites |
 | 3 — Tauri | S | — |
-| 4 — frontend | M | Palette dynamique (le reste est schema-driven) |
-| 5 — SDK | M | Macro proc-macro (ou codegen simple sans macro en MVP) |
-| 6 — tests | S | WAT inline évite le toolchain wasm32 en CI |
+| 4 — frontend | M | Dynamic palette (the rest is schema-driven) |
+| 5 — SDK | M | Proc-macro (or simple codegen without macro in MVP) |
+| 6 — tests | S | Inline WAT avoids the wasm32 toolchain in CI |
 | 7 — CI/docs | XS | — |
 
-Le point le plus délicat est l'ABI mémoire linéaire (alloc/free/write/read
-de `plugin_position`). Le reste est de la plomberie dans des seams déjà
-propres (Engine trait, registry, schema-driven UI).
+The trickiest point is the linear memory ABI (alloc/free/write/read of
+`plugin_position`). The rest is plumbing into already-clean seams
+(Engine trait, registry, schema-driven UI).

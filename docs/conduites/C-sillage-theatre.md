@@ -1,56 +1,57 @@
-# CONDUITE DE MISE EN ONDES — « SILLAGE »
+# SHOW RUNNING SHEET — "SILLAGE"
 
 | | |
 |---|---|
-| **Production** | Théâtre dansé — 60', 2 danseurs trackés |
-| **Salle** | Plateau 12×8m — 20 enceintes périmètre + ciel |
-| **Système** | STAGESPACE — positions only → renderer TiMax |
-| **Objets** | 24 — ambiances, voix, sons concrets, acteurs |
-| **Tracking** | PSN/RTTrP → `/stagespace/position` flux continu |
-| **Régie** | Cue list scène-par-scène + follow-me |
+| **Production** | Dance theatre — 60', 2 tracked dancers |
+| **Venue** | 12×8m stage — 20 perimeter + overhead speakers |
+| **System** | STAGESPACE — positions only → TiMax renderer |
+| **Objects** | 24 — atmospheres, voices, concrete sounds, actors |
+| **Tracking** | PSN/RTTrP → continuous `/stagespace/position` stream |
+| **Stage management** | Scene-by-scene cue list + follow-me |
 
 ---
 
 ## PATCH
 
-| Track | Objet | Rôle | Origine | Tracking |
+| Track | Object | Role | Origin | Tracking |
 |---|---|---|---|---|
-| 1–6 | AMB1–6 | ambiances scène | par zone | — |
-| 7–8 | V1/V2 | voix danseurs | entrée plateau | PSN→position |
-| 9–12 | S1–S4 | sons concrets | mobiles | — |
+| 1–6 | AMB1–6 | scene atmospheres | per zone | — |
+| 7–8 | V1/V2 | dancer voices | stage entrance | PSN→position |
+| 9–12 | S1–S4 | concrete sounds | mobile | — |
 | 13–14 | F1/F2 | followers (delay) | — | follow V1/V2 |
-| 15–18 | H1–H4 | hauteurs | dôme | — |
-| 19–24 | R1–R6 | réserve | parc | — |
+| 15–18 | H1–H4 | heights | dome | — |
+| 19–24 | R1–R6 | reserve | park | — |
 
-**Suivi** : `V1`/`V2` pilotés par flux `/stagespace/position <n> x y z` (PSN→OSC bridge) — positions manuelles en continu.
+**Follow**: `V1`/`V2` driven by `/stagespace/position <n> x y z` stream
+(PSN→OSC bridge) — continuous manual positions.
 
 ---
 
-## CONDUITE
+## RUNNING SHEET
 
-| # | Scène | Action | Commande | Note |
+| # | Scene | Action | Command | Note |
 |---|---|---|---|---|
-| 00 | — | **ARM + vérif tracking** — V1/V2 répondent au PSN | `/stagespace/arm` | `disarm` aux entractes |
-| 01 | Sc.1 — Noir | **AMB** — nappes fixes zone plateau | `/stagespace/cue/recall 1` | image ouverte |
-| 02 | Entrée D1 | **FOLLOW** — V1 suit danseur (PSN continu) | flux `/stagespace/position 7` | track 7 vivant |
-| 03 | Sc.2 | **TRACKING CUE** — ambiances changent, V1/V2 intouchés | `/stagespace/cue/recall 3` | scope positions — pas de clear |
-| 04 | Solo D1 | **ORBIT AUTOUR** — slot orbit centré sur position V1 | `/stagespace/park 7` + `/stagespace/slot 4` | park V1 (protégé) + ancre dynamique |
-| 05 | Entrée D2 | **DUO FOLLOW** — F1 poursuit V1 délai 800ms | `/stagespace/slot 5` | follow engine, délai param |
-| 06 | Sc.3 | **CHANGE AUTO** — pre_wait 2s + follow 0 | `/stagespace/cue/next` | enchaîné, pas d'opérateur |
-| 07 | Duo central | **CONVERGE** — tous objets convergent sur danseurs | `/stagespace/cue/recall 5` | `end:hold` — fige sur eux |
-| 08 | Sc.4 — Sortie | **SCATTER** — tout se disperse aux extrêmes | `/stagespace/cue/next` | tracking cue |
-| 09 | Final | **IMAGE FINALE** — V1/V2 derniers points fixes | `/stagespace/position 7/8` manuels | puis `/stagespace/park 7 8` |
-| 10 | Rideau | **STASE** — positions tenues, silence | — | sortie en image |
+| 00 | — | **ARM + tracking check** — V1/V2 respond to PSN | `/stagespace/arm` | `disarm` at intermissions |
+| 01 | Sc.1 — Blackout | **AMB** — fixed beds over stage zone | `/stagespace/cue/recall 1` | open image |
+| 02 | D1 entrance | **FOLLOW** — V1 follows dancer (continuous PSN) | `/stagespace/position 7` stream | track 7 live |
+| 03 | Sc.2 | **TRACKING CUE** — atmospheres change, V1/V2 untouched | `/stagespace/cue/recall 3` | positions scope — no clear |
+| 04 | D1 solo | **ORBIT AROUND** — orbit slot centered on V1's position | `/stagespace/park 7` + `/stagespace/slot 4` | park V1 (protected) + dynamic anchor |
+| 05 | D2 entrance | **DUO FOLLOW** — F1 pursues V1, 800ms delay | `/stagespace/slot 5` | follow engine, delay param |
+| 06 | Sc.3 | **AUTO CHANGE** — pre_wait 2s + follow 0 | `/stagespace/cue/next` | chained, no operator |
+| 07 | Central duo | **CONVERGE** — all objects converge on dancers | `/stagespace/cue/recall 5` | `end:hold` — freezes on them |
+| 08 | Sc.4 — Exit | **SCATTER** — everything disperses to extremes | `/stagespace/cue/next` | tracking cue |
+| 09 | Final | **FINAL IMAGE** — V1/V2 last fixed points | `/stagespace/position 7/8` manual | then `/stagespace/park 7 8` |
+| 10 | Curtain | **STASIS** — held positions, silence | — | exit in image |
 
 ---
 
-## CONSIGNES
+## NOTES
 
-- **Park = protection** — V1/V2 parkées ne sont JAMAIS écrites par un recall (Tracking ou Full). C'est la sécurité des positions suivies.
-- **Tracking cue** — ne touche que les objets listés dans son scope ; V1/V2 non listés restent au tracking PSN.
-- **Follow-me** : si le flux PSN coupe, la position fige (dernière manuelle) — vérifier `status` si perte d'objet.
-- **`pre_wait`/`follow`** — l'enchaînement scène 06 est auto ; ne pas GO manuellement pendant le wait.
-- **Répetition** : `disarm` (positions tournent sans émettre) — `arm` le soir.
-- **Panic** : positions `trackpos` — les danseurs voient leurs objets sauter aux origines ; signaler au plateau.
+- **Park = protection** — parked V1/V2 are NEVER written by a recall (Tracking or Full). That's the safety of followed positions.
+- **Tracking cue** — only touches objects listed in its scope; unlisted V1/V2 stay on PSN tracking.
+- **Follow-me**: if the PSN stream cuts, the position freezes (last manual) — check `status` if an object is lost.
+- **`pre_wait`/`follow`** — the scene 06 chaining is automatic; do not GO manually during the wait.
+- **Rehearsal**: `disarm` (positions run without emitting) — `arm` on show night.
+- **Panic**: `trackpos` positions — dancers see their objects jump to origins; signal the stage.
 
-**Signé** — metteur en ondes : ______  Régie plateau : ______  Date : ______
+**Signed** — sound director: ______  Stage management: ______  Date: ______

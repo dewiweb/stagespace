@@ -1,8 +1,8 @@
-# wobble — plugin modifier (ABI v2)
+# wobble — modifier plugin (ABI v2)
 
-Ajoute une oscillation circulaire dans le plan xz autour de la position
-upstream — démontre le passage de la trajectoire amont au guest via le
-buffer `plugin_inputs_ptr`.
+Adds a circular oscillation in the xz plane around the upstream
+position — demonstrates passing the upstream trajectory to the guest via
+the `plugin_inputs_ptr` buffer.
 
 ## Build
 
@@ -14,16 +14,16 @@ cargo build --release --target wasm32-unknown-unknown
 
 ## Usage
 
-Le node `Plugin` avec `plugin_id: "wobble"` prend **1 entrée
-trajectoire** (port `input`) — comme un modifier natif (`Scale`,
-`Offset`) : `Circular → wobble → Output`.
+The `Plugin` node with `plugin_id: "wobble"` takes **1 trajectory
+input** (port `input`) — like a native modifier (`Scale`,
+`Offset`): `Circular → wobble → Output`.
 
-Params : `amp` (rayon de l'oscillation), `freq` (Hz).
+Params: `amp` (oscillation radius), `freq` (Hz).
 
-## Points ABI v2 illustrés
+## ABI v2 features demonstrated
 
-- `kind: "modifier"` + `abi_version: 2` dans le manifeste
-- Macro `stagespace_plugin_modifier!` → exporte `plugin_inputs_ptr`
-  en plus du contrat v1
-- Signature `fn(t, i, n, d, params, input)` — `input` = position
-  upstream de l'objet courant
+- `kind: "modifier"` + `abi_version: 2` in the manifest
+- `stagespace_plugin_modifier!` macro → exports `plugin_inputs_ptr`
+  in addition to the v1 contract
+- Signature `fn(t, i, n, d, params, input)` — `input` = upstream
+  position of the current object

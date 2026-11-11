@@ -1,57 +1,56 @@
-# Cas d'usage — à amender/compléter
+# Use cases — to amend/complete
 
-Deux scénarios de terrain validés et leurs limites ouvertes. Document vivant :
-toute nouvelle exigence ou correction vient s'y ajouter.
-
----
-
-## 1. Ingé son mix console + effets (conduite maîtresse = console)
-
-**Scénario** : l'ingé pilote déjà sa console à ses scènes ; chaque snapshot/scène
-émet un OSC, STAGESPACE exécute les cues spatiales en chasse. Le laptop ne sert
-que pour le soundcheck et la surveillance.
-
-**Ce qui est livré** : `/stagespace/{go,cue/next,prev,recall,panic,stop,park,unpark,arm,disarm,status,timecode}` + `/slot|slot/stop|solo` ; ack + feedback `cue/current|next` vers les 4 derniers contrôleurs ; `docs/console-integration.md` ; `examples/conduite-epilogue.*` ; fade optionnel sur `cue/recall` ; `set_osc_armed` (dry-run) pilotable par OSC.
-
-**Limites ouvertes**
-- Retour d'état limité → **livré** : `/stagespace/nack` (rejet busy/not-found ciblé) + panneau **Conduite plein écran** dans PerformView (NOW/NEXT gros, TC, pending, GO/Prev/Next/Panic touch) ; Companion reste possible pour la console elle-même.
-- Deux couches de gain (fader console vs `object_channels.gain`) — règle documentée : gain spatial réservé aux cues tracking/effets.
-- ~~Pas d'OSC learn~~ **livré** : bouton LEARN dans l'éditeur OSC IN (cf. §2).
-- ~~Ack ≠ exécution~~ mitigé : rejet signalé par `nack`, exécution confirmée par le feedback `cue/current` — reste vrai qu'un hit instantané doit utiliser `cue/recall + fade court`.
+Two field-validated scenarios and their open limits. Living document:
+every new requirement or fix gets added here.
 
 ---
 
-## 2. Busking — concert non-timecodé (effets à l'inspiration)
+## 1. Sound engineer mixing console + effects (console = master conduite)
 
-**Scénario** : l'ingé prépare ses slots à la balance, puis tire/coupe/solo au
-numéro en live. Tout doit être fondu et annulable.
+**Scenario**: the engineer already drives their console by scenes; each
+snapshot/scene emits an OSC message, STAGESPACE executes the spatial cues
+in chase. The laptop is only for soundcheck and monitoring.
 
-**Ce qui est livré** : `playSlot`/`stopSlotWithFade` par UI + OSC (`/stagespace/slot|slot/stop|solo|unsolo`, fades du slot respectés ; `unsolo` = restore du set pré-solo) ; layers parallèles ; `one_shot` pour les stingers ; macros `scale/shift/rotation/speed` et OSC-IN (`macro`, `channel`, `position`, handlers→signal) pour l'expression live ; `park` pour figer un objet repris à la main ; DRY-RUN pour répéter silencieusement.
+**What's delivered**: `/stagespace/{go,cue/next,prev,recall,panic,stop,park,unpark,arm,disarm,status,timecode}` + `/slot|slot/stop|solo`; ack + `cue/current|next` feedback to the 4 most recent controllers; `docs/console-integration.md`; `examples/conduite-epilogue.*`; optional fade on `cue/recall`; `set_osc_armed` (dry-run) drivable by OSC.
 
-**Limites ouvertes**
-- Numérotation : `oscIndex` **stable persisté** livré — le n de `/stagespace/slot` ne suit plus les réordonnancements ; backfill index+1 pour les slots existants. `park` survit au panic par design (intention opérateur).
-- ~~Pas de "bump momentané"~~ **livré** (`6583fd9`) : press-and-hold ≥350ms sur un pad = joue tant que tenu, release = fade-out — comportement console.
-- ~~Le mapping fader→param demande un graphe signal pré-câblé (pas d'OSC learn)~~ **livré** : scope `OSC IN` du drawer live — liste, add/remove, **LEARN** (bouge le fader, l'adresse se remplit) via `learnAddOscMapping`.
-- ~~Prochain incrément : pads numérotés + solo dans PerformView~~ **livré** (`fda88ac`) — badge `#n` par slot, bouton `S` solo dès que plusieurs moves jouent ; reste un éditeur de mappings complet — **mode busking plein écran livré** (`a05f37c`) : pads géants adaptatifs + hold=bump + S=solo.
+**Open limits**
+- Limited state feedback → **delivered**: `/stagespace/nack` (targeted busy/not-found rejection) + **full-screen Conduite** panel in PerformView (big NOW/NEXT, TC, pending, GO/Prev/Next/Panic touch); Companion stays possible for the console itself.
+- Two gain layers (console fader vs `object_channels.gain`) — documented rule: spatial gain reserved for tracking/effects cues.
+- ~~No OSC learn~~ **delivered**: LEARN button in the OSC IN editor (see §2).
+- ~~Ack ≠ execution~~ mitigated: rejection reported by `nack`, execution confirmed by `cue/current` feedback — still true that an instant hit should use `cue/recall + short fade`.
 
-### 2b — Variante WFS + couronne KNN (renderer externe)
+---
 
-**Scénario** : concert live — entrées instrus/voix mixées en **WFS** (Wave
-Field Synthesis) sur alignement HP, plus un **bus KNN** vers une couronne de
-HP autour du public. Le processeur spatial externe (Holophonix, SPAT, ADM-OSC
-renderer…) possède tout le panning : STAGESPACE n'envoie que les
-positions/trajectoires des objets.
+## 2. Busking — non-timecoded concert (effects on inspiration)
 
-**Mapping** : objets 1–N = mix WFS (sources ponctuelles dans le sweet spot),
-objets N+1–24 = couronne KNN. Côté STAGESPACE c'est juste des index de tracks —
-la séparation en bus vit chez le renderer. `Group`/partition dans les graphes
-donne des sous-ensembles propres par bus.
+**Scenario**: the engineer prepares slots at soundcheck, then
+fires/cuts/solos by number live. Everything must be faded and cancelable.
 
-**Spécificités**
-- WFS : les moves doivent rester dans la zone couverte par l'alignement
-  (sweet spot / hors-champ de l'array) — contrainte de *design du graphe*,
-  pas du moteur.
-- KNN couronne : `Circular`/`Rotate`/phase-spread = usage canonique ;
-  `distance`/`gain` universels, `spread`/`aperture` selon profil/renderer.
-- La chaîne audio n'est jamais touchée : park, manual position, slots, solo
-  agissent uniquement sur les positions — le mix WFS/KNN continue tourner.
+**What's delivered**: `playSlot`/`stopSlotWithFade` via UI + OSC (`/stagespace/slot|slot/stop|solo|unsolo`, slot fades respected; `unsolo` = restore pre-solo set); parallel layers; `one_shot` for stingers; `scale/shift/rotation/speed` macros and OSC-IN (`macro`, `channel`, `position`, handlers→signal) for live expression; `park` to freeze a hand-held object; DRY-RUN for silent rehearsal.
+
+**Open limits**
+- Numbering: **stable persisted `oscIndex`** delivered — the n in `/stagespace/slot` no longer follows reordering; backfill index+1 for existing slots. `park` survives panic by design (operator intent).
+- ~~No "momentary bump"~~ **delivered** (`6583fd9`): press-and-hold ≥350ms on a pad = plays while held, release = fade-out — console behavior.
+- ~~The fader→param mapping needs a pre-wired signal graph (no OSC learn)~~ **delivered**: `OSC IN` scope of the live drawer — list, add/remove, **LEARN** (move the fader, the address fills in) via `learnAddOscMapping`.
+- ~~Next increment: numbered pads + solo in PerformView~~ **delivered** (`fda88ac`) — `#n` badge per slot, `S` solo button as soon as several moves play; a full mappings editor remains — **full-screen busking mode delivered** (`a05f37c`): adaptive giant pads + hold=bump + S=solo.
+
+### 2b — WFS + KNN ring variant (external renderer)
+
+**Scenario**: live concert — instrument/voice inputs mixed in **WFS**
+(Wave Field Synthesis) on a loudspeaker array, plus a **KNN bus** to a
+ring of speakers around the audience. The external spatial processor
+(Holophonix, SPAT, ADM-OSC renderer…) owns all the panning: STAGESPACE
+only sends object positions/trajectories.
+
+**Mapping**: objects 1–N = WFS mix (point sources in the sweet spot),
+objects N+1–24 = KNN ring. On the STAGESPACE side these are just track
+indices — the bus split lives in the renderer. `Group`/partition in
+graphs gives clean subsets per bus.
+
+**Specifics**
+- WFS: moves must stay in the zone covered by the array (sweet spot /
+  out-of-field) — a *graph design* constraint, not an engine one.
+- KNN ring: `Circular`/`Rotate`/phase-spread = canonical use;
+  `distance`/`gain` universal, `spread`/`aperture` per profile/renderer.
+- The audio chain is never touched: park, manual position, slots, solo
+  only act on positions — the WFS/KNN mix keeps running.

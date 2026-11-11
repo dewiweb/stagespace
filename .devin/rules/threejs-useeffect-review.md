@@ -1,110 +1,105 @@
----
-trigger: always_on
----
-# Règle : Review des useEffect dans le code Three.js
+# Rule: useEffect review in Three.js code
 
-## Objectif
+## Goal
 
-Les `useEffect` en React sont coûteux : ils se déclenchent à chaque changement de
-dépendances, causent des re-renders, et peuvent créer des fuites mémoire si le
-cleanup est oublié. Dans le contexte Three.js (render loop 60fps, objets GPU,
-refs partagées), un `useEffect` mal placé peut dégrader les performances ou
-créer des bugs subtils.
+`useEffect`s in React are expensive: they fire on every dependency
+change, cause re-renders, and can create memory leaks if cleanup is
+forgotten. In the Three.js context (60fps render loop, GPU objects,
+shared refs), a misplaced `useEffect` can degrade performance or
+create subtle bugs.
 
-## Règle
+## Rule
 
-**À chaque fois qu'on ajoute ou modifie un `useEffect` dans un fichier lié à
-Three.js** (hooks, composants avec scène 3D, render loop), **review obligatoire**
-pour vérifier s'il peut être remplacé par un mécanisme plus efficace.
+**Every time a `useEffect` is added or modified in a Three.js-related file** (hooks, components with a 3D scene, render loop), a **mandatory review** verifies whether it can be replaced by a more efficient mechanism.
 
-### Alternatives à privilégier (par ordre de préférence)
+### Preferred alternatives (in order of preference)
 
-1. **Ref sync inline** — Au lieu d'un `useEffect` qui sync une prop vers un ref,
-   faire la sync directement dans le body du composant :
+1. **Inline ref sync** — Instead of a `useEffect` syncing a prop to a ref,
+   do the sync directly in the component body:
 
    ```tsx
-   // ❌ Éviter
+   // ❌ Avoid
    useEffect(() => { positionsRef.current = positions; }, [positions]);
 
-   // ✅ Préférer
-   positionsRef.current = positions; // sync directe, pas de re-render
+   // ✅ Prefer
+   positionsRef.current = positions; // direct sync, no re-render
    ```
 
-2. **useMemo / useCallback** — Pour les valeurs dérivées ou callbacks stables,
-   préférer `useMemo` / `useCallback` plutôt qu'un `useEffect` qui met à jour un
+2. **useMemo / useCallback** — For derived values or stable callbacks,
+   prefer `useMemo` / `useCallback` over a `useEffect` that updates
    state.
 
-3. **Event handler direct** — Au lieu d'un `useEffect` qui réagit à un changement
-   de state, utiliser un event handler ou un callback directement au moment du
-   changement.
+3. **Direct event handler** — Instead of a `useEffect` reacting to a state
+   change, use an event handler or a callback at the moment of the
+   change.
 
-4. **Zustand selector** — Au lieu d'un `useEffect` qui lit le store et sync vers
-   un ref, utiliser un selector Zustand avec `useGraphStore((s) => s.xxx)` qui
-   ne re-render que quand la valeur change.
+4. **Zustand selector** — Instead of a `useEffect` reading the store and
+   syncing to a ref, use a Zustand selector `useGraphStore((s) => s.xxx)`
+   which only re-renders when the value changes.
 
-5. **requestAnimationFrame** — Pour les mises à jour continues (positions,
-   animations), utiliser la render loop existante (`useRenderLoop`) plutôt qu'un
-   `useEffect` avec `setInterval` ou `requestAnimationFrame` séparé.
+5. **requestAnimationFrame** — For continuous updates (positions,
+   animations), use the existing render loop (`useRenderLoop`) rather than a
+   `useEffect` with `setInterval` or a separate `requestAnimationFrame`.
 
-### Cas où un `useEffect` est justifié
+### Cases where a `useEffect` is justified
 
-Un `useEffect` reste légitime pour :
+A `useEffect` remains legitimate for:
 
-- **Setup one-shot avec cleanup** : création de la scène, renderer, caméra,
-  OrbitControls — tout ce qui doit être créé une fois et disposé au unmount
-- **Souscription à des events Tauri** : `listen("positions-update", ...)` avec
-  cleanup `unlisten()`
-- **ResizeObserver / IntersectionObserver** : avec cleanup dans le return
-- **Effets de bord sur le DOM** : focus, scroll, measurement
+- **One-shot setup with cleanup**: scene creation, renderer, camera,
+  OrbitControls — anything that must be created once and disposed on unmount
+- **Tauri event subscriptions**: `listen("positions-update", ...)` with
+  `unlisten()` cleanup
+- **ResizeObserver / IntersectionObserver**: with cleanup in the return
+- **DOM side effects**: focus, scroll, measurement
 
-### Checklist de review
+### Review checklist
 
-Pour chaque `useEffect` dans du code Three.js, vérifier :
+For each `useEffect` in Three.js code, verify:
 
-- [ ] **Peut-il être remplacé par une ref sync inline ?** (cas le plus fréquent)
-- [ ] **A-t-il un cleanup ?** — Si oui, le cleanup dispose-t-il bien les objets
-      Three.js (geometry, material, textures) ?
-- [ ] **Ses dépendances sont-elles minimales ?** — Éviter `[...]` avec des objets
-      qui changent à chaque render (créer des refs stables à la place)
-- [ ] **Déclenche-t-il un re-render ?** — Si oui, est-ce nécessaire ? Un `setState`
-      dans un `useEffect` cause un re-render supplémentaire
-- [ ] **Tourne-t-il à 60fps ?** — Si oui, le déplacer dans la render loop
-      existante (`useRenderLoop`) via un ref
-- [ ] **Crée-t-il des objets Three.js ?** — Si oui, vérifier le cleanup pour
-      éviter les fuites GPU
+- [ ] **Can it be replaced by an inline ref sync?** (most frequent case)
+- [ ] **Does it have a cleanup?** — If yes, does the cleanup properly
+      dispose Three.js objects (geometry, material, textures)?
+- [ ] **Are its dependencies minimal?** — Avoid `[...]` with objects
+      that change every render (create stable refs instead)
+- [ ] **Does it trigger a re-render?** — If yes, is it needed? A `setState`
+      in a `useEffect` causes an extra re-render
+- [ ] **Does it run at 60fps?** — If yes, move it into the existing
+      render loop (`useRenderLoop`) via a ref
+- [ ] **Does it create Three.js objects?** — If yes, check cleanup to
+      avoid GPU leaks
 
-### Fichiers concernés
+### Affected files
 
-| Fichier | Rôle | Attention particulière |
+| File | Role | Particular attention |
 |---------|------|------------------------|
-| `useRenderLoop.ts` | Render loop 60fps | **JAMAIS** de deps React dans le `useEffect` principal — utiliser des refs internes |
-| `useObjects3D.ts` | Création des sphères | Cleanup obligatoire (dispose geometry + material) |
-| `useHolMarkers.ts` | Marqueurs .hol | Cleanup obligatoire |
-| `useManipulateHandle.ts` | Handle + trajectory line | Cleanup obligatoire |
-| `useManipulateMode.ts` | Handlers drag | Utiliser des refs pour éviter les stale closures |
-| `useDrawMode.ts` | Handlers draw | Idem |
-| `useInteractionModes.ts` | Toggle OrbitControls | Cleanup : restaurer les controls |
-| `Scene3D.tsx` | Orchestration | Minimiser les `useEffect` — déléguer aux hooks |
-| `TrajectoryVisualization.tsx` | Lignes de trajectoire | Cleanup des geometries |
+| `useRenderLoop.ts` | 60fps render loop | **NEVER** React deps in the main `useEffect` — use internal refs |
+| `useObjects3D.ts` | Sphere creation | Cleanup mandatory (dispose geometry + material) |
+| `useHolMarkers.ts` | .hol markers | Cleanup mandatory |
+| `useManipulateHandle.ts` | Handle + trajectory line | Cleanup mandatory |
+| `useManipulateMode.ts` | Drag handlers | Use refs to avoid stale closures |
+| `useDrawMode.ts` | Draw handlers | Same |
+| `useInteractionModes.ts` | OrbitControls toggle | Cleanup: restore controls |
+| `Scene3D.tsx` | Orchestration | Minimize `useEffect`s — delegate to hooks |
+| `TrajectoryVisualization.tsx` | Trajectory lines | Geometry cleanup |
 
-### Exemple concret (déjà appliqué dans le codebase)
+### Concrete example (already applied in the codebase)
 
 ```tsx
-// Dans useRenderLoop.ts — AVANT (bug potentiel)
+// In useRenderLoop.ts — BEFORE (potential bug)
 const positionsRef = useRef(positions);
 useEffect(() => {
   positionsRef.current = positions;
-}, [positions]);  // ← useEffect inutile + re-render
+}, [positions]);  // ← useless useEffect + re-render
 
-// APRÈS (correct)
+// AFTER (correct)
 const positionsRef = useRef(positions);
-positionsRef.current = positions;  // sync inline, pas de re-render
+positionsRef.current = positions;  // inline sync, no re-render
 ```
 
 ### Application
 
-Cette règle s'applique :
-- **À chaque ajout de `useEffect`** dans un fichier Three.js
-- **À chaque review de code** touchant aux hooks Three.js
-- **Lors d'un refactor** — profiter pour remplacer les `useEffect` inutiles par
-  des ref syncs
+This rule applies:
+- **On every `useEffect` addition** in a Three.js file
+- **On every code review** touching Three.js hooks
+- **During a refactor** — take the opportunity to replace useless
+  `useEffect`s with ref syncs
