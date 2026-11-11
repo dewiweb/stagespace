@@ -156,6 +156,30 @@ export default function SpatialFxPanel() {
     }
   }, [zones.length, editingZoneIdx]);
 
+  /// Signature géométrique de la zone chargée — sert à détecter une
+  /// modification externe (drag/resize/place en 3D) pour resynchroniser
+  /// les champs position du formulaire sans toucher au reste du draft
+  /// (channels/effets : seule la géométrie peut bouger hors du formulaire).
+  const editGeomRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (editingZoneIdx === null) {
+      editGeomRef.current = null;
+      return;
+    }
+    const z = zones[editingZoneIdx];
+    if (!z) return;
+    const sig = JSON.stringify(z.shape);
+    if (editGeomRef.current === sig) return;
+    editGeomRef.current = sig;
+    if (z.shape.shape === 'sphere') {
+      setZA(z.shape.center.join(','));
+      setZRadius(String(z.shape.radius));
+    } else {
+      setZA(z.shape.min.join(','));
+      setZB(z.shape.max.join(','));
+    }
+  }, [zones, editingZoneIdx]);
+
   // ── Modulation form state ──
   const [mSource, setMSource] = React.useState<KinematicSourceName>('Speed');
   const [mChannel, setMChannel] = React.useState<SpatialChannelName>('Spread');
