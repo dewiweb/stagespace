@@ -14,31 +14,34 @@ any generic OSC receiver.
 ```
 ┌──────────────────────────────────────────────────┐
 │            Node Editor  (React Flow)              │
-│  Objects → Motion Node → Duration → Output     │
-│  + Global graph tab (post-merge FX chain)      │
+│  Objects → Motion Node → Duration → Output        │
+│  + Global FX tab (post-merge chain)               │
+│  + Modulation tab (signal graph → node params)    │
 └───────────────────┬──────────────────────────────┘
                     │ Tauri IPC
           ┌─────────▼──────────┐
-          │   Graph Compiler   │   ← Rust: nodes → composite function
+          │ Graph + Signal     │   ← Rust: nodes → composite function
+          │ Compilers          │
           └────┬──────────┬────┘
                │          │
     ┌──────────▼───┐  ┌───▼──────────┐
     │ Math Engine  │  │Physics Engine│
     │ circular     │  │ bouncing     │
-    │ lissajous    │  │ swarm (boids)│
-    │ spiral       │  │ spring       │
-    │ perlin_noise │  │ follow       │ ← pursue/evade/orbit/arrive
-    │ pendulum     │  │ avoidance    │
-    │ formation    │  │ vectorfield  │ ← procedural + drawn fields
-    │ converge     │  └─────────────┘
-    │ figure8      │
-    │ linear       │  Splines: DrawSpline / EvaluateSpline /
-    │ oscillation  │             TrimSpline / OffsetSpline
-    │ BPM          │  ← Audio IN (native cpal + FFT)
-    │ AudioAmp     │  ← Audio IN
-    │ TimeFalloff  │  ← Falloffs
-    │ PointDist    │  ← Falloffs
-    └──────────────┘
+    │ elliptical   │  │ swarm (boids)│
+    │ lissajous    │  │ spring       │
+    │ spiral       │  │ follow       │ ← pursue/evade/orbit/arrive
+    │ perlin_noise │  │ avoidance    │
+    │ pendulum     │  │ vectorfield  │ ← procedural + drawn fields
+    │ formation    │  └─────────────┘
+    │ converge     │
+    │ figure8      │  Splines: DrawSpline / EvaluateSpline /
+    │ rose_curve   │             TrimSpline / OffsetSpline
+    │ helix · wave │  Plugins: .ssx WASM engines (wasmtime)
+    │ linear       │
+    │ oscillation  │  Audio IN (cpal + FFT): BPM /
+    │ custom_traj  │    AudioAmplitude / AudioSpectrum
+    └──────────────┘  Falloffs: Time / PointDistance /
+                      Directional / AudioAmplitude
                     │
          ┌──────────▼──────────┐
          │  MergeRuntime 60 FPS │   ← parallel workers → merge → OSC
@@ -46,7 +49,12 @@ any generic OSC receiver.
          │  OSC Out (rosc)      │   → 6 profiles (Holophonix, IEM, IRCAM,
          │                      │      ADM, Generic XYZ/AED) + extended
          │                      │      channels (gain, spread, distance…)
-         │  3D Preview          │   ← real-time Three.js (+ zone viz)
+         │  OSC IN              │   ← /stagespace/* show control +
+         │                      │      user mappings (learn)
+         └──────────┬───────────┘
+                    │ positions-update event
+         ┌──────────▼──────────┐
+         │ 3D Preview (Three.js)│  ← real-time + zone viz
          └─────────────────────┘
 ```
 
