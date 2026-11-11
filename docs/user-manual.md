@@ -484,24 +484,47 @@ Le graphe *Global FX* (tab du node editor) ne produit pas de trajectoire — il
 **post-traite** le merge final de tous les moves :
 
 - `Merge` fixe la stratégie de résolution des tracks contestées.
-- `Zone`/`Velocity` **déclarent** les zones et canaux que le panel Spatial FX
-  (tab FX, colonne SHOW) affiche et édite.
+- `Zone` injecte des zones *designées* dans le moteur spatial (`graph_zones`,
+  évaluées avant les zones dessinées du panel FX — voir annexe D).
+- `Velocity` déclare les modulations cinématiques (speed/accel→canal) listées
+  par le panel FX.
 - Les modulations globales (macros d'ensemble) s'appliquent après merge —
   `macro:scale` d'un fader agit sur tous les moves simultanément.
 
 ![Spatial FX](screenshots/11-spatial-fx.png)
 
-## D. Spatial FX (tab FX)
+## D. Spatial FX — workflow de bout en bout
 
-Le panneau **FX** (colonne SHOW) édite zones, modulations de canaux et canaux
-objet déclarés par le graphe global :
+Les effets spatiaux partagent le même moteur d'évaluation (influence SDF
+par zone, fusion des canaux) mais ont **deux chemins de création** —
+déclaratif dans le graphe, interactif dans le viewer :
 
-- **Zones** : sphere/box, position + taille, canaux affectés (gain etc.),
-  `Place` = placement par clic dans la 3D. `clear all` et chaque `×` passent
-  par une confirmation.
-- **Modulations** : canaux déclarés par les nœuds `Velocity` du graphe global.
+### D.1 Deux sources de zones, un moteur
+
+| | Node `Zone` (Global FX) | Zones dessinées (panel FX + 3D) |
+|---|---|---|
+| Création | Node editor, tab **Global FX** | Panel **FX** (colonne SHOW) : `Add Zone` ou `Place` → clic en 3D ; ensuite drag = déplacer, scroll = resize |
+| Paramètres | `shape` sphere/box, centre/radius ou min/max, `falloff`, `channels`, `objects`, `enabled` | idem + **effets positionnels** (`repel`, `attract`, `dampen`, `vortex`) — déplacent les objets, exclusif aux zones dessinées |
+| Évaluation | `graph_zones` — remplacées en bloc à chaque push du graphe, évaluées **avant** les zones dessinées | `zones` — persistantes jusqu'à suppression, évaluées après |
+| Persistence | `globalGraph` dans le `.hfg` | tableau `zones` dans le `.hfg` |
+
+**Règle d'usage** : le node `Zone` pour les effets *designés* (reproductibles,
+versionnés dans le show) — les zones dessinées pour le *sculpting live* en
+répétition (et les effets positionnels que le node n'a pas). Les deux
+s'additionnent dans le merge runtime.
+
+### D.2 Le panel FX (colonne SHOW)
+
+- **Zones** : liste + `Place` (placement par clic 3D) + `Edit zones`
+  (déplacement/resize direct en 3D). `clear all` et chaque `×` passent par
+  une confirmation.
+- **Modulations** : cinématiques — `speed`/`accel`/`jerk`/`angvel` → canal.
+  **Déclarées par les nodes `Velocity` du graphe global** (édition dans le
+  node editor, tab Global FX) ; le panel les liste en lecture.
 - **Canaux objet** : gain/spread/distance/presence par objet — l'équivalent
   spatial d'un fader par track.
+- **Readback** : les canaux effectifs affichés = statiques ⊕ modulés ⊕
+  zones — l'effet réel combiné des trois sources est visible en live.
 
 ## E. Trackers externes (PSN)
 
