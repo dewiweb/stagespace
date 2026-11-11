@@ -44,13 +44,14 @@ any generic OSC receiver.
                       Directional / AudioAmplitude
                     │
          ┌──────────▼──────────┐
-         │  MergeRuntime 60 FPS │   ← parallel workers → merge → OSC
+         │  MergeRuntime 60 FPS │   ← N move slots on parallel workers
+         │  Cue list / setlist  │   ← recalls (Full|Tracking), TC chase
          │  Post-process graph  │   ← Scale/Rotate/Shift/Zone/Velocity…
          │  OSC Out (rosc)      │   → 6 profiles (Holophonix, IEM, IRCAM,
          │                      │      ADM, Generic XYZ/AED) + extended
          │                      │      channels (gain, spread, distance…)
-         │  OSC IN              │   ← /stagespace/* show control +
-         │                      │      user mappings (learn)
+         │  OSC IN · PSN        │   ← /stagespace/* show control,
+         │                      │      mappings (learn), PSN trackers
          └──────────┬───────────┘
                     │ positions-update event
          ┌──────────▼──────────┐
