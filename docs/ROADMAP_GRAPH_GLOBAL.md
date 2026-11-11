@@ -5,7 +5,7 @@ Architectural reference: `ARCHITECTURE_FUTURE.md`
 > ## ⚑ Global status — September 2025
 >
 > **Phases 1, 2, 3 and 4 (P1–P5): implemented.** This document remains the
-> design reference; remaining work is listed in the "Reste" callouts
+> design reference; remaining work is listed in the "Remaining" callouts
 > and in section P6+.
 >
 > Not implemented (consciously deferred): `PositionBuffer::read_stale`

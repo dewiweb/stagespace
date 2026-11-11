@@ -1,7 +1,6 @@
 # PLUGINS_WASM.md — WASM plugin system for custom nodes
 
-Branch: `feat/wasm-plugins`
-Status: **Phases 1+3+4+5 delivered + ABI v2** — functional host
+Status: **shipped (v0.5.2) — phases 1+3+4+5 delivered + ABI v2** — functional host
 runtime + Tauri integration (registry in AppState, commands
 `list_plugins`/`reload_plugins`, `compile_graph_live` = single compile
 path). 17 green plugin tests, generated TS contracts.

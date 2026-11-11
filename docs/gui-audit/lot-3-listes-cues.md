@@ -1,5 +1,8 @@
 # Lot 3 — Lists and cues (full audit)
 
+> **Audit annex** — snapshot; parent doc and status:
+> `../gui-audit.md`.
+
 Confirmed measure: `PerformView.tsx:459` column `w-72` = 288px; `:523`
 `h-56` = 224px fixed → header ~30px + store-row ~34px → **~160px of
 usable list ≈ 4 visible cues**. In Edit, the Moves/Cues/FX tabs are

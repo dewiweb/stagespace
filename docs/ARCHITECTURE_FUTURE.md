@@ -1,5 +1,9 @@
 # Future Architecture: Hybrid Global Graph
 
+> **Status: implemented.** The hybrid architecture described here shipped
+> (MergeRuntime, parallel workers, global post-process graph, MoveRef) —
+> see `ROADMAP_GRAPH_GLOBAL.md` phases 1–4. Kept as design rationale.
+
 ## Context
 
 Stagespace compiles node graphs into continuous functions `f(t, i) → Vec3` for real-time spatial control. The current system has a fundamental tension: macros and audio mods are layers **external** to the graph, hardcoded in the runtime, while the `Scale`, `Rotate`, `Offset`, `AudioAmplitudeFalloff` nodes already exist in the compiler.

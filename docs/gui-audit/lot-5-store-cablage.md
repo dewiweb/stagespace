@@ -1,5 +1,8 @@
 # Lot 5 — Store, IPC, wiring (full audit)
 
+> **Audit annex** — snapshot; parent doc and status:
+> `../gui-audit.md`.
+
 ## 1. Stores and slices map
 
 ### Root stores

@@ -1,5 +1,8 @@
 # Pre-1.0 audits — STAGESPACE
 
+> **Status: audit snapshot (pre-1.0)** — the T1–T7 plan drove the
+> robustness work; fixed items aren't re-marked here.
+
 Three independent reviews conducted on `feat/wasm-plugins` (post PR #1):
 real-time engine robustness, software architecture, UX/UI.
 Each finding references `file:line`. Classification: 🔴 blocking/critical · 🟠 important · 🟡 minor.

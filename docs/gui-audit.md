@@ -1,5 +1,9 @@
 # Global GUI audit — structure, hierarchy, elements
 
+> **Status: audit snapshot** — findings reference the code at audit time;
+> fixed items aren't re-marked here. See `gui-refonte-v2.md` for the
+> current direction.
+
 Complete app mapping first, then findings by level.
 
 ## App map (App.tsx)

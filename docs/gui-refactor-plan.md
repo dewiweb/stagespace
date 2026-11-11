@@ -1,5 +1,8 @@
 # GUI refactor plan — based on the complete audit (7 lots)
 
+> **Status: superseded by `gui-refonte-v2.md`** — kept for traceability
+> between audit findings (F1–F16, S1–S14) and their fixes.
+
 Each action references bugs **F1-F16** and structural items **S1-S14** from
 `docs/gui-audit.md` + the line-by-line detail of the `gui-audit/lot-*.md`
 annexes.

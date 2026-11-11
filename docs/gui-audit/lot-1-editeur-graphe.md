@@ -1,5 +1,8 @@
 # Lot 1 — Graph editor (full audit)
 
+> **Audit annex** — snapshot; parent doc and status:
+> `../gui-audit.md`.
+
 Files read in full + dependencies (`connectionRules.ts`, `Slider.tsx`,
 `index.css`, `tailwind.config.js`, `useGraphStore.updateNodeData`).
 

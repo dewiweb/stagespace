@@ -1,5 +1,8 @@
 # GUI redesign v2 — post-deep-review plan
 
+> **Status: active direction** — the canonical GUI plan (PERFORM/Edit,
+> Simple/Expert vocabulary).
+
 Replaces `gui-refactor-plan.md` (obsolete) — written from a full code
 review at `cf4749a`+, all dimensions: structure, data flow, detached
 state, dead code, test coverage, style.

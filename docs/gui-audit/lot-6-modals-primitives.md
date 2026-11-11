@@ -1,5 +1,8 @@
 # Lot 6 — Modals and ui/ primitives (full audit)
 
+> **Audit annex** — snapshot; parent doc and status:
+> `../gui-audit.md`.
+
 ## 1. `components/SettingsModal.tsx` (294 l.)
 
 Global config (OSC out/in, merge, track IDs, audio). Mounted only at

@@ -1,5 +1,10 @@
 # Development plan — object-oriented mixing
 
+> **Status: planning document.** Read together with
+> `spatial-object-mixing-study.md` (rationale) and
+> `ROADMAP_GRAPH_GLOBAL.md` (implementation status — the P1–P5 spatial
+> tracks shipped).
+
 Derived from `docs/spatial-object-mixing-study.md` + `docs/conduites/`
 (acceptance spec). Structured around the **three phases of the
 operator's work**:

@@ -206,6 +206,7 @@ sent as separate messages per the profile's capability matrix
 
 ## Documentation
 
+- **[docs/README.md](docs/README.md) — full documentation index by profile, with per-doc status**
 - [AGENTS.md](AGENTS.md) — conventions, build commands, CI
 - [docs/user-manual.md](docs/user-manual.md) — operator manual (views, OSC show-control, OSC-IN + learn, live safety, troubleshooting)
 - [docs/console-integration.md](docs/console-integration.md) — driving STAGESPACE from a console/QLab/Companion
@@ -218,7 +219,7 @@ sent as separate messages per the profile's capability matrix
 - [BENCHMARKS.md](rust-engines/BENCHMARKS.md) - Benchmarks guide
 - [CONTRIBUTING.md](CONTRIBUTING.md) - Contribution guide
 - [ROADMAP_GRAPH_GLOBAL.md](docs/ROADMAP_GRAPH_GLOBAL.md) - Global graph architecture roadmap
-- [ARCHITECTURE_FUTURE.md](docs/ARCHITECTURE_FUTURE.md) - Design document (partially implemented)
+- [ARCHITECTURE_FUTURE.md](docs/ARCHITECTURE_FUTURE.md) - Design document (implemented — kept as rationale)
 
 ## Tests
 

@@ -1,5 +1,8 @@
 # Lot 7 — Chrome and monitoring (full audit)
 
+> **Audit annex** — snapshot; parent doc and status:
+> `../gui-audit.md`.
+
 `performMode` in `useMoveEditorStore` (default **`true`** — the app boots
 in live, `:264`); header toggle `App.tsx:203-217`; `showExpert` `:218-229`
 (only if `!performMode`).

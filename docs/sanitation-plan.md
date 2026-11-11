@@ -1,5 +1,9 @@
 # Sanitation plan — architecture & modularization
 
+> **Status: largely implemented (2026-11).** Phases 0–5 + the >1200-line
+> catch-up are done — kept as the record of the modularization work.
+> `.devin/rules/modularisation.md` remains the active rule.
+
 2026-11 audit (`refactor/typed-ports` branch). Global structure is
 coherent; two work tracks: root hygiene + modularization of large files
 (rule `.devin/rules/modularisation.md`: >800 priority, >1200 critical).

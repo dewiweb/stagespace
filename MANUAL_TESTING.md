@@ -1,5 +1,9 @@
 # Manual Test Checklist — Stagespace Real-Life Testing
 
+> Covers surfaces, workflows, and playback. For the graph-editor gestures
+> (wire-drop, splice, reconnect, heal, frames, Alt-cut…) see
+> `docs/user-manual.md` §2.4 — not duplicated here.
+
 This checklist covers the 20% of testing that automated tests cannot reach:
 visual rendering, performance, audio, OSC hardware, and long-running stability.
 

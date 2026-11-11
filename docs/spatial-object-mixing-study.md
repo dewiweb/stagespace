@@ -1,5 +1,8 @@
 # STAGESPACE — control tower for object-oriented mixing
 
+> **Status: positioning study** — rationale for the object-mixing
+> direction; implementation status lives in `ROADMAP_GRAPH_GLOBAL.md`.
+
 Positioning study: scientific literature, state of the art, typical
 conduites, capability + ergonomics audit, gaps and roadmap.
 

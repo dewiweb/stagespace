@@ -1,5 +1,8 @@
 # Fresh-eyes audit — 2026-11-01
 
+> **Status: audit snapshot** — findings verified in code at that date;
+> fixed items aren't re-marked here.
+
 Full audit by 6 independent reviewers (backend, wire/IPC, frontend
 state, UX/workflows, tests, live safety), **without reading the
 existing plans/audits** — findings verified in code, file:line, ranked

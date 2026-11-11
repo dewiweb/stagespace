@@ -1,5 +1,8 @@
 # Lot 2 — Parameter panels (full audit)
 
+> **Audit annex** — snapshot; parent doc and status:
+> `../gui-audit.md`.
+
 Context: `App.tsx:233` — Inspector exists only in Atelier mode;
 `Scene3D.tsx:378` — MacrosPanel overlays the 3D canvas;
 `PerformView.tsx:940/984` — NodeParamsPanel + AudioModList in drawers.

@@ -1,5 +1,8 @@
 # State of the art — Spatial trajectories, effects and interfaces for live immersive audio
 
+> **Status: research reference** — landscape + implications; §5.2's
+> roadmap items land in `ROADMAP_GRAPH_GLOBAL.md` (P6+).
+
 Consolidated research document — analysis of the software landscape, the
 academic literature (HAL, NIME, ICMC, DAFx, JAES, JIM) and strategic
 positioning of STAGESPACE. In-depth version.

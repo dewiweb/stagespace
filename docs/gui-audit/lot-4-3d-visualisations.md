@@ -1,5 +1,8 @@
 # Lot 4 — 3D and visualizations (full audit)
 
+> **Audit annex** — snapshot; parent doc and status:
+> `../gui-audit.md`.
+
 `tailwind.config.js:16-22` mandates z-index tokens (overlay:20,
 raised:30, popover:50, menu:70, toast:9999) — `z-10` (Scene3D:418,490)
 and `z-50` (PerformView:539) remain violations.
