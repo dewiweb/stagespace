@@ -59,6 +59,29 @@ export function useStandaloneGraph(opts: {
     [edges, setEdges, connectedThisDrop],
   );
 
+  // Drag du endpoint d'une edge vers une autre cible — remplace l'edge
+  // (même règle "un input = une edge" que onConnect).
+  const onReconnect = useCallback(
+    (oldEdge: Edge, connection: Connection) => {
+      setEdges([
+        ...edges.filter(
+          (e) =>
+            e.id !== oldEdge.id &&
+            !(
+              e.target === connection.target &&
+              (e.targetHandle ?? null) === (connection.targetHandle ?? null)
+            ),
+        ),
+        {
+          ...connection,
+          id: `${connection.source}.${connection.sourceHandle ?? ''}-${connection.target}.${connection.targetHandle ?? ''}`,
+          markerEnd: { type: MarkerType.ArrowClosed },
+        } as Edge,
+      ]);
+    },
+    [edges, setEdges],
+  );
+
   // Auto-push quand le graphe change (debounce) — seulement si le tab
   // est actif (sinon les nodes n'ont pas été édités via cette surface).
   useEffect(() => {
@@ -67,5 +90,5 @@ export function useStandaloneGraph(opts: {
     return () => clearTimeout(timer);
   }, [nodes, edges, active, pushGraph]);
 
-  return { onNodesChange, onEdgesChange, onConnect };
+  return { onNodesChange, onEdgesChange, onConnect, onReconnect };
 }

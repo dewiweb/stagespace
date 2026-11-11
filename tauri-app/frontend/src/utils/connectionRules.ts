@@ -174,6 +174,39 @@ export function spliceRejectionReason(
   return null;
 }
 
+/// Type de port d'une sortie par handleId — `null` → première sortie
+/// (React Flow passe handleId null sur certains nodes mono-port).
+export function outputPortType(type: NodeType, handleId: string | null): PortDef['port_type'] | undefined {
+  const outs = specOf(type).outputs;
+  return outs.find((p) => p.name === handleId)?.port_type ?? (handleId === null ? outs[0]?.port_type : undefined);
+}
+
+/// Type de port d'une entrée par handleId — `null` → première entrée.
+export function inputPortType(
+  type: NodeType,
+  handleId: string | null,
+  pluginKind?: PluginKind,
+): PortDef['port_type'] | undefined {
+  const ins = effectiveInputPorts(type, pluginKind);
+  return ins.find((p) => p.name === handleId)?.port_type ?? (handleId === null ? ins[0]?.port_type : undefined);
+}
+
+/// Premier port d'entrée du node acceptant `portType` — cible de
+/// l'auto-connect après un wire-drop → quick-add.
+export function firstInputPortOf(
+  type: NodeType,
+  portType: PortDef['port_type'],
+  pluginKind?: PluginKind,
+): PortDef | undefined {
+  return effectiveInputPorts(type, pluginKind).find((p) => p.port_type === portType);
+}
+
+/// Premier port de sortie du node produisant `portType` — source de
+/// l'auto-connect après un back-drag depuis une entrée.
+export function firstOutputPortOf(type: NodeType, portType: PortDef['port_type']): PortDef | undefined {
+  return specOf(type).outputs.find((p) => p.port_type === portType);
+}
+
 /**
  * Retourne les ports d'entrée valides pour un type de node —
  * `NodeSpec::inputs` (Plugin : superset restreint par le kind du manifeste).

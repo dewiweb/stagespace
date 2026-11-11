@@ -1,8 +1,9 @@
 import React, { useRef, useMemo, useState } from 'react';
 import {
-  ReactFlow, useReactFlow, Background, Controls, MiniMap, NodeTypes,
+  ReactFlow, useReactFlow, Background, Controls, MiniMap, Panel, NodeTypes,
   type Node, type Edge, type Connection, type OnConnectStartParams,
-  type OnNodesChange, type OnEdgesChange,
+  type OnNodesChange, type OnEdgesChange, type HandleType,
+  type ReactFlowInstance,
 } from '@xyflow/react';
 import EmptyState from '../ui/EmptyState';
 import { getCategoryColor, type GraphNode } from '../nodeParamSchema';
@@ -28,6 +29,12 @@ interface GraphCanvasProps {
   onConnect: (connection: Connection) => void;
   onConnectStart: (event: unknown, params: OnConnectStartParams) => void;
   onConnectEnd: (event: unknown) => void;
+  /// Drag du endpoint d'une edge vers une autre cible (reconnect plugdata).
+  onReconnect: (oldEdge: Edge, newConnection: Connection) => void;
+  onReconnectStart: (event: unknown, edge: Edge, handleType: HandleType) => void;
+  onReconnectEnd: (event: unknown, edge: Edge, handleType: HandleType) => void;
+  /// Instance ReactFlow exposée (screenToFlowPosition pour le wire-drop).
+  onInit: (instance: ReactFlowInstance) => void;
   onNodeDoubleClick: (event: React.MouseEvent, node: Node) => void;
   onNodeContextMenu: (event: React.MouseEvent, node: Node) => void;
   onDismissNodeMenu: () => void;
@@ -46,38 +53,8 @@ interface GraphCanvasProps {
 }
 
 export const GraphCanvas: React.FC<GraphCanvasProps> = (p) => {
-  const issueCounts = useMemo(() => countIssues(p.graphIssues), [p.graphIssues]);
   return (
     <div className="flex-1 bg-stagespace-bg relative">
-      {(issueCounts.errors > 0 || issueCounts.warnings > 0) && (
-        <div className="absolute top-2 right-2 z-raised text-xs">
-          <button
-            onClick={p.onToggleIssues}
-            className="px-2 py-1 rounded bg-gray-900 border border-gray-700 hover:border-gray-500"
-            title="Graph diagnostics (backend)"
-          >
-            {issueCounts.errors > 0 && (
-              <span className="text-red-400">{issueCounts.errors} error{issueCounts.errors > 1 ? 's' : ''}</span>
-            )}
-            {issueCounts.errors > 0 && issueCounts.warnings > 0 && ' · '}
-            {issueCounts.warnings > 0 && (
-              <span className="text-amber-400">{issueCounts.warnings} warning{issueCounts.warnings > 1 ? 's' : ''}</span>
-            )}
-          </button>
-          {p.issuesOpen && (
-            <div className="mt-1 max-w-xs max-h-64 overflow-y-auto bg-gray-900 border border-gray-700 rounded p-2 space-y-1">
-              {p.graphIssues.map((i, k) => (
-                <div key={k} className={i.severity === 'Error' ? 'text-red-300' : 'text-amber-300'}>
-                  <span className="font-semibold">{i.severity}</span> — {i.message}
-                  {i.node_ids.length > 0 && (
-                    <div className="text-gray-500 font-mono text-[10px]">{i.node_ids.join(', ')}</div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
       <ReactFlow
         nodes={p.nodes}
         edges={p.edges}
@@ -86,6 +63,11 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = (p) => {
         onConnect={p.onConnect}
         onConnectStart={p.onConnectStart}
         onConnectEnd={p.onConnectEnd}
+        onReconnect={p.onReconnect}
+        onReconnectStart={p.onReconnectStart}
+        onReconnectEnd={p.onReconnectEnd}
+        onInit={p.onInit}
+        edgesReconnectable
         onNodeDoubleClick={p.onNodeDoubleClick}
         onNodeContextMenu={p.onNodeContextMenu}
         onNodeClick={p.onDismissNodeMenu}
@@ -106,6 +88,13 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = (p) => {
         <Controls showInteractive={false} />
         <ViewportSync contextKey={p.contextKey} />
         <PortLegend nodes={p.displayNodes} />
+        <IssuesPanel
+          issues={p.graphIssues}
+          open={p.issuesOpen}
+          onToggle={p.onToggleIssues}
+          nodes={p.nodes}
+          onNodesChange={p.onNodesChange}
+        />
         <MiniMap
           nodeColor={(n) => getCategoryColor((n.data.type ?? '') as NodeType)}
           maskColor="rgba(10,10,15,0.7)"
@@ -138,6 +127,70 @@ function ViewportSync({ contextKey }: { contextKey: string }) {
     return () => cancelAnimationFrame(raf);
   }, [contextKey, fitView]);
   return null;
+}
+
+/// Panneau de diagnostics backend — chaque issue avec node_ids est cliquable :
+/// focus (fitView) + sélection des nodes coupables. Enfant de <ReactFlow>
+/// (useReactFlow nécessite le provider interne).
+function IssuesPanel({ issues, open, onToggle, nodes, onNodesChange }: {
+  issues: GraphIssue[];
+  open: boolean;
+  onToggle: () => void;
+  nodes: Node[];
+  onNodesChange: OnNodesChange<Node>;
+}) {
+  const { fitView } = useReactFlow();
+  const counts = useMemo(() => countIssues(issues), [issues]);
+  if (counts.errors === 0 && counts.warnings === 0) return null;
+
+  const focusNodes = (ids: string[]) => {
+    if (ids.length === 0) return;
+    fitView({ nodes: ids.map((id) => ({ id })), duration: 250, padding: 0.4, maxZoom: 1.3 });
+    const inSet = new Set(ids);
+    onNodesChange([
+      ...nodes.filter((n) => n.selected && !inSet.has(n.id))
+        .map((n) => ({ type: 'select' as const, id: n.id, selected: false })),
+      ...ids.map((id) => ({ type: 'select' as const, id, selected: true })),
+    ]);
+  };
+
+  return (
+    <Panel position="top-right" className="text-xs">
+      <button
+        onClick={onToggle}
+        className="px-2 py-1 rounded bg-gray-900 border border-gray-700 hover:border-gray-500"
+        title="Graph diagnostics (backend) — click an issue to focus its node"
+      >
+        {counts.errors > 0 && (
+          <span className="text-red-400">{counts.errors} error{counts.errors > 1 ? 's' : ''}</span>
+        )}
+        {counts.errors > 0 && counts.warnings > 0 && ' · '}
+        {counts.warnings > 0 && (
+          <span className="text-amber-400">{counts.warnings} warning{counts.warnings > 1 ? 's' : ''}</span>
+        )}
+      </button>
+      {open && (
+        <div className="mt-1 max-w-xs max-h-64 overflow-y-auto bg-gray-900 border border-gray-700 rounded p-2 space-y-1">
+          {issues.map((i, k) => (
+            <button
+              key={k}
+              onClick={() => focusNodes(i.node_ids)}
+              disabled={i.node_ids.length === 0}
+              className={`w-full text-left rounded px-1 py-0.5 transition-colors ${
+                i.severity === 'Error' ? 'text-red-300' : 'text-amber-300'
+              } ${i.node_ids.length > 0 ? 'hover:bg-gray-800 cursor-pointer' : 'cursor-default'}`}
+              title={i.node_ids.length > 0 ? 'Focus the node(s) on the canvas' : undefined}
+            >
+              <span className="font-semibold">{i.severity}</span> — {i.message}
+              {i.node_ids.length > 0 && (
+                <div className="text-gray-500 font-mono text-[10px]">{i.node_ids.join(', ')}</div>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </Panel>
+  );
 }
 
 const LEGEND_STORAGE_KEY = 'stagespace.portLegend.collapsed';

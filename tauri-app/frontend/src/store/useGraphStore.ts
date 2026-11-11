@@ -62,6 +62,13 @@ interface GraphState
   /// Autopatch : remplace `oldEdgeId` par `edgeIn` (source→node) + `edgeOut`
   /// (node→target) et ajoute le node — atomique, une seule entrée d'historique.
   insertNodeOnEdge: (node: GraphNode, oldEdgeId: string, edgeIn: Edge, edgeOut: Edge) => void;
+  /// Ajout atomique nodes+edges — wire-drop→quick-add auto-connect, paste,
+  /// duplicate. Une seule entrée d'historique pour l'opération entière.
+  /// La règle "un input = une edge" s'applique à chaque edge ajoutée.
+  addNodesAndEdges: (nodes: GraphNode[], edges: Edge[]) => void;
+  /// Reconnexion d'une edge existante (drag de son endpoint) — remplace
+  /// l'edge et applique "un input = une edge". Atomique, une entrée d'historique.
+  reconnectEdge: (oldEdgeId: string, connection: Connection) => void;
   updateNodeData: (id: string, data: Partial<Record<string, any>>) => void;
   setNodes: (nodes: GraphNode[]) => void;
   setEdges: (edges: Edge[]) => void;
@@ -254,6 +261,42 @@ export const useGraphStore = create<GraphState>()((...a) => {
         edgeIn,
         edgeOut,
       ],
+    }));
+    autoSaveToEditingSlot();
+  },
+  addNodesAndEdges: (newNodes, newEdges) => {
+    get().pushHistory();
+    const arrow = { type: MarkerType.ArrowClosed };
+    set((s) => {
+      let edges = s.edges;
+      for (const e of newEdges) {
+        edges = rfAddEdge(
+          { ...e, markerEnd: e.markerEnd ?? arrow },
+          edges.filter(
+            (x) =>
+              !(x.target === e.target &&
+                (x.targetHandle ?? null) === (e.targetHandle ?? null)),
+          ),
+        ) as Edge[];
+      }
+      return { nodes: [...s.nodes, ...newNodes], edges };
+    });
+    autoSaveToEditingSlot();
+  },
+  reconnectEdge: (oldEdgeId, connection) => {
+    get().pushHistory();
+    set((s) => ({
+      edges: rfAddEdge(
+        { ...connection, markerEnd: { type: MarkerType.ArrowClosed } },
+        s.edges.filter(
+          (e) =>
+            e.id !== oldEdgeId &&
+            !(
+              e.target === connection.target &&
+              (e.targetHandle ?? null) === (connection.targetHandle ?? null)
+            ),
+        ),
+      ) as Edge[],
     }));
     autoSaveToEditingSlot();
   },

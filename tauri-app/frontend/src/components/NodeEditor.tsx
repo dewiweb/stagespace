@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect, useMemo } from 'react';
+import React, { useCallback, useState, useEffect, useMemo, useRef } from 'react';
 import {
   NodeTypes,
   MarkerType,
@@ -7,6 +7,8 @@ import {
   type Edge,
   type IsValidConnection,
   type OnConnectStartParams,
+  type HandleType,
+  type ReactFlowInstance,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
@@ -18,7 +20,13 @@ import { GraphCanvas } from './editor/GraphCanvas';
 import { useStandaloneGraph } from '../hooks/useStandaloneGraph';
 import { QuickAddModal } from './QuickAddModal';
 import { NODE_CATEGORIES, getDefaultParams, pluginDefaultParams, GLOBAL_ONLY_NODES, SUB_ONLY_NODES, SIGNAL_ONLY_NODES, type GraphNode } from './nodeParamSchema';
-import { isValidConnection, connectionRejectionReason, spliceRejectionReason } from '../utils/connectionRules';
+import {
+  isValidConnection, connectionRejectionReason, spliceRejectionReason,
+  effectiveInputPorts, outputPortType, inputPortType,
+  firstInputPortOf, firstOutputPortOf, specOf,
+} from '../utils/connectionRules';
+import type { PortDef } from '../types/generated/PortDef';
+import { snapshotSelection, cloneForPaste, writeGraphClipboard, readGraphClipboard, type GraphClipboardPayload } from '../utils/graphClipboard';
 import { presetsUsingType } from '../utils/shapePresets';
 import { toast } from '../utils/toast-helpers';
 import { safeInvoke as invoke } from '../utils/tauri';
@@ -54,7 +62,26 @@ export const NodeEditor: React.FC = () => {
   const insertNodeOnEdge = useGraphStore((s) => s.insertNodeOnEdge);
   const applyShapePreset = useGraphStore((s) => s.applyShapePreset);
   const [hoveredPaletteNode, setHoveredPaletteNode] = useState<string | null>(null);
-  const [connectingFrom, setConnectingFrom] = useState<NodeType | null>(null);
+  /// Origine du fil en cours de drag — type + node + handle. Sert au dimming
+  /// des cibles invalides ET au wire-drop→quick-add (type de port).
+  const [connectingFrom, setConnectingFrom] = useState<{
+    type: NodeType;
+    nodeId: string;
+    handleId: string | null;
+    handleType: 'source' | 'target';
+  } | null>(null);
+  /// Fil lâché sur le pane : le prochain pick QuickAdd crée le node au point
+  /// de drop et le câble automatiquement (geste signature plugdata).
+  const [pendingWire, setPendingWire] = useState<{
+    nodeId: string;
+    handleId: string | null;
+    /// 'from' = fil tiré depuis une sortie (le nouveau node reçoit) ;
+    /// 'to' = tiré depuis une entrée (le nouveau node alimente).
+    dir: 'from' | 'to';
+    portType: PortDef['port_type'];
+    screen: { x: number; y: number };
+  } | null>(null);
+  const rfInstance = useRef<ReactFlowInstance | null>(null);
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set());
   // Clic-droit node → menu "Open example" (help patches Pd/plugdata :
   // la doc est un graphe runnable, pas du texte).
@@ -152,8 +179,8 @@ export const NodeEditor: React.FC = () => {
           ...n,
           data: issue ? { ...n.data, issueMessages: issue.messages } : n.data,
           className: [
-            connectingFrom && !isValidConnection(
-              connectingFrom,
+            connectingFrom && connectingFrom.nodeId !== n.id && !isValidConnection(
+              connectingFrom.type,
               nodeType,
               nodeType === 'Plugin'
                 ? plugins.find((m) => m.id === n.data.params?.plugin_id)?.kind
@@ -288,8 +315,66 @@ export const NodeEditor: React.FC = () => {
     [selectedEdge, displayNodes, plugins, activeTab, globalNodes, globalEdges, setGlobalNodes, setGlobalEdges, signalNodes, signalEdges, setSignalNodes, setSignalEdges, insertNodeOnEdge],
   );
 
+  /// Wire-drop pick : pose `newNode` au point de drop et le câble au fil
+  /// lâché (dir 'from' : le fil alimente le node ; 'to' : le node alimente
+  /// le port d'où le fil partait). Atomique côté sub (addNodesAndEdges).
+  const addNodeWithWire = useCallback(
+    (newNode: Node, insertedType: NodeType, insertedKind?: PluginKind) => {
+      if (!pendingWire) return;
+      const arrow = { type: MarkerType.ArrowClosed };
+      let edge: Edge | null = null;
+      if (pendingWire.dir === 'from') {
+        const inPort = firstInputPortOf(insertedType, pendingWire.portType, insertedKind);
+        if (inPort) {
+          edge = {
+            id: `${pendingWire.nodeId}.${pendingWire.handleId ?? ''}-${newNode.id}.${inPort.name}`,
+            source: pendingWire.nodeId,
+            sourceHandle: pendingWire.handleId ?? undefined,
+            target: newNode.id,
+            targetHandle: inPort.name,
+            markerEnd: arrow,
+          };
+        }
+      } else {
+        const outPort = firstOutputPortOf(insertedType, pendingWire.portType);
+        if (outPort) {
+          edge = {
+            id: `${newNode.id}.${outPort.name}-${pendingWire.nodeId}.${pendingWire.handleId ?? ''}`,
+            source: newNode.id,
+            sourceHandle: outPort.name,
+            target: pendingWire.nodeId,
+            targetHandle: pendingWire.handleId ?? undefined,
+            markerEnd: arrow,
+          };
+        }
+      }
+      if (activeTab === 'global') {
+        setGlobalNodes([...globalNodes, newNode]);
+        if (edge) setGlobalEdges([...globalEdges, edge]);
+      } else if (activeTab === 'signal') {
+        setSignalNodes([...signalNodes, newNode]);
+        if (edge) setSignalEdges([...signalEdges, edge]);
+      } else {
+        useGraphStore.getState().addNodesAndEdges([newNode], edge ? [edge] : []);
+      }
+      setPendingWire(null);
+    },
+    [pendingWire, activeTab, globalNodes, globalEdges, setGlobalNodes, setGlobalEdges, signalNodes, signalEdges, setSignalNodes, setSignalEdges],
+  );
+
+  /// Position canvas du point de drop (coords écran → flow).
+  const dropFlowPosition = useCallback(
+    () => rfInstance.current?.screenToFlowPosition(pendingWire?.screen ?? { x: 0, y: 0 })
+      ?? { x: 250 + displayNodes.length * 30, y: 150 + displayNodes.length * 30 },
+    [pendingWire, displayNodes.length],
+  );
+
   const addNodeByType = useCallback(
     (type: NodeType) => {
+      if (pendingWire) {
+        addNodeWithWire(createNode(type, dropFlowPosition()), type);
+        return;
+      }
       const offset = displayNodes.length * 30;
       const newNode = createNode(type, { x: 250 + offset, y: 150 + offset });
       if (trySpliceOnEdge(newNode, type)) return;
@@ -301,18 +386,22 @@ export const NodeEditor: React.FC = () => {
         addNode(newNode);
       }
     },
-    [addNode, displayNodes.length, activeTab, globalNodes, setGlobalNodes, signalNodes, setSignalNodes, trySpliceOnEdge],
+    [addNode, displayNodes.length, activeTab, globalNodes, setGlobalNodes, signalNodes, setSignalNodes, trySpliceOnEdge, pendingWire, addNodeWithWire, dropFlowPosition],
   );
 
   // Plugin = sub-graph only (SUB_ONLY_NODES) → toujours dans le store sub.
   const addPluginNode = useCallback(
     (manifest: PluginManifest) => {
+      if (pendingWire) {
+        addNodeWithWire(createPluginNode(manifest, dropFlowPosition()), 'Plugin', manifest.kind);
+        return;
+      }
       const offset = nodes.length * 30;
       const newNode = createPluginNode(manifest, { x: 250 + offset, y: 150 + offset });
       if (trySpliceOnEdge(newNode, 'Plugin', manifest.kind)) return;
       addNode(newNode);
     },
-    [addNode, nodes.length, trySpliceOnEdge],
+    [addNode, nodes.length, trySpliceOnEdge, pendingWire, addNodeWithWire, dropFlowPosition],
   );
 
   // Validation visuelle des connexions — empêche de connecter des nodes incompatibles
@@ -342,27 +431,61 @@ export const NodeEditor: React.FC = () => {
     [displayNodes, plugins],
   );
 
-  // Track le type du node source quand on commence une connexion
+  // Track l'origine du fil quand on commence une connexion — type + node +
+  // handle : le wire-drop→quick-add en a besoin pour filtrer et câbler.
   const onConnectStart = useCallback((_: any, params: OnConnectStartParams) => {
     connectedThisDrop.current = false;
     const sourceNode = displayNodes.find((n) => n.id === params.nodeId);
-    if (sourceNode) {
-      const fromType = sourceNode.data.type as NodeType;
-      setConnectingFrom(fromType);
+    if (sourceNode && (params.handleType === 'source' || params.handleType === 'target')) {
+      setConnectingFrom({
+        type: sourceNode.data.type as NodeType,
+        nodeId: params.nodeId ?? '',
+        handleId: params.handleId ?? null,
+        handleType: params.handleType,
+      });
     }
   }, [displayNodes]);
 
+  /// Kind du manifeste d'un node Plugin — restreint les ports effectifs.
+  const pluginKindOf = useCallback(
+    (node: GraphNode | undefined): PluginKind | undefined =>
+      node?.data.type === 'Plugin'
+        ? plugins.find((m) => m.id === node.data.params?.plugin_id)?.kind
+        : undefined,
+    [plugins],
+  );
+
   const onConnectEnd = useCallback((event: any) => {
-    const fromType = connectingFrom;
+    const conn = connectingFrom;
     setConnectingFrom(null);
-    // Drop réussi → onConnect a tourné. Drop sur le canvas → annulation
-    // volontaire, pas de toast. Drop sur un node incompatible → expliquer
-    // pourquoi la connexion est refusée (sinon échec silencieux).
-    if (connectedThisDrop.current || !fromType) return;
+    // Drop réussi → onConnect a tourné. Drop sur un node incompatible →
+    // expliquer pourquoi. Drop sur le pane → QuickAdd filtré au type de
+    // port du fil (le geste signature plugdata : lâcher un fil dans le
+    // vide ouvre la palette des nodes compatibles, posés câblés).
+    if (connectedThisDrop.current || !conn) return;
     const el = event.target as HTMLElement | null;
     const targetNodeEl = el?.closest?.('.react-flow__node') as HTMLElement | null;
     const targetId = targetNodeEl?.dataset?.id;
-    if (!targetId) return;
+    if (!targetId) {
+      if (el?.closest?.('.react-flow__pane')) {
+        const srcNode = displayNodes.find((n) => n.id === conn.nodeId);
+        const portType = conn.handleType === 'source'
+          ? outputPortType(conn.type, conn.handleId)
+          : inputPortType(conn.type, conn.handleId, pluginKindOf(srcNode as GraphNode | undefined));
+        if (portType) {
+          const pt = event.changedTouches?.[0] ?? event;
+          setPendingWire({
+            nodeId: conn.nodeId,
+            handleId: conn.handleId,
+            dir: conn.handleType === 'source' ? 'from' : 'to',
+            portType,
+            screen: { x: pt.clientX, y: pt.clientY },
+          });
+          setQuickAddOpen(true);
+        }
+      }
+      return;
+    }
     const targetNode = displayNodes.find((n) => n.id === targetId);
     const toType = targetNode?.data.type as NodeType | undefined;
     if (!toType) return;
@@ -371,11 +494,18 @@ export const NodeEditor: React.FC = () => {
       : undefined;
     const handleEl = el?.closest?.('.react-flow__handle') as HTMLElement | null;
     const targetPort = handleEl?.dataset?.handleid ?? null;
-    const reason = connectionRejectionReason(
-      fromType, toType, undefined, targetPort ?? undefined, toPluginKind,
-    );
+    // Back-drag (fil tiré depuis une entrée) : la cible devient la source
+    // de l'edge — la raison du refus se formule dans le sens du flux.
+    const reason = conn.handleType === 'source'
+      ? connectionRejectionReason(
+          conn.type, toType, conn.handleId ?? undefined, targetPort ?? undefined, toPluginKind,
+        )
+      : connectionRejectionReason(
+          toType, conn.type, targetPort ?? undefined, conn.handleId ?? undefined,
+          pluginKindOf(targetNode as GraphNode | undefined),
+        );
     if (reason) toast.warning(reason);
-  }, [connectingFrom, displayNodes, plugins]);
+  }, [connectingFrom, displayNodes, plugins, pluginKindOf]);
 
   // Double-clic sur un node MoveRef → sélectionner le move et switcher vers le tab sub-graph
   const onNodeDoubleClick = useCallback((_: any, node: GraphNode) => {
@@ -411,19 +541,132 @@ export const NodeEditor: React.FC = () => {
     toast.info(`Loaded example '${presetName}' (${nodeType}) — Ctrl+Z to undo`);
   }, [nodes, applyShapePreset]);
 
-  // Quick-add : Ctrl/Cmd+K dans l'éditeur (pas pendant la saisie dans un
-  // champ). Le double-clic sur le pane est géré via onDoubleClick du wrapper.
+  /// Suppression par ids — cut clipboard : le sub passe par onNodesChange
+  /// (historique + autosave naturels), les standalone filtrent directement.
+  const removeByIds = useCallback(
+    (nodeIds: Set<string>, edgeIds: Set<string>) => {
+      if (activeTab === 'global') {
+        setGlobalNodes(globalNodes.filter((n) => !nodeIds.has(n.id)));
+        setGlobalEdges(globalEdges.filter((e) => !edgeIds.has(e.id) && !nodeIds.has(e.source) && !nodeIds.has(e.target)));
+      } else if (activeTab === 'signal') {
+        setSignalNodes(signalNodes.filter((n) => !nodeIds.has(n.id)));
+        setSignalEdges(signalEdges.filter((e) => !edgeIds.has(e.id) && !nodeIds.has(e.source) && !nodeIds.has(e.target)));
+      } else {
+        const st = useGraphStore.getState();
+        st.onNodesChange([...nodeIds].map((id) => ({ type: 'remove' as const, id })));
+        st.onEdgesChange([...edgeIds].map((id) => ({ type: 'remove' as const, id })));
+      }
+    },
+    [activeTab, globalNodes, globalEdges, setGlobalNodes, setGlobalEdges, signalNodes, signalEdges, setSignalNodes, setSignalEdges],
+  );
+
+  /// Collage dans le graphe actif — nodes désélectionnés au profit des
+  /// nouveaux (retour visuel standard des patchers).
+  const pastePayload = useCallback(
+    (payload: GraphClipboardPayload) => {
+      const clip = cloneForPaste(payload, Date.now());
+      if (!clip) return;
+      const deselect = <T extends { selected?: boolean }>(arr: T[]): T[] =>
+        arr.map((x) => (x.selected ? { ...x, selected: false } : x));
+      if (activeTab === 'global') {
+        setGlobalNodes([...deselect(globalNodes), ...clip.nodes]);
+        setGlobalEdges([...globalEdges, ...clip.edges]);
+      } else if (activeTab === 'signal') {
+        setSignalNodes([...deselect(signalNodes), ...clip.nodes]);
+        setSignalEdges([...signalEdges, ...clip.edges]);
+      } else {
+        const st = useGraphStore.getState();
+        st.onNodesChange(
+          st.nodes.filter((n) => n.selected).map((n) => ({ type: 'select' as const, id: n.id, selected: false })),
+        );
+        st.addNodesAndEdges(clip.nodes, clip.edges);
+      }
+    },
+    [activeTab, globalNodes, globalEdges, setGlobalNodes, setGlobalEdges, signalNodes, signalEdges, setSignalNodes, setSignalEdges],
+  );
+
+  // Quick-add Ctrl/Cmd+K + clipboard Ctrl+C/X/V/D dans l'éditeur (pas
+  // pendant la saisie dans un champ). Le double-clic pane est géré via
+  // onDoubleClick du wrapper.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.key === 'k' && (e.ctrlKey || e.metaKey))) return;
+      if (!(e.ctrlKey || e.metaKey)) return;
       const el = e.target as HTMLElement | null;
       if (el?.closest('input, textarea, select, [contenteditable]')) return;
-      e.preventDefault();
-      setQuickAddOpen(true);
+      const key = e.key.toLowerCase();
+      if (key === 'k') {
+        e.preventDefault();
+        setQuickAddOpen(true);
+        return;
+      }
+      if (key === 'c' || key === 'x') {
+        const snap = snapshotSelection(displayNodes, displayEdges);
+        if (snap.nodes.length === 0) return;
+        e.preventDefault();
+        writeGraphClipboard(snap);
+        if (key === 'x') {
+          const ids = new Set(snap.nodes.map((n) => n.id));
+          // Toutes les edges incidentes aux nodes retirés — pas seulement
+          // les internes copiées — sinon edges pendantes dans le graphe.
+          const incident = new Set(
+            displayEdges.filter((e2) => ids.has(e2.source) || ids.has(e2.target)).map((e2) => e2.id),
+          );
+          removeByIds(ids, incident);
+        }
+        return;
+      }
+      if (key === 'v') {
+        const clip = readGraphClipboard();
+        if (!clip) return;
+        e.preventDefault();
+        pastePayload(clip);
+        return;
+      }
+      if (key === 'd') {
+        // Duplicate : copie la sélection et colle immédiatement, sans
+        // écraser le clipboard.
+        const snap = snapshotSelection(displayNodes, displayEdges);
+        if (snap.nodes.length === 0) return;
+        e.preventDefault();
+        pastePayload(snap);
+      }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, []);
+  }, [displayNodes, displayEdges, removeByIds, pastePayload]);
+
+  // Drag du endpoint d'une edge — reconnect (même découpage que onConnect :
+  // standalone via le hook, sub via reconnectEdge du store).
+  const onReconnect = useCallback(
+    (oldEdge: Edge, connection: Connection) => {
+      connectedThisDrop.current = true;
+      if (activeTab === 'global') globalGraph.onReconnect(oldEdge, connection);
+      else if (activeTab === 'signal') signalGraph.onReconnect(oldEdge, connection);
+      else useGraphStore.getState().reconnectEdge(oldEdge.id, connection);
+    },
+    [activeTab, globalGraph, signalGraph],
+  );
+
+  // Pendant le drag de reconnect, dimmer les cibles invalides comme pour
+  // un fil neuf — l'extrémité ancrée reste branchée, l'autre bout cherche.
+  const onReconnectStart = useCallback(
+    (_: unknown, edge: Edge, handleType: HandleType) => {
+      const anchored = handleType === 'target'
+        ? { id: edge.source, handleId: edge.sourceHandle ?? null, type: 'source' as const }
+        : { id: edge.target, handleId: edge.targetHandle ?? null, type: 'target' as const };
+      const node = displayNodes.find((n) => n.id === anchored.id);
+      if (node) {
+        setConnectingFrom({
+          type: node.data.type as NodeType,
+          nodeId: anchored.id,
+          handleId: anchored.handleId,
+          handleType: anchored.type,
+        });
+      }
+    },
+    [displayNodes],
+  );
+  const onReconnectEnd = useCallback(() => setConnectingFrom(null), []);
 
   const onPaneDoubleClick = useCallback((e: React.MouseEvent) => {
     // Uniquement le pane lui-même — un double-clic sur MiniMap, Controls
@@ -432,18 +675,45 @@ export const NodeEditor: React.FC = () => {
     setQuickAddOpen(true);
   }, []);
 
-  /// Types proposés par la quick-add — mêmes filtres que la palette.
-  const allowedTypes = useMemo(
-    () =>
-      NODE_CATEGORIES.flatMap((cat) =>
-        activeTab === 'signal'
-          ? cat.types.filter((t) => SIGNAL_ONLY_NODES.has(t))
-          : activeTab === 'global'
-            ? cat.types.filter((t) => !SUB_ONLY_NODES.has(t) && !SIGNAL_ONLY_NODES.has(t))
-            : cat.types.filter((t) => !GLOBAL_ONLY_NODES.has(t) && !SIGNAL_ONLY_NODES.has(t)),
-      ),
-    [activeTab],
-  );
+  /// Types proposés par la quick-add — mêmes filtres que la palette, plus
+  /// le filtre port-type quand un fil a été lâché sur le pane (wire-drop).
+  const allowedTypes = useMemo(() => {
+    const base = NODE_CATEGORIES.flatMap((cat) =>
+      activeTab === 'signal'
+        ? cat.types.filter((t) => SIGNAL_ONLY_NODES.has(t))
+        : activeTab === 'global'
+          ? cat.types.filter((t) => !SUB_ONLY_NODES.has(t) && !SIGNAL_ONLY_NODES.has(t))
+          : cat.types.filter((t) => !GLOBAL_ONLY_NODES.has(t) && !SIGNAL_ONLY_NODES.has(t)),
+    );
+    if (!pendingWire) return base;
+    return base.filter((t) =>
+      pendingWire.dir === 'from'
+        ? effectiveInputPorts(t).some((p) => p.port_type === pendingWire.portType)
+        : specOf(t).outputs.some((p) => p.port_type === pendingWire.portType),
+    );
+  }, [activeTab, pendingWire]);
+
+  /// Plugins proposés en wire-drop — filtrés par leurs ports effectifs
+  /// (kind → ports), seulement quand un fil Positions/… les accomode.
+  const quickAddPlugins = useMemo(() => {
+    if (activeTab !== 'sub') return [];
+    if (!pendingWire) return plugins;
+    return plugins.filter((m) =>
+      pendingWire.dir === 'from'
+        ? effectiveInputPorts('Plugin', m.kind).some((p) => p.port_type === pendingWire.portType)
+        : specOf('Plugin').outputs.some((p) => p.port_type === pendingWire.portType),
+    );
+  }, [activeTab, pendingWire, plugins]);
+
+  /// Hint du quick-add en mode wire-drop — la cible du fil lâché.
+  const wireHint = useMemo(() => {
+    if (!pendingWire) return undefined;
+    const node = displayNodes.find((n) => n.id === pendingWire.nodeId);
+    const label = node?.data.type ?? pendingWire.nodeId;
+    return pendingWire.dir === 'from'
+      ? `wire from ${label} · ${pendingWire.portType} — new node gets connected`
+      : `wire to ${label} · ${pendingWire.portType} — new node gets connected`;
+  }, [pendingWire, displayNodes]);
 
   // Edge activity (plugdata) : les edges s'animent quand le graphe qu'on
   // édite tourne — sub : le slot édité a un move actif ; global : n'importe
@@ -611,6 +881,10 @@ export const NodeEditor: React.FC = () => {
         }
         onConnectStart={onConnectStart}
         onConnectEnd={onConnectEnd}
+        onReconnect={onReconnect}
+        onReconnectStart={onReconnectStart}
+        onReconnectEnd={onReconnectEnd}
+        onInit={(inst) => { rfInstance.current = inst; }}
         onNodeDoubleClick={onNodeDoubleClick}
         onNodeContextMenu={onNodeContextMenu}
         onDismissNodeMenu={() => setNodeMenu(null)}
@@ -633,10 +907,11 @@ export const NodeEditor: React.FC = () => {
         {quickAddOpen && (
           <QuickAddModal
             types={allowedTypes}
-            plugins={activeTab === 'sub' ? plugins : []}
+            plugins={quickAddPlugins}
             onAddType={addNodeByType}
             onAddPlugin={addPluginNode}
-            onClose={() => setQuickAddOpen(false)}
+            contextHint={wireHint}
+            onClose={() => { setQuickAddOpen(false); setPendingWire(null); }}
           />
         )}
 
@@ -681,7 +956,7 @@ export const NodeEditor: React.FC = () => {
         {/* Connecting hint badge */}
         {connectingFrom && (
           <div className="absolute top-2 left-1/2 -translate-x-1/2 z-popover px-3 py-1.5 bg-blue-900/80 border border-blue-600 rounded-lg text-blue-200 text-xs font-medium pointer-events-none">
-            Connecting from <span className="text-white font-bold">{connectingFrom}</span> — drag to a valid target
+            Connecting from <span className="text-white font-bold">{connectingFrom.type}</span> — drag to a valid target or drop on the canvas to quick-add
           </div>
         )}
       </GraphCanvas>

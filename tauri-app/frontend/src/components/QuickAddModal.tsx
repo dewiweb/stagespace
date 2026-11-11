@@ -20,7 +20,10 @@ export const QuickAddModal: React.FC<{
   onAddType: (t: NodeType) => void;
   onAddPlugin: (m: PluginManifest) => void;
   onClose: () => void;
-}> = ({ types, plugins, onAddType, onAddPlugin, onClose }) => {
+  /// Contexte wire-drop — "from Circular · Positions" : la liste est déjà
+  /// filtrée par le parent au type de port du fil lâché.
+  contextHint?: string;
+}> = ({ types, plugins, onAddType, onAddPlugin, onClose, contextHint }) => {
   const [query, setQuery] = React.useState('');
   const [selIdx, setSelIdx] = React.useState(0);
   const listRef = React.useRef<HTMLDivElement>(null);
@@ -83,6 +86,9 @@ export const QuickAddModal: React.FC<{
   return (
     <Modal title="Add node" onClose={onClose} widthClass="max-w-sm">
       <div className="px-4 py-3" onKeyDown={onKeyDown}>
+        {contextHint && (
+          <div className="text-cyan-400 text-[11px] font-mono mb-2">{contextHint}</div>
+        )}
         <input
           autoFocus
           value={query}

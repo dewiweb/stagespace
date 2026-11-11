@@ -97,6 +97,20 @@ Le toggle **Expert/Simple** ouvre le node editor :
 - **Canvas** : connexions par drag entre ports — **inputs en haut, outputs
   en bas** (convention Max/MSP). Légende `Ports` en haut à gauche, minimap
   en bas. Un node sélectionné s'édite dans l'Inspector (section NODE).
+- **Wire-drop → quick-add** : lâcher un fil sur le canvas vide ouvre le
+  quick-add **filtré au type de port du fil** — le node choisi est posé au
+  point de drop et déjà câblé (geste plugdata). Marche dans les deux sens
+  (tiré depuis une sortie ou une entrée).
+- **Autopatch** : edge sélectionnée + clic palette = le node s'insère dans
+  la chaîne (`A → B` devient `A → M → B`).
+- **Reconnect** : re-tirer le endpoint d'une edge la déplace vers une
+  nouvelle cible — pas besoin de supprimer puis re-câbler.
+- **Clipboard** : `Ctrl+C/X/V` copy/cut/paste des nodes sélectionnés (avec
+  leurs edges internes — paste possible dans un autre tab), `Ctrl+D`
+  duplicate.
+- **Diagnostics** : le badge erreurs/warnings en haut à droite liste les
+  problèmes du graphe — **cliquer une issue focus et sélectionne le node**
+  coupable sur le canvas.
 - **Save** sauvegarde le graphe dans le slot — hot-swap : si le move tourne,
   le nouveau graphe remplace l'ancien en fondu.
 
@@ -271,7 +285,7 @@ contrôleurs reçoivent le feedback.
 
 `Space` play/stop du slot sélectionné · `Enter` GO setlist · `Shift+Enter`
 recall cue suivante · `Backspace` cue précédente · `Esc` **panic** ·
-`Ctrl+Z`/`Y` undo/redo · `Ctrl+K` quick-add node · `?` cheatsheet
+`Ctrl+Z`/`Y` undo/redo · `Ctrl+K` quick-add node · `Ctrl+C/X/V/D` clipboard nodes · `?` cheatsheet
 
 ---
 
