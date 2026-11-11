@@ -26,6 +26,8 @@ interface NodePaletteProps {
   onHover: (key: string | null) => void;
   onAddNode: (type: NodeType) => void;
   onAddPluginNode: (m: PluginManifest) => void;
+  /// Node « frame » — annotation UI-only (jamais câblé ni compilé).
+  onAddFrame: () => void;
   plugins: PluginManifest[];
   pluginsLoaded: boolean;
   pluginsDir: string | null;
@@ -267,6 +269,13 @@ export const NodePalette: React.FC<NodePaletteProps> = (p) => {
 
       {/* Help footer */}
       <div className="p-3 border-t border-stagespace-border mt-2">
+        <button
+          onClick={p.onAddFrame}
+          className="w-full mb-2 px-2.5 py-1.5 rounded text-xs text-amber-300/80 border border-dashed border-amber-500/40 hover:border-amber-400/70 hover:text-amber-200 transition-colors"
+          title="Add a resizable annotation frame — UI only, never sent to the engine"
+        >
+          ▭ + Frame
+        </button>
         <div className="text-gray-400 text-xs leading-relaxed space-y-1">
           <div><span className="text-gray-400 font-semibold">Flow:</span> Objects → Engine → Output</div>
           <div><span className="text-gray-400 font-semibold">Chain:</span> Engine → Modifier → Output</div>

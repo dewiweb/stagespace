@@ -113,9 +113,23 @@ Le toggle **Expert/Simple** ouvre le node editor :
   du clic).
 - **Reconnect** : re-tirer le endpoint d'une edge la déplace vers une
   nouvelle cible — lâché sur le vide, il **supprime** l'edge.
+- **Wire-cutting** : **Alt+drag à travers les fils les coupe** (curseur
+  crosshair quand Alt est maintenu).
+- **Delete-heal** : supprimer un node mid-chain (`Delete` ou cut) **recoud
+  ses voisins** `A → B` quand les types de port correspondent — sémantique
+  plugdata. Nodes à plusieurs entrées/sorties ou types incompatibles :
+  coupure franche.
+- **Frames** : le bouton `▭ + Frame` (footer palette) pose un **cadre
+  d'annotation** — déplaçable, redimensionnable (poignées à la sélection),
+  renommable au double-clic du titre. UI-only : jamais envoyé au moteur
+  (filtré de toute sérialisation backend) mais **persisté dans le show**
+  — le cadre survit au save/reload.
 - **Clipboard** : `Ctrl+C/X/V` copy/cut/paste des nodes sélectionnés (avec
   leurs edges internes — paste possible dans un autre tab), `Ctrl+D`
   duplicate.
+- **Undo/redo** : `Ctrl+Z` / `Ctrl+Y` dans **les 3 tabs** — l'historique
+  des graphes Global FX et Modulation fusionne les bursts (drag continu =
+  une entrée), cap 50.
 - **Diagnostics** : le badge erreurs/warnings en haut à droite liste les
   problèmes du graphe — **cliquer une issue focus et sélectionne le node**
   coupable sur le canvas.

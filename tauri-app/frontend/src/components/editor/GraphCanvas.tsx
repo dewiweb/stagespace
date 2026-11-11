@@ -11,6 +11,7 @@ import type { NodeType } from '../../store/useGraphStore';
 import { portTypesInGraph, PORT_COLORS } from '../../utils/connectionRules';
 import { safeGetItem, safeSetItem } from '../../utils/safeStorage';
 import { countIssues, type GraphIssue } from '../../utils/graphIssues';
+import { edgeIdAtScreenPoint } from '../../hooks/useNodeInsertion';
 import { useEffect } from 'react';
 
 /// Canvas ReactFlow extrait de NodeEditor (P2.4) — la surface d'édition :
@@ -42,6 +43,8 @@ interface GraphCanvasProps {
   /// Drop palette → canvas (node posé au curseur, ou splice sur un fil).
   onPaletteDrop: (e: React.DragEvent) => void;
   onPaletteDragOver: (e: React.DragEvent) => void;
+  /// Alt+drag à travers un fil → coupe la connexion (wire-cutting).
+  onCutEdge: (edgeId: string) => void;
   onDismissNodeMenu: () => void;
   onPaneDoubleClick: (e: React.MouseEvent) => void;
   isValidConnection: (connection: Edge | Connection) => boolean;
@@ -58,9 +61,53 @@ interface GraphCanvasProps {
 }
 
 export const GraphCanvas: React.FC<GraphCanvasProps> = (p) => {
+  /// Wire-cutting : Alt+drag sur le canvas coupe chaque fil traversé.
+  /// onPointerDownCapture tourne AVANT les handlers ReactFlow → un Alt+drag
+  /// ne démarre ni drag de node, ni sélection rectangulaire, ni pan.
+  const [cutting, setCutting] = useState(false);
+  const [altHeld, setAltHeld] = useState(false);
+  const cutIds = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => { if (e.altKey) setAltHeld(true); };
+    const up = (e: KeyboardEvent) => { if (!e.altKey) setAltHeld(false); };
+    const blur = () => setAltHeld(false);
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    window.addEventListener('blur', blur);
+    return () => {
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+      window.removeEventListener('blur', blur);
+    };
+  }, []);
+
+  const onPointerDownCapture = (e: React.PointerEvent) => {
+    if (!e.altKey || e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    cutIds.current = new Set();
+    setCutting(true);
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!cutting) return;
+    const id = edgeIdAtScreenPoint(e.clientX, e.clientY);
+    if (id && !cutIds.current.has(id)) {
+      cutIds.current.add(id);
+      p.onCutEdge(id);
+    }
+  };
+  const stopCutting = () => setCutting(false);
+
   return (
     <div
       className="flex-1 bg-stagespace-bg relative"
+      style={altHeld ? { cursor: 'crosshair' } : undefined}
+      onPointerDownCapture={onPointerDownCapture}
+      onPointerMove={onPointerMove}
+      onPointerUp={stopCutting}
+      onPointerCancel={stopCutting}
+      onPointerLeave={stopCutting}
       onDrop={p.onPaletteDrop}
       onDragOver={p.onPaletteDragOver}
     >
@@ -106,7 +153,11 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = (p) => {
           onNodesChange={p.onNodesChange}
         />
         <MiniMap
-          nodeColor={(n) => getCategoryColor((n.data.type ?? '') as NodeType)}
+          nodeColor={(n) =>
+            n.type === 'frame'
+              ? 'rgba(251,191,36,0.35)'
+              : getCategoryColor((n.data.type ?? '') as NodeType)
+          }
           maskColor="rgba(10,10,15,0.7)"
         />
       </ReactFlow>

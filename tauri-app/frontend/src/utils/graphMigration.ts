@@ -1,5 +1,6 @@
 import type { Edge } from '@xyflow/react';
 import type { GraphNode } from '../components/nodeParamSchema';
+import { isFrameNode } from './frameNode';
 import nodeSpecs from '../types/generated/nodeSpecs.json';
 
 /// Types valides + specs = le catalogue généré (source unique — ts-rs).
@@ -59,6 +60,13 @@ export function migrateStoredGraph(
   const nodes: GraphNode[] = [];
   const dropped = new Set<string>();
   for (const n of parsed.nodes) {
+    // Les frames sont des annotations UI — pas un NodeType backend, mais
+    // persistantes dans le .hfg (le parser Rust les ignore : node_type
+    // est Option<String>, validé au compile où elles sont filtrées).
+    if (isFrameNode(n)) {
+      nodes.push(n);
+      continue;
+    }
     const t = n.data?.type as string | undefined;
     const migrated = t ? TYPE_MIGRATIONS[t] ?? t : t;
     if (t && migrated !== t) {

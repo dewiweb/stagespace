@@ -1,6 +1,7 @@
 import type { NodeType } from '../types/generated/NodeType';
 import type { Node } from '@xyflow/react';
 import { isValidConnection as isValidConnectionExported, NODE_SPECS, specOf } from '../utils/connectionRules';
+import { stripFrames } from '../utils/frameNode';
 import type { NodeCategory } from '../types/generated/NodeCategory';
 import type { ParamSpec } from '../types/generated/ParamSpec';
 import type { PluginManifest } from '../types/generated/PluginManifest';
@@ -177,17 +178,20 @@ export function mergeDefaultParams(type: NodeType, currentParams: Record<string,
 /**
  * Prépare un graphe (nodes + edges) pour la sauvegarde :
  * fusionne les params par défaut dans chaque node.
+ * Les frames (annotation UI-only) sont filtrés — le NodeType Rust est
+ * un enum fermé, 'Frame' ferait échouer la désérialisation.
  */
 export function prepareGraphForSave(nodes: any[], edges: any[]) {
+  const { nodes: kept, edges: keptEdges } = stripFrames(nodes, edges);
   return {
-    nodes: nodes.map((n) => ({
+    nodes: kept.map((n) => ({
       ...n,
       data: {
         ...n.data,
         params: mergeDefaultParams(n.data?.type, n.data?.params ?? {}),
       },
     })),
-    edges: [...edges],
+    edges: [...keptEdges],
   };
 }
 

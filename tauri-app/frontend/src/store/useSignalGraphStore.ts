@@ -5,6 +5,8 @@ import type { NodeType } from '../types/generated/NodeType';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { safeSetItem, safeParseStoredJson } from '../utils/safeStorage';
 import { migrateStoredGraph } from '../utils/graphMigration';
+import { createGraphHistory } from '../utils/graphHistory';
+import { stripFrames } from '../utils/frameNode';
 import { useGraphStore } from './useGraphStore';
 
 // ─── Helpers ───
@@ -78,6 +80,10 @@ interface SignalGraphState {
   pushSignalGraph: () => Promise<boolean>;
 
   resetToDefault: () => void;
+
+  // Undo/redo — vidé au setContext (le graphe chargé change d'identité).
+  undo: () => void;
+  redo: () => void;
 }
 
 const STORAGE_KEY = 'stagespace-signal-graph-v1';
@@ -105,6 +111,7 @@ function persist(state: SignalGraphState, nodes: GraphNode[], edges: Edge[]) {
 
 const _defaultGraph = buildDefaultSignalGraph();
 const _stored = loadFromStorage();
+const history = createGraphHistory<GraphNode, Edge>();
 
 export const useSignalGraphStore = create<SignalGraphState>((set, get) => ({
   // Un graph signal vide ne compile pas (SignalOut requis) — on démarre
@@ -114,11 +121,13 @@ export const useSignalGraphStore = create<SignalGraphState>((set, get) => ({
   context: 'global',
 
   setNodes: (nodes) => {
+    history.record(get().nodes, get().edges);
     set({ nodes });
     persist(get(), nodes, get().edges);
   },
 
   setEdges: (edges) => {
+    history.record(get().nodes, get().edges);
     set({ edges });
     persist(get(), get().nodes, edges);
   },
@@ -126,6 +135,9 @@ export const useSignalGraphStore = create<SignalGraphState>((set, get) => ({
   setContext: (slotId, slotGraph) => {
     const ctx = slotId ?? 'global';
     if (ctx === get().context) return;
+    // Un autre graphe charge — l'historique de l'ancien contexte ne doit
+    // pas pouvoir le restaurer ici.
+    history.clear();
     if (ctx === 'global') {
       // Relire le storage frais — _stored est figé au chargement du
       // module : revenir à 'global' après un contexte slot écrasait
@@ -146,6 +158,7 @@ export const useSignalGraphStore = create<SignalGraphState>((set, get) => ({
   },
 
   updateNodeData: (id, data) => {
+    history.record(get().nodes, get().edges);
     const nodes = get().nodes.map((n) =>
       n.id === id
         ? {
@@ -168,8 +181,10 @@ export const useSignalGraphStore = create<SignalGraphState>((set, get) => ({
     const { nodes, edges } = get();
 
     // Format React Flow attendu par build_graph_from_json.
+    // Les frames (UI-only) sont filtrés — 'Frame' n'est pas un NodeType.
+    const stripped = stripFrames(nodes, edges);
     const graphJson = {
-      nodes: nodes.map((n) => ({
+      nodes: stripped.nodes.map((n) => ({
         id: n.id,
         type: 'custom',
         position: n.position,
@@ -179,7 +194,7 @@ export const useSignalGraphStore = create<SignalGraphState>((set, get) => ({
           params: n.data.params ?? {},
         },
       })),
-      edges: edges.map((e) => ({
+      edges: stripped.edges.map((e) => ({
         id: e.id,
         source: e.source,
         target: e.target,
@@ -208,8 +223,23 @@ export const useSignalGraphStore = create<SignalGraphState>((set, get) => ({
   },
 
   resetToDefault: () => {
+    history.record(get().nodes, get().edges);
     const { nodes, edges } = buildDefaultSignalGraph();
     set({ nodes, edges });
     saveToStorage(nodes, edges);
+  },
+
+  undo: () => {
+    const snap = history.undo(get().nodes, get().edges);
+    if (!snap) return;
+    set({ nodes: snap.nodes, edges: snap.edges });
+    persist(get(), snap.nodes, snap.edges);
+  },
+
+  redo: () => {
+    const snap = history.redo(get().nodes, get().edges);
+    if (!snap) return;
+    set({ nodes: snap.nodes, edges: snap.edges });
+    persist(get(), snap.nodes, snap.edges);
   },
 }));

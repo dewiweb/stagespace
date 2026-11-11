@@ -15,6 +15,7 @@ import {
   spliceRejectionReason, effectiveInputPorts,
   firstInputPortOf, firstOutputPortOf, specOf,
 } from '../utils/connectionRules';
+import { FRAME_NODE_TYPE, FRAME_DATA_TYPE } from '../utils/frameNode';
 import type { PortDef } from '../types/generated/PortDef';
 import type { PluginManifest } from '../types/generated/PluginManifest';
 import type { PluginKind } from '../types/generated/PluginKind';
@@ -124,6 +125,23 @@ export function useNodeInsertion(opts: {
     },
     [activeTab],
   );
+
+  /// Node « frame » — annotation UI-only (jamais sérialisé backend :
+  /// utils/frameNode.ts filtre les payloads). Posé en offset diagonal,
+  /// derrière les autres nodes (zIndex -1), redimensionné via NodeResizer.
+  const addFrame = useCallback(() => {
+    const frame: Node = {
+      id: `frame-${Date.now()}`,
+      type: FRAME_NODE_TYPE,
+      position: {
+        x: 140 + (displayNodes.length % 6) * 24,
+        y: 120 + (displayNodes.length % 6) * 24,
+      },
+      data: { label: 'Frame', type: FRAME_DATA_TYPE, params: {} },
+      style: { width: 360, height: 220, zIndex: -1 },
+    };
+    addToContext(frame);
+  }, [addToContext, displayNodes.length]);
 
   /// Types des nodes aux 2 bouts d'une edge (+ kind si la cible est un
   /// plugin) — partagé par le splice et le filtre QuickAdd d'insertion.
@@ -433,6 +451,7 @@ export function useNodeInsertion(opts: {
     selectedEdge,
     addNodeByType,
     addPluginNode,
+    addFrame,
     onPaletteDragOver,
     onPaletteDrop,
   };

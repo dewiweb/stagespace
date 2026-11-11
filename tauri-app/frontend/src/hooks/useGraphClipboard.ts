@@ -8,6 +8,10 @@ import {
   snapshotSelection, cloneForPaste, writeGraphClipboard, readGraphClipboard,
   type GraphClipboardPayload,
 } from '../utils/graphClipboard';
+import { healEdgesForRemoval } from '../utils/graphHeal';
+import { isFrameNode } from '../utils/frameNode';
+import type { GraphNode } from '../components/nodeParamSchema';
+import type { PluginKind } from '../types/generated/PluginKind';
 import { toast } from '../utils/toast-helpers';
 
 /// Clipboard de graphe (copy/cut/paste/duplicate) + suppression par ids,
@@ -21,21 +25,35 @@ export function useGraphClipboard(opts: {
   displayEdges: Edge[];
   /// Ctrl+K vit dans le même listener que les raccourcis clipboard.
   onQuickAdd: () => void;
+  /// Kind du manifeste d'un node Plugin — requis pour typer le heal.
+  pluginKindOf: (n: GraphNode | undefined) => PluginKind | undefined;
 }) {
-  const { activeTab, displayNodes, displayEdges, onQuickAdd } = opts;
+  const { activeTab, displayNodes, displayEdges, onQuickAdd, pluginKindOf } = opts;
 
   /// Suppression par ids — le sub passe par onNodesChange/onEdgesChange
   /// (historique + autosave naturels), les standalone filtrent directement.
+  /// Un node mid-chain retiré recoud ses deux voisins (plugdata) quand
+  /// les types de port correspondent.
   const removeByIds = useCallback(
     (nodeIds: Set<string>, edgeIds: Set<string>) => {
+      const heal =
+        nodeIds.size > 0
+          ? healEdgesForRemoval(nodeIds, displayNodes, displayEdges, pluginKindOf)
+          : [];
       if (activeTab === 'global') {
         const st = useGlobalGraphStore.getState();
         st.setNodes(st.nodes.filter((n) => !nodeIds.has(n.id)));
-        st.setEdges(st.edges.filter((e) => !edgeIds.has(e.id) && !nodeIds.has(e.source) && !nodeIds.has(e.target)));
+        st.setEdges([
+          ...st.edges.filter((e) => !edgeIds.has(e.id) && !nodeIds.has(e.source) && !nodeIds.has(e.target)),
+          ...heal,
+        ]);
       } else if (activeTab === 'signal') {
         const st = useSignalGraphStore.getState();
         st.setNodes(st.nodes.filter((n) => !nodeIds.has(n.id)));
-        st.setEdges(st.edges.filter((e) => !edgeIds.has(e.id) && !nodeIds.has(e.source) && !nodeIds.has(e.target)));
+        st.setEdges([
+          ...st.edges.filter((e) => !edgeIds.has(e.id) && !nodeIds.has(e.source) && !nodeIds.has(e.target)),
+          ...heal,
+        ]);
       } else {
         const st = useGraphStore.getState();
         if (nodeIds.size > 0) {
@@ -44,9 +62,12 @@ export function useGraphClipboard(opts: {
         if (edgeIds.size > 0) {
           st.onEdgesChange([...edgeIds].map((id) => ({ type: 'remove' as const, id })));
         }
+        if (heal.length > 0) {
+          st.addNodesAndEdges([], heal);
+        }
       }
     },
-    [activeTab],
+    [activeTab, displayNodes, displayEdges, pluginKindOf],
   );
 
   /// Collage dans le graphe actif — nodes désélectionnés au profit des
@@ -63,7 +84,11 @@ export function useGraphClipboard(opts: {
           : activeTab === 'global'
             ? !SUB_ONLY_NODES.has(t) && !SIGNAL_ONLY_NODES.has(t)
             : !GLOBAL_ONLY_NODES.has(t) && !SIGNAL_ONLY_NODES.has(t);
-      const kept = clip.nodes.filter((n) => inScope(n.data.type as NodeType));
+      // Les frames (annotation UI-only) passent dans les 3 domaines —
+      // elles ne relèvent pas du scoping backend.
+      const kept = clip.nodes.filter(
+        (n) => isFrameNode(n) || inScope(n.data.type as NodeType),
+      );
       const skipped = clip.nodes.length - kept.length;
       if (skipped > 0) {
         toast.warning(`${skipped} node${skipped > 1 ? 's' : ''} skipped — not valid in the ${activeTab === 'signal' ? 'Modulation' : activeTab === 'global' ? 'Global FX' : 'Move'} graph`);

@@ -14,6 +14,7 @@ import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import { useSignalGraphStore } from '../store/useSignalGraphStore';
 import CustomNode from './CustomNode';
+import FrameNode from './editor/FrameNode';
 import { NodePalette } from './editor/NodePalette';
 import { GraphCanvas } from './editor/GraphCanvas';
 import { useStandaloneGraph } from '../hooks/useStandaloneGraph';
@@ -25,13 +26,17 @@ import {
   isValidConnection, connectionRejectionReason,
   outputPortType, inputPortType,
 } from '../utils/connectionRules';
+import { healEdgesForRemoval } from '../utils/graphHeal';
+import { stripFrames, isFrameNode } from '../utils/frameNode';
 import { presetsUsingType } from '../utils/shapePresets';
 import { toast } from '../utils/toast-helpers';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { issuesByNode, nodeIssueClass, type GraphIssue } from '../utils/graphIssues';
 import type { PluginKind } from '../types/generated/PluginKind';
 
-const nodeTypes: NodeTypes = { custom: CustomNode };
+/// `frame` = annotation UI-only — jamais sérialisé vers le backend
+/// (utils/frameNode.ts filtre tous les payloads).
+const nodeTypes: NodeTypes = { custom: CustomNode, frame: FrameNode };
 
 export const NodeEditor: React.FC = () => {
   const nodes = useGraphStore((s) => s.nodes);
@@ -145,7 +150,7 @@ export const NodeEditor: React.FC = () => {
           ...n,
           data: issue ? { ...n.data, issueMessages: issue.messages } : n.data,
           className: [
-            connectingFrom && connectingFrom.nodeId !== n.id && !isValidConnection(
+            connectingFrom && connectingFrom.nodeId !== n.id && !isFrameNode(n) && !isValidConnection(
               connectingFrom.type,
               nodeType,
               nodeType === 'Plugin'
@@ -164,21 +169,26 @@ export const NodeEditor: React.FC = () => {
   useEffect(() => {
     const ctx = activeTab === 'global' ? 'global' : activeTab === 'signal' ? 'signal' : 'sub';
     const timer = setTimeout(async () => {
-      const toGraphJson = (ns: GraphNode[], es: Edge[]) => ({
-        nodes: ns.map((n) => ({
-          id: n.id,
-          type: 'custom',
-          position: n.position,
-          data: { label: n.data.label ?? n.data.type ?? '', type: n.data.type ?? '', params: n.data.params ?? {} },
-        })),
-        edges: es.map((e) => ({
-          id: e.id,
-          source: e.source,
-          target: e.target,
-          sourceHandle: e.sourceHandle ?? 'out',
-          targetHandle: e.targetHandle ?? 'in',
-        })),
-      });
+      const toGraphJson = (ns: GraphNode[], es: Edge[]) => {
+        // Les frames (annotation UI) ne partent jamais au backend —
+        // 'Frame' n'est pas un NodeType de l'enum Rust.
+        const { nodes: kept, edges: keptEdges } = stripFrames(ns, es);
+        return {
+          nodes: kept.map((n) => ({
+            id: n.id,
+            type: 'custom',
+            position: n.position,
+            data: { label: n.data.label ?? n.data.type ?? '', type: n.data.type ?? '', params: n.data.params ?? {} },
+          })),
+          edges: keptEdges.map((e) => ({
+            id: e.id,
+            source: e.source,
+            target: e.target,
+            sourceHandle: e.sourceHandle ?? 'out',
+            targetHandle: e.targetHandle ?? 'in',
+          })),
+        };
+      };
       try {
         // En contexte signal per-move, le graphe du move sert à résoudre
         // les cibles `param:` (global signal → aucun move).
@@ -205,12 +215,16 @@ export const NodeEditor: React.FC = () => {
     setNodes: setGlobalNodes, setEdges: setGlobalEdges,
     pushGraph: pushGlobalGraph, active: activeTab === 'global',
     connectedThisDrop,
+    undo: useGlobalGraphStore.getState().undo,
+    redo: useGlobalGraphStore.getState().redo,
   });
   const signalGraph = useStandaloneGraph({
     nodes: signalNodes, edges: signalEdges,
     setNodes: setSignalNodes, setEdges: setSignalEdges,
     pushGraph: pushSignalGraph, active: activeTab === 'signal',
     connectedThisDrop,
+    undo: useSignalGraphStore.getState().undo,
+    redo: useSignalGraphStore.getState().redo,
   });
 
   const handleConnect = useCallback((connection: Connection) => {
@@ -277,7 +291,42 @@ export const NodeEditor: React.FC = () => {
   });
   const { removeByIds } = useGraphClipboard({
     activeTab, displayNodes, displayEdges, onQuickAdd: insert.openQuickAdd,
+    pluginKindOf,
   });
+
+  /// onNodesChange context-aware — avec heal (plugdata) : un node
+  /// mid-chain supprimé au Delete recoud ses voisins quand les types de
+  /// port correspondent (1 entrée + 1 sortie compatibles).
+  const handleNodesChange = useCallback(
+    (changes: Parameters<typeof onNodesChange>[0]) => {
+      const removed = new Set(
+        changes.filter((c) => c.type === 'remove').map((c) => c.id),
+      );
+      const heal = removed.size
+        ? healEdgesForRemoval(removed, displayNodes, displayEdges, pluginKindOf)
+        : [];
+      (activeTab === 'global'
+        ? globalGraph.onNodesChange
+        : activeTab === 'signal'
+          ? signalGraph.onNodesChange
+          : onNodesChange)(changes);
+      if (heal.length > 0) {
+        if (activeTab === 'global') {
+          const st = useGlobalGraphStore.getState();
+          st.setEdges([...st.edges, ...heal]);
+        } else if (activeTab === 'signal') {
+          const st = useSignalGraphStore.getState();
+          st.setEdges([...st.edges, ...heal]);
+        } else {
+          useGraphStore.getState().addNodesAndEdges([], heal);
+        }
+      }
+    },
+    [
+      activeTab, displayNodes, displayEdges, pluginKindOf,
+      globalGraph, signalGraph, onNodesChange,
+    ],
+  );
 
   const onConnectEnd = useCallback((event: any) => {
     const conn = connectingFrom;
@@ -364,6 +413,8 @@ export const NodeEditor: React.FC = () => {
   // dans applyShapePreset) — le toast le rappelle.
   const onNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
     event.preventDefault();
+    // Frames : annotation UI — pas d'exemples à proposer.
+    if (isFrameNode(node)) return;
     const nodeType = node.data.type as NodeType | undefined;
     if (!nodeType) return;
     setNodeMenu({ x: event.clientX, y: event.clientY, nodeType });
@@ -579,6 +630,7 @@ export const NodeEditor: React.FC = () => {
         onHover={setHoveredPaletteNode}
         onAddNode={insert.addNodeByType}
         onAddPluginNode={insert.addPluginNode}
+        onAddFrame={insert.addFrame}
         plugins={plugins}
         pluginsLoaded={pluginsLoaded}
         pluginsDir={pluginsDir}
@@ -591,11 +643,7 @@ export const NodeEditor: React.FC = () => {
       <GraphCanvas
         nodes={decoratedNodes}
         edges={decoratedEdges}
-        onNodesChange={
-          activeTab === 'global' ? globalGraph.onNodesChange
-            : activeTab === 'signal' ? signalGraph.onNodesChange
-            : onNodesChange
-        }
+        onNodesChange={handleNodesChange}
         onEdgesChange={
           activeTab === 'global' ? globalGraph.onEdgesChange
             : activeTab === 'signal' ? signalGraph.onEdgesChange
@@ -616,6 +664,7 @@ export const NodeEditor: React.FC = () => {
         onEdgeDoubleClick={onEdgeDoubleClick}
         onPaletteDrop={insert.onPaletteDrop}
         onPaletteDragOver={insert.onPaletteDragOver}
+        onCutEdge={(id) => removeByIds(new Set(), new Set([id]))}
         onNodeContextMenu={onNodeContextMenu}
         onDismissNodeMenu={() => setNodeMenu(null)}
         onPaneDoubleClick={onPaneDoubleClick}

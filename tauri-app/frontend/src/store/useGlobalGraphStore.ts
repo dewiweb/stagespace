@@ -5,6 +5,8 @@ import type { NodeType } from '../types/generated/NodeType';
 import { safeInvoke as invoke } from '../utils/tauri';
 import { safeSetItem, safeParseStoredJson } from '../utils/safeStorage';
 import { migrateStoredGraph } from '../utils/graphMigration';
+import { createGraphHistory } from '../utils/graphHistory';
+import { stripFrames } from '../utils/frameNode';
 
 // ─── Helpers ───
 
@@ -78,6 +80,10 @@ interface GlobalGraphState {
 
   // Reset au graph par défaut
   resetToDefault: () => void;
+
+  // Undo/redo — même sémantique burst-fusionnée que le store sub.
+  undo: () => void;
+  redo: () => void;
 }
 
 const STORAGE_KEY = 'stagespace-global-graph-v4';
@@ -97,6 +103,7 @@ function saveToStorage(nodes: GraphNode[], edges: Edge[]) {
 // Initialiser une seule fois pour que les IDs des nodes et edges correspondent
 const _defaultGraph = buildDefaultGlobalGraph();
 const _stored = loadFromStorage();
+const history = createGraphHistory<GraphNode, Edge>();
 
 export const useGlobalGraphStore = create<GlobalGraphState>((set, get) => ({
   nodes: _stored?.nodes ?? _defaultGraph.nodes,
@@ -104,16 +111,19 @@ export const useGlobalGraphStore = create<GlobalGraphState>((set, get) => ({
   isGlobalGraphEnabled: true,
 
   setNodes: (nodes) => {
+    history.record(get().nodes, get().edges);
     set({ nodes });
     saveToStorage(nodes, get().edges);
   },
 
   setEdges: (edges) => {
+    history.record(get().nodes, get().edges);
     set({ edges });
     saveToStorage(get().nodes, edges);
   },
 
   updateNodeData: (id, data) => {
+    history.record(get().nodes, get().edges);
     const nodes = get().nodes.map((n) =>
       n.id === id
         ? {
@@ -139,9 +149,11 @@ export const useGlobalGraphStore = create<GlobalGraphState>((set, get) => ({
     if (!isGlobalGraphEnabled) return true;
 
     // Préparer le graph pour le backend — format React Flow (data.type, data.params)
-    // Le parser Rust (build_graph_from_json) attend ce format
+    // Le parser Rust (build_graph_from_json) attend ce format.
+    // Les frames (UI-only) sont filtrés — 'Frame' n'est pas un NodeType.
+    const stripped = stripFrames(nodes, edges);
     const graphJson = {
-      nodes: nodes.map((n) => ({
+      nodes: stripped.nodes.map((n) => ({
         id: n.id,
         type: 'custom',
         position: n.position,
@@ -151,7 +163,7 @@ export const useGlobalGraphStore = create<GlobalGraphState>((set, get) => ({
           params: n.data.params ?? {},
         },
       })),
-      edges: edges.map((e) => ({
+      edges: stripped.edges.map((e) => ({
         id: e.id,
         source: e.source,
         target: e.target,
@@ -180,8 +192,23 @@ export const useGlobalGraphStore = create<GlobalGraphState>((set, get) => ({
   },
 
   resetToDefault: () => {
+    history.record(get().nodes, get().edges);
     const { nodes, edges } = buildDefaultGlobalGraph();
     set({ nodes, edges });
     saveToStorage(nodes, edges);
+  },
+
+  undo: () => {
+    const snap = history.undo(get().nodes, get().edges);
+    if (!snap) return;
+    set({ nodes: snap.nodes, edges: snap.edges });
+    saveToStorage(snap.nodes, snap.edges);
+  },
+
+  redo: () => {
+    const snap = history.redo(get().nodes, get().edges);
+    if (!snap) return;
+    set({ nodes: snap.nodes, edges: snap.edges });
+    saveToStorage(snap.nodes, snap.edges);
   },
 }));

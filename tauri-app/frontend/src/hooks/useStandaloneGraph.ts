@@ -16,8 +16,21 @@ export function useStandaloneGraph(opts: {
   pushGraph: () => void;
   active: boolean;
   connectedThisDrop: React.MutableRefObject<boolean>;
+  /// Undo/redo du store standalone (historique burst-fusionnée côté store).
+  undo: () => void;
+  redo: () => void;
 }) {
-  const { nodes, edges, setNodes, setEdges, pushGraph, active, connectedThisDrop } = opts;
+  const {
+    nodes,
+    edges,
+    setNodes,
+    setEdges,
+    pushGraph,
+    active,
+    connectedThisDrop,
+    undo,
+    redo,
+  } = opts;
 
   const onNodesChange = useCallback(
     (changes: Parameters<typeof applyNodeChanges>[0]) => {
@@ -81,6 +94,29 @@ export function useStandaloneGraph(opts: {
     },
     [edges, setEdges],
   );
+
+  // Undo/redo — document-level (bubbling avant le listener window de
+  // useLiveShortcuts : le preventDefault le fait passer). Sans effet
+  // quand le tab n'est pas actif — le store sub garde ses propres
+  // raccourcis.
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const el = e.target as HTMLElement | null;
+      if (el?.closest('input, textarea, select, [contenteditable]')) return;
+      const key = e.key.toLowerCase();
+      if (key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if (key === 'y' || (key === 'z' && e.shiftKey)) {
+        e.preventDefault();
+        redo();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [active, undo, redo]);
 
   // Auto-push quand le graphe change (debounce) — seulement si le tab
   // est actif (sinon les nodes n'ont pas été édités via cette surface).
