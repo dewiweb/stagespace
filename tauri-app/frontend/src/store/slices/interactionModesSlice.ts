@@ -35,7 +35,25 @@ export interface InteractionModesSlice {
   cancelInteractionModes: () => boolean;
 }
 
-type Store = InteractionModesSlice & { drawMode: boolean };
+type Store = InteractionModesSlice & {
+  drawMode: boolean;
+  // Brouillon spline studio — purgé à toute sortie de drawMode (Esc,
+  // bascule vers un autre mode) : sans ça des CPs stale ressurgissent.
+  drawnPoints: Array<[number, number, number]>;
+  controlPoints: Array<[number, number, number]>;
+  cpHistory: Array<{ cps: Array<[number, number, number]>; closed: boolean }>;
+  splineClosed: boolean;
+  splineTool: 'freehand' | 'place' | 'edit';
+};
+
+// Purge du brouillon spline — ajouté à toute transition drawMode → false.
+const CLEAR_SPLINE_DRAFT = {
+  drawnPoints: [] as Array<[number, number, number]>,
+  controlPoints: [] as Array<[number, number, number]>,
+  cpHistory: [] as Array<{ cps: Array<[number, number, number]>; closed: boolean }>,
+  splineClosed: false,
+  splineTool: 'freehand' as const,
+};
 
 export const createInteractionModesSlice: StateCreator<Store, [], [], InteractionModesSlice> = (set, get) => ({
   manipulateMode: false,
@@ -44,13 +62,13 @@ export const createInteractionModesSlice: StateCreator<Store, [], [], Interactio
   // l'autre reste "actif" (banner) mais mort. zoneEdit l'avait, pas les
   // autres (bug : zoneEdit + manipulate coexistaient).
   setManipulateMode: (v) =>
-    set(v ? { manipulateMode: true, drawMode: false, assignMode: false, zonePlaceMode: false, zoneEditMode: false } : { manipulateMode: false }),
+    set(v ? { manipulateMode: true, drawMode: false, assignMode: false, zonePlaceMode: false, zoneEditMode: false, ...CLEAR_SPLINE_DRAFT } : { manipulateMode: false }),
   assignMode: false,
   setAssignMode: (v) =>
-    set(v ? { assignMode: true, drawMode: false, manipulateMode: false, zonePlaceMode: false, zoneEditMode: false } : { assignMode: false }),
+    set(v ? { assignMode: true, drawMode: false, manipulateMode: false, zonePlaceMode: false, zoneEditMode: false, ...CLEAR_SPLINE_DRAFT } : { assignMode: false }),
   zonePlaceMode: false,
   setZonePlaceMode: (v) =>
-    set(v ? { zonePlaceMode: true, drawMode: false, manipulateMode: false, assignMode: false, zoneEditMode: false } : { zonePlaceMode: false }),
+    set(v ? { zonePlaceMode: true, drawMode: false, manipulateMode: false, assignMode: false, zoneEditMode: false, ...CLEAR_SPLINE_DRAFT } : { zonePlaceMode: false }),
   pendingZonePoint: null,
   setPendingZonePoint: (p) => set({ pendingZonePoint: p }),
   zonePlaceTarget: null,
@@ -58,12 +76,12 @@ export const createInteractionModesSlice: StateCreator<Store, [], [], Interactio
   zoneEditMode: false,
   setZoneEditMode: (v) =>
     set(v
-      ? { zoneEditMode: true, drawMode: false, manipulateMode: false, assignMode: false, zonePlaceMode: false }
+      ? { zoneEditMode: true, drawMode: false, manipulateMode: false, assignMode: false, zonePlaceMode: false, ...CLEAR_SPLINE_DRAFT }
       : { zoneEditMode: false }),
   cancelInteractionModes: () => {
     const { drawMode, manipulateMode, assignMode, zonePlaceMode, zoneEditMode } = get();
     if (!drawMode && !manipulateMode && !assignMode && !zonePlaceMode && !zoneEditMode) return false;
-    set({ drawMode: false, manipulateMode: false, assignMode: false, zonePlaceMode: false, zoneEditMode: false });
+    set({ drawMode: false, manipulateMode: false, assignMode: false, zonePlaceMode: false, zoneEditMode: false, ...CLEAR_SPLINE_DRAFT });
     return true;
   },
 });

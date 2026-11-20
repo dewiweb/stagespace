@@ -4,6 +4,11 @@ import { simplifyPoints, computeCentroid } from '../utils/geometryUtils';
 import { feLog } from '../../utils/tauri';
 import { toast } from '../../utils/toast-helpers';
 import { computeTrackIndices, saveSlotsToStorage, type MoveSlot } from './moveSlotsSlice';
+import { fitStroke, strokeLooksClosed, type Vec3 } from '../../utils/splineCore';
+
+export type SplineTool = 'freehand' | 'place' | 'edit';
+
+const CP_HISTORY_MAX = 32;
 
 export interface DrawModeSlice {
   // Draw mode (freehand trajectory drawing)
@@ -15,6 +20,31 @@ export interface DrawModeSlice {
   addDrawnPoint: (p: [number, number, number]) => void;
   clearDrawnPoints: () => void;
   finalizeDrawing: () => Promise<string | null>;
+
+  // ── Spline studio — couche édition au-dessus du freehand ──
+  // Outil actif dans le draw mode : freehand (stroke→fit→edit auto),
+  // place (clic = ajout de CP), edit (drag/suppr/insert sur CPs).
+  splineTool: SplineTool;
+  setSplineTool: (tool: SplineTool) => void;
+  // Points de contrôle éditables — ce que Done écrira dans le node.
+  controlPoints: Vec3[];
+  splineClosed: boolean;
+  setSplineClosed: (closed: boolean) => void;
+  smoothing: number; // 0..1 — intensité du fit stroke→CPs
+  setSmoothing: (v: number) => void;
+  // Historique undo — snapshot {cps, closed} par action mutatrice.
+  cpHistory: Array<{ cps: Vec3[]; closed: boolean }>;
+  cpUndo: () => void;
+  // Stroke freehand → CPs fittés (push history) + bascule en mode edit.
+  commitStroke: () => void;
+  // Remplace les CPs avec snapshot undo (drag, delete, insert, primitive).
+  // recordHistory=false pour les mises à jour continues (drag move).
+  setControlPoints: (cps: Vec3[], recordHistory?: boolean) => void;
+  // Snapshot undo sans toucher aux CPs — à appeler au début d'un drag.
+  pushCpSnapshot: () => void;
+  // Charge un jeu de CPs primitif (history + sélection aucune).
+  loadPrimitive: (cps: Vec3[], closed: boolean) => void;
+  clearSpline: () => void;
 }
 
 // finalizeDrawing accède à nodes, edges, isPlaying, updateGraphLive, holProject, manualOscIds via get()
@@ -43,23 +73,88 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
   setDrawMode: (enabled) =>
     set(enabled
       ? { drawMode: true, manipulateMode: false, assignMode: false, zonePlaceMode: false, zoneEditMode: false }
-      : { drawMode: false }),
+      // Quitter le mode abandonne le brouillon — Done a déjà persisté,
+      // Cancel/Esc jettent les CPs (sinon ils ressurgissent à la ré-entrée).
+      : { drawMode: false, drawnPoints: [], controlPoints: [], cpHistory: [], splineClosed: false, splineTool: 'freehand' as SplineTool }),
   drawZ: 0,
   setDrawZ: (z) => set({ drawZ: z }),
   drawnPoints: [],
   addDrawnPoint: (p) => set((s) => ({ drawnPoints: [...s.drawnPoints, p] })),
   clearDrawnPoints: () => set({ drawnPoints: [] }),
 
+  // ── Spline studio ──
+  splineTool: 'freehand' as SplineTool,
+  setSplineTool: (tool) => set({ splineTool: tool }),
+  controlPoints: [],
+  splineClosed: false,
+  setSplineClosed: (closed) =>
+    set((s) => ({
+      splineClosed: closed,
+      cpHistory: [...s.cpHistory, { cps: s.controlPoints, closed: s.splineClosed }].slice(-CP_HISTORY_MAX),
+    })),
+  smoothing: 0.5,
+  setSmoothing: (v) => set({ smoothing: Math.min(1, Math.max(0, v)) }),
+  cpHistory: [] as Array<{ cps: Vec3[]; closed: boolean }>,
+  cpUndo: () =>
+    set((s) => {
+      const prev = s.cpHistory[s.cpHistory.length - 1];
+      if (!prev) return s;
+      return {
+        controlPoints: prev.cps,
+        splineClosed: prev.closed,
+        cpHistory: s.cpHistory.slice(0, -1),
+      };
+    }),
+  commitStroke: () =>
+    set((s) => {
+      if (s.drawnPoints.length < 3) return s;
+      const closed = strokeLooksClosed(s.drawnPoints);
+      const cps = fitStroke(s.drawnPoints, { smoothing: s.smoothing, closed });
+      return {
+        controlPoints: cps,
+        splineClosed: closed,
+        cpHistory: [...s.cpHistory, { cps: s.controlPoints, closed: s.splineClosed }].slice(-CP_HISTORY_MAX),
+        drawnPoints: [],
+        splineTool: 'edit' as SplineTool,
+      };
+    }),
+  pushCpSnapshot: () =>
+    set((s) => ({
+      cpHistory: [...s.cpHistory, { cps: s.controlPoints, closed: s.splineClosed }].slice(-CP_HISTORY_MAX),
+    })),
+  setControlPoints: (cps, recordHistory = true) =>
+    set((s) => ({
+      controlPoints: cps,
+      cpHistory: recordHistory
+        ? [...s.cpHistory, { cps: s.controlPoints, closed: s.splineClosed }].slice(-CP_HISTORY_MAX)
+        : s.cpHistory,
+    })),
+  loadPrimitive: (cps, closed) =>
+    set((s) => ({
+      controlPoints: cps,
+      splineClosed: closed,
+      drawnPoints: [],
+      cpHistory: [...s.cpHistory, { cps: s.controlPoints, closed: s.splineClosed }].slice(-CP_HISTORY_MAX),
+      splineTool: 'edit' as SplineTool,
+    })),
+  clearSpline: () => set({ controlPoints: [], cpHistory: [], drawnPoints: [], splineClosed: false }),
+
   finalizeDrawing: async () => {
-    const { drawnPoints, nodes, holProject, manualOscIds, selectedTrackIds } = get();
-    feLog(`[DBG-finalize] drawnPoints=${drawnPoints.length} nodes=${nodes.length} types=${nodes.map((n) => n.data.type).join(',')}`);
-    if (drawnPoints.length < 3) {
-      feLog(`[DBG-finalize] ABORT: not enough points (${drawnPoints.length})`);
+    const { drawnPoints, controlPoints, splineClosed, nodes, holProject, manualOscIds, selectedTrackIds } = get();
+    feLog(`[DBG-finalize] drawnPoints=${drawnPoints.length} controlPoints=${controlPoints.length} closed=${splineClosed} nodes=${nodes.length} types=${nodes.map((n) => n.data.type).join(',')}`);
+
+    // Source : CPs édités si présents (spline studio), sinon le stroke brut.
+    const source = controlPoints.length >= 2 ? controlPoints : drawnPoints;
+    if (source.length < 2) {
+      feLog(`[DBG-finalize] ABORT: not enough points (${source.length})`);
       return null;
     }
 
-    // Douglas-Peucker simplification
-    const simplified = simplifyPoints(drawnPoints, 0.02);
+    // Les CPs issus du studio sont déjà propres — pas de re-simplification.
+    // Le fallback stroke brut garde la Douglas-Peucker historique.
+    const simplified = controlPoints.length >= 2
+      ? source
+      : simplifyPoints(drawnPoints, 0.02);
     feLog(`[DBG-finalize] simplified=${simplified.length} pts, first=${JSON.stringify(simplified[0])}, last=${JSON.stringify(simplified[simplified.length - 1])}`);
 
     // Calculer l'origin (isobarycentre des tracks sélectionnées)
@@ -87,7 +182,7 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
 
     if (!drawSplineNode && !vectorFieldNode) {
       feLog(`[DBG-finalize] ABORT: no DrawSpline or drawn VectorField node found`);
-      set({ drawMode: false });
+      set({ drawMode: false, drawnPoints: [], controlPoints: [], cpHistory: [], splineClosed: false, splineTool: 'freehand' as SplineTool });
       return null;
     }
 
@@ -124,6 +219,9 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
               params: {
                 ...n.data.params,
                 points: pointsJson,
+                // Honorés via EngineParams.extra côté Rust (parse_spline).
+                closed: splineClosed,
+                tension: 0.5,
               },
             },
           };
@@ -144,10 +242,14 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
         return n;
       }),
       drawMode: false,
-      // Stroke persisté dans le node → vider le buffer pour éviter une
+      // Stroke persisté dans le node → vider les buffers pour éviter une
       // double écriture au prochain finalize (l'append VectorField relit
       // params.points existants).
       drawnPoints: [],
+      controlPoints: [],
+      cpHistory: [],
+      splineClosed: false,
+      splineTool: 'freehand' as SplineTool,
     }));
 
     // Synchroniser slot.graphJson avec les nodes mis à jour

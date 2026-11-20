@@ -54,6 +54,8 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   const holProject = useGraphStore((s) => s.holProject);
   const drawMode = useGraphStore((s) => s.drawMode);
   const drawnPoints = useGraphStore((s) => s.drawnPoints);
+  const controlPoints = useGraphStore((s) => s.controlPoints);
+  const splineClosed = useGraphStore((s) => s.splineClosed);
 
   // Modes d'interaction — slice du store (le handler Esc global peut les
   // annuler avant le panic ; mutual exclusion gérée par le slice)
@@ -117,7 +119,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   useInteractionModes({ controlsRef, rendererRef, drawMode, manipulateMode, assignMode, zonePlaceMode, zoneEditMode });
 
   // ── Hooks extraits (handlers d'interaction) ──
-  const { drawCanvasRef, handleDrawStart, handleDrawMove, handleDrawEnd } =
+  const { drawCanvasRef, handleDrawStart, handleDrawMove, handleDrawEnd, handleDrawDoubleClick } =
     useDrawMode({ cameraRef, containerRef });
   const {
     draggingObject,
@@ -194,6 +196,8 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
     manipulateMode,
     holProject,
     drawnPoints,
+    controlPoints,
+    splineClosed,
     draggingObjectRef,
     setWebglFailed,
     dimensions,
@@ -296,6 +300,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
         handleDrawStart={handleDrawStart}
         handleDrawMove={handleDrawMove}
         handleDrawEnd={handleDrawEnd}
+        handleDrawDoubleClick={handleDrawDoubleClick}
         handleZoomWheel={handleZoomWheel}
         raycastAt={raycastAt}
         zoneIndexAt={zoneIndexAt}

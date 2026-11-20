@@ -17,6 +17,7 @@ export interface SceneInteractionLayersProps {
   handleDrawStart: (e: React.PointerEvent) => void;
   handleDrawMove: (e: React.PointerEvent) => void;
   handleDrawEnd: (e: React.PointerEvent) => void;
+  handleDrawDoubleClick: (e: React.MouseEvent) => void;
   handleZoomWheel: (e: React.WheelEvent) => void;
   raycastAt: (e: { clientX: number; clientY: number }) => THREE.Raycaster | null;
   zoneIndexAt: (r: THREE.Raycaster) => number | null;
@@ -52,6 +53,9 @@ export const SceneInteractionLayers: React.FC<SceneInteractionLayersProps> = (p)
       onPointerMove={p.handleDrawMove}
       onPointerUp={p.handleDrawEnd}
       onPointerCancel={p.handleDrawEnd}
+      onDoubleClick={p.handleDrawDoubleClick}
+      // Le clic-droit sert à supprimer des CPs en mode edit — pas de menu.
+      onContextMenu={p.drawMode ? (e) => e.preventDefault() : undefined}
       onWheel={p.handleZoomWheel}
     />
     {p.zoneEditMode && (

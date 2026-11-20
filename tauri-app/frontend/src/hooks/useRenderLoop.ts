@@ -6,6 +6,7 @@ import { useGraphStore } from '../store/useGraphStore';
 import type { HolProject } from '../store/useGraphStore';
 import { strongestZoneInfluence } from '../utils/zoneMath';
 import { toThree } from '../utils/coords';
+import { sampleSpline } from '../utils/splineCore';
 
 /// Cache un mesh ET ses labels CSS2DObject enfants.
 /// ATTENTION : CSS2DRenderer teste object.visible du CSS2DObject lui-même,
@@ -63,6 +64,9 @@ export interface UseRenderLoopParams {
   manipulateMode: boolean;
   holProject: HolProject | null;
   drawnPoints: DrawnPointsValue;
+  // Spline studio — CPs éditables + flag closed (preview miroir du backend).
+  controlPoints: DrawnPointsValue;
+  splineClosed: boolean;
   draggingObjectRef: MutableRefObject<number | null>;
   // Pour signaler l'échec WebGL
   setWebglFailed: (v: boolean) => void;
@@ -97,6 +101,8 @@ export function useRenderLoop({
   manipulateMode,
   holProject,
   drawnPoints,
+  controlPoints,
+  splineClosed,
   draggingObjectRef,
   setWebglFailed,
   initKey = 0,
@@ -107,12 +113,18 @@ export function useRenderLoop({
   const holProjectRef = useRef(holProject);
   const drawnPointsRef = useRef(drawnPoints);
   const lastDrawnKeyRef = useRef('');
+  const controlPointsRef = useRef(controlPoints);
+  const splineClosedRef = useRef(splineClosed);
+  const lastCpsRef = useRef<DrawnPointsValue | null>(null);
+  const lastClosedRef = useRef(false);
 
   // Sync des refs à chaque render React (cheap — pas d'effet de bord)
   macrosRef.current = macros;
   manipulateModeRef.current = manipulateMode;
   holProjectRef.current = holProject;
   drawnPointsRef.current = drawnPoints;
+  controlPointsRef.current = controlPoints;
+  splineClosedRef.current = splineClosed;
 
   // Init scene — ne se déclenche qu'une seule fois (deps = [])
   // Les dimensions initiales sont lues directement depuis le container
@@ -528,6 +540,67 @@ export function useRenderLoop({
           startMarker.name = '__drawSplineStart';
           startMarker.position.copy(linePoints[0]);
           scene.add(startMarker);
+        }
+      }
+
+      // ── Spline studio : preview de la courbe fittée + marqueurs CP ──
+      // La preview échantillonne le même Catmull-Rom que le backend
+      // (splineCore) — ce qu'on voit est ce qui sera émis.
+      const cps = controlPointsRef.current;
+      const closed = splineClosedRef.current;
+      // Les CPs sont immutables (nouvel array à chaque édition) — rebuild
+      // seulement sur changement de référence ou de flag, jamais par frame.
+      const cpsDirty = lastCpsRef.current !== cps || lastClosedRef.current !== closed;
+      if (cpsDirty) {
+        lastCpsRef.current = cps;
+        lastClosedRef.current = closed;
+
+        // Marqueurs CP — rebuild quand le count change, sinon reposition.
+        let cpGroup = scene.getObjectByName('__splineCps') as THREE.Group | undefined;
+        if (cpGroup && cpGroup.children.length !== cps.length) {
+          cpGroup.children.forEach((m) => {
+            (m as THREE.Mesh).geometry.dispose();
+            ((m as THREE.Mesh).material as THREE.Material).dispose();
+          });
+          scene.remove(cpGroup);
+          cpGroup = undefined;
+        }
+        if (!cpGroup && cps.length > 0) {
+          cpGroup = new THREE.Group();
+          cpGroup.name = '__splineCps';
+          const geom = new THREE.SphereGeometry(0.09, 12, 12);
+          const mat = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
+          for (let i = 0; i < cps.length; i++) cpGroup.add(new THREE.Mesh(geom, mat));
+          scene.add(cpGroup);
+        }
+        if (cpGroup) {
+          cps.forEach((p, i) => {
+            const m = cpGroup!.children[i] as THREE.Mesh | undefined;
+            if (m) {
+              const [tx, ty, tz] = toThree(p[0], p[1], p[2]);
+              m.position.set(tx, ty, tz);
+            }
+          });
+        }
+
+        // Preview de la courbe fittée (cyan).
+        const oldPrev = scene.getObjectByName('__splinePreview') as THREE.Line | undefined;
+        if (oldPrev) {
+          scene.remove(oldPrev);
+          oldPrev.geometry.dispose();
+          (oldPrev.material as THREE.Material).dispose();
+        }
+        if (cps.length >= 2) {
+          const preview = sampleSpline(cps, closed, 0.5, 160);
+          const linePoints = preview.map((p) => {
+            const [tx, ty, tz] = toThree(p[0], p[1], p[2]);
+            return new THREE.Vector3(tx, ty, tz);
+          });
+          const geom = new THREE.BufferGeometry().setFromPoints(linePoints);
+          const mat = new THREE.LineBasicMaterial({ color: 0x00e5ff });
+          const line = new THREE.Line(geom, mat);
+          line.name = '__splinePreview';
+          scene.add(line);
         }
       }
 
