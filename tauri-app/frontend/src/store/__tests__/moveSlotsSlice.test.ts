@@ -329,4 +329,41 @@ describe('syncSlotMovements', () => {
     useGraphStore.getState().syncSlotMovements();
     expect((useGraphStore.getState() as any).moveSlots[0].movementId).toBe('mv-1');
   });
+
+  it('rebinds a respawned movement to its slot by name after cue recall', () => {
+    // Recall : le backend respawn sous l'id du SNAPSHOT (≠ movementId
+    // runtime du slot). Sans rebind, le slot affiche "ready" pendant
+    // que son move tourne (orphan mv-*).
+    useGraphStore.setState({
+      moveSlots: [
+        makeSlot({ id: 'slot-1', name: 'Orbit', movementId: 'mv-old-stale' }),
+      ],
+      movements: [{ id: 'mv-snapshot', name: 'Orbit', is_preview: false }],
+    } as any);
+    useGraphStore.getState().syncSlotMovements();
+    expect((useGraphStore.getState() as any).moveSlots[0].movementId).toBe('mv-snapshot');
+  });
+
+  it('does not rebind when the slot name is ambiguous', () => {
+    useGraphStore.setState({
+      moveSlots: [
+        makeSlot({ id: 'slot-1', name: 'Orbit', movementId: null }),
+        makeSlot({ id: 'slot-2', name: 'Orbit', movementId: null }),
+      ],
+      movements: [{ id: 'mv-snapshot', name: 'Orbit', is_preview: false }],
+    } as any);
+    useGraphStore.getState().syncSlotMovements();
+    const slots = (useGraphStore.getState() as any).moveSlots;
+    expect(slots[0].movementId).toBeNull();
+    expect(slots[1].movementId).toBeNull();
+  });
+
+  it('does not rebind on preview mismatch', () => {
+    useGraphStore.setState({
+      moveSlots: [makeSlot({ id: 'slot-1', name: 'Orbit', isPreview: true })],
+      movements: [{ id: 'mv-snapshot', name: 'Orbit', is_preview: false }],
+    } as any);
+    useGraphStore.getState().syncSlotMovements();
+    expect((useGraphStore.getState() as any).moveSlots[0].movementId).toBeNull();
+  });
 });

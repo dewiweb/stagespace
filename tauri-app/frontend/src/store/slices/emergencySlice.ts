@@ -90,8 +90,14 @@ export const createEmergencySlice = (_set: CreatorArgs[0], get: CreatorArgs[1]):
     }
     const results = await Promise.allSettled(sends);
     const failedSends = results.filter((r) => r.status === 'rejected').length;
-    for (const r of results) {
-      if (r.status === 'rejected') console.error('Panic: position reset failed:', r.reason);
+    // Un log agrégé — une rejection par track floodait la console
+    // (32 lignes identiques pour 32 tracks injoignables).
+    if (failedSends > 0) {
+      const first = results.find((r) => r.status === 'rejected');
+      console.error(
+        `Panic: ${failedSends}/${sends.length} position resets failed:`,
+        first?.status === 'rejected' ? first.reason : undefined,
+      );
     }
     // Feedback obligatoire — un panic silencieux est un panic douteux.
     // Ne jamais prétendre que les positions ont été reset si aucun envoi

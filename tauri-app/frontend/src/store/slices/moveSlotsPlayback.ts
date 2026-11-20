@@ -388,9 +388,52 @@ export const createSlotPlaybackMethods = (set: CreatorArgs[0], get: CreatorArgs[
       });
     }
     // Direction inverse : moves backend (mv-*) que plus aucun slot ne track.
-    // Orphelins typiques : deactivate IPC échoué, crash du watcher.
-    // On ne les touche PAS automatiquement (risque de tuer un move voulu) —
-    // on les signale une fois par id, et seul STOP ALL peut les arrêter.
+    // Cas typique : un recall de cue respawn les moves sous l'id du
+    // SNAPSHOT (≠ movementId runtime du slot) — on rebind par nom+scope
+    // plutôt que de laisser l'UI afficher "ready" pendant que le move
+    // tourne. Un slot déjà lié ou un nom ambigu ne rebind pas.
+    {
+      const tracked = new Set(
+        get().moveSlots.map((s) => s.movementId).filter(Boolean)
+      );
+      const untracked = movements.filter(
+        (m) => m.id.startsWith('mv-') && !tracked.has(m.id) && !_fadingMoveIds.has(m.id)
+      );
+      if (untracked.length > 0) {
+        const freeByName = new Map<string, number>();
+        for (const sl of get().moveSlots) {
+          if (!sl.movementId) freeByName.set(sl.name, (freeByName.get(sl.name) ?? 0) + 1);
+        }
+        const bindings = new Map<string, string>();
+        const usedMoves = new Set<string>();
+        for (const m of untracked) {
+          // Nom unique parmi les slots libres — sinon ambigu, pas de rebind.
+          if ((freeByName.get(m.name) ?? 0) !== 1) continue;
+          const sl = get().moveSlots.find(
+            (s) =>
+              !s.movementId &&
+              !bindings.has(s.id) &&
+              s.name === m.name &&
+              (s.isPreview ?? false) === m.is_preview
+          );
+          if (!sl) continue;
+          bindings.set(sl.id, m.id);
+          usedMoves.add(m.id);
+        }
+        if (bindings.size > 0) {
+          set((s) => {
+            const newSlots = s.moveSlots.map((sl) =>
+              bindings.has(sl.id) ? { ...sl, movementId: bindings.get(sl.id)! } : sl
+            );
+            saveSlotsToStorage(newSlots);
+            return { moveSlots: newSlots };
+          });
+        }
+      }
+    }
+    // Orphelins restants : deactivate IPC échoué, crash du watcher,
+    // recall ambigu. On ne les touche PAS automatiquement (risque de tuer
+    // un move voulu) — signalés une fois par id, STOP ALL les arrête.
     const trackedIds = new Set(
       get().moveSlots.map((s) => s.movementId).filter(Boolean)
     );
