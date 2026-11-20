@@ -5,6 +5,9 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Vite + React + TS</title>
+    <!-- Pont dev headless (src-tauri/tests/dev_bridge.rs) — no-op sans
+         localStorage.stagespace_ipc_bridge. Chargé avant le bundle. -->
+    <script src="/tauri-bridge.js"></script>
   </head>
   <body>
     <div id="root"></div>

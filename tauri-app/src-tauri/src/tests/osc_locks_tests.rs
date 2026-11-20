@@ -21,7 +21,7 @@ mod osc_locks_tests {
                 stagespace_engines::osc_receiver::OscReceiver::new(0),
             )),
             presets: Arc::new(Mutex::new(stagespace_engines::presets::PresetManager::new())),
-            app_handle: Arc::new(Mutex::new(None)),
+            event_sink: Arc::new(Mutex::new(None)),
             movements: Arc::new(Mutex::new(HashMap::new())),
             pending_move_ids: Arc::new(Mutex::new(HashSet::new())),
             move_generation: Arc::new(AtomicU64::new(0)),

@@ -7,7 +7,7 @@
 //! cleanup complet si une étape échoue.
 
 use crate::commands::error::IpcError;
-use crate::commands::state::{lock_or_recover, Shared};
+use crate::commands::state::{emit_ui, lock_or_recover, EventSink, Shared};
 use crate::graph::compilation::compile_graph_live;
 use crate::graph::parser::build_graph_from_json;
 use crate::{AppState, Movement, MAX_MOVEMENTS};
@@ -18,7 +18,7 @@ use stagespace_engines::{
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Emitter, State};
+use tauri::State;
 
 #[derive(Deserialize)]
 #[allow(non_snake_case)]
@@ -517,16 +517,16 @@ fn spawn_move_inner(
 
         if !merge_rt.is_running() {
             // Callback positions → event 'global-positions' (preview 3D).
-            // Headless (tests/CLI) : pas d'app_handle → pas de callback, mais
+            // Headless (CLI pure) : pas d'event_sink → pas de callback, mais
             // le merge démarre quand même.
-            if let Some(app_handle) = lock_or_recover(&sh.app_handle).as_ref().cloned() {
+            if let Some(sink) = lock_or_recover(&sh.event_sink).as_ref().cloned() {
                 merge_rt.set_position_callback(Box::new(
                     move |t: f64, positions: Vec<(usize, nalgebra::Vector3<f64>)>| {
                         let positions_data: Vec<(usize, [f64; 3])> = positions
                             .into_iter()
                             .map(|(idx, pos)| (idx, [pos.x, pos.y, pos.z]))
                             .collect();
-                        let _ = app_handle.emit(
+                        sink(
                             "global-positions",
                             serde_json::json!({
                                 "time": t,
@@ -551,9 +551,7 @@ fn spawn_move_inner(
     }
 
     // 10. Emit active-moves-update
-    if let Some(app_handle) = lock_or_recover(&sh.app_handle).clone() {
-        let _ = app_handle.emit("active-moves-update", ());
-    }
+    emit_ui(&sh.event_sink, "active-moves-update", ());
 
     Ok(format!(
         "Move '{}' activated ({})",
@@ -642,14 +640,12 @@ fn deactivate_move_immediate_arc(
     merge_runtime: &Arc<Mutex<stagespace_engines::MergeRuntime>>,
     movements: &Arc<Mutex<HashMap<String, Movement>>>,
     pending: &Arc<Mutex<std::collections::HashSet<String>>>,
-    app_handle: &Arc<Mutex<Option<AppHandle>>>,
+    event_sink: &Arc<Mutex<Option<EventSink>>>,
 ) -> Result<String, IpcError> {
     if !remove_move_checked(movement_id, generation, merge_runtime, movements, pending) {
         return Ok(format!("Move '{movement_id}' already gone"));
     }
-    if let Some(app_handle) = lock_or_recover(app_handle).clone() {
-        let _ = app_handle.emit("active-moves-update", ());
-    }
+    emit_ui(event_sink, "active-moves-update", ());
     Ok(format!("Move '{movement_id}' deactivated"))
 }
 
@@ -693,7 +689,7 @@ pub async fn deactivate_move(
         let merge_rt_arc = state.merge_runtime.clone();
         let movements_arc = state.movements.clone();
         let pending_arc = state.pending_move_ids.clone();
-        let app_handle_arc = state.app_handle.clone();
+        let event_sink_arc = state.event_sink.clone();
         let mv_id = movement_id.clone();
         return tauri::async_runtime::spawn_blocking(move || {
             deactivate_move_immediate_arc(
@@ -702,7 +698,7 @@ pub async fn deactivate_move(
                 &merge_rt_arc,
                 &movements_arc,
                 &pending_arc,
-                &app_handle_arc,
+                &event_sink_arc,
             )
         })
         .await
@@ -713,16 +709,14 @@ pub async fn deactivate_move(
     //    génération : si l'id a été réutilisé par un nouveau move entre-temps,
     //    il ne touche à rien (le bug "sleeper kills reused id" est couvert).
     let mv_id = movement_id.clone();
-    let app_state = state.app_handle.clone();
+    let app_state = state.event_sink.clone();
     let merge_rt = state.merge_runtime.clone();
     let movements = state.movements.clone();
     let pending = state.pending_move_ids.clone();
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_secs_f64(fade));
         remove_move_checked(&mv_id, generation, &merge_rt, &movements, &pending);
-        if let Some(app_handle) = lock_or_recover(&app_state).clone() {
-            let _ = app_handle.emit("active-moves-update", ());
-        }
+        emit_ui(&app_state, "active-moves-update", ());
     });
 
     Ok(format!("Move '{movement_id}' fading out"))
@@ -764,7 +758,7 @@ pub async fn deactivate_all_moves(
 
     let count = move_entries.len();
     if fade > 0.0 {
-        let app_state = state.app_handle.clone();
+        let app_state = state.event_sink.clone();
         let merge_rt = state.merge_runtime.clone();
         let movements = state.movements.clone();
         let pending = state.pending_move_ids.clone();
@@ -773,16 +767,14 @@ pub async fn deactivate_all_moves(
             for (id, gen) in &move_entries {
                 remove_move_checked(id, *gen, &merge_rt, &movements, &pending);
             }
-            if let Some(app_handle) = lock_or_recover(&app_state).clone() {
-                let _ = app_handle.emit("active-moves-update", ());
-            }
+            emit_ui(&app_state, "active-moves-update", ());
         });
         Ok(format!("{count} moves fading out"))
     } else {
         let merge_rt_arc = state.merge_runtime.clone();
         let movements_arc = state.movements.clone();
         let pending_arc = state.pending_move_ids.clone();
-        let app_handle_arc = state.app_handle.clone();
+        let event_sink_arc = state.event_sink.clone();
         tauri::async_runtime::spawn_blocking(move || {
             for (id, gen) in &move_entries {
                 let _ = deactivate_move_immediate_arc(
@@ -791,7 +783,7 @@ pub async fn deactivate_all_moves(
                     &merge_rt_arc,
                     &movements_arc,
                     &pending_arc,
-                    &app_handle_arc,
+                    &event_sink_arc,
                 );
             }
         })

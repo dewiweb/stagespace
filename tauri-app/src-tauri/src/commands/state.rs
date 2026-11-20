@@ -3,7 +3,6 @@ use stagespace_engines::{AudioState, MergeRuntime, OscReceiver};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{Arc, Mutex, MutexGuard};
-use tauri::AppHandle;
 
 /// Lock a mutex, recovering from poisoning instead of panicking.
 ///
@@ -17,6 +16,23 @@ pub fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     })
 }
 
+/// Sink d'événements vers l'UI — closure agnostique du runtime (Wry en
+/// prod, MockRuntime dans les tests headless, aucun dans la CLI). Le
+/// backend n'a pas besoin d'une webview vivante pour émettre : positions,
+/// logs show-control, toasts et resyncs doivent fonctionner headless.
+pub type EventSink = Arc<dyn Fn(&str, serde_json::Value) + Send + Sync>;
+
+/// Émet un event vers l'UI via le sink — no-op silencieux si aucun n'est
+/// branché (headless pur : CLI, tests unitaires sans frontend).
+pub fn emit_ui<T: serde::Serialize>(sink: &Arc<Mutex<Option<EventSink>>>, event: &str, payload: T) {
+    let target = lock_or_recover(sink).clone();
+    if let Some(f) = target {
+        if let Ok(v) = serde_json::to_value(&payload) {
+            f(event, v);
+        }
+    }
+}
+
 /// Handles clonables vers l'état partagé de l'app — pour les `spawn_blocking`
 /// qui ne peuvent pas capturer `State<'_, AppState>` (non 'static).
 ///
@@ -25,7 +41,7 @@ pub fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 #[derive(Clone)]
 pub struct Shared {
     pub audio_state: Arc<Mutex<AudioState>>,
-    pub app_handle: Arc<Mutex<Option<AppHandle>>>,
+    pub event_sink: Arc<Mutex<Option<EventSink>>>,
     pub movements: Arc<Mutex<HashMap<String, Movement>>>,
     pub pending_move_ids: Arc<Mutex<HashSet<String>>>,
     pub move_generation: Arc<AtomicU64>,
@@ -46,7 +62,7 @@ impl Shared {
     pub fn from_state(state: &AppState) -> Self {
         Shared {
             audio_state: state.audio_state.clone(),
-            app_handle: state.app_handle.clone(),
+            event_sink: state.event_sink.clone(),
             movements: state.movements.clone(),
             pending_move_ids: state.pending_move_ids.clone(),
             move_generation: state.move_generation.clone(),

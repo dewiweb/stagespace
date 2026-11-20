@@ -16,12 +16,11 @@
 //! mauvais sens (les drains se font sous lock court puis le travail
 //! hors lock).
 
-use crate::commands::state::{lock_or_recover, Shared};
+use crate::commands::state::{emit_ui, lock_or_recover, Shared};
 use crate::AppState;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tauri::Emitter;
 
 /// Cadence de supervision — assez rapide pour tuer un zombie avant qu'il
 /// ne devienne audible (CPU/batterie), assez lente pour être négligeable.
@@ -102,9 +101,7 @@ pub(crate) fn drain_stale_kills(shared: &Shared) {
                 // d'un one-shot est un comportement normal, pas une alerte.
                 if was_running {
                     stopped_zombies = true;
-                    if let Some(handle) = lock_or_recover(&shared.app_handle).clone() {
-                        let _ = handle.emit("move-stale-killed", mv.name.clone());
-                    }
+                    emit_ui(&shared.event_sink, "move-stale-killed", &mv.name);
                 }
             }
         }
@@ -117,9 +114,7 @@ pub(crate) fn drain_stale_kills(shared: &Shared) {
         lock_or_recover(&shared.pending_move_ids).retain(|id| !kill_ids.contains(id.as_str()));
         // Le merge a déjà retiré les entrées — on resynchronise le
         // frontend sur la liste réelle des moves.
-        if let Some(handle) = lock_or_recover(&shared.app_handle).clone() {
-            let _ = handle.emit("active-moves-update", ());
-        }
+        emit_ui(&shared.event_sink, "active-moves-update", ());
     }
     let _ = stopped_zombies;
 }
@@ -146,16 +141,12 @@ pub(crate) fn supervise_merge(shared: &Shared, last_restart: &mut Instant) {
     match merge.start() {
         Ok(()) => {
             *last_restart = Instant::now();
-            if let Some(handle) = lock_or_recover(&shared.app_handle).clone() {
-                let _ = handle.emit("merge-restarted", ());
-            }
+            emit_ui(&shared.event_sink, "merge-restarted", ());
         }
         Err(e) => {
             *last_restart = Instant::now(); // backoff aussi sur échec
             eprintln!("[SUPERVISOR] merge restart failed: {e}");
-            if let Some(handle) = lock_or_recover(&shared.app_handle).clone() {
-                let _ = handle.emit("merge-restart-failed", e.to_string());
-            }
+            emit_ui(&shared.event_sink, "merge-restart-failed", e.to_string());
         }
     }
 }

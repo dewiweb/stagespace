@@ -1,9 +1,10 @@
 use super::error::IpcError;
 use super::state::lock_or_recover;
+use crate::commands::state::emit_ui;
 use crate::AppState;
 use stagespace_engines::{OscInStatsSnapshot, OscMapping, OscProfile, OscReceiver, OscSender};
 use std::str::FromStr;
-use tauri::{Emitter, State};
+use tauri::State;
 
 // OSC Receiver Commands
 
@@ -237,11 +238,7 @@ pub async fn send_osc_position(
 /// désarmé, aucun paquet OSC ne part (preview 3D vivante, silence réseau).
 /// Indépendant des flags `is_preview` par move.
 #[tauri::command]
-pub async fn set_osc_armed(
-    armed: bool,
-    app: tauri::AppHandle,
-    state: State<'_, AppState>,
-) -> Result<(), IpcError> {
+pub async fn set_osc_armed(armed: bool, state: State<'_, AppState>) -> Result<(), IpcError> {
     let merge_rt = lock_or_recover(&state.merge_runtime);
     merge_rt.set_osc_armed(armed);
     eprintln!(
@@ -250,7 +247,7 @@ pub async fn set_osc_armed(
     );
     // L'état armé est broadcasté — les toggles/chips UI restent synchronisés
     // quelle que soit la source de l'écriture (bouton, OSC /stagespace/arm).
-    let _ = app.emit("osc-armed-changed", armed);
+    emit_ui(&state.event_sink, "osc-armed-changed", armed);
     Ok(())
 }
 

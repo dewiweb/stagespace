@@ -22,7 +22,7 @@ mod supervisor_tests {
             MergeRuntime::new("127.0.0.1".to_string(), 0, sender, 60.0).expect("MergeRuntime bind");
         Shared {
             audio_state: Arc::new(Mutex::new(AudioState::new())),
-            app_handle: Arc::new(Mutex::new(None)),
+            event_sink: Arc::new(Mutex::new(None)),
             movements: Arc::new(Mutex::new(HashMap::new())),
             pending_move_ids: Arc::new(Mutex::new(HashSet::new())),
             move_generation: Arc::new(AtomicU64::new(0)),

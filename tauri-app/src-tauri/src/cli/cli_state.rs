@@ -2,7 +2,7 @@
 //!
 //! Le CLI utilise le même MoveService que l'app (`commands::merge_commands::
 //! spawn_move` / `remove_move_now`) via `state.shared` — pas de fork des
-//! chemins de spawn/stop. `app_handle` est `None` en headless : les events
+//! chemins de spawn/stop. `event_sink` est `None` en headless : les events
 //! Tauri sont simplement skipés.
 
 use stagespace_engines::{AudioState, MergeRuntime, OscReceiver, OscSender, PluginRegistry};
@@ -22,7 +22,7 @@ pub struct HolTrack {
 /// État global du CLI — persiste en mémoire pendant la session
 pub struct CliState {
     /// État moteur partagé — même struct que l'AppState Tauri
-    /// (`Shared::from_state`), avec `app_handle: None` (headless).
+    /// (`Shared::from_state`), avec `event_sink: None` (headless).
     /// movements/pending/generation/recall vivent dedans : les guards
     /// anti-doublon et anti-race du MoveService s'appliquent aussi au CLI.
     pub shared: Shared,
@@ -87,7 +87,7 @@ impl CliState {
 
         let shared = Shared {
             audio_state,
-            app_handle: Arc::new(Mutex::new(None)),
+            event_sink: Arc::new(Mutex::new(None)),
             movements: Arc::new(Mutex::new(HashMap::new())),
             pending_move_ids: Arc::new(Mutex::new(HashSet::new())),
             move_generation: Arc::new(AtomicU64::new(0)),

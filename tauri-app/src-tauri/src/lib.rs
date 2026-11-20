@@ -9,7 +9,7 @@ use stagespace_engines::{
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{Emitter, Manager, State};
 
 pub mod commands;
 pub mod graph;
@@ -59,7 +59,9 @@ pub struct AppState {
     pub audio_state: Arc<Mutex<AudioState>>,
     pub osc_receiver: Arc<Mutex<OscReceiver>>,
     pub presets: Arc<Mutex<PresetManager>>,
-    pub app_handle: Arc<Mutex<Option<AppHandle>>>,
+    /// Sink d'événements UI (positions, logs, resyncs) — branché au setup
+    /// par la fenêtre ; `None` en headless pur (CLI/tests sans frontend).
+    pub event_sink: Arc<Mutex<Option<commands::state::EventSink>>>,
     /// Multi-movement: plusieurs runtimes parallèles indépendants (workers)
     pub movements: Arc<Mutex<HashMap<String, Movement>>>,
     /// IDs réservés pendant l'activation d'un move (fenêtre compile+spawn) —
@@ -140,89 +142,387 @@ pub struct MovementInfo {
     pub track_count: usize,
 }
 
+/// Construction de l'état applicatif partagé — extraite pour être réutilisée
+/// par le pont de test headless (mock_app) avec le même wiring exact.
+pub fn new_app_state() -> AppState {
+    let osc_sender = OscSender::default();
+    // AudioState maître — partagé par le MergeRuntime et tous les
+    // workers (injection à la construction). Le poller n'écrit que
+    // cet Arc ; plus de copies synchronisées par polling.
+    let audio_state = Arc::new(Mutex::new(AudioState::new()));
+    // Ports candidats : 8000 (défaut), 8002 (fallback), 0 (port OS).
+    // Si aucun ne bind — pas de stack UDP — l'app ne peut pas servir :
+    // exit explicite plutôt qu'un panic ou un runtime zombie.
+    let merge_rt = [8000u16, 8002, 0]
+        .into_iter()
+        .enumerate()
+        .find_map(|(i, port)| {
+            match MergeRuntime::new_with_audio_state(
+                "127.0.0.1".to_string(),
+                port,
+                osc_sender.clone(),
+                60.0,
+                audio_state.clone(),
+            ) {
+                Ok(rt) => Some(rt),
+                Err(e) => {
+                    eprintln!("[WARN] MergeRuntime bind port {port} failed: {e}");
+                    let _ = i;
+                    None
+                }
+            }
+        })
+        .unwrap_or_else(|| {
+            eprintln!("[FATAL] MergeRuntime: no UDP port available — exiting");
+            std::process::exit(1);
+        });
+    // Plugins WASM — dossier `<data_dir>/com.stagespace.studio/plugins/`
+    // (même racine que l'app_data_dir Tauri : identifier de
+    // tauri.conf.json). Un plugin cassé n'empêche pas les autres —
+    // erreurs collectées dans le registry, visibles via list_plugins.
+    let plugins_dir = dirs::data_dir().map(|d| d.join("com.stagespace.studio").join("plugins"));
+    if let Some(dir) = &plugins_dir {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let plugin_registry = match PluginRegistry::new() {
+        Ok(mut reg) => {
+            if let Some(dir) = &plugins_dir {
+                let n = reg.scan_dir(dir);
+                if n > 0 {
+                    eprintln!("[PLUGINS] {n} plugin(s) loaded from {}", dir.display());
+                }
+                for (path, err) in reg.errors() {
+                    eprintln!("[PLUGINS-ERROR] {}: {err}", path.display());
+                }
+            }
+            Some(Arc::new(Mutex::new(reg)))
+        }
+        Err(e) => {
+            eprintln!("[PLUGINS-ERROR] wasmtime init failed: {e}");
+            None
+        }
+    };
+    AppState {
+        audio_state,
+        osc_receiver: Arc::new(Mutex::new(OscReceiver::new(8001))),
+        presets: Arc::new(Mutex::new(PresetManager::new())),
+        event_sink: Arc::new(Mutex::new(None)),
+        movements: Arc::new(Mutex::new(HashMap::new())),
+        pending_move_ids: Arc::new(Mutex::new(HashSet::new())),
+        move_generation: Arc::new(AtomicU64::new(0)),
+        merge_runtime: Arc::new(Mutex::new(merge_rt)),
+        psn_receiver: Arc::new(stagespace_engines::psn_receiver::PsnReceiver::new()),
+        recall_in_progress: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        deactivate_gen: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+        audio_capture: Arc::new(Mutex::new(AudioCaptureManager::new())),
+        audio_poller_shutdown: Arc::new(AtomicBool::new(false)),
+        supervisor_shutdown: Arc::new(AtomicBool::new(false)),
+        plugin_registry,
+        plugins_dir,
+    }
+}
+
+/// Setup du backend — branche le sink d'événements UI, démarre le receiver
+/// OSC (show-control `/stagespace/*`), le poller audio et le superviseur.
+/// Générique sur le runtime : utilisé par `run()` (Wry) et par le pont de
+/// test headless (MockRuntime) — le sink découple l'émission de la webview.
+pub fn setup_backend_runtime<R: tauri::Runtime>(
+    app: &mut tauri::App<R>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize logging
+    init_logging();
+
+    let app_handle = app.handle().clone();
+    let state: State<AppState> = app.state();
+    {
+        let sink_handle = app_handle.clone();
+        *lock_or_recover(&state.event_sink) =
+            Some(Arc::new(move |event: &str, payload: serde_json::Value| {
+                let _ = sink_handle.emit(event, payload);
+            }));
+    }
+
+    // Démarrer le receiver OSC (port 8001 par défaut)
+    // Non-fatal : si le port est pris, on log l'erreur mais l'app continue
+    {
+        let mut receiver = state.osc_receiver.lock().unwrap_or_else(|e| e.into_inner());
+        // Connecter le routing OSC IN aux destinations du MergeRuntime
+        // (macros, canaux spatiaux, positions manuelles)
+        let targets = state
+            .merge_runtime
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .osc_in_targets();
+        receiver.set_targets(targets);
+        // Branche le cache des valeurs OSC sur le merge (source
+        // `SignalOsc` du signal graph — l'Arc interne est
+        // re-pointé si le receiver est recréé sur un autre port).
+        {
+            let merge_rt = state
+                .merge_runtime
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            merge_rt.set_osc_values_handle(receiver.address_values_handle());
+        }
+        // Show-control : `/stagespace/*` intercepté par le
+        // receiver → évènement `show-control` vers le frontend
+        // (dispatch = les mêmes fonctions que les raccourcis).
+        {
+            let app_handle = app.handle().clone();
+            // L'arrêt d'urgence vit aussi côté backend : un panic
+            // OSC ne doit JAMAIS dépendre d'une webview vivante —
+            // sinon il est ACKé mais jamais exécuté (webview gelée).
+            let stop_movements = state.movements.clone();
+            let stop_merge = state.merge_runtime.clone();
+            let stop_gen = state.deactivate_gen.clone();
+            // Socket de réponse partagé — le sink peut répondre
+            // au demandeur d'un `positions` query sans webview.
+            let reply_handle = receiver.reply_socket_handle();
+            receiver.set_show_sink(move |cmd, addr| {
+                match cmd {
+                    stagespace_engines::osc_receiver::ShowCommand::Panic
+                    | stagespace_engines::osc_receiver::ShowCommand::Stop => {
+                        // Backend-side stop — exécuté ici, pas
+                        // via la webview. Le panic gagne sur tout.
+                        stop_gen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        let drained: Vec<Movement> = {
+                            stop_movements
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner())
+                                .drain()
+                                .map(|(_, m)| m)
+                                .collect()
+                        };
+                        for m in drained {
+                            m.runtime.stop();
+                        }
+                        if matches!(cmd, stagespace_engines::osc_receiver::ShowCommand::Panic) {
+                            let merge = stop_merge.lock().unwrap_or_else(|e| e.into_inner());
+                            let origin = merge.origin();
+                            // Objets parkés ou tenus manuellement :
+                            // ne PAS téléporter vers l'origine — le
+                            // merge les réémettrait aussitôt depuis
+                            // leur position tenue (flash aller-retour,
+                            // revue L6). Manuel/park = override
+                            // opérateur, il survit au panic.
+                            let manuals = merge.manual_positions();
+                            let parked = merge.parked_objects();
+                            for (obj_idx, id) in merge.osc_ids().iter().enumerate() {
+                                if manuals.contains_key(&obj_idx) || parked.contains(&obj_idx) {
+                                    continue;
+                                }
+                                let _ = merge.send_position_now(*id, origin);
+                            }
+                        }
+                        // Chaque webview annule ses propres timers
+                        // pre_wait/follow — ils vivent par contexte
+                        // JS : un panic ici n'atteint pas le
+                        // setTimeout armé dans une autre fenêtre
+                        // (revue H1 — sinon la cue tire après panic).
+                        let _ = app_handle.emit("timers:cancel", ());
+                    }
+                    stagespace_engines::osc_receiver::ShowCommand::PositionsQuery => {
+                        // `/stagespace/positions` — dump des positions
+                        // émises au demandeur (console/companion).
+                        // Backend-direct : pas de webview requise.
+                        let merge = stop_merge.lock().unwrap_or_else(|e| e.into_inner());
+                        let positions = merge.emitted_positions();
+                        let sock = reply_handle
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .clone();
+                        if let Some(sock) = sock {
+                            for (obj, pos) in positions {
+                                if let Some(bytes) =
+                                    stagespace_engines::osc_receiver::encode_position_feedback(
+                                        obj, pos,
+                                    )
+                                {
+                                    let _ = sock.send_to(&bytes, addr);
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+                // Broadcast à TOUTES les fenêtres : la fenêtre run
+                // détachée voit les commandes OSC dans son log.
+                let _ = app_handle.emit(
+                    "show-log",
+                    serde_json::json!({
+                        "label": format!("{cmd:?} {addr}"),
+                    }),
+                );
+                let _ = app_handle.emit(
+                    "show-control",
+                    serde_json::json!({
+                        "command": cmd,
+                        "from": addr.to_string(),
+                    }),
+                );
+            });
+        }
+        if let Err(e) = receiver.start() {
+            eprintln!(
+                "[WARN] OSC receiver failed to start on port {}: {}",
+                receiver.port, e
+            );
+        } else {
+            eprintln!("[INFO] OSC receiver listening on port {}", receiver.port);
+        }
+    }
+
+    // Démarrer le poller audio (envoie `audio-state-update` au frontend)
+    {
+        let state: &AppState = &app.state();
+        start_audio_poller(state.event_sink.clone(), state);
+        eprintln!("[INFO] Audio state poller started");
+    }
+
+    // Démarrer le superviseur backend (audits C5/C7) — kill des
+    // workers zombies + restart du merge sans dépendre du polling
+    // frontend. Une webview gelée ne peut plus provoquer de
+    // blackout OSC définitif.
+    {
+        let state: &AppState = &app.state();
+        supervisor::start(state);
+        eprintln!("[INFO] Backend supervisor started");
+    }
+
+    Ok(())
+}
+
+/// Dispatch IPC de toutes les commands — extrait en fonction nommée pour
+/// être partagée par `run()` (webview réelle) et le pont de test headless
+/// (`get_ipc_response` sur MockRuntime) sans dupliquer la liste.
+pub fn stagespace_invoke_handler<R: tauri::Runtime>(invoke: tauri::ipc::Invoke<R>) -> bool {
+    let handler: fn(tauri::ipc::Invoke<R>) -> bool = tauri::generate_handler![
+        import_hol_project,
+        list_audio_devices,
+        start_audio_capture,
+        stop_audio_capture,
+        update_audio_state,
+        get_audio_state,
+        osc_add_mapping,
+        osc_remove_mapping,
+        osc_list_mappings,
+        osc_clear_mappings,
+        osc_get_value,
+        osc_get_all_values,
+        osc_set_in_enabled,
+        osc_set_mapping_enabled,
+        osc_suppress_in,
+        osc_in_stats,
+        get_last_osc_message,
+        get_last_show_cmd_age,
+        send_show_nack,
+        set_osc_receiver_port,
+        set_osc_output,
+        set_osc_armed,
+        get_osc_armed,
+        get_osc_receiver_port,
+        preset_save,
+        preset_load,
+        preset_delete,
+        preset_list,
+        set_macro,
+        save_graph_to_file,
+        load_graph_from_file,
+        send_osc_position,
+        send_show_feedback,
+        set_timecode_fps,
+        set_psn_config,
+        get_psn_health,
+        get_object_states,
+        get_emitted_positions,
+        get_manual_position,
+        get_manual_positions,
+        throw_object,
+        set_venue_config,
+        get_perceptual_metrics,
+        set_distance_reality,
+        set_spatial_compression,
+        set_attention,
+        set_gesture,
+        set_pos_tape_record,
+        get_pos_tape,
+        set_media_sync,
+        play_pos_tape,
+        get_perf_stats,
+        discover_osc_targets,
+        sample_movement_trajectories,
+        sample_movement_trajectory,
+        launch_animation,
+        update_animation_state,
+        // Merge commands (Phase 1 — architecture hybride)
+        activate_move,
+        deactivate_move,
+        deactivate_all_moves,
+        set_merge_strategy,
+        set_global_macro,
+        set_move_speed,
+        set_move_playback_mode,
+        set_move_weight,
+        set_move_priority,
+        set_track_depths,
+        set_global_origin,
+        set_global_osc_ids,
+        update_move_graph_merged,
+        get_merge_perf_stats,
+        list_active_moves,
+        // Global graph commands (Phase 2 — post-processing)
+        update_global_graph,
+        // Signal graph (domaine modulation → deltas de macros)
+        diagnose_graph,
+        update_signal_graph,
+        set_track_positions,
+        get_track_positions,
+        set_track_position,
+        set_manual_position,
+        clear_manual_position,
+        clear_all_manual_positions,
+        throw_object,
+        // Spatial channels (Phase 4 — canaux étendus)
+        set_spatial_channel,
+        clear_spatial_channel,
+        clear_all_spatial_channels,
+        list_spatial_channels,
+        list_channel_modulations,
+        // Kinematic modulations (Phase 4 P2 — cinématique → canaux)
+        add_channel_modulation,
+        remove_channel_modulation,
+        clear_channel_modulations,
+        set_kinematic_smoothing,
+        // Zones (Phase 4 P4 — effets spatiaux par position)
+        add_zone,
+        update_zone,
+        remove_zone,
+        clear_zones,
+        list_zones,
+        // Effets déclarés par le graph global (nodes Zone/Velocity)
+        list_graph_effects,
+        get_profile_channels,
+        list_effective_channels,
+        // Cue commands (Phase 3 — cue system étendu)
+        store_cue,
+        recall_cue,
+        park_object,
+        get_parked_objects,
+        unpark_object,
+        frontend_log,
+        // Plugins WASM (bundles .ssx dans <data_dir>/plugins/)
+        list_plugins,
+        reload_plugins,
+        import_plugin,
+    ];
+    handler(invoke)
+}
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
-        .manage({
-            let osc_sender = OscSender::default();
-            // AudioState maître — partagé par le MergeRuntime et tous les
-            // workers (injection à la construction). Le poller n'écrit que
-            // cet Arc ; plus de copies synchronisées par polling.
-            let audio_state = Arc::new(Mutex::new(AudioState::new()));
-            // Ports candidats : 8000 (défaut), 8002 (fallback), 0 (port OS).
-            // Si aucun ne bind — pas de stack UDP — l'app ne peut pas servir :
-            // exit explicite plutôt qu'un panic ou un runtime zombie.
-            let merge_rt = [8000u16, 8002, 0]
-                .into_iter()
-                .enumerate()
-                .find_map(|(i, port)| {
-                    match MergeRuntime::new_with_audio_state(
-                        "127.0.0.1".to_string(),
-                        port,
-                        osc_sender.clone(),
-                        60.0,
-                        audio_state.clone(),
-                    ) {
-                        Ok(rt) => Some(rt),
-                        Err(e) => {
-                            eprintln!("[WARN] MergeRuntime bind port {port} failed: {e}");
-                            let _ = i;
-                            None
-                        }
-                    }
-                })
-                .unwrap_or_else(|| {
-                    eprintln!("[FATAL] MergeRuntime: no UDP port available — exiting");
-                    std::process::exit(1);
-                });
-            // Plugins WASM — dossier `<data_dir>/com.stagespace.studio/plugins/`
-            // (même racine que l'app_data_dir Tauri : identifier de
-            // tauri.conf.json). Un plugin cassé n'empêche pas les autres —
-            // erreurs collectées dans le registry, visibles via list_plugins.
-            let plugins_dir =
-                dirs::data_dir().map(|d| d.join("com.stagespace.studio").join("plugins"));
-            if let Some(dir) = &plugins_dir {
-                let _ = std::fs::create_dir_all(dir);
-            }
-            let plugin_registry = match PluginRegistry::new() {
-                Ok(mut reg) => {
-                    if let Some(dir) = &plugins_dir {
-                        let n = reg.scan_dir(dir);
-                        if n > 0 {
-                            eprintln!("[PLUGINS] {n} plugin(s) loaded from {}", dir.display());
-                        }
-                        for (path, err) in reg.errors() {
-                            eprintln!("[PLUGINS-ERROR] {}: {err}", path.display());
-                        }
-                    }
-                    Some(Arc::new(Mutex::new(reg)))
-                }
-                Err(e) => {
-                    eprintln!("[PLUGINS-ERROR] wasmtime init failed: {e}");
-                    None
-                }
-            };
-            AppState {
-                audio_state,
-                osc_receiver: Arc::new(Mutex::new(OscReceiver::new(8001))),
-                presets: Arc::new(Mutex::new(PresetManager::new())),
-                app_handle: Arc::new(Mutex::new(None)),
-                movements: Arc::new(Mutex::new(HashMap::new())),
-                pending_move_ids: Arc::new(Mutex::new(HashSet::new())),
-                move_generation: Arc::new(AtomicU64::new(0)),
-                merge_runtime: Arc::new(Mutex::new(merge_rt)),
-                psn_receiver: Arc::new(stagespace_engines::psn_receiver::PsnReceiver::new()),
-                recall_in_progress: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-                deactivate_gen: Arc::new(std::sync::atomic::AtomicU64::new(0)),
-                audio_capture: Arc::new(Mutex::new(AudioCaptureManager::new())),
-                audio_poller_shutdown: Arc::new(AtomicBool::new(false)),
-                supervisor_shutdown: Arc::new(AtomicBool::new(false)),
-                plugin_registry,
-                plugins_dir,
-            }
-        })
+        .manage(new_app_state())
         .on_window_event(|window, event| {
             // Seule la fenêtre PRINCIPALE arrête le show — une fenêtre
             // détachée (conduite/run) qui se ferme ne doit jamais tuer
@@ -277,169 +577,7 @@ pub fn run() {
             }
         })
         .setup(|app| {
-            // Initialize logging
-            init_logging();
-
-            let app_handle = app.handle().clone();
-            let state: State<AppState> = app.state();
-            let mut handle_guard = state.app_handle.lock().unwrap_or_else(|e| {
-                eprintln!("[WARN] app_handle mutex poisoned, recovering: {e}");
-                e.into_inner()
-            });
-            *handle_guard = Some(app_handle);
-
-            // Démarrer le receiver OSC (port 8001 par défaut)
-            // Non-fatal : si le port est pris, on log l'erreur mais l'app continue
-            {
-                let mut receiver = state.osc_receiver.lock().unwrap_or_else(|e| e.into_inner());
-                // Connecter le routing OSC IN aux destinations du MergeRuntime
-                // (macros, canaux spatiaux, positions manuelles)
-                let targets = state
-                    .merge_runtime
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .osc_in_targets();
-                receiver.set_targets(targets);
-                // Branche le cache des valeurs OSC sur le merge (source
-                // `SignalOsc` du signal graph — l'Arc interne est
-                // re-pointé si le receiver est recréé sur un autre port).
-                {
-                    let merge_rt = state
-                        .merge_runtime
-                        .lock()
-                        .unwrap_or_else(|e| e.into_inner());
-                    merge_rt.set_osc_values_handle(receiver.address_values_handle());
-                }
-                // Show-control : `/stagespace/*` intercepté par le
-                // receiver → évènement `show-control` vers le frontend
-                // (dispatch = les mêmes fonctions que les raccourcis).
-                {
-                    let app_handle = app.handle().clone();
-                    // L'arrêt d'urgence vit aussi côté backend : un panic
-                    // OSC ne doit JAMAIS dépendre d'une webview vivante —
-                    // sinon il est ACKé mais jamais exécuté (webview gelée).
-                    let stop_movements = state.movements.clone();
-                    let stop_merge = state.merge_runtime.clone();
-                    let stop_gen = state.deactivate_gen.clone();
-                    // Socket de réponse partagé — le sink peut répondre
-                    // au demandeur d'un `positions` query sans webview.
-                    let reply_handle = receiver.reply_socket_handle();
-                    receiver.set_show_sink(move |cmd, addr| {
-                        match cmd {
-                            stagespace_engines::osc_receiver::ShowCommand::Panic
-                            | stagespace_engines::osc_receiver::ShowCommand::Stop => {
-                                // Backend-side stop — exécuté ici, pas
-                                // via la webview. Le panic gagne sur tout.
-                                stop_gen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                                let drained: Vec<Movement> = {
-                                    stop_movements
-                                        .lock()
-                                        .unwrap_or_else(|e| e.into_inner())
-                                        .drain()
-                                        .map(|(_, m)| m)
-                                        .collect()
-                                };
-                                for m in drained {
-                                    m.runtime.stop();
-                                }
-                                if matches!(
-                                    cmd,
-                                    stagespace_engines::osc_receiver::ShowCommand::Panic
-                                ) {
-                                    let merge =
-                                        stop_merge.lock().unwrap_or_else(|e| e.into_inner());
-                                    let origin = merge.origin();
-                                    // Objets parkés ou tenus manuellement :
-                                    // ne PAS téléporter vers l'origine — le
-                                    // merge les réémettrait aussitôt depuis
-                                    // leur position tenue (flash aller-retour,
-                                    // revue L6). Manuel/park = override
-                                    // opérateur, il survit au panic.
-                                    let manuals = merge.manual_positions();
-                                    let parked = merge.parked_objects();
-                                    for (obj_idx, id) in merge.osc_ids().iter().enumerate() {
-                                        if manuals.contains_key(&obj_idx)
-                                            || parked.contains(&obj_idx)
-                                        {
-                                            continue;
-                                        }
-                                        let _ = merge.send_position_now(*id, origin);
-                                    }
-                                }
-                                // Chaque webview annule ses propres timers
-                                // pre_wait/follow — ils vivent par contexte
-                                // JS : un panic ici n'atteint pas le
-                                // setTimeout armé dans une autre fenêtre
-                                // (revue H1 — sinon la cue tire après panic).
-                                let _ = app_handle.emit("timers:cancel", ());
-                            }
-                            stagespace_engines::osc_receiver::ShowCommand::PositionsQuery => {
-                                // `/stagespace/positions` — dump des positions
-                                // émises au demandeur (console/companion).
-                                // Backend-direct : pas de webview requise.
-                                let merge =
-                                    stop_merge.lock().unwrap_or_else(|e| e.into_inner());
-                                let positions = merge.emitted_positions();
-                                let sock = reply_handle
-                                    .lock()
-                                    .unwrap_or_else(|e| e.into_inner())
-                                    .clone();
-                                if let Some(sock) = sock {
-                                    for (obj, pos) in positions {
-                                        if let Some(bytes) = stagespace_engines::osc_receiver::encode_position_feedback(obj, pos)
-                                        {
-                                            let _ = sock.send_to(&bytes, addr);
-                                        }
-                                    }
-                                }
-                            }
-                            _ => {}
-                        }
-                        // Broadcast à TOUTES les fenêtres : la fenêtre run
-                        // détachée voit les commandes OSC dans son log.
-                        let _ = app_handle.emit(
-                            "show-log",
-                            serde_json::json!({
-                                "label": format!("{cmd:?} {addr}"),
-                            }),
-                        );
-                        let _ = app_handle.emit(
-                            "show-control",
-                            serde_json::json!({
-                                "command": cmd,
-                                "from": addr.to_string(),
-                            }),
-                        );
-                    });
-                }
-                if let Err(e) = receiver.start() {
-                    eprintln!(
-                        "[WARN] OSC receiver failed to start on port {}: {}",
-                        receiver.port, e
-                    );
-                } else {
-                    eprintln!("[INFO] OSC receiver listening on port {}", receiver.port);
-                }
-            }
-
-            // Démarrer le poller audio (envoie `audio-state-update` au frontend)
-            {
-                let app_handle = app.handle().clone();
-                let state: &AppState = &app.state();
-                start_audio_poller(app_handle, state);
-                eprintln!("[INFO] Audio state poller started");
-            }
-
-            // Démarrer le superviseur backend (audits C5/C7) — kill des
-            // workers zombies + restart du merge sans dépendre du polling
-            // frontend. Une webview gelée ne peut plus provoquer de
-            // blackout OSC définitif.
-            {
-                let state: &AppState = &app.state();
-                supervisor::start(state);
-                eprintln!("[INFO] Backend supervisor started");
-            }
-
+            setup_backend_runtime(app)?;
             // Sur Linux WebKitGTK : autoriser getUserMedia (microphone)
             #[cfg(target_os = "linux")]
             {
@@ -468,125 +606,7 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
-            import_hol_project,
-            list_audio_devices,
-            start_audio_capture,
-            stop_audio_capture,
-            update_audio_state,
-            get_audio_state,
-            osc_add_mapping,
-            osc_remove_mapping,
-            osc_list_mappings,
-            osc_clear_mappings,
-            osc_get_value,
-            osc_get_all_values,
-            osc_set_in_enabled,
-            osc_set_mapping_enabled,
-            osc_suppress_in,
-            osc_in_stats,
-            get_last_osc_message,
-            get_last_show_cmd_age,
-            send_show_nack,
-            set_osc_receiver_port,
-            set_osc_output,
-            set_osc_armed,
-            get_osc_armed,
-            get_osc_receiver_port,
-            preset_save,
-            preset_load,
-            preset_delete,
-            preset_list,
-            set_macro,
-            save_graph_to_file,
-            load_graph_from_file,
-            send_osc_position,
-            send_show_feedback,
-            set_timecode_fps,
-            set_psn_config,
-            get_psn_health,
-            get_object_states,
-            get_emitted_positions,
-            get_manual_position,
-            get_manual_positions,
-            throw_object,
-            set_venue_config,
-            get_perceptual_metrics,
-            set_distance_reality,
-            set_spatial_compression,
-            set_attention,
-            set_gesture,
-            set_pos_tape_record,
-            get_pos_tape,
-            set_media_sync,
-            play_pos_tape,
-            get_perf_stats,
-            discover_osc_targets,
-            sample_movement_trajectories,
-            sample_movement_trajectory,
-            launch_animation,
-            update_animation_state,
-            // Merge commands (Phase 1 — architecture hybride)
-            activate_move,
-            deactivate_move,
-            deactivate_all_moves,
-            set_merge_strategy,
-            set_global_macro,
-            set_move_speed,
-            set_move_playback_mode,
-            set_move_weight,
-            set_move_priority,
-            set_track_depths,
-            set_global_origin,
-            set_global_osc_ids,
-            update_move_graph_merged,
-            get_merge_perf_stats,
-            list_active_moves,
-            // Global graph commands (Phase 2 — post-processing)
-            update_global_graph,
-            // Signal graph (domaine modulation → deltas de macros)
-            diagnose_graph,
-            update_signal_graph,
-            set_track_positions,
-            get_track_positions,
-            set_track_position,
-            set_manual_position,
-            clear_manual_position,
-            clear_all_manual_positions,
-            throw_object,
-            // Spatial channels (Phase 4 — canaux étendus)
-            set_spatial_channel,
-            clear_spatial_channel,
-            clear_all_spatial_channels,
-            list_spatial_channels,
-            list_channel_modulations,
-            // Kinematic modulations (Phase 4 P2 — cinématique → canaux)
-            add_channel_modulation,
-            remove_channel_modulation,
-            clear_channel_modulations,
-            set_kinematic_smoothing,
-            // Zones (Phase 4 P4 — effets spatiaux par position)
-            add_zone,
-            update_zone,
-            remove_zone,
-            clear_zones,
-            list_zones,
-            // Effets déclarés par le graph global (nodes Zone/Velocity)
-            list_graph_effects,
-            get_profile_channels,
-            list_effective_channels,
-            // Cue commands (Phase 3 — cue system étendu)
-            store_cue,
-            recall_cue,
-            park_object,
-            get_parked_objects,
-            unpark_object,
-            frontend_log,
-            // Plugins WASM (bundles .ssx dans <data_dir>/plugins/)
-            list_plugins,
-            reload_plugins,
-            import_plugin,
-        ])
+        .invoke_handler(stagespace_invoke_handler)
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

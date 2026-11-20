@@ -1,8 +1,10 @@
 use super::state::lock_or_recover;
 use crate::commands::error::IpcError;
+use crate::commands::state::{emit_ui, EventSink};
 use crate::AppState;
 use stagespace_engines::{AudioCaptureManager, AudioDeviceInfo, AudioState};
-use tauri::{Emitter, State};
+use std::sync::{Arc, Mutex};
+use tauri::State;
 
 #[tauri::command]
 pub async fn list_audio_devices() -> Result<Vec<AudioDeviceInfo>, IpcError> {
@@ -65,8 +67,8 @@ pub async fn update_audio_state(
 
 /// Boucle de polling audio : copie l'état du AudioCaptureManager vers AppState,
 /// propage aux runtimes, et émet `audio-state-update` vers le frontend.
-pub fn start_audio_poller(app_handle: tauri::AppHandle, state: &AppState) {
-    let app_handle = app_handle.clone();
+pub fn start_audio_poller(sink: Arc<Mutex<Option<EventSink>>>, state: &AppState) {
+    let sink = sink.clone();
     let audio_capture = state.audio_capture.clone();
     let audio_state = state.audio_state.clone();
     let shutdown = state.audio_poller_shutdown.clone();
@@ -103,15 +105,15 @@ pub fn start_audio_poller(app_handle: tauri::AppHandle, state: &AppState) {
                 {
                     let capture = audio_capture.lock().unwrap_or_else(|e| e.into_inner());
                     if let Some(err) = capture.take_error() {
-                        let _ = app_handle.emit("audio-error", err);
+                        emit_ui(&sink, "audio-error", &err);
                     }
                     if capture.take_recovered() {
-                        let _ = app_handle.emit("audio-recovered", ());
+                        emit_ui(&sink, "audio-recovered", ());
                     }
                 }
 
                 // Émettre vers le frontend
-                let _ = app_handle.emit("audio-state-update", state);
+                emit_ui(&sink, "audio-state-update", &state);
             }));
             if let Err(e) = tick {
                 eprintln!("[ERROR] Audio poller tick panicked: {e:?} — continuing");

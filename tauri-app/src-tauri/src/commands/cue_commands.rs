@@ -5,12 +5,13 @@
 
 use super::error::IpcError;
 use super::state::lock_or_recover;
+use crate::commands::state::emit_ui;
 use crate::graph::parser::build_graph_from_json;
 use crate::AppState;
 use serde::Deserialize;
 use stagespace_engines::{Cue, MacroSnapshot, SpatialMacroSnapshot};
 use std::sync::atomic::AtomicBool;
-use tauri::{Emitter, State};
+use tauri::State;
 
 /// RAII guard : remet recall_in_progress à false quand droppé (même si recall panique)
 struct RecallGuard<'a>(&'a AtomicBool);
@@ -249,12 +250,7 @@ pub async fn store_cue(
     };
 
     // Émettre l'événement pour que le frontend persiste le cue
-    state
-        .app_handle
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .as_ref()
-        .map(|handle| handle.emit("cue-stored", &cue));
+    emit_ui(&state.event_sink, "cue-stored", &cue);
 
     Ok(cue)
 }
@@ -273,11 +269,7 @@ pub async fn recall_cue(
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
     let sh = crate::commands::state::Shared::from_state(&state);
-    let handle = sh
-        .app_handle
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .clone();
+    let sink = sh.event_sink.clone();
     let sh2 = sh.clone();
     let cue_moves: Vec<String> = cue.moves.iter().map(|m| m.id.clone()).collect();
     let result = tauri::async_runtime::spawn_blocking(move || recall_cue_inner(cue, sh))
@@ -297,9 +289,7 @@ pub async fn recall_cue(
     }
     // Le recall tue/respawn des moves (même partiellement en cas d'échec) —
     // l'UI doit resynchroniser sa liste sinon elle affiche des zombies.
-    if let Some(h) = handle {
-        let _ = h.emit("active-moves-update", ());
-    }
+    emit_ui(&sink, "active-moves-update", ());
     result
 }
 
@@ -747,16 +737,11 @@ pub(crate) fn recall_cue_inner(
 
     // Le payload porte les respawns échoués — un recall partiel ne doit pas
     // passer pour un succès côté UI.
-    sh.app_handle
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .as_ref()
-        .map(|handle| {
-            handle.emit(
-                "cue-recalled",
-                serde_json::json!({ "cue_id": cue.id, "failed_moves": failed_moves }),
-            )
-        });
+    emit_ui(
+        &sh.event_sink,
+        "cue-recalled",
+        serde_json::json!({ "cue_id": cue.id, "failed_moves": failed_moves }),
+    );
 
     Ok(())
 }
