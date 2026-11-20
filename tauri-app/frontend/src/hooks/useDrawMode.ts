@@ -1,16 +1,42 @@
-import { useRef, useState, useCallback, MutableRefObject } from 'react';
+import { useRef, useState, useCallback, useEffect, MutableRefObject } from 'react';
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { useGraphStore } from '../store/useGraphStore';
 import { fromThree, toThree } from '../utils/coords';
-import { moveCp, deleteCp, insertCpAtU, nearestU } from '../utils/splineCore';
+import { moveCp, deleteCp, insertCpAtU, nearestU, type DrawView } from '../utils/splineCore';
 
 interface UseDrawModeParams {
   cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>;
   containerRef: MutableRefObject<HTMLDivElement | null>;
+  controlsRef: MutableRefObject<OrbitControls | null>;
 }
 
 /** Seuil de hit CP en pixels — cohérent avec la proximité objet (~40px). */
 const CP_HIT_PX = 24;
+
+/** Plan de dessin Three.js par vue — drawZ = offset le long de la normale. */
+function drawPlane(view: DrawView, offset: number): THREE.Plane {
+  switch (view) {
+    case 'front':
+      // Élévation : plan (x, z) à backend y = offset → three z = offset.
+      return new THREE.Plane(new THREE.Vector3(0, 0, 1), -offset);
+    case 'side':
+      // Élévation latérale : plan (y, z) à backend x = offset → three x = offset.
+      return new THREE.Plane(new THREE.Vector3(1, 0, 0), -offset);
+    case 'top':
+    case 'free':
+    default:
+      // Plan : (x, y) à backend z = offset → three y = offset.
+      return new THREE.Plane(new THREE.Vector3(0, 1, 0), -offset);
+  }
+}
+
+interface SavedCam {
+  pos: THREE.Vector3;
+  quat: THREE.Quaternion;
+  up: THREE.Vector3;
+  target: THREE.Vector3;
+}
 
 /**
  * Spline studio — mode dessin/édition de trajectoires.
@@ -21,15 +47,62 @@ const CP_HIT_PX = 24;
  * - `edit`     : drag CP / clic-droit CP = delete / double-clic = insert
  * Le commit (écriture dans le node) est explicité par le bouton Done.
  */
-export function useDrawMode({ cameraRef, containerRef }: UseDrawModeParams) {
+export function useDrawMode({ cameraRef, containerRef, controlsRef }: UseDrawModeParams) {
   const drawCanvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const draggingCpRef = useRef<number | null>(null);
+  const savedCamRef = useRef<SavedCam | null>(null);
 
   const drawMode = useGraphStore((s) => s.drawMode);
   const drawZ = useGraphStore((s) => s.drawZ);
+  const drawView = useGraphStore((s) => s.drawView);
 
-  // Convert screen coords to world coords on the Y=drawZ plane
+  // ── Vues fixées : snap caméra + verrou rotation + restore à la sortie ──
+  // Le snap préserve la cible et la distance courantes (framing gardé) ;
+  // pan/zoom restent actifs, seule la rotation est verrouillée.
+  useEffect(() => {
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+    if (!camera || !controls) return;
+    const view = drawView;
+    if (!drawMode || view === 'free') {
+      if (savedCamRef.current) {
+        camera.position.copy(savedCamRef.current.pos);
+        camera.quaternion.copy(savedCamRef.current.quat);
+        camera.up.copy(savedCamRef.current.up);
+        controls.target.copy(savedCamRef.current.target);
+        savedCamRef.current = null;
+      }
+      controls.enableRotate = true;
+      controls.update();
+      return;
+    }
+    if (!savedCamRef.current) {
+      savedCamRef.current = {
+        pos: camera.position.clone(),
+        quat: camera.quaternion.clone(),
+        up: camera.up.clone(),
+        target: controls.target.clone(),
+      };
+    }
+    const t = controls.target;
+    const d = Math.max(camera.position.distanceTo(t), 2);
+    camera.up.set(0, 1, 0);
+    // Epsilon latéral sur la vue top — évite la singularité de pôle exacte
+    // d'OrbitControls (azimuth indéterminé à polar=0).
+    if (view === 'top') {
+      camera.up.set(0, 0, 1); // upstage (+y backend = +z three) en haut de l'écran
+      camera.position.set(t.x, t.y + d, t.z + d * 0.001);
+    } else if (view === 'front') {
+      camera.position.set(t.x, t.y, t.z + d);
+    } else {
+      camera.position.set(t.x + d, t.y, t.z);
+    }
+    controls.enableRotate = false;
+    controls.update();
+  }, [drawMode, drawView, cameraRef, controlsRef]);
+
+  // Convert screen coords to world coords on the view's drawing plane
   const screenToWorld = useCallback(
     (screenX: number, screenY: number): [number, number, number] | null => {
       const camera = cameraRef.current;
@@ -45,8 +118,7 @@ export function useDrawMode({ cameraRef, containerRef }: UseDrawModeParams) {
       const raycaster = new THREE.Raycaster();
       raycaster.setFromCamera(ndc, camera);
 
-      // Intersect with horizontal plane at y = drawZ (Three.js Y-up)
-      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -drawZ);
+      const plane = drawPlane(useGraphStore.getState().drawView, drawZ);
       const intersection = new THREE.Vector3();
       if (raycaster.ray.intersectPlane(plane, intersection)) {
         // Convertir Three.js (x, y=up, z=depth) → backend (x, y=depth, z=up)

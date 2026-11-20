@@ -44,6 +44,7 @@ type Store = InteractionModesSlice & {
   cpHistory: Array<{ cps: Array<[number, number, number]>; closed: boolean }>;
   splineClosed: boolean;
   splineTool: 'freehand' | 'place' | 'edit';
+  drawView: 'free' | 'top' | 'front' | 'side';
 };
 
 // Purge du brouillon spline — ajouté à toute transition drawMode → false.
@@ -53,6 +54,7 @@ const CLEAR_SPLINE_DRAFT = {
   cpHistory: [] as Array<{ cps: Array<[number, number, number]>; closed: boolean }>,
   splineClosed: false,
   splineTool: 'freehand' as const,
+  drawView: 'free' as const,
 };
 
 export const createInteractionModesSlice: StateCreator<Store, [], [], InteractionModesSlice> = (set, get) => ({

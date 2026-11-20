@@ -120,7 +120,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
 
   // ── Hooks extraits (handlers d'interaction) ──
   const { drawCanvasRef, handleDrawStart, handleDrawMove, handleDrawEnd, handleDrawDoubleClick } =
-    useDrawMode({ cameraRef, containerRef });
+    useDrawMode({ cameraRef, containerRef, controlsRef });
   const {
     draggingObject,
     draggingHandle,

@@ -14,6 +14,8 @@ import {
   strokeLooksClosed,
   polylineLength,
   dist3,
+  mapToViewPlane,
+  remapCps,
   type Vec3,
 } from './splineCore';
 
@@ -157,6 +159,29 @@ describe('primitives', () => {
   it('primLine est alignée', () => {
     const cps = primLine(-1, 0, 1, 0, 0);
     cps.forEach((p) => expect(p[1]).toBe(0));
+  });
+});
+
+describe('vues fixées — mapToViewPlane / remapCps', () => {
+  it('top : plan (x,y) à z=offset', () => {
+    expect(mapToViewPlane(1, 2, 'top', 0.5)).toEqual([1, 2, 0.5]);
+    expect(mapToViewPlane(1, 2, 'free', 0.5)).toEqual([1, 2, 0.5]);
+  });
+
+  it('front : plan (x,z) à y=offset — cercle devient vertical', () => {
+    const cps = remapCps(primCircle(8, 2, 0), 'front', 1.0);
+    cps.forEach((p) => {
+      expect(p[1]).toBe(1.0); // y = offset constant
+      expect(Math.abs(Math.hypot(p[0], p[2]) - 2)).toBeLessThan(1e-9); // x,z sur le cercle
+    });
+  });
+
+  it('side : plan (y,z) à x=offset', () => {
+    const cps = remapCps(primCircle(8, 2, 0), 'side', -0.5);
+    cps.forEach((p) => {
+      expect(p[0]).toBe(-0.5);
+      expect(Math.abs(Math.hypot(p[1], p[2]) - 2)).toBeLessThan(1e-9);
+    });
   });
 });
 

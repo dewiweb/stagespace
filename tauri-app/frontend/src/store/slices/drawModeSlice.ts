@@ -4,9 +4,10 @@ import { simplifyPoints, computeCentroid } from '../utils/geometryUtils';
 import { feLog } from '../../utils/tauri';
 import { toast } from '../../utils/toast-helpers';
 import { computeTrackIndices, saveSlotsToStorage, type MoveSlot } from './moveSlotsSlice';
-import { fitStroke, strokeLooksClosed, type Vec3 } from '../../utils/splineCore';
+import { fitStroke, strokeLooksClosed, type Vec3, type DrawView } from '../../utils/splineCore';
 
 export type SplineTool = 'freehand' | 'place' | 'edit';
+export type { DrawView };
 
 const CP_HISTORY_MAX = 32;
 
@@ -26,6 +27,10 @@ export interface DrawModeSlice {
   // place (clic = ajout de CP), edit (drag/suppr/insert sur CPs).
   splineTool: SplineTool;
   setSplineTool: (tool: SplineTool) => void;
+  // Vue gizmo fixée — top/front/side = plan de dessin + caméra snappée,
+  // free = caméra libre sur plan top (legacy).
+  drawView: DrawView;
+  setDrawView: (v: DrawView) => void;
   // Points de contrôle éditables — ce que Done écrira dans le node.
   controlPoints: Vec3[];
   splineClosed: boolean;
@@ -75,7 +80,7 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
       ? { drawMode: true, manipulateMode: false, assignMode: false, zonePlaceMode: false, zoneEditMode: false }
       // Quitter le mode abandonne le brouillon — Done a déjà persisté,
       // Cancel/Esc jettent les CPs (sinon ils ressurgissent à la ré-entrée).
-      : { drawMode: false, drawnPoints: [], controlPoints: [], cpHistory: [], splineClosed: false, splineTool: 'freehand' as SplineTool }),
+      : { drawMode: false, drawnPoints: [], controlPoints: [], cpHistory: [], splineClosed: false, splineTool: 'freehand' as SplineTool, drawView: 'free' as DrawView }),
   drawZ: 0,
   setDrawZ: (z) => set({ drawZ: z }),
   drawnPoints: [],
@@ -85,6 +90,8 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
   // ── Spline studio ──
   splineTool: 'freehand' as SplineTool,
   setSplineTool: (tool) => set({ splineTool: tool }),
+  drawView: 'free' as DrawView,
+  setDrawView: (v) => set({ drawView: v }),
   controlPoints: [],
   splineClosed: false,
   setSplineClosed: (closed) =>
@@ -182,7 +189,7 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
 
     if (!drawSplineNode && !vectorFieldNode) {
       feLog(`[DBG-finalize] ABORT: no DrawSpline or drawn VectorField node found`);
-      set({ drawMode: false, drawnPoints: [], controlPoints: [], cpHistory: [], splineClosed: false, splineTool: 'freehand' as SplineTool });
+      set({ drawMode: false, drawnPoints: [], controlPoints: [], cpHistory: [], splineClosed: false, splineTool: 'freehand' as SplineTool, drawView: 'free' as DrawView });
       return null;
     }
 
@@ -250,6 +257,7 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
       cpHistory: [],
       splineClosed: false,
       splineTool: 'freehand' as SplineTool,
+      drawView: 'free' as DrawView,
     }));
 
     // Synchroniser slot.graphJson avec les nodes mis à jour

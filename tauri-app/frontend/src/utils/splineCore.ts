@@ -264,3 +264,33 @@ export function strokeLooksClosed(raw: Vec3[], thresh = 0.25): boolean {
   if (raw.length < 4) return false;
   return dist3(raw[0], raw[raw.length - 1]) < thresh;
 }
+
+// ── Vues fixées (top/front/side) — plan de dessin par vue ───────────────────
+
+/**
+ * Vue gizmo fixée du draw mode. Chaque vue définit son plan de dessin :
+ * - `top`   : plan (x, y) à z=offset — la vue plan (défaut historique)
+ * - `front` : plan (x, z) à y=offset — élévation vue depuis l'upstage
+ * - `side`  : plan (y, z) à x=offset — élévation latérale
+ * `free` = caméra libre, plan top (comportement legacy).
+ */
+export type DrawView = 'free' | 'top' | 'front' | 'side';
+
+/** Embarque un point 2D (u,v) dans le plan de la vue — coords backend. */
+export function mapToViewPlane(u: number, v: number, view: DrawView, offset: number): Vec3 {
+  switch (view) {
+    case 'front':
+      return [u, offset, v]; // x=u, y=offset(depth), z=v(up)
+    case 'side':
+      return [offset, u, v]; // x=offset(lateral), y=u(depth), z=v(up)
+    case 'top':
+    case 'free':
+    default:
+      return [u, v, offset]; // x=u, y=v(depth), z=offset(up)
+  }
+}
+
+/** Remappe un jeu de CPs orienté "top" (x,y plan, z=up) vers le plan d'une vue. */
+export function remapCps(cps: Vec3[], view: DrawView, offset: number): Vec3[] {
+  return cps.map(([x, y]) => mapToViewPlane(x, y, view, offset));
+}
