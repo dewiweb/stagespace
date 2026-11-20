@@ -9,6 +9,9 @@ interface UseDrawModeParams {
   cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>;
   containerRef: MutableRefObject<HTMLDivElement | null>;
   controlsRef: MutableRefObject<OrbitControls | null>;
+  // Span de la status bar pour le readout curseur (coords monde sur la
+  // feuille) — muté direct : les mousemove 60Hz ne passent pas par React.
+  cursorReadoutRef: MutableRefObject<HTMLSpanElement | null>;
 }
 
 /** Seuil de hit CP en pixels — cohérent avec la proximité objet (~40px). */
@@ -55,7 +58,7 @@ interface SavedCam {
  *   double-clic = insert
  * Le commit (écriture dans le node) est explicité par le bouton Done.
  */
-export function useDrawMode({ cameraRef, containerRef, controlsRef }: UseDrawModeParams) {
+export function useDrawMode({ cameraRef, containerRef, controlsRef, cursorReadoutRef }: UseDrawModeParams) {
   const drawCanvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   // Anchor CP du group-drag + flag "a réellement bougé" (le clic sur un
@@ -240,9 +243,22 @@ export function useDrawMode({ cameraRef, containerRef, controlsRef }: UseDrawMod
     [drawMode, screenToWorld, cpIndexAt],
   );
 
+  // Readout curseur — coords monde sur la feuille de la vue active,
+  // écrites dans le span de la status bar (footer éditeur).
+  const updateCursorReadout = useCallback(
+    (screenX: number, screenY: number) => {
+      const span = cursorReadoutRef.current;
+      if (!span) return;
+      const w = screenToWorld(screenX, screenY);
+      span.textContent = w ? `x ${w[0].toFixed(2)}  y ${w[1].toFixed(2)}  z ${w[2].toFixed(2)}` : '';
+    },
+    [screenToWorld, cursorReadoutRef],
+  );
+
   const handleDrawMove = useCallback(
     (e: React.PointerEvent) => {
       if (!drawMode) return;
+      updateCursorReadout(e.clientX, e.clientY);
       const st = useGraphStore.getState();
 
       // Marquee : drag à vide en edit = rectangle de sélection. Armé
@@ -312,7 +328,7 @@ export function useDrawMode({ cameraRef, containerRef, controlsRef }: UseDrawMod
       }
       st.addDrawnPoint(world);
     },
-    [drawMode, isDrawing, screenToWorld],
+    [drawMode, isDrawing, screenToWorld, updateCursorReadout],
   );
 
   const handleDrawEnd = useCallback(

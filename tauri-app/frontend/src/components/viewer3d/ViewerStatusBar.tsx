@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { MutableRefObject } from 'react';
 import { useGraphStore } from '../../store/useGraphStore';
 import { useMoveEditorStore } from '../../store/useMoveEditorStore';
 import { debugPerf } from '../../utils/debugPerf';
 import { ObjectInspectBar } from './ObjectInspectBar';
+import { drawToolHint } from './DrawToolbar';
 
 /// Métriques perf en une ligne — remplace l'ancien overlay flottant
 /// top-left. Opt-in via le toggle canvas (debugPerfVisible).
@@ -43,23 +44,51 @@ const PerfStrip: React.FC = () => {
   );
 };
 
+interface ViewerStatusBarProps {
+  // Span muté directement par les handlers pointer (coords monde du
+  // curseur) — pas de re-render React à 60Hz pour une position lue.
+  cursorReadoutRef: MutableRefObject<HTMLSpanElement | null>;
+}
+
 /**
- * Status bar dockée en bas de la surface 3D — remplace les indicateurs
- * flottants (chips movements bottom-right, inspect bar bottom-center,
- * overlay debug perf top-left). Rendue uniquement quand il y a du
- * contenu (movements, sélection, ou debug perf actif).
+ * Status bar dockée en bas de la surface 3D — footer permanent du
+ * layout éditeur : hint contextuel (gauche), compteurs du document,
+ * chips movements, inspect objet, coords curseur, perf (droite).
  */
-export const ViewerStatusBar: React.FC = () => {
+export const ViewerStatusBar: React.FC<ViewerStatusBarProps> = ({ cursorReadoutRef }) => {
   const movements = useGraphStore((s) => s.movements);
   const selectedObjIndex = useGraphStore((s) => s.selectedObjIndex);
   const emittedPositions = useGraphStore((s) => s.emittedPositions);
+  const drawMode = useGraphStore((s) => s.drawMode);
+  const manipulateMode = useGraphStore((s) => s.manipulateMode);
+  const assignMode = useGraphStore((s) => s.assignMode);
+  const zonePlaceMode = useGraphStore((s) => s.zonePlaceMode);
+  const zoneEditMode = useGraphStore((s) => s.zoneEditMode);
+  const splineTool = useGraphStore((s) => s.splineTool);
+  const drawView = useGraphStore((s) => s.drawView);
+  const controlPoints = useGraphStore((s) => s.controlPoints);
+  const cpSelection = useGraphStore((s) => s.cpSelection);
   const debugPerfVisible = useMoveEditorStore((s) => s.debugPerfVisible);
   const perfActive = debugPerfVisible && (debugPerf.mvts > 0 || debugPerf.renderFps > 0);
 
-  if (movements.length === 0 && selectedObjIndex === null && !perfActive) return null;
+  // Hint contextuel — les gestes du mode actif, ou l'aide orbit au neutre.
+  let hint = 'orbit: drag · zoom: scroll';
+  if (drawMode) hint = drawToolHint(splineTool, drawView);
+  else if (manipulateMode) hint = 'drag = move · Shift+click = multi-select · handle = move all · wheel = zoom/scale (Esc)';
+  else if (assignMode) hint = 'click objects to toggle their track for this move (Esc)';
+  else if (zonePlaceMode) hint = 'click on the floor to set the zone center (Esc)';
+  else if (zoneEditMode) hint = 'drag a zone to move it · wheel over it = resize (Esc)';
 
   return (
-    <div className="flex-shrink-0 flex items-center gap-2 px-1.5 py-0.5 bg-gray-900/95 border-t border-gray-700/60 min-h-[26px]">
+    <div className="flex-shrink-0 flex items-center gap-2.5 px-1.5 py-0.5 bg-gray-900/95 border-t border-gray-700/60 min-h-[24px]">
+      <span className="text-orange-400/90 text-[10px] font-medium truncate min-w-0 max-w-[38%]" title={hint}>
+        {hint}
+      </span>
+      {drawMode && controlPoints.length > 0 && (
+        <span className="text-gray-500 text-[10px] font-mono whitespace-nowrap">
+          {controlPoints.length} cp{cpSelection.size > 0 && <span className="text-orange-400"> · {cpSelection.size} sel</span>}
+        </span>
+      )}
       {movements.length > 0 && (
         <div className="flex items-center gap-1.5">
           <span className="text-gray-500 text-[10px] font-mono">MOVEMENTS</span>
@@ -78,6 +107,9 @@ export const ViewerStatusBar: React.FC = () => {
       )}
       <span className="flex-1" />
       {selectedObjIndex !== null && <ObjectInspectBar positions={emittedPositions} />}
+      {/* Coords monde du curseur — span muté par les handlers pointer
+          (pas de React state : les mousemove sont à 60Hz). */}
+      <span ref={cursorReadoutRef} className="text-gray-500 text-[10px] font-mono whitespace-nowrap" />
       {perfActive && <PerfStrip />}
     </div>
   );

@@ -10,6 +10,8 @@ import { debugPerf } from '../../utils/debugPerf';
 (window as any).__debugPerf = debugPerf;
 import { ViewerToolbar } from './ViewerToolbar';
 import { ViewerStatusBar } from './ViewerStatusBar';
+import { ViewerToolPalette } from './ViewerToolPalette';
+import { fromThree } from '../../utils/coords';
 import { TrajectoryVisualization } from './TrajectoryVisualization';
 import { ZoneVisualization } from './ZoneVisualization';
 import { useHolMarkers } from '../../hooks/useHolMarkers';
@@ -28,6 +30,13 @@ interface Scene3DProps {
   width?: string | number;
   height?: string | number;
 }
+
+// Temps partagés du readout curseur hors-draw (floor plane) — alloués
+// une fois, les mousemove ne churnent pas le GC.
+const _readoutNdc = new THREE.Vector2();
+const _readoutRay = new THREE.Raycaster();
+const _readoutHit = new THREE.Vector3();
+const _floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
 const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -109,10 +118,12 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
 
   // Plan de travail du draw mode — grille de visu créée par useRenderLoop.
   const workPlaneRef = useRef<THREE.Group | null>(null);
+  // Readout curseur de la status bar — span muté direct (60Hz sans React).
+  const cursorReadoutRef = useRef<HTMLSpanElement | null>(null);
 
   // ── Hooks extraits (handlers d'interaction) ──
   const { drawCanvasRef, marqueeDivRef, handleDrawStart, handleDrawMove, handleDrawEnd, handleDrawDoubleClick } =
-    useDrawMode({ cameraRef, containerRef, controlsRef });
+    useDrawMode({ cameraRef, containerRef, controlsRef, cursorReadoutRef });
   const {
     draggingObject,
     draggingHandle,
@@ -227,14 +238,38 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
     // Pas d'overflow-hidden ici : le popover macros de la toolbar déborde
     // volontairement dans le canvas. Le canvas garde SON overflow:hidden.
     <div style={{ width, height }} className="flex flex-col">
-      {/* Toolbar dockée — modes + outils contextuels (remplace les overlays
-          flottants qui couvraient la vue) */}
+      {/* Menu bar — contexte document (vues, commit) — layout éditeur :
+          palette d'outils à gauche, status bar en bas. */}
       <ViewerToolbar isPlaying={isPlaying} />
+      <div className="flex flex-1 min-h-0">
+        {/* Palette d'outils verticale — modes + sous-outils draw */}
+        <ViewerToolPalette />
       <div
         ref={containerRef}
         style={{ flex: 1, overflow: 'hidden', position: 'relative' }}
         onPointerDown={handleScenePointerDown}
         onPointerUp={handleScenePointerUp}
+        onPointerMove={(e) => {
+          // Readout floor-plane hors draw mode (en draw, le handler du
+          // canvas overlay écrit les coords sur la feuille de la vue).
+          const span = cursorReadoutRef.current;
+          const camera = cameraRef.current;
+          const container = containerRef.current;
+          if (!span || !camera || !container || drawMode) return;
+          const rect = container.getBoundingClientRect();
+          _readoutNdc.set(
+            ((e.clientX - rect.left) / rect.width) * 2 - 1,
+            -((e.clientY - rect.top) / rect.height) * 2 + 1,
+          );
+          _readoutRay.setFromCamera(_readoutNdc, camera);
+          if (_readoutRay.ray.intersectPlane(_floorPlane, _readoutHit)) {
+            const [bx, by, bz] = fromThree(_readoutHit.x, _readoutHit.y, _readoutHit.z);
+            span.textContent = `x ${bx.toFixed(2)}  y ${by.toFixed(2)}  z ${bz.toFixed(2)}`;
+          }
+        }}
+        onPointerLeave={() => {
+          if (cursorReadoutRef.current) cursorReadoutRef.current.textContent = '';
+        }}
       >
       {webglFailed && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-900/90 z-raised p-4">
@@ -313,8 +348,9 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
         </div>
       )}
       </div>
-      {/* Status bar dockée — chips movements + inspect de l'objet sélectionné */}
-      <ViewerStatusBar />
+      </div>
+      {/* Status bar dockée — footer : hint, compteurs, coords, perf */}
+      <ViewerStatusBar cursorReadoutRef={cursorReadoutRef} />
     </div>
   );
 };

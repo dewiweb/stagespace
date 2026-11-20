@@ -21,5 +21,5 @@ export function tcStr(seconds: number, fps: number): string {
 }
 
 /// Types de nodes dessinables au crayon (spline libre ou flux dessiné) —
-/// source unique pour ModeButtons.hasDrawableNode et le finalize draw.
+/// source unique pour ViewerToolPalette.hasDrawableNode et le finalize draw.
 export const DRAWABLE_NODE_TYPES = ['DrawSpline', 'EvaluateSpline', 'TrimSpline', 'OffsetSpline'] as const;

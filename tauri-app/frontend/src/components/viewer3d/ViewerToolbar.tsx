@@ -1,13 +1,11 @@
 import React from 'react';
 import { useGraphStore } from '../../store/useGraphStore';
-import { ModeButtons } from './ModeButtons';
-import { DrawToolbarTools, DrawToolbarOptions, drawToolHint } from './DrawToolbar';
+import { DrawMenuBar } from './DrawToolbar';
 import { MacrosSurface } from '../show/MacrosSurface';
 import { MACRO_NEUTRAL } from '../../store/slices/macrosSlice';
 import { SlidersHorizontal, ChevronDown, RotateCcw } from 'lucide-react';
 import { safeInvoke } from '../../utils/tauri';
 import { toast } from '../../utils/toast-helpers';
-import { isDetachedWindow } from '../../utils/safeStorage';
 import { tbAction } from './toolbarStyles';
 
 interface ViewerToolbarProps {
@@ -15,26 +13,24 @@ interface ViewerToolbarProps {
 }
 
 /**
- * Toolbar dockée en haut de la surface 3D — remplace l'accumulation
- * d'overlays flottants (mode buttons, bannières de mode, panneau macros,
- * barre studio) qui couvraient la vue.
+ * Menu bar du viewer 3D — ligne unique dockée en haut du canvas, dans
+ * le layout "éditeur" (palette à gauche, status bar en bas).
  *
- * Structure : [modes] | [outils contextuels du mode] ····· [hint]
- * + une 2e ligne d'options en draw mode uniquement.
+ * Contenu contextuel :
+ * - draw       : vues de travail + sélecteur/reload DrawSpline + Done/Cancel
+ * - manipulate : popover macros + LIVE + clear overrides
+ * - neutre     : caption discrète (la barre reste — chrome constant)
+ *
+ * Les hints contextuels vivent dans la status bar (bas), les outils
+ * dans la palette (gauche).
  */
 export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({ isPlaying }) => {
   const drawMode = useGraphStore((s) => s.drawMode);
   const manipulateMode = useGraphStore((s) => s.manipulateMode);
-  const assignMode = useGraphStore((s) => s.assignMode);
-  const zonePlaceMode = useGraphStore((s) => s.zonePlaceMode);
-  const zoneEditMode = useGraphStore((s) => s.zoneEditMode);
-  const splineTool = useGraphStore((s) => s.splineTool);
-  const drawView = useGraphStore((s) => s.drawView);
   const movements = useGraphStore((s) => s.movements);
   const setMacros = useGraphStore((s) => s.setMacros);
   const pushMacrosToRuntime = useGraphStore((s) => s.pushMacrosToRuntime);
   const [macrosOpen, setMacrosOpen] = React.useState(false);
-  const detached = isDetachedWindow();
 
   // Les macros ne vivent plus en pilules dans la toolbar (illisibles en
   // live) — le geste est l'outil principal, le panneau complet s'ouvre
@@ -45,22 +41,10 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({ isPlaying }) => {
     void pushMacrosToRuntime();
   };
 
-  let hint: string | null = null;
-  if (drawMode) hint = drawToolHint(splineTool, drawView);
-  else if (manipulateMode) hint = 'drag = move · Shift+click = multi-select · handle = move all · wheel = zoom/scale (Esc)';
-  else if (assignMode) hint = 'click objects to toggle their track for this move (Esc)';
-  else if (zonePlaceMode) hint = 'click on the floor to set the zone center (Esc)';
-  else if (zoneEditMode) hint = 'drag a zone to move it · wheel over it = resize (Esc)';
-
   return (
     <div className="flex-shrink-0 relative bg-gray-900/95 border-b border-gray-700/60">
-      {/* Row 1 : modes + outils contextuels + hint */}
-      <div className="flex items-center gap-2 px-1.5 py-1 flex-wrap">
-        <ModeButtons />
-        {(drawMode || manipulateMode || assignMode || zonePlaceMode || zoneEditMode) && (
-          <span className="w-px h-4 bg-gray-700/70" />
-        )}
-        {drawMode && <DrawToolbarTools />}
+      <div className="flex items-center gap-2 px-1.5 py-1 flex-nowrap overflow-hidden">
+        {drawMode && <DrawMenuBar />}
         {manipulateMode && (
           <>
             <button
@@ -87,28 +71,10 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({ isPlaying }) => {
             )}
           </>
         )}
-        <span className="flex-1" />
-        {hint && !drawMode && (
-          <span className="text-orange-400/90 text-[10px] font-medium truncate max-w-[45%]">
-            <span className={detached ? 'opacity-60' : ''}>{hint}</span>
-          </span>
+        {!drawMode && !manipulateMode && (
+          <span className="text-gray-600 text-[10px] font-mono tracking-wider">3D PREVIEW</span>
         )}
       </div>
-      {/* Row 2 : options du spline studio / macros globales */}
-      {drawMode && (
-        <div className="flex items-center gap-2 px-1.5 pb-1 flex-nowrap overflow-hidden">
-          <DrawToolbarOptions />
-          <span className="flex-1 min-w-2" />
-          {hint && (
-            <span
-              className="text-orange-400/90 text-[10px] font-medium truncate min-w-0 shrink"
-              title={hint}
-            >
-              {hint}
-            </span>
-          )}
-        </div>
-      )}
       {manipulateMode && macrosOpen && (
         <>
           {/* Backdrop — clic dehors = fermer, sans capter le scroll/pan */}
