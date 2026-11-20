@@ -51,10 +51,14 @@ export interface DrawModeSlice {
   // Les CPs sont recentrés sur l'origine des tracks sélectionnées —
   // même ancre que finalizeDrawing (les formes naissent là où sont les objets).
   loadPrimitive: (cps: Vec3[], closed: boolean) => void;
-  // Recharge le premier node DrawSpline (points+closed) dans l'éditeur :
-  // les points stockés sont relatifs à l'origine → on les remet en absolu
+  // Recharge un node DrawSpline (points+closed) dans l'éditeur : les
+  // points stockés sont relatifs à l'origine → on les remet en absolu
   // (finalize les re-soustraira) — idempotent si l'origine n'a pas bougé.
-  loadFromNode: () => string | null;
+  // nodeId = cible explicite (sélecteur) ; absent = premier DrawSpline.
+  loadFromNode: (nodeId?: string) => string | null;
+  // Node DrawSpline chargé dans l'éditeur — finalize écrit DESSUS (pas
+  // sur le premier trouvé), purgé avec le brouillon à la sortie.
+  loadedSplineNodeId: string | null;
   clearSpline: () => void;
 }
 
@@ -81,12 +85,22 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
   // Draw mode — setter exclusif : entrer en draw purge les autres modes
   // d'interaction (sinon une couche assign/manipulate couvre le canvas draw).
   drawMode: false,
-  setDrawMode: (enabled) =>
+  setDrawMode: (enabled) => {
     set(enabled
       ? { drawMode: true, manipulateMode: false, assignMode: false, zonePlaceMode: false, zoneEditMode: false }
       // Quitter le mode abandonne le brouillon — Done a déjà persisté,
       // Cancel/Esc jettent les CPs (sinon ils ressurgissent à la ré-entrée).
-      : { drawMode: false, drawnPoints: [], controlPoints: [], cpHistory: [], splineClosed: false, splineTool: 'freehand' as SplineTool, drawView: 'free' as DrawView }),
+      : { drawMode: false, drawnPoints: [], controlPoints: [], cpHistory: [], splineClosed: false, splineTool: 'freehand' as SplineTool, drawView: 'free' as DrawView, loadedSplineNodeId: null });
+    if (enabled) {
+      // Auto-load : une spline existe déjà → la charger direct dans
+      // l'éditeur (workflow dominant = éditer l'existant, pas redessiner).
+      const s = get();
+      const splines = s.nodes.filter((n) => n.data.type === 'DrawSpline');
+      if (splines.length > 0 && s.controlPoints.length === 0 && s.drawnPoints.length === 0) {
+        get().loadFromNode(splines[0].id);
+      }
+    }
+  },
   drawZ: 0,
   setDrawZ: (z) => set({ drawZ: z }),
   drawnPoints: [],
@@ -99,6 +113,7 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
   drawView: 'free' as DrawView,
   setDrawView: (v) => set({ drawView: v }),
   controlPoints: [],
+  loadedSplineNodeId: null,
   splineClosed: false,
   setSplineClosed: (closed) =>
     set((s) => ({
@@ -155,9 +170,11 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
         splineTool: 'edit' as SplineTool,
       };
     }),
-  loadFromNode: () => {
+  loadFromNode: (nodeId) => {
     const s = get();
-    const node = s.nodes.find((n) => n.data.type === 'DrawSpline');
+    const node = nodeId
+      ? s.nodes.find((n) => n.id === nodeId && n.data.type === 'DrawSpline')
+      : s.nodes.find((n) => n.data.type === 'DrawSpline');
     if (!node) return null;
     const raw = node.data.params?.points;
     let arr: unknown;
@@ -181,10 +198,11 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
       drawnPoints: [],
       splineTool: 'edit' as SplineTool,
       cpHistory: [...s.cpHistory, { cps: s.controlPoints, closed: s.splineClosed }].slice(-CP_HISTORY_MAX),
+      loadedSplineNodeId: node.id,
     });
     return node.id;
   },
-  clearSpline: () => set({ controlPoints: [], cpHistory: [], drawnPoints: [], splineClosed: false }),
+  clearSpline: () => set({ controlPoints: [], cpHistory: [], drawnPoints: [], splineClosed: false, loadedSplineNodeId: null }),
 
   finalizeDrawing: async () => {
     const { drawnPoints, controlPoints, splineClosed, nodes, holProject, manualOscIds, selectedTrackIds } = get();
@@ -220,8 +238,12 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
     feLog(`[DBG-finalize] pointsJson=${pointsJson.slice(0, 200)}...`);
 
     // Chercher les nodes cibles : DrawSpline (trajectoire) et/ou
-    // VectorField field="drawn" (lignes de flux → vecteurs tangents)
-    const drawSplineNode = nodes.find((n) => n.data.type === 'DrawSpline');
+    // VectorField field="drawn" (lignes de flux → vecteurs tangents).
+    // Priorité au node chargé dans l'éditeur (loadedSplineNodeId) —
+    // sinon Done écrirait toujours sur le premier DrawSpline du graphe.
+    const drawSplineNode =
+      nodes.find((n) => n.id === get().loadedSplineNodeId && n.data.type === 'DrawSpline')
+      ?? nodes.find((n) => n.data.type === 'DrawSpline');
     const vectorFieldNode = nodes.find(
       (n) => n.data.type === 'VectorField' && n.data.params?.field === 'drawn'
     );
@@ -229,7 +251,7 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
 
     if (!drawSplineNode && !vectorFieldNode) {
       feLog(`[DBG-finalize] ABORT: no DrawSpline or drawn VectorField node found`);
-      set({ drawMode: false, drawnPoints: [], controlPoints: [], cpHistory: [], splineClosed: false, splineTool: 'freehand' as SplineTool, drawView: 'free' as DrawView });
+      set({ drawMode: false, drawnPoints: [], controlPoints: [], cpHistory: [], splineClosed: false, splineTool: 'freehand' as SplineTool, drawView: 'free' as DrawView, loadedSplineNodeId: null });
       return null;
     }
 
@@ -298,6 +320,7 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
       splineClosed: false,
       splineTool: 'freehand' as SplineTool,
       drawView: 'free' as DrawView,
+      loadedSplineNodeId: null,
     }));
 
     // Synchroniser slot.graphJson avec les nodes mis à jour

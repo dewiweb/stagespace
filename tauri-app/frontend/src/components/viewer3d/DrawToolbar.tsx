@@ -93,7 +93,15 @@ export const DrawToolbarOptions: React.FC = () => {
   const cpUndo = useGraphStore((s) => s.cpUndo);
   const loadFromNode = useGraphStore((s) => s.loadFromNode);
   const clearSpline = useGraphStore((s) => s.clearSpline);
-  const hasDrawSpline = useGraphStore((s) => s.nodes.some((n) => n.data.type === 'DrawSpline'));
+  // ATTENTION : filter() dans le sélecteur = nouveau tableau à chaque
+  // appel → snapshot jamais stable → boucle de re-render infinie. On
+  // souscrit la référence nodes (stable) puis on mémoise le filtre.
+  const nodes = useGraphStore((s) => s.nodes);
+  const drawSplineNodes = React.useMemo(
+    () => nodes.filter((n) => n.data.type === 'DrawSpline'),
+    [nodes],
+  );
+  const loadedSplineNodeId = useGraphStore((s) => s.loadedSplineNodeId);
 
   // Label du slider d'offset = axe normal au plan de la vue (backend Z-up).
   const offsetAxis: Record<DrawView, string> = { free: 'Z', top: 'Z', front: 'Y', side: 'X' };
@@ -147,10 +155,23 @@ export const DrawToolbarOptions: React.FC = () => {
       <button title="Clear control points" onClick={clearSpline} className={tbIcon}>
         <Trash2 size={11} />
       </button>
+      {drawSplineNodes.length > 1 && (
+        <select
+          title="DrawSpline node to edit"
+          value={loadedSplineNodeId ?? ''}
+          onChange={(e) => e.target.value && loadFromNode(e.target.value)}
+          className="h-6 text-[11px] bg-gray-800 border border-gray-700 rounded px-1 text-gray-200 max-w-[90px]"
+        >
+          {loadedSplineNodeId === null && <option value="" disabled>spline…</option>}
+          {drawSplineNodes.map((n) => (
+            <option key={n.id} value={n.id}>{String(n.data.label ?? n.id)}</option>
+          ))}
+        </select>
+      )}
       <button
-        title="Load control points from the first DrawSpline node"
-        disabled={!hasDrawSpline}
-        onClick={loadFromNode}
+        title="Reload control points from the DrawSpline node (discards local edits)"
+        disabled={drawSplineNodes.length === 0}
+        onClick={() => loadFromNode(loadedSplineNodeId ?? undefined)}
         className={tbIcon}
       >
         <FolderOpen size={11} />

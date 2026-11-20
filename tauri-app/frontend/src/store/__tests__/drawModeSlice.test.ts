@@ -113,3 +113,77 @@ describe('finalizeDrawing', () => {
     expect((useGraphStore.getState() as any).drawMode).toBe(false);
   });
 });
+
+describe('loadFromNode', () => {
+  const mkNode = (id: string, pts: string, closed = false) => ({
+    id, type: 'custom', position: { x: 0, y: 0 },
+    data: { type: 'DrawSpline', label: id, params: { points: pts, closed } },
+  });
+
+  it('loads points+closed into controlPoints and records the node id', () => {
+    useGraphStore.setState({ nodes: [mkNode('sp1', '[[0,0,0],[1,0,0],[0,1,0]]', true)] } as any);
+    const id = useGraphStore.getState().loadFromNode();
+    expect(id).toBe('sp1');
+    const s = useGraphStore.getState();
+    expect(s.controlPoints.length).toBe(3);
+    expect(s.splineClosed).toBe(true);
+    expect(s.loadedSplineNodeId).toBe('sp1');
+    expect(s.splineTool).toBe('edit');
+  });
+
+  it('targets the requested node among several', () => {
+    useGraphStore.setState({
+      nodes: [mkNode('spA', '[[0,0,0],[1,0,0],[0,1,0]]'), mkNode('spB', '[[9,9,9],[8,0,0],[0,8,0]]')],
+    } as any);
+    const id = useGraphStore.getState().loadFromNode('spB');
+    expect(id).toBe('spB');
+    const s = useGraphStore.getState();
+    expect(s.loadedSplineNodeId).toBe('spB');
+    // Origine = (0,0,0) en l'absence de holProject → les points restent tels quels.
+    expect(s.controlPoints[0]).toEqual([9, 9, 9]);
+  });
+});
+
+describe('spline draft lifecycle', () => {
+  const mkNode = (id: string) => ({
+    id, type: 'custom', position: { x: 0, y: 0 },
+    data: { type: 'DrawSpline', params: { points: '[[0,0,0],[1,0,0],[0,1,0]]' } },
+  });
+
+  it('auto-loads the existing spline when entering draw mode', () => {
+    useGraphStore.setState({ nodes: [mkNode('sp1')], controlPoints: [], drawnPoints: [] } as any);
+    useGraphStore.getState().setDrawMode(true);
+    const s = useGraphStore.getState();
+    expect(s.drawMode).toBe(true);
+    expect(s.controlPoints.length).toBe(3);
+    expect(s.loadedSplineNodeId).toBe('sp1');
+  });
+
+  it('clears loadedSplineNodeId on draw mode exit', () => {
+    useGraphStore.setState({ drawMode: true, loadedSplineNodeId: 'sp1', controlPoints: [[0,0,0],[1,0,0]] } as any);
+    useGraphStore.getState().setDrawMode(false);
+    const s = useGraphStore.getState();
+    expect(s.loadedSplineNodeId).toBeNull();
+    expect(s.controlPoints).toEqual([]);
+  });
+
+  it('finalize writes to the loaded node, not the first DrawSpline', async () => {
+    useGraphStore.setState({
+      controlPoints: [[0, 0, 0], [2, 0, 0], [0, 2, 0]],
+      loadedSplineNodeId: 'spB',
+      drawMode: true,
+      nodes: [
+        { id: 'spA', type: 'custom', position: { x: 0, y: 0 }, data: { type: 'DrawSpline', params: { points: '[[1,1,1]]' } } },
+        { id: 'spB', type: 'custom', position: { x: 0, y: 0 }, data: { type: 'DrawSpline', params: { points: '[[2,2,2]]' } } },
+      ],
+      edges: [],
+    } as any);
+
+    const result = await useGraphStore.getState().finalizeDrawing();
+    expect(result).toBe('spB');
+    const spA = useGraphStore.getState().nodes.find((n) => n.id === 'spA');
+    const spB = useGraphStore.getState().nodes.find((n) => n.id === 'spB');
+    expect((spA!.data as any).params.points).toBe('[[1,1,1]]');
+    expect(JSON.parse((spB!.data as any).params.points).length).toBe(3);
+  });
+});

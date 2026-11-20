@@ -45,6 +45,8 @@ type Store = InteractionModesSlice & {
   splineClosed: boolean;
   splineTool: 'freehand' | 'place' | 'edit';
   drawView: 'free' | 'top' | 'front' | 'side';
+  // Cible finalize du brouillon — purge avec lui (drawModeSlice).
+  loadedSplineNodeId: string | null;
   // Multi-sélection manipulate — purge à la sortie du mode comme le
   // brouillon spline (sinon une sélection stale survivrait).
   manipSelection: Set<number>;
@@ -58,6 +60,7 @@ const CLEAR_SPLINE_DRAFT = {
   splineClosed: false,
   splineTool: 'freehand' as const,
   drawView: 'free' as const,
+  loadedSplineNodeId: null,
 };
 
 export const createInteractionModesSlice: StateCreator<Store, [], [], InteractionModesSlice> = (set, get) => ({
