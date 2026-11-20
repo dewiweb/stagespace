@@ -61,6 +61,7 @@ const CLEAR_SPLINE_DRAFT = {
   splineTool: 'freehand' as const,
   drawView: 'free' as const,
   loadedSplineNodeId: null,
+  cpSelection: new Set<number>(),
 };
 
 export const createInteractionModesSlice: StateCreator<Store, [], [], InteractionModesSlice> = (set, get) => ({

@@ -14,6 +14,8 @@ export interface SceneInteractionLayersProps {
   draggingHandle: boolean;
   draggingObject: number | null;
   drawCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
+  // Rectangle marquee de la sélection CPs — muté direct par useDrawMode.
+  marqueeDivRef: MutableRefObject<HTMLDivElement | null>;
   handleDrawStart: (e: React.PointerEvent) => void;
   handleDrawMove: (e: React.PointerEvent) => void;
   handleDrawEnd: (e: React.PointerEvent) => void;
@@ -57,6 +59,11 @@ export const SceneInteractionLayers: React.FC<SceneInteractionLayersProps> = (p)
       // Le clic-droit sert à supprimer des CPs en mode edit — pas de menu.
       onContextMenu={p.drawMode ? (e) => e.preventDefault() : undefined}
       onWheel={p.handleZoomWheel}
+    />
+    <div
+      ref={p.marqueeDivRef}
+      className="absolute z-overlay pointer-events-none border border-orange-400/80 bg-orange-400/10"
+      style={{ display: 'none' }}
     />
     {p.zoneEditMode && (
       <div

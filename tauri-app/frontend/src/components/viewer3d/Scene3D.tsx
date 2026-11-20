@@ -51,6 +51,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   const drawnPoints = useGraphStore((s) => s.drawnPoints);
   const controlPoints = useGraphStore((s) => s.controlPoints);
   const splineClosed = useGraphStore((s) => s.splineClosed);
+  const cpSelection = useGraphStore((s) => s.cpSelection);
 
   // Modes d'interaction — slice du store (le handler Esc global peut les
   // annuler avant le panic ; mutual exclusion gérée par le slice)
@@ -106,8 +107,11 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   const { handleRef, trajectoryLineRef } = useManipulateHandle({ sceneRef, manipulateMode });
   useInteractionModes({ controlsRef, rendererRef, drawMode, manipulateMode, assignMode, zonePlaceMode, zoneEditMode });
 
+  // Plan de travail du draw mode — grille de visu créée par useRenderLoop.
+  const workPlaneRef = useRef<THREE.Group | null>(null);
+
   // ── Hooks extraits (handlers d'interaction) ──
-  const { drawCanvasRef, handleDrawStart, handleDrawMove, handleDrawEnd, handleDrawDoubleClick } =
+  const { drawCanvasRef, marqueeDivRef, handleDrawStart, handleDrawMove, handleDrawEnd, handleDrawDoubleClick } =
     useDrawMode({ cameraRef, containerRef, controlsRef });
   const {
     draggingObject,
@@ -186,7 +190,9 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
     drawnPoints,
     controlPoints,
     splineClosed,
+    cpSelection,
     draggingSetRef,
+    workPlaneRef,
     setWebglFailed,
     dimensions,
     initKey,
@@ -274,6 +280,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
         draggingHandle={draggingHandle}
         draggingObject={draggingObject}
         drawCanvasRef={drawCanvasRef}
+        marqueeDivRef={marqueeDivRef}
         handleDrawStart={handleDrawStart}
         handleDrawMove={handleDrawMove}
         handleDrawEnd={handleDrawEnd}

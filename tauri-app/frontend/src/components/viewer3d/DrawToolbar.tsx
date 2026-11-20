@@ -1,7 +1,6 @@
 import React from 'react';
 import { Pencil, MousePointerClick, Spline, Undo2, Circle, Infinity as InfinityIcon, Minus, Trash2, Box, FolderOpen } from 'lucide-react';
 import { useGraphStore } from '../../store/useGraphStore';
-import Slider from '../ui/Slider';
 import { primCircle, primEllipse, primLemniscate, primLine, primArc, remapCps, type DrawView, type Vec3 } from '../../utils/splineCore';
 import type { SplineTool } from '../../store/slices/drawModeSlice';
 import { tbGroup, tbBtn, tbAction, tbIcon, tbSep, tbIdle } from './toolbarStyles';
@@ -13,7 +12,6 @@ import { tbGroup, tbBtn, tbAction, tbIcon, tbSep, tbIdle } from './toolbarStyles
  * options + undo/load/clear + compteur).
  */
 export const DrawToolbarTools: React.FC = () => {
-  const drawZ = useGraphStore((s) => s.drawZ);
   const clearDrawnPoints = useGraphStore((s) => s.clearDrawnPoints);
   const finalizeDrawing = useGraphStore((s) => s.finalizeDrawing);
   const setDrawMode = useGraphStore((s) => s.setDrawMode);
@@ -40,7 +38,7 @@ export const DrawToolbarTools: React.FC = () => {
     <button
       key={label}
       title={title}
-      onClick={() => loadPrimitive(remapCps(mk(), drawView, drawZ), closed)}
+      onClick={() => loadPrimitive(remapCps(mk(), drawView, 0), closed)}
       className={`${tbBtn} ${tbIdle}`}
     >
       {icon}{label}
@@ -55,11 +53,11 @@ export const DrawToolbarTools: React.FC = () => {
         {toolBtn('edit', 'Edit', <Spline size={11} />, 'Drag / delete / insert control points')}
       </div>
       <div className={tbGroup}>
-        {primBtn('O', <Circle size={11} />, 'Circle primitive', () => primCircle(12, 1.5, drawZ), true)}
-        {primBtn('8', <InfinityIcon size={11} />, 'Lemniscate (figure-8) primitive', () => primLemniscate(16, 1.6, drawZ), true)}
-        {primBtn('—', <Minus size={11} />, 'Line primitive', () => primLine(-1.5, 0, 1.5, 0, drawZ), false)}
-        {primBtn('◠', <Spline size={11} />, 'Arc primitive', () => primArc(5, 1.8, Math.PI * 0.8, drawZ), false)}
-        {primBtn('⬭', <Circle size={11} />, 'Ellipse primitive', () => primEllipse(12, 2.0, 1.0, drawZ), true)}
+        {primBtn('O', <Circle size={11} />, 'Circle primitive', () => primCircle(12, 1.5, 0), true)}
+        {primBtn('8', <InfinityIcon size={11} />, 'Lemniscate (figure-8) primitive', () => primLemniscate(16, 1.6, 0), true)}
+        {primBtn('—', <Minus size={11} />, 'Line primitive', () => primLine(-1.5, 0, 1.5, 0, 0), false)}
+        {primBtn('◠', <Spline size={11} />, 'Arc primitive', () => primArc(5, 1.8, Math.PI * 0.8, 0), false)}
+        {primBtn('⬭', <Circle size={11} />, 'Ellipse primitive', () => primEllipse(12, 2.0, 1.0, 0), true)}
       </div>
       <button
         // Finalize AVANT de clearer — finalizeDrawing lit drawnPoints/CPs.
@@ -80,11 +78,10 @@ export const DrawToolbarTools: React.FC = () => {
 };
 
 export const DrawToolbarOptions: React.FC = () => {
-  const drawZ = useGraphStore((s) => s.drawZ);
-  const setDrawZ = useGraphStore((s) => s.setDrawZ);
   const drawView = useGraphStore((s) => s.drawView);
   const setDrawView = useGraphStore((s) => s.setDrawView);
   const controlPoints = useGraphStore((s) => s.controlPoints);
+  const cpSelection = useGraphStore((s) => s.cpSelection);
   const splineClosed = useGraphStore((s) => s.splineClosed);
   const setSplineClosed = useGraphStore((s) => s.setSplineClosed);
   const cpHistory = useGraphStore((s) => s.cpHistory);
@@ -100,9 +97,6 @@ export const DrawToolbarOptions: React.FC = () => {
     [nodes],
   );
   const loadedSplineNodeId = useGraphStore((s) => s.loadedSplineNodeId);
-
-  // Label du slider d'offset = axe normal au plan de la vue (backend Z-up).
-  const offsetAxis: Record<DrawView, string> = { free: 'Z', top: 'Z', front: 'Y', side: 'X' };
 
   const viewBtn = (v: DrawView, label: string) => (
     <button
@@ -134,13 +128,6 @@ export const DrawToolbarOptions: React.FC = () => {
         Closed
       </label>
       <span className={tbSep} />
-      <span className="text-orange-400 text-[10px] font-mono" title="Work-plane offset on the view normal — also moves the current draft">{offsetAxis[drawView]}</span>
-      <Slider
-        layout="bare" min={-3} max={3} step={0.1} value={drawZ}
-        onChange={setDrawZ} accent="orange" className="w-16"
-      />
-      <span className="text-white text-[10px] font-mono w-7">{drawZ.toFixed(1)}</span>
-      <span className={tbSep} />
       <button title="Undo last edit" disabled={cpHistory.length === 0} onClick={cpUndo} className={tbIcon}>
         <Undo2 size={11} />
       </button>
@@ -168,7 +155,9 @@ export const DrawToolbarOptions: React.FC = () => {
       >
         <FolderOpen size={11} />
       </button>
-      <span className="text-gray-500 text-[10px] font-mono whitespace-nowrap">{controlPoints.length} cp</span>
+      <span className="text-gray-500 text-[10px] font-mono whitespace-nowrap">
+        {controlPoints.length} cp{cpSelection.size > 0 && <span className="text-orange-400"> · {cpSelection.size} sel</span>}
+      </span>
     </>
   );
 };
@@ -178,7 +167,7 @@ export function drawToolHint(tool: SplineTool, view: DrawView): string {
   const base: Record<SplineTool, string> = {
     freehand: 'click & drag; stroke becomes editable on release',
     place: 'click to append control points',
-    edit: 'drag CP · Shift+drag = height only · right-click deletes · double-click inserts',
+    edit: 'drag CP = move selection · drag empty = marquee · Shift+click = toggle · right-click deletes · double-click inserts',
   };
   return base[tool] + (view !== 'free' ? ` — ${view} view (rot locked)` : '');
 }

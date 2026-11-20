@@ -20,34 +20,54 @@ describe('setDrawMode', () => {
   });
 });
 
-describe('setDrawZ', () => {
-  it('sets the Z height for drawing', () => {
-    useGraphStore.getState().setDrawZ(5.5);
-    expect((useGraphStore.getState() as any).drawZ).toBe(5.5);
-  });
-
-  it('translates the draft along the view normal (Top → z)', () => {
-    useGraphStore.setState({
-      drawZ: 1,
-      drawView: 'top',
-      controlPoints: [[0, 0, 0], [1, 0, 0.5]],
-      drawnPoints: [[2, 2, 1]],
-    } as any);
-    useGraphStore.getState().setDrawZ(1.5);
+describe('cpSelection + translateCps', () => {
+  it('toggles CP membership via toggleCpSelection', () => {
     const s = useGraphStore.getState();
-    expect(s.controlPoints[0]).toEqual([0, 0, 0.5]);
-    expect(s.controlPoints[1]).toEqual([1, 0, 1]);
-    expect(s.drawnPoints[0]).toEqual([2, 2, 1.5]);
-    expect(s.cpHistory.length).toBe(1); // undo armé
+    s.toggleCpSelection(1);
+    s.toggleCpSelection(3);
+    expect([...useGraphStore.getState().cpSelection]).toEqual([1, 3]);
+    useGraphStore.getState().toggleCpSelection(1);
+    expect([...useGraphStore.getState().cpSelection]).toEqual([3]);
   });
 
-  it('translates on the view normal axis (Front → y, Side → x)', () => {
-    useGraphStore.setState({ drawZ: 0, drawView: 'front', controlPoints: [[0, 0, 0]] } as any);
-    useGraphStore.getState().setDrawZ(2);
-    expect(useGraphStore.getState().controlPoints[0]).toEqual([0, 2, 0]);
-    useGraphStore.setState({ drawZ: 0, drawView: 'side', controlPoints: [[0, 0, 0]] } as any);
-    useGraphStore.getState().setDrawZ(-1);
-    expect(useGraphStore.getState().controlPoints[0]).toEqual([-1, 0, 0]);
+  it('translates only the selected CPs by the group delta', () => {
+    useGraphStore.setState({
+      controlPoints: [[0, 0, 0], [1, 0, 0.5], [2, 2, 1]],
+    } as any);
+    useGraphStore.getState().translateCps(new Set([0, 2]), [0, 0, 2]);
+    const s = useGraphStore.getState();
+    expect(s.controlPoints[0]).toEqual([0, 0, 2]);   // sélectionné → bougé
+    expect(s.controlPoints[1]).toEqual([1, 0, 0.5]); // non sélectionné → intact
+    expect(s.controlPoints[2]).toEqual([2, 2, 3]);   // sélectionné → bougé
+  });
+
+  it('does not push history (caller snapshots once per gesture)', () => {
+    useGraphStore.setState({ controlPoints: [[0, 0, 0]], cpHistory: [], cpSelection: new Set([0]) } as any);
+    const s = useGraphStore.getState();
+    s.pushCpSnapshot();
+    s.translateCps(s.cpSelection, [1, 0, 0]);
+    s.translateCps(s.cpSelection, [1, 0, 0]);
+    expect(useGraphStore.getState().cpHistory.length).toBe(1); // un seul undo pour tout le drag
+    useGraphStore.getState().cpUndo();
+    expect(useGraphStore.getState().controlPoints[0]).toEqual([0, 0, 0]); // revient à l'état d'avant-geste
+  });
+
+  it('structural edits clear the selection (indices would drift)', () => {
+    useGraphStore.setState({ controlPoints: [[0, 0, 0], [1, 0, 0]], cpSelection: new Set([0]) } as any);
+    useGraphStore.getState().setControlPoints([[0, 0, 0], [1, 0, 0], [2, 0, 0]]); // place/insert/delete
+    expect(useGraphStore.getState().cpSelection.size).toBe(0);
+  });
+
+  it('continuous drag moves keep the selection', () => {
+    useGraphStore.setState({ controlPoints: [[0, 0, 0]], cpSelection: new Set([0]) } as any);
+    useGraphStore.getState().setControlPoints([[0.5, 0, 0]], false); // drag move
+    expect(useGraphStore.getState().cpSelection.size).toBe(1);
+  });
+
+  it('selection is purged on draw-mode exit', () => {
+    useGraphStore.setState({ drawMode: true, cpSelection: new Set([0, 1]) } as any);
+    useGraphStore.getState().setDrawMode(false);
+    expect(useGraphStore.getState().cpSelection.size).toBe(0);
   });
 });
 

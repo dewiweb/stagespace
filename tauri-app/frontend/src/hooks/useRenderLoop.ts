@@ -67,9 +67,14 @@ export interface UseRenderLoopParams {
   // Spline studio — CPs éditables + flag closed (preview miroir du backend).
   controlPoints: DrawnPointsValue;
   splineClosed: boolean;
+  // Indices des CPs sélectionnés (outil edit) — highlight orange.
+  cpSelection: ReadonlySet<number>;
   // Ensemble en cours de drag (multi-drag manipulate) — le render loop
   // garde les membres visibles au lieu de les cacher pendant le geste.
   draggingSetRef: MutableRefObject<Set<number>>;
+  // Plan de travail du draw mode — le loop crée/oriente la grille de la
+  // "feuille" (par l'origine) selon drawView ; pure visu, pas de handle.
+  workPlaneRef: MutableRefObject<THREE.Group | null>;
   // Pour signaler l'échec WebGL
   setWebglFailed: (v: boolean) => void;
   dimensions: { width: number; height: number };
@@ -105,7 +110,9 @@ export function useRenderLoop({
   drawnPoints,
   controlPoints,
   splineClosed,
+  cpSelection,
   draggingSetRef,
+  workPlaneRef,
   setWebglFailed,
   initKey = 0,
 }: UseRenderLoopParams) {
@@ -117,8 +124,10 @@ export function useRenderLoop({
   const lastDrawnKeyRef = useRef('');
   const controlPointsRef = useRef(controlPoints);
   const splineClosedRef = useRef(splineClosed);
+  const cpSelectionRef = useRef(cpSelection);
   const lastCpsRef = useRef<DrawnPointsValue | null>(null);
   const lastClosedRef = useRef(false);
+  const lastSelRef = useRef<ReadonlySet<number> | null>(null);
 
   // Sync des refs à chaque render React (cheap — pas d'effet de bord)
   macrosRef.current = macros;
@@ -127,6 +136,7 @@ export function useRenderLoop({
   drawnPointsRef.current = drawnPoints;
   controlPointsRef.current = controlPoints;
   splineClosedRef.current = splineClosed;
+  cpSelectionRef.current = cpSelection;
 
   // Init scene — ne se déclenche qu'une seule fois (deps = [])
   // Les dimensions initiales sont lues directement depuis le container
@@ -199,6 +209,19 @@ export function useRenderLoop({
     scene.add(grid);
     const axes = new THREE.AxesHelper(3);
     scene.add(axes);
+
+    // Plan de travail du draw mode — grille translucide, pure visu :
+    // la "feuille" passe par l'origine, centrée sur le centroïde des
+    // CPs. Visible uniquement en drawMode (repère utile en Front/Side
+    // où la grille du sol n'existe pas).
+    const workPlane = new THREE.Group();
+    const wpGrid = new THREE.GridHelper(10, 10, 0x22d3ee, 0x16303e);
+    (wpGrid.material as THREE.Material).transparent = true;
+    (wpGrid.material as THREE.Material).opacity = 0.45;
+    workPlane.add(wpGrid);
+    workPlane.visible = false;
+    scene.add(workPlane);
+    workPlaneRef.current = workPlane;
 
     // OrbitControls
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -629,12 +652,14 @@ export function useRenderLoop({
         lastClosedRef.current = closed;
 
         // Marqueurs CP — rebuild quand le count change, sinon reposition.
+        // Deux matériaux partagés stockés en userData : cyan par défaut,
+        // orange pour les CPs sélectionnés (assignation par index).
         let cpGroup = scene.getObjectByName('__splineCps') as THREE.Group | undefined;
         if (cpGroup && cpGroup.children.length !== cps.length) {
-          cpGroup.children.forEach((m) => {
-            (m as THREE.Mesh).geometry.dispose();
-            ((m as THREE.Mesh).material as THREE.Material).dispose();
-          });
+          const ud = cpGroup.userData as { geom?: THREE.BufferGeometry; matBase?: THREE.Material; matSel?: THREE.Material };
+          ud.geom?.dispose();
+          ud.matBase?.dispose();
+          ud.matSel?.dispose();
           scene.remove(cpGroup);
           cpGroup = undefined;
         }
@@ -642,16 +667,20 @@ export function useRenderLoop({
           cpGroup = new THREE.Group();
           cpGroup.name = '__splineCps';
           const geom = new THREE.SphereGeometry(0.09, 12, 12);
-          const mat = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
-          for (let i = 0; i < cps.length; i++) cpGroup.add(new THREE.Mesh(geom, mat));
+          const matBase = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
+          const matSel = new THREE.MeshBasicMaterial({ color: 0xffa040 });
+          cpGroup.userData = { geom, matBase, matSel };
+          for (let i = 0; i < cps.length; i++) cpGroup.add(new THREE.Mesh(geom, matBase));
           scene.add(cpGroup);
         }
         if (cpGroup) {
+          const sel = cpSelectionRef.current;
           cps.forEach((p, i) => {
             const m = cpGroup!.children[i] as THREE.Mesh | undefined;
             if (m) {
               const [tx, ty, tz] = toThree(p[0], p[1], p[2]);
               m.position.set(tx, ty, tz);
+              m.material = sel.has(i) ? cpGroup!.userData.matSel : cpGroup!.userData.matBase;
             }
           });
         }
@@ -674,6 +703,54 @@ export function useRenderLoop({
           const line = new THREE.Line(geom, mat);
           line.name = '__splinePreview';
           scene.add(line);
+        }
+      }
+
+      // Highlight sélection hors rebuild — la sélection change sans que
+      // les CPs bougent (marquee, shift+clic) : recolor seul, pas de
+      // rebuild de la preview. La Set est recréée à chaque mutation.
+      const sel = cpSelectionRef.current;
+      if (lastSelRef.current !== sel) {
+        lastSelRef.current = sel;
+        // Si cpsDirty a déjà tourné cette frame, les matériaux sont à
+        // jour (le bloc ci-dessus assigne sel.has(i)) — sinon recolor.
+        const grp = scene.getObjectByName('__splineCps') as THREE.Group | undefined;
+        if (grp && !cpsDirty) {
+          grp.children.forEach((m, i) => {
+            (m as THREE.Mesh).material = sel.has(i) ? grp.userData.matSel : grp.userData.matBase;
+          });
+        }
+      }
+
+      // Plan de travail — "feuille" passant par l'origine, orientée
+      // selon la vue, centrée sur le centroïde des CPs (origine sinon).
+      // Epsilon sur la normale pour éviter le z-fighting avec la grille
+      // du sol en vue top. Visible uniquement en drawMode.
+      const wp = workPlaneRef.current;
+      if (wp) {
+        const dw = storeState.drawMode;
+        wp.visible = dw;
+        if (dw) {
+          const v = storeState.drawView;
+          let ax = 0, ay = 0, az = 0;
+          if (cps.length > 0) {
+            for (const p of cps) {
+              const [tx, ty, tz] = toThree(p[0], p[1], p[2]);
+              ax += tx; ay += ty; az += tz;
+            }
+            ax /= cps.length; ay /= cps.length; az /= cps.length;
+          }
+          const eps = 0.001;
+          wp.rotation.set(0, 0, 0);
+          if (v === 'front') {
+            wp.rotation.x = Math.PI / 2; // grille → plan XY (normale three z)
+            wp.position.set(ax, ay, eps);
+          } else if (v === 'side') {
+            wp.rotation.z = Math.PI / 2; // grille → plan YZ (normale three x)
+            wp.position.set(eps, ay, az);
+          } else {
+            wp.position.set(ax, eps, az); // top/free — normale three y
+          }
         }
       }
 

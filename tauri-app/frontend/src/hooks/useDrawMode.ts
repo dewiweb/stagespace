@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { useGraphStore } from '../store/useGraphStore';
 import { fromThree, toThree } from '../utils/coords';
-import { moveCp, deleteCp, insertCpAtU, nearestU, type DrawView } from '../utils/splineCore';
+import { deleteCp, insertCpAtU, nearestU, type DrawView, type Vec3 } from '../utils/splineCore';
 
 interface UseDrawModeParams {
   cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>;
@@ -14,7 +14,13 @@ interface UseDrawModeParams {
 /** Seuil de hit CP en pixels — cohérent avec la proximité objet (~40px). */
 const CP_HIT_PX = 24;
 
-/** Plan de dessin Three.js par vue — drawZ = offset le long de la normale. */
+/** Dead-zone du marquee (px) — distingue clic à vide (désélection) du
+ * drag à vide (rectangle de sélection). */
+const MARQUEE_PX = 4;
+
+/** Plan de dessin Three.js par vue — la feuille passe par l'origine :
+ * la 3e coordonnée s'ajuste depuis les vues d'élévation, pas via un
+ * offset parallèle (paramètre retiré — redondant avec Front/Side). */
 function drawPlane(view: DrawView, offset: number): THREE.Plane {
   switch (view) {
     case 'front':
@@ -44,17 +50,26 @@ interface SavedCam {
  * Trois outils (drawModeSlice.splineTool) :
  * - `freehand` : drag = stroke brut → pointerup fit en CPs → bascule `edit`
  * - `place`    : clic = ajout de point de contrôle
- * - `edit`     : drag CP / clic-droit CP = delete / double-clic = insert
+ * - `edit`     : drag CP (= drag de la sélection) / Shift+clic CP =
+ *   toggle sélection / drag à vide = marquee / clic-droit CP = delete /
+ *   double-clic = insert
  * Le commit (écriture dans le node) est explicité par le bouton Done.
  */
 export function useDrawMode({ cameraRef, containerRef, controlsRef }: UseDrawModeParams) {
   const drawCanvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
+  // Anchor CP du group-drag + flag "a réellement bougé" (le clic sur un
+  // membre sans mouvement collapse la sélection à ce seul CP au release).
   const draggingCpRef = useRef<number | null>(null);
+  const cpDragMovedRef = useRef(false);
+  // Marquee (edit, drag à vide) : {x,y,shift} = pos de départ ; le flag
+  // active s'arme au-delà de la dead-zone. Le div DOM est muté direct.
+  const marqueeRef = useRef<{ x: number; y: number; shift: boolean } | null>(null);
+  const marqueeActiveRef = useRef(false);
+  const marqueeDivRef = useRef<HTMLDivElement | null>(null);
   const savedCamRef = useRef<SavedCam | null>(null);
 
   const drawMode = useGraphStore((s) => s.drawMode);
-  const drawZ = useGraphStore((s) => s.drawZ);
   const drawView = useGraphStore((s) => s.drawView);
 
   // ── Vues fixées : snap caméra + verrou rotation + restore à la sortie ──
@@ -118,7 +133,7 @@ export function useDrawMode({ cameraRef, containerRef, controlsRef }: UseDrawMod
       const raycaster = new THREE.Raycaster();
       raycaster.setFromCamera(ndc, camera);
 
-      const plane = drawPlane(useGraphStore.getState().drawView, drawZ);
+      const plane = drawPlane(useGraphStore.getState().drawView, 0);
       const intersection = new THREE.Vector3();
       if (raycaster.ray.intersectPlane(plane, intersection)) {
         // Convertir Three.js (x, y=up, z=depth) → backend (x, y=depth, z=up)
@@ -126,30 +141,40 @@ export function useDrawMode({ cameraRef, containerRef, controlsRef }: UseDrawMod
       }
       return null;
     },
-    [drawZ, cameraRef, containerRef],
+    [cameraRef, containerRef],
   );
 
-  // Index du CP le plus proche du curseur (< CP_HIT_PX écran) — projection
-  // world→NDC→pixels, pas de raycast : les CPs sont des positions connues.
+  // Projection world→pixels de tous les CPs — base commune du hit-test
+  // et du marquee (pas de raycast : les CPs sont des positions connues).
+  const cpScreenPositions = useCallback((): Array<{ x: number; y: number }> => {
+    const camera = cameraRef.current;
+    const container = containerRef.current;
+    const cps = useGraphStore.getState().controlPoints;
+    if (!camera || !container || cps.length === 0) return [];
+
+    const rect = container.getBoundingClientRect();
+    const v = new THREE.Vector3();
+    return cps.map((p) => {
+      const [tx, ty, tz] = toThree(p[0], p[1], p[2]);
+      v.set(tx, ty, tz).project(camera);
+      return { x: ((v.x + 1) / 2) * rect.width, y: ((1 - v.y) / 2) * rect.height };
+    });
+  }, [cameraRef, containerRef]);
+
+  // Index du CP le plus proche du curseur (< CP_HIT_PX écran).
   const cpIndexAt = useCallback(
     (screenX: number, screenY: number): number | null => {
-      const camera = cameraRef.current;
       const container = containerRef.current;
-      const cps = useGraphStore.getState().controlPoints;
-      if (!camera || !container || cps.length === 0) return null;
+      const positions = cpScreenPositions();
+      if (!container || positions.length === 0) return null;
 
       const rect = container.getBoundingClientRect();
       const px = screenX - rect.left;
       const py = screenY - rect.top;
-      const v = new THREE.Vector3();
       let best: number | null = null;
       let bestD = CP_HIT_PX;
-      for (let i = 0; i < cps.length; i++) {
-        const [tx, ty, tz] = toThree(cps[i][0], cps[i][1], cps[i][2]);
-        v.set(tx, ty, tz).project(camera);
-        const cx = ((v.x + 1) / 2) * rect.width;
-        const cy = ((1 - v.y) / 2) * rect.height;
-        const d = Math.hypot(cx - px, cy - py);
+      for (let i = 0; i < positions.length; i++) {
+        const d = Math.hypot(positions[i].x - px, positions[i].y - py);
         if (d < bestD) {
           bestD = d;
           best = i;
@@ -157,7 +182,7 @@ export function useDrawMode({ cameraRef, containerRef, controlsRef }: UseDrawMod
       }
       return best;
     },
-    [cameraRef, containerRef],
+    [containerRef, cpScreenPositions],
   );
 
   const handleDrawStart = useCallback(
@@ -184,8 +209,23 @@ export function useDrawMode({ cameraRef, containerRef, controlsRef }: UseDrawMod
       if (st.splineTool === 'edit') {
         const idx = cpIndexAt(e.clientX, e.clientY);
         if (idx !== null) {
+          if (e.shiftKey) {
+            st.toggleCpSelection(idx); // Shift+clic CP = toggle, pas de drag
+            return;
+          }
+          // Le CP draggé doit faire partie de la sélection — sinon elle
+          // devient {idx} (convention éditeurs vectoriels). Clic sur un
+          // membre sans bouger = collapse au release (voir handleDrawEnd).
+          if (!st.cpSelection.has(idx)) st.setCpSelection(new Set([idx]));
           st.pushCpSnapshot(); // un seul snapshot pour tout le drag
           draggingCpRef.current = idx;
+          cpDragMovedRef.current = false;
+          (e.target as HTMLElement).setPointerCapture(e.pointerId);
+        } else {
+          // Drag à vide = marquee de sélection ; dead-zone pour
+          // distinguer le clic (désélection) du rectangle.
+          marqueeRef.current = { x: e.clientX, y: e.clientY, shift: e.shiftKey };
+          marqueeActiveRef.current = false;
           (e.target as HTMLElement).setPointerCapture(e.pointerId);
         }
         return;
@@ -205,11 +245,33 @@ export function useDrawMode({ cameraRef, containerRef, controlsRef }: UseDrawMod
       if (!drawMode) return;
       const st = useGraphStore.getState();
 
-      // Drag d'un CP en mode edit — conventions CAD :
-      // - la coordonnée normale au plan de la vue est PRÉSERVÉE (drag en
-      //   Top ne casse pas la hauteur z du point)
-      // - Shift maintenu = contrainte verticale seule (Front/Side : z ;
-      //   Top/Free : y) — édition de hauteur par point
+      // Marquee : drag à vide en edit = rectangle de sélection. Armé
+      // après dead-zone ; le div DOM est muté direct (pas de re-render).
+      if (marqueeRef.current) {
+        const m = marqueeRef.current;
+        if (!marqueeActiveRef.current) {
+          if (Math.hypot(e.clientX - m.x, e.clientY - m.y) < MARQUEE_PX) return;
+          marqueeActiveRef.current = true;
+        }
+        const div = marqueeDivRef.current;
+        const container = containerRef.current;
+        if (div && container) {
+          const rect = container.getBoundingClientRect();
+          div.style.display = 'block';
+          div.style.left = `${Math.min(m.x, e.clientX) - rect.left}px`;
+          div.style.top = `${Math.min(m.y, e.clientY) - rect.top}px`;
+          div.style.width = `${Math.abs(e.clientX - m.x)}px`;
+          div.style.height = `${Math.abs(e.clientY - m.y)}px`;
+        }
+        return;
+      }
+
+      // Drag d'un CP en mode edit = drag de la SÉLECTION — conventions
+      // éditeurs vectoriels + préservation de la coordonnée normale :
+      // - le delta est calculé sur l'ancre (réponse 1:1 sous le curseur)
+      // - la coordonnée normale au plan est préservée (drag en Top ne
+      //   casse pas la hauteur z des points)
+      // - Shift = contrainte verticale (Front/Side : z ; Top/Free : y)
       const cpIdx = draggingCpRef.current;
       if (cpIdx !== null) {
         const world = screenToWorld(e.clientX, e.clientY);
@@ -217,7 +279,7 @@ export function useDrawMode({ cameraRef, containerRef, controlsRef }: UseDrawMod
         const cur = st.controlPoints[cpIdx];
         if (!cur) return;
         const v = st.drawView;
-        let next: [number, number, number];
+        let next: Vec3;
         if (e.shiftKey) {
           next = v === 'front' || v === 'side'
             ? [cur[0], cur[1], world[2]]
@@ -227,7 +289,10 @@ export function useDrawMode({ cameraRef, containerRef, controlsRef }: UseDrawMod
             : v === 'side' ? [cur[0], world[1], world[2]]
             : [world[0], world[1], cur[2]];
         }
-        st.setControlPoints(moveCp(st.controlPoints, cpIdx, next), false);
+        const delta: Vec3 = [next[0] - cur[0], next[1] - cur[1], next[2] - cur[2]];
+        if (delta[0] || delta[1] || delta[2]) cpDragMovedRef.current = true;
+        const sel = st.cpSelection.size > 0 ? st.cpSelection : new Set([cpIdx]);
+        st.translateCps(sel, delta);
         return;
       }
 
@@ -253,13 +318,47 @@ export function useDrawMode({ cameraRef, containerRef, controlsRef }: UseDrawMod
   const handleDrawEnd = useCallback(
     (e: React.PointerEvent) => {
       if (!drawMode) return;
+      const st = useGraphStore.getState();
       try {
         (e.target as HTMLElement).releasePointerCapture(e.pointerId);
       } catch {
         // capture déjà relâchée (sortie de canvas, unmount) — pas bloquant
       }
+      if (marqueeRef.current) {
+        const m = marqueeRef.current;
+        marqueeRef.current = null;
+        const div = marqueeDivRef.current;
+        if (div) div.style.display = 'none';
+        if (marqueeActiveRef.current) {
+          marqueeActiveRef.current = false;
+          // Rectangle fermé : CPs dont la projection tombe dedans.
+          // Shift au départ = union avec la sélection existante.
+          const container = containerRef.current;
+          if (container) {
+            const rect = container.getBoundingClientRect();
+            const x0 = Math.min(m.x, e.clientX) - rect.left;
+            const x1 = Math.max(m.x, e.clientX) - rect.left;
+            const y0 = Math.min(m.y, e.clientY) - rect.top;
+            const y1 = Math.max(m.y, e.clientY) - rect.top;
+            const inside = new Set<number>();
+            cpScreenPositions().forEach((p, i) => {
+              if (p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1) inside.add(i);
+            });
+            st.setCpSelection(m.shift ? new Set([...st.cpSelection, ...inside]) : inside);
+          }
+        } else if (!m.shift) {
+          st.setCpSelection(new Set()); // clic à vide = désélection (CAD)
+        }
+        return;
+      }
       if (draggingCpRef.current !== null) {
+        const anchor = draggingCpRef.current;
         draggingCpRef.current = null;
+        // Clic sur un membre sans bouger = collapse la sélection à ce
+        // seul CP (le drag l'aurait déplacée) — convention éditeurs.
+        if (!cpDragMovedRef.current && !e.shiftKey) {
+          st.setCpSelection(new Set([anchor]));
+        }
         return;
       }
       if (!isDrawing) return;
@@ -267,7 +366,7 @@ export function useDrawMode({ cameraRef, containerRef, controlsRef }: UseDrawMod
       // Le stroke devient un jeu de CPs éditable — commit explicite via Done.
       useGraphStore.getState().commitStroke();
     },
-    [drawMode, isDrawing],
+    [drawMode, isDrawing, cpScreenPositions, containerRef],
   );
 
   // Double-clic en mode edit = insertion d'un CP sur la courbe au point
@@ -285,9 +384,16 @@ export function useDrawMode({ cameraRef, containerRef, controlsRef }: UseDrawMod
     [drawMode, screenToWorld],
   );
 
+  // Sortie du mode : cacher le div marquee s'il restait affiché (sortie
+  // pendant un drag annulé — pointercancel couvre le reste).
+  useEffect(() => {
+    if (!drawMode && marqueeDivRef.current) marqueeDivRef.current.style.display = 'none';
+  }, [drawMode]);
+
   return {
     isDrawing,
     drawCanvasRef,
+    marqueeDivRef,
     handleDrawStart,
     handleDrawMove,
     handleDrawEnd,
