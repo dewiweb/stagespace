@@ -81,8 +81,9 @@ export const DrawModeOverlay: React.FC = () => {
 
   return (
     <>
-      {/* Barre studio */}
-      <div className="absolute top-2 left-2 z-overlay bg-gray-900/80 backdrop-blur rounded-lg p-2 border border-orange-600/50 flex flex-col gap-1.5 max-w-[320px]">
+      {/* Barre studio — bas-gauche au-dessus des ModeButtons (top-left est
+         déjà pris par le panneau DEBUG PERF quand il est ouvert). */}
+      <div className="absolute bottom-16 left-2 z-overlay bg-gray-900/80 backdrop-blur rounded-lg p-2 border border-orange-600/50 flex flex-col gap-1.5 max-w-[320px]">
         {/* Outils */}
         <div className="flex items-center gap-1 flex-wrap">
           {toolBtn('freehand', 'Draw', <Pencil size={11} />, 'Freehand stroke → fitted control points')}
