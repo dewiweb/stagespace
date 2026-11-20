@@ -205,11 +205,29 @@ export function useDrawMode({ cameraRef, containerRef, controlsRef }: UseDrawMod
       if (!drawMode) return;
       const st = useGraphStore.getState();
 
-      // Drag d'un CP en mode edit
+      // Drag d'un CP en mode edit — conventions CAD :
+      // - la coordonnée normale au plan de la vue est PRÉSERVÉE (drag en
+      //   Top ne casse pas la hauteur z du point)
+      // - Shift maintenu = contrainte verticale seule (Front/Side : z ;
+      //   Top/Free : y) — édition de hauteur par point
       const cpIdx = draggingCpRef.current;
       if (cpIdx !== null) {
         const world = screenToWorld(e.clientX, e.clientY);
-        if (world) st.setControlPoints(moveCp(st.controlPoints, cpIdx, world), false);
+        if (!world) return;
+        const cur = st.controlPoints[cpIdx];
+        if (!cur) return;
+        const v = st.drawView;
+        let next: [number, number, number];
+        if (e.shiftKey) {
+          next = v === 'front' || v === 'side'
+            ? [cur[0], cur[1], world[2]]
+            : [cur[0], world[1], cur[2]];
+        } else {
+          next = v === 'front' ? [world[0], cur[1], world[2]]
+            : v === 'side' ? [cur[0], world[1], world[2]]
+            : [world[0], world[1], cur[2]];
+        }
+        st.setControlPoints(moveCp(st.controlPoints, cpIdx, next), false);
         return;
       }
 

@@ -48,7 +48,13 @@ export interface DrawModeSlice {
   // Snapshot undo sans toucher aux CPs — à appeler au début d'un drag.
   pushCpSnapshot: () => void;
   // Charge un jeu de CPs primitif (history + sélection aucune).
+  // Les CPs sont recentrés sur l'origine des tracks sélectionnées —
+  // même ancre que finalizeDrawing (les formes naissent là où sont les objets).
   loadPrimitive: (cps: Vec3[], closed: boolean) => void;
+  // Recharge le premier node DrawSpline (points+closed) dans l'éditeur :
+  // les points stockés sont relatifs à l'origine → on les remet en absolu
+  // (finalize les re-soustraira) — idempotent si l'origine n'a pas bougé.
+  loadFromNode: () => string | null;
   clearSpline: () => void;
 }
 
@@ -137,13 +143,47 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
         : s.cpHistory,
     })),
   loadPrimitive: (cps, closed) =>
-    set((s) => ({
-      controlPoints: cps,
+    set((s) => {
+      const trackIds = Array.from(s.selectedTrackIds);
+      const trackIndices = computeTrackIndices(trackIds, s.holProject, s.manualOscIds);
+      const o = computeCentroid(s.holProject, trackIndices, s.manualOscIds);
+      return {
+        controlPoints: cps.map((p) => [p[0] + o[0], p[1] + o[1], p[2] + o[2]] as Vec3),
+        splineClosed: closed,
+        drawnPoints: [],
+        cpHistory: [...s.cpHistory, { cps: s.controlPoints, closed: s.splineClosed }].slice(-CP_HISTORY_MAX),
+        splineTool: 'edit' as SplineTool,
+      };
+    }),
+  loadFromNode: () => {
+    const s = get();
+    const node = s.nodes.find((n) => n.data.type === 'DrawSpline');
+    if (!node) return null;
+    const raw = node.data.params?.points;
+    let arr: unknown;
+    try {
+      arr = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch {
+      return null;
+    }
+    if (!Array.isArray(arr)) return null;
+    const rel = arr
+      .filter((p): p is number[] => Array.isArray(p) && p.length >= 3)
+      .map((p) => [+p[0], +p[1], +p[2]] as Vec3);
+    if (rel.length < 2) return null;
+    const trackIds = Array.from(s.selectedTrackIds);
+    const trackIndices = computeTrackIndices(trackIds, s.holProject, s.manualOscIds);
+    const o = computeCentroid(s.holProject, trackIndices, s.manualOscIds);
+    const closed = node.data.params?.closed === true;
+    set({
+      controlPoints: rel.map((p) => [p[0] + o[0], p[1] + o[1], p[2] + o[2]] as Vec3),
       splineClosed: closed,
       drawnPoints: [],
-      cpHistory: [...s.cpHistory, { cps: s.controlPoints, closed: s.splineClosed }].slice(-CP_HISTORY_MAX),
       splineTool: 'edit' as SplineTool,
-    })),
+      cpHistory: [...s.cpHistory, { cps: s.controlPoints, closed: s.splineClosed }].slice(-CP_HISTORY_MAX),
+    });
+    return node.id;
+  },
   clearSpline: () => set({ controlPoints: [], cpHistory: [], drawnPoints: [], splineClosed: false }),
 
   finalizeDrawing: async () => {

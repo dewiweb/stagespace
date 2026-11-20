@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pencil, MousePointerClick, Spline, Undo2, Circle, Infinity as InfinityIcon, Minus, Trash2, Box } from 'lucide-react';
+import { Pencil, MousePointerClick, Spline, Undo2, Circle, Infinity as InfinityIcon, Minus, Trash2, Box, FolderOpen } from 'lucide-react';
 import { useGraphStore } from '../../store/useGraphStore';
 import Slider from '../ui/Slider';
 import { primCircle, primEllipse, primLemniscate, primLine, primArc, remapCps, type DrawView, type Vec3 } from '../../utils/splineCore';
@@ -29,7 +29,9 @@ export const DrawModeOverlay: React.FC = () => {
   const cpHistory = useGraphStore((s) => s.cpHistory);
   const cpUndo = useGraphStore((s) => s.cpUndo);
   const loadPrimitive = useGraphStore((s) => s.loadPrimitive);
+  const loadFromNode = useGraphStore((s) => s.loadFromNode);
   const clearSpline = useGraphStore((s) => s.clearSpline);
+  const hasDrawSpline = useGraphStore((s) => s.nodes.some((n) => n.data.type === 'DrawSpline'));
 
   const toolBtn = (tool: SplineTool, label: string, icon: React.ReactNode, title: string) => (
     <button
@@ -76,7 +78,7 @@ export const DrawModeOverlay: React.FC = () => {
   const toolHint: Record<SplineTool, string> = {
     freehand: 'Draw mode — click & drag; stroke becomes editable on release',
     place: 'Place mode — click to append control points',
-    edit: 'Edit mode — drag CP · right-click CP deletes · double-click inserts',
+    edit: 'Edit — drag CP · Shift+drag = height only · right-click deletes · double-click inserts',
   };
 
   return (
@@ -140,6 +142,14 @@ export const DrawModeOverlay: React.FC = () => {
             className="p-1 rounded bg-gray-700 text-gray-300 hover:bg-gray-600"
           >
             <Trash2 size={11} />
+          </button>
+          <button
+            title="Load control points from the first DrawSpline node"
+            disabled={!hasDrawSpline}
+            onClick={loadFromNode}
+            className="p-1 rounded bg-gray-700 text-gray-300 hover:bg-gray-600 disabled:opacity-40"
+          >
+            <FolderOpen size={11} />
           </button>
           <span className="text-gray-400 text-[10px] font-mono">{controlPoints.length} cp</span>
         </div>
