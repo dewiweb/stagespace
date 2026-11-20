@@ -30,8 +30,17 @@ type MacrosStore = MacrosSlice & {
   movements: MovementInfo[];
 };
 
+/// Valeurs neutres — source unique pour l'état initial et le reset
+/// (popover macros du viewer : bouton "Reset").
+export const MACRO_NEUTRAL: MacrosState = {
+  speed: 1.0, scale: 1.0,
+  shiftX: 0, shiftY: 0, shiftZ: 0,
+  yaw: 0, pitch: 0, roll: 0,
+  radius_scale: 1.0, height_offset: 0,
+};
+
 export const createMacrosSlice: StateCreator<MacrosStore, [], [], MacrosSlice> = (set, get) => ({
-  macros: { speed: 1.0, scale: 1.0, shiftX: 0, shiftY: 0, shiftZ: 0, yaw: 0, pitch: 0, roll: 0, radius_scale: 1.0, height_offset: 0 },
+  macros: { ...MACRO_NEUTRAL },
   setMacros: (partial) => set((s) => ({ macros: { ...s.macros, ...partial } })),
 
   pushMacrosToRuntime: async () => {
