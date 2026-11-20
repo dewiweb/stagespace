@@ -3,9 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { useGraphStore } from '../../store/useGraphStore';
-import { useMoveEditorStore } from '../../store/useMoveEditorStore';
 import { TriangleAlert } from 'lucide-react';
-import { DebugPerfOverlay } from './DebugPerfOverlay';
 import { debugPerf } from '../../utils/debugPerf';
 
 // Exposer debugPerf sur window pour le render loop et le listener IPC
@@ -69,7 +67,6 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   // subscription ici re-rendrait Scene3D ~30×/s pendant un drag d'objet.
   const manualOscIds = useGraphStore((s) => s.manualOscIds);
   const editingSlotId = useGraphStore((s) => s.editingSlotId);
-  const debugPerfVisible = useMoveEditorStore((s) => s.debugPerfVisible);
 
   // Determine object count — utilise le max entre:
   // - le node Objects du slot sélectionné
@@ -306,8 +303,6 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
           </div>
         </div>
       )}
-      {/* Debug perf overlay — top left, opt-in via le toggle de la barre canvas */}
-      {debugPerfVisible && <DebugPerfOverlay />}
       </div>
       {/* Status bar dockée — chips movements + inspect de l'objet sélectionné */}
       <ViewerStatusBar />

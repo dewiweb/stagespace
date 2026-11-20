@@ -40,10 +40,10 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({ isPlaying }) => {
   return (
     <div className="flex-shrink-0 bg-gray-900/95 border-b border-gray-700/60">
       {/* Row 1 : modes + outils contextuels + hint */}
-      <div className="flex items-center gap-2 px-2 py-1 flex-wrap">
+      <div className="flex items-center gap-2 px-1.5 py-1 flex-wrap">
         <ModeButtons />
         {(drawMode || manipulateMode || assignMode || zonePlaceMode || zoneEditMode) && (
-          <span className="w-px h-5 bg-gray-700" />
+          <span className="w-px h-4 bg-gray-700/70" />
         )}
         {drawMode && <DrawToolbarTools />}
         {manipulateMode && (
@@ -62,7 +62,7 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({ isPlaying }) => {
           </>
         )}
         <span className="flex-1" />
-        {hint && (
+        {hint && !drawMode && (
           <span className="text-orange-400/90 text-[10px] font-medium truncate max-w-[45%]">
             <span className={detached ? 'opacity-60' : ''}>{hint}</span>
           </span>
@@ -70,12 +70,21 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({ isPlaying }) => {
       </div>
       {/* Row 2 : options du spline studio / macros globales */}
       {drawMode && (
-        <div className="flex items-center gap-2 px-2 pb-1.5 flex-wrap">
+        <div className="flex items-center gap-2 px-1.5 pb-1 flex-nowrap overflow-hidden">
           <DrawToolbarOptions />
+          <span className="flex-1 min-w-2" />
+          {hint && (
+            <span
+              className="text-orange-400/90 text-[10px] font-medium truncate min-w-0 shrink"
+              title={hint}
+            >
+              {hint}
+            </span>
+          )}
         </div>
       )}
       {manipulateMode && (
-        <div className="px-2 pb-1.5">
+        <div className="px-1.5 pb-1">
           <MacrosSurface horizontal layout="row" live={movements.length > 0} includeRadius={false} />
         </div>
       )}

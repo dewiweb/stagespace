@@ -4,6 +4,7 @@ import { useGraphStore } from '../../store/useGraphStore';
 import Slider from '../ui/Slider';
 import { primCircle, primEllipse, primLemniscate, primLine, primArc, remapCps, type DrawView, type Vec3 } from '../../utils/splineCore';
 import type { SplineTool } from '../../store/slices/drawModeSlice';
+import { tbGroup, tbBtn, tbAction, tbIcon, tbSep, tbIdle } from './toolbarStyles';
 
 /**
  * Outils du spline studio — rendu INLINE dans la ViewerToolbar (plus
@@ -25,13 +26,11 @@ export const DrawToolbarTools: React.FC = () => {
   const toolBtn = (tool: SplineTool, label: string, icon: React.ReactNode, title: string) => (
     <button
       key={tool}
-      title={title}
+      title={`${label} — ${title}`}
       onClick={() => setSplineTool(tool)}
-      className={`px-1.5 py-0.5 text-xs rounded font-medium flex items-center gap-1 ${
-        splineTool === tool ? 'bg-orange-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-      }`}
+      className={`${tbBtn} ${splineTool === tool ? 'bg-orange-600 text-white' : tbIdle}`}
     >
-      {icon}{label}
+      {icon}
     </button>
   );
 
@@ -42,7 +41,7 @@ export const DrawToolbarTools: React.FC = () => {
       key={label}
       title={title}
       onClick={() => loadPrimitive(remapCps(mk(), drawView, drawZ), closed)}
-      className="px-1.5 py-0.5 text-xs rounded bg-gray-700 text-gray-300 hover:bg-gray-600 flex items-center gap-1"
+      className={`${tbBtn} ${tbIdle}`}
     >
       {icon}{label}
     </button>
@@ -50,32 +49,32 @@ export const DrawToolbarTools: React.FC = () => {
 
   return (
     <>
-      {toolBtn('freehand', 'Draw', <Pencil size={11} />, 'Freehand stroke → fitted control points')}
-      {toolBtn('place', 'Place', <MousePointerClick size={11} />, 'Click to place control points')}
-      {toolBtn('edit', 'Edit', <Spline size={11} />, 'Drag / delete / insert control points')}
-      <span className="w-px h-4 bg-gray-600" />
-      {primBtn('O', <Circle size={11} />, 'Circle primitive', () => primCircle(12, 1.5, drawZ), true)}
-      {primBtn('8', <InfinityIcon size={11} />, 'Lemniscate (figure-8) primitive', () => primLemniscate(16, 1.6, drawZ), true)}
-      {primBtn('—', <Minus size={11} />, 'Line primitive', () => primLine(-1.5, 0, 1.5, 0, drawZ), false)}
-      {primBtn('◠', <Spline size={11} />, 'Arc primitive', () => primArc(5, 1.8, Math.PI * 0.8, drawZ), false)}
-      {primBtn('⬭', <Circle size={11} />, 'Ellipse primitive', () => primEllipse(12, 2.0, 1.0, drawZ), true)}
-      <span className="w-px h-4 bg-gray-600" />
-      <span className="flex items-center gap-2 whitespace-nowrap">
-        <button
-          // Finalize AVANT de clearer — finalizeDrawing lit drawnPoints/CPs.
-          // (finalizeDrawing sort déjà du drawMode en cas de succès)
-          onClick={async () => { await finalizeDrawing(); clearDrawnPoints(); clearSpline(); setDrawMode(false); }}
-          className="px-2 py-0.5 text-xs bg-orange-600 hover:bg-orange-700 text-white rounded font-medium"
-        >
-          Done
-        </button>
-        <button
-          onClick={() => { clearDrawnPoints(); clearSpline(); setDrawMode(false); }}
-          className="px-2 py-0.5 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded font-medium"
-        >
-          Cancel
-        </button>
-      </span>
+      <div className={tbGroup}>
+        {toolBtn('freehand', 'Draw', <Pencil size={11} />, 'Freehand stroke → fitted control points')}
+        {toolBtn('place', 'Place', <MousePointerClick size={11} />, 'Click to place control points')}
+        {toolBtn('edit', 'Edit', <Spline size={11} />, 'Drag / delete / insert control points')}
+      </div>
+      <div className={tbGroup}>
+        {primBtn('O', <Circle size={11} />, 'Circle primitive', () => primCircle(12, 1.5, drawZ), true)}
+        {primBtn('8', <InfinityIcon size={11} />, 'Lemniscate (figure-8) primitive', () => primLemniscate(16, 1.6, drawZ), true)}
+        {primBtn('—', <Minus size={11} />, 'Line primitive', () => primLine(-1.5, 0, 1.5, 0, drawZ), false)}
+        {primBtn('◠', <Spline size={11} />, 'Arc primitive', () => primArc(5, 1.8, Math.PI * 0.8, drawZ), false)}
+        {primBtn('⬭', <Circle size={11} />, 'Ellipse primitive', () => primEllipse(12, 2.0, 1.0, drawZ), true)}
+      </div>
+      <button
+        // Finalize AVANT de clearer — finalizeDrawing lit drawnPoints/CPs.
+        // (finalizeDrawing sort déjà du drawMode en cas de succès)
+        onClick={async () => { await finalizeDrawing(); clearDrawnPoints(); clearSpline(); setDrawMode(false); }}
+        className={`${tbAction} bg-orange-600 hover:bg-orange-700 text-white`}
+      >
+        Done
+      </button>
+      <button
+        onClick={() => { clearDrawnPoints(); clearSpline(); setDrawMode(false); }}
+        className={`${tbAction} bg-gray-800/70 border border-gray-700/70 hover:bg-gray-700 text-gray-300`}
+      >
+        Cancel
+      </button>
     </>
   );
 };
@@ -104,9 +103,7 @@ export const DrawToolbarOptions: React.FC = () => {
       key={v}
       title={`${label} view`}
       onClick={() => setDrawView(v)}
-      className={`px-1.5 py-0.5 text-xs rounded font-medium ${
-        drawView === v ? 'bg-cyan-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-      }`}
+      className={`${tbBtn} ${drawView === v ? 'bg-cyan-600 text-white' : tbIdle}`}
     >
       {label}
     </button>
@@ -114,13 +111,14 @@ export const DrawToolbarOptions: React.FC = () => {
 
   return (
     <>
-      <Box size={11} className="text-cyan-400" />
-      {viewBtn('free', 'Free')}
-      {viewBtn('top', 'Top')}
-      {viewBtn('front', 'Front')}
-      {viewBtn('side', 'Side')}
-      <span className="w-px h-4 bg-gray-600" />
-      <label className="flex items-center gap-1 text-xs text-gray-300 cursor-pointer">
+      <div className={tbGroup}>
+        <span className="h-6 px-1.5 flex items-center text-cyan-400" title="Working plane"><Box size={11} /></span>
+        {viewBtn('free', 'Free')}
+        {viewBtn('top', 'Top')}
+        {viewBtn('front', 'Front')}
+        {viewBtn('side', 'Side')}
+      </div>
+      <label className="flex items-center gap-1 text-[11px] text-gray-300 cursor-pointer h-6">
         <input
           type="checkbox"
           checked={splineClosed}
@@ -129,41 +127,35 @@ export const DrawToolbarOptions: React.FC = () => {
         />
         Closed
       </label>
-      <span className="text-orange-400 text-xs font-mono">{offsetAxis[drawView]}</span>
+      <span className={tbSep} />
+      <span className="text-orange-400 text-[10px] font-mono" title="Offset on the axis normal to the view plane">{offsetAxis[drawView]}</span>
       <Slider
         layout="bare" min={-3} max={3} step={0.1} value={drawZ}
         onChange={setDrawZ} accent="orange" className="w-16"
       />
-      <span className="text-white text-xs font-mono w-7">{drawZ.toFixed(1)}</span>
-      <span className="text-cyan-400 text-xs font-mono">sm</span>
+      <span className="text-white text-[10px] font-mono w-7">{drawZ.toFixed(1)}</span>
+      <span className={tbSep} />
+      <span className="text-cyan-400 text-[10px] font-mono" title="Stroke fitting aggressiveness">sm</span>
       <Slider
         layout="bare" min={0} max={1} step={0.05} value={smoothing}
         onChange={setSmoothing} accent="cyan" className="w-14"
       />
-      <button
-        title="Undo last edit"
-        disabled={cpHistory.length === 0}
-        onClick={cpUndo}
-        className="p-1 rounded bg-gray-700 text-gray-300 hover:bg-gray-600 disabled:opacity-40"
-      >
+      <span className={tbSep} />
+      <button title="Undo last edit" disabled={cpHistory.length === 0} onClick={cpUndo} className={tbIcon}>
         <Undo2 size={11} />
       </button>
-      <button
-        title="Clear control points"
-        onClick={clearSpline}
-        className="p-1 rounded bg-gray-700 text-gray-300 hover:bg-gray-600"
-      >
+      <button title="Clear control points" onClick={clearSpline} className={tbIcon}>
         <Trash2 size={11} />
       </button>
       <button
         title="Load control points from the first DrawSpline node"
         disabled={!hasDrawSpline}
         onClick={loadFromNode}
-        className="p-1 rounded bg-gray-700 text-gray-300 hover:bg-gray-600 disabled:opacity-40"
+        className={tbIcon}
       >
         <FolderOpen size={11} />
       </button>
-      <span className="text-gray-400 text-[10px] font-mono">{controlPoints.length} cp</span>
+      <span className="text-gray-500 text-[10px] font-mono whitespace-nowrap">{controlPoints.length} cp</span>
     </>
   );
 };
