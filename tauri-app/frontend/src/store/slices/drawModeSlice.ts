@@ -102,7 +102,23 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
     }
   },
   drawZ: 0,
-  setDrawZ: (z) => set({ drawZ: z }),
+  setDrawZ: (z) => {
+    const s = get();
+    const d = z - s.drawZ;
+    set({ drawZ: z });
+    if (d === 0) return;
+    // Le plan de travail emporte le brouillon : translate CPs + stroke
+    // le long de la normale de la vue (Top/Free→z, Front→y, Side→x).
+    // Sans ça le slider ne faisait rien de visible — write-only.
+    const axis = s.drawView === 'front' ? 1 : s.drawView === 'side' ? 0 : 2;
+    const shift = (p: Vec3) => {
+      const q = [p[0], p[1], p[2]] as Vec3;
+      q[axis] += d;
+      return q;
+    };
+    if (s.controlPoints.length > 0) s.setControlPoints(s.controlPoints.map(shift), true);
+    if (s.drawnPoints.length > 0) set({ drawnPoints: s.drawnPoints.map(shift) });
+  },
   drawnPoints: [],
   addDrawnPoint: (p) => set((s) => ({ drawnPoints: [...s.drawnPoints, p] })),
   clearDrawnPoints: () => set({ drawnPoints: [] }),

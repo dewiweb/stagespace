@@ -25,6 +25,30 @@ describe('setDrawZ', () => {
     useGraphStore.getState().setDrawZ(5.5);
     expect((useGraphStore.getState() as any).drawZ).toBe(5.5);
   });
+
+  it('translates the draft along the view normal (Top → z)', () => {
+    useGraphStore.setState({
+      drawZ: 1,
+      drawView: 'top',
+      controlPoints: [[0, 0, 0], [1, 0, 0.5]],
+      drawnPoints: [[2, 2, 1]],
+    } as any);
+    useGraphStore.getState().setDrawZ(1.5);
+    const s = useGraphStore.getState();
+    expect(s.controlPoints[0]).toEqual([0, 0, 0.5]);
+    expect(s.controlPoints[1]).toEqual([1, 0, 1]);
+    expect(s.drawnPoints[0]).toEqual([2, 2, 1.5]);
+    expect(s.cpHistory.length).toBe(1); // undo armé
+  });
+
+  it('translates on the view normal axis (Front → y, Side → x)', () => {
+    useGraphStore.setState({ drawZ: 0, drawView: 'front', controlPoints: [[0, 0, 0]] } as any);
+    useGraphStore.getState().setDrawZ(2);
+    expect(useGraphStore.getState().controlPoints[0]).toEqual([0, 2, 0]);
+    useGraphStore.setState({ drawZ: 0, drawView: 'side', controlPoints: [[0, 0, 0]] } as any);
+    useGraphStore.getState().setDrawZ(-1);
+    expect(useGraphStore.getState().controlPoints[0]).toEqual([-1, 0, 0]);
+  });
 });
 
 describe('addDrawnPoint', () => {

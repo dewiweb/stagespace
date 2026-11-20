@@ -87,8 +87,6 @@ export const DrawToolbarOptions: React.FC = () => {
   const controlPoints = useGraphStore((s) => s.controlPoints);
   const splineClosed = useGraphStore((s) => s.splineClosed);
   const setSplineClosed = useGraphStore((s) => s.setSplineClosed);
-  const smoothing = useGraphStore((s) => s.smoothing);
-  const setSmoothing = useGraphStore((s) => s.setSmoothing);
   const cpHistory = useGraphStore((s) => s.cpHistory);
   const cpUndo = useGraphStore((s) => s.cpUndo);
   const loadFromNode = useGraphStore((s) => s.loadFromNode);
@@ -136,18 +134,12 @@ export const DrawToolbarOptions: React.FC = () => {
         Closed
       </label>
       <span className={tbSep} />
-      <span className="text-orange-400 text-[10px] font-mono" title="Offset on the axis normal to the view plane">{offsetAxis[drawView]}</span>
+      <span className="text-orange-400 text-[10px] font-mono" title="Work-plane offset on the view normal — also moves the current draft">{offsetAxis[drawView]}</span>
       <Slider
         layout="bare" min={-3} max={3} step={0.1} value={drawZ}
         onChange={setDrawZ} accent="orange" className="w-16"
       />
       <span className="text-white text-[10px] font-mono w-7">{drawZ.toFixed(1)}</span>
-      <span className={tbSep} />
-      <span className="text-cyan-400 text-[10px] font-mono" title="Stroke fitting aggressiveness">sm</span>
-      <Slider
-        layout="bare" min={0} max={1} step={0.05} value={smoothing}
-        onChange={setSmoothing} accent="cyan" className="w-14"
-      />
       <span className={tbSep} />
       <button title="Undo last edit" disabled={cpHistory.length === 0} onClick={cpUndo} className={tbIcon}>
         <Undo2 size={11} />
