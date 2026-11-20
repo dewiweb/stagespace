@@ -216,3 +216,50 @@ solo/unsolo, cue/arm+go.
    nom unique + isPreview (testé ×1 et ×2 moves).
 10. **Log panic dédupé** — N rejections reset → 1 ligne agrégée ; le
     "flood" était l'artefact collecteur MCP.
+
+## Passe visuelle UX (screenshots live, 1600×950)
+
+**Lisible / validé** : 3 surfaces aux vocations distinctes et cohérentes
+(Atelier = construction, Conduite = conduite de cues gros boutons NOW/NEXT,
+Jeu = pads busking + radar) ; état live toujours visible (badge 1 LIVE,
+moves live, perf status bar réelle) ; toasts d'erreur parlants
+("OSC destination unreachable — nothing is listening on :9000") ; hint
+profil spatializer utile ("holophonix sends: gain — other channels
+produce silence").
+
+**Points d'amélioration UX notés** :
+- Radar Jeu : cluster minuscule au centre (pas d'auto-zoom sur le rayon
+  du champ) — peu exploité quand les objets orbitent à ~2m dans une vue 5m.
+- Pad "hold=bump" : jargon non explicité pour l'opérateur.
+- Panneau FX : plusieurs inputs sans label visible (0,0,0 / 2 / 0.1 / 0.5),
+  labels tronqués (`spread (no`, `obj (al`, `min (-`) — formulaire dense.
+- Badge NOW sur layer Spline Path ambigu alors qu'1 seul move joue.
+
+## Session 3 — campagne UI élément par élément (réel)
+
+**Toolbar Atelier** : surfaces ×3 (tooltips descriptifs), Expert toggle,
+undo/redo présents, save/load .hfg présents, LIVE→`get_osc_armed`
+true→false→true réel, `?`→cheatsheet, PANIC→0 moves + log agrégé,
+Esc ferme le modal SANS paniquer (priorité modal correcte).
+
+**Onglets SHOW** : Moves / Cues / FX / Score / Log — tous rendent leur
+propre panneau. (Faux positif initial = mauvais sélecteur de test.)
+
+**Canvas** : palette Select/Manipulate/Assign/Draw — Draw désactivé à
+juste titre sans node dessinable ; footer contextuel par mode ;
+Manipulate drag déjà prouvé E2E ; **Assign : mode actif + hint footer,
+mais le pick d'objet n'a pas été déclenché en synthétique — à confirmer
+à la main (cible de clic potentiellement petite)**.
+
+**Macros sliders** : Speed 1→2.5 → drift ×~5 réel. **Cues** : ARM toggle,
+dblclick recall (respawn réel), store OK. **FX** : zone via formulaire
+UI → `list_zones` backend ; modulation → `list_channel_modulations`.
+
+**Conduite** : CUE GO / Prev / Next → recalls réels ; CONSOLE présent.
+**Jeu** : STOP ALL → 0 moves ; pad tap relance (pointer events requis) ;
+ATTN = release désactivé sans stase (correct) ; SPATIAL k=0.5 compresse
+réellement le champ (1.47 vs 2.0). Settings modal complet.
+
+**À noter** : pads réagissent au pointerdown, pas au click simple —
+cohérent tactile mais à savoir ; bottom chips Jeu (Params/Playback/
+Tracks/Audio/OSC IN/Global) visibles, non détaillées.
