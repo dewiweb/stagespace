@@ -1,7 +1,7 @@
 import React from 'react';
 
 /// Slider partagé — remplace les ~6 implémentations locales
-/// (Inspector, MacrosPanel, MovesTable, MacroControls, DrawModeOverlay).
+/// (Inspector, macros, MovesTable, MacroControls, DrawToolbar).
 ///
 /// layout:
 ///  - 'row'    : label à gauche (w-16), range, valeur à droite — panels

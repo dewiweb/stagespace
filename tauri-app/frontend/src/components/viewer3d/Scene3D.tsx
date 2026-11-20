@@ -5,18 +5,15 @@ import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { useGraphStore } from '../../store/useGraphStore';
 import { useMoveEditorStore } from '../../store/useMoveEditorStore';
 import { TriangleAlert } from 'lucide-react';
-import { MacrosPanel } from './MacrosPanel';
 import { DebugPerfOverlay } from './DebugPerfOverlay';
 import { debugPerf } from '../../utils/debugPerf';
 
 // Exposer debugPerf sur window pour le render loop et le listener IPC
 (window as any).__debugPerf = debugPerf;
-import { DrawModeOverlay } from './DrawModeOverlay';
-import { ModeButtons } from './ModeButtons';
-import { ModeBanner } from '../ui/ModeBanner';
+import { ViewerToolbar } from './ViewerToolbar';
+import { ViewerStatusBar } from './ViewerStatusBar';
 import { TrajectoryVisualization } from './TrajectoryVisualization';
 import { ZoneVisualization } from './ZoneVisualization';
-import { ObjectInspectBar } from './ObjectInspectBar';
 import { useHolMarkers } from '../../hooks/useHolMarkers';
 import { useObjects3D } from '../../hooks/useObjects3D';
 import { useManipulateHandle } from '../../hooks/useManipulateHandle';
@@ -60,9 +57,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   // Modes d'interaction — slice du store (le handler Esc global peut les
   // annuler avant le panic ; mutual exclusion gérée par le slice)
   const manipulateMode = useGraphStore((s) => s.manipulateMode);
-  const setManipulateMode = useGraphStore((s) => s.setManipulateMode);
   const assignMode = useGraphStore((s) => s.assignMode);
-  const setAssignMode = useGraphStore((s) => s.setAssignMode);
   const zonePlaceMode = useGraphStore((s) => s.zonePlaceMode);
   const zoneEditMode = useGraphStore((s) => s.zoneEditMode);
 
@@ -73,10 +68,6 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   // NOTE : manualPositions est lu via getState() dans useRenderLoop — une
   // subscription ici re-rendrait Scene3D ~30×/s pendant un drag d'objet.
   const manualOscIds = useGraphStore((s) => s.manualOscIds);
-  const selectedObjIndex = useGraphStore((s) => s.selectedObjIndex);
-  // emittedPositions (1.5Hz) suffit pour la barre d'inspect — la vue live
-  // 60fps reste dans la boucle de rendu.
-  const emittedPositions = useGraphStore((s) => s.emittedPositions);
   const editingSlotId = useGraphStore((s) => s.editingSlotId);
   const debugPerfVisible = useMoveEditorStore((s) => s.debugPerfVisible);
 
@@ -230,12 +221,16 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   // Draw handlers → useDrawMode hook
 
   return (
-    <div
-      ref={containerRef}
-      style={{ width, height, overflow: 'hidden', position: 'relative' }}
-      onPointerDown={handleScenePointerDown}
-      onPointerUp={handleScenePointerUp}
-    >
+    <div style={{ width, height }} className="flex flex-col overflow-hidden">
+      {/* Toolbar dockée — modes + outils contextuels (remplace les overlays
+          flottants qui couvraient la vue) */}
+      <ViewerToolbar isPlaying={isPlaying} />
+      <div
+        ref={containerRef}
+        style={{ flex: 1, overflow: 'hidden', position: 'relative' }}
+        onPointerDown={handleScenePointerDown}
+        onPointerUp={handleScenePointerUp}
+      >
       {webglFailed && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-900/90 z-raised p-4">
           <TriangleAlert size={32} className="text-amber-400" />
@@ -259,23 +254,6 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
           </button>
         </div>
       )}
-      {drawMode && <DrawModeOverlay />}
-      {manipulateMode && <MacrosPanel isPlaying={isPlaying} hasMovements={movements.length > 0} />}
-      {assignMode && (
-        <ModeBanner variant="live">Assign — click objects to toggle their track for this move (Esc to cancel)</ModeBanner>
-      )}
-      {zonePlaceMode && (
-        <ModeBanner variant="osc">Place — click on the floor to set the zone center (Esc to cancel)</ModeBanner>
-      )}
-      {zoneEditMode && (
-        <ModeBanner variant="osc">Edit zones — drag a zone to move it, scroll over it to resize (Esc to cancel)</ModeBanner>
-      )}
-      <ModeButtons
-        manipulateMode={manipulateMode}
-        setManipulateMode={setManipulateMode}
-        assignMode={assignMode}
-        setAssignMode={setAssignMode}
-      />
       {/* Trajectory visualization — composant séparé qui gère ses propres lignes */}
       <TrajectoryVisualization
         sceneRef={sceneRef}
@@ -315,23 +293,6 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
         handleManipulateUp={handleManipulateUp}
         handleManipulateWheel={handleManipulateWheel}
       />
-      {/* Active movements indicator — bottom right */}
-      {movements.length > 0 && (
-        <div className="absolute bottom-2 right-2 z-overlay bg-gray-900/80 backdrop-blur rounded-lg px-2 py-1 border border-gray-700/50 flex items-center gap-1.5">
-          <span className="text-gray-500 text-xs font-mono">MOVEMENTS</span>
-          {movements.map((mv, idx) => (
-            <span
-              key={mv.id}
-              className={`text-xs font-mono px-1.5 py-0.5 rounded ${
-                mv.is_preview ? 'bg-cyan-900 text-cyan-400' : 'bg-green-900 text-green-400'
-              }`}
-              title={`${mv.name} — ${mv.track_count} tracks`}
-            >
-              {idx + 1}{mv.is_preview ? '👁' : '▶'}
-            </span>
-          ))}
-        </div>
-      )}
       {/* État vide — aucun move actif, aucun slot en édition : le canvas
           communique la prochaine action au lieu d'afficher une plaine vide.
           pointer-events-none : l'orbit reste utilisable. */}
@@ -345,16 +306,11 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
           </div>
         </div>
       )}
-      {/* Inspect de l'objet sélectionné (clic-gauche proximité, même
-          anneau blanc qu'au radar via selectedObjIndex) — partage la
-          barre du radar : état source + release/park. */}
-      {selectedObjIndex !== null && (
-        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-raised">
-          <ObjectInspectBar positions={emittedPositions} />
-        </div>
-      )}
       {/* Debug perf overlay — top left, opt-in via le toggle de la barre canvas */}
       {debugPerfVisible && <DebugPerfOverlay />}
+      </div>
+      {/* Status bar dockée — chips movements + inspect de l'objet sélectionné */}
+      <ViewerStatusBar />
     </div>
   );
 };

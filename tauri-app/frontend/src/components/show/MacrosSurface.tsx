@@ -15,10 +15,12 @@ export const MacrosSurface: React.FC<{
   includeRadius?: boolean;
   /// 'stack' = label+valeur au-dessus (overlays), 'row' = labels à gauche.
   layout?: 'row' | 'stack';
+  /// Rend les sliders en pilules compactes en wrap horizontal (toolbars).
+  horizontal?: boolean;
   /// Mise en avant des valeurs live (couleur live sur la valeur).
   live?: boolean;
   title?: string;
-}> = ({ includeRadius = true, layout = 'row', live = false, title }) => {
+}> = ({ includeRadius = true, layout = 'row', live = false, title, horizontal = false }) => {
   const macros = useGraphStore((s) => s.macros);
   const setMacros = useGraphStore((s) => s.setMacros);
   const pushMacrosToRuntime = useGraphStore((s) => s.pushMacrosToRuntime);
@@ -31,19 +33,21 @@ export const MacrosSurface: React.FC<{
   };
 
   const S = (key: keyof typeof macros, label: string, min: number, max: number, step: number, unit?: string, dec?: number) => (
-    <Slider
-      label={label}
-      value={macros[key] as number}
-      min={min} max={max} step={step} unit={unit} decimals={dec}
-      accent="purple"
-      layout={layout}
-      live={live}
-      onChange={(v) => set(key, v)}
-    />
+    <div key={key} className={horizontal ? 'w-40' : undefined}>
+      <Slider
+        label={label}
+        value={macros[key] as number}
+        min={min} max={max} step={step} unit={unit} decimals={dec}
+        accent="purple"
+        layout={layout}
+        live={live}
+        onChange={(v) => set(key, v)}
+      />
+    </div>
   );
 
   return (
-    <div className="space-y-1.5">
+    <div className={horizontal ? 'flex flex-wrap items-center gap-x-3 gap-y-1' : 'space-y-1.5'}>
       {title && <div className="text-xs font-semibold text-gray-300 uppercase tracking-wide">{title}</div>}
       {S('scale', 'Scale', 0.1, 4, 0.05)}
       {S('speed', 'Speed', 0, 4, 0.05, 'x')}
