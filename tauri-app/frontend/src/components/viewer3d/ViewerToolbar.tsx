@@ -47,7 +47,7 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({ isPlaying }) => {
 
   let hint: string | null = null;
   if (drawMode) hint = drawToolHint(splineTool, drawView);
-  else if (manipulateMode) hint = 'drag objects · drag handle = move · wheel = zoom/scale (Esc)';
+  else if (manipulateMode) hint = 'drag = move · Shift+click = multi-select · handle = move all · wheel = zoom/scale (Esc)';
   else if (assignMode) hint = 'click objects to toggle their track for this move (Esc)';
   else if (zonePlaceMode) hint = 'click on the floor to set the zone center (Esc)';
   else if (zoneEditMode) hint = 'drag a zone to move it · wheel over it = resize (Esc)';

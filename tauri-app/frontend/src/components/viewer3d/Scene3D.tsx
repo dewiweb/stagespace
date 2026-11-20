@@ -112,7 +112,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   const {
     draggingObject,
     draggingHandle,
-    draggingObjectRef,
+    draggingSetRef,
     handleManipulateDown,
     handleManipulateMove,
     handleManipulateUp,
@@ -186,7 +186,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
     drawnPoints,
     controlPoints,
     splineClosed,
-    draggingObjectRef,
+    draggingSetRef,
     setWebglFailed,
     dimensions,
     initKey,

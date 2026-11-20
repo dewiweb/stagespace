@@ -45,6 +45,9 @@ type Store = InteractionModesSlice & {
   splineClosed: boolean;
   splineTool: 'freehand' | 'place' | 'edit';
   drawView: 'free' | 'top' | 'front' | 'side';
+  // Multi-sélection manipulate — purge à la sortie du mode comme le
+  // brouillon spline (sinon une sélection stale survivrait).
+  manipSelection: Set<number>;
 };
 
 // Purge du brouillon spline — ajouté à toute transition drawMode → false.
@@ -64,7 +67,7 @@ export const createInteractionModesSlice: StateCreator<Store, [], [], Interactio
   // l'autre reste "actif" (banner) mais mort. zoneEdit l'avait, pas les
   // autres (bug : zoneEdit + manipulate coexistaient).
   setManipulateMode: (v) =>
-    set(v ? { manipulateMode: true, drawMode: false, assignMode: false, zonePlaceMode: false, zoneEditMode: false, ...CLEAR_SPLINE_DRAFT } : { manipulateMode: false }),
+    set(v ? { manipulateMode: true, drawMode: false, assignMode: false, zonePlaceMode: false, zoneEditMode: false, ...CLEAR_SPLINE_DRAFT } : { manipulateMode: false, manipSelection: new Set() }),
   assignMode: false,
   setAssignMode: (v) =>
     set(v ? { assignMode: true, drawMode: false, manipulateMode: false, zonePlaceMode: false, zoneEditMode: false, ...CLEAR_SPLINE_DRAFT } : { assignMode: false }),
@@ -83,7 +86,7 @@ export const createInteractionModesSlice: StateCreator<Store, [], [], Interactio
   cancelInteractionModes: () => {
     const { drawMode, manipulateMode, assignMode, zonePlaceMode, zoneEditMode } = get();
     if (!drawMode && !manipulateMode && !assignMode && !zonePlaceMode && !zoneEditMode) return false;
-    set({ drawMode: false, manipulateMode: false, assignMode: false, zonePlaceMode: false, zoneEditMode: false, ...CLEAR_SPLINE_DRAFT });
+    set({ drawMode: false, manipulateMode: false, assignMode: false, zonePlaceMode: false, zoneEditMode: false, manipSelection: new Set(), ...CLEAR_SPLINE_DRAFT });
     return true;
   },
 });

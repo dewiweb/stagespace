@@ -67,7 +67,9 @@ export interface UseRenderLoopParams {
   // Spline studio — CPs éditables + flag closed (preview miroir du backend).
   controlPoints: DrawnPointsValue;
   splineClosed: boolean;
-  draggingObjectRef: MutableRefObject<number | null>;
+  // Ensemble en cours de drag (multi-drag manipulate) — le render loop
+  // garde les membres visibles au lieu de les cacher pendant le geste.
+  draggingSetRef: MutableRefObject<Set<number>>;
   // Pour signaler l'échec WebGL
   setWebglFailed: (v: boolean) => void;
   dimensions: { width: number; height: number };
@@ -103,7 +105,7 @@ export function useRenderLoop({
   drawnPoints,
   controlPoints,
   splineClosed,
-  draggingObjectRef,
+  draggingSetRef,
   setWebglFailed,
   initKey = 0,
 }: UseRenderLoopParams) {
@@ -262,7 +264,7 @@ export function useRenderLoop({
       const mvts = storeState.movements;
       const mvPosMap = storeState.movementPositions;
       const holProj = holProjectRef.current;
-      const dragObj = draggingObjectRef.current;
+      const dragSet = draggingSetRef.current;
 
       // Structures scratch réutilisées à chaque frame — pas d'allocation
       // dans la boucle (Map/Set/Color recréés à 60fps = pression GC).
@@ -324,7 +326,17 @@ export function useRenderLoop({
         objs.forEach((mesh) => { hideMeshAndLabels(mesh); });
 
         objs.forEach((mesh, objIdx) => {
-          if (dragObj !== null && objIdx === dragObj) return;
+          // Membre en cours de drag : sa position est écrite par le
+          // handler de drag — le loop ne la touche pas, mais l'objet
+          // RESTE VISIBLE (avant : hide+skip → invisible pendant le drag).
+          if (dragSet.has(objIdx)) {
+            showMeshAndLabels(mesh);
+            const dm = mesh.material as THREE.MeshStandardMaterial;
+            dm.emissive.setHex(0x446688);
+            dm.opacity = 1;
+            dm.transparent = false;
+            return;
+          }
           // Focus : hors des tracks du slot édité → caché — SAUF en
           // assign : les non-membres doivent rester visibles et cliquables
           // sinon on ne peut jamais AJOUTER une track, seulement retirer.
@@ -350,7 +362,9 @@ export function useRenderLoop({
             // toute la scène cyan, on ne distinguait plus ce qui était on air).
             const isPreviewTrack = previewTracks.has(objIdx) && !liveTracks.has(objIdx);
             const isHighlighted = highlightedTracks.has(objIdx);
-            const isSelected = storeState.selectedObjIndex === objIdx;
+            const isSelected =
+              storeState.selectedObjIndex === objIdx ||
+              storeState.manipSelection.has(objIdx);
             if (isPreviewTrack) {
               mat.color.setHex(0x00ccff);
               mat.emissive.setHex(0x003344);
@@ -445,7 +459,16 @@ export function useRenderLoop({
         objs.forEach((mesh) => { hideMeshAndLabels(mesh); });
         if (showObjects) {
           objs.forEach((mesh, i) => {
-            if (dragObj !== null && i === dragObj) return;
+            // Membre en cours de drag : position gérée par le handler —
+            // visible + marqué, pas effacé par le hide global.
+            if (dragSet.has(i)) {
+              showMeshAndLabels(mesh);
+              const dm = mesh.material as THREE.MeshStandardMaterial;
+              dm.emissive.setHex(0x446688);
+              dm.opacity = 1;
+              dm.transparent = false;
+              return;
+            }
             // Focus : hors des tracks du slot édité → caché — SAUF en
             // assign (les non-membres restent visibles pour être ajoutés).
             if (focusActive && !focusedTracks.has(i) && !storeState.assignMode) return;
@@ -458,26 +481,25 @@ export function useRenderLoop({
             // affiché quand même : assign/zones doivent viser ce qui existe.
             if (p || needsObjects) {
               showMeshAndLabels(mesh);
-              // Feedback d'appartenance en assign (membre = emissive vert,
-              // non-membre = atténué) — sinon le toggle n'a aucun retour.
               const mat = mesh.material as THREE.MeshStandardMaterial;
+              // Normalisation à chaque frame — l'état style (assign,
+              // sélection) dérive du store sans résidu à la sortie.
+              mat.opacity = 1;
+              mat.transparent = false;
+              mat.emissive.setHSL(i / Math.max(objs.length, 1), 0.5, 0.2);
               if (storeState.assignMode && editingSlot) {
+                // Feedback d'appartenance : membre = emissive vert,
+                // non-membre = atténué — sinon le toggle n'a aucun retour.
                 if (focusedTracks.has(i)) {
                   mat.emissive.setHex(0x1a5c2e);
-                  mat.opacity = 1;
-                  mat.transparent = false;
                 } else {
                   mat.emissive.setHex(0x000000);
                   mat.opacity = 0.3;
                   mat.transparent = true;
                 }
-              } else if (mat.transparent || mat.emissive.getHex() === 0) {
-                // Reset — cette branche ne réécrit pas le matériau à
-                // chaque frame : sans ça l'atténuation (opacité ET
-                // emissive noir) survivait à la sortie du mode assign.
-                mat.opacity = 1;
-                mat.transparent = false;
-                mat.emissive.setHSL(i / Math.max(objs.length, 1), 0.5, 0.2);
+              } else if (storeState.manipulateMode && storeState.manipSelection.has(i)) {
+                // Sélection manipulate = même accent que selectedObjIndex.
+                mat.emissive.setHex(0x555555);
               }
             }
           });

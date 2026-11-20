@@ -34,6 +34,12 @@ export function useManipulateMode({
   const [draggingObject, setDraggingObject] = useState<number | null>(null);
   const draggingObjectRef = useRef<number | null>(null);
   const [draggingHandle, setDraggingHandle] = useState(false);
+  // Ensemble draggé — 1 objet ou toute la manipSelection. Lu par le render
+  // loop pour garder les membres visibles pendant le drag.
+  const draggingSetRef = useRef<Set<number>>(new Set());
+  // Dernier point d'intersection du drag — baseline du delta appliqué
+  // uniformément à tous les membres (multi-drag = même déplacement).
+  const dragDeltaRef = useRef<{ x: number; z: number } | null>(null);
   // Position/yaw au down — baseline du shift+drag (rotate). Le shift est
   // lu en live dans handleManipulateMove (e.shiftKey) : basculer
   // move↔rotate en cours de drag est possible.
@@ -131,8 +137,30 @@ export function useManipulateMode({
           doClearPosition(idx);
           return;
         }
+        const s = useGraphStore.getState();
+        // Shift+clic = toggle dans la multi-sélection (pas de drag) —
+        // la sélection persiste tant qu'on reste en manipulate.
+        if (e.shiftKey) {
+          s.toggleManipSelection(idx);
+          s.setSelectedObjIndex(idx);
+          return;
+        }
+        // Drag : un membre de la sélection → tout l'ensemble bouge ;
+        // un non-membre → la sélection devient l'objet seul (clic = focus).
+        const sel = s.manipSelection;
+        const dragSet = sel.size > 1 && sel.has(idx) ? new Set(sel) : new Set([idx]);
+        if (!sel.has(idx)) s.setManipSelection(new Set([idx]));
+        s.setSelectedObjIndex(idx);
+        draggingSetRef.current = dragSet;
+        dragDeltaRef.current = null;
         setDraggingObject(idx);
         (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      } else if (!e.shiftKey) {
+        // Clic à vide (ni objet ni handle) = désélection — convention CAD.
+        // Shift maintenu : la sélection survit pour enchaîner les ajouts.
+        const s = useGraphStore.getState();
+        if (s.manipSelection.size > 0) s.setManipSelection(new Set());
+        s.setSelectedObjIndex(null);
       }
     },
     [manipulateMode, cameraRef, containerRef, handleRef, objectsRef],
@@ -216,20 +244,31 @@ export function useManipulateMode({
           });
         }
       } else if (draggingObject !== null) {
-        // Move individual object — update mesh + persist to store
-        // Three.js: intersection est en coords Y-up (x=right, y=up, z=depth)
-        // Backend: stocke en coords Z-up (x=right, y=depth, z=up)
-        const mesh = objectsRef.current[draggingObject];
-        if (mesh) {
-          mesh.position.x = intersection.x;
-          mesh.position.z = intersection.z;
+        // Multi-drag : le même delta (dx, dz) est appliqué à tous les
+        // membres de l'ensemble — les positions relatives sont préservées.
+        // Baseline posée au premier move → pas de saut à l'accroche.
+        const set = draggingSetRef.current;
+        if (dragDeltaRef.current === null) {
+          dragDeltaRef.current = { x: intersection.x, z: intersection.z };
+          return;
         }
-        // Conversion Three.js (x, y=up, z=depth) → backend (x, y=depth, z=up)
-        const backendPos = fromThree(intersection.x, mesh?.position.y ?? 0, intersection.z);
-        useGraphStore.getState().setManualPosition(draggingObject, backendPos);
-        // Toujours invoquer — depuis P1.1 une position manuelle émet même
-        // sans move live ; sinon le drag-while-stopped divergeait en silence.
-        pushManualPositionThrottled.current(draggingObject, backendPos);
+        const dx = intersection.x - dragDeltaRef.current.x;
+        const dz = intersection.z - dragDeltaRef.current.z;
+        dragDeltaRef.current = { x: intersection.x, z: intersection.z };
+        if (dx === 0 && dz === 0) return;
+        const store = useGraphStore.getState();
+        for (const i of set) {
+          const mesh = objectsRef.current[i];
+          if (!mesh) continue;
+          mesh.position.x += dx;
+          mesh.position.z += dz;
+          // Conversion Three.js (x, y=up, z=depth) → backend (x, y=depth, z=up)
+          const backendPos = fromThree(mesh.position.x, mesh.position.y, mesh.position.z);
+          store.setManualPosition(i, backendPos);
+          // Toujours invoquer — depuis P1.1 une position manuelle émet
+          // même sans move live ; le throttle est keyed par objectIndex.
+          pushManualPositionThrottled.current(i, backendPos);
+        }
       }
     },
     [manipulateMode, draggingObject, draggingHandle, macros, setMacros, cameraRef, containerRef, handleRef, objectsRef],
@@ -240,6 +279,8 @@ export function useManipulateMode({
       // Si on relâche un objet draggé, garder l'override (ne pas effacer)
       setDraggingObject(null);
       setDraggingHandle(false);
+      draggingSetRef.current = new Set();
+      dragDeltaRef.current = null;
       dragStartPosRef.current = null;
       try {
         (e.target as HTMLElement).releasePointerCapture(e.pointerId);
@@ -294,6 +335,7 @@ export function useManipulateMode({
     draggingHandle,
     setDraggingHandle,
     draggingObjectRef,
+    draggingSetRef,
     handleManipulateDown,
     handleManipulateMove,
     handleManipulateUp,

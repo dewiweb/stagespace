@@ -37,6 +37,12 @@ export interface HolProjectSlice {
   /// Objet sélectionné dans les vues (obj_index) — radar proximité-clic.
   selectedObjIndex: number | null;
   setSelectedObjIndex: (i: number | null) => void;
+  /// Multi-sélection du mode manipulate (obj_index) — Shift+clic = toggle,
+  /// drag d'un membre = déplacement groupé (même delta pour tous).
+  /// Purge à la sortie du mode.
+  manipSelection: Set<number>;
+  toggleManipSelection: (i: number) => void;
+  setManipSelection: (sel: Set<number>) => void;
   resetManualPositions: (nObjects: number) => void;
 }
 
@@ -163,6 +169,15 @@ export const createHolProjectSlice: StateCreator<HolProjectStore, [], [], HolPro
   /// inspect + release/park ciblés. null = pas de sélection.
   selectedObjIndex: null as number | null,
   setSelectedObjIndex: (i: number | null) => set({ selectedObjIndex: i }),
+  manipSelection: new Set<number>(),
+  toggleManipSelection: (i) =>
+    set((s) => {
+      const next = new Set(s.manipSelection);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return { manipSelection: next };
+    }),
+  setManipSelection: (sel) => set({ manipSelection: sel }),
   setManualPosition: (index, pos) =>
     set((s) => ({ manualPositions: { ...s.manualPositions, [index]: pos } })),
   setManualPositions: (positions) => set({ manualPositions: positions }),
