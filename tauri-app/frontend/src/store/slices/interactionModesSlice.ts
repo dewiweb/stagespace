@@ -59,7 +59,6 @@ const CLEAR_SPLINE_DRAFT = {
   cpHistory: [] as Array<{ cps: Array<[number, number, number]>; closed: boolean }>,
   splineClosed: false,
   splineTool: 'freehand' as const,
-  drawView: 'free' as const,
   loadedSplineNodeId: null,
   cpSelection: new Set<number>(),
 };

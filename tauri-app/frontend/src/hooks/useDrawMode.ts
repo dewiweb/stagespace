@@ -75,50 +75,66 @@ export function useDrawMode({ cameraRef, containerRef, controlsRef, cursorReadou
   const drawMode = useGraphStore((s) => s.drawMode);
   const drawView = useGraphStore((s) => s.drawView);
 
-  // ── Vues fixées : snap caméra + verrou rotation + restore à la sortie ──
-  // Le snap préserve la cible et la distance courantes (framing gardé) ;
-  // pan/zoom restent actifs, seule la rotation est verrouillée.
+  // ── Vues fixées : snap caméra + verrou rotation + restore sur 'free' ──
+  // Actives dans TOUS les modes (inspection ortho, pas seulement le draw) :
+  // le snap préserve la cible et la distance (framing gardé), pan/zoom
+  // restent actifs, seule la rotation est verrouillée (convention CAD).
+  // ── Vues fixées : snap caméra + verrou rotation + restore sur 'free' ──
+  // Actives dans TOUS les modes (inspection ortho, pas seulement le draw) :
+  // le snap préserve la cible et la distance (framing gardé), pan/zoom
+  // restent actifs, seule la rotation est verrouillée (convention CAD).
+  // Retry RAF : une vue persistée (ex. 'top') hydratée au mount doit
+  // s'appliquer dès que cameraRef/controlsRef sont peuplés — un early
+  // return laisserait la vue active sans jamais snapper la caméra.
   useEffect(() => {
-    const camera = cameraRef.current;
-    const controls = controlsRef.current;
-    if (!camera || !controls) return;
-    const view = drawView;
-    if (!drawMode || view === 'free') {
-      if (savedCamRef.current) {
-        camera.position.copy(savedCamRef.current.pos);
-        camera.quaternion.copy(savedCamRef.current.quat);
-        camera.up.copy(savedCamRef.current.up);
-        controls.target.copy(savedCamRef.current.target);
-        savedCamRef.current = null;
+    let raf = 0;
+    const apply = () => {
+      const camera = cameraRef.current;
+      const controls = controlsRef.current;
+      if (!camera || !controls) {
+        raf = requestAnimationFrame(apply);
+        return;
       }
-      controls.enableRotate = true;
+      const view = drawView;
+      if (view === 'free') {
+        if (savedCamRef.current) {
+          camera.position.copy(savedCamRef.current.pos);
+          camera.quaternion.copy(savedCamRef.current.quat);
+          camera.up.copy(savedCamRef.current.up);
+          controls.target.copy(savedCamRef.current.target);
+          savedCamRef.current = null;
+        }
+        controls.enableRotate = true;
+        controls.update();
+        return;
+      }
+      if (!savedCamRef.current) {
+        savedCamRef.current = {
+          pos: camera.position.clone(),
+          quat: camera.quaternion.clone(),
+          up: camera.up.clone(),
+          target: controls.target.clone(),
+        };
+      }
+      const t = controls.target;
+      const d = Math.max(camera.position.distanceTo(t), 2);
+      camera.up.set(0, 1, 0);
+      // Epsilon latéral sur la vue top — évite la singularité de pôle
+      // exacte d'OrbitControls (azimuth indéterminé à polar=0).
+      if (view === 'top') {
+        camera.up.set(0, 0, 1); // upstage (+y backend = +z three) en haut de l'écran
+        camera.position.set(t.x, t.y + d, t.z + d * 0.001);
+      } else if (view === 'front') {
+        camera.position.set(t.x, t.y, t.z + d);
+      } else {
+        camera.position.set(t.x + d, t.y, t.z);
+      }
+      controls.enableRotate = false;
       controls.update();
-      return;
-    }
-    if (!savedCamRef.current) {
-      savedCamRef.current = {
-        pos: camera.position.clone(),
-        quat: camera.quaternion.clone(),
-        up: camera.up.clone(),
-        target: controls.target.clone(),
-      };
-    }
-    const t = controls.target;
-    const d = Math.max(camera.position.distanceTo(t), 2);
-    camera.up.set(0, 1, 0);
-    // Epsilon latéral sur la vue top — évite la singularité de pôle exacte
-    // d'OrbitControls (azimuth indéterminé à polar=0).
-    if (view === 'top') {
-      camera.up.set(0, 0, 1); // upstage (+y backend = +z three) en haut de l'écran
-      camera.position.set(t.x, t.y + d, t.z + d * 0.001);
-    } else if (view === 'front') {
-      camera.position.set(t.x, t.y, t.z + d);
-    } else {
-      camera.position.set(t.x + d, t.y, t.z);
-    }
-    controls.enableRotate = false;
-    controls.update();
-  }, [drawMode, drawView, cameraRef, controlsRef]);
+    };
+    apply();
+    return () => cancelAnimationFrame(raf);
+  }, [drawView, cameraRef, controlsRef]);
 
   // Convert screen coords to world coords on the view's drawing plane
   const screenToWorld = useCallback(

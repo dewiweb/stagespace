@@ -3,10 +3,11 @@ import { useGraphStore } from '../../store/useGraphStore';
 import { DrawMenuBar } from './DrawToolbar';
 import { MacrosSurface } from '../show/MacrosSurface';
 import { MACRO_NEUTRAL } from '../../store/slices/macrosSlice';
-import { SlidersHorizontal, ChevronDown, RotateCcw } from 'lucide-react';
+import { SlidersHorizontal, ChevronDown, RotateCcw, Box } from 'lucide-react';
 import { safeInvoke } from '../../utils/tauri';
 import { toast } from '../../utils/toast-helpers';
-import { tbAction } from './toolbarStyles';
+import { tbAction, tbGroup, tbBtn, tbSep, tbIdle } from './toolbarStyles';
+import type { DrawView } from '../../utils/splineCore';
 
 interface ViewerToolbarProps {
   isPlaying: boolean;
@@ -16,10 +17,12 @@ interface ViewerToolbarProps {
  * Menu bar du viewer 3D — ligne unique dockée en haut du canvas, dans
  * le layout "éditeur" (palette à gauche, status bar en bas).
  *
- * Contenu contextuel :
- * - draw       : vues de travail + sélecteur/reload DrawSpline + Done/Cancel
+ * Contenu :
+ * - tous les modes : vues Free/Top/Front/Side — en dehors du draw elles
+ *   servent de vues d'inspection ortho (snap caméra + rotation verrouillée,
+ *   pan/zoom libres) ; en draw elles choisissent la feuille de travail.
+ * - draw       : sélecteur/reload DrawSpline + Done/Cancel (DrawMenuBar)
  * - manipulate : popover macros + LIVE + clear overrides
- * - neutre     : caption discrète (la barre reste — chrome constant)
  *
  * Les hints contextuels vivent dans la status bar (bas), les outils
  * dans la palette (gauche).
@@ -27,6 +30,8 @@ interface ViewerToolbarProps {
 export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({ isPlaying }) => {
   const drawMode = useGraphStore((s) => s.drawMode);
   const manipulateMode = useGraphStore((s) => s.manipulateMode);
+  const drawView = useGraphStore((s) => s.drawView);
+  const setDrawView = useGraphStore((s) => s.setDrawView);
   const movements = useGraphStore((s) => s.movements);
   const setMacros = useGraphStore((s) => s.setMacros);
   const pushMacrosToRuntime = useGraphStore((s) => s.pushMacrosToRuntime);
@@ -44,6 +49,20 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({ isPlaying }) => {
   return (
     <div className="flex-shrink-0 relative bg-gray-900/95 border-b border-gray-700/60">
       <div className="flex items-center gap-2 px-1.5 py-1 flex-nowrap overflow-hidden">
+        <div className={tbGroup}>
+          <span className="h-6 px-1.5 flex items-center text-cyan-400" title="View — Free = orbit, Top/Front/Side = fixed ortho (rotate locked)"><Box size={11} /></span>
+          {(['free', 'top', 'front', 'side'] as DrawView[]).map((v) => (
+            <button
+              key={v}
+              title={`${v[0].toUpperCase() + v.slice(1)} view — snap camera${v === 'free' ? ', free orbit' : ', rotation locked'}`}
+              onClick={() => setDrawView(v)}
+              className={`${tbBtn} ${drawView === v ? 'bg-cyan-600 text-white' : tbIdle}`}
+            >
+              {v[0].toUpperCase() + v.slice(1)}
+            </button>
+          ))}
+        </div>
+        <span className={tbSep} />
         {drawMode && <DrawMenuBar />}
         {manipulateMode && (
           <>
@@ -72,7 +91,10 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({ isPlaying }) => {
           </>
         )}
         {!drawMode && !manipulateMode && (
-          <span className="text-gray-600 text-[10px] font-mono tracking-wider">3D PREVIEW</span>
+          <>
+            <span className="text-gray-600 text-[10px] font-mono tracking-wider">3D PREVIEW</span>
+            <span className="flex-1" />
+          </>
         )}
       </div>
       {manipulateMode && macrosOpen && (

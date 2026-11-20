@@ -97,7 +97,7 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
       ? { drawMode: true, manipulateMode: false, assignMode: false, zonePlaceMode: false, zoneEditMode: false }
       // Quitter le mode abandonne le brouillon — Done a déjà persisté,
       // Cancel/Esc jettent les CPs (sinon ils ressurgissent à la ré-entrée).
-      : { drawMode: false, drawnPoints: [], controlPoints: [], cpHistory: [], splineClosed: false, splineTool: 'freehand' as SplineTool, drawView: 'free' as DrawView, loadedSplineNodeId: null, cpSelection: new Set<number>() });
+      : { drawMode: false, drawnPoints: [], controlPoints: [], cpHistory: [], splineClosed: false, splineTool: 'freehand' as SplineTool, loadedSplineNodeId: null, cpSelection: new Set<number>() });
     if (enabled) {
       // Auto-load : une spline existe déjà → la charger direct dans
       // l'éditeur (workflow dominant = éditer l'existant, pas redessiner).
@@ -280,7 +280,7 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
 
     if (!drawSplineNode && !vectorFieldNode) {
       feLog(`[DBG-finalize] ABORT: no DrawSpline or drawn VectorField node found`);
-      set({ drawMode: false, drawnPoints: [], controlPoints: [], cpHistory: [], splineClosed: false, splineTool: 'freehand' as SplineTool, drawView: 'free' as DrawView, loadedSplineNodeId: null, cpSelection: new Set<number>() });
+      set({ drawMode: false, drawnPoints: [], controlPoints: [], cpHistory: [], splineClosed: false, splineTool: 'freehand' as SplineTool, loadedSplineNodeId: null, cpSelection: new Set<number>() });
       return null;
     }
 
@@ -348,7 +348,6 @@ export const createDrawModeSlice: StateCreator<DrawModeStore, [], [], DrawModeSl
       cpHistory: [],
       splineClosed: false,
       splineTool: 'freehand' as SplineTool,
-      drawView: 'free' as DrawView,
       loadedSplineNodeId: null,
       cpSelection: new Set<number>(),
     }));

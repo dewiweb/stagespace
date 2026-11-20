@@ -1,16 +1,17 @@
 import React from 'react';
-import { MousePointerClick, Spline, Undo2, Circle, Infinity as InfinityIcon, Minus, Trash2, Box, FolderOpen, RefreshCw, PencilLine } from 'lucide-react';
+import { MousePointerClick, Spline, Undo2, Circle, Infinity as InfinityIcon, Minus, Trash2, FolderOpen, RefreshCw, PencilLine } from 'lucide-react';
 import { useGraphStore } from '../../store/useGraphStore';
 import { primCircle, primEllipse, primLemniscate, primLine, primArc, remapCps, type DrawView, type Vec3 } from '../../utils/splineCore';
 import type { SplineTool } from '../../store/slices/drawModeSlice';
-import { tbGroup, tbBtn, tbAction, tbIcon, tbSep, tbIdle } from './toolbarStyles';
+import { tbAction, tbIcon, tbSep } from './toolbarStyles';
 
 /**
  * Contrôles du spline studio — répartis selon le layout éditeur :
  * - `DrawPaletteTools` : colonne verticale (ViewerToolPalette) — outils
  *   de création/édition, primitives, undo/clear, toggle closed.
  * - `DrawMenuBar` : barre horizontale (ViewerToolbar) — contexte document :
- *   vues de travail, sélecteur de node, reload, Done/Cancel.
+ *   sélecteur de node, reload, Done/Cancel. Les vues de travail vivent
+ *   dans `ViewButtons` (ViewerToolbar) — utiles dans tous les modes.
  * - `drawToolHint` : hint contextuel affiché dans la status bar.
  */
 
@@ -79,8 +80,6 @@ export const DrawMenuBar: React.FC = () => {
   const clearDrawnPoints = useGraphStore((s) => s.clearDrawnPoints);
   const finalizeDrawing = useGraphStore((s) => s.finalizeDrawing);
   const setDrawMode = useGraphStore((s) => s.setDrawMode);
-  const drawView = useGraphStore((s) => s.drawView);
-  const setDrawView = useGraphStore((s) => s.setDrawView);
   const loadFromNode = useGraphStore((s) => s.loadFromNode);
   const clearSpline = useGraphStore((s) => s.clearSpline);
   // ATTENTION : filter() dans le sélecteur = nouveau tableau à chaque
@@ -93,26 +92,8 @@ export const DrawMenuBar: React.FC = () => {
   );
   const loadedSplineNodeId = useGraphStore((s) => s.loadedSplineNodeId);
 
-  const viewBtn = (v: DrawView, label: string) => (
-    <button
-      key={v}
-      title={`${label} view`}
-      onClick={() => setDrawView(v)}
-      className={`${tbBtn} ${drawView === v ? 'bg-cyan-600 text-white' : tbIdle}`}
-    >
-      {label}
-    </button>
-  );
-
   return (
     <>
-      <div className={tbGroup}>
-        <span className="h-6 px-1.5 flex items-center text-cyan-400" title="Working plane"><Box size={11} /></span>
-        {viewBtn('free', 'Free')}
-        {viewBtn('top', 'Top')}
-        {viewBtn('front', 'Front')}
-        {viewBtn('side', 'Side')}
-      </div>
       {drawSplineNodes.length > 1 && (
         <select
           title="DrawSpline node to edit"
