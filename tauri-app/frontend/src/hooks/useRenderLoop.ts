@@ -325,8 +325,10 @@ export function useRenderLoop({
 
         objs.forEach((mesh, objIdx) => {
           if (dragObj !== null && objIdx === dragObj) return;
-          // Focus : hors des tracks du slot édité → caché
-          if (focusActive && !focusedTracks.has(objIdx)) return;
+          // Focus : hors des tracks du slot édité → caché — SAUF en
+          // assign : les non-membres doivent rester visibles et cliquables
+          // sinon on ne peut jamais AJOUTER une track, seulement retirer.
+          if (focusActive && !focusedTracks.has(objIdx) && !storeState.assignMode) return;
           const p = posMap.get(objIdx);
           if (p) {
             const [tx, ty, tz] = toThree(p.x, p.y, p.z);
@@ -364,6 +366,21 @@ export function useRenderLoop({
               mat.emissive.copy(mat.color).multiplyScalar(0.15);
             }
 
+            // Assign : membre du slot édité = emissive vert (feedback du
+            // toggle — le clic sur un non-membre l'allume), non-membre =
+            // fortement atténué. Sans ça l'assign n'a aucun retour visuel.
+            if (storeState.assignMode && editingSlot) {
+              if (focusedTracks.has(objIdx)) {
+                mat.emissive.setHex(0x1a5c2e);
+                mat.opacity = 1;
+                mat.transparent = false;
+              } else {
+                mat.emissive.setHex(0x000000);
+                mat.opacity = 0.3;
+                mat.transparent = true;
+              }
+            }
+
             // Zone influence : tinte l'emissive vers la couleur de la zone
             // (violet si graph-déclarée domine, cyan si manuelle domine) —
             // l'objet "s'allume" proportionnellement à son influence.
@@ -395,6 +412,16 @@ export function useRenderLoop({
             mat.emissive.setHSL(objIdx / Math.max(objs.length, 1), 0.5, 0.2);
             mat.opacity = 1.0;
             mat.transparent = false;
+            // Même feedback assign pour les objets sans position live.
+            if (storeState.assignMode && editingSlot) {
+              if (focusedTracks.has(objIdx)) {
+                mat.emissive.setHex(0x1a5c2e);
+              } else {
+                mat.emissive.setHex(0x000000);
+                mat.opacity = 0.3;
+                mat.transparent = true;
+              }
+            }
           }
         });
       } else {
@@ -419,8 +446,9 @@ export function useRenderLoop({
         if (showObjects) {
           objs.forEach((mesh, i) => {
             if (dragObj !== null && i === dragObj) return;
-            // Focus : hors des tracks du slot édité → caché
-            if (focusActive && !focusedTracks.has(i)) return;
+            // Focus : hors des tracks du slot édité → caché — SAUF en
+            // assign (les non-membres restent visibles pour être ajoutés).
+            if (focusActive && !focusedTracks.has(i) && !storeState.assignMode) return;
             const p = manualPos[i];
             if (p) {
               const [tx, ty, tz] = toThree(p[0], p[1], p[2]);
@@ -428,7 +456,30 @@ export function useRenderLoop({
             }
             // Sans position manuelle l'objet garde sa position spawn —
             // affiché quand même : assign/zones doivent viser ce qui existe.
-            if (p || needsObjects) showMeshAndLabels(mesh);
+            if (p || needsObjects) {
+              showMeshAndLabels(mesh);
+              // Feedback d'appartenance en assign (membre = emissive vert,
+              // non-membre = atténué) — sinon le toggle n'a aucun retour.
+              const mat = mesh.material as THREE.MeshStandardMaterial;
+              if (storeState.assignMode && editingSlot) {
+                if (focusedTracks.has(i)) {
+                  mat.emissive.setHex(0x1a5c2e);
+                  mat.opacity = 1;
+                  mat.transparent = false;
+                } else {
+                  mat.emissive.setHex(0x000000);
+                  mat.opacity = 0.3;
+                  mat.transparent = true;
+                }
+              } else if (mat.transparent || mat.emissive.getHex() === 0) {
+                // Reset — cette branche ne réécrit pas le matériau à
+                // chaque frame : sans ça l'atténuation (opacité ET
+                // emissive noir) survivait à la sortie du mode assign.
+                mat.opacity = 1;
+                mat.transparent = false;
+                mat.emissive.setHSL(i / Math.max(objs.length, 1), 0.5, 0.2);
+              }
+            }
           });
         }
       }
@@ -438,7 +489,7 @@ export function useRenderLoop({
       // markers de ses tracks). visible=false cache aussi le label enfant.
       const camPos = camera.position;
       holMarkersRef.current.forEach((m, i) => {
-        m.visible = !focusActive || focusedTracks.has(i);
+        m.visible = !focusActive || focusedTracks.has(i) || storeState.assignMode;
         if (m.visible) m.lookAt(camPos);
       });
 
