@@ -45,8 +45,14 @@ impl MergeRuntime {
             .write()
             .unwrap_or_else(|e| e.into_inner())
             .insert(obj_index, pos);
-        // Une reprise manuelle fraîche remplace un hold éventuel.
+        // Une reprise manuelle fraîche remplace un hold éventuel — le
+        // manuel n'est plus « seedé par le park » : unpark ne doit pas
+        // effacer une position que l'opérateur a posée en connaissance.
         self.held_objects
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&obj_index);
+        self.park_frozen
             .write()
             .unwrap_or_else(|e| e.into_inner())
             .remove(&obj_index);
@@ -82,14 +88,30 @@ impl MergeRuntime {
             .write()
             .unwrap_or_else(|e| e.into_inner())
             .remove(&obj_index);
-    }
-
-    /// Efface toutes les positions manuelles
-    pub fn clear_all_manual_positions(&self) {
-        self.manual_positions
+        // Un clear explicite lève le hold du park mais garde la protection
+        // recall (parked_objects) — l'opérateur peut relâcher la position
+        // sans perdre l'exclusion du recall.
+        self.park_frozen
             .write()
             .unwrap_or_else(|e| e.into_inner())
-            .clear();
+            .remove(&obj_index);
+    }
+
+    /// Efface toutes les positions manuelles — sauf celles seedées par le
+    /// park : un clear-all/clear-overrides ne libère pas un park (sémantique
+    /// console : le park survit à l'arm et aux overrides globaux).
+    pub fn clear_all_manual_positions(&self) {
+        let park = self
+            .park_frozen
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let mut manual = self
+            .manual_positions
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
+        manual.retain(|obj, _| park.contains(obj));
+        drop(manual);
         self.held_objects
             .write()
             .unwrap_or_else(|e| e.into_inner())
@@ -138,13 +160,39 @@ impl MergeRuntime {
     }
 
     /// Efface tous les canaux spatiaux de tous les objets
-    /// Parke/déparke un objet — les recalls de cues ne touchent pas ses
-    /// canaux (reprise manuelle prioritaire, sémantique Park des consoles).
+    /// Parke un objet — HOLD à sa dernière position canonique émise +
+    /// protection recall (sémantique Park des consoles : valeur figée,
+    /// les cues n'y touchent pas). Le hold passe par manual_positions
+    /// tracé dans `park_frozen` pour ne jamais effacer une reprise
+    /// opérateur à l'unpark.
     pub fn park_object(&self, obj: usize) {
         self.parked_objects
             .write()
             .unwrap_or_else(|e| e.into_inner())
             .insert(obj);
+        let pos = self
+            .last_canonical_positions
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&obj)
+            .copied()
+            .or_else(|| {
+                self.track_positions
+                    .read()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .get(&(obj as u32))
+                    .copied()
+            });
+        if let Some(p) = pos {
+            self.manual_positions
+                .write()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(obj, p);
+            self.park_frozen
+                .write()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(obj);
+        }
     }
 
     pub fn unpark_object(&self, obj: usize) {
@@ -152,6 +200,19 @@ impl MergeRuntime {
             .write()
             .unwrap_or_else(|e| e.into_inner())
             .remove(&obj);
+        // Ne retire la position figée QUE si le park l'a écrite — une
+        // reprise opérateur posée depuis survit à l'unpark.
+        if self
+            .park_frozen
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&obj)
+        {
+            self.manual_positions
+                .write()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(&obj);
+        }
     }
 
     pub fn parked_objects(&self) -> HashSet<usize> {
@@ -161,12 +222,23 @@ impl MergeRuntime {
             .clone()
     }
 
-    /// Efface le park d'un objet (panic / nouveau show).
+    /// Efface le park de tous les objets (panic / nouveau show) — libère
+    /// aussi les holds que le park a seedés (mais pas les reprises
+    /// opérateur, qui ne sont pas dans park_frozen).
     pub fn clear_parked(&self) {
         self.parked_objects
             .write()
             .unwrap_or_else(|e| e.into_inner())
             .clear();
+        let seeded =
+            std::mem::take(&mut *self.park_frozen.write().unwrap_or_else(|e| e.into_inner()));
+        let mut manual = self
+            .manual_positions
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
+        for obj in seeded {
+            manual.remove(&obj);
+        }
     }
 
     pub fn clear_all_object_channels(&self) {

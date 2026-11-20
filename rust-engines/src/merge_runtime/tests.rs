@@ -283,6 +283,7 @@ fn test_post_process_world_space_pivots() {
     let ctx = PostProcessContext {
         t: 0.0,
         macros: &macros,
+        base_macros: &macros,
         audio_state: &audio_state,
         track_positions: &track_positions,
         manual_positions: &manual_positions,
@@ -310,6 +311,59 @@ fn test_post_process_world_space_pivots() {
         (out[0].1 - nalgebra::Vector3::new(3.0, 4.0, 5.0)).norm() < 1e-9,
         "identité: {:?}",
         out[0].1
+    );
+}
+
+#[test]
+fn test_manual_positions_ignore_signal_deltas() {
+    // Une position manuelle/gelée (park, attention, hold, tape) ne doit pas
+    // dériver sous les deltas du signal graph — sinon aucun gel ne gèle.
+    use crate::merge_runtime::helpers::default_post_process_fn;
+    use crate::runtime::PostProcessContext;
+    use crate::MacroState;
+    use std::collections::HashMap;
+
+    let base = MacroState::new();
+    // eff = base + delta de rotation (comme produit par macro_with_deltas)
+    let eff = MacroState::new();
+    eff.set_rotation(45.0, 0.0, 0.0);
+
+    let audio_state = crate::audio::AudioState::default();
+    let track_positions: HashMap<u32, [f64; 3]> = HashMap::new();
+    let mut manual_positions: HashMap<usize, [f64; 3]> = HashMap::new();
+    manual_positions.insert(0, [1.0, 0.0, 0.0]); // obj 0 gelé
+    let track_depths: Vec<f64> = Vec::new();
+    let origin = nalgebra::Vector3::zeros();
+
+    let ctx = PostProcessContext {
+        t: 0.0,
+        macros: &eff,
+        base_macros: &base,
+        audio_state: &audio_state,
+        track_positions: &track_positions,
+        manual_positions: &manual_positions,
+        origin,
+        track_depths: &track_depths,
+    };
+    let pp = default_post_process_fn();
+    let out = pp(
+        &ctx,
+        vec![
+            (0, nalgebra::Vector3::new(9.0, 9.0, 9.0)), // move pos ignorée
+            (1, nalgebra::Vector3::new(1.0, 0.0, 0.0)), // move pos → delta
+        ],
+    );
+    // obj 0 (manuel) : position inchangée — pas de rotation delta
+    assert!(
+        (out[0].1 - nalgebra::Vector3::new(1.0, 0.0, 0.0)).norm() < 1e-9,
+        "manuel gelé sous delta: {:?}",
+        out[0].1
+    );
+    // obj 1 (move) : le delta s'applique — yaw 45°
+    assert!(
+        (out[1].1 - nalgebra::Vector3::new(1.0, 0.0, 0.0)).norm() > 0.1,
+        "move doit subir le delta: {:?}",
+        out[1].1
     );
 }
 
@@ -1075,4 +1129,69 @@ fn test_non_identity_obj_index_mapping() {
         !map.contains_key(&2),
         "aucun envoi ne doit partir vers l'osc_id 2 (off-by-one): {map:?}"
     );
+}
+
+#[test]
+fn test_park_holds_position_and_unpark_releases() {
+    // Park = hold console : l'objet se fige à sa dernière position émise
+    // (seedé en manual_positions), pas seulement un label de recall-scope.
+    // Unpark libère le hold — mais jamais une reprise opérateur posée entre.
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    let captured = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+    rt.set_sink(Box::new(CaptureSink(captured.clone())));
+    rt.set_osc_ids(vec![1]);
+
+    let b = Arc::new(PositionBuffer::new());
+    rt.register_move(
+        "m1".to_string(),
+        b.clone(),
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::default(),
+    );
+    b.write(vec![(0usize, nalgebra::Vector3::new(5.0, 0.0, 0.0))]);
+    rt.start().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(200));
+
+    // Park → manual seedé sur la position émise, émission figée.
+    rt.park_object(0);
+    b.write(vec![(0usize, nalgebra::Vector3::new(9.0, 9.0, 9.0))]);
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    let emitted_parked = captured
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(&1)
+        .copied();
+    assert!(
+        rt.manual_position(0).is_some(),
+        "park doit seeder un manual"
+    );
+    assert_eq!(
+        emitted_parked,
+        rt.manual_position(0).map(Into::into),
+        "le parké doit émettre sa position figée, pas la move pos"
+    );
+
+    // Une reprise opérateur pendant le park devient propriété opérateur.
+    rt.set_manual_position(0, [8.0, 8.0, 8.0]);
+    rt.unpark_object(0);
+    assert_eq!(
+        rt.manual_position(0),
+        Some([8.0, 8.0, 8.0]),
+        "unpark ne doit pas effacer une reprise opérateur"
+    );
+
+    // Park + unpark propre : le manual est retiré.
+    rt.clear_all_manual_positions();
+    rt.park_object(0);
+    assert!(rt.manual_position(0).is_some());
+    rt.unpark_object(0);
+    assert!(
+        rt.manual_position(0).is_none(),
+        "unpark doit libérer le hold seedé par park"
+    );
+
+    rt.stop();
 }

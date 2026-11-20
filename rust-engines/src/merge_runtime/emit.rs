@@ -190,7 +190,10 @@ pub(super) fn emit_osc_frame(
                         if (k - 1.0).abs() > 1e-6 {
                             send_pos *= k;
                         }
-                        sink_guard.send_state(osc_id, send_pos, eff_out.as_ref())
+                        // Delta-send : un canal identique (±ε) au dernier
+                        // envoi ne repart pas — la position seule suffit.
+                        let ch_out = flow.channels_to_send(*obj_idx, eff_out);
+                        sink_guard.send_state(osc_id, send_pos, ch_out.as_ref())
                     };
                     flow.sent += report.sent as u64;
                     flow.errors += report.errors as u64;

@@ -12,7 +12,14 @@ pub struct PostProcessContext<'a> {
     /// Temps écoulé depuis le démarrage du MergeRuntime
     pub t: f64,
     /// Macros spatiales (scale, rotation, shift, radius_scale, height_offset)
+    /// — jeu effectif incluant les deltas du signal graph.
     pub macros: &'a crate::runtime::MacroState,
+    /// Macros de base sans les deltas du signal graph. Les positions
+    /// manuelles/gelées (reprise opérateur, park, hold, attention, tape)
+    /// les utilisent : un gel ne doit pas dériver sous une modulation —
+    /// sinon `attention`, `End:hold` ou la tape ne figent plus rien.
+    /// Les macros opérateur (shift/scale…) continuent de s'appliquer.
+    pub base_macros: &'a crate::runtime::MacroState,
     /// Audio state (pour AudioFalloff)
     pub audio_state: &'a crate::audio::AudioState,
     /// Positions des tracks .hol (pour Barycenter) — track_id → [x, y, z]

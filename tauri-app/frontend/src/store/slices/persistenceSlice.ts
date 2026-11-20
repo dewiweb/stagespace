@@ -10,6 +10,7 @@ import type { CueData } from '../useCuelistStore';
 import type { HolProject } from '../types/index';
 import type { OscMapping } from '../../types/generated/OscMapping';
 import type { MacrosState } from './macrosSlice';
+import { MACRO_NEUTRAL } from './macrosSlice';
 import type {
   Zone,
   ZoneParams,
@@ -405,6 +406,10 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
         }
         toast.error(`Show loaded but OSC IN mappings restore failed: ${e}`);
       }
+    } else {
+      // Section absente du fichier = état vide pour ce show — sinon les
+      // mappings de l'ancien show resteraient actifs en silence (leak).
+      await invoke('osc_clear_mappings').catch(silentCatch);
     }
 
     // 3c. Macros globales — restore frontend + push backend. Sur échec du
@@ -419,6 +424,15 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
         set({ macros: prevMacros });
         await get().pushMacrosToRuntime?.().catch(silentCatch);
         toast.error(`Show loaded but macros failed to apply: ${e}`);
+      }
+    } else {
+      // Pas de section macros dans le fichier → macros neutres : une
+      // macro résiduelle de l'ancien show transformerait encore la sortie.
+      set({ macros: { ...MACRO_NEUTRAL } });
+      try {
+        await get().pushMacrosToRuntime?.();
+      } catch (e) {
+        console.error('Failed to reset macros on show load:', e);
       }
     }
 
@@ -476,6 +490,11 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
         await useGlobalGraphStore.getState().pushGlobalGraph();
         toast.error('Show loaded but global graph failed to apply — reverted');
       }
+    } else {
+      // Le fichier n'a pas de graphe global → le backend doit être vide
+      // aussi (sinon l'ancien graphe continue de produire ses effets).
+      useGlobalGraphStore.setState({ nodes: [], edges: [] });
+      await useGlobalGraphStore.getState().pushGlobalGraph();
     }
 
     // 5b. Graph de modulation (domaine signal) — même pattern restore+push.
@@ -498,6 +517,12 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
         await useSignalGraphStore.getState().pushSignalGraph();
         toast.error('Show loaded but signal graph failed to apply — reverted');
       }
+    } else {
+      // Section signalGraph absente → modulation vide : un signal graph
+      // résiduel continuerait de produire des deltas invisibles (freeze
+      // leak constaté en E2E — les gels dérivaient sous un yaw modulé).
+      useSignalGraphStore.setState({ nodes: [], edges: [], context: 'global' });
+      await useSignalGraphStore.getState().pushSignalGraph();
     }
 
     // 6. Spatial FX — replay des zones/modulations/channels sur le backend
@@ -555,6 +580,17 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
         }
         toast.error(`Show loaded but spatial FX restore failed: ${e}`);
       }
+    } else {
+      // Pas de section spatialFx → zones/modulations/channels vides côté
+      // backend + store (leak du show précédent sinon).
+      try {
+        await invoke('clear_zones');
+        await invoke('clear_channel_modulations');
+        await invoke('clear_all_spatial_channels');
+      } catch (e) {
+        console.error('Failed to clear spatial FX on show load:', e);
+      }
+      set({ zones: [], modulations: [], objectChannels: {} });
     }
   },
 });

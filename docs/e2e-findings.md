@@ -185,3 +185,34 @@ solo/unsolo, cue/arm+go.
 **Artefacts de test (pas des bugs app)**
 - Flood console panic = répétition du collecteur MCP (1 seul appel réel).
 - `position sink send failed` = UDP connecté + ICMP unreachable.
+
+---
+
+## Session 2 — fixes + retests réels (bridge dev_bridge + shim)
+
+### Résolu et vérifié E2E
+
+| Finding | Fix | Vérif E2E |
+|---|---|---|
+| **#1 gel sous deltas** — en fait PLUS PROFOND : la chaîne pp **compilée** (`compile_post_process`, active dès qu'un graphe global existe) ne consultait **jamais** `manual_positions` → park/attention/hold/tape/manuel **entièrement bypassés** sous graphe global | `PostProcessContext.base_macros` + substitution manual + split frozen/live (base vs eff macros) dans le pp compilé ; idem `default_post_process_fn` ; frozen layers transition | `park 0` sous LFO→yaw : drift **0.0000 m** (avant : 1.06 m/1.5 s) ; `manual [9,9,9]` exact |
+| **#3 park = label** | `park_object` seed `last_canonical→manual` ; `attention_focus` skip les parkés (release ne casse pas le hold) | drift **0.0000 m**, unpark relâche |
+| **#2 reset show** | `loadShowEnvelope` : sections absentes → reset déterministe (signal graph vide poussé backend, macros, FX, OSC) | code review + persistance |
+| **#6 double-nack** | racine : shim `tauri-bridge.js` sans `__TAURI_EVENT_PLUGIN_INTERNALS__.unregisterListener` → `_unlisten` jetait TypeError avant l'invoke → **fuite de TOUS les listeners** (StrictMode/HMR) ; ajout + `__listeners` debug | fresh page : 1 cmd → **1** nack ; `show-control` listeners : 1 (était 2→8 cumulés) |
+| **#4 clés IPC ignorées** | `deny_unknown_fields` sur structs params imbriqués | `objectIndex` invalide → erreur IPC au lieu de scope élargi |
+| **#5 OSC channels** | delta-send approx_eq ε — canaux inchangés non renvoyés | unit + code review |
+
+### Nouveaux findings session 2
+
+7. **Stale `movementId` après restart backend** — le slot persisté affiche
+   "playing" (boutons Stop) alors que le runtime est vide ; la sync ne
+   tournait que sur l'event `active-moves-update` (changements seuls).
+   Fix : reconcile `refreshMovements+syncSlotMovements` au mount du
+   listener. Limite : si le backend est down au mount, le stale reste
+   jusqu'au prochain event (acceptable — indicateur backend-down présent).
+8. **`osc-armed-changed` ×3 / `conduite:cmd` ×2 listeners** — multi-mounts
+   légitimes (useShowStatusStore + useOscArmed ; App + ConduitePage), pas
+   des fuites.
+9. **Rebind slots post-recall** — respawn sous id snapshot rebindé par
+   nom unique + isPreview (testé ×1 et ×2 moves).
+10. **Log panic dédupé** — N rejections reset → 1 ligne agrégée ; le
+    "flood" était l'artefact collecteur MCP.

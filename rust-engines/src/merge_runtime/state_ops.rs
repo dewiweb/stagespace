@@ -292,8 +292,14 @@ impl MergeRuntime {
             .manual_positions
             .write()
             .unwrap_or_else(|e| e.into_inner());
+        let parked = self
+            .parked_objects
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
         for (obj, pos) in last_out {
-            if obj != focus {
+            // Park exclu : il tient déjà sa position — le release
+            // d'attention ne doit pas lui ôter son hold.
+            if obj != focus && !parked.contains(&obj) {
                 manual.insert(obj, pos);
                 frozen.insert(obj);
             }

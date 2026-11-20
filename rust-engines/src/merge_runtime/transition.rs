@@ -166,6 +166,8 @@ impl PartialEq for Layer {
 pub(crate) struct LiveInputs<'a> {
     pub post_process_fn: &'a Arc<PostProcessFn>,
     pub macros: &'a crate::runtime::MacroState,
+    /// Macros sans deltas signal — positions manuelles/gelées.
+    pub base_macros: &'a crate::runtime::MacroState,
     pub manual_positions: &'a HashMap<usize, [f64; 3]>,
     pub track_depths: &'a [f64],
     pub object_channels: &'a HashMap<usize, SpatialChannels>,
@@ -194,6 +196,7 @@ pub(crate) struct EvalCommon<'a> {
 struct LayerView<'a> {
     pp_fn: &'a Arc<PostProcessFn>,
     macros_state: Option<&'a crate::runtime::MacroState>,
+    base_macros_state: Option<&'a crate::runtime::MacroState>,
     manual_positions: &'a HashMap<usize, [f64; 3]>,
     track_depths: &'a [f64],
     object_channels: &'a HashMap<usize, SpatialChannels>,
@@ -207,6 +210,7 @@ struct LayerView<'a> {
 fn eval_layer_positions(
     view: &LayerView,
     macros_owned: &Option<crate::runtime::MacroState>,
+    base_macros_owned: &Option<crate::runtime::MacroState>,
     merged: &[(usize, nalgebra::Vector3<f64>)],
     common: &EvalCommon,
 ) -> Vec<(usize, nalgebra::Vector3<f64>)> {
@@ -216,6 +220,10 @@ fn eval_layer_positions(
             .macros_state
             .or(macros_owned.as_ref())
             .expect("macros resolved"),
+        base_macros: view
+            .base_macros_state
+            .or(base_macros_owned.as_ref())
+            .expect("base macros resolved"),
         audio_state: common.audio_state,
         track_positions: common.track_positions,
         manual_positions: view.manual_positions,
@@ -385,11 +393,12 @@ pub(crate) fn eval_positions_tree(
             blend_positions(&p_from, &p_to, b)
         }
         _ => {
-            let (view, macros_owned) = match layer {
+            let (view, macros_owned, base_owned) = match layer {
                 Layer::Live => (
                     LayerView {
                         pp_fn: live.post_process_fn,
                         macros_state: Some(live.macros),
+                        base_macros_state: Some(live.base_macros),
                         manual_positions: live.manual_positions,
                         track_depths: live.track_depths,
                         object_channels: live.object_channels,
@@ -398,15 +407,18 @@ pub(crate) fn eval_positions_tree(
                         origin: live.origin,
                     },
                     None,
+                    None,
                 ),
                 Layer::Frozen(l) => {
-                    let m = crate::runtime::MacroState::new();
-                    m.restore_all(&l.macros);
-                    let m = crate::signal_compiler::macro_with_deltas(&m, common.macros_deltas);
+                    let m_base = crate::runtime::MacroState::new();
+                    m_base.restore_all(&l.macros);
+                    let m =
+                        crate::signal_compiler::macro_with_deltas(&m_base, common.macros_deltas);
                     (
                         LayerView {
                             pp_fn: &l.post_process_fn,
                             macros_state: None,
+                            base_macros_state: None,
                             manual_positions: &l.manual_positions,
                             track_depths: &l.track_depths,
                             object_channels: &l.object_channels,
@@ -415,11 +427,12 @@ pub(crate) fn eval_positions_tree(
                             origin: l.origin,
                         },
                         Some(m),
+                        Some(m_base),
                     )
                 }
                 Layer::Blend { .. } => unreachable!(),
             };
-            eval_layer_positions(&view, &macros_owned, merged, common)
+            eval_layer_positions(&view, &macros_owned, &base_owned, merged, common)
         }
     }
 }
@@ -444,11 +457,12 @@ pub(crate) fn eval_channels_tree(
             blend_channels(&c_from, &c_to, b)
         }
         _ => {
-            let (view, macros_owned) = match layer {
+            let (view, macros_owned, base_owned) = match layer {
                 Layer::Live => (
                     LayerView {
                         pp_fn: live.post_process_fn,
                         macros_state: Some(live.macros),
+                        base_macros_state: Some(live.base_macros),
                         manual_positions: live.manual_positions,
                         track_depths: live.track_depths,
                         object_channels: live.object_channels,
@@ -457,15 +471,18 @@ pub(crate) fn eval_channels_tree(
                         origin: live.origin,
                     },
                     None,
+                    None,
                 ),
                 Layer::Frozen(l) => {
-                    let m = crate::runtime::MacroState::new();
-                    m.restore_all(&l.macros);
-                    let m = crate::signal_compiler::macro_with_deltas(&m, common.macros_deltas);
+                    let m_base = crate::runtime::MacroState::new();
+                    m_base.restore_all(&l.macros);
+                    let m =
+                        crate::signal_compiler::macro_with_deltas(&m_base, common.macros_deltas);
                     (
                         LayerView {
                             pp_fn: &l.post_process_fn,
                             macros_state: None,
+                            base_macros_state: None,
                             manual_positions: &l.manual_positions,
                             track_depths: &l.track_depths,
                             object_channels: &l.object_channels,
@@ -474,12 +491,13 @@ pub(crate) fn eval_channels_tree(
                             origin: l.origin,
                         },
                         Some(m),
+                        Some(m_base),
                     )
                 }
                 Layer::Blend { .. } => unreachable!(),
             };
             // Zones évaluées sur les positions de CETTE feuille.
-            let positions = eval_layer_positions(&view, &macros_owned, merged, common);
+            let positions = eval_layer_positions(&view, &macros_owned, &base_owned, merged, common);
             eval_layer_channels(&view, &positions, kin_states)
         }
     }
@@ -519,6 +537,7 @@ mod tests {
         LiveInputs {
             post_process_fn: pp,
             macros,
+            base_macros: macros,
             manual_positions: Box::leak(Box::new(HashMap::new())),
             track_depths: &[],
             object_channels: channels,
@@ -738,6 +757,7 @@ mod zone_tests {
         let live = LiveInputs {
             post_process_fn: &pp,
             macros: &macros,
+            base_macros: &macros,
             manual_positions: Box::leak(Box::new(HashMap::new())),
             track_depths: &[],
             object_channels: &live_channels,
@@ -804,6 +824,7 @@ mod signal_delta_tests {
         let live = LiveInputs {
             post_process_fn: &pp,
             macros: &eff,
+            base_macros: &macros,
             manual_positions: Box::leak(Box::new(HashMap::new())),
             track_depths: &[],
             object_channels: &channels,
@@ -858,6 +879,7 @@ mod signal_delta_tests {
         let live2 = LiveInputs {
             post_process_fn: &pp,
             macros: &eff_to,
+            base_macros: &macros_to,
             manual_positions: Box::leak(Box::new(HashMap::new())),
             track_depths: &[],
             object_channels: &channels,

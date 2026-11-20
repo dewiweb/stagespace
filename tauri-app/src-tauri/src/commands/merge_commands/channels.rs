@@ -81,6 +81,7 @@ pub async fn list_channel_modulations(
 
 /// Paramètres d'une règle de modulation cinématique
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ModulationParams {
     /// Source cinématique : speed | accel | jerk
     pub source: String,
@@ -175,6 +176,7 @@ pub async fn set_kinematic_smoothing(
 
 /// Paramètres d'une zone d'effet spatial
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ZoneParams {
     /// "sphere" (center+radius) ou "box" (min+max)
     pub shape: String,

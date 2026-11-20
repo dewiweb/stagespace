@@ -189,9 +189,25 @@ pub fn compile_post_process(
     // Trouver la chaîne de nodes depuis Output vers l'amont
     let chain = build_transform_chain(graph, output_node.id)?;
 
-    // Si la chaîne est vide, retourner une fonction identité
+    // Chaîne vide : identité sur les positions, mais la substitution des
+    // positions gelées (manual_positions) reste due — sinon un park/hold
+    // serait ignoré dès qu'un graphe global Output→Merge direct existe.
     if chain.is_empty() {
-        return Ok(Box::new(|_ctx, positions| positions));
+        return Ok(Box::new(|ctx: &PostProcessContext, positions| {
+            if ctx.manual_positions.is_empty() {
+                return positions;
+            }
+            positions
+                .into_iter()
+                .map(|(idx, pos)| {
+                    if let Some(m) = ctx.manual_positions.get(&idx) {
+                        (idx, nalgebra::Vector3::new(m[0], m[1], m[2]))
+                    } else {
+                        (idx, pos)
+                    }
+                })
+                .collect()
+        }));
     }
 
     // Compiler chaque node en une closure de transformation
@@ -207,7 +223,27 @@ pub fn compile_post_process(
     // sur l'isobarycentre des `track_positions` pour les transforms qui
     // le SUIVENT dans la chaîne — la position du node a donc un sens.
     Ok(Box::new(move |ctx: &PostProcessContext, positions| {
-        let mut result = positions;
+        // Objets gelés (manual_positions : park, attention, tape, throw,
+        // hold, prise opérateur) — même sémantique que
+        // `default_post_process_fn` : la position gelée remplace la
+        // position du move en entrée de chaîne, et les transforms
+        // macro-driven appliquent les macros de BASE (pas les deltas du
+        // signal graph) — sinon un gel fuirait sous un graphe signal.
+        let has_manual = !ctx.manual_positions.is_empty();
+        let mut result: Vec<(usize, nalgebra::Vector3<f64>)> = if has_manual {
+            positions
+                .into_iter()
+                .map(|(idx, pos)| {
+                    if let Some(m) = ctx.manual_positions.get(&idx) {
+                        (idx, nalgebra::Vector3::new(m[0], m[1], m[2]))
+                    } else {
+                        (idx, pos)
+                    }
+                })
+                .collect()
+        } else {
+            positions
+        };
         let mut origin = ctx.origin;
         for (i, transform) in transforms.iter().enumerate() {
             if bary_flags[i] && !ctx.track_positions.is_empty() {
@@ -221,7 +257,27 @@ pub fn compile_post_process(
                     / n;
             }
             let ctx_eff = PostProcessContext { origin, ..*ctx };
-            result = transform(&ctx_eff, result);
+            if has_manual {
+                // Split per-objet : gelés sous base_macros, les autres
+                // sous macros effectives (base + deltas signal).
+                let (frozen, live): (Vec<_>, Vec<_>) = result
+                    .into_iter()
+                    .partition(|(idx, _)| ctx.manual_positions.contains_key(idx));
+                let mut out = Vec::with_capacity(frozen.len() + live.len());
+                if !frozen.is_empty() {
+                    let ctx_frozen = PostProcessContext {
+                        macros: ctx.base_macros,
+                        ..ctx_eff
+                    };
+                    out.extend(transform(&ctx_frozen, frozen));
+                }
+                if !live.is_empty() {
+                    out.extend(transform(&ctx_eff, live));
+                }
+                result = out;
+            } else {
+                result = transform(&ctx_eff, result);
+            }
         }
         result
     }))

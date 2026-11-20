@@ -184,6 +184,10 @@ pub struct MergeRuntime {
     /// jamais leurs canaux : la reprise manuelle d'un opérateur a priorité
     /// sur la mémoire enregistrée (sémantique Park des consoles).
     parked_objects: Arc<RwLock<HashSet<usize>>>,
+    /// Positions manuelles écrites PAR le park (hold) — permet à `unpark`
+    /// de ne retirer que ce qu'il a seedé, jamais une reprise opérateur
+    /// posée ensuite (même distinction held/manual).
+    park_frozen: Arc<RwLock<HashSet<usize>>>,
     /// End-mode par move (Revert | Hold) — posé au register_move, lu au
     /// retrait : Hold écrit la dernière position en manual_positions.
     move_end_modes: Arc<RwLock<HashMap<String, crate::EndMode>>>,
@@ -365,6 +369,7 @@ impl MergeRuntime {
             manual_positions: Arc::new(RwLock::new(HashMap::new())),
             object_channels: Arc::new(RwLock::new(HashMap::new())),
             parked_objects: Arc::new(RwLock::new(HashSet::new())),
+            park_frozen: Arc::new(RwLock::new(HashSet::new())),
             move_end_modes: Arc::new(RwLock::new(HashMap::new())),
             last_out_positions: Arc::new(RwLock::new(HashMap::new())),
             last_effective_channels: Arc::new(RwLock::new(HashMap::new())),

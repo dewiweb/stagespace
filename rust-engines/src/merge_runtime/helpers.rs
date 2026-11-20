@@ -129,12 +129,22 @@ pub fn merge_positions(
 /// 6. shift (translation finale)
 pub fn default_post_process_fn() -> PostProcessFn {
     Box::new(|ctx: &PostProcessContext, positions| {
+        let origin = ctx.origin;
+
+        // Deux jeux de paramètres : `macros` (avec deltas signal) pour les
+        // positions de move, `base_macros` (sans deltas) pour les positions
+        // manuelles — une modulation ne doit pas faire dériver un gel.
         let scale = ctx.macros.get_scale();
         let shift = ctx.macros.get_shift();
         let (yaw, pitch, roll) = ctx.macros.get_rotation();
         let radius_scale = ctx.macros.get_radius_scale();
         let height_offset = ctx.macros.get_height_offset();
-        let origin = ctx.origin;
+
+        let b_scale = ctx.base_macros.get_scale();
+        let b_shift = ctx.base_macros.get_shift();
+        let (b_yaw, b_pitch, b_roll) = ctx.base_macros.get_rotation();
+        let b_radius_scale = ctx.base_macros.get_radius_scale();
+        let b_height_offset = ctx.base_macros.get_height_offset();
 
         // Matrice de rotation — ordre canonique `spatial_transform::euler_rotation`
         // (X→Y→Z, unifié avec le modifier sub-graph depuis T2).
@@ -143,17 +153,39 @@ pub fn default_post_process_fn() -> PostProcessFn {
             yaw.to_radians(),
             roll.to_radians(),
         );
+        let b_rot_matrix = crate::spatial_transform::euler_rotation(
+            b_pitch.to_radians(),
+            b_yaw.to_radians(),
+            b_roll.to_radians(),
+        );
         let scale_vec = nalgebra::Vector3::new(scale, scale, scale);
+        let b_scale_vec = nalgebra::Vector3::new(b_scale, b_scale, b_scale);
 
         positions
             .iter()
             .map(|(obj_idx, pos)| {
                 // ManualPosition : si une position manuelle existe, l'utiliser
-                // (les positions manuelles sont déjà en world-space)
-                let pos = if let Some(manual) = ctx.manual_positions.get(obj_idx) {
-                    nalgebra::Vector3::new(manual[0], manual[1], manual[2])
+                // (les positions manuelles sont déjà en world-space) et la
+                // transformer avec les macros de base — les deltas du signal
+                // graph ne s'appliquent pas aux objets gelés.
+                let (pos, is_manual) = if let Some(manual) = ctx.manual_positions.get(obj_idx) {
+                    (
+                        nalgebra::Vector3::new(manual[0], manual[1], manual[2]),
+                        true,
+                    )
                 } else {
-                    *pos
+                    (*pos, false)
+                };
+                let (radius_scale, height_offset, scale_vec, rot_matrix, shift) = if is_manual {
+                    (
+                        b_radius_scale,
+                        b_height_offset,
+                        b_scale_vec,
+                        &b_rot_matrix,
+                        b_shift,
+                    )
+                } else {
+                    (radius_scale, height_offset, scale_vec, &rot_matrix, shift)
                 };
 
                 // radius_scale : scaling radial par rapport à l'origin
@@ -181,7 +213,7 @@ pub fn default_post_process_fn() -> PostProcessFn {
                 // scale → rotation (pivots à l'origin) → shift
                 let pos_scaled =
                     crate::spatial_transform::pivot_scale(pos_with_depth, origin, scale_vec);
-                let pos_rotated = if let Some(ref rot) = rot_matrix {
+                let pos_rotated = if let Some(rot) = rot_matrix {
                     crate::spatial_transform::pivot_rotate(pos_scaled, origin, rot)
                 } else {
                     pos_scaled

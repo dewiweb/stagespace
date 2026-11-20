@@ -27,6 +27,26 @@ pub struct SpatialChannels {
 }
 
 impl SpatialChannels {
+    /// Égalité approximative champ à champ — sert au delta-send : sous ε,
+    /// une variation (jitter de modulation, flottants) ne mérite pas un
+    /// paquet OSC supplémentaire.
+    pub fn approx_eq(&self, other: &SpatialChannels, eps: f64) -> bool {
+        fn oe(a: Option<f64>, b: Option<f64>, eps: f64) -> bool {
+            match (a, b) {
+                (None, None) => true,
+                (Some(x), Some(y)) => (x - y).abs() <= eps,
+                _ => false,
+            }
+        }
+        oe(self.gain, other.gain, eps)
+            && oe(self.spread, other.spread, eps)
+            && oe(self.distance, other.distance, eps)
+            && oe(self.presence, other.presence, eps)
+            && oe(self.yaw, other.yaw, eps)
+            && oe(self.aperture, other.aperture, eps)
+            && oe(self.lfe, other.lfe, eps)
+    }
+
     /// Retourne true si aucun canal n'est défini
     pub fn is_empty(&self) -> bool {
         self.gain.is_none()

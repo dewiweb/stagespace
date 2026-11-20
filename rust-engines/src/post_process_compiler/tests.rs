@@ -44,6 +44,7 @@ fn run_test(
     let ctx = PostProcessContext {
         t: 0.0,
         macros: &macros_ref,
+        base_macros: &macros_ref,
         audio_state: &audio,
         track_positions: &track_positions,
         manual_positions: &manual_positions,
@@ -168,6 +169,7 @@ fn run_test_full(
     let ctx = PostProcessContext {
         t: 0.0,
         macros: &macros_ref,
+        base_macros: &macros_ref,
         audio_state: &audio,
         track_positions: &track_positions,
         manual_positions: &manual_positions,
@@ -197,6 +199,7 @@ fn run_test_with_macros(
     let ctx = PostProcessContext {
         t: 0.0,
         macros: &macros,
+        base_macros: &macros,
         audio_state: &audio,
         track_positions: &track_positions,
         manual_positions: &HashMap::new(),
@@ -801,6 +804,7 @@ fn test_barycenter_position_in_chain_changes_pivot() {
     let ctx = PostProcessContext {
         t: 0.0,
         macros: Box::leak(Box::new(MacroState::new())),
+        base_macros: Box::leak(Box::new(MacroState::new())),
         audio_state: Box::leak(Box::new(crate::audio::AudioState::new())),
         track_positions: Box::leak(Box::new(tracks)),
         manual_positions: Box::leak(Box::new(HashMap::new())),
@@ -996,6 +1000,7 @@ fn test_lfo_oscillates_in_global_graph() {
         let ctx = PostProcessContext {
             t,
             macros: &m,
+            base_macros: &m,
             audio_state: &audio,
             track_positions: &tp,
             manual_positions: &mp,
@@ -1044,6 +1049,7 @@ fn test_jitter_in_global_graph() {
         let ctx = PostProcessContext {
             t,
             macros: &m,
+            base_macros: &m,
             audio_state: &audio,
             track_positions: &tp,
             manual_positions: &mp,

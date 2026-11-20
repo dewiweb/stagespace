@@ -189,6 +189,7 @@ mod complex_graph_tests {
         let ctx = stagespace_engines::runtime::PostProcessContext {
             t: 0.0,
             macros: &macros,
+            base_macros: &macros,
             audio_state: &audio,
             track_positions: &track_positions,
             manual_positions: &manual_positions,

@@ -565,6 +565,7 @@ impl MergeRuntime {
                 let ctx = PostProcessContext {
                     t: t_real,
                     macros: eff_macros.as_ref().unwrap_or_else(|| macros.as_ref()),
+                    base_macros: macros.as_ref(),
                     audio_state: &audio_state,
                     track_positions: &track_positions,
                     manual_positions: &manual_positions,
@@ -675,6 +676,7 @@ impl MergeRuntime {
                         .map(|(pp_fn, ch, zo, mo)| transition::LiveInputs {
                             post_process_fn: pp_fn,
                             macros: eff_macros.as_ref().unwrap_or_else(|| macros.as_ref()),
+                            base_macros: macros.as_ref(),
                             manual_positions: &manual_positions,
                             track_depths: &track_depths,
                             object_channels: ch,
@@ -1098,6 +1100,7 @@ impl MergeRuntime {
                 let ctx = PostProcessContext {
                     t,
                     macros: &macros,
+                    base_macros: &macros,
                     audio_state: &audio_state,
                     track_positions: &track_positions,
                     manual_positions: &manual_positions,

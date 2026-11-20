@@ -31,6 +31,16 @@
     cb.fn(data);
   }
 
+  // Un listener = paire (eventId -> callbackId) : la suppression doit
+  // nettoyer les deux, comme le fait le unregisterListener natif de Tauri.
+  function removeListener(event, eventId) {
+    var m = listeners.get(event);
+    if (!m) return;
+    var cid = m.get(eventId);
+    m.delete(eventId);
+    if (cid !== undefined) callbacks.delete(cid);
+  }
+
   var es = new EventSource(bridge + '/events');
   es.onmessage = function (m) {
     try {
@@ -46,6 +56,7 @@
 
   window.__TAURI_INTERNALS__ = {
     callbacks: callbacks,
+    __listeners: listeners,
     metadata: {
       currentWindow: { label: 'main' },
       currentWebviewWindow: { label: 'main' },
@@ -61,8 +72,7 @@
         return Promise.resolve(id);
       }
       if (cmd === 'plugin:event|unlisten') {
-        var m = listeners.get(args.event);
-        if (m) m.delete(args.eventId);
+        removeListener(args.event, args.eventId);
         return Promise.resolve();
       }
       if (cmd === 'plugin:event|emit' || cmd === 'plugin:event|emit_to') {
@@ -96,6 +106,14 @@
     runCallback: runCallback,
     convertFileSrc: function (p) { return p; },
     canParseTarget: function () { return false; },
+  };
+  // Requis par @tauri-apps/api v2 : _unlisten() appelle cet hook AVANT
+  // l'invoke plugin:event|unlisten — sans lui le unlisten jetait une
+  // TypeError et le listener fuyait (doublons StrictMode / remounts).
+  window.__TAURI_EVENT_PLUGIN_INTERNALS__ = {
+    unregisterListener: function (event, eventId) {
+      removeListener(event, eventId);
+    },
   };
   window.__TAURI__ = {};
 })();

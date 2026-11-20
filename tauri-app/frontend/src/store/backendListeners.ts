@@ -110,6 +110,13 @@ export const useMovementPositionsListener = () => {
 
   // Écouter active-moves-update pour sync la liste des moves (activate/deactivate côté backend)
   React.useEffect(() => {
+    // Reconcile initial : l'event ne part que sur CHANGEMENT backend — un
+    // restart backend avec un runtime vide n'émet rien et le movementId
+    // persisté resterait stale (slot "playing" fantôme). Le backend est la
+    // source de vérité : on tire la liste réelle au mount.
+    void refreshMovements().then(() =>
+      useGraphStore.getState().syncSlotMovements(),
+    );
     const unlisten = listen('active-moves-update', async () => {
       await refreshMovements();
       // Sync les slots après refresh — nettoie les movementIds stale

@@ -251,6 +251,9 @@ pub(super) struct OscFlow {
     pub bad_windows: u32,
     pub circuit_open: bool,
     pub last_probe: Instant,
+    /// Derniers canaux spatiaux envoyés par objet — delta-send : un canal
+    /// inchangé (±ε) ne repart pas sur le fil à chaque frame.
+    last_channels: std::collections::HashMap<usize, crate::osc_sender::SpatialChannels>,
 }
 
 impl OscFlow {
@@ -262,7 +265,37 @@ impl OscFlow {
             bad_windows: 0,
             circuit_open: false,
             last_probe: Instant::now() - Duration::from_secs(1),
+            last_channels: std::collections::HashMap::new(),
         }
+    }
+
+    /// Delta-send des canaux : renvoie les canaux à émettre (Some) ou
+    /// None s'ils sont identiques (±ε) au dernier envoi — la position
+    /// part toujours, seuls les messages de canaux sont économisés.
+    pub(super) fn channels_to_send(
+        &mut self,
+        obj_idx: usize,
+        eff: Option<crate::osc_sender::SpatialChannels>,
+    ) -> Option<crate::osc_sender::SpatialChannels> {
+        const EPS: f64 = 1e-3;
+        let prev = self.last_channels.get(&obj_idx).copied();
+        let unchanged = match (&prev, &eff) {
+            (None, None) => true,
+            (Some(p), Some(e)) => p.approx_eq(e, EPS),
+            _ => false,
+        };
+        if unchanged {
+            return None;
+        }
+        match eff {
+            Some(e) => {
+                self.last_channels.insert(obj_idx, e);
+            }
+            None => {
+                self.last_channels.remove(&obj_idx);
+            }
+        }
+        eff
     }
 }
 
