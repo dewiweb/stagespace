@@ -103,7 +103,11 @@ function AppMain() {
   const [leftCollapsed, setLeftCollapsed] = usePersistedState<boolean>('ss-layout-leftCollapsed', false);
   const [rightCollapsed, setRightCollapsed] = usePersistedState<boolean>('ss-layout-rightCollapsed', false);
   const [rightWidth, setRightWidth] = usePersistedState<number>('ss-layout-rightWidth', 288);
-  const [leftWidth, setLeftWidth] = usePersistedState<number>('ss-layout-leftWidth', 256);
+  // 256px historique étouffait la MovesTable (mesuré : ~503px utiles pour
+  // 6 colonnes + actions) — l'opérateur devait élargir à la main à chaque
+  // install. La migration douce ci-dessous n'élargit que ceux qui n'ont
+  // jamais touché au resize (valeur persistée = l'ancien défaut exact).
+  const [leftWidth, setLeftWidth] = usePersistedState<number>('ss-layout-leftWidth', 520);
   const resizingRef = React.useRef(false);
   const resizingSideRef = React.useRef<'left' | 'right' | 'expert'>('right');
   // Ratio NodeEditor/Scene3D en mode Expert (0.5 = moitié/moitié)
@@ -127,6 +131,16 @@ function AppMain() {
   const [audioExpanded, setAudioExpanded] = usePersistedState<boolean>('ss-layout-audioExpanded', false);
   // Premier lancement : proposer le show d'exemple bundle (évalué une fois)
   const [showWelcome, setShowWelcome] = React.useState(shouldShowWelcome);
+
+  // Migration largeur gauche : 256 était l'ancien défaut — les utilisateurs
+  // qui n'ont jamais redimensionné héritent du nouveau défaut (520) ; une
+  // largeur choisie à la main est préservée.
+  const migratedLeftWidth = React.useRef(false);
+  React.useEffect(() => {
+    if (migratedLeftWidth.current) return;
+    migratedLeftWidth.current = true;
+    if (leftWidth === 256) setLeftWidth(520);
+  }, [leftWidth, setLeftWidth]);
 
   // Listen to movement positions (multi-runtime)
   useMovementPositionsListener();
@@ -173,7 +187,7 @@ function AppMain() {
         const ratio = (e.clientX - rect.left) / rect.width;
         setExpertSplit(Math.max(0.25, Math.min(0.8, ratio)));
       } else {
-        const newWidth = Math.max(200, Math.min(500, e.clientX));
+        const newWidth = Math.max(200, Math.min(700, e.clientX));
         setLeftWidth(newWidth);
       }
     };

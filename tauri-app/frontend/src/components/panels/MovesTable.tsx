@@ -243,8 +243,10 @@ export default function MovesTable() {
         </div>
       )}
 
-      {/* ═══ Table ═══ */}
-      <div className="flex-1 overflow-y-auto min-h-0">
+      {/* ═══ Table ═══ — overflow-x : la table demande ~500px ; un
+          panneau resserré scrolle horizontalement plutôt que d'étouffer
+          les colonnes Actions/Set. */}
+      <div className="flex-1 overflow-auto min-h-0">
         {moveSlots.length === 0 ? (
           <div className="px-4 py-4">
             <EmptyState
