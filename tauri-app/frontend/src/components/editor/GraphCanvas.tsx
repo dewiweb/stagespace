@@ -3,7 +3,7 @@ import {
   ReactFlow, useReactFlow, Background, Controls, MiniMap, Panel, NodeTypes,
   type Node, type Edge, type Connection, type OnConnectStartParams,
   type OnNodesChange, type OnEdgesChange, type HandleType,
-  type ReactFlowInstance,
+  type ReactFlowInstance, type OnConnectEnd,
 } from '@xyflow/react';
 import EmptyState from '../ui/EmptyState';
 import { getCategoryColor, type GraphNode } from '../nodeParamSchema';
@@ -29,7 +29,7 @@ interface GraphCanvasProps {
   onEdgesChange: OnEdgesChange<Edge>;
   onConnect: (connection: Connection) => void;
   onConnectStart: (event: unknown, params: OnConnectStartParams) => void;
-  onConnectEnd: (event: unknown) => void;
+  onConnectEnd: OnConnectEnd;
   /// Drag du endpoint d'une edge vers une autre cible (reconnect plugdata).
   onReconnect: (oldEdge: Edge, newConnection: Connection) => void;
   onReconnectStart: (event: unknown, edge: Edge, handleType: HandleType) => void;

@@ -8,6 +8,7 @@ import {
   type OnConnectStartParams,
   type HandleType,
   type ReactFlowInstance,
+  type FinalConnectionState,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
@@ -328,68 +329,73 @@ export const NodeEditor: React.FC = () => {
     ],
   );
 
-  const onConnectEnd = useCallback((event: any) => {
+  const onConnectEnd = useCallback((event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
     const conn = connectingFrom;
     setConnectingFrom(null);
-    // Drop réussi → onConnect a tourné. Drop sur un node incompatible →
-    // expliquer pourquoi. Drop sur le pane → QuickAdd filtré au type de
-    // port du fil (le geste signature plugdata : lâcher un fil dans le
-    // vide ouvre la palette des nodes compatibles, posés câblés).
+    // Drop réussi → onConnect a tourné. Drop près d'un handle
+    // incompatible → expliquer le refus (toHandle/isValid sont typés
+    // par xyflow — plus de navigation du DOM interne dataset.id/handleid
+    // qui casserait à un changement de markup). Drop sur le pane →
+    // QuickAdd filtré au type de port (geste signature plugdata).
     if (connectedThisDrop.current || !conn) return;
     const el = event.target as HTMLElement | null;
-    const targetNodeEl = el?.closest?.('.react-flow__node') as HTMLElement | null;
-    const targetId = targetNodeEl?.dataset?.id;
-    if (!targetId) {
-      if (el?.closest?.('.react-flow__pane')) {
-        // Fil arraché d'une entrée déjà câblée et lâché dans le vide =
-        // "tirer le cable" (sémantique Max) → supprimer l'edge, pas de
-        // QuickAdd. Entrée vierge → QuickAdd filtré (création).
-        if (conn.handleType === 'target') {
-          const incoming = displayEdges.find(
-            (e) => e.target === conn.nodeId
-              && (e.targetHandle ?? 'in') === (conn.handleId ?? 'in'),
+
+    // Cas 1 : drop près d'un handle — toHandle est renseigné, et
+    // isValid reflète déjà checkValidConnection pour CE handle.
+    if (connectionState.toHandle && connectionState.isValid === false) {
+      const toNode = connectionState.toNode;
+      const toType = toNode?.data?.type as NodeType | undefined;
+      if (!toType) return;
+      const toPluginKind = toType === 'Plugin'
+        ? plugins.find((m) => m.id === (toNode as GraphNode | undefined)?.data?.params?.plugin_id)?.kind
+        : undefined;
+      const targetPort = connectionState.toHandle.id;
+      // Back-drag (fil tiré depuis une entrée) : la cible devient la
+      // source de l'edge — la raison se formule dans le sens du flux.
+      const reason = conn.handleType === 'source'
+        ? connectionRejectionReason(
+            conn.type, toType, conn.handleId ?? undefined, targetPort ?? undefined, toPluginKind,
+          )
+        : connectionRejectionReason(
+            toType, conn.type, targetPort ?? undefined, conn.handleId ?? undefined,
+            pluginKindOf(toNode as unknown as GraphNode | undefined),
           );
-          if (incoming) {
-            removeByIds(new Set(), new Set([incoming.id]));
-            return;
-          }
-        }
-        const srcNode = displayNodes.find((n) => n.id === conn.nodeId);
-        const portType = conn.handleType === 'source'
-          ? outputPortType(conn.type, conn.handleId)
-          : inputPortType(conn.type, conn.handleId, pluginKindOf(srcNode as GraphNode | undefined));
-        if (portType) {
-          const pt = event.changedTouches?.[0] ?? event;
-          insert.openQuickAddForWire({
-            nodeId: conn.nodeId,
-            handleId: conn.handleId,
-            dir: conn.handleType === 'source' ? 'from' : 'to',
-            portType,
-            screen: { x: pt.clientX, y: pt.clientY },
-          });
-        }
-      }
+      if (reason) toast.warning(reason);
       return;
     }
-    const targetNode = displayNodes.find((n) => n.id === targetId);
-    const toType = targetNode?.data.type as NodeType | undefined;
-    if (!toType) return;
-    const toPluginKind = toType === 'Plugin'
-      ? plugins.find((m) => m.id === targetNode?.data.params?.plugin_id)?.kind
-      : undefined;
-    const handleEl = el?.closest?.('.react-flow__handle') as HTMLElement | null;
-    const targetPort = handleEl?.dataset?.handleid ?? null;
-    // Back-drag (fil tiré depuis une entrée) : la cible devient la source
-    // de l'edge — la raison du refus se formule dans le sens du flux.
-    const reason = conn.handleType === 'source'
-      ? connectionRejectionReason(
-          conn.type, toType, conn.handleId ?? undefined, targetPort ?? undefined, toPluginKind,
-        )
-      : connectionRejectionReason(
-          toType, conn.type, targetPort ?? undefined, conn.handleId ?? undefined,
-          pluginKindOf(targetNode as GraphNode | undefined),
+
+    // Cas 2 : drop sur le pane (toHandle null, pas de node sous le
+    // curseur — un drop sur le corps d'un node n'est pas une tentative
+    // de connexion à un port, on ne toast pas).
+    if (el?.closest?.('.react-flow__pane')) {
+      // Fil arraché d'une entrée déjà câblée et lâché dans le vide =
+      // "tirer le cable" (sémantique Max) → supprimer l'edge, pas de
+      // QuickAdd. Entrée vierge → QuickAdd filtré (création).
+      if (conn.handleType === 'target') {
+        const incoming = displayEdges.find(
+          (e) => e.target === conn.nodeId
+            && (e.targetHandle ?? 'in') === (conn.handleId ?? 'in'),
         );
-    if (reason) toast.warning(reason);
+        if (incoming) {
+          removeByIds(new Set(), new Set([incoming.id]));
+          return;
+        }
+      }
+      const srcNode = displayNodes.find((n) => n.id === conn.nodeId);
+      const portType = conn.handleType === 'source'
+        ? outputPortType(conn.type, conn.handleId)
+        : inputPortType(conn.type, conn.handleId, pluginKindOf(srcNode as GraphNode | undefined));
+      if (portType) {
+        const pt = 'changedTouches' in event ? event.changedTouches[0] : event;
+        insert.openQuickAddForWire({
+          nodeId: conn.nodeId,
+          handleId: conn.handleId,
+          dir: conn.handleType === 'source' ? 'from' : 'to',
+          portType,
+          screen: { x: pt.clientX, y: pt.clientY },
+        });
+      }
+    }
   }, [connectingFrom, displayNodes, displayEdges, plugins, pluginKindOf, removeByIds, insert]);
 
   // Double-clic sur un node MoveRef → sélectionner le move et switcher vers le tab sub-graph
@@ -724,7 +730,12 @@ export const NodeEditor: React.FC = () => {
         {nodeMenu && (
           <div
             className="fixed z-menu w-56 bg-gray-900 border border-gray-700 rounded-lg shadow-xl overflow-hidden"
-            style={{ left: nodeMenu.x, top: nodeMenu.y }}
+            style={{
+              // Clampé au viewport — un clic droit près du bord droit/bas
+              // ouvrait le menu hors écran (w-56 = 224px, ~260px de haut).
+              left: Math.min(nodeMenu.x, window.innerWidth - 236),
+              top: Math.min(nodeMenu.y, window.innerHeight - 268),
+            }}
           >
             <div className="px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-800">
               {nodeMenu.nodeType} — runnable examples
