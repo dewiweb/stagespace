@@ -64,7 +64,7 @@ export const Slider: React.FC<SliderProps> = ({
       value={value}
       disabled={disabled}
       onChange={(e) => onChange(parseFloat(e.target.value))}
-      className={`flex-1 min-w-0 h-1.5 ${ACCENTS[accent]} disabled:opacity-30 ${
+      className={`nodrag flex-1 min-w-0 h-1.5 ${ACCENTS[accent]} disabled:opacity-30 ${
         layout === 'bare' ? className : ''
       }`}
     />

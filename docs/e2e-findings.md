@@ -563,3 +563,26 @@ cue (les buskés restent dans le compteur « N moves live »).
   Signals (tab Mods). Tooltip par catégorie explique la tâche
   ("Wire the pipeline — Objects → engine → Output"). Cosmétique
   pur : `CATEGORY_META` mappe les catégories backend inchangées.
+
+## Session 9 — lot graphe (dur)
+
+- **Style d'edge piloté par port_type** (NodeEditor) : les hardcodes
+  `'objects','duration','spline'` sur les noms de handle sont
+  remplacés par `inputPortType` (catalogue + kind plugin) — la classe
+  rf-edge-duration/spline, l'éligibilité splice ET l'animation
+  partagent le même prédicat que les règles de connexion. Un handle
+  renommé ou un 5e type de port ne peut plus diverger.
+- **Animation = flux continu** : `edgesLive` animait TOUTES les edges
+  (objects/duration/spline = carriers lus au spawn uniquement).
+  Désormais seules Positions/Signal s'animent — ce qui bouge à
+  l'écran = ce qui bouge au backend.
+- **nodrag sur TOUS les contrôles de node** : inputs/selects/toggles/
+  sliders/chevrons/spline-library — avant, un mousedown dans un
+  champ déplaçait le node (1 seul nodrag sur tout le fichier).
+  Prouvé : pointerdown+move dans un input → transform inchangé.
+- **Ids de nodes anti-collision** : `${type}-${Date.now()}` →
+  `-${counter}` — deux créations dans la même ms (quick-add, paste)
+  ne partagent plus un id.
+- **Audit remis à jour** : F11 (edge ids) corrigé par xyflow v12
+  (`xy-edge__src.sh-tgt.th`) + F12 (dblclick bubbling) déjà gardé —
+  les deux findings étaient obsolètes post-refacto.

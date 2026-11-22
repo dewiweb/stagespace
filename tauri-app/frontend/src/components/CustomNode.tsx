@@ -265,7 +265,7 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
         {schema.length > 0 && (
           <button
             onClick={() => setExpanded(!expanded)}
-            className="text-gray-400 hover:text-white text-xs ml-2 px-1"
+            className="nodrag text-gray-400 hover:text-white text-xs ml-2 px-1"
             aria-label={expanded ? 'Collapse' : 'Expand'}
           >
             {expanded ? '▾' : '▸'}
@@ -487,7 +487,7 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
         <select
           onChange={handleLoad}
           defaultValue=""
-          className="w-full px-2 py-1 bg-gray-900 text-cyan-300 text-xs font-mono rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
+          className="nodrag w-full px-2 py-1 bg-gray-900 text-cyan-300 text-xs font-mono rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
         >
           <option value="" disabled>Load a spline...</option>
           {savedSplines.map((s) => (
@@ -504,7 +504,7 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
               <span className="text-gray-400 font-mono truncate flex-1">{s.name}</span>
               <button
                 onClick={() => handleDelete(s.id)}
-                className="text-red-500 hover:text-red-400 px-1"
+                className="nodrag text-red-500 hover:text-red-400 px-1"
                 title="Delete"
               ><X size={10} /></button>
             </div>
@@ -522,23 +522,23 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
             onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setShowSave(false); }}
             placeholder="Nom de la spline..."
             autoFocus
-            className="flex-1 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
+            className="nodrag flex-1 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
           />
           <button
             onClick={handleSave}
-            className="text-green-400 hover:text-green-300 text-xs px-2"
+            className="nodrag text-green-400 hover:text-green-300 text-xs px-2"
             title="Confirmer"
           ><Check size={10} /></button>
           <button
             onClick={() => setShowSave(false)}
-            className="text-gray-500 hover:text-gray-400 text-xs px-2"
+            className="nodrag text-gray-500 hover:text-gray-400 text-xs px-2"
             title="Cancel"
           ><X size={10} /></button>
         </div>
       ) : (
         <button
           onClick={() => setShowSave(true)}
-          className="w-full text-xs text-cyan-400 hover:text-cyan-300 border border-cyan-800 hover:border-cyan-600 rounded py-1"
+          className="nodrag w-full text-xs text-cyan-400 hover:text-cyan-300 border border-cyan-800 hover:border-cyan-600 rounded py-1"
         >
           + Save this spline
         </button>

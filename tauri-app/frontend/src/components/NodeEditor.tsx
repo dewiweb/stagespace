@@ -501,32 +501,57 @@ export const NodeEditor: React.FC = () => {
   }, [moveSlots, editingSlotId]);
   const edgesLive =
     activeTab === 'sub' ? editedSlotLive : movements.length > 0;
+  /// port_type de l'entrée ciblée par une edge — dérivé du catalogue
+  /// (inputPortType + kind plugin), jamais du nom du handle : un handle
+  /// renommé ou un 5e type de port ne diverge plus des règles de
+  /// connexion (ex-hardcode 'objects'/'duration'/'spline').
+  const nodeById = useMemo(
+    () => new Map(displayNodes.map((n) => [n.id, n])),
+    [displayNodes],
+  );
+  const targetPortType = useCallback(
+    (e: Edge) => {
+      const target = nodeById.get(e.target);
+      if (!target) return undefined;
+      return inputPortType(
+        target.data.type as NodeType,
+        e.targetHandle ?? null,
+        pluginKindOf(target),
+      );
+    },
+    [nodeById, pluginKindOf],
+  );
   // Insert-target : l'edge sélectionnée sur laquelle un modifier peut
-  // s'insérer (trajectoire, pas duration/spline) prend un style dash cyan
-  // — l'autopatch doit être découvrable sans lire le hint de palette.
+  // s'insérer (trajectoire Positions) prend un style dash cyan —
+  // l'autopatch doit être découvrable sans lire le hint de palette.
   const selectedEdge = insert.selectedEdge;
   const insertableEdgeId =
-    selectedEdge &&
-    !['objects', 'duration', 'spline'].includes(selectedEdge.targetHandle ?? '')
+    selectedEdge && targetPortType(selectedEdge) === 'Positions'
       ? selectedEdge.id
       : null;
-  // Color-coding par port : une edge vers 'duration' porte un temps, vers
-  // 'spline' une géométrie — visuellement distinctes des edges trajectoire.
-  const portEdgeClass = (handle: string | null | undefined) =>
-    handle === 'duration' ? 'rf-edge-duration' :
-    handle === 'spline' ? 'rf-edge-spline' :
-    '';
+  // Color-coding par type de port : une edge Duration porte un temps,
+  // une Spline une géométrie — distinctes des edges trajectoire.
+  const PORT_EDGE_CLASS: Record<string, string> = {
+    Duration: 'rf-edge-duration',
+    Spline: 'rf-edge-spline',
+  };
   const decoratedEdges = useMemo(
     () =>
-      displayEdges.map((e) => ({
-        ...e,
-        animated: edgesLive,
-        className: [
-          portEdgeClass(e.targetHandle),
-          e.id === insertableEdgeId ? 'rf-edge-insert-target' : '',
-        ].filter(Boolean).join(' ') || undefined,
-      })),
-    [displayEdges, edgesLive, insertableEdgeId],
+      displayEdges.map((e) => {
+        const pt = targetPortType(e);
+        return {
+          ...e,
+          // L'animation marque le flux CONTINU — Positions/Signal vivent
+          // à chaque tick ; objects/duration/spline ne sont lus qu'au
+          // spawn du move (animer ces edges mentirait sur ce qui bouge).
+          animated: edgesLive && (pt === 'Positions' || pt === 'Signal'),
+          className: [
+            (pt && PORT_EDGE_CLASS[pt]) || '',
+            e.id === insertableEdgeId ? 'rf-edge-insert-target' : '',
+          ].filter(Boolean).join(' ') || undefined,
+        };
+      }),
+    [displayEdges, edgesLive, insertableEdgeId, targetPortType],
   );
 
   const toggleCat = (label: string) => {

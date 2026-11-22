@@ -44,8 +44,13 @@ export interface PendingWire {
   screen: { x: number; y: number };
 }
 
+/// Deux créations dans la même ms (quick-add double entrée, paste rapide)
+/// produisaient des ids identiques avec Date.now() seul — le compteur
+/// lève la collision sans dépendre de l'horloge.
+let nodeIdCounter = 0;
+
 const createNode = (type: NodeType, position: { x: number; y: number }): Node => ({
-  id: `${type}-${Date.now()}`,
+  id: `${type}-${Date.now()}-${nodeIdCounter++}`,
   type: 'custom',
   position,
   data: { label: type, type, params: getDefaultParams(type) },
@@ -54,7 +59,7 @@ const createNode = (type: NodeType, position: { x: number; y: number }): Node =>
 /// Node Plugin pré-rempli depuis un manifeste : plugin_id + defaults
 /// déclarés par le plugin, label = nom affiché du manifeste.
 const createPluginNode = (manifest: PluginManifest, position: { x: number; y: number }): Node => ({
-  id: `Plugin-${manifest.id}-${Date.now()}`,
+  id: `Plugin-${manifest.id}-${Date.now()}-${nodeIdCounter++}`,
   type: 'custom',
   position,
   data: { label: manifest.name, type: 'Plugin' as NodeType, params: pluginDefaultParams(manifest) },
@@ -131,7 +136,7 @@ export function useNodeInsertion(opts: {
   /// derrière les autres nodes (zIndex -1), redimensionné via NodeResizer.
   const addFrame = useCallback(() => {
     const frame: Node = {
-      id: `frame-${Date.now()}`,
+      id: `frame-${Date.now()}-${nodeIdCounter++}`,
       type: FRAME_NODE_TYPE,
       position: {
         x: 140 + (displayNodes.length % 6) * 24,

@@ -2,11 +2,14 @@ import React from 'react';
 
 /// Classe input partagée des params node — les 7 copies verbatim dans
 /// CustomNode divergeaient silencieusement (focus:border-blue vs cyan).
+/// `nodrag nowheel` : sans eux un mousedown dans le champ déplaçait le
+/// node (React Flow drague depuis tout élément non marqué) et la molette
+/// zoomait le canvas en éditant.
 export const NODE_INPUT_CLS =
-  'w-full px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none';
+  'nodrag nowheel w-full px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none';
 export const NODE_INPUT_MONO_CLS = `${NODE_INPUT_CLS} font-mono`;
 const TRACKS_CLS =
-  'w-full mt-0.5 px-2 py-1 bg-gray-900 text-cyan-300 text-xs font-mono rounded border border-gray-700 focus:border-cyan-500 focus:outline-none';
+  'nodrag nowheel w-full mt-0.5 px-2 py-1 bg-gray-900 text-cyan-300 text-xs font-mono rounded border border-gray-700 focus:border-cyan-500 focus:outline-none';
 
 /// Champ "Linked Tracks" des nodes Objects — deux copies identiques
 /// (expanded + collapsed) dans CustomNode, qui divergeaient sur le nombre
