@@ -19,6 +19,10 @@ import PerformView from './components/PerformView';
 import WelcomeModal, { shouldShowWelcome } from './components/WelcomeModal';
 const ConduiteSurface = React.lazy(() => import('./components/conduite/ConduiteSurface'));
 import ShortcutsModal from './components/ShortcutsModal';
+import { SettingsModal } from './components/SettingsModal';
+import { AboutModal } from './components/AboutModal';
+import { ConfirmModal } from './components/ui/ConfirmModal';
+import { newShow } from './utils/showFileActions';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Workflow, ChevronRight, ChevronDown, PanelRightClose, PanelLeftClose, PanelLeftOpen, PanelRightOpen, Maximize2, Minimize2, Activity } from 'lucide-react';
 import { useLiveShortcuts, usePerfStatsPolling } from './hooks/useLiveShortcuts';
@@ -98,6 +102,8 @@ function AppMain() {
   const debugPerfVisible = useMoveEditorStore((s) => s.debugPerfVisible);
   const setDebugPerfVisible = useMoveEditorStore((s) => s.setDebugPerfVisible);
   const shortcutsOpen = useMoveEditorStore((s) => s.shortcutsOpen);
+  const activeAppModal = useMoveEditorStore((s) => s.activeAppModal);
+  const setActiveAppModal = useMoveEditorStore((s) => s.setActiveAppModal);
   const oscInPort = useGraphStore((s) => s.oscInPort);
   // Layout persisté — l'opérateur retrouve son workspace au prochain
   // lancement (safeStorage : quota/corruption gérés).
@@ -653,6 +659,37 @@ function AppMain() {
 
       {/* Aide raccourcis — `?` key ou bouton Toolbar */}
       {shortcutsOpen && <ShortcutsModal />}
+
+      {/* Modales applicatives pilotées par la menubar — montées ici pour
+          survivre au démontage de la menubar (jamais, mais le pattern
+          est le même que shortcutsOpen). */}
+      {activeAppModal === 'settings' && (
+        <SettingsModal onClose={() => setActiveAppModal(null)} />
+      )}
+      {activeAppModal === 'about' && (
+        <AboutModal onClose={() => setActiveAppModal(null)} />
+      )}
+      {activeAppModal === 'new-show' && (
+        <ConfirmModal
+          title="New Show"
+          message={
+            <>
+              Clear everything — moves, cues, graphs, zones, macros.
+              <br />
+              <span className="text-gray-500">
+                The venue is kept: tracks, OSC config and .hol import
+                survive. Save the current show first if needed.
+              </span>
+            </>
+          }
+          confirmLabel="New empty show"
+          onConfirm={() => {
+            setActiveAppModal(null);
+            void newShow();
+          }}
+          onCancel={() => setActiveAppModal(null)}
+        />
+      )}
     </div>
   );
 }

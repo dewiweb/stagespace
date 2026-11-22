@@ -90,6 +90,11 @@ interface MoveEditorStore {
   // Overlay raccourcis clavier (`?` key / bouton Toolbar)
   shortcutsOpen: boolean;
   setShortcutsOpen: (on: boolean) => void;
+  // Modal applicative pilotée par la menubar (settings/about/new-show
+  // confirm) — un seul champ plutôt qu'un booléen par modale ; montée au
+  // niveau App pour survivre à tout démontage de la menubar.
+  activeAppModal: 'settings' | 'about' | 'new-show' | null;
+  setActiveAppModal: (m: 'settings' | 'about' | 'new-show' | null) => void;
 
   // Actions
   setCurrent: (anim: Move) => void;
@@ -298,6 +303,8 @@ export const useMoveEditorStore = create<MoveEditorStore>((set, get) => {
   setDebugPerfVisible: (on) => set({ debugPerfVisible: on }),
   shortcutsOpen: false,
   setShortcutsOpen: (on) => set({ shortcutsOpen: on }),
+  activeAppModal: null,
+  setActiveAppModal: (m) => set({ activeAppModal: m }),
 
   setCurrent: (anim) => set({ current: anim }),
 

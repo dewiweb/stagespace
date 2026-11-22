@@ -1,57 +1,37 @@
 import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
-import { importHolProject, loadShow, saveShow } from '../utils/showFileActions';
-import { FolderInput, Settings, Undo2, Redo2, Save, FolderOpen, CircleHelp } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import { SettingsModal } from './SettingsModal';
 import { PanicButton } from './ui/PanicButton';
 import { OscArmToggle } from './ui/OscArmToggle';
-import { IconButton } from './ui/IconButton';
 
 export const Toolbar: React.FC = () => {
   // Sélecteurs granulaires — un full-store subscribe re-renderait la Toolbar
   // à chaque frame (movementPositions écrit à 60fps).
   const compileError = useGraphStore((s) => s.compileError);
   const playError = useGraphStore((s) => s.playError);
-  const nodes = useGraphStore((s) => s.nodes);
   const holProject = useGraphStore((s) => s.holProject);
-  const undo = useGraphStore((s) => s.undo);
-  const redo = useGraphStore((s) => s.redo);
-  const canUndo = useGraphStore((s) => s.canUndo);
-  const canRedo = useGraphStore((s) => s.canRedo);
   const oscAddress = useGraphStore((s) => s.oscAddress);
   const oscPort = useGraphStore((s) => s.oscPort);
   const oscProfile = useGraphStore((s) => s.oscProfile);
 
   const [showSettings, setShowSettings] = React.useState(false);
 
-  const hasGraph = nodes.length > 0;
-
   // Les raccourcis live (Esc panic, Enter GO, …) et le polling perfStats sont
   // montés au niveau App (hooks/useLiveShortcuts.ts) — ils doivent survivre au
   // démontage du Toolbar en mode Perform.
 
-  const handleSaveGraph = saveShow;
-  const handleLoadGraph = loadShow;
-  const handleImportHol = importHolProject;
-
   return (
     <div className="flex flex-col border-b border-stagespace-border bg-stagespace-panel">
       <div className="flex items-center gap-2 px-4 py-2">
-        {/* Import .hol — action principale */}
-        <button
-          onClick={handleImportHol}
-          className="px-3 py-1.5 text-xs font-medium rounded bg-blue-700 hover:bg-blue-600 text-white transition-colors flex items-center gap-1.5"
-          title="Import a Holophonix project — discovers track IDs, names, colors, positions"
-        >
-          <FolderInput size={13} /> Import .hol
-        </button>
+        {/* Statut venue — le bouton Import .hol a migré dans File menu
+            (single-source showFileActions) ; le chip tracks reste comme
+            indicateur de la salle chargée. */}
         {holProject && (
           <span className="text-xs text-green-400 font-medium">
             {holProject.tracks.length} tracks
           </span>
         )}
-
-        <div className="w-px h-5 bg-stagespace-border mx-1" />
 
         {/* OSC status chip → ouvre Settings (source unique d'édition —
             le panneau inline dupliquait host/port/profile/trackIds/discovery) */}
@@ -67,46 +47,14 @@ export const Toolbar: React.FC = () => {
         </button>
         {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
 
-        <div className="w-px h-5 bg-stagespace-border mx-1" />
-
-        {/* Undo/Redo (expert) */}
-        <IconButton onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)">
-          <Undo2 size={14} />
-        </IconButton>
-        <IconButton onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Y)">
-          <Redo2 size={14} />
-        </IconButton>
-
-        {/* Save / Load show (graphe + slots + cues + OSC + spatial FX) */}
-        <IconButton onClick={handleSaveGraph} disabled={!hasGraph} title="Save complete show to .hfg file">
-          <Save size={14} />
-        </IconButton>
-        <IconButton
-          onClick={handleLoadGraph}
-          title="Load show from .hfg file (slots, cues, OSC, FX — blocked during playback)"
-        >
-          <FolderOpen size={14} />
-        </IconButton>
-
-        {/* Spacer — la StatusBar (bas de fenêtre) porte statut, perf,
-            erreurs et version ; la Toolbar ne garde que les actions. */}
+        {/* Undo/redo, save/load, import .hol, raccourcis : tous vivent
+            désormais dans la menubar + accélérateurs — la Toolbar ne
+            garde que le statut de salle et la zone sécurité live. */}
         <div className="flex-1" />
 
         {/* Zone sécurité live — arm + panic groupés à droite : les deux
             contrôles d'arrêt/sécurité au même endroit. */}
         <OscArmToggle />
-
-        {/* Help — cheatsheet raccourcis live (même contenu que la touche ?) */}
-        <IconButton
-          onClick={() => {
-            import('../store/useMoveEditorStore').then(({ useMoveEditorStore }) => {
-              useMoveEditorStore.getState().setShortcutsOpen(true);
-            });
-          }}
-          title="Keyboard shortcuts (?)"
-        >
-          <CircleHelp size={14} />
-        </IconButton>
 
         {/* PANIC — arrêt d'urgence, toujours visible et accessible.
             Jamais replié dans un panel : c'est le seul contrôle qui doit

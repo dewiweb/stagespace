@@ -55,11 +55,18 @@ export function useLiveShortcuts() {
       // cours de saisie (convention desktop : jamais en conflit avec le
       // texte tapé). Un modal ouvert les bloque (pas de save/load par-
       // dessus un dialog).
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 's' || e.key === 'o')) {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && ['s', 'o', 'n'].includes(e.key)) {
         if (!isModalOpen()) {
           e.preventDefault();
           if (e.key === 's') void saveShow();
-          else void loadShow();
+          else if (e.key === 'o') void loadShow();
+          // Ctrl+N arme la CONFIRMATION (modale App) — le reset complet
+          // d'un show ne part jamais sans l'accord de l'opérateur.
+          else {
+            import('../store/useMoveEditorStore').then(({ useMoveEditorStore }) => {
+              useMoveEditorStore.getState().setActiveAppModal('new-show');
+            });
+          }
         }
         return;
       }

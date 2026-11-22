@@ -29,11 +29,6 @@ afterEach(() => {
 });
 
 describe('Toolbar — rendering', () => {
-  it('renders Import .hol button', () => {
-    render(<Toolbar />);
-    expect(screen.getByText(/Import \.hol/i)).toBeInTheDocument();
-  });
-
   it('renders OSC chip with address:port and profile', () => {
     render(<Toolbar />);
     expect(screen.getByText(/127\.0\.0\.1:\d+/)).toBeInTheDocument();
@@ -45,16 +40,10 @@ describe('Toolbar — rendering', () => {
     expect(screen.getByTitle(/OSC →.*Settings/i)).toBeInTheDocument();
   });
 
-  it('renders Undo and Redo buttons', () => {
-    render(<Toolbar />);
-    expect(screen.getByTitle('Undo (Ctrl+Z)')).toBeInTheDocument();
-    expect(screen.getByTitle('Redo (Ctrl+Y)')).toBeInTheDocument();
-  });
-
   it('renders without crashing in default state', () => {
     render(<Toolbar />);
     // Just verify it renders without error
-    expect(screen.getByText(/Import \.hol/i)).toBeInTheDocument();
+    expect(screen.getByTitle(/PANIC \(Esc\)/i)).toBeInTheDocument();
   });
 
   it('renders the shared PANIC button (never folded into a panel)', () => {
@@ -62,10 +51,14 @@ describe('Toolbar — rendering', () => {
     expect(screen.getByTitle(/PANIC \(Esc\)/i)).toBeInTheDocument();
   });
 
-  it('renders Save and Load show buttons', () => {
+  it('file actions live in the menubar, not the toolbar', () => {
+    // Import .hol / save / load / undo / raccourcis ont migré dans la
+    // menubar + accélérateurs — la toolbar ne garde que statut et
+    // sécurité live.
     render(<Toolbar />);
-    expect(screen.getByTitle(/Save complete show/i)).toBeInTheDocument();
-    expect(screen.getByTitle(/Load show/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Import \.hol/i)).not.toBeInTheDocument();
+    expect(screen.queryByTitle(/Save complete show/i)).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Undo (Ctrl+Z)')).not.toBeInTheDocument();
   });
 });
 
@@ -91,7 +84,7 @@ describe('Toolbar — status', () => {
     } as any);
     render(<Toolbar />);
     // Le statut vit dans la StatusBar — la Toolbar reste fonctionnelle.
-    expect(screen.getByText(/Import \.hol/i)).toBeInTheDocument();
+    expect(screen.getByTitle(/PANIC \(Esc\)/i)).toBeInTheDocument();
   });
 
   it('shows the compile error detail band when compileError is set', () => {

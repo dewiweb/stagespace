@@ -162,7 +162,7 @@ CI fails if the committed files drift from the Rust sources.
 - `Esc` — Panic (stop all + send origin positions)
 - `?` — keyboard shortcuts cheatsheet
 - `Ctrl+Z` / `Ctrl+Y` — Undo/Redo (move graph; also Ctrl+Shift+Z)
-- `Ctrl+S` / `Ctrl+O` — Save / Load show (.hfg) — fire even while typing (desktop convention), blocked while a modal is open
+- `Ctrl+S` / `Ctrl+O` / `Ctrl+N` — Save / Load / New show (.hfg) — fire even while typing (desktop convention), blocked while a modal is open; New show arms a confirm modal
 - Cue list: click = arm, double-click = recall (no single-click scene kill)
 - Shortcuts disabled when typing in input fields (except Esc, Ctrl+S, Ctrl+O)
 

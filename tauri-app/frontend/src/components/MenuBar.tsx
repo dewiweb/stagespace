@@ -53,6 +53,7 @@ export const MenuBar: React.FC = () => {
   const showExpert = useMoveEditorStore((s) => s.showExpert);
   const setShowExpert = useMoveEditorStore((s) => s.setShowExpert);
   const setShortcutsOpen = useMoveEditorStore((s) => s.setShortcutsOpen);
+  const setActiveAppModal = useMoveEditorStore((s) => s.setActiveAppModal);
   const undo = useGraphStore((s) => s.undo);
   const redo = useGraphStore((s) => s.redo);
   const canUndo = useGraphStore((s) => s.canUndo);
@@ -175,6 +176,11 @@ export const MenuBar: React.FC = () => {
     {
       label: 'File',
       entries: [
+        // La modale de confirmation est montée au niveau App — le menu ne
+        // fait qu'armer le flag (un New show vide TOUT, jamais sans
+        // confirmation).
+        { label: 'New Show', shortcut: 'Ctrl+N', onClick: () => setActiveAppModal('new-show') },
+        { separator: true },
         { label: 'Save Show…', shortcut: 'Ctrl+S', onClick: () => void saveShow() },
         { label: 'Load Show…', shortcut: 'Ctrl+O', onClick: () => void loadShow() },
         { separator: true },
@@ -198,6 +204,8 @@ export const MenuBar: React.FC = () => {
           disabledReason: 'Nothing to redo',
           onClick: redo,
         },
+        { separator: true },
+        { label: 'Preferences…', onClick: () => setActiveAppModal('settings') },
       ],
     },
     {
@@ -221,6 +229,8 @@ export const MenuBar: React.FC = () => {
       label: 'Help',
       entries: [
         { label: 'Keyboard shortcuts', shortcut: '?', onClick: () => setShortcutsOpen(true) },
+        { separator: true },
+        { label: 'About STAGESPACE', onClick: () => setActiveAppModal('about') },
       ],
     },
   ];
