@@ -410,3 +410,13 @@ re-résolvant **par nom** (`reconnect_device_index`) quand le stream meurt.
 Limite restante : l'index persisté peut pointer sur un autre device après
 un changement de config matérielle — la résolution par nom au démarrage
 serait plus robuste (amélioration future côté backend).
+
+---
+
+## Session 5b — Audit UX/UI (heuristique + parcours cognitif)
+
+Audit complet dans `docs/ux-audit.md` (12 pistes classées). Points
+saillants : 5 noms pour le même concept (move/slot/pad/layer/animation),
+« LIVE » à 4 sens, trois systèmes de GO qui se recouvrent, deux listes
+Moves face à face, catégories de nodes par implémentation, jargon exposé
+(hold=bump, unverified, trk).
