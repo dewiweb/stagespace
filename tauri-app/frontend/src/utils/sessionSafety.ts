@@ -87,39 +87,67 @@ export function guardDirty(label: string, run: () => void): void {
 /// Garde à la fermeture fenêtre — desktop Tauri : onCloseRequested
 /// empêche la fermeture si dirty (modale). Remote navigateur :
 /// beforeunload natif. No-op hors fenêtre tauri.
+///
+/// `closeApproved` est au niveau MODULE, pas par listener : StrictMode
+/// (et HMR) peut laisser plusieurs listeners enregistrés — un flag par
+/// closure serait consommé par le premier et les autres reverraient un
+/// doc re-sali entre markClean et l'event (poll/sync de clés document).
+/// Un seul tir : une fois Discard armé, TOUS les listeners passent.
+/// Réarmé en .catch si close() est rejeté — la garde revit.
+let closeApproved = false;
+
 export function initWindowCloseGuard(): () => void {
+  // beforeunload : contexte NAVIGATEUR uniquement (remote bridge). Dans
+  // le webview Tauri il bloquerait un close() déjà approuvé — le doc se
+  // re-salit en continu (poll manualPositions → nouvelle référence →
+  // markDirty) entre le markClean et l'unload, et preventDefault ici
+  // annule la fermeture native SANS repasser par onCloseRequested.
   const onBeforeUnload = (e: BeforeUnloadEvent) => {
     if (useSessionStore.getState().dirty) e.preventDefault();
   };
-  window.addEventListener('beforeunload', onBeforeUnload);
+  const isTauri = checkTauri();
+  if (!isTauri) window.addEventListener('beforeunload', onBeforeUnload);
 
   let unlisten: (() => void) | undefined;
-  if (checkTauri()) {
-    // Consommé par le close() programmatique de la modale — le cleanup
-    // backend du CloseRequested peut re-salir le doc (stop des moves →
-    // positions hold → markDirty) AVANT que ce handler ne relise dirty ;
-    // on ne peut donc pas s'y fier pour laisser passer notre propre close.
-    let closeApproved = false;
+  let disposed = false;
+  if (isTauri) {
     void getCurrentWindow()
       .onCloseRequested(async (event) => {
-        if (closeApproved) { closeApproved = false; return; }
+        feLog(
+          `[quit] CloseRequested fired: closeApproved=${closeApproved} dirty=${useSessionStore.getState().dirty}`,
+        );
+        if (closeApproved) return;
         if (!useSessionStore.getState().dirty) return;
         event.preventDefault();
+        feLog(`[quit] prevented, arming modal`);
         setPendingUnsavedAction('Quit', () => {
           // close() et non destroy() : allow-destroy n'est pas dans les
           // capabilities (IPC refusé, promise rejetée en silence). Le
-          // markClean persiste dirty=false pour le recovery au boot ;
-          // closeApproved fait passer notre close() à travers la garde.
+          // markClean persiste dirty=false pour le recovery au boot.
           closeApproved = true;
           useSessionStore.getState().markClean();
-          // .catch loggé — un IPC refusé (permission) ne doit plus
-          // jamais échouer en silence comme allow-destroy l'a fait.
-          void getCurrentWindow().close().catch((e) => feLog(`[quit] close() rejected: ${e}`));
+          feLog(`[quit] discard: approved, closing`);
+          void getCurrentWindow()
+            .close()
+            .then(() => feLog(`[quit] close() resolved`))
+            // .catch loggé — un IPC refusé (permission) ne doit plus
+            // jamais échouer en silence comme allow-destroy l'a fait.
+            .catch((e) => {
+              closeApproved = false;
+              feLog(`[quit] close() rejected: ${e}`);
+            });
         });
       })
-      .then((u) => { unlisten = u; });
+      .then((u) => {
+        // Le cleanup StrictMode peut courir AVANT la résolution —
+        // désabonner dès que l'enregistrement aboutit sinon le listener
+        // fuit et subsiste en doublon du listener frais.
+        if (disposed) u();
+        else unlisten = u;
+      });
   }
   return () => {
+    disposed = true;
     window.removeEventListener('beforeunload', onBeforeUnload);
     unlisten?.();
   };

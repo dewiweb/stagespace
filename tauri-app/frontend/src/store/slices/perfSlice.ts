@@ -150,9 +150,16 @@ async function pollLive(broadcast: boolean) {
   show.useShowStatusStore.setState(patch);
   // Vérité backend des positions manuelles — le cache frontend ne voit
   // sinon jamais les écritures OSC/hold/tape/attention (cue capture et
-  // .hfg sauvaient des positions fausses).
+  // .hfg sauvaient des positions fausses). Guard contenu : la réponse
+  // désérialisée est une NOUVELLE référence à chaque poll — un setState
+  // inconditionnel re-marquerait dirty en continu (watchKeys compare
+  // par !==) : markClean annulé en un cycle, fenêtre impossible à
+  // fermer via Discard.
   if (manualPositions != null) {
-    m.useGraphStore.setState({ manualPositions });
+    const cur = m.useGraphStore.getState().manualPositions;
+    if (JSON.stringify(manualPositions) !== JSON.stringify(cur)) {
+      m.useGraphStore.setState({ manualPositions });
+    }
   }
   if (!broadcast) return;
   const payload: LiveStatePayload = {
