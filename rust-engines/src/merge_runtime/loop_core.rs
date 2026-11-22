@@ -38,6 +38,7 @@ impl MergeRuntime {
         let last_effective_channels_arc = self.last_effective_channels.clone();
         let last_canonical_arc = self.last_canonical_positions.clone();
         let held_objects_arc = self.held_objects.clone();
+        let parked_objects_arc = self.parked_objects.clone();
         let venue_map_arc = self.venue_map.clone();
         let perceptual_arc = self.perceptual.clone();
         let distance_reality_arc = self.distance_reality.clone();
@@ -144,6 +145,9 @@ impl MergeRuntime {
                 let mut move_positions: Vec<MoveEntry> = Vec::new();
                 let mut preview_positions: Vec<(usize, nalgebra::Vector3<f64>)> = Vec::new();
                 let mut moves_to_remove: Vec<String> = Vec::new();
+                // Tracks des moves retirés en Revert — origines émises
+                // après la section critique (pas de lock re-entrant).
+                let mut rest_emit_tracks: Vec<usize> = Vec::new();
 
                 // --- Section critique courte: update fades + clone data ---
                 let move_snapshots: Vec<(String, f64, f64, u32, Vec<usize>, bool)> = {
@@ -162,7 +166,47 @@ impl MergeRuntime {
                         }
                         let fade = state.update_fade(dt);
                         if !state.is_active {
+                            // Fade de poids merge terminé — c'est le chemin
+                            // du stop opérateur avec fade (deactivate_move
+                            // → start_fade_out). Même sémantique end_mode
+                            // que le stale-kill : le sleeper appellera
+                            // finish_move après coup, mais le move sera
+                            // déjà parti d'active_moves — c'est ici que la
+                            // fin déclarée doit s'appliquer.
                             moves_to_remove.push(move_id.clone());
+                            if move_end_modes_arc
+                                .read()
+                                .unwrap_or_else(|e| e.into_inner())
+                                .get(move_id)
+                                .is_some_and(|m| *m == crate::EndMode::Hold)
+                            {
+                                if let Some(buf) = buffers.get(move_id) {
+                                    let positions = buf.read();
+                                    let mut mp = manual_positions_arc
+                                        .write()
+                                        .unwrap_or_else(|e| e.into_inner());
+                                    let mut held =
+                                        held_objects_arc.write().unwrap_or_else(|e| e.into_inner());
+                                    crate::merge_runtime::state_ops::write_held_positions(
+                                        &state.track_indices,
+                                        &positions,
+                                        &mut mp,
+                                        &mut held,
+                                    );
+                                }
+                            } else if !state.is_preview {
+                                rest_emit_tracks.extend(state.track_indices.iter().copied());
+                            }
+                            // Le worker tourne encore — le sleeper du stop
+                            // l'arrêtera, mais le kill queue est le filet
+                            // si la génération ne matche plus.
+                            if let Some(buf) = buffers.get(move_id) {
+                                Self::enqueue_stale_kill_into(
+                                    &stale_kill_ids,
+                                    move_id.clone(),
+                                    buf.clone(),
+                                );
+                            }
                             continue;
                         }
                         // Détection de worker zombie : si le PositionBuffer du
@@ -239,6 +283,11 @@ impl MergeRuntime {
                                         &mut held,
                                     );
                                 }
+                            } else if !state.is_preview {
+                                // Revert : les objets retournent à leur
+                                // source de fond — origines collectées
+                                // ici, émises après la section critique.
+                                rest_emit_tracks.extend(state.track_indices.iter().copied());
                             }
                             // Audit C5 : publier l'ID + le buffer (test
                             // d'identité côté superviseur) pour arrêter
@@ -268,6 +317,23 @@ impl MergeRuntime {
                     snapshots
                 };
                 // --- Fin section critique: lock relâché ---
+                // Revert : émettre les origines des objets libérés —
+                // sinon le renderer garde la dernière position du move
+                // indéfiniment (même émission unitaire que finish_move).
+                if !rest_emit_tracks.is_empty() {
+                    crate::merge_runtime::state_ops::emit_rest_positions(
+                        &active_moves,
+                        &manual_positions_arc,
+                        &held_objects_arc,
+                        &parked_objects_arc,
+                        &track_positions_arc,
+                        &osc_ids_arc,
+                        &venue_map_arc,
+                        &last_out_positions_arc,
+                        &sink_arc,
+                        &rest_emit_tracks,
+                    );
+                }
 
                 // Lire les buffers et mapper hors lock. Les moves en PREVIEW
                 // n'entrent PAS dans le merge : ils pourraient gagner le merge

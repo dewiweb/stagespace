@@ -1303,6 +1303,166 @@ fn test_hold_chain_then_revert_full_scenario() {
     assert_eq!(rt.manual_position(0), None);
     let srcs = rt.object_control_sources();
     assert_eq!(srcs.get(&0).map(String::as_str), Some("track"));
+    // Et l'origine a réellement été émise vers le renderer — sans ça la
+    // source garderait la dernière position de M2 à l'infini.
+    assert_eq!(
+        captured.lock().unwrap_or_else(|e| e.into_inner()).get(&1),
+        Some(&nalgebra::Vector3::new(10.0, 0.0, 0.0)),
+        "revert doit émettre le trackpos d'origine"
+    );
+}
+
+#[test]
+fn test_finish_move_revert_emits_origins_and_respects_overrides() {
+    // Revert + origines dispersées : chaque objet repart vers SON trackpos.
+    // Skippés : l'objet encore couvert par un autre move (flash), la
+    // reprise opérateur (manual > tout), l'objet sans origine déclarée.
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    let captured = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+    rt.set_sink(Box::new(CaptureSink(captured.clone())));
+    rt.set_osc_ids(vec![1, 2, 3, 4]);
+    rt.set_track_positions(
+        [
+            (0u32, [10.0, 0.0, 0.0]),
+            (1u32, [0.0, 10.0, 0.0]),
+            (2u32, [-10.0, 0.0, 0.0]),
+        ]
+        .into_iter()
+        .collect(),
+    );
+    // Reprise opérateur sur l'objet 1 — le revert ne la touche pas.
+    rt.set_manual_position(1, [1.0, 2.0, 3.0]);
+    // Un second move couvre l'objet 2 — pas de flash vers l'origine.
+    let bx = Arc::new(PositionBuffer::new());
+    rt.register_move(
+        "mx".to_string(),
+        bx,
+        vec![3],
+        vec![2],
+        false,
+        crate::EndMode::Revert,
+    );
+
+    let b1 = Arc::new(PositionBuffer::new());
+    rt.register_move(
+        "m1".to_string(),
+        b1.clone(),
+        vec![1, 2, 3, 4],
+        vec![0, 1, 2, 3],
+        false,
+        crate::EndMode::Revert,
+    );
+    b1.write(vec![
+        (0usize, nalgebra::Vector3::new(5.0, 5.0, 5.0)),
+        (1usize, nalgebra::Vector3::new(5.0, 5.0, 5.0)),
+        (2usize, nalgebra::Vector3::new(5.0, 5.0, 5.0)),
+        (3usize, nalgebra::Vector3::new(5.0, 5.0, 5.0)),
+    ]);
+
+    rt.finish_move("m1");
+
+    let sent = captured.lock().unwrap_or_else(|e| e.into_inner());
+    assert_eq!(
+        sent.get(&1),
+        Some(&nalgebra::Vector3::new(10.0, 0.0, 0.0)),
+        "objet 0 → son origine"
+    );
+    assert!(
+        sent.get(&2).is_none(),
+        "objet 1 sous reprise opérateur → pas d'émission"
+    );
+    assert!(
+        sent.get(&3).is_none(),
+        "objet 2 couvert par mx → pas de flash origine"
+    );
+    assert!(
+        sent.get(&4).is_none(),
+        "objet 3 sans origine déclarée → pas d'émission"
+    );
+}
+
+#[test]
+fn test_fade_out_completion_revert_emits_origins() {
+    // Régression : la fin du fade de poids merge (chemin réel du stop
+    // opérateur UI — stopSlotWithFade → deactivate_move → start_fade_out)
+    // retirait le move SANS appliquer end_mode : pas de hold, pas
+    // d'émission des origines — le sleeper `finish_move` arrivait ensuite
+    // sur un `active_moves` déjà vidé et ne faisait rien. Le renderer
+    // gardait donc la dernière position du move indéfiniment.
+    // Le worker écrit encore pendant le fade : c'est la boucle qui doit
+    // appliquer la fin déclarée à la complétion du fade.
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    let captured = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+    rt.set_sink(Box::new(CaptureSink(captured.clone())));
+    rt.set_osc_ids(vec![1]);
+    rt.set_track_positions([(0u32, [8.0, 0.0, 0.0])].into_iter().collect());
+    let b = Arc::new(PositionBuffer::new());
+    rt.register_move(
+        "m1".to_string(),
+        b.clone(),
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::Revert,
+    );
+    // Le writer tourne pendant tout le test — pas de stale-kill : c'est
+    // bien la complétion du fade de poids qui retire le move.
+    let w = spawn_writer(&b, 0, nalgebra::Vector3::new(2.0, 0.0, 0.0), 600);
+    rt.start().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    rt.start_fade_out("m1", 0.1);
+    std::thread::sleep(std::time::Duration::from_millis(600));
+    rt.stop();
+    w.join().unwrap();
+
+    assert!(!rt.has_move("m1"), "le move doit être retiré après le fade");
+    assert_eq!(
+        captured.lock().unwrap_or_else(|e| e.into_inner()).get(&1),
+        Some(&nalgebra::Vector3::new(8.0, 0.0, 0.0)),
+        "revert via complétion du fade : l'origine doit être émise"
+    );
+    assert_eq!(rt.manual_position(0), None, "revert n'écrit pas de hold");
+}
+
+#[test]
+fn test_fade_out_completion_hold_writes_manual() {
+    // Même régression, côté Hold : la complétion du fade de poids doit
+    // figer les dernières positions du buffer en manuelles « held »
+    // (pause), sinon un stop-avec-fade sur un move End:hold était une
+    // coupure sèche silencieuse.
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    rt.set_sink(Box::new(CaptureSink(Arc::new(std::sync::Mutex::new(
+        std::collections::HashMap::new(),
+    )))));
+    rt.set_osc_ids(vec![1]);
+    rt.set_track_positions([(0u32, [8.0, 0.0, 0.0])].into_iter().collect());
+    let b = Arc::new(PositionBuffer::new());
+    rt.register_move(
+        "m1".to_string(),
+        b.clone(),
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::Hold,
+    );
+    let w = spawn_writer(&b, 0, nalgebra::Vector3::new(3.0, 4.0, 5.0), 600);
+    rt.start().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    rt.start_fade_out("m1", 0.1);
+    std::thread::sleep(std::time::Duration::from_millis(600));
+    rt.stop();
+    w.join().unwrap();
+
+    assert_eq!(
+        rt.manual_position(0),
+        Some([3.0, 4.0, 5.0]),
+        "hold via complétion du fade : la dernière position devient manuelle"
+    );
+    let srcs = rt.object_control_sources();
+    assert_eq!(srcs.get(&0).map(String::as_str), Some("hold"));
 }
 
 #[test]

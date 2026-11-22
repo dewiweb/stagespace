@@ -282,7 +282,33 @@ impl MergeRuntime {
                 write_held_positions(&track_indices, &positions, &mut mp, &mut held);
             }
         }
+        let track_indices = {
+            let moves = self.active_moves.read().unwrap_or_else(|e| e.into_inner());
+            moves
+                .get(move_id)
+                .map(|s| (s.track_indices.clone(), s.is_preview))
+        };
         self.unregister_move(move_id);
+        // Revert : les objets retournent à leur source de fond — émission
+        // unitaire des origines, sinon le renderer garderait la dernière
+        // position du move (rien ne les commande plus). Un preview n'a
+        // jamais émis : pas de retour à envoyer.
+        if !is_hold {
+            if let Some((tracks, false)) = track_indices {
+                emit_rest_positions(
+                    &self.active_moves,
+                    &self.manual_positions,
+                    &self.held_objects,
+                    &self.parked_objects,
+                    &self.track_positions,
+                    &self.osc_ids,
+                    &self.venue_map,
+                    &self.last_out_positions,
+                    &self.sink,
+                    &tracks,
+                );
+            }
+        }
     }
 
     /// Dernières positions émises par objet (tentées — pas de confirmation
@@ -689,6 +715,69 @@ impl MergeRuntime {
     /// Total de positions non-finies (NaN/inf) droppées avant l'envoi OSC.
     pub fn dropped_position_count(&self) -> u64 {
         self.dropped_positions.load(Ordering::SeqCst)
+    }
+}
+
+/// Émission unitaire des positions de repos après un revert — sinon le
+/// renderer garderait la dernière position du move indéfiniment (rien ne
+/// les commande plus). Skippés : objets encore couverts par un move
+/// actif (flash aller-retour), sous override opérateur (manual/held/park)
+/// ou sans origine déclarée. Fonction libre : le merge thread n'a pas de
+/// `self`, il passe ses arcs.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn emit_rest_positions(
+    active_moves: &Arc<RwLock<HashMap<String, MoveState>>>,
+    manual_positions: &Arc<RwLock<HashMap<usize, [f64; 3]>>>,
+    held_objects: &Arc<RwLock<HashSet<usize>>>,
+    parked_objects: &Arc<RwLock<HashSet<usize>>>,
+    track_positions: &SharedTrackPositions,
+    osc_ids: &Arc<RwLock<Arc<Vec<u32>>>>,
+    venue_map: &Arc<RwLock<Option<VenueMap>>>,
+    last_out_positions: &Arc<RwLock<HashMap<usize, [f64; 3]>>>,
+    sink: &SharedSink,
+    track_indices: &[usize],
+) {
+    let covered: HashSet<usize> = active_moves
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .values()
+        .filter(|s| s.is_active)
+        .flat_map(|s| s.track_indices.iter().copied())
+        .collect();
+    let manual = manual_positions.read().unwrap_or_else(|e| e.into_inner());
+    let held = held_objects.read().unwrap_or_else(|e| e.into_inner());
+    let parked = parked_objects.read().unwrap_or_else(|e| e.into_inner());
+    let track_pos = track_positions
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    let osc_ids = osc_ids.read().unwrap_or_else(|e| e.into_inner()).clone();
+    let venue_map = *venue_map.read().unwrap_or_else(|e| e.into_inner());
+    let mut last_out = last_out_positions
+        .write()
+        .unwrap_or_else(|e| e.into_inner());
+    let mut sink = sink.lock().unwrap_or_else(|e| e.into_inner());
+    for &t in track_indices {
+        if covered.contains(&t)
+            || manual.contains_key(&t)
+            || held.contains(&t)
+            || parked.contains(&t)
+        {
+            continue;
+        }
+        let (Some(&pos), Some(&osc_id)) = (track_pos.get(&(t as u32)), osc_ids.get(t)) else {
+            continue;
+        };
+        // Même transform venue_map que le chemin d'émission normal.
+        let send = venue_map
+            .map(|(s, o, yaw)| {
+                let (c, sn) = (yaw.cos(), yaw.sin());
+                let (x, y) = (pos[0] * c - pos[1] * sn, pos[0] * sn + pos[1] * c);
+                [x * s[0] + o[0], y * s[1] + o[1], pos[2] * s[2] + o[2]]
+            })
+            .unwrap_or(pos);
+        last_out.insert(t, pos);
+        let _ = sink.send_state(osc_id, send.into(), None);
     }
 }
 
