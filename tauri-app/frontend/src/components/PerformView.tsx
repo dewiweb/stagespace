@@ -202,11 +202,10 @@ export const PerformView: React.FC = () => {
 
         <div className="w-px h-8 bg-stagespace-border" />
 
-        {/* Position setlist + feedback GO */}
+        {/* Contexte show — cue courante/suivante + feedback GO. La
+            position setlist n/m vit dans le bouton SETLIST GO : un seul
+            endroit pour l'avancement, pas deux 'SETLIST' dans la barre. */}
         <div className="flex items-center gap-3 min-w-0 flex-1">
-          <span className="text-gray-400 text-xs uppercase tracking-wider flex-shrink-0">
-            Setlist {currentSetlistIndex + 1}/{setlistOrder.length}
-          </span>
           {isRecalling && (
             <span className="text-purple-400 text-xs font-bold animate-pulse flex-shrink-0">
               RECALLING…
@@ -274,7 +273,7 @@ export const PerformView: React.FC = () => {
         >
           <div className="text-lg font-black leading-tight">SETLIST ▶</div>
           <div className="text-xs font-medium text-teal-100/80 truncate leading-tight">
-            {nextSetlistSlot ? nextSetlistSlot.name : 'end of setlist'}
+            {currentSetlistIndex + 1}/{setlistOrder.length} · {nextSetlistSlot ? nextSetlistSlot.name : 'end of setlist'}
           </div>
         </button>
         {tcChaseEnabled && (
@@ -287,6 +286,8 @@ export const PerformView: React.FC = () => {
             {tcActive ? tc : 'TC lost'}
           </span>
         )}
+        {/* ─── Cluster vues : surfaces secondaires ─── */}
+        <div className="w-px h-8 bg-stagespace-border flex-shrink-0" />
         <button
           onClick={() => {
             // Fenêtre détachable : même vue conduite, propre process
@@ -302,10 +303,10 @@ export const PerformView: React.FC = () => {
               });
             });
           }}
-          className="px-3 py-2.5 rounded-lg flex-shrink-0 bg-amber-800/40 hover:bg-amber-700/60 text-amber-200/80 transition-colors active:scale-95"
+          className="px-3 py-2.5 rounded-lg flex-shrink-0 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-bold transition-colors active:scale-95"
           title="Conduite dans une fenêtre détachable (écran dédié)"
         >
-          ⧉
+          ⧉ Cues
         </button>
         <button
           onClick={() => {
@@ -322,10 +323,10 @@ export const PerformView: React.FC = () => {
               });
             });
           }}
-          className="px-3 py-2.5 rounded-lg flex-shrink-0 bg-green-800/40 hover:bg-green-700/60 text-green-200/80 transition-colors active:scale-95"
+          className="px-3 py-2.5 rounded-lg flex-shrink-0 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-bold transition-colors active:scale-95"
           title="Surface de jeu (pads + radar) dans une fenêtre détachable"
         >
-          ▶
+          ⧉ Run
         </button>
         {!detached && (
           <button
@@ -336,6 +337,8 @@ export const PerformView: React.FC = () => {
             Conduite
           </button>
         )}
+        {/* ─── Cluster sécurité — master à droite ─── */}
+        <div className="w-px h-8 bg-stagespace-border flex-shrink-0" />
         {consoleAge !== null && (
           <StatusChip
             variant={consoleAge < 5 ? 'live' : 'dim'}
