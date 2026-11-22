@@ -111,6 +111,7 @@ See `.github/workflows/ci.yml`.
 
 ### Frontend (TypeScript/React)
 - **Namespace boundary** — `obj_index` (0-based position in `osc_ids`) vs `track_id` (the N in `/track/N`) are TWO distinct spaces. Wire/backend speaks `obj_index` everywhere (`manual_positions`, `objectStates`, `emittedPositions`, `anchor_target`, `psn tracker_map`, `/stagespace/position <obj>`); operator UIs speak `track_id` (`slot.trackIds`, `manualOscIds`, `trackpos`). Mandatory conversion at the boundary: `objIdx = manualOscIds.indexOf(trackId)` — never `objectStates[trackId]` (off-by-one for 1-based tracks).
+  Exception: `track_positions` (rest positions / origins) is stored **track_id-keyed** — a rest position is an attribute of the object's operator identity, so it survives remapping. All readers resolve `obj → track_id` through the CURRENT `osc_ids` mapping (`track_pos_for_obj` in `state_ops.rs`), never `track_pos[obj]`.
 - State management: Zustand with slice pattern (`src/store/slices/`)
 - Tests: vitest + jsdom, mocks in `src/test/setup.ts`, helpers in `src/store/__tests__/testHelpers.ts`
 - Tauri IPC: use `safeInvoke` from `utils/tauri.ts` (not raw `invoke`)

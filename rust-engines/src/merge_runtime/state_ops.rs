@@ -550,12 +550,19 @@ impl MergeRuntime {
             .track_positions
             .read()
             .unwrap_or_else(|e| e.into_inner());
+        let ids = self.osc_ids.read().unwrap_or_else(|e| e.into_inner());
         let mut objs: HashSet<usize> = HashSet::new();
         objs.extend(parked.iter().copied());
         objs.extend(psn.iter().copied());
         objs.extend(held.iter().copied());
         objs.extend(manual.keys().copied());
-        objs.extend(tracks.keys().map(|&t| t as usize));
+        // Les origines sont indexées en track_id — les objets concernés
+        // se résolvent via le mapping courant.
+        objs.extend(
+            tracks
+                .keys()
+                .filter_map(|tid| ids.iter().position(|id| id == tid)),
+        );
         let frozen_attn = self
             .attention_frozen
             .read()
@@ -616,11 +623,12 @@ impl MergeRuntime {
         {
             return Some(*p);
         }
-        self.track_positions
+        let ids = self.osc_ids.read().unwrap_or_else(|e| e.into_inner());
+        let tp = self
+            .track_positions
             .read()
-            .unwrap_or_else(|e| e.into_inner())
-            .get(&(obj as u32))
-            .copied()
+            .unwrap_or_else(|e| e.into_inner());
+        track_pos_for_obj(&tp, &ids, obj).copied()
     }
 
     /// Règle le poids d'un move actif — fade effectif = fade × weight
@@ -765,7 +773,10 @@ pub(crate) fn emit_rest_positions(
         {
             continue;
         }
-        let (Some(&pos), Some(&osc_id)) = (track_pos.get(&(t as u32)), osc_ids.get(t)) else {
+        let (Some(pos), Some(&osc_id)) = (
+            track_pos_for_obj(&track_pos, &osc_ids, t).copied(),
+            osc_ids.get(t),
+        ) else {
             continue;
         };
         // Même transform venue_map que le chemin d'émission normal.
@@ -779,6 +790,20 @@ pub(crate) fn emit_rest_positions(
         last_out.insert(t, pos);
         let _ = sink.send_state(osc_id, send.into(), None);
     }
+}
+
+/// Résout l'origine déclarée d'un objet — `track_positions` est indexée en
+/// **track_id** (= osc_id, espace opérateur : `/stagespace/trackpos`,
+/// import `.hol`, frontend) : la position de repos suit l'IDENTITÉ de
+/// l'objet. La résolution obj→track passe par le mapping `osc_ids` courant,
+/// ce qui rend l'ordre écriture/mapping sans importance.
+pub(crate) fn track_pos_for_obj<'a>(
+    track_pos: &'a HashMap<u32, [f64; 3]>,
+    osc_ids: &[u32],
+    obj: usize,
+) -> Option<&'a [f64; 3]> {
+    let tid = osc_ids.get(obj)?;
+    track_pos.get(tid)
 }
 
 /// Écrit les dernières positions d'un move comme positions manuelles

@@ -4,7 +4,10 @@
 use super::*;
 
 impl MergeRuntime {
-    /// Définit les positions des tracks .hol (pour Barycenter)
+    /// Définit les origines déclarées — **clés en track_id** (= osc_id,
+    /// espace opérateur : import .hol, /stagespace/trackpos). Le stockage
+    /// suit l'identité de l'objet ; les lectures résolvent obj→track_id
+    /// via le mapping `osc_ids` courant (`track_pos_for_obj`).
     pub fn set_track_positions(&self, positions: HashMap<u32, [f64; 3]>) {
         *self
             .track_positions
@@ -12,9 +15,10 @@ impl MergeRuntime {
             .unwrap_or_else(|e| e.into_inner()) = Arc::new(positions);
     }
 
-    /// Définit l'origine d'UNE track — merge dans la map existante
-    /// (contrairement à set_track_positions qui remplace tout : un set
-    /// unitaire par OSC ne doit pas effacer les autres origines).
+    /// Définit l'origine d'UNE track — clé en **track_id** (espace
+    /// opérateur) — merge dans la map existante (contrairement à
+    /// set_track_positions qui remplace tout : un set unitaire par OSC
+    /// ne doit pas effacer les autres origines).
     pub fn set_track_position(&self, track: u32, pos: [f64; 3]) {
         let mut map = (**self
             .track_positions
@@ -28,9 +32,10 @@ impl MergeRuntime {
             .unwrap_or_else(|e| e.into_inner()) = Arc::new(map);
     }
 
-    /// Positions d'origine des tracks — pour panic hors-.hol : les
-    /// origines posées par /stagespace/trackpos ou l'import .hol sont
-    /// la vérité, pas un (0,0,0) en dur.
+    /// Positions d'origine des tracks — **clés en track_id** (espace
+    /// opérateur) — pour panic hors-.hol : les origines posées par
+    /// /stagespace/trackpos ou l'import .hol sont la vérité, pas un
+    /// (0,0,0) en dur.
     pub fn track_positions(&self) -> HashMap<u32, [f64; 3]> {
         (**self
             .track_positions
@@ -177,11 +182,12 @@ impl MergeRuntime {
             .get(&obj)
             .copied()
             .or_else(|| {
-                self.track_positions
+                let ids = self.osc_ids.read().unwrap_or_else(|e| e.into_inner());
+                let tp = self
+                    .track_positions
                     .read()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .get(&(obj as u32))
-                    .copied()
+                    .unwrap_or_else(|e| e.into_inner());
+                crate::merge_runtime::state_ops::track_pos_for_obj(&tp, &ids, obj).copied()
             });
         if let Some(p) = pos {
             self.manual_positions

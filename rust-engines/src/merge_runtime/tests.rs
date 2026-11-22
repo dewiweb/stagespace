@@ -1103,7 +1103,7 @@ fn test_finish_move_operator_stop_applies_hold() {
     let rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
     rt.set_osc_ids(vec![1, 2]);
     rt.set_track_positions(
-        [(0u32, [10.0, 0.0, 0.0]), (1u32, [0.0, 10.0, 0.0])]
+        [(1u32, [10.0, 0.0, 0.0]), (2u32, [0.0, 10.0, 0.0])]
             .into_iter()
             .collect(),
     );
@@ -1137,7 +1137,7 @@ fn test_finish_move_operator_stop_revert_writes_nothing() {
     let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
     let rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
     rt.set_osc_ids(vec![1]);
-    rt.set_track_positions([(0u32, [10.0, 0.0, 0.0])].into_iter().collect());
+    rt.set_track_positions([(1u32, [10.0, 0.0, 0.0])].into_iter().collect());
     let b = Arc::new(PositionBuffer::new());
     rt.register_move(
         "m1".to_string(),
@@ -1256,7 +1256,7 @@ fn test_hold_chain_then_revert_full_scenario() {
     let captured = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
     rt.set_sink(Box::new(CaptureSink(captured.clone())));
     rt.set_osc_ids(vec![1]);
-    rt.set_track_positions([(0u32, [10.0, 0.0, 0.0])].into_iter().collect());
+    rt.set_track_positions([(1u32, [10.0, 0.0, 0.0])].into_iter().collect());
 
     // M1 (End:hold) émet (5,5,5), stop opérateur → pause : l'objet reste là.
     let b1 = Arc::new(PositionBuffer::new());
@@ -1324,9 +1324,9 @@ fn test_finish_move_revert_emits_origins_and_respects_overrides() {
     rt.set_osc_ids(vec![1, 2, 3, 4]);
     rt.set_track_positions(
         [
-            (0u32, [10.0, 0.0, 0.0]),
-            (1u32, [0.0, 10.0, 0.0]),
-            (2u32, [-10.0, 0.0, 0.0]),
+            (1u32, [10.0, 0.0, 0.0]),
+            (2u32, [0.0, 10.0, 0.0]),
+            (3u32, [-10.0, 0.0, 0.0]),
         ]
         .into_iter()
         .collect(),
@@ -1397,7 +1397,7 @@ fn test_fade_out_completion_revert_emits_origins() {
     let captured = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
     rt.set_sink(Box::new(CaptureSink(captured.clone())));
     rt.set_osc_ids(vec![1]);
-    rt.set_track_positions([(0u32, [8.0, 0.0, 0.0])].into_iter().collect());
+    rt.set_track_positions([(1u32, [8.0, 0.0, 0.0])].into_iter().collect());
     let b = Arc::new(PositionBuffer::new());
     rt.register_move(
         "m1".to_string(),
@@ -1438,7 +1438,7 @@ fn test_fade_out_completion_hold_writes_manual() {
         std::collections::HashMap::new(),
     )))));
     rt.set_osc_ids(vec![1]);
-    rt.set_track_positions([(0u32, [8.0, 0.0, 0.0])].into_iter().collect());
+    rt.set_track_positions([(1u32, [8.0, 0.0, 0.0])].into_iter().collect());
     let b = Arc::new(PositionBuffer::new());
     rt.register_move(
         "m1".to_string(),
@@ -1463,6 +1463,38 @@ fn test_fade_out_completion_hold_writes_manual() {
     );
     let srcs = rt.object_control_sources();
     assert_eq!(srcs.get(&0).map(String::as_str), Some("hold"));
+}
+
+#[test]
+fn test_trackpos_resolves_through_track_id_mapping() {
+    // Sémantique unifiée : les origines sont indexées en track_id (espace
+    // opérateur — .hol, /stagespace/trackpos), résolues en obj_index via
+    // le mapping osc_ids COURANT. Mapping non-identité : tracks .hol
+    // [5,9,12] → obj 0,1,2. L'origine de l'objet 0 est track_pos[5], pas
+    // track_pos[0]. Un import avant set_osc_ids fonctionne aussi : la
+    // résolution à la lecture utilise le mapping au moment de la lecture.
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    // Origines posées en clés track_id AVANT le mapping — ordre libre.
+    rt.set_track_positions(
+        [
+            (5u32, [10.0, 0.0, 0.0]),
+            (9u32, [0.0, 10.0, 0.0]),
+            (12u32, [-10.0, 0.0, 0.0]),
+        ]
+        .into_iter()
+        .collect(),
+    );
+    assert_eq!(
+        rt.last_position(0),
+        None,
+        "sans mapping, aucun objet n'existe"
+    );
+    rt.set_osc_ids(vec![5, 9, 12]);
+    assert_eq!(rt.last_position(0), Some([10.0, 0.0, 0.0]));
+    assert_eq!(rt.last_position(1), Some([0.0, 10.0, 0.0]));
+    assert_eq!(rt.last_position(2), Some([-10.0, 0.0, 0.0]));
+    assert_eq!(rt.last_position(3), None, "pas d'objet 3 dans le mapping");
 }
 
 #[test]
