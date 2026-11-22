@@ -175,6 +175,10 @@ export const useGraphStore = create<GraphState>()((...a) => {
   // pending et vice-versa.
   let hotSwapTimer: ReturnType<typeof setTimeout> | null = null;
 
+  // Warn-once pour le hot-swap refusé à 0 track — évite le spam toast
+  // quand l'opérateur toggle plusieurs fois en sélection vide.
+  let emptyHotSwapWarned = false;
+
   // Les deletes clavier (Delete/Backspace) arrivent via des changes 'remove'
   // dans onNodesChange/onEdgesChange — pas via removeNode : sans push ici la
   // suppression n'est pas undoable. Debounce 100ms : un delete de node émet
@@ -372,7 +376,7 @@ export const useGraphStore = create<GraphState>()((...a) => {
       ]);
 
       const editingSlotId = get().editingSlotId as string | null;
-      const moveSlots = get().moveSlots as Array<{ id: string; movementId: string | null; trackIds?: number[] }> | undefined;
+      const moveSlots = get().moveSlots as Array<{ id: string; name?: string; movementId: string | null; trackIds?: number[] }> | undefined;
       const editingSlotMovementId = editingSlotId && moveSlots
         ? moveSlots.find((s) => s.id === editingSlotId)?.movementId ?? null
         : null;
@@ -384,6 +388,18 @@ export const useGraphStore = create<GraphState>()((...a) => {
         // Récupérer les osc_ids et track_indices du slot édité
         const editingSlot = moveSlots?.find((s: any) => s.id === editingSlotId);
         const oscIds = editingSlot?.trackIds ?? [];
+        // n_objects ≥ 1 côté backend : à 0 track le hot-swap est voué à
+        // l'échec et chaque caller (updateNodeData, undo, assign...) le
+        // re-tente — boucle d'erreurs. On court-circuite ; l'état du slot
+        // reste cohérent, le move garde son dernier graphe valide.
+        if (oscIds.length === 0) {
+          if (!emptyHotSwapWarned) {
+            emptyHotSwapWarned = true;
+            toast.warning(`"${editingSlot?.name ?? 'Move'}" is live — cannot empty its tracks while playing.`);
+          }
+          return;
+        }
+        emptyHotSwapWarned = false;
         const holProj = get().holProject;
         const manualIds = get().manualOscIds ?? [];
         const trackIndices = computeTrackIndices(oscIds, holProj, manualIds);

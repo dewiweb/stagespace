@@ -170,7 +170,30 @@ export function markFading(movementId: string, fadeDuration: number) {
 /// Backfill des champs ajoutés après coup — utilisé par le load localStorage
 /// ET le restore .hfg (un slot sérialisé par une ancienne version n'a pas les
 /// nouveaux champs ; sans ça ils arrivent undefined dans le store).
+const AUDIO_MOD_SOURCES = new Set(['bpm', 'amplitude_rms', 'amplitude_bass', 'amplitude_mid', 'amplitude_high']);
+const AUDIO_MOD_TARGETS = new Set(['speed', 'scale', 'radius_scale', 'height_offset', 'offset_x', 'offset_y', 'offset_z', 'yaw', 'pitch', 'roll']);
+
+// Les enums Rust rejettent tout variant inconnu — un mod invalide persisté
+// (show étranger, donnée corrompue) ferait échouer TOUT le payload
+// activate_move. On filtre ici : un mod inexécutable ne doit pas briquer le move.
+function isValidAudioMod(m: any): boolean {
+  if (!m || typeof m !== 'object') return false;
+  const src = m.source;
+  const srcOk = typeof src === 'string'
+    ? AUDIO_MOD_SOURCES.has(src)
+    : !!src && typeof src === 'object' && typeof src.spectrum_band === 'number';
+  return srcOk && AUDIO_MOD_TARGETS.has(m.target);
+}
+
+let invalidModsWarned = false;
+
 export function normalizeSlot(s: any): MoveSlot {
+  const rawMods = Array.isArray(s.audioMods) ? s.audioMods : [];
+  const audioMods = rawMods.filter(isValidAudioMod);
+  if (audioMods.length !== rawMods.length && !invalidModsWarned) {
+    invalidModsWarned = true;
+    console.error(`[stagespace] ${rawMods.length - audioMods.length} invalid audio mod(s) dropped (unknown source/target variant)`);
+  }
   return {
     ...s,
     macros: s.macros ?? defaultMacros(),
@@ -181,7 +204,7 @@ export function normalizeSlot(s: any): MoveSlot {
     fadeOut: s.fadeOut ?? 0.5,
     phaseSpread: s.phaseSpread ?? 0,
     assignments: s.assignments ?? [],
-    audioMods: s.audioMods ?? [],
+    audioMods,
     signalGraph: s.signalGraph ?? null,
     oscIndex: s.oscIndex ?? 0,
   };

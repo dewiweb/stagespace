@@ -263,3 +263,70 @@ réellement le champ (1.47 vs 2.0). Settings modal complet.
 **À noter** : pads réagissent au pointerdown, pas au click simple —
 cohérent tactile mais à savoir ; bottom chips Jeu (Params/Playback/
 Tracks/Audio/OSC IN/Global) visibles, non détaillées.
+
+## Session 4 — campagne UI point par point, 2e vague (réel)
+
+**Slots (MovesTable)** : rename inline par dblclick sur le nom (input +
+Enter) ✔ ; reorder setlist ▲/▼ (colonne SET change, tri visuel = ordre
+de création — à noter) ✔ ; toggle Mode Live→Preview (« pas d'OSC out ») ✔ ;
+chooser tracks (popover) ✔ ; template select 33 presets + plan xz/xy/yz ✔ ;
+popover Macros (Speed/Scale/Shift/Rot/Fade « Applied on launch and GO ») ✔ ;
+delete → modale « Delete « name » ? Slot graph, tracks and macros are
+lost — cannot be recovered » + confirm réel (ligne supprimée) ✔ ;
+remove-from-setlist (SET → vide) ✔ ; Edit graph → Expert Node Editor ✔.
+
+**Score panel** : 2 sections — SCORE (commandes horodatées, replay
+partition) + TAPE (positions 30 Hz), chacune ⏺ rec / ⏹ / ▶ / ↓ export /
+↑ import + texte explicatif clair (.sscore.json partageable, bounce chez
+renderer externe).
+
+**Inspector chips (Jeu + Atelier)** : Params/Playback/Tracks/Audio/
+OSC IN/Global — tous rendus. Playback = Speed + direction (forward/
+backward/pingpong) + fades In/Out + mode loop/oneshot + end revert/hold +
+anchor origin/current/follow (toggles actifs réels). Tracks presets
+All→8/8, None→0/8, Odd→4/8 réel. Audio form = Source(BPM/RMS/Bass/Mid/
+High) + Target(10 macros) + Intensity + Lissage. OSC IN = mappings +
+Add + LEARN ; Add vide → toast « Address + destination required »
+(validation propre).
+
+**Settings modal** : 5 onglets réels — Réseau (OSC OUT host/port/6 profils
++ OSC IN + /media), Tracking (PSN multicast/port/map/axes), Salle (venue
+scale/offset/yaw — payload OSC only, canonique préservé), Show (merge
+mode + liste tracks), Audio (« No device listed — start the microphone
+once to enumerate » = empty state honnête en headless).
+
+**Verrou config OSC** : changement de port refusé pendant le jeu
+(toast warning, input revient) ; accepté à l'arrêt ; **backend re-ciblé
+réellement :9001 — paquets /track/N/xyz reçus par un vrai listener UDP**.
+
+**Assign pick — VALIDÉ** : en édition, clics sur les objets du 3D Preview
+togglent les tracks (compteur N/64 change : 4→3→4→2→1→0). Le handler est
+sur l'overlay pointerdown du canvas — les events doivent viser
+elementFromPoint, pas le canvas WebGL.
+
+### Bugs trouvés cette session → FIXÉS
+
+- **Audio mod `source:''` briquait le slot** : un mod persisté avec une
+  source inconnue (show étranger/corrompu) faisait échouer TOUT
+  `activate_move` (`unknown variant ''`). Fix : `normalizeSlot` filtre
+  les mods invalides (source/target hors enums) — slot relancé en réel,
+  console.error une fois. `moveSlotsTypes.ts`.
+
+- **Boucle de hot-swap à 0 track** : vider les tracks d'un move LIVE
+  (deselect All, assign, None) poussait `update_move_graph_merged`
+  n_objects=0 → échec backend → ~16k console.error/s (mesuré in-page,
+  boucle réelle). Deux chemins patchés : `setSlotTracks` (warn + early
+  return) et `updateGraphLive` (skip + warn-once via flag). Vérif :
+  3 deselects → 0 erreur backend, 1 warning toast.
+
+### Améliorations notées
+
+- Tri visuel MovesTable = ordre de création alors que SET affiche
+  l'ordre setlist — une ligne peut afficher « #1 » avec SET=2. Dérouter
+  possible : envisager tri par SET ou un indicateur.
+- `0/8` tracks affiché quand None — un slot à 0 track ne peut pas
+  jouer : le bouton Launch devrait se désactiver / avertir avant le
+  backend (à l'arrêt c'est un état d'édition légitime).
+- Le toast « PANIC partially failed — N position reset(s) lost » est
+  correct mais apparaît aussi quand la destination OSC est simplement
+  absente en test — message OK en prod.

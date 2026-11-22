@@ -249,6 +249,13 @@ export const createSlotCrudMethods = (set: CreatorArgs[0], get: CreatorArgs[1]):
     }
     // Hot-swap si le slot est en lecture (édité ou non)
     const slot = get().moveSlots.find((s) => s.id === id);
+    if (slot?.movementId && sortedIds.length === 0) {
+      // n_objects ≥ 1 côté backend — vider les tracks d'un move live est un
+      // push voué à l'échec (re-tenté à chaque toggle). L'état du slot reste
+      // cohérent (0 track) mais on ne spamme pas le merge.
+      toast.warning(`"${slot.name}" is live — cannot remove all tracks while playing. Stop it first.`);
+      return;
+    }
     if (slot?.movementId) {
       const { holProject, manualOscIds } = get();
       const trackIndices = computeTrackIndices(slot.trackIds, holProject, manualOscIds);
