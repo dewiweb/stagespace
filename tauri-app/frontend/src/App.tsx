@@ -11,6 +11,7 @@ import Inspector from './components/Inspector';
 import AudioPanel from './components/panels/AudioPanel';
 import TabPanel from './components/TabPanel';
 import { Titlebar } from './components/Titlebar';
+import { WindowResizeHandles } from './components/WindowResizeHandles';
 import StatusBar from './components/StatusBar';
 import ToastContainer from './components/ToastContainer';
 import PerformView from './components/PerformView';
@@ -327,10 +328,13 @@ function AppMain() {
   ];
 
   return (
-    <div className="w-screen h-screen flex flex-col bg-stagespace-bg overflow-hidden">
+    <div className="relative w-screen h-screen flex flex-col bg-stagespace-bg overflow-hidden">
       {/* Titlebar — chrome de fenêtre frameless : brand + menubar +
           nav surfaces + contrôles OS (drag region natif Tauri). */}
       <Titlebar />
+      {/* Resize — frameless = pas de bordures natives ; poignées
+          invisibles sur bords/coins → startResizeDragging. */}
+      <WindowResizeHandles />
 
       {surface === 'conduite' ? (
         /* Surface Conduite — la station opérable interne : lit les

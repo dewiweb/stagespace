@@ -32,6 +32,7 @@
     "core:window:allow-unminimize",
     "core:window:allow-toggle-maximize",
     "core:window:allow-start-dragging",
+    "core:window:allow-start-resize-dragging",
     "core:webview:allow-create-webview-window",
     "core:webview:allow-get-all-webviews"
   ]
