@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
+import { X, Copy } from 'lucide-react';
 import { useCuelistStore, type CueData } from '../../store/useCuelistStore';
 import { useGraphStore } from '../../store/useGraphStore';
 import { doCuePrev, doCueNext, doCueRecallById } from '../../utils/liveActions';
@@ -18,6 +18,7 @@ export const CuelistPanel: React.FC<{ readonly?: boolean }> = ({ readonly = fals
   const storeCue = useCuelistStore((s) => s.storeCue);
   const pending = useCuelistStore((s) => s.pending);
   const deleteCue = useCuelistStore((s) => s.deleteCue);
+  const duplicateCue = useCuelistStore((s) => s.duplicateCue);
   const updateCue = useCuelistStore((s) => s.updateCue);
   const moveCue = useCuelistStore((s) => s.moveCue);
   // Rappels/next/prev passent par liveActions (guard recallBusy unifié).
@@ -379,6 +380,18 @@ export const CuelistPanel: React.FC<{ readonly?: boolean }> = ({ readonly = fals
                     )}
                   </div>
                 </div>
+                {!readonly && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      duplicateCue(cue.id);
+                    }}
+                    className="text-gray-400 hover:text-white text-xs px-1"
+                    title="Duplicate — clone this cue's snapshot (cue_number reset)"
+                  >
+                    <Copy size={11} />
+                  </button>
+                )}
                 {!readonly && (
                   <button
                     onClick={(e) => {

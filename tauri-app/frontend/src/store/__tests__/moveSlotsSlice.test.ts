@@ -408,3 +408,55 @@ describe('syncSlotMovements', () => {
     expect(slots[1].movementId).toBeNull();
   });
 });
+
+describe('duplicateMoveSlot', () => {
+  it('clone graph+tracks+macros, insère après la source, oscIndex unique', () => {
+    const slot = makeSlot({ id: 'slot-1', name: 'Circle A', trackIds: [5, 6], oscIndex: 3 });
+    const other = makeSlot({ id: 'slot-2', oscIndex: 7 });
+    useGraphStore.setState({ moveSlots: [slot, other] } as any);
+    useGraphStore.getState().duplicateMoveSlot('slot-1');
+    const slots = (useGraphStore.getState() as any).moveSlots;
+    expect(slots).toHaveLength(3);
+    const clone = slots[1]; // inséré juste après la source
+    expect(clone.name).toBe('Circle A copy');
+    expect(clone.id).not.toBe('slot-1');
+    expect(clone.trackIds).toEqual([5, 6]);
+    // selectSlotForEditing resynchronise le node Objects → la structure
+    // est la même mais les params reflètent les trackIds hérités.
+    expect(clone.graphJson.nodes.map((n: any) => n.data.type)).toEqual(
+      slot.graphJson.nodes.map((n: any) => n.data.type),
+    );
+    expect(clone.oscIndex).toBe(8); // max+1, jamais de collision /stagespace/slot
+    expect(clone.movementId).toBeNull();
+  });
+
+  it('le clone est deep-copié — éditer son graphe ne mute pas la source', () => {
+    const slot = makeSlot({ id: 'slot-1' });
+    useGraphStore.setState({ moveSlots: [slot] } as any);
+    useGraphStore.getState().duplicateMoveSlot('slot-1');
+    const slots = (useGraphStore.getState() as any).moveSlots;
+    slots[1].graphJson.nodes[0].data.params = { mutated: true };
+    expect(slots[0].graphJson.nodes[0].data.params.mutated).toBeUndefined();
+  });
+
+  it('n entre pas dans la setlist — l ordre du spectacle reste délibéré', () => {
+    const slot = makeSlot({ id: 'slot-1' });
+    useGraphStore.setState({ moveSlots: [slot], setlistOrder: ['slot-1'] } as any);
+    useGraphStore.getState().duplicateMoveSlot('slot-1');
+    expect((useGraphStore.getState() as any).setlistOrder).toEqual(['slot-1']);
+  });
+
+  it('sélectionne le duplicata pour édition', () => {
+    const slot = makeSlot({ id: 'slot-1' });
+    useGraphStore.setState({ moveSlots: [slot] } as any);
+    useGraphStore.getState().duplicateMoveSlot('slot-1');
+    const slots = (useGraphStore.getState() as any).moveSlots;
+    expect((useGraphStore.getState() as any).editingSlotId).toBe(slots[1].id);
+  });
+
+  it('slot inconnu → no-op', () => {
+    useGraphStore.setState({ moveSlots: [] } as any);
+    useGraphStore.getState().duplicateMoveSlot('nope');
+    expect((useGraphStore.getState() as any).moveSlots).toHaveLength(0);
+  });
+});

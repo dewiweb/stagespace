@@ -1,5 +1,5 @@
 import React from 'react';
-import { CircleDot, Play, Square, RefreshCw, Pencil, SlidersHorizontal, X, Star, ChevronDown } from 'lucide-react';
+import { CircleDot, Play, Square, RefreshCw, Pencil, SlidersHorizontal, X, Star, ChevronDown, Copy } from 'lucide-react';
 import { useGraphStore } from '../../store/useGraphStore';
 import { useMoveEditorStore } from '../../store/useMoveEditorStore';
 import { SHAPE_PRESETS } from '../../utils/shapePresets';
@@ -25,6 +25,7 @@ export default function MovesTable() {
   const moveSlots = useGraphStore((s) => s.moveSlots);
   const addMoveSlot = useGraphStore((s) => s.addMoveSlot);
   const removeMoveSlot = useGraphStore((s) => s.removeMoveSlot);
+  const duplicateMoveSlot = useGraphStore((s) => s.duplicateMoveSlot);
   const renameMoveSlot = useGraphStore((s) => s.renameMoveSlot);
   const setSlotTemplate = useGraphStore((s) => s.setSlotTemplate);
   const setSlotTracks = useGraphStore((s) => s.setSlotTracks);
@@ -482,6 +483,11 @@ export default function MovesTable() {
                           className="text-gray-400 hover:text-gray-200 text-xs px-1 rounded hover:bg-gray-700/30"
                           title="Macros (speed, scale, shift, rotation)"
                         ><SlidersHorizontal size={10} /></button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); duplicateMoveSlot(slot.id); }}
+                          className="text-gray-400 hover:text-gray-200 text-xs px-1 rounded hover:bg-gray-700/30"
+                          title="Duplicate — clone graph, tracks and macros into a new slot"
+                        ><Copy size={10} /></button>
                         <button
                           onClick={(e) => { e.stopPropagation(); setPendingDeleteSlot({ id: slot.id, name: slot.name }); }}
                           className="text-gray-400 hover:text-red-400 text-xs px-1 rounded hover:bg-red-900/20"

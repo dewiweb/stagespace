@@ -29,8 +29,8 @@ const GRAPH_GESTURES: { gesture: string; action: string }[] = [
   { gesture: 'Palette item drag', action: 'Drop on canvas to add · drop on a wire to splice' },
   { gesture: 'Double-click node title', action: 'Rename the instance (UI-only, backend uses type+params)' },
   { gesture: 'Alt+drag across wires', action: 'Cut every crossed connection' },
-  { gesture: 'Ctrl+C / Ctrl+X', action: 'Copy / cut the selected nodes (works across tabs)' },
-  { gesture: 'Ctrl+V / Ctrl+D', action: 'Paste / duplicate (out-of-scope nodes are filtered)' },
+  { gesture: 'Ctrl+C / Ctrl+X', action: 'Copy / cut the selected nodes (works across tabs, mirrored to the OS clipboard as JSON)' },
+  { gesture: 'Ctrl+V / Ctrl+D', action: 'Paste / duplicate (out-of-scope nodes are filtered — paste also reads the OS clipboard)' },
   { gesture: 'Delete / Backspace', action: 'Delete — a mid-chain node re-heals its neighbours' },
 ];
 
@@ -50,6 +50,8 @@ const MOUSE_GESTURES: { gesture: string; action: string }[] = [
   { gesture: 'Drag object (3D / radar)', action: 'Grab → manual position (engine loses control)' },
   { gesture: 'MANUAL bar / radar × badge', action: 'Release object(s) — engine resumes trajectory' },
   { gesture: 'Ctrl+click object', action: 'Release a held object (same as the bar)' },
+  { gesture: 'Ctrl+C / Ctrl+V (object selected)', action: 'Copy the emitted position / paste it as a manual position on the selected object' },
+  { gesture: 'Ctrl+C / Ctrl+V (spline edit)', action: 'Copy selected control points (all if none selected) / paste at +0.3m' },
   { gesture: 'Click radar (near object)', action: 'Select nearest object → inspect bar (state, release/park)' },
   { gesture: 'Assign mode (3D)', action: 'Click objects to toggle their track in the move' },
   { gesture: 'Draw mode (3D)', action: 'Draw a freehand spline trajectory' },

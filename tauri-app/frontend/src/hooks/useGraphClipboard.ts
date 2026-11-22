@@ -6,6 +6,7 @@ import { useSignalGraphStore } from '../store/useSignalGraphStore';
 import { GLOBAL_ONLY_NODES, SUB_ONLY_NODES, SIGNAL_ONLY_NODES } from '../components/nodeParamSchema';
 import {
   snapshotSelection, cloneForPaste, writeGraphClipboard, readGraphClipboard,
+  serializeGraphClipboard, parseGraphClipboard,
   type GraphClipboardPayload,
 } from '../utils/graphClipboard';
 import { healEdgesForRemoval } from '../utils/graphHeal';
@@ -135,6 +136,10 @@ export function useGraphClipboard(opts: {
         if (snap.nodes.length === 0) return;
         e.preventDefault();
         writeGraphClipboard(snap);
+        // Miroir dans le clipboard système (enveloppe JSON versionnée) —
+        // une chaîne de nœuds voyage entre shows/machines. Fire-and-
+        // forget : permission refusée ou webview sans API → no-op silencieux.
+        navigator.clipboard?.writeText(serializeGraphClipboard(snap)).catch(() => {});
         if (key === 'x') {
           const ids = new Set(snap.nodes.map((n) => n.id));
           // Toutes les edges incidentes aux nodes retirés — pas seulement
@@ -147,10 +152,22 @@ export function useGraphClipboard(opts: {
         return;
       }
       if (key === 'v') {
-        const clip = readGraphClipboard();
-        if (!clip) return;
         e.preventDefault();
-        pastePayload(clip);
+        const clip = readGraphClipboard();
+        if (clip) {
+          pastePayload(clip);
+          return;
+        }
+        // Clipboard mémoire vide → tenter le clipboard système : payload
+        // copiée dans une autre session/show ou partagée. readText est
+        // async — le paste arrive au tick suivant, c'est attendu.
+        navigator.clipboard
+          ?.readText()
+          .then((text) => {
+            const parsed = parseGraphClipboard(text);
+            if (parsed) pastePayload(parsed);
+          })
+          .catch(() => {});
         return;
       }
       if (key === 'd') {

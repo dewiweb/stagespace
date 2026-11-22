@@ -8,6 +8,7 @@ import { migrateStoredGraph } from '../../utils/graphMigration';
 import type { StateCreator } from 'zustand';
 import type { MoveSlotsSlice, MoveSlotsStore } from './moveSlotsSlice';
 import {
+  type MoveSlot,
   buildGraphForSlot,
   defaultMacros,
   syncObjectsNodeNoHotSwap,
@@ -23,7 +24,7 @@ import {
 
 type CreatorArgs = Parameters<StateCreator<MoveSlotsStore, [], [], MoveSlotsSlice>>;
 
-export const createSlotCrudMethods = (set: CreatorArgs[0], get: CreatorArgs[1]): Pick<MoveSlotsSlice, 'setSlotSignalGraph' | 'selectSlotForEditing' | 'addMoveSlot' | 'removeMoveSlot' | 'renameMoveSlot' | 'setSlotTemplate' | 'setSlotTracks' | 'setSlotMacros' | 'setSlotFadeDuration' | 'setSlotEndMode' | 'setSlotAnchorMode' | 'setSlotAnchorTarget' | 'setSlotLoopMode' | 'setSlotDirection' | 'updateSlotAnimationFields' | 'toggleSlotPreview' | 'addToSetlist' | 'removeFromSetlist' | 'moveSetlistItem'> => ({
+export const createSlotCrudMethods = (set: CreatorArgs[0], get: CreatorArgs[1]): Pick<MoveSlotsSlice, 'setSlotSignalGraph' | 'selectSlotForEditing' | 'addMoveSlot' | 'duplicateMoveSlot' | 'removeMoveSlot' | 'renameMoveSlot' | 'setSlotTemplate' | 'setSlotTracks' | 'setSlotMacros' | 'setSlotFadeDuration' | 'setSlotEndMode' | 'setSlotAnchorMode' | 'setSlotAnchorTarget' | 'setSlotLoopMode' | 'setSlotDirection' | 'updateSlotAnimationFields' | 'toggleSlotPreview' | 'addToSetlist' | 'removeFromSetlist' | 'moveSetlistItem'> => ({
   setSlotSignalGraph: (id, graph) => {
     set((s) => {
       const moveSlots = s.moveSlots.map((sl) =>
@@ -151,6 +152,31 @@ export const createSlotCrudMethods = (set: CreatorArgs[0], get: CreatorArgs[1]):
       const newEditingSlotId = s.editingSlotId === id ? null : s.editingSlotId;
       return { moveSlots: newSlots, setlistOrder: newSetlist, currentSetlistIndex: newIdx, editingSlotId: newEditingSlotId };
     });
+  },
+
+  duplicateMoveSlot: (id) => {
+    const src = get().moveSlots.find((s) => s.id === id);
+    if (!src) return;
+    const newSlotId = `slot-${Date.now()}`;
+    set((s) => {
+      const idx = s.moveSlots.findIndex((sl) => sl.id === id);
+      const clone: MoveSlot = {
+        // Deep clone — le graphe du duplicata ne doit pas partager de
+        // référence avec la source (éditer l'un muterait l'autre).
+        ...JSON.parse(JSON.stringify(src)),
+        id: newSlotId,
+        name: `${src.name} copy`,
+        movementId: null,
+        lastMovementId: undefined,
+        isPreview: false,
+        oscIndex: Math.max(0, ...s.moveSlots.map((sl) => sl.oscIndex)) + 1,
+      };
+      const newSlots = [...s.moveSlots];
+      newSlots.splice(idx + 1, 0, clone);
+      saveSlotsToStorage(newSlots);
+      return { moveSlots: newSlots };
+    });
+    get().selectSlotForEditing(newSlotId);
   },
 
   renameMoveSlot: (id, name) => {

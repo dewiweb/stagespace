@@ -32,6 +32,10 @@ export interface MoveSlotsSlice {
 
   // ─── CRUD moves ───
   addMoveSlot: () => void;
+  /// Clone graphe+tracks+macros d'un slot — inséré juste après la source,
+  /// sélectionné pour édition ("Move N copy"). Pas dans la setlist :
+  /// l'ordre du spectacle reste un choix délibéré.
+  duplicateMoveSlot: (id: string) => void;
   removeMoveSlot: (id: string) => void;
   renameMoveSlot: (id: string, name: string) => void;
   setSlotTemplate: (id: string, templateId: string) => void;

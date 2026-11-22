@@ -103,3 +103,28 @@ describe('timecode handling', () => {
     expect(getInvokeCalls().some((c) => c.cmd === 'recall_cue')).toBe(true);
   });
 });
+
+describe('duplicateCue', () => {
+  it('clone le snapshot, insère après la source, reset cue_number', () => {
+    useCuelistStore.getState().duplicateCue('b');
+    const cues = useCuelistStore.getState().cues;
+    expect(cues).toHaveLength(4);
+    const clone = cues[2]; // juste après 'b'
+    expect(clone.id).not.toBe('b');
+    expect(clone.name).toBe(`${cues[1].name} copy`);
+    expect(clone.cue_number).toBeNull(); // pas deux labels OSC identiques
+    expect(clone.pre_wait).toBe(cues[1].pre_wait);
+  });
+
+  it('currentCueIndex suit la cue courante par id', () => {
+    useCuelistStore.setState({ currentCueIndex: 2 }); // cue 'c'
+    useCuelistStore.getState().duplicateCue('a');
+    const st = useCuelistStore.getState();
+    expect(st.cues[st.currentCueIndex].id).toBe('c');
+  });
+
+  it('cue inconnue → no-op', () => {
+    useCuelistStore.getState().duplicateCue('nope');
+    expect(useCuelistStore.getState().cues).toHaveLength(3);
+  });
+});

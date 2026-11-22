@@ -2,6 +2,11 @@ import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
 import { toast } from '../utils/toast-helpers';
 import { doGo, doCueNext, doCuePrev, doToggleSelectedSlot } from '../utils/liveActions';
+import { doSetPosition } from '../utils/liveActionsSpatial';
+import {
+  writePositionClipboard, readPositionClipboard,
+  serializePositionClipboard, parsePositionClipboard,
+} from '../utils/graphClipboard';
 import { isModalOpen, closeTopModal } from '../utils/modalGuard';
 import { saveShow, loadShow } from '../utils/showFileActions';
 import { safeInvoke as invoke } from '../utils/tauri';
@@ -93,6 +98,39 @@ export function useLiveShortcuts() {
       // Dans l'éditeur React Flow : Delete/Backspace suppriment des nodes —
       // aucun raccourci live ne doit s'activer depuis le canvas.
       if (target instanceof Element && target.closest('.react-flow')) return;
+
+      // Copier/coller la POSITION de l'objet sélectionné — Ctrl+C copie
+      // la position émise (ce que l'opérateur voit), Ctrl+V l'applique
+      // en position manuelle à l'objet sélectionné (reprise opérateur,
+      // libérable via l'inspect bar). drawMode a son propre C/V (CPs).
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'v')) {
+        const gs = useGraphStore.getState();
+        if (gs.selectedObjIndex == null || gs.drawMode) return;
+        const obj = gs.selectedObjIndex;
+        if (e.key === 'c') {
+          const pos = gs.emittedPositions[obj];
+          if (!pos) return;
+          e.preventDefault();
+          const p: [number, number, number] = [pos[0], pos[1], pos[2]];
+          writePositionClipboard(p);
+          navigator.clipboard?.writeText(serializePositionClipboard(p)).catch(() => {});
+        } else {
+          e.preventDefault();
+          const clip = readPositionClipboard();
+          if (clip) {
+            doSetPosition(obj, clip[0], clip[1], clip[2]);
+            return;
+          }
+          navigator.clipboard
+            ?.readText()
+            .then((text) => {
+              const parsed = parsePositionClipboard(text);
+              if (parsed) doSetPosition(obj, parsed[0], parsed[1], parsed[2]);
+            })
+            .catch(() => {});
+        }
+        return;
+      }
 
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();

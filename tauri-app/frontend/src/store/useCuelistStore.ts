@@ -41,6 +41,7 @@ interface CuelistState {
   storeCue: (cue: StoreCueRequest) => Promise<CueData>;
   recallCue: (cueId: string, opts?: { skipPreWait?: boolean; timeOffset?: number; fadeOverride?: number }) => Promise<void>;
   deleteCue: (cueId: string) => void;
+  duplicateCue: (cueId: string) => void;
   /// Met à jour un cue en place (fade_duration éditable post-store) —
   /// la cuelist vit côté frontend (localStorage), le backend n'en garde
   /// pas de copie.
@@ -209,6 +210,27 @@ export const useCuelistStore = create<CuelistState>((set, get) => ({
     }
     set({ cues: filtered, currentCueIndex: newIndex });
     saveToStorage(filtered);
+  },
+
+  /// Clone le snapshot d'une cue — insérée juste après la source.
+  /// cue_number → null : deux cues avec le même label rendraient
+  /// /stagespace/cue/recall <n> ambigu, l'opérateur réassigne.
+  duplicateCue: (cueId: string) => {
+    const { cues, currentCueIndex } = get();
+    const i = cues.findIndex((c) => c.id === cueId);
+    if (i < 0) return;
+    const clone: CueData = {
+      ...JSON.parse(JSON.stringify(cues[i])),
+      id: `cue-${Date.now()}`,
+      name: `${cues[i].name} copy`,
+      cue_number: null,
+    };
+    const next = [...cues];
+    next.splice(i + 1, 0, clone);
+    const current = currentCueIndex >= 0 ? cues[currentCueIndex] : null;
+    const newIndex = current ? next.findIndex((c) => c.id === current.id) : -1;
+    set({ cues: next, currentCueIndex: newIndex });
+    saveToStorage(next);
   },
 
   updateCue: (cue) => {

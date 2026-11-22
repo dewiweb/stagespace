@@ -4,6 +4,10 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { useGraphStore } from '../store/useGraphStore';
 import { fromThree, toThree } from '../utils/coords';
 import { deleteCp, insertCpAtU, nearestU, type DrawView, type Vec3 } from '../utils/splineCore';
+import {
+  writeSplineClipboard, readSplineClipboard,
+  serializeSplineClipboard, parseSplineClipboard,
+} from '../utils/graphClipboard';
 
 interface UseDrawModeParams {
   cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>;
@@ -420,6 +424,61 @@ export function useDrawMode({ cameraRef, containerRef, controlsRef, cursorReadou
   // pendant un drag annulé — pointercancel couvre le reste).
   useEffect(() => {
     if (!drawMode && marqueeDivRef.current) marqueeDivRef.current.style.display = 'none';
+  }, [drawMode]);
+
+  // Copy/paste de CPs — Ctrl+C copie la sélection (tous si rien de
+  // sélectionné : dupliquer une forme entière entre moves), Ctrl+V
+  // colle en fin de spline avec un offset visible. Miroir dans le
+  // clipboard système (enveloppe 'spline') — une forme dessinée voyage
+  // entre shows comme une chaîne de nœuds.
+  useEffect(() => {
+    if (!drawMode) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const el = e.target as HTMLElement | null;
+      if (el?.closest('input, textarea, select, [contenteditable]')) return;
+      const st = useGraphStore.getState();
+      if (st.splineTool !== 'edit') return;
+      const key = e.key.toLowerCase();
+      if (key === 'c') {
+        const sel = st.cpSelection;
+        const points =
+          sel.size > 0
+            ? [...sel].sort((a, b) => a - b).map((i) => st.controlPoints[i])
+            : st.controlPoints;
+        if (points.length === 0) return;
+        e.preventDefault();
+        const payload = { points: points.map((p): Vec3 => [...p]), closed: st.splineClosed };
+        writeSplineClipboard(payload);
+        navigator.clipboard?.writeText(serializeSplineClipboard(payload)).catch(() => {});
+        return;
+      }
+      if (key === 'v') {
+        e.preventDefault();
+        const applyPaste = (payload: { points: Vec3[]; closed: boolean } | null) => {
+          if (!payload || payload.points.length === 0) return;
+          const s2 = useGraphStore.getState();
+          // +0.3m sur X : la copie doit être visible, pas empilée.
+          const pasted = payload.points.map(
+            (p): Vec3 => [p[0] + 0.3, p[1], p[2]],
+          );
+          const base = s2.controlPoints.length;
+          s2.setControlPoints([...s2.controlPoints, ...pasted]);
+          s2.setCpSelection(new Set(pasted.map((_, i) => base + i)));
+        };
+        const clip = readSplineClipboard();
+        if (clip) {
+          applyPaste(clip);
+          return;
+        }
+        navigator.clipboard
+          ?.readText()
+          .then((text) => applyPaste(parseSplineClipboard(text)))
+          .catch(() => {});
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
   }, [drawMode]);
 
   return {

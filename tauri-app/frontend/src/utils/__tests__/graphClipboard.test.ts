@@ -1,7 +1,7 @@
 /// <reference types="vitest/globals" />
 
 import { describe, it, expect } from 'vitest';
-import { snapshotSelection, cloneForPaste } from '../graphClipboard';
+import { snapshotSelection, cloneForPaste, serializeGraphClipboard, parseGraphClipboard, serializeSplineClipboard, parseSplineClipboard, serializePositionClipboard, parsePositionClipboard, serializeClipboard } from '../graphClipboard';
 import { makeNode, makeEdge, makeSimpleGraph } from '../../store/__tests__/testHelpers';
 import type { GraphNode } from '../../components/nodeParamSchema';
 import type { Edge } from '@xyflow/react';
@@ -65,5 +65,48 @@ describe('cloneForPaste', () => {
 
   it('payload vide → null', () => {
     expect(cloneForPaste({ nodes: [], edges: [] }, 1)).toBeNull();
+  });
+});
+
+describe('clipboard système — enveloppe JSON', () => {
+  const graph = makeSimpleGraph(3);
+  const payload = { nodes: graph.nodes, edges: graph.edges as Edge[] };
+
+  it('serialize → parse round-trip graphe', () => {
+    const parsed = parseGraphClipboard(serializeGraphClipboard(payload));
+    expect(parsed?.nodes).toHaveLength(payload.nodes.length);
+    expect(parsed?.edges).toHaveLength(payload.edges.length);
+  });
+
+  it('rejette les textes hors format / mauvaise version / JSON cassé', () => {
+    expect(parseGraphClipboard('hello world')).toBeNull();
+    expect(parseGraphClipboard('{"app":"stagespace","v":99,"kind":"graph","payload":{"nodes":[]}}')).toBeNull();
+    expect(parseGraphClipboard('{"app":"other","v":1,"kind":"graph","payload":{"nodes":[]}}')).toBeNull();
+    // kind mismatch : une payload spline passée au parser graphe
+    expect(parseGraphClipboard(serializeSplineClipboard({ points: [[0,0,0],[1,1,1]], closed: false }))).toBeNull();
+  });
+
+  it('rejette les payloads structurellement invalides', () => {
+    const bad = serializeClipboard('graph', { nodes: [{ id: 1 }] });
+    expect(parseGraphClipboard(bad)).toBeNull();
+    const noNodes = serializeClipboard('graph', { nodes: [] });
+    expect(parseGraphClipboard(noNodes)).toBeNull();
+  });
+
+  it('spline : round-trip + validation', () => {
+    const spl = { points: [[0, 0, 0], [1, 0, 1], [2, 0, 0]] as [number, number, number][], closed: true };
+    const parsed = parseSplineClipboard(serializeSplineClipboard(spl));
+    expect(parsed?.closed).toBe(true);
+    expect(parsed?.points).toHaveLength(3);
+    expect(parseSplineClipboard('junk')).toBeNull();
+    expect(parseSplineClipboard(serializeClipboard('spline', { points: [[0, 0, 0]], closed: false }))).toBeNull(); // <2 pts
+    expect(parseSplineClipboard(serializeClipboard('spline', { points: [[0, 'x', 0], [1, 1, 1]], closed: false }))).toBeNull(); // NaN
+  });
+
+  it('position : round-trip + validation', () => {
+    const parsed = parsePositionClipboard(serializePositionClipboard([1.5, -2, 0.25]));
+    expect(parsed).toEqual([1.5, -2, 0.25]);
+    expect(parsePositionClipboard('junk')).toBeNull();
+    expect(parsePositionClipboard(serializeClipboard('position', { pos: [1, 2] }))).toBeNull();
   });
 });
