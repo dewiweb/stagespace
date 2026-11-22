@@ -4,6 +4,7 @@
 /// Zustand ni Tauri — un seul rendu pour les deux contextes.
 import React from 'react';
 import { StatusChip } from '../ui/StatusChip';
+import { ParkedChip } from '../perform/ParkedChip';
 import { ShowTransport } from '../show/ShowTransport';
 import { formatLogLabel } from '../../utils/liveActionsShared';
 import type { ConduiteHandlers, ConduiteViewState } from './types';
@@ -21,7 +22,6 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
   // Arm local — click = arm (outline), double-click = RECALL : le même
   // contrat que CuelistPanel, jamais de scene-kill au simple clic.
   const [armedCueId, setArmedCueId] = React.useState<string | null>(null);
-  const [parkedOpen, setParkedOpen] = React.useState(false);
 
   // Modèle console : Prev/Next déplacent le marqueur d'armement SANS
   // tirer — on se positionne dans la cue list sans casser la scène.
@@ -61,41 +61,11 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
             </button>
           )}
           {st && st.parked.length > 0 && (
-            <div className="relative">
-              <button
-                onClick={() => setParkedOpen(!parkedOpen)}
-                className="text-xl px-3 py-1.5 rounded font-bold border border-cyan-600/60 text-cyan-200 bg-cyan-900/30 hover:bg-cyan-800/40"
-                title={`Objets parkés : ${st.parked.join(', ')} — cliquer pour dégeler`}
-              >
-                {st.parked.length} PARKED
-              </button>
-              {parkedOpen && (
-                <div className="absolute right-0 top-full mt-1 z-menu bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-2 min-w-[180px]">
-                  <div className="text-gray-400 text-[10px] uppercase tracking-wider px-1 pb-1">
-                    Parked — cliquer pour dégeler
-                  </div>
-                  {st.parked.map((obj) => (
-                    <div key={obj} className="flex items-center justify-between gap-2 px-1 py-1">
-                      <span className="text-cyan-200 font-mono text-sm">obj {obj}</span>
-                      <button
-                        onClick={() => onUnpark(obj)}
-                        className="px-2 py-0.5 rounded bg-gray-700 hover:bg-cyan-700 text-xs text-gray-200"
-                      >
-                        unpark
-                      </button>
-                    </div>
-                  ))}
-                  {st.parked.length > 1 && (
-                    <button
-                      onClick={() => st.parked.forEach((obj) => onUnpark(obj))}
-                      className="w-full mt-1 px-2 py-1 rounded bg-cyan-800 hover:bg-cyan-700 text-xs font-semibold text-white"
-                    >
-                      Unpark all
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
+            <ParkedChip
+              parked={st.parked}
+              onUnpark={onUnpark}
+              className="text-xl px-3 py-1.5 rounded font-bold border border-cyan-600/60 text-cyan-200 bg-cyan-900/30 hover:bg-cyan-800/40"
+            />
           )}
           {st && st.consoleAge !== null && (
             <StatusChip variant={st.consoleAge < 5 ? 'live' : 'dim'} className="text-xl px-3 py-1.5">

@@ -45,7 +45,7 @@ export type ConduiteHandlers = {
   /// SETLIST GO — crossfade vers le prochain move (≠ onGo = cue recall).
   onGoSetlist: () => void;
   /// Dégèle un objet parké (obj_index backend).
-  onUnpark: (obj: number) => void;
   /// Rejoue les slots stoppés par le dernier solo.
+  onUnpark: (obj: number) => void;
   onUnsolo: () => void;
 };

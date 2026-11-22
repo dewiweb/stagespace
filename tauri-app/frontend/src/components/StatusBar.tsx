@@ -7,6 +7,7 @@ import { useShowStatusStore } from '../store/useShowStatusStore';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { ModChips } from './ModChips';
 import { SettingsModal } from './SettingsModal';
+import { ParkedChip } from './perform/ParkedChip';
 import { doPanic } from '../utils/liveActions';
 
 /// StatusBar — bandeau persistant en bas de fenêtre, monté dans App pour
@@ -34,6 +35,7 @@ export const StatusBar: React.FC = () => {
   const perceptual = useGraphStore((s) => s.perceptual);
   const debugPerfVisible = useMoveEditorStore((s) => s.debugPerfVisible);
   const backendDown = useShowStatusStore((s) => s.backendDown);
+  const parked = useShowStatusStore((s) => s.parked);
   const isRecalling = useCuelistStore((s) => s.isRecalling);
 
   const activeCount = movements.length;
@@ -97,6 +99,11 @@ export const StatusBar: React.FC = () => {
           RECALL
         </span>
       )}
+
+      {/* Objets parkés — gèlent au travers des recalls/panic. Un objet
+          qui ignore le move en Atelier ou le recall en Conduite est
+          indiscernable d'un bug si l'état n'est pas visible partout. */}
+      {parked.length > 0 && <ParkedChip parked={parked} compact dropUp />}
 
       {/* Santé des flux — PSN tracking + last show-cmd (inclut TC). Un flux
           mort en silence = un follow-me gelé sans alerte : visible en

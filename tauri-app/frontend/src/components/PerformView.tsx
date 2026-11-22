@@ -6,7 +6,6 @@ import EmptyState from './ui/EmptyState';
 import { StatusChip } from './ui/StatusChip';
 import { SlotTile } from './show/SlotTile';
 import { LiveDrawer } from './perform/LiveDrawer';
-import { ParkedChip } from './perform/ParkedChip';
 import { useShowStatusStore, startShowStatusPolling } from '../store/useShowStatusStore';
 import { cueLabel, tcStr } from '../utils/showFormat';
 import { useGraphStore } from '../store/useGraphStore';
@@ -57,7 +56,6 @@ export const PerformView: React.FC = () => {
   const setSurface = useMoveEditorStore((s) => s.setSurface);
   // État de santé show (parked / consoleAge / armed) — poll unique partagé
   // via useShowStatusStore au lieu d'un setInterval par composant.
-  const parked = useShowStatusStore((s) => s.parked);
   const consoleAge = useShowStatusStore((s) => s.consoleAge);
   // Source-de-contrôle par track (badges pads) + solo actif — même
   // sémantique que l'ex-RunView : objectStates keyed par obj_index.
@@ -209,7 +207,6 @@ export const PerformView: React.FC = () => {
           <span className="text-gray-400 text-xs uppercase tracking-wider flex-shrink-0">
             Setlist {currentSetlistIndex + 1}/{setlistOrder.length}
           </span>
-          {parked.length > 0 && <ParkedChip parked={parked} compact />}
           {isRecalling && (
             <span className="text-purple-400 text-xs font-bold animate-pulse flex-shrink-0">
               RECALLING…
