@@ -36,7 +36,9 @@ export interface PersistenceSlice {
   listGraphs: () => Promise<string[]>;
 
   // Persistence sur disque (Tauri IPC) — .hfg = show complet depuis v2
-  saveGraphToFile: (filePath: string) => Promise<void>;
+  /// silent : écriture interne (autosave) — ne devient ni le chemin
+  /// courant ni un recent, et ne nettoie pas le dirty flag.
+  saveGraphToFile: (filePath: string, opts?: { silent?: boolean }) => Promise<void>;
   loadGraphFromFile: (filePath: string) => Promise<void>;
   /// Applique une enveloppe show déjà chargée (welcome screen, tests) —
   /// même chemin que loadGraphFromFile sans la lecture fichier.
@@ -322,7 +324,7 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
       .map((k) => k.replace('stagespace_graph_', ''));
   },
 
-  saveGraphToFile: async (filePath) => {
+  saveGraphToFile: async (filePath, opts) => {
     const envelope = await buildShowEnvelope(get());
     try {
       await invoke('save_graph_to_file', { filePath, graphJson: envelope });
@@ -338,6 +340,12 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
     await invoke('set_show_snapshot', { clientId: SYNC_CLIENT_ID, envelope })
       .then(() => markPushed(envelopeComparable(envelope)))
       .catch(silentCatch);
+    // Document synchronisé avec le fichier — clean + recent (sauf
+    // écriture interne type autosave : pas le vrai chemin du show).
+    if (!opts?.silent) {
+      const { useSessionStore } = await import('../useSessionStore');
+      useSessionStore.getState().markClean(filePath);
+    }
   },
 
   loadGraphFromFile: async (filePath) => {
@@ -348,6 +356,8 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
     }
     const raw = await invoke<ShowFileEnvelope>('load_graph_from_file', { filePath });
     await get().loadShowEnvelope(raw);
+    const { useSessionStore } = await import('../useSessionStore');
+    useSessionStore.getState().markClean(filePath);
   },
 
   loadShowEnvelope: async (raw, opts) => {
@@ -630,6 +640,11 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
         .then(() => markPushed(envelopeComparable(raw)))
         .catch(silentCatch);
     }
+    // Le document appliqué EST la référence — clean (le chemin courant
+    // est préservé ; seul loadGraphFromFile le remplace, via markClean
+    // avec path). Les marks dirty des mutations de restore sont effacés.
+    const { useSessionStore } = await import('../useSessionStore');
+    useSessionStore.getState().markClean();
   },
 
   pullShowFromHost: async (opts) => {

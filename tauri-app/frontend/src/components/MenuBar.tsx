@@ -3,7 +3,8 @@ import { useGraphStore } from '../store/useGraphStore';
 import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { useOscArmed } from '../hooks/useOscArmed';
-import { importHolProject, loadShow, saveShow } from '../utils/showFileActions';
+import { importHolProject, loadShow, loadShowFromPath, saveShow, basename } from '../utils/showFileActions';
+import { useSessionStore } from '../store/useSessionStore';
 import { doSetPosition } from '../utils/liveActionsSpatial';
 import { getGraphClipboardOps } from '../utils/clipboardBus';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -61,6 +62,8 @@ export const MenuBar: React.FC = () => {
   const setShowExpert = useMoveEditorStore((s) => s.setShowExpert);
   const setShortcutsOpen = useMoveEditorStore((s) => s.setShortcutsOpen);
   const setActiveAppModal = useMoveEditorStore((s) => s.setActiveAppModal);
+  const showDirty = useSessionStore((s) => s.dirty);
+  const recentShows = useSessionStore((s) => s.recentShows);
   const undo = useGraphStore((s) => s.undo);
   const redo = useGraphStore((s) => s.redo);
   const canUndo = useGraphStore((s) => s.canUndo);
@@ -194,8 +197,23 @@ export const MenuBar: React.FC = () => {
         // confirmation).
         { label: 'New Show', shortcut: 'Ctrl+N', onClick: () => setActiveAppModal('new-show') },
         { separator: true },
-        { label: 'Save Show…', shortcut: 'Ctrl+S', onClick: () => void saveShow() },
+        // Save direct si le show a déjà un chemin (convention Ctrl+S) —
+        // le • signale des changements non sauvés (dirty session store).
+        { label: `Save${showDirty ? ' •' : ''}`, shortcut: 'Ctrl+S', onClick: () => void saveShow() },
+        { label: 'Save As…', onClick: () => void saveShow(true) },
         { label: 'Load Show…', shortcut: 'Ctrl+O', onClick: () => void loadShow() },
+        // Shows récents — même chemin que loadShow sans dialog
+        // (garde dirty via guardDirty, comme tout load).
+        ...(recentShows.length > 0
+          ? [
+              { separator: true } as const,
+              ...recentShows.slice(0, 5).map((p) => ({
+                label: `Recent: ${basename(p)}`,
+                title: p,
+                onClick: () => loadShowFromPath(p),
+              })),
+            ]
+          : []),
         // Remote UI : le store local est vide au premier accès — le
         // snapshot poussé par l'hôte au save/load fait foi.
         ...(isRemote

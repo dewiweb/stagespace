@@ -24,6 +24,10 @@ import { SettingsModal } from './components/SettingsModal';
 import { AboutModal } from './components/AboutModal';
 import { ConfirmModal } from './components/ui/ConfirmModal';
 import { newShow } from './utils/showFileActions';
+import { initDirtyTracking, initWindowCloseGuard, initAutosave } from './utils/sessionSafety';
+import { useSessionStore } from './store/useSessionStore';
+import { toast } from './utils/toast-helpers';
+import { UnsavedChangesModal } from './components/ui/UnsavedChangesModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ChevronRight, ChevronDown, PanelRightClose, PanelLeftClose, PanelLeftOpen, PanelRightOpen, Maximize2, Minimize2, Activity } from 'lucide-react';
 import { useLiveShortcuts, usePerfStatsPolling } from './hooks/useLiveShortcuts';
@@ -172,6 +176,21 @@ function AppMain() {
     const onCtx = (e: MouseEvent) => e.preventDefault();
     document.addEventListener('contextmenu', onCtx);
     return () => document.removeEventListener('contextmenu', onCtx);
+  }, []);
+
+  // ── Sécurité session ── dirty tracking sur les clés document,
+  // garde à la fermeture fenêtre, autosave. Un show non sauvegardé
+  // ne doit JAMAIS se perdre en silence.
+  React.useEffect(() => initDirtyTracking(), []);
+  React.useEffect(() => initWindowCloseGuard(), []);
+  React.useEffect(() => initAutosave(), []);
+  // Recovery awareness — un crash/reload restaure les stores depuis
+  // localStorage ; si la session précédente était dirty on le dit
+  // (le backup autosave.hfg existe en plus sur disque).
+  React.useEffect(() => {
+    if (useSessionStore.getState().dirty) {
+      toast.info('Previous session had unsaved changes — recovered from session state');
+    }
   }, []);
   // Raccourcis live (Esc=panic, Enter=GO, Shift+Enter=recall) + polling perf —
   // au niveau App : ils doivent fonctionner aussi en mode Perform (le Toolbar
@@ -627,6 +646,9 @@ function AppMain() {
       {activeAppModal === 'about' && (
         <AboutModal onClose={() => setActiveAppModal(null)} />
       )}
+      {/* Garde "unsaved changes" — armée par guardDirty (Load, Recent,
+          Quit, fermeture fenêtre). Save first / Discard / Cancel. */}
+      <UnsavedChangesModal />
       {activeAppModal === 'new-show' && (
         <ConfirmModal
           title="New Show"

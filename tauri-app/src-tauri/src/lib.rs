@@ -541,6 +541,15 @@ pub fn stagespace_invoke_handler<R: tauri::Runtime>(invoke: tauri::ipc::Invoke<R
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Single instance — une 2e instance ferait conflit sur les ports
+        // OSC/bridge (échec silencieux en régie). Le 2e lancement focus
+        // la fenêtre existante et meurt là.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.unminimize();
+                let _ = w.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(new_app_state())
