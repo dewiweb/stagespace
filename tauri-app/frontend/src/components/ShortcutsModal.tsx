@@ -10,6 +10,8 @@ const SHORTCUTS: { keys: string; action: string }[] = [
   { keys: 'Shift+Enter', action: 'RECALL next cue — kills all moves, respawns the snapshot' },
   { keys: 'Backspace', action: 'Recall previous cue' },
   { keys: 'Esc', action: 'PANIC — stop all moves, send origin positions' },
+  { keys: 'Ctrl+S', action: 'Save show (.hfg) — works while typing' },
+  { keys: 'Ctrl+O', action: 'Load show (.hfg) — works while typing' },
   { keys: 'Ctrl+Z', action: 'Undo graph edit' },
   { keys: 'Ctrl+Y / Ctrl+Shift+Z', action: 'Redo graph edit' },
   { keys: 'Ctrl+K', action: 'Quick-add node — searchable palette (also: double-click the canvas)' },

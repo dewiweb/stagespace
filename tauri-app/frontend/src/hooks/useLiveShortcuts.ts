@@ -3,6 +3,7 @@ import { useGraphStore } from '../store/useGraphStore';
 import { toast } from '../utils/toast-helpers';
 import { doGo, doCueNext, doCuePrev, doToggleSelectedSlot } from '../utils/liveActions';
 import { isModalOpen, closeTopModal } from '../utils/modalGuard';
+import { saveShow, loadShow } from '../utils/showFileActions';
 import { safeInvoke as invoke } from '../utils/tauri';
 import type { PerfStatsResponse } from '../types/generated/PerfStatsResponse';
 
@@ -47,6 +48,19 @@ export function useLiveShortcuts() {
         const gs = useGraphStore.getState();
         if (gs.cancelInteractionModes()) return;
         panic();
+        return;
+      }
+
+      // Accélérateurs fichier globaux — Ctrl+S/Ctrl+O fonctionnent même en
+      // cours de saisie (convention desktop : jamais en conflit avec le
+      // texte tapé). Un modal ouvert les bloque (pas de save/load par-
+      // dessus un dialog).
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 's' || e.key === 'o')) {
+        if (!isModalOpen()) {
+          e.preventDefault();
+          if (e.key === 's') void saveShow();
+          else void loadShow();
+        }
         return;
       }
 

@@ -175,8 +175,8 @@ export const MenuBar: React.FC = () => {
     {
       label: 'File',
       entries: [
-        { label: 'Save Show…', onClick: () => void saveShow() },
-        { label: 'Load Show…', onClick: () => void loadShow() },
+        { label: 'Save Show…', shortcut: 'Ctrl+S', onClick: () => void saveShow() },
+        { label: 'Load Show…', shortcut: 'Ctrl+O', onClick: () => void loadShow() },
         { separator: true },
         { label: 'Import Holophonix project…', onClick: () => void importHolProject() },
       ],
