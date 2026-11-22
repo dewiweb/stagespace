@@ -29,15 +29,15 @@ afterEach(() => {
 });
 
 describe('Toolbar — rendering', () => {
-  it('renders OSC chip with address:port and profile', () => {
+  it('renders Settings chip — la destination OSC vit dans la StatusBar', () => {
     render(<Toolbar />);
-    expect(screen.getByText(/127\.0\.0\.1:\d+/)).toBeInTheDocument();
-    expect(screen.getByText('holophonix')).toBeInTheDocument();
+    expect(screen.getByTitle(/Settings — OSC out destination shown in the status bar/i)).toBeInTheDocument();
+    expect(screen.queryByText('holophonix')).not.toBeInTheDocument();
   });
 
   it('renders Settings chip that opens the modal', () => {
     render(<Toolbar />);
-    expect(screen.getByTitle(/OSC →.*Settings/i)).toBeInTheDocument();
+    expect(screen.getByTitle(/Settings — OSC out destination/i)).toBeInTheDocument();
   });
 
   it('renders without crashing in default state', () => {
@@ -100,15 +100,15 @@ describe('Toolbar — status', () => {
 });
 
 describe('Toolbar — settings modal', () => {
-  it('opens settings modal on OSC chip click', () => {
+  it('opens settings modal on Settings chip click', () => {
     render(<Toolbar />);
-    fireEvent.click(screen.getByTitle(/OSC →.*Settings/i));
+    fireEvent.click(screen.getByTitle(/Settings — OSC out destination/i));
     expect(screen.getByTestId('settings-modal')).toBeInTheDocument();
   });
 
   it('closes settings modal on close button', () => {
     render(<Toolbar />);
-    fireEvent.click(screen.getByTitle(/OSC →.*Settings/i));
+    fireEvent.click(screen.getByTitle(/Settings — OSC out destination/i));
     expect(screen.getByTestId('settings-modal')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Close Settings'));
     expect(screen.queryByTestId('settings-modal')).not.toBeInTheDocument();

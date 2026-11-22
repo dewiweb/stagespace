@@ -6,6 +6,7 @@ import { useOscArmed } from '../hooks/useOscArmed';
 import { useShowStatusStore } from '../store/useShowStatusStore';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { ModChips } from './ModChips';
+import { SettingsModal } from './SettingsModal';
 import { doPanic } from '../utils/liveActions';
 
 /// StatusBar — bandeau persistant en bas de fenêtre, monté dans App pour
@@ -26,6 +27,8 @@ export const StatusBar: React.FC = () => {
   const clearPlayError = useGraphStore((s) => s.clearPlayError);
   const oscAddress = useGraphStore((s) => s.oscAddress);
   const oscPort = useGraphStore((s) => s.oscPort);
+  const oscProfile = useGraphStore((s) => s.oscProfile);
+  const [showSettings, setShowSettings] = React.useState(false);
   const [armed] = useOscArmed();
   const flowHealth = useGraphStore((s) => s.flowHealth);
   const perceptual = useGraphStore((s) => s.perceptual);
@@ -222,10 +225,17 @@ export const StatusBar: React.FC = () => {
 
       <div className="flex-1" />
 
-      {/* Destination OSC — rappel discret de où partent les positions */}
-      <span className="text-gray-500 font-mono flex-shrink-0" title="OSC output destination — UDP: delivery unverified; OSC SUSPENDED only fires on refused port, not on a dead host">
-        → {oscAddress}:{oscPort} ·unverified
-      </span>
+      {/* Destination OSC — seule source d'affichage addr/port/profile
+          (visible sur toutes les surfaces, la Toolbar n'existe qu'en
+          Atelier). Clic = Settings, l'info EST le point d'entrée. */}
+      <button
+        onClick={() => setShowSettings(true)}
+        className="text-gray-500 font-mono flex-shrink-0 hover:text-gray-200 transition-colors"
+        title={`OSC → ${oscAddress}:${oscPort} (${oscProfile}) — UDP: delivery unverified; OSC SUSPENDED only fires on refused port, not on a dead host — click: Settings`}
+      >
+        → {oscAddress}:{oscPort} {oscProfile} ·unverified
+      </button>
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
       <span className="text-gray-400 font-mono flex-shrink-0" title="STAGESPACE version">
         v{__APP_VERSION__}
       </span>

@@ -12,9 +12,6 @@ export const Toolbar: React.FC = () => {
   const compileError = useGraphStore((s) => s.compileError);
   const playError = useGraphStore((s) => s.playError);
   const holProject = useGraphStore((s) => s.holProject);
-  const oscAddress = useGraphStore((s) => s.oscAddress);
-  const oscPort = useGraphStore((s) => s.oscPort);
-  const oscProfile = useGraphStore((s) => s.oscProfile);
   const showExpert = useMoveEditorStore((s) => s.showExpert);
   const setShowExpert = useMoveEditorStore((s) => s.setShowExpert);
   const setEditorFocus = useMoveEditorStore((s) => s.setEditorFocus);
@@ -37,17 +34,16 @@ export const Toolbar: React.FC = () => {
           </span>
         )}
 
-        {/* OSC status chip → ouvre Settings (source unique d'édition —
-            le panneau inline dupliquait host/port/profile/trackIds/discovery) */}
+        {/* Entrée Settings — la destination OSC s'affiche dans la
+            StatusBar (toutes surfaces) ; dupliquer addr/port/profile ici
+            créait deux sources pour la même info. */}
         <button
           onClick={() => setShowSettings(true)}
           className="px-3 py-1.5 text-xs font-medium rounded bg-gray-800 text-gray-400 hover:text-white transition-colors flex items-center gap-1.5"
-          title={`OSC → ${oscAddress}:${oscPort} (${oscProfile}) — Settings`}
+          title="Settings — OSC out destination shown in the status bar"
         >
           <Settings size={13} />
-          <span className="text-gray-500 text-[11px] uppercase tracking-wider">OSC out</span>
-          <span className="text-gray-500 font-mono text-xs">{oscAddress}:{oscPort}</span>
-          <span className="text-gray-400 text-xs">{oscProfile}</span>
+          <span className="text-gray-500 text-[11px] uppercase tracking-wider">Settings</span>
         </button>
         {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
 
