@@ -13,6 +13,10 @@ interface TrajectoryVisualizationProps {
   isPlaying: boolean;
   hasMovements: boolean;
   nObjects: number;
+  /// Passe à true quand useRenderLoop a créé la scène — dep de l'effet :
+  /// sans lui, le composant (enfant) s'exécute avant la création de la
+  /// scène au mount et ses early-returns ne sont jamais relancés.
+  sceneReady: boolean;
 }
 
 /**
@@ -21,7 +25,7 @@ interface TrajectoryVisualizationProps {
  * Extrait de Scene3D.
  */
 export const TrajectoryVisualization: React.FC<TrajectoryVisualizationProps> = ({
-  sceneRef, objectsRef, isPlaying, hasMovements, nObjects,
+  sceneRef, objectsRef, isPlaying, hasMovements, nObjects, sceneReady,
 }) => {
   const pathLinesRef = useRef<THREE.Line[]>([]);
   const cancelRef = useRef<(() => void) | null>(null);
@@ -60,29 +64,36 @@ export const TrajectoryVisualization: React.FC<TrajectoryVisualizationProps> = (
   ].join(',');
 
   useEffect(() => {
-    const scene = sceneRef.current;
-    if (!scene) return;
-
     // Purge AVANT tout early-return — sinon les derniers chemins dessinés
     // restent dans la scène indéfiniment après un stop-all (ghost lines).
     const clearLines = () => {
       pathLinesRef.current.forEach((l) => {
-        scene.remove(l);
+        l.removeFromParent();
         l.geometry.dispose();
         (l.material as THREE.Material).dispose();
       });
       pathLinesRef.current = [];
     };
-    if (!(isPlaying || hasMovements) || !objectsRef.current || objectsRef.current.length === 0) {
+    if (!(isPlaying || hasMovements)) {
       clearLines();
       return;
     }
 
-    const timer = setTimeout(() => {
-      // Nettoyer les anciennes lignes
+    let cancelled = false;
+    let timer = 0;
+    let tries = 0;
+    // La scène et les objets n'existent pas forcément à l'exécution de cet
+    // effet (les effets enfants courent avant les hooks du parent) : on
+    // réessaie borné au lieu d'abandonner — sinon les paths restaient
+    // silencieusement absents jusqu'au prochain changement de dep.
+    const attempt = () => {
+      if (cancelled) return;
+      const scene = sceneRef.current;
+      if (!scene || !objectsRef.current || objectsRef.current.length === 0) {
+        if (tries++ < 20) timer = window.setTimeout(attempt, 150);
+        return;
+      }
       clearLines();
-
-      let cancelled = false;
 
       const fetchTrajectory = async () => {
         try {
@@ -140,17 +151,20 @@ export const TrajectoryVisualization: React.FC<TrajectoryVisualizationProps> = (
       };
 
       fetchTrajectory();
-      cancelRef.current = () => { cancelled = true; };
-    }, 200);
+    };
+
+    timer = window.setTimeout(attempt, 200);
+    cancelRef.current = () => { cancelled = true; };
 
     return () => {
+      cancelled = true;
       clearTimeout(timer);
       if (cancelRef.current) {
         cancelRef.current();
         cancelRef.current = null;
       }
     };
-  }, [isPlaying, hasMovements, movementIdsKey, animKey, graphCompileVersion, nObjects, macrosKey, movementsToShow, sceneRef, objectsRef]);
+  }, [isPlaying, hasMovements, movementIdsKey, animKey, graphCompileVersion, nObjects, macrosKey, movementsToShow, sceneReady, sceneRef, objectsRef]);
 
   // Cleanup à l'unmount — removeFromParent détache du parent réel (le ref
   // scene peut avoir été réassigné entre-temps).

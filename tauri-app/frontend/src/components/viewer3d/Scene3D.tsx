@@ -311,6 +311,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
         isPlaying={isPlaying}
         hasMovements={movements.length > 0}
         nObjects={nObjects}
+        sceneReady={sceneReady}
       />
       {/* Zones d'effets spatiaux — volumes translucides (sphere/box + falloff) */}
       <ZoneVisualization sceneRef={sceneRef} />
