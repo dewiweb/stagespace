@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "STAGESPACE",
+        "title": "STAGESPACE — Play the space",
         "width": 1200,
         "height": 800,
         "resizable": true,

@@ -296,14 +296,11 @@ function AppMain() {
       {/* Header */}
       <header className="h-12 bg-stagespace-panel border-b border-stagespace-border flex items-center justify-between px-4 flex-shrink-0">
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow">
-            <span className="text-white font-bold text-sm">S</span>
-          </div>
-          <h1 className="text-white font-bold text-base tracking-tight">STAGESPACE</h1>
-          <span className="text-gray-400 text-xs ml-1 italic">Play the space</span>
           {/* Menus applicatifs — chaque entrée dispatch vers les mêmes
               actions que les raccourcis/boutons (troisième porte, pas un
-              troisième chemin de code). */}
+              troisième chemin de code). Le brand vit dans la barre de
+              titre OS (tauri.conf.json) et le About — pas besoin de le
+              répéter dans le header. */}
           <MenuBar />
         </div>
         {/* Nav 3 phases — les surfaces de travail de l'opérateur :
