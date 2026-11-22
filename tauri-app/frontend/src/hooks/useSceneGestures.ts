@@ -8,18 +8,22 @@ interface UseSceneGesturesParams {
     e: { clientX: number; clientY: number },
     opts?: { proximityPx?: number },
   ) => number | null;
+  /// Clic-droit tap sur un objet — le parent ouvre le menu contextuel
+  /// (Release/Park/Copy/Paste position). Release instantané = Ctrl+clic.
+  onObjectContextMenu?: (obj: number, x: number, y: number) => void;
 }
 
 /**
  * Gestes transverses du viewer 3D — au niveau conteneur, dans TOUS les modes :
  * - clic-gauche SANS drag = sélection de l'objet le plus proche (tap-select,
  *   parité radar — hors modes interactifs qui gèrent leur propre clic)
- * - clic-droit SANS drag = release de la position manuelle de l'objet
+ * - Ctrl+clic-gauche = release instantané de la position manuelle
+ * - clic-droit SANS drag = menu contextuel de l'objet (Release en 1er item)
  * Le clic se distingue du drag par déplacement <6px et durée <500ms
  * (OrbitControls pan/rotate utilisent le drag — le contexte natif est
  * supprimé globalement dans App.tsx).
  */
-export function useSceneGestures({ pickObjectIndexAt }: UseSceneGesturesParams) {
+export function useSceneGestures({ pickObjectIndexAt, onObjectContextMenu }: UseSceneGesturesParams) {
   const leftDownRef = useRef<{ x: number; y: number; t: number } | null>(null);
   const rightDownRef = useRef<{ x: number; y: number; t: number } | null>(null);
 
@@ -36,7 +40,7 @@ export function useSceneGestures({ pickObjectIndexAt }: UseSceneGesturesParams) 
         if (!d) return;
         if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6 || Date.now() - d.t > 500) return;
         const idx = pickObjectIndexAt(e, { proximityPx: 40 });
-        if (idx !== null) doClearPosition(idx);
+        if (idx !== null) onObjectContextMenu?.(idx, e.clientX, e.clientY);
         return;
       }
       if (e.button === 0) {
@@ -49,10 +53,16 @@ export function useSceneGestures({ pickObjectIndexAt }: UseSceneGesturesParams) 
         const s = useGraphStore.getState();
         if (s.manipulateMode || s.assignMode || s.drawMode || s.zonePlaceMode || s.zoneEditMode) return;
         const idx = pickObjectIndexAt(e, { proximityPx: 40 });
+        // Ctrl+clic = release instantané (parité radar — le clic-droit
+        // ouvre désormais le menu, le release y est le 1er item).
+        if (e.ctrlKey) {
+          if (idx !== null) doClearPosition(idx);
+          return;
+        }
         s.setSelectedObjIndex(idx);
       }
     },
-    [pickObjectIndexAt],
+    [pickObjectIndexAt, onObjectContextMenu],
   );
 
   // Assign — clic sur un objet = toggle de sa track via la même source de

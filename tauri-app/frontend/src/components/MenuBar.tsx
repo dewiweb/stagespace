@@ -6,6 +6,7 @@ import { useOscArmed } from '../hooks/useOscArmed';
 import { importHolProject, loadShow, saveShow } from '../utils/showFileActions';
 import { doSetPosition } from '../utils/liveActionsSpatial';
 import { getGraphClipboardOps } from '../utils/clipboardBus';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import {
   writePositionClipboard, readPositionClipboard,
   serializePositionClipboard, parsePositionClipboard,
@@ -202,6 +203,12 @@ export const MenuBar: React.FC = () => {
           : []),
         { separator: true },
         { label: 'Import Holophonix project…', onClick: () => void importHolProject() },
+        // Quit — desktop uniquement (un remote navigateur ne peut pas
+        // fermer la fenêtre hôte ; la croix de la titlebar a le même chemin).
+        ...(isRemote ? [] : [
+          { separator: true } as const,
+          { label: 'Quit', onClick: () => void getCurrentWindow().close() },
+        ]),
       ],
     },
     {

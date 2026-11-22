@@ -25,6 +25,8 @@ import { useScenePicking } from '../../hooks/useScenePicking';
 import { useZoneGestures } from '../../hooks/useZoneGestures';
 import { useSceneGestures } from '../../hooks/useSceneGestures';
 import { SceneInteractionLayers } from './SceneInteractionLayers';
+import ContextMenu from '../ui/ContextMenu';
+import { buildObjectMenuItems } from '../../utils/objectMenuItems';
 
 interface Scene3DProps {
   width?: string | number;
@@ -154,8 +156,16 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
     handleZoneEditUp,
     handleZoneEditWheel,
   } = useZoneGestures({ raycastAt, zoneIndexAt });
+  // Menu clic-droit objet — état lu via getState() à l'ouverture (pas de
+  // subscription 30Hz à emittedPositions ici).
+  const [objMenu, setObjMenu] = useState<{ x: number; y: number; obj: number } | null>(null);
   const { handleScenePointerDown, handleScenePointerUp, handleAssignDown } =
-    useSceneGestures({ pickObjectIndexAt });
+    useSceneGestures({
+      pickObjectIndexAt,
+      // Clic-droit tap sur un objet → menu (Release/Park/Copy/Paste) —
+      // instantané reste Ctrl+clic, géré dans le hook.
+      onObjectContextMenu: (obj, x, y) => setObjMenu({ x, y, obj }),
+    });
 
   // Resize observer — merge du handle resize en un seul effect
   // Met à jour directement les refs Three.js (pas de re-render React)
@@ -334,6 +344,24 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
         handleManipulateUp={handleManipulateUp}
         handleManipulateWheel={handleManipulateWheel}
       />
+      {/* Menu clic-droit sur un objet — Release/Park/Copy/Paste position.
+          Positions/état lus à l'ouverture via getState(). */}
+      {objMenu && (() => {
+        const st = useGraphStore.getState();
+        return (
+          <ContextMenu
+            x={objMenu.x}
+            y={objMenu.y}
+            header={`Object ${st.manualOscIds[objMenu.obj] ?? objMenu.obj + 1}`}
+            onClose={() => setObjMenu(null)}
+            items={buildObjectMenuItems(
+              objMenu.obj,
+              st.objectStates[objMenu.obj] ?? 'track',
+              st.emittedPositions[objMenu.obj],
+            )}
+          />
+        );
+      })()}
       {/* État vide — aucun move actif, aucun slot en édition : le canvas
           communique la prochaine action au lieu d'afficher une plaine vide.
           pointer-events-none : l'orbit reste utilisable. */}

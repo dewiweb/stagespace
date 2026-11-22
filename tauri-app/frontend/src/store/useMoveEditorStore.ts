@@ -111,6 +111,8 @@ interface MoveEditorStore {
   removeAudioMod: (index: number) => void;
   saveAnimation: () => Promise<void>;
   deleteAnimation: (id: string) => void;
+  /// Clone une animation de la bibliothèque (id frais, nom "… copy").
+  duplicateAnimation: (id: string) => void;
   loadAnimation: (anim: Move) => void;
   renameAnimation: (id: string, name: string) => void;
 
@@ -382,6 +384,21 @@ export const useMoveEditorStore = create<MoveEditorStore>((set, get) => {
 
   deleteAnimation: (id) => {
     const updated = get().animations.filter((a) => a.id !== id);
+    set({ animations: updated });
+    saveAnimationsToStorage(updated);
+  },
+
+  duplicateAnimation: (id) => {
+    const anims = get().animations;
+    const idx = anims.findIndex((a) => a.id === id);
+    if (idx < 0) return;
+    const src = anims[idx];
+    const copy: Move = {
+      ...JSON.parse(JSON.stringify(src)),
+      id: `${src.id}-copy-${Date.now()}`,
+      name: `${src.name} copy`,
+    };
+    const updated = [...anims.slice(0, idx + 1), copy, ...anims.slice(idx + 1)];
     set({ animations: updated });
     saveAnimationsToStorage(updated);
   },

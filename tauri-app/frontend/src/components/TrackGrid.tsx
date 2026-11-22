@@ -2,6 +2,7 @@ import React from 'react';
 import { TrackAssignment, useMoveEditorStore } from '../store/useMoveEditorStore';
 import { useGraphStore } from '../store/useGraphStore';
 import EmptyState from './ui/EmptyState';
+import ContextMenu from './ui/ContextMenu';
 import { trackColor } from '../utils/trackColor';
 
 interface TrackInfo {
@@ -94,8 +95,27 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
     return sum + (asg?.depth ?? (selectedTrackIds.has(t.id) ? 1.0 : 0.0));
   }, 0);
 
+  const [ctxMenu, setCtxMenu] = React.useState<{ x: number; y: number } | null>(null);
+
   return (
-    <div className="space-y-2">
+    <div
+      className="space-y-2"
+      onContextMenu={(e) => {
+        // Clic-droit n'importe où sur la grille → patterns de sélection
+        // (les mêmes que la barre — découvrabilité menu contextuel).
+        e.preventDefault();
+        setCtxMenu({ x: e.clientX, y: e.clientY });
+      }}
+    >
+      {ctxMenu && (
+        <ContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          header="Select tracks"
+          onClose={() => setCtxMenu(null)}
+          items={PATTERNS.map((p) => ({ label: p.label, title: p.title, onClick: () => applyPattern(p.id) }))}
+        />
+      )}
       {/* Barre de patterns */}
       <div className="flex flex-wrap gap-0.5">
         {PATTERNS.map((p) => (

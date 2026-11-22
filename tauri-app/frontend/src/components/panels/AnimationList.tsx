@@ -4,6 +4,7 @@ import { useMoveEditorStore, Move } from '../../store/useMoveEditorStore';
 import { useGraphStore } from '../../store/useGraphStore';
 import EmptyState from '../ui/EmptyState';
 import { ConfirmModal } from '../ui/ConfirmModal';
+import ContextMenu from '../ui/ContextMenu';
 import { SHAPE_PRESETS, type ShapePreset } from '../../utils/shapePresets';
 
 // Icône pour une animation — dérivée du node engine principal du graphe
@@ -46,6 +47,9 @@ export default function AnimationList() {
   const deleteAnimation = useMoveEditorStore((s) => s.deleteAnimation);
   const loadAnimation = useMoveEditorStore((s) => s.loadAnimation);
   const renameAnimation = useMoveEditorStore((s) => s.renameAnimation);
+  const duplicateAnimation = useMoveEditorStore((s) => s.duplicateAnimation);
+  // Menu clic-droit sur une animation de la bibliothèque.
+  const [ctxMenu, setCtxMenu] = React.useState<{ x: number; y: number; anim: Move } | null>(null);
   const applyShapePreset = useGraphStore((s) => s.applyShapePreset);
   const getSelectedOscIds = useGraphStore((s) => s.getSelectedOscIds);
   const editingSlotId = useGraphStore((s) => s.editingSlotId);
@@ -189,7 +193,11 @@ export default function AnimationList() {
                       ? 'bg-blue-900/30 border-blue-700/40'
                       : 'bg-gray-800/40 border-gray-700/40 hover:border-gray-600'
                   }`}
-                  onClick={() => loadAnimation(anim)}>
+                  onClick={() => loadAnimation(anim)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setCtxMenu({ x: e.clientX, y: e.clientY, anim });
+                  }}>
                   <span className="text-sm">{animIcon(anim)}</span>
                   {editingId === anim.id ? (
                     <input
@@ -237,6 +245,22 @@ export default function AnimationList() {
         </div>
       </div>
 
+      {/* Menu clic-droit bibliothèque — Load/Rename/Duplicate/Delete */}
+      {ctxMenu && (
+        <ContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          header={ctxMenu.anim.name}
+          onClose={() => setCtxMenu(null)}
+          items={[
+            { label: 'Load into editor', onClick: () => loadAnimation(ctxMenu.anim) },
+            { label: 'Rename…', onClick: () => startRename(ctxMenu.anim) },
+            { label: 'Duplicate', onClick: () => duplicateAnimation(ctxMenu.anim.id) },
+            { separator: true },
+            { label: 'Delete…', danger: true, onClick: () => setConfirmDelete(ctxMenu.anim) },
+          ]}
+        />
+      )}
       {confirmDelete && (
         <ConfirmModal
           title="Delete template"

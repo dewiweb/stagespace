@@ -1,12 +1,15 @@
 import React from 'react';
 
-export interface ContextMenuItem {
-  label: string;
-  danger?: boolean;
-  disabled?: boolean;
-  title?: string;
-  onClick: () => void;
-}
+export type ContextMenuItem =
+  | { separator: true }
+  | {
+      separator?: false;
+      label: string;
+      danger?: boolean;
+      disabled?: boolean;
+      title?: string;
+      onClick: () => void;
+    };
 
 interface ContextMenuProps {
   x: number;
@@ -66,7 +69,9 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose, 
           {header}
         </div>
       )}
-      {items.map((item, i) => (
+      {items.map((item, i) => ('separator' in item && item.separator) ? (
+        <div key={i} className="border-t border-gray-800 my-0.5" />
+      ) : (
         <button
           key={i}
           role="menuitem"
@@ -87,6 +92,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose, 
           {item.label}
         </button>
       ))}
+
+
     </div>
   );
 };

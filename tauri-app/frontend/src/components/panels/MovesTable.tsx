@@ -629,6 +629,12 @@ export default function MovesTable() {
               label: 'Duplicate',
               onClick: () => duplicateMoveSlot(slotCtxMenu.slot.id),
             },
+            { separator: true },
+            // ★ setlist — mêmes actions que les boutons de la ligne.
+            setlistOrder.includes(slotCtxMenu.slot.id)
+              ? { label: 'Remove from setlist', onClick: () => removeFromSetlist(slotCtxMenu.slot.id) }
+              : { label: 'Add to setlist', onClick: () => addToSetlist(slotCtxMenu.slot.id) },
+            { separator: true },
             {
               label: 'Delete…',
               danger: true,

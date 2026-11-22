@@ -6,6 +6,8 @@
 import React from 'react';
 import { useGraphStore } from '../../store/useGraphStore';
 import { doThrow, doClearPosition } from '../../utils/liveActions';
+import ContextMenu from '../ui/ContextMenu';
+import { buildObjectMenuItems } from '../../utils/objectMenuItems';
 import { sourceHex, SOURCE_LABEL, SOURCE_HEX } from '../../utils/sourceColors';
 import { ObjectInspectBar } from '../viewer3d/ObjectInspectBar';
 import type { Zone } from '../../store/slices/spatialFxSlice';
@@ -63,6 +65,8 @@ export const Radar2D: React.FC = () => {
   const positions = Object.keys(livePositions).length > 0 ? livePositions : emittedPositions;
   const selectedObj = useGraphStore((s) => s.selectedObjIndex);
   const setSelectedObj = useGraphStore((s) => s.setSelectedObjIndex);
+  // Menu clic-droit sur un objet — Release/Park/Copy/Paste position.
+  const [objMenu, setObjMenu] = React.useState<{ x: number; y: number; obj: number } | null>(null);
   const zones = useGraphStore((s) => s.zones);
   const graphZones = useGraphStore((s) => s.graphZones);
 
@@ -155,9 +159,9 @@ export const Radar2D: React.FC = () => {
         if (Math.hypot(vx, vy) > 0.5) doThrow(drag.id, vx, vy, 0);
       }}
       onContextMenu={(e) => {
-        // Clic-droit proximité — comme le 3D : relâcher l'objet le plus
-        // proche sans viser le cercle r=4 en mouvement. Le handler du <g>
-        // fait le release précis ; celui-ci est le fallback large.
+        // Clic-droit proximité — comme le 3D : menu sur l'objet le plus
+        // proche sans viser le cercle r=4 en mouvement. Release = 1er item
+        // du menu ; Ctrl+clic reste le release instantané.
         e.preventDefault();
         const rect = e.currentTarget.getBoundingClientRect();
         const vx = ((e.clientX - rect.left) / rect.width) * 220 - 110;
@@ -168,7 +172,7 @@ export const Radar2D: React.FC = () => {
           const d = Math.hypot(x * k - vx, y * k - vy);
           if (d < bd) { bd = d; best = Number(id); }
         }
-        if (best >= 0) doClearPosition(best);
+        if (best >= 0) setObjMenu({ x: e.clientX, y: e.clientY, obj: best });
       }}
     >
       <circle cx="0" cy="0" r="105" fill="none" stroke="#1f2937" strokeWidth="1" />
@@ -227,12 +231,12 @@ export const Radar2D: React.FC = () => {
             key={id}
             style={{ cursor: 'grab' }}
             onContextMenu={(e) => {
-              // Clic-droit = relâcher l'objet tenu en manuel : le moteur
-              // reprend la main (la position manuelle a priorité au merge —
-              // un objet dragué resterait figé sans ce chemin de release).
+              // Clic-droit sur l'objet = menu (Release en 1er item) —
+              // le release instantané reste dispo en Ctrl+clic et via
+              // l'inspect bar.
               e.preventDefault();
               e.stopPropagation();
-              doClearPosition(t);
+              setObjMenu({ x: e.clientX, y: e.clientY, obj: t });
             }}
             onPointerDown={(e) => {
               if (e.ctrlKey) {
@@ -295,6 +299,20 @@ export const Radar2D: React.FC = () => {
         </marker>
       </defs>
     </svg>
+    {/* Menu clic-droit objet — Release/Park/Copy/Paste position */}
+    {objMenu && (
+      <ContextMenu
+        x={objMenu.x}
+        y={objMenu.y}
+        header={`Object ${objMenu.obj + 1}`}
+        onClose={() => setObjMenu(null)}
+        items={buildObjectMenuItems(
+          objMenu.obj,
+          objectStates[objMenu.obj] ?? 'track',
+          emittedPositions[objMenu.obj],
+        )}
+      />
+    )}
     {/* Inspect de l'objet sélectionné — composant partagé avec le 3D */}
     <ObjectInspectBar positions={positions} />
     {/* Légende des couleurs source-de-contrôle — les points colorés
