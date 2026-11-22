@@ -129,6 +129,14 @@ export const useMovementPositionsListener = () => {
       await refreshMovements();
       // Sync les slots après refresh — nettoie les movementIds stale
       useGraphStore.getState().syncSlotMovements();
+      // L'event part pendant l'activation/deactivation — le refetch peut
+      // lire un état transitoire (move pas encore requêtable) et rester
+      // aveugle jusqu'au prochain event. Second tirage court pour converger.
+      setTimeout(() => {
+        void refreshMovements().then(() =>
+          useGraphStore.getState().syncSlotMovements(),
+        );
+      }, 400);
     });
     return () => { clearTimeout(retry); unlisten.then((fn) => fn()).catch(() => {}); };
   }, [refreshMovements]);
