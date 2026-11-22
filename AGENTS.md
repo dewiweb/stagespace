@@ -45,6 +45,10 @@ cd tauri-app/src-tauri
 cargo build              # Build
 cargo test --lib         # Run tests (75 tests)
 cargo clippy --all-targets -- -D warnings  # Lint (CI: --all-targets inclut tests)
+
+# Dev bridge — real backend over HTTP/SSE for a plain browser
+# (E2E, Puppeteer, remote UI): cargo test --test dev_bridge -- --ignored
+# then http://localhost:5175/?bridge=http://127.0.0.1:4173 — docs/dev-bridge.md
 ```
 
 ### CLI (workflow testing tool)

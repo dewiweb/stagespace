@@ -3,6 +3,10 @@
  * `localStorage.stagespace_ipc_bridge` contient l'URL du pont
  * (ex. `http://127.0.0.1:4173`). Sinon : no-op, mode navigateur normal.
  *
+ * Raccourci : `?bridge=http://hote:4173` dans l'URL persiste la valeur
+ * en localStorage et nettoie l'URL — une seule URL à ouvrir sur une
+ * machine distante, `?bridge=off` désactive.
+ *
  * Installe `window.__TAURI_INTERNALS__` compatible avec @tauri-apps/api v2 :
  *  - invoke(cmd, args)      → POST {bridge}/invoke (vrai backend headless)
  *  - plugin:event|listen    → registry local + EventSource {bridge}/events
@@ -13,6 +17,14 @@
 (function () {
   var bridge = null;
   try {
+    var q = new URLSearchParams(location.search).get('bridge');
+    if (q) {
+      if (q === 'off') localStorage.removeItem('stagespace_ipc_bridge');
+      else localStorage.setItem('stagespace_ipc_bridge', q);
+      var u = new URL(location.href);
+      u.searchParams.delete('bridge');
+      history.replaceState(null, '', u.toString());
+    }
     bridge = localStorage.getItem('stagespace_ipc_bridge');
   } catch (e) {
     return;

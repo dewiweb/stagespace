@@ -18,6 +18,19 @@ cd tauri-app/src-tauri
 ./target/debug/stagespace-cli "osc-listen --port 8000 --validate --profile holophonix --timeout 300 --quiet"
 ```
 
+### Alternative: headless dev bridge (browser + real backend)
+
+To drive the UI from a plain browser (Puppeteer, E2E, or a remote
+operator screen) against the **real backend** without a webview:
+
+```bash
+cd tauri-app/src-tauri && cargo test --test dev_bridge -- --ignored
+cd ../frontend && npm run dev
+# browser → http://localhost:5175/?bridge=http://127.0.0.1:4173
+```
+
+Full setup, remote-UI (LAN/SSH tunnel) and limits: `docs/dev-bridge.md`.
+
 ---
 
 ## Phase 1: Project Setup

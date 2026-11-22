@@ -7,6 +7,11 @@
 //! `invoke` → `POST http://127.0.0.1:4173/invoke` et les events → SSE
 //! `GET http://127.0.0.1:4173/events`.
 //!
+//! Bind : `127.0.0.1:4173` par défaut, surchargeable via
+//! `STAGESPACE_BRIDGE_BIND` (ex. `0.0.0.0:4173` pour une UI distante sur
+//! le LAN — aucune auth : tunnel SSH recommandé hors réseau de confiance,
+//! `ssh -L 4173:127.0.0.1:4173 host`).
+//!
 //! Le pont utilise `tauri::test::get_ipc_response` (MockRuntime) : les
 //! commands s'exécutent dans le vrai dispatch IPC avec le vrai AppState —
 //! MergeRuntime, OSC, superviseur compris. `event_sink` (agnostique)
@@ -25,7 +30,7 @@ use tauri::test::{get_ipc_response, mock_context, noop_assets};
 use tauri::webview::InvokeRequest;
 use tauri::{Listener, WebviewWindowBuilder};
 
-const BIND: &str = "127.0.0.1:4173";
+const DEFAULT_BIND: &str = "127.0.0.1:4173";
 
 /// Events backend que le frontend écoute — forwarded vers les
 /// subscribers SSE tels quels (`listen_any` capte aussi les emits directs
@@ -160,8 +165,10 @@ fn dev_bridge() {
         }
     });
 
-    let listener = TcpListener::bind(BIND).expect("bridge bind failed");
-    eprintln!("[DEV-BRIDGE] backend headless prêt — {BIND}/invoke + /events");
+    let bind =
+        std::env::var("STAGESPACE_BRIDGE_BIND").unwrap_or_else(|_| DEFAULT_BIND.to_string());
+    let listener = TcpListener::bind(&bind).expect("bridge bind failed");
+    eprintln!("[DEV-BRIDGE] backend headless prêt — {bind}/invoke + /events");
 
     for conn in listener.incoming() {
         let mut stream = match conn {
