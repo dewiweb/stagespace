@@ -1,9 +1,9 @@
 import React from 'react';
 import { TrackAssignment, useMoveEditorStore } from '../store/useMoveEditorStore';
-import { useGraphStore } from '../store/useGraphStore';
 import EmptyState from './ui/EmptyState';
 import ContextMenu from './ui/ContextMenu';
 import { trackColor } from '../utils/trackColor';
+import { TRACK_PATTERNS, applySelectionPattern, SelectionPattern } from '../utils/trackPatterns';
 
 interface TrackInfo {
   id: number;
@@ -16,8 +16,11 @@ interface TrackGridProps {
   tracks: TrackInfo[];
   selectedTrackIds: Set<number>;
   toggleTrackSelection: (id: number) => void;
-  selectAllTracks: () => void;
-  deselectAllTracks: () => void;
+  /// Remplace la sélection entière (patterns + all/none). C'est au
+  /// parent de router vers la bonne cible : sélection globale
+  /// (Inspector) ou trackIds du slot (LiveDrawer) — sinon les patterns
+  /// mutent le mauvais espace.
+  setTrackSelection: (ids: number[]) => void;
   assignments: TrackAssignment[];
   updateAssignment: (trackId: number, patch: Partial<TrackAssignment>) => void;
   /// Mode dense pour le drawer Perform (pleine largeur) : cellules petites,
@@ -26,22 +29,11 @@ interface TrackGridProps {
 }
 
 
-/// Patterns de sélection rapides
-type SelectionPattern = 'all' | 'none' | 'even' | 'odd' | 'first_half' | 'second_half' | 'inverse';
 
-const PATTERNS: { id: SelectionPattern; label: string; title: string }[] = [
-  { id: 'all', label: 'All', title: 'Select all (100%)' },
-  { id: 'none', label: 'None', title: 'Deselect all' },
-  { id: 'even', label: '1 of 2', title: 'Select every other track (even indices)' },
-  { id: 'odd', label: 'Odd', title: 'Select every other track (odd indices)' },
-  { id: 'inverse', label: 'Inverse', title: 'Invert current selection' },
-  { id: 'first_half', label: '1st half', title: 'First half' },
-  { id: 'second_half', label: '2nd half', title: 'Second half' },
-];
 
 export const TrackGrid: React.FC<TrackGridProps> = ({
   tracks, selectedTrackIds, toggleTrackSelection,
-  selectAllTracks,
+  setTrackSelection,
   assignments, updateAssignment,
   compact = false,
 }) => {
@@ -50,41 +42,17 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
   // Applique un pattern de sélection
   const applyPattern = (pattern: SelectionPattern) => {
     const ids = tracks.map((t) => t.id);
-    const n = ids.length;
-    if (n === 0) return;
+    if (ids.length === 0) return;
+    const nextSel = applySelectionPattern(pattern, ids, selectedTrackIds);
     // Batch : une sélection + un set d'assignments par pattern — pas
-    // N×toggle/updateAssignment = N syncs + N pushes live.
-    let nextSel: number[] | null = null;
-    const patches: Array<{ trackId: number; patch: { depth: number } }> = [];
-    switch (pattern) {
-      case 'all':
-        patches.push(...ids.map((id) => ({ trackId: id, patch: { depth: 1.0 } })));
-        selectAllTracks();
-        break;
-      case 'none':
-        nextSel = [];
-        break;
-      case 'even':
-        nextSel = ids.filter((_, i) => i % 2 === 0);
-        patches.push(...nextSel.map((id) => ({ trackId: id, patch: { depth: 1.0 } })));
-        break;
-      case 'odd':
-        nextSel = ids.filter((_, i) => i % 2 === 1);
-        patches.push(...nextSel.map((id) => ({ trackId: id, patch: { depth: 1.0 } })));
-        break;
-      case 'first_half':
-        nextSel = ids.slice(0, Math.ceil(n / 2));
-        patches.push(...nextSel.map((id) => ({ trackId: id, patch: { depth: 1.0 } })));
-        break;
-      case 'second_half':
-        nextSel = ids.slice(Math.floor(n / 2));
-        patches.push(...nextSel.map((id) => ({ trackId: id, patch: { depth: 1.0 } })));
-        break;
-      case 'inverse':
-        nextSel = ids.filter((id) => !selectedTrackIds.has(id));
-        break;
-    }
-    if (nextSel != null) useGraphStore.getState().setSelectedTracks(nextSel);
+    // N×toggle/updateAssignment = N syncs + N pushes live. Les patterns
+    // de choix (all/even/odd/halves) initialisent depth à 1 sur les
+    // tracks retenues ; none/inverse sont des sélections pures.
+    const patches =
+      pattern === 'none' || pattern === 'inverse'
+        ? []
+        : nextSel.map((id) => ({ trackId: id, patch: { depth: 1.0 } }));
+    setTrackSelection(nextSel);
     if (patches.length > 0) useMoveEditorStore.getState().updateAssignments(patches);
   };
 
@@ -113,12 +81,12 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
           y={ctxMenu.y}
           header="Select tracks"
           onClose={() => setCtxMenu(null)}
-          items={PATTERNS.map((p) => ({ label: p.label, title: p.title, onClick: () => applyPattern(p.id) }))}
+          items={TRACK_PATTERNS.map((p) => ({ label: p.label, title: p.title, onClick: () => applyPattern(p.id) }))}
         />
       )}
       {/* Barre de patterns */}
       <div className="flex flex-wrap gap-0.5">
-        {PATTERNS.map((p) => (
+        {TRACK_PATTERNS.map((p) => (
           <button
             key={p.id}
             onClick={() => applyPattern(p.id)}

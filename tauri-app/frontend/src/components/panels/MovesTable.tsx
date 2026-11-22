@@ -9,6 +9,7 @@ import Modal from '../ui/Modal';
 import Slider from '../ui/Slider';
 import EmptyState from '../ui/EmptyState';
 import ConfirmModal from '../ui/ConfirmModal';
+import { TRACK_PATTERNS, applySelectionPattern } from '../../utils/trackPatterns';
 import ContextMenu from '../ui/ContextMenu';
 
 /// MovesTable — la table des moves (concept unifié)
@@ -514,15 +515,15 @@ export default function MovesTable() {
       {editingTracksFor && (
         <Modal title="Move tracks" onClose={() => setEditingTracksFor(null)}>
           <div className="p-4">
-            <div className="flex gap-2 mb-3">
-              <button
-                onClick={() => setTempTrackIds([...allTrackIds])}
-                className="text-xs px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded"
-              >Tout</button>
-              <button
-                onClick={() => setTempTrackIds([])}
-                className="text-xs px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded"
-              >None</button>
+            <div className="flex flex-wrap items-center gap-1 mb-3">
+              {TRACK_PATTERNS.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => setTempTrackIds((prev) => applySelectionPattern(p.id, allTrackIds, new Set(prev)))}
+                  title={p.title}
+                  className="text-xs px-1.5 py-0.5 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white rounded transition-colors"
+                >{p.label}</button>
+              ))}
               <div className="flex-1" />
               <span className="text-xs text-gray-500 self-center">{tempTrackIds.length} selected</span>
             </div>

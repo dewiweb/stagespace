@@ -48,8 +48,7 @@ export default function Inspector() {
   const holProject = useGraphStore((s) => s.holProject);
   const selectedTrackIds = useGraphStore((s) => s.selectedTrackIds);
   const toggleTrackSelection = useGraphStore((s) => s.toggleTrackSelection);
-  const selectAllTracks = useGraphStore((s) => s.selectAllTracks);
-  const deselectAllTracks = useGraphStore((s) => s.deselectAllTracks);
+  const setSelectedTracks = useGraphStore((s) => s.setSelectedTracks);
   const manualOscIds = useGraphStore((s) => s.manualOscIds);
   const panic = useGraphStore((s) => s.panic);
   const playSlot = useGraphStore((s) => s.playSlot);
@@ -371,8 +370,7 @@ export default function Inspector() {
               tracks={tracks}
               selectedTrackIds={selectedTrackIds}
               toggleTrackSelection={toggleTrackSelection}
-              selectAllTracks={selectAllTracks}
-              deselectAllTracks={deselectAllTracks}
+              setTrackSelection={setSelectedTracks}
               assignments={current.assignments}
               updateAssignment={updateAssignment}
             />
@@ -383,8 +381,7 @@ export default function Inspector() {
                   tracks={manualOscIds.map((id, i) => ({ id, name: `Object ${id}`, color: `hsl(${(i / manualOscIds.length) * 360}, 70%, 55%)`, position: [0, 0, 0] as [number, number, number] }))}
                   selectedTrackIds={selectedTrackIds}
                   toggleTrackSelection={toggleTrackSelection}
-                  selectAllTracks={selectAllTracks}
-                  deselectAllTracks={deselectAllTracks}
+                  setTrackSelection={setSelectedTracks}
                   assignments={current.assignments}
                   updateAssignment={updateAssignment}
                 />

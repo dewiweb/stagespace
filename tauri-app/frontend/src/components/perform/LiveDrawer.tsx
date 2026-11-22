@@ -362,8 +362,7 @@ export const LiveDrawer: React.FC = () => {
                 ? fresh.filter((t) => t !== tid)
                 : [...fresh, tid]);
             }}
-            selectAllTracks={() => setSlotTracks(slot.id, allTrackInfos.map((t) => t.id))}
-            deselectAllTracks={() => setSlotTracks(slot.id, [])}
+            setTrackSelection={(ids) => setSlotTracks(slot.id, ids)}
             assignments={current.assignments}
             updateAssignment={updateAssignment}
           />
