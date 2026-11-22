@@ -1,16 +1,28 @@
 import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
 import { useMoveEditorStore } from '../store/useMoveEditorStore';
+import { useCuelistStore } from '../store/useCuelistStore';
 import { useOscArmed } from '../hooks/useOscArmed';
 import { importHolProject, loadShow, saveShow } from '../utils/showFileActions';
-import { doCueGo, doGo, doPanic, doStop } from '../utils/liveActions';
+import {
+  doCueGo,
+  doCueNext,
+  doCuePrev,
+  doGesture,
+  doGo,
+  doPanic,
+  doStop,
+  doTcChase,
+  doToggleSelectedSlot,
+} from '../utils/liveActions';
 
-/// Barre de menus applicative — File/Edit/View/Show/Help, la convention
-/// de toute app desktop. Chaque entrée dispatch vers la MÊME action que
-/// les raccourcis et les boutons (liveActions / showFileActions) — le
-/// menu est une troisième porte, pas un troisième chemin de code. Les
-/// menus affichent l'état live (✓ surface courante, ✓ OSC LIVE) là où
-/// une toolbar ne le peut pas.
+/// Barre de menus applicative — squelette fixe (File/Edit/View/Show/Help,
+/// mémoire musculaire) mais contenu contextuel à la surface, comme une
+/// app desktop normale : le menu Show de CONDUITE parle cues (GO armé
+/// nommé, recall next/prev, TC chase), celui de JEU parle jeu (gestes,
+/// solo/unsolo), celui d'ATELIER reste sobre. Chaque entrée dispatch vers
+/// la MÊME action que les raccourcis et les boutons — le menu est une
+/// troisième porte, pas un troisième chemin de code.
 
 interface Item {
   label: string;
@@ -18,6 +30,7 @@ interface Item {
   checked?: boolean;
   danger?: boolean;
   disabled?: boolean;
+  disabledReason?: string;
   onClick?: () => void;
   separator?: false;
 }
@@ -40,12 +53,15 @@ export const MenuBar: React.FC = () => {
   const showExpert = useMoveEditorStore((s) => s.showExpert);
   const setShowExpert = useMoveEditorStore((s) => s.setShowExpert);
   const setShortcutsOpen = useMoveEditorStore((s) => s.setShortcutsOpen);
-  // editorFocus reste un state local d'AppMain — le menu bascule Expert,
-  // le split 50/50 est accessible ensuite via le bouton Focus existant.
   const undo = useGraphStore((s) => s.undo);
   const redo = useGraphStore((s) => s.redo);
   const canUndo = useGraphStore((s) => s.canUndo);
   const canRedo = useGraphStore((s) => s.canRedo);
+  const editingSlotId = useGraphStore((s) => s.editingSlotId);
+  const moveSlots = useGraphStore((s) => s.moveSlots);
+  const cues = useCuelistStore((s) => s.cues);
+  const armedCueId = useCuelistStore((s) => s.armedCueId);
+  const tcChaseEnabled = useCuelistStore((s) => s.tcChaseEnabled);
   const [armed, setArmed] = useOscArmed();
 
   // Clic dehors / Esc ferment le menu ouvert.
@@ -65,6 +81,96 @@ export const MenuBar: React.FC = () => {
     };
   }, [openMenu]);
 
+  // Label dynamique du CUE GO — « fire '2 Ensemble' » quand une cue est
+  // armée (convention console : le GO dit ce qu'il va tirer).
+  const armedCue = armedCueId ? cues.find((c) => c.id === armedCueId) : undefined;
+  const cueGoLabel = armedCue
+    ? `CUE GO — fire "${armedCue.name}"`
+    : 'CUE GO — next cue';
+
+  // Pad sélectionné — label dynamique « Stop 'ZZTest' » / « Play 'Orbit' »
+  // (convention app : le menu dit ce que l'action va faire).
+  const editingSlot = editingSlotId ? moveSlots.find((s) => s.id === editingSlotId) : undefined;
+  const padToggleEntry: Item = editingSlot
+    ? {
+        label: `${editingSlot.movementId ? 'Stop' : 'Play'} "${editingSlot.name}"`,
+        shortcut: 'Space',
+        onClick: () => doToggleSelectedSlot('menu'),
+      }
+    : {
+        label: 'Play/Stop pad — no move selected',
+        shortcut: 'Space',
+        disabled: true,
+        disabledReason: 'Click a pad name first',
+      };
+
+  // OSC arm — même entrée sur toutes les surfaces, l'état reste visible.
+  const oscArmEntry: Item = {
+    label: armed ? 'OSC LIVE — click for DRY-RUN' : 'OSC DRY-RUN — click to go LIVE',
+    checked: armed,
+    onClick: () => setArmed(!armed),
+  };
+  const panicEntry: Item = {
+    label: 'PANIC — stop + reset positions',
+    shortcut: 'Esc',
+    danger: true,
+    onClick: () => doPanic(),
+  };
+
+  // Menu Show contextuel — les verbes qui ont du sens SUR la surface.
+  const showMenu: Menu =
+    surface === 'conduite'
+      ? {
+          label: 'Show',
+          entries: [
+            { label: cueGoLabel, onClick: () => doCueGo('menu') },
+            { label: 'Recall next cue', shortcut: 'Shift+Enter', onClick: () => doCueNext('menu') },
+            { label: 'Recall previous cue', shortcut: 'Backspace', onClick: () => doCuePrev('menu') },
+            { separator: true },
+            {
+              label: 'Chase timecode',
+              checked: tcChaseEnabled,
+              onClick: () => doTcChase(!tcChaseEnabled, 'menu'),
+            },
+            { separator: true },
+            oscArmEntry,
+            { separator: true },
+            panicEntry,
+          ],
+        }
+      : surface === 'jeu'
+        ? {
+            label: 'Show',
+            entries: [
+              { label: 'SETLIST GO — next move', shortcut: 'Enter', onClick: () => doGo('menu') },
+              padToggleEntry,
+              { separator: true },
+              { label: 'Gesture: Explode', onClick: () => doGesture('explode', 1.0, 'menu') },
+              { label: 'Gesture: Converge', onClick: () => doGesture('converge', 1.0, 'menu') },
+              { label: 'Gesture: Orbit', onClick: () => doGesture('orbit', 1.0, 'menu') },
+              { label: 'Gesture: Front', onClick: () => doGesture('front', 1.0, 'menu') },
+              { separator: true },
+              { label: 'Stop all moves', onClick: () => doStop() },
+              { separator: true },
+              oscArmEntry,
+              { separator: true },
+              panicEntry,
+            ],
+          }
+        : {
+            // Atelier — transport de répétition : les mêmes verbes mais
+            // sans les gestes ni la navigation de cues de la conduite.
+            label: 'Show',
+            entries: [
+              { label: 'SETLIST GO — next move', shortcut: 'Enter', onClick: () => doGo('menu') },
+              { label: 'Stop all moves', onClick: () => doStop() },
+              { separator: true },
+              oscArmEntry,
+              { separator: true },
+              panicEntry,
+            ],
+          };
+
   const menus: Menu[] = [
     {
       label: 'File',
@@ -78,8 +184,20 @@ export const MenuBar: React.FC = () => {
     {
       label: 'Edit',
       entries: [
-        { label: 'Undo', shortcut: 'Ctrl+Z', disabled: !canUndo, onClick: undo },
-        { label: 'Redo', shortcut: 'Ctrl+Y', disabled: !canRedo, onClick: redo },
+        {
+          label: 'Undo',
+          shortcut: 'Ctrl+Z',
+          disabled: !canUndo,
+          disabledReason: 'Nothing to undo',
+          onClick: undo,
+        },
+        {
+          label: 'Redo',
+          shortcut: 'Ctrl+Y',
+          disabled: !canRedo,
+          disabledReason: 'Nothing to redo',
+          onClick: redo,
+        },
       ],
     },
     {
@@ -92,26 +210,13 @@ export const MenuBar: React.FC = () => {
         {
           label: 'Expert graph editor',
           checked: showExpert,
+          disabled: surface !== 'atelier',
+          disabledReason: 'Atelier only',
           onClick: () => setShowExpert(!showExpert),
         },
       ],
     },
-    {
-      label: 'Show',
-      entries: [
-        { label: 'SETLIST GO — next move', shortcut: 'Enter', onClick: () => doGo('menu') },
-        { label: 'CUE GO — fire armed cue', onClick: () => doCueGo('menu') },
-        { label: 'Stop all moves', onClick: () => doStop() },
-        { separator: true },
-        {
-          label: armed ? 'OSC LIVE — click for DRY-RUN' : 'OSC DRY-RUN — click to go LIVE',
-          checked: armed,
-          onClick: () => setArmed(!armed),
-        },
-        { separator: true },
-        { label: 'PANIC — stop + reset positions', shortcut: 'Esc', danger: true, onClick: () => doPanic() },
-      ],
-    },
+    showMenu,
     {
       label: 'Help',
       entries: [
@@ -148,7 +253,7 @@ export const MenuBar: React.FC = () => {
           {openMenu === menu.label && (
             <div
               role="menu"
-              className="absolute left-0 top-full mt-0.5 min-w-[240px] bg-gray-850 bg-gray-900 border border-gray-700 rounded-md shadow-xl py-1 z-50"
+              className="absolute left-0 top-full mt-0.5 min-w-[240px] bg-gray-900 border border-gray-700 rounded-md shadow-xl py-1 z-50"
             >
               {menu.entries.map((entry, i) =>
                 'separator' in entry && entry.separator ? (
@@ -158,6 +263,7 @@ export const MenuBar: React.FC = () => {
                     key={i}
                     role="menuitem"
                     disabled={(entry as Item).disabled}
+                    title={(entry as Item).disabled ? (entry as Item).disabledReason : undefined}
                     onClick={() => run(entry as Item)}
                     className={`w-full flex items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors ${
                       (entry as Item).disabled

@@ -18,6 +18,26 @@ const MACRO_KEYS: Record<string, string> = {
   height: 'height_offset', height_offset: 'height_offset',
 };
 
+/// Toggle play/stop du slot sélectionné (editingSlotId) — la sémantique
+/// du raccourci Space, partagée par le menu Show de JEU. `from` trace la
+/// source (keyboard/menu) pour le log d'actions.
+export function doToggleSelectedSlot(from?: string): void {
+  const gs = useGraphStore.getState();
+  const slotId = gs.editingSlotId as string | null;
+  if (!slotId) {
+    toast.info('No move selected — click a move first');
+    return;
+  }
+  const slot = gs.moveSlots?.find((s) => s.id === slotId);
+  if (!slot) return;
+  logAction('doToggleSelectedSlot', from);
+  if (slot.movementId) {
+    void gs.stopSlot(slotId);
+  } else {
+    void gs.playSlot(slotId);
+  }
+}
+
 /** /stagespace/macro <name> <v> — macro globale depuis le fil (fader console). */
 export async function doMacro(name: string, v: number, from?: string) {
   if (routeDetached(`macro:${name}:${v}`)) return;

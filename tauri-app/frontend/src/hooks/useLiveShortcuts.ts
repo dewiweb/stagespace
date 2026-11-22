@@ -1,7 +1,7 @@
 import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
 import { toast } from '../utils/toast-helpers';
-import { doGo, doCueNext, doCuePrev } from '../utils/liveActions';
+import { doGo, doCueNext, doCuePrev, doToggleSelectedSlot } from '../utils/liveActions';
 import { isModalOpen, closeTopModal } from '../utils/modalGuard';
 import { safeInvoke as invoke } from '../utils/tauri';
 import type { PerfStatsResponse } from '../types/generated/PerfStatsResponse';
@@ -95,21 +95,10 @@ export function useLiveShortcuts() {
         e.preventDefault();
         doCuePrev();
       } else if (e.key === ' ') {
-        // Space: play/stop the selected (editing) slot
+        // Space: play/stop the selected (editing) slot — même chemin que
+        // l'entrée de menu Show (doToggleSelectedSlot).
         e.preventDefault();
-        const gs = useGraphStore.getState();
-        const slotId = gs.editingSlotId as string | null;
-        if (!slotId) {
-          toast.info('No move selected — click a move first');
-          return;
-        }
-        const slot = gs.moveSlots?.find((s) => s.id === slotId);
-        if (!slot) return;
-        if (slot.movementId) {
-          gs.stopSlot(slotId);
-        } else {
-          gs.playSlot(slotId);
-        }
+        doToggleSelectedSlot('keyboard');
       }
     };
     window.addEventListener('keydown', handler);
