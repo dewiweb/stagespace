@@ -11,6 +11,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager, State};
 
+pub mod bridge_server;
 pub mod commands;
 pub mod graph;
 pub mod supervisor;
@@ -578,6 +579,9 @@ pub fn run() {
         })
         .setup(|app| {
             setup_backend_runtime(app)?;
+            // Remote UI opt-in : bridge HTTP+SSE vers navigateurs
+            // distants (STAGESPACE_BRIDGE_BIND) — cohabite avec la webview.
+            bridge_server::spawn_if_enabled(app.handle());
             // Sur Linux WebKitGTK : autoriser getUserMedia (microphone)
             #[cfg(target_os = "linux")]
             {

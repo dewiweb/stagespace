@@ -1,39 +1,54 @@
-# Dev Bridge — backend réel dans un navigateur
+# Dev Bridge / Remote UI — backend réel dans un navigateur
 
-Le dev bridge expose **le backend Tauri complet** (commands IPC + events)
-sur HTTP+SSE, sans webview. Le frontend React le consomme via un shim
+Le bridge expose **le backend Tauri complet** (commands IPC + events)
+sur HTTP+SSE. Le frontend React le consomme via un shim
 `__TAURI_INTERNALS__` : tout ce que l'UI fait en webview passe par le
 même dispatch IPC, le vrai `AppState`, le vrai `MergeRuntime` — OSC,
 superviseur, plugins WASM compris.
 
-Usages : tests E2E réels (Puppeteer), debug frontend contre un backend
-vivant, et **UI distante** — piloter STAGESPACE depuis un autre poste
-du réseau via navigateur.
+Deux modes, **même code** (`src/bridge_server.rs`) :
+
+- **In-app (remote UI)** — le bridge tourne *dans* l'application Tauri,
+  en parallèle de la webview desktop : opt-in via `STAGESPACE_BRIDGE_BIND`.
+  UI desktop + navigateurs distants pilotent **le même show vivant** —
+  les events (`listen_any`) sont broadcast aux deux.
+- **Headless (tests)** — `tests/dev_bridge.rs` construit une mock app
+  (`MockRuntime`) et sert la même boucle : E2E réel depuis Puppeteer
+  sans webview.
 
 ```
-navigateur ──POST /invoke──▶ dev_bridge ──get_ipc_response──▶ vrai dispatch Tauri
-navigateur ◀──SSE /events─── dev_bridge ◀──listen_any───────── event_sink backend
+navigateur ──POST /invoke──▶ bridge_server ──webview.on_message──▶ dispatch IPC réel
+navigateur ◀──SSE /events─── bridge_server ◀──listen_any────────── event_sink backend
 ```
+
+`on_message` est le point d'entrée IPC réel des webviews Tauri
+(`get_ipc_response` n'en est qu'un wrapper MockRuntime) : le remote
+passe exactement par le chemin de la webview desktop — même
+sérialisation, même `invoke_key`, même resolver.
 
 ## Lancer
+
+### In-app (UI desktop + remote simultanés)
+
+```bash
+STAGESPACE_BRIDGE_BIND=0.0.0.0:4173 ./stagespace-tauri   # ou npm run tauri dev
+# log : [BRIDGE] remote UI enabled on 0.0.0.0:4173 — no auth, trusted network only
+```
+
+Sans la variable : le bridge ne démarre pas, coût nul. Un échec de bind
+log et continue — jamais fatal pour l'app.
+
+### Headless (tests E2E)
 
 ```bash
 cd tauri-app/src-tauri
 cargo test --test dev_bridge -- --ignored --nocapture
-# [DEV-BRIDGE] backend headless prêt — 127.0.0.1:4173/invoke + /events
 ```
 
-C'est un `#[test]` ignoré qui vit indéfiniment (jamais de `Ok` — le
-tuer avec Ctrl+C). Un second lancement échoue sur `AddrInUse` : c'est
-normal, l'instance existante est saine — vérifier avec
-`curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4173/events`
-→ `200`.
-
-Bind par défaut `127.0.0.1:4173`, surchargeable :
-
-```bash
-STAGESPACE_BRIDGE_BIND=0.0.0.0:4173 cargo test --test dev_bridge -- --ignored
-```
+C'est un `#[test]` ignoré qui vit indéfiniment (le tuer avec Ctrl+C).
+Un second lancement échoue sur `AddrInUse` : normal — vérifier
+l'instance existante avec `curl -s -X POST …/invoke`. Bind par défaut
+`127.0.0.1:4173`, même env var.
 
 ## Côté frontend
 
@@ -56,18 +71,18 @@ Le shim route `invoke()` → `POST {bridge}/invoke`, `listen()` →
 
 Le bridge répond `Access-Control-Allow-Origin: *` et le SSE broadcast
 supporte **plusieurs clients simultanés** — plusieurs opérateurs sur
-plusieurs postes peuvent piloter le même backend en parallèle (ex. un
-sur Jeu, un sur Conduite).
+plusieurs postes pilotent le même backend en parallèle (ex. un sur Jeu,
+un sur Conduite, + l'écran desktop local).
 
 ### Sur le LAN
 
-Machine hôte (celle qui fait tourner le moteur + l'OSC OUT) :
+Machine hôte (moteur + OSC OUT) :
 
 ```bash
-cd tauri-app/src-tauri
-STAGESPACE_BRIDGE_BIND=0.0.0.0:4173 cargo test --test dev_bridge -- --ignored &
+STAGESPACE_BRIDGE_BIND=0.0.0.0:4173 npm run tauri dev &
+# ou headless : STAGESPACE_BRIDGE_BIND=0.0.0.0:4173 cargo test --test dev_bridge -- --ignored
 
-cd ../frontend
+cd tauri-app/frontend
 npm run dev -- --host          # vite sur 0.0.0.0:5175
 # ou build statique : npm run build, servir dist/ par n'importe quel serveur
 ```
@@ -85,7 +100,7 @@ lien survit aux reloads (localStorage).
 
 Aucune auth ni chiffrement sur le bridge — ne jamais exposer `4173` en
 `0.0.0.0` hors d'un réseau maîtrisé. Le tunnel est la voie sûre, et le
-bind par défaut `127.0.0.1` suffit :
+bind `127.0.0.1` suffit :
 
 ```bash
 ssh -L 4173:127.0.0.1:4173 -L 5175:127.0.0.1:5175 user@hôte
@@ -94,20 +109,27 @@ ssh -L 4173:127.0.0.1:4173 -L 5175:127.0.0.1:5175 user@hôte
 
 ## Limites
 
-| Fonction | Statut via bridge |
-|---|---|
-| Commands IPC, events, OSC IN/OUT, moves, cues, gestes | ✅ réel, identique webview |
-| Pickers de fichiers natifs (Save/Load Show, Import .hol) | ❌ le plugin dialog n'a pas de fenêtre dans la mock app — utiliser `/stagespace/show/load <path>` (OSC) ou un fichier côté disque de l'hôte |
-| `getVersion()` etc. (plugin app) | ⚠️ dégrade proprement (`vdev`) |
-| Audio IN | capté côté **hôte** (normal — le moteur est sur l'hôte) |
-| Fenêtres détachées `?view=…` | ✅ — un navigateur distant est une detached window de plus |
-| Sécurité | aucune auth — LAN de confiance ou tunnel SSH uniquement |
+| Fonction | Headless (mock) | In-app (real) |
+|---|---|---|
+| Commands IPC, events, OSC IN/OUT, moves, cues, gestes | ✅ réel, identique webview | ✅ idem |
+| Pickers de fichiers (Save/Load, Import .hol) | ❌ pas de fenêtre dans la mock app | ⚠️ le dialog s'ouvre **sur l'écran de l'hôte** |
+| `getVersion()` etc. (plugin app) | ⚠️ dégrade (`vdev`) | ✅ réel |
+| Audio IN | capté côté hôte | idem (normal) |
+| Fenêtres détachées `?view=…` | ✅ — un navigateur distant est une detached window de plus | idem |
+| Sécurité | aucune auth — LAN de confiance ou tunnel SSH | idem |
+
+Évolution naturelle si le remote devient un usage show : toggle dans
+Settings + token d'accès, plutôt que la seule env var.
 
 ## Fichiers
 
-- `tauri-app/src-tauri/tests/dev_bridge.rs` — listener HTTP, dispatch
-  IPC sérialisé (`get_ipc_response` + mock webview), broadcast SSE.
+- `tauri-app/src-tauri/src/bridge_server.rs` — listener HTTP, dispatch
+  via `webview.on_message` (sérialisé sur un thread dédié), broadcast
+  SSE, `spawn_if_enabled` (env `STAGESPACE_BRIDGE_BIND`).
+- `tauri-app/src-tauri/tests/dev_bridge.rs` — même `serve` sur mock app.
+- `tauri-app/src-tauri/src/lib.rs` — `spawn_if_enabled` appelé dans
+  `.setup` après `setup_backend_runtime`.
 - `tauri-app/frontend/public/tauri-bridge.js` — shim
   `__TAURI_INTERNALS__` activé par localStorage/`?bridge=`.
-- Events forwardés : liste `EVENTS` dans `dev_bridge.rs` (ajouter ici
-  tout nouvel event écouté par le frontend).
+- Events forwardés : liste `EVENTS` dans `bridge_server.rs` (ajouter
+  ici tout nouvel event écouté par le frontend).
