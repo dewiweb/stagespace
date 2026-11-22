@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useSessionStore } from '../../store/useSessionStore';
 import { useGraphStore } from '../../store/useGraphStore';
-import { guardDirty, initDirtyTracking, getPendingUnsavedAction, clearPendingUnsavedAction } from '../sessionSafety';
+import { guardDirty, initDirtyTracking, initWindowCloseGuard, getPendingUnsavedAction, clearPendingUnsavedAction } from '../sessionSafety';
 
 describe('useSessionStore', () => {
   beforeEach(() => {
@@ -87,5 +87,58 @@ describe('initDirtyTracking', () => {
     // Après unsub : plus de tracking.
     useGraphStore.setState({ setlistOrder: [...useGraphStore.getState().setlistOrder, 'y'] });
     expect(useSessionStore.getState().dirty).toBe(false);
+  });
+});
+
+describe('initWindowCloseGuard — Quit', () => {
+  const g = globalThis as unknown as Record<string, unknown>;
+  const handlers = () =>
+    g.__closeRequestedHandlers as Array<(e: { preventDefault: () => void }) => unknown>;
+  const win = () =>
+    g.__windowMock as { close: ReturnType<typeof vi.fn>; destroy: ReturnType<typeof vi.fn> };
+
+  beforeEach(async () => {
+    handlers().length = 0;
+    win().close.mockClear();
+    win().destroy.mockClear();
+    useSessionStore.setState({ dirty: false });
+    clearPendingUnsavedAction();
+  });
+
+  it('dirty → preventDefault + modale armée ; Discard → markClean + close()', async () => {
+    const unlisten = initWindowCloseGuard();
+    await Promise.resolve(); // laisse onCloseRequested().then() se résoudre
+    useSessionStore.setState({ dirty: true });
+
+    const prevented = { prevented: false };
+    await handlers()[0]({ preventDefault: () => { prevented.prevented = true; } });
+    expect(prevented.prevented).toBe(true);
+    expect(getPendingUnsavedAction()?.label).toBe('Quit');
+
+    // Discard : l'action fait markClean + close() (jamais destroy() —
+    // allow-destroy absent des capabilities, IPC refusé en silence).
+    getPendingUnsavedAction()?.run();
+    await Promise.resolve();
+    expect(useSessionStore.getState().dirty).toBe(false);
+    expect(win().close).toHaveBeenCalledTimes(1);
+    expect(win().destroy).not.toHaveBeenCalled();
+
+    // Ré-entrée : notre close() réémet CloseRequested → la garde laisse
+    // passer même si le cleanup a re-sali le doc entre-temps.
+    useSessionStore.setState({ dirty: true });
+    const again = { prevented: false };
+    await handlers()[0]({ preventDefault: () => { again.prevented = true; } });
+    expect(again.prevented).toBe(false);
+    unlisten();
+  });
+
+  it('clean → pas de preventDefault, pas de modale', async () => {
+    const unlisten = initWindowCloseGuard();
+    await Promise.resolve();
+    const e = { prevented: false };
+    await handlers()[0]({ preventDefault: () => { e.prevented = true; } });
+    expect(e.prevented).toBe(false);
+    expect(getPendingUnsavedAction()).toBeNull();
+    unlisten();
   });
 });

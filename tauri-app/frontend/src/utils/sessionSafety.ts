@@ -13,6 +13,7 @@ import { useSignalGraphStore } from '../store/useSignalGraphStore';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { useSessionStore } from '../store/useSessionStore';
 import { checkTauri } from './tauri';
+import { feLog } from './tauri';
 
 // ── Clés document — miroir de buildShowEnvelope (persistenceSlice) ──
 // Exclus délibérément : editingSlotId, currentSetlistIndex,
@@ -94,12 +95,26 @@ export function initWindowCloseGuard(): () => void {
 
   let unlisten: (() => void) | undefined;
   if (checkTauri()) {
+    // Consommé par le close() programmatique de la modale — le cleanup
+    // backend du CloseRequested peut re-salir le doc (stop des moves →
+    // positions hold → markDirty) AVANT que ce handler ne relise dirty ;
+    // on ne peut donc pas s'y fier pour laisser passer notre propre close.
+    let closeApproved = false;
     void getCurrentWindow()
       .onCloseRequested(async (event) => {
+        if (closeApproved) { closeApproved = false; return; }
         if (!useSessionStore.getState().dirty) return;
         event.preventDefault();
         setPendingUnsavedAction('Quit', () => {
-          void getCurrentWindow().destroy();
+          // close() et non destroy() : allow-destroy n'est pas dans les
+          // capabilities (IPC refusé, promise rejetée en silence). Le
+          // markClean persiste dirty=false pour le recovery au boot ;
+          // closeApproved fait passer notre close() à travers la garde.
+          closeApproved = true;
+          useSessionStore.getState().markClean();
+          // .catch loggé — un IPC refusé (permission) ne doit plus
+          // jamais échouer en silence comme allow-destroy l'a fait.
+          void getCurrentWindow().close().catch((e) => feLog(`[quit] close() rejected: ${e}`));
         });
       })
       .then((u) => { unlisten = u; });

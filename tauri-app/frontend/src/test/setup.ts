@@ -91,6 +91,26 @@ vi.mock('@tauri-apps/plugin-shell', () => ({
   Shell: { open: vi.fn() },
 }));
 
+// Mock @tauri-apps/api/window — getCurrentWindow contrôlable : les tests
+// pilotent le handler onCloseRequested capturé et espionnent close().
+const closeRequestedHandlers: Array<(e: { preventDefault: () => void }) => unknown> = [];
+const windowMock = {
+  onCloseRequested: (h: (e: { preventDefault: () => void }) => unknown) => {
+    closeRequestedHandlers.push(h);
+    return Promise.resolve(() => {
+      const i = closeRequestedHandlers.indexOf(h);
+      if (i >= 0) closeRequestedHandlers.splice(i, 1);
+    });
+  },
+  close: vi.fn(async () => {}),
+  destroy: vi.fn(async () => {}),
+};
+vi.mock('@tauri-apps/api/window', () => ({
+  getCurrentWindow: () => windowMock,
+}));
+(globalThis as Record<string, unknown>).__closeRequestedHandlers = closeRequestedHandlers;
+(globalThis as Record<string, unknown>).__windowMock = windowMock;
+
 // Mock toast store — no-op in tests
 vi.mock('../store/useToastStore', () => ({
   useToastStore: { getState: () => ({ push: () => {}, dismiss: () => {}, clear: () => {}, toasts: [] }) },
