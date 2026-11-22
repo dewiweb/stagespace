@@ -531,3 +531,16 @@ Reste : les trois GO (CUE GO / SETLIST GO / RECALL) cohabitent sans
 hiérarchie visuelle de risque au-delà de la couleur ; `NOW` affiche les
 noms mais un cue courant + buskés simultanés ne montre encore que le
 cue (les buskés restent dans le compteur « N moves live »).
+- **Orphelins visibles** : la top bar Jeu affiche `N LIVE +K ⚠` (amber)
+  — avant, un mouvement orphelin (recall/deactivate raté) émettait
+  sans apparaître dans le compteur slots. Le `3 live` du StatusBar
+  (vérité backend) devient auto-expliqué. Prouvé : 2 slots + 1
+  orphelin → `2 LIVE +1 ⚠`.
+- **Circle/Circular unifié** : le preset s'appelait `Circle` mais
+  créait un node `Circular` (type contractuel backend). Presets
+  alignés sur les types : `Circular`, `Elliptical`, `RoseCurve`,
+  `Circular + X`. Les noms descriptifs (Pursuit→Follow,
+  Gravity Well→PointDistanceFalloff) restent — ce sont des
+  configurations nommées, pas des quasi-doublons.
+- **NOW + buskés sous cue** : `+ <noms> busked` en sous-titre quand
+  un cue courant coexiste avec des layers buskées.

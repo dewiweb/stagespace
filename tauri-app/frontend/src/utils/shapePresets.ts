@@ -112,7 +112,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
 
   {
     id: 'circle',
-    name: 'Circle',
+    name: 'Circular',
     icon: '◯',
     description: 'Circular orbit around center',
     category: 'orbits',
@@ -120,7 +120,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
   },
   {
     id: 'elliptical',
-    name: 'Ellipse',
+    name: 'Elliptical',
     icon: '⬭',
     description: 'Elliptical orbit with independent axes',
     category: 'orbits',
@@ -160,7 +160,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
   },
   {
     id: 'rose',
-    name: 'Rose',
+    name: 'RoseCurve',
     icon: '✿',
     description: 'Rose curve with 4 petals',
     category: 'orbits',
@@ -235,7 +235,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
 
   {
     id: 'circle-rotate',
-    name: 'Circle + Rotate',
+    name: 'Circular + Rotate',
     icon: '↻',
     description: 'Circle with rotation modifier — tilted orbit',
     category: 'shaped',
@@ -246,7 +246,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
   },
   {
     id: 'circle-offset',
-    name: 'Circle + Offset',
+    name: 'Circular + Offset',
     icon: '⇄',
     description: 'Circle shifted in space — off-center orbit',
     category: 'shaped',
@@ -257,7 +257,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
   },
   {
     id: 'circle-scale',
-    name: 'Circle + Scale',
+    name: 'Circular + Scale',
     icon: '⤢',
     description: 'Circle scaled non-uniformly — stretched orbit',
     category: 'shaped',
@@ -268,7 +268,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
   },
   {
     id: 'circle-lfo',
-    name: 'Circle + LFO',
+    name: 'Circular + LFO',
     icon: '∿',
     description: 'Circle with LFO breathing effect on Y axis',
     category: 'shaped',
@@ -279,7 +279,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
   },
   {
     id: 'circle-mirror',
-    name: 'Circle + Mirror',
+    name: 'Circular + Mirror',
     icon: '⇋',
     description: 'Circle mirrored across XZ plane — symmetrical Y',
     category: 'shaped',
@@ -290,7 +290,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
   },
   {
     id: 'circle-phaseshift',
-    name: 'Circle + PhaseShift',
+    name: 'Circular + PhaseShift',
     icon: '⇶',
     description: 'Circle with phase shift — wave-like cascade between objects',
     category: 'shaped',
@@ -301,7 +301,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
   },
   {
     id: 'circle-jitter',
-    name: 'Circle + Jitter',
+    name: 'Circular + Jitter',
     icon: '✲',
     description: 'Circle with organic noise — less mechanical movement',
     category: 'shaped',
@@ -312,7 +312,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
   },
   {
     id: 'circle-clamp',
-    name: 'Circle + Clamp',
+    name: 'Circular + Clamp',
     icon: '⬚',
     description: 'Circle constrained to a bounding box — safety for venue limits',
     category: 'shaped',
@@ -351,7 +351,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
 
   {
     id: 'mix-circle-figure8',
-    name: 'Mix: Circle + Fig8',
+    name: 'Mix: Circular + Fig8',
     icon: '⊕',
     description: 'Blend circle and figure-8 with Mix node (50% each)',
     category: 'layers',
@@ -363,7 +363,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
   },
   {
     id: 'mix-circle-spiral',
-    name: 'Mix: Circle + Spiral',
+    name: 'Mix: Circular + Spiral',
     icon: '⊕',
     description: 'Blend circle and spiral — orbit that breathes',
     category: 'layers',
@@ -375,7 +375,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
   },
   {
     id: 'sequence-circle-spiral',
-    name: 'Sequence: Circle→Spiral',
+    name: 'Sequence: Circular→Spiral',
     icon: '→',
     description: 'Circle for 4s, then spiral — temporal chaining (hard cut)',
     category: 'layers',
@@ -387,7 +387,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
   },
   {
     id: 'crossfade-circle-spiral',
-    name: 'Crossfade: Circle⇄Spiral',
+    name: 'Crossfade: Circular⇄Spiral',
     icon: '⇆',
     description: 'Circle then spiral with 1s smooth crossfade transition',
     category: 'layers',
@@ -399,7 +399,7 @@ export const SHAPE_PRESETS: ShapePreset[] = [
   },
   {
     id: 'group-circle-linear',
-    name: 'Group: Circle + Linear',
+    name: 'Group: Circular + Linear',
     icon: '⊞',
     description: 'First half on circle, second half on linear — partition tracks',
     category: 'layers',

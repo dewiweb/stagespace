@@ -63,6 +63,7 @@ export const PerformView: React.FC = () => {
   const objectStates = useGraphStore((s) => s.objectStates);
   const manualOscIds = useGraphStore((s) => s.manualOscIds);
   const soloSavedIds = useGraphStore((s) => s.soloSavedIds);
+  const movements = useGraphStore((s) => s.movements);
   // Panneau central : pads (l'instrument, défaut) ou canvas 3D.
   const [centerView, setCenterView] = React.useState<'pads' | '3d'>('pads');
   // Fenêtre détachée (?view=run) — l'édition pure est masquée : le
@@ -71,6 +72,11 @@ export const PerformView: React.FC = () => {
   React.useEffect(() => { startShowStatusPolling(); }, []);
 
   const playingCount = moveSlots.filter((s) => s.movementId).length;
+  // Orphelins : mouvements backend vivants non rattachés à un slot —
+  // invisibles dans playingCount, pourtant ils émettent. Même prédicat
+  // que syncSlotMovements (id mv-* hors bindings slot).
+  const trackedMoveIds = new Set(moveSlots.map((s) => s.movementId).filter(Boolean));
+  const orphanCount = movements.filter((m) => m.id.startsWith('mv-') && !trackedMoveIds.has(m.id)).length;
 
   const nextSetlistSlotId =
     currentSetlistIndex >= 0 && currentSetlistIndex + 1 < setlistOrder.length
@@ -183,6 +189,14 @@ export const PerformView: React.FC = () => {
           <span className="text-white text-lg font-black tabular-nums tracking-wide">
             {playingCount > 0 ? `${playingCount} LIVE` : 'IDLE'}
           </span>
+          {orphanCount > 0 && (
+            <span
+              className="px-1.5 py-0.5 rounded bg-amber-900/60 text-amber-300 text-[10px] font-bold"
+              title={`${orphanCount} orphan movement(s) running — no slot controls them. STOP ALL clears.`}
+            >
+              +{orphanCount} ⚠
+            </span>
+          )}
         </div>
 
         <div className="w-px h-8 bg-stagespace-border" />
