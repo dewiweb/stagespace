@@ -167,37 +167,50 @@ export default function Inspector() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-stagespace-panel">
-      {/* Header */}
+      {/* Header — sélecteur de move PERMANENT : l'Inspector est toujours
+          « l'inspecteur du slot choisi ici ». L'entrée Global = désélection
+          explicite (avant : il fallait deviner le clic sur la cellule # de
+          la table). ● = move en jeu, ◦ = preview. */}
       <div className="px-3 py-2 border-b border-gray-700/50 flex-shrink-0">
-        {hasEditingSlot ? (
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={current.name}
-              onChange={(e) => updateCurrent({ name: e.target.value, id: current.id })}
-              className="flex-1 min-w-0 bg-transparent text-white text-sm font-semibold focus:outline-none focus:text-blue-400"
-            />
-            {editingIsLive && (
-              <span
-                className={`flex-shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-bold ${
-                  editingSlot?.isPreview
-                    ? 'bg-cyan-900/60 text-cyan-300 border border-cyan-700/50'
-                    : 'bg-green-900/60 text-green-300 border border-green-700/50 animate-pulse'
-                }`}
-                title={editingSlot?.isPreview
-                  ? 'This move runs in preview — edits apply live (no OSC out)'
-                  : 'ON AIR — les edits de ce panneau partent au renderer en direct'}
-              >
-                <span className={`w-1.5 h-1.5 rounded-full ${editingSlot?.isPreview ? 'bg-cyan-400' : 'bg-green-400'}`} />
-                {editingSlot?.isPreview ? 'PREVIEW' : 'LIVE'}
-              </span>
-            )}
-          </div>
-        ) : (
-          <div className="w-full text-gray-500 text-sm font-semibold flex items-center gap-2">
-            <span className="text-gray-400">Global</span>
-            <span className="text-xs text-gray-500 font-normal">— select a move to edit it</span>
-          </div>
+        <div className="flex items-center gap-2">
+          <select
+            value={editingSlotId ?? ''}
+            onChange={(e) => selectSlotForEditing(e.target.value === '' ? null : e.target.value)}
+            className="flex-1 min-w-0 bg-gray-800 text-white text-xs font-semibold px-2 py-1.5 rounded border border-gray-700 focus:border-indigo-500 focus:outline-none cursor-pointer"
+            title="Move inspecté — Global = vue macros/audio, aucun move en édition"
+          >
+            <option value="">◆ Global — no move</option>
+            {moveSlots.map((slot) => (
+              <option key={slot.id} value={slot.id}>
+                {slot.movementId ? (slot.isPreview ? '◦ ' : '● ') : '· '}
+                {slot.name} · {slot.trackIds.length}trk
+              </option>
+            ))}
+          </select>
+          {editingIsLive && (
+            <span
+              className={`flex-shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-bold ${
+                editingSlot?.isPreview
+                  ? 'bg-cyan-900/60 text-cyan-300 border border-cyan-700/50'
+                  : 'bg-green-900/60 text-green-300 border border-green-700/50 animate-pulse'
+              }`}
+              title={editingSlot?.isPreview
+                ? 'This move runs in preview — edits apply live (no OSC out)'
+                : 'ON AIR — les edits de ce panneau partent au renderer en direct'}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${editingSlot?.isPreview ? 'bg-cyan-400' : 'bg-green-400'}`} />
+              {editingSlot?.isPreview ? 'PREVIEW' : 'LIVE'}
+            </span>
+          )}
+        </div>
+        {hasEditingSlot && (
+          <input
+            type="text"
+            value={current.name}
+            onChange={(e) => updateCurrent({ name: e.target.value, id: current.id })}
+            className="mt-1.5 w-full bg-transparent text-white text-sm font-semibold focus:outline-none focus:text-blue-400"
+            title="Rename the move"
+          />
         )}
       </div>
 
@@ -207,38 +220,9 @@ export default function Inspector() {
         {!hasEditingSlot ? (
           /* ═══════════════ MODE GLOBAL (aucun slot sélectionné) ═══════════════ */
           <>
-            {/* MOVES — mini liste : tap → sélectionne le slot pour édition.
-                Sans ça l'Inspector global était une impasse (macros seuls). */}
-            <Section title="Moves" icon={<Play size={12} />} defaultOpen={true}
-              badge={moveSlots.length > 0 ? `${moveSlots.length}` : undefined}>
-              {moveSlots.length === 0 ? (
-                <div className="text-gray-400 text-xs py-1">
-                  Aucun slot — crée un move depuis le panneau Show (gauche).
-                </div>
-              ) : (
-                <div className="space-y-0.5">
-                  {moveSlots.map((slot) => (
-                    <button
-                      key={slot.id}
-                      onClick={() => selectSlotForEditing(slot.id)}
-                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded border bg-gray-800/40 border-gray-700/40 hover:border-gray-600 hover:bg-gray-800/60 transition-all text-left"
-                      title="Select this move to edit it"
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                        slot.movementId
-                          ? slot.isPreview ? 'bg-cyan-400' : 'bg-green-400 animate-pulse'
-                          : 'bg-gray-600'
-                      }`} />
-                      <span className="text-white text-xs flex-1 truncate">{slot.name}</span>
-                      <span className="text-gray-500 text-xs font-mono flex-shrink-0">
-                        {slot.trackIds.length}trk
-                      </span>
-                      <span className="text-gray-400 text-xs">→</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </Section>
+            {/* (ex-MOVES mini list — remplacée par le sélecteur permanent
+                du header : un seul endroit où choisir/désélectionner le
+                move inspecté, plus de liste dupliquée face à la table.) */}
 
             {/* MACROS — runtime controls globaux (affectent tous les moves) */}
             <Section title="Macros" icon={<Zap size={12} />} defaultOpen={true}
