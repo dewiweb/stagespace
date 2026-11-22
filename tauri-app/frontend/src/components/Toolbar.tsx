@@ -2,8 +2,6 @@ import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
 import { Settings } from 'lucide-react';
 import { SettingsModal } from './SettingsModal';
-import { PanicButton } from './ui/PanicButton';
-import { OscArmToggle } from './ui/OscArmToggle';
 
 export const Toolbar: React.FC = () => {
   // Sélecteurs granulaires — un full-store subscribe re-renderait la Toolbar
@@ -43,19 +41,10 @@ export const Toolbar: React.FC = () => {
         </button>
         {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
 
-        {/* Undo/redo, save/load, import .hol, raccourcis : tous vivent
-            désormais dans la menubar + accélérateurs — la Toolbar ne
-            garde que le statut de salle et la zone sécurité live. */}
+        {/* Arm/Panic : doublons retirés — la StatusBar porte le chip
+            LIVE/DRY-RUN (cliquable = le contrôle) et PANIC sur TOUTES
+            les surfaces, l'Atelier y compris. */}
         <div className="flex-1" />
-
-        {/* Zone sécurité live — arm + panic groupés à droite : les deux
-            contrôles d'arrêt/sécurité au même endroit. */}
-        <OscArmToggle />
-
-        {/* PANIC — arrêt d'urgence, toujours visible et accessible.
-            Jamais replié dans un panel : c'est le seul contrôle qui doit
-            survivre à tous les états de l'UI (Esc = même action). */}
-        <PanicButton />
 
       </div>
 

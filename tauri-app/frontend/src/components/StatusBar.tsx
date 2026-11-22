@@ -30,7 +30,7 @@ export const StatusBar: React.FC = () => {
   const oscPort = useGraphStore((s) => s.oscPort);
   const oscProfile = useGraphStore((s) => s.oscProfile);
   const [showSettings, setShowSettings] = React.useState(false);
-  const [armed] = useOscArmed();
+  const [armed, setArmed] = useOscArmed();
   const flowHealth = useGraphStore((s) => s.flowHealth);
   const perceptual = useGraphStore((s) => s.perceptual);
   const debugPerfVisible = useMoveEditorStore((s) => s.debugPerfVisible);
@@ -84,18 +84,20 @@ export const StatusBar: React.FC = () => {
         <span className="text-gray-300 font-medium">{statusLabel}</span>
       </div>
 
-      {/* État arm/disarm — LA métrique de sécurité live : un dry-run sans
-          indicateur visible est un silence réseau impossible à diagnostiquer. */}
-      <span
-        className={`px-1.5 py-0.5 rounded font-bold flex-shrink-0 ${
+      {/* Arm/disarm — LA métrique de sécurité live ET le contrôle :
+          le chip EST l'interrupteur master, disponible sur toutes les
+          surfaces (la copie Toolbar a été retirée — doublon). */}
+      <button
+        onClick={() => setArmed(!armed)}
+        className={`px-1.5 py-0.5 rounded font-bold flex-shrink-0 transition-colors ${
           armed
-            ? 'text-red-300 bg-red-900/40 border border-red-700/40'
-            : 'text-emerald-400 bg-emerald-900/40 border border-emerald-700/40 animate-pulse'
+            ? 'text-red-300 bg-red-900/40 border border-red-700/40 hover:bg-red-800/50'
+            : 'text-emerald-400 bg-emerald-900/40 border border-emerald-700/40 animate-pulse hover:bg-emerald-800/50'
         }`}
-        title={armed ? 'OSC LIVE — positions attempted; UDP cannot confirm delivery (a powered-off renderer host stays invisible)' : 'DRY-RUN — OSC muted, nothing is sent'}
+        title={armed ? 'OSC LIVE — positions attempted; UDP cannot confirm delivery (a powered-off renderer host stays invisible). Click for DRY-RUN' : 'DRY-RUN — OSC muted, nothing is sent. Click to go LIVE'}
       >
         {armed ? 'LIVE' : 'DRY-RUN'}
-      </span>
+      </button>
 
       {/* Recall en cours — le backend supprime les /stagespace/* entrants
           (hors panic) : sans cet indicateur, un desk dont les commandes

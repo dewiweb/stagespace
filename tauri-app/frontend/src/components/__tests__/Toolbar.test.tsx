@@ -42,13 +42,13 @@ describe('Toolbar — rendering', () => {
 
   it('renders without crashing in default state', () => {
     render(<Toolbar />);
-    // Just verify it renders without error
-    expect(screen.getByTitle(/PANIC \(Esc\)/i)).toBeInTheDocument();
+    expect(screen.getByTitle(/Settings — OSC out destination/i)).toBeInTheDocument();
   });
 
-  it('renders the shared PANIC button (never folded into a panel)', () => {
+  it('panic + arm ne vivent pas dans la toolbar — StatusBar les porte sur toutes les surfaces', () => {
     render(<Toolbar />);
-    expect(screen.getByTitle(/PANIC \(Esc\)/i)).toBeInTheDocument();
+    expect(screen.queryByTitle(/PANIC \(Esc\)/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('DRY-RUN')).not.toBeInTheDocument();
   });
 
   it('file actions live in the menubar, not the toolbar', () => {
@@ -84,7 +84,7 @@ describe('Toolbar — status', () => {
     } as any);
     render(<Toolbar />);
     // Le statut vit dans la StatusBar — la Toolbar reste fonctionnelle.
-    expect(screen.getByTitle(/PANIC \(Esc\)/i)).toBeInTheDocument();
+    expect(screen.getByTitle(/Settings — OSC out destination/i)).toBeInTheDocument();
   });
 
   it('shows the compile error detail band when compileError is set', () => {

@@ -3,8 +3,8 @@ import { useOscArmed } from '../../hooks/useOscArmed';
 /// Master arm — « OSC LIVE » global. Disarmé = silence réseau total (le
 /// merge et la preview 3D continuent) — l'interrupteur master de la console,
 /// indépendant des badges Live/Preview par move.
-/// Monté dans le Toolbar (atelier) ET le header Perform (surface live) —
-/// c'est là qu'il sert réellement. L'état vient de `useOscArmed` (écouté via
+/// Monté dans le header Perform (surface live) — en Atelier et partout
+/// ailleurs, le chip LIVE/DRY-RUN de la StatusBar est le contrôle. L'état vient de `useOscArmed` (écouté via
 /// `osc-armed-changed`) — synchronisé quelle que soit la source d'écriture.
 export function OscArmToggle() {
   const [armed, setArmed] = useOscArmed();
