@@ -5,8 +5,7 @@ import { buildModChips } from '../utils/signalModChips';
 /// Chips des modulations globales actives — un SignalOut = un chip
 /// `target ← source`. Une modulation oubliée dans le show est sinon
 /// indiscernable d'un bug de trajectoire (un yaw oscillant ressemble à
-/// un move erratique). Monté dans StatusBar (toutes surfaces) et dans la
-/// status bar du viewer 3D.
+/// un move erratique). Source unique : la StatusBar (toutes surfaces).
 export const ModChips: React.FC = () => {
   const nodes = useSignalGraphStore((s) => s.nodes);
   const edges = useSignalGraphStore((s) => s.edges);
