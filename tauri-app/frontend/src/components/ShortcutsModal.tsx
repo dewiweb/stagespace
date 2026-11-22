@@ -32,6 +32,17 @@ const GRAPH_GESTURES: { gesture: string; action: string }[] = [
   { gesture: 'Delete / Backspace', action: 'Delete — a mid-chain node re-heals its neighbours' },
 ];
 
+/// Mécanique des pads Jeu — transport et édition sont DÉCOUPLÉS
+/// (plusieurs pads tournent en même temps : toucher le transport ne
+/// doit jamais détourner le drawer du move en cours de tweak).
+const PAD_GESTURES: { gesture: string; action: string }[] = [
+  { gesture: 'Pad body — tap', action: 'Play / stop the move (transport only, never selects)' },
+  { gesture: 'Pad body — hold ≥350ms', action: 'Momentary bump — plays while held, fades on release' },
+  { gesture: 'Pad name — tap', action: 'Select the move for the Live drawer (works stopped too)' },
+  { gesture: 'editing: <name> ✕', action: 'Deselect — back to overview' },
+  { gesture: 'Gesture buttons', action: 'EXPLODE / CONVERGE / ORBIT / FRONT — ballistic throw on live objects' },
+];
+
 /// Gestes souris — la moitié "live" de l'interface n'est pas au clavier.
 const MOUSE_GESTURES: { gesture: string; action: string }[] = [
   { gesture: 'Drag object (3D / radar)', action: 'Grab → manual position (engine loses control)' },
@@ -67,6 +78,19 @@ export const ShortcutsModal: React.FC = () => {
           <table className="w-full text-xs">
             <tbody>
               {GRAPH_GESTURES.map((g) => (
+                <tr key={g.gesture} className="border-b border-gray-800/50 last:border-0">
+                  <td className="py-1.5 pr-4 whitespace-nowrap text-gray-200">{g.gesture}</td>
+                  <td className="py-1.5 text-gray-400">{g.action}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="mt-4 pt-3 border-t border-gray-800">
+          <div className="text-gray-300 text-xs font-semibold mb-1">Live pads (Jeu)</div>
+          <table className="w-full text-xs">
+            <tbody>
+              {PAD_GESTURES.map((g) => (
                 <tr key={g.gesture} className="border-b border-gray-800/50 last:border-0">
                   <td className="py-1.5 pr-4 whitespace-nowrap text-gray-200">{g.gesture}</td>
                   <td className="py-1.5 text-gray-400">{g.action}</td>

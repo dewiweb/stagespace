@@ -183,8 +183,16 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
             <div className="text-gray-500 text-xs uppercase tracking-widest mb-1">Next</div>
             <div className="text-3xl font-bold text-gray-300 truncate max-w-[55vw]">{nxt?.label || '—'}</div>
           </div>
-          <div className="text-green-400/90 text-xl font-semibold">
+          <div className="text-green-400/90 text-xl font-semibold flex items-center gap-2">
             {st && st.playingCount > 0 ? `${st.playingCount} moves live` : 'IDLE'}
+            {st && st.orphanCount > 0 && (
+              <span
+                className="px-1.5 py-0.5 rounded bg-amber-900/60 text-amber-300 text-xs font-bold"
+                title={`${st.orphanCount} orphan movement(s) running — no slot controls them. PANIC clears.`}
+              >
+                +{st.orphanCount} ⚠
+              </span>
+            )}
           </div>
 
           <ShowTransport
@@ -210,7 +218,7 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
             <button
               onClick={onGoSetlist}
               disabled={!st?.nextSetlistName}
-              className="px-8 py-3 rounded-xl bg-green-700 hover:bg-green-600 text-white font-bold text-lg disabled:opacity-30 disabled:cursor-not-allowed active:scale-95"
+              className="px-8 py-3 rounded-xl bg-teal-700 hover:bg-teal-600 text-white font-bold text-lg disabled:opacity-30 disabled:cursor-not-allowed active:scale-95"
               title="SETLIST GO — crossfade vers le prochain move de la setlist, les layers continuent. ≠ CUE GO (recall = tue la scène)"
             >
               SETLIST ▶

@@ -19,6 +19,7 @@ type BroadcastState = {
   isRecalling: boolean;
   playingCount: number;
   playingNames: string[];
+  orphanCount: number;
   tcChaseEnabled: boolean;
   tcActive: boolean;
   tcStr: string;

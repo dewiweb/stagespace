@@ -263,16 +263,17 @@ export const PerformView: React.FC = () => {
         </button>
 
         {/* SETLIST GO — crossfade vers le prochain move de la setlist.
-            Distinct du GO de la station Conduite (cue recall) : même
-            couleur, sémantique opposée — le label DOIT différer. */}
+            Teal partout (Jeu + Conduite) : l'opérateur apprend une seule
+            fois « teal = avance la setlist », jamais confondu avec le
+            vert CUE GO (recall = tue la scène). */}
         <button
           onClick={handleGO}
           disabled={!nextSetlistSlotId}
-          className="px-6 py-2.5 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 text-left min-w-[160px]"
+          className="px-6 py-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 text-left min-w-[160px]"
           title="SETLIST GO — crossfade vers le prochain move, les layers continuent (Enter). Cue recall (tue la scène) = Shift+Enter ou Conduite"
         >
           <div className="text-lg font-black leading-tight">SETLIST ▶</div>
-          <div className="text-xs font-medium text-green-100/80 truncate leading-tight">
+          <div className="text-xs font-medium text-teal-100/80 truncate leading-tight">
             {nextSetlistSlot ? nextSetlistSlot.name : 'end of setlist'}
           </div>
         </button>

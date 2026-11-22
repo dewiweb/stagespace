@@ -32,6 +32,9 @@ export function useConduiteBroadcast() {
         isRecalling: cs.isRecalling,
         playingCount: gs.moveSlots.filter((m) => m.movementId).length,
         playingNames: gs.moveSlots.filter((m) => m.movementId).map((m) => m.name),
+        orphanCount: gs.movements.filter(
+          (mv) => mv.id.startsWith('mv-') && !gs.moveSlots.some((s) => s.movementId === mv.id)
+        ).length,
         tcChaseEnabled: cs.tcChaseEnabled,
         tcActive,
         tcStr: tc,

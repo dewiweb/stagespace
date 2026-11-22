@@ -544,3 +544,14 @@ cue (les buskés restent dans le compteur « N moves live »).
   configurations nommées, pas des quasi-doublons.
 - **NOW + buskés sous cue** : `+ <noms> busked` en sous-titre quand
   un cue courant coexiste avec des layers buskées.
+- **Hiérarchie GO par la couleur** : SETLIST GO passe au teal sur les
+  trois surfaces (Jeu top bar, Conduite, setlist Atelier) — « teal =
+  avance la setlist (crossfade, layers continuent) », vert = CUE GO
+  (recall, tue la scène), amber = RECALL, rouge = PANIC. Le
+  commentaire « même couleur, sémantique opposée » est résolu.
+- **Orphelins en Conduite** : `orphanCount` ajouté au contrat +
+  broadcast → `N moves live +K ⚠` identique à la top bar Jeu, y
+  compris dans la fenêtre détachée.
+- **Doc `?` pads** : section « Live pads » — body tap = play/stop,
+  hold = bump, name = sélection drawer, editing ✕ = désélection,
+  boutons gestes. La mécanique découverte au test est documentée.

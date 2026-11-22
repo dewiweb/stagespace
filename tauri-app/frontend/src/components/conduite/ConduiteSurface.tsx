@@ -19,6 +19,7 @@ export const ConduiteSurface: React.FC = () => {
   const lastTimecode = useCuelistStore((s) => s.lastTimecode);
   const lastTimecodeAt = useCuelistStore((s) => s.lastTimecodeAt);
   const moveSlots = useGraphStore((s) => s.moveSlots);
+  const movements = useGraphStore((s) => s.movements);
   const setlistOrder = useGraphStore((s) => s.setlistOrder);
   const currentSetlistIndex = useGraphStore((s) => s.currentSetlistIndex);
   const soloSavedIds = useGraphStore((s) => s.soloSavedIds);
@@ -42,6 +43,11 @@ export const ConduiteSurface: React.FC = () => {
     isRecalling,
     playingCount: moveSlots.filter((m) => m.movementId).length,
     playingNames: moveSlots.filter((m) => m.movementId).map((m) => m.name),
+    // Orphelins : backend vivant, aucun slot ne les contrôle — même
+    // prédicat que la top bar Jeu.
+    orphanCount: movements.filter(
+      (mv) => mv.id.startsWith('mv-') && !moveSlots.some((s) => s.movementId === mv.id)
+    ).length,
     tcChaseEnabled,
     tcActive,
     tcStr: tcStr(lastTimecode ?? 0, timecodeFps),

@@ -18,6 +18,10 @@ export type ConduiteViewState = {
   /// aucune cue n'est courante : la scène jouée en busking n'est pas « — »,
   /// c'est la vérité de ce qui sonne.
   playingNames: string[];
+  /// Mouvements backend vivants sans slot — émettent des positions mais
+  /// n'ont ni pad ni transport. Doit être >0 que ponctuellement (recall
+  /// ambigu, deactivate raté) : affiché en ⚠ dans le compteur.
+  orphanCount: number;
   tcChaseEnabled: boolean;
   tcActive: boolean;
   tcStr: string;

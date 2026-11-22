@@ -229,7 +229,7 @@ export default function MovesTable() {
             <button
               onClick={handleGO}
               disabled={!nextSetlistSlotId}
-              className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm font-bold rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95"
+              className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white text-sm font-bold rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95"
               title="GO: advance to the next move in the setlist (crossfade) — Enter. RECALL cue = Shift+Enter."
             >
               GO ▶
