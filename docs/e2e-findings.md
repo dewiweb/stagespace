@@ -485,3 +485,26 @@ opacité réduite) + tooltip expliquant comment interagir.
 - `npx tsc -b` propre, 485/485 vitest, lint 0 erreur
 - E2E réel : geste balistique mesuré, rename préservé, validation
   visible, chip LIVE unifié, entrée delete rendue
+
+## Session 7 — Cohérence inter-surfaces (Atelier ↔ Jeu)
+
+Suite des findings UX sur l'invariant entre surfaces.
+
+- **Panneau gauche** : défaut 256→520px (table = 503px mesurés), migration
+  douce pour les valeurs persistées = ancien défaut, scroll-x si resserré.
+- **Sélection de move** : l'Inspector a maintenant un `<select>` permanent
+  (« ◆ Global » = désélection explicite — avant : toggle invisible sur la
+  cellule # de la table). La mini-liste MOVES dupliquée est supprimée.
+- **Pad → édition** : tap sur le NOM du pad sélectionne le move pour le
+  drawer sans le lancer (corps = transport pur). Avant : sélectionnable
+  seulement via la ligne setlist ou en le lançant. Ring indigo sur le pad
+  sélectionné.
+- **Vocabulaire scopes** : `Perform`→`Playback`, merge macros →
+  `Global macros` (vs `Macros` = scope move) — les deux surfaces parlent
+  le même langage.
+- **Constat** : pads transport ≠ sélection est CORRECT en multi-pad
+  (retour utilisateur) — le drawer resterait instable sinon. Le transport
+  canonique (`PLAY · <sélection>`) émerge naturellement en top-center.
+
+Reste : hiérarchie des GO (3 systèmes), `editing:` chip discret,
+NOW qui ignore les buskés.
