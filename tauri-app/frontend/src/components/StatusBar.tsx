@@ -7,7 +7,7 @@ import { useShowStatusStore } from '../store/useShowStatusStore';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { ModChips } from './ModChips';
 import { SettingsModal } from './SettingsModal';
-import { ParkedChip } from './perform/ParkedChip';
+import { ParkedChip, OverrideChip } from './perform/ParkedChip';
 import { doPanic } from '../utils/liveActions';
 
 /// StatusBar — bandeau persistant en bas de fenêtre, monté dans App pour
@@ -36,6 +36,8 @@ export const StatusBar: React.FC = () => {
   const debugPerfVisible = useMoveEditorStore((s) => s.debugPerfVisible);
   const backendDown = useShowStatusStore((s) => s.backendDown);
   const parked = useShowStatusStore((s) => s.parked);
+  const objectStates = useGraphStore((s) => s.objectStates);
+  const manualPositions = useGraphStore((s) => s.manualPositions);
   const isRecalling = useCuelistStore((s) => s.isRecalling);
 
   const activeCount = movements.length;
@@ -55,6 +57,13 @@ export const StatusBar: React.FC = () => {
     status === 'error' ? 'Error' :
     status === 'compiled' ? 'Compiled' :
     'Idle';
+
+  // Overrides hors park (chip cyan propre) — manual/hold/freeze ou une
+  // position manuelle posée, mêmes règles que l'ex-ManualReleaseBar.
+  const overrideEntries = Object.entries(objectStates)
+    .filter(([i, s]) => s !== 'park' && (s === 'manual' || s === 'hold' || s === 'freeze' || manualPositions[Number(i)] != null))
+    .map(([i, s]) => ({ obj: Number(i), state: (s === 'hold' || s === 'freeze' ? s : 'manual') as 'manual' | 'hold' | 'freeze' }))
+    .sort((a, b) => a.obj - b.obj);
 
   return (
     <footer className="h-7 flex items-center gap-3 px-3 border-t border-stagespace-border bg-stagespace-panel flex-shrink-0 text-xs select-none">
@@ -104,6 +113,11 @@ export const StatusBar: React.FC = () => {
           qui ignore le move en Atelier ou le recall en Conduite est
           indiscernable d'un bug si l'état n'est pas visible partout. */}
       {parked.length > 0 && <ParkedChip parked={parked} compact dropUp />}
+
+      {/* Overrides live (manual/hold/freeze) — même catégorie que park
+          mais transient : l'opérateur a la main, pas le moteur. Remplace
+          la barre flottante ManualReleaseBar. */}
+      {overrideEntries.length > 0 && <OverrideChip entries={overrideEntries} compact dropUp />}
 
       {/* Santé des flux — PSN tracking + last show-cmd (inclut TC). Un flux
           mort en silence = un follow-me gelé sans alerte : visible en

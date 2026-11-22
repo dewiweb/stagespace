@@ -14,7 +14,6 @@ import Toolbar from './components/Toolbar';
 import { Titlebar } from './components/Titlebar';
 import StatusBar from './components/StatusBar';
 import ToastContainer from './components/ToastContainer';
-import { ManualReleaseBar } from './components/viewer3d/ManualReleaseBar';
 import PerformView from './components/PerformView';
 import WelcomeModal, { shouldShowWelcome } from './components/WelcomeModal';
 import { initShowSync } from './utils/showSync';
@@ -59,7 +58,6 @@ const RunWindow: React.FC = () => {
       <StatusBar />
       {/* Toasts — un GO refusé / erreur backend doit être visible dans
           la fenêtre de jeu dédiée, pas seulement dans la principale. */}
-      <ManualReleaseBar />
       <ToastContainer />
     </div>
   );
@@ -650,7 +648,6 @@ function AppMain() {
 
       {/* Release des objets tenus en manuel — visible dans tous les modes
           (un objet figé doit pouvoir être relâché où qu'on soit). */}
-      <ManualReleaseBar />
 
       {/* Toast notifications — erreurs backend, alerts OSC, etc. */}
       <ToastContainer />
