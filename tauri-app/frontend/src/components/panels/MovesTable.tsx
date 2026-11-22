@@ -10,6 +10,7 @@ import Slider from '../ui/Slider';
 import EmptyState from '../ui/EmptyState';
 import ConfirmModal from '../ui/ConfirmModal';
 import { TRACK_PATTERNS, applySelectionPattern } from '../../utils/trackPatterns';
+import { buildObjectMenuItems } from '../../utils/objectMenuItems';
 import ContextMenu from '../ui/ContextMenu';
 
 /// MovesTable — la table des moves (concept unifié)
@@ -101,6 +102,7 @@ export default function MovesTable() {
   // ─── Track Picker (modal inline) ───
   const [editingTracksFor, setEditingTracksFor] = React.useState<string | null>(null);
   const [tempTrackIds, setTempTrackIds] = React.useState<number[]>([]);
+  const [objMenu, setObjMenu] = React.useState<{ x: number; y: number; trackId: number } | null>(null);
 
   const openTrackPicker = (slotId: string, currentTracks: number[]) => {
     setEditingTracksFor(slotId);
@@ -536,6 +538,12 @@ export default function MovesTable() {
                       prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]
                     );
                   }}
+                  onContextMenu={(e) => {
+                    // Clic-droit cellule = ops live sur l'objet (release/
+                    // park…) — identique au clic-droit radar/3D/TrackGrid.
+                    e.preventDefault();
+                    setObjMenu({ x: e.clientX, y: e.clientY, trackId: id });
+                  }}
                   className={`text-xs font-mono px-2 py-1.5 rounded transition-colors ${
                     tempTrackIds.includes(id)
                       ? 'bg-indigo-700 text-white'
@@ -615,6 +623,22 @@ export default function MovesTable() {
               >Close</button>
             </div>
           </Modal>
+        );
+      })()}
+
+      {/* ═══ Menu clic-droit cellule track (picker) — ops live objet ═══ */}
+      {objMenu && (() => {
+        const gs = useGraphStore.getState();
+        const obj = gs.manualOscIds.indexOf(objMenu.trackId);
+        if (obj < 0) return null;
+        return (
+          <ContextMenu
+            x={objMenu.x}
+            y={objMenu.y}
+            header={`Track ${objMenu.trackId} · obj ${obj + 1}`}
+            onClose={() => setObjMenu(null)}
+            items={buildObjectMenuItems(obj, gs.objectStates[obj] ?? 'move', gs.emittedPositions[obj])}
+          />
         );
       })()}
 

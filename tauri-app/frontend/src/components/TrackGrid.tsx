@@ -4,6 +4,8 @@ import EmptyState from './ui/EmptyState';
 import ContextMenu from './ui/ContextMenu';
 import { trackColor } from '../utils/trackColor';
 import { TRACK_PATTERNS, applySelectionPattern, SelectionPattern } from '../utils/trackPatterns';
+import { buildObjectMenuItems } from '../utils/objectMenuItems';
+import { useGraphStore } from '../store/useGraphStore';
 
 interface TrackInfo {
   id: number;
@@ -64,6 +66,14 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
   }, 0);
 
   const [ctxMenu, setCtxMenu] = React.useState<{ x: number; y: number } | null>(null);
+  // Clic-droit sur une cellule = menu OBJET (release/park/copy pos —
+  // mêmes ops que radar/3D) ; sur le fond = patterns de sélection.
+  const [objMenu, setObjMenu] = React.useState<{ x: number; y: number; trackId: number } | null>(null);
+  const cellCtx = (e: React.MouseEvent, trackId: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setObjMenu({ x: e.clientX, y: e.clientY, trackId });
+  };
 
   return (
     <div
@@ -84,6 +94,23 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
           items={TRACK_PATTERNS.map((p) => ({ label: p.label, title: p.title, onClick: () => applyPattern(p.id) }))}
         />
       )}
+      {objMenu && (() => {
+        // Boundary track_id → obj_index (AGENTS.md : obj_index partout
+        // sur le wire ; les UIs opérateur parlent track_id).
+        const gs = useGraphStore.getState();
+        const obj = gs.manualOscIds.indexOf(objMenu.trackId);
+        if (obj < 0) return null;
+        const src = gs.objectStates[obj] ?? 'move';
+        return (
+          <ContextMenu
+            x={objMenu.x}
+            y={objMenu.y}
+            header={`Track ${objMenu.trackId} · obj ${obj + 1}`}
+            onClose={() => setObjMenu(null)}
+            items={buildObjectMenuItems(obj, src, gs.emittedPositions[obj])}
+          />
+        );
+      })()}
       {/* Barre de patterns */}
       <div className="flex flex-wrap gap-0.5">
         {TRACK_PATTERNS.map((p) => (
@@ -143,6 +170,7 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
                     : 'bg-gray-800/40 border-gray-700/30 opacity-50'
                 }`}
                 onClick={() => toggleTrackSelection(t.id)}
+                onContextMenu={(e) => cellCtx(e, t.id)}
                 title={`${t.name} (#${t.id}) — depth: ${Math.round(depth * 100)}%`}
               >
                 {/* Color dot + ID */}
@@ -185,6 +213,7 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
             <button
               key={t.id}
               onClick={() => toggleTrackSelection(t.id)}
+              onContextMenu={(e) => cellCtx(e, t.id)}
               className={`relative ${compact ? 'h-9' : 'aspect-square'} rounded-lg flex ${compact ? 'flex-row gap-1 px-1' : 'flex-col'} items-center justify-center transition-all border-2 ${
                 isSelected
                   ? 'border-blue-500 bg-blue-900/40'

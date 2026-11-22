@@ -12,7 +12,7 @@ export interface HeldEntry {
   state: HeldState;
 }
 
-const releaseFor = (state: HeldState, obj: number) => {
+const releaseFor = (obj: number, state: HeldState) => {
   switch (state) {
     case 'park': doUnpark(obj); break;
     case 'freeze': doAttention(null); break;
