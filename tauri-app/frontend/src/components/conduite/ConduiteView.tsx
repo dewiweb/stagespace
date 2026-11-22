@@ -165,9 +165,11 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
                     : st.playingNames.join(' + ')
                   : '—')}
             </div>
-            {!cur && st && st.playingNames.length > 0 && (
+            {st && st.playingNames.length > 0 && (
               <div className="text-gray-500 text-sm mt-1" title={st.playingNames.join(', ')}>
-                busked — no current cue
+                {cur
+                  ? `+ ${st.playingNames.join(' + ')} busked`
+                  : 'busked — no current cue'}
               </div>
             )}
             {st?.pending && (
