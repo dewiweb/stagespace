@@ -12,17 +12,28 @@ import { sourceHex, SOURCE_LABEL, SOURCE_HEX } from '../../utils/sourceColors';
 import { ObjectInspectBar } from '../viewer3d/ObjectInspectBar';
 import type { Zone } from '../../store/slices/spatialFxSlice';
 
-/// Empreinte top-down d'une zone en coords monde (x, y) — bounds utilisés
+/// Vue radar — même vocabulaire que le 3D (top/front/side).
+/// top   : plan X/Y   — +y vers le bas d'écran (FRONT = -y, en haut).
+/// front : élévation X/Z — +z vers le haut (ySign -1).
+/// side  : profil Y/Z — +y vers la droite, +z vers le haut.
+type RadarView = 'top' | 'front' | 'side';
+const VIEW_AXES: Record<RadarView, { a: number; b: number; ySign: number; label: string }> = {
+  top:   { a: 0, b: 1, ySign: 1,  label: 'FRONT' },
+  front: { a: 0, b: 2, ySign: -1, label: 'UP' },
+  side:  { a: 1, b: 2, ySign: -1, label: 'UP' },
+};
+
+/// Empreinte d'une zone dans le plan projeté (axes a,b) — bounds utilisés
 /// par l'auto-fit du radar (une zone lointaine ne doit pas clipper).
-function zoneBounds(z: Zone): number[] {
+function zoneBounds(z: Zone, a: number, b: number): number[] {
   if (z.shape.shape === 'sphere') {
     const r = z.shape.radius + z.falloff;
-    return [Math.abs(z.shape.center[0]) + r, Math.abs(z.shape.center[1]) + r];
+    return [Math.abs(z.shape.center[a]) + r, Math.abs(z.shape.center[b]) + r];
   }
   const f = z.falloff;
   return [
-    Math.max(Math.abs(z.shape.min[0]), Math.abs(z.shape.max[0])) + f,
-    Math.max(Math.abs(z.shape.min[1]), Math.abs(z.shape.max[1])) + f,
+    Math.max(Math.abs(z.shape.min[a]), Math.abs(z.shape.max[a])) + f,
+    Math.max(Math.abs(z.shape.min[b]), Math.abs(z.shape.max[b])) + f,
   ];
 }
 
@@ -69,24 +80,30 @@ export const Radar2D: React.FC = () => {
   const [objMenu, setObjMenu] = React.useState<{ x: number; y: number; obj: number } | null>(null);
   const zones = useGraphStore((s) => s.zones);
   const graphZones = useGraphStore((s) => s.graphZones);
+  // Vue projetée — top/front/side (sélecteur en overlay, mêmes
+  // conventions que le viewer 3D).
+  const [radarView, setRadarView] = React.useState<RadarView>('top');
+  const { a: va, b: vb, ySign, label: axisLabel } = VIEW_AXES[radarView];
 
-  // Auto-fit : échelle sur les bounds réels, AVEC hystérésis — un objet
-  // lancé loin ne rescale pas la vue d'un coup : zoom-out immédiat (on
-  // doit voir l'objet), zoom-in amorti (la vue revient doucement).
+  // Auto-fit : échelle sur les bounds réels PROJETÉS, AVEC hystérésis —
+  // un objet lancé loin ne rescale pas la vue d'un coup : zoom-out
+  // immédiat (on doit voir l'objet), zoom-in amorti.
   const maxRef = React.useRef(5);
   const targetR = Math.max(
     5,
-    ...Object.values(positions).flatMap((p) => [Math.abs(p[0]), Math.abs(p[1])]),
+    ...Object.values(positions).flatMap((p) => [Math.abs(p[va]), Math.abs(p[vb])]),
     // Les zones incluent leur empreinte dans le fit — sinon une zone
     // lointaine clipperait hors cadre.
-    ...zones.flatMap((z) => zoneBounds(z)),
-    ...graphZones.flatMap((z) => zoneBounds(z)),
+    ...zones.flatMap((z) => zoneBounds(z, va, vb)),
+    ...graphZones.flatMap((z) => zoneBounds(z, va, vb)),
   );
   maxRef.current = targetR > maxRef.current
     ? targetR
     : maxRef.current + (targetR - maxRef.current) * 0.08;
   const maxR = maxRef.current;
   const k = 100 / maxR;
+  // Projette une position monde [x,y,z] → coords écran du plan actif.
+  const proj = (p: readonly number[]): [number, number] => [p[va] * k, p[vb] * k * ySign];
 
   // Inspect de l'objet sélectionné — délégué à ObjectInspectBar (partagé
   // avec le viewer 3D) : état source + position + release/park.
@@ -97,6 +114,24 @@ export const Radar2D: React.FC = () => {
 
   return (
     <>
+    <div className="relative flex-1 min-h-0">
+    {/* Sélecteur de vue — mêmes conventions que le viewer 3D :
+        top = plan X/Y, front = élévation X/Z, side = profil Y/Z. */}
+    <div className="absolute top-1 right-1 z-10 flex gap-0.5">
+      {(['top', 'front', 'side'] as RadarView[]).map((v) => (
+        <button
+          key={v}
+          onClick={() => setRadarView(v)}
+          className={`px-1.5 py-0.5 text-[9px] rounded transition-colors ${
+            radarView === v
+              ? 'bg-cyan-700 text-white'
+              : 'bg-gray-800/80 text-gray-400 hover:bg-gray-700 hover:text-white'
+          }`}
+        >
+          {v === 'top' ? 'Top' : v === 'front' ? 'Front' : 'Side'}
+        </button>
+      ))}
+    </div>
     <svg
       viewBox="-110 -110 220 220"
       className="flex-1 min-h-0"
@@ -111,8 +146,9 @@ export const Radar2D: React.FC = () => {
         const vy = ((e.clientY - rect.top) / rect.height) * 220 - 110;
         let best = -1;
         let bd = 18;
-        for (const [id, [x, y]] of Object.entries(positions)) {
-          const d = Math.hypot(x * k - vx, y * k - vy);
+        for (const [id, p] of Object.entries(positions)) {
+          const [px, py] = proj(p);
+          const d = Math.hypot(px - vx, py - vy);
           if (d < bd) { bd = d; best = Number(id); }
         }
         setSelectedObj(best >= 0 ? best : null);
@@ -152,11 +188,15 @@ export const Radar2D: React.FC = () => {
         const from = recent.length > 0 ? recent[0] : { x: drag.x, y: drag.y, t: drag.t };
         const dt = Math.max(0.05, (now - from.t) / 1000);
         const scale = 220 / rect.width / k; // px → viewBox → mètres
-        const vx = ((e.clientX - from.x) * scale) / dt;
-        // cy = worldY*k — le +y monde rend vers le BAS de l'écran (FRONT
-        // en haut = -y). Drag vers le haut (dy<0) → vy<0 : PAS de négation.
-        const vy = ((e.clientY - from.y) * scale) / dt;
-        if (Math.hypot(vx, vy) > 0.5) doThrow(drag.id, vx, vy, 0);
+        // Vélocité écran → monde selon la vue : l'axe a = droite écran,
+        // l'axe b = bas écran × ySign (top : +y monde vers le bas → pas
+        // de négation ; front/side : +z vers le haut → négation).
+        const velA = ((e.clientX - from.x) * scale) / dt;
+        const velB = ((e.clientY - from.y) * scale * ySign) / dt;
+        const v: [number, number, number] = [0, 0, 0];
+        v[va] = velA;
+        v[vb] = velB;
+        if (Math.hypot(velA, velB) > 0.5) doThrow(drag.id, v[0], v[1], v[2]);
       }}
       onContextMenu={(e) => {
         // Clic-droit proximité — comme le 3D : menu sur l'objet le plus
@@ -168,8 +208,9 @@ export const Radar2D: React.FC = () => {
         const vy = ((e.clientY - rect.top) / rect.height) * 220 - 110;
         let best = -1;
         let bd = 18;
-        for (const [id, [x, y]] of Object.entries(positions)) {
-          const d = Math.hypot(x * k - vx, y * k - vy);
+        for (const [id, p] of Object.entries(positions)) {
+          const [px, py] = proj(p);
+          const d = Math.hypot(px - vx, py - vy);
           if (d < bd) { bd = d; best = Number(id); }
         }
         if (best >= 0) setObjMenu({ x: e.clientX, y: e.clientY, obj: best });
@@ -179,7 +220,17 @@ export const Radar2D: React.FC = () => {
       <circle cx="0" cy="0" r="52" fill="none" stroke="#1f2937" strokeWidth="0.5" />
       <line x1="0" y1="-105" x2="0" y2="105" stroke="#1f2937" strokeWidth="0.5" />
       <line x1="-105" y1="0" x2="105" y2="0" stroke="#1f2937" strokeWidth="0.5" />
-      <text x="0" y="-99" fill="#4b5563" fontSize="8" textAnchor="middle">FRONT · {maxR.toFixed(0)}m</text>
+      <text x="0" y="-99" fill="#4b5563" fontSize="8" textAnchor="middle">{axisLabel} · {maxR.toFixed(0)}m</text>
+      {/* Axes projetés — la vue ne dit rien si on ne sait pas quels
+          axes on regarde. */}
+      <text x="103" y="107" fill="#374151" fontSize="7" textAnchor="end">
+        {'XYZ'[va]}/{'XYZ'[vb]}
+      </text>
+      {/* En side : le FRONT (-y) est à gauche — repère au bord. */}
+      {radarView === 'side' && (
+        <text x="-103" y="107" fill="#4b5563" fontSize="7" textAnchor="start">← FRONT</text>
+      )}
+      {/* En front : repère LEFT/RIGHT implicite = ±x, rien à marquer. */}
       {/* Empreintes des zones — cyan manuelles, violet graph-déclarées.
           Plein = noyau (influence 1), pointillé = falloff externe.
           Les zones à effet positionnel (repel/vortex…) reçoivent un
@@ -192,8 +243,9 @@ export const Radar2D: React.FC = () => {
         const strokeW = z.effect ? 1.6 : 0.7;
         const dash = z.effect ? 'none' : '3 2';
         if (z.shape.shape === 'sphere') {
-          const cx = z.shape.center[0] * k;
-          const cy = z.shape.center[1] * k;
+          // Sphère projetée = cercle dans n'importe quelle vue ortho.
+          const cx = z.shape.center[va] * k;
+          const cy = z.shape.center[vb] * k * ySign;
           const r = z.shape.radius * k;
           const rf = (z.shape.radius + z.falloff) * k;
           return (
@@ -205,10 +257,14 @@ export const Radar2D: React.FC = () => {
             </g>
           );
         }
-        const w = (z.shape.max[0] - z.shape.min[0]) * k;
-        const h = (z.shape.max[1] - z.shape.min[1]) * k;
-        const x = z.shape.min[0] * k;
-        const y = z.shape.min[1] * k;
+        // Box projetée : rect dans le plan (a,b) — le ySign exige un min
+        // sur les deux coins écran, pas sur les coords monde.
+        const y1 = z.shape.min[vb] * k * ySign;
+        const y2 = z.shape.max[vb] * k * ySign;
+        const w = (z.shape.max[va] - z.shape.min[va]) * k;
+        const h = Math.abs(y2 - y1);
+        const x = z.shape.min[va] * k;
+        const y = Math.min(y1, y2);
         const f = z.falloff * k;
         return (
           <g key={`z${zi}`} pointerEvents="none">
@@ -219,11 +275,22 @@ export const Radar2D: React.FC = () => {
           </g>
         );
       })}
-      {Object.entries(positions).map(([id, [x, y]]) => {
+      {Object.entries(positions).map(([id, p]) => {
         const t = Number(id);
         const src = objectStates[t] ?? 'track';
-        const cx = Math.max(-105, Math.min(105, x * k));
-        const cy = Math.max(-105, Math.min(105, y * k));
+        const [px, py] = proj(p);
+        // Hors-cadre : jamais un point figé — flèche de bearing sur le
+        // bord + distance réelle. L'auto-fit couvre normalement tous les
+        // objets du set ; ceci est le filet de sécurité (position en
+        // transition, objet hors fit).
+        const dist = Math.hypot(px, py);
+        const out = dist > 105;
+        const bs = out ? 105 / dist : 1;
+        const cx = out ? px * bs : px;
+        const cy = out ? py * bs : py;
+        const ang = Math.atan2(py, px) * 180 / Math.PI;
+        // Distance réelle dans le plan projeté, en mètres.
+        const distM = Math.hypot(p[va], p[vb]);
         const isManual = src === 'manual';
         const isSelected = selectedObj === t;
         return (
@@ -253,9 +320,25 @@ export const Radar2D: React.FC = () => {
             {isSelected && (
               <circle cx={cx} cy={cy} r={8} fill="none" stroke="#fff" strokeWidth="1.5" opacity="0.9" />
             )}
-            <circle cx={cx} cy={cy} r="4" fill={sourceHex(src)}>
-              <title>#{manualOscIds[t] ?? t + 1} · {SOURCE_LABEL[src] ?? src}</title>
-            </circle>
+            {out ? (
+              <>
+                {/* Chevron de bearing — pointe vers l'extérieur (angle
+                    du vecteur projeté). */}
+                <g transform={`translate(${cx},${cy}) rotate(${ang})`}>
+                  <path d="M -4,-4 L 5,0 L -4,4 z" fill={sourceHex(src)} />
+                </g>
+                <text
+                  x={cx * 0.93} y={cy * 0.93}
+                  fill={sourceHex(src)} fontSize="7" textAnchor="middle" fontWeight="bold"
+                >
+                  {distM.toFixed(1)}m
+                </text>
+              </>
+            ) : (
+              <circle cx={cx} cy={cy} r="4" fill={sourceHex(src)}>
+                <title>#{manualOscIds[t] ?? t + 1} · {SOURCE_LABEL[src] ?? src}</title>
+              </circle>
+            )}
             {isManual && (
               <text
                 x={cx + 8}
@@ -282,9 +365,7 @@ export const Radar2D: React.FC = () => {
       {/* Flèche du lancer en cours — direction + longueur du flick.
           Le geste était invisible : impossible de viser le lancer. */}
       {throwCursor && throwDrag.current && positions[throwDrag.current.id] && (() => {
-        const [ox, oy] = positions[throwDrag.current!.id];
-        const x1 = ox * k;
-        const y1 = oy * k;
+        const [x1, y1] = proj(positions[throwDrag.current!.id]);
         return (
           <line
             x1={x1} y1={y1} x2={throwCursor.x} y2={throwCursor.y}
@@ -299,6 +380,7 @@ export const Radar2D: React.FC = () => {
         </marker>
       </defs>
     </svg>
+    </div>
     {/* Menu clic-droit objet — Release/Park/Copy/Paste position */}
     {objMenu && (
       <ContextMenu
