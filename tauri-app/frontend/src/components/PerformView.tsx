@@ -345,7 +345,7 @@ export const PerformView: React.FC = () => {
             CONSOLE {consoleAge < 5 ? '●' : '○'}
           </StatusChip>
         )}
-        <OscArmToggle />
+        <OscArmToggle size="lg" />
         <PanicButton size="lg" />
       </div>
 
