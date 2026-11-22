@@ -563,8 +563,7 @@ pub fn run() {
             // Destroyed uniquement — CloseRequested peut être annulé par
             // la garde "unsaved changes" du frontend (preventDefault) :
             // nettoyer ici tuerait le show sur une fermeture annulée.
-            if let tauri::WindowEvent::Destroyed = event
-            {
+            if let tauri::WindowEvent::Destroyed = event {
                 // Stopper tous les movements proprement à la fermeture
                 let state: State<AppState> = window.state();
                 let drained: Vec<Movement> = {
