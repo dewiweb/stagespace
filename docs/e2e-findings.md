@@ -555,3 +555,11 @@ cue (les buskés restent dans le compteur « N moves live »).
 - **Doc `?` pads** : section « Live pads » — body tap = play/stop,
   hold = bump, name = sélection drawer, editing ✕ = désélection,
   boutons gestes. La mécanique découverte au test est documentée.
+- **Palette par tâche opérateur** : les catégories internes
+  (MathEngine/PhysicsEngine — distinction d'implémentation) deviennent
+  des verbes de workflow : Flow (3) → Motion·Geometric (15) →
+  Motion·Simulated (6) → Drawn Paths → Transform → Combine →
+  Spatial Fades → Inputs → Stage FX (tab Global) → Plugins →
+  Signals (tab Mods). Tooltip par catégorie explique la tâche
+  ("Wire the pipeline — Objects → engine → Output"). Cosmétique
+  pur : `CATEGORY_META` mappe les catégories backend inchangées.

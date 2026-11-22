@@ -102,6 +102,7 @@ export const NodePalette: React.FC<NodePaletteProps> = (p) => {
             <div key={cat.label}>
               <button
                 onClick={() => p.onToggleCat(cat.label)}
+                title={cat.hint}
                 className="w-full flex items-center gap-1 text-gray-500 text-xs font-semibold mb-1 px-1 uppercase tracking-wider hover:text-gray-300 transition-colors"
               >
                 <span className="text-xs">{isCollapsed ? '▸' : '▾'}</span>

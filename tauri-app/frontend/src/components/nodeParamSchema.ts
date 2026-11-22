@@ -62,23 +62,27 @@ export const PARAM_SCHEMA: Record<NodeType, ParamDef[]> = Object.fromEntries(
 
 /// Ordre + habillage des catégories de palette — cosmétique UI ; la liste des
 /// types vient du catalogue (un node sans spec n'apparaît nulle part).
-const CATEGORY_META: { category: NodeCategory; label: string; color: string }[] = [
-  { category: 'Structural', label: 'Structural', color: 'gray' },
-  { category: 'MathEngine', label: 'Math Engines', color: 'blue' },
-  { category: 'PhysicsEngine', label: 'Physics Engines', color: 'green' },
-  { category: 'Spline', label: 'Splines', color: 'cyan' },
-  { category: 'Envelope', label: 'Envelopes', color: 'orange' },
-  { category: 'Modifier', label: 'Modifiers', color: 'pink' },
-  { category: 'PostProcess', label: 'Global (Post-process)', color: 'cyan' },
-  { category: 'Composite', label: 'Composite', color: 'purple' },
-  { category: 'Source', label: 'Sources', color: 'yellow' },
-  { category: 'Plugin', label: 'Plugins', color: 'yellow' },
-  { category: 'Signal', label: 'Signal (Modulation)', color: 'amber' },
+/// Labels orientés TÂCHE opérateur (« qu'est-ce que je veux faire ? ») plutôt
+/// que taxonomie interne (MathEngine/PhysicsEngine = distinction d'implémentation).
+/// `hint` = tooltip du header de catégorie dans la palette.
+const CATEGORY_META: { category: NodeCategory; label: string; hint: string; color: string }[] = [
+  { category: 'Structural', label: 'Flow', hint: 'Wire the pipeline — Objects → engine → Output', color: 'gray' },
+  { category: 'MathEngine', label: 'Motion · Geometric', hint: 'Deterministic trajectories — orbits, lines, waves, noise', color: 'blue' },
+  { category: 'PhysicsEngine', label: 'Motion · Simulated', hint: 'Physical & reactive behaviors — springs, bounce, follow, swarm', color: 'green' },
+  { category: 'Spline', label: 'Drawn Paths', hint: 'Draw a freehand trajectory, then evaluate/trim/offset it', color: 'cyan' },
+  { category: 'Modifier', label: 'Transform', hint: 'Reshape a trajectory — scale, rotate, offset, mirror, delay…', color: 'pink' },
+  { category: 'Composite', label: 'Combine', hint: 'Layer & arrange — mix, sequence, crossfade, switch', color: 'purple' },
+  { category: 'Envelope', label: 'Spatial Fades', hint: 'Fade by time, distance, direction or audio level', color: 'orange' },
+  { category: 'Source', label: 'Inputs', hint: 'External drives — audio amplitude/spectrum, OSC, BPM', color: 'yellow' },
+  { category: 'PostProcess', label: 'Stage FX', hint: 'Global processing on the whole field — zones, radius, velocity, barycenter', color: 'cyan' },
+  { category: 'Plugin', label: 'Plugins', hint: 'External .ssx bundles — drop the plugins folder content here', color: 'yellow' },
+  { category: 'Signal', label: 'Signals', hint: 'Modulation patch cables — only in the Mods tab', color: 'amber' },
 ];
 
-export const NODE_CATEGORIES: { label: string; color: string; types: NodeType[] }[] =
-  CATEGORY_META.map(({ category, label, color }) => ({
+export const NODE_CATEGORIES: { label: string; hint: string; color: string; types: NodeType[] }[] =
+  CATEGORY_META.map(({ category, label, hint, color }) => ({
     label,
+    hint,
     color,
     types: NODE_SPECS.filter((s) => s.category === category).map((s) => s.node_type),
   })).filter((c) => c.types.length > 0);
