@@ -124,6 +124,7 @@ ssh -L 4173:127.0.0.1:4173 -L 5175:127.0.0.1:5175 user@hôte
 | Fonction | Headless (mock) | In-app (real) |
 |---|---|---|
 | Commands IPC, events, OSC IN/OUT, moves, cues, gestes | ✅ réel, identique webview | ✅ idem |
+| Contenu du show (slots, cues, setlist) | ✅ via snapshot `set/get_show_snapshot` — poussé par le frontend à chaque save/load, récupéré par le remote (auto au 1er accès + `File → Sync show from host`) | idem |
 | Pickers de fichiers (Save/Load, Import .hol) | ❌ pas de fenêtre dans la mock app | ⚠️ le dialog s'ouvre **sur l'écran de l'hôte** |
 | `getVersion()` etc. (plugin app) | ⚠️ dégrade (`vdev`) | ✅ réel |
 | Audio IN | capté côté hôte | idem (normal) |

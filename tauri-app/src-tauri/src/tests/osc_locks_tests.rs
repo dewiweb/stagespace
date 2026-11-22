@@ -37,6 +37,7 @@ mod osc_locks_tests {
             plugin_registry: None,
             plugins_dir: None,
             remote_ui: Mutex::new(crate::bridge_server::RemoteUi::default()),
+            show_snapshot: Mutex::new(None),
         }
     }
 

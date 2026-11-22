@@ -94,6 +94,26 @@ pub async fn load_graph_from_file(file_path: String) -> Result<serde_json::Value
     .map_err(|e| IpcError::internal(format!("Graph load task failed: {e}")))?
 }
 
+/// Snapshot du show courant (enveloppe v2) — poussé par le frontend à
+/// chaque save/load pour que les UIs distantes puissent récupérer le
+/// show. État de session, pas de persistance disque.
+#[tauri::command]
+pub fn set_show_snapshot(state: State<AppState>, envelope: serde_json::Value) {
+    *state
+        .show_snapshot
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = Some(envelope);
+}
+
+#[tauri::command]
+pub fn get_show_snapshot(state: State<AppState>) -> Option<serde_json::Value> {
+    state
+        .show_snapshot
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

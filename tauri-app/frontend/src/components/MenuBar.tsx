@@ -60,6 +60,9 @@ export const MenuBar: React.FC = () => {
   const canRedo = useGraphStore((s) => s.canRedo);
   const editingSlotId = useGraphStore((s) => s.editingSlotId);
   const moveSlots = useGraphStore((s) => s.moveSlots);
+  const pullShowFromHost = useGraphStore((s) => s.pullShowFromHost);
+  /// Navigateur distant via bridge — le snapshot du show vit sur l'hôte.
+  const isRemote = typeof window !== 'undefined' && Boolean((window as { __STAGESPACE_BRIDGE__?: boolean }).__STAGESPACE_BRIDGE__);
   const cues = useCuelistStore((s) => s.cues);
   const armedCueId = useCuelistStore((s) => s.armedCueId);
   const tcChaseEnabled = useCuelistStore((s) => s.tcChaseEnabled);
@@ -183,6 +186,11 @@ export const MenuBar: React.FC = () => {
         { separator: true },
         { label: 'Save Show…', shortcut: 'Ctrl+S', onClick: () => void saveShow() },
         { label: 'Load Show…', shortcut: 'Ctrl+O', onClick: () => void loadShow() },
+        // Remote UI : le store local est vide au premier accès — le
+        // snapshot poussé par l'hôte au save/load fait foi.
+        ...(isRemote
+          ? [{ label: 'Sync show from host', onClick: () => void pullShowFromHost() }]
+          : []),
         { separator: true },
         { label: 'Import Holophonix project…', onClick: () => void importHolProject() },
       ],

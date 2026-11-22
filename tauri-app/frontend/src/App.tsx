@@ -189,6 +189,14 @@ function AppMain() {
     else void s.refreshRemoteUiStatus();
   }, []);
 
+  // Show snapshot : un store sans slots = client neuf (remote, nouveau
+  // navigateur) → adopter le show poussé par l'hôte. Un store non vide
+  // n'est jamais écrasé (edits locales préservées).
+  React.useEffect(() => {
+    const s = useGraphStore.getState();
+    if (s.moveSlots.length === 0) void s.pullShowFromHost({ quiet: true });
+  }, []);
+
   // ── Resize des panneaux gauche et droit ──
   React.useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {

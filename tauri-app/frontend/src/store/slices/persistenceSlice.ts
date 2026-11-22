@@ -32,6 +32,9 @@ export interface PersistenceSlice {
   /// Applique une enveloppe show déjà chargée (welcome screen, tests) —
   /// même chemin que loadGraphFromFile sans la lecture fichier.
   loadShowEnvelope: (envelope: ShowFileEnvelope) => Promise<void>;
+  /// Récupère le snapshot du show hébergé par le backend (remote UI) —
+  /// `quiet` pour l'auto-pull au boot (pas de toast "rien à récupérer").
+  pullShowFromHost: (opts?: { quiet?: boolean }) => Promise<void>;
 }
 
 // Le slice accède aux autres slices via get() — type étendu du store
@@ -310,6 +313,10 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
       console.error('Failed to save show file:', e);
       throw e;
     }
+    // Snapshot backend : les UIs distantes (remote UI) récupèrent le show
+    // via get_show_snapshot — sans ça elles démarrent sur un store vide.
+    // Non bloquant : l'échec ne doit pas gâcher un save réussi.
+    await invoke('set_show_snapshot', { envelope }).catch(silentCatch);
   },
 
   loadGraphFromFile: async (filePath) => {
@@ -591,6 +598,29 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
         console.error('Failed to clear spatial FX on show load:', e);
       }
       set({ zones: [], modulations: [], objectChannels: {} });
+    }
+
+    // Le show chargé devient le snapshot partagé aux UIs distantes —
+    // y compris l'enveloppe vide de newShow (le "clear" doit se propager).
+    await invoke('set_show_snapshot', { envelope: raw }).catch(silentCatch);
+  },
+
+  pullShowFromHost: async (opts) => {
+    if (get().movements.length > 0) {
+      toast.warning('Cannot sync show during playback — stop all moves first.');
+      return;
+    }
+    try {
+      const snap = await invoke<ShowFileEnvelope | null>('get_show_snapshot');
+      if (!snap) {
+        if (!opts?.quiet) toast.info('No show on host yet — save or load one first.');
+        return;
+      }
+      await get().loadShowEnvelope(snap);
+      if (!opts?.quiet) toast.success('Show synced from host');
+    } catch (e) {
+      console.error('[pullShowFromHost]', e);
+      if (!opts?.quiet) toast.error(`Show sync failed: ${e}`);
     }
   },
 });

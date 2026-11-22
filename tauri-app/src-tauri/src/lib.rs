@@ -23,7 +23,10 @@ use commands::audio::{
 use commands::cue_commands::{
     get_parked_objects, park_object, recall_cue, store_cue, unpark_object,
 };
-use commands::file_io::{import_hol_project, load_graph_from_file, save_graph_to_file};
+use commands::file_io::{
+    get_show_snapshot, import_hol_project, load_graph_from_file, save_graph_to_file,
+    set_show_snapshot,
+};
 use commands::merge_commands::{
     activate_move, add_channel_modulation, add_zone, clear_all_manual_positions,
     clear_all_spatial_channels, clear_channel_modulations, clear_manual_position,
@@ -98,6 +101,11 @@ pub struct AppState {
     /// Bridge remote-UI (HTTP/SSE → navigateurs) — start/stop à chaud
     /// via `set_remote_ui` (Settings) ou au boot via STAGESPACE_BRIDGE_BIND.
     pub remote_ui: Mutex<bridge_server::RemoteUi>,
+    /// Snapshot du show courant (enveloppe) — poussé par le frontend à
+    /// chaque save/load ; les UIs distantes le récupèrent via
+    /// `get_show_snapshot` à la connexion (les slots vivent côté frontend,
+    /// sans snapshot un remote démarrerait sur un store vide).
+    pub show_snapshot: Mutex<Option<serde_json::Value>>,
 }
 
 /// Un movement = un runtime indépendant avec ses propres tracks et mode (preview/live)
@@ -225,6 +233,7 @@ pub fn new_app_state() -> AppState {
         plugin_registry,
         plugins_dir,
         remote_ui: Mutex::new(bridge_server::RemoteUi::default()),
+        show_snapshot: Mutex::new(None),
     }
 }
 
@@ -523,6 +532,9 @@ pub fn stagespace_invoke_handler<R: tauri::Runtime>(invoke: tauri::ipc::Invoke<R
         // Remote-UI bridge (Settings — serveur HTTP/SSE à chaud)
         set_remote_ui,
         remote_ui_status,
+        // Show snapshot — l'hôte partage l'enveloppe aux UIs distantes
+        set_show_snapshot,
+        get_show_snapshot,
     ];
     handler(invoke)
 }
