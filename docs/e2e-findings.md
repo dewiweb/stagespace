@@ -330,3 +330,41 @@ elementFromPoint, pas le canvas WebGL.
 - Le toast « PANIC partially failed — N position reset(s) lost » est
   correct mais apparaît aussi quand la destination OSC est simplement
   absente en test — message OK en prod.
+
+## Session 5 — chaîne audio réelle (fooyin → PipeWire → app)
+
+**Setup** : fooyin joue sur la sortie analog ; source PipeWire par défaut
+= `alsa_output…analog-stereo.monitor` ; `start_audio_capture` device
+`pulse` → capture réelle.
+
+**`get_audio_state` vivant** : amplitude {bass 0.08–0.47, mid, high, rms},
+bpm ~164–192 (confidence ~0.45), spectrum FFT 1024 bins — valeurs
+variables à chaque échantillon, corrélées à la musique.
+
+**Audio mod end-to-end** : injecté `bass→radius_scale ×1.5` sur move live
+via `update_animation_state` → les 4 objets du move respirent ENSEMBLE
+avec la basse (r : 2.55→3.31→2.57→3.30→0.70 en suivant l'enveloppe
+bass, lag = smoothing 0.3 attendu). Puis ajouté un 2e mod via le formulaire
+UI (+ Add audio mod → selects réels) → « Bass → Radius » affiché avec
+sliders Intensity/Lissage — write-through live confirmé.
+
+**Dégradation propre** : `stop_audio_capture` → audio_state tout null →
+rayon retombe exactement à la base 2.00 (mod contribue 0, pas
+d'offset résiduel, pas d'erreur).
+
+**Visuel** : Jeu — pad OrbTest « LIVE » avec les 32 tracks listées,
+panneau Audio « Bass → Radius » + Intensity/Lissage, radar alimenté,
+STOP ■ OrbTest actif.
+
+### Notes audio
+
+- `list_audio_devices` expose les devices hôte cpal (jack/pipewire/
+  pulse/default/hw…) — pour capter la sortie il faut `pulse`/`pipewire`
+  ET la source par défaut sur le monitor. Le panneau Audio dit
+  « Start the microphone once to enumerate » : le cas capture-de-sortie
+  (monitor) n'est pas expliqué — à documenter pour l'opérateur.
+- Un mod poussé backend-direct (update_animation_state) n'apparaît pas
+  dans la liste du slot (état persisté ≠ état live) — séparation
+  honnête, cohérente avec l'archi backend-authoritative.
+- BPM conf ~0.45 sur le morceau testé — utilisable mais pas rock-solid
+  pour sync critique (attendu pour un détecteur temps réel).
