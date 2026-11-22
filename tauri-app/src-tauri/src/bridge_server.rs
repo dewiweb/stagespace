@@ -40,6 +40,7 @@ pub const EVENTS: &[&str] = &[
     "cue-armed",
     "show-control",
     "show-log",
+    "show-state-changed",
     "timers:cancel",
 ];
 

@@ -3,6 +3,15 @@ import type { Edge } from '@xyflow/react';
 import type { GraphNode } from '../../components/nodeParamSchema';
 import { safeInvoke as invoke, silentCatch } from '../../utils/tauri';
 import { safeSetItem, safeParseStoredJson } from '../../utils/safeStorage';
+import {
+  SYNC_CLIENT_ID,
+  markPushed,
+  markApplied,
+  isDuplicateSyncContent,
+  envelopeComparable,
+  beginApply,
+  endApply,
+} from '../../utils/showSyncState';
 import { toast } from '../../utils/toast-helpers';
 import type { MoveSlot } from './moveSlotsSlice';
 import { normalizeSlot, saveSlotsToStorage } from './moveSlotsSlice';
@@ -31,7 +40,9 @@ export interface PersistenceSlice {
   loadGraphFromFile: (filePath: string) => Promise<void>;
   /// Applique une enveloppe show déjà chargée (welcome screen, tests) —
   /// même chemin que loadGraphFromFile sans la lecture fichier.
-  loadShowEnvelope: (envelope: ShowFileEnvelope) => Promise<void>;
+  /// `skipSnapshotPush` : apply depuis un pair (sync) — ne pas repousser
+  /// le snapshot qu'on vient de recevoir (écho).
+  loadShowEnvelope: (envelope: ShowFileEnvelope, opts?: { skipSnapshotPush?: boolean }) => Promise<void>;
   /// Récupère le snapshot du show hébergé par le backend (remote UI) —
   /// `quiet` pour l'auto-pull au boot (pas de toast "rien à récupérer").
   pullShowFromHost: (opts?: { quiet?: boolean }) => Promise<void>;
@@ -76,6 +87,67 @@ type PersistenceStore = PersistenceSlice & {
 //      spatial FX + tracks (.hol / manuels)
 const SHOW_FILE_FORMAT = 'stagespace-show';
 const SHOW_FILE_VERSION = 2;
+
+/// Construit l'enveloppe v2 du show courant — partagée entre
+/// saveGraphToFile (export .hfg) et la sync remote (push snapshot).
+/// Exportée pour utils/showSync.ts (pas de cycle : elle ne lit que
+/// l'état passé en paramètre).
+export async function buildShowEnvelope(s: PersistenceStore): Promise<ShowFileEnvelope> {
+  // Le graphe global et les cues vivent dans des stores séparés —
+  // import dynamique pour éviter les cycles d'import.
+  const { useGlobalGraphStore } = await import('../useGlobalGraphStore');
+  const { useSignalGraphStore } = await import('../useSignalGraphStore');
+  const { useCuelistStore } = await import('../useCuelistStore');
+  const globalStore = useGlobalGraphStore.getState();
+  const signalStore = useSignalGraphStore.getState();
+  const cueStore = useCuelistStore.getState();
+
+  // OSC IN mappings : sérialisables — sinon ils sont perdus au load.
+  let oscMappings: OscMapping[] | undefined;
+  try {
+    oscMappings = await invoke<OscMapping[]>('osc_list_mappings');
+  } catch (e) {
+    console.error('[buildShowEnvelope] osc_list_mappings failed:', e);
+    toast.warning(`OSC IN mappings not saved — list failed: ${e}`);
+  }
+
+  return {
+    format: SHOW_FILE_FORMAT,
+    version: SHOW_FILE_VERSION,
+    savedAt: Date.now(),
+    nodes: s.nodes,
+    edges: s.edges,
+    globalGraph: { nodes: globalStore.nodes, edges: globalStore.edges },
+    signalGraph: { nodes: signalStore.nodes, edges: signalStore.edges },
+    // Strip runtime state : movementId n'a de sens que pendant la session —
+    // un slot rechargé afficherait un fantôme "playing".
+    slots: s.moveSlots.map((sl) => ({ ...sl, movementId: null })),
+    setlistOrder: s.setlistOrder,
+    currentSetlistIndex: s.currentSetlistIndex,
+    editingSlotId: s.editingSlotId,
+    cues: cueStore.cues,
+    oscMappings,
+    macros: s.macros,
+    osc: {
+      oscAddress: s.oscAddress,
+      oscPort: s.oscPort,
+      oscProfile: s.oscProfile,
+      oscInPort: s.oscInPort,
+    },
+    spatialFx: {
+      zones: s.zones,
+      modulations: s.modulations,
+      objectChannels: s.objectChannels,
+      kinematicSmoothing: s.kinematicSmoothing,
+    },
+    tracks: {
+      holProject: s.holProject,
+      manualOscIds: s.manualOscIds,
+      manualPositions: s.manualPositions,
+      selectedTrackIds: Array.from(s.selectedTrackIds),
+    },
+  };
+}
 
 interface OscConfigData {
   oscAddress: string;
@@ -251,62 +323,7 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
   },
 
   saveGraphToFile: async (filePath) => {
-    const s = get();
-    // Le graphe global et les cues vivent dans des stores séparés —
-    // import dynamique pour éviter les cycles d'import.
-    const { useGlobalGraphStore } = await import('../useGlobalGraphStore');
-    const { useSignalGraphStore } = await import('../useSignalGraphStore');
-    const { useCuelistStore } = await import('../useCuelistStore');
-    const globalStore = useGlobalGraphStore.getState();
-    const signalStore = useSignalGraphStore.getState();
-    const cueStore = useCuelistStore.getState();
-
-    // OSC IN mappings : sérialisables — sinon ils sont perdus au load.
-    let oscMappings: OscMapping[] | undefined;
-    try {
-      oscMappings = await invoke<OscMapping[]>('osc_list_mappings');
-    } catch (e) {
-      console.error('[saveGraphToFile] osc_list_mappings failed:', e);
-      toast.warning(`OSC IN mappings not saved — list failed: ${e}`);
-    }
-
-    const envelope: ShowFileEnvelope = {
-      format: SHOW_FILE_FORMAT,
-      version: SHOW_FILE_VERSION,
-      savedAt: Date.now(),
-      nodes: s.nodes,
-      edges: s.edges,
-      globalGraph: { nodes: globalStore.nodes, edges: globalStore.edges },
-      signalGraph: { nodes: signalStore.nodes, edges: signalStore.edges },
-      // Strip runtime state : movementId n'a de sens que pendant la session —
-      // un slot rechargé afficherait un fantôme "playing".
-      slots: s.moveSlots.map((sl) => ({ ...sl, movementId: null })),
-      setlistOrder: s.setlistOrder,
-      currentSetlistIndex: s.currentSetlistIndex,
-      editingSlotId: s.editingSlotId,
-      cues: cueStore.cues,
-      oscMappings,
-      macros: s.macros,
-      osc: {
-        oscAddress: s.oscAddress,
-        oscPort: s.oscPort,
-        oscProfile: s.oscProfile,
-        oscInPort: s.oscInPort,
-      },
-      spatialFx: {
-        zones: s.zones,
-        modulations: s.modulations,
-        objectChannels: s.objectChannels,
-        kinematicSmoothing: s.kinematicSmoothing,
-      },
-      tracks: {
-        holProject: s.holProject,
-        manualOscIds: s.manualOscIds,
-        manualPositions: s.manualPositions,
-        selectedTrackIds: Array.from(s.selectedTrackIds),
-      },
-    };
-
+    const envelope = await buildShowEnvelope(get());
     try {
       await invoke('save_graph_to_file', { filePath, graphJson: envelope });
     } catch (e) {
@@ -314,9 +331,11 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
       throw e;
     }
     // Snapshot backend : les UIs distantes (remote UI) récupèrent le show
-    // via get_show_snapshot — sans ça elles démarrent sur un store vide.
-    // Non bloquant : l'échec ne doit pas gâcher un save réussi.
-    await invoke('set_show_snapshot', { envelope }).catch(silentCatch);
+    // via get_show_snapshot + l'event show-state-changed — sans ça elles
+    // démarrent sur un store vide. Non bloquant : l'échec ne doit pas
+    // gâcher un save réussi.
+    markPushed(envelopeComparable(envelope));
+    await invoke('set_show_snapshot', { clientId: SYNC_CLIENT_ID, envelope }).catch(silentCatch);
   },
 
   loadGraphFromFile: async (filePath) => {
@@ -329,7 +348,7 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
     await get().loadShowEnvelope(raw);
   },
 
-  loadShowEnvelope: async (raw) => {
+  loadShowEnvelope: async (raw, opts) => {
     // Live-safety : charger un show remplace slots, cues, config OSC et
     // spatial FX — refuser pendant le playback plutôt que corrompre
     // l'état de moves en cours.
@@ -602,12 +621,17 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
 
     // Le show chargé devient le snapshot partagé aux UIs distantes —
     // y compris l'enveloppe vide de newShow (le "clear" doit se propager).
-    await invoke('set_show_snapshot', { envelope: raw }).catch(silentCatch);
+    // skipSnapshotPush : apply depuis un pair — le repousser créerait
+    // une boucle d'écho entre clients.
+    if (!opts?.skipSnapshotPush) {
+      markPushed(envelopeComparable(raw));
+      await invoke('set_show_snapshot', { clientId: SYNC_CLIENT_ID, envelope: raw }).catch(silentCatch);
+    }
   },
 
   pullShowFromHost: async (opts) => {
     if (get().movements.length > 0) {
-      toast.warning('Cannot sync show during playback — stop all moves first.');
+      if (!opts?.quiet) toast.warning('Cannot sync show during playback — stop all moves first.');
       return;
     }
     try {
@@ -616,8 +640,22 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
         if (!opts?.quiet) toast.info('No show on host yet — save or load one first.');
         return;
       }
-      await get().loadShowEnvelope(snap);
-      if (!opts?.quiet) toast.success('Show synced from host');
+      const snapJson = envelopeComparable(snap);
+      if (isDuplicateSyncContent(snapJson)) return; // déjà à jour
+      // Contenu identique au nôtre → pas d'apply (évite mutations + echo).
+      const local = envelopeComparable(await buildShowEnvelope(get()));
+      if (local === snapJson) {
+        markApplied(snapJson);
+        return;
+      }
+      beginApply();
+      try {
+        await get().loadShowEnvelope(snap, { skipSnapshotPush: true });
+        markApplied(snapJson);
+        if (!opts?.quiet) toast.success('Show synced from host');
+      } finally {
+        endApply();
+      }
     } catch (e) {
       console.error('[pullShowFromHost]', e);
       if (!opts?.quiet) toast.error(`Show sync failed: ${e}`);

@@ -124,13 +124,35 @@ ssh -L 4173:127.0.0.1:4173 -L 5175:127.0.0.1:5175 user@hôte
 | Fonction | Headless (mock) | In-app (real) |
 |---|---|---|
 | Commands IPC, events, OSC IN/OUT, moves, cues, gestes | ✅ réel, identique webview | ✅ idem |
-| Contenu du show (slots, cues, setlist) | ✅ via snapshot `set/get_show_snapshot` — poussé par le frontend à chaque save/load, récupéré par le remote (auto au 1er accès + `File → Sync show from host`) | idem |
+| Contenu du show (slots, cues, setlist, graphes) | ✅ sync live : `set_show_snapshot` pousse l'enveloppe + broadcast `show-state-changed` ; chaque client applique (voir § Sync) | idem |
 | Pickers de fichiers (Save/Load, Import .hol) | ❌ pas de fenêtre dans la mock app | ⚠️ le dialog s'ouvre **sur l'écran de l'hôte** |
 | `getVersion()` etc. (plugin app) | ⚠️ dégrade (`vdev`) | ✅ réel |
 | Audio IN | capté côté hôte | idem (normal) |
 | Fenêtres détachées `?view=…` | ✅ — un navigateur distant est une detached window de plus | idem |
 | Sécurité | aucune auth — LAN de confiance ou tunnel SSH | idem |
 | `set_remote_ui` (toggle) | refuse proprement — pas de webview Wry | ✅ start/stop à chaud |
+
+## Sync du show entre clients
+
+Le backend est le relais d'autorité de l'état *authoring* (slots, cues,
+setlist, graphes — tout ce qui n'est pas runtime) :
+
+1. Un client appelle `set_show_snapshot { clientId, envelope }` — le
+   backend stocke l'enveloppe (`AppState.show_snapshot`) et émet
+   `show-state-changed { clientId }` (webview + SSE).
+2. Les **autres** clients reçoivent l'event → `get_show_snapshot` →
+   appliquent l'enveloppe à leur store local.
+3. Un client ignore l'event portant son propre `clientId` (anti-écho) ;
+   un marqueur d'enveloppe comparable évite de ré-appliquer/pousser en
+   boucle.
+
+Sémantique : **last-writer-wins convergente** — si deux clients éditent
+en même temps, la dernière enveloppe arrivée gagne (console model : le
+fichier fait foi). Un remote ne peut pas écraser un show pendant le jeu
+(même garde que le load normal).
+
+Les pushs sortants passent par `utils/showSync.ts` (debounce) ; le pull
+initial hydrate un navigateur frais au premier accès.
 
 Évolution naturelle si le remote devient un usage show : token d'accès
 (le serveur statique de `dist/` par le bridge — URL unique — serait le
@@ -149,5 +171,13 @@ suivant).
   `.setup` après `setup_backend_runtime`.
 - `tauri-app/frontend/public/tauri-bridge.js` — shim
   `__TAURI_INTERNALS__` activé par localStorage/`?bridge=`.
+- `tauri-app/frontend/src/utils/showSync.ts` — orchestrateur de sync
+  (subscribe `show-state-changed`, pull initial, push debouncé,
+  anti-écho). Monté dans `App.tsx`.
+- `tauri-app/frontend/src/utils/showSyncState.ts` — `SYNC_CLIENT_ID` +
+  marqueurs d'enveloppe poussée/appliquée.
+- `tauri-app/src-tauri/src/commands/file_io.rs` — `set/get_show_snapshot`
+  (relais + broadcast `show-state-changed`).
 - Events forwardés : liste `EVENTS` dans `bridge_server.rs` (ajouter
-  ici tout nouvel event écouté par le frontend).
+  ici tout nouvel event écouté par le frontend). `show-state-changed`
+  y figure.

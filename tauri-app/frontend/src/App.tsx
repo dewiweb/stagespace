@@ -17,6 +17,7 @@ import ToastContainer from './components/ToastContainer';
 import { ManualReleaseBar } from './components/viewer3d/ManualReleaseBar';
 import PerformView from './components/PerformView';
 import WelcomeModal, { shouldShowWelcome } from './components/WelcomeModal';
+import { initShowSync } from './utils/showSync';
 const ConduiteSurface = React.lazy(() => import('./components/conduite/ConduiteSurface'));
 import ShortcutsModal from './components/ShortcutsModal';
 import { SettingsModal } from './components/SettingsModal';
@@ -189,10 +190,11 @@ function AppMain() {
     else void s.refreshRemoteUiStatus();
   }, []);
 
-  // Show snapshot : un store sans slots = client neuf (remote, nouveau
-  // navigateur) → adopter le show poussé par l'hôte. Un store non vide
-  // n'est jamais écrasé (edits locales préservées).
+  // Show sync : le backend relaie l'enveloppe entre UIs — push débouncé
+  // sur mutation locale, apply sur event d'un pair. Plus l'initial pull
+  // : un store sans slots = client neuf (remote, nouveau navigateur).
   React.useEffect(() => {
+    void initShowSync();
     const s = useGraphStore.getState();
     if (s.moveSlots.length === 0) void s.pullShowFromHost({ quiet: true });
   }, []);
