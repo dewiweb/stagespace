@@ -97,8 +97,11 @@ fn respond(stream: &mut std::net::TcpStream, status: &str, content_type: &str, b
 /// `shutdown` : arrêt propre demandé par `RemoteUi::stop` — l'accept
 /// loop, le broadcast et les writers SSE sortent tous (sinon les
 /// senders survivraient à leur propre Arc : cycle d'auto-référence).
+/// Le listener est bindé par l'appelant : une erreur de bind (port
+/// occupé, adresse invalide) remonte à l'appelant au lieu de mourir
+/// dans le thread en laissant croire que le serveur tourne.
 pub fn serve(
-    bind: &str,
+    listener: TcpListener,
     dispatch: Dispatch,
     events: Receiver<Value>,
     shutdown: Arc<AtomicBool>,
@@ -123,9 +126,14 @@ pub fn serve(
         });
     }
 
-    let listener = TcpListener::bind(bind)?;
     listener.set_nonblocking(true)?;
-    eprintln!("[BRIDGE] remote UI ready — {bind}/invoke + /events");
+    eprintln!(
+        "[BRIDGE] remote UI ready — {}/invoke + /events",
+        listener
+            .local_addr()
+            .map(|a| a.to_string())
+            .unwrap_or_default()
+    );
 
     while !shutdown.load(Ordering::SeqCst) {
         match listener.accept() {
@@ -327,13 +335,18 @@ impl RemoteUi {
         if self.server.as_ref().is_some_and(|s| s.bind == bind) {
             return Ok(()); // déjà sur ce bind — no-op
         }
-        self.stop();
         let webview = self
             .webview
             .clone()
             .ok_or_else(|| "remote UI unavailable (headless backend)".to_string())?;
         let app = webview.app_handle().clone();
         let dispatch = ipc_dispatch(webview, app.invoke_key().to_string())?;
+        // Bind synchrone AVANT le teardown : un port occupé ou une
+        // adresse invalide remonte en erreur à l'appelant (set_remote_ui
+        // → toast, spawn_if_enabled → retry) sans tuer un serveur qui
+        // tourne, et `is_running` ne peut plus mentir.
+        let listener = TcpListener::bind(bind).map_err(|e| format!("cannot bind {bind}: {e}"))?;
+        self.stop();
         let (ev_tx, ev_rx) = channel::<Value>();
         let mut listeners = Vec::with_capacity(EVENTS.len());
         for name in EVENTS {
@@ -346,9 +359,8 @@ impl RemoteUi {
         }
         let shutdown = Arc::new(AtomicBool::new(false));
         let sd = shutdown.clone();
-        let bind_owned = bind.to_string();
         std::thread::spawn(move || {
-            if let Err(e) = serve(&bind_owned, dispatch, ev_rx, sd) {
+            if let Err(e) = serve(listener, dispatch, ev_rx, sd) {
                 eprintln!("[BRIDGE] serve stopped: {e}");
             }
         });
@@ -384,14 +396,33 @@ pub fn spawn_if_enabled(app: &AppHandle) {
     if bind.is_empty() {
         return;
     }
-    let state = app.state::<crate::AppState>();
-    let result = {
-        let mut rui = state.remote_ui.lock().unwrap_or_else(|e| e.into_inner());
-        rui.start(&bind)
-    };
-    if let Err(e) = result {
-        eprintln!("[BRIDGE] remote UI disabled — {e}");
-    }
+    // Retry borné dans un thread : une instance précédente peut encore
+    // tenir le port au boot (drain/TIME_WAIT/zombie) — le bridge ne doit
+    // ni bloquer le setup ni mourir sur un conflit transitoire.
+    let app = app.clone();
+    std::thread::spawn(move || {
+        const BIND_ATTEMPTS: u32 = 5;
+        for attempt in 1..=BIND_ATTEMPTS {
+            let result = {
+                let state = app.state::<crate::AppState>();
+                let mut rui = state.remote_ui.lock().unwrap_or_else(|e| e.into_inner());
+                rui.start(&bind)
+            };
+            match result {
+                Ok(()) => return,
+                Err(e) if attempt < BIND_ATTEMPTS => {
+                    eprintln!(
+                        "[BRIDGE] bind {bind} failed ({e}) — retry {attempt}/{BIND_ATTEMPTS}"
+                    );
+                    std::thread::sleep(Duration::from_secs(2));
+                }
+                Err(e) => {
+                    eprintln!("[BRIDGE] remote UI disabled — {e}");
+                    return;
+                }
+            }
+        }
+    });
 }
 
 #[cfg(test)]
@@ -412,8 +443,8 @@ mod tests {
         let (_tx, rx) = channel::<Value>();
         let dispatch: Dispatch = Arc::new(|_cmd, _args| Ok(Value::Array(vec![])));
         let sd = shutdown.clone();
-        let bind = format!("127.0.0.1:{port}");
-        let h = std::thread::spawn(move || serve(&bind, dispatch, rx, sd));
+        let listener = TcpListener::bind(format!("127.0.0.1:{port}")).unwrap();
+        let h = std::thread::spawn(move || serve(listener, dispatch, rx, sd));
         // Laisse le listener s'installer, puis arrête.
         std::thread::sleep(Duration::from_millis(100));
         shutdown.store(true, Ordering::SeqCst);
@@ -432,9 +463,9 @@ mod tests {
         let (tx, rx) = channel::<Value>();
         let dispatch: Dispatch = Arc::new(|_cmd, _args| Ok(Value::Array(vec![])));
         let sd = shutdown.clone();
-        let bind = format!("127.0.0.1:{port}");
+        let listener = TcpListener::bind(format!("127.0.0.1:{port}")).unwrap();
         std::thread::spawn(move || {
-            let _ = serve(&bind, dispatch, rx, sd);
+            let _ = serve(listener, dispatch, rx, sd);
         });
         std::thread::sleep(Duration::from_millis(150));
 

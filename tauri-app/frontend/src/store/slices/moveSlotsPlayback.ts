@@ -141,7 +141,7 @@ export const createSlotPlaybackMethods = (set: CreatorArgs[0], get: CreatorArgs[
           graph_json: graphData,
           osc_ids: slot.trackIds,
           track_indices: trackIndices,
-          is_preview: slot.isPreview,
+          is_preview: slot.isPreview ?? false,
           origin,
           duration,
           loop_mode: slot.loopMode,

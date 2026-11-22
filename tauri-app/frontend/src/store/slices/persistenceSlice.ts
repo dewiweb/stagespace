@@ -333,9 +333,11 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
     // Snapshot backend : les UIs distantes (remote UI) récupèrent le show
     // via get_show_snapshot + l'event show-state-changed — sans ça elles
     // démarrent sur un store vide. Non bloquant : l'échec ne doit pas
-    // gâcher un save réussi.
-    markPushed(envelopeComparable(envelope));
-    await invoke('set_show_snapshot', { clientId: SYNC_CLIENT_ID, envelope }).catch(silentCatch);
+    // gâcher un save réussi. markPushed seulement si le push a réussi —
+    // sinon le marqueur "déjà poussé" bloquerait tout sync futur.
+    await invoke('set_show_snapshot', { clientId: SYNC_CLIENT_ID, envelope })
+      .then(() => markPushed(envelopeComparable(envelope)))
+      .catch(silentCatch);
   },
 
   loadGraphFromFile: async (filePath) => {
@@ -622,15 +624,20 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
     // Le show chargé devient le snapshot partagé aux UIs distantes —
     // y compris l'enveloppe vide de newShow (le "clear" doit se propager).
     // skipSnapshotPush : apply depuis un pair — le repousser créerait
-    // une boucle d'écho entre clients.
+    // une boucle d'écho entre clients. markPushed seulement au succès.
     if (!opts?.skipSnapshotPush) {
-      markPushed(envelopeComparable(raw));
-      await invoke('set_show_snapshot', { clientId: SYNC_CLIENT_ID, envelope: raw }).catch(silentCatch);
+      await invoke('set_show_snapshot', { clientId: SYNC_CLIENT_ID, envelope: raw })
+        .then(() => markPushed(envelopeComparable(raw)))
+        .catch(silentCatch);
     }
   },
 
   pullShowFromHost: async (opts) => {
-    if (get().movements.length > 0) {
+    // Garde live : la vérité c'est le backend, pas le miroir local — un
+    // remote qui joint pendant le jeu a movements=[] avant le premier
+    // event et verrait la garde ouverte.
+    const active = await invoke<unknown[]>('list_active_moves').catch(() => get().movements);
+    if (active.length > 0) {
       if (!opts?.quiet) toast.warning('Cannot sync show during playback — stop all moves first.');
       return;
     }

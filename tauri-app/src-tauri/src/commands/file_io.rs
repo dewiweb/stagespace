@@ -100,11 +100,7 @@ pub async fn load_graph_from_file(file_path: String) -> Result<serde_json::Value
 /// appliquent (last-writer-wins). `client_id` identifie l'émetteur — les
 /// clients ignorent leur propre écho. État de session, pas de disque.
 #[tauri::command]
-pub fn set_show_snapshot(
-    state: State<AppState>,
-    client_id: String,
-    envelope: serde_json::Value,
-) {
+pub fn set_show_snapshot(state: State<AppState>, client_id: String, envelope: serde_json::Value) {
     *state
         .show_snapshot
         .lock()

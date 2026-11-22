@@ -36,16 +36,34 @@ async function pushNow() {
 }
 
 function schedulePush() {
+  // Les set() de l'apply déclenchent les subscriptions — repousser le
+  // contenu qu'on vient de recevoir créerait un ping-pong entre clients.
+  if (isApplying()) return;
   if (pushTimer) clearTimeout(pushTimer);
   pushTimer = setTimeout(() => void pushNow(), PUSH_DEBOUNCE_MS);
 }
 
+const PULL_RETRY_MS = 5000;
+let pullRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
 async function pullNow() {
   const { useGraphStore } = await import('../store/useGraphStore');
   const s = useGraphStore.getState();
-  if (s.movements.length > 0) {
+  // Garde live : vérité backend, pas le miroir movements (vide tant que
+  // le premier event n'est pas arrivé — un remote joignant mid-play).
+  const active = await invoke<unknown[]>('list_active_moves').catch(() => s.movements);
+  if (active.length > 0) {
     // Apply impossible pendant le jeu — retry au retour à l'idle.
     pendingPull = true;
+    // Filet de convergence : si l'event de fin de jeu est raté (miroir
+    // movements jamais monté à 1 → transition jamais vue), le retry
+    // garantit qu'on converge quand même.
+    if (!pullRetryTimer) {
+      pullRetryTimer = setTimeout(() => {
+        pullRetryTimer = null;
+        if (pendingPull) void pullNow();
+      }, PULL_RETRY_MS);
+    }
     return;
   }
   pendingPull = false;
@@ -62,8 +80,6 @@ function contentChanged(s: any, p: any): boolean {
     s.edges !== p.edges ||
     s.setlistOrder !== p.setlistOrder ||
     s.currentSetlistIndex !== p.currentSetlistIndex ||
-    s.editingSlotId !== p.editingSlotId ||
-    s.macros !== p.macros ||
     s.zones !== p.zones ||
     s.modulations !== p.modulations ||
     s.objectChannels !== p.objectChannels ||
@@ -82,19 +98,13 @@ export async function initShowSync() {
   if (initialized) return;
   initialized = true;
 
-  const { listen } = await import('@tauri-apps/api/event');
   const { useGraphStore } = await import('../store/useGraphStore');
   const { useCuelistStore } = await import('../store/useCuelistStore');
   const { useGlobalGraphStore } = await import('../store/useGlobalGraphStore');
   const { useSignalGraphStore } = await import('../store/useSignalGraphStore');
 
-  // Un pair a poussé son contenu → pull + apply (ignore son propre écho).
-  await listen<{ clientId?: string }>('show-state-changed', (ev) => {
-    if (ev.payload?.clientId === SYNC_CLIENT_ID) return;
-    pullNow().catch(silentCatch);
-  });
-
-  // Mutations locales → push débouncé.
+  // Mutations locales → push débouncé — enregistrées EN PREMIER : si le
+  // listen échoue, pousser doit quand même marcher (sync sortante saine).
   useGraphStore.subscribe((s, p) => {
     if (contentChanged(s, p)) schedulePush();
   });
@@ -114,4 +124,15 @@ export async function initShowSync() {
       void pullNow();
     }
   });
+
+  // Un pair a poussé son contenu → pull + apply (ignore son propre écho).
+  try {
+    const { listen } = await import('@tauri-apps/api/event');
+    await listen<{ clientId?: string }>('show-state-changed', (ev) => {
+      if (ev.payload?.clientId === SYNC_CLIENT_ID) return;
+      pullNow().catch(silentCatch);
+    });
+  } catch (e) {
+    console.error('[showSync] show-state-changed listen failed:', e);
+  }
 }

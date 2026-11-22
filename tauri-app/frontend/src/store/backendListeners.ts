@@ -117,12 +117,20 @@ export const useMovementPositionsListener = () => {
     void refreshMovements().then(() =>
       useGraphStore.getState().syncSlotMovements(),
     );
+    // Un remote qui boot pendant que le backend (re)démarre peut rater
+    // l'invoke initial — sans event suivant, le miroir resterait aveugle
+    // (0 move affiché pendant le jeu). Un second tirage couvre la race.
+    const retry = setTimeout(() => {
+      void refreshMovements().then(() =>
+        useGraphStore.getState().syncSlotMovements(),
+      );
+    }, 3000);
     const unlisten = listen('active-moves-update', async () => {
       await refreshMovements();
       // Sync les slots après refresh — nettoie les movementIds stale
       useGraphStore.getState().syncSlotMovements();
     });
-    return () => { unlisten.then((fn) => fn()).catch(() => {}); };
+    return () => { clearTimeout(retry); unlisten.then((fn) => fn()).catch(() => {}); };
   }, [refreshMovements]);
 
   // Ref partagé pour les effects qui doivent connaître l'état playback sans

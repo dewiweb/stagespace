@@ -213,6 +213,9 @@ export function normalizeSlot(s: any): MoveSlot {
     audioMods,
     signalGraph: s.signalGraph ?? null,
     oscIndex: s.oscIndex ?? 0,
+    isPreview: s.isPreview ?? false,
+    endMode: s.endMode ?? 'revert',
+    anchorMode: s.anchorMode ?? 'origin',
   };
 }
 

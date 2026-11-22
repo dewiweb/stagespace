@@ -54,5 +54,6 @@ fn dev_bridge() {
     eprintln!("[DEV-BRIDGE] backend headless prêt — {bind}");
     // Flag jamais armé : le pont de dev vit indéfiniment (Ctrl+C pour tuer).
     let never_shutdown = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    bridge_server::serve(&bind, dispatch, events, never_shutdown).expect("bridge serve failed");
+    let listener = std::net::TcpListener::bind(&bind).expect("bridge bind failed");
+    bridge_server::serve(listener, dispatch, events, never_shutdown).expect("bridge serve failed");
 }
