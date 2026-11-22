@@ -11,7 +11,7 @@ import Inspector from './components/Inspector';
 import AudioPanel from './components/panels/AudioPanel';
 import TabPanel from './components/TabPanel';
 import Toolbar from './components/Toolbar';
-import { MenuBar } from './components/MenuBar';
+import { Titlebar } from './components/Titlebar';
 import StatusBar from './components/StatusBar';
 import ToastContainer from './components/ToastContainer';
 import { ManualReleaseBar } from './components/viewer3d/ManualReleaseBar';
@@ -24,7 +24,7 @@ import { AboutModal } from './components/AboutModal';
 import { ConfirmModal } from './components/ui/ConfirmModal';
 import { newShow } from './utils/showFileActions';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { Workflow, ChevronRight, ChevronDown, PanelRightClose, PanelLeftClose, PanelLeftOpen, PanelRightOpen, Maximize2, Minimize2, Activity } from 'lucide-react';
+import { ChevronRight, ChevronDown, PanelRightClose, PanelLeftClose, PanelLeftOpen, PanelRightOpen, Maximize2, Minimize2, Activity } from 'lucide-react';
 import { useLiveShortcuts, usePerfStatsPolling } from './hooks/useLiveShortcuts';
 import { useShowControl } from './hooks/useShowControl';
 import { useConduiteBroadcast } from './hooks/useConduiteBroadcast';
@@ -98,7 +98,6 @@ function AppMain() {
   // avancer le show) · JEU (interagir avec les objets) — la nav
   // première remplace l'ancien toggle PERFORM/Edit.
   const surface = useMoveEditorStore((s) => s.surface);
-  const setSurface = useMoveEditorStore((s) => s.setSurface);
   const debugPerfVisible = useMoveEditorStore((s) => s.debugPerfVisible);
   const setDebugPerfVisible = useMoveEditorStore((s) => s.setDebugPerfVisible);
   const shortcutsOpen = useMoveEditorStore((s) => s.shortcutsOpen);
@@ -123,7 +122,8 @@ function AppMain() {
   // Focus éditeur : les panneaux latéraux se retirent et le NodeEditor
   // prend toute la rangée — la navigation dans le graphe est le besoin
   // premier en Expert (Scene3D reste monté, masqué).
-  const [editorFocus, setEditorFocus] = React.useState(false);
+  const editorFocus = useMoveEditorStore((s) => s.editorFocus);
+  const setEditorFocus = useMoveEditorStore((s) => s.setEditorFocus);
   // Focus réellement actif : editorFocus n'a de sens qu'en mode Expert.
   const focusActive = showExpert && editorFocus;
   // Sections collapsibles du panneau gauche
@@ -230,7 +230,7 @@ function AppMain() {
   // Le focus éditeur n'a de sens qu'en Expert — sortir du mode l'annule.
   React.useEffect(() => {
     if (!showExpert && editorFocus) setEditorFocus(false);
-  }, [showExpert, editorFocus]);
+  }, [showExpert, editorFocus, setEditorFocus]);
 
   // Modes d'interaction = état armé pour Scene3D. Si la scène devient
   // invisible (surface ≠ atelier, ou editorFocus masque le 3D), un mode
@@ -293,67 +293,9 @@ function AppMain() {
 
   return (
     <div className="w-screen h-screen flex flex-col bg-stagespace-bg overflow-hidden">
-      {/* Header */}
-      <header className="h-12 bg-stagespace-panel border-b border-stagespace-border flex items-center justify-between px-4 flex-shrink-0">
-        <div className="flex items-center gap-2.5">
-          {/* Menus applicatifs — chaque entrée dispatch vers les mêmes
-              actions que les raccourcis/boutons (troisième porte, pas un
-              troisième chemin de code). Le brand vit dans la barre de
-              titre OS (tauri.conf.json) et le About — pas besoin de le
-              répéter dans le header. */}
-          <MenuBar />
-        </div>
-        {/* Nav 3 phases — les surfaces de travail de l'opérateur :
-            ATELIER (composer/préparer) · CONDUITE (faire avancer le show)
-            · JEU (interagir live). La phase courante est colorée. */}
-        <nav className="flex items-center gap-1 bg-gray-900/60 rounded-lg p-0.5">
-          {(
-            [
-              { id: 'atelier', label: 'Atelier', color: 'bg-purple-600', title: 'Composer/préparer — graphes, moves, cues, score, réglages' },
-              { id: 'conduite', label: 'Conduite', color: 'bg-amber-600', title: 'Faire avancer le show — cues, GO, surveillance, log' },
-              { id: 'jeu', label: 'Jeu', color: 'bg-green-600', title: 'Interagir live — pads, gestes, radar, sources' },
-            ] as const
-          ).map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setSurface(tab.id)}
-              title={tab.title}
-              className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
-                surface === tab.id
-                  ? `${tab.color} text-white`
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
-        <div className="flex items-center gap-3">
-          {surface === 'atelier' && (
-            // Même convention que PERFORM/Edit : le bouton affiche la
-            // CIBLE, la couleur signale le mode courant.
-            <button
-              onClick={() => {
-                const next = !showExpert;
-                setShowExpert(next);
-                // Entrer en Expert = intention d'éditer le graphe — activer
-                // le Focus directement (le split 50/50 écrase le canvas
-                // React Flow ; la 3D reste à un clic via Focus).
-                if (next) setEditorFocus(true);
-              }}
-              className={`px-3 py-1 text-xs font-bold rounded transition-all flex items-center gap-1.5 ${
-                showExpert ? 'bg-gray-800 text-gray-400 hover:text-white' : 'bg-purple-600 text-white'
-              }`}
-              title={showExpert
-                ? 'Simple mode — move form editor (no graph nodes)'
-                : 'Expert mode — advanced graph editor (nodes, connections, custom trajectories)'}
-            >
-              <Workflow size={12} />
-              {showExpert ? 'Simple' : 'Expert'}
-            </button>
-          )}
-        </div>
-      </header>
+      {/* Titlebar — chrome de fenêtre frameless : brand + menubar +
+          nav surfaces + contrôles OS (drag region natif Tauri). */}
+      <Titlebar />
 
       {surface === 'conduite' ? (
         /* Surface Conduite — la station opérable interne : lit les

@@ -31,6 +31,10 @@
   }
   if (!bridge) return;
 
+  // Marqueur : le frontend distingue un vrai webview Tauri (fenêtre OS
+  // contrôlable — boutons titlebar) du shim bridge (pas de fenêtre).
+  window.__STAGESPACE_BRIDGE__ = bridge;
+
   var callbacks = new Map();
   var cbId = 0;
   var listeners = new Map(); // eventName -> Map<eventId, callbackId>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
-import { Settings } from 'lucide-react';
+import { useMoveEditorStore } from '../store/useMoveEditorStore';
+import { Settings, Workflow } from 'lucide-react';
 import { SettingsModal } from './SettingsModal';
 import { PanicButton } from './ui/PanicButton';
 import { OscArmToggle } from './ui/OscArmToggle';
@@ -14,6 +15,9 @@ export const Toolbar: React.FC = () => {
   const oscAddress = useGraphStore((s) => s.oscAddress);
   const oscPort = useGraphStore((s) => s.oscPort);
   const oscProfile = useGraphStore((s) => s.oscProfile);
+  const showExpert = useMoveEditorStore((s) => s.showExpert);
+  const setShowExpert = useMoveEditorStore((s) => s.setShowExpert);
+  const setEditorFocus = useMoveEditorStore((s) => s.setEditorFocus);
 
   const [showSettings, setShowSettings] = React.useState(false);
 
@@ -46,6 +50,30 @@ export const Toolbar: React.FC = () => {
           <span className="text-gray-400 text-xs">{oscProfile}</span>
         </button>
         {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+
+        {/* Simple/Expert — mode de l'éditeur de move. Même convention que
+            PERFORM/Edit : le bouton affiche la CIBLE, la couleur signale
+            le mode courant. (Relogé du header quand celui-ci est devenu
+            la titlebar frameless.) */}
+        <button
+          onClick={() => {
+            const next = !showExpert;
+            setShowExpert(next);
+            // Entrer en Expert = intention d'éditer le graphe — activer
+            // le Focus directement (le split 50/50 écrase le canvas
+            // React Flow ; la 3D reste à un clic via Focus).
+            if (next) setEditorFocus(true);
+          }}
+          className={`px-3 py-1.5 text-xs font-bold rounded transition-all flex items-center gap-1.5 ${
+            showExpert ? 'bg-gray-800 text-gray-400 hover:text-white' : 'bg-purple-600 text-white'
+          }`}
+          title={showExpert
+            ? 'Simple mode — move form editor (no graph nodes)'
+            : 'Expert mode — advanced graph editor (nodes, connections, custom trajectories)'}
+        >
+          <Workflow size={12} />
+          {showExpert ? 'Simple' : 'Expert'}
+        </button>
 
         {/* Undo/redo, save/load, import .hol, raccourcis : tous vivent
             désormais dans la menubar + accélérateurs — la Toolbar ne

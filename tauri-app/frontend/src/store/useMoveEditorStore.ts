@@ -80,6 +80,10 @@ interface MoveEditorStore {
 
   showExpert: boolean;
   setShowExpert: (show: boolean) => void;
+  // Focus plein-écran de l'éditeur Expert (split 50/50 vs graphe seul) —
+  // dans le store : la titlebar/Toolbar le pilotent hors de l'arbre App.
+  editorFocus: boolean;
+  setEditorFocus: (on: boolean) => void;
   // Mode Perform — surface live réduite (setlist + canvas + params live à la
   // demande). L'édition structurelle (nodes, templates, OSC config) est cachée.
   performMode: boolean;
@@ -293,6 +297,8 @@ export const useMoveEditorStore = create<MoveEditorStore>((set, get) => {
   },
   showExpert: false,
   setShowExpert: (show) => set({ showExpert: show }),
+  editorFocus: false,
+  setEditorFocus: (on) => set({ editorFocus: on }),
   // Perform-first : l'app s'ouvre sur la surface de show. Le graphe est
   // l'atelier — on y entre via « Edit graph » sur un move, pas par défaut.
   // Dérivé de la surface persistée — sinon un boot 'atelier' gardait
