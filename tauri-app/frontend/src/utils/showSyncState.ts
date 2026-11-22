@@ -3,7 +3,12 @@
 
 /// Identifie cette instance frontend — un client ignore les événements
 /// `show-state-changed` portant son propre id (écho de son propre push).
-export const SYNC_CLIENT_ID = crypto.randomUUID();
+/// crypto.randomUUID n'existe qu'en secure context (HTTPS/localhost) :
+/// la webui servie en HTTP LAN a besoin du fallback.
+export const SYNC_CLIENT_ID =
+  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 
 let lastPushed = '';
 let lastApplied = '';
