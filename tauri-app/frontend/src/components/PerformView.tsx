@@ -16,7 +16,7 @@ import { Radar2D } from './jeu/Radar2D';
 import type { RadarView } from './jeu/Radar2D';
 import { GestureStrip } from './jeu/GestureStrip';
 import { isDetachedWindow } from '../utils/safeStorage';
-import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { detachWindow } from '../utils/detachWindow';
 import { PanicButton } from './ui/PanicButton';
 import { OscArmToggle } from './ui/OscArmToggle';
 
@@ -286,47 +286,16 @@ export const PerformView: React.FC = () => {
             {tcActive ? tc : 'TC lost'}
           </span>
         )}
-        {/* ─── Cluster vues : surfaces secondaires ─── */}
+        {/* ─── Cluster vues : détacher CETTE surface + switch conduite.
+            Le ⧉ conduite vit dans le header Conduite — chaque surface
+            porte son propre bouton de détachement. ─── */}
         <div className="w-px h-8 bg-stagespace-border flex-shrink-0" />
         <button
-          onClick={() => {
-            // Fenêtre détachable : même vue conduite, propre process
-            // webview — posée sur un écran dédié au FOH.
-            WebviewWindow.getByLabel('conduite').then((w) => {
-              if (w) void w.setFocus();
-              else new WebviewWindow('conduite', {
-                url: '/?view=conduite',
-                title: 'STAGESPACE — Conduite',
-                width: 1100,
-                height: 720,
-                resizable: true,
-              });
-            });
-          }}
+          onClick={() => detachWindow('run', 'STAGESPACE — Run', 1200, 760)}
           className="px-3 py-2.5 rounded-lg flex-shrink-0 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-bold transition-colors active:scale-95"
-          title="Conduite dans une fenêtre détachable (écran dédié)"
+          title="Détacher cette surface (pads + radar) dans une fenêtre dédiée"
         >
-          ⧉ Cues
-        </button>
-        <button
-          onClick={() => {
-            // Surface de jeu détachable — pads + radar + transport sur
-            // écran dédié (la surface à jouer, pas l'admin).
-            WebviewWindow.getByLabel('run').then((w) => {
-              if (w) void w.setFocus();
-              else new WebviewWindow('run', {
-                url: '/?view=run',
-                title: 'STAGESPACE — Run',
-                width: 1200,
-                height: 760,
-                resizable: true,
-              });
-            });
-          }}
-          className="px-3 py-2.5 rounded-lg flex-shrink-0 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-bold transition-colors active:scale-95"
-          title="Surface de jeu (pads + radar) dans une fenêtre détachable"
-        >
-          ⧉ Run
+          ⧉
         </button>
         {!detached && (
           <button

@@ -18,6 +18,7 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
   onGoSetlist,
   onUnpark,
   onUnsolo,
+  onDetach,
 }) => {
   // Arm local — click = arm (outline), double-click = RECALL : le même
   // contrat que CuelistPanel, jamais de scene-kill au simple clic.
@@ -49,7 +50,18 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
     <div className="h-full w-full bg-stagespace-bg flex flex-col select-none overflow-hidden">
       {/* Header — santé show, lisible à distance FOH. */}
       <div className="flex items-center justify-between px-6 py-3 border-b border-gray-800 flex-shrink-0">
-        <span className="text-gray-400 text-xs uppercase tracking-widest">Conduite — STAGESPACE</span>
+        <div className="flex items-center gap-2">
+          <span className="text-gray-400 text-xs uppercase tracking-widest">Conduite — STAGESPACE</span>
+          {onDetach && (
+            <button
+              onClick={onDetach}
+              className="text-xs px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold transition-colors"
+              title="Détacher cette vue dans une fenêtre dédiée (écran FOH)"
+            >
+              ⧉
+            </button>
+          )}
+        </div>
         <div className="flex items-center gap-3">
           {st && !st.armed && (
             <button

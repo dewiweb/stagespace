@@ -48,4 +48,7 @@ export type ConduiteHandlers = {
   /// Rejoue les slots stoppés par le dernier solo.
   onUnpark: (obj: number) => void;
   onUnsolo: () => void;
+  /// Présent uniquement dans la fenêtre principale — la conduite déjà
+  /// détachée ne peut pas se détacher elle-même (bouton ⧉ du header).
+  onDetach?: () => void;
 };

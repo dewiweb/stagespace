@@ -6,6 +6,7 @@ import { useCuelistStore } from '../../store/useCuelistStore';
 import { useGraphStore } from '../../store/useGraphStore';
 import { useShowStatusStore } from '../../store/useShowStatusStore';
 import { doArm, doCueNext, doCueRecallById, doPanic, doGo, doUnpark, doUnsolo } from '../../utils/liveActions';
+import { detachWindow } from '../../utils/detachWindow';
 import { cueLabel, tcStr } from '../../utils/showFormat';
 import { ConduiteView } from './ConduiteView';
 import type { ConduiteViewState } from './types';
@@ -79,6 +80,7 @@ export const ConduiteSurface: React.FC = () => {
       onGoSetlist={() => doGo('conduite')}
       onUnpark={(obj) => doUnpark(obj, 'conduite')}
       onUnsolo={() => doUnsolo('conduite')}
+      onDetach={() => detachWindow('conduite', 'STAGESPACE — Conduite', 1100, 720)}
     />
   );
 };
