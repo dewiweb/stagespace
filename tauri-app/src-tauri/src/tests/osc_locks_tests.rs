@@ -36,6 +36,7 @@ mod osc_locks_tests {
             supervisor_shutdown: Arc::new(AtomicBool::new(false)),
             plugin_registry: None,
             plugins_dir: None,
+            remote_ui: Mutex::new(crate::bridge_server::RemoteUi::default()),
         }
     }
 

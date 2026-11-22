@@ -9,5 +9,6 @@ pub mod osc;
 pub mod playback;
 pub mod plugins;
 pub mod presets;
+pub mod remote_ui;
 pub mod sampling;
 pub mod state;

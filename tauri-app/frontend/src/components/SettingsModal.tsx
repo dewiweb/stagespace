@@ -56,6 +56,11 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const mediaSyncTarget = useGraphStore((s) => s.mediaSyncTarget);
   const mediaSyncPrefix = useGraphStore((s) => s.mediaSyncPrefix);
   const setMediaSync = useGraphStore((s) => s.setMediaSync);
+  const remoteUiEnabled = useGraphStore((s) => s.remoteUiEnabled);
+  const remoteUiBind = useGraphStore((s) => s.remoteUiBind);
+  const remoteUiRunning = useGraphStore((s) => s.remoteUiRunning);
+  const remoteUiActiveBind = useGraphStore((s) => s.remoteUiActiveBind);
+  const setRemoteUi = useGraphStore((s) => s.setRemoteUi);
 
   const [oscIdsStr, setOscIdsStr] = React.useState(manualOscIds.join(','));
   const [audioDevices, setAudioDevices] = React.useState<{ id: string; name: string }[]>([]);
@@ -270,6 +275,51 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 {oscInStatus}
               </p>
             )}
+          </section>
+          )}
+
+          {/* ─── Remote UI ─── */}
+          {tab === 'reseau' && (
+          <section>
+            <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+              <span className="text-cyan-400">⇄</span> Remote UI
+            </h3>
+            <p className="text-gray-400 text-xs mb-3">
+              Serve the bridge to remote browsers — same live backend, desktop UI keeps running.
+              Remote clients open the app URL with <span className="font-mono">?bridge=http://&lt;this machine&gt;:&lt;port&gt;</span>.
+            </p>
+            <div className="flex items-center gap-2 mb-2">
+              <button
+                onClick={() => void setRemoteUi({ enabled: !remoteUiEnabled })}
+                className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                  remoteUiEnabled
+                    ? 'bg-cyan-700 hover:bg-cyan-600 text-white'
+                    : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                }`}
+              >
+                {remoteUiEnabled ? 'Enabled' : 'Disabled'}
+              </button>
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={remoteUiBind}
+                  onChange={(e) => void setRemoteUi({ bind: e.target.value })}
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                  placeholder="0.0.0.0:4173"
+                  title="host:port — 127.0.0.1 = this machine only, 0.0.0.0 = all interfaces (LAN)"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-gray-400">
+              {remoteUiRunning
+                ? <>Listening on <span className="font-mono text-cyan-300">{remoteUiActiveBind}</span> — browsers at <span className="font-mono">http://…?bridge=http://&lt;ip&gt;:{remoteUiActiveBind?.split(':').pop()}</span></>
+                : remoteUiEnabled
+                  ? 'Stopped — enabling will bind on launch.'
+                  : 'Bridge off. STAGESPACE_BRIDGE_BIND env var can also force-start it.'}
+            </p>
+            <p className="text-xs text-yellow-500/80 mt-1.5">
+              No authentication — use 127.0.0.1 or a trusted network only (SSH tunnel otherwise).
+            </p>
           </section>
           )}
 

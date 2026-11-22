@@ -50,6 +50,7 @@ use commands::osc::{
 use commands::playback::set_macro;
 use commands::plugins::{import_plugin, list_plugins, reload_plugins};
 use commands::presets::{preset_delete, preset_list, preset_load, preset_save};
+use commands::remote_ui::{remote_ui_status, set_remote_ui};
 use commands::sampling::{
     frontend_log, get_perf_stats, sample_movement_trajectories, sample_movement_trajectory,
 };
@@ -94,6 +95,9 @@ pub struct AppState {
     pub plugin_registry: Option<Arc<Mutex<stagespace_engines::PluginRegistry>>>,
     /// Dossier des bundles `.ssx` (`<app_data_dir>/plugins/`).
     pub plugins_dir: Option<std::path::PathBuf>,
+    /// Bridge remote-UI (HTTP/SSE → navigateurs) — start/stop à chaud
+    /// via `set_remote_ui` (Settings) ou au boot via STAGESPACE_BRIDGE_BIND.
+    pub remote_ui: Mutex<bridge_server::RemoteUi>,
 }
 
 /// Un movement = un runtime indépendant avec ses propres tracks et mode (preview/live)
@@ -220,6 +224,7 @@ pub fn new_app_state() -> AppState {
         supervisor_shutdown: Arc::new(AtomicBool::new(false)),
         plugin_registry,
         plugins_dir,
+        remote_ui: Mutex::new(bridge_server::RemoteUi::default()),
     }
 }
 
@@ -515,6 +520,9 @@ pub fn stagespace_invoke_handler<R: tauri::Runtime>(invoke: tauri::ipc::Invoke<R
         list_plugins,
         reload_plugins,
         import_plugin,
+        // Remote-UI bridge (Settings — serveur HTTP/SSE à chaud)
+        set_remote_ui,
+        remote_ui_status,
     ];
     handler(invoke)
 }
@@ -579,6 +587,17 @@ pub fn run() {
         })
         .setup(|app| {
             setup_backend_runtime(app)?;
+            // La webview `main` devient la cible IPC du bridge remote-UI —
+            // posée toujours (le toggle Settings l'utilise à chaud), alors
+            // que le serveur ne démarre que sur demande (env ou commande).
+            {
+                let state = app.state::<AppState>();
+                state
+                    .remote_ui
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .webview = app.get_webview_window("main");
+            }
             // Remote UI opt-in : bridge HTTP+SSE vers navigateurs
             // distants (STAGESPACE_BRIDGE_BIND) — cohabite avec la webview.
             bridge_server::spawn_if_enabled(app.handle());

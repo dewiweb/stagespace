@@ -36,6 +36,9 @@ interface PersistedOscConfig {
   mediaSyncEnabled: boolean;
   mediaSyncTarget: string;
   mediaSyncPrefix: string;
+  /// Remote-UI bridge — navigateurs distants sur le même backend.
+  remoteUiEnabled: boolean;
+  remoteUiBind: string;
 }
 
 function loadConfigFromStorage(): Partial<PersistedOscConfig> {
@@ -66,6 +69,8 @@ const persist = (s: OscConfigSlice, patch: Partial<PersistedOscConfig>) => {
     mediaSyncEnabled: s.mediaSyncEnabled,
     mediaSyncTarget: s.mediaSyncTarget,
     mediaSyncPrefix: s.mediaSyncPrefix,
+    remoteUiEnabled: s.remoteUiEnabled,
+    remoteUiBind: s.remoteUiBind,
     ...patch,
   });
 };
@@ -121,6 +126,15 @@ export interface OscConfigSlice {
   mediaSyncTarget: string;
   mediaSyncPrefix: string;
   setMediaSync: (cfg: { enabled?: boolean; target?: string; prefix?: string }) => Promise<void>;
+  /// Remote-UI — serveur HTTP/SSE vers navigateurs distants.
+  /// `enabled`/`bind` = réglage persisté (appliqué au boot) ;
+  /// `running`/`activeBind` = vérité backend lue en direct.
+  remoteUiEnabled: boolean;
+  remoteUiBind: string;
+  remoteUiRunning: boolean;
+  remoteUiActiveBind: string | null;
+  setRemoteUi: (cfg: { enabled?: boolean; bind?: string }) => Promise<void>;
+  refreshRemoteUiStatus: () => Promise<void>;
   setOscAddress: (addr: string) => void;
   setOscPort: (port: number) => void;
   setOscProfile: (profile: string) => void;
@@ -150,6 +164,10 @@ export const createOscConfigSlice: StateCreator<OscConfigSlice, [], [], OscConfi
     mediaSyncEnabled: saved.mediaSyncEnabled ?? false,
     mediaSyncTarget: saved.mediaSyncTarget ?? '127.0.0.1:8000',
     mediaSyncPrefix: saved.mediaSyncPrefix ?? '/media',
+    remoteUiEnabled: saved.remoteUiEnabled ?? false,
+    remoteUiBind: saved.remoteUiBind ?? '0.0.0.0:4173',
+    remoteUiRunning: false,
+    remoteUiActiveBind: null,
     psnLastPacketAge: null,
     psnRunning: false,
     setPsnConfig: async (cfg) => {
@@ -289,6 +307,41 @@ export const createOscConfigSlice: StateCreator<OscConfigSlice, [], [], OscConfi
         persist(get(), prev);
         toast.error('Media sync failed: ' + e);
       }
+    },
+    setRemoteUi: async (cfg) => {
+      const prev = {
+        remoteUiEnabled: get().remoteUiEnabled,
+        remoteUiBind: get().remoteUiBind,
+      };
+      const next = {
+        remoteUiEnabled: cfg.enabled ?? prev.remoteUiEnabled,
+        remoteUiBind: cfg.bind?.trim() || prev.remoteUiBind,
+      };
+      try {
+        const status = await invoke<{ running: boolean; bind: string | null }>('set_remote_ui', {
+          enabled: next.remoteUiEnabled,
+          bind: next.remoteUiBind,
+        });
+        // Succès → persister le réglage et refléter la vérité backend.
+        set({
+          ...next,
+          remoteUiRunning: status.running,
+          remoteUiActiveBind: status.bind,
+        });
+        persist(get(), next);
+      } catch (e) {
+        // Échec : garder le réglage local mais resynchroniser l'état réel —
+        // un bind refusé ne doit pas laisser croire que rien ne tourne.
+        console.error('[setRemoteUi] Failed:', e);
+        toast.error('Remote UI failed: ' + e);
+        await get().refreshRemoteUiStatus();
+      }
+    },
+    refreshRemoteUiStatus: async () => {
+      try {
+        const status = await invoke<{ running: boolean; bind: string | null }>('remote_ui_status');
+        set({ remoteUiRunning: status.running, remoteUiActiveBind: status.bind });
+      } catch { /* non-Tauri (preview/bridge absent) — rien à lire */ }
     },
     refreshPsnHealth: async () => {
       try {

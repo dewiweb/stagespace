@@ -180,6 +180,15 @@ function AppMain() {
   useConduiteBroadcast();
   usePerfStatsPolling();
 
+  // Remote-UI : ré-appliquer le réglage persisté au boot — l'opérateur
+  // distant ne doit pas ouvrir Settings à chaque lancement ; et lire le
+  // statut réel (un env STAGESPACE_BRIDGE_BIND peut l'avoir démarré).
+  React.useEffect(() => {
+    const s = useGraphStore.getState();
+    if (s.remoteUiEnabled) void s.setRemoteUi({ enabled: true });
+    else void s.refreshRemoteUiStatus();
+  }, []);
+
   // ── Resize des panneaux gauche et droit ──
   React.useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {

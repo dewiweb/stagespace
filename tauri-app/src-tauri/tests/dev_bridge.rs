@@ -52,5 +52,7 @@ fn dev_bridge() {
     let events = bridge_server::event_forwarder(app.handle());
     let bind = std::env::var(bridge_server::ENV_BIND).unwrap_or_else(|_| DEFAULT_BIND.to_string());
     eprintln!("[DEV-BRIDGE] backend headless prêt — {bind}");
-    bridge_server::serve(&bind, dispatch, events).expect("bridge serve failed");
+    // Flag jamais armé : le pont de dev vit indéfiniment (Ctrl+C pour tuer).
+    let never_shutdown = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    bridge_server::serve(&bind, dispatch, events, never_shutdown).expect("bridge serve failed");
 }

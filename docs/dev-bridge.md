@@ -9,9 +9,11 @@ superviseur, plugins WASM compris.
 Deux modes, **même code** (`src/bridge_server.rs`) :
 
 - **In-app (remote UI)** — le bridge tourne *dans* l'application Tauri,
-  en parallèle de la webview desktop : opt-in via `STAGESPACE_BRIDGE_BIND`.
-  UI desktop + navigateurs distants pilotent **le même show vivant** —
-  les events (`listen_any`) sont broadcast aux deux.
+  en parallèle de la webview desktop. Activable à chaud depuis
+  **Settings → Réseau → Remote UI** (persisté, ré-appliqué au boot) ou
+  via `STAGESPACE_BRIDGE_BIND` au lancement. UI desktop + navigateurs
+  distants pilotent **le même show vivant** — les events (`listen_any`)
+  sont broadcast aux deux.
 - **Headless (tests)** — `tests/dev_bridge.rs` construit une mock app
   (`MockRuntime`) et sert la même boucle : E2E réel depuis Puppeteer
   sans webview.
@@ -30,13 +32,23 @@ sérialisation, même `invoke_key`, même resolver.
 
 ### In-app (UI desktop + remote simultanés)
 
+**Via Settings** — `Settings → Réseau → Remote UI` : toggle Enable +
+bind `host:port` (`127.0.0.1` = cette machine seule, `0.0.0.0` = toutes
+interfaces/LAN). Le réglage est persisté et **ré-appliqué au boot** —
+l'opérateur distant ne reconfigure rien à chaque lancement. Start/stop
+à chaud via `set_remote_ui` / `remote_ui_status` (IPC) : arrêt propre
+des listeners SSE et des abonnements d'events (`unlisten`), sans
+toucher la webview ni le moteur.
+
+**Via env var** (startup override, ops/deploy) :
+
 ```bash
 STAGESPACE_BRIDGE_BIND=0.0.0.0:4173 ./stagespace-tauri   # ou npm run tauri dev
-# log : [BRIDGE] remote UI enabled on 0.0.0.0:4173 — no auth, trusted network only
+# log : [BRIDGE] remote UI started on 0.0.0.0:4173 — no auth, trusted network only
 ```
 
-Sans la variable : le bridge ne démarre pas, coût nul. Un échec de bind
-log et continue — jamais fatal pour l'app.
+Sans activation : le bridge ne démarre pas, coût nul. Un échec de bind
+est remonté à l'UI (Settings) ou loggé (env) — jamais fatal pour l'app.
 
 ### Headless (tests E2E)
 
@@ -117,15 +129,20 @@ ssh -L 4173:127.0.0.1:4173 -L 5175:127.0.0.1:5175 user@hôte
 | Audio IN | capté côté hôte | idem (normal) |
 | Fenêtres détachées `?view=…` | ✅ — un navigateur distant est une detached window de plus | idem |
 | Sécurité | aucune auth — LAN de confiance ou tunnel SSH | idem |
+| `set_remote_ui` (toggle) | refuse proprement — pas de webview Wry | ✅ start/stop à chaud |
 
-Évolution naturelle si le remote devient un usage show : toggle dans
-Settings + token d'accès, plutôt que la seule env var.
+Évolution naturelle si le remote devient un usage show : token d'accès
+(le serveur statique de `dist/` par le bridge — URL unique — serait le
+suivant).
 
 ## Fichiers
 
 - `tauri-app/src-tauri/src/bridge_server.rs` — listener HTTP, dispatch
   via `webview.on_message` (sérialisé sur un thread dédié), broadcast
-  SSE, `spawn_if_enabled` (env `STAGESPACE_BRIDGE_BIND`).
+  SSE, `RemoteUi` (start/stop, `unlisten` propre), `spawn_if_enabled`
+  (env `STAGESPACE_BRIDGE_BIND`).
+- `tauri-app/src-tauri/src/commands/remote_ui.rs` — `set_remote_ui` /
+  `remote_ui_status` (validation du bind, erreurs typées).
 - `tauri-app/src-tauri/tests/dev_bridge.rs` — même `serve` sur mock app.
 - `tauri-app/src-tauri/src/lib.rs` — `spawn_if_enabled` appelé dans
   `.setup` après `setup_backend_runtime`.
