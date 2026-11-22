@@ -38,6 +38,7 @@ export const StatusBar: React.FC = () => {
   const parked = useShowStatusStore((s) => s.parked);
   const objectStates = useGraphStore((s) => s.objectStates);
   const manualPositions = useGraphStore((s) => s.manualPositions);
+  const holProject = useGraphStore((s) => s.holProject);
   const isRecalling = useCuelistStore((s) => s.isRecalling);
 
   const activeCount = movements.length;
@@ -247,6 +248,14 @@ export const StatusBar: React.FC = () => {
       )}
 
       <div className="flex-1" />
+
+      {/* Salle chargée — ex-chip Toolbar : info document, à droite avec
+          la destination et la version. */}
+      {holProject && (
+        <span className="text-green-400 font-medium flex-shrink-0" title="Venue (.hol) loaded">
+          {holProject.tracks.length} tracks
+        </span>
+      )}
 
       {/* Destination OSC — seule source d'affichage addr/port/profile
           (visible sur toutes les surfaces, la Toolbar n'existe qu'en

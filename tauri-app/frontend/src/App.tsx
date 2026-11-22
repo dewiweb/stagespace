@@ -10,7 +10,6 @@ import AnimationList from './components/panels/AnimationList';
 import Inspector from './components/Inspector';
 import AudioPanel from './components/panels/AudioPanel';
 import TabPanel from './components/TabPanel';
-import Toolbar from './components/Toolbar';
 import { Titlebar } from './components/Titlebar';
 import StatusBar from './components/StatusBar';
 import ToastContainer from './components/ToastContainer';
@@ -191,7 +190,7 @@ function AppMain() {
     }
   }, []);
   // Raccourcis live (Esc=panic, Enter=GO, Shift+Enter=recall) + polling perf —
-  // au niveau App : ils doivent fonctionner aussi en mode Perform (le Toolbar
+  // au niveau App : ils doivent fonctionner aussi en mode Perform (la Toolbar
   // et sa stack se démontent).
   useLiveShortcuts();
   useShowControl();
@@ -358,11 +357,8 @@ function AppMain() {
         /* Surface Atelier — la mise en boîte : graphes, moves, cues,
            templates, 3D, réglages. */
         <>
-      {/* Toolbar (OSC settings, import .hol) */}
-      <Toolbar />
-
       {/* Main Content — 3 colonnes (boundary par colonne : un crash de render
-          ne doit pas démonter Toolbar/ToastContainer — panic Esc doit survivre) */}
+          ne doit pas démonter le chrome global — panic Esc doit survivre) */}
       <div className="flex-1 flex overflow-hidden">
         <ErrorBoundary zone="Left panel">
         {/* Colonne gauche : AnimationList + onglets secondaires (collapsible +
@@ -655,7 +651,7 @@ function AppMain() {
       {/* Premier lancement — show d'exemple ou départ vide */}
       {showWelcome && <WelcomeModal onClose={() => setShowWelcome(false)} />}
 
-      {/* Aide raccourcis — `?` key ou bouton Toolbar */}
+      {/* Aide raccourcis — `?` key ou menu Help */}
       {shortcutsOpen && <ShortcutsModal />}
 
       {/* Modales applicatives pilotées par la menubar — montées ici pour
