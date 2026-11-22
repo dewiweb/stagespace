@@ -29,7 +29,7 @@ import { useSessionStore } from './store/useSessionStore';
 import { toast } from './utils/toast-helpers';
 import { UnsavedChangesModal } from './components/ui/UnsavedChangesModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { ChevronRight, ChevronDown, PanelRightClose, PanelLeftClose, PanelLeftOpen, PanelRightOpen, Maximize2, Minimize2, Activity } from 'lucide-react';
+import { ChevronRight, ChevronDown, PanelRightClose, PanelLeftClose, PanelLeftOpen, PanelRightOpen, Maximize2, Minimize2, Activity, Workflow } from 'lucide-react';
 import { useLiveShortcuts, usePerfStatsPolling } from './hooks/useLiveShortcuts';
 import { useShowControl } from './hooks/useShowControl';
 import { useConduiteBroadcast } from './hooks/useConduiteBroadcast';
@@ -449,6 +449,16 @@ function AppMain() {
           {/* Barre du haut — change selon le mode */}
           {showExpert ? (
             <div className="h-9 border-b border-stagespace-border flex items-center px-3 flex-shrink-0 gap-2">
+              {/* Mode Simple/Expert — vit dans le header de la colonne
+                  qu'il transforme (NodeEditor mount/unmount), pas dans la
+                  Toolbar globale à côté de PANIC. */}
+              <button
+                onClick={() => setShowExpert(false)}
+                className="px-2 py-0.5 text-xs rounded font-medium bg-gray-800 text-gray-400 hover:text-white transition-colors"
+                title="Simple mode — move form editor (no graph nodes)"
+              >
+                Simple
+              </button>
               <span className="text-gray-300 text-xs font-medium">Expert — Node Editor</span>
               <button
                 onClick={() => setEditorFocus(!editorFocus)}
@@ -490,6 +500,19 @@ function AppMain() {
                 <span className="text-gray-300 text-xs font-medium">Canvas</span>
               </div>
               <div className="flex-1" />
+              <button
+                onClick={() => {
+                  setShowExpert(true);
+                  // Entrer en Expert = intention d'éditer le graphe —
+                  // Focus direct (le split 50/50 écrase le canvas).
+                  setEditorFocus(true);
+                }}
+                className="px-2 py-0.5 text-xs rounded font-bold bg-purple-600 text-white hover:bg-purple-500 transition-colors flex items-center gap-1"
+                title="Expert mode — advanced graph editor (nodes, connections, custom trajectories)"
+              >
+                <Workflow size={11} />
+                Expert
+              </button>
               {import.meta.env.DEV && (
                 <button
                   onClick={() => setDebugPerfVisible(!debugPerfVisible)}
