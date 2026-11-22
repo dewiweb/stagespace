@@ -181,17 +181,21 @@ export const PerformView: React.FC = () => {
         {/* Chrome de surface — identité + détachement de CETTE vue
             (même pattern que le header Conduite). Séparé des contrôles
             show : ce n'est pas une action de jeu. */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <span className="text-gray-500 text-[10px] uppercase tracking-widest">Jeu</span>
-          <button
-            onClick={() => detachWindow('run', 'STAGESPACE — Run', 1200, 760)}
-            className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white text-xs font-bold transition-colors active:scale-95"
-            title="Détacher cette surface (pads + radar) dans une fenêtre dédiée"
-          >
-            ⧉
-          </button>
-        </div>
-        <div className="w-px h-8 bg-stagespace-border flex-shrink-0" />
+        {!detached && (
+          <>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <span className="text-gray-500 text-[10px] uppercase tracking-widest">Jeu</span>
+              <button
+                onClick={() => detachWindow('run', 'STAGESPACE — Run', 1200, 760)}
+                className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white text-xs font-bold transition-colors active:scale-95"
+                title="Détacher cette surface (pads + radar) dans une fenêtre dédiée"
+              >
+                ⧉
+              </button>
+            </div>
+            <div className="w-px h-8 bg-stagespace-border flex-shrink-0" />
+          </>
+        )}
         <div className="flex items-center gap-2.5">
           <div
             className={`w-4 h-4 rounded-full ${
