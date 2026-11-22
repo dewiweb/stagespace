@@ -224,8 +224,9 @@ export default function Inspector() {
                 du header : un seul endroit où choisir/désélectionner le
                 move inspecté, plus de liste dupliquée face à la table.) */}
 
-            {/* MACROS — runtime controls globaux (affectent tous les moves) */}
-            <Section title="Macros" icon={<Zap size={12} />} defaultOpen={true}
+            {/* GLOBAL MACROS — merge scope, tous les moves live. Même
+                contrôle que le scope 'Global macros' du drawer Jeu. */}
+            <Section title="Global macros" icon={<Zap size={12} />} defaultOpen={true}
               badge={activeMovementIds.length > 0 ? `${activeMovementIds.length} live` : undefined}>
               <MacrosSurface includeRadius live />
             </Section>
@@ -311,7 +312,7 @@ export default function Inspector() {
                 (la structure du move) — replié en mode Perform où les
                 contrôles live sont Params (pinned) et Macros. key force le
                 repli à l'entrée/sortie de mode. */}
-            <Section key={`perform-${performMode}`} title="Perform" icon={<Play size={12} />} defaultOpen={!performMode}>
+            <Section key={`perform-${performMode}`} title="Playback" icon={<Play size={12} />} defaultOpen={!performMode}>
               <Slider label="Duration" value={current.duration} min={0.5} max={30} step={0.5} onChange={(v) => updateCurrent({ duration: v })} unit="s" />
               <div className="flex gap-1 pt-1">
                 {(['forward', 'backward', 'ping_pong'] as const).map((d) => (

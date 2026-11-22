@@ -117,7 +117,7 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
           isPlaying
             ? 'bg-green-800/70 border-green-600 text-green-50'
             : 'bg-gray-800/80 border-gray-700 text-gray-200 hover:bg-gray-700/80'
-        }`}
+        } ${p.isSelected ? 'ring-2 ring-inset ring-indigo-500/80' : ''}`}
         role="button"
         aria-label={`slot ${oscNum} ${slot.name} ${isPlaying ? 'stop' : 'play'}`}
         title={`OSC: /stagespace/slot ${oscNum} · slot/stop ${oscNum} · solo ${oscNum}`}
@@ -137,7 +137,20 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
           )}
         </div>
         <div className="min-w-0">
-          <div className={`${big ? 'text-lg' : 'text-sm'} font-semibold truncate leading-tight`}>{slot.name}</div>
+          {/* Nom = sélection pour le drawer — stopPropagation sur pointerdown
+              (tue le timer hold/bump) ET click (ne lance pas le move). Corps
+              du pad = transport pur, sélection stable en multi-pad live. */}
+          <div
+            className={`${big ? 'text-lg' : 'text-sm'} font-semibold truncate leading-tight ${
+              p.isSelected ? 'text-indigo-300' : p.onSelect ? 'hover:text-indigo-300' : ''
+            }`}
+            onPointerDown={p.onSelect ? (e) => e.stopPropagation() : undefined}
+            onClick={p.onSelect ? (e) => { e.stopPropagation(); p.onSelect?.(); } : undefined}
+            title={p.onSelect ? 'Select for editing — the drawer below targets this move (no play/stop)' : undefined}
+            role={p.onSelect ? 'button' : undefined}
+          >
+            {slot.name}
+          </div>
           <div
             className={`text-[10px] mt-0.5 ${isPlaying ? 'text-green-300/80' : 'text-gray-500'}`}
             title={`Tracks : ${slot.trackIds.join(', ')}${isPlaying ? '' : ' — tap = play, hold ≥350ms = momentary'}`}

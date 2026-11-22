@@ -134,8 +134,8 @@ export const LiveDrawer: React.FC = () => {
           'Audio-reactive mods of the selected move')}
         {scopeBtn('osc', <>OSC IN</>, false,
           'Mappings OSC entrants (fader→param) + learn')}
-        {scopeBtn('global', <><Globe size={12} className="inline -mt-0.5" /> Global</>, false,
-          'Macros globales — affectent TOUS les moves live (merge)')}
+        {scopeBtn('global', <><Globe size={12} className="inline -mt-0.5" /> Global macros</>, false,
+          'Global macros — merge scope, affectent TOUS les moves live')}
 
         {!slot && playingSlots.length === 0 && (
           <span className="text-gray-400 text-xs ml-2">

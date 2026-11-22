@@ -132,6 +132,8 @@ export const PerformView: React.FC = () => {
         parkedTracks={parkedTracks}
         heldTracks={heldTracks}
         onAttention={firstObj >= 0 ? () => doAttention(firstObj) : undefined}
+        isSelected={editingSlotId === slot.id}
+        onSelect={() => selectSlotForEditing(editingSlotId === slot.id ? null : slot.id)}
         onPlay={() => void playSlot(slot.id)}
         onStop={() => void stopSlotWithFade(slot.id, slot.fadeOut ?? 1)}
         onSolo={() => (soloId === slot.id ? doUnsolo() : doSolo(oscNum))}
