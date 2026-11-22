@@ -21,6 +21,9 @@ import { GraphCanvas } from './editor/GraphCanvas';
 import { useStandaloneGraph } from '../hooks/useStandaloneGraph';
 import { useNodeInsertion } from '../hooks/useNodeInsertion';
 import { useGraphClipboard } from '../hooks/useGraphClipboard';
+import { getGraphClipboardOps } from '../utils/clipboardBus';
+import { readGraphClipboard } from '../utils/graphClipboard';
+import ContextMenu from './ui/ContextMenu';
 import { QuickAddModal } from './QuickAddModal';
 import { type GraphNode } from './nodeParamSchema';
 import {
@@ -60,6 +63,9 @@ export const NodeEditor: React.FC = () => {
   // Clic-droit node → menu "Open example" (help patches Pd/plugdata :
   // la doc est un graphe runnable, pas du texte).
   const [nodeMenu, setNodeMenu] = useState<{ x: number; y: number; nodeType: NodeType; nodeId: string } | null>(null);
+  // Clic-droit sur le canvas vide — Paste / Quick-add (miroir des
+  // raccourcis, découvrabilité menu).
+  const [canvasMenu, setCanvasMenu] = useState<{ x: number; y: number } | null>(null);
   // Palette repliable — QuickAdd couvre l'ajout rapide ; la palette sert
   // la découverte. Repliée elle rend ~220px au canvas en split expert.
   // État persisté : sans ça elle repartait dépliée à chaque session et
@@ -423,8 +429,19 @@ export const NodeEditor: React.FC = () => {
     if (isFrameNode(node)) return;
     const nodeType = node.data.type as NodeType | undefined;
     if (!nodeType) return;
+    // Convention éditeur : clic-droit sur un nœud hors sélection la
+    // remplace par lui (sinon Copy/Cut/Duplicate porteraient sur
+    // l'ancienne sélection — surprenant). Nœud déjà sélectionné → la
+    // multi-sélection est préservée.
+    if (!node.selected) {
+      handleNodesChange(displayNodes.map((n) => ({
+        id: n.id,
+        type: 'select' as const,
+        selected: n.id === node.id,
+      })));
+    }
     setNodeMenu({ x: event.clientX, y: event.clientY, nodeType, nodeId: node.id });
-  }, []);
+  }, [displayNodes, handleNodesChange]);
 
   const openExampleFor = useCallback((nodeType: NodeType, presetId: string, presetName: string) => {
     setNodeMenu(null);
@@ -697,6 +714,11 @@ export const NodeEditor: React.FC = () => {
         onPaletteDragOver={insert.onPaletteDragOver}
         onCutEdge={(id) => removeByIds(new Set(), new Set([id]))}
         onNodeContextMenu={onNodeContextMenu}
+        onPaneContextMenu={(e) => {
+          e.preventDefault();
+          setNodeMenu(null);
+          setCanvasMenu({ x: e.clientX, y: e.clientY });
+        }}
         onDismissNodeMenu={() => setNodeMenu(null)}
         onPaneDoubleClick={onPaneDoubleClick}
         isValidConnection={checkValidConnection}
@@ -765,6 +787,26 @@ export const NodeEditor: React.FC = () => {
                 </div>
               </div>
             )}
+            {/* Actions clipboard — bus, mêmes ops que Ctrl+C/X/D. Le
+                clic-droit a sélectionné le nœud → les ops agissent sur
+                lui (ou la multi-sélection existante). */}
+            <div className="border-t border-gray-800">
+              {(
+                [
+                  ['Copy', () => getGraphClipboardOps()?.copy()],
+                  ['Cut', () => getGraphClipboardOps()?.cut()],
+                  ['Duplicate', () => getGraphClipboardOps()?.duplicate()],
+                ] as const
+              ).map(([label, fn]) => (
+                <button
+                  key={label}
+                  onClick={() => { fn(); setNodeMenu(null); }}
+                  className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-cyan-900/40 hover:text-white transition-colors"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <button
               onClick={() => { removeByIds(new Set([nodeMenu.nodeId]), new Set()); setNodeMenu(null); }}
               className="w-full text-left px-3 py-1.5 text-xs text-red-300 hover:bg-red-900/40 border-t border-gray-800 transition-colors"
@@ -772,6 +814,28 @@ export const NodeEditor: React.FC = () => {
               ✕ Delete node
             </button>
           </div>
+        )}
+
+        {/* Menu clic-droit canvas vide — Paste (bus clipboard, mêmes ops
+            que Ctrl+V) + Quick-add (Ctrl+K). */}
+        {canvasMenu && (
+          <ContextMenu
+            x={canvasMenu.x}
+            y={canvasMenu.y}
+            onClose={() => setCanvasMenu(null)}
+            items={[
+              {
+                label: 'Paste',
+                disabled: !readGraphClipboard(),
+                title: 'Copy nodes first (Ctrl+C)',
+                onClick: () => getGraphClipboardOps()?.paste(),
+              },
+              {
+                label: 'Quick-add node…',
+                onClick: () => insert.openQuickAdd(),
+              },
+            ]}
+          />
         )}
 
         {/* Connecting hint badge */}

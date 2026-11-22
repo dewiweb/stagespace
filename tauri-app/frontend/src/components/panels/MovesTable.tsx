@@ -9,6 +9,7 @@ import Modal from '../ui/Modal';
 import Slider from '../ui/Slider';
 import EmptyState from '../ui/EmptyState';
 import ConfirmModal from '../ui/ConfirmModal';
+import ContextMenu from '../ui/ContextMenu';
 
 /// MovesTable — la table des moves (concept unifié)
 /// Tout est un Move. Certains moves sont dans la setlist (l'ordre du spectacle).
@@ -137,6 +138,8 @@ export default function MovesTable() {
   // Confirmation avant delete — le slot contient graphe+tracks+macros, non
   // récupérable (l'undo ne couvre pas removeMoveSlot).
   const [pendingDeleteSlot, setPendingDeleteSlot] = React.useState<{ id: string; name: string } | null>(null);
+  // Menu clic-droit sur une ligne — Duplicate/Delete (édition).
+  const [slotCtxMenu, setSlotCtxMenu] = React.useState<{ x: number; y: number; slot: (typeof moveSlots)[number] } | null>(null);
 
   // Templates basiques pour le dropdown — trajectoires simples + layers,
   // on exclut physics/spline/reactive (réglages spécifiques, moins "one-click")
@@ -290,6 +293,10 @@ export default function MovesTable() {
                 return (
                   <tr
                     key={slot.id}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setSlotCtxMenu({ x: e.clientX, y: e.clientY, slot });
+                    }}
                     className={`border-b border-gray-800/40 transition-colors cursor-pointer ${
                       isEditing ? 'bg-indigo-900/30 ring-1 ring-inset ring-indigo-700/50' :
                       isPlaying ? 'bg-green-900/10' : 'hover:bg-gray-800/20'
@@ -609,6 +616,27 @@ export default function MovesTable() {
           </Modal>
         );
       })()}
+
+      {/* ═══ Menu clic-droit ligne — Duplicate/Delete ═══ */}
+      {slotCtxMenu && (
+        <ContextMenu
+          x={slotCtxMenu.x}
+          y={slotCtxMenu.y}
+          header={slotCtxMenu.slot.name}
+          onClose={() => setSlotCtxMenu(null)}
+          items={[
+            {
+              label: 'Duplicate',
+              onClick: () => duplicateMoveSlot(slotCtxMenu.slot.id),
+            },
+            {
+              label: 'Delete…',
+              danger: true,
+              onClick: () => setPendingDeleteSlot({ id: slotCtxMenu.slot.id, name: slotCtxMenu.slot.name }),
+            },
+          ]}
+        />
+      )}
 
       {/* ═══ Delete confirmation ═══ */}
       {pendingDeleteSlot && (

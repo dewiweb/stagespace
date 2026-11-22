@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { X, Copy } from 'lucide-react';
+import ContextMenu from '../ui/ContextMenu';
 import { useCuelistStore, type CueData } from '../../store/useCuelistStore';
 import { useGraphStore } from '../../store/useGraphStore';
 import { doCuePrev, doCueNext, doCueRecallById } from '../../utils/liveActions';
@@ -28,6 +29,8 @@ export const CuelistPanel: React.FC<{ readonly?: boolean }> = ({ readonly = fals
   // Confirmation avant delete — un cue supprimé n'est pas récupérable et
   // le bouton ✕ est adjacent au recall (un misclick live coûte le cue).
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  // Menu clic-droit sur une cue — Duplicate/Delete.
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; cue: CueData } | null>(null);
   // Arm-before-recall : un simple clic sur un cue l'arme (outline), le
   // double-clic déclenche le recall. Un recall tue TOUS les moves actifs —
   // un misclick en live viderait la scène.
@@ -202,6 +205,11 @@ export const CuelistPanel: React.FC<{ readonly?: boolean }> = ({ readonly = fals
                 onDoubleClick={() => {
                   setArmedCueId(null);
                   doCueRecallById(cue.id, undefined, 'cuelist');
+                }}
+                onContextMenu={(e) => {
+                  if (readonly) return;
+                  e.preventDefault();
+                  setCtxMenu({ x: e.clientX, y: e.clientY, cue });
                 }}
                 title={idx === currentCueIndex ? 'Current cue' : 'Click = arm · double-click = RECALL (replaces the whole scene)'}
               >
@@ -459,6 +467,23 @@ export const CuelistPanel: React.FC<{ readonly?: boolean }> = ({ readonly = fals
           </div>
         )}
       </div>
+
+      {ctxMenu && (
+        <ContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          header={ctxMenu.cue.name}
+          onClose={() => setCtxMenu(null)}
+          items={[
+            { label: 'Duplicate', onClick: () => duplicateCue(ctxMenu.cue.id) },
+            {
+              label: 'Delete…',
+              danger: true,
+              onClick: () => setPendingDelete({ id: ctxMenu.cue.id, name: ctxMenu.cue.name }),
+            },
+          ]}
+        />
+      )}
 
       {pendingDelete && (
         <ConfirmModal

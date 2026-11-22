@@ -9,6 +9,7 @@ import {
   serializeGraphClipboard, parseGraphClipboard,
   type GraphClipboardPayload,
 } from '../utils/graphClipboard';
+import { registerGraphClipboard } from '../utils/clipboardBus';
 import { healEdgesForRemoval } from '../utils/graphHeal';
 import { isFrameNode } from '../utils/frameNode';
 import type { GraphNode } from '../components/nodeParamSchema';
@@ -118,6 +119,69 @@ export function useGraphClipboard(opts: {
     [activeTab],
   );
 
+  /// Snapshot de la sélection → clipboard mémoire + système (miroir
+  /// JSON versionné — une chaîne de nœuds voyage entre shows/machines).
+  const copySelection = useCallback(() => {
+    const snap = snapshotSelection(displayNodes, displayEdges);
+    if (snap.nodes.length === 0) return;
+    writeGraphClipboard(snap);
+    navigator.clipboard?.writeText(serializeGraphClipboard(snap)).catch(() => {});
+  }, [displayNodes, displayEdges]);
+
+  const cutSelection = useCallback(() => {
+    const snap = snapshotSelection(displayNodes, displayEdges);
+    if (snap.nodes.length === 0) return;
+    writeGraphClipboard(snap);
+    navigator.clipboard?.writeText(serializeGraphClipboard(snap)).catch(() => {});
+    const ids = new Set(snap.nodes.map((n) => n.id));
+    // Toutes les edges incidentes aux nodes retirés — pas seulement les
+    // internes copiées — sinon edges pendantes dans le graphe.
+    const incident = new Set(
+      displayEdges.filter((e2) => ids.has(e2.source) || ids.has(e2.target)).map((e2) => e2.id),
+    );
+    removeByIds(ids, incident);
+  }, [displayNodes, displayEdges, removeByIds]);
+
+  /// Paste mémoire d'abord, sinon clipboard système (payload venue
+  /// d'une autre session/show). readText est async — le paste arrive au
+  /// tick suivant, c'est attendu.
+  const pasteClipboard = useCallback(() => {
+    const clip = readGraphClipboard();
+    if (clip) {
+      pastePayload(clip);
+      return;
+    }
+    navigator.clipboard
+      ?.readText()
+      .then((text) => {
+        const parsed = parseGraphClipboard(text);
+        if (parsed) pastePayload(parsed);
+      })
+      .catch(() => {});
+  }, [pastePayload]);
+
+  /// Duplicate : copie la sélection et colle immédiatement, sans écraser
+  /// le clipboard.
+  const duplicateSelection = useCallback(() => {
+    const snap = snapshotSelection(displayNodes, displayEdges);
+    if (snap.nodes.length === 0) return;
+    pastePayload(snap);
+  }, [displayNodes, displayEdges, pastePayload]);
+
+  // Enregistrement sur le bus — le menu Edit appelle ces mêmes ops.
+  useEffect(
+    () =>
+      registerGraphClipboard({
+        copy: copySelection,
+        cut: cutSelection,
+        paste: pasteClipboard,
+        duplicate: duplicateSelection,
+        hasSelection: () =>
+          displayNodes.some((n) => (n as { selected?: boolean }).selected),
+      }),
+    [copySelection, cutSelection, pasteClipboard, duplicateSelection, displayNodes],
+  );
+
   // Ctrl/Cmd+K quick-add + C/X/V/D clipboard — pas pendant la saisie
   // dans un champ.
   useEffect(() => {
@@ -131,57 +195,35 @@ export function useGraphClipboard(opts: {
         onQuickAdd();
         return;
       }
-      if (key === 'c' || key === 'x') {
-        const snap = snapshotSelection(displayNodes, displayEdges);
-        if (snap.nodes.length === 0) return;
-        e.preventDefault();
-        writeGraphClipboard(snap);
-        // Miroir dans le clipboard système (enveloppe JSON versionnée) —
-        // une chaîne de nœuds voyage entre shows/machines. Fire-and-
-        // forget : permission refusée ou webview sans API → no-op silencieux.
-        navigator.clipboard?.writeText(serializeGraphClipboard(snap)).catch(() => {});
-        if (key === 'x') {
-          const ids = new Set(snap.nodes.map((n) => n.id));
-          // Toutes les edges incidentes aux nodes retirés — pas seulement
-          // les internes copiées — sinon edges pendantes dans le graphe.
-          const incident = new Set(
-            displayEdges.filter((e2) => ids.has(e2.source) || ids.has(e2.target)).map((e2) => e2.id),
-          );
-          removeByIds(ids, incident);
+      if (key === 'c') {
+        if (displayNodes.some((n) => (n as { selected?: boolean }).selected)) {
+          e.preventDefault();
+          copySelection();
+        }
+        return;
+      }
+      if (key === 'x') {
+        if (displayNodes.some((n) => (n as { selected?: boolean }).selected)) {
+          e.preventDefault();
+          cutSelection();
         }
         return;
       }
       if (key === 'v') {
         e.preventDefault();
-        const clip = readGraphClipboard();
-        if (clip) {
-          pastePayload(clip);
-          return;
-        }
-        // Clipboard mémoire vide → tenter le clipboard système : payload
-        // copiée dans une autre session/show ou partagée. readText est
-        // async — le paste arrive au tick suivant, c'est attendu.
-        navigator.clipboard
-          ?.readText()
-          .then((text) => {
-            const parsed = parseGraphClipboard(text);
-            if (parsed) pastePayload(parsed);
-          })
-          .catch(() => {});
+        pasteClipboard();
         return;
       }
       if (key === 'd') {
-        // Duplicate : copie la sélection et colle immédiatement, sans
-        // écraser le clipboard.
-        const snap = snapshotSelection(displayNodes, displayEdges);
-        if (snap.nodes.length === 0) return;
-        e.preventDefault();
-        pastePayload(snap);
+        if (displayNodes.some((n) => (n as { selected?: boolean }).selected)) {
+          e.preventDefault();
+          duplicateSelection();
+        }
       }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [displayNodes, displayEdges, removeByIds, pastePayload, onQuickAdd]);
+  }, [displayNodes, copySelection, cutSelection, pasteClipboard, duplicateSelection, onQuickAdd]);
 
   return { removeByIds, pastePayload };
 }

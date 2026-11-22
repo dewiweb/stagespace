@@ -38,6 +38,8 @@ interface GraphCanvasProps {
   onInit: (instance: ReactFlowInstance) => void;
   onNodeDoubleClick: (event: React.MouseEvent, node: Node) => void;
   onNodeContextMenu: (event: React.MouseEvent, node: Node) => void;
+  /// Clic-droit sur le pane vide — menu contextuel canvas (Paste…).
+  onPaneContextMenu?: (event: React.MouseEvent | MouseEvent) => void;
   /// Double-clic sur un fil → QuickAdd filtré aux 2 bouts (insertion).
   onEdgeDoubleClick: (event: React.MouseEvent, edge: Edge) => void;
   /// Drop palette → canvas (node posé au curseur, ou splice sur un fil).
@@ -127,6 +129,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = (p) => {
         onNodeDoubleClick={p.onNodeDoubleClick}
         onEdgeDoubleClick={p.onEdgeDoubleClick}
         onNodeContextMenu={p.onNodeContextMenu}
+        onPaneContextMenu={p.onPaneContextMenu}
         onNodeClick={p.onDismissNodeMenu}
         onPaneClick={p.onDismissNodeMenu}
         onMoveStart={p.onDismissNodeMenu}

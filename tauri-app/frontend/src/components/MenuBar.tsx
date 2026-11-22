@@ -4,6 +4,12 @@ import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { useOscArmed } from '../hooks/useOscArmed';
 import { importHolProject, loadShow, saveShow } from '../utils/showFileActions';
+import { doSetPosition } from '../utils/liveActionsSpatial';
+import { getGraphClipboardOps } from '../utils/clipboardBus';
+import {
+  writePositionClipboard, readPositionClipboard,
+  serializePositionClipboard, parsePositionClipboard,
+} from '../utils/graphClipboard';
 import {
   doCueGo,
   doCueNext,
@@ -60,6 +66,9 @@ export const MenuBar: React.FC = () => {
   const canRedo = useGraphStore((s) => s.canRedo);
   const editingSlotId = useGraphStore((s) => s.editingSlotId);
   const moveSlots = useGraphStore((s) => s.moveSlots);
+  const duplicateMoveSlot = useGraphStore((s) => s.duplicateMoveSlot);
+  const selectedObjIndex = useGraphStore((s) => s.selectedObjIndex);
+  const emittedPositions = useGraphStore((s) => s.emittedPositions);
   const pullShowFromHost = useGraphStore((s) => s.pullShowFromHost);
   /// Navigateur distant via bridge — le snapshot du show vit sur l'hôte.
   const isRemote = typeof window !== 'undefined' && Boolean((window as { __STAGESPACE_BRIDGE__?: boolean }).__STAGESPACE_BRIDGE__);
@@ -212,6 +221,74 @@ export const MenuBar: React.FC = () => {
           disabledReason: 'Nothing to redo',
           onClick: redo,
         },
+        { separator: true },
+        // Clipboard nœuds — les ops viennent du bus : useGraphClipboard
+        // les enregistre tant que l'éditeur est monté. Le menu appelle
+        // les MÊMES fonctions que Ctrl+C/X/V/D (troisième porte).
+        ...((): Entry[] => {
+          const ops = getGraphClipboardOps();
+          const hasSel = ops?.hasSelection() ?? false;
+          const dis = (reason: string): Pick<Item, 'disabled' | 'disabledReason'> => ({
+            disabled: true,
+            disabledReason: reason,
+          });
+          const noSel = !ops ? dis('Open the graph editor first') : !hasSel ? dis('Select nodes first') : {};
+          return [
+            { label: 'Cut', shortcut: 'Ctrl+X', ...(!ops ? dis('Open the graph editor first') : noSel), onClick: () => ops?.cut() },
+            { label: 'Copy', shortcut: 'Ctrl+C', ...noSel, onClick: () => ops?.copy() },
+            { label: 'Paste', shortcut: 'Ctrl+V', ...(ops ? {} : dis('Open the graph editor first')), onClick: () => ops?.paste() },
+            { label: 'Duplicate', shortcut: 'Ctrl+D', ...noSel, onClick: () => ops?.duplicate() },
+          ];
+        })(),
+        { separator: true },
+        // Duplicate move — cible le slot en cours d'édition, même chemin
+        // que le bouton ⧉ de MovesTable.
+        {
+          label: editingSlot ? `Duplicate move "${editingSlot.name}"` : 'Duplicate move — no slot selected',
+          ...(editingSlotId ? { onClick: () => duplicateMoveSlot(editingSlotId) } : { disabled: true, disabledReason: 'Select a move first' }),
+        },
+        // Copier/coller la position de l'objet sélectionné — mêmes ops
+        // que Ctrl+C/V sur la vue 3D.
+        ...(selectedObjIndex != null
+          ? ([
+              {
+                label: `Copy position of object ${selectedObjIndex}`,
+                shortcut: 'Ctrl+C',
+                ...(emittedPositions[selectedObjIndex]
+                  ? {
+                      onClick: () => {
+                        const p = emittedPositions[selectedObjIndex];
+                        const pos: [number, number, number] = [p[0], p[1], p[2]];
+                        writePositionClipboard(pos);
+                        navigator.clipboard?.writeText(serializePositionClipboard(pos)).catch(() => {});
+                      },
+                    }
+                  : { disabled: true, disabledReason: 'No emitted position yet' }),
+              },
+              {
+                label: `Paste position to object ${selectedObjIndex}`,
+                shortcut: 'Ctrl+V',
+                onClick: () => {
+                  const clip = readPositionClipboard();
+                  if (clip) {
+                    doSetPosition(selectedObjIndex, clip[0], clip[1], clip[2]);
+                    return;
+                  }
+                  navigator.clipboard
+                    ?.readText()
+                    .then((text) => {
+                      const parsed = parsePositionClipboard(text);
+                      if (parsed) doSetPosition(selectedObjIndex, parsed[0], parsed[1], parsed[2]);
+                    })
+                    .catch(() => {});
+                },
+              },
+            ] as Entry[])
+          : [{
+              label: 'Copy/Paste position — no object selected',
+              disabled: true,
+              disabledReason: 'Select an object in the 3D view or radar first',
+            } as Entry]),
         { separator: true },
         { label: 'Preferences…', onClick: () => setActiveAppModal('settings') },
       ],
