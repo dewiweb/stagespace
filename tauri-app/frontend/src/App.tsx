@@ -11,6 +11,7 @@ import Inspector from './components/Inspector';
 import AudioPanel from './components/panels/AudioPanel';
 import TabPanel from './components/TabPanel';
 import Toolbar from './components/Toolbar';
+import { MenuBar } from './components/MenuBar';
 import StatusBar from './components/StatusBar';
 import ToastContainer from './components/ToastContainer';
 import { ManualReleaseBar } from './components/viewer3d/ManualReleaseBar';
@@ -294,6 +295,10 @@ function AppMain() {
           </div>
           <h1 className="text-white font-bold text-base tracking-tight">STAGESPACE</h1>
           <span className="text-gray-400 text-xs ml-1 italic">Play the space</span>
+          {/* Menus applicatifs — chaque entrée dispatch vers les mêmes
+              actions que les raccourcis/boutons (troisième porte, pas un
+              troisième chemin de code). */}
+          <MenuBar />
         </div>
         {/* Nav 3 phases — les surfaces de travail de l'opérateur :
             ATELIER (composer/préparer) · CONDUITE (faire avancer le show)

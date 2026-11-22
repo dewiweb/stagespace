@@ -1,7 +1,6 @@
 import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
-import { toast } from '../utils/toast-helpers';
-import { open, save } from '@tauri-apps/plugin-dialog';
+import { importHolProject, loadShow, saveShow } from '../utils/showFileActions';
 import { FolderInput, Settings, Undo2, Redo2, Save, FolderOpen, CircleHelp } from 'lucide-react';
 import { SettingsModal } from './SettingsModal';
 import { PanicButton } from './ui/PanicButton';
@@ -14,9 +13,6 @@ export const Toolbar: React.FC = () => {
   const compileError = useGraphStore((s) => s.compileError);
   const playError = useGraphStore((s) => s.playError);
   const nodes = useGraphStore((s) => s.nodes);
-  const saveGraphToFile = useGraphStore((s) => s.saveGraphToFile);
-  const loadGraphFromFile = useGraphStore((s) => s.loadGraphFromFile);
-  const importHol = useGraphStore((s) => s.importHol);
   const holProject = useGraphStore((s) => s.holProject);
   const undo = useGraphStore((s) => s.undo);
   const redo = useGraphStore((s) => s.redo);
@@ -34,52 +30,9 @@ export const Toolbar: React.FC = () => {
   // montés au niveau App (hooks/useLiveShortcuts.ts) — ils doivent survivre au
   // démontage du Toolbar en mode Perform.
 
-  const handleSaveGraph = async () => {
-    try {
-      const filePath = await save({
-        filters: [{ name: 'STAGESPACE Show', extensions: ['hfg'] }],
-        defaultPath: 'show.hfg',
-      });
-      if (filePath) {
-        await saveGraphToFile(filePath as string);
-        toast.success('Show saved');
-      }
-    } catch (e) {
-      console.error('Save show failed:', e);
-      toast.error(`Save show failed: ${e}`);
-    }
-  };
-
-  const handleLoadGraph = async () => {
-    try {
-      const result = await open({
-        filters: [{ name: 'STAGESPACE Show', extensions: ['hfg', 'json'] }],
-        multiple: false,
-      });
-      if (result) {
-        await loadGraphFromFile(result as string);
-        toast.success('Show loaded');
-      }
-    } catch (e) {
-      console.error('Load show failed:', e);
-      toast.error(`Load show failed: ${e}`);
-    }
-  };
-
-  const handleImportHol = async () => {
-    try {
-      const result = await open({
-        filters: [{ name: 'Holophonix Project', extensions: ['hol', 'json'] }],
-        multiple: false,
-      });
-      if (result) {
-        await importHol(result as string);
-      }
-    } catch (e) {
-      console.error('Import .hol failed:', e);
-      toast.error(`Import .hol failed: ${e}`);
-    }
-  };
+  const handleSaveGraph = saveShow;
+  const handleLoadGraph = loadShow;
+  const handleImportHol = importHolProject;
 
   return (
     <div className="flex flex-col border-b border-stagespace-border bg-stagespace-panel">
