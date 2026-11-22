@@ -58,7 +58,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const setMediaSync = useGraphStore((s) => s.setMediaSync);
 
   const [oscIdsStr, setOscIdsStr] = React.useState(manualOscIds.join(','));
-  const [audioDevices, setAudioDevices] = React.useState<MediaDeviceInfo[]>([]);
+  const [audioDevices, setAudioDevices] = React.useState<{ id: string; name: string }[]>([]);
   // Tabs par domaine — 8 sections plates étaient illisibles ; regroupées
   // par métier opérateur (réseau, tracking, salle, show, audio).
   const [tab, setTab] = React.useState<'reseau' | 'tracking' | 'salle' | 'show' | 'audio'>('reseau');
@@ -87,18 +87,13 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     }
   };
 
-  // Énumérer les devices audio
+  // Énumérer les devices audio — via le backend (cpal), PAS
+  // enumerateDevices() du webview : ses deviceId opaques n'ont aucun sens
+  // pour cpal, start_audio_capture les rejetterait ("device not found").
   React.useEffect(() => {
-    (async () => {
-      try {
-        if (navigator.mediaDevices?.enumerateDevices) {
-          const devices = await navigator.mediaDevices.enumerateDevices();
-          setAudioDevices(devices.filter((d) => d.kind === 'audioinput'));
-        }
-      } catch {
-        // Silently fail — l'utilisateur n'a peut-être pas encore donné la permission
-      }
-    })();
+    invoke<{ id: string; name: string }[]>('list_audio_devices', {})
+      .then(setAudioDevices)
+      .catch((e) => console.error('[SettingsModal] list_audio_devices failed:', e));
   }, []);
 
 
@@ -509,9 +504,9 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none"
               >
                 <option value="">System default</option>
-                {audioDevices.map((d, i) => (
-                  <option key={d.deviceId || i} value={d.deviceId}>
-                    {d.label || `Audio device ${i + 1}`}
+                {audioDevices.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
                   </option>
                 ))}
               </select>

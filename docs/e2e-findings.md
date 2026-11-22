@@ -368,3 +368,45 @@ STOP ■ OrbTest actif.
   honnête, cohérente avec l'archi backend-authoritative.
 - BPM conf ~0.45 sur le morceau testé — utilisable mais pas rock-solid
   pour sync critique (attendu pour un détecteur temps réel).
+
+---
+
+## Session 5 — Sélecteur de source audio : Settings sur le mauvais univers
+
+### Bug trouvé (cassé de bout en bout)
+
+L'onglet **Settings → Audio** énumérait les devices via
+`navigator.mediaDevices.enumerateDevices()` — l'API du webview. Ses
+`deviceId` (UUID opaques par origine) n'ont **aucun sens pour cpal** :
+`start_audio_capture` fait `parse::<usize>()` (index d'énumération) →
+tout choix ≠ « System default » → `device not found`. L'AudioPanel, lui,
+utilisait déjà `list_audio_devices` (backend) — deux implémentations
+divergentes du même sélecteur.
+
+### Fix
+
+`SettingsModal.tsx` : énumération remplacée par
+`invoke('list_audio_devices')` — même source cpal que `AudioPanel`,
+IDs identiques, select rend `d.id`/`d.name`.
+
+### Preuve réelle (fooyin toujours en lecture)
+
+- Settings → Audio liste maintenant les vrais devices cpal :
+  `0=jack, 1=pipewire, 2=pulse, 3=default, 12=hw:CARD=Generic_1,DEV=0…`
+- Sélection `pulse` (value `2`) → `localStorage.stagespace-audio-device="2"`
+- `start_audio_capture(deviceId:"2")` → capture OK,
+  `get_audio_state` vivant : bass 0.12, rms 0.09, **bpm 197 @ conf 0.78**,
+  spectrum 1024 bins
+- « System default » → `deviceId:null` → `default_input_device` →
+  capture OK (bass 0.22)
+- `deviceId:"999"` (absent) → erreur IPC propre, pas de capture fantôme
+
+### Cross-platform (réponse design)
+
+`cpal::default_host()` : ALSA (Linux, → PipeWire via compat), CoreAudio
+(macOS), WASAPI (Windows). Le `device_id` persiste un **index
+d'énumération** — volatil au replug ; le backend compense déjà en
+re-résolvant **par nom** (`reconnect_device_index`) quand le stream meurt.
+Limite restante : l'index persisté peut pointer sur un autre device après
+un changement de config matérielle — la résolution par nom au démarrage
+serait plus robuste (amélioration future côté backend).
