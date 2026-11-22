@@ -332,6 +332,7 @@ export default function Inspector() {
               <div className="flex gap-1 pt-1">
                 {(['forward', 'backward', 'ping_pong'] as const).map((d) => (
                   <button key={d} onClick={() => updateCurrent({ direction: d })}
+                    title={d === 'forward' ? 'Direction — la trajectoire joue dans le sens du dessin' : d === 'backward' ? 'Direction — la trajectoire joue à rebours' : 'Direction — la trajectoire alterne aller/retour'}
                     className={`flex-1 py-1 text-xs rounded ${current.direction === d ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-500'}`}>
                     {d === 'forward' ? '→ Fwd' : d === 'backward' ? '← Bwd' : '↔ Ping'}
                   </button>
@@ -340,6 +341,7 @@ export default function Inspector() {
               <div className="flex gap-1">
                 {(['loop', 'one_shot'] as const).map((l) => (
                   <button key={l} onClick={() => updateCurrent({ loop_mode: l })}
+                    title={l === 'loop' ? 'Loop — la trajectoire recommence en boucle' : 'One-shot — joue une fois puis termine (voir End : revert/hold)'}
                     className={`flex-1 py-1 text-xs rounded ${current.loop_mode === l ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-500'}`}>
                     {l === 'loop' ? '↻ Loop' : '▶ One-shot'}
                   </button>

@@ -3,6 +3,7 @@
 /// l'atelier (tab Log) — la conduite a sa propre vue du même showLog.
 import React from 'react';
 import { useGraphStore } from '../../store/useGraphStore';
+import { formatLogLabel } from '../../utils/liveActionsShared';
 import EmptyState from '../ui/EmptyState';
 
 export const ShowLogPanel: React.FC = () => {
@@ -20,7 +21,7 @@ export const ShowLogPanel: React.FC = () => {
         ) : (
           showLog.slice().reverse().map((l, i) => (
             <div key={l.ts + '-' + i} className="text-[10px] text-gray-500 truncate leading-4">
-              {new Date(l.ts).toLocaleTimeString('fr-FR', { hour12: false })} · {l.label}
+              {new Date(l.ts).toLocaleTimeString('fr-FR', { hour12: false })} · {formatLogLabel(l.label)}
             </div>
           ))
         )}

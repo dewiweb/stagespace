@@ -420,3 +420,68 @@ saillants : 5 noms pour le même concept (move/slot/pad/layer/animation),
 « LIVE » à 4 sens, trois systèmes de GO qui se recouvrent, deux listes
 Moves face à face, catégories de nodes par implémentation, jargon exposé
 (hold=bump, unverified, trk).
+
+## Session 6 — Correctifs UX (findings C1–C6 + quick wins)
+
+Suite du deep-dive UX (`docs/ux-audit.md`) — les findings de conception
+sont fixés et prouvés en réel.
+
+### C1 — Renommage silencieux par template ✔ FIXÉ
+
+Cliquer un template sur un slot écrasait `slot.name` (`name: preset.name`
+dans `setSlotTemplate`) — le nom custom disparaissait et divergeait du
+mouvement live. Fix : le nom n'est remplacé que s'il est encore le nom
+auto `Move N`. Prouvé : slot renommé `ZZTest` → template `Spiral`
+appliqué → le nom reste `ZZTest` (avant : devenait `Spiral`).
+
+### C2 — Chip ARM cues = dry-run OSC global ✔ FIXÉ
+
+L'onglet Cues affichait `ARM`/`DRY-RUN` pour le même état que le `LIVE`
+de la toolbar — un mini-chip dans un panneau local pouvait couper toutes
+les sorties OSC. Fix : le chip affiche `LIVE`/`DRY-RUN` avec un tooltip
+explicite — vocabulaire identique aux deux endroits.
+
+### C3 — Track IDs : validation avec feedback ✔ FIXÉ
+
+`abc;;9` était parsé silencieusement en `[9]` (63 IDs perdus). Fix :
+`handleOscIdsChange` rejette les tokens non-numériques, affiche
+« Ignored — invalid entries: … » sous le champ, garde la dernière liste
+valide. Prouvé : erreur visible, disparue au retour valide, store intact.
+
+### C4 — Suppression de node invisible ✔ FIXÉ
+
+Le menu contextuel node ne proposait que des « runnable examples » ;
+la suppression était clavier-only non documentée. Fix : entrée
+« ✕ Delete node » ajoutée au menu (passe par `removeByIds` — re-heal des
+chaînes inclus). Prouvé : clic droit node → entrée rendue.
+
+### C5 — Gestes composés sans UI ✔ FIXÉ
+
+`explode`/`converge`/`orbit`/`front` n'existaient qu'en OSC-IN. Fix :
+4 boutons dans `GestureStrip` (Jeu), `doGesture(name, 3.0)` — la force
+par défaut du protocole. Désactivés quand aucun objet n'est émis (hint
+explicite). Prouvé : EXPLODE cliqué → obj 0-5 propulsés radialement
+(`[-1.73,0,1.0] → [3.14,0,1.13]`…), amortissement balistique observé.
+
+### C6 — Faux onglet « 3D PREVIEW » ✔ FIXÉ
+
+Le label dans la rangée des vues Free/Top/Front/Side ressemblait à un
+onglet désactivé. Fix : stylisé en libellé (`· 3D PREVIEW`, select-none,
+opacité réduite) + tooltip expliquant comment interagir.
+
+### Quick wins
+
+- **Pads — mur de numéros** : `formatTrackIds` condense les tracks en
+  plages (`1-32` au lieu de 64 chiffres), les tracks parkés ⏸ gardent
+  leur marqueur, tooltip = liste complète + rappel tap/hold.
+- **Tooltips PERFORM** : Fwd/Bwd/Ping et Loop/One-shot expliqués
+  (« joue à rebours », « une fois puis termine — voir End »).
+- **Log opérationnel** : `formatLogLabel` mappe les noms de fonctions
+  (`doTape` → « Position tape », `doTcChase` → « TC chase »…) dans les
+  deux vues de log (Conduite + ShowLogPanel).
+
+### Vérifs
+
+- `npx tsc -b` propre, 485/485 vitest, lint 0 erreur
+- E2E réel : geste balistique mesuré, rename préservé, validation
+  visible, chip LIVE unifié, entrée delete rendue

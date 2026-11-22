@@ -170,9 +170,13 @@ export const createSlotCrudMethods = (set: CreatorArgs[0], get: CreatorArgs[1]):
       if (!slot) return;
       const { nodes, edges } = preset.build(slot.trackIds.length);
       set((s) => {
-        const newSlots = s.moveSlots.map((sl) =>
-          sl.id === id ? { ...sl, templateId, graphJson: { nodes, edges }, name: preset.name } : sl
-        );
+        const newSlots = s.moveSlots.map((sl) => {
+          if (sl.id !== id) return sl;
+          // Ne pas écraser un nom custom : seul le nom auto "Move N" cède
+          // la place au nom du template (l'opérateur n'a pas nommé le slot).
+          const name = /^Move \d+$/.test(sl.name) ? preset.name : sl.name;
+          return { ...sl, templateId, graphJson: { nodes, edges }, name };
+        });
         saveSlotsToStorage(newSlots);
         return { moveSlots: newSlots };
       });

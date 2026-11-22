@@ -92,7 +92,12 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({ isPlaying }) => {
         )}
         {!drawMode && !manipulateMode && (
           <>
-            <span className="text-gray-600 text-[10px] font-mono tracking-wider">3D PREVIEW</span>
+            <span
+              className="text-gray-500 text-[10px] font-mono tracking-wider select-none cursor-default opacity-70"
+              title="Read-only 3D preview — pick Select/Manipulate/Draw in the tools to interact with objects"
+            >
+              · 3D PREVIEW
+            </span>
             <span className="flex-1" />
           </>
         )}

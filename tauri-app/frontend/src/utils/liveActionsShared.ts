@@ -30,6 +30,32 @@ export function logAction(name: string, detail?: string) {
   useGraphStore.getState().pushShowLog(name);
 }
 
+/// Les actions sont loggées sous leur nom de fonction (`doTape`,
+/// `doCueGo`…) — l'opérateur doit lire le show, pas le code. Mapping
+/// explicite pour les noms cryptiques, sinon `doX` → `X`.
+const LOG_LABELS: Record<string, string> = {
+  doTape: 'Position tape',
+  doRehearsal: 'Rehearsal capture',
+  doTcChase: 'TC chase',
+  doTcFps: 'TC fps',
+  doCueGo: 'Cue GO',
+  doCuePrev: 'Cue prev',
+  doCueNext: 'Cue next',
+  doSetlistGo: 'Setlist GO',
+  doPanic: 'PANIC',
+  doStopAll: 'Stop all',
+  doMacro: 'Macro',
+  doGesture: 'Gesture',
+  doSpatial: 'Spatial',
+  doAttention: 'Attention',
+  doSoundcheck: 'Soundcheck',
+};
+export function formatLogLabel(name: string): string {
+  if (LOG_LABELS[name]) return LOG_LABELS[name];
+  const m = /^do([A-Z].+)$/.exec(name);
+  return m ? m[1] : name;
+}
+
 /// Annule les timers pre_wait/follow ICI ET partout — chaque webview
 /// possède ses propres timers (revue H1) : un panic/stop dans une
 /// fenêtre détachée doit désarmer ceux de la principale aussi.

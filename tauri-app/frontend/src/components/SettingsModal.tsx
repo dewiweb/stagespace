@@ -71,6 +71,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const [venueOffsetStr, setVenueOffsetStr] = React.useState(venueOffset);
   const [venueYawStr, setVenueYawStr] = React.useState(venueYaw);
   const [oscInStatus, setOscInStatus] = React.useState<string | null>(null);
+  const [oscIdsError, setOscIdsError] = React.useState<string | null>(null);
   const [discovering, setDiscovering] = React.useState(false);
   const [discoveredTargets, setDiscoveredTargets] = React.useState<Array<{ name: string; host: string; port: number; profile: string; source: string }>>([]);
 
@@ -99,11 +100,17 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
 
   const handleOscIdsChange = (value: string) => {
     setOscIdsStr(value);
-    const parsed = value
-      .split(',')
-      .map((id) => parseInt(id.trim(), 10))
-      .filter((id) => !isNaN(id));
-    setManualOscIds(parsed);
+    const tokens = value.split(',').map((t) => t.trim()).filter((t) => t !== '');
+    const bad = tokens.filter((t) => !/^\d+$/.test(t));
+    if (bad.length > 0) {
+      // Ne pas appliquer silencieusement — "abc;;9" devenait [9] sans
+      // prévenir (63 IDs perdus). La saisie reste visible, le store garde
+      // la dernière liste valide.
+      setOscIdsError(`Ignored — invalid entries: ${bad.join(', ')}`);
+      return;
+    }
+    setOscIdsError(null);
+    setManualOscIds(tokens.map((t) => parseInt(t, 10)));
   };
 
   const handleOscInPortApply = async () => {
@@ -485,6 +492,9 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
               placeholder="1,2,3..."
             />
+            {oscIdsError && (
+              <p className="text-red-400 text-xs mt-1.5">{oscIdsError}</p>
+            )}
           </section>
           </>)}
 

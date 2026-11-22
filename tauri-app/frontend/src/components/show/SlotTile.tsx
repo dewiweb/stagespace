@@ -1,6 +1,26 @@
 import React from 'react';
 import { Play, Square, SlidersHorizontal } from 'lucide-react';
 
+/// Tracks condensés en plages pour la lisibilité pad : 64 tracks = mur
+/// de chiffres, «1-32» se lit en un clin d'œil. Les tracks parkés ⏸
+/// sortent de la plage pour garder leur marqueur.
+function formatTrackIds(trackIds: number[], parked: number[]): string {
+  const parkedSet = new Set(parked);
+  const parts: string[] = [];
+  let i = 0;
+  while (i < trackIds.length) {
+    const t = trackIds[i];
+    if (parkedSet.has(t)) { parts.push(`${t}⏸`); i++; continue; }
+    // Plage de tracks consécutifs non parkés
+    let j = i;
+    while (j + 1 < trackIds.length && !parkedSet.has(trackIds[j + 1]) && trackIds[j + 1] === trackIds[j] + 1) j++;
+    if (j - i >= 2) parts.push(`${trackIds[i]}-${trackIds[j]}`);
+    else for (let k = i; k <= j; k++) parts.push(`${trackIds[k]}`);
+    i = j + 1;
+  }
+  return parts.join(' ');
+}
+
 /// Tuile de slot unifiée — un seul composant pour le rendu live d'un move
 /// (ex-renderPad + ex-renderSlotRow, deux implémentations divergentes dans
 /// PerformView). `density` contrôle la forme, PAS la sémantique :
@@ -118,8 +138,11 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
         </div>
         <div className="min-w-0">
           <div className={`${big ? 'text-lg' : 'text-sm'} font-semibold truncate leading-tight`}>{slot.name}</div>
-          <div className={`text-[10px] mt-0.5 ${isPlaying ? 'text-green-300/80' : 'text-gray-500'}`}>
-            {slot.trackIds.map((t) => `${t}${p.parkedTracks?.includes(t) ? '⏸' : ''}`).join(' ')}
+          <div
+            className={`text-[10px] mt-0.5 ${isPlaying ? 'text-green-300/80' : 'text-gray-500'}`}
+            title={`Tracks : ${slot.trackIds.join(', ')}${isPlaying ? '' : ' — tap = play, hold ≥350ms = momentary'}`}
+          >
+            {formatTrackIds(slot.trackIds, p.parkedTracks ?? [])}
             {isPlaying ? ' · LIVE' : ' · hold=bump'}
           </div>
         </div>

@@ -5,6 +5,7 @@
 import React from 'react';
 import { StatusChip } from '../ui/StatusChip';
 import { ShowTransport } from '../show/ShowTransport';
+import { formatLogLabel } from '../../utils/liveActionsShared';
 import type { ConduiteHandlers, ConduiteViewState } from './types';
 
 export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteHandlers> = ({
@@ -224,7 +225,7 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
               <span className="text-gray-600">
                 {new Date(l.ts).toLocaleTimeString('fr-FR', { hour12: false })}
               </span>{' '}
-              {l.label}
+              {formatLogLabel(l.label)}
             </div>
           ))}
         </div>

@@ -58,7 +58,7 @@ export const NodeEditor: React.FC = () => {
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set());
   // Clic-droit node → menu "Open example" (help patches Pd/plugdata :
   // la doc est un graphe runnable, pas du texte).
-  const [nodeMenu, setNodeMenu] = useState<{ x: number; y: number; nodeType: NodeType } | null>(null);
+  const [nodeMenu, setNodeMenu] = useState<{ x: number; y: number; nodeType: NodeType; nodeId: string } | null>(null);
   // Palette repliable — QuickAdd couvre l'ajout rapide ; la palette sert
   // la découverte. Repliée elle rend ~220px au canvas en split expert.
   // État persisté : sans ça elle repartait dépliée à chaque session et
@@ -417,7 +417,7 @@ export const NodeEditor: React.FC = () => {
     if (isFrameNode(node)) return;
     const nodeType = node.data.type as NodeType | undefined;
     if (!nodeType) return;
-    setNodeMenu({ x: event.clientX, y: event.clientY, nodeType });
+    setNodeMenu({ x: event.clientX, y: event.clientY, nodeType, nodeId: node.id });
   }, []);
 
   const openExampleFor = useCallback((nodeType: NodeType, presetId: string, presetName: string) => {
@@ -729,6 +729,12 @@ export const NodeEditor: React.FC = () => {
                 </div>
               </div>
             )}
+            <button
+              onClick={() => { removeByIds(new Set([nodeMenu.nodeId]), new Set()); setNodeMenu(null); }}
+              className="w-full text-left px-3 py-1.5 text-xs text-red-300 hover:bg-red-900/40 border-t border-gray-800 transition-colors"
+            >
+              ✕ Delete node
+            </button>
           </div>
         )}
 

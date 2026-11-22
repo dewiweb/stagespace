@@ -494,9 +494,9 @@ function DryRunChip() {
     <button
       onClick={() => setArmed(!armed)}
       className={`px-1.5 py-0.5 rounded border ${armed ? 'border-gray-600 text-gray-500' : 'border-emerald-600 text-emerald-400'}`}
-      title={armed ? 'OSC armed — click to rehearse without sending' : 'DRY-RUN — OSC disarmed'}
+      title={armed ? 'OSC LIVE — positions are sent. Click for DRY-RUN (rehearse without sending)' : 'DRY-RUN — OSC output muted, click to arm'}
     >
-      {armed ? 'ARM' : 'DRY-RUN'}
+      {armed ? 'LIVE' : 'DRY-RUN'}
     </button>
   );
 }
