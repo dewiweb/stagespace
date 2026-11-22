@@ -16,7 +16,7 @@ import type { Zone } from '../../store/slices/spatialFxSlice';
 /// top   : plan X/Y   — +y vers le bas d'écran (FRONT = -y, en haut).
 /// front : élévation X/Z — +z vers le haut (ySign -1).
 /// side  : profil Y/Z — +y vers la droite, +z vers le haut.
-type RadarView = 'top' | 'front' | 'side';
+export type RadarView = 'top' | 'front' | 'side';
 const VIEW_AXES: Record<RadarView, { a: number; b: number; ySign: number; label: string }> = {
   top:   { a: 0, b: 1, ySign: 1,  label: 'FRONT' },
   front: { a: 0, b: 2, ySign: -1, label: 'UP' },
@@ -37,7 +37,7 @@ function zoneBounds(z: Zone, a: number, b: number): number[] {
   ];
 }
 
-export const Radar2D: React.FC = () => {
+export const Radar2D: React.FC<{ view: RadarView }> = ({ view: radarView }) => {
   const emittedPositions = useGraphStore((s) => s.emittedPositions);
   const objectStates = useGraphStore((s) => s.objectStates);
   const manualOscIds = useGraphStore((s) => s.manualOscIds);
@@ -80,9 +80,8 @@ export const Radar2D: React.FC = () => {
   const [objMenu, setObjMenu] = React.useState<{ x: number; y: number; obj: number } | null>(null);
   const zones = useGraphStore((s) => s.zones);
   const graphZones = useGraphStore((s) => s.graphZones);
-  // Vue projetée — top/front/side (sélecteur en overlay, mêmes
-  // conventions que le viewer 3D).
-  const [radarView, setRadarView] = React.useState<RadarView>('top');
+  // Vue projetée — top/front/side, choisie via le sélecteur dans le
+  // header du panneau (PerformView) — mêmes conventions que le viewer 3D.
   const { a: va, b: vb, ySign, label: axisLabel } = VIEW_AXES[radarView];
 
   // Auto-fit : échelle sur les bounds réels PROJETÉS, AVEC hystérésis —
@@ -115,23 +114,6 @@ export const Radar2D: React.FC = () => {
   return (
     <>
     <div className="relative flex-1 min-h-0">
-    {/* Sélecteur de vue — mêmes conventions que le viewer 3D :
-        top = plan X/Y, front = élévation X/Z, side = profil Y/Z. */}
-    <div className="absolute top-1 right-1 z-10 flex gap-0.5">
-      {(['top', 'front', 'side'] as RadarView[]).map((v) => (
-        <button
-          key={v}
-          onClick={() => setRadarView(v)}
-          className={`px-1.5 py-0.5 text-[9px] rounded transition-colors ${
-            radarView === v
-              ? 'bg-cyan-700 text-white'
-              : 'bg-gray-800/80 text-gray-400 hover:bg-gray-700 hover:text-white'
-          }`}
-        >
-          {v === 'top' ? 'Top' : v === 'front' ? 'Front' : 'Side'}
-        </button>
-      ))}
-    </div>
     <svg
       viewBox="-110 -110 220 220"
       className="flex-1 min-h-0"

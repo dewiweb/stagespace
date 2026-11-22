@@ -14,6 +14,7 @@ import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { doSolo, doStop, doUnsolo, getSoloRestoreIds, doAttention } from '../utils/liveActions';
 import { Radar2D } from './jeu/Radar2D';
+import type { RadarView } from './jeu/Radar2D';
 import { GestureStrip } from './jeu/GestureStrip';
 import { isDetachedWindow } from '../utils/safeStorage';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
@@ -66,6 +67,8 @@ export const PerformView: React.FC = () => {
   const movements = useGraphStore((s) => s.movements);
   // Panneau central : pads (l'instrument, défaut) ou canvas 3D.
   const [centerView, setCenterView] = React.useState<'pads' | '3d'>('pads');
+  // Projection du radar — sélecteur dans le header du panneau radar.
+  const [radarView, setRadarView] = React.useState<RadarView>('top');
   // Fenêtre détachée (?view=run) — l'édition pure est masquée : le
   // storage est read-only là-bas, créer divergerait sans persister.
   const detached = isDetachedWindow();
@@ -476,11 +479,28 @@ export const PerformView: React.FC = () => {
 
         {/* Radar — positions réellement émises + grab & throw. */}
         <div className="w-64 flex-shrink-0 border-l border-stagespace-border bg-gray-900/50 p-2 flex flex-col">
-          <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1 flex justify-between">
-            <span>radar · top</span>
-            <span className="normal-case text-gray-600">drag = throw</span>
+          <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1 flex items-center justify-between">
+            <span className="flex-shrink-0">radar</span>
+            {/* Sélecteur de vue — dans le header, jamais par-dessus la
+                zone cliquable du radar. */}
+            <span className="flex items-center gap-1">
+              {(['top', 'front', 'side'] as RadarView[]).map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setRadarView(v)}
+                  className={`px-1.5 py-0.5 text-[9px] rounded normal-case tracking-normal transition-colors ${
+                    radarView === v
+                      ? 'bg-cyan-700 text-white'
+                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
+                  }`}
+                >
+                  {v}
+                </button>
+              ))}
+              <span className="normal-case text-gray-600 ml-1">drag = throw</span>
+            </span>
           </div>
-          <Radar2D />
+          <Radar2D view={radarView} />
         </div>
       </div>
 
