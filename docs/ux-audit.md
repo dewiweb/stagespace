@@ -131,3 +131,68 @@ mélange show-critical (armed, panic) et debug (merge lock).
 12. **Expert/Simple = 2 apps dans une** : envisager mode « patch »
     dédié (le graphe mérite sa surface plutôt qu'un toggle qui écrase
     le canvas).
+
+---
+
+## Deep dive — chaque contrôle testé réellement (session 2)
+
+### Confirmé fonctionnel (à corriger dans l'évaluation initiale)
+
+- **Cue recall dblclick** : NOW/NEXT mis à jour parfaitement (Ensemble→Bass Drop)
+- **Pads** : tap = toggle, **hold≥350ms = momentary** (bump-play sur pad
+  arrêté, punch-out sur pad live) — validé backend, fade-out au release
+- **Radar drag** : grab+throw réel → obj 0 en manual_position [-7.5,0,1.97]
+- **Auto-fit radar existe** (« auto-fit amorti ») — mais les objets sur la
+  même orbite s'empilent en un point (6 dots verts confondus)
+- **Shortcuts `?`** : TOUT est documenté (splice, back-drag, Alt+drag cut,
+  Delete re-heals, grab/release radar) — le savoir existe, il est caché
+- **Palette nodes** : 57 types en 9 catégories + recettes Flow/Chain/
+  Blend/Time en bas + légende couleurs d'edges — mieux que prévu
+- **Quick-add** : s'auto-documente (↑↓/Enter/Esc, « inserts into a
+  selected edge ») ; filtre par type de port
+- **IssuesPanel** : `diagnose_graph` backend → badge « N warnings »
+- **Settings** : Réseau/Tracking/Show bien documentés — exemples de
+  format inline (`1:7 = tracker 1 pilote track 7`), sémantique MERGE
+  expliquée, MEDIA SYNC OUT
+- **Tooltips différenciants** : CUE GO « ≠ SETLIST GO », STOP ALL
+  « en fondu, moins brutal que PANIC », Prev/Next « arm — ne tire pas »
+- **Erreurs IPC** : `deny_unknown_fields` nomme la clé attendue
+
+### Nouveaux problèmes — par gravité
+
+**C1 — Clic template = renommage silencieux.** Cliquer « Ellipse » sur le
+move live a changé le template ET renommé `OrbTest` → `Ellipse` (nom
+custom perdu, zéro confirm). Pire : le mouvement live garde l'ancien nom
+→ table « Ellipse » / carte slot « OrbTest » / STOP « Ellipse » / backend
+« OrbTest » = **4 dénominations du même objet à l'écran**.
+
+**C2 — Chip ARM dans Cues = dry-run OSC global.** `useOscArmed` — le
+même état que `● LIVE` toolbar et que le toast « armed ». Un mini-chip
+labellé différemment peut muter tout le show. 3 représentations d'un
+état : LIVE (toolbar) / ARM (cues) / DRY-RUN (état).
+
+**C3 — Track IDs sans validation.** `abc;;9` → parsé en `[9]` en
+silence : 63 IDs perdus, champ affiche encore la saisie brute. Pareil
+probable sur les autres champs texte (psnMap, axes).
+
+**C4 — Node mort invisible.** Quick-add dépose le node non connecté,
+visuellement identique aux nodes câblés. Seul indice : badge
+« 1 warning » en texte gris (IssuesPanel replié). Aucun bouton
+supprimer sur node, menu contextuel = exemples (pas d'édition) —
+Delete clavier seulement, documenté dans `?` mais invisible.
+
+**C5 — Gestes composés sans UI.** `explode/converge/orbit/front`
+existes côté backend (`/stagespace/gesture`) — aucun bouton nulle part.
+Le « GestureStrip » ne contient que SPATIAL + ATTN.
+
+**C6 — `3D PREVIEW` = faux onglet** — label non interactif dans une
+rangée de 4 vrais boutons de vue.
+
+**Détails accumulés** : `Circle` (table/templates) vs `Circular`
+(params/node) ; `1 of 2` cryptique ; Fwd/Bwd/Ping/Loop/One-shot sans
+tooltip (effet live ?) ; `+ Move` crée un slot déjà rempli (hint
+« a template fills it » trompeur) ; pads = mur de numéros (32-64 tracks
+énumérés) ; LOG montre `doTape`/`doRehearsal` bruts ; `TC chase/lost`
+non expliqués ; tooltip CONDUITE survend (« plein écran » = switch
+surface) ; orphelin `Orbit Ensemble` post-recall correctement signalé
+mais inexpliqué.
