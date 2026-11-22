@@ -42,6 +42,17 @@ banner; the table below summarizes it.
 | `sanitation-plan.md` | Modularization plan (phases 0–5 + >1200 catch-up) | Largely implemented |
 | `gui-refactor-plan.md` | First GUI fix plan | Superseded by `gui-refonte-v2.md` |
 
+## Documentation roadmap
+
+- **Manual / wiki refresh with up-to-date screenshots** — `user-manual.md`
+  and its wiki mirror predate the chrome refonte: Toolbar dissolved,
+  StatusBar carries global state + controls (PANIC, LIVE/DRY-RUN chips
+  are now buttons), surface order `Atelier | Jeu | Conduite`, `JEU ⧉` /
+  `CONDUITE ⧉` detach chrome, frameless window resize handles, session
+  safety (dirty tracking, unsaved-changes modal, autosave/recovery,
+  recent shows). Re-capture `docs/screenshots/` against ≥0.6.1 and sync
+  the wiki pages.
+
 ## Elsewhere in the repo
 
 - `rust-engines/` — `BENCHMARKS.md`, `CONFIG.md`, `ERROR_HANDLING.md`, `LOGGING.md`, `TESTING.md`
