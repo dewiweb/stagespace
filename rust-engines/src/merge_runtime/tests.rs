@@ -1093,6 +1093,219 @@ fn test_end_mode_hold_writes_manual_position() {
 }
 
 #[test]
+fn test_finish_move_operator_stop_applies_hold() {
+    // « Stop = applique la fin déclarée » : un stop opérateur sur un move
+    // EndMode::Hold fige la dernière position émise (pause) — avant, Hold
+    // ne s'appliquait qu'à la fin naturelle (stale-kill) et le stop était
+    // une coupure sèche vers les origines. Origines non-nulles : les
+    // positions tenues doivent être celles du move, pas le trackpos.
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    rt.set_osc_ids(vec![1, 2]);
+    rt.set_track_positions(
+        [(0u32, [10.0, 0.0, 0.0]), (1u32, [0.0, 10.0, 0.0])]
+            .into_iter()
+            .collect(),
+    );
+    let b = Arc::new(PositionBuffer::new());
+    rt.register_move(
+        "m1".to_string(),
+        b.clone(),
+        vec![1, 2],
+        vec![0, 1],
+        false,
+        crate::EndMode::Hold,
+    );
+    b.write(vec![
+        (0usize, nalgebra::Vector3::new(5.0, 5.0, 5.0)),
+        (1usize, nalgebra::Vector3::new(-5.0, -5.0, -5.0)),
+    ]);
+
+    rt.finish_move("m1");
+
+    assert_eq!(rt.manual_position(0), Some([5.0, 5.0, 5.0]));
+    assert_eq!(rt.manual_position(1), Some([-5.0, -5.0, -5.0]));
+    let srcs = rt.object_control_sources();
+    assert_eq!(srcs.get(&0).map(String::as_str), Some("hold"));
+    assert_eq!(srcs.get(&1).map(String::as_str), Some("hold"));
+}
+
+#[test]
+fn test_finish_move_operator_stop_revert_writes_nothing() {
+    // Stop + EndMode::Revert : pas de hold — l'objet retourne à sa
+    // source de fond (trackpos / rien émis).
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    rt.set_osc_ids(vec![1]);
+    rt.set_track_positions([(0u32, [10.0, 0.0, 0.0])].into_iter().collect());
+    let b = Arc::new(PositionBuffer::new());
+    rt.register_move(
+        "m1".to_string(),
+        b.clone(),
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::Revert,
+    );
+    b.write(vec![(0usize, nalgebra::Vector3::new(9.0, 9.0, 9.0))]);
+
+    rt.finish_move("m1");
+
+    assert_eq!(rt.manual_position(0), None);
+    let srcs = rt.object_control_sources();
+    assert_eq!(srcs.get(&0).map(String::as_str), Some("track"));
+}
+
+#[test]
+fn test_register_move_consumes_held_but_not_operator_manual() {
+    // Held = mémoire éphémère : un move qui reprend la track la consomme —
+    // sinon la position tenue gagnerait le post-process (manual > move) et
+    // clouerait l'objet pendant tout le move. Une manual posée par
+    // l'opérateur (pas de marqueur held) n'est JAMAIS consommée.
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    rt.set_osc_ids(vec![1, 2]);
+
+    // Hold sur track 0 via finish_move (chemin stop opérateur)
+    let b1 = Arc::new(PositionBuffer::new());
+    rt.register_move(
+        "m1".to_string(),
+        b1.clone(),
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::Hold,
+    );
+    b1.write(vec![(0usize, nalgebra::Vector3::new(7.0, 8.0, 9.0))]);
+    rt.finish_move("m1");
+    assert_eq!(rt.manual_position(0), Some([7.0, 8.0, 9.0]));
+
+    // Manual opérateur sur track 1 (reprise directe — pas un hold)
+    rt.set_manual_position(1, [1.0, 2.0, 3.0]);
+
+    // Un nouveau move reprend les deux tracks : held consommé, manual gardé.
+    let b2 = Arc::new(PositionBuffer::new());
+    rt.register_move(
+        "m2".to_string(),
+        b2,
+        vec![1, 2],
+        vec![0, 1],
+        false,
+        crate::EndMode::Revert,
+    );
+
+    assert_eq!(
+        rt.manual_position(0),
+        None,
+        "le hold doit être consommé par le move qui reprend la track"
+    );
+    assert_eq!(
+        rt.manual_position(1),
+        Some([1.0, 2.0, 3.0]),
+        "la reprise opérateur ne doit jamais être consommée"
+    );
+    let srcs = rt.object_control_sources();
+    assert_eq!(srcs.get(&0).map(String::as_str), Some("move"));
+    assert_eq!(srcs.get(&1).map(String::as_str), Some("manual"));
+}
+
+#[test]
+fn test_register_preview_move_does_not_consume_held() {
+    // Un move preview est une dry-run : il ne touche pas à l'état live —
+    // le hold reste pour le vrai move qui suivra.
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    rt.set_osc_ids(vec![1]);
+    let b1 = Arc::new(PositionBuffer::new());
+    rt.register_move(
+        "m1".to_string(),
+        b1.clone(),
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::Hold,
+    );
+    b1.write(vec![(0usize, nalgebra::Vector3::new(4.0, 5.0, 6.0))]);
+    rt.finish_move("m1");
+
+    let bp = Arc::new(PositionBuffer::new());
+    rt.register_move(
+        "prev".to_string(),
+        bp,
+        vec![1],
+        vec![0],
+        true, // is_preview
+        crate::EndMode::Revert,
+    );
+
+    assert_eq!(
+        rt.manual_position(0),
+        Some([4.0, 5.0, 6.0]),
+        "un preview ne doit pas consommer le hold"
+    );
+}
+
+#[test]
+fn test_hold_chain_then_revert_full_scenario() {
+    // Le scénario utilisateur complet avec origines non-nulles :
+    //   rest(trackpos) → M1 play → stop+hold (pause à l'arrêt) →
+    //   M2 play sur les mêmes objets (held consommé → les objets bougent)
+    //   → stop+revert M2 → retour aux origines trackpos.
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    let captured = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+    rt.set_sink(Box::new(CaptureSink(captured.clone())));
+    rt.set_osc_ids(vec![1]);
+    rt.set_track_positions([(0u32, [10.0, 0.0, 0.0])].into_iter().collect());
+
+    // M1 (End:hold) émet (5,5,5), stop opérateur → pause : l'objet reste là.
+    let b1 = Arc::new(PositionBuffer::new());
+    rt.register_move(
+        "m1".to_string(),
+        b1.clone(),
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::Hold,
+    );
+    b1.write(vec![(0usize, nalgebra::Vector3::new(5.0, 5.0, 5.0))]);
+    rt.finish_move("m1");
+    assert_eq!(rt.manual_position(0), Some([5.0, 5.0, 5.0]));
+
+    // M2 (End:revert) reprend la track : le hold est consommé, l'objet bouge.
+    let b2 = Arc::new(PositionBuffer::new());
+    rt.register_move(
+        "m2".to_string(),
+        b2.clone(),
+        vec![1],
+        vec![0],
+        false,
+        crate::EndMode::Revert,
+    );
+    rt.start().unwrap();
+    // Écrire en continu pour rester sous le seuil de staleness (~30 frames).
+    for _ in 0..10 {
+        b2.write(vec![(0usize, nalgebra::Vector3::new(1.0, 2.0, 3.0))]);
+        std::thread::sleep(std::time::Duration::from_millis(16));
+    }
+    rt.stop();
+    // La position émise pendant M2 est celle du move (1,2,3) — pas le
+    // hold (5,5,5) qui aurait cloué l'objet si la consommation manquait.
+    assert_eq!(
+        captured.lock().unwrap_or_else(|e| e.into_inner()).get(&1),
+        Some(&nalgebra::Vector3::new(1.0, 2.0, 3.0)),
+        "l'objet doit suivre M2, pas rester figé sur le hold de M1"
+    );
+
+    // Stop M2 en revert : retour à la source de fond — le trackpos, pas
+    // le hold de M1 (consommé) ni la dernière position de M2.
+    rt.finish_move("m2");
+    assert_eq!(rt.manual_position(0), None);
+    let srcs = rt.object_control_sources();
+    assert_eq!(srcs.get(&0).map(String::as_str), Some("track"));
+}
+
+#[test]
 fn test_non_identity_obj_index_mapping() {
     // P3 : obj_index ≠ position dans la liste — un mapping .hol
     // [track 5, track 9, track 12] : obj_index 1 → osc_id 9, jamais 2.

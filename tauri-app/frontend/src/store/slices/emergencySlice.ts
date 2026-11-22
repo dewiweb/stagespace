@@ -17,7 +17,7 @@ export type EmergencyStore = EmergencySlice & {
   holProject: HolProject | null;
   manualOscIds: number[];
   objectStates: Record<number, string>;
-  stopAllMovements: () => Promise<void>;
+  stopAllMovements: (honorEndMode?: boolean) => Promise<void>;
 };
 
 type CreatorArgs = Parameters<StateCreator<EmergencyStore, [], [], EmergencySlice>>;
@@ -40,7 +40,10 @@ export const createEmergencySlice = (_set: CreatorArgs[0], get: CreatorArgs[1]):
     // le spatializer garde les dernières positions et les sources restent "en
     // l'air").
     try {
-      await get().stopAllMovements();
+      // honorEndMode=false : le panic ramène tout aux origines — un hold
+      // déclaré ne doit pas survivre à un arrêt d'urgence (sinon la
+      // propre passe origines ci-dessous sauterait ces objets « held »).
+      await get().stopAllMovements(false);
     } catch (e) {
       failedStops += 1;
       console.error('Panic: stop all failed:', e);

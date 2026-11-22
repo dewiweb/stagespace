@@ -88,7 +88,7 @@ export type MoveSlotsStore = MoveSlotsSlice & {
   setEdges: (edges: Edge[]) => void;
   stopMovement: (movementId: string) => Promise<void>;
   stopMovementWithFade: (movementId: string, fadeDuration: number) => Promise<void>;
-  stopAllMovements: () => Promise<void>;
+  stopAllMovements: (honorEndMode?: boolean) => Promise<void>;
   refreshMovements: () => Promise<void>;
   // OSC config globale
   oscAddress: string;

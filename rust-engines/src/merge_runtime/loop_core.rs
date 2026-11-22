@@ -230,15 +230,14 @@ impl MergeRuntime {
                                     let mut mp = manual_positions_arc
                                         .write()
                                         .unwrap_or_else(|e| e.into_inner());
-                                    for (i, (_, pos)) in positions.iter().enumerate() {
-                                        if let Some(&track) = state.track_indices.get(i) {
-                                            mp.insert(track, [pos.x, pos.y, pos.z]);
-                                            held_objects_arc
-                                                .write()
-                                                .unwrap_or_else(|e| e.into_inner())
-                                                .insert(track);
-                                        }
-                                    }
+                                    let mut held =
+                                        held_objects_arc.write().unwrap_or_else(|e| e.into_inner());
+                                    crate::merge_runtime::state_ops::write_held_positions(
+                                        &state.track_indices,
+                                        &positions,
+                                        &mut mp,
+                                        &mut held,
+                                    );
                                 }
                             }
                             // Audit C5 : publier l'ID + le buffer (test

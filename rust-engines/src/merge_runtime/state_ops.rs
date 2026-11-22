@@ -114,6 +114,26 @@ impl MergeRuntime {
         is_preview: bool,
         end_mode: crate::EndMode,
     ) {
+        // Held = mémoire éphémère post-move : un move qui reprend une
+        // track consomme son hold (`AnchorMode::Current` l'a déjà capturée
+        // via `last_position` avant le register). Sans ça, la position
+        // tenue gagnerait le post-process (`manual > move`) et clouerait
+        // l'objet pendant tout le nouveau move. Les manual posées par
+        // l'opérateur ne sont jamais consommées — `held_objects` fait la
+        // distinction entre « figé par un move » et « tenu par l'opérateur ».
+        // Un move preview est une dry-run : il ne touche pas à l'état live.
+        if !is_preview && !track_indices.is_empty() {
+            let mut held = self.held_objects.write().unwrap_or_else(|e| e.into_inner());
+            let mut manual = self
+                .manual_positions
+                .write()
+                .unwrap_or_else(|e| e.into_inner());
+            for &track in &track_indices {
+                if held.remove(&track) {
+                    manual.remove(&track);
+                }
+            }
+        }
         let state = MoveState::new(osc_ids, track_indices, is_preview);
         self.active_moves
             .write()
@@ -226,6 +246,43 @@ impl MergeRuntime {
             .write()
             .unwrap_or_else(|e| e.into_inner())
             .remove(move_id);
+    }
+
+    /// Retire un move en appliquant son `end_mode` déclaré — le stop
+    /// opérateur honore `Hold` (pause : figer la dernière position émise
+    /// en manuelle) comme une fin naturelle. Les retraits internes
+    /// (panic, recall, spawn-failure) passent par `unregister_move` brut :
+    /// un kill non déclaré ne doit pas écrire de hold.
+    pub fn finish_move(&self, move_id: &str) {
+        let is_hold = self
+            .move_end_modes
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(move_id)
+            .is_some_and(|m| *m == crate::EndMode::Hold);
+        if is_hold {
+            let (buffer, track_indices) = {
+                let moves = self.active_moves.read().unwrap_or_else(|e| e.into_inner());
+                let buffers = self.move_buffers.read().unwrap_or_else(|e| e.into_inner());
+                (
+                    buffers.get(move_id).cloned(),
+                    moves
+                        .get(move_id)
+                        .map(|s| s.track_indices.clone())
+                        .unwrap_or_default(),
+                )
+            };
+            if let Some(buf) = buffer {
+                let positions = buf.read();
+                let mut mp = self
+                    .manual_positions
+                    .write()
+                    .unwrap_or_else(|e| e.into_inner());
+                let mut held = self.held_objects.write().unwrap_or_else(|e| e.into_inner());
+                write_held_positions(&track_indices, &positions, &mut mp, &mut held);
+            }
+        }
+        self.unregister_move(move_id);
     }
 
     /// Dernières positions émises par objet (tentées — pas de confirmation
@@ -632,5 +689,23 @@ impl MergeRuntime {
     /// Total de positions non-finies (NaN/inf) droppées avant l'envoi OSC.
     pub fn dropped_position_count(&self) -> u64 {
         self.dropped_positions.load(Ordering::SeqCst)
+    }
+}
+
+/// Écrit les dernières positions d'un move comme positions manuelles
+/// « held » — partagé entre la fin naturelle (stale-kill) et le stop
+/// opérateur (`finish_move`) : même sémantique `EndMode::Hold`.
+/// `positions[i]` (index local du buffer) → `track_indices[i]` (index global).
+pub(crate) fn write_held_positions(
+    track_indices: &[usize],
+    positions: &[(usize, nalgebra::Vector3<f64>)],
+    manual_positions: &mut HashMap<usize, [f64; 3]>,
+    held_objects: &mut HashSet<usize>,
+) {
+    for (i, (_, pos)) in positions.iter().enumerate() {
+        if let Some(&track) = track_indices.get(i) {
+            manual_positions.insert(track, [pos.x, pos.y, pos.z]);
+            held_objects.insert(track);
+        }
     }
 }

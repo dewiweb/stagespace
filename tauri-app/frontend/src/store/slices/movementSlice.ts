@@ -169,7 +169,7 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
     }
   },
 
-  stopAllMovements: async () => {
+  stopAllMovements: async (honorEndMode = true) => {
     try {
       // Un stop opérateur désarme les timers pendus — sinon une cue
       // armée ressuscite le move N secondes après le stop (revue M3).
@@ -177,7 +177,7 @@ export const createMovementSlice: StateCreator<MovementStore, [], [], MovementSl
         m.useCuelistStore.getState().cancelPendingTimers(),
       );
       void import('../../utils/timerBroadcast').then((m) => m.broadcastTimerCancel());
-      await invoke('deactivate_all_moves', { fadeDuration: 0.0 });
+      await invoke('deactivate_all_moves', { fadeDuration: 0.0, honorEndMode });
       // Vider l'objet mutable
       for (const k of Object.keys(_movementPositionsExternal)) delete _movementPositionsExternal[k];
       set({ savedGraphs: {} });

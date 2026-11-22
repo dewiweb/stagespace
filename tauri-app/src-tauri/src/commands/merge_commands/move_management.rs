@@ -150,6 +150,7 @@ pub fn remove_move_now(movement_id: &str, sh: &Shared) -> bool {
         &sh.merge_runtime,
         &sh.movements,
         &sh.pending_move_ids,
+        true,
     )
 }
 
@@ -357,6 +358,15 @@ fn spawn_move_inner(
     runtime.set_loop_mode(spec.loop_mode);
     runtime.set_direction(spec.direction);
     if let Some((fade_in, fade_out)) = spec.fade {
+        // EndMode::Hold = « figer tel quel » : la contraction radiale du
+        // fade_out vers l'ancre n'a de sens que pour un move qui revient —
+        // sinon Hold capturerait l'ancre au lieu de la dernière position
+        // de la forme. Le fade_in reste (entrée ≠ sortie).
+        let fade_out = if spec.end_mode == stagespace_engines::EndMode::Hold {
+            0.0
+        } else {
+            fade_out
+        };
         runtime.set_fade(fade_in, fade_out);
     }
     if let Some(speed) = spec.speed {
@@ -609,6 +619,7 @@ fn remove_move_checked(
     merge_runtime: &Arc<Mutex<stagespace_engines::MergeRuntime>>,
     movements: &Arc<Mutex<HashMap<String, Movement>>>,
     pending: &Arc<Mutex<std::collections::HashSet<String>>>,
+    honor_end_mode: bool,
 ) -> bool {
     // Section critique pending → movements : si l'id est en cours de
     // réactivation (pending) ou a été réutilisé (génération différente),
@@ -626,7 +637,14 @@ fn remove_move_checked(
     };
     {
         let merge_rt = lock_or_recover(merge_runtime);
-        merge_rt.unregister_move(movement_id);
+        // Le stop opérateur applique la fin déclarée du move (Hold = pause,
+        // les dernières positions deviennent manuelles) — un kill interne
+        // (panic, recall, sweep) retire brut sans écrire de hold.
+        if honor_end_mode {
+            merge_rt.finish_move(movement_id);
+        } else {
+            merge_rt.unregister_move(movement_id);
+        }
     }
     if let Some(movement) = movement {
         movement.runtime.stop(); // stop() join le thread proprement
@@ -641,8 +659,16 @@ fn deactivate_move_immediate_arc(
     movements: &Arc<Mutex<HashMap<String, Movement>>>,
     pending: &Arc<Mutex<std::collections::HashSet<String>>>,
     event_sink: &Arc<Mutex<Option<EventSink>>>,
+    honor_end_mode: bool,
 ) -> Result<String, IpcError> {
-    if !remove_move_checked(movement_id, generation, merge_runtime, movements, pending) {
+    if !remove_move_checked(
+        movement_id,
+        generation,
+        merge_runtime,
+        movements,
+        pending,
+        honor_end_mode,
+    ) {
         return Ok(format!("Move '{movement_id}' already gone"));
     }
     emit_ui(event_sink, "active-moves-update", ());
@@ -699,6 +725,7 @@ pub async fn deactivate_move(
                 &movements_arc,
                 &pending_arc,
                 &event_sink_arc,
+                true,
             )
         })
         .await
@@ -715,20 +742,26 @@ pub async fn deactivate_move(
     let pending = state.pending_move_ids.clone();
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_secs_f64(fade));
-        remove_move_checked(&mv_id, generation, &merge_rt, &movements, &pending);
+        remove_move_checked(&mv_id, generation, &merge_rt, &movements, &pending, true);
         emit_ui(&app_state, "active-moves-update", ());
     });
 
     Ok(format!("Move '{movement_id}' fading out"))
 }
 
-/// Désactive tous les moves avec fade out
+/// Désactive tous les moves avec fade out.
+///
+/// `honor_end_mode` (défaut true) : le stop applique la fin déclarée de
+/// chaque move (Hold = pause). Le panic passe `false` — un arrêt
+/// d'urgence ramène tout aux origines sans écrire de hold.
 #[tauri::command]
 pub async fn deactivate_all_moves(
     fade_duration: Option<f64>,
+    honor_end_mode: Option<bool>,
     state: State<'_, AppState>,
 ) -> Result<String, IpcError> {
     let fade = fade_duration.unwrap_or(0.5);
+    let honor_end_mode = honor_end_mode.unwrap_or(true);
 
     // Panic beat — un recall en cours doit détecter ça et s'avorter
     // avant de respawner (le panic gagne toujours).
@@ -765,7 +798,7 @@ pub async fn deactivate_all_moves(
         std::thread::spawn(move || {
             std::thread::sleep(std::time::Duration::from_secs_f64(fade));
             for (id, gen) in &move_entries {
-                remove_move_checked(id, *gen, &merge_rt, &movements, &pending);
+                remove_move_checked(id, *gen, &merge_rt, &movements, &pending, honor_end_mode);
             }
             emit_ui(&app_state, "active-moves-update", ());
         });
@@ -784,6 +817,7 @@ pub async fn deactivate_all_moves(
                     &movements_arc,
                     &pending_arc,
                     &event_sink_arc,
+                    honor_end_mode,
                 );
             }
         })

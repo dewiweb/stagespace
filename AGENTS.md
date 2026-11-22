@@ -219,12 +219,21 @@ dispatches to the same functions as the keyboard shortcuts (`liveActions.ts`).
 
 Each move/slot carries two flags (Playback tab: `End`, `Anchor`):
 
-- **`End: hold`** — at the end of a one-shot, the last positions are
-  written as manual positions: the object stays where the move left it
-  (instead of returning to base — `revert` by default).
+- **`End: hold`** — the last emitted positions are written as manual
+  positions ("held"): the object stays where the move left it
+  (`revert` returns it to its track origin). Applies identically at
+  natural end AND on operator stop — "stop = apply the declared end".
+  A hold move never runs the radial fade-out contraction: hold means
+  freeze in place, not collapse to the anchor. Panic bypasses end_mode
+  unconditionally (`deactivate_all_moves honor_end_mode=false`).
 - **`Anchor: current`** — at spawn, each object captures its last
   emitted position as anchor (`delta = captured − traj(0)`): the move
   starts from where the object is, no jump — move→move chaining.
+- **Held = ephemeral memory, not a pinned position** — `register_move`
+  consumes `held_objects` markers for its tracks (the anchor capture
+  already read them via `last_position`), so a new move overrides the
+  memory instead of being frozen by it. Operator `manual` positions
+  (no held marker) are never consumed.
 
 Combined: `hold` freezes the object at `f(T)`, `current` on the next
 move continues from that point — "release/peg-out" console semantics.
