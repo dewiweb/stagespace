@@ -51,7 +51,7 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
       {/* Header — santé show, lisible à distance FOH. */}
       <div className="flex items-center justify-between px-6 py-3 border-b border-gray-800 flex-shrink-0">
         <div className="flex items-center gap-2">
-          <span className="text-gray-400 text-xs uppercase tracking-widest">Conduite — STAGESPACE</span>
+          <span className="text-gray-400 text-xs uppercase tracking-widest">Conduite</span>
           {onDetach && (
             <button
               onClick={onDetach}
