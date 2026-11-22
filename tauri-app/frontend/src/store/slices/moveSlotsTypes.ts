@@ -86,6 +86,12 @@ export interface MoveSlot {
   trackIds: number[];
   /// ID du movement actif (null = arrêté). Source de vérité = backend.
   movementId: string | null;
+  /// Dernier movementId connu du slot — mémoire du lien backend. Un
+  /// recall de cue respawn les moves sous l'id du SNAPSHOT (= cet id),
+  /// ce qui permet un rebind exact par id au lieu du match par nom
+  /// (cassé dès qu'un slot est renommé). Jamais utilisé pour le
+  /// transport — indicatif de réconciliation seulement.
+  lastMovementId?: string;
   /// Mode preview ou live
   isPreview: boolean;
   /// Macros sauvegardées (appliquées au lancement et au GO)

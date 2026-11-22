@@ -366,4 +366,45 @@ describe('syncSlotMovements', () => {
     useGraphStore.getState().syncSlotMovements();
     expect((useGraphStore.getState() as any).moveSlots[0].movementId).toBeNull();
   });
+
+  it('remembers lastMovementId when a binding goes stale', () => {
+    useGraphStore.setState({
+      moveSlots: [makeSlot({ id: 'slot-1', movementId: 'mv-stale' })],
+      movements: [],
+    } as any);
+    useGraphStore.getState().syncSlotMovements();
+    const sl = (useGraphStore.getState() as any).moveSlots[0];
+    expect(sl.movementId).toBeNull();
+    expect(sl.lastMovementId).toBe('mv-stale');
+  });
+
+  it('rebinds by lastMovementId even after the slot is renamed', () => {
+    // Scénario : slot "Orbit" joue mv-A → cue stocké (snap.id = mv-A) →
+    // slot stoppé puis renommé "Poursuite" → cue recall respawn sous mv-A.
+    // Le match par nom échoue ("Poursuite" ≠ "Orbit") — l'id exact sauve.
+    useGraphStore.setState({
+      moveSlots: [
+        makeSlot({ id: 'slot-1', name: 'Poursuite', lastMovementId: 'mv-A' }),
+      ],
+      movements: [{ id: 'mv-A', name: 'Orbit', is_preview: false }],
+    } as any);
+    useGraphStore.getState().syncSlotMovements();
+    expect((useGraphStore.getState() as any).moveSlots[0].movementId).toBe('mv-A');
+  });
+
+  it('prefers the id match over a colliding slot name', () => {
+    // Un autre slot libre porte le même nom que le move respawné — le
+    // match par id doit gagner pour le slot qui possédait vraiment cet id.
+    useGraphStore.setState({
+      moveSlots: [
+        makeSlot({ id: 'slot-1', name: 'Orbit', lastMovementId: 'mv-A' }),
+        makeSlot({ id: 'slot-2', name: 'Orbit' }),
+      ],
+      movements: [{ id: 'mv-A', name: 'Orbit', is_preview: false }],
+    } as any);
+    useGraphStore.getState().syncSlotMovements();
+    const slots = (useGraphStore.getState() as any).moveSlots;
+    expect(slots[0].movementId).toBe('mv-A');
+    expect(slots[1].movementId).toBeNull();
+  });
 });

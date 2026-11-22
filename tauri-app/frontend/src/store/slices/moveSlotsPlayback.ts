@@ -234,7 +234,9 @@ export const createSlotPlaybackMethods = (set: CreatorArgs[0], get: CreatorArgs[
       return;
     }
     set((s) => {
-      const newSlots = s.moveSlots.map((sl) => sl.id === id ? { ...sl, movementId: null } : sl);
+      const newSlots = s.moveSlots.map((sl) =>
+        sl.id === id ? { ...sl, movementId: null, lastMovementId: sl.movementId ?? sl.lastMovementId } : sl
+      );
       saveSlotsToStorage(newSlots);
       return { moveSlots: newSlots };
     });
@@ -262,7 +264,9 @@ export const createSlotPlaybackMethods = (set: CreatorArgs[0], get: CreatorArgs[
     // l'id comme "en fade" pour que syncSlotMovements ne le flagge pas orphelin.
     markFading(movementId, fadeDuration);
     set((s) => {
-      const newSlots = s.moveSlots.map((sl) => sl.id === id ? { ...sl, movementId: null } : sl);
+      const newSlots = s.moveSlots.map((sl) =>
+        sl.id === id ? { ...sl, movementId: null, lastMovementId: sl.movementId ?? sl.lastMovementId } : sl
+      );
       saveSlotsToStorage(newSlots);
       return { moveSlots: newSlots };
     });
@@ -380,7 +384,7 @@ export const createSlotPlaybackMethods = (set: CreatorArgs[0], get: CreatorArgs[
       set((s) => {
         const newSlots = s.moveSlots.map((sl) =>
           sl.movementId && !s.pendingPlays.includes(sl.id) && !activeIds.has(sl.movementId)
-            ? { ...sl, movementId: null }
+            ? { ...sl, movementId: null, lastMovementId: sl.movementId }
             : sl
         );
         saveSlotsToStorage(newSlots);
@@ -406,7 +410,20 @@ export const createSlotPlaybackMethods = (set: CreatorArgs[0], get: CreatorArgs[
         }
         const bindings = new Map<string, string>();
         const usedMoves = new Set<string>();
+        // Passe 1 — rebind EXACT par lastMovementId : un recall respawn
+        // les moves du cue sous l'id du snapshot (= l'id que le slot
+        // portait au store). Le match par id survit aux renames, à la
+        // différence du match par nom de la passe 2.
         for (const m of untracked) {
+          const sl = get().moveSlots.find(
+            (s) => !s.movementId && !bindings.has(s.id) && s.lastMovementId === m.id
+          );
+          if (!sl) continue;
+          bindings.set(sl.id, m.id);
+          usedMoves.add(m.id);
+        }
+        for (const m of untracked) {
+          if (usedMoves.has(m.id)) continue;
           // Nom unique parmi les slots libres — sinon ambigu, pas de rebind.
           if ((freeByName.get(m.name) ?? 0) !== 1) continue;
           const sl = get().moveSlots.find(

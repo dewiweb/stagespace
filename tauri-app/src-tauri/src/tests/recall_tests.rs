@@ -474,4 +474,45 @@ mod recall_tests {
             "un cue Tracking ne touche pas aux moves non listés"
         );
     }
+
+    #[test]
+    fn test_spawn_aborts_during_recall_and_leaves_no_ghost() {
+        // Fenêtre pending/recall : le sweep Full saute les ids pending —
+        // le spawn doit s'auto-avorter (abort_on_recall) plutôt que de
+        // ré-introduire un move après le sweep. Sinon : worker vivant,
+        // absent de toute volonté de recall → orphelin.
+        use crate::commands::merge_commands::{spawn_move, MoveSpec};
+        let sh = make_shared();
+        sh.recall_in_progress
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        let spec = MoveSpec {
+            id: "mv-pending".to_string(),
+            name: "Pending".to_string(),
+            graph_json: serde_json::from_value(circular_graph()).unwrap(),
+            osc_ids: vec![1],
+            track_indices: vec![0],
+            is_preview: false,
+            origin: None,
+            duration: 4.0,
+            loop_mode: stagespace_engines::LoopMode::Loop,
+            direction: stagespace_engines::PlayDirection::Forward,
+            fade: None,
+            speed: None,
+            spatial_macros: None,
+            animation_state: None,
+            signal_graph: None,
+            end_mode: stagespace_engines::EndMode::default(),
+            anchor_mode: stagespace_engines::AnchorMode::default(),
+            anchor_target: None,
+        };
+        let err = spawn_move(spec, &sh).expect_err("spawn doit avorter pendant un recall");
+        assert!(
+            !sh.movements.lock().unwrap().contains_key("mv-pending"),
+            "aucun ghost ne doit être inséré : {err}"
+        );
+        assert!(
+            !sh.merge_runtime.lock().unwrap().has_move("mv-pending"),
+            "le merge ne doit pas connaître le move avorté"
+        );
+    }
 }
