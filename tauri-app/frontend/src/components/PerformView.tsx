@@ -9,7 +9,6 @@ import { LiveDrawer } from './perform/LiveDrawer';
 import { useShowStatusStore, startShowStatusPolling } from '../store/useShowStatusStore';
 import { cueLabel, tcStr } from '../utils/showFormat';
 import { useGraphStore } from '../store/useGraphStore';
-import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { doSolo, doStop, doUnsolo, getSoloRestoreIds, doAttention } from '../utils/liveActions';
 import { Radar2D } from './jeu/Radar2D';
@@ -48,12 +47,10 @@ export const PerformView: React.FC = () => {
   const tcChaseEnabled = useCuelistStore((s) => s.tcChaseEnabled);
   const tcFps = useGraphStore((s) => s.timecodeFps);
   const [goFeedback, setGoFeedback] = React.useState<{ ok: boolean; message: string } | null>(null);
-  // Mode touch : pads numérotés (busking) + cibles agrandies (tablette).
   // Mode tactile/busking plein écran supprimés — la surface Jeu EST
   // l'instrument (pads permanents au centre, gestes en strip). La
-  // conduite est une surface de première classe (nav ATELIER/CONDUITE/
-  // JEU) — le bouton y navigue au lieu de l'overlay interne redondant.
-  const setSurface = useMoveEditorStore((s) => s.setSurface);
+  // conduite est une surface de première classe (switcher de surface
+  // en haut de la menubar, /stagespace/view pour le show-control).
   // État de santé show (parked / consoleAge / armed) — poll unique partagé
   // via useShowStatusStore au lieu d'un setInterval par composant.
   const consoleAge = useShowStatusStore((s) => s.consoleAge);
@@ -181,6 +178,20 @@ export const PerformView: React.FC = () => {
           Les métriques moteur (FPS/OSC/CPU) vivent dans la StatusBar
           partagée en bas — ici on ne garde que le contexte du show. */}
       <div className="h-16 flex items-center gap-4 px-4 border-b border-stagespace-border bg-stagespace-panel flex-shrink-0">
+        {/* Chrome de surface — identité + détachement de CETTE vue
+            (même pattern que le header Conduite). Séparé des contrôles
+            show : ce n'est pas une action de jeu. */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <span className="text-gray-500 text-[10px] uppercase tracking-widest">Jeu</span>
+          <button
+            onClick={() => detachWindow('run', 'STAGESPACE — Run', 1200, 760)}
+            className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white text-xs font-bold transition-colors active:scale-95"
+            title="Détacher cette surface (pads + radar) dans une fenêtre dédiée"
+          >
+            ⧉
+          </button>
+        </div>
+        <div className="w-px h-8 bg-stagespace-border flex-shrink-0" />
         <div className="flex items-center gap-2.5">
           <div
             className={`w-4 h-4 rounded-full ${
@@ -285,26 +296,6 @@ export const PerformView: React.FC = () => {
           >
             {tcActive ? tc : 'TC lost'}
           </span>
-        )}
-        {/* ─── Cluster vues : détacher CETTE surface + switch conduite.
-            Le ⧉ conduite vit dans le header Conduite — chaque surface
-            porte son propre bouton de détachement. ─── */}
-        <div className="w-px h-8 bg-stagespace-border flex-shrink-0" />
-        <button
-          onClick={() => detachWindow('run', 'STAGESPACE — Run', 1200, 760)}
-          className="px-3 py-2.5 rounded-lg flex-shrink-0 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-bold transition-colors active:scale-95"
-          title="Détacher cette surface (pads + radar) dans une fenêtre dédiée"
-        >
-          ⧉
-        </button>
-        {!detached && (
-          <button
-            onClick={() => setSurface('conduite')}
-            className="px-3 py-2.5 rounded-lg flex-shrink-0 bg-amber-800/60 hover:bg-amber-700/80 text-amber-100 text-xs font-bold uppercase tracking-wide transition-colors active:scale-95"
-            title="Vue conduite plein écran — NOW/NEXT cue, TC, ARM (lisible à distance)"
-          >
-            Conduite
-          </button>
         )}
         {/* ─── Cluster sécurité — master à droite ─── */}
         <div className="w-px h-8 bg-stagespace-border flex-shrink-0" />
