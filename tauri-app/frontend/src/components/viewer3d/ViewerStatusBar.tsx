@@ -2,6 +2,7 @@ import React, { MutableRefObject } from 'react';
 import { useGraphStore } from '../../store/useGraphStore';
 import { useMoveEditorStore } from '../../store/useMoveEditorStore';
 import { debugPerf } from '../../utils/debugPerf';
+import { ModChips } from '../ModChips';
 import { ObjectInspectBar } from './ObjectInspectBar';
 import { drawToolHint } from './DrawToolbar';
 
@@ -105,6 +106,7 @@ export const ViewerStatusBar: React.FC<ViewerStatusBarProps> = ({ cursorReadoutR
           ))}
         </div>
       )}
+      <ModChips />
       <span className="flex-1" />
       {selectedObjIndex !== null && <ObjectInspectBar positions={emittedPositions} />}
       {/* Coords monde du curseur — span muté par les handlers pointer

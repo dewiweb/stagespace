@@ -5,6 +5,7 @@ import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { useOscArmed } from '../hooks/useOscArmed';
 import { useShowStatusStore } from '../store/useShowStatusStore';
 import { useCuelistStore } from '../store/useCuelistStore';
+import { ModChips } from './ModChips';
 import { doPanic } from '../utils/liveActions';
 
 /// StatusBar — bandeau persistant en bas de fenêtre, monté dans App pour
@@ -143,6 +144,11 @@ export const StatusBar: React.FC = () => {
           </span>
         ) : null;
       })()}
+
+      {/* Modulations globales actives — un graphe signal oublié qui drive
+          des macros est indiscernable d'un bug de trajectoire : visible
+          en permanence, comme ARM/PSN. */}
+      <ModChips />
 
       {/* Backend absent — un silentCatch a avalé un échec IPC. Plus de
           backend = plus d'OSC, plus de recall, plus rien : visible partout. */}

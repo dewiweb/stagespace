@@ -109,15 +109,16 @@ function persist(state: SignalGraphState, nodes: GraphNode[], edges: Edge[]) {
   }
 }
 
-const _defaultGraph = buildDefaultSignalGraph();
 const _stored = loadFromStorage();
 const history = createGraphHistory<GraphNode, Edge>();
 
 export const useSignalGraphStore = create<SignalGraphState>((set, get) => ({
-  // Un graph signal vide ne compile pas (SignalOut requis) — on démarre
-  // sur l'exemple LFO→yaw plutôt qu'un canvas vide qui refuserait le push.
-  nodes: _stored?.nodes ?? _defaultGraph.nodes,
-  edges: _stored?.edges ?? _defaultGraph.edges,
+  // Seed = vide : une modulation active par défaut serait invisible pour
+  // l'opérateur (le backend compile un graphe vide en empty_signal_fn).
+  // L'exemple LFO→yaw reste dispo via resetToDefault — démo explicite,
+  // jamais imposée.
+  nodes: _stored?.nodes ?? [],
+  edges: _stored?.edges ?? [],
   context: 'global',
 
   setNodes: (nodes) => {
@@ -145,8 +146,8 @@ export const useSignalGraphStore = create<SignalGraphState>((set, get) => ({
       const fresh = loadFromStorage();
       set({
         context: 'global',
-        nodes: fresh?.nodes ?? _defaultGraph.nodes,
-        edges: fresh?.edges ?? _defaultGraph.edges,
+        nodes: fresh?.nodes ?? [],
+        edges: fresh?.edges ?? [],
       });
     } else {
       set({
