@@ -449,16 +449,6 @@ function AppMain() {
           {/* Barre du haut — change selon le mode */}
           {showExpert ? (
             <div className="h-9 border-b border-stagespace-border flex items-center px-3 flex-shrink-0 gap-2">
-              {/* Mode Simple/Expert — vit dans le header de la colonne
-                  qu'il transforme (NodeEditor mount/unmount), pas dans la
-                  Toolbar globale à côté de PANIC. */}
-              <button
-                onClick={() => setShowExpert(false)}
-                className="px-2 py-0.5 text-xs rounded font-medium bg-gray-800 text-gray-400 hover:text-white transition-colors"
-                title="Simple mode — move form editor (no graph nodes)"
-              >
-                Simple
-              </button>
               <span className="text-gray-300 text-xs font-medium">Expert — Node Editor</span>
               <button
                 onClick={() => setEditorFocus(!editorFocus)}
@@ -490,6 +480,15 @@ function AppMain() {
               >
                 ★ Save
               </button>
+              {/* Toggle de mode — extrême droite dans les deux headers
+                  (position constante), il transforme la colonne sous lui. */}
+              <button
+                onClick={() => setShowExpert(false)}
+                className="px-2 py-0.5 text-xs rounded font-medium bg-gray-800 text-gray-400 hover:text-white transition-colors"
+                title="Simple mode — move form editor (no graph nodes)"
+              >
+                Simple
+              </button>
             </div>
           ) : (
             <div className="h-9 border-b border-stagespace-border flex items-center px-3 bg-stagespace-panel flex-shrink-0">
@@ -500,6 +499,18 @@ function AppMain() {
                 <span className="text-gray-300 text-xs font-medium">Canvas</span>
               </div>
               <div className="flex-1" />
+              {import.meta.env.DEV && (
+                <button
+                  onClick={() => setDebugPerfVisible(!debugPerfVisible)}
+                  className={`p-1 rounded transition-colors ${debugPerfVisible ? 'text-cyan-400 bg-cyan-900/30' : 'text-gray-500 hover:text-gray-300'}`}
+                  title="DEBUG PERF overlay (render/IPC fps, stutter) — dev tool"
+                >
+                  <Activity size={12} />
+                </button>
+              )}
+              {/* Toggle de mode — extrême droite dans les deux headers
+                  (position constante). Le hint 'orbit:drag' est déjà dans
+                  l'overlay du canvas + les tooltips du viewer : retiré. */}
               <button
                 onClick={() => {
                   setShowExpert(true);
@@ -513,16 +524,6 @@ function AppMain() {
                 <Workflow size={11} />
                 Expert
               </button>
-              {import.meta.env.DEV && (
-                <button
-                  onClick={() => setDebugPerfVisible(!debugPerfVisible)}
-                  className={`p-1 rounded transition-colors ${debugPerfVisible ? 'text-cyan-400 bg-cyan-900/30' : 'text-gray-500 hover:text-gray-300'}`}
-                  title="DEBUG PERF overlay (render/IPC fps, stutter) — dev tool"
-                >
-                  <Activity size={12} />
-                </button>
-              )}
-              <span className="text-gray-500 text-xs">orbit: drag · zoom: scroll</span>
             </div>
           )}
 
