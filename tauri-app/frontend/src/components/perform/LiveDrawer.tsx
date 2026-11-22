@@ -148,7 +148,14 @@ export const LiveDrawer: React.FC = () => {
         )}
         {slot && (
           <span className="text-indigo-400/70 text-xs ml-2 flex items-center gap-1.5">
-            editing: {slot.name}
+            editing:
+            <button
+              onClick={() => { selectSlotForEditing(null); setScope(null); }}
+              className="px-1.5 py-0.5 -my-0.5 rounded bg-indigo-900/60 hover:bg-indigo-800 text-indigo-200 font-semibold"
+              title="Click to deselect — back to overview (no move edited)"
+            >
+              {slot.name} ✕
+            </button>
             {slot.movementId
               ? <span className={`px-1 rounded ${slot.isPreview ? 'bg-cyan-900 text-cyan-300' : 'bg-green-900 text-green-300'}`}>{slot.isPreview ? 'PREV' : 'LIVE'}</span>
               : <span className="text-gray-400">(stopped)</span>}

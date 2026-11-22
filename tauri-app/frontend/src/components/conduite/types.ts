@@ -14,6 +14,10 @@ export type ConduiteViewState = {
   pending: { kind: string; remainingSec: number } | null;
   isRecalling: boolean;
   playingCount: number;
+  /// Noms des moves live (slots avec movementId) — NOW les affiche quand
+  /// aucune cue n'est courante : la scène jouée en busking n'est pas « — »,
+  /// c'est la vérité de ce qui sonne.
+  playingNames: string[];
   tcChaseEnabled: boolean;
   tcActive: boolean;
   tcStr: string;

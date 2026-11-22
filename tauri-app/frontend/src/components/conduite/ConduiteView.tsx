@@ -155,7 +155,21 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
           )}
           <div className="text-center min-w-0">
             <div className="text-gray-500 text-base uppercase tracking-widest mb-1">Now</div>
-            <div className="text-5xl font-black text-amber-300 truncate max-w-[60vw]">{cur?.label || '—'}</div>
+            {/* Sans cue courante mais des moves live (busking) : NOW montre
+                la vérité — ce qui sonne — plutôt qu'un tiret trompeur. */}
+            <div className="text-5xl font-black text-amber-300 truncate max-w-[60vw]">
+              {cur?.label ||
+                (st && st.playingNames.length > 0
+                  ? st.playingNames.length > 2
+                    ? `${st.playingNames[0]} +${st.playingNames.length - 1}`
+                    : st.playingNames.join(' + ')
+                  : '—')}
+            </div>
+            {!cur && st && st.playingNames.length > 0 && (
+              <div className="text-gray-500 text-sm mt-1" title={st.playingNames.join(', ')}>
+                busked — no current cue
+              </div>
+            )}
             {st?.pending && (
               <div className="text-orange-400 text-2xl font-bold mt-2 animate-pulse">
                 {st.pending.kind === 'pre_wait' ? 'pré-attente' : 'follow'} {st.pending.remainingSec.toFixed(1)}s

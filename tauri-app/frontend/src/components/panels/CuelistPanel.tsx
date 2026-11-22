@@ -137,7 +137,7 @@ export const CuelistPanel: React.FC<{ readonly?: boolean }> = ({ readonly = fals
         <button
           onClick={() => doCueNext('cuelist')}
           disabled={currentCueIndex + 1 >= cues.length || isRecalling}
-          className="px-1.5 py-0.5 text-xs bg-purple-800 hover:bg-purple-700 text-purple-200 rounded disabled:opacity-30"
+          className="px-1.5 py-0.5 text-xs bg-amber-800/80 hover:bg-amber-700 text-amber-100 rounded disabled:opacity-30"
           title="Next cue — RECALL replaces the whole scene (kill + respawn). Setlist GO = Enter."
         >
           RECALL ▶

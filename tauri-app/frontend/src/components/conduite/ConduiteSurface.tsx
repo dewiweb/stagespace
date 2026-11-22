@@ -41,6 +41,7 @@ export const ConduiteSurface: React.FC = () => {
       : null,
     isRecalling,
     playingCount: moveSlots.filter((m) => m.movementId).length,
+    playingNames: moveSlots.filter((m) => m.movementId).map((m) => m.name),
     tcChaseEnabled,
     tcActive,
     tcStr: tcStr(lastTimecode ?? 0, timecodeFps),

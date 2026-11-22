@@ -18,6 +18,7 @@ type BroadcastState = {
   pending: ConduiteViewState['pending'];
   isRecalling: boolean;
   playingCount: number;
+  playingNames: string[];
   tcChaseEnabled: boolean;
   tcActive: boolean;
   tcStr: string;

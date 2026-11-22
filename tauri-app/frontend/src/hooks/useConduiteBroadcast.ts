@@ -31,6 +31,7 @@ export function useConduiteBroadcast() {
           : null,
         isRecalling: cs.isRecalling,
         playingCount: gs.moveSlots.filter((m) => m.movementId).length,
+        playingNames: gs.moveSlots.filter((m) => m.movementId).map((m) => m.name),
         tcChaseEnabled: cs.tcChaseEnabled,
         tcActive,
         tcStr: tc,

@@ -508,3 +508,26 @@ Suite des findings UX sur l'invariant entre surfaces.
 
 Reste : hiérarchie des GO (3 systèmes), `editing:` chip discret,
 NOW qui ignore les buskés.
+
+## Session 8 — NOW busked, hiérarchie GO, chip editing
+
+Corrections de la session précédente, vérifiées en réel :
+
+- **NOW inclut les buskés** (`playingNames` ajouté au contrat
+  `ConduiteViewState` + broadcast `conduite:state`) : sans cue courante,
+  NOW = noms des moves live (`ZZTest +3 · busked — no current cue`)
+  au lieu de `—`. Preuve : 4 moves lancés hors cue, capture montrant
+  NOW/4 moves live cohérents.
+- **RECALL = amber** : le bouton qui tue la scène entière était violet
+  neutre comme la navigation. Désormais amber — la couleur code le
+  risque (CUE GO vert = avance, RECALL amber = remplace tout,
+  PANIC rouge = tue).
+- **`editing:` cliquable** : le chip du LiveDrawer est un bouton
+  `✕` — désélection explicite (retour Global), symétrique au
+  `◆ Global` de l'Inspector. Avant : seule désélection = bouton
+  `All` invisible sans move live.
+
+Reste : les trois GO (CUE GO / SETLIST GO / RECALL) cohabitent sans
+hiérarchie visuelle de risque au-delà de la couleur ; `NOW` affiche les
+noms mais un cue courant + buskés simultanés ne montre encore que le
+cue (les buskés restent dans le compteur « N moves live »).
