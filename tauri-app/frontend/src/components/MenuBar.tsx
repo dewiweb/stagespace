@@ -322,8 +322,8 @@ export const MenuBar: React.FC = () => {
       label: 'View',
       entries: [
         { label: 'Atelier — composer', checked: surface === 'atelier', onClick: () => setSurface('atelier') },
-        { label: 'Conduite — run the show', checked: surface === 'conduite', onClick: () => setSurface('conduite') },
         { label: 'Jeu — perform live', checked: surface === 'jeu', onClick: () => setSurface('jeu') },
+        { label: 'Conduite — run the show', checked: surface === 'conduite', onClick: () => setSurface('conduite') },
         { separator: true },
         {
           label: 'Expert graph editor',

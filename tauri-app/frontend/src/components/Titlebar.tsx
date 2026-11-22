@@ -12,8 +12,8 @@ const realWindow =
 
 const SURFACES = [
   { id: 'atelier', label: 'Atelier', color: 'bg-purple-600', title: 'Composer/préparer — graphes, moves, cues, score, réglages' },
-  { id: 'conduite', label: 'Conduite', color: 'bg-amber-600', title: 'Faire avancer le show — cues, GO, surveillance, log' },
   { id: 'jeu', label: 'Jeu', color: 'bg-green-600', title: 'Interagir live — pads, gestes, radar, sources' },
+  { id: 'conduite', label: 'Conduite', color: 'bg-amber-600', title: 'Faire avancer le show — cues, GO, surveillance, log' },
 ] as const;
 
 /** Barre de titre custom (fenêtre frameless — `decorations: false`).
