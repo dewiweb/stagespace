@@ -154,9 +154,9 @@ export const createSlotCrudMethods = (set: CreatorArgs[0], get: CreatorArgs[1]):
     });
   },
 
-  duplicateMoveSlot: (id) => {
+  duplicateMoveSlot: (id, opts) => {
     const src = get().moveSlots.find((s) => s.id === id);
-    if (!src) return;
+    if (!src) return undefined;
     const newSlotId = `slot-${Date.now()}`;
     set((s) => {
       const idx = s.moveSlots.findIndex((sl) => sl.id === id);
@@ -165,18 +165,24 @@ export const createSlotCrudMethods = (set: CreatorArgs[0], get: CreatorArgs[1]):
         // référence avec la source (éditer l'un muterait l'autre).
         ...JSON.parse(JSON.stringify(src)),
         id: newSlotId,
-        name: `${src.name} copy`,
+        name: opts?.name ?? `${src.name} copy`,
         movementId: null,
         lastMovementId: undefined,
         isPreview: false,
         oscIndex: Math.max(0, ...s.moveSlots.map((sl) => sl.oscIndex)) + 1,
+        // Assignation du clone — le "make unique" du score peut le
+        // naître scopé à sa piste détachée.
+        ...(opts?.trackIds ? { trackIds: [...opts.trackIds] } : {}),
       };
       const newSlots = [...s.moveSlots];
       newSlots.splice(idx + 1, 0, clone);
       saveSlotsToStorage(newSlots);
       return { moveSlots: newSlots };
     });
-    get().selectSlotForEditing(newSlotId);
+    // `select: false` = ne pas voler la sélection d'édition Atelier
+    // (déliage depuis la surface score — l'opérateur n'y est pas).
+    if (opts?.select !== false) get().selectSlotForEditing(newSlotId);
+    return newSlotId;
   },
 
   renameMoveSlot: (id, name) => {

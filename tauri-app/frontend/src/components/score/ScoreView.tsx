@@ -19,7 +19,7 @@
 ///   ScoreInspector.tsx  bandeau bas (couverture, saisies, actions)
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  useScoreStore, GLOBALFX_LANE, MODULATION_LANE, laneIdOf,
+  useScoreStore, GLOBALFX_LANE, MODULATION_LANE, CONDUCTOR_LANE, laneIdOf,
   type ScoreClipDoc, type ScoreLaneMode,
 } from '../../store/useScoreStore';
 import { useGraphStore } from '../../store/useGraphStore';
@@ -29,14 +29,18 @@ import {
   nodeParamDefsOf, clipParamDefsOf, globalFxParamDefsOf, MERGE_BLEND_DEFS,
   type ParamDef,
 } from './scoreParams';
-import { clipLabel as clipLabelOf, isTextEntryTarget } from './scoreUtils';
+import { clipLabel as clipLabelOf, isTextEntryTarget, fmtMs } from './scoreUtils';
 import { effectiveTrackIds } from '../../utils/scoreResolve';
 import { isModalOpen } from '../../utils/modalGuard';
 import { ScoreCurvePane } from './ScoreCurvePane';
 import type { ParamGroup } from './ScoreParamsPanel';
 import { ScoreTransport } from './ScoreTransport';
-import { ScoreTimeline, type ScoreLaneLayout } from './ScoreTimeline';
+import { ScoreTimeline, type ScoreLaneLayout, type ScoreMenuTarget } from './ScoreTimeline';
+import ContextMenu, { type ContextMenuItem } from '../ui/ContextMenu';
+import { detachLaneFromClip, makeClipUnique, sharedClipCount } from '../../utils/scoreDetach';
+import { toast } from '../../utils/toast-helpers';
 import { ScoreClipPicker, type ScorePickerState } from './ScoreClipPicker';
+import { ScoreToolbar } from './ScoreToolbar';
 import { ScoreInspector } from './ScoreInspector';
 import type { ClipDragMode } from './ScoreClipBlock';
 
@@ -50,7 +54,7 @@ const ScoreView: React.FC = () => {
   const loopEndMs = useScoreStore((s) => s.loopEndMs);
   const globalFxCurves = useScoreStore((s) => s.globalFxCurves);
   const modulationCurves = useScoreStore((s) => s.modulationCurves);
-  const { addClip, moveClip, resizeClip, removeClip, duplicateClip, setDurationMs, setClipRepeat, setClipFades, setClipCurve, setClipTrackIds, setLaneCurve, setLoop, playScore, stopScore, seekScore, toggleLaneMute, setLaneMode } =
+  const { addClip, moveClip, resizeClip, removeClip, duplicateClip, splitClip, setDurationMs, setClipRepeat, setClipFades, setClipCurve, setClipTrackIds, setLaneCurve, setLoop, playScore, stopScore, seekScore, toggleLaneMute, setLaneMode, selectClip, selectGlobalLane, clearScoreSelection } =
     useScoreStore.getState();
   const moveSlots = useGraphStore((s) => s.moveSlots);
   const macros = useGraphStore((s) => s.macros);
@@ -60,15 +64,17 @@ const ScoreView: React.FC = () => {
   const cues = useCuelistStore((s) => s.cues);
 
   const [pxPerSec, setPxPerSec] = useState(60);
-  const [selected, setSelected] = useState<string | null>(null);
+  // Sélection dans le store — toolbar + MenuBar agissent dessus.
+  const selected = useScoreStore((s) => s.selectedClipId);
   /// Lane globale sélectionnée (`globalfx`/`modulation`) — contexte
   /// d'édition de la zone haute. Pseudo-lanes épinglées : leurs
   /// courbes vivent au niveau du doc en temps absolu partition.
-  const [selGlobal, setSelGlobal] = useState<string | null>(null);
+  const selGlobal = useScoreStore((s) => s.selGlobalLane);
   /// Nom fraîchement saisi pour une nouvelle courbe modulation
   /// (clé libre — `/score/energy`, `/mod/x`… lue par les SignalOsc).
   const [modName, setModName] = useState('');
   const [picker, setPicker] = useState<ScorePickerState | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<{ target: ScoreMenuTarget; x: number; y: number } | null>(null);
   /// Partage éditeur/timeline — drag sur la poignée, défaut 50/50.
   const [topFrac, setTopFrac] = useState(0.5);
   const splitRootRef = useRef<HTMLDivElement>(null);
@@ -165,8 +171,7 @@ const ScoreView: React.FC = () => {
   const onClipPointerDown = (e: React.PointerEvent, clip: ScoreClipDoc, mode: ClipDragMode, origMs?: number) => {
     e.stopPropagation();
     e.preventDefault();
-    setSelected(clip.id);
-    setSelGlobal(null);
+    selectClip(clip.id);
     dragRef.current = { clipId: clip.id, mode, startX: e.clientX, origMs: origMs ?? (mode === 'move' ? clip.startMs : clip.durationMs ?? 0) };
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   };
@@ -196,16 +201,161 @@ const ScoreView: React.FC = () => {
         if (isModalOpen() || isTextEntryTarget(e.target)) return;
         e.preventDefault();
         removeClip(selected);
-        setSelected(null);
+        clearScoreSelection();
+      }
+      // S — split du clip sélectionné au curseur (même verbe que la
+      // toolbar et le menu Edit).
+      if ((e.key === 's' || e.key === 'S') && !e.ctrlKey && !e.metaKey && !e.altKey && selected) {
+        if (isModalOpen() || isTextEntryTarget(e.target)) return;
+        e.preventDefault();
+        splitClip(selected, displayCursor);
       }
     };
     window.addEventListener('keydown', h, true);
     return () => window.removeEventListener('keydown', h, true);
-  }, [selected, removeClip]);
+  }, [selected, removeClip, splitClip, displayCursor, clearScoreSelection]);
 
   const addToLane = (ref: ScoreClipDoc['ref'], opts?: { durationMs?: number; trackIds?: number[]; repeatEveryMs?: number }) => {
-    addClip(ref, displayCursor, opts);
+    addClip(ref, picker?.startMs ?? displayCursor, opts);
     setPicker(null);
+  };
+
+  /// Menu contextuel (clic droit) — items par cible. Le clip est
+  /// sélectionné au passage pour que l'inspector reflète la cible.
+  const ctxMenuItems = (): { header?: string; items: ContextMenuItem[] } => {
+    if (!ctxMenu) return { items: [] };
+    const t = ctxMenu.target;
+    if (t.kind === 'clip') {
+      const c = clips.find((x) => x.id === t.clipId);
+      if (!c) return { items: [] };
+      const eff = effectiveTrackIds(c);
+      const laneSuffix = t.trackId !== undefined ? ` — T${t.trackId}` : '';
+      const isSlot = c.ref.type === 'slot';
+      const isCue = c.ref.type === 'cue';
+      const canDetach = isSlot && t.trackId !== undefined && eff.length > 1;
+      const n = sharedClipCount(c.ref);
+      const items: ContextMenuItem[] = [
+        {
+          label: `Détacher T${t.trackId}`,
+          disabled: !canDetach,
+          title: canDetach
+            ? 'Scinde la couverture : cette piste devient un clip indépendant (même move, placement libre)'
+            : 'Détachable seulement sur un clip multi-objets (slot)',
+          onClick: () => {
+            if (detachLaneFromClip(c.id, t.trackId!, false)) toast.success(`T${t.trackId} détachée en clip indépendant`);
+          },
+        },
+        {
+          label: `Détacher T${t.trackId} en nouveau move`,
+          disabled: !canDetach,
+          title: canDetach
+            ? 'La piste devient un clip suivant un NOUVEAU move en banque (contenu divergent possible)'
+            : 'Détachable seulement sur un clip multi-objets (slot)',
+          onClick: () => {
+            if (detachLaneFromClip(c.id, t.trackId!, true)) toast.success(`Nouveau move créé pour T${t.trackId}`);
+          },
+        },
+        {
+          label: `Rendre unique${n > 1 ? ` (lié ×${n})` : ''}`,
+          disabled: !isSlot,
+          title: isSlot
+            ? `Clone le move en banque — ce clip suit la copie, ${n > 1 ? `les ${n - 1} autre(s) clip(s) gardent l'original` : 'édition sans affecter l\'original'}`
+            : 'Make unique : slots seulement (cue → duplication de cue = flatten, à venir)',
+          onClick: () => {
+            const id = makeClipUnique(c.id);
+            if (id) toast.success('Move dupliqué — le clip suit la copie');
+          },
+        },
+        { separator: true },
+        { label: 'Dupliquer le clip', onClick: () => duplicateClip(c.id) },
+        {
+          label: 'Supprimer',
+          danger: true,
+          onClick: () => { removeClip(c.id); if (selected === c.id) clearScoreSelection(); },
+        },
+      ];
+      if (isSlot || isCue) {
+        items.push(
+          { separator: true },
+          c.trackIds === undefined
+            ? {
+                label: 'Geler la couverture',
+                title: 'La couverture actuelle devient un override explicite (ne suit plus l\'entité)',
+                onClick: () => setClipTrackIds(c.id, eff),
+              }
+            : {
+                label: 'Repasser en suivi live',
+                title: 'La couverture re-dérive de l\'entité référencée (réassignations Atelier reflétées)',
+                onClick: () => setClipTrackIds(c.id, undefined),
+              },
+        );
+      }
+      return { header: `${clipLabel(c)}${laneSuffix}`, items };
+    }
+    if (t.kind === 'lane') {
+      const muted = laneMutedOf(t.laneId);
+      const isObj = t.trackId !== undefined;
+      const stacked = laneModeOf(t.laneId) === 'stacked';
+      const items: ContextMenuItem[] = [
+        { label: muted ? 'Démuter la lane' : 'Muter la lane', onClick: () => toggleLaneMute(t.laneId) },
+        {
+          label: stacked ? 'Passer en exclusive' : 'Passer en stacked',
+          disabled: !isObj,
+          title: isObj ? 'Mode de chevauchement des clips sur cette lane' : 'Les lanes globales sont exclusive par nature',
+          onClick: () => setLaneMode(t.laneId, stacked ? 'exclusive' : 'stacked'),
+        },
+        { separator: true },
+        {
+          label: 'Ajouter un clip ici…',
+          disabled: t.laneId === GLOBALFX_LANE || t.laneId === MODULATION_LANE,
+          title: 'Les courbes des lanes globales s\'éditent en zone haute',
+          onClick: () => setPicker({ laneId: t.laneId, x: ctxMenu.x, y: ctxMenu.y }),
+        },
+      ];
+      return { header: isObj ? `Lane T${t.trackId}` : t.laneId, items };
+    }
+    if (t.kind === 'empty') {
+      const canAdd = t.laneId === CONDUCTOR_LANE || t.trackId !== undefined;
+      return {
+        items: [{
+          label: `Ajouter un clip à ${fmtMs(t.ms)}…`,
+          disabled: !canAdd,
+          title: canAdd ? undefined : 'Les courbes des lanes globales s\'éditent en zone haute',
+          onClick: () => setPicker({ laneId: t.laneId, x: ctxMenu.x, y: ctxMenu.y, startMs: t.ms }),
+        }],
+      };
+    }
+    // ruler — bornes de loop
+    const armed = loopStartMs != null && loopEndMs != null;
+    return {
+      header: fmtMs(t.ms),
+      items: [
+        {
+          label: 'Loop : début ici',
+          disabled: armed && t.ms >= loopEndMs!,
+          title: 'Le début de région doit précéder la fin',
+          onClick: () => setLoop(t.ms, loopEndMs ?? durationMs),
+        },
+        {
+          label: 'Loop : fin ici',
+          disabled: loopStartMs == null || t.ms <= loopStartMs,
+          title: loopStartMs == null ? 'Posez d\'abord le début' : 'La fin doit suivre le début',
+          onClick: () => setLoop(loopStartMs, t.ms),
+        },
+        { separator: true },
+        {
+          label: 'Désarmer la loop',
+          disabled: !armed,
+          onClick: () => setLoop(undefined, undefined),
+        },
+      ],
+    };
+  };
+
+  const openCtxMenu = (target: ScoreMenuTarget, x: number, y: number) => {
+    setPicker(null);
+    if (target.kind === 'clip') selectClip(target.clipId);
+    setCtxMenu({ target, x, y });
   };
 
   // Zone haute — contexte d'édition des courbes (docs/score-sequencer.md
@@ -401,6 +551,23 @@ const ScoreView: React.FC = () => {
         onZoom={(dir) => setPxPerSec((z) => dir > 0 ? Math.min(400, z * 1.4) : Math.max(10, z / 1.4))}
         onLaneH={setLaneH}
       />
+      <ScoreToolbar
+        selClip={selClip ?? null}
+        cursorMs={displayCursor}
+        onSplit={splitClip}
+        onDuplicate={duplicateClip}
+        onDelete={(id) => { removeClip(id); clearScoreSelection(); }}
+        onDetachLane={(id, tid, asNewMove) => {
+          if (detachLaneFromClip(id, tid, asNewMove)) {
+            toast.success(asNewMove ? `T${tid} détachée → nouveau move en banque` : `T${tid} détachée en clip indépendant`);
+          }
+        }}
+        onMakeUnique={(id) => { if (makeClipUnique(id)) toast.success('Move dupliqué — le clip suit la copie'); }}
+        onToggleFollow={(id) => {
+          const c = clips.find((x) => x.id === id);
+          if (c) setClipTrackIds(id, c.trackIds === undefined ? effectiveTrackIds(c) : undefined);
+        }}
+      />
       <ScoreTimeline
         grow={1 - topFrac}
         durationMs={durationMs}
@@ -423,8 +590,8 @@ const ScoreView: React.FC = () => {
         modulationCurves={modulationCurves}
         selGlobal={selGlobal}
         selected={selected}
-        onSelectLane={(laneId) => { setSelGlobal(laneId); setSelected(null); setPicker(null); }}
-        onClearSelection={() => { setSelected(null); setSelGlobal(null); setPicker(null); }}
+        onSelectLane={(laneId) => { selectGlobalLane(laneId); setPicker(null); }}
+        onClearSelection={() => { clearScoreSelection(); setPicker(null); }}
         onOpenPicker={(laneId, x, y) => setPicker({ laneId, x, y })}
         onToggleLaneMute={toggleLaneMute}
         onSetLaneMode={setLaneMode}
@@ -434,6 +601,7 @@ const ScoreView: React.FC = () => {
         onClipPointerDown={onClipPointerDown}
         onClipPointerMove={onClipPointerMove}
         onClipPointerUp={onClipPointerUp}
+        onContextMenu={openCtxMenu}
       />
 
       {/* Picker d'ajout de clip — globalfx → markers ; lane objet →
@@ -448,6 +616,21 @@ const ScoreView: React.FC = () => {
           onClose={() => setPicker(null)}
         />
       )}
+
+      {/* Menu contextuel timeline — items dépendent de la cible
+          (clip/lane/corps vide/ruler). */}
+      {ctxMenu && (() => {
+        const { header, items } = ctxMenuItems();
+        return (
+          <ContextMenu
+            x={ctxMenu.x}
+            y={ctxMenu.y}
+            header={header}
+            items={items}
+            onClose={() => setCtxMenu(null)}
+          />
+        );
+      })()}
 
       {/* Bandeau info bas — inspector du clip sélectionné */}
       <ScoreInspector

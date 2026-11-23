@@ -21,6 +21,16 @@ export interface ScoreLaneLayout {
   rowOf: Map<string, number>;
 }
 
+/// Cible d'un clic droit — le menu contextuel se construit dessus.
+/// `clip` porte la lane où le rendu a été cliqué (déliage par piste) ;
+/// `empty` = corps de lane vide (ajout de clip à cet instant) ;
+/// `ruler` = bornes de loop ; `lane` = en-tête (mute/mode).
+export type ScoreMenuTarget =
+  | { kind: 'clip'; clipId: string; laneId: string; trackId?: number }
+  | { kind: 'lane'; laneId: string; trackId?: number }
+  | { kind: 'empty'; laneId: string; ms: number; trackId?: number }
+  | { kind: 'ruler'; ms: number };
+
 export const ScoreTimeline: React.FC<{
   /// Part de la hauteur restante allouée à la zone timeline (0–1).
   grow: number;
@@ -55,6 +65,7 @@ export const ScoreTimeline: React.FC<{
   onClipPointerDown: (e: React.PointerEvent, clip: ScoreClipDoc, mode: ClipDragMode, origMs?: number) => void;
   onClipPointerMove: (e: React.PointerEvent, clip: ScoreClipDoc) => void;
   onClipPointerUp: (e: React.PointerEvent) => void;
+  onContextMenu: (target: ScoreMenuTarget, x: number, y: number) => void;
 }> = ({
   grow, durationMs, displayCursor, playing, tickEvery, laneH, rowH,
   ms2px, px2ms, loopStartMs, loopEndMs, seekScore,
@@ -63,7 +74,7 @@ export const ScoreTimeline: React.FC<{
   selGlobal, selected, onSelectLane, onClearSelection, onOpenPicker,
   onToggleLaneMute, onSetLaneMode,
   clipOrphan, effFades, clipLabel,
-  onClipPointerDown, onClipPointerMove, onClipPointerUp,
+  onClipPointerDown, onClipPointerMove, onClipPointerUp, onContextMenu,
 }) => {
   /// En-têtes de lanes — scrollTop synchronisé avec la timeline
   /// (les rangées ont les mêmes hauteurs : ruler 24 + 2×24
@@ -87,6 +98,10 @@ export const ScoreTimeline: React.FC<{
               key={laneId}
               className={`h-6 shrink-0 flex items-center gap-1 px-2 border-b border-gray-800 cursor-pointer ${sel ? 'bg-cyan-900/30 ring-1 ring-cyan-500' : 'hover:bg-gray-800/40'}`}
               onClick={() => onSelectLane(laneId)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                onContextMenu({ kind: 'lane', laneId }, e.clientX, e.clientY);
+              }}
               title={isCond
                 ? 'Lane CONDUCTOR — événements-barrières : cue recall, stopAll, panic (transitions d\'état globales)'
                 : isGfx
@@ -115,7 +130,15 @@ export const ScoreTimeline: React.FC<{
           const muted = laneMutedOf(lane.id);
           const stacked = laneModeOf(lane.id) === 'stacked';
           return (
-            <div key={lane.id} className="shrink-0 flex items-center gap-1 px-2 border-b border-gray-800" style={{ height: laneLayout.get(lane.id)?.height ?? laneH }}>
+            <div
+              key={lane.id}
+              className="shrink-0 flex items-center gap-1 px-2 border-b border-gray-800"
+              style={{ height: laneLayout.get(lane.id)?.height ?? laneH }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                onContextMenu({ kind: 'lane', laneId: lane.id, trackId: lane.trackId }, e.clientX, e.clientY);
+              }}
+            >
               <button
                 onClick={() => onToggleLaneMute(lane.id)}
                 title={muted ? 'Lane mutée — ses objets sont exclus des clips' : 'Mute lane'}
@@ -166,6 +189,11 @@ export const ScoreTimeline: React.FC<{
               const rect = e.currentTarget.getBoundingClientRect();
               seekScore(Math.round(px2ms(e.clientX - rect.left) / 50) * 50);
             }}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              const rect = e.currentTarget.getBoundingClientRect();
+              onContextMenu({ kind: 'ruler', ms: Math.max(0, px2ms(e.clientX - rect.left)) }, e.clientX, e.clientY);
+            }}
           >
             {Array.from({ length: Math.ceil(durationMs / tickEvery) + 1 }, (_, i) => i * tickEvery).map((ms) => (
               <div key={ms} className="absolute top-0 bottom-0 border-l border-gray-700 pl-1 text-[9px] text-gray-500" style={{ left: ms2px(ms) }}>
@@ -198,6 +226,12 @@ export const ScoreTimeline: React.FC<{
                 key={laneId}
                 className={`relative h-6 border-b border-gray-800 cursor-pointer ${selGlobal === laneId ? 'bg-cyan-900/15' : 'hover:bg-gray-800/20'} ${laneMutedOf(laneId) ? 'opacity-40' : ''}`}
                 onClick={(e) => { e.stopPropagation(); onSelectLane(laneId); }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  onContextMenu({ kind: 'empty', laneId, ms: Math.max(0, px2ms(e.clientX - rect.left)) }, e.clientX, e.clientY);
+                }}
               >
                 {laneId !== MODULATION_LANE && clips.filter((c) => clipLaneIds(c, effectiveTrackIds(c)).includes(laneId)).map((c) => (
                   <div
@@ -209,6 +243,11 @@ export const ScoreTimeline: React.FC<{
                     onPointerMove={(e) => onClipPointerMove(e, c)}
                     onPointerUp={onClipPointerUp}
                     onClick={(e) => e.stopPropagation()}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onContextMenu({ kind: 'clip', clipId: c.id, laneId }, e.clientX, e.clientY);
+                    }}
                   >
                     <span className="truncate pointer-events-none">{clipLabel(c)}</span>
                   </div>
@@ -233,7 +272,16 @@ export const ScoreTimeline: React.FC<{
             const lay = laneLayout.get(lane.id) ?? { height: laneH, rowOf: new Map<string, number>() };
             const stacked = laneModeOf(lane.id) === 'stacked';
             return (
-              <div key={lane.id} className="relative border-b border-gray-800" style={{ height: lay.height, opacity: laneMutedOf(lane.id) ? 0.4 : 1 }}>
+              <div
+                key={lane.id}
+                className="relative border-b border-gray-800"
+                style={{ height: lay.height, opacity: laneMutedOf(lane.id) ? 0.4 : 1 }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  onContextMenu({ kind: 'empty', laneId: lane.id, trackId: lane.trackId, ms: Math.max(0, px2ms(e.clientX - rect.left)) }, e.clientX, e.clientY);
+                }}
+              >
                 {/* Blast radius des cues (clipLaneIds → conductor ;
                     couverture effective du snapshot ; vide = toutes
                     les lanes) — marqueur d'impact, pas un clip. */}
@@ -265,6 +313,11 @@ export const ScoreTimeline: React.FC<{
                       onPointerDown={onClipPointerDown}
                       onPointerMove={onClipPointerMove}
                       onPointerUp={onClipPointerUp}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onContextMenu({ kind: 'clip', clipId: c.id, laneId: lane.id, trackId: lane.trackId }, e.clientX, e.clientY);
+                      }}
                     />
                   );
                 })}

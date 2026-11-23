@@ -352,6 +352,8 @@ failed: … reading 'transformCallback'` — à vérifier avec le shim.
 | Audit | `pre_wait`/`follow`/`timecode` bypassés au score | Sémantiques setlist ; sur un score la timeline EST le timing |
 | Audit | `flatten cue → clips` = opération d'éditeur non-destructive | Référence vivante par défaut (édit-once), édition interne à la demande |
 | Sync | Couverture clip : `trackIds` absent = suit l'entité vivante, présent = override gelé | Propagation Atelier→Score automatique ; l'override reste l'exception (toggle ⇄ inspector) |
+| Édit | Déliage : `Détacher T<n>` = split de couverture (même entité), `→ nouveau move` = clone slot scopé ; `Rendre unique` = clone + repoint ref | Deux liens distincts (couverture vs contenu) ; le nouveau move vit en banque → synchro tous modes |
+| Édit | Sélection clip/lane dans `useScoreStore` (pas ScoreView) | Même cible pour menu contextuel, toolbar et MenuBar global — trois portes, un chemin |
 
 ## Verification status
 

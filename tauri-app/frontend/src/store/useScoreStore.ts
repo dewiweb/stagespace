@@ -161,6 +161,9 @@ interface ScoreState extends ScoreDoc {
   /// même effet qu'une réassignation de tracks dans l'Atelier).
   /// `undefined` = repasse le clip en mode "suit l'entité vivante".
   setClipTrackIds: (id: string, trackIds: number[] | undefined) => void;
+  /// Repointe la référence du clip vers une autre entité (ex. après
+  /// un "make unique" — le clip suit désormais le move cloné).
+  retargetClip: (id: string, ref: ScoreClipRef) => void;
   moveClip: (id: string, startMs: number) => void;
   resizeClip: (id: string, durationMs: number | undefined) => void;
   setClipRepeat: (id: string, repeatEveryMs: number | undefined) => void;
@@ -179,6 +182,11 @@ interface ScoreState extends ScoreDoc {
   /// indépendant, éditable séparément — sa couverture peut ensuite
   /// diverger) — décalé de sa propre durée.
   duplicateClip: (id: string) => void;
+  /// Coupe le clip en deux à `ms` (temps score absolu) — les bords
+  /// externes gardent leurs fades, le bord interne n'en a pas ; les
+  /// courbes sont re-découpées (t relatif clip). Slots seulement —
+  /// cues/markers sont des événements instantanés insécables.
+  splitClip: (id: string, ms: number) => void;
   setLoop: (startMs: number | undefined, endMs: number | undefined) => void;
   setDurationMs: (ms: number) => void;
   setScoreDoc: (doc: ScoreDoc | undefined) => void;
@@ -188,10 +196,23 @@ interface ScoreState extends ScoreDoc {
   stopScore: () => void;
   seekScore: (ms: number) => void;
   _setTransport: (playing: boolean, cursorMs: number, loopStartMs?: number, loopEndMs?: number) => void;
+  /// Sélection d'édition — dans le store (pas ScoreView) pour que la
+  /// toolbar et le MenuBar global agissent sur la même cible.
+  selectedClipId: string | null;
+  selGlobalLane: string | null;
+  /// Les deux sélections sont exclusives (un clip OU une lane globale).
+  selectClip: (id: string | null) => void;
+  selectGlobalLane: (laneId: string | null) => void;
+  clearScoreSelection: () => void;
 }
 
 export const useScoreStore = create<ScoreState>()((set, get) => ({
   ...emptyDoc(),
+  selectedClipId: null,
+  selGlobalLane: null,
+  selectClip: (id) => set({ selectedClipId: id, selGlobalLane: null }),
+  selectGlobalLane: (laneId) => set({ selGlobalLane: laneId, selectedClipId: null }),
+  clearScoreSelection: () => set({ selectedClipId: null, selGlobalLane: null }),
   playing: false,
   cursorMs: 0,
 
@@ -230,6 +251,10 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
           ? { ...c, trackIds: trackIds === undefined ? undefined : [...new Set(trackIds)].sort((a, b) => a - b) }
           : c,
       ),
+    })),
+  retargetClip: (id, ref) =>
+    set((s) => ({
+      clips: s.clips.map((c) => (c.id === id ? { ...c, ref } : c)),
     })),
   moveClip: (id, startMs) =>
     set((s) => ({
@@ -277,6 +302,42 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
         startMs: Math.min(s.durationMs, src.startMs + (src.durationMs ?? 1000)),
       };
       return { clips: [...s.clips, copy] };
+    }),
+  splitClip: (id, ms) =>
+    set((s) => {
+      const c = s.clips.find((x) => x.id === id);
+      if (!c || c.ref.type !== 'slot' || ms <= c.startMs) return {};
+      if (c.durationMs != null && ms >= c.startMs + c.durationMs) return {};
+      const off = ms - c.startMs;
+      // Courbes : t relatif au début du clip → la partie droite est
+      // re-basée à 0 (les points avant la coupe restent à gauche).
+      const cut = (ks: ScoreKeyframe[], side: 'l' | 'r') =>
+        side === 'l' ? ks.filter((k) => k.t < off) : ks.filter((k) => k.t >= off).map((k) => ({ ...k, t: k.t - off }));
+      const splitCurves = (side: 'l' | 'r') => {
+        if (!c.curves) return undefined;
+        const out = Object.fromEntries(
+          Object.entries(c.curves)
+            .map(([p, ks]) => [p, cut(ks, side)] as const)
+            .filter(([, ks]) => ks.length > 0),
+        );
+        return Object.keys(out).length > 0 ? out : undefined;
+      };
+      const left: ScoreClipDoc = {
+        ...c,
+        durationMs: off,
+        fadeOutMs: undefined,
+        curves: splitCurves('l'),
+      };
+      const right: ScoreClipDoc = {
+        ...c,
+        id: uid(),
+        startMs: ms,
+        durationMs: c.durationMs != null ? c.durationMs - off : undefined,
+        fadeInMs: undefined,
+        trackIds: c.trackIds !== undefined ? [...c.trackIds] : undefined,
+        curves: splitCurves('r'),
+      };
+      return { clips: s.clips.flatMap((x) => (x.id === id ? [left, right] : [x])) };
     }),
   setLoop: (startMs, endMs) => {
     set({ loopStartMs: startMs, loopEndMs: endMs });

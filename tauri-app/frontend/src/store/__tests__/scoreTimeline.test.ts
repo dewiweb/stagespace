@@ -225,3 +225,90 @@ describe('score timeline (S2/S3 — lanes objets)', () => {
     expect(disarm?.args).toEqual({ startMs: null, endMs: null });
   });
 });
+
+describe('déliage + split (édition)', () => {
+  beforeEach(() => {
+    resetStore();
+    clearInvokeCalls();
+    useScoreStore.getState().clearScore();
+    useGraphStore.setState({
+      manualOscIds: [1, 2, 3, 4],
+      moveSlots: [slot('s1', 'Orbe'), slot('s2', 'Duo', [2, 3])],
+    } as never);
+    useCuelistStore.setState({ cues: [] } as never);
+  });
+
+  it('Détacher T<n> — override sur l\'original, nouveau clip même ref', async () => {
+    const { detachLaneFromClip } = await import('../../utils/scoreDetach');
+    const st = useScoreStore.getState();
+    const c = st.addClip({ type: 'slot', slotId: 's2' }, 1000, { durationMs: 5000 });
+    expect(detachLaneFromClip(c.id, 2, false)).toBe(true);
+    const clips = useScoreStore.getState().clips;
+    const orig = clips.find((x) => x.id === c.id)!;
+    const fresh = clips.find((x) => x.id !== c.id)!;
+    expect(orig.trackIds).toEqual([3]);
+    expect(fresh.trackIds).toEqual([2]);
+    expect(fresh.ref).toEqual(c.ref);
+    expect(fresh.startMs).toBe(1000);
+    // Mono-piste → no-op ; cue → no-op.
+    expect(detachLaneFromClip(fresh.id, 2, false)).toBe(false);
+    const cue = st.addClip({ type: 'cue', cueId: '7' }, 0, {});
+    expect(detachLaneFromClip(cue.id, 1, false)).toBe(false);
+  });
+
+  it('Détacher T<n> → nouveau move : clone en banque, clip en suivi live', async () => {
+    const { detachLaneFromClip } = await import('../../utils/scoreDetach');
+    const st = useScoreStore.getState();
+    const c = st.addClip({ type: 'slot', slotId: 's2' }, 0, { durationMs: 5000 });
+    const nSlots = useGraphStore.getState().moveSlots.length;
+    expect(detachLaneFromClip(c.id, 3, true)).toBe(true);
+    const slots = useGraphStore.getState().moveSlots;
+    expect(slots.length).toBe(nSlots + 1);
+    const clone = slots.find((s) => s.name.includes('▸ T3'))!;
+    expect(clone.trackIds).toEqual([3]);
+    const fresh = useScoreStore.getState().clips.find((x) => x.id !== c.id)!;
+    expect(fresh.ref).toEqual({ type: 'slot', slotId: clone.id });
+    expect(fresh.trackIds).toBeUndefined();
+  });
+
+  it('makeClipUnique — clone + repoint, mode suivi préservé', async () => {
+    const { makeClipUnique, sharedClipCount } = await import('../../utils/scoreDetach');
+    const st = useScoreStore.getState();
+    const c = st.addClip({ type: 'slot', slotId: 's1' }, 0, {});
+    const c2 = st.addClip({ type: 'slot', slotId: 's1' }, 5000, {});
+    expect(sharedClipCount(c.ref)).toBe(2);
+    const id = makeClipUnique(c.id)!;
+    expect(id).toBeTruthy();
+    const clips = useScoreStore.getState().clips;
+    expect(clips[0].ref).toEqual({ type: 'slot', slotId: id });
+    expect(clips[0].trackIds).toBeUndefined();
+    // L'autre clip garde l'entité d'origine.
+    expect(clips.find((x) => x.id === c2.id)!.ref).toEqual(c2.ref);
+    expect(sharedClipCount(c2.ref)).toBe(1);
+  });
+
+  it('splitClip — deux parties, fades externes, courbes re-basées', () => {
+    const st = useScoreStore.getState();
+    const c = st.addClip({ type: 'slot', slotId: 's1' }, 1000, { durationMs: 4000, trackIds: [1] });
+    useScoreStore.getState().setClipCurve(c.id, 'speed', [{ t: 0, v: 1 }, { t: 3000, v: 2 }]);
+    useScoreStore.getState().setClipFades(c.id, 500, 800);
+    useScoreStore.getState().splitClip(c.id, 3000);
+    const clips = useScoreStore.getState().clips;
+    expect(clips).toHaveLength(2);
+    const left = clips.find((x) => x.id === c.id)!;
+    const right = clips.find((x) => x.id !== c.id)!;
+    expect(left.durationMs).toBe(2000);
+    expect(left.fadeInMs).toBe(500);
+    expect(left.fadeOutMs).toBeUndefined();
+    expect(left.curves?.speed).toEqual([{ t: 0, v: 1 }]);
+    expect(right.startMs).toBe(3000);
+    expect(right.durationMs).toBe(2000);
+    expect(right.fadeInMs).toBeUndefined();
+    expect(right.fadeOutMs).toBe(800);
+    expect(right.curves?.speed).toEqual([{ t: 1000, v: 2 }]); // t relatif re-basé
+    // Hors fenêtre → no-op ; cue → no-op.
+    useScoreStore.getState().splitClip(left.id, 999);
+    useScoreStore.getState().splitClip(left.id, 3500);
+    expect(useScoreStore.getState().clips).toHaveLength(2);
+  });
+});

@@ -22,7 +22,10 @@ export const ScoreClipBlock: React.FC<{
   onPointerDown: (e: React.PointerEvent, clip: ScoreClipDoc, mode: ClipDragMode, origMs?: number) => void;
   onPointerMove: (e: React.PointerEvent, clip: ScoreClipDoc) => void;
   onPointerUp: (e: React.PointerEvent) => void;
-}> = ({ clip: c, label, orphan, selected, top, h, ms2px, fades, onPointerDown, onPointerMove, onPointerUp }) => {
+  /// Clic droit sur ce rendu — la lane parente complète le contexte
+  /// (clipId + trackId pour le déliage de couverture).
+  onContextMenu?: (e: React.MouseEvent) => void;
+}> = ({ clip: c, label, orphan, selected, top, h, ms2px, fades, onPointerDown, onPointerMove, onPointerUp, onContextMenu }) => {
   /// Événement ponctuel (cue/marker, durationMs null) — pas de
   /// fenêtre : la boîte épouse son label (nowrap) et une barre
   /// blanche à gauche marque l'instant, au lieu d'un carré de 14px.
@@ -59,6 +62,7 @@ export const ScoreClipBlock: React.FC<{
         onPointerMove={(e) => onPointerMove(e, c)}
         onPointerUp={onPointerUp}
         onClick={(e) => e.stopPropagation()}
+        onContextMenu={onContextMenu}
       >
         {/* Région de fade-in + poignée d'angle (drag horizontal → fade_in clip-local) */}
         {fades && fades.inMs > 0 && (

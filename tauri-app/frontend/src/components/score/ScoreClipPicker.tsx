@@ -14,6 +14,9 @@ export interface ScorePickerState {
   laneId: string;
   x: number;
   y: number;
+  /// Position d'insertion — "ajouter un clip ici" du menu contextuel
+  /// pose le clip à cet instant ; absent = curseur (comportement +).
+  startMs?: number;
 }
 
 export const ScoreClipPicker: React.FC<{

@@ -23,6 +23,9 @@ import {
   doTcChase,
   doToggleSelectedSlot,
 } from '../utils/liveActions';
+import { useScoreStore } from '../store/useScoreStore';
+import { effectiveTrackIds } from '../utils/scoreResolve';
+import { detachLaneFromClip, makeClipUnique } from '../utils/scoreDetach';
 
 /// Barre de menus applicative — squelette fixe (File/Edit/View/Show/Help,
 /// mémoire musculaire) mais contenu contextuel à la surface, comme une
@@ -74,6 +77,12 @@ export const MenuBar: React.FC = () => {
   const selectedObjIndex = useGraphStore((s) => s.selectedObjIndex);
   const emittedPositions = useGraphStore((s) => s.emittedPositions);
   const pullShowFromHost = useGraphStore((s) => s.pullShowFromHost);
+  // Score — sélection + transport pour les verbes Edit/Show score.
+  const scorePlaying = useScoreStore((s) => s.playing);
+  const scoreLoopArmed = useScoreStore((s) => s.loopStartMs != null && s.loopEndMs != null);
+  const scoreSelectedId = useScoreStore((s) => s.selectedClipId);
+  const scoreClips = useScoreStore((s) => s.clips);
+  const scoreCursorMs = useScoreStore((s) => s.cursorMs);
   /// Navigateur distant via bridge — le snapshot du show vit sur l'hôte.
   const isRemote = typeof window !== 'undefined' && Boolean((window as { __STAGESPACE_BRIDGE__?: boolean }).__STAGESPACE_BRIDGE__);
   const cues = useCuelistStore((s) => s.cues);
@@ -166,6 +175,30 @@ export const MenuBar: React.FC = () => {
               { label: 'Gesture: Converge', onClick: () => doGesture('converge', 1.0, 'menu') },
               { label: 'Gesture: Orbit', onClick: () => doGesture('orbit', 1.0, 'menu') },
               { label: 'Gesture: Front', onClick: () => doGesture('front', 1.0, 'menu') },
+              { separator: true },
+              { label: 'Stop all moves', onClick: () => doStop() },
+              { separator: true },
+              oscArmEntry,
+              { separator: true },
+              panicEntry,
+            ],
+          }
+      : surface === 'score'
+        ? {
+            // Score — transport du séquenceur backend + loop ; mêmes
+            // actions que les boutons de la surface.
+            label: 'Show',
+            entries: [
+              {
+                label: scorePlaying ? 'Stop score' : 'Play score',
+                onClick: () => (scorePlaying ? useScoreStore.getState().stopScore() : void useScoreStore.getState().playScore()),
+              },
+              {
+                label: scoreLoopArmed ? 'Disarm loop region' : 'Disarm loop region',
+                disabled: !scoreLoopArmed,
+                disabledReason: 'No loop armed — right-click the ruler to set bounds',
+                onClick: () => useScoreStore.getState().setLoop(undefined, undefined),
+              },
               { separator: true },
               { label: 'Stop all moves', onClick: () => doStop() },
               { separator: true },
@@ -272,6 +305,66 @@ export const MenuBar: React.FC = () => {
           label: editingSlot ? `Duplicate move "${editingSlot.name}"` : 'Duplicate move — no slot selected',
           ...(editingSlotId ? { onClick: () => duplicateMoveSlot(editingSlotId) } : { disabled: true, disabledReason: 'Select a move first' }),
         },
+        // Score — verbes du clip sélectionné (sélection dans le store :
+        // même cible que la toolbar et le menu contextuel). Détacher
+        // par piste = une entrée par lane couverte.
+        ...(surface === 'score'
+          ? ((): Entry[] => {
+              const sc = useScoreStore.getState();
+              const c = scoreClips.find((x) => x.id === scoreSelectedId);
+              if (!c) {
+                return [{
+                  label: 'Score clip — none selected',
+                  disabled: true,
+                  disabledReason: 'Select a clip in the score timeline',
+                }];
+              }
+              const eff = effectiveTrackIds(c);
+              const isSlot = c.ref.type === 'slot';
+              const canSplit =
+                isSlot && scoreCursorMs > c.startMs &&
+                (c.durationMs == null || scoreCursorMs < c.startMs + c.durationMs);
+              const canDetach = isSlot && eff.length > 1;
+              const detachDis = { disabled: true, disabledReason: 'Only on multi-object slot clips' };
+              return [
+                { separator: true },
+                {
+                  label: 'Split clip at cursor',
+                  disabled: !canSplit,
+                  disabledReason: 'Cursor outside the clip (or instant marker)',
+                  onClick: () => sc.splitClip(c.id, scoreCursorMs),
+                },
+                { label: 'Duplicate clip', onClick: () => sc.duplicateClip(c.id) },
+                {
+                  label: 'Delete clip',
+                  shortcut: 'Del',
+                  onClick: () => { sc.removeClip(c.id); sc.clearScoreSelection(); },
+                },
+                { separator: true },
+                ...eff.flatMap((tid): Entry[] => [
+                  {
+                    label: `Detach T${tid} to own clip`,
+                    ...(canDetach ? { onClick: () => detachLaneFromClip(c.id, tid, false) } : detachDis),
+                  },
+                  {
+                    label: `Detach T${tid} → new move`,
+                    ...(canDetach ? { onClick: () => detachLaneFromClip(c.id, tid, true) } : detachDis),
+                  },
+                ]),
+                { separator: true },
+                {
+                  label: 'Make unique — clone move',
+                  disabled: !isSlot,
+                  disabledReason: 'Slot clips only',
+                  onClick: () => makeClipUnique(c.id),
+                },
+                {
+                  label: c.trackIds === undefined ? 'Freeze coverage (override)' : 'Follow live entity',
+                  onClick: () => sc.setClipTrackIds(c.id, c.trackIds === undefined ? eff : undefined),
+                },
+              ];
+            })()
+          : []),
         // Copier/coller la position de l'objet sélectionné — mêmes ops
         // que Ctrl+C/V sur la vue 3D.
         ...(selectedObjIndex != null

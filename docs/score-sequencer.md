@@ -272,6 +272,39 @@ tous les rendus. Sémantiques :
   = lié (couverture) ; dupliquer = copie indépendante dont la
   couverture peut diverger.
 
+### Déliage — deux liens distincts (implémenté)
+
+Un clip entretient deux liens, déliables séparément :
+
+- **Couverture** (copies liées sur les lanes) → `Détacher T<n>`
+  scinde le clip : l'original reçoit un override = couverture
+  effective minus T<n> (suivre l'entité en excluant une piste est
+  impossible par construction), un nouveau clip naît sur `[T<n>]`
+  avec les mêmes placement/fades/courbes — **même entité**, le
+  contenu reste synchronisé. Variante `Détacher T<n> → nouveau
+  move` : le nouveau clip suit un **clone du slot** né assigné
+  `[T<n>]` (nom `‹slot› ▸ T<n>`) — divergence de contenu possible,
+  le move apparaît dans la banque (visible dans tous les modes).
+- **Référence** (entité partagée) → `Rendre unique` clone le slot
+  en banque et repointe `ref.slotId` : en mode suivi le clip suit
+  désormais le clone — le suivi live survit, seule la cible
+  change. Le badge `lié ×N` indique combien de clips partagent
+  l'entité.
+
+Trois portes pour les mêmes verbes (même code, pas trois chemins) :
+
+1. **Menu contextuel** (clic droit — `ui/ContextMenu`) : sur un
+   rendu de clip (le couple clip×lane donne la piste), un en-tête
+   de lane (mute/mode/ajout), le corps vide (ajouter à cet instant)
+   et la ruler (bornes de loop).
+2. **Toolbar** (`ScoreToolbar`) : ✂ split au curseur (`S`), ⧉ dup,
+   ⌫, détacher ▾ (dropdown par piste), ⬡ unique ×N, toggle
+   suivi⇄gelé.
+3. **MenuBar global** : menu Show score (play/stop, désarmer la
+   loop, stop all, panic) + section score dans Edit (mêmes verbes
+   sur la sélection — qui vit désormais dans `useScoreStore` :
+   `selectedClipId`/`selGlobalLane`).
+
 ### Zone haute — éditeur de courbes du clip sélectionné
 
 Au lieu d'une sous-piste d'automation par paramètre (modèle DAW
