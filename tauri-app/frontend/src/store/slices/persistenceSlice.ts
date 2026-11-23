@@ -136,6 +136,8 @@ export async function buildShowEnvelope(s: PersistenceStore): Promise<ShowFileEn
       tracks: scoreStore.tracks,
       clips: scoreStore.clips,
       durationMs: scoreStore.durationMs,
+      loopStartMs: scoreStore.loopStartMs,
+      loopEndMs: scoreStore.loopEndMs,
     },
     oscMappings,
     macros: s.macros,

@@ -106,6 +106,12 @@ clip repeat = the same *phrase* reiterated. A future "pattern clip"
 (nested clip group that tiles) generalizes this to multi-lane phrases
 (moves + cues + markers repeated together) — S3+ territory.
 
+A third level landed in S2.y: **transport loop** (`loop_region` —
+the `loop` field above). The whole arrangement wraps `[start,end)`
+with hard-cut semantics: cycle moves are deactivated at `loop_end`,
+the cursor re-bases, a fresh event list is generated. Events before
+`loop_start` play once on the first pass → intro-then-loop.
+
 ## The engine — backend-evaluated
 
 The score is **evaluated inside the merge/runtime at the 60 Hz tick**,

@@ -216,7 +216,12 @@ pub struct ScoreTimeline {
     /// Départ du play courant — `cursor = seek_ms + (now - started_at)`.
     pub started_at: Option<Instant>,
     /// Base du curseur — posée par seek (stopped only), consommée au play.
+    /// Pendant une boucle, rebasée à `loop_start` à chaque cycle.
     pub seek_ms: u64,
+    /// Region de boucle arrangement [start, end) — rebouclage
+    /// hard-wrap du transport (distinct du clip repeat : boucle de la
+    /// partition entière). `None` = pas de boucle.
+    pub loop_region: Option<(u64, u64)>,
     /// Génération — stop/load l'incrémente, les sleeps armés s'abortent.
     pub generation: u64,
 }
@@ -227,6 +232,8 @@ pub struct ScoreTimelineState {
     pub cursor_ms: u64,
     pub duration_ms: u64,
     pub len: usize,
+    pub loop_start_ms: Option<u64>,
+    pub loop_end_ms: Option<u64>,
 }
 
 fn timeline_state(tl: &ScoreTimeline) -> ScoreTimelineState {
@@ -238,6 +245,8 @@ fn timeline_state(tl: &ScoreTimeline) -> ScoreTimelineState {
                 .unwrap_or(0),
         duration_ms: tl.duration_ms,
         len: tl.clips.len(),
+        loop_start_ms: tl.loop_region.map(|r| r.0),
+        loop_end_ms: tl.loop_region.map(|r| r.1),
     }
 }
 
@@ -268,51 +277,104 @@ pub async fn score_timeline_load(
 pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcError> {
     let sh = Shared::from_state(&state);
     let tl_arc = state.score_timeline.clone();
-    let (gen, clips, seek) = {
+    let (gen, clips, seek, lp) = {
         let mut tl = lock_or_recover(&tl_arc);
         tl.generation += 1;
         tl.started_at = Some(Instant::now());
-        (tl.generation, tl.clips.clone(), tl.seek_ms)
+        (tl.generation, tl.clips.clone(), tl.seek_ms, tl.loop_region)
     };
     if clips.is_empty() {
         lock_or_recover(&tl_arc).started_at = None;
         return Err(IpcError::validation("score timeline empty"));
     }
 
-    let events = build_events(&clips, seek);
-
     let sink = sh.event_sink.clone();
     std::thread::spawn(move || {
-        let t0 = Instant::now();
-        let cursor = |elapsed: Duration| seek + elapsed.as_millis() as u64;
         // Lane → move score actif — "un move à la fois par lane".
         let mut lane_active: HashMap<String, (String, f64)> = HashMap::new();
-        for (t, ev) in events {
-            loop {
-                let elapsed = t0.elapsed();
-                if cursor(elapsed) >= t {
+        // Cycles de lecture : sans loop un seul passage ; avec loop, le
+        // transport reboucle à `loop_start` (hard-wrap — les moves
+        // score du cycle sont coupés avant de repartir, sémantique
+        // "redémarrer la phrase" déterministe).
+        let mut cycle_start = seek;
+        'outer: loop {
+            let t0 = Instant::now();
+            let cursor = |elapsed: Duration| cycle_start + elapsed.as_millis() as u64;
+            for (t, ev) in build_events(&clips, cycle_start) {
+                // Borne de boucle : les événements ≥ loop_end sont
+                // exclus du cycle (wrap dur, pas de pré-écoute).
+                if lp.map(|(_, e)| t >= e).unwrap_or(false) {
                     break;
+                }
+                loop {
+                    let elapsed = t0.elapsed();
+                    if cursor(elapsed) >= t {
+                        break;
+                    }
+                    if lock_or_recover(&tl_arc).generation != gen {
+                        return;
+                    }
+                    std::thread::sleep(
+                        Duration::from_millis(t - cursor(elapsed)).min(Duration::from_millis(50)),
+                    );
                 }
                 if lock_or_recover(&tl_arc).generation != gen {
                     return;
                 }
-                std::thread::sleep(
-                    Duration::from_millis(t - cursor(elapsed)).min(Duration::from_millis(50)),
-                );
-            }
-            if lock_or_recover(&tl_arc).generation != gen {
-                return;
-            }
-            match ev {
-                Ev::Fire(i, k, offset) => {
-                    fire_clip(&clips[i], k, offset, &sh, &mut lane_active, &sink)
-                }
-                Ev::EndMove(id, fade) => {
-                    lane_active.retain(|_, v| v.0 != id);
-                    if let Err(e) = deactivate_move_arc(&id, fade, true, &sh) {
-                        eprintln!("[score] end-of-clip deactivate '{id}' failed: {e}");
+                match ev {
+                    Ev::Fire(i, k, offset) => {
+                        fire_clip(&clips[i], k, offset, &sh, &mut lane_active, &sink)
+                    }
+                    Ev::EndMove(id, fade) => {
+                        lane_active.retain(|_, v| v.0 != id);
+                        if let Err(e) = deactivate_move_arc(&id, fade, true, &sh) {
+                            eprintln!("[score] end-of-clip deactivate '{id}' failed: {e}");
+                        }
                     }
                 }
+            }
+            match lp {
+                Some((lstart, lend)) if lend > lstart => {
+                    // Attendre la borne de boucle (les événements peuvent
+                    // finir avant lend — trou de queue).
+                    loop {
+                        let elapsed = t0.elapsed();
+                        if cursor(elapsed) >= lend {
+                            break;
+                        }
+                        if lock_or_recover(&tl_arc).generation != gen {
+                            return;
+                        }
+                        std::thread::sleep(
+                            Duration::from_millis(lend - cursor(elapsed))
+                                .min(Duration::from_millis(50)),
+                        );
+                    }
+                    if lock_or_recover(&tl_arc).generation != gen {
+                        return;
+                    }
+                    // Hard-cut : couper tous les moves score du cycle
+                    // avant le rebouclage — chaque cycle repart propre.
+                    let drained: Vec<(String, f64)> = lane_active.drain().map(|(_, v)| v).collect();
+                    for (id, fade) in drained {
+                        let _ = deactivate_move_arc(&id, fade, true, &sh);
+                    }
+                    emit_ui(&sink, "active-moves-update", ());
+                    // Rebase du curseur partagé — l'état rapporté reflète
+                    // le retour visuel à loop_start.
+                    {
+                        let mut tl = lock_or_recover(&tl_arc);
+                        if tl.generation != gen {
+                            return;
+                        }
+                        tl.seek_ms = lstart;
+                        tl.started_at = Some(Instant::now());
+                    }
+                    let st = timeline_state(&lock_or_recover(&tl_arc));
+                    emit_ui(&sink, "score-timeline", st);
+                    cycle_start = lstart;
+                }
+                _ => break 'outer,
             }
         }
         let mut tl = lock_or_recover(&tl_arc);
@@ -494,6 +556,32 @@ pub async fn score_timeline_state(
     state: State<'_, AppState>,
 ) -> Result<ScoreTimelineState, IpcError> {
     Ok(timeline_state(&lock_or_recover(&state.score_timeline)))
+}
+
+/// Arme/désarme la region de boucle [start, end) — rebouclage du
+/// transport (hard-wrap : les moves score du cycle sont coupés au
+/// rebouclage). Appliqué à la prochaine lecture ; en cours de lecture
+/// la config courante est déjà capturée — changer la loop live est S3.
+#[tauri::command]
+pub async fn score_timeline_set_loop(
+    start_ms: Option<u64>,
+    end_ms: Option<u64>,
+    state: State<'_, AppState>,
+) -> Result<(), IpcError> {
+    let mut tl = lock_or_recover(&state.score_timeline);
+    tl.loop_region = match (start_ms, end_ms) {
+        (Some(s), Some(e)) if e > s => Some((s, e)),
+        (None, None) => None,
+        _ => {
+            return Err(IpcError::validation(
+                "loop requires start < end (both set or neither)",
+            ))
+        }
+    };
+    let st = timeline_state(&tl);
+    drop(tl);
+    emit_ui(&state.event_sink, "score-timeline", st);
+    Ok(())
 }
 
 #[cfg(test)]

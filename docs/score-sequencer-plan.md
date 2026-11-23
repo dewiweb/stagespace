@@ -5,7 +5,7 @@
 > **Update this file whenever a phase lands or its scope changes** —
 > it is the single source of truth for "where is the sequencer".
 
-Last updated: after `c18a8cb` (S2.x — clip repeat).
+Last updated: after loop region + clip duplicate (S2.y partial).
 
 ## Status at a glance
 
@@ -15,9 +15,9 @@ Last updated: after `c18a8cb` (S2.x — clip repeat).
 | S1 | Backend-owned tape clock | ✅ | `952439d` |
 | S2 | Multitrack clip timeline executed by backend + SCORE surface | ✅ | `65eadb0` |
 | S2.x | Clip repeat (bounded pattern copies) | ✅ | `c18a8cb` |
-| S2.y | Timeline hardening (seek-while-playing, score loop region, record→tracks) | 🔲 | — |
+| S2.y | Timeline hardening — loop region ✅ · clip duplicate ✅ · seek-while-playing 🔲 · record→tracks 🔲 | 🔄 | — |
 | S3 | Automation lanes (macros, modulations, object params) | 🔲 | — |
-| S4 | TC chase, loop regions, poly-temporal (multi-cursors) | 🔲 | — |
+| S4 | TC chase, poly-temporal (multi-cursors, relative speeds) | 🔲 | — |
 
 ## S1 — backend-owned score tape clock ✅
 
@@ -94,19 +94,31 @@ tests.
 (nested clip group tiling moves+cues+markers together — the real DAW
 pattern) is S3+ work.
 
-## S2.y — timeline hardening 🔲 (next candidates, unordered)
+## S2.y — timeline hardening 🔄
 
-- **Seek while playing** — deterministic kill/respawn of score moves
-  or backend `locate` semantics; today `score_timeline_seek` refuses
-  while `started_at.is_some()`.
-- **Score loop region** — transport-level `{start,end}` loop (design
-  note `loop` field): at end, jump back + regenerate event list or
-  re-emit. Distinct from clip repeat (whole-arrangement loop).
-- **Record → tracks** — convert the S1 rehearsal tape (or live
+- ✅ **Score loop region** — `loop_region: Option<(u64,u64)>` on the
+  timeline, command `score_timeline_set_loop`. Transport-level
+  `[start,end)` loop with **hard-wrap semantics**: at `loop_end` the
+  cycle's score moves are cut, the shared cursor re-bases to
+  `loop_start` (state event shows the jump), and a fresh event list
+  is generated — deterministic, each cycle is "seek into loop_start".
+  Events ≥ `loop_end` never fire while looping (no pre-hearing).
+  First pass honours the seek: events before `loop_start` play once
+  as an intro, then the region loops. Loop config is captured at
+  play (live re-arm is S3). Persisted in `.hfg` + dirty-tracked; UI:
+  `⟲ LOOP` transport toggle + bound inputs + ruler band. Three
+  distinct loop levels now coexist: trajectory loop (`loop_mode`),
+  clip repeat (`repeat_every_ms`), transport loop (`loop_region`).
+- ✅ **Clip duplicate** — `duplicateClip` materializes an independent
+  copy offset by its duration (inspector `⧉` button). Distinct from
+  repeat: a real editable clip, not a virtual pattern copy.
+- 🔲 **Seek while playing** — deterministic kill/respawn of score
+  moves or backend `locate` semantics; today `score_timeline_seek`
+  refuses while `started_at.is_some()`.
+- 🔲 **Record → tracks** — convert the S1 rehearsal tape (or live
   capture) into clips on lanes; the tape becomes a recording mode of
   the sequencer rather than a parallel feature.
-- **Clip nudge/duplicate UX** — copy/paste clips, Alt-drag duplicate
-  (materialized copies editing — distinct from virtual repeat).
+- 🔲 **Clip nudge UX** — copy/paste, Alt-drag duplicate, multi-select.
 
 ## S3 — automation lanes 🔲
 
@@ -164,11 +176,13 @@ math vs an unmaintained dependency.
 | S2 | No timeline library (custom view) | Minimal deps; real cost lands at S3 |
 | S2.x | Clip repeat = virtual materialized copies, not duplicated JSON | Edit-once; bounded; seek-safe |
 | S2.x | Repeat requires `duration_ms` window | No unbounded generation |
+| S2.y | Transport loop = hard-wrap (cycle moves cut at loop_end) | Deterministic "restart the phrase"; no ghost spawns |
+| S2.y | Events < loop_start play once on first pass | Intro-then-loop, standard DAW reading |
 
 ## Verification status
 
 - Backend: **85 tests** (incl. 4 `build_events` repeat tests), clippy
-  `-D warnings`, fmt — all green at `c18a8cb`.
-- Frontend: **515 tests** (score timeline suite: document ops,
-  resolution, mute/lost refs, transport invokes, repeat propagation),
-  tsc, lint (0 errors) — all green at `c18a8cb`.
+  `-D warnings`, fmt — all green.
+- Frontend: **517 tests** (score timeline suite: document ops,
+  resolution, mute/lost refs, transport invokes, repeat propagation,
+  duplicate, loop region config), tsc, lint (0 errors) — all green.

@@ -45,6 +45,11 @@ export interface ScoreDoc {
   tracks: ScoreTrack[];
   clips: ScoreClipDoc[];
   durationMs: number;
+  /// Region de boucle transport [start, end) — rebouclage hard-wrap
+  /// de la partition entière (distinct du clip repeat). Les deux
+  /// ensemble ou aucun.
+  loopStartMs?: number;
+  loopEndMs?: number;
 }
 
 const uid = () => `sc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
@@ -68,6 +73,10 @@ interface ScoreState extends ScoreDoc {
   resizeClip: (id: string, durationMs: number | undefined) => void;
   setClipRepeat: (id: string, repeatEveryMs: number | undefined) => void;
   removeClip: (id: string) => void;
+  /// Copie matérielle du clip (distinct du repeat : une vraie clip
+  /// indépendante, éditable séparément) — décalée de sa propre durée.
+  duplicateClip: (id: string) => void;
+  setLoop: (startMs: number | undefined, endMs: number | undefined) => void;
   setDurationMs: (ms: number) => void;
   setScoreDoc: (doc: ScoreDoc | undefined) => void;
   clearScore: () => void;
@@ -75,7 +84,7 @@ interface ScoreState extends ScoreDoc {
   playScore: () => Promise<void>;
   stopScore: () => void;
   seekScore: (ms: number) => void;
-  _setTransport: (playing: boolean, cursorMs: number) => void;
+  _setTransport: (playing: boolean, cursorMs: number, loopStartMs?: number, loopEndMs?: number) => void;
 }
 
 export const useScoreStore = create<ScoreState>()((set, get) => ({
@@ -119,6 +128,23 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
       clips: s.clips.map((c) => (c.id === id ? { ...c, repeatEveryMs } : c)),
     })),
   removeClip: (id) => set((s) => ({ clips: s.clips.filter((c) => c.id !== id) })),
+  duplicateClip: (id) =>
+    set((s) => {
+      const src = s.clips.find((c) => c.id === id);
+      if (!src) return {};
+      const copy: ScoreClipDoc = {
+        ...src,
+        id: uid(),
+        startMs: Math.min(s.durationMs, src.startMs + (src.durationMs ?? 1000)),
+      };
+      return { clips: [...s.clips, copy] };
+    }),
+  setLoop: (startMs, endMs) => {
+    set({ loopStartMs: startMs, loopEndMs: endMs });
+    // Resync backend immédiat (hors play) — l'état transport reflète
+    // la loop armée même arrêtée.
+    invoke('score_timeline_set_loop', { startMs: startMs ?? null, endMs: endMs ?? null }).catch(silentCatch);
+  },
   setDurationMs: (ms) => set({ durationMs: Math.max(1000, ms) }),
   setScoreDoc: (doc) =>
     set(doc ?? { tracks: defaultTracks(), clips: [], durationMs: 120_000 }),
@@ -135,6 +161,7 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
       if (clips.length === 0) { toast.error('Score : aucun clip résolvable'); return; }
       // Seek courant = base du curseur (le backend spanne les clips à cheval).
       await invoke('score_timeline_load', { clips, durationMs: s.durationMs });
+      await invoke('score_timeline_set_loop', { startMs: s.loopStartMs ?? null, endMs: s.loopEndMs ?? null });
       await invoke('score_timeline_play');
       set({ playing: true });
     } catch (e) {
@@ -148,5 +175,12 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
   seekScore: (ms) => {
     invoke('score_timeline_seek', { ms }).then(() => set({ cursorMs: ms })).catch(silentCatch);
   },
-  _setTransport: (playing, cursorMs) => set({ playing, cursorMs }),
+  _setTransport: (playing, cursorMs, loopStartMs, loopEndMs) =>
+    // Loop fields : écrits seulement si différents — l'écho backend
+    // ne doit pas re-marquer le doc dirty à chaque event transport.
+    set((s) =>
+      s.loopStartMs === loopStartMs && s.loopEndMs === loopEndMs
+        ? { playing, cursorMs }
+        : { playing, cursorMs, loopStartMs, loopEndMs },
+    ),
 }));

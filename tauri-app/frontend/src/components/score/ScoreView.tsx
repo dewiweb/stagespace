@@ -30,7 +30,9 @@ const ScoreView: React.FC = () => {
   const durationMs = useScoreStore((s) => s.durationMs);
   const playing = useScoreStore((s) => s.playing);
   const cursorMs = useScoreStore((s) => s.cursorMs);
-  const { addClip, moveClip, resizeClip, removeClip, setDurationMs, setClipRepeat, playScore, stopScore, seekScore, toggleTrackMute } =
+  const loopStartMs = useScoreStore((s) => s.loopStartMs);
+  const loopEndMs = useScoreStore((s) => s.loopEndMs);
+  const { addClip, moveClip, resizeClip, removeClip, duplicateClip, setDurationMs, setClipRepeat, setLoop, playScore, stopScore, seekScore, toggleTrackMute } =
     useScoreStore.getState();
   const moveSlots = useGraphStore((s) => s.moveSlots);
   const cues = useCuelistStore((s) => s.cues);
@@ -137,6 +139,38 @@ const ScoreView: React.FC = () => {
           />
           s
         </label>
+        {/* Loop region — rebouclage hard-wrap du transport [start, end) */}
+        {(() => {
+          const loopOn = loopStartMs != null && loopEndMs != null;
+          const boundIn = (label: string, val: number, onSet: (v: number) => void) => (
+            <label className="text-[10px] text-gray-500 flex items-center gap-1">
+              {label}
+              <input
+                type="number" min={0} step={1} defaultValue={val / 1000}
+                onBlur={(e) => { const v = Number(e.target.value); if (v >= 0) onSet(v * 1000); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                className="w-12 bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-[10px]"
+              />
+            </label>
+          );
+          return (
+            <span className="flex items-center gap-1.5">
+              <button
+                onClick={() => setLoop(loopOn ? undefined : 0, loopOn ? undefined : durationMs)}
+                title="Region de boucle — le transport reboucle (hard-wrap)"
+                className={`px-2 py-0.5 text-[10px] font-bold rounded ${loopOn ? 'bg-cyan-800 text-cyan-200' : 'bg-gray-800 text-gray-500 hover:text-gray-300'}`}
+              >
+                ⟲ LOOP
+              </button>
+              {loopOn && (
+                <>
+                  {boundIn('de', loopStartMs, (v) => setLoop(Math.min(v, loopEndMs - 50), loopEndMs))}
+                  {boundIn('à', loopEndMs, (v) => setLoop(loopStartMs, Math.max(v, loopStartMs + 50)))}
+                </>
+              )}
+            </span>
+          );
+        })()}
         <div className="flex-1" />
         <button onClick={() => setPxPerSec((z) => Math.max(10, z / 1.4))} className="px-2 py-0.5 text-xs bg-gray-800 rounded hover:bg-gray-700">−</button>
         <button onClick={() => setPxPerSec((z) => Math.min(400, z * 1.4))} className="px-2 py-0.5 text-xs bg-gray-800 rounded hover:bg-gray-700">+</button>
@@ -182,7 +216,21 @@ const ScoreView: React.FC = () => {
                   {fmtMs(ms).slice(0, 5)}
                 </div>
               ))}
+              {/* Region de boucle — bandeau sur la ruler */}
+              {loopStartMs != null && loopEndMs != null && (
+                <div
+                  className="absolute top-0 bottom-0 bg-cyan-400/15 border-x border-cyan-400/60 pointer-events-none"
+                  style={{ left: ms2px(loopStartMs), width: ms2px(loopEndMs - loopStartMs) }}
+                />
+              )}
             </div>
+            {/* Bornes de loop pleine hauteur (très faible) */}
+            {loopStartMs != null && loopEndMs != null && (
+              <>
+                <div className="absolute top-0 bottom-0 w-px bg-cyan-400/30 pointer-events-none" style={{ left: ms2px(loopStartMs) }} />
+                <div className="absolute top-0 bottom-0 w-px bg-cyan-400/30 pointer-events-none" style={{ left: ms2px(loopEndMs) }} />
+              </>
+            )}
             {/* Lanes */}
             {tracks.map((t) => (
               <div key={t.id} className="relative border-b border-gray-800" style={{ height: laneH, opacity: t.muted ? 0.4 : 1 }}>
@@ -321,6 +369,11 @@ const ScoreView: React.FC = () => {
                 }
                 setClipRepeat(c.id, v && v > 0 ? v : undefined);
               }, 'Copies du pattern — re-déclenche le clip toutes les N s dans sa durée')}
+              <button
+                className="hover:text-gray-200 border border-gray-700 rounded px-1.5 py-0.5"
+                title="Dupliquer le clip (copie indépendante, décalée de sa durée)"
+                onClick={() => duplicateClip(c.id)}
+              >⧉</button>
             </span>
           );
         })()}

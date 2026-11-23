@@ -59,7 +59,8 @@ use commands::sampling::{
 };
 use commands::score::{
     score_clear, score_load, score_play, score_state, score_stop, score_timeline_load,
-    score_timeline_play, score_timeline_seek, score_timeline_state, score_timeline_stop,
+    score_timeline_play, score_timeline_seek, score_timeline_set_loop, score_timeline_state,
+    score_timeline_stop,
 };
 use commands::state::lock_or_recover;
 
@@ -483,6 +484,7 @@ pub fn stagespace_invoke_handler<R: tauri::Runtime>(invoke: tauri::ipc::Invoke<R
         score_timeline_play,
         score_timeline_stop,
         score_timeline_seek,
+        score_timeline_set_loop,
         score_timeline_state,
         get_perf_stats,
         discover_osc_targets,

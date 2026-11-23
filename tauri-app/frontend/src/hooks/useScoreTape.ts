@@ -18,6 +18,8 @@ interface ScoreFireEntry {
 interface ScoreTimelineStateEvent {
   playing: boolean;
   cursor_ms: number;
+  loop_start_ms?: number;
+  loop_end_ms?: number;
 }
 
 export function useScoreTape() {
@@ -33,7 +35,8 @@ export function useScoreTape() {
         // S2 — transitions du transport timeline (play→end, stop, seek)
         // poussées par le backend ; le curseur continu est animé par la vue.
         const v = await safeListen<ScoreTimelineStateEvent>('score-timeline', (event) => {
-          useScoreStore.getState()._setTransport(event.payload.playing, event.payload.cursor_ms);
+          const p = event.payload;
+          useScoreStore.getState()._setTransport(p.playing, p.cursor_ms, p.loop_start_ms, p.loop_end_ms);
         });
         if (cancelled) { u(); v(); }
         else { unlisten = u; unlistenTl = v; }

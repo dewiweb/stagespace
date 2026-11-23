@@ -97,4 +97,35 @@ describe('score timeline (S2)', () => {
     expect(clips[0].repeat_every_ms).toBe(2000);
     expect(clips[0].duration_ms).toBe(10_000);
   });
+
+  it('duplicateClip — copie indépendante décalée de sa durée', () => {
+    const st = useScoreStore.getState();
+    const c = st.addClip('trk-slots', { type: 'slot', slotId: 's1' }, 1000, 4000);
+    useScoreStore.getState().duplicateClip(c.id);
+    const clips = useScoreStore.getState().clips;
+    expect(clips).toHaveLength(2);
+    const copy = clips[1];
+    expect(copy.id).not.toBe(c.id);
+    expect(copy.startMs).toBe(5000); // 1000 + durée 4000
+    expect(copy.ref).toEqual(c.ref);
+    // Copie indépendante : bouger l'une ne touche pas l'autre.
+    useScoreStore.getState().moveClip(copy.id, 9000);
+    expect(useScoreStore.getState().clips[0].startMs).toBe(1000);
+  });
+
+  it('loop region — setLoop stocke + playScore envoie set_loop au backend', async () => {
+    const st = useScoreStore.getState();
+    st.addClip('trk-slots', { type: 'slot', slotId: 's1' }, 0, 5000);
+    useScoreStore.getState().setLoop(2000, 30_000);
+    const s = useScoreStore.getState();
+    expect(s.loopStartMs).toBe(2000);
+    expect(s.loopEndMs).toBe(30_000);
+    await useScoreStore.getState().playScore();
+    const setLoopCall = getInvokeCalls().find((c) => c.cmd === 'score_timeline_set_loop');
+    expect(setLoopCall?.args).toEqual({ startMs: 2000, endMs: 30_000 });
+    // Désarmement → null/null (pas de region).
+    useScoreStore.getState().setLoop(undefined, undefined);
+    const disarm = getInvokeCalls().filter((c) => c.cmd === 'score_timeline_set_loop').pop();
+    expect(disarm?.args).toEqual({ startMs: null, endMs: null });
+  });
 });
