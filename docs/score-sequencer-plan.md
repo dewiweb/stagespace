@@ -5,7 +5,9 @@
 > **Update this file whenever a phase lands or its scope changes** —
 > it is the single source of truth for "where is the sequencer".
 
-Last updated: after loop region + clip duplicate (S2.y partial).
+Last updated: 2026-11-23 — clip fades + lane modes + orphan refs
+implémentés (S2.y). Reste : seek-while-playing, record→tracks,
+édition (split/multi-select/copy-paste).
 
 ## Status at a glance
 
@@ -15,7 +17,7 @@ Last updated: after loop region + clip duplicate (S2.y partial).
 | S1 | Backend-owned tape clock | ✅ | `952439d` |
 | S2 | Multitrack clip timeline executed by backend + SCORE surface | ✅ | `65eadb0` |
 | S2.x | Clip repeat (bounded pattern copies) | ✅ | `c18a8cb` |
-| S2.y | Timeline hardening — loop region ✅ · clip duplicate ✅ · seek-while-playing 🔲 · record→tracks 🔲 | 🔄 | — |
+| S2.y | Timeline hardening — loop region ✅ · clip duplicate ✅ · clip fades ✅ · lane modes ✅ · orphan refs ✅ · seek-while-playing 🔲 · record→tracks 🔲 · édition avancée 🔲 | 🔄 | — |
 | S3 | Automation lanes (macros, modulations, object params) | 🔲 | — |
 | S4 | TC chase, poly-temporal (multi-cursors, relative speeds) | 🔲 | — |
 
@@ -117,8 +119,35 @@ pattern) is S3+ work.
   refuses while `started_at.is_some()`.
 - 🔲 **Record → tracks** — convert the S1 rehearsal tape (or live
   capture) into clips on lanes; the tape becomes a recording mode of
-  the sequencer rather than a parallel feature.
-- 🔲 **Clip nudge UX** — copy/paste, Alt-drag duplicate, multi-select.
+  the sequencer rather than a parallel feature. Le modèle lanes-par-
+  objet (design 11-23) rend le dépôt naturel : clips sur les pistes
+  objets + événements globaux sur le master.
+- ✅ **Clip fades** — `fadeInMs`/`fadeOutMs` optionnels sur
+  `ScoreClipDoc` (`undefined`/`None` = hérite les fades du slot),
+  wire `fade_in_ms`/`fade_out_ms`. Backend : l'override est injecté
+  dans `req.animation` au fire (même pipeline `spec.fade` que les
+  slots) et emporté par l'`EndMove` (`clip.fade ?? animation.fade`).
+  UI : poignée triangulaire haut-gauche (fade-in, région en gradient
+  dans le clip) + **tail** dessiné après le bord droit (le move
+  s'éteint après sa fenêtre — tail model), drag des deux avec snap
+  50 ms + champs inspecteur. `fade_shape` réservé pour plus tard.
+- ✅ **Lane mode `stacked | exclusive`** — `mode` optionnel sur
+  `ScoreTrack` (défaut `exclusive`, backfill `setScoreDoc` sur les
+  vieux docs), wire `stacked: true` par clip. Backend : `lane_active`
+  passe d'un id par lane à `HashMap<lane, Vec<(id, fade)>>` —
+  exclusive draine et coupe la lane au fire (comportement S2),
+  stacked empile (les moves se composent dans le merge). EndMove ne
+  retire que son move ; le hard-wrap loop draine tout. UI : toggle
+  `EXC`/`STK` en tête de piste ; en stacked les clips qui se
+  chevauchent sont empilés sur des sous-lignes (packing glouton) et
+  la piste grandit.
+- ✅ **Clip orphelin** — réf `slotId`/`cueId` cassée → clip dessiné
+  pointillé/désaturé en édition (label `⚠` déjà existant), plus
+  seulement en toast au play. Couleurs par type inchangées
+  (slot mauve / cue ambre / stop rouge / panic rouge foncé).
+- 🔲 **Clip editing** — split at cursor, copy/paste, multi-select,
+  nudge, Alt-drag duplicate. Priorité : split + multi-select +
+  copy/paste (c'est ce qui rend l'arrangement réellement éditable).
 
 ## S3 — automation lanes 🔲
 
@@ -128,10 +157,30 @@ Keyframed continuous parameters evaluated by the backend (design note
 params, per-object params. Writes go through the **same command paths
 as OSC-IN** (same validation, same merge inputs).
 
+**Modèle UI retenu (design 11-23)** : éditeur de courbes **clip-
+scoped** dans la zone haute de la surface — sélecteur de courbe +
+éditeur de keyframes attaché au clip sélectionné, PAS de sous-piste
+par paramètre. Conséquence côté modèle : les courbes sont des
+données du clip (`clip.curves: AutomationLane[]` avec target
+`macro:speed` / `obj:<track_id>:pos.x` / `mod:…`), évaluées
+uniquement pendant la fenêtre du clip.
+
+**Modèle de pistes retenu (design 11-23)** : pistes **par objet**
+(keyées `track_id`, résolution obj→track_id au play comme
+`track_positions`) **+ piste master** ; `lane_mode: stacked |
+exclusive` (objets : chevauchements = moves simultanés composés par
+le merge ; master/cues/markers : last-wins actuel). Backend : peu de
+changement — chaque clip spawne déjà son `sc-<clipId>` ; `lane_active`
+passe d'un id unique par lane à une liste (le hard-wrap loop coupe
+déjà tout ce qui est actif). Formations multi-objets : placement à
+trancher (ghost-span / piste principale / master — §Surface du doc
+design).
+
 Open design points: evaluation rate (60 Hz vs event-driven), curve
 model (linear/smoothstep/step — bezier later), conflict policy with
-operator/OSC writes (last-wins? score priority?), lane-per-target UI
-density.
+operator/OSC writes (proposition : courbe écrit en continu sauf
+park/manuel — opérateur souverain), fin de courbe (hold/revert —
+réutiliser `end_mode`).
 
 **Dependency reassessment:** S3 is where curve editing (keyframe
 handles, bezier, range selection) may finally justify a React
@@ -178,11 +227,20 @@ math vs an unmaintained dependency.
 | S2.x | Repeat requires `duration_ms` window | No unbounded generation |
 | S2.y | Transport loop = hard-wrap (cycle moves cut at loop_end) | Deterministic "restart the phrase"; no ghost spawns |
 | S2.y | Events < loop_start play once on first pass | Intro-then-loop, standard DAW reading |
+| UX | Pistes = par objet + master, pas par type | Lisibilité opérateur ; le "record→tracks" devient un dépôt par objet naturel |
+| UX | Terminologie "piste"/"clip" | "track" collisionne avec `/track/N` (OSC) |
+| UX | Courbes éditées clip-scoped (zone haute), pas de sous-pistes | Évite l'explosion de lanes (1 param × N objets) ; évaluation bornée à la fenêtre du clip |
+| UX | Fades clip-locaux (`None` = hérite slot) + poignées de bord | Même clip, articulations différentes par instance (modèle DAW clip gain) |
+| UX | `lane_mode: stacked \| exclusive` par piste | Chevauchement = intention (layering merge) sur objets ; last-wins reste sain sur cues/master |
+| UX | Clip orphelin flaggé en édition | Réf cassée visible avant le play, pas juste en toast |
 
 ## Verification status
 
-- Backend: **85 tests** (incl. 4 `build_events` repeat tests), clippy
-  `-D warnings`, fmt — all green.
-- Frontend: **517 tests** (score timeline suite: document ops,
-  resolution, mute/lost refs, transport invokes, repeat propagation,
-  duplicate, loop region config), tsc, lint (0 errors) — all green.
+- Backend: **87 tests** (4 `build_events` repeat + 3 fade/serde
+  compat) — all green sur la toolchain GNU (manifest comctl32 v6
+  injecté pour `TaskDialogIndirect` ; voir note env ci-dessous).
+- Frontend: **520 tests** (score timeline : +fades clip-local,
+  +lane mode, +backfill mode), tsc, lint (0 errors) — all green.
+- Note env (Windows/GNU) : `cargo test` src-tauri exige
+  `RUSTFLAGS="-Clink-arg=<manifest.res>"` (comctl32 v6) + un shim
+  `strnlen_s` pour `ittapi-sys` — artefacts temporaires hors repo.

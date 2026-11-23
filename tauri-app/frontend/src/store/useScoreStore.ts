@@ -10,12 +10,20 @@ import { toast } from '../utils/toast-helpers';
 import { safeInvoke as invoke, silentCatch } from '../utils/tauri';
 
 export type ScoreTrackKind = 'slots' | 'cues' | 'markers';
+/// Comportement de la piste en chevauchement de clips (docs/score-
+/// sequencer.md §Surface) : `exclusive` = last-wins console (un move
+/// score à la fois — cues/markers/master), `stacked` = les clips qui
+/// se chevauchent jouent simultanément, leurs sorties se composent
+/// dans le merge (pistes objets).
+export type ScoreLaneMode = 'exclusive' | 'stacked';
 
 export interface ScoreTrack {
   id: string;
   name: string;
   kind: ScoreTrackKind;
   muted: boolean;
+  /// Mode de chevauchement — `exclusive` par défaut (sémantique S2).
+  mode?: ScoreLaneMode;
 }
 
 /// Référence d'un clip — JAMAIS un snapshot : le document pointe vers
@@ -38,6 +46,12 @@ export interface ScoreClipDoc {
   /// requise). Distinct du loop_mode du move (trajectoire interne) :
   /// ici chaque copie est un nouveau spawn — re-articulation rythmique.
   repeatEveryMs?: number;
+  /// Fades clip-local (modèle DAW — le clip instance possède ses
+  /// articulations). `undefined` = hérite les fades du slot
+  /// (animation.fade_in/fade_out). fade_out joue EN TAIL après la fin
+  /// du clip (EndMove à end_ms, le move s'éteint pendant son fade).
+  fadeInMs?: number;
+  fadeOutMs?: number;
   ref: ScoreClipRef;
 }
 
@@ -68,10 +82,13 @@ interface ScoreState extends ScoreDoc {
   addTrack: (kind: ScoreTrackKind, name?: string) => void;
   removeTrack: (id: string) => void;
   toggleTrackMute: (id: string) => void;
+  setTrackMode: (id: string, mode: ScoreLaneMode) => void;
   addClip: (trackId: string, ref: ScoreClipRef, startMs: number, durationMs?: number) => ScoreClipDoc;
   moveClip: (id: string, startMs: number) => void;
   resizeClip: (id: string, durationMs: number | undefined) => void;
   setClipRepeat: (id: string, repeatEveryMs: number | undefined) => void;
+  /// Fades du clip — `undefined` = retour à l'héritage du slot.
+  setClipFades: (id: string, fadeInMs: number | undefined, fadeOutMs: number | undefined) => void;
   removeClip: (id: string) => void;
   /// Copie matérielle du clip (distinct du repeat : une vraie clip
   /// indépendante, éditable séparément) — décalée de sa propre durée.
@@ -109,6 +126,10 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
     set((s) => ({
       tracks: s.tracks.map((t) => (t.id === id ? { ...t, muted: !t.muted } : t)),
     })),
+  setTrackMode: (id, mode) =>
+    set((s) => ({
+      tracks: s.tracks.map((t) => (t.id === id ? { ...t, mode } : t)),
+    })),
 
   addClip: (trackId, ref, startMs, durationMs) => {
     const clip: ScoreClipDoc = { id: uid(), trackId, startMs: Math.max(0, startMs), durationMs, ref };
@@ -126,6 +147,10 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
   setClipRepeat: (id, repeatEveryMs) =>
     set((s) => ({
       clips: s.clips.map((c) => (c.id === id ? { ...c, repeatEveryMs } : c)),
+    })),
+  setClipFades: (id, fadeInMs, fadeOutMs) =>
+    set((s) => ({
+      clips: s.clips.map((c) => (c.id === id ? { ...c, fadeInMs, fadeOutMs } : c)),
     })),
   removeClip: (id) => set((s) => ({ clips: s.clips.filter((c) => c.id !== id) })),
   duplicateClip: (id) =>
@@ -147,7 +172,11 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
   },
   setDurationMs: (ms) => set({ durationMs: Math.max(1000, ms) }),
   setScoreDoc: (doc) =>
-    set(doc ?? { tracks: defaultTracks(), clips: [], durationMs: 120_000 }),
+    // Backfill `mode` — les docs sauvegardés avant lane_mode n'ont pas
+    // le champ (exclusive = sémantique historique S2).
+    set(doc
+      ? { ...doc, tracks: doc.tracks.map((t) => ({ ...t, mode: t.mode ?? 'exclusive' })) }
+      : { tracks: defaultTracks(), clips: [], durationMs: 120_000 }),
   clearScore: () =>
     set({ tracks: defaultTracks(), clips: [], durationMs: 120_000, playing: false, cursorMs: 0 }),
 

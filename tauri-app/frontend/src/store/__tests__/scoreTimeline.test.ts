@@ -113,6 +113,44 @@ describe('score timeline (S2)', () => {
     expect(useScoreStore.getState().clips[0].startMs).toBe(1000);
   });
 
+  it('setClipFades — fades clip-local propagés à la résolution', async () => {
+    const st = useScoreStore.getState();
+    const c = st.addClip('trk-slots', { type: 'slot', slotId: 's1' }, 0, 5000);
+    useScoreStore.getState().setClipFades(c.id, 1500, 3000);
+    const doc = useScoreStore.getState().clips[0];
+    expect(doc.fadeInMs).toBe(1500);
+    expect(doc.fadeOutMs).toBe(3000);
+    const { clips } = await resolveScoreClips(useScoreStore.getState());
+    expect(clips[0].fade_in_ms).toBe(1500);
+    expect(clips[0].fade_out_ms).toBe(3000);
+    // undefined → héritage du slot (pas de champ à la résolution).
+    useScoreStore.getState().setClipFades(c.id, undefined, undefined);
+    const r2 = await resolveScoreClips(useScoreStore.getState());
+    expect(r2.clips[0].fade_in_ms).toBeUndefined();
+    expect(r2.clips[0].fade_out_ms).toBeUndefined();
+  });
+
+  it('lane mode — setTrackMode stacked → flag propagé, exclusive par défaut', async () => {
+    const st = useScoreStore.getState();
+    st.addClip('trk-slots', { type: 'slot', slotId: 's1' }, 0, 5000);
+    let { clips } = await resolveScoreClips(useScoreStore.getState());
+    expect(clips[0].stacked).toBeUndefined(); // exclusive = absent du wire
+    useScoreStore.getState().setTrackMode('trk-slots', 'stacked');
+    ({ clips } = await resolveScoreClips(useScoreStore.getState()));
+    expect(clips[0].stacked).toBe(true);
+    useScoreStore.getState().setTrackMode('trk-slots', 'exclusive');
+    ({ clips } = await resolveScoreClips(useScoreStore.getState()));
+    expect(clips[0].stacked).toBeUndefined();
+  });
+
+  it('setScoreDoc backfill mode:exclusive sur les vieux docs', () => {
+    useScoreStore.getState().setScoreDoc({
+      tracks: [{ id: 't1', name: 'A', kind: 'slots', muted: false }],
+      clips: [], durationMs: 60_000,
+    });
+    expect(useScoreStore.getState().tracks[0].mode).toBe('exclusive');
+  });
+
   it('loop region — setLoop stocke + playScore envoie set_loop au backend', async () => {
     const st = useScoreStore.getState();
     st.addClip('trk-slots', { type: 'slot', slotId: 's1' }, 0, 5000);

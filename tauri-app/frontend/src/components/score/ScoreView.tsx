@@ -32,7 +32,7 @@ const ScoreView: React.FC = () => {
   const cursorMs = useScoreStore((s) => s.cursorMs);
   const loopStartMs = useScoreStore((s) => s.loopStartMs);
   const loopEndMs = useScoreStore((s) => s.loopEndMs);
-  const { addClip, moveClip, resizeClip, removeClip, duplicateClip, setDurationMs, setClipRepeat, setLoop, playScore, stopScore, seekScore, toggleTrackMute } =
+  const { addClip, moveClip, resizeClip, removeClip, duplicateClip, setDurationMs, setClipRepeat, setClipFades, setLoop, playScore, stopScore, seekScore, toggleTrackMute, setTrackMode } =
     useScoreStore.getState();
   const moveSlots = useGraphStore((s) => s.moveSlots);
   const cues = useCuelistStore((s) => s.cues);
@@ -64,14 +64,59 @@ const ScoreView: React.FC = () => {
   const px2ms = useCallback((px: number) => Math.max(0, (px / pxPerSec) * 1000), [pxPerSec]);
   const tickEvery = pxPerSec < 30 ? 10_000 : pxPerSec < 80 ? 5_000 : 1_000;
   const laneH = 44;
+  const rowH = 20; // hauteur d'une sous-ligne en mode stacked
 
-  // Drag de clip : horizontal → startMs (snap 50ms) ; bord droit → resize.
-  const dragRef = useRef<{ clipId: string; mode: 'move' | 'resize'; startX: number; origMs: number } | null>(null);
-  const onClipPointerDown = (e: React.PointerEvent, clip: ScoreClipDoc, mode: 'move' | 'resize') => {
+  // Clip orphelin — sa référence (slotId/cueId) ne pointe plus sur une
+  // entité vivante : signalé en édition, pas seulement en toast au play.
+  const clipOrphan = (c: ScoreClipDoc): boolean => {
+    if (c.ref.type === 'slot')
+      return !moveSlots.some((s) => s.id === (c.ref as { slotId: string }).slotId);
+    if (c.ref.type === 'cue')
+      return !cues.some((q) => String(q.id) === String((c.ref as { cueId: string }).cueId));
+    return false;
+  };
+
+  // Fades effectifs (ms) : clip-local sinon hérité du slot.
+  const effFades = (c: ScoreClipDoc): { inMs: number; outMs: number } => {
+    if (c.ref.type !== 'slot') return { inMs: 0, outMs: 0 };
+    const sl = moveSlots.find((x) => x.id === (c.ref as { slotId: string }).slotId);
+    return {
+      inMs: c.fadeInMs ?? (sl?.fadeIn ?? 0) * 1000,
+      outMs: c.fadeOutMs ?? (sl?.fadeOut ?? 0.5) * 1000,
+    };
+  };
+
+  // Layout par piste — en mode stacked les clips qui se chevauchent
+  // sont empilés sur des sous-lignes (packing glouton par startMs) et
+  // la piste grandit ; en exclusive une seule ligne (le chevauchement
+  // se dessine tel quel — last-wins au fire).
+  const laneLayout = new Map<string, { height: number; rowOf: Map<string, number> }>();
+  for (const t of tracks) {
+    const lane = clips.filter((c) => c.trackId === t.id);
+    if (t.mode !== 'stacked') {
+      laneLayout.set(t.id, { height: laneH, rowOf: new Map(lane.map((c) => [c.id, 0])) });
+      continue;
+    }
+    const rowEnd: number[] = [];
+    const rowOf = new Map<string, number>();
+    for (const c of [...lane].sort((a, b) => a.startMs - b.startMs)) {
+      const end = c.startMs + (c.durationMs ?? 250);
+      let r = rowEnd.findIndex((e) => c.startMs >= e);
+      if (r < 0) { r = rowEnd.length; rowEnd.push(0); }
+      rowEnd[r] = end;
+      rowOf.set(c.id, r);
+    }
+    laneLayout.set(t.id, { height: Math.max(laneH, 8 + rowEnd.length * rowH), rowOf });
+  }
+
+  // Drag de clip : horizontal → startMs (snap 50ms) ; bord droit →
+  // resize ; poignées d'angle → fades clip-local.
+  const dragRef = useRef<{ clipId: string; mode: 'move' | 'resize' | 'fadeIn' | 'fadeOut'; startX: number; origMs: number } | null>(null);
+  const onClipPointerDown = (e: React.PointerEvent, clip: ScoreClipDoc, mode: 'move' | 'resize' | 'fadeIn' | 'fadeOut', origMs?: number) => {
     e.stopPropagation();
     e.preventDefault();
     setSelected(clip.id);
-    dragRef.current = { clipId: clip.id, mode, startX: e.clientX, origMs: mode === 'move' ? clip.startMs : clip.durationMs ?? 0 };
+    dragRef.current = { clipId: clip.id, mode, startX: e.clientX, origMs: origMs ?? (mode === 'move' ? clip.startMs : clip.durationMs ?? 0) };
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   };
   const onClipPointerMove = (e: React.PointerEvent, clip: ScoreClipDoc) => {
@@ -79,7 +124,9 @@ const ScoreView: React.FC = () => {
     if (!d || d.clipId !== clip.id) return;
     const deltaMs = px2ms(e.clientX - d.startX);
     if (d.mode === 'move') moveClip(clip.id, Math.round((d.origMs + deltaMs) / 50) * 50);
-    else resizeClip(clip.id, Math.max(100, Math.round((d.origMs + deltaMs) / 50) * 50));
+    else if (d.mode === 'resize') resizeClip(clip.id, Math.max(100, Math.round((d.origMs + deltaMs) / 50) * 50));
+    else if (d.mode === 'fadeIn') setClipFades(clip.id, Math.max(0, Math.round((d.origMs + deltaMs) / 50) * 50), clip.fadeOutMs);
+    else if (d.mode === 'fadeOut') setClipFades(clip.id, clip.fadeInMs, Math.max(0, Math.round((d.origMs + deltaMs) / 50) * 50));
   };
   const onClipPointerUp = () => { dragRef.current = null; };
 
@@ -182,12 +229,21 @@ const ScoreView: React.FC = () => {
         <div className="w-32 shrink-0 border-r border-gray-800 bg-gray-900/40 flex flex-col">
           <div className="h-6 border-b border-gray-800" />
           {tracks.map((t) => (
-            <div key={t.id} className="flex items-center gap-1 px-2 border-b border-gray-800" style={{ height: laneH }}>
+            <div key={t.id} className="flex items-center gap-1 px-2 border-b border-gray-800" style={{ height: laneLayout.get(t.id)?.height ?? laneH }}>
               <button
                 onClick={() => toggleTrackMute(t.id)}
                 title={t.muted ? 'Lane mutée — clips non joués' : 'Mute lane'}
                 className={`w-3 h-3 rounded-sm border ${t.muted ? 'bg-orange-600 border-orange-400' : 'border-gray-600'}`}
               />
+              <button
+                onClick={() => setTrackMode(t.id, t.mode === 'stacked' ? 'exclusive' : 'stacked')}
+                title={t.mode === 'stacked'
+                  ? 'Stacked — les clips simultanés composent (moves superposés)'
+                  : 'Exclusive — un clip à la fois (last-wins, sémantique console)'}
+                className={`text-[8px] font-mono px-0.5 rounded border ${t.mode === 'stacked' ? 'border-purple-500 text-purple-300' : 'border-gray-700 text-gray-600 hover:text-gray-400'}`}
+              >
+                {t.mode === 'stacked' ? 'STK' : 'EXC'}
+              </button>
               <span className={`text-[10px] font-bold flex-1 truncate ${t.muted ? 'text-gray-600 line-through' : 'text-gray-300'}`}>{t.name}</span>
               <button
                 onClick={(e) => setPicker({ trackId: t.id, x: e.clientX, y: e.clientY })}
@@ -232,49 +288,99 @@ const ScoreView: React.FC = () => {
               </>
             )}
             {/* Lanes */}
-            {tracks.map((t) => (
-              <div key={t.id} className="relative border-b border-gray-800" style={{ height: laneH, opacity: t.muted ? 0.4 : 1 }}>
-                {clips.filter((c) => c.trackId === t.id).map((c) => {
-                  const w = c.durationMs != null ? ms2px(c.durationMs) : 14;
-                  return (
-                    <div
-                      key={c.id}
-                      className={`absolute top-1.5 bottom-1.5 rounded border text-[10px] font-bold px-1.5 flex items-center overflow-hidden cursor-grab ${CLIP_COLORS[c.ref.type]} ${selected === c.id ? 'ring-2 ring-white' : ''}`}
-                      style={{ left: ms2px(c.startMs), width: Math.max(14, w), minWidth: 14 }}
-                      title={clipLabel(c)}
-                      onPointerDown={(e) => onClipPointerDown(e, c, 'move')}
-                      onPointerMove={(e) => onClipPointerMove(e, c)}
-                      onPointerUp={onClipPointerUp}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {/* Copies du pattern — ticks aux bornes de répétition */}
-                      {c.repeatEveryMs != null && c.repeatEveryMs > 0 && c.durationMs != null &&
-                        Array.from(
-                          { length: Math.floor(c.durationMs / c.repeatEveryMs) },
-                          (_, i) => (i + 1) * c.repeatEveryMs!,
-                        ).filter((off) => off < c.durationMs!).map((off) => (
+            {tracks.map((t) => {
+              const lay = laneLayout.get(t.id) ?? { height: laneH, rowOf: new Map<string, number>() };
+              const stacked = t.mode === 'stacked';
+              return (
+                <div key={t.id} className="relative border-b border-gray-800" style={{ height: lay.height, opacity: t.muted ? 0.4 : 1 }}>
+                  {clips.filter((c) => c.trackId === t.id).map((c) => {
+                    const w = c.durationMs != null ? ms2px(c.durationMs) : 14;
+                    const row = lay.rowOf.get(c.id) ?? 0;
+                    const top = stacked ? 2 + row * rowH : 6;
+                    const h = stacked ? rowH - 4 : lay.height - 12;
+                    const orphan = clipOrphan(c);
+                    const fades = c.ref.type === 'slot' ? effFades(c) : null;
+                    const bg = CLIP_COLORS[c.ref.type].split(' ')[0];
+                    return (
+                      <React.Fragment key={c.id}>
+                        {/* Tail fade-out — déborde le bord droit : le
+                            move s'éteint APRÈS la fin de sa fenêtre
+                            (EndMove à end + ramp). */}
+                        {fades && fades.outMs > 0 && c.durationMs != null && (
                           <div
-                            key={off}
-                            className="absolute top-0 bottom-0 border-l border-white/30 pointer-events-none"
-                            style={{ left: ms2px(off) }}
-                          />
-                        ))}
-                      <span className="truncate pointer-events-none">
-                        {c.repeatEveryMs != null ? '⟳ ' : ''}{clipLabel(c)}
-                      </span>
-                      {c.ref.type === 'slot' && c.durationMs != null && (
+                            className="absolute z-0 pointer-events-none"
+                            style={{ left: ms2px(c.startMs + c.durationMs), top, height: h, width: ms2px(fades.outMs) }}
+                          >
+                            <div
+                              className={`absolute inset-0 ${bg} opacity-50`}
+                              style={{ clipPath: 'polygon(0 0, 0 100%, 100% 0)' }}
+                            />
+                            <div
+                              className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize pointer-events-auto"
+                              title="fade out — tail du clip (s)"
+                              onPointerDown={(e) => onClipPointerDown(e, c, 'fadeOut', fades.outMs)}
+                              onPointerMove={(e) => onClipPointerMove(e, c)}
+                              onPointerUp={onClipPointerUp}
+                            />
+                          </div>
+                        )}
                         <div
-                          className="absolute right-0 top-0 bottom-0 w-1.5 cursor-ew-resize bg-white/20 hover:bg-white/50"
-                          onPointerDown={(e) => onClipPointerDown(e, c, 'resize')}
+                          className={`absolute rounded border text-[10px] font-bold px-1.5 flex items-center overflow-hidden cursor-grab ${CLIP_COLORS[c.ref.type]} ${selected === c.id ? 'ring-2 ring-white' : ''} ${orphan ? 'border-dashed opacity-50 saturate-50' : ''}`}
+                          style={{ left: ms2px(c.startMs), width: Math.max(14, w), minWidth: 14, top, height: h }}
+                          title={orphan ? `${clipLabel(c)} — référence perdue` : clipLabel(c)}
+                          onPointerDown={(e) => onClipPointerDown(e, c, 'move')}
                           onPointerMove={(e) => onClipPointerMove(e, c)}
                           onPointerUp={onClipPointerUp}
-                        />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {/* Région de fade-in + poignée d'angle (drag
+                              horizontal → fade_in clip-local) */}
+                          {fades && fades.inMs > 0 && (
+                            <div
+                              className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-black/50 to-transparent pointer-events-none"
+                              style={{ width: ms2px(fades.inMs) }}
+                            />
+                          )}
+                          {fades && (
+                            <div
+                              className="absolute left-0 top-0 w-2.5 h-2.5 cursor-ew-resize"
+                              style={{ clipPath: 'polygon(0 0, 100% 0, 0 100%)', background: 'rgba(255,255,255,.4)' }}
+                              title="fade in — entrée du clip (s)"
+                              onPointerDown={(e) => onClipPointerDown(e, c, 'fadeIn', fades.inMs)}
+                              onPointerMove={(e) => onClipPointerMove(e, c)}
+                              onPointerUp={onClipPointerUp}
+                            />
+                          )}
+                          {/* Copies du pattern — ticks aux bornes de répétition */}
+                          {c.repeatEveryMs != null && c.repeatEveryMs > 0 && c.durationMs != null &&
+                            Array.from(
+                              { length: Math.floor(c.durationMs / c.repeatEveryMs) },
+                              (_, i) => (i + 1) * c.repeatEveryMs!,
+                            ).filter((off) => off < c.durationMs!).map((off) => (
+                              <div
+                                key={off}
+                                className="absolute top-0 bottom-0 border-l border-white/30 pointer-events-none"
+                                style={{ left: ms2px(off) }}
+                              />
+                            ))}
+                          <span className="truncate pointer-events-none">
+                            {c.repeatEveryMs != null ? '⟳ ' : ''}{clipLabel(c)}
+                          </span>
+                          {c.ref.type === 'slot' && c.durationMs != null && (
+                            <div
+                              className="absolute right-0 top-0 bottom-0 w-1.5 cursor-ew-resize bg-white/20 hover:bg-white/50"
+                              onPointerDown={(e) => onClipPointerDown(e, c, 'resize')}
+                              onPointerMove={(e) => onClipPointerMove(e, c)}
+                              onPointerUp={onClipPointerUp}
+                            />
+                          )}
+                        </div>
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
+              );
+            })}
             {/* Curseur */}
             <div className="absolute top-0 bottom-0 w-px bg-cyan-400 pointer-events-none" style={{ left: ms2px(displayCursor) }} />
           </div>
@@ -360,6 +466,12 @@ const ScoreView: React.FC = () => {
               <span className="font-bold text-gray-300">{clipLabel(c)}</span>
               {numIn('début', c.startMs, (v) => v != null && moveClip(c.id, v))}
               {numIn('durée', c.durationMs, (v) => resizeClip(c.id, v && v > 0 ? v : undefined))}
+              {c.ref.type === 'slot' && numIn('fade in', c.fadeInMs,
+                (v) => setClipFades(c.id, v, c.fadeOutMs),
+                'Fade-in clip-local — vide = hérite le fade du slot')}
+              {c.ref.type === 'slot' && numIn('fade out', c.fadeOutMs,
+                (v) => setClipFades(c.id, c.fadeInMs, v),
+                'Fade-out clip-local (tail après la fin) — vide = hérite le fade du slot')}
               {numIn('⟳ toutes les', c.repeatEveryMs, (v) => {
                 // Repeat exige une fenêtre (durationMs) — un clip
                 // ouvert qui devient bouclé prend le reste du score

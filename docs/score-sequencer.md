@@ -53,6 +53,12 @@ Automation: { param_ref, keyframes[], interpolation } on a track
 | `objects` | Per-object params: manual position curves, park windows, attention | `/stagespace/position`, `park`, `attention` |
 | `gestures` | One-shot ballistic events at a timestamp | `/stagespace/gesture`, `throw` |
 
+Ces types décrivent les *payloads* de clips. Le modèle de pistes a
+depuis évolué (voir §Surface) : les pistes sont **par objet + master**
+plutôt que par type — un type de clip détermine sur quelle piste il
+peut vivre (objet → sa piste, global → master, cue/marker → master
+ou piste dédiée).
+
 ### Automation data
 
 ```ts
@@ -141,16 +147,67 @@ The score is the written plan; the console is the override.
 ## Surface
 
 Fourth surface `SCORE` (`Atelier | Jeu | Score | Conduite`?) — a
-composition mode, not a move-editing tool:
+composition mode, not a move-editing tool. Deux zones (décision de
+design 2026-11-23) :
+
+### Zone basse — la timeline à pistes
 
 - Ruler + TC readout, transport cluster (play/pause/seek/loop, chase)
-- Lane list left (add/reorder/mute/solo per track), clips right
-- Automation lanes: overlay curves, keyframe editing (add/move/delete,
-  snap to grid)
-- Clip editing: drag to move/trim, double-click to jump to the move in
-  Atelier; cue markers = the cue chips
-- Optional "record to score" — capture live busking *into* tracks
-  (supersedes today's rehearsal tape as an import path)
+- **Une piste par objet** (identité `track_id` — survit au remapping
+  OSC, comme `track_positions`) **+ une piste "master"/globale** pour
+  tout ce qui s'applique à l'ensemble :
+  - Master : macros (speed, scale, shift_xyz, yaw/pitch/roll,
+    radius_scale, height_offset), spatial k, gestures
+    (explode/converge/orbit/front), cues, stop/panic, attention.
+  - Pistes objets : position manuelle (x/y/z comme courbes), park
+    windows, throw/impulsions, slot clips mono-objet.
+- **Terminologie** : « piste » (pas « track » — collision avec les
+  `/track/N` OSC) et « clip » pour les blocs posés sur les pistes.
+  Renommage `ScoreTrack` → `ScoreLane` envisagé tant que la feature
+  est jeune.
+- **Clips superposés sur une piste** — `lane_mode` par piste :
+  - `stacked` (pistes objets) : deux clips qui se chevauchent = deux
+    moves simultanés dont les sorties se composent dans le merge —
+    le chevauchement est une intention, la piste grandit
+    verticalement (style éditeur vidéo / take lanes).
+  - `exclusive` (cues, markers, master) : last-wins, le modèle
+    console actuel — deux recalls simultanés ne veulent rien dire.
+- **Couleur propre par type de clip** (slot / cue / marker / gesture /
+  automation) + état visuel : clip « orphelin » (slotId/cueId
+  supprimé) signalé en édition (hachuré/bord rouge), pas seulement
+  en toast au play — `scoreResolve` remonte déjà ces erreurs.
+- **Fades visibles dans le clip** (poignées triangulaires aux bords,
+  comme un séquenceur A/V) : `fade_in_ms`/`fade_out_ms` clip-local
+  optionnels (`None` = hérite du slot). Le chevauchement des fades
+  entre deux clips consécutifs est un crossfade réel — l'ancien
+  move s'éteint en fade pendant que le nouveau spawne. Fade shapes
+  (lin/log/S) plus tard via `fade_shape`.
+- Optional "record to score" — capture live busking *into* tracks ;
+  les pistes par objet rendent le dépôt naturel : une prise = des
+  clips éparpillés sur les pistes objets + les événements globaux
+  sur le master (supersedes today's rehearsal tape as an import path).
+
+**Tension connue — slot clips multi-objets** : une formation
+(cercle sur objets 1-8) partage un graphe de trajectoire ; on ne
+peut pas la splitter en clips par objet. Options : *ghost-span* (le
+clip se dessine en traversant les pistes des objets touchés —
+cible), *formation → master* (simple mais un solo irait aussi sur
+le master), ou *hybride* (clip sur la piste de l'objet principal /
+piste MOVES dédiée — pragmatique pour démarrer).
+
+### Zone haute — éditeur de courbes du clip sélectionné
+
+Au lieu d'une sous-piste d'automation par paramètre (modèle DAW
+classique — explosion de pistes), l'éditeur de courbes est
+**attaché au clip sélectionné** : un sélecteur liste les courbes
+éditables du clip + un éditeur visuel de keyframes. Modèle *clip
+envelopes* (Live) plutôt que *track automation* :
+
+- Les courbes ne sont évaluées que pendant la fenêtre du clip —
+  évaluation bornée, pas de lanes toujours actives.
+- Même idiome que l'app : sélection → éditeur dédié (cf. Atelier).
+- **Courbe vs fades** : les fades restent des poignées de bord de
+  clip (articulation), les courbes sont les paramètres continus.
 
 ## Phases
 
@@ -163,9 +220,26 @@ composition mode, not a move-editing tool:
 
 ## Open questions
 
-- Clip overlapping semantics on one lane (latest wins? blend? nack?)
+- ~~Clip overlapping semantics on one lane~~ → **tranché** : par
+  piste, `lane_mode: stacked | exclusive` (voir §Surface).
 - Automation vs operator takeover: priority rules (park/freeze/manual
-  interactions — manual must stay sovereign, like OSC)
+  interactions — manual must stay sovereign, like OSC). Proposition :
+  pendant la fenêtre du clip la courbe écrit en continu, sauf si
+  l'objet est parké ou en position manuelle — l'opérateur garde la
+  priorité absolue.
+- **Fin de courbe = hold ou revert ?** Même question que `end_mode`
+  pour les moves — la valeur écrite par la courbe tient-elle après
+  la fin du clip (console) ou revient-elle ? Réutiliser la notion
+  end_mode serait cohérent.
+- **Fade_out dans la fenêtre ou en tail ?** Aujourd'hui `EndMove`
+  tire à `end_ms` et le move s'éteint pendant le fade, au-delà du
+  bord du clip (visuellement : un tail). Alternative type audio :
+  `EndMove` à `end - fade_out` pour que l'objet atteigne sa position
+  finale exactement au bord. Choix conservé pour l'instant :
+  tail model.
 - Does a score own the setlist (clips spawn slots) or reference it
-  (clips point at existing slots — simpler, S2 choice)?
+  (clips point at existing slots — simpler, S2 choice)? Tranché S2 :
+  référence — reste valable.
+- Placement des formations multi-objets (ghost-span vs piste objet
+  principale vs master — voir §Surface).
 - Loop region × TC chase interaction

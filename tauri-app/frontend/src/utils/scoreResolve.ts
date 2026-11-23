@@ -17,6 +17,13 @@ export interface ResolvedScoreClip {
   start_ms: number;
   duration_ms?: number;
   repeat_every_ms?: number;
+  /// Fades clip-local (ms) — override des fades du slot ; absent =
+  /// le backend prend l'animation du slot.
+  fade_in_ms?: number;
+  fade_out_ms?: number;
+  /// Piste en mode stacked — les clips simultanés ne se coupent pas
+  /// (moves composés par le merge). Absent/false = exclusive.
+  stacked?: boolean;
   payload: Record<string, unknown>;
 }
 
@@ -30,11 +37,18 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
   const cs = useCuelistStore.getState();
   const ctx = { holProject: gs.holProject, manualOscIds: gs.manualOscIds };
   const muted = new Set(doc.tracks.filter((t) => t.muted).map((t) => t.id));
+  const trackMode = new Map(doc.tracks.map((t) => [t.id, t.mode ?? 'exclusive']));
   const clips: ResolvedScoreClip[] = [];
   const errors: string[] = [];
 
   for (const c of doc.clips) {
     if (muted.has(c.trackId)) continue;
+    const base = {
+      id: c.id, track: c.trackId, start_ms: c.startMs,
+      repeat_every_ms: c.repeatEveryMs,
+      fade_in_ms: c.fadeInMs, fade_out_ms: c.fadeOutMs,
+      ...(trackMode.get(c.trackId) === 'stacked' ? { stacked: true } : {}),
+    };
     switch (c.ref.type) {
       case 'slot': {
         const raw = gs.moveSlots.find((s) => s.id === (c.ref as { slotId: string }).slotId);
@@ -46,11 +60,8 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
             slot, graphJson, ctx, `sc-${c.id}`,
           );
           clips.push({
-            id: c.id,
-            track: c.trackId,
-            start_ms: c.startMs,
+            ...base,
             duration_ms: c.durationMs,
-            repeat_every_ms: c.repeatEveryMs,
             payload: {
               kind: 'Slot',
               data: { request, macros: globalMacros },
@@ -65,18 +76,14 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
         const cueId = (c.ref as { cueId: string }).cueId;
         const cue = cs.cues.find((q) => String(q.id) === String(cueId));
         if (!cue) { errors.push(`Clip ${c.id}: cue introuvable — supprimée ?`); break; }
-        clips.push({
-          id: c.id, track: c.trackId, start_ms: c.startMs,
-          repeat_every_ms: c.repeatEveryMs,
-          payload: { kind: 'Cue', data: cue },
-        });
+        clips.push({ ...base, payload: { kind: 'Cue', data: cue } });
         break;
       }
       case 'stopAll':
-        clips.push({ id: c.id, track: c.trackId, start_ms: c.startMs, repeat_every_ms: c.repeatEveryMs, payload: { kind: 'StopAll' } });
+        clips.push({ ...base, payload: { kind: 'StopAll' } });
         break;
       case 'panic':
-        clips.push({ id: c.id, track: c.trackId, start_ms: c.startMs, repeat_every_ms: c.repeatEveryMs, payload: { kind: 'Panic' } });
+        clips.push({ ...base, payload: { kind: 'Panic' } });
         break;
     }
   }

@@ -205,6 +205,18 @@ pub struct ScoreClip {
     /// Requiert `duration_ms` (la fenêtre borne les copies).
     #[serde(default)]
     pub repeat_every_ms: Option<u64>,
+    /// Fades clip-local (ms) — override des fades de l'animation du
+    /// slot. `None` = héritage. fade_out joue en tail : l'EndMove tire
+    /// à la fin de la fenêtre et le move s'éteint pendant son fade.
+    #[serde(default)]
+    pub fade_in_ms: Option<u64>,
+    #[serde(default)]
+    pub fade_out_ms: Option<u64>,
+    /// Piste en mode stacked — un clip Slot qui démarre ne coupe PAS
+    /// les moves score actifs de la lane (les sorties se composent
+    /// dans le merge). `false` = exclusive (last-wins, défaut S2).
+    #[serde(default)]
+    pub stacked: bool,
     pub payload: ScoreClipPayload,
 }
 
@@ -290,8 +302,10 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
 
     let sink = sh.event_sink.clone();
     std::thread::spawn(move || {
-        // Lane → move score actif — "un move à la fois par lane".
-        let mut lane_active: HashMap<String, (String, f64)> = HashMap::new();
+        // Lane → moves score actifs. En mode `exclusive` la liste reste
+        // ≤1 (un nouveau clip coupe le précédent — console) ; en
+        // `stacked` les moves se composent dans le merge.
+        let mut lane_active: HashMap<String, Vec<(String, f64)>> = HashMap::new();
         // Cycles de lecture : sans loop un seul passage ; avec loop, le
         // transport reboucle à `loop_start` (hard-wrap — les moves
         // score du cycle sont coupés avant de repartir, sémantique
@@ -326,7 +340,9 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
                         fire_clip(&clips[i], k, offset, &sh, &mut lane_active, &sink)
                     }
                     Ev::EndMove(id, fade) => {
-                        lane_active.retain(|_, v| v.0 != id);
+                        for v in lane_active.values_mut() {
+                            v.retain(|x| x.0 != id);
+                        }
                         if let Err(e) = deactivate_move_arc(&id, fade, true, &sh) {
                             eprintln!("[score] end-of-clip deactivate '{id}' failed: {e}");
                         }
@@ -355,7 +371,8 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
                     }
                     // Hard-cut : couper tous les moves score du cycle
                     // avant le rebouclage — chaque cycle repart propre.
-                    let drained: Vec<(String, f64)> = lane_active.drain().map(|(_, v)| v).collect();
+                    let drained: Vec<(String, f64)> =
+                        lane_active.drain().flat_map(|(_, v)| v).collect();
                     for (id, fade) in drained {
                         let _ = deactivate_move_arc(&id, fade, true, &sh);
                     }
@@ -446,10 +463,12 @@ fn build_events(clips: &[ScoreClip], seek: u64) -> Vec<(u64, Ev)> {
             // Cue markers déjà passés : skippés (documenté — pas de catch-up).
             if let (Some(e), ScoreClipPayload::Slot { request, .. }) = (iter_end, &c.payload) {
                 if e > seek {
-                    let fade = request
-                        .animation
-                        .as_ref()
-                        .map(|a| a.fade_out)
+                    // fade_out effectif : l'override clip-local prime
+                    // sur le fade de l'animation du slot.
+                    let fade = c
+                        .fade_out_ms
+                        .map(|m| m as f64 / 1000.0)
+                        .or_else(|| request.animation.as_ref().map(|a| a.fade_out))
                         .unwrap_or(0.5);
                     let mv_id = if c.repeat_every_ms.is_some() {
                         format!("{}-{k}", request.movement_id)
@@ -471,21 +490,37 @@ fn fire_clip(
     iteration: u64,
     offset_ms: u64,
     sh: &Shared,
-    lane_active: &mut HashMap<String, (String, f64)>,
+    lane_active: &mut HashMap<String, Vec<(String, f64)>>,
     sink: &Arc<Mutex<Option<crate::commands::state::EventSink>>>,
 ) {
     match &clip.payload {
         ScoreClipPayload::Slot { request, macros } => {
-            // Le move score actif sur cette lane est coupé d'abord —
-            // dernier clip gagne (sémantique console, déterministe).
-            if let Some((prev_id, prev_fade)) = lane_active.remove(&clip.track) {
-                let _ = deactivate_move_arc(&prev_id, prev_fade, true, sh);
+            // Mode exclusive : les moves score actifs sur cette lane
+            // sont coupés d'abord — dernier clip gagne (console). En
+            // stacked ils continuent : leurs sorties se composent.
+            if !clip.stacked {
+                if let Some(prev) = lane_active.remove(&clip.track) {
+                    for (prev_id, prev_fade) in prev {
+                        let _ = deactivate_move_arc(&prev_id, prev_fade, true, sh);
+                    }
+                }
             }
             let mut req = request.as_ref().clone();
             // Itérations d'un clip répété : id suffixé par itération —
             // chaque copie est un move distinct (les EndMove ciblent par id).
             if clip.repeat_every_ms.is_some() {
                 req.movement_id = format!("{}-{iteration}", req.movement_id);
+            }
+            // Fades clip-local : override de l'animation du slot quand
+            // présents (None = héritage). L'override du fade_out est
+            // aussi celui stocké pour les cuts/EndMove ultérieurs.
+            if let Some(a) = req.animation.as_mut() {
+                if let Some(ms) = clip.fade_in_ms {
+                    a.fade_in = ms as f64 / 1000.0;
+                }
+                if let Some(ms) = clip.fade_out_ms {
+                    a.fade_out = ms as f64 / 1000.0;
+                }
             }
             match spawn_move(spec_from_request(req.clone()), sh) {
                 Ok(_) => {
@@ -498,7 +533,10 @@ fn fire_clip(
                         }
                     }
                     let fade_out = req.animation.as_ref().map(|a| a.fade_out).unwrap_or(0.5);
-                    lane_active.insert(clip.track.clone(), (req.movement_id.clone(), fade_out));
+                    lane_active
+                        .entry(clip.track.clone())
+                        .or_default()
+                        .push((req.movement_id.clone(), fade_out));
                     emit_ui(sink, "active-moves-update", ());
                 }
                 Err(e) => eprintln!("[score] clip '{}' spawn failed: {}", clip.id, e),
@@ -638,6 +676,9 @@ mod tests {
             start_ms,
             duration_ms,
             repeat_every_ms,
+            fade_in_ms: None,
+            fade_out_ms: None,
+            stacked: false,
             payload: ScoreClipPayload::Slot {
                 request: Box::new(ActivateMoveRequest {
                     movement_id: format!("sc-{id}"),
@@ -735,5 +776,55 @@ mod tests {
                 (4000, "end:sc-c1".to_string()),
             ]
         );
+    }
+
+    #[test]
+    fn clip_fade_out_overrides_animation_fade() {
+        // fade_out_ms du clip prime sur le fade de l'animation du
+        // slot : l'EndMove emporte l'override (utilisé au cut).
+        let mut clips = vec![slot_clip("c1", 0, Some(2_000), None)];
+        if let ScoreClipPayload::Slot { request, .. } = &mut clips[0].payload {
+            request.animation = Some(stagespace_engines::Animation {
+                fade_out: 0.5,
+                ..Default::default()
+            });
+        }
+        clips[0].fade_out_ms = Some(3_000);
+        let evs = build_events(&clips, 0);
+        let fade = evs.iter().find_map(|(_, ev)| match ev {
+            Ev::EndMove(_, f) => Some(*f),
+            _ => None,
+        });
+        assert_eq!(fade, Some(3.0)); // 3 000 ms → 3 s, pas le 0.5 du slot
+    }
+
+    #[test]
+    fn clip_fade_inherited_when_unset() {
+        // Sans override : l'EndMove retombe sur le fade de l'animation.
+        let mut clips = vec![slot_clip("c1", 0, Some(2_000), None)];
+        if let ScoreClipPayload::Slot { request, .. } = &mut clips[0].payload {
+            request.animation = Some(stagespace_engines::Animation {
+                fade_out: 1.25,
+                ..Default::default()
+            });
+        }
+        let evs = build_events(&clips, 0);
+        let fade = evs.iter().find_map(|(_, ev)| match ev {
+            Ev::EndMove(_, f) => Some(*f),
+            _ => None,
+        });
+        assert_eq!(fade, Some(1.25));
+    }
+
+    #[test]
+    fn new_fields_default_on_old_wire_payloads() {
+        // Compat arrière : un ScoreClip sérialisé avant fades/stacked
+        // (les trois champs absents) se désérialise avec les défauts.
+        let json = r#"{"id":"c1","track":"t1","start_ms":0,
+            "payload":{"kind":"StopAll"}}"#;
+        let c: ScoreClip = serde_json::from_str(json).unwrap();
+        assert_eq!(c.fade_in_ms, None);
+        assert_eq!(c.fade_out_ms, None);
+        assert!(!c.stacked);
     }
 }
