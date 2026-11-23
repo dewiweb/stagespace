@@ -34,6 +34,8 @@ export const CLIP_COLORS: Record<string, string> = {
   positions: 'bg-teal-700/80 border-teal-400',
   modGraph: 'bg-indigo-700/80 border-indigo-400',
   postGraph: 'bg-sky-700/80 border-sky-400',
+  chanMods: 'bg-violet-700/80 border-violet-400',
+  zones: 'bg-fuchsia-700/80 border-fuchsia-400',
 };
 
 /// Label affiché d'un clip — nom du slot/cue ou marqueur.
@@ -60,5 +62,7 @@ export function clipLabel(
     }
     case 'modGraph': return 'MOD graph';
     case 'postGraph': return 'POST graph';
+    case 'chanMods': return `MODS ×${clip.ref.modulations.length}`;
+    case 'zones': return `ZONES ×${clip.ref.zones.length}`;
   }
 }

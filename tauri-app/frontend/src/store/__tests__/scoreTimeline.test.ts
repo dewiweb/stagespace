@@ -1,6 +1,6 @@
 /// <reference types="vitest/globals" />
 import { describe, expect, it, beforeEach } from 'vitest';
-import { useScoreStore, clipLaneIds, GLOBALFX_LANE, MODULATION_LANE, CONDUCTOR_LANE } from '../useScoreStore';
+import { useScoreStore, clipLaneIds, GLOBALFX_LANE, MODULATION_LANE, CONDUCTOR_LANE, SPATIALFX_LANE } from '../useScoreStore';
 import { resolveScoreClips, cueCoverage } from '../../utils/scoreResolve';
 import { useGraphStore, getInvokeCalls, clearInvokeCalls, resetStore } from './testHelpers';
 import { useCuelistStore } from '../useCuelistStore';
@@ -364,7 +364,13 @@ describe('flatten cue → clips (explosion)', () => {
         global_graph: { nodes: [{ id: 'g1' }], edges: [] },
         manual_positions: { 0: [1, 2, 3], 2: [0, 1, 0] },
         object_channels: { 0: { spread: 45, yaw: 30 }, 2: { gain: 0.8 } },
-        osc_mappings: null, zones: null,
+        osc_mappings: null,
+        channel_modulations: [
+          { object: null, source: 'Speed', channel: 'Spread', scale: 1.5, offset: 0, min: null, max: null, listener: [0, 0, 0] },
+        ],
+        zones: [
+          { shape: { shape: 'sphere', center: [0, 0, 0], radius: 3 }, falloff: 1, channels: {}, objects: null, enabled: true, effect: { kind: 'repel', strength: 1 } },
+        ],
         per_track_depths: [0.7, 1.0, 0.4, 1.0], active_move_ids: [],
       }] as never,
     });
@@ -375,14 +381,14 @@ describe('flatten cue → clips (explosion)', () => {
     const st = useScoreStore.getState();
     const cueClip = st.addClip({ type: 'cue', cueId: 'c1' }, 12000, {});
     const r = flattenCueClip(cueClip.id)!;
-    expect(r.movedClips).toBe(5); // 2 slots + positions + modGraph + postGraph
+    expect(r.movedClips).toBe(7); // 2 slots + positions + modGraph + postGraph + chanMods + zones
     expect(r.macroKeys).toBe(10 + 4 + 3); // 8 macros + 2 spatial + 4 depths + 3 channels
     expect(r.skipped).toEqual([]);
 
     // Clip cue remplacé par l'arrangement à t0 — slots en suivi live.
     const clips = useScoreStore.getState().clips;
     expect(clips.find((c) => c.ref.type === 'cue')).toBeUndefined();
-    expect(clips).toHaveLength(5);
+    expect(clips).toHaveLength(7);
     expect(clips.every((c) => c.startMs === 12000)).toBe(true);
     expect(clips.filter((c) => c.ref.type === 'slot').every((c) => c.trackIds === undefined)).toBe(true);
 
@@ -392,11 +398,19 @@ describe('flatten cue → clips (explosion)', () => {
     // signal_graph → clip modGraph portant le graphe.
     const modClip = clips.find((c) => c.ref.type === 'modGraph')!;
     expect((modClip.ref as { graph: { nodes: unknown[] } }).graph.nodes).toHaveLength(1);
-    // global_graph → clip postGraph sur GLOBALFX (zones/modulations
+    // global_graph → clip postGraph sur SPATIALFX (zones/modulations
     // déclaratives + stratégie re-extraites au tir par le backend).
     const postClip = clips.find((c) => c.ref.type === 'postGraph')!;
     expect((postClip.ref as { graph: { nodes: unknown[] } }).graph.nodes).toHaveLength(1);
-    expect(clipLaneIds(postClip)).toEqual([GLOBALFX_LANE]);
+    expect(clipLaneIds(postClip)).toEqual([SPATIALFX_LANE]);
+    // Tables manuelles → clips-porteurs sur la même lane (disjointes
+    // de la moitié déclarative portée par postGraph).
+    const cue = useCuelistStore.getState().cues[0];
+    const chanClip = clips.find((c) => c.ref.type === 'chanMods')!;
+    expect(chanClip.ref).toEqual({ type: 'chanMods', modulations: cue.channel_modulations });
+    expect(clipLaneIds(chanClip)).toEqual([SPATIALFX_LANE]);
+    const zonesClip = clips.find((c) => c.ref.type === 'zones')!;
+    expect(zonesClip.ref).toEqual({ type: 'zones', zones: cue.zones });
 
     // Slots matérialisés : obj_index → track_id, props du snapshot.
     const slots = useGraphStore.getState().moveSlots;
@@ -440,22 +454,22 @@ describe('flatten cue → clips (explosion)', () => {
         { id: 'empty', name: 'Stop', moves: [], macros: null, signal_graph: null,
           spatial_macros: null, manual_positions: {}, object_channels: null,
           osc_mappings: null, zones: null, per_track_depths: [] },
-        // Catégorie non matérialisable seule (zones) → warning + clip
-        // conservé.
-        { id: 'zones-only', name: 'Zones', moves: [], macros: null, signal_graph: null,
+        // Catégorie non matérialisable seule (osc_mappings — config
+        // OSC-IN, pas d'entité timeline) → warning + clip conservé.
+        { id: 'maps-only', name: 'Mappings', moves: [], macros: null, signal_graph: null,
           spatial_macros: null, manual_positions: {}, object_channels: null,
-          osc_mappings: null, zones: [{}], per_track_depths: [] },
+          osc_mappings: [{}], zones: null, per_track_depths: [] },
       ] as never,
     });
     const cueClip = useScoreStore.getState().addClip({ type: 'cue', cueId: 'empty' }, 5000, {});
     const r = flattenCueClip(cueClip.id)!;
     expect(r.movedClips).toBe(0);
     expect(reportFlatten(r).kind).toBe('info');
-    const zClip = useScoreStore.getState().addClip({ type: 'cue', cueId: 'zones-only' }, 8000, {});
+    const zClip = useScoreStore.getState().addClip({ type: 'cue', cueId: 'maps-only' }, 8000, {});
     const rz = flattenCueClip(zClip.id)!;
     const repz = reportFlatten(rz);
     expect(repz.kind).toBe('warning');
-    expect(repz.message).toContain('zones');
+    expect(repz.message).toContain('osc_mappings');
     expect(useScoreStore.getState().clips.find((c) => c.id === zClip.id)).toBeTruthy();
     // Le clip cue survit — supprimer la seule représentation serait
     // une perte d'information.
@@ -486,5 +500,34 @@ describe('flatten cue → clips (explosion)', () => {
       0: { depth: [{ t: 0, v: 0.7 }, { t: 2000, v: 1 }], spread: [{ t: 500, v: 45 }] },
       2: { gain: [{ t: 0, v: 0.8 }] },
     });
+  });
+
+  it('spatialFxCurves : lane mutée → vidée au load ; clés mod:*/zone:*', async () => {
+    const st = useScoreStore.getState();
+    st.setLaneCurve(SPATIALFX_LANE, 'ksmooth', [{ t: 0, v: 0.9 }]);
+    st.setLaneCurve(SPATIALFX_LANE, 'zone:0:falloff', [{ t: 1000, v: 3 }]);
+    st.setLaneCurve(SPATIALFX_LANE, 'mod:speed>spread:scale', [{ t: 0, v: 4 }]);
+    expect(useScoreStore.getState().spatialFxCurves).toEqual({
+      ksmooth: [{ t: 0, v: 0.9 }],
+      'zone:0:falloff': [{ t: 1000, v: 3 }],
+      'mod:speed>spread:scale': [{ t: 0, v: 4 }],
+    });
+    // modRuleKey — même format que le parsing backend
+    // (`<src>><ch>[@<obj>]`, aliases from_str).
+    const { modRuleKey, spatialFxParamDefsOf } = await import('../../components/score/scoreParams');
+    expect(modRuleKey({ source: 'Speed', channel: 'Spread', object: null })).toBe('speed>spread');
+    expect(modRuleKey({ source: 'AngularSpeed', channel: 'Yaw', object: 2 })).toBe('angvel>yaw@2');
+    // Les defs dérivent des clips-porteurs installés + ksmooth.
+    st.addClip({ type: 'zones', zones: [{ shape: { shape: 'sphere', center: [0, 0, 0], radius: 3 }, falloff: 1, channels: {}, objects: null, enabled: true, effect: { kind: 'repel', strength: 1 } } as never] }, 0, {});
+    st.addClip({ type: 'chanMods', modulations: [{ object: null, source: 'Speed', channel: 'Spread', scale: 1.5, offset: 0, min: null, max: null, listener: [0, 0, 0] } as never] }, 0, {});
+    const ids = spatialFxParamDefsOf(useScoreStore.getState().clips, {}).map((d) => d.id);
+    expect(ids).toEqual(expect.arrayContaining([
+      'ksmooth', 'zone:0:falloff', 'zone:0:strength', 'zone:0:enabled',
+      'mod:speed>spread:scale', 'mod:speed>spread:min',
+    ]));
+    // Les clips spatialfx sont gouvernés par leur lane (mute → skip).
+    useScoreStore.getState().toggleLaneMute(SPATIALFX_LANE);
+    const { clips: resolved } = await resolveScoreClips(useScoreStore.getState());
+    expect(resolved).toHaveLength(0);
   });
 });

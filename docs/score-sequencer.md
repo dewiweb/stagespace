@@ -180,23 +180,55 @@ rappelable en Conduite. Matérialisé :
 - `signal_graph` → clip **`modGraph`** sur la lane MODULATION (le clip
   porte le graphe ; au tir : compile + hot-swap de la SignalFn globale,
   même chemin que `update_signal_graph`).
-- `global_graph` → clip **`postGraph`** sur la lane GLOBALFX (le clip
-  porte le graphe post-process ; au tir : parse →
+- `global_graph` → clip **`postGraph`** sur la lane **SPATIALFX** (le
+  clip porte le graphe post-process ; au tir : parse →
   `extract_graph_effects` → `compile_post_process` → swap de la
   `post_process_fn` + `set_graph_effects` + stratégie du node `Merge` —
   même chemin que `recall_cue` étape 1). C'est la moitié **déclarative**
   des zones/modulations (nodes `Zone`/`Velocity`), disjointe des tables
   manuelles `cue.zones`/`cue.channel_modulations` : matérialiser les
   tables sans le graphe perdrait silencieusement la moitié déclarative.
+- `channel_modulations` → clip **`chanMods`** sur SPATIALFX — la table
+  de règles cinématiques **manuelles** (clear + install au tir, même
+  chemin que le recall) ; la moitié déclarative (nodes `Velocity`)
+  revient via `postGraph`.
+- `zones` → clip **`zones`** sur SPATIALFX — la table de zones
+  **manuelles** (clear + install) ; les zones des nodes `Zone` du
+  graphe reviennent via `postGraph`.
 - `per_track_depths` → keyframes **`depth`** des lanes objet (courbes
   éditables, temps absolu → `set_track_depth` au tick — absent = 1.0)
 - `object_channels` → keyframes **`gain`/`spread`/`distance`/`presence`/
   `yaw`/`aperture`/`lfe`** des lanes objet (mêmes noms que
   `SpatialChannel` → `set_object_channel`)
 
-Ces trois types de clip sont les **exceptions au modèle par référence** :
+Ces types de clip sont les **exceptions au modèle par référence** :
 le clip porte sa donnée (pas d'entité vivante correspondante —
 matériau matérialisé, éditable indépendamment de la cue).
+
+### Lane SPATIALFX — surcouche d'effets
+
+La lane `spatialfx` (entre GLOBALFX et MODULATION) porte le périmètre
+de l'onglet FX de l'Atelier en timeline : les clips `postGraph` /
+`zones` / `chanMods` installent la **structure** (pipeline, tables de
+contraintes et de règles — install clear+set comme le recall), et ses
+courbes en temps absolu modulent les **scalaires** de ces définitions :
+
+- `ksmooth` → `set_kinematic_smoothing` (lissage cinématique global)
+- `zone:<i>:<field>` → patch en place de la zone `i` de la table
+  courante (`update_zone`) : `falloff`, `strength` (des effets
+  repel/attract/dampen/vortex), `enabled` (step, v ≥ 0.5). `i` est
+  **positionnel** — le dernier clip `zones` tiré fixe l'ordre.
+- `mod:<src>><ch>[@<obj>][#<n>]:<field>` → patch en place de la n-ième
+  règle matchant `(source, channel, object)` (`update_modulation`) :
+  `scale`, `offset`, `min`, `max`. La clé est stable entre les
+  réinstallations de table ; `#n` départage les triplets en doublon.
+
+**La courbe réécrit la définition, jamais l'influence** — une zone est
+une contrainte évaluée par le merge à chaque frame depuis les positions
+réelles (SDF → influence → lerp des canaux / déplacement). Le score
+automatise « la zone grandit, se durcit, se coupe » ; le merge garde
+« qui est dedans et à quel point ». Clé/index inconnu → skip honnête
+(une courbe ne module qu'une contrainte installée).
 
 Les **courbes des lanes objet** (`depth` + canaux) sont une troisième
 couche de courbes du score — temps partition absolu comme GLOBALFX/
@@ -208,11 +240,10 @@ d'un graphe (les nodes `PerTrackDepth` lisent les depths, les canaux
 sont émis en OSC en sortie).
 
 Explicitement **non matérialisé** — rapporté à l'opérateur (toast +
-`skipped`), jamais silencieusement perdu : `channel_modulations`
-(table manuelle — règles cinématiques), `zones` (table manuelle),
-`osc_mappings`, `graph` (legacy, quand `moves[]` est vide) — pas
-encore d'entité timeline ; la cue les conserve. Un clip cue dont
-rien n'est matérialisable est **conservé**, pas effacé.
+`skipped`), jamais silencieusement perdu : `osc_mappings` (table
+OSC-IN — config système, cas d'usage timeline discutable), `graph`
+(legacy, quand `moves[]` est vide). La cue les conserve. Un clip cue
+dont rien n'est matérialisable est **conservé**, pas effacé.
 Modèle du clip imbriqué de DAW : référence vivante par défaut, flatten
 quand on veut éditer l'intérieur — jamais l'inverse.
 

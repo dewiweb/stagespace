@@ -19,14 +19,14 @@
 ///   ScoreInspector.tsx  bandeau bas (couverture, saisies, actions)
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  useScoreStore, GLOBALFX_LANE, MODULATION_LANE, CONDUCTOR_LANE, laneIdOf,
+  useScoreStore, GLOBALFX_LANE, MODULATION_LANE, CONDUCTOR_LANE, SPATIALFX_LANE, laneIdOf,
   type ScoreClipDoc, type ScoreLaneMode,
 } from '../../store/useScoreStore';
 import { useGraphStore } from '../../store/useGraphStore';
 import { useCuelistStore } from '../../store/useCuelistStore';
 import { buildGraphForSlot, type MoveSlot } from '../../store/slices/moveSlotsTypes';
 import {
-  nodeParamDefsOf, clipParamDefsOf, globalFxParamDefsOf, MERGE_BLEND_DEFS, OBJECT_LANE_DEFS,
+  nodeParamDefsOf, clipParamDefsOf, globalFxParamDefsOf, spatialFxParamDefsOf, MERGE_BLEND_DEFS, OBJECT_LANE_DEFS,
   type ParamDef,
 } from './scoreParams';
 import { clipLabel as clipLabelOf, isTextEntryTarget, fmtMs } from './scoreUtils';
@@ -55,6 +55,7 @@ const ScoreView: React.FC = () => {
   const loopEndMs = useScoreStore((s) => s.loopEndMs);
   const globalFxCurves = useScoreStore((s) => s.globalFxCurves);
   const modulationCurves = useScoreStore((s) => s.modulationCurves);
+  const spatialFxCurves = useScoreStore((s) => s.spatialFxCurves);
   const objectCurves = useScoreStore((s) => s.objectCurves);
   const { addClip, moveClip, resizeClip, removeClip, duplicateClip, splitClip, setDurationMs, setClipRepeat, setClipFades, setClipCurve, setClipTrackIds, setLaneCurve, setLoop, playScore, stopScore, seekScore, toggleLaneMute, setLaneMode, selectClip, selectGlobalLane, clearScoreSelection } =
     useScoreStore.getState();
@@ -329,7 +330,7 @@ const ScoreView: React.FC = () => {
         { separator: true },
         {
           label: 'Ajouter un clip ici…',
-          disabled: t.laneId === GLOBALFX_LANE || t.laneId === MODULATION_LANE,
+          disabled: t.laneId === GLOBALFX_LANE || t.laneId === MODULATION_LANE || t.laneId === SPATIALFX_LANE,
           title: 'Les courbes des lanes globales s\'éditent en zone haute',
           onClick: () => setPicker({ laneId: t.laneId, x: ctxMenu.x, y: ctxMenu.y }),
         },
@@ -410,6 +411,11 @@ const ScoreView: React.FC = () => {
   // source OSC. Pas de "base connue" → ligne plate à 0.
   const selLaneIsGlobalFx = selGlobal === GLOBALFX_LANE;
   const selLaneIsMod = selGlobal === MODULATION_LANE;
+  // Lane SPATIALFX — surcouche d'effets : les defs zone:*/mod:* sont
+  // dérivées des clips zones/chanMods installés (une courbe ne module
+  // qu'une contrainte qui existe) + ksmooth + clés orphelines.
+  const selLaneIsSpatialFx = selGlobal === SPATIALFX_LANE;
+  const spatialFxDefs = spatialFxParamDefsOf(clips, spatialFxCurves);
   // Lane objet sélectionnée (`obj-<trackId>`) — courbes depth/canaux.
   const selObjLane = selGlobal?.startsWith('obj-') ? selGlobal : null;
   const modNames = Object.keys(modulationCurves ?? {}).sort();
@@ -419,16 +425,20 @@ const ScoreView: React.FC = () => {
     ? globalFxDefs
     : selLaneIsMod
       ? modDefs
-      : selObjLane
-        ? OBJECT_LANE_DEFS
-        : [...nodeDefs, ...clipDefs, ...MERGE_BLEND_DEFS];
+      : selLaneIsSpatialFx
+        ? spatialFxDefs
+        : selObjLane
+          ? OBJECT_LANE_DEFS
+          : [...nodeDefs, ...clipDefs, ...MERGE_BLEND_DEFS];
   const ctxFirst = selLaneIsGlobalFx
     ? globalFxDefs[0].id
     : selLaneIsMod
       ? (modNames[0] ?? '')
-      : selObjLane
-        ? OBJECT_LANE_DEFS[0].id
-        : 'enveloppe';
+      : selLaneIsSpatialFx
+        ? spatialFxDefs[0].id
+        : selObjLane
+          ? OBJECT_LANE_DEFS[0].id
+          : 'enveloppe';
   // Le chip actif doit exister dans le contexte courant — sinon
   // retombe sur la première entrée du catalogue. Contexte modulation :
   // le nom fraîchement saisi (pas encore de courbe) reste valide.
@@ -469,7 +479,17 @@ const ScoreView: React.FC = () => {
               : []),
           ],
         }]
-      : selObjLane
+      : selLaneIsSpatialFx
+        ? [{
+            rows: spatialFxDefs.map((p) => ({
+              id: p.id,
+              active: effParam === p.id,
+              hasData: spatialFxCurves?.[p.id] != null,
+              title: `Courbe ${p.label ?? p.id} — réécrit la définition dans la table courante (l'influence reste évaluée par le merge)`,
+              display: p.label,
+            })),
+          }]
+        : selObjLane
         ? [{
             rows: OBJECT_LANE_DEFS.map((p) => ({
               id: p.id,
@@ -536,6 +556,9 @@ const ScoreView: React.FC = () => {
         selClip={selClip ?? null}
         selLaneIsGlobalFx={selLaneIsGlobalFx}
         selLaneIsMod={selLaneIsMod}
+        selLaneIsSpatialFx={selLaneIsSpatialFx}
+        spatialFxDefs={spatialFxDefs}
+        spatialFxCurves={spatialFxCurves}
         selObjLane={selObjLane}
         objectCurves={objectCurves}
         effParam={effParam}
@@ -636,6 +659,7 @@ const ScoreView: React.FC = () => {
         clips={clips}
         globalFxCurves={globalFxCurves}
         modulationCurves={modulationCurves}
+        spatialFxCurves={spatialFxCurves}
         objectCurves={objectCurves}
         selGlobal={selGlobal}
         selected={selected}

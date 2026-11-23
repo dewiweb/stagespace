@@ -13,7 +13,7 @@ import { useGraphStore } from '../store/useGraphStore';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { normalizeSlot } from '../store/slices/moveSlotsTypes';
 import { buildSlotActivation } from './slotActivation';
-import { CONDUCTOR_LANE, GLOBALFX_LANE, MODULATION_LANE, laneIdOf, clipLaneIds } from '../store/useScoreStore';
+import { CONDUCTOR_LANE, MODULATION_LANE, SPATIALFX_LANE, laneIdOf, clipLaneIds } from '../store/useScoreStore';
 import type { ScoreDoc, ScoreClipDoc } from '../store/useScoreStore';
 
 /// Une lane wire — `id` (`obj-<trackId>`/`master`) + mode. Le backend
@@ -84,9 +84,9 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
     } else if (c.ref.type === 'modGraph') {
       // Pas de couverture objet — muté par sa propre lane.
       if (laneState(MODULATION_LANE)?.muted) continue;
-    } else if (c.ref.type === 'postGraph') {
-      // Pipeline global — muté par la lane globalfx.
-      if (laneState(GLOBALFX_LANE)?.muted) continue;
+    } else if (c.ref.type === 'postGraph' || c.ref.type === 'chanMods' || c.ref.type === 'zones') {
+      // Surcouche spatial FX — mutée par sa propre lane.
+      if (laneState(SPATIALFX_LANE)?.muted) continue;
     } else if (activeTids.length === 0) {
       continue;
     }
@@ -183,6 +183,18 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
           payload: { kind: 'PostGraph', data: { graph: c.ref.graph } },
         });
         break;
+      case 'chanMods':
+        clips.push({
+          ...base,
+          payload: { kind: 'ChanMods', data: { modulations: c.ref.modulations } },
+        });
+        break;
+      case 'zones':
+        clips.push({
+          ...base,
+          payload: { kind: 'Zones', data: { zones: c.ref.zones } },
+        });
+        break;
     }
   }
   return { clips, errors, objectCurves };
@@ -221,13 +233,23 @@ export function effectiveTrackIds(c: ScoreClipDoc): number[] {
 /// conversion track_id via la liste `manualOscIds` (règle namespace :
 /// les lanes parlent track_id, jamais obj_index).
 export function cueCoverage(
-  cue: { track_indices?: number[]; moves?: { track_indices?: number[] }[]; manual_positions?: object },
+  cue: {
+    track_indices?: number[];
+    moves?: { track_indices?: number[] }[];
+    manual_positions?: object;
+    zones?: { objects?: number[] | null }[] | null;
+    channel_modulations?: { object?: number | null }[] | null;
+  },
   manualOscIds: number[],
 ): number[] {
   const objIdx = new Set<number>([
     ...(cue.track_indices ?? []),
     ...(cue.moves ?? []).flatMap((m) => m.track_indices ?? []),
     ...Object.keys(cue.manual_positions ?? {}).map(Number),
+    // Objets scopés des zones/règles manuelles — une zone restreinte
+    // ne touche que ses objets listés.
+    ...(cue.zones ?? []).flatMap((z) => z.objects ?? []),
+    ...(cue.channel_modulations ?? []).flatMap((m) => (m.object != null ? [m.object] : [])),
   ]);
   return [...objIdx]
     .map((i) => manualOscIds[i])

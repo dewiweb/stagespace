@@ -6,7 +6,7 @@
 /// détruiraient la poignée SVG en plein drag (pointer capture).
 import React, { useRef, useState } from 'react';
 import type { ScoreClipDoc, ScoreKeyframe } from '../../store/useScoreStore';
-import { GLOBALFX_LANE, MODULATION_LANE } from '../../store/useScoreStore';
+import { GLOBALFX_LANE, MODULATION_LANE, SPATIALFX_LANE } from '../../store/useScoreStore';
 import { CurveEditor } from './CurveEditor';
 import { useElementSize } from './useElementSize';
 import { ScoreParamsPanel, type ParamGroup } from './ScoreParamsPanel';
@@ -66,6 +66,10 @@ export const ScoreCurvePane: React.FC<{
   selClip: ScoreClipDoc | null;
   selLaneIsGlobalFx: boolean;
   selLaneIsMod: boolean;
+  /// Lane SPATIALFX sélectionnée — courbes ksmooth/zone:*/mod:*.
+  selLaneIsSpatialFx: boolean;
+  spatialFxDefs: ParamDef[];
+  spatialFxCurves?: Record<string, ScoreKeyframe[]>;
   /// Lane objet sélectionnée (`obj-<trackId>`) — courbes depth/canaux.
   selObjLane: string | null;
   objectCurves?: Record<string, Record<string, ScoreKeyframe[]>>;
@@ -95,6 +99,7 @@ export const ScoreCurvePane: React.FC<{
   setClipCurve: (clipId: string, param: string, kfs: ScoreKeyframe[] | undefined) => void;
 }> = ({
   topFrac, selGlobal, selClip, selLaneIsGlobalFx, selLaneIsMod,
+  selLaneIsSpatialFx, spatialFxDefs, spatialFxCurves,
   selObjLane, objectCurves,
   effParam, durationMs, globalFxDefs, globalFxCurves, modDefs,
   modulationCurves, nodeDefs, clipDefs, selFades, selClipLabel,
@@ -134,6 +139,17 @@ export const ScoreCurvePane: React.FC<{
           endMs={durationMs}
           param={p}
           onCurve={(kfs) => setLaneCurve(MODULATION_LANE, p.id, kfs)}
+        />
+      );
+    }
+    if (selLaneIsSpatialFx) {
+      const p = spatialFxDefs.find((d) => d.id === effParam) ?? spatialFxDefs[0];
+      return (
+        <CurveEditor
+          kfs={spatialFxCurves?.[p.id]}
+          endMs={durationMs}
+          param={p}
+          onCurve={(kfs) => setLaneCurve(SPATIALFX_LANE, p.id, kfs)}
         />
       );
     }
@@ -194,6 +210,9 @@ export const ScoreCurvePane: React.FC<{
               </>
             )}
             {selLaneIsMod && <span className="text-[10px] text-amber-400">MODULATION — valeurs SignalOsc</span>}
+            {selLaneIsSpatialFx && (
+              <span className="text-[10px] text-violet-400">SPATIALFX — scalaires des contraintes (zones/règles installées par clip)</span>
+            )}
             {selClip && !selGlobal && <span className="text-[10px] text-gray-500 truncate">{selClipLabel} — per-move</span>}
           </>
         }

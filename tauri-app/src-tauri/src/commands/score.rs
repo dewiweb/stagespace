@@ -193,7 +193,9 @@ pub enum ScoreClipPayload {
     /// Graph de modulation global — compile + hot-swap de la SignalFn
     /// (même chemin que `update_signal_graph`, scope global ; clip
     /// `modGraph`, issu du flatten de `cue.signal_graph`).
-    SignalGraph { graph: stagespace_engines::GraphJson },
+    SignalGraph {
+        graph: stagespace_engines::GraphJson,
+    },
     /// Graph global post-process — build → extract_graph_effects →
     /// compile → swap_post_process_fn + set_graph_effects (+ stratégie
     /// du node Merge en tête de chaîne) : même chemin que `recall_cue`
@@ -201,7 +203,25 @@ pub enum ScoreClipPayload {
     /// des zones/modulations (nodes Zone/Velocity) — disjointe des
     /// tables manuelles `cue.zones`/`cue.channel_modulations` (clip
     /// `postGraph`, issu du flatten de `cue.global_graph`).
-    PostGraph { graph: stagespace_engines::GraphJson },
+    PostGraph {
+        graph: stagespace_engines::GraphJson,
+    },
+    /// Table de règles cinématiques MANUELLES — clear + install (même
+    /// chemin que `recall_cue` : `clear_modulations` + `add_modulation`
+    /// par règle). La moitié déclarative (nodes Velocity du graphe)
+    /// revient via PostGraph — disjoint. Clip `chanMods`, issu du
+    /// flatten de `cue.channel_modulations`.
+    ChanMods {
+        modulations: Vec<stagespace_engines::ChannelModulation>,
+    },
+    /// Table de zones MANUELLES — clear + install (même chemin que
+    /// `recall_cue` : `clear_zones` + `add_zone` par zone). Les zones
+    /// sont des contraintes déclaratives évaluées par frame (influence
+    /// SDF) — le clip installe la définition, le merge garde l'éval.
+    /// Clip `zones`, issu du flatten de `cue.zones`.
+    Zones {
+        zones: Vec<stagespace_engines::Zone>,
+    },
 }
 
 /// Interpolation d'un segment de courbe — définie sur le keyframe
@@ -318,6 +338,14 @@ pub struct ScoreTimeline {
     /// du merge (jamais dérivés d'un graphe) — matérialisés au flatten
     /// depuis `cue.per_track_depths`/`cue.object_channels`.
     pub object_curves: HashMap<usize, HashMap<String, Vec<ScoreKeyframe>>>,
+    /// Courbes de la lane SPATIALFX — temps absolu : `ksmooth` (lissage
+    /// cinématique), `zone:<i>:<field>` (patch en place de la zone i —
+    /// falloff/strength/enabled), `mod:<src>><ch>[@<obj>][#n]:<field>`
+    /// (patch en place de la nième règle matchant la clé — scale/
+    /// offset/min/max). Les courbes n'automatisent jamais l'influence
+    /// d'une zone (calculée live par le merge) — elles réécrivent la
+    /// DÉFINITION de la contrainte.
+    pub spatial_fx_curves: HashMap<String, Vec<ScoreKeyframe>>,
     /// Génération — stop/load l'incrémente, les sleeps armés s'abortent.
     pub generation: u64,
 }
@@ -355,6 +383,7 @@ pub async fn score_timeline_load(
     global_fx_curves: HashMap<String, Vec<ScoreKeyframe>>,
     modulation_curves: HashMap<String, Vec<ScoreKeyframe>>,
     object_curves: HashMap<usize, HashMap<String, Vec<ScoreKeyframe>>>,
+    spatial_fx_curves: HashMap<String, Vec<ScoreKeyframe>>,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
     let mut tl = lock_or_recover(&state.score_timeline);
@@ -383,10 +412,15 @@ pub async fn score_timeline_load(
             kfs.sort_by_key(|k| k.t);
         }
     }
+    let mut sfx = spatial_fx_curves;
+    for kfs in sfx.values_mut() {
+        kfs.sort_by_key(|k| k.t);
+    }
     tl.clips = sorted;
     tl.global_fx_curves = gfx;
     tl.modulation_curves = mods;
     tl.object_curves = objs;
+    tl.spatial_fx_curves = sfx;
     tl.duration_ms = duration_ms;
     Ok(())
 }
@@ -530,6 +564,108 @@ struct AbsCurves<'a> {
     modulation: &'a HashMap<String, Vec<ScoreKeyframe>>,
     /// `obj_index → param → keyframes` (lanes objet `obj-<trackId>`).
     object: &'a HashMap<usize, HashMap<String, Vec<ScoreKeyframe>>>,
+    /// Lane SPATIALFX — `ksmooth`, `zone:<i>:<field>`, `mod:<key>:<field>`.
+    spatial_fx: &'a HashMap<String, Vec<ScoreKeyframe>>,
+}
+
+/// Écrit une valeur de courbe SPATIALFX — patch en place des tables
+/// manuelles du merge (jamais l'influence, toujours la définition) :
+/// - `ksmooth` → `set_kinematic_smoothing` (lissage cinématique global)
+/// - `zone:<i>:<field>` → `falloff` / `strength` (des effets Repel/
+///   Attract/Dampen/Vortex) / `enabled` (v ≥ 0.5) — `update_zone(i, z)`.
+///   `i` est POSITIONNEL : index dans la table courante — le dernier
+///   clip `zones` tiré (ou l'état opérateur) fixe l'ordre.
+/// - `mod:<src>><ch>[@<obj>][#<n>]:<field>` → `scale`/`offset`/`min`/`max`
+///   de la n-ième règle matchant `(source, channel, object)` —
+///   `update_modulation(i, r)`. La clé est stable entre les
+///   réinstallations de table (contrairement à l'index) ; `#n`
+///   départage les règles qui partagent le même triplet.
+///
+/// Clé/champ/index inconnu → skip silencieux (la courbe s'applique à
+/// la table COURANTE : une règle absente n'a rien à moduler).
+fn eval_spatial_fx_param(rt: &stagespace_engines::MergeRuntime, param: &str, v: f64) {
+    if param == "ksmooth" {
+        rt.set_kinematic_smoothing(v);
+        return;
+    }
+    if let Some(rest) = param.strip_prefix("zone:") {
+        let Some((idx, field)) = rest.split_once(':') else {
+            return;
+        };
+        let Ok(i) = idx.parse::<usize>() else {
+            return;
+        };
+        let mut zones = rt.zones();
+        let Some(z) = zones.get_mut(i) else {
+            return;
+        };
+        match field {
+            "falloff" => z.falloff = v.max(0.0),
+            "enabled" => z.enabled = v >= 0.5,
+            "strength" => {
+                if let Some(
+                    stagespace_engines::zones::ZoneEffect::Repel { strength }
+                    | stagespace_engines::zones::ZoneEffect::Attract { strength }
+                    | stagespace_engines::zones::ZoneEffect::Dampen { strength }
+                    | stagespace_engines::zones::ZoneEffect::Vortex { strength },
+                ) = z.effect.as_mut()
+                {
+                    *strength = v;
+                }
+            }
+            _ => return,
+        }
+        let z = z.clone();
+        rt.update_zone(i, z);
+        return;
+    }
+    if let Some(rest) = param.strip_prefix("mod:") {
+        let Some((key, field)) = rest.split_once(':') else {
+            return;
+        };
+        // `src>ch[@obj][#n]` — #n = occurrence (défaut 0).
+        let (key, occ) = match key.split_once('#') {
+            Some((k, n)) => (k, n.parse::<usize>().unwrap_or(0)),
+            None => (key, 0),
+        };
+        let (src_ch, obj) = match key.split_once('@') {
+            Some((a, b)) => (a, b.parse::<usize>().ok()),
+            None => (key, None),
+        };
+        let obj = match (key.contains('@'), obj) {
+            // `@` présent mais non numérique → clé invalide.
+            (true, None) => return,
+            _ => obj,
+        };
+        let Some((src, ch)) = src_ch.split_once('>') else {
+            return;
+        };
+        let (Ok(src), Ok(ch)) = (
+            stagespace_engines::KinematicSource::from_str(src),
+            stagespace_engines::osc_sender::SpatialChannel::from_str(ch),
+        ) else {
+            return;
+        };
+        let rules = rt.modulations();
+        let mut seen = 0usize;
+        for (i, r) in rules.iter().enumerate() {
+            if r.source == src && r.channel == ch && r.object == obj {
+                if seen == occ {
+                    let mut patched = r.clone();
+                    match field {
+                        "scale" => patched.scale = v,
+                        "offset" => patched.offset = v,
+                        "min" => patched.min = v,
+                        "max" => patched.max = v,
+                        _ => return,
+                    }
+                    rt.update_modulation(i, patched);
+                    return;
+                }
+                seen += 1;
+            }
+        }
+    }
 }
 
 fn eval_curves(
@@ -579,6 +715,14 @@ fn eval_curves(
             write_macro_param(master, param, v);
         }
     }
+    if !abs.spatial_fx.is_empty() {
+        let rt = lock_or_recover(merge);
+        for (param, kfs) in abs.spatial_fx {
+            if let Some(v) = sample_curve(kfs, cursor_ms) {
+                eval_spatial_fx_param(&rt, param, v);
+            }
+        }
+    }
     if !abs.object.is_empty() {
         let rt = lock_or_recover(merge);
         for (obj, params) in abs.object {
@@ -617,7 +761,16 @@ fn eval_curves(
 pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcError> {
     let sh = Shared::from_state(&state);
     let tl_arc = state.score_timeline.clone();
-    let (gen, clips, seek, lp, global_fx_curves, modulation_curves, object_curves) = {
+    let (
+        gen,
+        clips,
+        seek,
+        lp,
+        global_fx_curves,
+        modulation_curves,
+        object_curves,
+        spatial_fx_curves,
+    ) = {
         let mut tl = lock_or_recover(&tl_arc);
         tl.generation += 1;
         tl.started_at = Some(Instant::now());
@@ -629,6 +782,7 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
             tl.global_fx_curves.clone(),
             tl.modulation_curves.clone(),
             tl.object_curves.clone(),
+            tl.spatial_fx_curves.clone(),
         )
     };
     if clips.is_empty() {
@@ -687,6 +841,7 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
                             global_fx: &global_fx_curves,
                             modulation: &modulation_curves,
                             object: &object_curves,
+                            spatial_fx: &spatial_fx_curves,
                         },
                         &osc_source,
                     );
@@ -725,6 +880,7 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
                         global_fx: &global_fx_curves,
                         modulation: &modulation_curves,
                         object: &object_curves,
+                        spatial_fx: &spatial_fx_curves,
                     },
                     &osc_source,
                 );
@@ -754,6 +910,7 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
                                 global_fx: &global_fx_curves,
                                 modulation: &modulation_curves,
                                 object: &object_curves,
+                                spatial_fx: &spatial_fx_curves,
                             },
                             &osc_source,
                         );
@@ -1101,6 +1258,29 @@ fn fire_clip(
                     }
                 }
                 Err(e) => eprintln!("[score] clip '{}': global graph rejeté — {e}", clip.id),
+            }
+        }
+        ScoreClipPayload::ChanMods { modulations } => {
+            // recall_cue : clear + install de la table MANUELLE —
+            // les règles Velocity du graphe (graph_modulations) ne
+            // sont pas touchées (disjoint).
+            let rt = lock_or_recover(&sh.merge_runtime);
+            rt.clear_modulations();
+            for r in modulations {
+                if let Err(e) = rt.add_modulation(r.clone()) {
+                    eprintln!("[score] clip '{}': modulation rejetée — {e}", clip.id);
+                }
+            }
+        }
+        ScoreClipPayload::Zones { zones } => {
+            // recall_cue : clear + install des zones MANUELLES — les
+            // zones du graphe (graph_zones) ne sont pas touchées.
+            let rt = lock_or_recover(&sh.merge_runtime);
+            rt.clear_zones();
+            for z in zones {
+                if let Err(e) = rt.add_zone(z.clone()) {
+                    eprintln!("[score] clip '{}': zone rejetée — {e}", clip.id);
+                }
             }
         }
     }
@@ -1618,16 +1798,95 @@ mod tests {
                 (
                     "depth".to_string(),
                     vec![
-                        ScoreKeyframe { t: 0, v: 1.0, interp: ScoreInterp::Linear },
-                        ScoreKeyframe { t: 4_000, v: 0.0, interp: ScoreInterp::Linear },
+                        ScoreKeyframe {
+                            t: 0,
+                            v: 1.0,
+                            interp: ScoreInterp::Linear,
+                        },
+                        ScoreKeyframe {
+                            t: 4_000,
+                            v: 0.0,
+                            interp: ScoreInterp::Linear,
+                        },
                     ],
                 ),
                 (
                     "spread".to_string(),
-                    vec![ScoreKeyframe { t: 0, v: 60.0, interp: ScoreInterp::Step }],
+                    vec![ScoreKeyframe {
+                        t: 0,
+                        v: 60.0,
+                        interp: ScoreInterp::Step,
+                    }],
                 ),
             ]),
         )]);
+        // Courbes SPATIALFX : `ksmooth` → lissage cinématique ;
+        // `zone:<i>:<field>`/`mod:<key>:<field>` → patch en place des
+        // tables manuelles (la courbe réécrit la définition, jamais
+        // l'influence évaluée par le merge).
+        {
+            let rt = merge_rt.lock().unwrap_or_else(|e| e.into_inner());
+            rt.add_zone(stagespace_engines::Zone {
+                shape: stagespace_engines::ZoneShape::Sphere {
+                    center: [0.0, 0.0, 0.0],
+                    radius: 2.0,
+                },
+                falloff: 1.0,
+                channels: stagespace_engines::SpatialChannels::default(),
+                objects: None,
+                enabled: true,
+                effect: Some(stagespace_engines::zones::ZoneEffect::Repel { strength: 1.0 }),
+            })
+            .expect("zone");
+            rt.add_modulation(stagespace_engines::ChannelModulation::new(
+                stagespace_engines::KinematicSource::Speed,
+                stagespace_engines::osc_sender::SpatialChannel::Spread,
+                1.5,
+            ))
+            .expect("modulation");
+        }
+        let spatial_fx_curves = HashMap::from([
+            (
+                "ksmooth".to_string(),
+                vec![ScoreKeyframe {
+                    t: 0,
+                    v: 0.9,
+                    interp: ScoreInterp::Step,
+                }],
+            ),
+            (
+                "zone:0:falloff".to_string(),
+                vec![ScoreKeyframe {
+                    t: 0,
+                    v: 3.0,
+                    interp: ScoreInterp::Step,
+                }],
+            ),
+            (
+                "zone:0:enabled".to_string(),
+                vec![ScoreKeyframe {
+                    t: 0,
+                    v: 0.0,
+                    interp: ScoreInterp::Step,
+                }],
+            ),
+            (
+                "zone:0:strength".to_string(),
+                vec![ScoreKeyframe {
+                    t: 0,
+                    v: 5.0,
+                    interp: ScoreInterp::Step,
+                }],
+            ),
+            (
+                "mod:speed>spread:scale".to_string(),
+                vec![ScoreKeyframe {
+                    t: 0,
+                    v: 4.0,
+                    interp: ScoreInterp::Step,
+                }],
+            ),
+        ]);
         eval_curves(
             2_000,
             &targets,
@@ -1637,6 +1896,7 @@ mod tests {
                 global_fx: &master,
                 modulation: &modulation,
                 object: &object_curves,
+                spatial_fx: &spatial_fx_curves,
             },
             &osc_source,
         );
@@ -1661,5 +1921,15 @@ mod tests {
             Some(60.0),
             "la courbe channel doit écrire object_channels"
         );
+        // Lane SPATIALFX : ksmooth patché ; zone[0] falloff/strength
+        // patchés et enabled coupé ; la règle speed>spread scalée ×4.
+        assert!((rt.kinematic_smoothing() - 0.9).abs() < 1e-9);
+        assert!((rt.zones()[0].falloff - 3.0).abs() < 1e-9);
+        assert!(!rt.zones()[0].enabled);
+        assert_eq!(
+            rt.zones()[0].effect,
+            Some(stagespace_engines::zones::ZoneEffect::Repel { strength: 5.0 })
+        );
+        assert!((rt.modulations()[0].scale - 4.0).abs() < 1e-9);
     }
 }

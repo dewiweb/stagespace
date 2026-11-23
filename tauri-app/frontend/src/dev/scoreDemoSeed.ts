@@ -92,7 +92,15 @@ export function seedScoreDemo() {
         // Vrais paramètres runtime → courbes éditables des lanes objet
         // à l'explosion (depth sur T1/T3, canaux sur T1/T3).
         object_channels: { 0: { spread: 45, yaw: 30 }, 2: { gain: 0.8, distance: 6 } },
-        osc_mappings: null, zones: null,
+        osc_mappings: null,
+        // Tables manuelles → clips-porteurs spatialfx (zones ×1,
+        // chanMods ×1) + defs de courbes mod:*/zone:* dans l'éditeur.
+        channel_modulations: [
+          { object: null, source: 'Speed', channel: 'Spread', scale: 1.5, offset: 0, min: null, max: 40, listener: [0, 0, 0] },
+        ],
+        zones: [
+          { shape: { shape: 'sphere', center: [0, 0, 0], radius: 3 }, falloff: 1.5, channels: { spread: 120, presence: -6 }, objects: null, enabled: true, effect: { kind: 'repel', strength: 1 } },
+        ],
         per_track_depths: [0.7, 1.0, 0.4, 1.0],
       },
       {

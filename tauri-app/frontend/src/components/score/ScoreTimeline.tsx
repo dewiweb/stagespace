@@ -4,7 +4,7 @@
 /// la timeline (mêmes hauteurs de rangées).
 import React, { useRef } from 'react';
 import {
-  GLOBALFX_LANE, MODULATION_LANE, CONDUCTOR_LANE, GLOBAL_LANES, clipLaneIds,
+  GLOBALFX_LANE, MODULATION_LANE, CONDUCTOR_LANE, SPATIALFX_LANE, GLOBAL_LANES, clipLaneIds,
   type ScoreClipDoc, type ScoreKeyframe, type ScoreLaneMode,
 } from '../../store/useScoreStore';
 import { CLIP_COLORS, fmtMs } from './scoreUtils';
@@ -52,6 +52,8 @@ export const ScoreTimeline: React.FC<{
   clips: ScoreClipDoc[];
   globalFxCurves?: Record<string, ScoreKeyframe[]>;
   modulationCurves?: Record<string, ScoreKeyframe[]>;
+  /// Courbes de la lane spatialfx (ksmooth, zone:*, mod:*).
+  spatialFxCurves?: Record<string, ScoreKeyframe[]>;
   /// Courbes depth/canaux des lanes objet (laneId → param → kfs).
   objectCurves?: Record<string, Record<string, ScoreKeyframe[]>>;
   selGlobal: string | null;
@@ -72,7 +74,7 @@ export const ScoreTimeline: React.FC<{
   grow, durationMs, displayCursor, playing, tickEvery, laneH, rowH,
   ms2px, px2ms, loopStartMs, loopEndMs, seekScore,
   lanes, laneLayout, laneModeOf, laneMutedOf,
-  clips, globalFxCurves, modulationCurves, objectCurves,
+  clips, globalFxCurves, modulationCurves, spatialFxCurves, objectCurves,
   selGlobal, selected, onSelectLane, onClearSelection, onOpenPicker,
   onToggleLaneMute, onSetLaneMode,
   clipOrphan, effFades, clipLabel,
@@ -93,6 +95,7 @@ export const ScoreTimeline: React.FC<{
         {GLOBAL_LANES.map((laneId) => {
           const isGfx = laneId === GLOBALFX_LANE;
           const isCond = laneId === CONDUCTOR_LANE;
+          const isSfx = laneId === SPATIALFX_LANE;
           const sel = selGlobal === laneId;
           const muted = laneMutedOf(laneId);
           return (
@@ -108,6 +111,8 @@ export const ScoreTimeline: React.FC<{
                 ? 'Lane CONDUCTOR — événements-barrières : cue recall, stopAll, panic (transitions d\'état globales)'
                 : isGfx
                 ? 'Lane GLOBALFX — transform global du merge (MacroState de la couche Global FX) + markers'
+                : isSfx
+                ? 'Lane SPATIALFX — surcouche d\'effets : postGraph + zones + règles cinématiques + courbes de leurs scalaires'
                 : 'Lane MODULATION — valeurs nommées injectées dans la map OSC, lues par les SignalOsc'}
             >
               <button
@@ -115,8 +120,8 @@ export const ScoreTimeline: React.FC<{
                 title={muted ? 'Lane mutée — ses événements/courbes ne jouent pas' : 'Mute lane'}
                 className={`w-3 h-3 rounded-sm border ${muted ? 'bg-orange-600 border-orange-400' : 'border-gray-600'}`}
               />
-              <span className={`text-[9px] font-bold tracking-wide flex-1 truncate ${muted ? 'text-gray-600 line-through' : isCond ? 'text-rose-300' : isGfx ? 'text-cyan-300' : 'text-amber-300'}`}>
-                {isCond ? 'CONDUCTOR' : isGfx ? 'GLOBALFX' : 'MODULATION'}
+              <span className={`text-[9px] font-bold tracking-wide flex-1 truncate ${muted ? 'text-gray-600 line-through' : isCond ? 'text-rose-300' : isGfx ? 'text-cyan-300' : isSfx ? 'text-violet-300' : 'text-amber-300'}`}>
+                {isCond ? 'CONDUCTOR' : isGfx ? 'GLOBALFX' : isSfx ? 'SPATIALFX' : 'MODULATION'}
               </span>
               {isCond && (
                 <button
@@ -228,7 +233,15 @@ export const ScoreTimeline: React.FC<{
               courbes nommées (aperçu — l'édition est en zone haute). */}
           {GLOBAL_LANES.map((laneId) => {
             const isGfx = laneId === GLOBALFX_LANE;
-            const laneCurves = laneId === MODULATION_LANE ? modulationCurves : (isGfx ? globalFxCurves : undefined);
+            const isSfx = laneId === SPATIALFX_LANE;
+            const laneCurves =
+              laneId === MODULATION_LANE
+                ? modulationCurves
+                : isSfx
+                  ? spatialFxCurves
+                  : isGfx
+                    ? globalFxCurves
+                    : undefined;
             return (
               <div
                 key={laneId}
@@ -265,7 +278,7 @@ export const ScoreTimeline: React.FC<{
                     <div
                       key={`${param}-${i}`}
                       title={`${param} @${fmtMs(k.t)} = ${k.v}`}
-                      className={`absolute w-1.5 h-1.5 rounded-full ${isGfx ? 'bg-cyan-300/70' : 'bg-amber-300/70'}`}
+                      className={`absolute w-1.5 h-1.5 rounded-full ${isGfx ? 'bg-cyan-300/70' : isSfx ? 'bg-violet-300/70' : 'bg-amber-300/70'}`}
                       style={{ left: ms2px(k.t) - 3, top: 2 + (pi % 3) * 6 }}
                     />
                   )),

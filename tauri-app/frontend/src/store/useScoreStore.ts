@@ -11,6 +11,8 @@
 import { create } from 'zustand';
 import { toast } from '../utils/toast-helpers';
 import { safeInvoke as invoke, silentCatch } from '../utils/tauri';
+import type { Zone } from '../types/generated/Zone';
+import type { ChannelModulation } from '../types/generated/ChannelModulation';
 
 /// Identifiants de lanes — `obj-<trackId>` par objet patché + deux
 /// pseudo-lanes globales reprenant la taxonomie des graphes de
@@ -20,12 +22,19 @@ import { safeInvoke as invoke, silentCatch } from '../utils/tauri';
 /// des graphs de modulation, le score agit comme un contrôleur).
 export const GLOBALFX_LANE = 'globalfx';
 export const MODULATION_LANE = 'modulation';
+/// Lane de surcouche « spatial FX » — périmètre de l'onglet FX de
+/// l'Atelier porté en timeline : clips `postGraph`/`zones`/`chanMods`
+/// (la structure : pipeline post-process, tables de contraintes et de
+/// règles cinématiques manuelles) + courbes scalaires (`ksmooth`,
+/// `zone:<i>:<field>`, `mod:<key>:<field>`) qui réécrivent la
+/// DÉFINITION des contraintes — l'influence reste évaluée par le merge.
+export const SPATIALFX_LANE = 'spatialfx';
 /// Lane du chef d'orchestre — événements-barrières (cue recall,
 /// stopAll, panic) : transitions d'état globales, pas du contenu
 /// composable (design §Cues on the timeline). Même id côté backend.
 export const CONDUCTOR_LANE = 'conductor';
 /// Lanes globales épinglées en tête de timeline (ordre d'affichage).
-export const GLOBAL_LANES = [CONDUCTOR_LANE, GLOBALFX_LANE, MODULATION_LANE] as const;
+export const GLOBAL_LANES = [CONDUCTOR_LANE, GLOBALFX_LANE, SPATIALFX_LANE, MODULATION_LANE] as const;
 export const laneIdOf = (trackId: number) => `obj-${trackId}`;
 
 /// Comportement d'une lane en chevauchement de clips (docs/score-
@@ -55,7 +64,13 @@ export type ScoreClipRef =
   | { type: 'panic' }
   | { type: 'positions'; positions: Record<number, [number, number, number]> }
   | { type: 'modGraph'; graph: { nodes: unknown[]; edges: unknown[] } }
-  | { type: 'postGraph'; graph: { nodes: unknown[]; edges: unknown[] } };
+  | { type: 'postGraph'; graph: { nodes: unknown[]; edges: unknown[] } }
+  /// Tables MANUELLES du spatial FX (clip-porteur sur la lane
+  /// spatialfx — la moitié déclarative des nodes Zone/Velocity vit
+  /// dans `postGraph`) : règles cinématiques et zones, installées
+  /// clear+set au tir — même sémantique que le recall de cue.
+  | { type: 'chanMods'; modulations: ChannelModulation[] }
+  | { type: 'zones'; zones: Zone[] };
 
 export interface ScoreClipDoc {
   id: string;
@@ -129,9 +144,11 @@ export const clipLaneIds = (c: ScoreClipDoc, eff: number[] = c.trackIds ?? []): 
     case 'modGraph':
       return [MODULATION_LANE];
     case 'postGraph':
-      // Pipeline post-process global — la couche transform que la
-      // lane globalfx représente déjà (voir en-tête de lane).
-      return [GLOBALFX_LANE];
+    case 'chanMods':
+    case 'zones':
+      // Pipeline post-process + tables de contraintes/règles — la
+      // surcouche « spatial FX » (périmètre de l'onglet FX d'Atelier).
+      return [SPATIALFX_LANE];
     default:
       return [CONDUCTOR_LANE];
   }
@@ -157,6 +174,13 @@ export interface ScoreDoc {
   /// sur les tables runtime du merge (`set_track_depth` /
   /// `set_object_channel`) — la lane mutée est skippée à la résolution.
   objectCurves?: Record<string, Record<string, ScoreKeyframe[]>>;
+  /// Courbes SPATIALFX — temps absolu : `ksmooth` (lissage
+  /// cinématique global), `zone:<i>:<field>` (falloff/strength/enabled
+  /// — index positionnel dans la table courante), `mod:<src>><ch>[@<obj>]
+  /// [#<n>]:<field>` (scale/offset/min/max de la n-ième règle matchant
+  /// la clé). Les courbes réécrivent la définition des contraintes —
+  /// jamais l'influence positionnelle (calculée par le merge).
+  spatialFxCurves?: Record<string, ScoreKeyframe[]>;
   /// Region de boucle transport [start, end) — rebouclage hard-wrap
   /// de la partition entière (distinct du clip repeat). Les deux
   /// ensemble ou aucun.
@@ -176,6 +200,7 @@ const emptyDoc = (): ScoreDoc => ({
   globalFxCurves: {},
   modulationCurves: {},
   objectCurves: {},
+  spatialFxCurves: {},
 });
 
 interface ScoreState extends ScoreDoc {
@@ -325,7 +350,12 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
         else lane[paramId] = [...keyframes].sort((a, b) => a.t - b.t);
         return { objectCurves: { ...(s.objectCurves ?? {}), [laneId]: lane } };
       }
-      const field = laneId === MODULATION_LANE ? 'modulationCurves' : 'globalFxCurves';
+      const field =
+        laneId === MODULATION_LANE
+          ? 'modulationCurves'
+          : laneId === SPATIALFX_LANE
+            ? 'spatialFxCurves'
+            : 'globalFxCurves';
       const curves = { ...(s[field] ?? {}) };
       if (keyframes === undefined) delete curves[paramId];
       else curves[paramId] = [...keyframes].sort((a, b) => a.t - b.t);
@@ -414,6 +444,7 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
         // Lane globale mutée → ses courbes ne jouent pas.
         globalFxCurves: s.laneStates?.[GLOBALFX_LANE]?.muted ? {} : (s.globalFxCurves ?? {}),
         modulationCurves: s.laneStates?.[MODULATION_LANE]?.muted ? {} : (s.modulationCurves ?? {}),
+        spatialFxCurves: s.laneStates?.[SPATIALFX_LANE]?.muted ? {} : (s.spatialFxCurves ?? {}),
         objectCurves,
       });
       await invoke('score_timeline_set_loop', { startMs: s.loopStartMs ?? null, endMs: s.loopEndMs ?? null });

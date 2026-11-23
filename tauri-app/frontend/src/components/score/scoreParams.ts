@@ -108,6 +108,58 @@ export const MERGE_BLEND_DEFS: ParamDef[] = [
   { id: 'merge:priority', min: 0, max: 16, def: 0, label: 'priority' },
 ];
 
+/// Params de la lane SPATIALFX — scalaires des tables manuelles +
+/// le lissage cinématique global. `ksmooth` est statique ; les defs
+/// `zone:<i>:<field>`/`mod:<key>:<field>` sont dérivées des clips
+/// `zones`/`chanMods` posés (une courbe ne module qu'une contrainte
+/// installée) + des clés déjà présentes dans la map (donnée orpheline
+/// listée honnêtement). La courbe réécrit la DÉFINITION — jamais
+/// l'influence positionnelle (évaluée par le merge).
+export const SPATIALFX_STATIC_DEFS: ParamDef[] = [
+  { id: 'ksmooth', min: 0, max: 0.99, def: 0.5, label: 'kinematic smoothing' },
+];
+
+/// Clé stable d'une règle cinématique — même format que le backend
+/// (`mod:<src>><ch>[@<obj>]` : `from_str` des deux enums). `#n` ajouté
+/// côté doc si deux règles partagent le triplet.
+export function modRuleKey(r: { source: string; channel: string; object: number | null }): string {
+  const src = { Speed: 'speed', Acceleration: 'accel', Jerk: 'jerk', AngularSpeed: 'angvel' }[r.source] ?? r.source.toLowerCase();
+  return `${src}>${r.channel.toLowerCase()}${r.object != null ? `@${r.object}` : ''}`;
+}
+
+/// Defs SPATIALFX dérivées du doc — `zone:<i>:<field>` par zone
+/// installée (index positionnel), `mod:<key>:<field>` par règle, plus
+/// `ksmooth` + les clés déjà courbées non couvertes.
+export function spatialFxParamDefsOf(
+  clips: { ref: { type: string; zones?: { effect?: unknown }[]; modulations?: { source: string; channel: string; object: number | null }[] } }[],
+  curves: Record<string, unknown> | undefined,
+): ParamDef[] {
+  const defs = new Map<string, ParamDef>(SPATIALFX_STATIC_DEFS.map((d) => [d.id, d]));
+  for (const c of clips) {
+    if (c.ref.type === 'zones') {
+      (c.ref.zones ?? []).forEach((z, i) => {
+        defs.set(`zone:${i}:falloff`, { id: `zone:${i}:falloff`, min: 0, max: 8, def: 1, label: `zone ${i} · falloff` });
+        if (z.effect != null) {
+          defs.set(`zone:${i}:strength`, { id: `zone:${i}:strength`, min: 0, max: 8, def: 1, label: `zone ${i} · strength` });
+        }
+        defs.set(`zone:${i}:enabled`, { id: `zone:${i}:enabled`, min: 0, max: 1, def: 1, label: `zone ${i} · enabled` });
+      });
+    }
+    if (c.ref.type === 'chanMods') {
+      for (const r of c.ref.modulations ?? []) {
+        const key = modRuleKey(r);
+        for (const f of ['scale', 'offset', 'min', 'max'] as const) {
+          defs.set(`mod:${key}:${f}`, { id: `mod:${key}:${f}`, min: f === 'scale' ? 0 : -10, max: 10, def: f === 'scale' ? 1 : 0, label: `${key} · ${f}` });
+        }
+      }
+    }
+  }
+  for (const id of Object.keys(curves ?? {})) {
+    if (!defs.has(id)) defs.set(id, { id, min: 0, max: 1, def: 0, label: id });
+  }
+  return [...defs.values()];
+}
+
 /// La ligne plate d'une courbe = la VALEUR CONNUE du paramètre
 /// quand le clip n'a pas de modulation — pas un défaut arbitraire.
 /// - Transform per-move : `slot.macros` (seedé dans l'animation au

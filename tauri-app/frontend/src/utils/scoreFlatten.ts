@@ -130,12 +130,24 @@ export function flattenCueClip(clipId: string): FlattenCueResult | undefined {
     res.movedClips++;
   }
 
-  // Graph global post-process → clip `postGraph` sur GLOBALFX. C'est
+  // Graph global post-process → clip `postGraph` sur SPATIALFX. C'est
   // la moitié DÉCLARATIVE des zones/modulations (nodes Zone/Velocity)
   // + la stratégie de merge + move_ref — le tir re-compile et
   // re-extrait les effets, disjoint des tables manuelles.
   if (cue.global_graph && (cue.global_graph.nodes?.length ?? 0) > 0) {
     score.addClip({ type: 'postGraph', graph: cue.global_graph as never }, t0, {});
+    res.movedClips++;
+  }
+
+  // Tables MANUELLES → clips-porteurs sur SPATIALFX (install clear+set
+  // au tir, même sémantique que le recall — les courbes `zone:*`/
+  // `mod:*` peuvent ensuite moduler leurs scalaires en place).
+  if (cue.channel_modulations?.length) {
+    score.addClip({ type: 'chanMods', modulations: cue.channel_modulations }, t0, {});
+    res.movedClips++;
+  }
+  if (cue.zones?.length) {
+    score.addClip({ type: 'zones', zones: cue.zones }, t0, {});
     res.movedClips++;
   }
 
@@ -161,13 +173,10 @@ export function flattenCueClip(clipId: string): FlattenCueResult | undefined {
   }
 
   // Honnêteté : ces catégories n'ont pas (encore) d'entité timeline —
-  // signalées, jamais silencieusement abandonnées. `zones` et
-  // `channel_modulations` = les tables MANUELLES seules (la moitié
-  // déclarative est couverte par le clip postGraph ci-dessus).
+  // signalées, jamais silencieusement abandonnées. `osc_mappings` est
+  // la table OSC-IN (config système — cas d'usage timeline discutable).
   if (cue.graph && (cue.graph.nodes?.length ?? 0) > 0 && moves.length === 0) res.skipped.push('graph (legacy)');
-  if (cue.channel_modulations?.length) res.skipped.push('channel_modulations');
   if (cue.osc_mappings?.length) res.skipped.push('osc_mappings');
-  if (cue.zones?.length) res.skipped.push('zones');
 
   // Rien à matérialiser (snapshot vide ou catégories non mappables
   // seulement) → le clip est conservé : supprimer la seule
