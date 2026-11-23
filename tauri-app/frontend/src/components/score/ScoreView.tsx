@@ -38,7 +38,7 @@ import { ScoreTransport } from './ScoreTransport';
 import { ScoreTimeline, type ScoreLaneLayout, type ScoreMenuTarget } from './ScoreTimeline';
 import ContextMenu, { type ContextMenuItem } from '../ui/ContextMenu';
 import { detachLaneFromClip, makeClipUnique, sharedClipCount } from '../../utils/scoreDetach';
-import { flattenCueClip } from '../../utils/scoreFlatten';
+import { flattenCueClip, reportFlatten } from '../../utils/scoreFlatten';
 import { toast } from '../../utils/toast-helpers';
 import { ScoreClipPicker, type ScorePickerState } from './ScoreClipPicker';
 import { ScoreToolbar } from './ScoreToolbar';
@@ -275,14 +275,7 @@ const ScoreView: React.FC = () => {
             : 'Explosion : clips cue seulement',
           onClick: () => {
             const r = flattenCueClip(c.id);
-            if (!r) return;
-            const detail = [`${r.movedClips} clip(s)`, r.macroKeys ? `${r.macroKeys} keyframes` : '']
-              .filter(Boolean).join(', ');
-            if (r.skipped.length) {
-              toast.warning(`Cue explosée : ${detail} — non matérialisé : ${r.skipped.join(', ')}`);
-            } else {
-              toast.success(`Cue explosée : ${detail}`);
-            }
+            if (r) { const rep = reportFlatten(r); toast[rep.kind](rep.message); }
           },
         },
         { separator: true },
@@ -584,10 +577,7 @@ const ScoreView: React.FC = () => {
         onMakeUnique={(id) => { if (makeClipUnique(id)) toast.success('Move dupliqué — le clip suit la copie'); }}
         onFlattenCue={(id) => {
           const r = flattenCueClip(id);
-          if (!r) return;
-          const detail = [`${r.movedClips} clip(s)`, r.macroKeys ? `${r.macroKeys} keyframes` : ''].filter(Boolean).join(', ');
-          if (r.skipped.length) toast.warning(`Cue explosée : ${detail} — non matérialisé : ${r.skipped.join(', ')}`);
-          else toast.success(`Cue explosée : ${detail}`);
+          if (r) { const rep = reportFlatten(r); toast[rep.kind](rep.message); }
         }}
         onToggleFollow={(id) => {
           const c = clips.find((x) => x.id === id);

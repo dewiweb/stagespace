@@ -110,9 +110,29 @@ export function flattenCueClip(clipId: string): FlattenCueResult | undefined {
   if (cue.zones?.length) res.skipped.push('zones');
   if (cue.per_track_depths?.length) res.skipped.push('depths');
 
-  // Le clip cue laisse place au matériau explosé — le garder
+  // Rien à matérialiser (snapshot vide ou catégories non mappables
+  // seulement) → le clip est conservé : supprimer la seule
+  // représentation de la cue perdrait l'information de placement.
+  // Le clip cue laisse sinon place au matériau explosé — le garder
   // double-firerait (rappel de cue + clips matérialisés).
+  if (res.movedClips === 0 && res.macroKeys === 0) return res;
   score.removeClip(clipId);
   score.clearScoreSelection();
   return res;
+}
+
+/// Restitution uniforme du rapport d'explosion (contexte / toolbar /
+/// MenuBar) — le skipped n'est jamais silencieux.
+export function reportFlatten(r: FlattenCueResult): { kind: 'success' | 'warning' | 'info'; message: string } {
+  const detail = [`${r.movedClips} clip(s)`, r.macroKeys ? `${r.macroKeys} keyframes` : ''].filter(Boolean).join(', ');
+  if (r.movedClips === 0 && r.macroKeys === 0) {
+    return {
+      kind: r.skipped.length ? 'warning' : 'info',
+      message: r.skipped.length
+        ? `Rien à exploser — contenu non matérialisable : ${r.skipped.join(', ')} (clip conservé)`
+        : 'Snapshot vide — rien à exploser (clip conservé)',
+    };
+  }
+  if (r.skipped.length) return { kind: 'warning', message: `Cue explosée : ${detail} — non matérialisé : ${r.skipped.join(', ')}` };
+  return { kind: 'success', message: `Cue explosée : ${detail}` };
 }

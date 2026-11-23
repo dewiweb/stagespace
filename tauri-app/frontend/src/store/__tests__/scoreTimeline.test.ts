@@ -388,6 +388,22 @@ describe('flatten cue → clips (explosion)', () => {
     expect(useCuelistStore.getState().cues[0].moves).toHaveLength(2);
   });
 
+  it('snapshot vide → clip conservé, rapport honnête', async () => {
+    const { flattenCueClip, reportFlatten } = await import('../../utils/scoreFlatten');
+    useCuelistStore.setState({
+      cues: [{ id: 'empty', name: 'Stop', moves: [], macros: null, signal_graph: null,
+        spatial_macros: null, manual_positions: {}, object_channels: null,
+        osc_mappings: null, zones: null, per_track_depths: [] }] as never,
+    });
+    const cueClip = useScoreStore.getState().addClip({ type: 'cue', cueId: 'empty' }, 5000, {});
+    const r = flattenCueClip(cueClip.id)!;
+    expect(r.movedClips).toBe(0);
+    expect(reportFlatten(r).kind).toBe('info');
+    // Le clip cue survit — supprimer la seule représentation serait
+    // une perte d'information.
+    expect(useScoreStore.getState().clips.find((c) => c.id === cueClip.id)).toBeTruthy();
+  });
+
   it('no-op : clip non-cue ou cue introuvable', async () => {
     const { flattenCueClip } = await import('../../utils/scoreFlatten');
     const st = useScoreStore.getState();
