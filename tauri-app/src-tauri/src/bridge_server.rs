@@ -237,8 +237,8 @@ pub fn ipc_dispatch<R: Runtime>(
     } else {
         "tauri://localhost"
     }
-        .parse()
-        .map_err(|e| format!("bridge url parse: {e}"))?;
+    .parse()
+    .map_err(|e| format!("bridge url parse: {e}"))?;
     let (job_tx, job_rx) = channel::<Job>();
     std::thread::spawn(move || {
         for job in job_rx {

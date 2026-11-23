@@ -29,7 +29,8 @@ import {
   nodeParamDefsOf, clipParamDefsOf, globalFxParamDefsOf, MERGE_BLEND_DEFS,
   type ParamDef,
 } from './scoreParams';
-import { clipLabel as clipLabelOf } from './scoreUtils';
+import { clipLabel as clipLabelOf, isTextEntryTarget } from './scoreUtils';
+import { isModalOpen } from '../../utils/modalGuard';
 import { ScoreCurvePane } from './ScoreCurvePane';
 import type { ParamGroup } from './ScoreParamsPanel';
 import { ScoreTransport } from './ScoreTransport';
@@ -179,18 +180,24 @@ const ScoreView: React.FC = () => {
   };
   const onClipPointerUp = () => { dragRef.current = null; };
 
-  // Suppression au clavier du clip sélectionné.
+  // Suppression au clavier du clip sélectionné. Phase CAPTURE : le
+  // handler global (useLiveShortcuts, Backspace → cue précédent) est
+  // en bubbling — on consomme la touche avant lui via preventDefault
+  // (il bail sur defaultPrevented). Un modal ouvert ou une saisie
+  // texte bloque (les INPUT non-textuels comme les sliders ne
+  // bloquent PAS — sinon le slider qui garde le focus rend Delete
+  // muet).
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if ((e.key === 'Delete' || e.key === 'Backspace') && selected) {
-        const tag = (e.target as HTMLElement).tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+        if (isModalOpen() || isTextEntryTarget(e.target)) return;
+        e.preventDefault();
         removeClip(selected);
         setSelected(null);
       }
     };
-    window.addEventListener('keydown', h);
-    return () => window.removeEventListener('keydown', h);
+    window.addEventListener('keydown', h, true);
+    return () => window.removeEventListener('keydown', h, true);
   }, [selected, removeClip]);
 
   const addToLane = (ref: ScoreClipDoc['ref'], opts?: { durationMs?: number; trackIds?: number[]; repeatEveryMs?: number }) => {
@@ -436,6 +443,7 @@ const ScoreView: React.FC = () => {
           cues={cues}
           manualOscIds={manualOscIds}
           onPick={addToLane}
+          onClose={() => setPicker(null)}
         />
       )}
 

@@ -3,6 +3,7 @@
 /// ses trackIds, cue → la couverture dérivée du snapshot.
 import React from 'react';
 import { GLOBALFX_LANE } from '../../store/useScoreStore';
+import { useModalGuard } from '../../utils/modalGuard';
 import type { ScoreClipDoc } from '../../store/useScoreStore';
 import type { MoveSlot } from '../../store/slices/moveSlotsTypes';
 import type { Cue } from '../../types/generated/Cue';
@@ -21,7 +22,13 @@ export const ScoreClipPicker: React.FC<{
   cues: Cue[];
   manualOscIds: number[];
   onPick: (ref: ScoreClipDoc['ref'], opts?: { durationMs?: number; trackIds?: number[]; repeatEveryMs?: number }) => void;
-}> = ({ picker, moveSlots, cues, manualOscIds, onPick }) => (
+  /// Appelé quand Esc est pressé alors que le picker est au sommet de
+  /// la stack de modals — le picker est monté/démonté, useModalGuard
+  /// suffit (pas de panic global quand il est ouvert).
+  onClose: () => void;
+}> = ({ picker, moveSlots, cues, manualOscIds, onPick, onClose }) => {
+  useModalGuard(onClose);
+  return (
   <div
     className="fixed z-50 bg-gray-900 border border-gray-700 rounded shadow-xl py-1 max-h-64 overflow-auto min-w-52"
     style={{ left: picker.x, top: picker.y }}
@@ -79,4 +86,5 @@ export const ScoreClipPicker: React.FC<{
       </>
     )}
   </div>
-);
+  );
+};

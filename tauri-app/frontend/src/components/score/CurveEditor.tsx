@@ -5,6 +5,7 @@
 import React, { useRef } from 'react';
 import type { ScoreKeyframe } from '../../store/useScoreStore';
 import type { ParamDef } from './scoreParams';
+import { useElementSize } from './useElementSize';
 
 export const CurveEditor: React.FC<{
   kfs?: ScoreKeyframe[];
@@ -13,25 +14,33 @@ export const CurveEditor: React.FC<{
   onCurve: (kfs: ScoreKeyframe[] | undefined) => void;
 }> = ({ kfs, endMs, param: p, onCurve }) => {
   const end = endMs;
-  const W = 1000;
-  const H = 100;
+  /// viewBox = pixels réels (mesurés) — preserveAspectRatio="none"
+  /// sur un viewBox fixe étirait cercles et texte. Placeholder
+  /// 600x100 tant que le ResizeObserver n'a pas mesuré (et en jsdom).
+  const [wrapRef, measured] = useElementSize<HTMLDivElement>();
+  const W = measured.width > 0 ? measured.width : 600;
+  const H = measured.height > 0 ? measured.height : 100;
   const pad = 12;
-  const x = (t: number) => pad + (t / end) * (W - pad * 2);
-  const y = (v: number) => 8 + (1 - (v - p.min) / (p.max - p.min)) * (H - 16);
+  const spanX = Math.max(1, W - pad * 2);
+  const spanY = Math.max(1, H - 16);
+  const x = (t: number) => pad + (t / end) * spanX;
+  const y = (v: number) => 8 + (1 - (v - p.min) / (p.max - p.min)) * spanY;
   const toCurve = (e: React.PointerEvent<SVGSVGElement>): ScoreKeyframe => {
     const r = e.currentTarget.getBoundingClientRect();
-    const vx = ((e.clientX - r.left) / r.width) * W;
-    const vy = ((e.clientY - r.top) / r.height) * H;
-    const t = Math.max(0, Math.min(end, Math.round(((vx - pad) / (W - pad * 2)) * end / 50) * 50));
-    const v = Math.max(p.min, Math.min(p.max, p.min + (1 - (vy - 8) / (H - 16)) * (p.max - p.min)));
+    const px = e.clientX - r.left;
+    const py = e.clientY - r.top;
+    const t = Math.max(0, Math.min(end, Math.round(((px - pad) / spanX) * end / 50) * 50));
+    const v = Math.max(p.min, Math.min(p.max, p.min + (1 - (py - 8) / spanY) * (p.max - p.min)));
     return { t, v: Math.round(v * 100) / 100 };
   };
   const dragRef = useRef<number | null>(null);
   return (
+    <div ref={wrapRef} className="flex-1 min-h-0 min-w-0">
     <svg
+      width={W}
+      height={H}
       viewBox={`0 0 ${W} ${H}`}
-      className="flex-1 h-full cursor-crosshair"
-      preserveAspectRatio="none"
+      className="cursor-crosshair"
       onPointerDown={(e) => {
         // Clic sur le fond → nouveau keyframe (courbe vide → pose
         // aussi le point de départ à la valeur par défaut).
@@ -73,7 +82,7 @@ export const CurveEditor: React.FC<{
           />
           {kfs.map((k, i) => (
             <circle
-              key={i} cx={x(k.t)} cy={y(k.v)} r={7}
+              key={i} cx={x(k.t)} cy={y(k.v)} r={5}
               className="fill-cyan-300 stroke-gray-900 cursor-grab"
               strokeWidth={1.5}
               onPointerDown={(e) => {
@@ -100,5 +109,6 @@ export const CurveEditor: React.FC<{
         </text>
       )}
     </svg>
+    </div>
   );
 };

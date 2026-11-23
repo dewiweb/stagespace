@@ -1215,9 +1215,21 @@ mod tests {
     #[test]
     fn curve_samples_linear_between_keyframes() {
         let kfs = vec![
-            ScoreKeyframe { t: 0, v: 1.0, interp: ScoreInterp::Linear },
-            ScoreKeyframe { t: 4_000, v: 2.0, interp: ScoreInterp::Linear },
-            ScoreKeyframe { t: 8_000, v: 0.0, interp: ScoreInterp::Linear },
+            ScoreKeyframe {
+                t: 0,
+                v: 1.0,
+                interp: ScoreInterp::Linear,
+            },
+            ScoreKeyframe {
+                t: 4_000,
+                v: 2.0,
+                interp: ScoreInterp::Linear,
+            },
+            ScoreKeyframe {
+                t: 8_000,
+                v: 0.0,
+                interp: ScoreInterp::Linear,
+            },
         ];
         // Bords : clamp avant le premier / après le dernier point.
         assert_eq!(sample_curve(&kfs, 0), Some(1.0));
@@ -1231,7 +1243,14 @@ mod tests {
         // Cas limites.
         assert_eq!(sample_curve(&[], 100), None);
         assert_eq!(
-            sample_curve(&[ScoreKeyframe { t: 500, v: 3.0, interp: ScoreInterp::Linear }], 0),
+            sample_curve(
+                &[ScoreKeyframe {
+                    t: 500,
+                    v: 3.0,
+                    interp: ScoreInterp::Linear
+                }],
+                0
+            ),
             Some(3.0)
         );
     }
@@ -1241,23 +1260,38 @@ mod tests {
         // step : la valeur du keyframe tient jusqu'au suivant (front
         // montant au keyframe lui-même, pas avant).
         let step = vec![
-            ScoreKeyframe { t: 0, v: 1.0, interp: ScoreInterp::Step },
-            ScoreKeyframe { t: 4_000, v: 3.0, interp: ScoreInterp::Step },
+            ScoreKeyframe {
+                t: 0,
+                v: 1.0,
+                interp: ScoreInterp::Step,
+            },
+            ScoreKeyframe {
+                t: 4_000,
+                v: 3.0,
+                interp: ScoreInterp::Step,
+            },
         ];
         assert_eq!(sample_curve(&step, 1_999), Some(1.0));
         assert_eq!(sample_curve(&step, 4_000), Some(3.0));
         // smooth : smoothstep f²(3−2f) — milieu = moyenne, quart =
         // 0.156·Δ (ease in), pas de dépassement.
         let smooth = vec![
-            ScoreKeyframe { t: 0, v: 0.0, interp: ScoreInterp::Smooth },
-            ScoreKeyframe { t: 4_000, v: 4.0, interp: ScoreInterp::Smooth },
+            ScoreKeyframe {
+                t: 0,
+                v: 0.0,
+                interp: ScoreInterp::Smooth,
+            },
+            ScoreKeyframe {
+                t: 4_000,
+                v: 4.0,
+                interp: ScoreInterp::Smooth,
+            },
         ];
         assert_eq!(sample_curve(&smooth, 2_000), Some(2.0));
         let q = sample_curve(&smooth, 1_000).unwrap();
         assert!((q - 4.0 * (0.25 * 0.25 * (3.0 - 0.5))).abs() < 1e-9);
         // Linear reste le défaut serde — payload sans `interp` lit linear.
-        let legacy: ScoreKeyframe =
-            serde_json::from_str(r#"{"t":100,"v":2.5}"#).unwrap();
+        let legacy: ScoreKeyframe = serde_json::from_str(r#"{"t":100,"v":2.5}"#).unwrap();
         assert_eq!(legacy.interp, ScoreInterp::Linear);
     }
 
@@ -1298,23 +1332,47 @@ mod tests {
         curves.insert(
             "speed".to_string(),
             vec![
-                ScoreKeyframe { t: 0, v: 1.0, interp: ScoreInterp::Linear },
-                ScoreKeyframe { t: 2_000, v: 3.0, interp: ScoreInterp::Linear },
+                ScoreKeyframe {
+                    t: 0,
+                    v: 1.0,
+                    interp: ScoreInterp::Linear,
+                },
+                ScoreKeyframe {
+                    t: 2_000,
+                    v: 3.0,
+                    interp: ScoreInterp::Linear,
+                },
             ],
         );
         // Blend params — côté merge (`merge:` prefix), pas le worker.
         curves.insert(
             "merge:weight".to_string(),
             vec![
-                ScoreKeyframe { t: 0, v: 1.0, interp: ScoreInterp::Linear },
-                ScoreKeyframe { t: 2_000, v: 1.8, interp: ScoreInterp::Linear },
+                ScoreKeyframe {
+                    t: 0,
+                    v: 1.0,
+                    interp: ScoreInterp::Linear,
+                },
+                ScoreKeyframe {
+                    t: 2_000,
+                    v: 1.8,
+                    interp: ScoreInterp::Linear,
+                },
             ],
         );
         curves.insert(
             "merge:priority".to_string(),
             vec![
-                ScoreKeyframe { t: 0, v: 0.0, interp: ScoreInterp::Linear },
-                ScoreKeyframe { t: 2_000, v: 8.0, interp: ScoreInterp::Linear },
+                ScoreKeyframe {
+                    t: 0,
+                    v: 0.0,
+                    interp: ScoreInterp::Linear,
+                },
+                ScoreKeyframe {
+                    t: 2_000,
+                    v: 8.0,
+                    interp: ScoreInterp::Linear,
+                },
             ],
         );
         let mut targets = HashMap::new();
@@ -1332,8 +1390,16 @@ mod tests {
         master.insert(
             "shift_y".to_string(),
             vec![
-                ScoreKeyframe { t: 0, v: 0.0, interp: ScoreInterp::Linear },
-                ScoreKeyframe { t: 4_000, v: 4.0, interp: ScoreInterp::Linear },
+                ScoreKeyframe {
+                    t: 0,
+                    v: 0.0,
+                    interp: ScoreInterp::Linear,
+                },
+                ScoreKeyframe {
+                    t: 4_000,
+                    v: 4.0,
+                    interp: ScoreInterp::Linear,
+                },
             ],
         );
         let mv = targets["sc-c1"].macros.clone();
@@ -1343,8 +1409,16 @@ mod tests {
         let modulation = HashMap::from([(
             "/score/energy".to_string(),
             vec![
-                ScoreKeyframe { t: 0, v: 0.0, interp: ScoreInterp::Linear },
-                ScoreKeyframe { t: 4_000, v: 1.0, interp: ScoreInterp::Linear },
+                ScoreKeyframe {
+                    t: 0,
+                    v: 0.0,
+                    interp: ScoreInterp::Linear,
+                },
+                ScoreKeyframe {
+                    t: 4_000,
+                    v: 1.0,
+                    interp: ScoreInterp::Linear,
+                },
             ],
         )]);
         let merge_rt = Arc::new(Mutex::new(

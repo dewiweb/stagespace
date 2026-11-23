@@ -1,4 +1,21 @@
 /// Helpers purs de la surface score — formatage, couleurs, labels.
+
+/// La cible d'un keydown est-elle un champ de SAISIE de texte ?
+/// Utilisé pour ne pas détourner Delete/Backspace (ni les raccourcis)
+/// pendant que l'opérateur tape. Les INPUT non-textuels (range,
+/// checkbox, boutons…) n'entrent pas dans cette catégorie — un slider
+/// qui garde le focus ne doit pas bloquer la suppression d'un clip.
+const NON_TEXT_INPUT_TYPES = new Set([
+  'range', 'checkbox', 'radio', 'button', 'color', 'submit', 'reset',
+]);
+export function isTextEntryTarget(t: EventTarget | null): boolean {
+  if (!(t instanceof HTMLElement)) return false;
+  if (t.tagName === 'TEXTAREA' || t.tagName === 'SELECT') return true;
+  if (t.isContentEditable) return true;
+  if (t.tagName === 'INPUT')
+    return !NON_TEXT_INPUT_TYPES.has((t as HTMLInputElement).type);
+  return false;
+}
 import type { ScoreClipDoc } from '../../store/useScoreStore';
 import type { MoveSlot } from '../../store/slices/moveSlotsTypes';
 import type { Cue } from '../../types/generated/Cue';

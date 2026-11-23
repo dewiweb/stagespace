@@ -8,6 +8,7 @@ import React, { useRef, useState } from 'react';
 import type { ScoreClipDoc, ScoreKeyframe } from '../../store/useScoreStore';
 import { GLOBALFX_LANE, MODULATION_LANE } from '../../store/useScoreStore';
 import { CurveEditor } from './CurveEditor';
+import { useElementSize } from './useElementSize';
 import { ScoreParamsPanel, type ParamGroup } from './ScoreParamsPanel';
 import { MERGE_BLEND_DEFS, type ParamDef } from './scoreParams';
 
@@ -19,8 +20,10 @@ const EnvelopeEditor: React.FC<{
 }> = ({ fades, endMs }) => {
   const end = endMs;
   const total = end + fades.outMs + 500;
-  const W = 1000;
-  const H = 100;
+  /// Même mécanique que CurveEditor — viewBox = pixels réels.
+  const [wrapRef, measured] = useElementSize<HTMLDivElement>();
+  const W = measured.width > 0 ? measured.width : 600;
+  const H = measured.height > 0 ? measured.height : 100;
   const pad = 12;
   const x = (ms: number) => pad + (ms / total) * (W - pad * 2);
   const pts = [
@@ -32,7 +35,8 @@ const EnvelopeEditor: React.FC<{
     .map((p) => p.join(','))
     .join(' ');
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="flex-1 h-full" preserveAspectRatio="none">
+    <div ref={wrapRef} className="flex-1 min-h-0 min-w-0">
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
       <rect x={x(0)} y={0} width={x(end) - x(0)} height={H} className="fill-purple-500/10" />
       <rect x={x(end)} y={0} width={x(end + fades.outMs) - x(end)} height={H} className="fill-purple-500/5" />
       <line x1={x(end)} y1={0} x2={x(end)} y2={H} stroke="#a78bfa" strokeOpacity={0.5} strokeDasharray="3 3" />
@@ -51,6 +55,7 @@ const EnvelopeEditor: React.FC<{
         </text>
       )}
     </svg>
+    </div>
   );
 };
 
@@ -94,7 +99,7 @@ export const ScoreCurvePane: React.FC<{
 }) => {
   /// Partage réglable colonnes paramètres / éditeur — même mécanique
   /// que topFrac, bornes 20–70 %.
-  const [paramFrac, setParamFrac] = useState(0.5);
+  const [paramFrac, setParamFrac] = useState(0.22);
   const curveZoneRef = useRef<HTMLDivElement>(null);
   const paramDrag = useRef(false);
   const isSlot = selClip?.ref.type === 'slot';
@@ -199,7 +204,7 @@ export const ScoreCurvePane: React.FC<{
         onPointerMove={(e) => {
           if (!paramDrag.current || !curveZoneRef.current) return;
           const r = curveZoneRef.current.getBoundingClientRect();
-          setParamFrac(Math.min(0.7, Math.max(0.2, (e.clientX - r.left) / r.width)));
+          setParamFrac(Math.min(0.5, Math.max(0.12, (e.clientX - r.left) / r.width)));
         }}
         onPointerUp={() => { paramDrag.current = false; }}
       />

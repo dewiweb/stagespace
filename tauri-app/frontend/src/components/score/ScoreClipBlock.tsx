@@ -23,6 +23,10 @@ export const ScoreClipBlock: React.FC<{
   onPointerMove: (e: React.PointerEvent, clip: ScoreClipDoc) => void;
   onPointerUp: (e: React.PointerEvent) => void;
 }> = ({ clip: c, label, orphan, selected, top, h, ms2px, fades, onPointerDown, onPointerMove, onPointerUp }) => {
+  /// Événement ponctuel (cue/marker, durationMs null) — pas de
+  /// fenêtre : la boîte épouse son label (nowrap) et une barre
+  /// blanche à gauche marque l'instant, au lieu d'un carré de 14px.
+  const instant = c.durationMs == null;
   const w = c.durationMs != null ? ms2px(c.durationMs) : 14;
   const bg = CLIP_COLORS[c.ref.type].split(' ')[0];
   return (
@@ -48,8 +52,8 @@ export const ScoreClipBlock: React.FC<{
         </div>
       )}
       <div
-        className={`absolute rounded border text-[10px] font-bold px-1.5 flex items-center overflow-hidden cursor-grab ${CLIP_COLORS[c.ref.type]} ${selected ? 'ring-2 ring-white' : ''} ${orphan ? 'border-dashed opacity-50 saturate-50' : ''}`}
-        style={{ left: ms2px(c.startMs), width: Math.max(14, w), minWidth: 14, top, height: h }}
+        className={`absolute rounded border text-[10px] font-bold px-1.5 flex items-center overflow-hidden cursor-grab ${CLIP_COLORS[c.ref.type]} ${selected ? 'ring-2 ring-white' : ''} ${orphan ? 'border-dashed opacity-50 saturate-50' : ''} ${instant ? 'whitespace-nowrap pr-2 border-l-2 border-l-white/70' : ''}`}
+        style={{ left: ms2px(c.startMs), width: instant ? undefined : Math.max(14, w), minWidth: 14, top, height: h }}
         title={orphan ? `${label} — référence perdue` : label}
         onPointerDown={(e) => onPointerDown(e, c, 'move')}
         onPointerMove={(e) => onPointerMove(e, c)}
