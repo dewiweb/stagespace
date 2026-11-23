@@ -276,6 +276,9 @@ interface ScoreState extends ScoreDoc {
   clearScore: () => void;
   // Transport actions
   playScore: () => Promise<void>;
+  /// Hot-swap de la partition pendant la lecture — édition live sans
+  /// coupure : les clips inchangés gardent leurs moves (backend).
+  _hotSwap: () => Promise<void>;
   stopScore: () => void;
   seekScore: (ms: number) => void;
   _setTransport: (playing: boolean, cursorMs: number, loopStartMs?: number, loopEndMs?: number) => void;
@@ -288,6 +291,10 @@ interface ScoreState extends ScoreDoc {
   selectGlobalLane: (laneId: string | null) => void;
   clearScoreSelection: () => void;
 }
+
+/// Dernière partition résolue envoyée au backend (clip.id → JSON) —
+/// base du diff hot-swap : un clip inchangé garde son move actif.
+let lastResolvedClips = new Map<string, string>();
 
 export const useScoreStore = create<ScoreState>()((set, get) => ({
   ...emptyDoc(),
@@ -466,6 +473,7 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
       const { clips, errors, objectCurves } = await resolveScoreClips(s);
       errors.forEach((e) => toast.warning(e));
       if (clips.length === 0) { toast.error('Score : aucun clip résolvable'); return; }
+      lastResolvedClips = new Map(clips.map((c) => [c.id, JSON.stringify(c)]));
       // Seek courant = base du curseur (le backend spanne les clips à cheval).
       await invoke('score_timeline_load', {
         clips,
@@ -489,8 +497,36 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
     }
   },
   stopScore: () => {
+    lastResolvedClips = new Map();
     invoke('score_timeline_stop').catch(silentCatch);
     set({ playing: false });
+  },
+  _hotSwap: async () => {
+    const s = get();
+    if (!s.playing) return;
+    try {
+      const { resolveScoreClips } = await import('../utils/scoreResolve');
+      const { clips, errors, objectCurves } = await resolveScoreClips(s);
+      errors.forEach((e) => toast.warning(e));
+      const next = new Map(clips.map((c) => [c.id, JSON.stringify(c)]));
+      // dead = id disparu OU contenu modifié — le backend ne tue que
+      // les moves de ces clips ; les inchangés survivent (hot-swap).
+      const dead = [...lastResolvedClips.keys()].filter(
+        (id) => next.get(id) !== lastResolvedClips.get(id),
+      );
+      await invoke('score_timeline_update', {
+        clips,
+        durationMs: s.durationMs,
+        globalFxCurves: s.laneStates?.[GLOBALFX_LANE]?.muted ? {} : (s.globalFxCurves ?? {}),
+        modulationCurves: s.laneStates?.[MODULATION_LANE]?.muted ? {} : (s.modulationCurves ?? {}),
+        spatialFxCurves: s.laneStates?.[SPATIALFX_LANE]?.muted ? {} : (s.spatialFxCurves ?? {}),
+        objectCurves,
+        deadClipIds: dead,
+      });
+      lastResolvedClips = next;
+    } catch (e) {
+      toast.warning('Score update failed: ' + e);
+    }
   },
   seekScore: (ms) => {
     invoke('score_timeline_seek', { ms }).then(() => set({ cursorMs: ms })).catch(silentCatch);

@@ -48,6 +48,7 @@ export async function doMacro(name: string, v: number, from?: string) {
     return;
   }
   const st = useGraphStore.getState();
+  rec('doMacro', [v], { macro: key });
   st.setMacros({ [key]: v } as Record<string, number>);
   await st.pushMacrosToRuntime();
 }
@@ -76,7 +77,6 @@ export function doArm(armed: boolean, from?: string) {
 export function doSlot(n: number, from?: string) {
   if (routeDetached(`slot:${n}`)) return;
   logAction('doSlot', from);
-  rec('doSlot', [n]);
   const gs = useGraphStore.getState();
   const slot = gs.moveSlots.find((s) => s.oscIndex === n);
   if (!slot) {
@@ -87,6 +87,8 @@ export function doSlot(n: number, from?: string) {
   // recall — rejet explicite plutôt qu'un tir orphelin.
   if (recallBusy(from)) return;
   disarmPending();
+  // rec après les gardes — une action nackée n'écrit pas dans la prise.
+  rec('doSlot', [n], { slotId: slot.id });
   void gs.playSlot(slot.id);
 }
 
@@ -94,7 +96,6 @@ export function doSlot(n: number, from?: string) {
 export function doSlotStop(n: number, from?: string) {
   if (routeDetached(`slotstop:${n}`)) return;
   logAction('doSlotStop', from);
-  rec('doSlotStop', [n]);
   const gs = useGraphStore.getState();
   const slot = gs.moveSlots.find((s) => s.oscIndex === n);
   if (!slot) {
@@ -104,6 +105,7 @@ export function doSlotStop(n: number, from?: string) {
   // Un stop pendant un recall peut tuer un move que le recall vient de
   // respawner — même garde que doSlot.
   if (recallBusy(from)) return;
+  rec('doSlotStop', [n], { slotId: slot.id });
   if (slot.movementId) {
     disarmPending();
     void gs.stopSlotWithFade(slot.id, slot.fadeOut ?? 1);
@@ -120,7 +122,6 @@ export function getSoloRestoreIds(): string[] {
 export function doSolo(n: number, from?: string) {
   if (routeDetached(`solo:${n}`)) return;
   logAction('doSolo', from);
-  rec('doSolo', [n]);
   const gs = useGraphStore.getState();
   // Un n hors oscIndex = not-found, jamais le slot n-1 (mauvais objet tiré).
   const target = gs.moveSlots.find((s) => s.oscIndex === n);
@@ -132,7 +133,9 @@ export function doSolo(n: number, from?: string) {
   disarmPending();
   // Sauvegarde des autres slots jouants — un solo n'est jamais une
   // fin en soi, l'opérateur voudra souvent revenir au mix d'avant.
-  useGraphStore.setState({ soloSavedIds: gs.moveSlots.filter((s) => s.id !== target.id && s.movementId).map((s) => s.id) });
+  const saved = gs.moveSlots.filter((s) => s.id !== target.id && s.movementId).map((s) => s.id);
+  rec('doSolo', [n], { slotId: target.id, slotIds: saved });
+  useGraphStore.setState({ soloSavedIds: saved });
   for (const s of gs.moveSlots) {
     if (s.id !== target.id && s.movementId) void gs.stopSlotWithFade(s.id, s.fadeOut ?? 1);
   }
@@ -149,6 +152,7 @@ export function doUnsolo(from?: string) {
   disarmPending();
   const gs = useGraphStore.getState();
   const ids = gs.soloSavedIds;
+  rec('doUnsolo', [], { slotIds: ids });
   useGraphStore.setState({ soloSavedIds: [] });
   for (const id of ids) {
     const slot = gs.moveSlots.find((s) => s.id === id);

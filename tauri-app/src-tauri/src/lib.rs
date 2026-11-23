@@ -58,9 +58,8 @@ use commands::sampling::{
     frontend_log, get_perf_stats, sample_movement_trajectories, sample_movement_trajectory,
 };
 use commands::score::{
-    score_clear, score_load, score_play, score_state, score_stop, score_timeline_load,
-    score_timeline_play, score_timeline_seek, score_timeline_set_loop, score_timeline_state,
-    score_timeline_stop,
+    score_timeline_load, score_timeline_play, score_timeline_seek, score_timeline_set_loop,
+    score_timeline_state, score_timeline_stop, score_timeline_update,
 };
 use commands::state::lock_or_recover;
 
@@ -111,9 +110,7 @@ pub struct AppState {
     /// `get_show_snapshot` à la connexion (les slots vivent côté frontend,
     /// sans snapshot un remote démarrerait sur un store vide).
     pub show_snapshot: Mutex<Option<serde_json::Value>>,
-    /// Score tape (S1) — bande de commandes horodatées, horloge backend.
-    pub score_tape: Arc<Mutex<commands::score::ScoreTape>>,
-    /// Score timeline (S2) — clips multi-pistes exécutés par le backend
+    /// Score timeline — clips multi-pistes exécutés par le backend
     /// (spawn_move/recall direct, survit à la webview).
     pub score_timeline: Arc<Mutex<commands::score::ScoreTimeline>>,
 }
@@ -244,7 +241,6 @@ pub fn new_app_state() -> AppState {
         plugins_dir,
         remote_ui: Mutex::new(bridge_server::RemoteUi::default()),
         show_snapshot: Mutex::new(None),
-        score_tape: Arc::new(Mutex::new(commands::score::ScoreTape::default())),
         score_timeline: Arc::new(Mutex::new(commands::score::ScoreTimeline::default())),
     }
 }
@@ -475,12 +471,8 @@ pub fn stagespace_invoke_handler<R: tauri::Runtime>(invoke: tauri::ipc::Invoke<R
         get_pos_tape,
         set_media_sync,
         play_pos_tape,
-        score_load,
-        score_play,
-        score_stop,
-        score_clear,
-        score_state,
         score_timeline_load,
+        score_timeline_update,
         score_timeline_play,
         score_timeline_stop,
         score_timeline_seek,

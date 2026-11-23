@@ -8,17 +8,11 @@
 
 ## Why
 
-Today `ScorePanel` is a *command tape*: `rehearsal` records timestamped
-busking actions (`liveActionsRehearsal.ts`, ~160 lines, frontend-only)
-and replays them through a chain of `setTimeout`. It captures the right
-verbs but is the embryo, not the concept:
-
-- **Frontend-timed** — jitter, dies on webview reload, violates the
-  "backend owns runtime truth" rule.
-- **Flat** — one linear tape, no parallel lanes, no continuous
-  automation.
-- **No persistence in the show** — lives in `localStorage`, not the
-  `.hfg` envelope.
+The score is a **backend-executed multitrack sequencer** AND a
+**recorder**: it plays the partition from the backend clock and
+captures live busking into editable clips. It replaces the earlier
+embryos — a frontend-timed `setTimeout` tape and a backend-clocked
+command tape (S1, removed).
 
 The user's framing: a **multitrack automation sequencer** (audio/video
 sequencer metaphor) — its own surface, where you place moves and cues
@@ -274,6 +268,55 @@ re-tirer après un arrêt d'urgence. `stopAll` (`honor_end_mode`) ne
 touche PAS le transport : un clip stopAll du score ne se suicide
 pas, le score reste souverain de sa composition.
 
+## Transport — sémantiques professionnelles
+
+Le transport partage **une seule machine de rebase** —
+`spawn_score_thread` + `kill_score_moves` + le miroir `tl.active`
+(move_id → clip_id, lanes, fade, courbe) publié par le scheduler à
+chaque événement :
+
+- **`score_timeline_stop`** = le stop des autres modes : les moves
+  `sc-*` sont désactivés selon leurs **fades et end_mode déclarés**
+  (`honor_end_mode` — un `hold` écrit sa position tenue). Les moves
+  opérateur ne sont jamais touchés (dual authority).
+- **`score_timeline_seek` en lecture** = scrub : tous les moves
+  score sont coupés net (fade 0, ids libérés), le scheduler repart
+  au nouveau curseur — les clips chevauchant le point d'arrivée
+  repartent avec leur offset de spanning. Arrêté : simple rebase.
+- **`score_timeline_update`** = hot-swap de la partition **pendant
+  la lecture** (édition live débouncée côté frontend). Le frontend
+  calcule `dead_clip_ids` (clip.id disparu ou JSON modifié —
+  `ScoreClip` est Deserialize-only) ; le backend coupe net les
+  moves des clips morts et **hérite les moves des clips inchangés**
+  via `tl.active` → pas de coupure audible. Les `EndMove` et les
+  courbes des moves hérités continuent normalement.
+- **`score_timeline_set_loop`** est live-safe : le scheduler relit
+  `loop_region` à chaque événement — un changement s'applique dès
+  le prochain événement/wrap, sans respawn.
+- **`score_timeline_load`** = reset complet : stop + kill net des
+  moves score + curseur à 0.
+
+## Recorder — le séquenceur enregistre aussi
+
+`doRehearsal record/stop` capture le busking (mêmes `do*` que
+l'opérateur et l'OSC — Conduite, Jeu, GUI) en entrées horodatées
+enrichies de **refs typées** (`RecRef` : slotId/cueId/trackIds/
+positions résolus à l'enregistrement). Au stop, `recordingToScore`
+matérialise la prise en clips + courbes ajoutés en fin de
+partition :
+
+- `doSlot`/`doSlotStop` s'apparient en clips bornés ; `doGo`/`doSolo`
+  = stop-all + play ; panic/stop/cue Full ferment les clips ouverts ;
+  la fin de prise ferme le reste au dernier événement.
+- Positions consécutives < 250 ms fusionnent en un clip `positions` ;
+  macros → courbes GLOBALFX (linéaires) ; `spatial` → courbe
+  SPATIALFX (`spatial` = compresseur global, même chemin que
+  `/stagespace/spatial`).
+- Actions non convertibles (trackpos, config…) → `skipped` remonté
+  à l'opérateur — jamais perdu silencieusement.
+- Enregistrer pendant la lecture fonctionne (overdub) : les clips
+  ajoutés rejoignent la lecture via le hot-swap.
+
 Explicitement **non matérialisé** — rapporté à l'opérateur (toast +
 `skipped`), jamais silencieusement perdu : `osc_mappings` (table
 OSC-IN — config système, cas d'usage timeline discutable), `graph`
@@ -294,10 +337,11 @@ never in JS:
 - Clip boundaries emit the same commands the operator/OSC would send
   (`activate_move`, `cue/recall`, `slot/stop`…) — the score is *another
   controller*, not a parallel runtime.
-- Commands: `score_load`, `score_play`, `score_pause`, `score_seek`,
-  `score_set_loop`; state polled/emitted like movements (`score/state`
-  event: cursor, playing, active clips) → webview is a view, not the
-  clock.
+- Commands: `score_timeline_load`, `score_timeline_play`,
+  `score_timeline_stop`, `score_timeline_seek`, `score_timeline_set_loop`,
+  `score_timeline_update` (hot-swap), `score_timeline_state`;
+  state emitted as `score-timeline` events (cursor, playing, loop) →
+  webview is a view, not the clock.
 - TC chase: `cursor_t` can be *driven* by incoming timecode (existing
   `/stagespace/timecode/chase` machinery) — the score becomes the
   SMPTE-synced master plan of the show.
@@ -352,10 +396,9 @@ design 2026-11-23) :
   entre deux clips consécutifs est un crossfade réel — l'ancien
   move s'éteint en fade pendant que le nouveau spawne. Fade shapes
   (lin/log/S) plus tard via `fade_shape`.
-- Optional "record to score" — capture live busking *into* tracks ;
-  les pistes par objet rendent le dépôt naturel : une prise = des
-  clips éparpillés sur les pistes objets + les événements globaux
-  sur le master (supersedes today's rehearsal tape as an import path).
+- ~~"record to score"~~ → **livré** : le recorder capture le busking
+  en refs typées puis matérialise clips/courbes dans la partition
+  (voir §Recorder — supersedes the old rehearsal tape, supprimée).
 
 **Formations multi-objets — tranché (copies liées)** : un clip porte
 sa **couverture** (`clip.trackIds` — les track-objets qu'il pilote)
@@ -439,7 +482,7 @@ envelopes* (Live) plutôt que *track automation* :
 
 | Phase | Scope | Notes |
 |---|---|---|
-| **S1 — backend tape** | Move today's rehearsal model backend-side: timed command entries evaluated at tick, `score/*` transport commands, `.sscore` kept as export | Quick win: fixes `setTimeout` replay, survives reload; UI unchanged |
+| **S1 — backend tape** | ~~timed command tape~~ → **supprimée** : remplacée par le recorder→clips (§Recorder) — plus de tape parallèle, une seule timeline | Done — le concept S1 n'existe plus |
 | **S2 — clip timeline** | `slots` + `cues` lanes, Score model in the envelope, surface with ruler + clip editing | The "written linear show" case |
 | **S3 — automation** | pistes objets (+ master), courbes clip→macros per-move & master→macros globales évaluées au tick, keyframe editor | En cours : lanes objets + courbes livrés ; reste position/park/throw clips |
 | **S4 — TC & poly-temporal** | TC chase as clock source, loop regions, multiple cursors / relative speeds (IanniX territory) | Open — design with RESEARCH_STATE_OF_ART §IanniX |

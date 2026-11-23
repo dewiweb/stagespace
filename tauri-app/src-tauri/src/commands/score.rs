@@ -1,10 +1,15 @@
-//! Score tape (S1 du séquenceur — docs/score-sequencer.md) — bande de
-//! commandes horodatées dont l'HORLOGE vit dans le backend (thread
-//! dédié), pas en `setTimeout` frontend : timing déterministe, état
-//! requêtable (`score_state`), le curseur survit à un reload webview.
-//! Le frontend reste l'exécuteur — chaque entrée est ré-émise en
-//! `score-fire` et dispatchée par le REPLAY map existant, mêmes
-//! sémantiques que le busking enregistré.
+//! Séquenceur Score (docs/score-sequencer.md) — partition de clips
+//! multi-pistes exécutée par le backend : horloge dédiée, spawn/stop
+//! des moves via les mêmes primitives que les modes opérateur, courbes
+//! évaluées au tick. Vérité runtime backend — le frontend résout le
+//! document en payloads, il ne joue rien lui-même.
+//!
+//! Transport : `play` balaye les résidus `sc-*` et spawn le scheduler ;
+//! `stop` désactive les moves score selon leurs fades/end_mode déclarés
+//! (comme le stop des autres modes) ; `seek` en lecture = scrub
+//! (kill + respawn au curseur) ; `update` = hot-swap de la partition
+//! avec survie des clips inchangés (`tl.active`) ; `set_loop` est
+//! live-safe (le scheduler relit la région en continu).
 
 use super::error::IpcError;
 use super::state::{emit_ui, lock_or_recover, Shared};
@@ -22,140 +27,6 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::State;
-
-/// Une commande horodatée — `name`/`args` au format frontend (`doSlot`,
-/// `doSetPosition`…), compatible avec le `.sscore.json` existant.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ScoreTapeEntry {
-    /// ms depuis le début de la bande.
-    pub t: u64,
-    pub name: String,
-    #[serde(default)]
-    pub args: Vec<f64>,
-}
-
-/// État de la bande dans AppState — la partition courante + l'horloge.
-#[derive(Default)]
-pub struct ScoreTape {
-    pub entries: Vec<ScoreTapeEntry>,
-    /// Départ du play courant — `cursor = now - started_at`.
-    pub started_at: Option<Instant>,
-    /// Génération de lecture : stop/clear/load l'incrémente, les
-    /// sleeps armés par une ancienne génération s'abortent.
-    pub generation: u64,
-}
-
-/// État requêtable par l'UI (resync après reload, indicateur PLAY).
-#[derive(Serialize)]
-pub struct ScoreTapeState {
-    pub playing: bool,
-    /// Position courante du curseur en ms (0 si pas de lecture).
-    pub cursor_ms: u64,
-    pub len: usize,
-}
-
-fn tape_state(tape: &ScoreTape) -> ScoreTapeState {
-    ScoreTapeState {
-        playing: tape.started_at.is_some(),
-        cursor_ms: tape
-            .started_at
-            .map(|t0| t0.elapsed().as_millis() as u64)
-            .unwrap_or(0),
-        len: tape.entries.len(),
-    }
-}
-
-/// Charge une partition (remplace la bande courante, stoppe la lecture).
-#[tauri::command]
-pub async fn score_load(
-    entries: Vec<ScoreTapeEntry>,
-    state: State<'_, AppState>,
-) -> Result<(), IpcError> {
-    let mut tape = lock_or_recover(&state.score_tape);
-    tape.generation += 1;
-    tape.started_at = None;
-    tape.entries = entries;
-    Ok(())
-}
-
-/// Lance la lecture — thread horloge : sleep jusqu'au timestamp de
-/// chaque entrée puis `score-fire` vers l'UI. Un play sur une lecture
-/// en cours la relance depuis le début (re-arm propre via generation).
-#[tauri::command]
-pub async fn score_play(state: State<'_, AppState>) -> Result<(), IpcError> {
-    let (gen, entries) = {
-        let mut tape = lock_or_recover(&state.score_tape);
-        tape.generation += 1;
-        tape.started_at = Some(Instant::now());
-        (tape.generation, tape.entries.clone())
-    };
-    if entries.is_empty() {
-        lock_or_recover(&state.score_tape).started_at = None;
-        return Err(IpcError::validation("score tape empty"));
-    }
-    let tape_arc = state.score_tape.clone();
-    let sink = state.event_sink.clone();
-    std::thread::spawn(move || {
-        let t0 = Instant::now();
-        for e in &entries {
-            let deadline = Duration::from_millis(e.t);
-            // Sleep par tranches : un stop/clear doit être vu <50ms même
-            // si la prochaine entrée est lointaine (pas de tir orphelin).
-            loop {
-                let elapsed = t0.elapsed();
-                if elapsed >= deadline {
-                    break;
-                }
-                if lock_or_recover(&tape_arc).generation != gen {
-                    return; // stoppé — mourir sans tirer
-                }
-                std::thread::sleep((deadline - elapsed).min(Duration::from_millis(50)));
-            }
-            if lock_or_recover(&tape_arc).generation != gen {
-                return;
-            }
-            emit_ui(&sink, "score-fire", e);
-        }
-        // Fin de bande — la génération n'a pas changé : fermer la lecture.
-        let mut tape = lock_or_recover(&tape_arc);
-        if tape.generation == gen {
-            tape.started_at = None;
-        }
-        drop(tape);
-        emit_ui(
-            &sink,
-            "score-state",
-            serde_json::json!({ "playing": false }),
-        );
-    });
-    Ok(())
-}
-
-/// Stoppe la lecture — les sleeps armés s'abortent à la prochaine
-/// tranche (<50ms), la partition est conservée.
-#[tauri::command]
-pub async fn score_stop(state: State<'_, AppState>) -> Result<(), IpcError> {
-    let mut tape = lock_or_recover(&state.score_tape);
-    tape.generation += 1;
-    tape.started_at = None;
-    Ok(())
-}
-
-/// Vide la partition (stoppe d'abord).
-#[tauri::command]
-pub async fn score_clear(state: State<'_, AppState>) -> Result<(), IpcError> {
-    let mut tape = lock_or_recover(&state.score_tape);
-    tape.generation += 1;
-    tape.started_at = None;
-    tape.entries.clear();
-    Ok(())
-}
-
-/// État courant — resync de l'UI (PLAY affiché, curseur).
-#[tauri::command]
-pub async fn score_state(state: State<'_, AppState>) -> Result<ScoreTapeState, IpcError> {
-    Ok(tape_state(&lock_or_recover(&state.score_tape)))
-}
 
 // ─── S2 — ScoreTimeline : clips multi-pistes exécutés par le backend ───
 // Contrairement à la tape (score-fire → dispatch frontend), le timeline
@@ -325,6 +196,22 @@ pub struct ScoreClip {
     pub payload: ScoreClipPayload,
 }
 
+/// Move score vivant — miroir dans `ScoreTimeline` de l'état autrefois
+/// local au thread scheduler. Persiste entre générations : c'est lui
+/// qui permet au hot-swap (`score_timeline_update`) de survivre les
+/// clips inchangés, et à `stop`/`seek` de distinguer les moves score
+/// des moves opérateur.
+pub struct ActiveMove {
+    /// Clip qui a spawné le move (`clip.id`) — la clé du diff hot-swap.
+    pub clip_id: String,
+    /// Lanes couvertes (cut exclusif + drain au wrap).
+    pub lanes: Vec<String>,
+    /// fade_out résolu au spawn (clip override ou héritage slot).
+    pub fade: f64,
+    /// Cible de courbes clip-scoped (macros per-move etc.).
+    pub curve: Option<CurveTarget>,
+}
+
 /// État de la timeline dans AppState — partition de clips + horloge.
 #[derive(Default)]
 pub struct ScoreTimeline {
@@ -366,6 +253,12 @@ pub struct ScoreTimeline {
     /// d'une zone (calculée live par le merge) — elles réécrivent la
     /// DÉFINITION de la contrainte.
     pub spatial_fx_curves: HashMap<String, Vec<ScoreKeyframe>>,
+    /// Moves score actifs : `move_id → ActiveMove` (miroir publié par
+    /// le scheduler après chaque événement). Sert au hot-swap
+    /// (`score_timeline_update` préserve les moves des clips inchangés),
+    /// au `stop`/`seek` (kill ciblé des moves score) et au seeding du
+    /// thread respawné.
+    pub active: HashMap<String, ActiveMove>,
     /// Génération — stop/load l'incrémente, les sleeps armés s'abortent.
     pub generation: u64,
 }
@@ -411,10 +304,14 @@ pub async fn score_timeline_load(
     spatial_fx_curves: HashMap<String, Vec<ScoreKeyframe>>,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
+    let sh = Shared::from_state(&state);
     let mut tl = lock_or_recover(&state.score_timeline);
     tl.generation += 1;
     tl.started_at = None;
     tl.seek_ms = 0;
+    // Load = reset complet : les moves score du doc précédent sont
+    // coupés net (un nouveau doc ne doit pas hériter de l'ancien).
+    kill_score_moves(&sh, &mut tl, true);
     let mut sorted = clips;
     sorted.sort_by_key(|c| c.start_ms);
     // Keyframes triés par t — l'évaluation fait un partition_point.
@@ -528,7 +425,8 @@ fn write_macro_param(m: &stagespace_engines::MacroState, param: &str, v: f64) {
 /// Cible `param:` résolue — ((node_key, param_key), base du node).
 type ResolvedParamTarget = ((String, String), f64);
 
-struct CurveTarget {
+#[derive(Clone)]
+pub struct CurveTarget {
     macros: Arc<stagespace_engines::MacroState>,
     /// `Runtime::param_deltas` — même canal que les contributions du
     /// signal graph (somme dans `ParamSlots::apply_frame`).
@@ -611,6 +509,11 @@ struct AbsCurves<'a> {
 fn eval_spatial_fx_param(rt: &stagespace_engines::MergeRuntime, param: &str, v: f64) {
     if param == "ksmooth" {
         rt.set_kinematic_smoothing(v);
+        return;
+    }
+    if param == "spatial" {
+        // Compresseur spatial global — même chemin que `/stagespace/spatial`.
+        rt.set_spatial_compression(v);
         return;
     }
     if let Some(rest) = param.strip_prefix("zone:") {
@@ -778,72 +681,154 @@ fn eval_curves(
     }
 }
 
-/// Lance la lecture — thread horloge qui exécute les clips sur Shared.
-/// Spanning : un clip Slot qui chevauche le curseur démarre immédiatement
-/// avec `set_time_offset(cursor - start)` ; les cue markers passés sont
-/// skippés (l'état initial reste l'affaire de l'opérateur/conduite).
-#[tauri::command]
-pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcError> {
-    let sh = Shared::from_state(&state);
-    let tl_arc = state.score_timeline.clone();
+/// Publie le miroir `tl.active` depuis l'état local du scheduler —
+/// gardé par génération : un thread mourant ne pollue pas le suivant.
+/// Le miroir sert au hot-swap (survie des clips inchangés) et aux
+/// kills ciblés (`stop`/`seek`).
+fn publish_active(
+    tl_arc: &Arc<Mutex<ScoreTimeline>>,
+    gen: u64,
+    lane_active: &HashMap<String, Vec<(String, f64, String)>>,
+    curve_targets: &HashMap<String, CurveTarget>,
+) {
+    let mut tl = lock_or_recover(tl_arc);
+    if tl.generation != gen {
+        return;
+    }
+    let mut active: HashMap<String, ActiveMove> = HashMap::new();
+    for (lane, moves) in lane_active {
+        for (id, fade, clip_id) in moves {
+            let e = active.entry(id.clone()).or_insert_with(|| ActiveMove {
+                clip_id: clip_id.clone(),
+                lanes: Vec::new(),
+                fade: *fade,
+                curve: curve_targets.get(id).cloned(),
+            });
+            e.lanes.push(lane.clone());
+        }
+    }
+    tl.active = active;
+}
+
+/// Move id attendu pour l'itération `k` d'un clip Slot — miroir de la
+/// construction dans `fire_clip` (`sc-<clip>` posé à la résolution,
+/// suffixe `-k` en repeat). Sert au skip des moves hérités (hot-swap).
+fn expected_move_id(clip: &ScoreClip, k: u64) -> Option<String> {
+    match &clip.payload {
+        ScoreClipPayload::Slot { request, .. } => Some(if clip.repeat_every_ms.is_some() {
+            format!("{}-{k}", request.movement_id)
+        } else {
+            request.movement_id.clone()
+        }),
+        _ => None,
+    }
+}
+
+/// Tue tous les moves score — `tl.active` + balayage des `sc-*` non
+/// trackés (résidus, moves spawnés par cue etc.). `immediate` = fade 0
+/// (seek/hot-swap : cut déterministe, l'id est libre pour le respawn
+/// immédiat) ; sinon les fades déclarées jouent (stop = "appliquer la
+/// fin déclarée" — même sémantique que le stop des autres modes).
+/// `honor_end_mode` reste toujours honoré : un move `hold` écrit sa
+/// position tenue même sur un cut.
+fn kill_score_moves(sh: &Shared, tl: &mut ScoreTimeline, immediate: bool) {
+    let mut kills: Vec<(String, f64)> = tl
+        .active
+        .iter()
+        .map(|(id, am)| (id.clone(), if immediate { 0.0 } else { am.fade }))
+        .collect();
+    for id in lock_or_recover(&sh.movements)
+        .keys()
+        .filter(|id| id.starts_with(SCORE_MOVE_PREFIX))
+        .cloned()
+        .collect::<Vec<_>>()
+    {
+        if !tl.active.contains_key(&id) {
+            kills.push((id, 0.0));
+        }
+    }
+    for (id, fade) in kills {
+        let _ = deactivate_move_arc(&id, fade, true, sh);
+    }
+    tl.active.clear();
+    emit_ui(&sh.event_sink, "active-moves-update", ());
+}
+
+/// (Re)spawn du thread scheduler — partagé par play/update/seek :
+/// bump la génération (tue l'ancien thread ≤50 ms), pose `started_at`,
+/// seed l'état actif hérité (`tl.active` ∩ `movements` — les moves des
+/// clips inchangés survivent au hot-swap) et lance l'horloge à
+/// `seek_ms`. `loop_region` est relu en continu dans le thread → les
+/// changements de boucle s'appliquent sans respawn.
+fn spawn_score_thread(sh: &Shared, tl_arc: &Arc<Mutex<ScoreTimeline>>) -> Result<(), IpcError> {
     let (
         gen,
-        clips,
         seek,
-        lp,
+        clips,
         global_fx_curves,
         modulation_curves,
         object_curves,
         spatial_fx_curves,
+        lane_active,
+        curve_targets,
     ) = {
-        let mut tl = lock_or_recover(&tl_arc);
+        let mut tl = lock_or_recover(tl_arc);
+        if tl.clips.is_empty() {
+            tl.started_at = None;
+            return Err(IpcError::validation("score timeline empty"));
+        }
         tl.generation += 1;
         tl.started_at = Some(Instant::now());
+        // Seeding hot-swap : un move hérité ne repart que s'il est
+        // encore enregistré dans `movements` (mort entre-temps → skip).
+        let movements = lock_or_recover(&sh.movements);
+        let mut lane_active: HashMap<String, Vec<(String, f64, String)>> = HashMap::new();
+        let mut curve_targets: HashMap<String, CurveTarget> = HashMap::new();
+        for (id, am) in &tl.active {
+            if !movements.contains_key(id) {
+                continue;
+            }
+            for lane in &am.lanes {
+                lane_active.entry(lane.clone()).or_default().push((
+                    id.clone(),
+                    am.fade,
+                    am.clip_id.clone(),
+                ));
+            }
+            if let Some(c) = &am.curve {
+                curve_targets.insert(id.clone(), c.clone());
+            }
+        }
         (
             tl.generation,
-            tl.clips.clone(),
             tl.seek_ms,
-            tl.loop_region,
+            tl.clips.clone(),
             tl.global_fx_curves.clone(),
             tl.modulation_curves.clone(),
             tl.object_curves.clone(),
             tl.spatial_fx_curves.clone(),
+            lane_active,
+            curve_targets,
         )
     };
-    if clips.is_empty() {
-        lock_or_recover(&tl_arc).started_at = None;
-        return Err(IpcError::validation("score timeline empty"));
-    }
-
-    // Résidu d'une lecture précédente : les ids score sont
-    // déterministes (`sc-<clip>`) — un move survivant ferait échouer
-    // le spawn au conflit d'id. Balayage des moves score encore
-    // vivants (fade court, honor_end_mode) avant le départ ; les moves
-    // opérateur (autres ids) ne sont pas touchés — dual authority.
-    let leftovers: Vec<String> = lock_or_recover(&sh.movements)
-        .keys()
-        .filter(|id| id.starts_with(SCORE_MOVE_PREFIX))
-        .cloned()
-        .collect();
-    for id in leftovers {
-        let _ = deactivate_move_arc(&id, 0.2, true, &sh);
-    }
 
     let sink = sh.event_sink.clone();
+    let sh = sh.clone();
+    let tl_arc = tl_arc.clone();
     std::thread::spawn(move || {
         // Filet de sécurité : un panic dans le scheduler laisserait
         // `started_at` posé (transport zombie) et des moves score
         // orphelins. `catch_unwind` ferme l'état et remonte un nack.
         let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            // Lane → moves score actifs. En mode `exclusive` la liste reste
-            // ≤1 (un nouveau clip coupe le précédent — console) ; en
-            // `stacked` les moves se composent dans le merge.
-            let mut lane_active: HashMap<String, Vec<(String, f64)>> = HashMap::new();
+            // Lane → moves score actifs [(move_id, fade, clip_id)].
+            // En mode `exclusive` la liste reste ≤1 (un nouveau clip
+            // coupe le précédent — console) ; en `stacked` les moves se
+            // composent dans le merge.
+            let mut lane_active = lane_active;
             // Cibles de courbes : move score → (macros per-move du worker,
             // t0 absolu, table). Rempli au fire (clips Slot avec curves),
-            // vidé au EndMove/cut/hard-wrap. Les macros master du merge
-            // sont prises une fois — Arc stable pour la durée du process.
-            let mut curve_targets: HashMap<String, CurveTarget> = HashMap::new();
+            // vidé au EndMove/cut/hard-wrap.
+            let mut curve_targets = curve_targets;
             let master_macros = lock_or_recover(&sh.merge_runtime).macros();
             // Source `SignalOsc` — handle EXTERNE (RwLock) : les écritures
             // modulation suivent les rebinds du receiver OSC.
@@ -851,14 +836,22 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
             // Cycles de lecture : sans loop un seul passage ; avec loop, le
             // transport reboucle à `loop_start` (hard-wrap — les moves
             // score du cycle sont coupés avant de repartir, sémantique
-            // "redémarrer la phrase" déterministe).
+            // "redémarrer la phrase" déterministe). La région est relue
+            // par événement → `score_timeline_set_loop` s'applique live.
             let mut cycle_start = seek;
             'outer: loop {
                 let t0 = Instant::now();
                 let cursor = |elapsed: Duration| cycle_start + elapsed.as_millis() as u64;
                 for (t, ev) in build_events(&clips, cycle_start) {
-                    // Borne de boucle : les événements ≥ loop_end sont
-                    // exclus du cycle (wrap dur, pas de pré-écoute).
+                    // Borne de boucle relue : un set_loop pendant la
+                    // lecture s'applique dès le prochain événement.
+                    let lp = {
+                        let tl = lock_or_recover(&tl_arc);
+                        if tl.generation != gen {
+                            return;
+                        }
+                        tl.loop_region
+                    };
                     if lp.map(|(_, e)| t >= e).unwrap_or(false) {
                         break;
                     }
@@ -894,15 +887,24 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
                         return;
                     }
                     match ev {
-                        Ev::Fire(i, k, offset) => fire_clip(
-                            &clips[i],
-                            k,
-                            offset,
-                            &sh,
-                            &mut lane_active,
-                            &mut curve_targets,
-                            &sink,
-                        ),
+                        Ev::Fire(i, k, offset) => {
+                            // Hot-swap : un move hérité (clip inchangé)
+                            // n'est pas re-spawné — il continue sa vie.
+                            let inherited = expected_move_id(&clips[i], k).is_some_and(|id| {
+                                lane_active.values().flatten().any(|(x, _, _)| *x == id)
+                            });
+                            if !inherited {
+                                fire_clip(
+                                    &clips[i],
+                                    k,
+                                    offset,
+                                    &sh,
+                                    &mut lane_active,
+                                    &mut curve_targets,
+                                    &sink,
+                                );
+                            }
+                        }
                         Ev::EndMove(id, fade) => {
                             for v in lane_active.values_mut() {
                                 v.retain(|x| x.0 != id);
@@ -917,6 +919,9 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
                             }
                         }
                     }
+                    // Le miroir tl.active suit chaque mutation — c'est
+                    // lui que le hot-swap et les kills consultent.
+                    publish_active(&tl_arc, gen, &lane_active, &curve_targets);
                     // Les courbes du clip qui vient de tirer écrivent leurs
                     // valeurs de t0 immédiatement (sinon ≤50 ms de retard).
                     eval_curves(
@@ -933,6 +938,7 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
                         &osc_source,
                     );
                 }
+                let lp = lock_or_recover(&tl_arc).loop_region;
                 match lp {
                     Some((lstart, lend)) if lend > lstart => {
                         // Attendre la borne de boucle (les événements peuvent
@@ -975,13 +981,15 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
                             lane_active
                                 .drain()
                                 .flat_map(|(_, v)| v)
-                                .filter(|(id, _)| seen.insert(id.clone()))
+                                .filter(|(id, _, _)| seen.insert(id.clone()))
+                                .map(|(id, fade, _)| (id, fade))
                                 .collect()
                         };
                         for (id, fade) in drained {
                             curve_targets.remove(&id);
                             let _ = deactivate_move_arc(&id, fade, true, &sh);
                         }
+                        publish_active(&tl_arc, gen, &lane_active, &curve_targets);
                         emit_ui(&sink, "active-moves-update", ());
                         // Rebase du curseur partagé — l'état rapporté reflète
                         // le retour visuel à loop_start.
@@ -1024,9 +1032,133 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
             );
         }
     });
+    Ok(())
+}
+
+/// Lance la lecture — thread horloge qui exécute les clips sur Shared.
+/// Spanning : un clip Slot qui chevauche le curseur démarre immédiatement
+/// avec `set_time_offset(cursor - start)` ; les cue markers passés sont
+/// skippés (l'état initial reste l'affaire de l'opérateur/conduite).
+#[tauri::command]
+pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcError> {
+    let sh = Shared::from_state(&state);
+    let tl_arc = state.score_timeline.clone();
+    {
+        let tl = lock_or_recover(&tl_arc);
+        if tl.clips.is_empty() {
+            return Err(IpcError::validation("score timeline empty"));
+        }
+    }
+    // Fresh play : les ids score sont déterministes (`sc-<clip>`) — un
+    // move survivant ferait échouer le spawn au conflit d'id. Balayage
+    // des résidus ; les moves opérateur ne sont pas touchés.
+    {
+        let mut tl = lock_or_recover(&tl_arc);
+        kill_score_moves(&sh, &mut tl, true);
+    }
+    spawn_score_thread(&sh, &tl_arc)?;
     // État play poussé aussi — resync des vues (remote, reload).
     let st = timeline_state(&lock_or_recover(&state.score_timeline));
     emit_ui(&state.event_sink, "score-timeline", st);
+    Ok(())
+}
+
+/// Hot-swap de la partition PENDANT la lecture : remplace clips et
+/// courbes au curseur vivant. `dead_clip_ids` (calculé côté frontend —
+/// les clips sont `Deserialize`-only) = ids disparus ou modifiés : leurs
+/// moves sont coupés net (la spec a changé — garder l'ancien move serait
+/// mensonger) ; les moves des clips inchangés survivent dans `tl.active`
+/// et sont hérités par le nouveau scheduler (pas de coupure audible).
+/// Arrêté → équivalent à `load` en conservant le curseur.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn score_timeline_update(
+    clips: Vec<ScoreClip>,
+    duration_ms: u64,
+    global_fx_curves: HashMap<String, Vec<ScoreKeyframe>>,
+    modulation_curves: HashMap<String, Vec<ScoreKeyframe>>,
+    object_curves: HashMap<usize, HashMap<String, Vec<ScoreKeyframe>>>,
+    spatial_fx_curves: HashMap<String, Vec<ScoreKeyframe>>,
+    dead_clip_ids: Vec<String>,
+    state: State<'_, AppState>,
+) -> Result<(), IpcError> {
+    let sh = Shared::from_state(&state);
+    let tl_arc = state.score_timeline.clone();
+    let playing = {
+        let mut tl = lock_or_recover(&tl_arc);
+        let playing = tl.started_at.is_some();
+        // Le thread courant meurt ≤50 ms — avant les kills pour que ses
+        // derniers événements ne puissent pas re-remplir `tl.active`.
+        tl.generation += 1;
+        // Rebase du curseur vivant : seek_ms devient la base du prochain
+        // cycle (started_at reposé au spawn).
+        if let Some(t0) = tl.started_at {
+            tl.seek_ms += t0.elapsed().as_millis() as u64;
+        }
+        tl.seek_ms = tl.seek_ms.min(duration_ms);
+        // Kills : moves des clips morts + balayage sc-* non trackés.
+        let dead: HashSet<&str> = dead_clip_ids.iter().map(String::as_str).collect();
+        let kills: Vec<String> = tl
+            .active
+            .iter()
+            .filter(|(_, am)| dead.contains(am.clip_id.as_str()))
+            .map(|(id, _)| id.clone())
+            .collect();
+        tl.active
+            .retain(|_, am| !dead.contains(am.clip_id.as_str()));
+        for id in kills {
+            let _ = deactivate_move_arc(&id, 0.0, true, &sh);
+        }
+        for id in lock_or_recover(&sh.movements)
+            .keys()
+            .filter(|id| id.starts_with(SCORE_MOVE_PREFIX))
+            .cloned()
+            .collect::<Vec<_>>()
+        {
+            if !tl.active.contains_key(&id) {
+                let _ = deactivate_move_arc(&id, 0.0, true, &sh);
+            }
+        }
+        // Swap du doc — mêmes tris que `load`.
+        let mut sorted = clips;
+        sorted.sort_by_key(|c| c.start_ms);
+        for c in &mut sorted {
+            for kfs in c.curves.values_mut() {
+                kfs.sort_by_key(|k| k.t);
+            }
+        }
+        let mut gfx = global_fx_curves;
+        for kfs in gfx.values_mut() {
+            kfs.sort_by_key(|k| k.t);
+        }
+        let mut mods = modulation_curves;
+        for kfs in mods.values_mut() {
+            kfs.sort_by_key(|k| k.t);
+        }
+        let mut objs = object_curves;
+        for params in objs.values_mut() {
+            for kfs in params.values_mut() {
+                kfs.sort_by_key(|k| k.t);
+            }
+        }
+        let mut sfx = spatial_fx_curves;
+        for kfs in sfx.values_mut() {
+            kfs.sort_by_key(|k| k.t);
+        }
+        tl.clips = sorted;
+        tl.global_fx_curves = gfx;
+        tl.modulation_curves = mods;
+        tl.object_curves = objs;
+        tl.spatial_fx_curves = sfx;
+        tl.duration_ms = duration_ms;
+        playing
+    };
+    if playing {
+        spawn_score_thread(&sh, &tl_arc)?;
+    }
+    emit_ui(&sh.event_sink, "active-moves-update", ());
+    let st = timeline_state(&lock_or_recover(&tl_arc));
+    emit_ui(&sh.event_sink, "score-timeline", st);
     Ok(())
 }
 
@@ -1117,7 +1249,7 @@ fn fire_clip(
     iteration: u64,
     offset_ms: u64,
     sh: &Shared,
-    lane_active: &mut HashMap<String, Vec<(String, f64)>>,
+    lane_active: &mut HashMap<String, Vec<(String, f64, String)>>,
     curve_targets: &mut HashMap<String, CurveTarget>,
     sink: &Arc<Mutex<Option<crate::commands::state::EventSink>>>,
 ) {
@@ -1129,7 +1261,7 @@ fn fire_clip(
             // continuent : leurs sorties se composent dans le merge.
             for lane in clip.lanes.iter().filter(|l| !l.stacked) {
                 if let Some(prev) = lane_active.remove(&lane.id) {
-                    for (prev_id, prev_fade) in prev {
+                    for (prev_id, prev_fade, _) in prev {
                         curve_targets.remove(&prev_id);
                         let _ = deactivate_move_arc(&prev_id, prev_fade, true, sh);
                         // Un move multi-lanes coupé ici resterait
@@ -1205,10 +1337,11 @@ fn fire_clip(
                     // est coupé si l'une d'elles (exclusive) reçoit un
                     // nouveau clip, et drainé au hard-wrap partout.
                     for lane in &clip.lanes {
-                        lane_active
-                            .entry(lane.id.clone())
-                            .or_default()
-                            .push((req.movement_id.clone(), fade_out));
+                        lane_active.entry(lane.id.clone()).or_default().push((
+                            req.movement_id.clone(),
+                            fade_out,
+                            clip.id.clone(),
+                        ));
                     }
                     emit_ui(sink, "active-moves-update", ());
                 }
@@ -1239,8 +1372,11 @@ fn fire_clip(
                     // connus dans cue.moves) s'enregistrent sur la lane
                     // conductor pour le cleanup wrap/stop — sans ça ils
                     // fuiraient entre les cycles de loop.
-                    let respawned: Vec<(String, f64)> =
-                        cue.moves.iter().map(|m| (m.id.clone(), 0.0)).collect();
+                    let respawned: Vec<(String, f64, String)> = cue
+                        .moves
+                        .iter()
+                        .map(|m| (m.id.clone(), 0.0, clip.id.clone()))
+                        .collect();
                     if !respawned.is_empty() {
                         lane_active
                             .entry(CONDUCTOR_LANE.to_string())
@@ -1435,28 +1571,48 @@ fn fire_clip(
 /// reprend la main). Les tirs futurs s'abortent <50ms.
 #[tauri::command]
 pub async fn score_timeline_stop(state: State<'_, AppState>) -> Result<(), IpcError> {
-    let mut tl = lock_or_recover(&state.score_timeline);
-    tl.generation += 1;
-    tl.started_at = None;
-    let st = timeline_state(&tl);
-    drop(tl);
+    let sh = Shared::from_state(&state);
+    let tl_arc = state.score_timeline.clone();
+    {
+        let mut tl = lock_or_recover(&tl_arc);
+        tl.generation += 1;
+        tl.started_at = None;
+        // Stop = comme dans les autres modes : les moves que le score a
+        // spawnés sont désactivés selon leurs fades et end_mode déclarés
+        // (honor_end_mode — un `hold` écrit sa position tenue). Les
+        // moves opérateur ne sont pas touchés (dual authority).
+        kill_score_moves(&sh, &mut tl, false);
+    }
+    let st = timeline_state(&lock_or_recover(&tl_arc));
     emit_ui(&state.event_sink, "score-timeline", st);
     Ok(())
 }
 
-/// Déplace le curseur de base — stopped only : un seek en lecture
-/// demanderait de défaire/refaire des clips (kill-respawn), S3.
+/// Déplace le curseur — arrêté : simple rebase. En lecture : scrub —
+/// tous les moves score sont du "mauvais temps", ils sont coupés net et
+/// le scheduler repart au nouveau curseur (les clips chevauchant le
+/// point d'arrivée repartent avec leur offset de spanning).
 #[tauri::command]
 pub async fn score_timeline_seek(ms: u64, state: State<'_, AppState>) -> Result<(), IpcError> {
-    let mut tl = lock_or_recover(&state.score_timeline);
-    if tl.started_at.is_some() {
-        return Err(IpcError::busy("score playing — stop before seek"));
+    let sh = Shared::from_state(&state);
+    let tl_arc = state.score_timeline.clone();
+    let playing = {
+        let mut tl = lock_or_recover(&tl_arc);
+        // Clamp à la durée — un seek hors partition n'a pas de sens.
+        tl.seek_ms = ms.min(tl.duration_ms);
+        let playing = tl.started_at.is_some();
+        if playing {
+            // Tue le thread courant AVANT les kills — sinon ses
+            // derniers événements re-rempliraient `tl.active`.
+            tl.generation += 1;
+            kill_score_moves(&sh, &mut tl, true);
+        }
+        playing
+    };
+    if playing {
+        spawn_score_thread(&sh, &tl_arc)?;
     }
-    // Clamp à la durée — un seek hors partition n'a pas de sens
-    // (le play lirait immédiatement "fin" sans que l'UI sache pourquoi).
-    tl.seek_ms = ms.min(tl.duration_ms);
-    let st = timeline_state(&tl);
-    drop(tl);
+    let st = timeline_state(&lock_or_recover(&tl_arc));
     emit_ui(&state.event_sink, "score-timeline", st);
     Ok(())
 }
@@ -1471,8 +1627,9 @@ pub async fn score_timeline_state(
 
 /// Arme/désarme la region de boucle [start, end) — rebouclage du
 /// transport (hard-wrap : les moves score du cycle sont coupés au
-/// rebouclage). Appliqué à la prochaine lecture ; en cours de lecture
-/// la config courante est déjà capturée — changer la loop live est S3.
+/// rebouclage). Live-safe : le scheduler relit `loop_region` à chaque
+/// événement — un changement en lecture s'applique dès le prochain
+/// événement/wrap, sans respawn ni coupure.
 #[tauri::command]
 pub async fn score_timeline_set_loop(
     start_ms: Option<u64>,
@@ -1499,43 +1656,6 @@ pub async fn score_timeline_set_loop(
 mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
-
-    fn tape_with(entries: Vec<ScoreTapeEntry>) -> Arc<Mutex<ScoreTape>> {
-        Arc::new(Mutex::new(ScoreTape {
-            entries,
-            ..Default::default()
-        }))
-    }
-
-    #[test]
-    fn state_reports_cursor_and_len() {
-        let tape = tape_with(vec![
-            ScoreTapeEntry {
-                t: 0,
-                name: "doGo".into(),
-                args: vec![],
-            },
-            ScoreTapeEntry {
-                t: 5000,
-                name: "doPanic".into(),
-                args: vec![],
-            },
-        ]);
-        {
-            let mut t = tape.lock().unwrap_or_else(|e| e.into_inner());
-            t.started_at = Some(Instant::now());
-        }
-        let s = tape_state(&lock_or_recover(&tape));
-        assert!(s.playing);
-        assert_eq!(s.len, 2);
-        assert!(s.cursor_ms < 5000);
-    }
-
-    #[test]
-    fn stopped_tape_is_not_playing() {
-        let tape = tape_with(vec![]);
-        assert!(!tape_state(&lock_or_recover(&tape)).playing);
-    }
 
     fn slot_clip(
         id: &str,

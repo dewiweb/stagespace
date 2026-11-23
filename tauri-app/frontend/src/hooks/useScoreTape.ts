@@ -1,20 +1,18 @@
-/// Score tape (S1) — l'horloge backend tire chaque entrée via l'event
-/// `score-fire` ; le frontend l'exécute via le même REPLAY map que le
-/// replay historique (mêmes fonctions que le busking enregistré).
-/// Monté dans la fenêtre principale UNIQUEMENT — `score-fire` est un
-/// event global Tauri : une fenêtre détachée qui écouterait doublerait
-/// chaque commande (même règle que `show-control`).
+/// Score — sync du transport timeline + hot-swap de l'édition live.
+/// Monté dans la fenêtre principale UNIQUEMENT (règle show-control :
+/// la détachée n'exécute pas les actions show).
+///
+/// Deux canaux :
+/// - `score-timeline` (backend → UI) : transitions de transport
+///   (play/stop/seek/wrap) + resync au mount (le backend peut jouer
+///   alors que la webview a rechargé).
+/// - souscription au doc (UI → backend) : toute édition de la
+///   partition PENDANT la lecture débouche en `score_timeline_update`
+///   débouncée — hot-swap avec survie des clips inchangés.
 import { useEffect } from 'react';
 import { safeInvoke, safeListen } from '../utils/tauri';
 import { toast } from '../utils/toast-helpers';
-import { fireScoreEntry } from '../utils/liveActionsRehearsal';
 import { useScoreStore } from '../store/useScoreStore';
-
-interface ScoreFireEntry {
-  t: number;
-  name: string;
-  args: number[];
-}
 
 interface ScoreTimelineStateEvent {
   playing: boolean;
@@ -23,18 +21,19 @@ interface ScoreTimelineStateEvent {
   loop_end_ms?: number;
 }
 
+/// Délai de débounce du hot-swap — assez long pour absorber un drag
+/// de clip, assez court pour que l'édition live soit entendue.
+const HOT_SWAP_DEBOUNCE_MS = 600;
+
 export function useScoreTape() {
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
     let unlistenTl: (() => void) | undefined;
     let unlistenNack: (() => void) | undefined;
+    let hotTimer: ReturnType<typeof setTimeout> | undefined;
     let cancelled = false;
     const setup = async () => {
       try {
-        const u = await safeListen<ScoreFireEntry>('score-fire', (event) => {
-          fireScoreEntry(event.payload.name, event.payload.args ?? []);
-        });
-        // S2 — transitions du transport timeline (play→end, stop, seek)
+        // Transitions du transport timeline (play→end, stop, seek)
         // poussées par le backend ; le curseur continu est animé par la vue.
         const v = await safeListen<ScoreTimelineStateEvent>('score-timeline', (event) => {
           const p = event.payload;
@@ -45,8 +44,8 @@ export function useScoreTape() {
         const n = await safeListen<{ clip_id: string; reason: string }>('score-nack', (event) => {
           toast.warning(`Score : clip ${event.payload.clip_id} ignoré — ${event.payload.reason}`);
         });
-        if (cancelled) { u(); v(); n(); }
-        else { unlisten = u; unlistenTl = v; unlistenNack = n; }
+        if (cancelled) { v(); n(); }
+        else { unlistenTl = v; unlistenNack = n; }
         // Resync après (re)mount — le backend peut être encore en
         // lecture alors que le webview a rechargé (état transport
         // frontend reparti à zéro). On re-prend l'état réel.
@@ -59,9 +58,30 @@ export function useScoreTape() {
       }
     };
     void setup();
+    // Édition live : toute mutation de la partition pendant la lecture
+    // est poussée au backend en hot-swap (survie des clips inchangés).
+    // La loop region est exclue — `score_timeline_set_loop` est déjà
+    // live-safe côté backend (relu en continu par le scheduler).
+    const unsubDoc = useScoreStore.subscribe((s, p) => {
+      if (!s.playing) return;
+      if (
+        s.clips === p.clips &&
+        s.laneStates === p.laneStates &&
+        s.globalFxCurves === p.globalFxCurves &&
+        s.modulationCurves === p.modulationCurves &&
+        s.objectCurves === p.objectCurves &&
+        s.spatialFxCurves === p.spatialFxCurves &&
+        s.durationMs === p.durationMs
+      ) return;
+      clearTimeout(hotTimer);
+      hotTimer = setTimeout(() => {
+        void useScoreStore.getState()._hotSwap();
+      }, HOT_SWAP_DEBOUNCE_MS);
+    });
     return () => {
       cancelled = true;
-      unlisten?.();
+      clearTimeout(hotTimer);
+      unsubDoc();
       unlistenTl?.();
       unlistenNack?.();
     };

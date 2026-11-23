@@ -117,6 +117,7 @@ export const MERGE_BLEND_DEFS: ParamDef[] = [
 /// l'influence positionnelle (évaluée par le merge).
 export const SPATIALFX_STATIC_DEFS: ParamDef[] = [
   { id: 'ksmooth', min: 0, max: 0.99, def: 0.5, label: 'kinematic smoothing' },
+  { id: 'spatial', min: 0.1, max: 4, def: 1, label: 'spatial compression' },
 ];
 
 /// Clé stable d'une règle cinématique — même format que le backend

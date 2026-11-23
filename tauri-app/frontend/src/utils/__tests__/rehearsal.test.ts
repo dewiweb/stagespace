@@ -1,66 +1,108 @@
 /// <reference types="vitest/globals" />
 import { describe, expect, it, beforeEach } from 'vitest';
-import { renderHook } from '@testing-library/react';
 import { doRehearsal, doSlot } from '../liveActions';
-import { useScoreTape } from '../../hooks/useScoreTape';
-import { emitMockEvent, clearListeners } from '../../test/setup';
+import { recordingToScore } from '../recordingToScore';
+import { rehearsalState } from '../liveActionsShared';
+import { useScoreStore } from '../../store/useScoreStore';
 import { useGraphStore, getInvokeCalls, clearInvokeCalls, resetStore } from '../../store/__tests__/testHelpers';
 
-// S1 : l'horloge de lecture vit dans le backend (`score_load`/`score_play`
-// → thread → `score-fire`). Le frontend pousse la bande et exécute les
-// entrées tirées — plus de setTimeout (revue M7 résolue par construction :
-// le backend n'a qu'un seul thread de lecture par génération).
-const slot = (id: string) =>
+// Recorder → Score : la capture busking est matérialisée en clips/courbes
+// de la timeline (refs vivantes — pas de tape parallèle). Le transport
+// reste `score_timeline_*` (backend-owned, déterministe).
+const slot = (id: string, oscIndex = 1) =>
   ({
-    id, name: id, oscIndex: 1, templateId: 'circle',
+    id, name: id, oscIndex, templateId: 'circle',
     graphJson: null, signalGraph: null, trackIds: [1],
     movementId: null, isPreview: false,
   }) as never;
 
 const settle = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-describe('rehearsal — horloge backend (S1)', () => {
+describe('rehearsal — recorder → clips Score', () => {
   beforeEach(() => {
     resetStore();
     clearInvokeCalls();
-    clearListeners();
-    doRehearsal('clear'); // purge l'état module entre les tests
-    clearInvokeCalls();
-    useGraphStore.setState({ moveSlots: [slot('s1')] } as never);
+    rehearsalState.recording = false;
+    rehearsalState.entries = [];
+    useScoreStore.getState().clearScore();
+    useGraphStore.setState({ moveSlots: [slot('s1', 1), slot('s2', 2)], manualOscIds: [1, 2] } as never);
   });
 
-  it('play pousse la bande au backend puis arme la lecture', async () => {
+  it('stop matérialise la prise : un doSlot devient un clip slot', async () => {
     doRehearsal('record');
-    doSlot(1); // enregistré via rec() + joue (activate_move)
+    doSlot(1);
     doRehearsal('stop');
-    await settle(150);
+    await settle(50);
+    const clips = useScoreStore.getState().clips;
+    expect(clips).toHaveLength(1);
+    expect(clips[0].ref).toEqual({ type: 'slot', slotId: 's1' });
+    // Pas de stop enregistré → clip refermé à la fin de la prise (1ms min).
+    expect(clips[0].durationMs).toBeGreaterThan(0);
+  });
+
+  it('play délègue au transport timeline (playScore)', async () => {
+    doRehearsal('record');
+    doSlot(1);
+    doRehearsal('stop');
+    await settle(50);
     clearInvokeCalls();
-
     doRehearsal('play');
-    await settle(50);
+    await settle(80);
     const calls = getInvokeCalls().map((c) => c.cmd);
-    expect(calls).toContain('score_load');
-    expect(calls).toContain('score_play');
-    // score_load reçoit les entrées enregistrées (doSlot).
-    const load = getInvokeCalls().find((c) => c.cmd === 'score_load');
-    expect((load?.args?.entries as { name: string }[])?.[0]?.name).toBe('doSlot');
+    expect(calls).toContain('score_timeline_load');
+    expect(calls).toContain('score_timeline_play');
+    expect(calls).not.toContain('score_play');
   });
 
-  it('un score-fire backend exécute la commande enregistrée', async () => {
-    renderHook(() => useScoreTape());
-    await settle(20);
-    emitMockEvent('score-fire', { t: 0, name: 'doSlot', args: [1] });
-    await settle(50);
-    expect(getInvokeCalls().map((c) => c.cmd)).toContain('activate_move');
-  });
-
-  it('clear vide la bande backend — plus aucun tir possible', () => {
-    doRehearsal('clear');
-    expect(getInvokeCalls().map((c) => c.cmd)).toContain('score_clear');
-  });
-
-  it('stop coupe la lecture backend', () => {
+  it('clear vide la partition score', () => {
+    doRehearsal('record');
+    doSlot(1);
     doRehearsal('stop');
-    expect(getInvokeCalls().map((c) => c.cmd)).toContain('score_stop');
+    expect(useScoreStore.getState().clips.length).toBe(1);
+    doRehearsal('clear');
+    expect(useScoreStore.getState().clips.length).toBe(0);
+  });
+});
+
+describe('recordingToScore — appariement et conversion', () => {
+  beforeEach(() => {
+    rehearsalState.recording = false;
+  });
+
+  it('slot joué puis stoppé → clip borné ; panic ferme les clips ouverts', () => {
+    const take = recordingToScore([
+      { t: 100, name: 'doSlot', args: [1], ref: { slotId: 's1' } },
+      { t: 4000, name: 'doSlotStop', args: [1], ref: { slotId: 's1' } },
+      { t: 5000, name: 'doSlot', args: [2], ref: { slotId: 's2' } },
+      { t: 8000, name: 'doPanic', args: [] },
+    ]);
+    expect(take.clips).toHaveLength(3);
+    expect(take.clips[0].durationMs).toBe(3900);
+    expect(take.clips[1].durationMs).toBe(3000); // fermé par le panic
+    expect(take.clips[2].ref.type).toBe('panic');
+  });
+
+  it('cue, gestes et positions deviennent des clips typés', () => {
+    const take = recordingToScore([
+      { t: 0, name: 'doCueRecallById', args: [], ref: { cueId: 'c1' } },
+      { t: 1000, name: 'doPark', args: [0], ref: { trackId: 3 } },
+      { t: 1500, name: 'doSetPosition', args: [0, 1, 2, 3], ref: { positions: { 3: [1, 2, 3] } } },
+      { t: 2000, name: 'doGesture', args: [2.5], ref: { macro: 'explode', strength: 2.5 } },
+    ]);
+    expect(take.clips.map((c) => c.ref.type)).toEqual(['cue', 'park', 'positions', 'gesture']);
+    expect(take.clips[1].trackIds).toEqual([3]);
+    const pos = take.clips[2].ref;
+    expect(pos.type === 'positions' && pos.positions[3]).toEqual([1, 2, 3]);
+  });
+
+  it('macros → courbes globalfx ; spatial → courbe spatialfx ; inconnus → skipped', () => {
+    const take = recordingToScore([
+      { t: 0, name: 'doMacro', args: [1.5], ref: { macro: 'scale' } },
+      { t: 500, name: 'doSpatial', args: [0.8], ref: { macro: 'spatial' } },
+      { t: 600, name: 'doSetTrackPosition', args: [1, 0, 0, 0] },
+    ]);
+    expect(take.globalFx.scale).toEqual([{ t: 0, v: 1.5, interp: 'linear' }]);
+    expect(take.spatialFx.spatial).toEqual([{ t: 500, v: 0.8, interp: 'linear' }]);
+    expect(take.skipped).toEqual(['doSetTrackPosition']);
   });
 });

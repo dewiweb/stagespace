@@ -1,42 +1,17 @@
-/// Répétition & enregistrement — rehearsal (bande horodatée rejouée
-/// comme cue), tape de positions, scores import/export. Extrait de
-/// liveActions.ts.
+/// Recorder du séquenceur Score — la prise busking est matérialisée
+/// en clips/courbes de la timeline (refs vivantes). Tape de positions
+/// (flux 30 Hz, renderer externe). Extrait de liveActions.ts.
 import { toast } from './toast-helpers';
-import { safeInvoke as invoke, silentCatch } from './tauri';
+import { safeInvoke as invoke } from './tauri';
 import { rehearsalState, logAction } from './liveActionsShared';
-import { doGo, doPanic } from './liveActionsTransport';
-import { doSlot, doSlotStop, doSolo, doUnsolo } from './liveActionsSlots';
-import {
-  doSetPosition, doClearPosition, doThrow, doSpatial, doAttention,
-  doSetTrackPosition,
-} from './liveActionsSpatial';
+import { recordingToScore } from './recordingToScore';
+import { useScoreStore, GLOBALFX_LANE, SPATIALFX_LANE } from '../store/useScoreStore';
 
 /** /stagespace/record <start|stop> · /stagespace/rehearsal <play|clear> —
- *  capture de répétition : enregistre la session busking (commandes
- *  horodatées) et la rejoue comme un cue live.
- *  S1 : l'horloge vit dans le backend (thread + `score-fire`) — le
- *  frontend reste l'exécuteur via cette map. */
-const REPLAY: Record<string, (...a: number[]) => void> = {
-  doGo: () => doGo(),
-  doPanic: () => doPanic(),
-  doSlot: (n) => doSlot(n),
-  doSlotStop: (n) => doSlotStop(n),
-  doSolo: (n) => doSolo(n),
-  doUnsolo: () => doUnsolo(),
-  doSetPosition: (o, x, y, z) => doSetPosition(o, x, y, z),
-  doClearPosition: (o) => doClearPosition(o),
-  doThrow: (o, x, y, z) => doThrow(o, x, y, z),
-  doSpatial: (k) => doSpatial(k),
-  doAttention: (o) => doAttention(o === -1 ? null : o),
-  doSetTrackPosition: (t, x, y, z) => doSetTrackPosition(t, x, y, z),
-};
-
-/** Point d'entrée unique des entrées tirées par l'horloge backend —
- *  appelé par le listener `score-fire` (hook useScoreTape). */
-export function fireScoreEntry(name: string, args: number[]) {
-  REPLAY[name]?.(...args);
-}
-
+ *  Recorder du séquenceur : capture la session busking (commandes
+ *  horodatées + refs typées) puis la MATÉRIALISE en clips/courbes de la
+ *  timeline Score — pas de tape parallèle : la prise devient de la
+ *  partition éditable (Conduite → Score → réédition → re-jeu). */
 export function doRehearsal(action: string, from?: string) {
   logAction('doRehearsal', from);
   const s = rehearsalState;
@@ -45,68 +20,64 @@ export function doRehearsal(action: string, from?: string) {
       s.recording = true;
       s.t0 = Date.now();
       s.entries = [];
-      toast.info('Rehearsal REC — capture du busking');
+      toast.info('Score REC — capture du busking en cours');
       break;
-    case 'stop':
-      s.recording = false;
-      // Coupe aussi une lecture en cours — STOP est sans ambiguïté.
-      invoke('score_stop').catch(silentCatch);
-      // Persiste la dernière prise — la partition survit au reload.
-      try {
-        localStorage.setItem('stagespace:diffusion-score', JSON.stringify(s.entries));
-      } catch { /* storage full — non critique */ }
-      toast.info(`Rehearsal STOP — ${s.entries.length} commandes capturées`);
-      break;
-    case 'play': {
-      if (s.entries.length === 0) { toast.warning('Rehearsal vide'); return; }
-      // L'horloge est backend (déterministe, survit au reload webview) —
-      // le frontend reste l'exécuteur via `score-fire` → fireScoreEntry.
-      // recording off pendant le replay — sinon la bande s'auto-écrit.
+    case 'stop': {
       const wasRecording = s.recording;
       s.recording = false;
-      invoke('score_load', { entries: s.entries })
-        .then(() => invoke('score_play'))
-        .then(() => toast.info(`Score PLAY — ${s.entries.length} commandes`))
-        .catch((e) => {
-          s.recording = wasRecording;
-          toast.error('Score play failed: ' + e);
+      // STOP est sans ambiguïté : hors enregistrement il coupe la
+      // lecture score ; en enregistrement il clôt la prise.
+      if (!wasRecording) {
+        useScoreStore.getState().stopScore();
+        return;
+      }
+      const take = recordingToScore(s.entries);
+      s.entries = [];
+      if (take.clips.length === 0 && Object.keys(take.globalFx).length === 0
+          && Object.keys(take.spatialFx).length === 0) {
+        toast.warning('Prise vide — rien de capturé');
+        return;
+      }
+      // La prise s'ajoute en fin de partition — une section de plus,
+      // éditable immédiatement (déliage, quantize, retarget…).
+      const sc = useScoreStore.getState();
+      const base = sc.durationMs > 0 ? sc.durationMs + 500 : 0;
+      let end = base;
+      for (const c of take.clips) {
+        sc.addClip(c.ref, base + c.startMs, {
+          durationMs: c.durationMs,
+          trackIds: c.trackIds,
         });
-      // Restaure le flag record en fin de bande — durée max = dernière entrée.
-      const last = s.entries.reduce((m, e) => Math.max(m, e.t), 0);
-      setTimeout(() => { s.recording = wasRecording; }, last + 100);
+        end = Math.max(end, base + c.startMs + (c.durationMs ?? 0));
+      }
+      const mergeKfs = (
+        lane: string, param: string, kfs: { t: number; v: number; interp?: 'linear'|'step'|'smooth' }[],
+        cur: Record<string, { t: number; v: number; interp?: 'linear'|'step'|'smooth' }[]> | undefined,
+      ) => {
+        const existing = cur?.[param] ?? [];
+        sc.setLaneCurve(lane, param, [...existing, ...kfs.map((k) => ({ ...k, t: k.t + base }))]);
+      };
+      for (const [param, kfs] of Object.entries(take.globalFx)) {
+        mergeKfs(GLOBALFX_LANE, param, kfs, sc.globalFxCurves);
+      }
+      for (const [param, kfs] of Object.entries(take.spatialFx)) {
+        mergeKfs(SPATIALFX_LANE, param, kfs, sc.spatialFxCurves);
+      }
+      sc.setDurationMs(end + 1000);
+      const skippedNote = take.skipped.length
+        ? ` — ${take.skipped.length} action(s) ignorée(s) : ${take.skipped.slice(0, 3).join(', ')}${take.skipped.length > 3 ? '…' : ''}`
+        : '';
+      toast.info(`Prise matérialisée — ${take.clips.length} clip(s) dans la partition${skippedNote}`);
       break;
     }
-    case 'clear':
-      s.entries = [];
-      invoke('score_clear').catch(silentCatch);
+    case 'play':
+      void useScoreStore.getState().playScore();
       break;
-    case 'load':
-      // Charge la partition persistée (dernier record ou score importé).
-      try {
-        const raw = localStorage.getItem('stagespace:diffusion-score');
-        if (raw) {
-          s.entries = JSON.parse(raw);
-          toast.info(`Score chargé — ${s.entries.length} commandes`);
-        } else {
-          toast.warning('Aucun score sauvegardé');
-        }
-      } catch { toast.error('Score invalide'); }
+    case 'clear':
+      useScoreStore.getState().clearScore();
+      toast.info('Partition vidée');
       break;
   }
-}
-
-/** Diffusion score — export/import de la partition (JSON). Le score =
- *  la bande rehearsal sérialisée : capturé OU autorisé, sauvegardé,
- *  joué — la partition acousmatique de la conduite A. */
-export function scoreExport() {
-  const raw = localStorage.getItem('stagespace:diffusion-score');
-  if (!raw) { toast.warning('Aucun score à exporter'); return; }
-  const blob = new Blob([raw], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'diffusion-score.sscore.json';
-  a.click();
-  URL.revokeObjectURL(a.href);
 }
 
 /** Position stream tape — enregistre les positions émises à ~30Hz et
@@ -146,18 +117,3 @@ export function tapeImport(file: File) {
   reader.readAsText(file);
 }
 
-export function scoreImport(file: File) {
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const entries = JSON.parse(reader.result as string);
-      if (!Array.isArray(entries)) throw new Error('not a tape');
-      localStorage.setItem('stagespace:diffusion-score', JSON.stringify(entries));
-      rehearsalState.entries = entries;
-      toast.info(`Score importé — ${entries.length} commandes`);
-    } catch {
-      toast.error('Score invalide');
-    }
-  };
-  reader.readAsText(file);
-}

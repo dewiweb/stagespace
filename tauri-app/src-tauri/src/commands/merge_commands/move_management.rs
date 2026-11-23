@@ -804,9 +804,12 @@ pub(crate) fn deactivate_all_arc(
     // qu'on enchaîne.
     if !honor_end_mode {
         let mut tl = lock_or_recover(&sh.score_timeline);
-        if tl.started_at.is_some() {
+        if tl.started_at.is_some() || !tl.active.is_empty() {
             tl.generation += 1;
             tl.started_at = None;
+            // Les moves score sont tous tués par le panic ci-dessous —
+            // le miroir ne doit pas ressusciter de zombies au prochain play.
+            tl.active.clear();
             emit_ui(
                 &sh.event_sink,
                 "score-timeline",

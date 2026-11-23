@@ -4,7 +4,7 @@ import { useGraphStore } from '../store/useGraphStore';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { toast } from './toast-helpers';
 import {
-  logAction, disarmPending, routeDetached, nack, recallBusy,
+  logAction, rec, disarmPending, routeDetached, nack, recallBusy,
 } from './liveActionsShared';
 
 /// GO setlist (= Enter) — crossfade vers le prochain move.
@@ -14,6 +14,9 @@ export function doGo(from?: string) {
   if (recallBusy(from)) return;
   disarmPending();
   const gs = useGraphStore.getState();
+  // GO = stop all + play du prochain slot de la setlist — la ref
+  // capturée permet au recorder d'écrire le clip typé.
+  rec('doGo', [], { slotId: gs.setlistOrder[gs.currentSetlistIndex + 1] });
   gs.goToNextMove().then((res: { ok: boolean; message: string }) => {
     if (!res.ok) toast.warning(res.message);
   });
@@ -26,7 +29,9 @@ export function doCueNext(from?: string) {
   // Guard avant mutation — une commande nackée ne doit pas annuler les timers.
   if (recallBusy(from)) return;
   disarmPending();
-  useCuelistStore.getState().goToNextCue();
+  const cs = useCuelistStore.getState();
+  rec('doCueNext', [], { cueId: cs.cues[cs.currentCueIndex + 1]?.id });
+  cs.goToNextCue();
 }
 
 /// Cue précédente (= Backspace).
@@ -35,7 +40,9 @@ export function doCuePrev(from?: string) {
   logAction('doCuePrev', from);
   if (recallBusy(from)) return;
   disarmPending();
-  useCuelistStore.getState().goToPreviousCue();
+  const cs = useCuelistStore.getState();
+  rec('doCuePrev', [], { cueId: cs.cues[cs.currentCueIndex - 1]?.id });
+  cs.goToPreviousCue();
 }
 
 /// Recall direct d'une cue par numéro — match sur `cue_number`, sinon
@@ -55,6 +62,7 @@ export function doCueRecall(n: string, fadeOverride?: number, from?: string) {
     toast.warning(`Cue '${n}' not found`);
     return;
   }
+  rec('doCueRecall', [Number(n) || 0], { cueId: cue.id });
   void s.recallCue(cue.id, fadeOverride != null ? { fadeOverride } : undefined);
 }
 
@@ -70,6 +78,7 @@ export function doCueRecallById(id: string, fadeOverride?: number, from?: string
     return;
   }
   disarmPending();
+  rec('doCueRecallById', [], { cueId: id });
   void s.recallCue(id, fadeOverride != null ? { fadeOverride } : undefined);
 }
 
@@ -105,6 +114,7 @@ export function doStatus() {
 /// Panic (= Esc) — stop all + positions origine.
 export function doPanic() {
   logAction('doPanic');
+  rec('doPanic');
   disarmPending();
   useGraphStore.getState().panic();
 }
@@ -112,6 +122,7 @@ export function doPanic() {
 /// Stop all moves (même fonction que le bouton UI — deactivate_all).
 export function doStop() {
   logAction('doStop');
+  rec('doStop');
   disarmPending();
   useGraphStore.getState().stopAllMovements();
 }
