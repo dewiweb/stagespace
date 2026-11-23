@@ -80,6 +80,25 @@ export const GLOBALFX_PARAM_DEFS: ParamDef[] = [
   { id: 'height_offset', min: -10, max: 10, def: 0 },
 ];
 
+/// Params courbables d'une lane OBJET — vrais paramètres runtime du
+/// merge (jamais dérivés d'un graphe : les nodes les lisent) :
+/// - `depth` → `per_track_depth` (lu par le node PerTrackDepth ;
+///   absent = 1.0)
+/// - les 7 `SpatialChannel` → `object_channels` (émettés en OSC en
+///   plus de la position — le « caractère spatial » de l'objet).
+/// Mêmes champs que `cue.per_track_depths`/`cue.object_channels` —
+/// le flatten les écrit en keyframes à l'instant du clip.
+export const OBJECT_LANE_DEFS: ParamDef[] = [
+  { id: 'depth', min: 0, max: 1, def: 1 },
+  { id: 'gain', min: 0, max: 2, def: 1 },
+  { id: 'spread', min: 0, max: 180, def: 0 },
+  { id: 'distance', min: 0, max: 20, def: 0 },
+  { id: 'presence', min: -24, max: 24, def: 0 },
+  { id: 'yaw', min: -180, max: 180, def: 0 },
+  { id: 'aperture', min: 0, max: 180, def: 0 },
+  { id: 'lfe', min: 0, max: 2, def: 0 },
+];
+
 /// Blend params — côté MERGE du move (`set_move_weight`/
 /// `set_move_priority`), ni graphe ni transform : `fade × weight`
 /// = poids effectif dans Override/Crossfade/Blend, `priority`

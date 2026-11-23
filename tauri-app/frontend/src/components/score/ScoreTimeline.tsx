@@ -52,6 +52,8 @@ export const ScoreTimeline: React.FC<{
   clips: ScoreClipDoc[];
   globalFxCurves?: Record<string, ScoreKeyframe[]>;
   modulationCurves?: Record<string, ScoreKeyframe[]>;
+  /// Courbes depth/canaux des lanes objet (laneId → param → kfs).
+  objectCurves?: Record<string, Record<string, ScoreKeyframe[]>>;
   selGlobal: string | null;
   selected: string | null;
   onSelectLane: (laneId: string) => void;
@@ -70,7 +72,7 @@ export const ScoreTimeline: React.FC<{
   grow, durationMs, displayCursor, playing, tickEvery, laneH, rowH,
   ms2px, px2ms, loopStartMs, loopEndMs, seekScore,
   lanes, laneLayout, laneModeOf, laneMutedOf,
-  clips, globalFxCurves, modulationCurves,
+  clips, globalFxCurves, modulationCurves, objectCurves,
   selGlobal, selected, onSelectLane, onClearSelection, onOpenPicker,
   onToggleLaneMute, onSetLaneMode,
   clipOrphan, effFades, clipLabel,
@@ -129,11 +131,14 @@ export const ScoreTimeline: React.FC<{
         {lanes.map((lane) => {
           const muted = laneMutedOf(lane.id);
           const stacked = laneModeOf(lane.id) === 'stacked';
+          const sel = selGlobal === lane.id;
           return (
             <div
               key={lane.id}
-              className="shrink-0 flex items-center gap-1 px-2 border-b border-gray-800"
+              className={`shrink-0 flex items-center gap-1 px-2 border-b border-gray-800 cursor-pointer ${sel ? 'bg-cyan-900/30 ring-1 ring-cyan-500' : 'hover:bg-gray-800/40'}`}
               style={{ height: laneLayout.get(lane.id)?.height ?? laneH }}
+              onClick={() => onSelectLane(lane.id)}
+              title={`Lane T${lane.trackId} — clips + courbes depth/canaux (clic = édition des courbes)`}
               onContextMenu={(e) => {
                 e.preventDefault();
                 onContextMenu({ kind: 'lane', laneId: lane.id, trackId: lane.trackId }, e.clientX, e.clientY);
@@ -342,6 +347,18 @@ export const ScoreTimeline: React.FC<{
                     />
                   );
                 })}
+                {/* Points des courbes depth/canaux de la lane (édition
+                    en zone haute quand la lane est sélectionnée). */}
+                {Object.entries(objectCurves?.[lane.id] ?? {}).flatMap(([param, kfs], pi) =>
+                  kfs.map((k, i) => (
+                    <div
+                      key={`oc-${param}-${i}`}
+                      title={`${param} @${fmtMs(k.t)} = ${k.v}`}
+                      className="absolute w-1.5 h-1.5 rounded-full bg-emerald-300/70 pointer-events-none"
+                      style={{ left: ms2px(k.t) - 3, top: 2 + (pi % 3) * 6 }}
+                    />
+                  )),
+                )}
               </div>
             );
           })}

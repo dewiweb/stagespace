@@ -44,6 +44,10 @@ export interface ResolvedScoreClip {
 export interface ResolveResult {
   clips: ResolvedScoreClip[];
   errors: string[];
+  /// Courbes des lanes objet résolues en obj_index (`obj-<trackId>` →
+  /// `manualOscIds.indexOf(trackId)`) — lanes mutées ou non patchées
+  /// skippées. Wire : `score_timeline_load.object_curves`.
+  objectCurves: Record<number, Record<string, { t: number; v: number }[]>>;
 }
 
 export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
@@ -53,6 +57,18 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
   const laneState = (laneId: string) => doc.laneStates?.[laneId];
   const clips: ResolvedScoreClip[] = [];
   const errors: string[] = [];
+
+  // Courbes des lanes objet — `obj-<trackId>` → obj_index (règle
+  // namespace : le wire parle obj_index). Lane mutée → skip ; track
+  // non patchée → skip (rien à écrire côté merge).
+  const objectCurves: ResolveResult['objectCurves'] = {};
+  for (const [laneId, params] of Object.entries(doc.objectCurves ?? {})) {
+    const trackId = Number(laneId.replace(/^obj-/, ''));
+    const obj = gs.manualOscIds.indexOf(trackId);
+    if (obj < 0 || laneState(laneId)?.muted) continue;
+    const entries = Object.entries(params).filter(([, kfs]) => kfs.length);
+    if (entries.length) objectCurves[obj] = Object.fromEntries(entries);
+  }
 
   for (const c of doc.clips) {
     const isBarrier = c.ref.type === 'cue' || c.ref.type === 'stopAll' || c.ref.type === 'panic';
@@ -169,7 +185,7 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
         break;
     }
   }
-  return { clips, errors };
+  return { clips, errors, objectCurves };
 }
 
 /// Couverture EFFECTIVE d'un clip — `trackIds` explicite si présent,

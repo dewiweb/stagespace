@@ -26,6 +26,10 @@ export interface FlattenCueResult {
   skipped: string[];
 }
 
+/// Champs `SpatialChannels` = ids des courbes channel d'une lane objet
+/// (mêmes noms que `SpatialChannel::from_str` côté backend).
+const CHANNEL_FIELDS = ['gain', 'spread', 'distance', 'presence', 'yaw', 'aperture', 'lfe'] as const;
+
 const MACRO_FIELDS = ['speed', 'scale', 'shift_x', 'shift_y', 'shift_z', 'yaw', 'pitch', 'roll'] as const;
 
 /// Construit le slot de banque matérialisant un MoveSnapshot.
@@ -135,17 +139,35 @@ export function flattenCueClip(clipId: string): FlattenCueResult | undefined {
     res.movedClips++;
   }
 
+  // Vrais paramètres runtime → courbes des lanes objet à t0 (un
+  // keyframe par valeur snapshotée, en espace track_id — la résolution
+  // reconvertit en obj_index). `per_track_depths` est aligné obj_index ;
+  // `object_channels` émet chaque champ présent comme courbe nommée.
+  const upsertObjCurve = (laneId: string, param: string, v: number) => {
+    const cur = score.objectCurves?.[laneId]?.[param] ?? [];
+    score.setLaneCurve(laneId, param, [...cur.filter((k) => k.t !== t0), { t: t0, v }]);
+    res.macroKeys++;
+  };
+  (cue.per_track_depths ?? []).forEach((d, obj) => {
+    if (typeof d === 'number' && osc[obj] != null) upsertObjCurve(`obj-${osc[obj]}`, 'depth', d);
+  });
+  for (const [obj, chs] of Object.entries(cue.object_channels ?? {})) {
+    const track = osc[Number(obj)];
+    if (track == null) continue;
+    for (const p of CHANNEL_FIELDS) {
+      const v = (chs as unknown as Record<string, unknown>)[p];
+      if (typeof v === 'number') upsertObjCurve(`obj-${track}`, p, v);
+    }
+  }
+
   // Honnêteté : ces catégories n'ont pas (encore) d'entité timeline —
   // signalées, jamais silencieusement abandonnées. `zones` et
   // `channel_modulations` = les tables MANUELLES seules (la moitié
   // déclarative est couverte par le clip postGraph ci-dessus).
   if (cue.graph && (cue.graph.nodes?.length ?? 0) > 0 && moves.length === 0) res.skipped.push('graph (legacy)');
-  if (cue.graph && (cue.graph.nodes?.length ?? 0) > 0 && moves.length === 0) res.skipped.push('graph (legacy)');
-  if (cue.object_channels) res.skipped.push('channels');
   if (cue.channel_modulations?.length) res.skipped.push('channel_modulations');
   if (cue.osc_mappings?.length) res.skipped.push('osc_mappings');
   if (cue.zones?.length) res.skipped.push('zones');
-  if (cue.per_track_depths?.length) res.skipped.push('depths');
 
   // Rien à matérialiser (snapshot vide ou catégories non mappables
   // seulement) → le clip est conservé : supprimer la seule

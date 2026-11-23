@@ -151,6 +151,12 @@ export interface ScoreDoc {
   /// des graphs de modulation (globale + per-move — même espace
   /// d'adresses). Clé = le nom/adresse (ex. `/score/energy`).
   modulationCurves?: Record<string, ScoreKeyframe[]>;
+  /// Courbes des lanes OBJET — temps absolu, `laneId (obj-<trackId>) →
+  /// param → keyframes` : `depth` + les canaux SpatialChannel (gain,
+  /// spread, distance, presence, yaw, aperture, lfe). Écrites en live
+  /// sur les tables runtime du merge (`set_track_depth` /
+  /// `set_object_channel`) — la lane mutée est skippée à la résolution.
+  objectCurves?: Record<string, Record<string, ScoreKeyframe[]>>;
   /// Region de boucle transport [start, end) — rebouclage hard-wrap
   /// de la partition entière (distinct du clip repeat). Les deux
   /// ensemble ou aucun.
@@ -160,7 +166,17 @@ export interface ScoreDoc {
 
 const uid = () => `sc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 
-const emptyDoc = (): ScoreDoc => ({ laneStates: {}, clips: [], durationMs: 120_000 });
+const emptyDoc = (): ScoreDoc => ({
+  laneStates: {},
+  clips: [],
+  durationMs: 120_000,
+  // Les maps de courbes sont listées explicitement : `set` fusionne
+  // en surface — un champ absent persisterait (clearScore = tout
+  // vider, courbes comprises).
+  globalFxCurves: {},
+  modulationCurves: {},
+  objectCurves: {},
+});
 
 interface ScoreState extends ScoreDoc {
   // Transport — runtime (pas dans l'enveloppe)
@@ -302,6 +318,13 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
     })),
   setLaneCurve: (laneId, paramId, keyframes) =>
     set((s) => {
+      if (laneId.startsWith('obj-')) {
+        // Lane objet — map imbriquée laneId → param → keyframes.
+        const lane = { ...(s.objectCurves?.[laneId] ?? {}) };
+        if (keyframes === undefined) delete lane[paramId];
+        else lane[paramId] = [...keyframes].sort((a, b) => a.t - b.t);
+        return { objectCurves: { ...(s.objectCurves ?? {}), [laneId]: lane } };
+      }
       const field = laneId === MODULATION_LANE ? 'modulationCurves' : 'globalFxCurves';
       const curves = { ...(s[field] ?? {}) };
       if (keyframes === undefined) delete curves[paramId];
@@ -381,7 +404,7 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
     if (s.clips.length === 0) { toast.warning('Score vide'); return; }
     try {
       const { resolveScoreClips } = await import('../utils/scoreResolve');
-      const { clips, errors } = await resolveScoreClips(s);
+      const { clips, errors, objectCurves } = await resolveScoreClips(s);
       errors.forEach((e) => toast.warning(e));
       if (clips.length === 0) { toast.error('Score : aucun clip résolvable'); return; }
       // Seek courant = base du curseur (le backend spanne les clips à cheval).
@@ -391,6 +414,7 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
         // Lane globale mutée → ses courbes ne jouent pas.
         globalFxCurves: s.laneStates?.[GLOBALFX_LANE]?.muted ? {} : (s.globalFxCurves ?? {}),
         modulationCurves: s.laneStates?.[MODULATION_LANE]?.muted ? {} : (s.modulationCurves ?? {}),
+        objectCurves,
       });
       await invoke('score_timeline_set_loop', { startMs: s.loopStartMs ?? null, endMs: s.loopEndMs ?? null });
       await invoke('score_timeline_play');

@@ -10,7 +10,7 @@ import { GLOBALFX_LANE, MODULATION_LANE } from '../../store/useScoreStore';
 import { CurveEditor } from './CurveEditor';
 import { useElementSize } from './useElementSize';
 import { ScoreParamsPanel, type ParamGroup } from './ScoreParamsPanel';
-import { MERGE_BLEND_DEFS, type ParamDef } from './scoreParams';
+import { MERGE_BLEND_DEFS, OBJECT_LANE_DEFS, type ParamDef } from './scoreParams';
 
 /// Enveloppe fade-in → sustain → tail fade-out APRÈS la fin de
 /// fenêtre du clip (le move s'éteint au-delà du bord).
@@ -66,6 +66,9 @@ export const ScoreCurvePane: React.FC<{
   selClip: ScoreClipDoc | null;
   selLaneIsGlobalFx: boolean;
   selLaneIsMod: boolean;
+  /// Lane objet sélectionnée (`obj-<trackId>`) — courbes depth/canaux.
+  selObjLane: string | null;
+  objectCurves?: Record<string, Record<string, ScoreKeyframe[]>>;
   effParam: string;
   durationMs: number;
   globalFxDefs: ParamDef[];
@@ -92,6 +95,7 @@ export const ScoreCurvePane: React.FC<{
   setClipCurve: (clipId: string, param: string, kfs: ScoreKeyframe[] | undefined) => void;
 }> = ({
   topFrac, selGlobal, selClip, selLaneIsGlobalFx, selLaneIsMod,
+  selObjLane, objectCurves,
   effParam, durationMs, globalFxDefs, globalFxCurves, modDefs,
   modulationCurves, nodeDefs, clipDefs, selFades, selClipLabel,
   paramGroups, paramEmptyContent, modName, setModName, setCurveParam,
@@ -130,6 +134,17 @@ export const ScoreCurvePane: React.FC<{
           endMs={durationMs}
           param={p}
           onCurve={(kfs) => setLaneCurve(MODULATION_LANE, p.id, kfs)}
+        />
+      );
+    }
+    if (selObjLane) {
+      const p = OBJECT_LANE_DEFS.find((d) => d.id === effParam) ?? OBJECT_LANE_DEFS[0];
+      return (
+        <CurveEditor
+          kfs={objectCurves?.[selObjLane]?.[p.id]}
+          endMs={durationMs}
+          param={p}
+          onCurve={(kfs) => setLaneCurve(selObjLane, p.id, kfs)}
         />
       );
     }

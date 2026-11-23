@@ -363,8 +363,9 @@ describe('flatten cue → clips (explosion)', () => {
         signal_graph: { nodes: [{ id: 'n1' }], edges: [] },
         global_graph: { nodes: [{ id: 'g1' }], edges: [] },
         manual_positions: { 0: [1, 2, 3], 2: [0, 1, 0] },
-        object_channels: null, osc_mappings: null, zones: null,
-        per_track_depths: [], active_move_ids: [],
+        object_channels: { 0: { spread: 45, yaw: 30 }, 2: { gain: 0.8 } },
+        osc_mappings: null, zones: null,
+        per_track_depths: [0.7, 1.0, 0.4, 1.0], active_move_ids: [],
       }] as never,
     });
   });
@@ -375,7 +376,7 @@ describe('flatten cue → clips (explosion)', () => {
     const cueClip = st.addClip({ type: 'cue', cueId: 'c1' }, 12000, {});
     const r = flattenCueClip(cueClip.id)!;
     expect(r.movedClips).toBe(5); // 2 slots + positions + modGraph + postGraph
-    expect(r.macroKeys).toBe(10); // 8 macros + 2 spatial
+    expect(r.macroKeys).toBe(10 + 4 + 3); // 8 macros + 2 spatial + 4 depths + 3 channels
     expect(r.skipped).toEqual([]);
 
     // Clip cue remplacé par l'arrangement à t0 — slots en suivi live.
@@ -419,6 +420,15 @@ describe('flatten cue → clips (explosion)', () => {
     expect(gfx.radius_scale).toEqual([{ t: 12000, v: 1.4 }]);
     expect(gfx.height_offset).toEqual([{ t: 12000, v: 0.2 }]);
 
+    // per_track_depths/object_channels (obj_index) → courbes des lanes
+    // objet en track_id — résolues en obj_index au load.
+    const oc = useScoreStore.getState().objectCurves!;
+    expect(oc['obj-1'].depth).toEqual([{ t: 12000, v: 0.7 }]);
+    expect(oc['obj-3'].depth).toEqual([{ t: 12000, v: 0.4 }]);
+    expect(oc['obj-1'].spread).toEqual([{ t: 12000, v: 45 }]);
+    expect(oc['obj-1'].yaw).toEqual([{ t: 12000, v: 30 }]);
+    expect(oc['obj-3'].gain).toEqual([{ t: 12000, v: 0.8 }]);
+
     // La cue d'origine est intacte — flatten non destructif.
     expect(useCuelistStore.getState().cues[0].moves).toHaveLength(2);
   });
@@ -459,5 +469,22 @@ describe('flatten cue → clips (explosion)', () => {
     expect(flattenCueClip(s.id)).toBeUndefined();
     const orphan = st.addClip({ type: 'cue', cueId: 'nope' }, 0, {});
     expect(flattenCueClip(orphan.id)).toBeUndefined();
+  });
+
+  it('objectCurves : lanes objet → obj_index, mutées/non patchées skippées', async () => {
+    const st = useScoreStore.getState();
+    // track_id 1 → obj 0, track_id 3 → obj 2 (manualOscIds [1,2,3,4]).
+    st.setLaneCurve('obj-1', 'depth', [{ t: 0, v: 0.7 }, { t: 2000, v: 1 }]);
+    st.setLaneCurve('obj-1', 'spread', [{ t: 500, v: 45 }]);
+    st.setLaneCurve('obj-3', 'gain', [{ t: 0, v: 0.8 }]);
+    st.setLaneCurve('obj-9', 'depth', [{ t: 0, v: 0.5 }]); // non patchée
+    st.setLaneCurve('obj-2', 'depth', [{ t: 0, v: 0.9 }]); // mutée
+    useScoreStore.getState().toggleLaneMute('obj-2');
+    st.addClip({ type: 'slot', slotId: 's1' }, 0, { durationMs: 1000, trackIds: [1] });
+    const { objectCurves } = await resolveScoreClips(useScoreStore.getState());
+    expect(objectCurves).toEqual({
+      0: { depth: [{ t: 0, v: 0.7 }, { t: 2000, v: 1 }], spread: [{ t: 500, v: 45 }] },
+      2: { gain: [{ t: 0, v: 0.8 }] },
+    });
   });
 });

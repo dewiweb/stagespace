@@ -1665,3 +1665,16 @@ fn test_park_holds_position_and_unpark_releases() {
 
     rt.stop();
 }
+
+#[test]
+fn test_set_track_depth_pads_with_default() {
+    // set_track_depth etend le vecteur a 1.0 (la valeur par defaut
+    // quand l'index est absent — helpers.rs unwrap_or(1.0)).
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    rt.set_track_depth(2, 0.4);
+    assert_eq!(rt.track_depths(), vec![1.0, 1.0, 0.4]);
+    rt.set_track_depth(0, 0.9);
+    assert_eq!(rt.track_depths(), vec![0.9, 1.0, 0.4]);
+    rt.stop();
+}

@@ -188,17 +188,31 @@ rappelable en Conduite. Matérialisé :
   des zones/modulations (nodes `Zone`/`Velocity`), disjointe des tables
   manuelles `cue.zones`/`cue.channel_modulations` : matérialiser les
   tables sans le graphe perdrait silencieusement la moitié déclarative.
+- `per_track_depths` → keyframes **`depth`** des lanes objet (courbes
+  éditables, temps absolu → `set_track_depth` au tick — absent = 1.0)
+- `object_channels` → keyframes **`gain`/`spread`/`distance`/`presence`/
+  `yaw`/`aperture`/`lfe`** des lanes objet (mêmes noms que
+  `SpatialChannel` → `set_object_channel`)
 
-Ces trois types sont les **exceptions au modèle par référence** : le
-clip porte sa donnée (pas d'entité vivante correspondante — matériau
-matérialisé, éditable indépendamment de la cue).
+Ces trois types de clip sont les **exceptions au modèle par référence** :
+le clip porte sa donnée (pas d'entité vivante correspondante —
+matériau matérialisé, éditable indépendamment de la cue).
+
+Les **courbes des lanes objet** (`depth` + canaux) sont une troisième
+couche de courbes du score — temps partition absolu comme GLOBALFX/
+MODULATION, mais par lane `obj-<trackId>` : cliquer l'en-tête de lane
+les édite en zone haute ; la lane mutée est skippée à la résolution ;
+les lanes sont converties `track_id → obj_index` au chargement (règle
+namespace). Ce sont de **vrais paramètres runtime** — jamais dérivés
+d'un graphe (les nodes `PerTrackDepth` lisent les depths, les canaux
+sont émis en OSC en sortie).
 
 Explicitement **non matérialisé** — rapporté à l'opérateur (toast +
-`skipped`), jamais silencieusement perdu : `object_channels`,
-`channel_modulations` (table manuelle), `zones` (table manuelle),
-`per_track_depths`, `osc_mappings`, `graph` (legacy, quand `moves[]`
-est vide) — pas encore d'entité timeline ; la cue les conserve. Un
-clip cue dont rien n'est matérialisable est **conservé**, pas effacé.
+`skipped`), jamais silencieusement perdu : `channel_modulations`
+(table manuelle — règles cinématiques), `zones` (table manuelle),
+`osc_mappings`, `graph` (legacy, quand `moves[]` est vide) — pas
+encore d'entité timeline ; la cue les conserve. Un clip cue dont
+rien n'est matérialisable est **conservé**, pas effacé.
 Modèle du clip imbriqué de DAW : référence vivante par défaut, flatten
 quand on veut éditer l'intérieur — jamais l'inverse.
 

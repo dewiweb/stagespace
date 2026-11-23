@@ -18,6 +18,7 @@ use crate::AppState;
 use serde::{Deserialize, Serialize};
 use stagespace_engines::Cue;
 use std::collections::{HashMap, HashSet};
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::State;
@@ -310,6 +311,13 @@ pub struct ScoreTimeline {
     /// nommée lue par les nodes `SignalOsc` des graphs de modulation
     /// (globale et per-move — même espace d'adresses que l'OSC réel).
     pub modulation_curves: HashMap<String, Vec<ScoreKeyframe>>,
+    /// Courbes des lanes OBJET (S3) — temps absolu, `obj_index → param
+    /// → keyframes` : `depth` → `set_track_depth`, les autres noms sont
+    /// les canaux `SpatialChannel` (gain/spread/distance/presence/yaw/
+    /// aperture/lfe) → `set_object_channel`. Vrais paramètres runtime
+    /// du merge (jamais dérivés d'un graphe) — matérialisés au flatten
+    /// depuis `cue.per_track_depths`/`cue.object_channels`.
+    pub object_curves: HashMap<usize, HashMap<String, Vec<ScoreKeyframe>>>,
     /// Génération — stop/load l'incrémente, les sleeps armés s'abortent.
     pub generation: u64,
 }
@@ -346,6 +354,7 @@ pub async fn score_timeline_load(
     duration_ms: u64,
     global_fx_curves: HashMap<String, Vec<ScoreKeyframe>>,
     modulation_curves: HashMap<String, Vec<ScoreKeyframe>>,
+    object_curves: HashMap<usize, HashMap<String, Vec<ScoreKeyframe>>>,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
     let mut tl = lock_or_recover(&state.score_timeline);
@@ -368,9 +377,16 @@ pub async fn score_timeline_load(
     for kfs in mods.values_mut() {
         kfs.sort_by_key(|k| k.t);
     }
+    let mut objs = object_curves;
+    for params in objs.values_mut() {
+        for kfs in params.values_mut() {
+            kfs.sort_by_key(|k| k.t);
+        }
+    }
     tl.clips = sorted;
     tl.global_fx_curves = gfx;
     tl.modulation_curves = mods;
+    tl.object_curves = objs;
     tl.duration_ms = duration_ms;
     Ok(())
 }
@@ -507,13 +523,21 @@ fn resolve_param_targets(
 /// GLOBALFX → macros globales du merge ; MODULATION → valeurs
 /// nommées dans la map OSC (source `SignalOsc` des graphs de
 /// modulation — le score agit comme un contrôleur OSC de plus).
+/// Les trois couches de courbes temps-absolu du score — regroupées
+/// pour `eval_curves` (clippy::too_many_arguments).
+struct AbsCurves<'a> {
+    global_fx: &'a HashMap<String, Vec<ScoreKeyframe>>,
+    modulation: &'a HashMap<String, Vec<ScoreKeyframe>>,
+    /// `obj_index → param → keyframes` (lanes objet `obj-<trackId>`).
+    object: &'a HashMap<usize, HashMap<String, Vec<ScoreKeyframe>>>,
+}
+
 fn eval_curves(
     cursor_ms: u64,
     targets: &HashMap<String, CurveTarget>,
     merge: &Arc<Mutex<stagespace_engines::MergeRuntime>>,
     master: &stagespace_engines::MacroState,
-    global_fx_curves: &HashMap<String, Vec<ScoreKeyframe>>,
-    modulation_curves: &HashMap<String, Vec<ScoreKeyframe>>,
+    abs: &AbsCurves<'_>,
     osc_source: &stagespace_engines::signal_compiler::SignalOscSource,
 ) {
     for (move_id, target) in targets {
@@ -550,18 +574,34 @@ fn eval_curves(
             }
         }
     }
-    for (param, kfs) in global_fx_curves {
+    for (param, kfs) in abs.global_fx {
         if let Some(v) = sample_curve(kfs, cursor_ms) {
             write_macro_param(master, param, v);
         }
     }
-    if !modulation_curves.is_empty() {
+    if !abs.object.is_empty() {
+        let rt = lock_or_recover(merge);
+        for (obj, params) in abs.object {
+            for (param, kfs) in params {
+                if let Some(v) = sample_curve(kfs, cursor_ms) {
+                    if param == "depth" {
+                        rt.set_track_depth(*obj, v);
+                    } else if let Ok(ch) =
+                        stagespace_engines::osc_sender::SpatialChannel::from_str(param)
+                    {
+                        rt.set_object_channel(*obj, ch, v);
+                    }
+                }
+            }
+        }
+    }
+    if !abs.modulation.is_empty() {
         // Read-lock → map COURANTE (suit les rebinds du receiver),
         // puis une écriture par nom — `SignalOsc.name` les relit à la
         // frame suivante, comme une adresse OSC reçue.
         let map = osc_source.read().unwrap_or_else(|e| e.into_inner()).clone();
         let mut vals = lock_or_recover(&map);
-        for (name, kfs) in modulation_curves {
+        for (name, kfs) in abs.modulation {
             if let Some(v) = sample_curve(kfs, cursor_ms) {
                 vals.insert(name.clone(), vec![v]);
             }
@@ -577,7 +617,7 @@ fn eval_curves(
 pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcError> {
     let sh = Shared::from_state(&state);
     let tl_arc = state.score_timeline.clone();
-    let (gen, clips, seek, lp, global_fx_curves, modulation_curves) = {
+    let (gen, clips, seek, lp, global_fx_curves, modulation_curves, object_curves) = {
         let mut tl = lock_or_recover(&tl_arc);
         tl.generation += 1;
         tl.started_at = Some(Instant::now());
@@ -588,6 +628,7 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
             tl.loop_region,
             tl.global_fx_curves.clone(),
             tl.modulation_curves.clone(),
+            tl.object_curves.clone(),
         )
     };
     if clips.is_empty() {
@@ -642,8 +683,11 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
                         &curve_targets,
                         &sh.merge_runtime,
                         &master_macros,
-                        &global_fx_curves,
-                        &modulation_curves,
+                        &AbsCurves {
+                            global_fx: &global_fx_curves,
+                            modulation: &modulation_curves,
+                            object: &object_curves,
+                        },
                         &osc_source,
                     );
                 }
@@ -677,8 +721,11 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
                     &curve_targets,
                     &sh.merge_runtime,
                     &master_macros,
-                    &global_fx_curves,
-                    &modulation_curves,
+                    &AbsCurves {
+                        global_fx: &global_fx_curves,
+                        modulation: &modulation_curves,
+                        object: &object_curves,
+                    },
                     &osc_source,
                 );
             }
@@ -703,8 +750,11 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
                             &curve_targets,
                             &sh.merge_runtime,
                             &master_macros,
-                            &global_fx_curves,
-                            &modulation_curves,
+                            &AbsCurves {
+                                global_fx: &global_fx_curves,
+                                modulation: &modulation_curves,
+                                object: &object_curves,
+                            },
                             &osc_source,
                         );
                     }
@@ -1560,13 +1610,34 @@ mod tests {
                 false,
                 stagespace_engines::EndMode::default(),
             );
+        // Courbes des lanes objet : `depth` → set_track_depth,
+        // canal nommé → set_object_channel — vrais params runtime.
+        let object_curves = HashMap::from([(
+            0usize,
+            HashMap::from([
+                (
+                    "depth".to_string(),
+                    vec![
+                        ScoreKeyframe { t: 0, v: 1.0, interp: ScoreInterp::Linear },
+                        ScoreKeyframe { t: 4_000, v: 0.0, interp: ScoreInterp::Linear },
+                    ],
+                ),
+                (
+                    "spread".to_string(),
+                    vec![ScoreKeyframe { t: 0, v: 60.0, interp: ScoreInterp::Step }],
+                ),
+            ]),
+        )]);
         eval_curves(
             2_000,
             &targets,
             &merge_rt,
             &merge_macros,
-            &master,
-            &modulation,
+            &AbsCurves {
+                global_fx: &master,
+                modulation: &modulation,
+                object: &object_curves,
+            },
             &osc_source,
         );
         // t local = 1s → speed = 1 + (2-1)·(3-1)/2 = 2.
@@ -1583,5 +1654,12 @@ mod tests {
         let rt = merge_rt.lock().unwrap_or_else(|e| e.into_inner());
         assert_eq!(rt.get_move_weight("sc-c1"), Some(1.4));
         assert_eq!(rt.get_move_priority("sc-c1"), Some(4));
+        // Lanes objet : depth obj0 → 1 − 1·(2s/4s) = 0.5 ; spread = 60.
+        assert_eq!(rt.track_depths()[0], 0.5);
+        assert_eq!(
+            rt.object_channels()[&0].spread,
+            Some(60.0),
+            "la courbe channel doit écrire object_channels"
+        );
     }
 }

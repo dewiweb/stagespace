@@ -30,6 +30,23 @@ export function seedScoreDemo() {
   // backend) ET comme signal_graph de la cue Ouverture : son flatten
   // produit un clip modGraph réellement compilable.
   const demoSig = buildScoreDemoSignalGraph();
+  // Graphe move minimal COMPILABLE (Objects+Duration → engine →
+  // Output) — les MoveSnapshot du seed le portent pour que les slots
+  // matérialisés jouent réellement au tir backend (un graph_json vide
+  // échoue MissingRequiredNode(Output)).
+  const mvGraph = (prefix: string, radius: number, speed: number, dur: number) => ({
+    nodes: [
+      { id: `${prefix}-objects`, type: 'custom', position: { x: 50, y: 250 }, data: { label: 'Objects', type: 'Objects', params: { n_objects: 1 } } },
+      { id: `${prefix}-dur`, type: 'custom', position: { x: 50, y: 80 }, data: { label: 'Duration', type: 'Duration', params: { duration: dur } } },
+      { id: `${prefix}-eng`, type: 'custom', position: { x: 300, y: 180 }, data: { label: 'Circular', type: 'Circular', params: { radius, speed, plane: 'xz', phase_offset: true } } },
+      { id: `${prefix}-out`, type: 'custom', position: { x: 620, y: 180 }, data: { label: 'Output', type: 'Output', params: {} } },
+    ],
+    edges: [
+      { id: `${prefix}-e1`, source: `${prefix}-objects`, target: `${prefix}-eng`, sourceHandle: 'objects', targetHandle: 'objects' },
+      { id: `${prefix}-e2`, source: `${prefix}-dur`, target: `${prefix}-eng`, sourceHandle: 'duration', targetHandle: 'duration' },
+      { id: `${prefix}-e3`, source: `${prefix}-eng`, target: `${prefix}-out`, sourceHandle: 'out', targetHandle: 'in' },
+    ],
+  });
   useCuelistStore.setState({
     cues: [
       // Snapshot touchant les obj_index 0 et 1 → couverture dérivée
@@ -41,14 +58,14 @@ export function seedScoreDemo() {
         // matérialisés + clips à 15 s + keyframes GLOBALFX.
         moves: [
           {
-            id: 'mv-spirale', name: 'Spirale', graph_json: { nodes: [], edges: [] },
+            id: 'mv-spirale', name: 'Spirale', graph_json: mvGraph('sp', 2.0, 1.0, 5),
             signal_graph: null, osc_ids: [], track_indices: [0], is_preview: false,
             duration: 5, loop_mode: 'loop', direction: 'forward',
             fade_in: 0.8, fade_out: 1.2, end_mode: 'hold', anchor_mode: 'current',
             anchor_target: null,
           },
           {
-            id: 'mv-nappes', name: 'Nappes', graph_json: { nodes: [], edges: [] },
+            id: 'mv-nappes', name: 'Nappes', graph_json: mvGraph('np', 4.0, 0.3, 4),
             signal_graph: null, osc_ids: [], track_indices: [1], is_preview: false,
             duration: 4, loop_mode: 'oneshot', direction: 'ping_pong',
             fade_in: 0.2, fade_out: 0.4, end_mode: null, anchor_mode: null,
@@ -72,8 +89,11 @@ export function seedScoreDemo() {
           ],
           edges: [{ id: 'pg-e1', source: 'pg-merge', target: 'pg-out', sourceHandle: 'out', targetHandle: 'in' }],
         } as never,
-        object_channels: null,
-        osc_mappings: null, zones: null, per_track_depths: [],
+        // Vrais paramètres runtime → courbes éditables des lanes objet
+        // à l'explosion (depth sur T1/T3, canaux sur T1/T3).
+        object_channels: { 0: { spread: 45, yaw: 30 }, 2: { gain: 0.8, distance: 6 } },
+        osc_mappings: null, zones: null,
+        per_track_depths: [0.7, 1.0, 0.4, 1.0],
       },
       {
         id: 'cue-nuit', cue_number: '2', name: 'Nuit', description: 'Nuit demo',

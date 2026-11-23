@@ -26,7 +26,7 @@ import { useGraphStore } from '../../store/useGraphStore';
 import { useCuelistStore } from '../../store/useCuelistStore';
 import { buildGraphForSlot, type MoveSlot } from '../../store/slices/moveSlotsTypes';
 import {
-  nodeParamDefsOf, clipParamDefsOf, globalFxParamDefsOf, MERGE_BLEND_DEFS,
+  nodeParamDefsOf, clipParamDefsOf, globalFxParamDefsOf, MERGE_BLEND_DEFS, OBJECT_LANE_DEFS,
   type ParamDef,
 } from './scoreParams';
 import { clipLabel as clipLabelOf, isTextEntryTarget, fmtMs } from './scoreUtils';
@@ -55,6 +55,7 @@ const ScoreView: React.FC = () => {
   const loopEndMs = useScoreStore((s) => s.loopEndMs);
   const globalFxCurves = useScoreStore((s) => s.globalFxCurves);
   const modulationCurves = useScoreStore((s) => s.modulationCurves);
+  const objectCurves = useScoreStore((s) => s.objectCurves);
   const { addClip, moveClip, resizeClip, removeClip, duplicateClip, splitClip, setDurationMs, setClipRepeat, setClipFades, setClipCurve, setClipTrackIds, setLaneCurve, setLoop, playScore, stopScore, seekScore, toggleLaneMute, setLaneMode, selectClip, selectGlobalLane, clearScoreSelection } =
     useScoreStore.getState();
   const moveSlots = useGraphStore((s) => s.moveSlots);
@@ -409,6 +410,8 @@ const ScoreView: React.FC = () => {
   // source OSC. Pas de "base connue" → ligne plate à 0.
   const selLaneIsGlobalFx = selGlobal === GLOBALFX_LANE;
   const selLaneIsMod = selGlobal === MODULATION_LANE;
+  // Lane objet sélectionnée (`obj-<trackId>`) — courbes depth/canaux.
+  const selObjLane = selGlobal?.startsWith('obj-') ? selGlobal : null;
   const modNames = Object.keys(modulationCurves ?? {}).sort();
   const modDefs: ParamDef[] = modNames.map((n) => ({ id: n, min: -1, max: 1, def: 0, label: n }));
   const isSlot = selClip?.ref.type === 'slot';
@@ -416,12 +419,16 @@ const ScoreView: React.FC = () => {
     ? globalFxDefs
     : selLaneIsMod
       ? modDefs
-      : [...nodeDefs, ...clipDefs, ...MERGE_BLEND_DEFS];
+      : selObjLane
+        ? OBJECT_LANE_DEFS
+        : [...nodeDefs, ...clipDefs, ...MERGE_BLEND_DEFS];
   const ctxFirst = selLaneIsGlobalFx
     ? globalFxDefs[0].id
     : selLaneIsMod
       ? (modNames[0] ?? '')
-      : 'enveloppe';
+      : selObjLane
+        ? OBJECT_LANE_DEFS[0].id
+        : 'enveloppe';
   // Le chip actif doit exister dans le contexte courant — sinon
   // retombe sur la première entrée du catalogue. Contexte modulation :
   // le nom fraîchement saisi (pas encore de courbe) reste valide.
@@ -462,7 +469,18 @@ const ScoreView: React.FC = () => {
               : []),
           ],
         }]
-      : selClip
+      : selObjLane
+        ? [{
+            rows: OBJECT_LANE_DEFS.map((p) => ({
+              id: p.id,
+              active: effParam === p.id,
+              hasData: objectCurves?.[selObjLane]?.[p.id] != null,
+              title: p.id === 'depth'
+                ? `Courbe depth — per_track_depth de ${selObjLane} (lu par PerTrackDepth, absent = 1.0)`
+                : `Courbe ${p.id} — canal spatial de ${selObjLane} (SpatialChannel, émis en OSC) — base ${p.def}`,
+            })),
+          }]
+        : selClip
         ? [
             {
               rows: [{
@@ -518,6 +536,8 @@ const ScoreView: React.FC = () => {
         selClip={selClip ?? null}
         selLaneIsGlobalFx={selLaneIsGlobalFx}
         selLaneIsMod={selLaneIsMod}
+        selObjLane={selObjLane}
+        objectCurves={objectCurves}
         effParam={effParam}
         durationMs={durationMs}
         globalFxDefs={globalFxDefs}
@@ -616,6 +636,7 @@ const ScoreView: React.FC = () => {
         clips={clips}
         globalFxCurves={globalFxCurves}
         modulationCurves={modulationCurves}
+        objectCurves={objectCurves}
         selGlobal={selGlobal}
         selected={selected}
         onSelectLane={(laneId) => { selectGlobalLane(laneId); setPicker(null); }}
