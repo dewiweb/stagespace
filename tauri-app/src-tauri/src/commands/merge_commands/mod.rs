@@ -5,9 +5,9 @@
 
 mod channels;
 mod graph_updates;
-mod macros;
+pub(crate) mod macros;
 mod manual_positions;
-mod move_management;
+pub(crate) mod move_management;
 
 pub use super::state::lock_or_recover;
 pub use channels::{

@@ -18,6 +18,7 @@ import PerformView from './components/PerformView';
 import WelcomeModal, { shouldShowWelcome } from './components/WelcomeModal';
 import { initShowSync } from './utils/showSync';
 const ConduiteSurface = React.lazy(() => import('./components/conduite/ConduiteSurface'));
+const ScoreView = React.lazy(() => import('./components/score/ScoreView'));
 import ShortcutsModal from './components/ShortcutsModal';
 import { SettingsModal } from './components/SettingsModal';
 import { AboutModal } from './components/AboutModal';
@@ -351,6 +352,21 @@ function AppMain() {
             }
           >
             <ConduiteSurface />
+          </React.Suspense>
+        </ErrorBoundary>
+      ) : surface === 'score' ? (
+        /* Surface Score — le séquenceur timeline (S2) : composition
+           multipiste du show dans le temps. Exécution backend, la vue
+           n'est que le curseur + l'édition des clips. */
+        <ErrorBoundary zone="Score">
+          <React.Suspense
+            fallback={
+              <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">
+                Chargement du score…
+              </div>
+            }
+          >
+            <ScoreView />
           </React.Suspense>
         </ErrorBoundary>
       ) : surface === 'jeu' ? (

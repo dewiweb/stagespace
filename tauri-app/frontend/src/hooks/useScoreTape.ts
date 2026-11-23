@@ -7,6 +7,7 @@
 import { useEffect } from 'react';
 import { safeListen } from '../utils/tauri';
 import { fireScoreEntry } from '../utils/liveActionsRehearsal';
+import { useScoreStore } from '../store/useScoreStore';
 
 interface ScoreFireEntry {
   t: number;
@@ -14,17 +15,28 @@ interface ScoreFireEntry {
   args: number[];
 }
 
+interface ScoreTimelineStateEvent {
+  playing: boolean;
+  cursor_ms: number;
+}
+
 export function useScoreTape() {
   useEffect(() => {
     let unlisten: (() => void) | undefined;
+    let unlistenTl: (() => void) | undefined;
     let cancelled = false;
     const setup = async () => {
       try {
         const u = await safeListen<ScoreFireEntry>('score-fire', (event) => {
           fireScoreEntry(event.payload.name, event.payload.args ?? []);
         });
-        if (cancelled) u();
-        else unlisten = u;
+        // S2 — transitions du transport timeline (play→end, stop, seek)
+        // poussées par le backend ; le curseur continu est animé par la vue.
+        const v = await safeListen<ScoreTimelineStateEvent>('score-timeline', (event) => {
+          useScoreStore.getState()._setTransport(event.payload.playing, event.payload.cursor_ms);
+        });
+        if (cancelled) { u(); v(); }
+        else { unlisten = u; unlistenTl = v; }
       } catch {
         // Pas de backend (Vite seul) — silence.
       }
@@ -33,6 +45,7 @@ export function useScoreTape() {
     return () => {
       cancelled = true;
       unlisten?.();
+      unlistenTl?.();
     };
   }, []);
 }

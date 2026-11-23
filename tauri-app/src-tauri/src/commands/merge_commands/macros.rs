@@ -55,6 +55,18 @@ pub async fn set_global_macro(
         }
     }
     let merge_rt = lock_or_recover(&state.merge_runtime);
+    apply_set_macro_request(&request, &merge_rt);
+    Ok(())
+}
+
+/// Applique les champs Some d'un SetMacroRequest au MergeRuntime —
+/// partagé entre la commande et le lecteur de score timeline (les
+/// macros spatiales d'un slot s'appliquent au lancement, comme un
+/// play manuel).
+pub(crate) fn apply_set_macro_request(
+    request: &SetMacroRequest,
+    merge_rt: &stagespace_engines::MergeRuntime,
+) {
     let macros = merge_rt.macros();
     if let Some(s) = request.scale {
         macros.set_scale(s);
@@ -77,7 +89,6 @@ pub async fn set_global_macro(
     if let Some(v) = request.height_offset {
         macros.set_height_offset(v);
     }
-    Ok(())
 }
 
 /// Définit le speed d'un move individuel (per-move, dans le worker)

@@ -3,7 +3,6 @@
 /// syncSlotMovements — le chemin critique du show, inchangé.
 import { safeInvoke as invoke, feLog } from '../../utils/tauri';
 import { toast } from '../../utils/toast-helpers';
-import { computeCentroid } from '../utils/geometryUtils';
 import type { StateCreator } from 'zustand';
 import type { MoveSlotsSlice, MoveSlotsStore } from './moveSlotsSlice';
 import {
@@ -69,97 +68,14 @@ export const createSlotPlaybackMethods = (set: CreatorArgs[0], get: CreatorArgs[
         }
       }
 
-      const { prepareGraphForSave } = await import('../../components/nodeParamSchema');
-      const graphData = prepareGraphForSave(graphJson.nodes, graphJson.edges);
+      // Request via le builder partagé (utils/slotActivation) — le même
+      // chemin sert le score timeline : un clip Slot rejoue ce payload.
+      const { buildSlotActivation } = await import('../../utils/slotActivation');
+      const { request, globalMacros } = await buildSlotActivation(
+        slot, graphJson, { holProject, manualOscIds }, movementId,
+      );
 
-      // Lire la duration depuis le node Duration du graphe
-      const duration = extractDuration(graphJson.nodes);
-
-      const trackIndices = computeTrackIndices(slot.trackIds, holProject, manualOscIds);
-      if (trackIndices.length === 0) {
-        throw new Error(
-          `No track indices — the slot's track selection doesn't map to current OSC ids (check OSC ids / selection).`,
-        );
-      }
-
-      const origin = computeCentroid(holProject, trackIndices, manualOscIds);
-
-      // Payload animation complet — le backend en extrait fade (cycle),
-      // speed (worker) et AnimationState (depths, phase offsets, audio mods).
-      // NB: les macros spatiales scale/shift/rotation de l'animation ne sont
-      // PAS reprises dans le spec backend — elles restent globales (merge)
-      // via set_global_macro ci-dessous, sinon double-application.
-      const animation = {
-        id: slot.id,
-        name: slot.name,
-        speed: slot.macros.speed,
-        duration,
-        direction: slot.direction,
-        loop_mode: slot.loopMode === 'oneshot' ? 'one_shot' : 'loop',
-        scale: slot.macros.scale,
-        yaw: slot.macros.yaw,
-        pitch: slot.macros.pitch,
-        roll: slot.macros.roll,
-        offset_x: slot.macros.shiftX,
-        offset_y: slot.macros.shiftY,
-        offset_z: slot.macros.shiftZ,
-        assignments: slot.assignments,
-        phase_spread: slot.phaseSpread,
-        audio_mods: slot.audioMods,
-        graph_json: graphData,
-        fade_in: slot.fadeIn,
-        fade_out: slot.fadeOut,
-      };
-      // Graphe de modulation per-move (cibles `param:` liées aux nodes du
-      // graphe du move — compilé côté backend avec le même graph_json).
-      const signalGraphData = slot.signalGraph
-        ? {
-            nodes: slot.signalGraph.nodes.map((n) => ({
-              id: n.id,
-              type: 'custom',
-              position: n.position,
-              data: {
-                label: n.data.label ?? n.data.type ?? '',
-                type: n.data.type ?? 'SignalOut',
-                params: n.data.params ?? {},
-              },
-            })),
-            edges: slot.signalGraph.edges.map((e) => ({
-              id: e.id,
-              source: e.source,
-              target: e.target,
-              sourceHandle: e.sourceHandle ?? 'out',
-              targetHandle: e.targetHandle ?? 'signal',
-            })),
-          }
-        : null;
-
-      await invoke('activate_move', {
-        request: {
-          movement_id: movementId,
-          name: slot.name,
-          graph_json: graphData,
-          osc_ids: slot.trackIds,
-          track_indices: trackIndices,
-          is_preview: slot.isPreview ?? false,
-          origin,
-          duration,
-          loop_mode: slot.loopMode,
-          direction: slot.direction,
-          end_mode: slot.endMode ?? 'revert',
-          anchor_mode: slot.anchorMode ?? 'origin',
-          // Boundary UI→wire : l'opérateur saisit un track_id, le
-          // backend attend obj_index (position dans osc_ids).
-          anchor_target: slot.anchorTarget != null
-            ? (manualOscIds.indexOf(slot.anchorTarget) >= 0
-                ? manualOscIds.indexOf(slot.anchorTarget)
-                : null)
-            : null,
-          // Le graphe de modulation per-move voyage via l'animation payload
-          // (MoveSpec.signal_graph = request.animation.signal_graph).
-          animation: animation ? { ...animation, signal_graph: signalGraphData } : animation,
-        },
-      });
+      await invoke('activate_move', { request });
       if (slot.macros) {
         // Macros du slot : speed est per-move (worker — posée via spec.speed
         // dans l'animation payload), les macros spatiales (scale/shift/rotation)
@@ -168,17 +84,7 @@ export const createSlotPlaybackMethods = (set: CreatorArgs[0], get: CreatorArgs[
         // « appliquées au lancement et au GO ».
         // Non-fatal : un échec ici ne doit pas faire échouer le play.
         try {
-          await invoke('set_global_macro', {
-            request: {
-              scale: slot.macros.scale,
-              shiftX: slot.macros.shiftX,
-              shiftY: slot.macros.shiftY,
-              shiftZ: slot.macros.shiftZ,
-              yaw: slot.macros.yaw,
-              pitch: slot.macros.pitch,
-              roll: slot.macros.roll,
-            },
-          });
+          await invoke('set_global_macro', { request: globalMacros });
         } catch (e) {
           console.warn('[playSlot] set_global_macro failed:', e);
           toast.warning(`"${slot.name}": spatial macros not applied (${e})`);

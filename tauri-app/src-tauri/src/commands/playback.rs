@@ -12,7 +12,7 @@ use tauri::State;
 // `deactivate_all_moves`). Seul `set_macro` survit : il s'applique aux macros
 // globales du MergeRuntime, actives pour tous les moves.
 
-#[derive(Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[allow(non_snake_case)]
 pub struct SetMacroRequest {
     pub speed: Option<f64>,

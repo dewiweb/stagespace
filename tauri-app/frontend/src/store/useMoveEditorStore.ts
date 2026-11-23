@@ -71,12 +71,12 @@ interface MoveEditorStore {
   activeMovementIds: string[];
   launchFlash: number; // timestamp du dernier launch (pour feedback visuel)
   // Mode Expert (node editor) — partagé pour que MovesPanel puisse l'activer via [edit]
-  /// Surface active — la refonte 3 phases de l'opérateur :
-  /// atelier (mise en boîte) · conduite (faire avancer le show) ·
-  /// jeu (interagir avec les objets live). Remplace le booléen
-  /// performMode : 'jeu' = l'ancien performMode=true.
-  surface: 'atelier' | 'conduite' | 'jeu';
-  setSurface: (s: 'atelier' | 'conduite' | 'jeu') => void;
+  /// Surface active — la refonte de l'opérateur : atelier (mise en
+  /// boîte) · conduite (faire avancer le show) · jeu (interagir live)
+  /// · score (séquenceur timeline — composition, S2).
+  /// Remplace le booléen performMode : 'jeu' = l'ancien performMode=true.
+  surface: 'atelier' | 'conduite' | 'jeu' | 'score';
+  setSurface: (s: 'atelier' | 'conduite' | 'jeu' | 'score') => void;
 
   showExpert: boolean;
   setShowExpert: (show: boolean) => void;
@@ -272,9 +272,9 @@ function syncCurrentToSlot(get: () => MoveEditorStore, patch: Partial<Move>) {
 
 /// Lecture gardée de la surface persistée — localStorage n'existe pas
 /// hors jsdom (import du module en contexte Node = ReferenceError sinon).
-function readPersistedSurface(): 'atelier' | 'conduite' | 'jeu' {
+function readPersistedSurface(): 'atelier' | 'conduite' | 'jeu' | 'score' {
   try {
-    return (localStorage.getItem('ss-surface') as 'atelier' | 'conduite' | 'jeu' | null) ?? 'jeu';
+    return (localStorage.getItem('ss-surface') as 'atelier' | 'conduite' | 'jeu' | 'score' | null) ?? 'jeu';
   } catch {
     return 'jeu';
   }

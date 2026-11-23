@@ -20,7 +20,7 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use tauri::State;
 
-#[derive(Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[allow(non_snake_case)]
 pub struct ActivateMoveRequest {
     pub movement_id: String,
@@ -570,18 +570,15 @@ fn spawn_move_inner(
     ))
 }
 
-/// Active un move : crée un worker Runtime, l'attache au MergeRuntime.
-#[tauri::command]
-pub async fn activate_move(
-    request: ActivateMoveRequest,
-    state: State<'_, AppState>,
-) -> Result<String, IpcError> {
+/// Construit le MoveSpec d'un ActivateMoveRequest — partagé entre la
+/// commande IPC et le lecteur de score timeline (même chemin de spawn).
+pub(crate) fn spec_from_request(request: ActivateMoveRequest) -> MoveSpec {
     // Extrait AVANT le move des champs de request dans spec.
     let animation_state = request
         .animation
         .as_ref()
         .map(|a| AnimationState::from_animation(a, &request.osc_ids));
-    let spec = MoveSpec {
+    MoveSpec {
         id: request.movement_id,
         name: request.name,
         graph_json: request.graph_json,
@@ -603,7 +600,16 @@ pub async fn activate_move(
         end_mode: request.end_mode,
         anchor_mode: request.anchor_mode,
         anchor_target: request.anchor_target,
-    };
+    }
+}
+
+/// Active un move : crée un worker Runtime, l'attache au MergeRuntime.
+#[tauri::command]
+pub async fn activate_move(
+    request: ActivateMoveRequest,
+    state: State<'_, AppState>,
+) -> Result<String, IpcError> {
+    let spec = spec_from_request(request);
     let sh = Shared::from_state(&state);
     tauri::async_runtime::spawn_blocking(move || spawn_move(spec, &sh))
         .await
@@ -680,24 +686,25 @@ fn deactivate_move_immediate_arc(
 /// NOTE: pour un id inconnu (déjà parti ou jamais existé), on renvoie Ok —
 /// la désactivation est idempotent, safe à spammer en live. Un id en cours
 /// d'activation (pending) renvoie Err pour éviter un no-op silencieux.
-#[tauri::command]
-pub async fn deactivate_move(
-    movement_id: String,
-    fade_duration: Option<f64>,
-    state: State<'_, AppState>,
+/// Corps de deactivate_move sur handles Shared — appelable depuis la
+/// commande IPC et le lecteur de score timeline (fin de clip Slot).
+/// Synchrone : à appeler depuis spawn_blocking ou un thread bloquant.
+pub(crate) fn deactivate_move_arc(
+    movement_id: &str,
+    fade: f64,
+    honor_end_mode: bool,
+    sh: &Shared,
 ) -> Result<String, IpcError> {
-    let fade = fade_duration.unwrap_or(0.5);
-
     // 1. Snapshot génération + existence (section critique pending → movements)
     let generation = {
-        let pending = lock_or_recover(&state.pending_move_ids);
-        let movements = lock_or_recover(&state.movements);
-        if pending.contains(&movement_id) {
+        let pending = lock_or_recover(&sh.pending_move_ids);
+        let movements = lock_or_recover(&sh.movements);
+        if pending.contains(movement_id) {
             return Err(IpcError::busy(format!(
                 "Move '{movement_id}' is being activated — try again in a moment"
             )));
         }
-        movements.get(&movement_id).map(|m| m.generation)
+        movements.get(movement_id).map(|m| m.generation)
     };
     let Some(generation) = generation else {
         // Id inconnu : no-op documenté (idempotent).
@@ -706,47 +713,66 @@ pub async fn deactivate_move(
 
     // 2. Démarrer le fade out dans le MergeRuntime
     {
-        let merge_rt = lock_or_recover(&state.merge_runtime);
-        merge_rt.start_fade_out(&movement_id, fade);
+        let merge_rt = lock_or_recover(&sh.merge_runtime);
+        merge_rt.start_fade_out(movement_id, fade);
     }
 
-    // 3. Si fade instantané, retirer immédiatement dans spawn_blocking
+    // 3. Fade instantané → retrait immédiat (synchrone ici — l'appelant
+    //    de la commande emballe dans spawn_blocking, le thread score
+    //    est déjà bloquant).
     if fade <= 0.0 {
-        let merge_rt_arc = state.merge_runtime.clone();
-        let movements_arc = state.movements.clone();
-        let pending_arc = state.pending_move_ids.clone();
-        let event_sink_arc = state.event_sink.clone();
-        let mv_id = movement_id.clone();
-        return tauri::async_runtime::spawn_blocking(move || {
-            deactivate_move_immediate_arc(
-                &mv_id,
-                generation,
-                &merge_rt_arc,
-                &movements_arc,
-                &pending_arc,
-                &event_sink_arc,
-                true,
-            )
-        })
-        .await
-        .map_err(|e| IpcError::internal(format!("Task join error: {e}")))?;
+        return deactivate_move_immediate_arc(
+            movement_id,
+            generation,
+            &sh.merge_runtime,
+            &sh.movements,
+            &sh.pending_move_ids,
+            &sh.event_sink,
+            honor_end_mode,
+        );
     }
 
     // 4. Attendre la fin du fade dans un thread séparé. Le sleeper vérifie la
     //    génération : si l'id a été réutilisé par un nouveau move entre-temps,
     //    il ne touche à rien (le bug "sleeper kills reused id" est couvert).
-    let mv_id = movement_id.clone();
-    let app_state = state.event_sink.clone();
-    let merge_rt = state.merge_runtime.clone();
-    let movements = state.movements.clone();
-    let pending = state.pending_move_ids.clone();
+    let mv_id = movement_id.to_string();
+    let app_state = sh.event_sink.clone();
+    let merge_rt = sh.merge_runtime.clone();
+    let movements = sh.movements.clone();
+    let pending = sh.pending_move_ids.clone();
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_secs_f64(fade));
-        remove_move_checked(&mv_id, generation, &merge_rt, &movements, &pending, true);
+        remove_move_checked(
+            &mv_id,
+            generation,
+            &merge_rt,
+            &movements,
+            &pending,
+            honor_end_mode,
+        );
         emit_ui(&app_state, "active-moves-update", ());
     });
 
     Ok(format!("Move '{movement_id}' fading out"))
+}
+
+#[tauri::command]
+pub async fn deactivate_move(
+    movement_id: String,
+    fade_duration: Option<f64>,
+    state: State<'_, AppState>,
+) -> Result<String, IpcError> {
+    let fade = fade_duration.unwrap_or(0.5);
+    if fade <= 0.0 {
+        // Le retrait immédiat est un join de worker — hors de l'executor.
+        let sh = Shared::from_state(&state);
+        return tauri::async_runtime::spawn_blocking(move || {
+            deactivate_move_arc(&movement_id, fade, true, &sh)
+        })
+        .await
+        .map_err(|e| IpcError::internal(format!("Task join error: {e}")))?;
+    }
+    deactivate_move_arc(&movement_id, fade, true, &Shared::from_state(&state))
 }
 
 /// Désactive tous les moves avec fade out.
@@ -754,24 +780,23 @@ pub async fn deactivate_move(
 /// `honor_end_mode` (défaut true) : le stop applique la fin déclarée de
 /// chaque move (Hold = pause). Le panic passe `false` — un arrêt
 /// d'urgence ramène tout aux origines sans écrire de hold.
-#[tauri::command]
-pub async fn deactivate_all_moves(
-    fade_duration: Option<f64>,
-    honor_end_mode: Option<bool>,
-    state: State<'_, AppState>,
+/// Corps de deactivate_all_moves sur handles Shared — appelable depuis
+/// la commande IPC et le lecteur de score timeline (clips StopAll/Panic).
+/// Synchrone : la partie bloquante (join des workers) n'arrive que pour
+/// fade<=0 — l'appelant commande l'emballe dans spawn_blocking.
+pub(crate) fn deactivate_all_arc(
+    fade: f64,
+    honor_end_mode: bool,
+    sh: &Shared,
 ) -> Result<String, IpcError> {
-    let fade = fade_duration.unwrap_or(0.5);
-    let honor_end_mode = honor_end_mode.unwrap_or(true);
-
     // Panic beat — un recall en cours doit détecter ça et s'avorter
     // avant de respawner (le panic gagne toujours).
-    state
-        .deactivate_gen
+    sh.deactivate_gen
         .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
     // Snapshot (id, génération) — le sleeper ne tuera que ces instances-là.
     let move_entries: Vec<(String, u64)> = {
-        let movements = lock_or_recover(&state.movements);
+        let movements = lock_or_recover(&sh.movements);
         movements
             .iter()
             .map(|(id, m)| (id.clone(), m.generation))
@@ -783,7 +808,7 @@ pub async fn deactivate_all_moves(
     }
 
     {
-        let merge_rt = lock_or_recover(&state.merge_runtime);
+        let merge_rt = lock_or_recover(&sh.merge_runtime);
         for (id, _) in &move_entries {
             merge_rt.start_fade_out(id, fade);
         }
@@ -791,10 +816,10 @@ pub async fn deactivate_all_moves(
 
     let count = move_entries.len();
     if fade > 0.0 {
-        let app_state = state.event_sink.clone();
-        let merge_rt = state.merge_runtime.clone();
-        let movements = state.movements.clone();
-        let pending = state.pending_move_ids.clone();
+        let app_state = sh.event_sink.clone();
+        let merge_rt = sh.merge_runtime.clone();
+        let movements = sh.movements.clone();
+        let pending = sh.pending_move_ids.clone();
         std::thread::spawn(move || {
             std::thread::sleep(std::time::Duration::from_secs_f64(fade));
             for (id, gen) in &move_entries {
@@ -804,27 +829,39 @@ pub async fn deactivate_all_moves(
         });
         Ok(format!("{count} moves fading out"))
     } else {
-        let merge_rt_arc = state.merge_runtime.clone();
-        let movements_arc = state.movements.clone();
-        let pending_arc = state.pending_move_ids.clone();
-        let event_sink_arc = state.event_sink.clone();
-        tauri::async_runtime::spawn_blocking(move || {
-            for (id, gen) in &move_entries {
-                let _ = deactivate_move_immediate_arc(
-                    id,
-                    *gen,
-                    &merge_rt_arc,
-                    &movements_arc,
-                    &pending_arc,
-                    &event_sink_arc,
-                    honor_end_mode,
-                );
-            }
+        for (id, gen) in &move_entries {
+            let _ = deactivate_move_immediate_arc(
+                id,
+                *gen,
+                &sh.merge_runtime,
+                &sh.movements,
+                &sh.pending_move_ids,
+                &sh.event_sink,
+                honor_end_mode,
+            );
+        }
+        Ok(format!("{count} moves deactivated"))
+    }
+}
+
+#[tauri::command]
+pub async fn deactivate_all_moves(
+    fade_duration: Option<f64>,
+    honor_end_mode: Option<bool>,
+    state: State<'_, AppState>,
+) -> Result<String, IpcError> {
+    let fade = fade_duration.unwrap_or(0.5);
+    let honor_end_mode = honor_end_mode.unwrap_or(true);
+    if fade <= 0.0 {
+        // Le retrait immédiat join les workers — hors de l'executor async.
+        let sh = Shared::from_state(&state);
+        return tauri::async_runtime::spawn_blocking(move || {
+            deactivate_all_arc(fade, honor_end_mode, &sh)
         })
         .await
         .map_err(|e| IpcError::internal(format!("Task join error: {e}")))?;
-        Ok(format!("{count} moves deactivated"))
     }
+    deactivate_all_arc(fade, honor_end_mode, &Shared::from_state(&state))
 }
 
 /// Récupère les stats de performance du MergeRuntime

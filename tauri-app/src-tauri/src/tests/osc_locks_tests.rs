@@ -39,6 +39,7 @@ mod osc_locks_tests {
             remote_ui: Mutex::new(crate::bridge_server::RemoteUi::default()),
             show_snapshot: Mutex::new(None),
             score_tape: Arc::new(Mutex::new(crate::commands::score::ScoreTape::default())),
+            score_timeline: Arc::new(Mutex::new(crate::commands::score::ScoreTimeline::default())),
         }
     }
 

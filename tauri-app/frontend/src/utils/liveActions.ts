@@ -22,7 +22,7 @@ export * from './liveActionsRehearsal';
 /// sur les onglets surface.
 export function doView(v: string | number | null, from?: string): void {
   const surface = String(v);
-  if (surface !== 'atelier' && surface !== 'conduite' && surface !== 'jeu') return;
+  if (surface !== 'atelier' && surface !== 'conduite' && surface !== 'jeu' && surface !== 'score') return;
   useMoveEditorStore.getState().setSurface(surface);
   feLog(`[osc-in] /stagespace/view ${surface}${from ? ` (${from})` : ''}`);
 }

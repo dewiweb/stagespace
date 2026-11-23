@@ -100,9 +100,11 @@ export async function buildShowEnvelope(s: PersistenceStore): Promise<ShowFileEn
   const { useGlobalGraphStore } = await import('../useGlobalGraphStore');
   const { useSignalGraphStore } = await import('../useSignalGraphStore');
   const { useCuelistStore } = await import('../useCuelistStore');
+  const { useScoreStore } = await import('../useScoreStore');
   const globalStore = useGlobalGraphStore.getState();
   const signalStore = useSignalGraphStore.getState();
   const cueStore = useCuelistStore.getState();
+  const scoreStore = useScoreStore.getState();
 
   // OSC IN mappings : sérialisables — sinon ils sont perdus au load.
   let oscMappings: OscMapping[] | undefined;
@@ -128,6 +130,13 @@ export async function buildShowEnvelope(s: PersistenceStore): Promise<ShowFileEn
     currentSetlistIndex: s.currentSetlistIndex,
     editingSlotId: s.editingSlotId,
     cues: cueStore.cues,
+    /// Score timeline (S2) — document du séquenceur : pistes + clips
+    /// (références vers slots/cues — jamais de snapshots).
+    score: {
+      tracks: scoreStore.tracks,
+      clips: scoreStore.clips,
+      durationMs: scoreStore.durationMs,
+    },
     oscMappings,
     macros: s.macros,
     osc: {
@@ -188,6 +197,8 @@ export interface ShowFileEnvelope {
   currentSetlistIndex?: number;
   editingSlotId?: string | null;
   cues?: CueData[];
+  /// Document du score timeline (S2) — pistes + clips (refs).
+  score?: import('../useScoreStore').ScoreDoc;
   osc?: OscConfigData;
   spatialFx?: SpatialFxData;
   tracks?: TracksData;
@@ -420,6 +431,12 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
       useCuelistStore.setState({ cues: raw.cues, currentCueIndex: -1 });
       useCuelistStore.getState().saveToStorage();
     }
+
+    // 3b. Score timeline (S2) — document frontend : pistes + clips.
+    //     Les clips référencent les slots/cues par id — restaurés après
+    //     eux (les refs restent valides, ids préservés).
+    const { useScoreStore } = await import('../useScoreStore');
+    useScoreStore.getState().setScoreDoc(raw.score);
 
     // 3b. OSC IN mappings — clear + replay (le fichier remplace l'état).
     //     Rollback sur l'état précédent si le replay échoue à mi-parcours :
