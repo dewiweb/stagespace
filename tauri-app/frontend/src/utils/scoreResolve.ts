@@ -103,7 +103,27 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
         const cueId = (c.ref as { cueId: string }).cueId;
         const cue = cs.cues.find((q) => String(q.id) === String(cueId));
         if (!cue) { errors.push(`Clip ${c.id}: cue introuvable — supprimée ?`); break; }
-        clips.push({ ...base, payload: { kind: 'Cue', data: cue } });
+        // Wire : `Cue.id`/`cue_number` sont String côté backend — un
+        // snapshot à id numérique (vieux show, seed, édit manuel)
+        // ferait échouer la désérialisation de TOUTE la partition.
+        clips.push({
+          ...base,
+          payload: {
+            kind: 'Cue',
+            data: {
+              ...cue,
+              id: String(cue.id),
+              cue_number: cue.cue_number == null ? cue.cue_number : String(cue.cue_number),
+              // Champs requis côté Rust sans serde(default) — un snapshot
+              // partiel (seed, vieux show, édit manuel) ne doit pas faire
+              // échouer le load de toute la partition.
+              name: cue.name ?? '',
+              description: cue.description ?? '',
+              graph: cue.graph ?? { nodes: [], edges: [] },
+              timestamp: cue.timestamp ?? 0,
+            },
+          },
+        });
         break;
       }
       case 'stopAll':

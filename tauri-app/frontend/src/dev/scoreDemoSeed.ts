@@ -30,8 +30,16 @@ export function seedScoreDemo() {
     cues: [
       // Snapshot touchant les obj_index 0 et 1 → couverture dérivée
       // = track_ids 1 et 2 (via manualOscIds).
-      { id: 1, cue_number: '1', name: 'Ouverture', moves: [], track_indices: [0, 1], manual_positions: {} },
-      { id: 2, cue_number: '2', name: 'Nuit', moves: [], track_indices: [3], manual_positions: { 2: [0, 1, 0] } },
+      {
+        id: 'cue-ouverture', cue_number: '1', name: 'Ouverture', description: 'Ouverture demo',
+        graph: { nodes: [], edges: [] }, timestamp: 0,
+        moves: [], track_indices: [0, 1], manual_positions: {},
+      },
+      {
+        id: 'cue-nuit', cue_number: '2', name: 'Nuit', description: 'Nuit demo',
+        graph: { nodes: [], edges: [] }, timestamp: 0,
+        moves: [], track_indices: [3], manual_positions: { 2: [0, 1, 0] },
+      },
     ],
   } as never);
 
@@ -70,8 +78,8 @@ export function seedScoreDemo() {
   s.addClip({ type: 'slot', slotId: 's-vague' }, 30_000, { durationMs: 8_000, trackIds: [2, 9] });
 
   // Cues — couverture dérivée du snapshot (T1+T2 / T3+T4).
-  s.addClip({ type: 'cue', cueId: '1' }, 15_000, { trackIds: [1, 2] });
-  s.addClip({ type: 'cue', cueId: '2' }, 38_000, { trackIds: [3, 4] });
+  s.addClip({ type: 'cue', cueId: 'cue-ouverture' }, 15_000, { trackIds: [1, 2] });
+  s.addClip({ type: 'cue', cueId: 'cue-nuit' }, 38_000, { trackIds: [3, 4] });
   // Cue orpheline — couverture vide → se rend sur la lane master.
   s.addClip({ type: 'cue', cueId: '999' }, 48_000);
 

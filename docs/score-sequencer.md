@@ -119,6 +119,56 @@ with hard-cut semantics: cycle moves are deactivated at `loop_end`,
 the cursor re-bases, a fresh event list is generated. Events before
 `loop_start` play once on the first pass → intro-then-loop.
 
+### Cues on the timeline — lane CONDUCTOR + barrière d'état
+
+Deux catégories ontologiquement différentes cohabitent sur la timeline :
+
+| | Contenu continu (lanes) | Événements-barrières (globaux) |
+|---|---|---|
+| Entités | moves, courbes d'automation | cue recall, stopAll, panic |
+| Composition | s'empilent dans le temps ; conflits tranchés par les règles de lane (`stacked`/`exclusive`) | **cassent** la composition — transition atomique instantanée |
+| Portée | couverture par objet (`trackIds`) | tout le runtime |
+
+Une cue est par nature la deuxième catégorie : `recall_cue_inner` est
+une transition d'état **atomique et globale** — crossfade de l'output
+layer entier (`begin_transition`), kill des moves non listés (mode
+Full), respawn des `active_move_ids`, hot-swap des graphs, suppression
+OSC-IN pendant fade+500 ms. La représenter "sur des lanes d'objets"
+serait un mensonge sémantique : sa couverture réelle déborde toute
+piste (et `track_indices` vide = **tous** les tracks, pas aucun).
+
+**Modèle retenu — la cue reste une référence atomique :**
+
+- **Lane CONDUCTOR** (la piste du chef d'orchestre) — pas `obj-N`.
+  Une cue n'appartient pas à un objet, elle appartient au show.
+  C'est la traduction timeline de la setlist de Conduite.
+- **Blast radius visualisé** : le clip cue dessine son empreinte sur
+  les lanes en dessous — lanes tuées (Full) ou touchées
+  (Tracking/scope). `track_indices` vide → empreinte sur **toutes**
+  les lanes.
+- **Durée affichée = `fade_duration`** (le crossfade) — un tail, pas
+  une fenêtre de clip : la cue n'a pas de fin propre, c'est un point.
+- **Sémantique barrière côté backend** : au fire, `lane_active` est
+  *released* — les moves score sont tués (Full) ou mergés (Tracking),
+  le score perd l'autorité jusqu'au prochain clip. Les
+  `active_move_ids` respawnés par la cue — connus statiquement dans
+  le snapshot — sont enregistrés pour le cleanup au wrap/stop → pas
+  de fuite entre cycles de loop, déterminisme garanti.
+- **`pre_wait` / `follow` / `timecode` bypassés** : ce sont des
+  sémantiques de *setlist* (timers frontend). Sur un score, la
+  timeline EST le timing — le tir est instantané au timestamp du clip.
+  Même cue, comportement différent Conduite (timing interne joué) vs
+  Score (timing externe imposé) — c'est voulu, pas un bug.
+
+**"Flatten cue → clips"** existe comme *opération d'éditeur* (menu
+contextuel, non-destructif — la cue vivante reste référencée) :
+`moves[]` → clips slot sur les lanes obj- ; `macros`/`spatial_macros`
+→ keyframes GLOBALFX ; `signal_graph` → clip MODULATION ;
+`manual_positions` → marqueurs de position ; les métadonnées timing
+se résorbent dans la position temporelle. Modèle du clip imbriqué de
+DAW : référence vivante par défaut, flatten quand on veut éditer
+l'intérieur — jamais l'inverse.
+
 ## The engine — backend-evaluated
 
 The score is **evaluated inside the merge/runtime at the 60 Hz tick**,

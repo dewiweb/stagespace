@@ -54,6 +54,15 @@ export async function buildSlotActivation(
   const duration = extractDuration(graphJson.nodes);
 
   const trackIndices = computeTrackIndices(slot.trackIds, ctx.holProject, ctx.manualOscIds);
+  // Parallélisme osc_ids/track_indices : computeTrackIndices droppe les
+  // trackIds non résolus (pas de fallback silencieux) — osc_ids doit
+  // suivre le même filtre sinon les listes divergent et le backend
+  // rejette (track_indices.len() != osc_ids.len()).
+  const resolvedTids = slot.trackIds.filter((tid) =>
+    ctx.holProject
+      ? ctx.holProject.tracks.some((t: any) => t.id === tid)
+      : ctx.manualOscIds.includes(tid),
+  );
   if (trackIndices.length === 0) {
     throw new Error(
       `No track indices — the slot's track selection doesn't map to current OSC ids (check OSC ids / selection).`,
@@ -117,7 +126,7 @@ export async function buildSlotActivation(
       movement_id: movementId,
       name: slot.name,
       graph_json: graphData,
-      osc_ids: slot.trackIds,
+      osc_ids: resolvedTids,
       track_indices: trackIndices,
       is_preview: slot.isPreview ?? false,
       origin,

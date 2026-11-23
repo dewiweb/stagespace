@@ -270,21 +270,36 @@ en mode navigateur (gêne les tests automatisés).
 Console (mode navigateur) : `[showSync] show-state-changed listen
 failed: … reading 'transformCallback'` — à vérifier avec le shim.
 
-### Reprise — état exact au commit
+### Reprise — audit backend réel fait sous Linux (bridge + `?score-demo`)
 
-- Audit **avec backend** (dev bridge headless, play/stop réel) **non
-  fait** : machine Windows à court de disque. À faire sous Linux :
-  `cd tauri-app/src-tauri && cargo test --test dev_bridge -- --ignored
-  --nocapture` puis `http://127.0.0.1:5173/?bridge=http://127.0.0.1:4173&score-demo`
-  (`?bridge` est retiré par le shim, `score-demo` survit).
+- ✅ Bridge headless + `?score-demo` joué contre le vrai merge :
+  résolution 8 clips OK, `score_timeline_load` OK. Bugs trouvés et
+  corrigés : ids de cue numériques (`id: 1` vs `String`) → coercition
+  défensive dans `scoreResolve` + seed à ids string ; champs `Cue`
+  requis sans `serde(default)` (`description`, `graph`, `timestamp`)
+  absents des cues stub du seed → seed complété + valeurs de repli
+  dans le résolveur (un snapshot partiel ne doit pas faire échouer le
+  load de toute la partition).
+- ⚠️ **Piège de diagnostic bridge** : `import()` dynamique dans
+  `page.evaluate` peut lire une instance de module HMR périmée
+  (store vide alors que l'UI affiche les clips) — valider via le DOM
+  ou un spy `fetch`, pas via le store importé.
+- 🔲 **Modèle cue sur timeline — redesign acté** (voir design note §
+  "Cues on the timeline") : lane CONDUCTOR, blast radius, barrière
+  d'état backend (release `lane_active` + enregistrement des
+  `active_move_ids` pour cleanup au wrap/stop), `flatten cue → clips`
+  comme opération d'éditeur. **Gaps ouverts** : fuite des moves
+  respawnés par cue au loop-wrap ; busy-skip silencieux (pas d'event
+  UI) ; `track_indices` vide = tous les tracks → couverture `[]`
+  mensongère ; `pre_wait`/`follow`/`timecode` bypassés (voulu — à
+  documenter dans le manuel).
 - `bridge_server.rs` : origine IPC `http://tauri.localhost` sous
-  Windows/Android (sinon le gate ACL refuse tout en Remote) — sans
-  effet sous Linux, **non testé en exécution**.
-- **Non vérifié depuis l'ajout de `ScoreInterp`** : `cargo test` /
-  clippy / fmt de `src-tauri` (et rust-engines par sécurité). Frontend
-  vérifié : tsc + eslint + vitest 522/522.
-- Ordre suivant : bugs 1-3 ci-dessus → chantier 3 (UI CurveEditor) →
-  4 timeline editing → 5 clips position/park/throw → 6 end-mode courbes.
+  Windows/Android — sans effet sous Linux, **non testé en exécution**.
+- ✅ Vérifié sous Linux après sync : rust-engines 556/556, src-tauri
+  92/92, clippy `-D warnings` + fmt des deux, tsc, vitest 527/527.
+- Ordre suivant : redesign cue (conductor lane + barrière) → chantier
+  3 (UI CurveEditor) → 4 timeline editing → 5 clips position/park/throw
+  → 6 end-mode courbes.
 
 ## S4 — TC chase & poly-temporal 🔲
 
@@ -331,6 +346,10 @@ failed: … reading 'transformCallback'` — à vérifier avec le shim.
 | UX | Fades clip-locaux (`None` = hérite slot) + poignées de bord | Même clip, articulations différentes par instance (modèle DAW clip gain) |
 | UX | `lane_mode: stacked \| exclusive` par piste | Chevauchement = intention (layering merge) sur objets ; last-wins reste sain sur cues/master |
 | UX | Clip orphelin flaggé en édition | Réf cassée visible avant le play, pas juste en toast |
+| Audit | Cue = référence atomique sur lane CONDUCTOR, pas lanes objet | `recall_cue_inner` est une transition globale — sa couverture déborde toute piste ; le modèle setlist-traduite est honnête |
+| Audit | Cue fire = barrière d'état (release `lane_active` + track `active_move_ids`) | Determinisme de boucle : les respawns de cue ne fuient pas entre cycles |
+| Audit | `pre_wait`/`follow`/`timecode` bypassés au score | Sémantiques setlist ; sur un score la timeline EST le timing |
+| Audit | `flatten cue → clips` = opération d'éditeur non-destructive | Référence vivante par défaut (édit-once), édition interne à la demande |
 
 ## Verification status
 
