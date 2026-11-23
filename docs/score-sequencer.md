@@ -3,6 +3,8 @@
 > **Status: design note.** Vision: the score is the *ultimate* level of
 > show programming — a timeline where the show IS the structure, above
 > the discrete cue machine of Conduite.
+> Implementation status & phased plan live in
+> [score-sequencer-plan.md](score-sequencer-plan.md).
 
 ## Why
 
