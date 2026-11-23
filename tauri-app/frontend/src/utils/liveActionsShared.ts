@@ -10,12 +10,13 @@ import { safeInvoke as invoke, silentCatch } from './tauri';
 
 /// Rehearsal capture — bande de commandes horodatée : enregistre ce
 /// que le busking fait vraiment, rejoue comme un cue live.
+/// S1 : l'horloge de lecture vit dans le backend (`score_play` →
+/// `score-fire`) — plus de playTimers frontend.
 export const rehearsalState: {
   recording: boolean;
   t0: number;
   entries: { t: number; name: string; args: number[] }[];
-  playTimers: ReturnType<typeof setTimeout>[];
-} = { recording: false, t0: 0, entries: [], playTimers: [] };
+} = { recording: false, t0: 0, entries: [] };
 
 export function rec(name: string, args: number[] = []) {
   if (rehearsalState.recording)

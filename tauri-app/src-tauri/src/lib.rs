@@ -57,6 +57,7 @@ use commands::remote_ui::{remote_ui_status, set_remote_ui};
 use commands::sampling::{
     frontend_log, get_perf_stats, sample_movement_trajectories, sample_movement_trajectory,
 };
+use commands::score::{score_clear, score_load, score_play, score_state, score_stop};
 use commands::state::lock_or_recover;
 
 // État global de l'application
@@ -106,6 +107,8 @@ pub struct AppState {
     /// `get_show_snapshot` à la connexion (les slots vivent côté frontend,
     /// sans snapshot un remote démarrerait sur un store vide).
     pub show_snapshot: Mutex<Option<serde_json::Value>>,
+    /// Score tape (S1) — bande de commandes horodatées, horloge backend.
+    pub score_tape: Arc<Mutex<commands::score::ScoreTape>>,
 }
 
 /// Un movement = un runtime indépendant avec ses propres tracks et mode (preview/live)
@@ -234,6 +237,7 @@ pub fn new_app_state() -> AppState {
         plugins_dir,
         remote_ui: Mutex::new(bridge_server::RemoteUi::default()),
         show_snapshot: Mutex::new(None),
+        score_tape: Arc::new(Mutex::new(commands::score::ScoreTape::default())),
     }
 }
 
@@ -463,6 +467,11 @@ pub fn stagespace_invoke_handler<R: tauri::Runtime>(invoke: tauri::ipc::Invoke<R
         get_pos_tape,
         set_media_sync,
         play_pos_tape,
+        score_load,
+        score_play,
+        score_stop,
+        score_clear,
+        score_state,
         get_perf_stats,
         discover_osc_targets,
         sample_movement_trajectories,

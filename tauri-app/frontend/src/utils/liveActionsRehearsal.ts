@@ -2,7 +2,7 @@
 /// comme cue), tape de positions, scores import/export. Extrait de
 /// liveActions.ts.
 import { toast } from './toast-helpers';
-import { safeInvoke as invoke } from './tauri';
+import { safeInvoke as invoke, silentCatch } from './tauri';
 import { rehearsalState, logAction } from './liveActionsShared';
 import { doGo, doPanic } from './liveActionsTransport';
 import { doSlot, doSlotStop, doSolo, doUnsolo } from './liveActionsSlots';
@@ -13,7 +13,9 @@ import {
 
 /** /stagespace/record <start|stop> · /stagespace/rehearsal <play|clear> —
  *  capture de répétition : enregistre la session busking (commandes
- *  horodatées) et la rejoue comme un cue live. */
+ *  horodatées) et la rejoue comme un cue live.
+ *  S1 : l'horloge vit dans le backend (thread + `score-fire`) — le
+ *  frontend reste l'exécuteur via cette map. */
 const REPLAY: Record<string, (...a: number[]) => void> = {
   doGo: () => doGo(),
   doPanic: () => doPanic(),
@@ -29,6 +31,12 @@ const REPLAY: Record<string, (...a: number[]) => void> = {
   doSetTrackPosition: (t, x, y, z) => doSetTrackPosition(t, x, y, z),
 };
 
+/** Point d'entrée unique des entrées tirées par l'horloge backend —
+ *  appelé par le listener `score-fire` (hook useScoreTape). */
+export function fireScoreEntry(name: string, args: number[]) {
+  REPLAY[name]?.(...args);
+}
+
 export function doRehearsal(action: string, from?: string) {
   logAction('doRehearsal', from);
   const s = rehearsalState;
@@ -41,6 +49,8 @@ export function doRehearsal(action: string, from?: string) {
       break;
     case 'stop':
       s.recording = false;
+      // Coupe aussi une lecture en cours — STOP est sans ambiguïté.
+      invoke('score_stop').catch(silentCatch);
       // Persiste la dernière prise — la partition survit au reload.
       try {
         localStorage.setItem('stagespace:diffusion-score', JSON.stringify(s.entries));
@@ -49,33 +59,26 @@ export function doRehearsal(action: string, from?: string) {
       break;
     case 'play': {
       if (s.entries.length === 0) { toast.warning('Rehearsal vide'); return; }
-      // Rejoue la bande sur ses timestamps (une chaîne de setTimeout).
+      // L'horloge est backend (déterministe, survit au reload webview) —
+      // le frontend reste l'exécuteur via `score-fire` → fireScoreEntry.
       // recording off pendant le replay — sinon la bande s'auto-écrit.
       const wasRecording = s.recording;
       s.recording = false;
-      let delay = 0;
-      // Une bande déjà en cours doit être arrêtée AVANT d'armer la
-      // nouvelle — remplacer playTimers sans clearTimeout perdait les
-      // références et la première bande continuait de tirer (revue M7).
-      s.playTimers.forEach(clearTimeout);
-      // Tous les timers sont trackés — 'clear' doit pouvoir tout annuler
-      // (un seul playTimer écrasé = la bande continuait de tirer).
-      s.playTimers = s.entries.map((e) => {
-        delay = e.t;
-        return setTimeout(() => REPLAY[e.name]?.(...e.args), e.t);
-      });
-      s.playTimers.push(
-        setTimeout(() => {
+      invoke('score_load', { entries: s.entries })
+        .then(() => invoke('score_play'))
+        .then(() => toast.info(`Score PLAY — ${s.entries.length} commandes`))
+        .catch((e) => {
           s.recording = wasRecording;
-          toast.info('Rehearsal fini');
-        }, delay + 100),
-      );
+          toast.error('Score play failed: ' + e);
+        });
+      // Restaure le flag record en fin de bande — durée max = dernière entrée.
+      const last = s.entries.reduce((m, e) => Math.max(m, e.t), 0);
+      setTimeout(() => { s.recording = wasRecording; }, last + 100);
       break;
     }
     case 'clear':
       s.entries = [];
-      s.playTimers.forEach(clearTimeout);
-      s.playTimers = [];
+      invoke('score_clear').catch(silentCatch);
       break;
     case 'load':
       // Charge la partition persistée (dernier record ou score importé).

@@ -31,6 +31,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { ChevronRight, ChevronDown, PanelRightClose, PanelLeftClose, PanelLeftOpen, PanelRightOpen, Maximize2, Minimize2, Activity, Workflow } from 'lucide-react';
 import { useLiveShortcuts, usePerfStatsPolling } from './hooks/useLiveShortcuts';
 import { useShowControl } from './hooks/useShowControl';
+import { useScoreTape } from './hooks/useScoreTape';
 import { useConduiteBroadcast } from './hooks/useConduiteBroadcast';
 import { prepareGraphForSave } from './components/nodeParamSchema';
 import { usePersistedState } from './utils/usePersistedState';
@@ -195,6 +196,7 @@ function AppMain() {
   // et sa stack se démontent).
   useLiveShortcuts();
   useShowControl();
+  useScoreTape();
   useConduiteBroadcast();
   usePerfStatsPolling();
 
