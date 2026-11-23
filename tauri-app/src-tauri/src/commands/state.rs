@@ -51,6 +51,10 @@ pub struct Shared {
     /// Un recall qui détecte un panic mid-flight doit s'avorter : le panic
     /// gagne toujours, jamais de respawn après un arrêt d'urgence.
     pub deactivate_gen: Arc<AtomicU64>,
+    /// Transport du séquenceur score — un panic (deactivate_all sans
+    /// honorer les fins) doit tuer sa génération : l'arrêt d'urgence
+    /// fait taire le show, le score ne re-tire rien.
+    pub score_timeline: Arc<Mutex<crate::commands::score::ScoreTimeline>>,
     pub osc_receiver: Arc<Mutex<OscReceiver>>,
     /// Registry des plugins WASM — None si wasmtime n'a pas pu s'initialiser.
     pub plugin_registry: Option<Arc<Mutex<stagespace_engines::PluginRegistry>>>,
@@ -69,6 +73,7 @@ impl Shared {
             merge_runtime: state.merge_runtime.clone(),
             recall_in_progress: state.recall_in_progress.clone(),
             deactivate_gen: state.deactivate_gen.clone(),
+            score_timeline: state.score_timeline.clone(),
             osc_receiver: state.osc_receiver.clone(),
             plugin_registry: state.plugin_registry.clone(),
             plugins_dir: state.plugins_dir.clone(),

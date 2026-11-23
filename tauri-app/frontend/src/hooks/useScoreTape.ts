@@ -5,7 +5,7 @@
 /// event global Tauri : une fenêtre détachée qui écouterait doublerait
 /// chaque commande (même règle que `show-control`).
 import { useEffect } from 'react';
-import { safeListen } from '../utils/tauri';
+import { safeInvoke, safeListen } from '../utils/tauri';
 import { toast } from '../utils/toast-helpers';
 import { fireScoreEntry } from '../utils/liveActionsRehearsal';
 import { useScoreStore } from '../store/useScoreStore';
@@ -47,6 +47,13 @@ export function useScoreTape() {
         });
         if (cancelled) { u(); v(); n(); }
         else { unlisten = u; unlistenTl = v; unlistenNack = n; }
+        // Resync après (re)mount — le backend peut être encore en
+        // lecture alors que le webview a rechargé (état transport
+        // frontend reparti à zéro). On re-prend l'état réel.
+        const st = await safeInvoke<ScoreTimelineStateEvent>('score_timeline_state');
+        if (!cancelled && st) {
+          useScoreStore.getState()._setTransport(st.playing, st.cursor_ms, st.loop_start_ms, st.loop_end_ms);
+        }
       } catch {
         // Pas de backend (Vite seul) — silence.
       }

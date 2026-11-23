@@ -794,6 +794,27 @@ pub(crate) fn deactivate_all_arc(
     sh.deactivate_gen
         .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
+    // Panic = le séquenceur meurt aussi : sans ça le thread score
+    // continue d'ordonnancer et RESPAWN des moves après l'arrêt
+    // d'urgence (l'horloge ne check que sa génération). `stopAll`
+    // (honor_end_mode=true) laisse le transport tourner — le score
+    // reste souverain de sa composition ; un clip `Panic` du score
+    // passe par le même chemin et tue donc sa propre lecture —
+    // cohérent : un panic est une fin de show, pas un événement
+    // qu'on enchaîne.
+    if !honor_end_mode {
+        let mut tl = lock_or_recover(&sh.score_timeline);
+        if tl.started_at.is_some() {
+            tl.generation += 1;
+            tl.started_at = None;
+            emit_ui(
+                &sh.event_sink,
+                "score-timeline",
+                crate::commands::score::timeline_state(&tl),
+            );
+        }
+    }
+
     // Snapshot (id, génération) — le sleeper ne tuera que ces instances-là.
     let move_entries: Vec<(String, u64)> = {
         let movements = lock_or_recover(&sh.movements);

@@ -539,13 +539,14 @@ describe('flatten cue → clips (explosion)', () => {
     st.addClip({ type: 'park' }, 2000, { trackIds: [2, 4] });
     // Park suivi (undefined) → tout le patch non muté.
     st.addClip({ type: 'park' }, 2500);
-    // Unpark suivi → [] = clear_parked côté backend.
+    // Unpark suivi → tout le patch non muté, matérialisé (jamais un []
+    // ambigu — le backend lirait "clear_parked global").
     st.addClip({ type: 'unpark' }, 3000);
     // Unpark gelé → ces objets.
     st.addClip({ type: 'unpark' }, 3500, { trackIds: [3] });
     // Throw — vélocité + cibles.
     st.addClip({ type: 'throw', vel: [0, 5, 0] }, 4000, { trackIds: [1, 2] });
-    // ManualClear suivi → [] = clear_all.
+    // ManualClear suivi → tout le patch, matérialisé.
     st.addClip({ type: 'manualClear' }, 5000);
     // Attention — 1er objet couvert = survivant ; vide = release.
     st.addClip({ type: 'attention' }, 6000, { trackIds: [3] });
@@ -557,10 +558,10 @@ describe('flatten cue → clips (explosion)', () => {
       // track 2 → obj 1, track 4 → obj 3 (manualOscIds [1,2,3,4])
       { kind: 'Park', data: { objects: [1, 3] } },
       { kind: 'Park', data: { objects: [0, 1, 2, 3] } },
-      { kind: 'Unpark', data: { objects: [] } },
+      { kind: 'Unpark', data: { objects: [0, 1, 2, 3] } },
       { kind: 'Unpark', data: { objects: [2] } },
       { kind: 'Throw', data: { objects: [0, 1], vel: [0, 5, 0] } },
-      { kind: 'ManualClear', data: { objects: [] } },
+      { kind: 'ManualClear', data: { objects: [0, 1, 2, 3] } },
       { kind: 'Attention', data: { obj: 2 } },
       { kind: 'Attention', data: { obj: null } },
     ]);
@@ -573,10 +574,16 @@ describe('flatten cue → clips (explosion)', () => {
     useScoreStore.getState().toggleLaneMute('obj-2'); // track 2 mutée
     st.addClip({ type: 'park' }, 0, { trackIds: [1, 2] });
     st.addClip({ type: 'throw', vel: [1, 0, 0] }, 0); // suivi = patch non muté
+    // Couverture gelée ENTIÈREMENT mutée → le clip saute (jamais un []
+    // que le backend lirait "release/clear global").
+    st.addClip({ type: 'unpark' }, 0, { trackIds: [2] });
+    st.addClip({ type: 'manualClear' }, 0, { trackIds: [2] });
+    st.addClip({ type: 'attention' }, 0, { trackIds: [2] });
     const { clips } = await resolveScoreClips(useScoreStore.getState());
     // track 2 exclue des cibles (lane mutée = le score n'y touche pas).
     expect(clips[0].payload).toEqual({ kind: 'Park', data: { objects: [0] } });
     expect(clips[1].payload).toEqual({ kind: 'Throw', data: { objects: [0, 2, 3], vel: [1, 0, 0] } });
+    expect(clips).toHaveLength(2); // unpark/manualClear/attention skippés
     // Mute conductor → tout l'événementiel saute.
     useScoreStore.getState().toggleLaneMute(CONDUCTOR_LANE);
     const { clips: muted } = await resolveScoreClips(useScoreStore.getState());

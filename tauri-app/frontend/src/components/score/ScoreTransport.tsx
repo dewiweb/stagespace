@@ -74,6 +74,14 @@ export const ScoreTransport: React.FC<{
         </span>
       );
     })()}
+    {playing && (
+      <span
+        className="text-[10px] text-amber-400/90 border border-amber-900/60 rounded px-1.5 py-0.5"
+        title="Le scheduler joue la partition chargée au PLAY — les éditions pendant la lecture s'appliquent au prochain PLAY"
+      >
+        éditions différées
+      </span>
+    )}
     <div className="flex-1" />
     <button onClick={() => onZoom(-1)} className="px-2 py-0.5 text-xs bg-gray-800 rounded hover:bg-gray-700">−</button>
     <button onClick={() => onZoom(1)} className="px-2 py-0.5 text-xs bg-gray-800 rounded hover:bg-gray-700">+</button>

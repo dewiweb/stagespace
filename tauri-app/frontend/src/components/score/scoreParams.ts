@@ -146,8 +146,15 @@ export function spatialFxParamDefsOf(
       });
     }
     if (c.ref.type === 'chanMods') {
+      // Deux règles peuvent partager le même triplet (source>channel
+      // [@obj]) — la 2e occurrence reçoit le suffixe `#n`, même
+      // convention que le parser backend (occurrence dans la table).
+      const seen = new Map<string, number>();
       for (const r of c.ref.modulations ?? []) {
-        const key = modRuleKey(r);
+        const base = modRuleKey(r);
+        const n = seen.get(base) ?? 0;
+        seen.set(base, n + 1);
+        const key = n === 0 ? base : `${base}#${n}`;
         for (const f of ['scale', 'offset', 'min', 'max'] as const) {
           defs.set(`mod:${key}:${f}`, { id: `mod:${key}:${f}`, min: f === 'scale' ? 0 : -10, max: 10, def: f === 'scale' ? 1 : 0, label: `${key} · ${f}` });
         }

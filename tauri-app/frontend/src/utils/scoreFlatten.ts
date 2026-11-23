@@ -177,6 +177,15 @@ export function flattenCueClip(clipId: string): FlattenCueResult | undefined {
   // la table OSC-IN (config système — cas d'usage timeline discutable).
   if (cue.graph && (cue.graph.nodes?.length ?? 0) > 0 && moves.length === 0) res.skipped.push('graph (legacy)');
   if (cue.osc_mappings?.length) res.skipped.push('osc_mappings');
+  // Sémantique de recall — `mode` (Tracking ≠ Full), `scope` (quelles
+  // catégories restaurer), `pre_wait`/`follow`/`timecode` (timing
+  // conductor) : les clips explosés sont du matériau brut, ils ne
+  // portent pas la barrière que la cue représentait.
+  if (cue.mode && cue.mode !== 'Full') res.skipped.push(`mode:${cue.mode}`);
+  if (cue.pre_wait) res.skipped.push('pre_wait');
+  if (cue.follow != null) res.skipped.push('follow');
+  if (cue.timecode != null) res.skipped.push('timecode');
+  if (moves.some((mv) => mv.animation_state != null)) res.skipped.push('animation_state');
 
   // Rien à matérialiser (snapshot vide ou catégories non mappables
   // seulement) → le clip est conservé : supprimer la seule

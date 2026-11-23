@@ -250,18 +250,29 @@ plus, pas un runtime parallèle) :
 |---|---|---|
 | `gesture` | `gesture(name, strength)` — impulsion balistique explode/converge/orbit/front | tous les objets émis |
 | `throw` | `throw_object(obj, vel)` par objet | couverture |
-| `park` | `park_object` — fige + exempte des recalls | couverture (vide = no-op logué) |
-| `unpark` | `unpark_object` ; vide → `clear_parked` | couverture |
-| `manualClear` | `clear_manual_position` ; vide → `clear_all` | couverture |
-| `attention` | `attention_focus(1er couvert)` ; vide → `attention_release` | couverture |
+| `park` | `park_object` — fige + exempte des recalls | couverture |
+| `unpark` | `unpark_object` par objet | couverture |
+| `manualClear` | `clear_manual_position` par objet | couverture |
+| `attention` | `attention_focus(1er couvert)` ; couverture suivie (aucune cible) → `attention_release` | couverture |
 
 **Couverture = cible** : pour ces clips, `trackIds` n'est pas un
 blast radius visuel mais la liste sémantique des objets visés —
 `undefined` (suivi) = tout le patch à l'instant du play ; une liste
 gelée = ces objets ; les lanes objet mutées excluent leurs cibles
-(« lane mutée = le score n'y touche pas »). Le mute de la lane
-conductor saute tout l'événementiel. `strength`/`vel` s'éditent dans
-l'inspector.
+(« lane mutée = le score n'y touche pas »). Les cibles sont
+**toujours matérialisées** à la résolution — jamais un `objects: []`
+que le backend lirait « clear global » : une couverture entièrement
+mutée saute le clip (exception `attention` : couverture suivie →
+`release` explicite, la forme « tout » du contrôle). Le mute de la
+lane conductor saute tout l'événementiel. `strength`/`vel` s'éditent
+dans l'inspector.
+
+**Panic tue le transport** : `panic` (opérateur Esc, OSC
+`/stagespace/panic`, ou clip `panic` du score) invalide la
+génération de la timeline — le scheduler meurt, rien ne peut
+re-tirer après un arrêt d'urgence. `stopAll` (`honor_end_mode`) ne
+touche PAS le transport : un clip stopAll du score ne se suicide
+pas, le score reste souverain de sa composition.
 
 Explicitement **non matérialisé** — rapporté à l'opérateur (toast +
 `skipped`), jamais silencieusement perdu : `osc_mappings` (table

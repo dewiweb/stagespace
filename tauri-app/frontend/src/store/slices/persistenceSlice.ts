@@ -141,6 +141,8 @@ export async function buildShowEnvelope(s: PersistenceStore): Promise<ShowFileEn
       loopEndMs: scoreStore.loopEndMs,
       globalFxCurves: scoreStore.globalFxCurves,
       modulationCurves: scoreStore.modulationCurves,
+      objectCurves: scoreStore.objectCurves,
+      spatialFxCurves: scoreStore.spatialFxCurves,
     },
     oscMappings,
     macros: s.macros,
@@ -438,9 +440,12 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
     }
 
     // 3b. Score timeline (S2) — document frontend : pistes + clips.
-    //     Les clips référencent les slots/cues par id — restaurés après
-    //     eux (les refs restent valides, ids préservés).
+    //     Le transport backend est arrêté AVANT de remplacer le doc :
+    //     un score qui ne jouerait que des courbes (aucun move) passerait
+    //     le garde `movements.length` et continuerait d'écrire sur le
+    //     nouveau show. `stop` est idempotent — safe même arrêté.
     const { useScoreStore } = await import('../useScoreStore');
+    useScoreStore.getState().stopScore();
     useScoreStore.getState().setScoreDoc(raw.score);
 
     // 3b. OSC IN mappings — clear + replay (le fichier remplace l'état).

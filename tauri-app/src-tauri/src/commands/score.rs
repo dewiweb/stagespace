@@ -370,6 +370,11 @@ pub struct ScoreTimeline {
     pub generation: u64,
 }
 
+/// Préfixe des ids de moves spawnés par le scheduler score
+/// (`sc-<clip_id>` — préfixe posé côté frontend dans `scoreResolve`).
+/// Sert au balayage des résidus au play et aux filtres "moves score".
+pub(crate) const SCORE_MOVE_PREFIX: &str = "sc-";
+
 #[derive(Serialize)]
 pub struct ScoreTimelineState {
     pub playing: bool,
@@ -380,7 +385,7 @@ pub struct ScoreTimelineState {
     pub loop_end_ms: Option<u64>,
 }
 
-fn timeline_state(tl: &ScoreTimeline) -> ScoreTimelineState {
+pub(crate) fn timeline_state(tl: &ScoreTimeline) -> ScoreTimelineState {
     ScoreTimelineState {
         playing: tl.started_at.is_some(),
         cursor_ms: tl.seek_ms
@@ -810,117 +815,67 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
         return Err(IpcError::validation("score timeline empty"));
     }
 
+    // Résidu d'une lecture précédente : les ids score sont
+    // déterministes (`sc-<clip>`) — un move survivant ferait échouer
+    // le spawn au conflit d'id. Balayage des moves score encore
+    // vivants (fade court, honor_end_mode) avant le départ ; les moves
+    // opérateur (autres ids) ne sont pas touchés — dual authority.
+    let leftovers: Vec<String> = lock_or_recover(&sh.movements)
+        .keys()
+        .filter(|id| id.starts_with(SCORE_MOVE_PREFIX))
+        .cloned()
+        .collect();
+    for id in leftovers {
+        let _ = deactivate_move_arc(&id, 0.2, true, &sh);
+    }
+
     let sink = sh.event_sink.clone();
     std::thread::spawn(move || {
-        // Lane → moves score actifs. En mode `exclusive` la liste reste
-        // ≤1 (un nouveau clip coupe le précédent — console) ; en
-        // `stacked` les moves se composent dans le merge.
-        let mut lane_active: HashMap<String, Vec<(String, f64)>> = HashMap::new();
-        // Cibles de courbes : move score → (macros per-move du worker,
-        // t0 absolu, table). Rempli au fire (clips Slot avec curves),
-        // vidé au EndMove/cut/hard-wrap. Les macros master du merge
-        // sont prises une fois — Arc stable pour la durée du process.
-        let mut curve_targets: HashMap<String, CurveTarget> = HashMap::new();
-        let master_macros = lock_or_recover(&sh.merge_runtime).macros();
-        // Source `SignalOsc` — handle EXTERNE (RwLock) : les écritures
-        // modulation suivent les rebinds du receiver OSC.
-        let osc_source = lock_or_recover(&sh.merge_runtime).osc_values_source();
-        // Cycles de lecture : sans loop un seul passage ; avec loop, le
-        // transport reboucle à `loop_start` (hard-wrap — les moves
-        // score du cycle sont coupés avant de repartir, sémantique
-        // "redémarrer la phrase" déterministe).
-        let mut cycle_start = seek;
-        'outer: loop {
-            let t0 = Instant::now();
-            let cursor = |elapsed: Duration| cycle_start + elapsed.as_millis() as u64;
-            for (t, ev) in build_events(&clips, cycle_start) {
-                // Borne de boucle : les événements ≥ loop_end sont
-                // exclus du cycle (wrap dur, pas de pré-écoute).
-                if lp.map(|(_, e)| t >= e).unwrap_or(false) {
-                    break;
-                }
-                loop {
-                    let elapsed = t0.elapsed();
-                    if cursor(elapsed) >= t {
+        // Filet de sécurité : un panic dans le scheduler laisserait
+        // `started_at` posé (transport zombie) et des moves score
+        // orphelins. `catch_unwind` ferme l'état et remonte un nack.
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            // Lane → moves score actifs. En mode `exclusive` la liste reste
+            // ≤1 (un nouveau clip coupe le précédent — console) ; en
+            // `stacked` les moves se composent dans le merge.
+            let mut lane_active: HashMap<String, Vec<(String, f64)>> = HashMap::new();
+            // Cibles de courbes : move score → (macros per-move du worker,
+            // t0 absolu, table). Rempli au fire (clips Slot avec curves),
+            // vidé au EndMove/cut/hard-wrap. Les macros master du merge
+            // sont prises une fois — Arc stable pour la durée du process.
+            let mut curve_targets: HashMap<String, CurveTarget> = HashMap::new();
+            let master_macros = lock_or_recover(&sh.merge_runtime).macros();
+            // Source `SignalOsc` — handle EXTERNE (RwLock) : les écritures
+            // modulation suivent les rebinds du receiver OSC.
+            let osc_source = lock_or_recover(&sh.merge_runtime).osc_values_source();
+            // Cycles de lecture : sans loop un seul passage ; avec loop, le
+            // transport reboucle à `loop_start` (hard-wrap — les moves
+            // score du cycle sont coupés avant de repartir, sémantique
+            // "redémarrer la phrase" déterministe).
+            let mut cycle_start = seek;
+            'outer: loop {
+                let t0 = Instant::now();
+                let cursor = |elapsed: Duration| cycle_start + elapsed.as_millis() as u64;
+                for (t, ev) in build_events(&clips, cycle_start) {
+                    // Borne de boucle : les événements ≥ loop_end sont
+                    // exclus du cycle (wrap dur, pas de pré-écoute).
+                    if lp.map(|(_, e)| t >= e).unwrap_or(false) {
                         break;
                     }
-                    if lock_or_recover(&tl_arc).generation != gen {
-                        return;
-                    }
-                    std::thread::sleep(
-                        Duration::from_millis(t - cursor(elapsed)).min(Duration::from_millis(50)),
-                    );
-                    // Tick courbes — chaque réveil ≤50 ms écrit les
-                    // valeurs échantillonnées au curseur courant.
-                    eval_curves(
-                        cursor(t0.elapsed()),
-                        &curve_targets,
-                        &sh.merge_runtime,
-                        &master_macros,
-                        &AbsCurves {
-                            global_fx: &global_fx_curves,
-                            modulation: &modulation_curves,
-                            object: &object_curves,
-                            spatial_fx: &spatial_fx_curves,
-                        },
-                        &osc_source,
-                    );
-                }
-                if lock_or_recover(&tl_arc).generation != gen {
-                    return;
-                }
-                match ev {
-                    Ev::Fire(i, k, offset) => fire_clip(
-                        &clips[i],
-                        k,
-                        offset,
-                        &sh,
-                        &mut lane_active,
-                        &mut curve_targets,
-                        &sink,
-                    ),
-                    Ev::EndMove(id, fade) => {
-                        for v in lane_active.values_mut() {
-                            v.retain(|x| x.0 != id);
-                        }
-                        curve_targets.remove(&id);
-                        if let Err(e) = deactivate_move_arc(&id, fade, true, &sh) {
-                            eprintln!("[score] end-of-clip deactivate '{id}' failed: {e}");
-                        }
-                    }
-                }
-                // Les courbes du clip qui vient de tirer écrivent leurs
-                // valeurs de t0 immédiatement (sinon ≤50 ms de retard).
-                eval_curves(
-                    cursor(t0.elapsed()),
-                    &curve_targets,
-                    &sh.merge_runtime,
-                    &master_macros,
-                    &AbsCurves {
-                        global_fx: &global_fx_curves,
-                        modulation: &modulation_curves,
-                        object: &object_curves,
-                        spatial_fx: &spatial_fx_curves,
-                    },
-                    &osc_source,
-                );
-            }
-            match lp {
-                Some((lstart, lend)) if lend > lstart => {
-                    // Attendre la borne de boucle (les événements peuvent
-                    // finir avant lend — trou de queue).
                     loop {
                         let elapsed = t0.elapsed();
-                        if cursor(elapsed) >= lend {
+                        if cursor(elapsed) >= t {
                             break;
                         }
                         if lock_or_recover(&tl_arc).generation != gen {
                             return;
                         }
                         std::thread::sleep(
-                            Duration::from_millis(lend - cursor(elapsed))
+                            Duration::from_millis(t - cursor(elapsed))
                                 .min(Duration::from_millis(50)),
                         );
+                        // Tick courbes — chaque réveil ≤50 ms écrit les
+                        // valeurs échantillonnées au curseur courant.
                         eval_curves(
                             cursor(t0.elapsed()),
                             &curve_targets,
@@ -938,47 +893,136 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
                     if lock_or_recover(&tl_arc).generation != gen {
                         return;
                     }
-                    // Hard-cut : couper tous les moves score du cycle
-                    // avant le rebouclage — chaque cycle repart propre.
-                    // Un move multi-lanes apparaît dans la liste de
-                    // chaque lane couverte → dédup avant le cut.
-                    let drained: Vec<(String, f64)> = {
-                        let mut seen = HashSet::new();
-                        lane_active
-                            .drain()
-                            .flat_map(|(_, v)| v)
-                            .filter(|(id, _)| seen.insert(id.clone()))
-                            .collect()
-                    };
-                    for (id, fade) in drained {
-                        curve_targets.remove(&id);
-                        let _ = deactivate_move_arc(&id, fade, true, &sh);
+                    match ev {
+                        Ev::Fire(i, k, offset) => fire_clip(
+                            &clips[i],
+                            k,
+                            offset,
+                            &sh,
+                            &mut lane_active,
+                            &mut curve_targets,
+                            &sink,
+                        ),
+                        Ev::EndMove(id, fade) => {
+                            for v in lane_active.values_mut() {
+                                v.retain(|x| x.0 != id);
+                            }
+                            curve_targets.remove(&id);
+                            if let Err(e) = deactivate_move_arc(&id, fade, true, &sh) {
+                                emit_ui(
+                                    &sink,
+                                    "score-nack",
+                                    serde_json::json!({ "clip_id": id, "reason": format!("fin de clip: {e}") }),
+                                );
+                            }
+                        }
                     }
-                    emit_ui(&sink, "active-moves-update", ());
-                    // Rebase du curseur partagé — l'état rapporté reflète
-                    // le retour visuel à loop_start.
-                    {
-                        let mut tl = lock_or_recover(&tl_arc);
-                        if tl.generation != gen {
+                    // Les courbes du clip qui vient de tirer écrivent leurs
+                    // valeurs de t0 immédiatement (sinon ≤50 ms de retard).
+                    eval_curves(
+                        cursor(t0.elapsed()),
+                        &curve_targets,
+                        &sh.merge_runtime,
+                        &master_macros,
+                        &AbsCurves {
+                            global_fx: &global_fx_curves,
+                            modulation: &modulation_curves,
+                            object: &object_curves,
+                            spatial_fx: &spatial_fx_curves,
+                        },
+                        &osc_source,
+                    );
+                }
+                match lp {
+                    Some((lstart, lend)) if lend > lstart => {
+                        // Attendre la borne de boucle (les événements peuvent
+                        // finir avant lend — trou de queue).
+                        loop {
+                            let elapsed = t0.elapsed();
+                            if cursor(elapsed) >= lend {
+                                break;
+                            }
+                            if lock_or_recover(&tl_arc).generation != gen {
+                                return;
+                            }
+                            std::thread::sleep(
+                                Duration::from_millis(lend - cursor(elapsed))
+                                    .min(Duration::from_millis(50)),
+                            );
+                            eval_curves(
+                                cursor(t0.elapsed()),
+                                &curve_targets,
+                                &sh.merge_runtime,
+                                &master_macros,
+                                &AbsCurves {
+                                    global_fx: &global_fx_curves,
+                                    modulation: &modulation_curves,
+                                    object: &object_curves,
+                                    spatial_fx: &spatial_fx_curves,
+                                },
+                                &osc_source,
+                            );
+                        }
+                        if lock_or_recover(&tl_arc).generation != gen {
                             return;
                         }
-                        tl.seek_ms = lstart;
-                        tl.started_at = Some(Instant::now());
+                        // Hard-cut : couper tous les moves score du cycle
+                        // avant le rebouclage — chaque cycle repart propre.
+                        // Un move multi-lanes apparaît dans la liste de
+                        // chaque lane couverte → dédup avant le cut.
+                        let drained: Vec<(String, f64)> = {
+                            let mut seen = HashSet::new();
+                            lane_active
+                                .drain()
+                                .flat_map(|(_, v)| v)
+                                .filter(|(id, _)| seen.insert(id.clone()))
+                                .collect()
+                        };
+                        for (id, fade) in drained {
+                            curve_targets.remove(&id);
+                            let _ = deactivate_move_arc(&id, fade, true, &sh);
+                        }
+                        emit_ui(&sink, "active-moves-update", ());
+                        // Rebase du curseur partagé — l'état rapporté reflète
+                        // le retour visuel à loop_start.
+                        {
+                            let mut tl = lock_or_recover(&tl_arc);
+                            if tl.generation != gen {
+                                return;
+                            }
+                            tl.seek_ms = lstart;
+                            tl.started_at = Some(Instant::now());
+                        }
+                        let st = timeline_state(&lock_or_recover(&tl_arc));
+                        emit_ui(&sink, "score-timeline", st);
+                        cycle_start = lstart;
                     }
-                    let st = timeline_state(&lock_or_recover(&tl_arc));
-                    emit_ui(&sink, "score-timeline", st);
-                    cycle_start = lstart;
+                    _ => break 'outer,
                 }
-                _ => break 'outer,
             }
+            let mut tl = lock_or_recover(&tl_arc);
+            if tl.generation == gen {
+                tl.started_at = None;
+            }
+            let st = timeline_state(&tl);
+            drop(tl);
+            emit_ui(&sink, "score-timeline", st);
+        }));
+        if let Err(payload) = r {
+            eprintln!("score scheduler panic: {payload:?}");
+            let mut tl = lock_or_recover(&tl_arc);
+            if tl.generation == gen {
+                tl.started_at = None;
+            }
+            let st = timeline_state(&tl);
+            drop(tl);
+            emit_ui(&sink, "score-timeline", st);
+            emit_ui(
+                &sink,
+                "score-nack",
+                serde_json::json!({ "clip_id": "", "reason": "scheduler panic — lecture arrêtée" }),
+            );
         }
-        let mut tl = lock_or_recover(&tl_arc);
-        if tl.generation == gen {
-            tl.started_at = None;
-        }
-        let st = timeline_state(&tl);
-        drop(tl);
-        emit_ui(&sink, "score-timeline", st);
     });
     // État play poussé aussi — resync des vues (remote, reload).
     let st = timeline_state(&lock_or_recover(&state.score_timeline));
@@ -1168,7 +1212,13 @@ fn fire_clip(
                     }
                     emit_ui(sink, "active-moves-update", ());
                 }
-                Err(e) => eprintln!("[score] clip '{}' spawn failed: {}", clip.id, e),
+                // Spawn impossible = événement visible en show —
+                // nack opérateur comme le busy-skip des cues.
+                Err(e) => emit_ui(
+                    sink,
+                    "score-nack",
+                    serde_json::json!({ "clip_id": clip.id, "reason": e.to_string() }),
+                ),
             }
         }
         ScoreClipPayload::Cue(cue) => {
@@ -1240,7 +1290,11 @@ fn fire_clip(
                             .map_err(|e| format!("compile: {e:?}"))
                     })
                     .map_err(|e| {
-                        eprintln!("[score] clip '{}': signal graph rejeté — {e}", clip.id);
+                        emit_ui(
+                            sink,
+                            "score-nack",
+                            serde_json::json!({ "clip_id": clip.id, "reason": format!("signal graph: {e}") }),
+                        );
                         e
                     })
                     .ok()
@@ -1277,7 +1331,11 @@ fn fire_clip(
                         rt.set_merge_strategy(strategy);
                     }
                 }
-                Err(e) => eprintln!("[score] clip '{}': global graph rejeté — {e}", clip.id),
+                Err(e) => emit_ui(
+                    sink,
+                    "score-nack",
+                    serde_json::json!({ "clip_id": clip.id, "reason": format!("global graph: {e}") }),
+                ),
             }
         }
         ScoreClipPayload::ChanMods { modulations } => {
@@ -1286,10 +1344,18 @@ fn fire_clip(
             // sont pas touchées (disjoint).
             let rt = lock_or_recover(&sh.merge_runtime);
             rt.clear_modulations();
+            let mut rejected = 0usize;
             for r in modulations {
-                if let Err(e) = rt.add_modulation(r.clone()) {
-                    eprintln!("[score] clip '{}': modulation rejetée — {e}", clip.id);
+                if rt.add_modulation(r.clone()).is_err() {
+                    rejected += 1;
                 }
+            }
+            if rejected > 0 {
+                emit_ui(
+                    sink,
+                    "score-nack",
+                    serde_json::json!({ "clip_id": clip.id, "reason": format!("{rejected} modulation(s) rejetée(s)") }),
+                );
             }
         }
         ScoreClipPayload::Zones { zones } => {
@@ -1297,10 +1363,18 @@ fn fire_clip(
             // zones du graphe (graph_zones) ne sont pas touchées.
             let rt = lock_or_recover(&sh.merge_runtime);
             rt.clear_zones();
+            let mut rejected = 0usize;
             for z in zones {
-                if let Err(e) = rt.add_zone(z.clone()) {
-                    eprintln!("[score] clip '{}': zone rejetée — {e}", clip.id);
+                if rt.add_zone(z.clone()).is_err() {
+                    rejected += 1;
                 }
+            }
+            if rejected > 0 {
+                emit_ui(
+                    sink,
+                    "score-nack",
+                    serde_json::json!({ "clip_id": clip.id, "reason": format!("{rejected} zone(s) rejetée(s)") }),
+                );
             }
         }
         ScoreClipPayload::Gesture { name, strength } => {
@@ -1310,7 +1384,11 @@ fn fire_clip(
         ScoreClipPayload::Park { objects } => {
             let rt = lock_or_recover(&sh.merge_runtime);
             if objects.is_empty() {
-                eprintln!("[score] clip '{}': park sans cible — ignoré", clip.id);
+                emit_ui(
+                    sink,
+                    "score-nack",
+                    serde_json::json!({ "clip_id": clip.id, "reason": "park sans cible" }),
+                );
             }
             for &o in objects {
                 rt.park_object(o);
@@ -1374,7 +1452,9 @@ pub async fn score_timeline_seek(ms: u64, state: State<'_, AppState>) -> Result<
     if tl.started_at.is_some() {
         return Err(IpcError::busy("score playing — stop before seek"));
     }
-    tl.seek_ms = ms;
+    // Clamp à la durée — un seek hors partition n'a pas de sens
+    // (le play lirait immédiatement "fin" sans que l'UI sache pourquoi).
+    tl.seek_ms = ms.min(tl.duration_ms);
     let st = timeline_state(&tl);
     drop(tl);
     emit_ui(&state.event_sink, "score-timeline", st);

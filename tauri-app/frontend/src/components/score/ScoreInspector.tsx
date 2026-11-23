@@ -64,8 +64,9 @@ export const ScoreInspector: React.FC<{
     </label>
   );
   // Événements à cibles — la couverture trackIds porte la sémantique
-  // (objets visés), pas un simple blast radius visuel.
-  const TARGETED = new Set(['park', 'unpark', 'throw', 'manualClear', 'attention']);
+  // (objets visés), pas un simple blast radius visuel. `positions`
+  // filtre ses entrées par la couverture, donc éditable aussi.
+  const TARGETED = new Set(['park', 'unpark', 'throw', 'manualClear', 'attention', 'positions']);
   return (
     <div className="px-3 py-1 border-t border-gray-800 text-[10px] text-gray-500 flex items-center gap-4">
       <span>{clipsCount} clip{clipsCount > 1 ? 's' : ''} — exécution backend (survit au reload)</span>
@@ -73,21 +74,26 @@ export const ScoreInspector: React.FC<{
         <span className="flex items-center gap-3 text-gray-400 border-l border-gray-800 pl-4">
           <span className="font-bold text-gray-300">{clipLabel(c)}</span>
           {/* Couverture — les objets pilotés par ce clip. × retire
-              l'objet (réassignation) ; slot → + ajoute un objet. */}
+              l'objet (réassignation) ; slot → + ajoute un objet.
+              Cue : lecture seule — le recall est global, la couverture
+              affichée n'est qu'un blast radius informatif. */}
           {(c.ref.type === 'slot' || c.ref.type === 'cue' || TARGETED.has(c.ref.type)) && (() => {
             const eff = effectiveTrackIds(c);
             const following = c.trackIds === undefined;
+            const editable = c.ref.type !== 'cue';
             return (
-            <span className="flex items-center gap-1" title={following
-              ? (TARGETED.has(c.ref.type)
-                ? 'Cible suivie — tous les objets patchés (geler pour restreindre)'
-                : 'Couverture suivie — dérivée en live de l\'entité (réassignations reflétées)')
-              : 'Couverture gelée — override explicite du clip'}>
+            <span className="flex items-center gap-1" title={!editable
+              ? 'Blast radius visuel — le recall de cue est global, cette couverture ne filtre rien'
+              : following
+                ? (TARGETED.has(c.ref.type)
+                  ? 'Cible suivie — tous les objets patchés (geler pour restreindre)'
+                  : 'Couverture suivie — dérivée en live de l\'entité (réassignations reflétées)')
+                : 'Couverture gelée — override explicite du clip'}>
               obj:
               {eff.map((tid) => (
-                <span key={tid} className={`px-1 rounded bg-gray-800 border border-gray-700 flex items-center ${following ? 'opacity-60' : ''}`}>
+                <span key={tid} className={`px-1 rounded bg-gray-800 border border-gray-700 flex items-center ${following || !editable ? 'opacity-60' : ''}`}>
                   {tid}
-                  {!following && (
+                  {editable && !following && (
                     <button
                       className="ml-0.5 text-gray-500 hover:text-red-400"
                       title={`Retirer l'objet ${tid} de la couverture`}
@@ -96,7 +102,7 @@ export const ScoreInspector: React.FC<{
                   )}
                 </span>
               ))}
-              {following ? (
+              {editable && (following ? (
                 <button
                   className="px-1 rounded text-cyan-400 hover:bg-gray-800"
                   title="Couverture suivie (live) — cliquer pour geler en override explicite"
@@ -108,8 +114,8 @@ export const ScoreInspector: React.FC<{
                   title="Override explicite — cliquer pour repasser en suivi live"
                   onClick={() => onSetClipTrackIds(c.id, undefined)}
                 >⇄</button>
-              )}
-              {(c.ref.type === 'slot' || TARGETED.has(c.ref.type)) && !following && (
+              ))}
+              {editable && (c.ref.type === 'slot' || TARGETED.has(c.ref.type)) && !following && (
                 <select
                   className="bg-gray-800 border border-gray-700 rounded text-[10px]"
                   value=""

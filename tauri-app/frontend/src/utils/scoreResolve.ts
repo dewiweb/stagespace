@@ -16,8 +16,9 @@ import { buildSlotActivation } from './slotActivation';
 import { CONDUCTOR_LANE, MODULATION_LANE, SPATIALFX_LANE, laneIdOf, clipLaneIds } from '../store/useScoreStore';
 import type { ScoreDoc, ScoreClipDoc } from '../store/useScoreStore';
 
-/// Une lane wire — `id` (`obj-<trackId>`/`master`) + mode. Le backend
-/// coupe les moves précédents par lane en mode exclusive uniquement.
+/// Une lane wire — `id` (`obj-<trackId>`/lane globale) + mode. Le
+/// backend coupe les moves précédents par lane en mode exclusive
+/// uniquement.
 export interface ResolvedLane {
   id: string;
   stacked?: boolean;
@@ -25,8 +26,9 @@ export interface ResolvedLane {
 
 export interface ResolvedScoreClip {
   id: string;
-  /// Lanes occupées — `obj-<trackId>` pour slot/cue, `master` pour
-  /// les markers. Le backend y enregistre ses moves actifs.
+  /// Lanes occupées — `obj-<trackId>` pour slot, lane `conductor`
+  /// pour cue/markers/événements, lanes globales pour les
+  /// clips-porteurs. Le backend y enregistre ses moves actifs.
   lanes: ResolvedLane[];
   start_ms: number;
   duration_ms?: number;
@@ -217,6 +219,9 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
         const objects = activeTids
           .map((tid) => gs.manualOscIds.indexOf(tid))
           .filter((i) => i >= 0);
+        // Couverture mutée à vide → rien à viser : le clip saute
+        // plutôt que de tirer un événement sans cible.
+        if (!objects.length) break;
         clips.push({
           ...base,
           payload: c.ref.type === 'park'
@@ -227,12 +232,14 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
       }
       case 'unpark':
       case 'manualClear': {
-        // Couverture gelée → ces objets ; suivie (undefined) → []
-        // = clear_parked / clear_all_manual_positions côté backend
-        /// (release global — la forme "tout" la plus simple).
-        const objects = c.trackIds === undefined
-          ? []
-          : activeTids.map((tid) => gs.manualOscIds.indexOf(tid)).filter((i) => i >= 0);
+        // Cibles TOUJOURS matérialisées — couverture suivie = tout le
+        // patch non muté, gelée = la liste. Un [] envoyé au backend se
+        // lirait "release globale" : une couverture mutée à vide doit
+        // sauter le clip, pas dé-parker/vider tout le patch.
+        const objects = activeTids
+          .map((tid) => gs.manualOscIds.indexOf(tid))
+          .filter((i) => i >= 0);
+        if (!objects.length) break;
         clips.push({
           ...base,
           payload: c.ref.type === 'unpark'
@@ -242,6 +249,10 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
         break;
       }
       case 'attention': {
+        // Couverture gelée entièrement mutée → clip sauté (un obj null
+        // lâcherait un release déguisé). Suivie → null = release
+        // honnête, la forme "tout" du contrôle.
+        if (c.trackIds !== undefined && !activeTids.length) break;
         // 1er objet couvert = le survivant (stase des autres) ;
         // aucun = release.
         const obj = activeTids.length ? gs.manualOscIds.indexOf(activeTids[0]) : -1;

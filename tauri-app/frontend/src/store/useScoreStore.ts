@@ -5,7 +5,8 @@
 /// events `score-timeline` du backend.
 ///
 /// LES LANES SONT LES OBJETS : une lane par `track_id` patché +
-/// une pseudo-lane master. Elles sont dérivées de la config (pas des
+/// quatre lanes globales épinglées (conductor/globalfx/spatialfx/
+/// modulation). Elles sont dérivées de la config (pas des
 /// entités persistées) — le doc ne stocke que leurs overrides
 /// (`laneStates`) et la couverture de chaque clip (`trackIds`).
 import { create } from 'zustand';
@@ -43,7 +44,8 @@ export const laneIdOf = (trackId: number) => `obj-${trackId}`;
 /// jouent ensemble, leurs sorties se composent dans le merge.
 export type ScoreLaneMode = 'exclusive' | 'stacked';
 
-/// Overrides persistés d'une lane — clé `obj-<trackId>` ou `master`.
+/// Overrides persistés d'une lane — clé `obj-<trackId>` ou id de lane
+/// globale (`conductor`/`globalfx`/`spatialfx`/`modulation`).
 /// Une lane n'a une entrée que si mutée ou en mode non-défaut.
 export interface ScoreLaneState {
   muted?: boolean;
@@ -138,8 +140,8 @@ export interface ScoreClipDoc {
 export type ScoreInterp = 'linear' | 'step' | 'smooth';
 
 /// Un point d'une courbe : `t` en ms (relatif au début du clip pour
-/// les courbes clip-scoped, absolu partition pour les courbes
-/// master) + valeur du paramètre.
+/// les courbes clip-scoped, absolu partition pour les courbes de
+/// lanes) + valeur du paramètre.
 export interface ScoreKeyframe {
   t: number;
   v: number;
@@ -177,7 +179,7 @@ export const clipLaneIds = (c: ScoreClipDoc, eff: number[] = c.trackIds ?? []): 
 };
 
 export interface ScoreDoc {
-  /// Overrides des lanes dérivées (`obj-<trackId>`/`master` → état).
+  /// Overrides des lanes dérivées (`obj-<trackId>`/lanes globales → état).
   laneStates?: Record<string, ScoreLaneState>;
   clips: ScoreClipDoc[];
   durationMs: number;
@@ -230,13 +232,13 @@ interface ScoreState extends ScoreDoc {
   playing: boolean;
   cursorMs: number;
   // Document actions
-  /// Mute d'une lane (`obj-<trackId>` ou `master`).
+  /// Mute d'une lane (`obj-<trackId>` ou lane globale).
   toggleLaneMute: (laneId: string) => void;
   /// Mode de chevauchement d'une lane.
   setLaneMode: (laneId: string, mode: ScoreLaneMode) => void;
   /// Insère un clip. `trackIds` = couverture (objets pilotés) — pour
   /// un slot : son assignation ; pour une cue : union dérivée de son
-  /// snapshot ; markers : ignoré (lane master). Retourne le clip.
+  /// snapshot ; markers : ignoré (lane conductor). Retourne le clip.
   addClip: (ref: ScoreClipRef, startMs: number, opts?: { durationMs?: number; trackIds?: number[]; repeatEveryMs?: number }) => ScoreClipDoc;
   /// Réassigne la couverture d'un clip (ajoute/retire des objets —
   /// même effet qu'une réassignation de tracks dans l'Atelier).
@@ -372,12 +374,17 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
         else lane[paramId] = [...keyframes].sort((a, b) => a.t - b.t);
         return { objectCurves: { ...(s.objectCurves ?? {}), [laneId]: lane } };
       }
+      // Routing explicite — un laneId inconnu retomberait en GLOBALFX
+      // et écrirait silencieusement sur la mauvaise lane : no-op.
       const field =
-        laneId === MODULATION_LANE
-          ? 'modulationCurves'
-          : laneId === SPATIALFX_LANE
-            ? 'spatialFxCurves'
-            : 'globalFxCurves';
+        laneId === GLOBALFX_LANE
+          ? 'globalFxCurves'
+          : laneId === MODULATION_LANE
+            ? 'modulationCurves'
+            : laneId === SPATIALFX_LANE
+              ? 'spatialFxCurves'
+              : null;
+      if (!field) return {};
       const curves = { ...(s[field] ?? {}) };
       if (keyframes === undefined) delete curves[paramId];
       else curves[paramId] = [...keyframes].sort((a, b) => a.t - b.t);
@@ -469,6 +476,11 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
         spatialFxCurves: s.laneStates?.[SPATIALFX_LANE]?.muted ? {} : (s.spatialFxCurves ?? {}),
         objectCurves,
       });
+      // `load` remet le curseur backend à 0 — on re-pose le seek pour
+      // que play démarre depuis le curseur courant (play-from-cursor).
+      if (s.cursorMs > 0) {
+        await invoke('score_timeline_seek', { ms: s.cursorMs });
+      }
       await invoke('score_timeline_set_loop', { startMs: s.loopStartMs ?? null, endMs: s.loopEndMs ?? null });
       await invoke('score_timeline_play');
       set({ playing: true });
