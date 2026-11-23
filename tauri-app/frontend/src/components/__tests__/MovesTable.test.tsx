@@ -2,7 +2,7 @@
 /// <reference types="@testing-library/jest-dom" />
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import MovesTable from '../panels/MovesTable';
 import { useGraphStore } from '../../store/useGraphStore';
 import { useMoveEditorStore } from '../../store/useMoveEditorStore';
@@ -108,9 +108,10 @@ describe('MovesTable — play/stop', () => {
     render(<MovesTable />);
     const playBtn = screen.getByTitle(/Launch live/i);
     fireEvent.click(playBtn);
-    await new Promise((r) => setTimeout(r, 100));
-    const calls = getInvokeCalls();
-    expect(calls.some((c) => c.cmd === 'activate_move')).toBe(true);
+    await waitFor(
+      () => expect(getInvokeCalls().some((c) => c.cmd === 'activate_move')).toBe(true),
+      { timeout: 5000 },
+    );
   });
 
   it('clicking ■ stop button calls deactivate_move when playing', async () => {
@@ -119,9 +120,10 @@ describe('MovesTable — play/stop', () => {
     render(<MovesTable />);
     const stopBtn = screen.getByTitle(/Immediate stop/i);
     fireEvent.click(stopBtn);
-    await new Promise((r) => setTimeout(r, 100));
-    const calls = getInvokeCalls();
-    expect(calls.some((c) => c.cmd === 'deactivate_move')).toBe(true);
+    await waitFor(
+      () => expect(getInvokeCalls().some((c) => c.cmd === 'deactivate_move')).toBe(true),
+      { timeout: 5000 },
+    );
   });
 
   it('clicking ■ Stop All calls deactivate_move for all active slots', async () => {
@@ -130,9 +132,10 @@ describe('MovesTable — play/stop', () => {
     useGraphStore.setState({ moveSlots: [slot1, slot2] } as any);
     render(<MovesTable />);
     fireEvent.click(screen.getByText('■ Stop All'));
-    await new Promise((r) => setTimeout(r, 100));
-    const calls = getInvokeCalls().filter((c) => c.cmd === 'deactivate_move');
-    expect(calls.length).toBeGreaterThanOrEqual(2);
+    await waitFor(
+      () => expect(getInvokeCalls().filter((c) => c.cmd === 'deactivate_move').length).toBeGreaterThanOrEqual(2),
+      { timeout: 5000 },
+    );
   });
 });
 
