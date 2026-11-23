@@ -16,6 +16,7 @@ export interface ResolvedScoreClip {
   track: string;
   start_ms: number;
   duration_ms?: number;
+  repeat_every_ms?: number;
   payload: Record<string, unknown>;
 }
 
@@ -49,6 +50,7 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
             track: c.trackId,
             start_ms: c.startMs,
             duration_ms: c.durationMs,
+            repeat_every_ms: c.repeatEveryMs,
             payload: {
               kind: 'Slot',
               data: { request, macros: globalMacros },
@@ -65,15 +67,16 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
         if (!cue) { errors.push(`Clip ${c.id}: cue introuvable — supprimée ?`); break; }
         clips.push({
           id: c.id, track: c.trackId, start_ms: c.startMs,
+          repeat_every_ms: c.repeatEveryMs,
           payload: { kind: 'Cue', data: cue },
         });
         break;
       }
       case 'stopAll':
-        clips.push({ id: c.id, track: c.trackId, start_ms: c.startMs, payload: { kind: 'StopAll' } });
+        clips.push({ id: c.id, track: c.trackId, start_ms: c.startMs, repeat_every_ms: c.repeatEveryMs, payload: { kind: 'StopAll' } });
         break;
       case 'panic':
-        clips.push({ id: c.id, track: c.trackId, start_ms: c.startMs, payload: { kind: 'Panic' } });
+        clips.push({ id: c.id, track: c.trackId, start_ms: c.startMs, repeat_every_ms: c.repeatEveryMs, payload: { kind: 'Panic' } });
         break;
     }
   }

@@ -197,6 +197,14 @@ pub struct ScoreClip {
     pub start_ms: u64,
     #[serde(default)]
     pub duration_ms: Option<u64>,
+    /// Re-déclenchement périodique — "clip loop" DAW : le clip tire à
+    /// `start + k·repeat_every` jusqu'à la fin de sa fenêtre
+    /// (`duration_ms`). Distinct du loop_mode du move (trajectoire
+    /// interne) : ici chaque itération est un nouveau spawn/pulse —
+    /// re-articulation rythmique, pas mouvement continu.
+    /// Requiert `duration_ms` (la fenêtre borne les copies).
+    #[serde(default)]
+    pub repeat_every_ms: Option<u64>,
     pub payload: ScoreClipPayload,
 }
 
@@ -271,35 +279,7 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
         return Err(IpcError::validation("score timeline empty"));
     }
 
-    // Liste d'événements : démarrages de clips + fins auto des Slots.
-    enum Ev {
-        Fire(usize, u64),     // clip index, offset_ms (spanning)
-        EndMove(String, f64), // movement_id, fade_out
-    }
-    let mut events: Vec<(u64, Ev)> = Vec::new();
-    for (i, c) in clips.iter().enumerate() {
-        let end = c.duration_ms.map(|d| c.start_ms + d);
-        if c.start_ms >= seek {
-            events.push((c.start_ms, Ev::Fire(i, 0)));
-        } else if matches!(c.payload, ScoreClipPayload::Slot { .. })
-            && end.map(|e| e > seek).unwrap_or(true)
-        {
-            // Clip slot à cheval sur le curseur → démarrage offset.
-            events.push((seek, Ev::Fire(i, seek - c.start_ms)));
-        }
-        // Cue markers déjà passés : skippés (documenté — pas de catch-up).
-        if let (Some(e), ScoreClipPayload::Slot { request, .. }) = (end, &c.payload) {
-            if e > seek {
-                let fade = request
-                    .animation
-                    .as_ref()
-                    .map(|a| a.fade_out)
-                    .unwrap_or(0.5);
-                events.push((e, Ev::EndMove(request.movement_id.clone(), fade)));
-            }
-        }
-    }
-    events.sort_by_key(|(t, _)| *t);
+    let events = build_events(&clips, seek);
 
     let sink = sh.event_sink.clone();
     std::thread::spawn(move || {
@@ -324,7 +304,9 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
                 return;
             }
             match ev {
-                Ev::Fire(i, offset) => fire_clip(&clips[i], offset, &sh, &mut lane_active, &sink),
+                Ev::Fire(i, k, offset) => {
+                    fire_clip(&clips[i], k, offset, &sh, &mut lane_active, &sink)
+                }
                 Ev::EndMove(id, fade) => {
                     lane_active.retain(|_, v| v.0 != id);
                     if let Err(e) = deactivate_move_arc(&id, fade, true, &sh) {
@@ -347,9 +329,84 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
     Ok(())
 }
 
+/// Liste d'événements du lecteur : démarrages de clips + fins auto des
+/// moves score (Slots). Extrait de la commande pour être testable en
+/// unit — la détermination des timestamps est pure.
+enum Ev {
+    /// clip index, itération (repeat), offset_ms (seek à cheval)
+    Fire(usize, u64, u64),
+    /// movement_id, fade_out
+    EndMove(String, f64),
+}
+
+/// Compile les clips résolus en liste d'événements ordonnée à partir
+/// de `seek`. Un clip `repeat_every_ms` s'expande en copies à
+/// `start + k·every` bornées par sa fenêtre `duration_ms` — les
+/// répétitions sont matérialisées au play (pas de scheduler
+/// infini) : déterministe, borné (4096 itérations max), seek sûr.
+fn build_events(clips: &[ScoreClip], seek: u64) -> Vec<(u64, Ev)> {
+    let mut events: Vec<(u64, Ev)> = Vec::new();
+    for (i, c) in clips.iter().enumerate() {
+        // Expansion des répétitions — (fire_at, itération, fin du move
+        // score pour cette itération). repeat_every requiert duration_ms
+        // (la fenêtre borne les copies) — sans fenêtre, une seule fois
+        // + avertissement (jamais de génération non bornée).
+        let iterations: Vec<(u64, u64, Option<u64>)> = match (c.repeat_every_ms, c.duration_ms) {
+            (Some(every), Some(window)) if every > 0 => {
+                let mut v = Vec::new();
+                for k in 0u64..4096 {
+                    let fk = c.start_ms + k * every;
+                    if fk >= c.start_ms + window {
+                        break;
+                    }
+                    v.push((fk, k, Some((fk + every).min(c.start_ms + window))));
+                }
+                v
+            }
+            (Some(_), _) => {
+                eprintln!(
+                    "[score] clip '{}': repeat_every ignoré — duration_ms requis",
+                    c.id
+                );
+                vec![(c.start_ms, 0, None)]
+            }
+            _ => vec![(c.start_ms, 0, c.duration_ms.map(|d| c.start_ms + d))],
+        };
+        for (fire_at, k, iter_end) in iterations {
+            if fire_at >= seek {
+                events.push((fire_at, Ev::Fire(i, k, 0)));
+            } else if matches!(c.payload, ScoreClipPayload::Slot { .. })
+                && iter_end.map(|e| e > seek).unwrap_or(true)
+            {
+                // Itération de slot à cheval sur le curseur → offset.
+                events.push((seek, Ev::Fire(i, k, seek - fire_at)));
+            }
+            // Cue markers déjà passés : skippés (documenté — pas de catch-up).
+            if let (Some(e), ScoreClipPayload::Slot { request, .. }) = (iter_end, &c.payload) {
+                if e > seek {
+                    let fade = request
+                        .animation
+                        .as_ref()
+                        .map(|a| a.fade_out)
+                        .unwrap_or(0.5);
+                    let mv_id = if c.repeat_every_ms.is_some() {
+                        format!("{}-{k}", request.movement_id)
+                    } else {
+                        request.movement_id.clone()
+                    };
+                    events.push((e, Ev::EndMove(mv_id, fade)));
+                }
+            }
+        }
+    }
+    events.sort_by_key(|(t, _)| *t);
+    events
+}
+
 /// Exécute un clip — mêmes chemins que les actions opérateur/OSC.
 fn fire_clip(
     clip: &ScoreClip,
+    iteration: u64,
     offset_ms: u64,
     sh: &Shared,
     lane_active: &mut HashMap<String, (String, f64)>,
@@ -362,22 +419,24 @@ fn fire_clip(
             if let Some((prev_id, prev_fade)) = lane_active.remove(&clip.track) {
                 let _ = deactivate_move_arc(&prev_id, prev_fade, true, sh);
             }
-            match spawn_move(spec_from_request(request.as_ref().clone()), sh) {
+            let mut req = request.as_ref().clone();
+            // Itérations d'un clip répété : id suffixé par itération —
+            // chaque copie est un move distinct (les EndMove ciblent par id).
+            if clip.repeat_every_ms.is_some() {
+                req.movement_id = format!("{}-{iteration}", req.movement_id);
+            }
+            match spawn_move(spec_from_request(req.clone()), sh) {
                 Ok(_) => {
                     if let Some(m) = macros {
                         apply_set_macro_request(m, &lock_or_recover(&sh.merge_runtime));
                     }
                     if offset_ms > 0 {
-                        if let Some(mv) = lock_or_recover(&sh.movements).get(&request.movement_id) {
+                        if let Some(mv) = lock_or_recover(&sh.movements).get(&req.movement_id) {
                             mv.runtime.set_time_offset(offset_ms as f64 / 1000.0);
                         }
                     }
-                    let fade_out = request
-                        .animation
-                        .as_ref()
-                        .map(|a| a.fade_out)
-                        .unwrap_or(0.5);
-                    lane_active.insert(clip.track.clone(), (request.movement_id.clone(), fade_out));
+                    let fade_out = req.animation.as_ref().map(|a| a.fade_out).unwrap_or(0.5);
+                    lane_active.insert(clip.track.clone(), (req.movement_id.clone(), fade_out));
                     emit_ui(sink, "active-moves-update", ());
                 }
                 Err(e) => eprintln!("[score] clip '{}' spawn failed: {}", clip.id, e),
@@ -477,5 +536,116 @@ mod tests {
     fn stopped_tape_is_not_playing() {
         let tape = tape_with(vec![]);
         assert!(!tape_state(&lock_or_recover(&tape)).playing);
+    }
+
+    fn slot_clip(
+        id: &str,
+        start_ms: u64,
+        duration_ms: Option<u64>,
+        repeat_every_ms: Option<u64>,
+    ) -> ScoreClip {
+        ScoreClip {
+            id: id.to_string(),
+            track: "t1".to_string(),
+            start_ms,
+            duration_ms,
+            repeat_every_ms,
+            payload: ScoreClipPayload::Slot {
+                request: Box::new(ActivateMoveRequest {
+                    movement_id: format!("sc-{id}"),
+                    name: "test".to_string(),
+                    graph_json: stagespace_engines::GraphJson::default(),
+                    osc_ids: vec![1],
+                    track_indices: vec![0],
+                    is_preview: false,
+                    origin: None,
+                    duration: 10.0,
+                    loop_mode: "loop".to_string(),
+                    direction: "forward".to_string(),
+                    animation: None,
+                    end_mode: stagespace_engines::EndMode::default(),
+                    anchor_mode: stagespace_engines::AnchorMode::default(),
+                    anchor_target: None,
+                }),
+                macros: None,
+            },
+        }
+    }
+
+    fn events_map(evs: &[(u64, Ev)]) -> Vec<(u64, String)> {
+        evs.iter()
+            .map(|(t, ev)| {
+                let desc = match ev {
+                    Ev::Fire(i, k, off) => format!("fire:{i}:k{k}:+{off}"),
+                    Ev::EndMove(id, _) => format!("end:{id}"),
+                };
+                (*t, desc)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn repeat_expands_into_bounded_copies() {
+        // Fenêtre 10s, période 2s → 5 copies à 0,2,4,6,8 — chacune
+        // vit une période (EndMove au prochain pas / fin de fenêtre).
+        let clips = vec![slot_clip("c1", 0, Some(10_000), Some(2_000))];
+        let evs = events_map(&build_events(&clips, 0));
+        assert_eq!(
+            evs,
+            vec![
+                (0, "fire:0:k0:+0".to_string()),
+                (2000, "end:sc-c1-0".to_string()),
+                (2000, "fire:0:k1:+0".to_string()),
+                (4000, "end:sc-c1-1".to_string()),
+                (4000, "fire:0:k2:+0".to_string()),
+                (6000, "end:sc-c1-2".to_string()),
+                (6000, "fire:0:k3:+0".to_string()),
+                (8000, "end:sc-c1-3".to_string()),
+                (8000, "fire:0:k4:+0".to_string()),
+                (10000, "end:sc-c1-4".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn repeat_seek_spans_iteration_with_offset() {
+        // Seek à 5s : l'itération k2 (4→6s) est à cheval → fire offset
+        // 1s à l'instant du seek ; les copies < seek sont mortes.
+        let clips = vec![slot_clip("c1", 0, Some(10_000), Some(2_000))];
+        let evs = events_map(&build_events(&clips, 5_000));
+        assert_eq!(
+            evs,
+            vec![
+                (5000, "fire:0:k2:+1000".to_string()),
+                (6000, "end:sc-c1-2".to_string()),
+                (6000, "fire:0:k3:+0".to_string()),
+                (8000, "end:sc-c1-3".to_string()),
+                (8000, "fire:0:k4:+0".to_string()),
+                (10000, "end:sc-c1-4".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn repeat_without_window_fires_once() {
+        // repeat_every sans duration_ms → pas de fenêtre borne → une
+        // seule fois (jamais de génération non bornée).
+        let clips = vec![slot_clip("c1", 0, None, Some(2_000))];
+        let evs = events_map(&build_events(&clips, 0));
+        assert_eq!(evs, vec![(0, "fire:0:k0:+0".to_string())]);
+    }
+
+    #[test]
+    fn non_repeat_clip_unchanged() {
+        // Régression : un clip simple garde Fire + EndMove sur l'id de base.
+        let clips = vec![slot_clip("c1", 1_000, Some(3_000), None)];
+        let evs = events_map(&build_events(&clips, 0));
+        assert_eq!(
+            evs,
+            vec![
+                (1000, "fire:0:k0:+0".to_string()),
+                (4000, "end:sc-c1".to_string()),
+            ]
+        );
     }
 }

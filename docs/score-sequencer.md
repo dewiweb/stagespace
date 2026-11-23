@@ -81,6 +81,29 @@ interface Score {
 Persistence: `Score` joins the `.hfg` envelope (document, not runtime)
 → dirty tracking, save/load, autosave apply unchanged.
 
+### Loop semantics — two distinct notions (S2.x)
+
+- **In-clip loop** (`MoveSlot.loop_mode = 'loop'`, existing): the
+  *trajectory* cycles continuously for the whole clip duration. One
+  spawn, no re-articulation. A 30 s slot clip of a looped circle =
+  30 s of uninterrupted orbiting.
+- **Clip repeat** (`repeat_every_ms`, S2.x): the *clip itself*
+  re-fires — the scheduler materializes bounded copies at
+  `start + k·every` inside the clip's window (`duration_ms`, required).
+  Each copy is a fresh spawn/pulse: re-anchored, re-faded —
+  rhythmic re-articulation, not continuous motion. With
+  `anchor: current` each copy chains from where the previous one
+  ended → evolving patterns. Iteration movement-ids are suffixed
+  (`sc-{clip}-{k}`) → deterministic deactivation, seek-safe (a seek
+  landing mid-iteration starts it with `time_offset`). Expansion is
+  materialized at play time (bounded to 4096 iterations) — no infinite
+  scheduler, no unbounded worker fan-out.
+
+The distinction matters musically: internal loop = continuous gesture;
+clip repeat = the same *phrase* reiterated. A future "pattern clip"
+(nested clip group that tiles) generalizes this to multi-lane phrases
+(moves + cues + markers repeated together) — S3+ territory.
+
 ## The engine — backend-evaluated
 
 The score is **evaluated inside the merge/runtime at the 60 Hz tick**,

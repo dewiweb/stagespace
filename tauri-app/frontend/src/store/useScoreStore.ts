@@ -33,6 +33,11 @@ export interface ScoreClipDoc {
   /// Slots : fin auto (désactivation). Absent = le move tourne jusqu'au
   /// stop suivant/panic (clip "ouvert").
   durationMs?: number;
+  /// "Clip loop" — re-déclenchement périodique : le clip tire à
+  /// start + k·repeatEveryMs jusqu'à la fin de sa fenêtre (durationMs
+  /// requise). Distinct du loop_mode du move (trajectoire interne) :
+  /// ici chaque copie est un nouveau spawn — re-articulation rythmique.
+  repeatEveryMs?: number;
   ref: ScoreClipRef;
 }
 
@@ -61,6 +66,7 @@ interface ScoreState extends ScoreDoc {
   addClip: (trackId: string, ref: ScoreClipRef, startMs: number, durationMs?: number) => ScoreClipDoc;
   moveClip: (id: string, startMs: number) => void;
   resizeClip: (id: string, durationMs: number | undefined) => void;
+  setClipRepeat: (id: string, repeatEveryMs: number | undefined) => void;
   removeClip: (id: string) => void;
   setDurationMs: (ms: number) => void;
   setScoreDoc: (doc: ScoreDoc | undefined) => void;
@@ -107,6 +113,10 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
   resizeClip: (id, durationMs) =>
     set((s) => ({
       clips: s.clips.map((c) => (c.id === id ? { ...c, durationMs } : c)),
+    })),
+  setClipRepeat: (id, repeatEveryMs) =>
+    set((s) => ({
+      clips: s.clips.map((c) => (c.id === id ? { ...c, repeatEveryMs } : c)),
     })),
   removeClip: (id) => set((s) => ({ clips: s.clips.filter((c) => c.id !== id) })),
   setDurationMs: (ms) => set({ durationMs: Math.max(1000, ms) }),

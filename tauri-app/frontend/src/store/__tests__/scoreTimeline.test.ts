@@ -88,4 +88,13 @@ describe('score timeline (S2)', () => {
     expect(getInvokeCalls().map((c) => c.cmd)).toContain('score_timeline_stop');
     expect(useScoreStore.getState().playing).toBe(false);
   });
+
+  it('repeatEveryMs (copies du pattern) est propagé à la résolution', async () => {
+    const st = useScoreStore.getState();
+    const c = st.addClip('trk-slots', { type: 'slot', slotId: 's1' }, 0, 10_000);
+    useScoreStore.getState().setClipRepeat(c.id, 2_000);
+    const { clips } = await resolveScoreClips(useScoreStore.getState());
+    expect(clips[0].repeat_every_ms).toBe(2000);
+    expect(clips[0].duration_ms).toBe(10_000);
+  });
 });

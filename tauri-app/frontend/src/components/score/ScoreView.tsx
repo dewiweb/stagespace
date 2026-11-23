@@ -30,7 +30,7 @@ const ScoreView: React.FC = () => {
   const durationMs = useScoreStore((s) => s.durationMs);
   const playing = useScoreStore((s) => s.playing);
   const cursorMs = useScoreStore((s) => s.cursorMs);
-  const { addClip, moveClip, resizeClip, removeClip, setDurationMs, playScore, stopScore, seekScore, toggleTrackMute } =
+  const { addClip, moveClip, resizeClip, removeClip, setDurationMs, setClipRepeat, playScore, stopScore, seekScore, toggleTrackMute } =
     useScoreStore.getState();
   const moveSlots = useGraphStore((s) => s.moveSlots);
   const cues = useCuelistStore((s) => s.cues);
@@ -199,7 +199,21 @@ const ScoreView: React.FC = () => {
                       onPointerUp={onClipPointerUp}
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <span className="truncate pointer-events-none">{clipLabel(c)}</span>
+                      {/* Copies du pattern — ticks aux bornes de répétition */}
+                      {c.repeatEveryMs != null && c.repeatEveryMs > 0 && c.durationMs != null &&
+                        Array.from(
+                          { length: Math.floor(c.durationMs / c.repeatEveryMs) },
+                          (_, i) => (i + 1) * c.repeatEveryMs!,
+                        ).filter((off) => off < c.durationMs!).map((off) => (
+                          <div
+                            key={off}
+                            className="absolute top-0 bottom-0 border-l border-white/30 pointer-events-none"
+                            style={{ left: ms2px(off) }}
+                          />
+                        ))}
+                      <span className="truncate pointer-events-none">
+                        {c.repeatEveryMs != null ? '⟳ ' : ''}{clipLabel(c)}
+                      </span>
                       {c.ref.type === 'slot' && c.durationMs != null && (
                         <div
                           className="absolute right-0 top-0 bottom-0 w-1.5 cursor-ew-resize bg-white/20 hover:bg-white/50"
@@ -270,9 +284,47 @@ const ScoreView: React.FC = () => {
         );
       })()}
 
-      {/* Bandeau info bas */}
-      <div className="px-3 py-1 border-t border-gray-800 text-[10px] text-gray-500 flex gap-4">
+      {/* Bandeau info bas — inspector du clip sélectionné */}
+      <div className="px-3 py-1 border-t border-gray-800 text-[10px] text-gray-500 flex items-center gap-4">
         <span>{clips.length} clip{clips.length > 1 ? 's' : ''} — exécution backend (survit au reload)</span>
+        {(() => {
+          const c = clips.find((x) => x.id === selected);
+          if (!c) return null;
+          const numIn = (label: string, val: number | undefined, onSet: (v: number | undefined) => void, title?: string) => (
+            <label className="flex items-center gap-1" title={title}>
+              {label}
+              <input
+                key={`${c.id}-${label}`}
+                type="number" min={0} step={0.5} defaultValue={val != null ? val / 1000 : ''}
+                placeholder="—"
+                onBlur={(e) => {
+                  const v = e.target.value === '' ? undefined : Math.max(0, Number(e.target.value) * 1000);
+                  onSet(v);
+                }}
+                onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                className="w-14 bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-[10px]"
+              />
+              s
+            </label>
+          );
+          return (
+            <span className="flex items-center gap-3 text-gray-400 border-l border-gray-800 pl-4">
+              <span className="font-bold text-gray-300">{clipLabel(c)}</span>
+              {numIn('début', c.startMs, (v) => v != null && moveClip(c.id, v))}
+              {numIn('durée', c.durationMs, (v) => resizeClip(c.id, v && v > 0 ? v : undefined))}
+              {numIn('⟳ toutes les', c.repeatEveryMs, (v) => {
+                // Repeat exige une fenêtre (durationMs) — un clip
+                // ouvert qui devient bouclé prend le reste du score
+                // comme fenêtre.
+                if (v != null && v > 0 && c.durationMs == null) {
+                  resizeClip(c.id, Math.max(v, durationMs - c.startMs));
+                }
+                setClipRepeat(c.id, v && v > 0 ? v : undefined);
+              }, 'Copies du pattern — re-déclenche le clip toutes les N s dans sa durée')}
+            </span>
+          );
+        })()}
+        <div className="flex-1" />
         <button className="hover:text-gray-300" onClick={() => {
           useScoreStore.getState().clearScore();
           toast.info('Score vidé');
