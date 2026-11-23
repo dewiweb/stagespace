@@ -128,7 +128,10 @@ export function flattenCueClip(clipId: string): FlattenCueResult | undefined {
 
   // Honnêteté : ces catégories n'ont pas (encore) d'entité timeline —
   // signalées, jamais silencieusement abandonnées.
+  if (cue.global_graph && (cue.global_graph.nodes?.length ?? 0) > 0) res.skipped.push('global_graph');
+  if (cue.graph && (cue.graph.nodes?.length ?? 0) > 0 && moves.length === 0) res.skipped.push('graph (legacy)');
   if (cue.object_channels) res.skipped.push('channels');
+  if (cue.channel_modulations?.length) res.skipped.push('channel_modulations');
   if (cue.osc_mappings?.length) res.skipped.push('osc_mappings');
   if (cue.zones?.length) res.skipped.push('zones');
   if (cue.per_track_depths?.length) res.skipped.push('depths');
