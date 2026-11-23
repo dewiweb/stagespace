@@ -57,7 +57,7 @@ const ScoreView: React.FC = () => {
   const modulationCurves = useScoreStore((s) => s.modulationCurves);
   const spatialFxCurves = useScoreStore((s) => s.spatialFxCurves);
   const objectCurves = useScoreStore((s) => s.objectCurves);
-  const { addClip, moveClip, resizeClip, removeClip, duplicateClip, splitClip, setDurationMs, setClipRepeat, setClipFades, setClipCurve, setClipTrackIds, setLaneCurve, setLoop, playScore, stopScore, seekScore, toggleLaneMute, setLaneMode, selectClip, selectGlobalLane, clearScoreSelection } =
+  const { addClip, moveClip, resizeClip, removeClip, duplicateClip, splitClip, setDurationMs, setClipRepeat, setClipFades, setClipCurve, setClipTrackIds, setLaneCurve, setLoop, playScore, stopScore, seekScore, toggleLaneMute, setLaneMode, selectClip, selectGlobalLane, clearScoreSelection, retargetClip } =
     useScoreStore.getState();
   const moveSlots = useGraphStore((s) => s.moveSlots);
   const macros = useGraphStore((s) => s.macros);
@@ -719,6 +719,7 @@ const ScoreView: React.FC = () => {
         onSetClipRepeat={setClipRepeat}
         onSetClipTrackIds={setClipTrackIds}
         onDuplicateClip={duplicateClip}
+        onUpdateRef={retargetClip}
       />
     </div>
   );

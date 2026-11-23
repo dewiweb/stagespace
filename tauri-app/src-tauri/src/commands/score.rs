@@ -222,6 +222,26 @@ pub enum ScoreClipPayload {
     Zones {
         zones: Vec<stagespace_engines::Zone>,
     },
+    /// Geste balistique GLOBAL — `gesture(name, strength)` sur tous
+    /// les objets émis (même chemin que `/stagespace/gesture` :
+    /// explode/converge/orbit/front, vélocité initiale amortie).
+    Gesture { name: String, strength: f64 },
+    /// Park — `park_object` par objet (fige + exempte des recalls).
+    /// Objets en obj_index ; liste vide = no-op (logué).
+    Park { objects: Vec<usize> },
+    /// Unpark — `unpark_object` par objet ; liste vide = `clear_parked`
+    /// (relâche tout — l'événement "release" de fin de section).
+    Unpark { objects: Vec<usize> },
+    /// Throw — `throw_object(obj, vel)` par objet couvert (grab &
+    /// throw balistique, même chemin que `/stagespace/throw`).
+    Throw { objects: Vec<usize>, vel: [f64; 3] },
+    /// Relâche des positions manuelles — `clear_manual_position` par
+    /// objet ; liste vide = `clear_all_manual_positions` (retour au
+    /// live pour toutes les reprises opérateur).
+    ManualClear { objects: Vec<usize> },
+    /// Attention — `attention_focus(obj)` (stase : tout fige sauf
+    /// l'objet couvert) ou `attention_release()` quand `obj` est None.
+    Attention { obj: Option<usize> },
 }
 
 /// Interpolation d'un segment de courbe — définie sur le keyframe
@@ -1281,6 +1301,52 @@ fn fire_clip(
                 if let Err(e) = rt.add_zone(z.clone()) {
                     eprintln!("[score] clip '{}': zone rejetée — {e}", clip.id);
                 }
+            }
+        }
+        ScoreClipPayload::Gesture { name, strength } => {
+            // /stagespace/gesture — impulsion sur les objets émis.
+            lock_or_recover(&sh.merge_runtime).gesture(name, *strength);
+        }
+        ScoreClipPayload::Park { objects } => {
+            let rt = lock_or_recover(&sh.merge_runtime);
+            if objects.is_empty() {
+                eprintln!("[score] clip '{}': park sans cible — ignoré", clip.id);
+            }
+            for &o in objects {
+                rt.park_object(o);
+            }
+        }
+        ScoreClipPayload::Unpark { objects } => {
+            let rt = lock_or_recover(&sh.merge_runtime);
+            if objects.is_empty() {
+                rt.clear_parked();
+            } else {
+                for &o in objects {
+                    rt.unpark_object(o);
+                }
+            }
+        }
+        ScoreClipPayload::Throw { objects, vel } => {
+            let rt = lock_or_recover(&sh.merge_runtime);
+            for &o in objects {
+                rt.throw_object(o, *vel);
+            }
+        }
+        ScoreClipPayload::ManualClear { objects } => {
+            let rt = lock_or_recover(&sh.merge_runtime);
+            if objects.is_empty() {
+                rt.clear_all_manual_positions();
+            } else {
+                for &o in objects {
+                    rt.clear_manual_position(o);
+                }
+            }
+        }
+        ScoreClipPayload::Attention { obj } => {
+            let rt = lock_or_recover(&sh.merge_runtime);
+            match obj {
+                Some(o) => rt.attention_focus(*o),
+                None => rt.attention_release(),
             }
         }
     }

@@ -530,4 +530,56 @@ describe('flatten cue → clips (explosion)', () => {
     const { clips: resolved } = await resolveScoreClips(useScoreStore.getState());
     expect(resolved).toHaveLength(0);
   });
+
+  it('événements conductor — gesture/park/unpark/throw/manualClear/attention', async () => {
+    const st = useScoreStore.getState();
+    // Gesture : global, strength dans le payload.
+    st.addClip({ type: 'gesture', name: 'explode', strength: 4 }, 1000);
+    // Park couverture gelée → cibles explicites (track → obj).
+    st.addClip({ type: 'park' }, 2000, { trackIds: [2, 4] });
+    // Park suivi (undefined) → tout le patch non muté.
+    st.addClip({ type: 'park' }, 2500);
+    // Unpark suivi → [] = clear_parked côté backend.
+    st.addClip({ type: 'unpark' }, 3000);
+    // Unpark gelé → ces objets.
+    st.addClip({ type: 'unpark' }, 3500, { trackIds: [3] });
+    // Throw — vélocité + cibles.
+    st.addClip({ type: 'throw', vel: [0, 5, 0] }, 4000, { trackIds: [1, 2] });
+    // ManualClear suivi → [] = clear_all.
+    st.addClip({ type: 'manualClear' }, 5000);
+    // Attention — 1er objet couvert = survivant ; vide = release.
+    st.addClip({ type: 'attention' }, 6000, { trackIds: [3] });
+    st.addClip({ type: 'attention' }, 7000);
+
+    const { clips } = await resolveScoreClips(useScoreStore.getState());
+    expect(clips.map((c) => c.payload)).toEqual([
+      { kind: 'Gesture', data: { name: 'explode', strength: 4 } },
+      // track 2 → obj 1, track 4 → obj 3 (manualOscIds [1,2,3,4])
+      { kind: 'Park', data: { objects: [1, 3] } },
+      { kind: 'Park', data: { objects: [0, 1, 2, 3] } },
+      { kind: 'Unpark', data: { objects: [] } },
+      { kind: 'Unpark', data: { objects: [2] } },
+      { kind: 'Throw', data: { objects: [0, 1], vel: [0, 5, 0] } },
+      { kind: 'ManualClear', data: { objects: [] } },
+      { kind: 'Attention', data: { obj: 2 } },
+      { kind: 'Attention', data: { obj: null } },
+    ]);
+    // Tous sur la lane conductor.
+    expect(clips.every((c) => c.lanes.length === 1 && c.lanes[0].id === CONDUCTOR_LANE)).toBe(true);
+  });
+
+  it('événements conductor — mute conductor skippe ; lanes objet mutées excluent les cibles', async () => {
+    const st = useScoreStore.getState();
+    useScoreStore.getState().toggleLaneMute('obj-2'); // track 2 mutée
+    st.addClip({ type: 'park' }, 0, { trackIds: [1, 2] });
+    st.addClip({ type: 'throw', vel: [1, 0, 0] }, 0); // suivi = patch non muté
+    const { clips } = await resolveScoreClips(useScoreStore.getState());
+    // track 2 exclue des cibles (lane mutée = le score n'y touche pas).
+    expect(clips[0].payload).toEqual({ kind: 'Park', data: { objects: [0] } });
+    expect(clips[1].payload).toEqual({ kind: 'Throw', data: { objects: [0, 2, 3], vel: [1, 0, 0] } });
+    // Mute conductor → tout l'événementiel saute.
+    useScoreStore.getState().toggleLaneMute(CONDUCTOR_LANE);
+    const { clips: muted } = await resolveScoreClips(useScoreStore.getState());
+    expect(muted).toHaveLength(0);
+  });
 });

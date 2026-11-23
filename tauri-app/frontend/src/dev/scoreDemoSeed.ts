@@ -151,6 +151,14 @@ export function seedScoreDemo() {
   // Cue orpheline — couverture vide → se rend sur la lane master.
   s.addClip({ type: 'cue', cueId: '999' }, 48_000);
 
+  // Événements conductor — geste global + contrôle ciblé.
+  s.addClip({ type: 'gesture', name: 'explode', strength: 4 }, 17_000);
+  s.addClip({ type: 'park' }, 26_000, { trackIds: [3] });
+  s.addClip({ type: 'unpark' }, 44_000); // couverture vide → clear_parked
+  s.addClip({ type: 'throw', vel: [0, 4, 0] }, 33_000, { trackIds: [1, 2] });
+  s.addClip({ type: 'attention' }, 46_000, { trackIds: [2] });
+  s.addClip({ type: 'attention' }, 49_000); // vide → release
+
   // Markers → lane globalfx.
   s.addClip({ type: 'stopAll' }, 50_000);
   s.addClip({ type: 'panic' }, 56_000);

@@ -21,9 +21,11 @@ export const ScoreInspector: React.FC<{
   onSetClipRepeat: (id: string, everyMs: number | undefined) => void;
   onSetClipTrackIds: (id: string, trackIds: number[] | undefined) => void;
   onDuplicateClip: (id: string) => void;
+  /// Réécrit la référence du clip (geste → strength, throw → vel).
+  onUpdateRef: (id: string, ref: ScoreClipDoc['ref']) => void;
 }> = ({
   clipsCount, selected, clipLabel, manualOscIds, covered, durationMs,
-  onMoveClip, onResizeClip, onSetClipFades, onSetClipRepeat, onSetClipTrackIds, onDuplicateClip,
+  onMoveClip, onResizeClip, onSetClipFades, onSetClipRepeat, onSetClipTrackIds, onDuplicateClip, onUpdateRef,
 }) => {
   const c = selected;
   /// Champ numérique secondes → ms (vide = undefined).
@@ -47,6 +49,23 @@ export const ScoreInspector: React.FC<{
       s
     </label>
   );
+  /// Champ numérique BRUT (unité du paramètre — pas des secondes) :
+  /// strength de geste, composantes de vélocité de throw.
+  const rawIn = (label: string, val: number, onSet: (v: number) => void, title?: string) => (
+    <label className="flex items-center gap-1" title={title}>
+      {label}
+      <input
+        key={`${c?.id}-${label}-${val}`}
+        type="number" step={0.5} defaultValue={val}
+        onBlur={(e) => { const v = Number(e.target.value); if (Number.isFinite(v)) onSet(v); }}
+        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+        className="w-14 bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-[10px]"
+      />
+    </label>
+  );
+  // Événements à cibles — la couverture trackIds porte la sémantique
+  // (objets visés), pas un simple blast radius visuel.
+  const TARGETED = new Set(['park', 'unpark', 'throw', 'manualClear', 'attention']);
   return (
     <div className="px-3 py-1 border-t border-gray-800 text-[10px] text-gray-500 flex items-center gap-4">
       <span>{clipsCount} clip{clipsCount > 1 ? 's' : ''} — exécution backend (survit au reload)</span>
@@ -55,12 +74,14 @@ export const ScoreInspector: React.FC<{
           <span className="font-bold text-gray-300">{clipLabel(c)}</span>
           {/* Couverture — les objets pilotés par ce clip. × retire
               l'objet (réassignation) ; slot → + ajoute un objet. */}
-          {(c.ref.type === 'slot' || c.ref.type === 'cue') && (() => {
+          {(c.ref.type === 'slot' || c.ref.type === 'cue' || TARGETED.has(c.ref.type)) && (() => {
             const eff = effectiveTrackIds(c);
             const following = c.trackIds === undefined;
             return (
             <span className="flex items-center gap-1" title={following
-              ? 'Couverture suivie — dérivée en live de l\'entité (réassignations reflétées)'
+              ? (TARGETED.has(c.ref.type)
+                ? 'Cible suivie — tous les objets patchés (geler pour restreindre)'
+                : 'Couverture suivie — dérivée en live de l\'entité (réassignations reflétées)')
               : 'Couverture gelée — override explicite du clip'}>
               obj:
               {eff.map((tid) => (
@@ -88,7 +109,7 @@ export const ScoreInspector: React.FC<{
                   onClick={() => onSetClipTrackIds(c.id, undefined)}
                 >⇄</button>
               )}
-              {c.ref.type === 'slot' && !following && (
+              {(c.ref.type === 'slot' || TARGETED.has(c.ref.type)) && !following && (
                 <select
                   className="bg-gray-800 border border-gray-700 rounded text-[10px]"
                   value=""
@@ -116,6 +137,24 @@ export const ScoreInspector: React.FC<{
           {c.ref.type === 'slot' && numIn('fade out', c.fadeOutMs,
             (v) => onSetClipFades(c.id, c.fadeInMs, v),
             'Fade-out clip-local (tail après la fin) — vide = hérite le fade du slot')}
+          {(() => {
+            const ref = c.ref;
+            if (ref.type === 'gesture') {
+              return rawIn('force', ref.strength,
+                (v) => onUpdateRef(c.id, { ...ref, strength: v }),
+                'Vélocité initiale de l\'impulsion (m/s) — défaut OSC : 3');
+            }
+            if (ref.type === 'throw') {
+              return (['x', 'y', 'z'] as const).map((axis, i) =>
+                rawIn(axis, ref.vel[i], (v) => {
+                  const vel: [number, number, number] = [...ref.vel];
+                  vel[i] = v;
+                  onUpdateRef(c.id, { ...ref, vel });
+                }, `Composante ${axis} de la vélocité (m/s)`),
+              );
+            }
+            return null;
+          })()}
           {numIn('⟳ toutes les', c.repeatEveryMs, (v) => {
             // Repeat exige une fenêtre (durationMs) — un clip
             // ouvert qui devient bouclé prend le reste du score

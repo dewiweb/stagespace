@@ -70,7 +70,29 @@ export type ScoreClipRef =
   /// dans `postGraph`) : règles cinématiques et zones, installées
   /// clear+set au tir — même sémantique que le recall de cue.
   | { type: 'chanMods'; modulations: ChannelModulation[] }
-  | { type: 'zones'; zones: Zone[] };
+  | { type: 'zones'; zones: Zone[] }
+  | ScoreEventRef;
+
+/// Événements gestuels/contrôle — lane CONDUCTOR, one-shot comme
+  /// stopAll/panic (mêmes chemins que les commandes OSC
+  /// `/stagespace/*`). Les cibles (park/unpark/throw/manualClear/
+  /// attention) = la COUVERTURE du clip (`trackIds`) : `undefined` =
+  /// tous les objets patchés (suivi live), liste explicite = ces
+  /// objets. `gesture` est global (tous les objets émis).
+  /// - `gesture` : impulsion balistique globale (explode/converge/
+  ///   orbit/front), `strength` = vélocité initiale (défaut OSC : 3).
+  /// - `park` / `unpark` : fige / relâche (couverture vide → clear).
+  /// - `throw` : lance balistique `vel` (m/s) sur les objets couverts.
+  /// - `manualClear` : relâche les positions manuelles (vide = tout).
+  /// - `attention` : stase — tout fige SAUF le 1er objet couvert ;
+  ///   couverture vide = release.
+export type ScoreEventRef =
+  | { type: 'gesture'; name: 'explode' | 'converge' | 'orbit' | 'front'; strength: number }
+  | { type: 'throw'; vel: [number, number, number] }
+  | { type: 'park' }
+  | { type: 'unpark' }
+  | { type: 'manualClear' }
+  | { type: 'attention' };
 
 export interface ScoreClipDoc {
   id: string;

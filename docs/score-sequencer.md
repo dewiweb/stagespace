@@ -239,6 +239,30 @@ namespace). Ce sont de **vrais paramètres runtime** — jamais dérivés
 d'un graphe (les nodes `PerTrackDepth` lisent les depths, les canaux
 sont émis en OSC en sortie).
 
+### Lane CONDUCTOR — événements gestuels & contrôle
+
+À côté des barrières (`cue`, `stopAll`, `panic`), la lane conductor
+porte les **événements one-shot** d'opérateur — mêmes chemins backend
+que les commandes OSC `/stagespace/*` (le score est un contrôleur de
+plus, pas un runtime parallèle) :
+
+| Clip | Effet au tir | Cibles |
+|---|---|---|
+| `gesture` | `gesture(name, strength)` — impulsion balistique explode/converge/orbit/front | tous les objets émis |
+| `throw` | `throw_object(obj, vel)` par objet | couverture |
+| `park` | `park_object` — fige + exempte des recalls | couverture (vide = no-op logué) |
+| `unpark` | `unpark_object` ; vide → `clear_parked` | couverture |
+| `manualClear` | `clear_manual_position` ; vide → `clear_all` | couverture |
+| `attention` | `attention_focus(1er couvert)` ; vide → `attention_release` | couverture |
+
+**Couverture = cible** : pour ces clips, `trackIds` n'est pas un
+blast radius visuel mais la liste sémantique des objets visés —
+`undefined` (suivi) = tout le patch à l'instant du play ; une liste
+gelée = ces objets ; les lanes objet mutées excluent leurs cibles
+(« lane mutée = le score n'y touche pas »). Le mute de la lane
+conductor saute tout l'événementiel. `strength`/`vel` s'éditent dans
+l'inspector.
+
 Explicitement **non matérialisé** — rapporté à l'opérateur (toast +
 `skipped`), jamais silencieusement perdu : `osc_mappings` (table
 OSC-IN — config système, cas d'usage timeline discutable), `graph`

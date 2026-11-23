@@ -36,6 +36,12 @@ export const CLIP_COLORS: Record<string, string> = {
   postGraph: 'bg-sky-700/80 border-sky-400',
   chanMods: 'bg-violet-700/80 border-violet-400',
   zones: 'bg-fuchsia-700/80 border-fuchsia-400',
+  gesture: 'bg-orange-600/80 border-orange-400',
+  throw: 'bg-orange-800/80 border-orange-500',
+  park: 'bg-cyan-800/80 border-cyan-500',
+  unpark: 'bg-cyan-700/80 border-cyan-400',
+  manualClear: 'bg-slate-700/80 border-slate-400',
+  attention: 'bg-rose-800/80 border-rose-500',
 };
 
 /// Label affiché d'un clip — nom du slot/cue ou marqueur.
@@ -64,5 +70,11 @@ export function clipLabel(
     case 'postGraph': return 'POST graph';
     case 'chanMods': return `MODS ×${clip.ref.modulations.length}`;
     case 'zones': return `ZONES ×${clip.ref.zones.length}`;
+    case 'gesture': return `◈ ${clip.ref.name.toUpperCase()}`;
+    case 'throw': return 'THROW';
+    case 'park': return 'PARK';
+    case 'unpark': return 'UNPARK';
+    case 'manualClear': return 'MANUEL OFF';
+    case 'attention': return 'ATTENTION';
   }
 }

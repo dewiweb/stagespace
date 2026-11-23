@@ -71,7 +71,16 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
   }
 
   for (const c of doc.clips) {
-    const isBarrier = c.ref.type === 'cue' || c.ref.type === 'stopAll' || c.ref.type === 'panic';
+    // Événements de la lane conductor : barrières d'état (cue/stopAll/
+    // panic) + gestes et contrôle (park/unpark/throw/manualClear/
+    // attention/gesture) — gouvernés par le mute de la lane conductor.
+    // Leur couverture trackIds est la CIBLE sémantique (objets
+    // concernés), filtrée par les lanes objet mutées : une lane mutée
+    // = le score n'y touche pas.
+    const isConductor =
+      c.ref.type === 'cue' || c.ref.type === 'stopAll' || c.ref.type === 'panic' ||
+      c.ref.type === 'gesture' || c.ref.type === 'park' || c.ref.type === 'unpark' ||
+      c.ref.type === 'throw' || c.ref.type === 'manualClear' || c.ref.type === 'attention';
     // Mute : les barrières (transitions d'état globales) sont gouvernées
     // par la lane conductor — leur couverture trackIds n'est qu'un
     // blast radius visuel, elle ne mute pas l'événement. Un slot perd
@@ -79,7 +88,7 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
     // Couverture effective : explicite si gelée, sinon dérivation
     // live de l'entité (réassignation Atelier reflétée dans le score).
     const activeTids = effectiveTrackIds(c).filter((tid) => !laneState(laneIdOf(tid))?.muted);
-    if (isBarrier) {
+    if (isConductor) {
       if (laneState(CONDUCTOR_LANE)?.muted) continue;
     } else if (c.ref.type === 'modGraph') {
       // Pas de couverture objet — muté par sa propre lane.
@@ -195,6 +204,53 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
           payload: { kind: 'Zones', data: { zones: c.ref.zones } },
         });
         break;
+      case 'gesture':
+        clips.push({
+          ...base,
+          payload: { kind: 'Gesture', data: { name: c.ref.name, strength: c.ref.strength } },
+        });
+        break;
+      case 'park':
+      case 'throw': {
+        // Cibles matérialisées — couverture suivie = tout le patch
+        // non muté ; gelée = la liste. Vide → no-op backend (logué).
+        const objects = activeTids
+          .map((tid) => gs.manualOscIds.indexOf(tid))
+          .filter((i) => i >= 0);
+        clips.push({
+          ...base,
+          payload: c.ref.type === 'park'
+            ? { kind: 'Park', data: { objects } }
+            : { kind: 'Throw', data: { objects, vel: c.ref.vel } },
+        });
+        break;
+      }
+      case 'unpark':
+      case 'manualClear': {
+        // Couverture gelée → ces objets ; suivie (undefined) → []
+        // = clear_parked / clear_all_manual_positions côté backend
+        /// (release global — la forme "tout" la plus simple).
+        const objects = c.trackIds === undefined
+          ? []
+          : activeTids.map((tid) => gs.manualOscIds.indexOf(tid)).filter((i) => i >= 0);
+        clips.push({
+          ...base,
+          payload: c.ref.type === 'unpark'
+            ? { kind: 'Unpark', data: { objects } }
+            : { kind: 'ManualClear', data: { objects } },
+        });
+        break;
+      }
+      case 'attention': {
+        // 1er objet couvert = le survivant (stase des autres) ;
+        // aucun = release.
+        const obj = activeTids.length ? gs.manualOscIds.indexOf(activeTids[0]) : -1;
+        clips.push({
+          ...base,
+          payload: { kind: 'Attention', data: { obj: obj >= 0 ? obj : null } },
+        });
+        break;
+      }
     }
   }
   return { clips, errors, objectCurves };
@@ -222,6 +278,17 @@ export function effectiveTrackIds(c: ScoreClipDoc): number[] {
       // Les positions sont portées en track_id (espace opérateur).
       return Object.keys((c.ref as { positions: Record<number, [number, number, number]> }).positions)
         .map(Number).filter((t) => Number.isFinite(t));
+    case 'park':
+    case 'unpark':
+    case 'throw':
+    case 'manualClear':
+      // Couverture suivie (`trackIds` undefined) = tous les objets
+      // patchés — la cible "tout le monde" du geste/contrôle.
+      return gs.manualOscIds;
+    case 'attention':
+      // Stase : couverture suivie = aucun objet → release. La cible
+      // est le 1er objet d'une couverture gelée.
+      return [];
     default:
       return [];
   }
