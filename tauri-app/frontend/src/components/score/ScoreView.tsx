@@ -164,8 +164,92 @@ const ScoreView: React.FC = () => {
     setPicker(null);
   };
 
+  // Zone haute — éditeur clip-scoped (docs/score-sequencer.md §Surface) :
+  // les "courbes" du clip sélectionné s'éditent ici. L'enveloppe de
+  // fades est la première courbe réelle ; les paramètres continus
+  // (pos.x, speed, scale…) arrivent avec S3.
+  const CurveZone = () => {
+    const c = clips.find((x) => x.id === selected);
+    const chip = (label: string, active: boolean, title?: string) => (
+      <span
+        title={title}
+        className={`px-2 py-0.5 text-[9px] font-bold rounded border ${active ? 'border-cyan-500 text-cyan-300 bg-cyan-900/30' : 'border-gray-800 text-gray-600'}`}
+      >
+        {label}
+      </span>
+    );
+    const inner = (() => {
+      if (!c)
+        return (
+          <span className="text-[11px] text-gray-600 italic">
+            Sélectionnez un clip — ses courbes éditables s'affichent ici (éditeur S3).
+          </span>
+        );
+      if (c.ref.type !== 'slot')
+        return (
+          <span className="text-[11px] text-gray-500">
+            {clipLabel(c)} — événement ponctuel, pas de courbe éditable.
+          </span>
+        );
+      // Enveloppe du clip : rampe fade-in → sustain → tail fade-out
+      // APRÈS la fin de fenêtre (le move s'éteint au-delà du bord).
+      const fades = effFades(c);
+      const end = c.durationMs ?? fades.inMs + 4_000; // clip ouvert → fenêtre nominale
+      const total = end + fades.outMs + 500;
+      const W = 1000; // viewBox, étiré au conteneur
+      const H = 100;
+      const pad = 12;
+      const x = (ms: number) => pad + (ms / total) * (W - pad * 2);
+      const pts = [
+        [x(0), H - 8],
+        [x(fades.inMs), 8],
+        [x(end), 8],
+        [x(end + fades.outMs), H - 8],
+      ]
+        .map((p) => p.join(','))
+        .join(' ');
+      return (
+        <svg viewBox={`0 0 ${W} ${H}`} className="flex-1 h-full" preserveAspectRatio="none">
+          {/* fenêtre du clip */}
+          <rect x={x(0)} y={0} width={x(end) - x(0)} height={H} className="fill-purple-500/10" />
+          {/* tail — fade joué au-delà de la fenêtre */}
+          <rect x={x(end)} y={0} width={x(end + fades.outMs) - x(end)} height={H} className="fill-purple-500/5" />
+          <line x1={x(end)} y1={0} x2={x(end)} y2={H} stroke="#a78bfa" strokeOpacity={0.5} strokeDasharray="3 3" />
+          <polyline points={pts} fill="none" stroke="#c4b5fd" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+          {fades.inMs > 0 && (
+            <line x1={x(0)} y1={H - 4} x2={x(fades.inMs)} y2={H - 4} stroke="#67e8f9" strokeOpacity={0.6} />
+          )}
+          {fades.outMs > 0 && (
+            <line x1={x(end)} y1={H - 4} x2={x(end + fades.outMs)} y2={H - 4} stroke="#67e8f9" strokeOpacity={0.6} />
+          )}
+          <text x={x(0) + 2} y={H - 10} className="fill-gray-500" fontSize="9">0</text>
+          <text x={x(end) + 2} y={12} className="fill-purple-300" fontSize="9">fin clip</text>
+          {fades.outMs > 0 && (
+            <text x={x(end + fades.outMs) - 30} y={H - 10} className="fill-cyan-300" fontSize="9">
+              +{(fades.outMs / 1000).toFixed(1)}s tail
+            </text>
+          )}
+        </svg>
+      );
+    })();
+    return (
+      <div className="h-40 shrink-0 border-b border-gray-800 bg-gray-900/40 flex flex-col px-3 py-1.5 gap-1">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Éditeur</span>
+          {chip('enveloppe (fades)', true, 'fade-in / fade-out effectifs du clip')}
+          {chip('pos.x — S3', false, 'Courbes de paramètres — automation lanes (S3)')}
+          {chip('speed — S3', false, 'Courbes de paramètres — automation lanes (S3)')}
+          <div className="flex-1" />
+          {c && <span className="text-[10px] text-gray-500">{clipLabel(c)}</span>}
+        </div>
+        {inner}
+      </div>
+    );
+  };
+
   return (
     <div className="flex-1 flex flex-col bg-gray-950 text-gray-200 overflow-hidden select-none">
+      <CurveZone />
       {/* Transport */}
       <div className="flex items-center gap-3 px-3 py-1.5 border-b border-gray-800 bg-gray-900/60">
         <button

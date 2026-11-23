@@ -145,6 +145,12 @@ pattern) is S3+ work.
   pointillé/désaturé en édition (label `⚠` déjà existant), plus
   seulement en toast au play. Couleurs par type inchangées
   (slot mauve / cue ambre / stop rouge / panic rouge foncé).
+- ✅ **Layout deux zones (modèle UI S3)** — la surface se scinde :
+  zone haute = éditeur clip-scoped, zone basse = timeline +
+  transport. L'éditeur affiche déjà l'**enveloppe de fades** du clip
+  sélectionné (rampe/plateau/tail — première "courbe" réelle) +
+  sélecteur de courbe avec placeholders S3 (pos.x, speed).
+  Dev-seed `?score-demo` (hors prod) pour les revues visuelles.
 - 🔲 **Clip editing** — split at cursor, copy/paste, multi-select,
   nudge, Alt-drag duplicate. Priorité : split + multi-select +
   copy/paste (c'est ce qui rend l'arrangement réellement éditable).
