@@ -26,6 +26,10 @@ export function seedScoreDemo() {
       slot('s-essaim', 'Essaim', 2.0, 3.0, [2, 3, 4]),
     ],
   } as never);
+  // Graphe signal démo — réutilisé pour la lane MODULATION (poussé au
+  // backend) ET comme signal_graph de la cue Ouverture : son flatten
+  // produit un clip modGraph réellement compilable.
+  const demoSig = buildScoreDemoSignalGraph();
   useCuelistStore.setState({
     cues: [
       // Snapshot touchant les obj_index 0 et 1 → couverture dérivée
@@ -51,9 +55,14 @@ export function seedScoreDemo() {
             anchor_target: null,
           },
         ] as never,
-        track_indices: [0, 1], manual_positions: {},
+        track_indices: [0, 1],
+        // Flatten → clip positions (obj 0 → track 1) + clip modGraph +
+        // keyframes GLOBALFX (dont les 2 spatial macros).
+        manual_positions: { 0: [0.5, 1, 0] },
         macros: { speed: 1.2, scale: 1, shift_x: 0, shift_y: 0.5, shift_z: 0, yaw: 45, pitch: 0, roll: 0 },
-        signal_graph: null, spatial_macros: null, object_channels: null,
+        spatial_macros: { radius_scale: 1.3, height_offset: 0.1 },
+        signal_graph: { nodes: demoSig.nodes, edges: demoSig.edges } as never,
+        object_channels: null,
         osc_mappings: null, zones: null, per_track_depths: [],
       },
       {
@@ -123,8 +132,7 @@ export function seedScoreDemo() {
   // défaut : sans lui la lane MODULATION n'a aucun consommateur.
   // SignalOsc("/score/energy") → Map(0..1→-0.5..+0.5) → SignalOut
   // (scale) : la courbe ci-dessus module l'échelle globale au play.
-  const sig = buildScoreDemoSignalGraph();
-  useSignalGraphStore.setState({ nodes: sig.nodes, edges: sig.edges, context: 'global' });
+  useSignalGraphStore.setState({ nodes: demoSig.nodes, edges: demoSig.edges, context: 'global' });
   void useSignalGraphStore.getState().pushSignalGraph();
 
   s.setLoop(20_000, 60_000);

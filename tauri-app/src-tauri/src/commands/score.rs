@@ -184,6 +184,15 @@ pub enum ScoreClipPayload {
     StopAll,
     /// Panic — deactivate_all sans honorer les fins déclarées (= Esc).
     Panic,
+    /// Positions manuelles — `{obj_index → pos}` appliqué au merge,
+    /// même chemin que `/stagespace/position` (clip `positions`, issu
+    /// du flatten de `cue.manual_positions`). Instantané, persisté
+    /// jusqu'à override — sémantique identique à la cue.
+    Positions { positions: Vec<(usize, [f64; 3])> },
+    /// Graph de modulation global — compile + hot-swap de la SignalFn
+    /// (même chemin que `update_signal_graph`, scope global ; clip
+    /// `modGraph`, issu du flatten de `cue.signal_graph`).
+    SignalGraph { graph: stagespace_engines::GraphJson },
 }
 
 /// Interpolation d'un segment de courbe — définie sur le keyframe
@@ -974,6 +983,36 @@ fn fire_clip(
             let _ = deactivate_all_arc(0.0, false, sh);
             lane_active.clear();
             curve_targets.clear();
+        }
+        ScoreClipPayload::Positions { positions } => {
+            // Même chemin que /stagespace/position — takeover manuel
+            // des objets listés (persiste jusqu'à override/clear).
+            let rt = lock_or_recover(&sh.merge_runtime);
+            for (obj, pos) in positions {
+                rt.set_manual_position(*obj, *pos);
+            }
+        }
+        ScoreClipPayload::SignalGraph { graph } => {
+            // update_signal_graph scope global — graph vide = reset.
+            let signal_fn = if graph.nodes.is_empty() {
+                Some(stagespace_engines::signal_compiler::empty_signal_fn())
+            } else {
+                let audio_state = lock_or_recover(&sh.audio_state);
+                crate::graph::parser::build_graph_from_json(graph, &audio_state)
+                    .map_err(|e| format!("parse: {e}"))
+                    .and_then(|g| {
+                        stagespace_engines::compile_signal_graph(&g)
+                            .map_err(|e| format!("compile: {e:?}"))
+                    })
+                    .map_err(|e| {
+                        eprintln!("[score] clip '{}': signal graph rejeté — {e}", clip.id);
+                        e
+                    })
+                    .ok()
+            };
+            if let Some(f) = signal_fn {
+                lock_or_recover(&sh.merge_runtime).swap_signal_fn(f);
+            }
         }
     }
 }

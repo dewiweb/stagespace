@@ -89,7 +89,8 @@ export function flattenCueClip(clipId: string): FlattenCueResult | undefined {
   }
 
   // Macros → keyframes GLOBALFX à t0 (insertion triée, remplace un
-  // éventuel point existant à cet instant).
+  // éventuel point existant à cet instant). Spatial macros = 2 champs
+  // supplémentaires de la même lane (radius_scale/height_offset).
   if (cue.macros) {
     for (const p of MACRO_FIELDS) {
       const v = cue.macros[p as keyof typeof cue.macros];
@@ -99,12 +100,34 @@ export function flattenCueClip(clipId: string): FlattenCueResult | undefined {
       res.macroKeys++;
     }
   }
+  if (cue.spatial_macros) {
+    for (const p of ['radius_scale', 'height_offset'] as const) {
+      const v = cue.spatial_macros[p];
+      if (typeof v !== 'number') continue;
+      const cur = score.globalFxCurves?.[p] ?? [];
+      score.setLaneCurve(GLOBALFX_LANE, p, [...cur.filter((k) => k.t !== t0), { t: t0, v }].sort((a, b) => a.t - b.t));
+      res.macroKeys++;
+    }
+  }
+
+  // Positions manuelles → clip `positions` (obj_index → track_id à
+  // l'explosion — le clip porte sa donnée en espace opérateur).
+  const manual = Object.entries(cue.manual_positions ?? {})
+    .map(([o, p]) => [osc[Number(o)], p] as const)
+    .filter((e): e is [number, [number, number, number]] => e[0] != null);
+  if (manual.length) {
+    score.addClip({ type: 'positions', positions: Object.fromEntries(manual) }, t0, {});
+    res.movedClips++;
+  }
+
+  // Graph signal global → clip `modGraph` sur la lane MODULATION.
+  if (cue.signal_graph) {
+    score.addClip({ type: 'modGraph', graph: cue.signal_graph as never }, t0, {});
+    res.movedClips++;
+  }
 
   // Honnêteté : ces catégories n'ont pas (encore) d'entité timeline —
   // signalées, jamais silencieusement abandonnées.
-  if (cue.signal_graph) res.skipped.push('signal_graph');
-  if (cue.spatial_macros) res.skipped.push('spatial_macros');
-  if (cue.manual_positions && Object.keys(cue.manual_positions).length) res.skipped.push('manual_positions');
   if (cue.object_channels) res.skipped.push('channels');
   if (cue.osc_mappings?.length) res.skipped.push('osc_mappings');
   if (cue.zones?.length) res.skipped.push('zones');

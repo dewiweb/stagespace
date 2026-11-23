@@ -171,16 +171,27 @@ rappelable en Conduite. Matérialisé :
   signal / end-mode / anchor / fades / loop du snapshot conservés,
   couverture `obj→track` convertie) + un clip slot **en suivi live**
   à l'instant du clip cue (durée = `move.duration`).
-- `macros` → keyframes **GLOBALFX** à l'instant du clip (les 8 champs
-  `MacroSnapshot` → param ids identiques).
+- `macros` + `spatial_macros` → keyframes **GLOBALFX** à l'instant du
+  clip (les 8 champs `MacroSnapshot` + `radius_scale`/`height_offset`
+  → param ids identiques).
+- `manual_positions` → clip **`positions`** (marqueur par piste, la
+  donnée est portée par le clip en `track_id`, convertie `obj_index`
+  à la résolution — même chemin backend que `/stagespace/position`).
+- `signal_graph` → clip **`modGraph`** sur la lane MODULATION (le clip
+  porte le graphe ; au tir : compile + hot-swap de la SignalFn globale,
+  même chemin que `update_signal_graph`).
+
+Ces deux types sont les **exceptions au modèle par référence** : le
+clip porte sa donnée (pas d'entité vivante correspondante — matériau
+matérialisé, éditable indépendamment de la cue).
 
 Explicitement **non matérialisé** — rapporté à l'opérateur (toast +
-`skipped`), jamais silencieusement perdu : `signal_graph` (un graphe
-n'est pas des keyframes), `spatial_macros`, `manual_positions`,
-`object_channels`, `osc_mappings`, `zones`, `per_track_depths`. Ces
-catégories n'ont pas encore d'entité timeline — la cue les conserve
-toutes. Modèle du clip imbriqué de DAW : référence vivante par défaut,
-flatten quand on veut éditer l'intérieur — jamais l'inverse.
+`skipped`), jamais silencieusement perdu : `object_channels`,
+`osc_mappings`, `zones`, `per_track_depths` (pas encore d'entité
+timeline — la cue les conserve). Un clip cue dont rien n'est
+matérialisable est **conservé**, pas effacé. Modèle du clip imbriqué
+de DAW : référence vivante par défaut, flatten quand on veut éditer
+l'intérieur — jamais l'inverse.
 
 ## The engine — backend-evaluated
 

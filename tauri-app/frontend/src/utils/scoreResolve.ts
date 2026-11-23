@@ -13,7 +13,7 @@ import { useGraphStore } from '../store/useGraphStore';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { normalizeSlot } from '../store/slices/moveSlotsTypes';
 import { buildSlotActivation } from './slotActivation';
-import { CONDUCTOR_LANE, laneIdOf, clipLaneIds } from '../store/useScoreStore';
+import { CONDUCTOR_LANE, MODULATION_LANE, laneIdOf, clipLaneIds } from '../store/useScoreStore';
 import type { ScoreDoc, ScoreClipDoc } from '../store/useScoreStore';
 
 /// Une lane wire — `id` (`obj-<trackId>`/`master`) + mode. Le backend
@@ -65,6 +65,9 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
     const activeTids = effectiveTrackIds(c).filter((tid) => !laneState(laneIdOf(tid))?.muted);
     if (isBarrier) {
       if (laneState(CONDUCTOR_LANE)?.muted) continue;
+    } else if (c.ref.type === 'modGraph') {
+      // Pas de couverture objet — muté par sa propre lane.
+      if (laneState(MODULATION_LANE)?.muted) continue;
     } else if (activeTids.length === 0) {
       continue;
     }
@@ -135,6 +138,26 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
       case 'panic':
         clips.push({ ...base, payload: { kind: 'Panic' } });
         break;
+      case 'positions': {
+        // track_id → obj_index à la résolution (règle namespace : le
+        // backend ne connaît que l'espace objet) ; seules les pistes
+        // non mutées (activeTids) sont envoyées.
+        const entries = (Object.entries(c.ref.positions) as [string, [number, number, number]][])
+          .map(([t, p]) => ({ tid: Number(t), obj: gs.manualOscIds.indexOf(Number(t)), p }))
+          .filter((e) => e.obj >= 0 && activeTids.includes(e.tid));
+        if (!entries.length) break;
+        clips.push({
+          ...base,
+          payload: { kind: 'Positions', data: { positions: entries.map((e) => [e.obj, e.p]) } },
+        });
+        break;
+      }
+      case 'modGraph':
+        clips.push({
+          ...base,
+          payload: { kind: 'SignalGraph', data: { graph: c.ref.graph } },
+        });
+        break;
     }
   }
   return { clips, errors };
@@ -158,6 +181,10 @@ export function effectiveTrackIds(c: ScoreClipDoc): number[] {
       const cue = cs.cues.find((q) => String(q.id) === String((c.ref as { cueId: string }).cueId));
       return cue ? cueCoverage(cue, gs.manualOscIds) : [];
     }
+    case 'positions':
+      // Les positions sont portées en track_id (espace opérateur).
+      return Object.keys((c.ref as { positions: Record<number, [number, number, number]> }).positions)
+        .map(Number).filter((t) => Number.isFinite(t));
     default:
       return [];
   }

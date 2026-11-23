@@ -296,10 +296,14 @@ failed: … reading 'transformCallback'` — à vérifier avec le shim.
   moves → slots matérialisés `‹cue›·‹move›` + clips suivis, macros →
   keyframes GLOBALFX ; `signal_graph`/`spatial_macros`/
   `manual_positions`/`channels`/`mappings`/`zones`/`depths` rapportés
-  `skipped` (pas d'entité timeline). **Reste ouvert** : duplication de
-  re-capture arrangement→cue,
-  entités timeline pour les catégories skippées, tail `fade_duration`
-  du clip cue.
+  `skipped` (pas d'entité timeline). ✅ **Entités livrées** : clip
+  `positions` (manual_positions obj→track, tir = `/stagespace/position`
+  par objet, marqueurs teal par lane) et clip `modGraph` (signal_graph
+  porté par le clip, tir = compile+swap de la SignalFn globale) ;
+  `spatial_macros` → keyframes GLOBALFX ; make-unique sur cue =
+  `duplicateCue` + retargetClip. **Reste ouvert** : re-capture
+  arrangement→cue, entités pour `channels`/`mappings`/`zones`/`depths`,
+  tail `fade_duration` du clip cue.
 - `bridge_server.rs` : origine IPC `http://tauri.localhost` sous
   Windows/Android — sans effet sous Linux, **non testé en exécution**.
 - ✅ Vérifié sous Linux après sync : rust-engines 556/556, src-tauri

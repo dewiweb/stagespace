@@ -236,7 +236,7 @@ export const ScoreTimeline: React.FC<{
                   onContextMenu({ kind: 'empty', laneId, ms: Math.max(0, px2ms(e.clientX - rect.left)) }, e.clientX, e.clientY);
                 }}
               >
-                {laneId !== MODULATION_LANE && clips.filter((c) => clipLaneIds(c, effectiveTrackIds(c)).includes(laneId)).map((c) => (
+                {clips.filter((c) => clipLaneIds(c, effectiveTrackIds(c)).includes(laneId)).map((c) => (
                   <div
                     key={c.id}
                     className={`absolute top-0.5 bottom-0.5 rounded border text-[9px] font-bold px-1 flex items-center cursor-grab ${CLIP_COLORS[c.ref.type]} ${selected === c.id ? 'ring-2 ring-white' : ''}`}
@@ -294,6 +294,24 @@ export const ScoreTimeline: React.FC<{
                     className="absolute top-0 bottom-0 w-0.5 bg-amber-400/50 pointer-events-none"
                     style={{ left: ms2px(c.startMs) }}
                     title={`${clipLabel(c)} — touche T${lane.trackId}`}
+                  />
+                ))}
+                {/* Clips positions — marqueurs interactifs par piste
+                    (instantané : set de positions manuelles). */}
+                {clips.filter((c) => c.ref.type === 'positions' && effectiveTrackIds(c).includes(lane.trackId)).map((c) => (
+                  <div
+                    key={`pos-${c.id}`}
+                    className={`absolute top-0 bottom-0 w-1 bg-teal-400/80 cursor-pointer hover:bg-teal-300 ${selected === c.id ? 'ring-1 ring-white' : ''}`}
+                    style={{ left: ms2px(c.startMs) - 2 }}
+                    title={clipLabel(c)}
+                    onPointerDown={(e) => onClipPointerDown(e, c, 'move')}
+                    onPointerMove={(e) => onClipPointerMove(e, c)}
+                    onPointerUp={onClipPointerUp}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onContextMenu({ kind: 'clip', clipId: c.id, laneId: lane.id, trackId: lane.trackId }, e.clientX, e.clientY);
+                    }}
                   />
                 ))}
                 {clips.filter((c) => c.ref.type === 'slot' && effectiveTrackIds(c).includes(lane.trackId)).map((c) => {

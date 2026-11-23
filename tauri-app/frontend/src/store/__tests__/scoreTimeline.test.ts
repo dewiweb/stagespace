@@ -359,9 +359,9 @@ describe('flatten cue → clips (explosion)', () => {
           mv('m2', 'Essaim', [1], { duration: 3, loop_mode: 'oneshot', direction: 'ping_pong' }),
         ],
         macros: { speed: 1.5, scale: 2, shift_x: 0, shift_y: 0, shift_z: 0, yaw: 90, pitch: 0, roll: 0 },
-        signal_graph: { nodes: [], edges: [] },
-        spatial_macros: null,
-        manual_positions: { 0: [1, 2, 3] },
+        spatial_macros: { radius_scale: 1.4, height_offset: 0.2 },
+        signal_graph: { nodes: [{ id: 'n1' }], edges: [] },
+        manual_positions: { 0: [1, 2, 3], 2: [0, 1, 0] },
         object_channels: null, osc_mappings: null, zones: null,
         per_track_depths: [], active_move_ids: [],
       }] as never,
@@ -373,17 +373,23 @@ describe('flatten cue → clips (explosion)', () => {
     const st = useScoreStore.getState();
     const cueClip = st.addClip({ type: 'cue', cueId: 'c1' }, 12000, {});
     const r = flattenCueClip(cueClip.id)!;
-    expect(r.movedClips).toBe(2);
-    expect(r.macroKeys).toBe(8);
-    expect(r.skipped).toContain('signal_graph');
-    expect(r.skipped).toContain('manual_positions');
+    expect(r.movedClips).toBe(4); // 2 slots + positions + modGraph
+    expect(r.macroKeys).toBe(10); // 8 macros + 2 spatial
+    expect(r.skipped).toEqual([]);
 
-    // Clip cue remplacé par 2 clips slot à t0 — suivi live (pas d'override).
+    // Clip cue remplacé par l'arrangement à t0 — slots en suivi live.
     const clips = useScoreStore.getState().clips;
     expect(clips.find((c) => c.ref.type === 'cue')).toBeUndefined();
-    expect(clips).toHaveLength(2);
+    expect(clips).toHaveLength(4);
     expect(clips.every((c) => c.startMs === 12000)).toBe(true);
-    expect(clips.every((c) => c.trackIds === undefined)).toBe(true);
+    expect(clips.filter((c) => c.ref.type === 'slot').every((c) => c.trackIds === undefined)).toBe(true);
+
+    // manual_positions (obj_index) → clip positions en track_id.
+    const posClip = clips.find((c) => c.ref.type === 'positions')!;
+    expect(posClip.ref).toEqual({ type: 'positions', positions: { 1: [1, 2, 3], 3: [0, 1, 0] } });
+    // signal_graph → clip modGraph portant le graphe.
+    const modClip = clips.find((c) => c.ref.type === 'modGraph')!;
+    expect((modClip.ref as { graph: { nodes: unknown[] } }).graph.nodes).toHaveLength(1);
 
     // Slots matérialisés : obj_index → track_id, props du snapshot.
     const slots = useGraphStore.getState().moveSlots;
@@ -394,15 +400,18 @@ describe('flatten cue → clips (explosion)', () => {
     const essaim = slots.find((s) => s.name === 'Ouverture·Essaim')!;
     expect(essaim.loopMode).toBe('oneshot');
     expect(essaim.direction).toBe('ping_pong');
-    expect(clips[0].durationMs).toBe(6000);
-    // Les clips pointent les slots matérialisés.
+    const slotClips = clips.filter((c) => c.ref.type === 'slot');
+    expect(slotClips[0].durationMs).toBe(6000);
+    // Les clips slot pointent les slots matérialisés.
     const ids = new Set(slots.map((s) => s.id));
-    expect(clips.every((c) => c.ref.type === 'slot' && ids.has(c.ref.slotId))).toBe(true);
+    expect(slotClips.every((c) => c.ref.type === 'slot' && ids.has(c.ref.slotId))).toBe(true);
 
     // Macros → keyframes GLOBALFX à l'instant du clip.
     const gfx = useScoreStore.getState().globalFxCurves!;
     expect(gfx.speed).toContainEqual({ t: 12000, v: 1.5 });
     expect(gfx.yaw).toEqual([{ t: 12000, v: 90 }]);
+    expect(gfx.radius_scale).toEqual([{ t: 12000, v: 1.4 }]);
+    expect(gfx.height_offset).toEqual([{ t: 12000, v: 0.2 }]);
 
     // La cue d'origine est intacte — flatten non destructif.
     expect(useCuelistStore.getState().cues[0].moves).toHaveLength(2);
@@ -411,14 +420,27 @@ describe('flatten cue → clips (explosion)', () => {
   it('snapshot vide → clip conservé, rapport honnête', async () => {
     const { flattenCueClip, reportFlatten } = await import('../../utils/scoreFlatten');
     useCuelistStore.setState({
-      cues: [{ id: 'empty', name: 'Stop', moves: [], macros: null, signal_graph: null,
-        spatial_macros: null, manual_positions: {}, object_channels: null,
-        osc_mappings: null, zones: null, per_track_depths: [] }] as never,
+      cues: [
+        { id: 'empty', name: 'Stop', moves: [], macros: null, signal_graph: null,
+          spatial_macros: null, manual_positions: {}, object_channels: null,
+          osc_mappings: null, zones: null, per_track_depths: [] },
+        // Catégorie non matérialisable seule (zones) → warning + clip
+        // conservé.
+        { id: 'zones-only', name: 'Zones', moves: [], macros: null, signal_graph: null,
+          spatial_macros: null, manual_positions: {}, object_channels: null,
+          osc_mappings: null, zones: [{}], per_track_depths: [] },
+      ] as never,
     });
     const cueClip = useScoreStore.getState().addClip({ type: 'cue', cueId: 'empty' }, 5000, {});
     const r = flattenCueClip(cueClip.id)!;
     expect(r.movedClips).toBe(0);
     expect(reportFlatten(r).kind).toBe('info');
+    const zClip = useScoreStore.getState().addClip({ type: 'cue', cueId: 'zones-only' }, 8000, {});
+    const rz = flattenCueClip(zClip.id)!;
+    const repz = reportFlatten(rz);
+    expect(repz.kind).toBe('warning');
+    expect(repz.message).toContain('zones');
+    expect(useScoreStore.getState().clips.find((c) => c.id === zClip.id)).toBeTruthy();
     // Le clip cue survit — supprimer la seule représentation serait
     // une perte d'information.
     expect(useScoreStore.getState().clips.find((c) => c.id === cueClip.id)).toBeTruthy();

@@ -44,11 +44,16 @@ export interface ScoreLaneState {
 
 /// Référence d'un clip — JAMAIS un snapshot : le document pointe vers
 /// le slot/cue vivant (édité → le clip rejoue la version courante).
+/// `positions` et `modGraph` sont les exceptions matérialisées (issues
+/// du flatten de cue — pas d'entité vivante correspondante) : le clip
+/// PORTE sa donnée (positions en track_id, graphe signal sérialisé).
 export type ScoreClipRef =
   | { type: 'slot'; slotId: string }
   | { type: 'cue'; cueId: string }
   | { type: 'stopAll' }
-  | { type: 'panic' };
+  | { type: 'panic' }
+  | { type: 'positions'; positions: Record<number, [number, number, number]> }
+  | { type: 'modGraph'; graph: { nodes: unknown[]; edges: unknown[] } };
 
 export interface ScoreClipDoc {
   id: string;
@@ -114,10 +119,17 @@ export interface ScoreKeyframe {
 /// global/non-assigné reste visible. `eff` = couverture effective
 /// (résolue — les clips en mode "suit l'entité" n'ont pas de trackIds
 /// gelés ; voir effectiveTrackIds dans scoreResolve).
-export const clipLaneIds = (c: ScoreClipDoc, eff: number[] = c.trackIds ?? []): string[] =>
-  c.ref.type === 'slot'
-    ? (eff.length ? eff.map(laneIdOf) : [GLOBALFX_LANE])
-    : [CONDUCTOR_LANE];
+export const clipLaneIds = (c: ScoreClipDoc, eff: number[] = c.trackIds ?? []): string[] => {
+  switch (c.ref.type) {
+    case 'slot':
+    case 'positions':
+      return eff.length ? eff.map(laneIdOf) : [GLOBALFX_LANE];
+    case 'modGraph':
+      return [MODULATION_LANE];
+    default:
+      return [CONDUCTOR_LANE];
+  }
+};
 
 export interface ScoreDoc {
   /// Overrides des lanes dérivées (`obj-<trackId>`/`master` → état).

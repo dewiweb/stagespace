@@ -31,6 +31,8 @@ export const CLIP_COLORS: Record<string, string> = {
   cue: 'bg-amber-600/80 border-amber-400',
   stopAll: 'bg-red-700/80 border-red-500',
   panic: 'bg-red-900/80 border-red-400',
+  positions: 'bg-teal-700/80 border-teal-400',
+  modGraph: 'bg-indigo-700/80 border-indigo-400',
 };
 
 /// Label affiché d'un clip — nom du slot/cue ou marqueur.
@@ -51,5 +53,10 @@ export function clipLabel(
     }
     case 'stopAll': return 'STOP ALL';
     case 'panic': return 'PANIC';
+    case 'positions': {
+      const n = Object.keys(clip.ref.positions).length;
+      return `POS ×${n}`;
+    }
+    case 'modGraph': return 'MOD graph';
   }
 }
