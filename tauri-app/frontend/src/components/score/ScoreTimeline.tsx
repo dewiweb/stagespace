@@ -185,6 +185,9 @@ export const ScoreTimeline: React.FC<{
           <div
             className="sticky top-0 z-20 h-6 border-b border-gray-800 relative cursor-text bg-gray-900"
             onClick={(e) => {
+              // stopPropagation — un seek ne désélectionne pas le clip
+              // (le conteneur a onClearSelection).
+              e.stopPropagation();
               if (playing) return;
               const rect = e.currentTarget.getBoundingClientRect();
               seekScore(Math.round(px2ms(e.clientX - rect.left) / 50) * 50);

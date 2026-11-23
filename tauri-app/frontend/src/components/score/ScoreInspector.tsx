@@ -31,7 +31,10 @@ export const ScoreInspector: React.FC<{
     <label className="flex items-center gap-1" title={title}>
       {label}
       <input
-        key={`${c?.id}-${label}`}
+        // key par valeur — une mutation externe du clip (split,
+        // menu contextuel) re-initialise l'input non contrôlé au
+        // lieu d'afficher la valeur d'avant.
+        key={`${c?.id}-${label}-${val ?? 'x'}`}
         type="number" min={0} step={0.5} defaultValue={val != null ? val / 1000 : ''}
         placeholder="—"
         onBlur={(e) => {
