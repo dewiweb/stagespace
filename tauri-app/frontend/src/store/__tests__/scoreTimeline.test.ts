@@ -312,3 +312,88 @@ describe('déliage + split (édition)', () => {
     expect(useScoreStore.getState().clips).toHaveLength(2);
   });
 });
+
+describe('flatten cue → clips (explosion)', () => {
+  const mv = (id: string, name: string, trackIndices: number[], extra = {}) => ({
+    id, name, graph_json: { nodes: [], edges: [] }, signal_graph: null,
+    osc_ids: [], track_indices: trackIndices, is_preview: false,
+    duration: 6, loop_mode: 'loop', direction: 'forward',
+    fade_in: 0.8, fade_out: 1.2, end_mode: null, anchor_mode: null,
+    anchor_target: null, ...extra,
+  });
+
+  beforeEach(() => {
+    resetStore();
+    clearInvokeCalls();
+    useScoreStore.getState().clearScore();
+    useGraphStore.setState({
+      manualOscIds: [1, 2, 3, 4],
+      moveSlots: [slot('s1', 'Orbe')],
+    } as never);
+    useCuelistStore.setState({
+      cues: [{
+        id: 'c1', name: 'Ouverture', cue_number: '1', description: '',
+        mode: 'Full', track_indices: [],
+        moves: [
+          mv('m1', 'Spirale', [0, 2], { end_mode: 'hold', anchor_mode: 'current' }),
+          mv('m2', 'Essaim', [1], { duration: 3, loop_mode: 'oneshot', direction: 'ping_pong' }),
+        ],
+        macros: { speed: 1.5, scale: 2, shift_x: 0, shift_y: 0, shift_z: 0, yaw: 90, pitch: 0, roll: 0 },
+        signal_graph: { nodes: [], edges: [] },
+        spatial_macros: null,
+        manual_positions: { 0: [1, 2, 3] },
+        object_channels: null, osc_mappings: null, zones: null,
+        per_track_depths: [], active_move_ids: [],
+      }] as never,
+    });
+  });
+
+  it('moves→slots+clips suivis, macros→GLOBALFX, skipped rapportés, cue intacte', async () => {
+    const { flattenCueClip } = await import('../../utils/scoreFlatten');
+    const st = useScoreStore.getState();
+    const cueClip = st.addClip({ type: 'cue', cueId: 'c1' }, 12000, {});
+    const r = flattenCueClip(cueClip.id)!;
+    expect(r.movedClips).toBe(2);
+    expect(r.macroKeys).toBe(8);
+    expect(r.skipped).toContain('signal_graph');
+    expect(r.skipped).toContain('manual_positions');
+
+    // Clip cue remplacé par 2 clips slot à t0 — suivi live (pas d'override).
+    const clips = useScoreStore.getState().clips;
+    expect(clips.find((c) => c.ref.type === 'cue')).toBeUndefined();
+    expect(clips).toHaveLength(2);
+    expect(clips.every((c) => c.startMs === 12000)).toBe(true);
+    expect(clips.every((c) => c.trackIds === undefined)).toBe(true);
+
+    // Slots matérialisés : obj_index → track_id, props du snapshot.
+    const slots = useGraphStore.getState().moveSlots;
+    const spirale = slots.find((s) => s.name === 'Ouverture·Spirale')!;
+    expect(spirale.trackIds).toEqual([1, 3]);
+    expect(spirale.endMode).toBe('hold');
+    expect(spirale.anchorMode).toBe('current');
+    const essaim = slots.find((s) => s.name === 'Ouverture·Essaim')!;
+    expect(essaim.loopMode).toBe('oneshot');
+    expect(essaim.direction).toBe('ping_pong');
+    expect(clips[0].durationMs).toBe(6000);
+    // Les clips pointent les slots matérialisés.
+    const ids = new Set(slots.map((s) => s.id));
+    expect(clips.every((c) => c.ref.type === 'slot' && ids.has(c.ref.slotId))).toBe(true);
+
+    // Macros → keyframes GLOBALFX à l'instant du clip.
+    const gfx = useScoreStore.getState().globalFxCurves!;
+    expect(gfx.speed).toContainEqual({ t: 12000, v: 1.5 });
+    expect(gfx.yaw).toEqual([{ t: 12000, v: 90 }]);
+
+    // La cue d'origine est intacte — flatten non destructif.
+    expect(useCuelistStore.getState().cues[0].moves).toHaveLength(2);
+  });
+
+  it('no-op : clip non-cue ou cue introuvable', async () => {
+    const { flattenCueClip } = await import('../../utils/scoreFlatten');
+    const st = useScoreStore.getState();
+    const s = st.addClip({ type: 'slot', slotId: 's1' }, 0, {});
+    expect(flattenCueClip(s.id)).toBeUndefined();
+    const orphan = st.addClip({ type: 'cue', cueId: 'nope' }, 0, {});
+    expect(flattenCueClip(orphan.id)).toBeUndefined();
+  });
+});

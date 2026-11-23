@@ -291,9 +291,15 @@ failed: … reading 'transformCallback'` — à vérifier avec le shim.
   (Full → `lane_active` + `curve_targets` vidés ; `cue.moves` ids
   respawnés enregistrés sous `conductor` pour cleanup wrap/stop),
   `score-nack` → toast sur busy-skip, picker conductor dédié (cues +
-  stopAll + panic). **Reste ouvert** : `flatten cue → clips` (opération
-  d'éditeur), `pre_wait`/`follow`/`timecode` bypassés (voulu — à
-  documenter dans le manuel), tail `fade_duration` du clip cue.
+  stopAll + panic). ✅ **`flatten cue → clips` livré**
+  (`utils/scoreFlatten.ts` + menu contextuel / toolbar `◆` / MenuBar) :
+  moves → slots matérialisés `‹cue›·‹move›` + clips suivis, macros →
+  keyframes GLOBALFX ; `signal_graph`/`spatial_macros`/
+  `manual_positions`/`channels`/`mappings`/`zones`/`depths` rapportés
+  `skipped` (pas d'entité timeline). **Reste ouvert** : duplication de
+  cue (équivalent cue du make-unique), re-capture arrangement→cue,
+  entités timeline pour les catégories skippées, tail `fade_duration`
+  du clip cue.
 - `bridge_server.rs` : origine IPC `http://tauri.localhost` sous
   Windows/Android — sans effet sous Linux, **non testé en exécution**.
 - ✅ Vérifié sous Linux après sync : rust-engines 556/556, src-tauri

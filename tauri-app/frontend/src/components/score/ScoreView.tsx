@@ -38,6 +38,7 @@ import { ScoreTransport } from './ScoreTransport';
 import { ScoreTimeline, type ScoreLaneLayout, type ScoreMenuTarget } from './ScoreTimeline';
 import ContextMenu, { type ContextMenuItem } from '../ui/ContextMenu';
 import { detachLaneFromClip, makeClipUnique, sharedClipCount } from '../../utils/scoreDetach';
+import { flattenCueClip } from '../../utils/scoreFlatten';
 import { toast } from '../../utils/toast-helpers';
 import { ScoreClipPicker, type ScorePickerState } from './ScoreClipPicker';
 import { ScoreToolbar } from './ScoreToolbar';
@@ -264,6 +265,24 @@ const ScoreView: React.FC = () => {
           onClick: () => {
             const id = makeClipUnique(c.id);
             if (id) toast.success('Move dupliqué — le clip suit la copie');
+          },
+        },
+        {
+          label: 'Exploser la cue → clips',
+          disabled: !isCue,
+          title: isCue
+            ? 'Matérialise le snapshot en arrangement éditable (moves → clips, macros → GLOBALFX) — la cue d\'origine reste intacte'
+            : 'Explosion : clips cue seulement',
+          onClick: () => {
+            const r = flattenCueClip(c.id);
+            if (!r) return;
+            const detail = [`${r.movedClips} clip(s)`, r.macroKeys ? `${r.macroKeys} keyframes` : '']
+              .filter(Boolean).join(', ');
+            if (r.skipped.length) {
+              toast.warning(`Cue explosée : ${detail} — non matérialisé : ${r.skipped.join(', ')}`);
+            } else {
+              toast.success(`Cue explosée : ${detail}`);
+            }
           },
         },
         { separator: true },
@@ -563,6 +582,13 @@ const ScoreView: React.FC = () => {
           }
         }}
         onMakeUnique={(id) => { if (makeClipUnique(id)) toast.success('Move dupliqué — le clip suit la copie'); }}
+        onFlattenCue={(id) => {
+          const r = flattenCueClip(id);
+          if (!r) return;
+          const detail = [`${r.movedClips} clip(s)`, r.macroKeys ? `${r.macroKeys} keyframes` : ''].filter(Boolean).join(', ');
+          if (r.skipped.length) toast.warning(`Cue explosée : ${detail} — non matérialisé : ${r.skipped.join(', ')}`);
+          else toast.success(`Cue explosée : ${detail}`);
+        }}
         onToggleFollow={(id) => {
           const c = clips.find((x) => x.id === id);
           if (c) setClipTrackIds(id, c.trackIds === undefined ? effectiveTrackIds(c) : undefined);

@@ -16,8 +16,9 @@ export const ScoreToolbar: React.FC<{
   onDelete: (id: string) => void;
   onDetachLane: (clipId: string, trackId: number, asNewMove: boolean) => void;
   onMakeUnique: (clipId: string) => void;
+  onFlattenCue: (clipId: string) => void;
   onToggleFollow: (clipId: string) => void;
-}> = ({ selClip, cursorMs, onSplit, onDuplicate, onDelete, onDetachLane, onMakeUnique, onToggleFollow }) => {
+}> = ({ selClip, cursorMs, onSplit, onDuplicate, onDelete, onDetachLane, onMakeUnique, onFlattenCue, onToggleFollow }) => {
   const [detachMenu, setDetachMenu] = useState<{ x: number; y: number } | null>(null);
   const eff = selClip ? effectiveTrackIds(selClip) : [];
   const isSlot = selClip?.ref.type === 'slot';
@@ -65,6 +66,13 @@ export const ScoreToolbar: React.FC<{
         title={isSlot ? `Clone le move en banque — ce clip suit la copie (lié ×${n})` : 'Slots seulement'}
         onClick={() => selClip && onMakeUnique(selClip.id)}
       >⬡ unique{isSlot && n > 1 ? ` ×${n}` : ''}</button>
+      {selClip?.ref.type === 'cue' && (
+        <button
+          className={btn}
+          title="Explose le snapshot en arrangement éditable (moves → clips suivis, macros → keyframes GLOBALFX) — la cue d'origine reste intacte"
+          onClick={() => selClip && onFlattenCue(selClip.id)}
+        >◆ flatten</button>
+      )}
       {selClip && (selClip.ref.type === 'slot' || selClip.ref.type === 'cue') && (
         <button
           className={`${btn} ${selClip.trackIds === undefined ? 'text-cyan-300 border-cyan-800' : 'text-orange-300 border-orange-800'}`}

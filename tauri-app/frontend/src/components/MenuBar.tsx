@@ -26,6 +26,8 @@ import {
 import { useScoreStore } from '../store/useScoreStore';
 import { effectiveTrackIds } from '../utils/scoreResolve';
 import { detachLaneFromClip, makeClipUnique } from '../utils/scoreDetach';
+import { flattenCueClip } from '../utils/scoreFlatten';
+import { toast } from '../utils/toast-helpers';
 
 /// Barre de menus applicative — squelette fixe (File/Edit/View/Show/Help,
 /// mémoire musculaire) mais contenu contextuel à la surface, comme une
@@ -357,6 +359,18 @@ export const MenuBar: React.FC = () => {
                   disabled: !isSlot,
                   disabledReason: 'Slot clips only',
                   onClick: () => makeClipUnique(c.id),
+                },
+                {
+                  label: 'Flatten cue → clips',
+                  disabled: c.ref.type !== 'cue',
+                  disabledReason: 'Cue clips only',
+                  onClick: () => {
+                    const r = flattenCueClip(c.id);
+                    if (!r) return;
+                    const detail = [`${r.movedClips} clip(s)`, r.macroKeys ? `${r.macroKeys} keyframes` : ''].filter(Boolean).join(', ');
+                    if (r.skipped.length) toast.warning(`Cue flattened: ${detail} — not materialized: ${r.skipped.join(', ')}`);
+                    else toast.success(`Cue flattened: ${detail}`);
+                  },
                 },
                 {
                   label: c.trackIds === undefined ? 'Freeze coverage (override)' : 'Follow live entity',

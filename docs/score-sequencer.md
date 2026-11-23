@@ -161,14 +161,26 @@ piste (et `track_indices` vide = **tous** les tracks, pas aucun).
   Même cue, comportement différent Conduite (timing interne joué) vs
   Score (timing externe imposé) — c'est voulu, pas un bug.
 
-**"Flatten cue → clips"** existe comme *opération d'éditeur* (menu
-contextuel, non-destructif — la cue vivante reste référencée) :
-`moves[]` → clips slot sur les lanes obj- ; `macros`/`spatial_macros`
-→ keyframes GLOBALFX ; `signal_graph` → clip MODULATION ;
-`manual_positions` → marqueurs de position ; les métadonnées timing
-se résorbent dans la position temporelle. Modèle du clip imbriqué de
-DAW : référence vivante par défaut, flatten quand on veut éditer
-l'intérieur — jamais l'inverse.
+**"Exploser la cue → clips"** (`flattenCueClip`, menu contextuel /
+toolbar `◆ flatten` / MenuBar Edit) — *bounce to tracks* non
+destructif : le clip cue est remplacé par l'arrangement contenu dans
+son snapshot, la cue d'origine reste intacte dans la cuelist et
+rappelable en Conduite. Matérialisé :
+
+- `moves[]` → **nouveaux slots en banque** (`‹cue›·‹move›`, graphe /
+  signal / end-mode / anchor / fades / loop du snapshot conservés,
+  couverture `obj→track` convertie) + un clip slot **en suivi live**
+  à l'instant du clip cue (durée = `move.duration`).
+- `macros` → keyframes **GLOBALFX** à l'instant du clip (les 8 champs
+  `MacroSnapshot` → param ids identiques).
+
+Explicitement **non matérialisé** — rapporté à l'opérateur (toast +
+`skipped`), jamais silencieusement perdu : `signal_graph` (un graphe
+n'est pas des keyframes), `spatial_macros`, `manual_positions`,
+`object_channels`, `osc_mappings`, `zones`, `per_track_depths`. Ces
+catégories n'ont pas encore d'entité timeline — la cue les conserve
+toutes. Modèle du clip imbriqué de DAW : référence vivante par défaut,
+flatten quand on veut éditer l'intérieur — jamais l'inverse.
 
 ## The engine — backend-evaluated
 
