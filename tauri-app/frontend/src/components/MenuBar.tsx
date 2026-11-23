@@ -355,9 +355,9 @@ export const MenuBar: React.FC = () => {
                 ]),
                 { separator: true },
                 {
-                  label: 'Make unique — clone move',
-                  disabled: !isSlot,
-                  disabledReason: 'Slot clips only',
+                  label: c.ref.type === 'cue' ? 'Make unique — duplicate cue' : 'Make unique — clone move',
+                  disabled: !isSlot && c.ref.type !== 'cue',
+                  disabledReason: 'Slot/cue clips only',
                   onClick: () => makeClipUnique(c.id),
                 },
                 {

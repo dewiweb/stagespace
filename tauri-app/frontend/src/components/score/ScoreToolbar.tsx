@@ -22,6 +22,7 @@ export const ScoreToolbar: React.FC<{
   const [detachMenu, setDetachMenu] = useState<{ x: number; y: number } | null>(null);
   const eff = selClip ? effectiveTrackIds(selClip) : [];
   const isSlot = selClip?.ref.type === 'slot';
+  const isCue = selClip?.ref.type === 'cue';
   const canSplit =
     !!selClip && isSlot && cursorMs > selClip.startMs &&
     (selClip.durationMs == null || cursorMs < selClip.startMs + selClip.durationMs);
@@ -62,10 +63,14 @@ export const ScoreToolbar: React.FC<{
       >⇱ détacher ▾</button>
       <button
         className={btn}
-        disabled={!isSlot}
-        title={isSlot ? `Clone le move en banque — ce clip suit la copie (lié ×${n})` : 'Slots seulement'}
+        disabled={!isSlot && !isCue}
+        title={isSlot
+          ? `Clone le move en banque — ce clip suit la copie (lié ×${n})`
+          : isCue
+            ? 'Duplique la cue dans la cuelist — ce clip suit la copie'
+            : 'Pas d\'entité à dupliquer sur un marker'}
         onClick={() => selClip && onMakeUnique(selClip.id)}
-      >⬡ unique{isSlot && n > 1 ? ` ×${n}` : ''}</button>
+      >⬡ unique{(isSlot || isCue) && n > 1 ? ` ×${n}` : ''}</button>
       {selClip?.ref.type === 'cue' && (
         <button
           className={btn}

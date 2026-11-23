@@ -297,8 +297,12 @@ Un clip entretient deux liens, déliables séparément :
   move` : le nouveau clip suit un **clone du slot** né assigné
   `[T<n>]` (nom `‹slot› ▸ T<n>`) — divergence de contenu possible,
   le move apparaît dans la banque (visible dans tous les modes).
-- **Référence** (entité partagée) → `Rendre unique` clone le slot
-  en banque et repointe `ref.slotId` : en mode suivi le clip suit
+- **Référence** (entité partagée) → `Rendre unique` clone l'entité
+  et repointe la ref : slot → clone du move en banque
+  (`‹slot› ▸ unique`) ; cue → duplication dans la cuelist
+  (`‹cue› copy`, insérée après la source, `cue_number` null — à
+  réassigner, deux cues au même numéro rendraient
+  `/stagespace/cue/recall <n>` ambigu). En mode suivi le clip suit
   désormais le clone — le suivi live survit, seule la cible
   change. Le badge `lié ×N` indique combien de clips partagent
   l'entité.

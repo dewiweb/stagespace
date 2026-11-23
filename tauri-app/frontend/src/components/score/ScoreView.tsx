@@ -258,13 +258,15 @@ const ScoreView: React.FC = () => {
         },
         {
           label: `Rendre unique${n > 1 ? ` (lié ×${n})` : ''}`,
-          disabled: !isSlot,
+          disabled: !isSlot && !isCue,
           title: isSlot
             ? `Clone le move en banque — ce clip suit la copie, ${n > 1 ? `les ${n - 1} autre(s) clip(s) gardent l'original` : 'édition sans affecter l\'original'}`
-            : 'Make unique : slots seulement (cue → duplication de cue = flatten, à venir)',
+            : isCue
+              ? 'Duplique la cue dans la cuelist — ce clip suit la copie, les autres références gardent l\'originale'
+              : 'Pas d\'entité à dupliquer sur un marker',
           onClick: () => {
             const id = makeClipUnique(c.id);
-            if (id) toast.success('Move dupliqué — le clip suit la copie');
+            if (id) toast.success(isCue ? 'Cue dupliquée dans la cuelist — le clip suit la copie' : 'Move dupliqué — le clip suit la copie');
           },
         },
         {
@@ -574,7 +576,10 @@ const ScoreView: React.FC = () => {
             toast.success(asNewMove ? `T${tid} détachée → nouveau move en banque` : `T${tid} détachée en clip indépendant`);
           }
         }}
-        onMakeUnique={(id) => { if (makeClipUnique(id)) toast.success('Move dupliqué — le clip suit la copie'); }}
+        onMakeUnique={(id) => {
+          const wasCue = clips.find((x) => x.id === id)?.ref.type === 'cue';
+          if (makeClipUnique(id)) toast.success(wasCue ? 'Cue dupliquée — le clip suit la copie' : 'Move dupliqué — le clip suit la copie');
+        }}
         onFlattenCue={(id) => {
           const r = flattenCueClip(id);
           if (r) { const rep = reportFlatten(r); toast[rep.kind](rep.message); }

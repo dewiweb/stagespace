@@ -297,7 +297,7 @@ failed: … reading 'transformCallback'` — à vérifier avec le shim.
   keyframes GLOBALFX ; `signal_graph`/`spatial_macros`/
   `manual_positions`/`channels`/`mappings`/`zones`/`depths` rapportés
   `skipped` (pas d'entité timeline). **Reste ouvert** : duplication de
-  cue (équivalent cue du make-unique), re-capture arrangement→cue,
+  re-capture arrangement→cue,
   entités timeline pour les catégories skippées, tail `fade_duration`
   du clip cue.
 - `bridge_server.rs` : origine IPC `http://tauri.localhost` sous

@@ -47,7 +47,7 @@ export function clipLabel(
     }
     case 'cue': {
       const cue = cues.find((x) => String(x.id) === String((clip.ref as { cueId: string }).cueId));
-      return cue ? `CUE ${cue.cue_number} ${cue.name}` : '⚠ cue perdue';
+      return cue ? `CUE ${cue.cue_number != null ? `${cue.cue_number} ` : ''}${cue.name}` : '⚠ cue perdue';
     }
     case 'stopAll': return 'STOP ALL';
     case 'panic': return 'PANIC';

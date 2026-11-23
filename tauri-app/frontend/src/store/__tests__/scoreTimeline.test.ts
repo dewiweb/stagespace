@@ -287,6 +287,26 @@ describe('déliage + split (édition)', () => {
     expect(sharedClipCount(c2.ref)).toBe(1);
   });
 
+  it('makeClipUnique sur cue — clone en cuelist, clip repointé', async () => {
+    const { makeClipUnique } = await import('../../utils/scoreDetach');
+    useCuelistStore.setState({
+      cues: [{ id: 'q1', name: 'Ouverture', cue_number: '1', moves: [], track_indices: [0, 1] }] as never,
+    });
+    const st = useScoreStore.getState();
+    const c1 = st.addClip({ type: 'cue', cueId: 'q1' }, 1000, {});
+    const c2 = st.addClip({ type: 'cue', cueId: 'q1' }, 5000, {});
+    const newId = makeClipUnique(c1.id)!;
+    expect(newId).toBeTruthy();
+    const cues = useCuelistStore.getState().cues;
+    expect(cues).toHaveLength(2);
+    expect(cues[1].name).toBe('Ouverture copy');
+    expect(cues[1].cue_number).toBeNull();
+    // Clone inséré après la source ; c1 repointé, c2 garde l'originale.
+    const clips = useScoreStore.getState().clips;
+    expect(clips[0].ref).toEqual({ type: 'cue', cueId: newId });
+    expect(clips.find((x) => x.id === c2.id)!.ref).toEqual({ type: 'cue', cueId: 'q1' });
+  });
+
   it('splitClip — deux parties, fades externes, courbes re-basées', () => {
     const st = useScoreStore.getState();
     const c = st.addClip({ type: 'slot', slotId: 's1' }, 1000, { durationMs: 4000, trackIds: [1] });

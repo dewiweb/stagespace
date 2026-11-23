@@ -10,6 +10,7 @@
 /// devient un clip suivant un move frais né pour elle.
 import { useScoreStore } from '../store/useScoreStore';
 import { useGraphStore } from '../store/useGraphStore';
+import { useCuelistStore } from '../store/useCuelistStore';
 import { effectiveTrackIds } from './scoreResolve';
 import type { ScoreClipDoc, ScoreClipRef } from '../store/useScoreStore';
 
@@ -89,17 +90,31 @@ export function detachLaneFromClip(clipId: string, trackId: number, asNewMove: b
 /// `Rendre unique` — clone l'entité référencée et repointe le clip.
 /// Le clip garde son mode de couverture : en suivi il suit désormais
 /// le clone (suivi live préservé, seule la cible change) ; en override
-/// l'override reste clip-local. Retourne le nouvel id de slot.
+/// l'override reste clip-local. Slot → clone du move en banque
+/// (`‹slot› ▸ unique`) ; cue → duplication dans la cuelist
+/// (`‹cue› copy`, insérée après la source, cue_number null — le clip
+/// devient la SEULE référence vivante au clone). Retourne l'id de
+/// l'entité clonée.
 export function makeClipUnique(clipId: string): string | undefined {
   const score = useScoreStore.getState();
   const clip = score.clips.find((c) => c.id === clipId);
-  if (!clip || clip.ref.type !== 'slot') return undefined;
+  if (!clip) return undefined;
   const clipRef = clip.ref;
-  const src = useGraphStore.getState().moveSlots.find((s) => s.id === clipRef.slotId);
-  const newSlotId = useGraphStore.getState().duplicateMoveSlot(clipRef.slotId, {
-    name: `${src?.name ?? 'Move'} ▸ unique`,
-    select: false,
-  });
-  if (newSlotId) score.retargetClip(clipId, { type: 'slot', slotId: newSlotId });
-  return newSlotId;
+  if (clipRef.type === 'slot') {
+    const src = useGraphStore.getState().moveSlots.find((s) => s.id === clipRef.slotId);
+    const newSlotId = useGraphStore.getState().duplicateMoveSlot(clipRef.slotId, {
+      name: `${src?.name ?? 'Move'} ▸ unique`,
+      select: false,
+    });
+    if (newSlotId) score.retargetClip(clipId, { type: 'slot', slotId: newSlotId });
+    return newSlotId;
+  }
+  if (clipRef.type === 'cue') {
+    const newCueId = useCuelistStore.getState().duplicateCue(String(clipRef.cueId), {
+      name: `${useCuelistStore.getState().cues.find((q) => String(q.id) === String(clipRef.cueId))?.name ?? 'Cue'} copy`,
+    });
+    if (newCueId) score.retargetClip(clipId, { type: 'cue', cueId: newCueId });
+    return newCueId;
+  }
+  return undefined;
 }
