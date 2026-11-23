@@ -186,6 +186,21 @@ pub enum ScoreClipPayload {
     Panic,
 }
 
+/// Interpolation d'un segment de courbe — définie sur le keyframe
+/// comme dans les DAW : le segment [ce point → suivant) utilise son
+/// `interp`. `linear` par défaut (rétrocompatible — les vieux docs
+/// sans le champ lisent `linear`). `step` maintient `a.v` jusqu'au
+/// keyframe suivant ; `smooth` = smoothstep `f²(3−2f)` (ease in/out
+/// sans overshoot). Bezier = extension future (handles par segment).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ScoreInterp {
+    #[default]
+    Linear,
+    Step,
+    Smooth,
+}
+
 /// Un keyframe de courbe — `t` en ms. Relatif au début du clip pour
 /// les courbes clip-scoped, absolu (début de partition) pour les
 /// courbes master. `v` = valeur ABSOLUE du paramètre.
@@ -193,6 +208,8 @@ pub enum ScoreClipPayload {
 pub struct ScoreKeyframe {
     pub t: u64,
     pub v: f64,
+    #[serde(default)]
+    pub interp: ScoreInterp,
 }
 
 /// Un clip posé sur la timeline — `track` = la lane d'appartenance :
@@ -264,14 +281,18 @@ pub struct ScoreTimeline {
     /// hard-wrap du transport (distinct du clip repeat : boucle de la
     /// partition entière). `None` = pas de boucle.
     pub loop_region: Option<(u64, u64)>,
-    /// Courbes master (S3) — évaluées en temps partition absolu et
+    /// Courbes GLOBALFX (S3) — évaluées en temps partition absolu et
     /// écrites sur les macros GLOBALES du merge
     /// (`MergeRuntime::macros()` — `MacroScope::Global`, mêmes chemins
-    /// que `/stagespace/macro`). Portée "ensemble du core" : ne vit
-    /// que sur la piste master côté doc. Hold à l'arrêt (dernière
-    /// valeur conservée — sémantique console, l'opérateur reprend la
-    /// main à tout moment).
-    pub master_curves: HashMap<String, Vec<ScoreKeyframe>>,
+    /// que `/stagespace/macro`). Hold à l'arrêt (dernière valeur
+    /// conservée — sémantique console, l'opérateur reprend la main à
+    /// tout moment).
+    pub global_fx_curves: HashMap<String, Vec<ScoreKeyframe>>,
+    /// Courbes MODULATION (S3) — temps absolu, écrites dans la map des
+    /// valeurs OSC (`last_by_address`) : le score devient une source
+    /// nommée lue par les nodes `SignalOsc` des graphs de modulation
+    /// (globale et per-move — même espace d'adresses que l'OSC réel).
+    pub modulation_curves: HashMap<String, Vec<ScoreKeyframe>>,
     /// Génération — stop/load l'incrémente, les sleeps armés s'abortent.
     pub generation: u64,
 }
@@ -306,7 +327,8 @@ fn timeline_state(tl: &ScoreTimeline) -> ScoreTimelineState {
 pub async fn score_timeline_load(
     clips: Vec<ScoreClip>,
     duration_ms: u64,
-    master_curves: HashMap<String, Vec<ScoreKeyframe>>,
+    global_fx_curves: HashMap<String, Vec<ScoreKeyframe>>,
+    modulation_curves: HashMap<String, Vec<ScoreKeyframe>>,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
     let mut tl = lock_or_recover(&state.score_timeline);
@@ -321,12 +343,17 @@ pub async fn score_timeline_load(
             kfs.sort_by_key(|k| k.t);
         }
     }
-    let mut mc = master_curves;
-    for kfs in mc.values_mut() {
+    let mut gfx = global_fx_curves;
+    for kfs in gfx.values_mut() {
+        kfs.sort_by_key(|k| k.t);
+    }
+    let mut mods = modulation_curves;
+    for kfs in mods.values_mut() {
         kfs.sort_by_key(|k| k.t);
     }
     tl.clips = sorted;
-    tl.master_curves = mc;
+    tl.global_fx_curves = gfx;
+    tl.modulation_curves = mods;
     tl.duration_ms = duration_ms;
     Ok(())
 }
@@ -348,7 +375,17 @@ fn sample_curve(kfs: &[ScoreKeyframe], t_ms: u64) -> Option<f64> {
             let i = kfs.partition_point(|k| k.t <= t_ms);
             let (a, b) = (&kfs[i - 1], &kfs[i]);
             let f = (t_ms - a.t) as f64 / (b.t - a.t) as f64;
-            Some(a.v + (b.v - a.v) * f)
+            let v = match a.interp {
+                // step : la valeur du keyframe tient jusqu'au suivant.
+                ScoreInterp::Step => a.v,
+                // smooth : smoothstep — ease in/out sans overshoot.
+                ScoreInterp::Smooth => {
+                    let s = f * f * (3.0 - 2.0 * f);
+                    a.v + (b.v - a.v) * s
+                }
+                ScoreInterp::Linear => a.v + (b.v - a.v) * f,
+            };
+            Some(v)
         }
     }
 }
@@ -393,34 +430,124 @@ fn write_macro_param(m: &stagespace_engines::MacroState, param: &str, v: f64) {
 }
 
 /// Une cible de courbes clip-scoped : le MacroState du move spawné,
-/// le t0 ABSOLU de cette itération (start + k·repeat — le temps local
-/// de la courbe = cursor − t0) et la table de keyframes.
+/// le canal de deltas `param:` de son runtime, les cibles résolues au
+/// fire, le t0 ABSOLU de cette itération (start + k·repeat — le temps
+/// local de la courbe = cursor − t0) et la table de keyframes.
+/// Cible `param:` résolue — ((node_key, param_key), base du node).
+type ResolvedParamTarget = ((String, String), f64);
+
 struct CurveTarget {
     macros: Arc<stagespace_engines::MacroState>,
+    /// `Runtime::param_deltas` — même canal que les contributions du
+    /// signal graph (somme dans `ParamSlots::apply_frame`).
+    param_deltas: Arc<Mutex<HashMap<(String, String), f64>>>,
+    /// Cibles `param:` résolues au fire — clé de courbe →
+    /// ((node_key, param_key), base). La base sert à convertir la
+    /// valeur absolue de la courbe en delta (`slots = base + Δ`).
+    param_targets: HashMap<String, Vec<ResolvedParamTarget>>,
     t0_ms: u64,
     curves: HashMap<String, Vec<ScoreKeyframe>>,
 }
 
+/// Résolution d'une cible de courbe `param:<node_id|NodeType>:<key>` —
+/// mêmes règles que le signal compiler (id d'abord, type-wide ensuite),
+/// appliquées au `graph_json` de la request du clip. Retourne les
+/// ((node_key, param_key), base) — node_key = l'id React Flow du node
+/// (= `__fe_id` injecté par le parser, clé stable des ParamSlots).
+fn resolve_param_targets(
+    gj: &stagespace_engines::GraphJson,
+    param_id: &str,
+) -> Vec<ResolvedParamTarget> {
+    let Some(rest) = param_id.strip_prefix("param:") else {
+        return Vec::new();
+    };
+    let Some((seg, key)) = rest.split_once(':') else {
+        return Vec::new();
+    };
+    let by_id: Vec<&stagespace_engines::GraphNodeJson> =
+        gj.nodes.iter().filter(|n| n.id == seg).collect();
+    let targets: Vec<&stagespace_engines::GraphNodeJson> = if !by_id.is_empty() {
+        by_id
+    } else {
+        gj.nodes
+            .iter()
+            .filter(|n| n.data.node_type.as_deref() == Some(seg))
+            .collect()
+    };
+    targets
+        .iter()
+        .filter_map(|n| {
+            let base = n.data.params.get(key)?.as_f64()?;
+            Some(((n.id.clone(), key.to_string()), base))
+        })
+        .collect()
+}
+
 /// Évalue toutes les courbes au curseur courant — appelé à chaque
 /// réveil de l'horloge (le sleep est borné à 50 ms). Clip-scoped →
-/// macros per-move ; master → macros globales du merge.
+/// macros per-move + deltas `param:` + blend `merge:` (weight /
+/// priority — `set_move_*`, côté merge pas worker) du move ;
+/// GLOBALFX → macros globales du merge ; MODULATION → valeurs
+/// nommées dans la map OSC (source `SignalOsc` des graphs de
+/// modulation — le score agit comme un contrôleur OSC de plus).
 fn eval_curves(
     cursor_ms: u64,
     targets: &HashMap<String, CurveTarget>,
+    merge: &Arc<Mutex<stagespace_engines::MergeRuntime>>,
     master: &stagespace_engines::MacroState,
-    master_curves: &HashMap<String, Vec<ScoreKeyframe>>,
+    global_fx_curves: &HashMap<String, Vec<ScoreKeyframe>>,
+    modulation_curves: &HashMap<String, Vec<ScoreKeyframe>>,
+    osc_source: &stagespace_engines::signal_compiler::SignalOscSource,
 ) {
-    for target in targets.values() {
+    for (move_id, target) in targets {
         let lt = cursor_ms.saturating_sub(target.t0_ms);
         for (param, kfs) in &target.curves {
             if let Some(v) = sample_curve(kfs, lt) {
-                write_macro_param(&target.macros, param, v);
+                if param.starts_with("param:") {
+                    // Courbe absolue → delta `v − base` sur les slots du
+                    // move (param modulable du graphe — même canal que
+                    // le signal graph, relu à la frame suivante).
+                    if let Some(tgts) = target.param_targets.get(param) {
+                        if !tgts.is_empty() {
+                            let mut ext = lock_or_recover(&target.param_deltas);
+                            for ((nk, pk), base) in tgts {
+                                ext.insert((nk.clone(), pk.clone()), v - base);
+                            }
+                        }
+                    }
+                } else if let Some(mk) = param.strip_prefix("merge:") {
+                    // Blend params — côté MERGE, pas le worker :
+                    // `fade × weight` est le poids effectif dans
+                    // Override/Crossfade/Blend ; priority départage la
+                    // stratégie Priority. Même canal que les IPC
+                    // set_move_weight/set_move_priority.
+                    let rt = lock_or_recover(merge);
+                    match mk {
+                        "weight" => rt.set_move_weight(move_id, v),
+                        "priority" => rt.set_move_priority(move_id, v.max(0.0).round() as u32),
+                        _ => {}
+                    }
+                } else {
+                    write_macro_param(&target.macros, param, v);
+                }
             }
         }
     }
-    for (param, kfs) in master_curves {
+    for (param, kfs) in global_fx_curves {
         if let Some(v) = sample_curve(kfs, cursor_ms) {
             write_macro_param(master, param, v);
+        }
+    }
+    if !modulation_curves.is_empty() {
+        // Read-lock → map COURANTE (suit les rebinds du receiver),
+        // puis une écriture par nom — `SignalOsc.name` les relit à la
+        // frame suivante, comme une adresse OSC reçue.
+        let map = osc_source.read().unwrap_or_else(|e| e.into_inner()).clone();
+        let mut vals = lock_or_recover(&map);
+        for (name, kfs) in modulation_curves {
+            if let Some(v) = sample_curve(kfs, cursor_ms) {
+                vals.insert(name.clone(), vec![v]);
+            }
         }
     }
 }
@@ -433,7 +560,7 @@ fn eval_curves(
 pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcError> {
     let sh = Shared::from_state(&state);
     let tl_arc = state.score_timeline.clone();
-    let (gen, clips, seek, lp, master_curves) = {
+    let (gen, clips, seek, lp, global_fx_curves, modulation_curves) = {
         let mut tl = lock_or_recover(&tl_arc);
         tl.generation += 1;
         tl.started_at = Some(Instant::now());
@@ -442,7 +569,8 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
             tl.clips.clone(),
             tl.seek_ms,
             tl.loop_region,
-            tl.master_curves.clone(),
+            tl.global_fx_curves.clone(),
+            tl.modulation_curves.clone(),
         )
     };
     if clips.is_empty() {
@@ -462,6 +590,9 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
         // sont prises une fois — Arc stable pour la durée du process.
         let mut curve_targets: HashMap<String, CurveTarget> = HashMap::new();
         let master_macros = lock_or_recover(&sh.merge_runtime).macros();
+        // Source `SignalOsc` — handle EXTERNE (RwLock) : les écritures
+        // modulation suivent les rebinds du receiver OSC.
+        let osc_source = lock_or_recover(&sh.merge_runtime).osc_values_source();
         // Cycles de lecture : sans loop un seul passage ; avec loop, le
         // transport reboucle à `loop_start` (hard-wrap — les moves
         // score du cycle sont coupés avant de repartir, sémantique
@@ -492,8 +623,11 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
                     eval_curves(
                         cursor(t0.elapsed()),
                         &curve_targets,
+                        &sh.merge_runtime,
                         &master_macros,
-                        &master_curves,
+                        &global_fx_curves,
+                        &modulation_curves,
+                        &osc_source,
                     );
                 }
                 if lock_or_recover(&tl_arc).generation != gen {
@@ -524,8 +658,11 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
                 eval_curves(
                     cursor(t0.elapsed()),
                     &curve_targets,
+                    &sh.merge_runtime,
                     &master_macros,
-                    &master_curves,
+                    &global_fx_curves,
+                    &modulation_curves,
+                    &osc_source,
                 );
             }
             match lp {
@@ -547,8 +684,11 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
                         eval_curves(
                             cursor(t0.elapsed()),
                             &curve_targets,
+                            &sh.merge_runtime,
                             &master_macros,
-                            &master_curves,
+                            &global_fx_curves,
+                            &modulation_curves,
+                            &osc_source,
                         );
                     }
                     if lock_or_recover(&tl_arc).generation != gen {
@@ -742,10 +882,23 @@ fn fire_clip(
                             // phase interne du move, pas le temps de
                             // courbe qui suit le curseur timeline.
                             if !clip.curves.is_empty() {
+                                // Cibles `param:` résolues sur le
+                                // graph_json de la request (id node ou
+                                // type-wide — mêmes règles que le
+                                // signal compiler), base lue dans les
+                                // params du node.
+                                let param_targets = clip
+                                    .curves
+                                    .keys()
+                                    .filter(|k| k.starts_with("param:"))
+                                    .map(|k| (k.clone(), resolve_param_targets(&req.graph_json, k)))
+                                    .collect();
                                 curve_targets.insert(
                                     req.movement_id.clone(),
                                     CurveTarget {
                                         macros: mv.runtime.macros(),
+                                        param_deltas: mv.runtime.param_deltas(),
+                                        param_targets,
                                         t0_ms: clip.start_ms
                                             + iteration * clip.repeat_every_ms.unwrap_or(0),
                                         curves: clip.curves.clone(),
@@ -1062,9 +1215,9 @@ mod tests {
     #[test]
     fn curve_samples_linear_between_keyframes() {
         let kfs = vec![
-            ScoreKeyframe { t: 0, v: 1.0 },
-            ScoreKeyframe { t: 4_000, v: 2.0 },
-            ScoreKeyframe { t: 8_000, v: 0.0 },
+            ScoreKeyframe { t: 0, v: 1.0, interp: ScoreInterp::Linear },
+            ScoreKeyframe { t: 4_000, v: 2.0, interp: ScoreInterp::Linear },
+            ScoreKeyframe { t: 8_000, v: 0.0, interp: ScoreInterp::Linear },
         ];
         // Bords : clamp avant le premier / après le dernier point.
         assert_eq!(sample_curve(&kfs, 0), Some(1.0));
@@ -1078,9 +1231,34 @@ mod tests {
         // Cas limites.
         assert_eq!(sample_curve(&[], 100), None);
         assert_eq!(
-            sample_curve(&[ScoreKeyframe { t: 500, v: 3.0 }], 0),
+            sample_curve(&[ScoreKeyframe { t: 500, v: 3.0, interp: ScoreInterp::Linear }], 0),
             Some(3.0)
         );
+    }
+
+    #[test]
+    fn curve_samples_step_and_smooth_interps() {
+        // step : la valeur du keyframe tient jusqu'au suivant (front
+        // montant au keyframe lui-même, pas avant).
+        let step = vec![
+            ScoreKeyframe { t: 0, v: 1.0, interp: ScoreInterp::Step },
+            ScoreKeyframe { t: 4_000, v: 3.0, interp: ScoreInterp::Step },
+        ];
+        assert_eq!(sample_curve(&step, 1_999), Some(1.0));
+        assert_eq!(sample_curve(&step, 4_000), Some(3.0));
+        // smooth : smoothstep f²(3−2f) — milieu = moyenne, quart =
+        // 0.156·Δ (ease in), pas de dépassement.
+        let smooth = vec![
+            ScoreKeyframe { t: 0, v: 0.0, interp: ScoreInterp::Smooth },
+            ScoreKeyframe { t: 4_000, v: 4.0, interp: ScoreInterp::Smooth },
+        ];
+        assert_eq!(sample_curve(&smooth, 2_000), Some(2.0));
+        let q = sample_curve(&smooth, 1_000).unwrap();
+        assert!((q - 4.0 * (0.25 * 0.25 * (3.0 - 0.5))).abs() < 1e-9);
+        // Linear reste le défaut serde — payload sans `interp` lit linear.
+        let legacy: ScoreKeyframe =
+            serde_json::from_str(r#"{"t":100,"v":2.5}"#).unwrap();
+        assert_eq!(legacy.interp, ScoreInterp::Linear);
     }
 
     #[test]
@@ -1120,8 +1298,23 @@ mod tests {
         curves.insert(
             "speed".to_string(),
             vec![
-                ScoreKeyframe { t: 0, v: 1.0 },
-                ScoreKeyframe { t: 2_000, v: 3.0 },
+                ScoreKeyframe { t: 0, v: 1.0, interp: ScoreInterp::Linear },
+                ScoreKeyframe { t: 2_000, v: 3.0, interp: ScoreInterp::Linear },
+            ],
+        );
+        // Blend params — côté merge (`merge:` prefix), pas le worker.
+        curves.insert(
+            "merge:weight".to_string(),
+            vec![
+                ScoreKeyframe { t: 0, v: 1.0, interp: ScoreInterp::Linear },
+                ScoreKeyframe { t: 2_000, v: 1.8, interp: ScoreInterp::Linear },
+            ],
+        );
+        curves.insert(
+            "merge:priority".to_string(),
+            vec![
+                ScoreKeyframe { t: 0, v: 0.0, interp: ScoreInterp::Linear },
+                ScoreKeyframe { t: 2_000, v: 8.0, interp: ScoreInterp::Linear },
             ],
         );
         let mut targets = HashMap::new();
@@ -1129,6 +1322,8 @@ mod tests {
             "sc-c1".to_string(),
             CurveTarget {
                 macros: Arc::new(move_macros),
+                param_deltas: Arc::new(Mutex::new(HashMap::new())),
+                param_targets: HashMap::new(),
                 t0_ms: 1_000, // clip à 1s → t local = cursor - 1s
                 curves,
             },
@@ -1137,18 +1332,65 @@ mod tests {
         master.insert(
             "shift_y".to_string(),
             vec![
-                ScoreKeyframe { t: 0, v: 0.0 },
-                ScoreKeyframe { t: 4_000, v: 4.0 },
+                ScoreKeyframe { t: 0, v: 0.0, interp: ScoreInterp::Linear },
+                ScoreKeyframe { t: 4_000, v: 4.0, interp: ScoreInterp::Linear },
             ],
         );
         let mv = targets["sc-c1"].macros.clone();
-        eval_curves(2_000, &targets, &merge_macros, &master);
+        let osc_source: stagespace_engines::signal_compiler::SignalOscSource = std::sync::Arc::new(
+            std::sync::RwLock::new(std::sync::Arc::new(std::sync::Mutex::new(HashMap::new()))),
+        );
+        let modulation = HashMap::from([(
+            "/score/energy".to_string(),
+            vec![
+                ScoreKeyframe { t: 0, v: 0.0, interp: ScoreInterp::Linear },
+                ScoreKeyframe { t: 4_000, v: 1.0, interp: ScoreInterp::Linear },
+            ],
+        )]);
+        let merge_rt = Arc::new(Mutex::new(
+            stagespace_engines::MergeRuntime::new(
+                "127.0.0.1".into(),
+                8000,
+                stagespace_engines::OscSender::default(),
+                60.0,
+            )
+            .expect("merge runtime"),
+        ));
+        // Le move doit exister dans active_moves pour que les setters
+        // merge:weight/priority aient une cible.
+        merge_rt
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .register_move(
+                "sc-c1".to_string(),
+                Arc::new(stagespace_engines::PositionBuffer::new()),
+                vec![0],
+                vec![0],
+                false,
+                stagespace_engines::EndMode::default(),
+            );
+        eval_curves(
+            2_000,
+            &targets,
+            &merge_rt,
+            &merge_macros,
+            &master,
+            &modulation,
+            &osc_source,
+        );
         // t local = 1s → speed = 1 + (2-1)·(3-1)/2 = 2.
         assert_eq!(mv.get_speed(), 2.0);
         // cursor 2s → shift_y = 2.0 sur le scope global.
         assert_eq!(merge_macros.get_shift().y, 2.0);
+        // cursor 2s → modulation "/score/energy" = 0.5 dans la map OSC.
+        let map = osc_source.read().unwrap().clone();
+        assert_eq!(lock_or_recover(&map)["/score/energy"], vec![0.5]);
         // Le scope master ne touche pas le move, et réciproquement.
         assert_eq!(merge_macros.get_speed(), 1.0);
         assert_eq!(mv.get_shift().y, 0.0);
+        // merge:weight → 1.0 + 0.8·(1s/2s) = 1.4 ; merge:priority → 4.
+        let rt = merge_rt.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(rt.get_move_weight("sc-c1"), Some(1.4));
+        assert_eq!(rt.get_move_priority("sc-c1"), Some(4));
     }
 }

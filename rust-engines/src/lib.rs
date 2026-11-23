@@ -34,7 +34,6 @@ pub mod zones;
 #[cfg(test)]
 mod animation_tests;
 #[cfg(test)]
-#[cfg(test)]
 mod bench;
 #[cfg(test)]
 mod compiler_tests;

@@ -66,6 +66,13 @@ pub struct Runtime {
     /// y écrit les deltas `param:` de la signal_fn à chaque frame ; les
     /// closures lisent leurs slots par index (base + delta, sans lock).
     param_slots: Arc<Mutex<Arc<crate::param_slots::ParamSlots>>>,
+    /// Contributions externes aux slots `param:` — `(node_key, param_key)`
+    /// → delta additif, sommé avec les deltas du signal graph à chaque
+    /// frame (même sémantique : base + delta, aucun hold — une source
+    /// qui cesse d'écrire voit le param revenir à sa base au frame
+    /// suivante). Canal des courbes de score / automation ; écrit par
+    /// n'importe quel thread, relu sous le lock signal par le worker.
+    external_param_deltas: Arc<Mutex<HashMap<(String, String), f64>>>,
     /// Buffer de positions — le worker écrit ses positions (world-space)
     /// à chaque frame ; le MergeRuntime lit tous les buffers pour faire
     /// le merge + post-processing + envoi via le sink.
@@ -127,6 +134,7 @@ impl Runtime {
             audio_param_overrides: Arc::new(Mutex::new(HashMap::new())),
             held_positions: Arc::new(Mutex::new(HashMap::new())),
             param_slots: Arc::new(Mutex::new(crate::param_slots::ParamSlots::empty())),
+            external_param_deltas: Arc::new(Mutex::new(HashMap::new())),
             position_buffer: Mutex::new(None),
             duration_ms: Arc::new(std::sync::atomic::AtomicU64::new(4000)),
             osc_ids_arc: Arc::new(std::sync::RwLock::new(Vec::new())),
@@ -468,6 +476,15 @@ impl Runtime {
         self.macros.clone()
     }
 
+    /// Handle sur les deltas `param:` externes — les contributions
+    /// `(node_key, param_key) → delta` y sont relues à chaque frame et
+    /// sommées avec celles du signal graph dans `ParamSlots::apply_frame`.
+    /// Le writer (score, automation) garde la clé stable `__fe_id` —
+    /// elle survit aux recompiles tant que le graphe garde le même node.
+    pub fn param_deltas(&self) -> Arc<Mutex<HashMap<(String, String), f64>>> {
+        self.external_param_deltas.clone()
+    }
+
     pub fn set_loop_mode(&self, mode: LoopMode) {
         self.config.set_loop_mode(mode);
     }
@@ -546,6 +563,7 @@ impl Runtime {
         let audio_state_arc = self.audio_state.clone();
         let audio_param_overrides_arc = self.audio_param_overrides.clone();
         let param_slots_arc = self.param_slots.clone();
+        let external_deltas_arc = self.external_param_deltas.clone();
         let signal_fn_arc = self.signal_fn.clone();
         let osc_values_arc = self.osc_values.clone();
 
@@ -630,7 +648,7 @@ impl Runtime {
                         // catch_unwind : un panic dans le signal graph ne doit
                         // pas tuer le worker (seul les evals de position
                         // étaient protégés avant).
-                        let deltas =
+                        let mut deltas =
                             match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                                 (*signal)(&crate::signal_compiler::SignalCtx {
                                     t: t_real,
@@ -647,6 +665,25 @@ impl Runtime {
                                     crate::signal_compiler::SignalOutput::default()
                                 }
                             };
+                        // Contributions externes (score curves / automation) —
+                        // résolues (node_key,param_key) → idx sous le MÊME lock
+                        // que `slots` : le swap d'un recompile ne peut pas
+                        // produire un idx obsolète. Mêmes deltas additifs, même
+                        // "pas de hold" qu'une source signal absente.
+                        {
+                            let ext = external_deltas_arc
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner());
+                            if !ext.is_empty() {
+                                for ((nk, pk), v) in ext.iter() {
+                                    if v.is_finite() {
+                                        if let Some(idx) = slots.slot_of(nk, pk) {
+                                            deltas.slot_deltas.push((idx, *v));
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         // Deltas de slots : zero → somme des deltas finis →
                         // bump generation (les caches de params patchés
                         // rebuild au plus 1×/frame). Aucun hold : un delta

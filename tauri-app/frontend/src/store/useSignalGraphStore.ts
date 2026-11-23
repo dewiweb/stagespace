@@ -112,6 +112,32 @@ function persist(state: SignalGraphState, nodes: GraphNode[], edges: Edge[]) {
 const _stored = loadFromStorage();
 const history = createGraphHistory<GraphNode, Edge>();
 
+/// Graphe de démo score — consomme la courbe MODULATION `/score/energy`
+/// (lane du score → map OSC) et la transforme en delta de macro global :
+/// energy 0..1 → scale -0.5..+0.5. Sert à vérifier la chaîne e2e
+/// score → SignalOsc → SignalOut → MergeRuntime::macros().
+export function buildScoreDemoSignalGraph(): { nodes: GraphNode[]; edges: Edge[] } {
+  const osc = makeNode('SignalOsc', { x: 100, y: 200 }, {
+    name: '/score/energy',
+    index: 0,
+  });
+  const map = makeNode('SignalMap', { x: 330, y: 200 }, {
+    in_min: 0.0,
+    in_max: 1.0,
+    out_min: -0.5,
+    out_max: 0.5,
+  });
+  const out = makeNode('SignalOut', { x: 560, y: 200 }, {
+    target: 'scale',
+    amount: 1.0,
+  });
+
+  return {
+    nodes: [osc, map, out],
+    edges: [makeEdge(osc.id, map.id), makeEdge(map.id, out.id)],
+  };
+}
+
 export const useSignalGraphStore = create<SignalGraphState>((set, get) => ({
   // Seed = vide : une modulation active par défaut serait invisible pour
   // l'opérateur (le backend compile un graphe vide en empty_signal_fn).

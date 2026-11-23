@@ -3,10 +3,11 @@
 /// variés : copies liées multi-lanes, fades clip-local, lane stacked,
 /// repeat, orphelins, lane fantôme, loop, courbes clip+master.
 /// Le play n'est pas exercé (pas de backend) — rendu/édition seulement.
-import { useScoreStore } from '../store/useScoreStore';
+import { useScoreStore, GLOBALFX_LANE, MODULATION_LANE } from '../store/useScoreStore';
 import { useGraphStore } from '../store/useGraphStore';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { useMoveEditorStore } from '../store/useMoveEditorStore';
+import { useSignalGraphStore, buildScoreDemoSignalGraph } from '../store/useSignalGraphStore';
 
 const slot = (id: string, name: string, fadeIn: number, fadeOut: number, trackIds: number[]) =>
   ({
@@ -42,8 +43,11 @@ export function seedScoreDemo() {
   s.setLaneMode('obj-2', 'stacked');
 
   // Orbe couvre T1+T2 → copie liée sur les deux lanes (chevauche
-  // Vague sur T2 → sous-lignes en stacked). Fades + courbes clip.
-  const c1 = s.addClip({ type: 'slot', slotId: 's-orbe' }, 2_000, { durationMs: 12_000, trackIds: [1, 2] });
+  // Vague sur T2 → sous-lignes en stacked). Move loopé → tuile par
+  // défaut (repeat = un cycle) + fades + courbes clip.
+  const c1 = s.addClip({ type: 'slot', slotId: 's-orbe' }, 2_000, {
+    durationMs: 12_000, trackIds: [1, 2], repeatEveryMs: 4_000,
+  });
   s.setClipFades(c1.id, 800, 1_500);
   s.setClipCurve(c1.id, 'speed', [
     { t: 0, v: 1 }, { t: 4_000, v: 1.8 }, { t: 9_000, v: 0.6 }, { t: 12_000, v: 1 },
@@ -52,11 +56,14 @@ export function seedScoreDemo() {
     { t: 0, v: 1 }, { t: 6_000, v: 1.5 }, { t: 12_000, v: 0.8 },
   ]);
   // Vague sur T2+T3 — chevauche Orbe sur la lane T2 (stacked) et
-  // vit aussi seule sur T3 (fades hérités du slot).
-  s.addClip({ type: 'slot', slotId: 's-vague' }, 9_000, { durationMs: 10_000, trackIds: [2, 3] });
-  // Essaim répété sur T2+T3+T4 — trois copies liées + ticks ⟳.
-  const c3 = s.addClip({ type: 'slot', slotId: 's-essaim' }, 22_000, { durationMs: 16_000, trackIds: [2, 3, 4] });
-  s.setClipRepeat(c3.id, 4_000);
+  // vit aussi seule sur T3 (fades hérités du slot, tuile par défaut).
+  s.addClip({ type: 'slot', slotId: 's-vague' }, 9_000, {
+    durationMs: 10_000, trackIds: [2, 3], repeatEveryMs: 5_000,
+  });
+  // Essaim sur T2+T3+T4 — trois copies liées multi-lanes + tuile.
+  s.addClip({ type: 'slot', slotId: 's-essaim' }, 22_000, {
+    durationMs: 16_000, trackIds: [2, 3, 4], repeatEveryMs: 4_000,
+  });
   // Référence cassée → clip orphelin sur T4 (pointillés, ⚠).
   s.addClip({ type: 'slot', slotId: 'slot-supprime' }, 42_000, { durationMs: 6_000, trackIds: [4] });
   // Lane fantôme : clip couvrant l'objet 9, non patché → T9 ⚠.
@@ -68,15 +75,28 @@ export function seedScoreDemo() {
   // Cue orpheline — couverture vide → se rend sur la lane master.
   s.addClip({ type: 'cue', cueId: '999' }, 48_000);
 
-  // Markers → lane master.
+  // Markers → lane globalfx.
   s.addClip({ type: 'stopAll' }, 50_000);
   s.addClip({ type: 'panic' }, 56_000);
 
-  // Courbes master — macros globales (merge), temps absolu partition.
-  s.setMasterCurve('radius_scale', [
+  // Courbes GLOBALFX — macros globales (merge), temps absolu partition.
+  s.setLaneCurve(GLOBALFX_LANE, 'radius_scale', [
     { t: 0, v: 1 }, { t: 30_000, v: 1.6 }, { t: 60_000, v: 1 },
   ]);
-  s.setMasterCurve('shift_y', [{ t: 0, v: 0 }, { t: 45_000, v: 2 }]);
+  s.setLaneCurve(GLOBALFX_LANE, 'shift_y', [{ t: 0, v: 0 }, { t: 45_000, v: 2 }]);
+  // Courbe MODULATION — valeur nommée injectée dans la map OSC,
+  // lisible par un node SignalOsc `/score/energy` du graph Mods.
+  s.setLaneCurve(MODULATION_LANE, '/score/energy', [
+    { t: 0, v: 0 }, { t: 20_000, v: 1 }, { t: 40_000, v: 0.3 }, { t: 60_000, v: 0 },
+  ]);
+
+  // Graphe signal NON-VIDE — le signal graph global est vide par
+  // défaut : sans lui la lane MODULATION n'a aucun consommateur.
+  // SignalOsc("/score/energy") → Map(0..1→-0.5..+0.5) → SignalOut
+  // (scale) : la courbe ci-dessus module l'échelle globale au play.
+  const sig = buildScoreDemoSignalGraph();
+  useSignalGraphStore.setState({ nodes: sig.nodes, edges: sig.edges, context: 'global' });
+  void useSignalGraphStore.getState().pushSignalGraph();
 
   s.setLoop(20_000, 60_000);
 

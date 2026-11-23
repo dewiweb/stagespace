@@ -1,7 +1,7 @@
 import React from 'react';
 import { useGraphStore } from '../../store/useGraphStore';
 import { DrawMenuBar } from './DrawToolbar';
-import { MacrosSurface } from '../show/MacrosSurface';
+import { GlobalTransformSurface } from '../show/GlobalTransformSurface';
 import { MACRO_NEUTRAL } from '../../store/slices/macrosSlice';
 import { SlidersHorizontal, ChevronDown, RotateCcw, Box } from 'lucide-react';
 import { safeInvoke } from '../../utils/tauri';
@@ -68,14 +68,14 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({ isPlaying }) => {
           <>
             <button
               onClick={toggleMacros}
-              title="Global field macros (speed, scale, shift, rotation, radius, height)"
+              title="Global transform — merge scope (speed, scale, shift, rotation, radius, height)"
               className={`${tbAction} border ${
                 macrosOpen
                   ? 'bg-purple-700/80 border-purple-500/60 text-white'
                   : 'bg-gray-800/70 border-gray-700/70 text-gray-300 hover:bg-gray-700'
               }`}
             >
-              <SlidersHorizontal size={11} /> Macros <ChevronDown size={10} className={macrosOpen ? 'rotate-180' : ''} />
+              <SlidersHorizontal size={11} /> Transform <ChevronDown size={10} className={macrosOpen ? 'rotate-180' : ''} />
             </button>
             {isPlaying && <span className="text-stagespace-live text-[10px] font-bold animate-pulse">LIVE</span>}
             {movements.length > 0 && (
@@ -110,16 +110,16 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({ isPlaying }) => {
               mini-sliders compressés dans le bandeau. */}
           <div className="absolute left-1.5 top-full z-[60] mt-1 w-64 rounded-md border border-gray-700/80 bg-gray-900/98 shadow-2xl p-2.5">
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Global macros</span>
+              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Global transform</span>
               <button
                 onClick={resetMacros}
-                title="Reset all macros to neutral"
+                title="Reset global transform to neutral"
                 className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded bg-gray-800 text-gray-300 hover:bg-gray-700"
               >
                 <RotateCcw size={10} /> Reset
               </button>
             </div>
-            <MacrosSurface layout="stack" live={movements.length > 0} includeRadius />
+            <GlobalTransformSurface layout="stack" live={movements.length > 0} includeRadius />
           </div>
         </>
       )}

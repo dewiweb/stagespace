@@ -30,7 +30,7 @@ function Section({ title, icon, defaultOpen = true, badge, badgeColor = 'gray', 
 }
 
 import Slider from './ui/Slider';
-import { MacrosSurface } from './show/MacrosSurface';
+import { GlobalTransformSurface } from './show/GlobalTransformSurface';
 import { AudioModList } from './AudioModControls';
 import { Zap, AudioLines, Hexagon, SlidersHorizontal, Play, CircleDot, X, Square, ChevronRight, TriangleAlert, Check } from 'lucide-react';
 
@@ -123,7 +123,7 @@ export default function Inspector() {
   };
 
   // Handler unifié : met à jour les deux stores (Move + Graph macros) + pousse vers le runtime
-  // Utilisé à la fois par les sliders Transform (Simple) et Macros (Expert)
+  // Utilisé à la fois par les sliders Transform (Simple) et Global transform (Expert)
   const handleUnified = (key: string, value: number, source: 'simple' | 'expert') => {
     if (source === 'simple') {
       // key est un nom Simple (offset_x, scale, yaw, ...)
@@ -176,7 +176,7 @@ export default function Inspector() {
             value={editingSlotId ?? ''}
             onChange={(e) => selectSlotForEditing(e.target.value === '' ? null : e.target.value)}
             className="flex-1 min-w-0 bg-gray-800 text-white text-xs font-semibold px-2 py-1.5 rounded border border-gray-700 focus:border-indigo-500 focus:outline-none cursor-pointer"
-            title="Move inspecté — Global = vue macros/audio, aucun move en édition"
+            title="Move inspecté — Global = vue transform global/audio, aucun move en édition"
           >
             <option value="">◆ Global — no move</option>
             {moveSlots.map((slot) => (
@@ -223,11 +223,11 @@ export default function Inspector() {
                 du header : un seul endroit où choisir/désélectionner le
                 move inspecté, plus de liste dupliquée face à la table.) */}
 
-            {/* GLOBAL MACROS — merge scope, tous les moves live. Même
-                contrôle que le scope 'Global macros' du drawer Jeu. */}
-            <Section title="Global macros" icon={<Zap size={12} />} defaultOpen={true}
+            {/* GLOBAL TRANSFORM — merge scope, tous les moves live. Même
+                contrôle que le scope 'Global transform' du drawer Jeu. */}
+            <Section title="Global transform" icon={<Zap size={12} />} defaultOpen={true}
               badge={activeMovementIds.length > 0 ? `${activeMovementIds.length} live` : undefined}>
-              <MacrosSurface includeRadius live />
+              <GlobalTransformSurface includeRadius live />
             </Section>
 
             {/* AUDIO — mods audio-reactifs globaux */}
@@ -270,10 +270,11 @@ export default function Inspector() {
               )}
             </Section>
 
-            {/* MACROS — runtime controls appliqués à tous les moves */}
-            <Section title="Macros" icon={<Zap size={12} />} defaultOpen={true}
+            {/* GLOBAL TRANSFORM — runtime controls appliqués à tous les
+                moves (scope merge — voir taxonomie GlobalTransformSurface) */}
+            <Section title="Global transform" icon={<Zap size={12} />} defaultOpen={true}
               badge={activeMovementIds.length > 0 ? `${activeMovementIds.length} live` : undefined}>
-              <MacrosSurface includeRadius live />
+              <GlobalTransformSurface includeRadius live />
             </Section>
           </>
         ) : (
@@ -335,8 +336,11 @@ export default function Inspector() {
               <Slider label="Fade out" value={current.fade_out} min={0} max={5} step={0.1} onChange={(v) => updateCurrent({ fade_out: v })} unit="s" />
             </Section>
 
-            {/* MACROS — speed, scale, shift, rotation (unifié avec Expert) */}
-            <Section title="Macros" icon={<Zap size={12} />}>
+            {/* TRANSFORM — speed, scale, shift, rotation : scope PER-MOVE
+                (champs Animation du move — pas un graphe, cf. MacroScope::PerMove).
+                Radius/Height en sous-groupe « global » : ils n'existent pas
+                sur Animation — scope merge (Global transform). */}
+            <Section title="Transform" icon={<Zap size={12} />}>
               <Slider label="Speed" value={current.speed} min={0} max={4} step={0.05} onChange={(v) => handleTransform('speed', v)} unit="x" accent="purple" />
               <Slider label="Scale" value={current.scale} min={0} max={4} step={0.05} onChange={(v) => handleTransform('scale', v)} accent="purple" />
               <Slider label="Shift X" value={current.offset_x} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_x', v)} accent="purple" />
@@ -345,8 +349,9 @@ export default function Inspector() {
               <Slider label="Yaw" value={current.yaw} min={-180} max={180} step={1} onChange={(v) => handleTransform('yaw', v)} unit="°" accent="purple" />
               <Slider label="Pitch" value={current.pitch} min={-90} max={90} step={1} onChange={(v) => handleTransform('pitch', v)} unit="°" accent="purple" />
               <Slider label="Roll" value={current.roll} min={-180} max={180} step={1} onChange={(v) => handleTransform('roll', v)} unit="°" accent="purple" />
-              <Slider label="Radius" value={macros.radius_scale} min={0} max={4} step={0.05} onChange={(v) => handleMacro('radius_scale', v)} unit="x" accent="purple" />
-              <Slider label="Height" value={macros.height_offset} min={-5} max={5} step={0.1} onChange={(v) => handleMacro('height_offset', v)} unit="m" accent="purple" />
+              <div className="pt-1 mt-1 border-t border-gray-800 text-[10px] uppercase tracking-wider text-gray-600" title="Scope merge — tous les moves (Global transform)">— global —</div>
+              <Slider label="Radius" value={macros.radius_scale} min={0} max={4} step={0.05} onChange={(v) => handleMacro('radius_scale', v)} unit="x" accent="cyan" />
+              <Slider label="Height" value={macros.height_offset} min={-5} max={5} step={0.1} onChange={(v) => handleMacro('height_offset', v)} unit="m" accent="cyan" />
             </Section>
           </>
         )}

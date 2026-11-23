@@ -184,6 +184,16 @@ impl MergeRuntime {
         *self.osc_values.write().unwrap_or_else(|e| e.into_inner()) = handle;
     }
 
+    /// Handle externe `SignalOscSource` — le read lock donne la map
+    /// COURANTE : une écriture via ce handle suit les rebinds du
+    /// receiver (contrairement à `address_values_handle()` capturé une
+    /// fois). Utilisé par le score timeline pour injecter des valeurs
+    /// nommées dans le domaine de modulation (`SignalOsc` les lit
+    /// comme n'importe quelle source OSC).
+    pub fn osc_values_source(&self) -> crate::signal_compiler::SignalOscSource {
+        self.osc_values.clone()
+    }
+
     /// Évalue la `SignalFn` courante hors boucle — diagnostic/test :
     /// permet de vérifier qu'un recall/hot-swap a bien installé (ou
     /// reset) le graph de modulation sans démarrer le merge.

@@ -1,6 +1,6 @@
 /// <reference types="vitest/globals" />
 import { describe, expect, it, beforeEach } from 'vitest';
-import { useScoreStore, clipLaneIds, MASTER_LANE } from '../useScoreStore';
+import { useScoreStore, clipLaneIds, GLOBALFX_LANE, MODULATION_LANE } from '../useScoreStore';
 import { resolveScoreClips, cueCoverage } from '../../utils/scoreResolve';
 import { useGraphStore, getInvokeCalls, clearInvokeCalls, resetStore } from './testHelpers';
 import { useCuelistStore } from '../useCuelistStore';
@@ -49,15 +49,15 @@ describe('score timeline (S2/S3 — lanes objets)', () => {
     expect(useScoreStore.getState().clips).toHaveLength(0);
   });
 
-  it('clipLaneIds — couverture → lanes objets ; vide/marker → master', () => {
+  it('clipLaneIds — couverture → lanes objets ; vide/marker → globalfx', () => {
     const st = useScoreStore.getState();
     const c = st.addClip({ type: 'slot', slotId: 's2' }, 0, { trackIds: [2, 3] });
     expect(clipLaneIds(c)).toEqual(['obj-2', 'obj-3']);
     const marker = st.addClip({ type: 'panic' }, 5000);
-    expect(clipLaneIds(marker)).toEqual([MASTER_LANE]);
-    // Couverture vide → lane master (le clip reste visible).
+    expect(clipLaneIds(marker)).toEqual([GLOBALFX_LANE]);
+    // Couverture vide → lane globalfx (le clip reste visible).
     const cue = st.addClip({ type: 'cue', cueId: '7' }, 8000);
-    expect(clipLaneIds(cue)).toEqual([MASTER_LANE]);
+    expect(clipLaneIds(cue)).toEqual([GLOBALFX_LANE]);
   });
 
   it('playScore résout → score_timeline_load + play, lanes émises', async () => {
@@ -74,7 +74,7 @@ describe('score timeline (S2/S3 — lanes objets)', () => {
     expect(clips).toHaveLength(3);
     expect(clips.map((c) => c.payload.kind)).toEqual(['Slot', 'Cue', 'StopAll']);
     expect(clips[0].lanes.map((l) => l.id)).toEqual(['obj-2', 'obj-3']);
-    expect(clips[2].lanes.map((l) => l.id)).toEqual([MASTER_LANE]);
+    expect(clips[2].lanes.map((l) => l.id)).toEqual([GLOBALFX_LANE]);
     expect(useScoreStore.getState().playing).toBe(true);
   });
 
@@ -94,17 +94,22 @@ describe('score timeline (S2/S3 — lanes objets)', () => {
     expect(r2.clips).toHaveLength(2);
   });
 
-  it('master mutée → markers skippés + masterCurves non envoyées', async () => {
+  it('globalfx mutée → markers skippés + globalFxCurves non envoyées', async () => {
     const st = useScoreStore.getState();
     st.addClip({ type: 'slot', slotId: 's1' }, 0, { durationMs: 1000, trackIds: [1] });
     st.addClip({ type: 'stopAll' }, 5_000);
-    st.setMasterCurve('speed', [{ t: 0, v: 1 }, { t: 5000, v: 2 }]);
-    useScoreStore.getState().toggleLaneMute(MASTER_LANE);
+    st.setLaneCurve(GLOBALFX_LANE, 'speed', [{ t: 0, v: 1 }, { t: 5000, v: 2 }]);
+    st.setLaneCurve(MODULATION_LANE, '/score/energy', [{ t: 0, v: 0 }, { t: 5000, v: 1 }]);
+    useScoreStore.getState().toggleLaneMute(GLOBALFX_LANE);
     const { clips } = await resolveScoreClips(useScoreStore.getState());
     expect(clips.map((c) => c.payload.kind)).toEqual(['Slot']);
     await useScoreStore.getState().playScore();
     const load = getInvokeCalls().find((c) => c.cmd === 'score_timeline_load');
-    expect(load?.args?.masterCurves).toEqual({});
+    expect(load?.args?.globalFxCurves).toEqual({});
+    // Lane modulation non mutée → ses courbes passent.
+    expect(load?.args?.modulationCurves).toEqual({
+      '/score/energy': [{ t: 0, v: 0 }, { t: 5000, v: 1 }],
+    });
   });
 
   it('stopScore → score_timeline_stop + playing false', () => {

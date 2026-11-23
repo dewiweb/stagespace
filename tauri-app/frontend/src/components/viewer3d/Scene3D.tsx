@@ -245,7 +245,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
   // Draw handlers → useDrawMode hook
 
   return (
-    // Pas d'overflow-hidden ici : le popover macros de la toolbar déborde
+    // Pas d'overflow-hidden ici : le popover transform de la toolbar déborde
     // volontairement dans le canvas. Le canvas garde SON overflow:hidden.
     <div style={{ width, height }} className="flex flex-col">
       {/* Menu bar — contexte document (vues, commit) — layout éditeur :

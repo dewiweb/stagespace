@@ -662,6 +662,25 @@ impl MergeRuntime {
         }
     }
 
+    /// Poids merge courant d'un move (`fade × weight` = poids
+    /// effectif) — `None` si inconnu/retiré. Inspection/debug.
+    pub fn get_move_weight(&self, move_id: &str) -> Option<f64> {
+        self.active_moves
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(move_id)
+            .map(|s| s.weight)
+    }
+
+    /// Priorité merge courante d'un move — `None` si inconnu/retiré.
+    pub fn get_move_priority(&self, move_id: &str) -> Option<u32> {
+        self.active_moves
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(move_id)
+            .map(|s| s.priority)
+    }
+
     /// Met à jour les osc_ids d'un move actif (pour hot-swap des tracks)
     pub fn update_move_osc_ids(&self, move_id: &str, osc_ids: Vec<u32>) {
         if let Some(state) = self

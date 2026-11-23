@@ -18,7 +18,7 @@ implémentés (S2.y). Reste : seek-while-playing, record→tracks,
 | S2 | Multitrack clip timeline executed by backend + SCORE surface | ✅ | `65eadb0` |
 | S2.x | Clip repeat (bounded pattern copies) | ✅ | `c18a8cb` |
 | S2.y | Timeline hardening — loop region ✅ · clip duplicate ✅ · clip fades ✅ · lane modes ✅ · orphan refs ✅ · seek-while-playing 🔲 · record→tracks 🔲 · édition avancée 🔲 | 🔄 | — |
-| S3 | Automation lanes (macros, modulations, object params) | 🔲 | — |
+| S3 | Automation lanes — pistes objets ✅ · courbes param:/transform/globalfx/modulation ✅ · blend merge: ✅ · taxonomie ✅ · reste : outils courbes, édition timeline, clips position/park/throw | 🔄 | — |
 | S4 | TC chase, poly-temporal (multi-cursors, relative speeds) | 🔲 | — |
 
 ## S1 — backend-owned score tape clock ✅
@@ -155,44 +155,136 @@ pattern) is S3+ work.
   nudge, Alt-drag duplicate. Priorité : split + multi-select +
   copy/paste (c'est ce qui rend l'arrangement réellement éditable).
 
-## S3 — automation lanes 🔲
+## S3 — automation lanes 🔄
 
 Keyframed continuous parameters evaluated by the backend (design note
-`AutomationLane`): global macros (`speed`, `scale`, `shift_*`,
-`yaw/pitch/roll`, `radius_scale`, `height_offset`), modulation-graph
-params, per-object params. Writes go through the **same command paths
-as OSC-IN** (same validation, same merge inputs).
+`AutomationLane`), through the **same command paths as OSC-IN**.
 
-**Modèle UI retenu (design 11-23)** : éditeur de courbes **clip-
-scoped** dans la zone haute de la surface — sélecteur de courbe +
-éditeur de keyframes attaché au clip sélectionné, PAS de sous-piste
-par paramètre. Conséquence côté modèle : les courbes sont des
-données du clip (`clip.curves: AutomationLane[]` avec target
-`macro:speed` / `obj:<track_id>:pos.x` / `mod:…`), évaluées
-uniquement pendant la fenêtre du clip.
+**Livré** : pistes par objet (`obj-<track_id>`) + copies liées
+multi-objets + couverture cue dérivée du snapshot + réassignation par
+lane (`bc1675d`) ; courbes `param:<node>:<key>` du graphe du move
+(canal `external_param_deltas` → `ParamSlots`, courbe absolue → delta
+au fire — même résolution id-puis-type que le signal compiler) ;
+courbes transform per-move (`runtime.macros()`) ; lanes GLOBALFX
+(transform du merge + markers) et MODULATION (valeurs nommées → map
+OSC → `SignalOsc`, getter `osc_values_source()` rebind-safe) ; loop
+default = `repeatEveryMs` pré-rempli à la période du move loopé ;
+ligne plate = valeur connue à l'insertion ; éditeur keyframes +
+splits réglables + ruler sticky ; taxonomie alignée **Transform**
+(per-move) / **Global transform** (merge) / **Params** / **Modulation**
+dans toute l'app.
 
-**Modèle de pistes retenu (design 11-23)** : pistes **par objet**
-(keyées `track_id`, résolution obj→track_id au play comme
-`track_positions`) **+ piste master** ; `lane_mode: stacked |
-exclusive` (objets : chevauchements = moves simultanés composés par
-le merge ; master/cues/markers : last-wins actuel). Backend : peu de
-changement — chaque clip spawne déjà son `sc-<clipId>` ; `lane_active`
-passe d'un id unique par lane à une liste (le hard-wrap loop coupe
-déjà tout ce qui est actif). Formations multi-objets : placement à
-trancher (ghost-span / piste principale / master — §Surface du doc
-design).
+**Restant — chantiers identifiés :**
 
-Open design points: evaluation rate (60 Hz vs event-driven), curve
-model (linear/smoothstep/step — bezier later), conflict policy with
-operator/OSC writes (proposition : courbe écrit en continu sauf
-park/manuel — opérateur souverain), fin de courbe (hold/revert —
-réutiliser `end_mode`).
+- **Outils d'édition de courbes dédiés** 🔄 (chantier 3, démarré) :
+  multi-sélection marquee / déplacement groupé, tangentes &
+  interpolations (linear, step, smooth/bezier), snap grille t+valeur,
+  édition numérique du point, copier/coller de courbes entre params
+  et clips, ghost des autres courbes en fond, undo/redo score-scoped.
+  Fait : `ScoreKeyframe.interp` (`linear|step|smooth`, défaut linear,
+  rétrocompatible) côté backend (`ScoreInterp` + `sample_curve`) et
+  frontend (type + `utils/scoreCurveMath.ts`, sampler miroir).
+  **Non fait** : l'UI — `CurveEditor.tsx` est encore l'éditeur
+  d'origine (linéaire, clic=ajout, drag 1 point, clic droit=delete).
+- **Blend modes multi-moves** ✅ — `merge:weight`/`merge:priority`
+  clip curves → `set_move_weight`/`set_move_priority` (côté merge,
+  `fade × weight` = poids effectif) ; sélecteur de `MergeStrategy`
+  dans le contexte GLOBALFX (override/crossfade/blend/priority —
+  aussi porté par cues + node Merge du graphe global) ; getters
+  `get_move_weight`/`get_move_priority` ajoutés.
+- **Modulation e2e** ✅ — `buildScoreDemoSignalGraph` (SignalOsc
+  `/score/energy` → Map → SignalOut scale) seedé par `?score-demo` ;
+  test rust-engines `test_signal_osc_reads_score_modulation_source`
+  prouve la chaîne map OSC → SignalOsc → delta macro.
+- **Outils d'édition timeline** : menu contextuel clip (cut/copy/
+  paste/delete/duplicate/split at cursor/rename/mute/convert) +
+  menu contextuel lane (mute/solo, mode, hauteur, insert) + entrées
+  menu bar (Edit/Score), split clip au curseur, multi-sélection de
+  clips + déplacement groupé, ripple edit.
+- **Clips position/park/throw** sur pistes objets (automation de la
+  couche manuelle).
+- **Copy/paste lié vs indépendant** explicite dans l'UI.
+- **End-mode des courbes** (hold/revert à la fin du clip — réutiliser
+  `end_mode`).
 
-**Dependency reassessment:** S3 is where curve editing (keyframe
-handles, bezier, range selection) may finally justify a React
-timeline/graph library — re-evaluate `react-timeline-editor` /
-custom canvas then. S2's custom timeline stays: ~100 lines of pointer
-math vs an unmaintained dependency.
+Open design points (inchangés) : conflict policy avec écriture
+opérateur/OSC (proposition : courbe écrit en continu sauf park/manuel
+— opérateur souverain), fade_out tail vs in-window (conservé : tail).
+
+**Dependency reassessment:** le custom timeline tient ; les outils de
+courbes (tangentes bezier, marquee) réévalueront `react-timeline-editor`
+vs custom canvas quand le chantier démarre.
+
+### Modularisation de la surface SCORE ✅
+
+`ScoreView.tsx` (1229 l.) découpé — comportement inchangé :
+
+| Fichier | Rôle |
+|---|---|
+| `ScoreView.tsx` | orchestration : stores, sélection, split, layout lanes, drag clips |
+| `scoreParams.ts` | catalogues courbables + ligne plate (base connue) |
+| `scoreUtils.ts` | `fmtMs`, couleurs, `clipLabel` |
+| `CurveEditor.tsx` | éditeur SVG keyframes (cible du chantier 3) |
+| `ScoreCurvePane.tsx` | zone haute + `EnvelopeEditor` |
+| `ScoreParamsPanel.tsx` | colonne paramètres (groupes construits par ScoreView) |
+| `ScoreTransport.tsx` | play/stop, loop, zoom, hauteur pistes |
+| `ScoreTimeline.tsx` | en-têtes + ruler + lanes globales/objets + curseur |
+| `ScoreClipBlock.tsx` | rendu d'un clip (fades, repeats, poignées) |
+| `ScoreClipPicker.tsx` | popup d'ajout |
+| `ScoreInspector.tsx` | bandeau bas |
+
+Règle : composants définis au niveau module (identité stable — pas de
+composant imbriqué, sinon perte de pointer capture en plein drag).
+
+Fix au passage : le drag de clip utilisait `px2ms` (borné ≥0) pour le
+**delta** → tout drag vers la gauche (reculer, rétrécir, réduire un
+fade) était écrasé à 0. Delta signé désormais.
+
+### Audit UI Puppeteer (`?score-demo`, Vite seul, sans backend)
+
+`puppeteer-core` + Chrome headless, 1600×1000 (script local non
+versionné, `.scratch/`). OK : drag clip (2000→0→2500 ms), resize
+(12000→10350→12000), poignée fade-in, zoom, slider hauteur, deux
+splitters, contextes GLOBALFX/MODULATION/clip, picker (fermeture au
+clic extérieur), bandeau bas réactif.
+
+**Bugs à corriger (prioritaires, petits)** :
+1. **Échap avec le picker ouvert déclenche PANIC** (raccourci global)
+   au lieu de fermer le picker → le picker doit consommer Échap
+   (`stopPropagation`) et se fermer.
+2. **Suppr inopérant après usage d'un slider** : le `<input range>`
+   garde le focus, le handler ignore les INPUT → blur des contrôles
+   non-texte après usage, ou ne filtrer que les inputs texte.
+3. **CurveEditor déformé** (`preserveAspectRatio="none"`) : keyframes
+   en ellipses étirées, textes écrasés → coordonnées en pixels réels
+   (ResizeObserver) ou textes/points hors du SVG étiré.
+4. **Clips cue illisibles** (carré 14 px sans label).
+
+**Manques UX constatés** : colonne paramètres à 50 % de la largeur
+(→ ~200 px fixe), éditeur de courbe sans grille / axes valeur+temps /
+curseur de lecture / tooltip de valeur, aucun menu contextuel
+(chantier 4), courbes invisibles sur les lanes objets (aperçu
+mini-courbe dans le clip souhaitable), modal « Welcome » bloquante
+en mode navigateur (gêne les tests automatisés).
+
+Console (mode navigateur) : `[showSync] show-state-changed listen
+failed: … reading 'transformCallback'` — à vérifier avec le shim.
+
+### Reprise — état exact au commit
+
+- Audit **avec backend** (dev bridge headless, play/stop réel) **non
+  fait** : machine Windows à court de disque. À faire sous Linux :
+  `cd tauri-app/src-tauri && cargo test --test dev_bridge -- --ignored
+  --nocapture` puis `http://127.0.0.1:5173/?bridge=http://127.0.0.1:4173&score-demo`
+  (`?bridge` est retiré par le shim, `score-demo` survit).
+- `bridge_server.rs` : origine IPC `http://tauri.localhost` sous
+  Windows/Android (sinon le gate ACL refuse tout en Remote) — sans
+  effet sous Linux, **non testé en exécution**.
+- **Non vérifié depuis l'ajout de `ScoreInterp`** : `cargo test` /
+  clippy / fmt de `src-tauri` (et rust-engines par sécurité). Frontend
+  vérifié : tsc + eslint + vitest 522/522.
+- Ordre suivant : bugs 1-3 ci-dessus → chantier 3 (UI CurveEditor) →
+  4 timeline editing → 5 clips position/park/throw → 6 end-mode courbes.
 
 ## S4 — TC chase & poly-temporal 🔲
 
@@ -241,6 +333,13 @@ math vs an unmaintained dependency.
 | UX | Clip orphelin flaggé en édition | Réf cassée visible avant le play, pas juste en toast |
 
 ## Verification status
+
+- **Dernier état (branche `feat/score-sequencer`, commit de reprise)** :
+  frontend vitest 522/522 + tsc + eslint verts après modularisation ;
+  rust-engines 555/555 et src-tauri 90/90 verts **avant** l'ajout de
+  `ScoreInterp` — à relancer en premier à la reprise.
+
+Historique :
 
 - Backend: **87 tests** (4 `build_events` repeat + 3 fade/serde
   compat) — all green sur la toolchain GNU (manifest comctl32 v6

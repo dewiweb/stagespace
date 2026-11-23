@@ -12,9 +12,16 @@ import { create } from 'zustand';
 import { toast } from '../utils/toast-helpers';
 import { safeInvoke as invoke, silentCatch } from '../utils/tauri';
 
-/// Identifiants de lanes — `obj-<trackId>` par objet patché, `master`
-/// pour la lane globale (macros, markers stop/panic).
-export const MASTER_LANE = 'master';
+/// Identifiants de lanes — `obj-<trackId>` par objet patché + deux
+/// pseudo-lanes globales reprenant la taxonomie des graphes de
+/// l'Atelier : `globalfx` (macros globales du merge — la couche
+/// transform du graphe global + markers stop/panic) et `modulation`
+/// (valeurs nommées injectées dans la map OSC — source `SignalOsc`
+/// des graphs de modulation, le score agit comme un contrôleur).
+export const GLOBALFX_LANE = 'globalfx';
+export const MODULATION_LANE = 'modulation';
+/// Lanes globales épinglées en tête de timeline (ordre d'affichage).
+export const GLOBAL_LANES = [GLOBALFX_LANE, MODULATION_LANE] as const;
 export const laneIdOf = (trackId: number) => `obj-${trackId}`;
 
 /// Comportement d'une lane en chevauchement de clips (docs/score-
@@ -52,10 +59,13 @@ export interface ScoreClipDoc {
   /// Slots : fin auto (désactivation). Absent = le move tourne jusqu'au
   /// stop suivant/panic (clip "ouvert").
   durationMs?: number;
-  /// "Clip loop" — re-déclenchement périodique : le clip tire à
+  /// Tuile du clip — copies liées du move : le clip tire à
   /// start + k·repeatEveryMs jusqu'à la fin de sa fenêtre (durationMs
-  /// requise). Distinct du loop_mode du move (trajectoire interne) :
-  /// ici chaque copie est un nouveau spawn — re-articulation rythmique.
+  /// requise). COMPORTEMENT PAR DÉFAUT du score pour les moves
+  /// `loop_mode='loop'` : insérés avec repeat = la période du cycle,
+  /// étendre le clip ajoute des copies. Chaque copie est un nouveau
+  /// spawn (ré-articulation — distinct du loop interne qui jouerait
+  /// sa trajectoire en continu sur un seul spawn).
   repeatEveryMs?: number;
   /// Fades clip-local (modèle DAW — le clip instance possède ses
   /// articulations). `undefined` = hérite les fades du slot
@@ -72,32 +82,44 @@ export interface ScoreClipDoc {
   ref: ScoreClipRef;
 }
 
+/// Interpolation d'un segment de courbe — définie sur le keyframe
+/// (segment [ce point → suivant)). 'linear' = défaut (rétrocompatible),
+/// 'step' maintient la valeur, 'smooth' = smoothstep ease in/out.
+/// Miroir de `ScoreInterp` côté backend (score.rs).
+export type ScoreInterp = 'linear' | 'step' | 'smooth';
+
 /// Un point d'une courbe : `t` en ms (relatif au début du clip pour
 /// les courbes clip-scoped, absolu partition pour les courbes
-/// master) + valeur du paramètre. Interpolation linéaire.
+/// master) + valeur du paramètre.
 export interface ScoreKeyframe {
   t: number;
   v: number;
+  interp?: ScoreInterp;
 }
 
 /// Lanes occupées par un clip — slot/cue : ses objets ; marker :
-/// la lane master. Un clip objet à couverture vide (rien d'assigné
+/// la lane globalfx. Un clip objet à couverture vide (rien d'assigné
 /// — ex. cue dont le snapshot ne touche aucune track connue) se rend
-/// sur la lane master : le contenu global/non-assigné reste visible.
+/// sur la lane globalfx : le contenu global/non-assigné reste visible.
 export const clipLaneIds = (c: ScoreClipDoc): string[] =>
   c.ref.type === 'slot' || c.ref.type === 'cue'
-    ? (c.trackIds.length ? c.trackIds.map(laneIdOf) : [MASTER_LANE])
-    : [MASTER_LANE];
+    ? (c.trackIds.length ? c.trackIds.map(laneIdOf) : [GLOBALFX_LANE])
+    : [GLOBALFX_LANE];
 
 export interface ScoreDoc {
   /// Overrides des lanes dérivées (`obj-<trackId>`/`master` → état).
   laneStates?: Record<string, ScoreLaneState>;
   clips: ScoreClipDoc[];
   durationMs: number;
-  /// Courbes master (S3) — keyframes en temps ABSOLU de partition,
+  /// Courbes GLOBALFX (S3) — keyframes en temps ABSOLU de partition,
   /// écrites sur les macros GLOBALES du merge (mêmes chemins que
   /// /stagespace/macro). Affectent l'ensemble du core.
-  masterCurves?: Record<string, ScoreKeyframe[]>;
+  globalFxCurves?: Record<string, ScoreKeyframe[]>;
+  /// Courbes MODULATION (S3) — temps absolu, injectées comme valeurs
+  /// nommées dans la map des valeurs OSC : lues par les `SignalOsc`
+  /// des graphs de modulation (globale + per-move — même espace
+  /// d'adresses). Clé = le nom/adresse (ex. `/score/energy`).
+  modulationCurves?: Record<string, ScoreKeyframe[]>;
   /// Region de boucle transport [start, end) — rebouclage hard-wrap
   /// de la partition entière (distinct du clip repeat). Les deux
   /// ensemble ou aucun.
@@ -121,7 +143,7 @@ interface ScoreState extends ScoreDoc {
   /// Insère un clip. `trackIds` = couverture (objets pilotés) — pour
   /// un slot : son assignation ; pour une cue : union dérivée de son
   /// snapshot ; markers : ignoré (lane master). Retourne le clip.
-  addClip: (ref: ScoreClipRef, startMs: number, opts?: { durationMs?: number; trackIds?: number[] }) => ScoreClipDoc;
+  addClip: (ref: ScoreClipRef, startMs: number, opts?: { durationMs?: number; trackIds?: number[]; repeatEveryMs?: number }) => ScoreClipDoc;
   /// Réassigne la couverture d'un clip (ajoute/retire des objets —
   /// même effet qu'une réassignation de tracks dans l'Atelier).
   setClipTrackIds: (id: string, trackIds: number[]) => void;
@@ -134,9 +156,10 @@ interface ScoreState extends ScoreDoc {
   /// Les keyframes sont triées par t ; un param sans courbe garde sa
   /// valeur fixe (héritée du slot/macros au play).
   setClipCurve: (id: string, paramId: string, keyframes: ScoreKeyframe[] | undefined) => void;
-  /// Courbe master — `t` absolu partition, écrit sur les macros
-  /// globales du merge au play (`/stagespace/macro`-like).
-  setMasterCurve: (paramId: string, keyframes: ScoreKeyframe[] | undefined) => void;
+  /// Courbe d'une lane globale (`globalfx` → macros du merge,
+  /// `modulation` → valeur nommée dans la map OSC) — `t` absolu
+  /// partition, évaluée backend au play.
+  setLaneCurve: (laneId: string, paramId: string, keyframes: ScoreKeyframe[] | undefined) => void;
   removeClip: (id: string) => void;
   /// Copie matérielle du clip (distinct du repeat : un vrai clip
   /// indépendant, éditable séparément — sa couverture peut ensuite
@@ -176,6 +199,7 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
       trackIds: opts?.trackIds ?? [],
       startMs: Math.max(0, startMs),
       durationMs: opts?.durationMs,
+      repeatEveryMs: opts?.repeatEveryMs,
       ref,
     };
     set((s) => ({ clips: [...s.clips, clip] }));
@@ -213,12 +237,13 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
         return { ...c, curves };
       }),
     })),
-  setMasterCurve: (paramId, keyframes) =>
+  setLaneCurve: (laneId, paramId, keyframes) =>
     set((s) => {
-      const masterCurves = { ...(s.masterCurves ?? {}) };
-      if (keyframes === undefined) delete masterCurves[paramId];
-      else masterCurves[paramId] = [...keyframes].sort((a, b) => a.t - b.t);
-      return { masterCurves };
+      const field = laneId === MODULATION_LANE ? 'modulationCurves' : 'globalFxCurves';
+      const curves = { ...(s[field] ?? {}) };
+      if (keyframes === undefined) delete curves[paramId];
+      else curves[paramId] = [...keyframes].sort((a, b) => a.t - b.t);
+      return { [field]: curves };
     }),
   removeClip: (id) => set((s) => ({ clips: s.clips.filter((c) => c.id !== id) })),
   duplicateClip: (id) =>
@@ -264,8 +289,9 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
       await invoke('score_timeline_load', {
         clips,
         durationMs: s.durationMs,
-        // Lane master mutée → ses courbes ne jouent pas.
-        masterCurves: s.laneStates?.[MASTER_LANE]?.muted ? {} : (s.masterCurves ?? {}),
+        // Lane globale mutée → ses courbes ne jouent pas.
+        globalFxCurves: s.laneStates?.[GLOBALFX_LANE]?.muted ? {} : (s.globalFxCurves ?? {}),
+        modulationCurves: s.laneStates?.[MODULATION_LANE]?.muted ? {} : (s.modulationCurves ?? {}),
       });
       await invoke('score_timeline_set_loop', { startMs: s.loopStartMs ?? null, endMs: s.loopEndMs ?? null });
       await invoke('score_timeline_play');
