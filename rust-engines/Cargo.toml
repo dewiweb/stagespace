@@ -37,3 +37,12 @@ criterion = "0.5"
 [[bench]]
 name = "engines_bench"
 harness = false
+
+# Debuginfo réduite en dev/test : lignes seulement pour notre code
+# (backtraces lisibles), aucune pour les dépendances — divise la taille
+# de target/ (rlibs, .pdb) sans changer le code généré.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
