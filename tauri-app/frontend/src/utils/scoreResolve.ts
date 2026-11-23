@@ -13,7 +13,7 @@ import { useGraphStore } from '../store/useGraphStore';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { normalizeSlot } from '../store/slices/moveSlotsTypes';
 import { buildSlotActivation } from './slotActivation';
-import { CONDUCTOR_LANE, MODULATION_LANE, laneIdOf, clipLaneIds } from '../store/useScoreStore';
+import { CONDUCTOR_LANE, GLOBALFX_LANE, MODULATION_LANE, laneIdOf, clipLaneIds } from '../store/useScoreStore';
 import type { ScoreDoc, ScoreClipDoc } from '../store/useScoreStore';
 
 /// Une lane wire — `id` (`obj-<trackId>`/`master`) + mode. Le backend
@@ -68,6 +68,9 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
     } else if (c.ref.type === 'modGraph') {
       // Pas de couverture objet — muté par sa propre lane.
       if (laneState(MODULATION_LANE)?.muted) continue;
+    } else if (c.ref.type === 'postGraph') {
+      // Pipeline global — muté par la lane globalfx.
+      if (laneState(GLOBALFX_LANE)?.muted) continue;
     } else if (activeTids.length === 0) {
       continue;
     }
@@ -156,6 +159,12 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
         clips.push({
           ...base,
           payload: { kind: 'SignalGraph', data: { graph: c.ref.graph } },
+        });
+        break;
+      case 'postGraph':
+        clips.push({
+          ...base,
+          payload: { kind: 'PostGraph', data: { graph: c.ref.graph } },
         });
         break;
     }

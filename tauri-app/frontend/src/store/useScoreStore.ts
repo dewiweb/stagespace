@@ -44,16 +44,18 @@ export interface ScoreLaneState {
 
 /// Référence d'un clip — JAMAIS un snapshot : le document pointe vers
 /// le slot/cue vivant (édité → le clip rejoue la version courante).
-/// `positions` et `modGraph` sont les exceptions matérialisées (issues
-/// du flatten de cue — pas d'entité vivante correspondante) : le clip
-/// PORTE sa donnée (positions en track_id, graphe signal sérialisé).
+/// `positions`, `modGraph` et `postGraph` sont les exceptions
+/// matérialisées (issues du flatten de cue — pas d'entité vivante
+/// correspondante) : le clip PORTE sa donnée (positions en track_id,
+/// graphe signal / graphe global post-process sérialisés).
 export type ScoreClipRef =
   | { type: 'slot'; slotId: string }
   | { type: 'cue'; cueId: string }
   | { type: 'stopAll' }
   | { type: 'panic' }
   | { type: 'positions'; positions: Record<number, [number, number, number]> }
-  | { type: 'modGraph'; graph: { nodes: unknown[]; edges: unknown[] } };
+  | { type: 'modGraph'; graph: { nodes: unknown[]; edges: unknown[] } }
+  | { type: 'postGraph'; graph: { nodes: unknown[]; edges: unknown[] } };
 
 export interface ScoreClipDoc {
   id: string;
@@ -126,6 +128,10 @@ export const clipLaneIds = (c: ScoreClipDoc, eff: number[] = c.trackIds ?? []): 
       return eff.length ? eff.map(laneIdOf) : [GLOBALFX_LANE];
     case 'modGraph':
       return [MODULATION_LANE];
+    case 'postGraph':
+      // Pipeline post-process global — la couche transform que la
+      // lane globalfx représente déjà (voir en-tête de lane).
+      return [GLOBALFX_LANE];
     default:
       return [CONDUCTOR_LANE];
   }

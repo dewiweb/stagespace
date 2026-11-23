@@ -193,6 +193,14 @@ pub enum ScoreClipPayload {
     /// (même chemin que `update_signal_graph`, scope global ; clip
     /// `modGraph`, issu du flatten de `cue.signal_graph`).
     SignalGraph { graph: stagespace_engines::GraphJson },
+    /// Graph global post-process — build → extract_graph_effects →
+    /// compile → swap_post_process_fn + set_graph_effects (+ stratégie
+    /// du node Merge en tête de chaîne) : même chemin que `recall_cue`
+    /// étape 1 / `update_global_graph`. Restaure la moitié DÉCLARATIVE
+    /// des zones/modulations (nodes Zone/Velocity) — disjointe des
+    /// tables manuelles `cue.zones`/`cue.channel_modulations` (clip
+    /// `postGraph`, issu du flatten de `cue.global_graph`).
+    PostGraph { graph: stagespace_engines::GraphJson },
 }
 
 /// Interpolation d'un segment de courbe — définie sur le keyframe
@@ -1012,6 +1020,37 @@ fn fire_clip(
             };
             if let Some(f) = signal_fn {
                 lock_or_recover(&sh.merge_runtime).swap_signal_fn(f);
+            }
+        }
+        ScoreClipPayload::PostGraph { graph } => {
+            // recall_cue étape 1 : parse → effets → compile → swap. Un
+            // graphe invalide logue sans crasher (ni la lecture ni le
+            // post-process courant ne sont interrompus).
+            let rt = lock_or_recover(&sh.merge_runtime);
+            let audio_state = lock_or_recover(&sh.audio_state);
+            let compiled = crate::graph::parser::build_graph_from_json(graph, &audio_state)
+                .map_err(|e| format!("parse: {e}"))
+                .and_then(|g| {
+                    let effects = stagespace_engines::extract_graph_effects(&g)
+                        .map_err(|e| format!("effects: {e:?}"))?;
+                    let f = stagespace_engines::compile_post_process(
+                        stagespace_engines::PostProcessCompileParams {
+                            graph: g,
+                            macros: rt.macros(),
+                        },
+                    )
+                    .map_err(|e| format!("compile: {e:?}"))?;
+                    Ok((f, effects))
+                });
+            match compiled {
+                Ok((f, effects)) => {
+                    rt.swap_post_process_fn(f);
+                    rt.set_graph_effects(effects.zones, effects.modulations, effects.move_ref);
+                    if let Some(strategy) = effects.strategy {
+                        rt.set_merge_strategy(strategy);
+                    }
+                }
+                Err(e) => eprintln!("[score] clip '{}': global graph rejeté — {e}", clip.id),
             }
         }
     }

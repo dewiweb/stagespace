@@ -180,18 +180,27 @@ rappelable en Conduite. Matérialisé :
 - `signal_graph` → clip **`modGraph`** sur la lane MODULATION (le clip
   porte le graphe ; au tir : compile + hot-swap de la SignalFn globale,
   même chemin que `update_signal_graph`).
+- `global_graph` → clip **`postGraph`** sur la lane GLOBALFX (le clip
+  porte le graphe post-process ; au tir : parse →
+  `extract_graph_effects` → `compile_post_process` → swap de la
+  `post_process_fn` + `set_graph_effects` + stratégie du node `Merge` —
+  même chemin que `recall_cue` étape 1). C'est la moitié **déclarative**
+  des zones/modulations (nodes `Zone`/`Velocity`), disjointe des tables
+  manuelles `cue.zones`/`cue.channel_modulations` : matérialiser les
+  tables sans le graphe perdrait silencieusement la moitié déclarative.
 
-Ces deux types sont les **exceptions au modèle par référence** : le
+Ces trois types sont les **exceptions au modèle par référence** : le
 clip porte sa donnée (pas d'entité vivante correspondante — matériau
 matérialisé, éditable indépendamment de la cue).
 
 Explicitement **non matérialisé** — rapporté à l'opérateur (toast +
 `skipped`), jamais silencieusement perdu : `object_channels`,
-`osc_mappings`, `zones`, `per_track_depths` (pas encore d'entité
-timeline — la cue les conserve). Un clip cue dont rien n'est
-matérialisable est **conservé**, pas effacé. Modèle du clip imbriqué
-de DAW : référence vivante par défaut, flatten quand on veut éditer
-l'intérieur — jamais l'inverse.
+`channel_modulations` (table manuelle), `zones` (table manuelle),
+`per_track_depths`, `osc_mappings`, `graph` (legacy, quand `moves[]`
+est vide) — pas encore d'entité timeline ; la cue les conserve. Un
+clip cue dont rien n'est matérialisable est **conservé**, pas effacé.
+Modèle du clip imbriqué de DAW : référence vivante par défaut, flatten
+quand on veut éditer l'intérieur — jamais l'inverse.
 
 ## The engine — backend-evaluated
 

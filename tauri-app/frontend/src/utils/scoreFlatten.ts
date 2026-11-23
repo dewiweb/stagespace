@@ -126,9 +126,20 @@ export function flattenCueClip(clipId: string): FlattenCueResult | undefined {
     res.movedClips++;
   }
 
+  // Graph global post-process → clip `postGraph` sur GLOBALFX. C'est
+  // la moitié DÉCLARATIVE des zones/modulations (nodes Zone/Velocity)
+  // + la stratégie de merge + move_ref — le tir re-compile et
+  // re-extrait les effets, disjoint des tables manuelles.
+  if (cue.global_graph && (cue.global_graph.nodes?.length ?? 0) > 0) {
+    score.addClip({ type: 'postGraph', graph: cue.global_graph as never }, t0, {});
+    res.movedClips++;
+  }
+
   // Honnêteté : ces catégories n'ont pas (encore) d'entité timeline —
-  // signalées, jamais silencieusement abandonnées.
-  if (cue.global_graph && (cue.global_graph.nodes?.length ?? 0) > 0) res.skipped.push('global_graph');
+  // signalées, jamais silencieusement abandonnées. `zones` et
+  // `channel_modulations` = les tables MANUELLES seules (la moitié
+  // déclarative est couverte par le clip postGraph ci-dessus).
+  if (cue.graph && (cue.graph.nodes?.length ?? 0) > 0 && moves.length === 0) res.skipped.push('graph (legacy)');
   if (cue.graph && (cue.graph.nodes?.length ?? 0) > 0 && moves.length === 0) res.skipped.push('graph (legacy)');
   if (cue.object_channels) res.skipped.push('channels');
   if (cue.channel_modulations?.length) res.skipped.push('channel_modulations');

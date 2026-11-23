@@ -361,6 +361,7 @@ describe('flatten cue → clips (explosion)', () => {
         macros: { speed: 1.5, scale: 2, shift_x: 0, shift_y: 0, shift_z: 0, yaw: 90, pitch: 0, roll: 0 },
         spatial_macros: { radius_scale: 1.4, height_offset: 0.2 },
         signal_graph: { nodes: [{ id: 'n1' }], edges: [] },
+        global_graph: { nodes: [{ id: 'g1' }], edges: [] },
         manual_positions: { 0: [1, 2, 3], 2: [0, 1, 0] },
         object_channels: null, osc_mappings: null, zones: null,
         per_track_depths: [], active_move_ids: [],
@@ -373,14 +374,14 @@ describe('flatten cue → clips (explosion)', () => {
     const st = useScoreStore.getState();
     const cueClip = st.addClip({ type: 'cue', cueId: 'c1' }, 12000, {});
     const r = flattenCueClip(cueClip.id)!;
-    expect(r.movedClips).toBe(4); // 2 slots + positions + modGraph
+    expect(r.movedClips).toBe(5); // 2 slots + positions + modGraph + postGraph
     expect(r.macroKeys).toBe(10); // 8 macros + 2 spatial
     expect(r.skipped).toEqual([]);
 
     // Clip cue remplacé par l'arrangement à t0 — slots en suivi live.
     const clips = useScoreStore.getState().clips;
     expect(clips.find((c) => c.ref.type === 'cue')).toBeUndefined();
-    expect(clips).toHaveLength(4);
+    expect(clips).toHaveLength(5);
     expect(clips.every((c) => c.startMs === 12000)).toBe(true);
     expect(clips.filter((c) => c.ref.type === 'slot').every((c) => c.trackIds === undefined)).toBe(true);
 
@@ -390,6 +391,11 @@ describe('flatten cue → clips (explosion)', () => {
     // signal_graph → clip modGraph portant le graphe.
     const modClip = clips.find((c) => c.ref.type === 'modGraph')!;
     expect((modClip.ref as { graph: { nodes: unknown[] } }).graph.nodes).toHaveLength(1);
+    // global_graph → clip postGraph sur GLOBALFX (zones/modulations
+    // déclaratives + stratégie re-extraites au tir par le backend).
+    const postClip = clips.find((c) => c.ref.type === 'postGraph')!;
+    expect((postClip.ref as { graph: { nodes: unknown[] } }).graph.nodes).toHaveLength(1);
+    expect(clipLaneIds(postClip)).toEqual([GLOBALFX_LANE]);
 
     // Slots matérialisés : obj_index → track_id, props du snapshot.
     const slots = useGraphStore.getState().moveSlots;

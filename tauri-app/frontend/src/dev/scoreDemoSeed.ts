@@ -62,6 +62,16 @@ export function seedScoreDemo() {
         macros: { speed: 1.2, scale: 1, shift_x: 0, shift_y: 0.5, shift_z: 0, yaw: 45, pitch: 0, roll: 0 },
         spatial_macros: { radius_scale: 1.3, height_offset: 0.1 },
         signal_graph: { nodes: demoSig.nodes, edges: demoSig.edges } as never,
+        // Pipeline post-process minimal (Merge→Output = identité) → le
+        // flatten produit un clip postGraph réellement compilable, dont
+        // le tir swappe la post_process_fn + re-extrait les graph_effects.
+        global_graph: {
+          nodes: [
+            { id: 'pg-merge', type: 'custom', position: { x: 100, y: 100 }, data: { node_type: 'Merge', params: {} } },
+            { id: 'pg-out', type: 'custom', position: { x: 320, y: 100 }, data: { node_type: 'Output', params: {} } },
+          ],
+          edges: [{ id: 'pg-e1', source: 'pg-merge', target: 'pg-out', sourceHandle: 'out', targetHandle: 'in' }],
+        } as never,
         object_channels: null,
         osc_mappings: null, zones: null, per_track_depths: [],
       },

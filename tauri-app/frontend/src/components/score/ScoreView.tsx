@@ -236,26 +236,33 @@ const ScoreView: React.FC = () => {
       const canDetach = isSlot && t.trackId !== undefined && eff.length > 1;
       const n = sharedClipCount(c.ref);
       const items: ContextMenuItem[] = [
-        {
-          label: `Détacher T${t.trackId}`,
-          disabled: !canDetach,
-          title: canDetach
-            ? 'Scinde la couverture : cette piste devient un clip indépendant (même move, placement libre)'
-            : 'Détachable seulement sur un clip multi-objets (slot)',
-          onClick: () => {
-            if (detachLaneFromClip(c.id, t.trackId!, false)) toast.success(`T${t.trackId} détachée en clip indépendant`);
-          },
-        },
-        {
-          label: `Détacher T${t.trackId} en nouveau move`,
-          disabled: !canDetach,
-          title: canDetach
-            ? 'La piste devient un clip suivant un NOUVEAU move en banque (contenu divergent possible)'
-            : 'Détachable seulement sur un clip multi-objets (slot)',
-          onClick: () => {
-            if (detachLaneFromClip(c.id, t.trackId!, true)) toast.success(`Nouveau move créé pour T${t.trackId}`);
-          },
-        },
+        // Le déliage de couverture n'existe que sur un clip slot —
+        // afficher « Détacher Tundefined » désactivé sur les autres
+        // types (cue, markers, graph) n'apporte que du bruit.
+        ...(isSlot
+          ? [
+              {
+                label: `Détacher T${t.trackId}`,
+                disabled: !canDetach,
+                title: canDetach
+                  ? 'Scinde la couverture : cette piste devient un clip indépendant (même move, placement libre)'
+                  : 'Détachable seulement sur un clip multi-objets (slot)',
+                onClick: () => {
+                  if (detachLaneFromClip(c.id, t.trackId!, false)) toast.success(`T${t.trackId} détachée en clip indépendant`);
+                },
+              },
+              {
+                label: `Détacher T${t.trackId} en nouveau move`,
+                disabled: !canDetach,
+                title: canDetach
+                  ? 'La piste devient un clip suivant un NOUVEAU move en banque (contenu divergent possible)'
+                  : 'Détachable seulement sur un clip multi-objets (slot)',
+                onClick: () => {
+                  if (detachLaneFromClip(c.id, t.trackId!, true)) toast.success(`Nouveau move créé pour T${t.trackId}`);
+                },
+              },
+            ]
+          : []),
         {
           label: `Rendre unique${n > 1 ? ` (lié ×${n})` : ''}`,
           disabled: !isSlot && !isCue,
