@@ -8,6 +8,7 @@ import {
   type ScoreClipDoc, type ScoreKeyframe, type ScoreLaneMode,
 } from '../../store/useScoreStore';
 import { CLIP_COLORS, fmtMs } from './scoreUtils';
+import { effectiveTrackIds } from '../../utils/scoreResolve';
 import { ScoreClipBlock, type ClipDragMode } from './ScoreClipBlock';
 
 export interface ScoreLane {
@@ -198,7 +199,7 @@ export const ScoreTimeline: React.FC<{
                 className={`relative h-6 border-b border-gray-800 cursor-pointer ${selGlobal === laneId ? 'bg-cyan-900/15' : 'hover:bg-gray-800/20'} ${laneMutedOf(laneId) ? 'opacity-40' : ''}`}
                 onClick={(e) => { e.stopPropagation(); onSelectLane(laneId); }}
               >
-                {laneId !== MODULATION_LANE && clips.filter((c) => clipLaneIds(c).includes(laneId)).map((c) => (
+                {laneId !== MODULATION_LANE && clips.filter((c) => clipLaneIds(c, effectiveTrackIds(c)).includes(laneId)).map((c) => (
                   <div
                     key={c.id}
                     className={`absolute top-0.5 bottom-0.5 rounded border text-[9px] font-bold px-1 flex items-center cursor-grab ${CLIP_COLORS[c.ref.type]} ${selected === c.id ? 'ring-2 ring-white' : ''}`}
@@ -234,9 +235,9 @@ export const ScoreTimeline: React.FC<{
             return (
               <div key={lane.id} className="relative border-b border-gray-800" style={{ height: lay.height, opacity: laneMutedOf(lane.id) ? 0.4 : 1 }}>
                 {/* Blast radius des cues (clipLaneIds → conductor ;
-                    trackIds = couverture du snapshot ; vide = toutes
+                    couverture effective du snapshot ; vide = toutes
                     les lanes) — marqueur d'impact, pas un clip. */}
-                {clips.filter((c) => c.ref.type === 'cue' && (c.trackIds.length === 0 || c.trackIds.includes(lane.trackId))).map((c) => (
+                {clips.filter((c) => c.ref.type === 'cue' && (effectiveTrackIds(c).length === 0 || effectiveTrackIds(c).includes(lane.trackId))).map((c) => (
                   <div
                     key={`blast-${c.id}`}
                     className="absolute top-0 bottom-0 w-0.5 bg-amber-400/50 pointer-events-none"
@@ -244,7 +245,7 @@ export const ScoreTimeline: React.FC<{
                     title={`${clipLabel(c)} — touche T${lane.trackId}`}
                   />
                 ))}
-                {clips.filter((c) => c.ref.type === 'slot' && c.trackIds.includes(lane.trackId)).map((c) => {
+                {clips.filter((c) => c.ref.type === 'slot' && effectiveTrackIds(c).includes(lane.trackId)).map((c) => {
                   const row = lay.rowOf.get(c.id) ?? 0;
                   const top = stacked ? 2 + row * rowH : 6;
                   const h = stacked ? rowH - 4 : lay.height - 12;

@@ -53,12 +53,13 @@ export type ScoreClipRef =
 export interface ScoreClipDoc {
   id: string;
   /// Couverture — les track-objets pilotés par ce clip (= les lanes
-  /// sur lesquelles il se rend en copie liée). Slot : assignation
-  /// EFFECTIVE du move — insérée = slot.trackIds, ensuite libre
-  /// (filtrer ou étendre revient à réassigner les tracks, comme dans
-  /// l'Atelier). Cue : union dérivée du snapshot (info visuelle — le
-  /// recall reste global). Marker : vide — vit sur la lane master.
-  trackIds: number[];
+  /// sur lesquelles il se rend en copie liée). Slot : `undefined` =
+  /// suit `slot.trackIds` en live (réassignation Atelier reflétée) ;
+  /// une liste = assignation explicite gelée (sous-ensemble ou
+  /// extension du slot, comme dans l'Atelier). Cue : blast radius
+  /// dérivé du snapshot (info visuelle — le recall reste global ;
+  /// undefined = suivi en live aussi). Marker : vide.
+  trackIds?: number[];
   startMs: number;
   /// Slots : fin auto (désactivation). Absent = le move tourne jusqu'au
   /// stop suivant/panic (clip "ouvert").
@@ -106,9 +107,16 @@ export interface ScoreKeyframe {
 /// `trackIds` reste sur le clip pour le blast radius visuel. Un clip
 /// objet à couverture vide se rend sur la lane globalfx : le contenu
 /// global/non-assigné reste visible.
-export const clipLaneIds = (c: ScoreClipDoc): string[] =>
+/// Lanes occupées par un clip — slot : ses objets ; cue/stopAll/panic
+/// (barrières d'état globales) : la lane conductor — leur couverture
+/// `trackIds` reste sur le clip pour le blast radius visuel. Un clip
+/// objet à couverture vide se rend sur la lane globalfx : le contenu
+/// global/non-assigné reste visible. `eff` = couverture effective
+/// (résolue — les clips en mode "suit l'entité" n'ont pas de trackIds
+/// gelés ; voir effectiveTrackIds dans scoreResolve).
+export const clipLaneIds = (c: ScoreClipDoc, eff: number[] = c.trackIds ?? []): string[] =>
   c.ref.type === 'slot'
-    ? (c.trackIds.length ? c.trackIds.map(laneIdOf) : [GLOBALFX_LANE])
+    ? (eff.length ? eff.map(laneIdOf) : [GLOBALFX_LANE])
     : [CONDUCTOR_LANE];
 
 export interface ScoreDoc {
@@ -151,7 +159,8 @@ interface ScoreState extends ScoreDoc {
   addClip: (ref: ScoreClipRef, startMs: number, opts?: { durationMs?: number; trackIds?: number[]; repeatEveryMs?: number }) => ScoreClipDoc;
   /// Réassigne la couverture d'un clip (ajoute/retire des objets —
   /// même effet qu'une réassignation de tracks dans l'Atelier).
-  setClipTrackIds: (id: string, trackIds: number[]) => void;
+  /// `undefined` = repasse le clip en mode "suit l'entité vivante".
+  setClipTrackIds: (id: string, trackIds: number[] | undefined) => void;
   moveClip: (id: string, startMs: number) => void;
   resizeClip: (id: string, durationMs: number | undefined) => void;
   setClipRepeat: (id: string, repeatEveryMs: number | undefined) => void;
@@ -201,7 +210,9 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
   addClip: (ref, startMs, opts) => {
     const clip: ScoreClipDoc = {
       id: uid(),
-      trackIds: opts?.trackIds ?? [],
+      // Pas de trackIds par défaut → le clip suit l'entité vivante
+      // (couverture dérivée live) ; opts.trackIds = override gelé.
+      ...(opts?.trackIds !== undefined ? { trackIds: [...opts.trackIds] } : {}),
       startMs: Math.max(0, startMs),
       durationMs: opts?.durationMs,
       repeatEveryMs: opts?.repeatEveryMs,
@@ -210,10 +221,14 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
     set((s) => ({ clips: [...s.clips, clip] }));
     return clip;
   },
+  // `trackIds` = override explicite ; `undefined` = repasse en mode
+  // "suit l'entité vivante".
   setClipTrackIds: (id, trackIds) =>
     set((s) => ({
       clips: s.clips.map((c) =>
-        c.id === id ? { ...c, trackIds: [...new Set(trackIds)].sort((a, b) => a - b) } : c,
+        c.id === id
+          ? { ...c, trackIds: trackIds === undefined ? undefined : [...new Set(trackIds)].sort((a, b) => a - b) }
+          : c,
       ),
     })),
   moveClip: (id, startMs) =>
@@ -257,7 +272,7 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
       if (!src) return {};
       const copy: ScoreClipDoc = {
         ...src,
-        trackIds: [...src.trackIds],
+        ...(src.trackIds !== undefined ? { trackIds: [...src.trackIds] } : {}),
         id: uid(),
         startMs: Math.min(s.durationMs, src.startMs + (src.durationMs ?? 1000)),
       };
@@ -275,8 +290,8 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
       doc
         ? {
             ...doc,
-            // Défensif : un clip sans couverture persistée → [].
-            clips: doc.clips.map((c) => ({ ...c, trackIds: c.trackIds ?? [] })),
+            // `trackIds` absent = mode "suit l'entité" — préservé tel
+            // quel (les vieux docs avec une liste restent des overrides).
           }
         : emptyDoc(),
     ),

@@ -17,7 +17,6 @@ const Harness = ({ onClose }: { onClose: () => void }) => {
       picker={{ laneId: 'obj-1', x: 0, y: 0 }}
       moveSlots={[]}
       cues={[]}
-      manualOscIds={[1]}
       onPick={() => {}}
       onClose={onClose}
     />

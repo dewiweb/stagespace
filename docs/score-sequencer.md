@@ -70,7 +70,8 @@ interface AutomationLane {
 }
 interface ScoreClip {
   id: string;
-  trackIds: number[];        // couverture — les pistes objets occupées
+  trackIds?: number[];       // override de couverture — absent = suit
+                             // l'entité vivante (réassignations propagées)
   start: number;             // seconds, score time
   duration: number | null;   // null = event/marker
   curves?: Record<string, Keyframe[]>;  // t relatif clip (per-move)
@@ -251,9 +252,14 @@ entité clip, éditer un exemplaire (déplacer, fades, courbes) édite
 tous les rendus. Sémantiques :
 
 - **Slot** : la couverture est l'**assignation effective** du move —
-  insérée = `slot.trackIds`, ensuite libre (retirer un objet filtre
-  les `osc_ids`/`track_indices` du spawn ; en ajouter un étend le
-  move — même effet qu'une réassignation de tracks dans l'Atelier).
+  par défaut **suivie en live** (`trackIds` absent → dérivée de
+  `slot.trackIds` à chaque rendu/play : une réassignation dans
+  l'Atelier se propage au score automatiquement). L'inspector peut
+  **geler** la couverture (toggle ⇄ → `trackIds` explicite = override
+  local du clip : retirer un objet filtre les `osc_ids`/
+  `track_indices` du spawn, en ajouter un étend le move). Le toggle
+  ramène au mode suivi — la synchronisation avec les autres modes
+  reste le défaut, l'override l'exception.
   Un seul spawn par itération (`sc-<clipId>`), enregistré dans toutes
   ses pistes — coupé si l'une d'elles (exclusive) reçoit un clip.
 - **Cue** : la couverture est **dérivée du snapshot** (union

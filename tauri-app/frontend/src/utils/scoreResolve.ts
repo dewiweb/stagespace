@@ -60,13 +60,15 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
     // par la lane conductor — leur couverture trackIds n'est qu'un
     // blast radius visuel, elle ne mute pas l'événement. Un slot perd
     // les objets dont la lane est mutée — couverture vide → skippé.
-    const activeTids = c.trackIds.filter((tid) => !laneState(laneIdOf(tid))?.muted);
+    // Couverture effective : explicite si gelée, sinon dérivation
+    // live de l'entité (réassignation Atelier reflétée dans le score).
+    const activeTids = effectiveTrackIds(c).filter((tid) => !laneState(laneIdOf(tid))?.muted);
     if (isBarrier) {
       if (laneState(CONDUCTOR_LANE)?.muted) continue;
     } else if (activeTids.length === 0) {
       continue;
     }
-    const lanes: ResolvedLane[] = clipLaneIds({ ...c, trackIds: activeTids } as ScoreClipDoc).map(
+    const lanes: ResolvedLane[] = clipLaneIds(c, activeTids).map(
       (id) => ({ id, ...(laneState(id)?.mode === 'stacked' ? { stacked: true } : {}) }),
     );
     const base = {
@@ -136,6 +138,29 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
     }
   }
   return { clips, errors };
+}
+
+/// Couverture EFFECTIVE d'un clip — `trackIds` explicite si présent,
+/// sinon dérivation live de l'entité référencée : slot → slot.trackIds
+/// (une réassignation Atelier se reflète dans le score), cue → blast
+/// radius du snapshot courant, markers → []. Utilisée pour lanes,
+/// mute, rendu et blast radius — la seule source de vérité.
+export function effectiveTrackIds(c: ScoreClipDoc): number[] {
+  if (c.trackIds !== undefined) return c.trackIds;
+  const gs = useGraphStore.getState();
+  switch (c.ref.type) {
+    case 'slot': {
+      const slotId = (c.ref as { slotId: string }).slotId;
+      return gs.moveSlots.find((s) => s.id === slotId)?.trackIds ?? [];
+    }
+    case 'cue': {
+      const cs = useCuelistStore.getState();
+      const cue = cs.cues.find((q) => String(q.id) === String((c.ref as { cueId: string }).cueId));
+      return cue ? cueCoverage(cue, gs.manualOscIds) : [];
+    }
+    default:
+      return [];
+  }
 }
 
 /// Couverture dérivée d'une cue — union des track-objets que son

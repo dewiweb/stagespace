@@ -351,6 +351,7 @@ failed: … reading 'transformCallback'` — à vérifier avec le shim.
 | Audit | Cue fire = barrière d'état (release `lane_active` + track `active_move_ids`) | Determinisme de boucle : les respawns de cue ne fuient pas entre cycles |
 | Audit | `pre_wait`/`follow`/`timecode` bypassés au score | Sémantiques setlist ; sur un score la timeline EST le timing |
 | Audit | `flatten cue → clips` = opération d'éditeur non-destructive | Référence vivante par défaut (édit-once), édition interne à la demande |
+| Sync | Couverture clip : `trackIds` absent = suit l'entité vivante, présent = override gelé | Propagation Atelier→Score automatique ; l'override reste l'exception (toggle ⇄ inspector) |
 
 ## Verification status
 

@@ -30,6 +30,7 @@ import {
   type ParamDef,
 } from './scoreParams';
 import { clipLabel as clipLabelOf, isTextEntryTarget } from './scoreUtils';
+import { effectiveTrackIds } from '../../utils/scoreResolve';
 import { isModalOpen } from '../../utils/modalGuard';
 import { ScoreCurvePane } from './ScoreCurvePane';
 import type { ParamGroup } from './ScoreParamsPanel';
@@ -126,7 +127,7 @@ const ScoreView: React.FC = () => {
   // track_ids) ∪ les couvertures de clips. Un trackId référencé par
   // un clip mais absent de la config → lane "fantôme" (l'objet n'est
   // plus patché — le clip resterait muet à cet endroit).
-  const covered = new Set(clips.flatMap((c) => c.trackIds));
+  const covered = new Set(clips.flatMap((c) => effectiveTrackIds(c)));
   const laneTids = [...new Set([...manualOscIds, ...covered])].sort((a, b) => a - b);
   const lanes = laneTids.map((tid) => ({ id: laneIdOf(tid), trackId: tid, ghost: !manualOscIds.includes(tid) }));
   const laneModeOf = (laneId: string): ScoreLaneMode => laneStates?.[laneId]?.mode ?? 'exclusive';
@@ -139,7 +140,9 @@ const ScoreView: React.FC = () => {
   // une sous-ligne INDÉPENDANTE par lane couverte.
   const laneLayout = new Map<string, ScoreLaneLayout>();
   for (const lane of lanes) {
-    const laneClips = clips.filter((c) => c.trackIds.includes(lane.trackId));
+    // Seuls les slots occupent des lanes objets — la couverture des
+    // barrières (cue) n'est qu'un blast radius visuel.
+    const laneClips = clips.filter((c) => c.ref.type === 'slot' && effectiveTrackIds(c).includes(lane.trackId));
     if (laneModeOf(lane.id) !== 'stacked') {
       laneLayout.set(lane.id, { height: laneH, rowOf: new Map(laneClips.map((c) => [c.id, 0])) });
       continue;
@@ -441,7 +444,6 @@ const ScoreView: React.FC = () => {
           picker={picker}
           moveSlots={moveSlots}
           cues={cues}
-          manualOscIds={manualOscIds}
           onPick={addToLane}
           onClose={() => setPicker(null)}
         />

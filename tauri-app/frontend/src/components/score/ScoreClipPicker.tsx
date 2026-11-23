@@ -9,7 +9,6 @@ import type { ScoreClipDoc } from '../../store/useScoreStore';
 import type { MoveSlot } from '../../store/slices/moveSlotsTypes';
 import type { Cue } from '../../types/generated/Cue';
 import { extractDuration } from '../../store/slices/moveSlotsTypes';
-import { cueCoverage } from '../../utils/scoreResolve';
 
 export interface ScorePickerState {
   laneId: string;
@@ -21,13 +20,13 @@ export const ScoreClipPicker: React.FC<{
   picker: ScorePickerState;
   moveSlots: MoveSlot[];
   cues: Cue[];
-  manualOscIds: number[];
+
   onPick: (ref: ScoreClipDoc['ref'], opts?: { durationMs?: number; trackIds?: number[]; repeatEveryMs?: number }) => void;
   /// Appelé quand Esc est pressé alors que le picker est au sommet de
   /// la stack de modals — le picker est monté/démonté, useModalGuard
   /// suffit (pas de panic global quand il est ouvert).
   onClose: () => void;
-}> = ({ picker, moveSlots, cues, manualOscIds, onPick, onClose }) => {
+}> = ({ picker, moveSlots, cues, onPick, onClose }) => {
   useModalGuard(onClose);
   return (
   <div
@@ -48,7 +47,7 @@ export const ScoreClipPicker: React.FC<{
           <button
             key={c.id}
             className="w-full text-left px-3 py-1 text-xs hover:bg-amber-700/40 truncate"
-            onClick={() => onPick({ type: 'cue', cueId: String(c.id) }, { trackIds: cueCoverage(c, manualOscIds) })}
+            onClick={() => onPick({ type: 'cue', cueId: String(c.id) })}
           >
             ◆ CUE {c.cue_number ?? i + 1} {c.name}
           </button>
@@ -69,7 +68,8 @@ export const ScoreClipPicker: React.FC<{
               const dur = s.graphJson ? extractDuration(s.graphJson.nodes) * 1000 : 30_000;
               onPick({ type: 'slot', slotId: s.id }, {
                 durationMs: dur,
-                trackIds: s.trackIds,
+                // trackIds omis = suivi live : la couverture dérive
+                // du slot à chaque play (réassignations reflétées).
                 // Défaut score = tuile du motif : un move LOOPÉ
                 // s'insère déjà en copies liées (une par cycle,
                 // période = durée du graphe) — étendre le clip
