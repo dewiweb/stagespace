@@ -53,7 +53,7 @@ export function initDirtyTracking(): () => void {
     watchKeys(useGlobalGraphStore as unknown as AnyStore, ['nodes', 'edges'], mark),
     watchKeys(useSignalGraphStore as unknown as AnyStore, ['nodes', 'edges'], mark),
     watchKeys(useCuelistStore as unknown as AnyStore, ['cues', 'tcChaseEnabled'], mark),
-    watchKeys(useScoreStore as unknown as AnyStore, ['tracks', 'clips', 'durationMs', 'loopStartMs', 'loopEndMs'], mark),
+    watchKeys(useScoreStore as unknown as AnyStore, ['laneStates', 'clips', 'durationMs', 'loopStartMs', 'loopEndMs', 'masterCurves'], mark),
   ];
   return () => subs.forEach((u) => u());
 }

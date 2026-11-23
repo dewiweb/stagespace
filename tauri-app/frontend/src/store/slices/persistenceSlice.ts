@@ -130,14 +130,16 @@ export async function buildShowEnvelope(s: PersistenceStore): Promise<ShowFileEn
     currentSetlistIndex: s.currentSetlistIndex,
     editingSlotId: s.editingSlotId,
     cues: cueStore.cues,
-    /// Score timeline (S2) — document du séquenceur : pistes + clips
-    /// (références vers slots/cues — jamais de snapshots).
+    /// Score timeline (S2/S3) — document du séquenceur : clips +
+    /// overrides de lanes (laneStates — les lanes elles-mêmes sont
+    /// dérivées des track_ids patchés, non persistées).
     score: {
-      tracks: scoreStore.tracks,
+      laneStates: scoreStore.laneStates,
       clips: scoreStore.clips,
       durationMs: scoreStore.durationMs,
       loopStartMs: scoreStore.loopStartMs,
       loopEndMs: scoreStore.loopEndMs,
+      masterCurves: scoreStore.masterCurves,
     },
     oscMappings,
     macros: s.macros,

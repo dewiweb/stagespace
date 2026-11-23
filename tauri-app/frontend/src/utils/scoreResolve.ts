@@ -1,19 +1,33 @@
-/// Résolution des clips du score → payloads backend (S2). Le document
-/// référence les entités vivantes (slotId/cueId) ; au `playScore` on
-/// construit les payloads que le backend exécutera seul — la lecture
-/// de la timeline ne dépend alors plus de la webview.
-/// Slots : request via le builder partagé (`buildSlotActivation`) avec
-/// movement_id déterministe `sc-<clipId>` ; cues : snapshot tel quel
-/// (le store garde l'objet Cue backend depuis store_cue).
+/// Résolution des clips du score → payloads backend (S2/S3). Le
+/// document référence les entités vivantes (slotId/cueId) ; au
+/// `playScore` on construit les payloads que le backend exécutera
+/// seul — la lecture ne dépend alors plus de la webview.
+/// Slots : request via le builder partagé (`buildSlotActivation`) —
+/// L'ASSIGNATION DU CLIP (trackIds) remplace celle du slot :
+/// restreindre la couverture filtre les osc_ids/track_indices du
+/// spawn, l'étendre ajoute des tracks au move (comme une
+/// réassignation dans l'Atelier). Cues : snapshot tel quel (le
+/// store garde l'objet Cue backend depuis store_cue) — la
+/// couverture trackIds est info visuelle, le recall reste global.
 import { useGraphStore } from '../store/useGraphStore';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { normalizeSlot } from '../store/slices/moveSlotsTypes';
 import { buildSlotActivation } from './slotActivation';
+import { MASTER_LANE, laneIdOf, clipLaneIds } from '../store/useScoreStore';
 import type { ScoreDoc, ScoreClipDoc } from '../store/useScoreStore';
+
+/// Une lane wire — `id` (`obj-<trackId>`/`master`) + mode. Le backend
+/// coupe les moves précédents par lane en mode exclusive uniquement.
+export interface ResolvedLane {
+  id: string;
+  stacked?: boolean;
+}
 
 export interface ResolvedScoreClip {
   id: string;
-  track: string;
+  /// Lanes occupées — `obj-<trackId>` pour slot/cue, `master` pour
+  /// les markers. Le backend y enregistre ses moves actifs.
+  lanes: ResolvedLane[];
   start_ms: number;
   duration_ms?: number;
   repeat_every_ms?: number;
@@ -21,9 +35,9 @@ export interface ResolvedScoreClip {
   /// le backend prend l'animation du slot.
   fade_in_ms?: number;
   fade_out_ms?: number;
-  /// Piste en mode stacked — les clips simultanés ne se coupent pas
-  /// (moves composés par le merge). Absent/false = exclusive.
-  stacked?: boolean;
+  /// Courbes clip-scoped (S3) — param → keyframes {t relatif, v
+  /// absolue}, écrites live sur les macros per-move du worker.
+  curves?: Record<string, { t: number; v: number }[]>;
   payload: Record<string, unknown>;
 }
 
@@ -36,24 +50,37 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
   const gs = useGraphStore.getState();
   const cs = useCuelistStore.getState();
   const ctx = { holProject: gs.holProject, manualOscIds: gs.manualOscIds };
-  const muted = new Set(doc.tracks.filter((t) => t.muted).map((t) => t.id));
-  const trackMode = new Map(doc.tracks.map((t) => [t.id, t.mode ?? 'exclusive']));
+  const laneState = (laneId: string) => doc.laneStates?.[laneId];
   const clips: ResolvedScoreClip[] = [];
   const errors: string[] = [];
 
   for (const c of doc.clips) {
-    if (muted.has(c.trackId)) continue;
+    const isMarker = c.ref.type === 'stopAll' || c.ref.type === 'panic';
+    // Mute : les markers sont gouvernés par la lane master ; un
+    // slot/cue perd les objets dont la lane est mutée — couverture
+    // vide → clip skippé (sa lane est "silencieuse").
+    const activeTids = c.trackIds.filter((tid) => !laneState(laneIdOf(tid))?.muted);
+    if (isMarker) {
+      if (laneState(MASTER_LANE)?.muted) continue;
+    } else if (activeTids.length === 0) {
+      continue;
+    }
+    const lanes: ResolvedLane[] = clipLaneIds({ ...c, trackIds: activeTids } as ScoreClipDoc).map(
+      (id) => ({ id, ...(laneState(id)?.mode === 'stacked' ? { stacked: true } : {}) }),
+    );
     const base = {
-      id: c.id, track: c.trackId, start_ms: c.startMs,
+      id: c.id, lanes, start_ms: c.startMs,
       repeat_every_ms: c.repeatEveryMs,
       fade_in_ms: c.fadeInMs, fade_out_ms: c.fadeOutMs,
-      ...(trackMode.get(c.trackId) === 'stacked' ? { stacked: true } : {}),
+      ...(c.curves && Object.keys(c.curves).length ? { curves: c.curves } : {}),
     };
     switch (c.ref.type) {
       case 'slot': {
         const raw = gs.moveSlots.find((s) => s.id === (c.ref as { slotId: string }).slotId);
         if (!raw) { errors.push(`Clip ${c.id}: slot introuvable — supprimé ?`); break; }
-        const slot = normalizeSlot(raw);
+        // L'assignation du clip remplace celle du slot — sous-ensemble
+        // ou extension, le spawn ne couvre que les objets du clip.
+        const slot = normalizeSlot({ ...raw, trackIds: activeTids });
         try {
           const graphJson = slot.graphJson ?? (await presetGraph(slot));
           const { request, globalMacros } = await buildSlotActivation(
@@ -90,6 +117,26 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
   return { clips, errors };
 }
 
+/// Couverture dérivée d'une cue — union des track-objets que son
+/// snapshot touche : scope `track_indices` + tracks des moves
+/// stockés + positions manuelles. En obj_index dans la snapshot →
+/// conversion track_id via la liste `manualOscIds` (règle namespace :
+/// les lanes parlent track_id, jamais obj_index).
+export function cueCoverage(
+  cue: { track_indices?: number[]; moves?: { track_indices?: number[] }[]; manual_positions?: object },
+  manualOscIds: number[],
+): number[] {
+  const objIdx = new Set<number>([
+    ...(cue.track_indices ?? []),
+    ...(cue.moves ?? []).flatMap((m) => m.track_indices ?? []),
+    ...Object.keys(cue.manual_positions ?? {}).map(Number),
+  ]);
+  return [...objIdx]
+    .map((i) => manualOscIds[i])
+    .filter((tid): tid is number => tid != null)
+    .sort((a, b) => a - b);
+}
+
 /// Slot sans graphe sauvegardé → le graphe du preset template (même
 /// règle de fallback que playSlot).
 async function presetGraph(slot: ReturnType<typeof normalizeSlot>) {
@@ -97,10 +144,4 @@ async function presetGraph(slot: ReturnType<typeof normalizeSlot>) {
   const preset = SHAPE_PRESETS.find((p) => p.id === slot.templateId) ?? SHAPE_PRESETS[0];
   const built = preset.build(slot.trackIds.length);
   return { nodes: built.nodes, edges: built.edges };
-}
-
-/// Type guard utilisé par la vue — un clip ne peut vivre que sur une
-/// lane de son kind (slots→slot, cues→cue, markers→stopAll/panic).
-export function clipKindOf(ref: ScoreClipDoc['ref']): 'slots' | 'cues' | 'markers' {
-  return ref.type === 'slot' ? 'slots' : ref.type === 'cue' ? 'cues' : 'markers';
 }

@@ -17,7 +17,7 @@ use crate::commands::playback::SetMacroRequest;
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 use stagespace_engines::Cue;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::State;
@@ -186,14 +186,38 @@ pub enum ScoreClipPayload {
     Panic,
 }
 
+/// Un keyframe de courbe — `t` en ms. Relatif au début du clip pour
+/// les courbes clip-scoped, absolu (début de partition) pour les
+/// courbes master. `v` = valeur ABSOLUE du paramètre.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ScoreKeyframe {
+    pub t: u64,
+    pub v: f64,
+}
+
 /// Un clip posé sur la timeline — `track` = la lane d'appartenance :
 /// le backend applique "un move score à la fois par lane" (un nouveau
 /// clip Slot qui démarre coupe le précédent — dernier gagne, comme
 /// une console qui reprend la main sur le même canal).
+/// Une lane du clip — `obj-<trackId>` pour slot/cue (les pistes sont
+/// les objets : un clip multi-objets s'enregistre dans TOUTES ses
+/// lanes), `master` pour les markers. `stacked` = mode de la lane :
+/// un nouveau clip ne coupe pas les moves actifs qui s'y trouvent.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ScoreLane {
+    pub id: String,
+    #[serde(default)]
+    pub stacked: bool,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct ScoreClip {
     pub id: String,
-    pub track: String,
+    /// Lanes occupées — sémantique last-wins exclusive vs stacked par
+    /// lane (un move multi-objets est coupé si n'importe laquelle de
+    /// ses lanes exclusive reçoit un nouveau clip).
+    #[serde(default)]
+    pub lanes: Vec<ScoreLane>,
     pub start_ms: u64,
     #[serde(default)]
     pub duration_ms: Option<u64>,
@@ -212,11 +236,17 @@ pub struct ScoreClip {
     pub fade_in_ms: Option<u64>,
     #[serde(default)]
     pub fade_out_ms: Option<u64>,
-    /// Piste en mode stacked — un clip Slot qui démarre ne coupe PAS
-    /// les moves score actifs de la lane (les sorties se composent
-    /// dans le merge). `false` = exclusive (last-wins, défaut S2).
+    /// Courbes clip-scoped (S3 — docs/score-sequencer.md §S3) :
+    /// `param` → keyframes (ms relatif au début du clip, valeur
+    /// absolue). Évaluées à chaque tick de l'horloge (≤50 ms) et
+    /// écrites sur les macros PER-MOVE du worker spawné
+    /// (`runtime.macros()` — `MacroScope::PerMove`, lues à chaque
+    /// frame) : la valeur seedée du slot reste la base tant que la
+    /// courbe ne couvre pas le param. Interpolation linéaire, clamp
+    /// aux bornes. Params : speed, scale, yaw/pitch/roll,
+    /// offset_x/y/z (= shift_*), radius_scale, height_offset.
     #[serde(default)]
-    pub stacked: bool,
+    pub curves: HashMap<String, Vec<ScoreKeyframe>>,
     pub payload: ScoreClipPayload,
 }
 
@@ -234,6 +264,14 @@ pub struct ScoreTimeline {
     /// hard-wrap du transport (distinct du clip repeat : boucle de la
     /// partition entière). `None` = pas de boucle.
     pub loop_region: Option<(u64, u64)>,
+    /// Courbes master (S3) — évaluées en temps partition absolu et
+    /// écrites sur les macros GLOBALES du merge
+    /// (`MergeRuntime::macros()` — `MacroScope::Global`, mêmes chemins
+    /// que `/stagespace/macro`). Portée "ensemble du core" : ne vit
+    /// que sur la piste master côté doc. Hold à l'arrêt (dernière
+    /// valeur conservée — sémantique console, l'opérateur reprend la
+    /// main à tout moment).
+    pub master_curves: HashMap<String, Vec<ScoreKeyframe>>,
     /// Génération — stop/load l'incrémente, les sleeps armés s'abortent.
     pub generation: u64,
 }
@@ -268,6 +306,7 @@ fn timeline_state(tl: &ScoreTimeline) -> ScoreTimelineState {
 pub async fn score_timeline_load(
     clips: Vec<ScoreClip>,
     duration_ms: u64,
+    master_curves: HashMap<String, Vec<ScoreKeyframe>>,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
     let mut tl = lock_or_recover(&state.score_timeline);
@@ -276,9 +315,114 @@ pub async fn score_timeline_load(
     tl.seek_ms = 0;
     let mut sorted = clips;
     sorted.sort_by_key(|c| c.start_ms);
+    // Keyframes triés par t — l'évaluation fait un partition_point.
+    for c in &mut sorted {
+        for kfs in c.curves.values_mut() {
+            kfs.sort_by_key(|k| k.t);
+        }
+    }
+    let mut mc = master_curves;
+    for kfs in mc.values_mut() {
+        kfs.sort_by_key(|k| k.t);
+    }
     tl.clips = sorted;
+    tl.master_curves = mc;
     tl.duration_ms = duration_ms;
     Ok(())
+}
+
+/// Échantillonne une courbe (keyframes triés par t) — interpolation
+/// linéaire, clamp aux bornes avant/après. `None` = courbe vide.
+fn sample_curve(kfs: &[ScoreKeyframe], t_ms: u64) -> Option<f64> {
+    match kfs.len() {
+        0 => None,
+        1 => Some(kfs[0].v),
+        _ => {
+            if t_ms <= kfs[0].t {
+                return Some(kfs[0].v);
+            }
+            let last = &kfs[kfs.len() - 1];
+            if t_ms >= last.t {
+                return Some(last.v);
+            }
+            let i = kfs.partition_point(|k| k.t <= t_ms);
+            let (a, b) = (&kfs[i - 1], &kfs[i]);
+            let f = (t_ms - a.t) as f64 / (b.t - a.t) as f64;
+            Some(a.v + (b.v - a.v) * f)
+        }
+    }
+}
+
+/// Écrit une valeur de courbe sur un MacroState — même convention de
+/// noms que `audio_param_overrides` (`offset_*` et `shift_*` acceptés
+/// pour les axes, comme la traduction du signal graph). Valable pour
+/// les deux scopes : `Runtime::macros()` (per-move) et
+/// `MergeRuntime::macros()` (global).
+fn write_macro_param(m: &stagespace_engines::MacroState, param: &str, v: f64) {
+    match param {
+        "speed" => m.set_speed(v),
+        "scale" => m.set_scale(v),
+        "radius_scale" => m.set_radius_scale(v),
+        "height_offset" => m.set_height_offset(v),
+        "shift_x" | "offset_x" => {
+            let s = m.get_shift();
+            m.set_shift(v, s.y, s.z);
+        }
+        "shift_y" | "offset_y" => {
+            let s = m.get_shift();
+            m.set_shift(s.x, v, s.z);
+        }
+        "shift_z" | "offset_z" => {
+            let s = m.get_shift();
+            m.set_shift(s.x, s.y, v);
+        }
+        "yaw" => {
+            let (_, p, r) = m.get_rotation();
+            m.set_rotation(v, p, r);
+        }
+        "pitch" => {
+            let (y, _, r) = m.get_rotation();
+            m.set_rotation(y, v, r);
+        }
+        "roll" => {
+            let (y, p, _) = m.get_rotation();
+            m.set_rotation(y, p, v);
+        }
+        _ => {}
+    }
+}
+
+/// Une cible de courbes clip-scoped : le MacroState du move spawné,
+/// le t0 ABSOLU de cette itération (start + k·repeat — le temps local
+/// de la courbe = cursor − t0) et la table de keyframes.
+struct CurveTarget {
+    macros: Arc<stagespace_engines::MacroState>,
+    t0_ms: u64,
+    curves: HashMap<String, Vec<ScoreKeyframe>>,
+}
+
+/// Évalue toutes les courbes au curseur courant — appelé à chaque
+/// réveil de l'horloge (le sleep est borné à 50 ms). Clip-scoped →
+/// macros per-move ; master → macros globales du merge.
+fn eval_curves(
+    cursor_ms: u64,
+    targets: &HashMap<String, CurveTarget>,
+    master: &stagespace_engines::MacroState,
+    master_curves: &HashMap<String, Vec<ScoreKeyframe>>,
+) {
+    for target in targets.values() {
+        let lt = cursor_ms.saturating_sub(target.t0_ms);
+        for (param, kfs) in &target.curves {
+            if let Some(v) = sample_curve(kfs, lt) {
+                write_macro_param(&target.macros, param, v);
+            }
+        }
+    }
+    for (param, kfs) in master_curves {
+        if let Some(v) = sample_curve(kfs, cursor_ms) {
+            write_macro_param(master, param, v);
+        }
+    }
 }
 
 /// Lance la lecture — thread horloge qui exécute les clips sur Shared.
@@ -289,11 +433,17 @@ pub async fn score_timeline_load(
 pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcError> {
     let sh = Shared::from_state(&state);
     let tl_arc = state.score_timeline.clone();
-    let (gen, clips, seek, lp) = {
+    let (gen, clips, seek, lp, master_curves) = {
         let mut tl = lock_or_recover(&tl_arc);
         tl.generation += 1;
         tl.started_at = Some(Instant::now());
-        (tl.generation, tl.clips.clone(), tl.seek_ms, tl.loop_region)
+        (
+            tl.generation,
+            tl.clips.clone(),
+            tl.seek_ms,
+            tl.loop_region,
+            tl.master_curves.clone(),
+        )
     };
     if clips.is_empty() {
         lock_or_recover(&tl_arc).started_at = None;
@@ -306,6 +456,12 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
         // ≤1 (un nouveau clip coupe le précédent — console) ; en
         // `stacked` les moves se composent dans le merge.
         let mut lane_active: HashMap<String, Vec<(String, f64)>> = HashMap::new();
+        // Cibles de courbes : move score → (macros per-move du worker,
+        // t0 absolu, table). Rempli au fire (clips Slot avec curves),
+        // vidé au EndMove/cut/hard-wrap. Les macros master du merge
+        // sont prises une fois — Arc stable pour la durée du process.
+        let mut curve_targets: HashMap<String, CurveTarget> = HashMap::new();
+        let master_macros = lock_or_recover(&sh.merge_runtime).macros();
         // Cycles de lecture : sans loop un seul passage ; avec loop, le
         // transport reboucle à `loop_start` (hard-wrap — les moves
         // score du cycle sont coupés avant de repartir, sémantique
@@ -331,23 +487,46 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
                     std::thread::sleep(
                         Duration::from_millis(t - cursor(elapsed)).min(Duration::from_millis(50)),
                     );
+                    // Tick courbes — chaque réveil ≤50 ms écrit les
+                    // valeurs échantillonnées au curseur courant.
+                    eval_curves(
+                        cursor(t0.elapsed()),
+                        &curve_targets,
+                        &master_macros,
+                        &master_curves,
+                    );
                 }
                 if lock_or_recover(&tl_arc).generation != gen {
                     return;
                 }
                 match ev {
-                    Ev::Fire(i, k, offset) => {
-                        fire_clip(&clips[i], k, offset, &sh, &mut lane_active, &sink)
-                    }
+                    Ev::Fire(i, k, offset) => fire_clip(
+                        &clips[i],
+                        k,
+                        offset,
+                        &sh,
+                        &mut lane_active,
+                        &mut curve_targets,
+                        &sink,
+                    ),
                     Ev::EndMove(id, fade) => {
                         for v in lane_active.values_mut() {
                             v.retain(|x| x.0 != id);
                         }
+                        curve_targets.remove(&id);
                         if let Err(e) = deactivate_move_arc(&id, fade, true, &sh) {
                             eprintln!("[score] end-of-clip deactivate '{id}' failed: {e}");
                         }
                     }
                 }
+                // Les courbes du clip qui vient de tirer écrivent leurs
+                // valeurs de t0 immédiatement (sinon ≤50 ms de retard).
+                eval_curves(
+                    cursor(t0.elapsed()),
+                    &curve_targets,
+                    &master_macros,
+                    &master_curves,
+                );
             }
             match lp {
                 Some((lstart, lend)) if lend > lstart => {
@@ -365,15 +544,30 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
                             Duration::from_millis(lend - cursor(elapsed))
                                 .min(Duration::from_millis(50)),
                         );
+                        eval_curves(
+                            cursor(t0.elapsed()),
+                            &curve_targets,
+                            &master_macros,
+                            &master_curves,
+                        );
                     }
                     if lock_or_recover(&tl_arc).generation != gen {
                         return;
                     }
                     // Hard-cut : couper tous les moves score du cycle
                     // avant le rebouclage — chaque cycle repart propre.
-                    let drained: Vec<(String, f64)> =
-                        lane_active.drain().flat_map(|(_, v)| v).collect();
+                    // Un move multi-lanes apparaît dans la liste de
+                    // chaque lane couverte → dédup avant le cut.
+                    let drained: Vec<(String, f64)> = {
+                        let mut seen = HashSet::new();
+                        lane_active
+                            .drain()
+                            .flat_map(|(_, v)| v)
+                            .filter(|(id, _)| seen.insert(id.clone()))
+                            .collect()
+                    };
                     for (id, fade) in drained {
+                        curve_targets.remove(&id);
                         let _ = deactivate_move_arc(&id, fade, true, &sh);
                     }
                     emit_ui(&sink, "active-moves-update", ());
@@ -491,17 +685,26 @@ fn fire_clip(
     offset_ms: u64,
     sh: &Shared,
     lane_active: &mut HashMap<String, Vec<(String, f64)>>,
+    curve_targets: &mut HashMap<String, CurveTarget>,
     sink: &Arc<Mutex<Option<crate::commands::state::EventSink>>>,
 ) {
     match &clip.payload {
         ScoreClipPayload::Slot { request, macros } => {
-            // Mode exclusive : les moves score actifs sur cette lane
-            // sont coupés d'abord — dernier clip gagne (console). En
-            // stacked ils continuent : leurs sorties se composent.
-            if !clip.stacked {
-                if let Some(prev) = lane_active.remove(&clip.track) {
+            // Mode exclusive PAR LANE : les moves score actifs sur
+            // chaque lane exclusive occupée sont coupés d'abord —
+            // dernier clip gagne (console). Sur les lanes stacked ils
+            // continuent : leurs sorties se composent dans le merge.
+            for lane in clip.lanes.iter().filter(|l| !l.stacked) {
+                if let Some(prev) = lane_active.remove(&lane.id) {
                     for (prev_id, prev_fade) in prev {
+                        curve_targets.remove(&prev_id);
                         let _ = deactivate_move_arc(&prev_id, prev_fade, true, sh);
+                        // Un move multi-lanes coupé ici resterait
+                        // enregistré actif sur ses autres lanes (état
+                        // stale + futur deactivate en trop) — purge.
+                        for v in lane_active.values_mut() {
+                            v.retain(|x| x.0 != prev_id);
+                        }
                     }
                 }
             }
@@ -527,16 +730,40 @@ fn fire_clip(
                     if let Some(m) = macros {
                         apply_set_macro_request(m, &lock_or_recover(&sh.merge_runtime));
                     }
-                    if offset_ms > 0 {
+                    if offset_ms > 0 || !clip.curves.is_empty() {
                         if let Some(mv) = lock_or_recover(&sh.movements).get(&req.movement_id) {
-                            mv.runtime.set_time_offset(offset_ms as f64 / 1000.0);
+                            if offset_ms > 0 {
+                                mv.runtime.set_time_offset(offset_ms as f64 / 1000.0);
+                            }
+                            // Courbes clip-scoped → macros per-move du
+                            // worker (scope PerMove). t0 = début ABSOLU
+                            // de cette itération (start + k·repeat) —
+                            // le spanning (offset>0) n'affecte que la
+                            // phase interne du move, pas le temps de
+                            // courbe qui suit le curseur timeline.
+                            if !clip.curves.is_empty() {
+                                curve_targets.insert(
+                                    req.movement_id.clone(),
+                                    CurveTarget {
+                                        macros: mv.runtime.macros(),
+                                        t0_ms: clip.start_ms
+                                            + iteration * clip.repeat_every_ms.unwrap_or(0),
+                                        curves: clip.curves.clone(),
+                                    },
+                                );
+                            }
                         }
                     }
                     let fade_out = req.animation.as_ref().map(|a| a.fade_out).unwrap_or(0.5);
-                    lane_active
-                        .entry(clip.track.clone())
-                        .or_default()
-                        .push((req.movement_id.clone(), fade_out));
+                    // Le move s'enregistre dans TOUTES ses lanes : il
+                    // est coupé si l'une d'elles (exclusive) reçoit un
+                    // nouveau clip, et drainé au hard-wrap partout.
+                    for lane in &clip.lanes {
+                        lane_active
+                            .entry(lane.id.clone())
+                            .or_default()
+                            .push((req.movement_id.clone(), fade_out));
+                    }
                     emit_ui(sink, "active-moves-update", ());
                 }
                 Err(e) => eprintln!("[score] clip '{}' spawn failed: {}", clip.id, e),
@@ -672,13 +899,16 @@ mod tests {
     ) -> ScoreClip {
         ScoreClip {
             id: id.to_string(),
-            track: "t1".to_string(),
+            lanes: vec![ScoreLane {
+                id: "obj-1".to_string(),
+                stacked: false,
+            }],
             start_ms,
             duration_ms,
             repeat_every_ms,
             fade_in_ms: None,
             fade_out_ms: None,
-            stacked: false,
+            curves: HashMap::new(),
             payload: ScoreClipPayload::Slot {
                 request: Box::new(ActivateMoveRequest {
                     movement_id: format!("sc-{id}"),
@@ -820,11 +1050,105 @@ mod tests {
     fn new_fields_default_on_old_wire_payloads() {
         // Compat arrière : un ScoreClip sérialisé avant fades/stacked
         // (les trois champs absents) se désérialise avec les défauts.
-        let json = r#"{"id":"c1","track":"t1","start_ms":0,
+        let json = r#"{"id":"c1","start_ms":0,
             "payload":{"kind":"StopAll"}}"#;
         let c: ScoreClip = serde_json::from_str(json).unwrap();
         assert_eq!(c.fade_in_ms, None);
         assert_eq!(c.fade_out_ms, None);
-        assert!(!c.stacked);
+        assert!(c.lanes.is_empty());
+        assert!(c.curves.is_empty());
+    }
+
+    #[test]
+    fn curve_samples_linear_between_keyframes() {
+        let kfs = vec![
+            ScoreKeyframe { t: 0, v: 1.0 },
+            ScoreKeyframe { t: 4_000, v: 2.0 },
+            ScoreKeyframe { t: 8_000, v: 0.0 },
+        ];
+        // Bords : clamp avant le premier / après le dernier point.
+        assert_eq!(sample_curve(&kfs, 0), Some(1.0));
+        assert_eq!(sample_curve(&kfs, 8_000), Some(0.0));
+        assert_eq!(sample_curve(&kfs, 20_000), Some(0.0));
+        // Milieu de rampe montante puis descendante.
+        assert_eq!(sample_curve(&kfs, 2_000), Some(1.5));
+        assert_eq!(sample_curve(&kfs, 6_000), Some(1.0));
+        // Exactement sur un keyframe.
+        assert_eq!(sample_curve(&kfs, 4_000), Some(2.0));
+        // Cas limites.
+        assert_eq!(sample_curve(&[], 100), None);
+        assert_eq!(
+            sample_curve(&[ScoreKeyframe { t: 500, v: 3.0 }], 0),
+            Some(3.0)
+        );
+    }
+
+    #[test]
+    fn write_macro_param_updates_axes_independently() {
+        let m = stagespace_engines::MacroState::new();
+        // Aliases offset_* == shift_* (convention overrides/signal).
+        write_macro_param(&m, "shift_x", 2.0);
+        write_macro_param(&m, "offset_y", -1.0);
+        let s = m.get_shift();
+        assert_eq!(s.x, 2.0);
+        assert_eq!(s.y, -1.0);
+        assert_eq!(s.z, 0.0);
+        // Rotation : un axe modifié n'écrase pas les deux autres.
+        m.set_rotation(10.0, 20.0, 30.0);
+        write_macro_param(&m, "pitch", 99.0);
+        let (y, p, r) = m.get_rotation();
+        assert_eq!((y, p, r), (10.0, 99.0, 30.0));
+        // Scalaires.
+        write_macro_param(&m, "speed", 2.5);
+        write_macro_param(&m, "radius_scale", 1.4);
+        write_macro_param(&m, "height_offset", -3.0);
+        assert_eq!(m.get_speed(), 2.5);
+        assert_eq!(m.get_radius_scale(), 1.4);
+        assert_eq!(m.get_height_offset(), -3.0);
+        // Param inconnu → no-op (pas de panic).
+        write_macro_param(&m, "bogus", 1.0);
+    }
+
+    #[test]
+    fn eval_curves_writes_per_move_and_global_scopes() {
+        // Clip-scoped → le MacroState du move ; master → celui du
+        // merge. Les deux scopes restent disjoints (contrat
+        // MacroScope : un param piloté par UN scope).
+        let move_macros = stagespace_engines::MacroState::new();
+        let merge_macros = stagespace_engines::MacroState::new();
+        let mut curves = HashMap::new();
+        curves.insert(
+            "speed".to_string(),
+            vec![
+                ScoreKeyframe { t: 0, v: 1.0 },
+                ScoreKeyframe { t: 2_000, v: 3.0 },
+            ],
+        );
+        let mut targets = HashMap::new();
+        targets.insert(
+            "sc-c1".to_string(),
+            CurveTarget {
+                macros: Arc::new(move_macros),
+                t0_ms: 1_000, // clip à 1s → t local = cursor - 1s
+                curves,
+            },
+        );
+        let mut master = HashMap::new();
+        master.insert(
+            "shift_y".to_string(),
+            vec![
+                ScoreKeyframe { t: 0, v: 0.0 },
+                ScoreKeyframe { t: 4_000, v: 4.0 },
+            ],
+        );
+        let mv = targets["sc-c1"].macros.clone();
+        eval_curves(2_000, &targets, &merge_macros, &master);
+        // t local = 1s → speed = 1 + (2-1)·(3-1)/2 = 2.
+        assert_eq!(mv.get_speed(), 2.0);
+        // cursor 2s → shift_y = 2.0 sur le scope global.
+        assert_eq!(merge_macros.get_shift().y, 2.0);
+        // Le scope master ne touche pas le move, et réciproquement.
+        assert_eq!(merge_macros.get_speed(), 1.0);
+        assert_eq!(mv.get_shift().y, 0.0);
     }
 }

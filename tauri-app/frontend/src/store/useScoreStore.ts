@@ -1,28 +1,33 @@
-/// Score timeline (S2 — docs/score-sequencer.md) — le document du
-/// séquenceur : pistes + clips (références vers slots/cues/markers).
-/// Document state (tracks/clips/durationMs) → enveloppe .hfg + dirty
-/// tracking ; transport state (playing/cursorMs) → runtime, poussé
-/// par les events `score-timeline` du backend.
-/// Les clips référencent les entités du show (slotId, cueId) —
-/// résolution en payloads backend au play (utils/scoreResolve).
+/// Score timeline (S2/S3 — docs/score-sequencer.md) — le document du
+/// séquenceur : lanes par OBJET + clips (références vers slots/cues/
+/// markers). Document state → enveloppe .hfg + dirty tracking ;
+/// transport state (playing/cursorMs) → runtime, poussé par les
+/// events `score-timeline` du backend.
+///
+/// LES LANES SONT LES OBJETS : une lane par `track_id` patché +
+/// une pseudo-lane master. Elles sont dérivées de la config (pas des
+/// entités persistées) — le doc ne stocke que leurs overrides
+/// (`laneStates`) et la couverture de chaque clip (`trackIds`).
 import { create } from 'zustand';
 import { toast } from '../utils/toast-helpers';
 import { safeInvoke as invoke, silentCatch } from '../utils/tauri';
 
-export type ScoreTrackKind = 'slots' | 'cues' | 'markers';
-/// Comportement de la piste en chevauchement de clips (docs/score-
+/// Identifiants de lanes — `obj-<trackId>` par objet patché, `master`
+/// pour la lane globale (macros, markers stop/panic).
+export const MASTER_LANE = 'master';
+export const laneIdOf = (trackId: number) => `obj-${trackId}`;
+
+/// Comportement d'une lane en chevauchement de clips (docs/score-
 /// sequencer.md §Surface) : `exclusive` = last-wins console (un move
-/// score à la fois — cues/markers/master), `stacked` = les clips qui
-/// se chevauchent jouent simultanément, leurs sorties se composent
-/// dans le merge (pistes objets).
+/// score à la fois par lane), `stacked` = les clips simultanés
+/// jouent ensemble, leurs sorties se composent dans le merge.
 export type ScoreLaneMode = 'exclusive' | 'stacked';
 
-export interface ScoreTrack {
-  id: string;
-  name: string;
-  kind: ScoreTrackKind;
-  muted: boolean;
-  /// Mode de chevauchement — `exclusive` par défaut (sémantique S2).
+/// Overrides persistés d'une lane — clé `obj-<trackId>` ou `master`.
+/// Une lane n'a une entrée que si mutée ou en mode non-défaut.
+export interface ScoreLaneState {
+  muted?: boolean;
+  /// `exclusive` par défaut quand absent.
   mode?: ScoreLaneMode;
 }
 
@@ -36,7 +41,13 @@ export type ScoreClipRef =
 
 export interface ScoreClipDoc {
   id: string;
-  trackId: string;
+  /// Couverture — les track-objets pilotés par ce clip (= les lanes
+  /// sur lesquelles il se rend en copie liée). Slot : assignation
+  /// EFFECTIVE du move — insérée = slot.trackIds, ensuite libre
+  /// (filtrer ou étendre revient à réassigner les tracks, comme dans
+  /// l'Atelier). Cue : union dérivée du snapshot (info visuelle — le
+  /// recall reste global). Marker : vide — vit sur la lane master.
+  trackIds: number[];
   startMs: number;
   /// Slots : fin auto (désactivation). Absent = le move tourne jusqu'au
   /// stop suivant/panic (clip "ouvert").
@@ -52,13 +63,41 @@ export interface ScoreClipDoc {
   /// du clip (EndMove à end_ms, le move s'éteint pendant son fade).
   fadeInMs?: number;
   fadeOutMs?: number;
+  /// Courbes clip-scoped (S3 — docs/score-sequencer.md) :
+  /// `paramId` → keyframes `{t, v}` avec `t` = ms relatif au début du
+  /// clip. Écrites en live sur les macros PER-MOVE du worker spawné
+  /// (scope PerMove — valeur absolue, base = seed du slot). Params :
+  /// speed, scale, yaw/pitch/roll, offset_x/y/z (= shift_*).
+  curves?: Record<string, ScoreKeyframe[]>;
   ref: ScoreClipRef;
 }
 
+/// Un point d'une courbe : `t` en ms (relatif au début du clip pour
+/// les courbes clip-scoped, absolu partition pour les courbes
+/// master) + valeur du paramètre. Interpolation linéaire.
+export interface ScoreKeyframe {
+  t: number;
+  v: number;
+}
+
+/// Lanes occupées par un clip — slot/cue : ses objets ; marker :
+/// la lane master. Un clip objet à couverture vide (rien d'assigné
+/// — ex. cue dont le snapshot ne touche aucune track connue) se rend
+/// sur la lane master : le contenu global/non-assigné reste visible.
+export const clipLaneIds = (c: ScoreClipDoc): string[] =>
+  c.ref.type === 'slot' || c.ref.type === 'cue'
+    ? (c.trackIds.length ? c.trackIds.map(laneIdOf) : [MASTER_LANE])
+    : [MASTER_LANE];
+
 export interface ScoreDoc {
-  tracks: ScoreTrack[];
+  /// Overrides des lanes dérivées (`obj-<trackId>`/`master` → état).
+  laneStates?: Record<string, ScoreLaneState>;
   clips: ScoreClipDoc[];
   durationMs: number;
+  /// Courbes master (S3) — keyframes en temps ABSOLU de partition,
+  /// écrites sur les macros GLOBALES du merge (mêmes chemins que
+  /// /stagespace/macro). Affectent l'ensemble du core.
+  masterCurves?: Record<string, ScoreKeyframe[]>;
   /// Region de boucle transport [start, end) — rebouclage hard-wrap
   /// de la partition entière (distinct du clip repeat). Les deux
   /// ensemble ou aucun.
@@ -68,30 +107,40 @@ export interface ScoreDoc {
 
 const uid = () => `sc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 
-const defaultTracks = (): ScoreTrack[] => [
-  { id: 'trk-slots', name: 'MOVES', kind: 'slots', muted: false },
-  { id: 'trk-cues', name: 'CUES', kind: 'cues', muted: false },
-  { id: 'trk-markers', name: 'MARKERS', kind: 'markers', muted: false },
-];
+const emptyDoc = (): ScoreDoc => ({ laneStates: {}, clips: [], durationMs: 120_000 });
 
 interface ScoreState extends ScoreDoc {
   // Transport — runtime (pas dans l'enveloppe)
   playing: boolean;
   cursorMs: number;
   // Document actions
-  addTrack: (kind: ScoreTrackKind, name?: string) => void;
-  removeTrack: (id: string) => void;
-  toggleTrackMute: (id: string) => void;
-  setTrackMode: (id: string, mode: ScoreLaneMode) => void;
-  addClip: (trackId: string, ref: ScoreClipRef, startMs: number, durationMs?: number) => ScoreClipDoc;
+  /// Mute d'une lane (`obj-<trackId>` ou `master`).
+  toggleLaneMute: (laneId: string) => void;
+  /// Mode de chevauchement d'une lane.
+  setLaneMode: (laneId: string, mode: ScoreLaneMode) => void;
+  /// Insère un clip. `trackIds` = couverture (objets pilotés) — pour
+  /// un slot : son assignation ; pour une cue : union dérivée de son
+  /// snapshot ; markers : ignoré (lane master). Retourne le clip.
+  addClip: (ref: ScoreClipRef, startMs: number, opts?: { durationMs?: number; trackIds?: number[] }) => ScoreClipDoc;
+  /// Réassigne la couverture d'un clip (ajoute/retire des objets —
+  /// même effet qu'une réassignation de tracks dans l'Atelier).
+  setClipTrackIds: (id: string, trackIds: number[]) => void;
   moveClip: (id: string, startMs: number) => void;
   resizeClip: (id: string, durationMs: number | undefined) => void;
   setClipRepeat: (id: string, repeatEveryMs: number | undefined) => void;
   /// Fades du clip — `undefined` = retour à l'héritage du slot.
   setClipFades: (id: string, fadeInMs: number | undefined, fadeOutMs: number | undefined) => void;
+  /// Pose/remplace la courbe d'un paramètre (`undefined` = supprime).
+  /// Les keyframes sont triées par t ; un param sans courbe garde sa
+  /// valeur fixe (héritée du slot/macros au play).
+  setClipCurve: (id: string, paramId: string, keyframes: ScoreKeyframe[] | undefined) => void;
+  /// Courbe master — `t` absolu partition, écrit sur les macros
+  /// globales du merge au play (`/stagespace/macro`-like).
+  setMasterCurve: (paramId: string, keyframes: ScoreKeyframe[] | undefined) => void;
   removeClip: (id: string) => void;
-  /// Copie matérielle du clip (distinct du repeat : une vraie clip
-  /// indépendante, éditable séparément) — décalée de sa propre durée.
+  /// Copie matérielle du clip (distinct du repeat : un vrai clip
+  /// indépendant, éditable séparément — sa couverture peut ensuite
+  /// diverger) — décalé de sa propre durée.
   duplicateClip: (id: string) => void;
   setLoop: (startMs: number | undefined, endMs: number | undefined) => void;
   setDurationMs: (ms: number) => void;
@@ -105,37 +154,39 @@ interface ScoreState extends ScoreDoc {
 }
 
 export const useScoreStore = create<ScoreState>()((set, get) => ({
-  tracks: defaultTracks(),
-  clips: [],
-  durationMs: 120_000,
+  ...emptyDoc(),
   playing: false,
   cursorMs: 0,
 
-  addTrack: (kind, name) => {
-    const id = uid();
+  toggleLaneMute: (laneId) =>
     set((s) => ({
-      tracks: [...s.tracks, { id, name: name ?? kind.toUpperCase(), kind, muted: false }],
-    }));
-  },
-  removeTrack: (id) =>
-    set((s) => ({
-      tracks: s.tracks.filter((t) => t.id !== id),
-      clips: s.clips.filter((c) => c.trackId !== id),
+      laneStates: {
+        ...s.laneStates,
+        [laneId]: { ...s.laneStates?.[laneId], muted: !s.laneStates?.[laneId]?.muted },
+      },
     })),
-  toggleTrackMute: (id) =>
+  setLaneMode: (laneId, mode) =>
     set((s) => ({
-      tracks: s.tracks.map((t) => (t.id === id ? { ...t, muted: !t.muted } : t)),
-    })),
-  setTrackMode: (id, mode) =>
-    set((s) => ({
-      tracks: s.tracks.map((t) => (t.id === id ? { ...t, mode } : t)),
+      laneStates: { ...s.laneStates, [laneId]: { ...s.laneStates?.[laneId], mode } },
     })),
 
-  addClip: (trackId, ref, startMs, durationMs) => {
-    const clip: ScoreClipDoc = { id: uid(), trackId, startMs: Math.max(0, startMs), durationMs, ref };
+  addClip: (ref, startMs, opts) => {
+    const clip: ScoreClipDoc = {
+      id: uid(),
+      trackIds: opts?.trackIds ?? [],
+      startMs: Math.max(0, startMs),
+      durationMs: opts?.durationMs,
+      ref,
+    };
     set((s) => ({ clips: [...s.clips, clip] }));
     return clip;
   },
+  setClipTrackIds: (id, trackIds) =>
+    set((s) => ({
+      clips: s.clips.map((c) =>
+        c.id === id ? { ...c, trackIds: [...new Set(trackIds)].sort((a, b) => a - b) } : c,
+      ),
+    })),
   moveClip: (id, startMs) =>
     set((s) => ({
       clips: s.clips.map((c) => (c.id === id ? { ...c, startMs: Math.max(0, startMs) } : c)),
@@ -152,6 +203,23 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
     set((s) => ({
       clips: s.clips.map((c) => (c.id === id ? { ...c, fadeInMs, fadeOutMs } : c)),
     })),
+  setClipCurve: (id, paramId, keyframes) =>
+    set((s) => ({
+      clips: s.clips.map((c) => {
+        if (c.id !== id) return c;
+        const curves = { ...(c.curves ?? {}) };
+        if (keyframes === undefined) delete curves[paramId];
+        else curves[paramId] = [...keyframes].sort((a, b) => a.t - b.t);
+        return { ...c, curves };
+      }),
+    })),
+  setMasterCurve: (paramId, keyframes) =>
+    set((s) => {
+      const masterCurves = { ...(s.masterCurves ?? {}) };
+      if (keyframes === undefined) delete masterCurves[paramId];
+      else masterCurves[paramId] = [...keyframes].sort((a, b) => a.t - b.t);
+      return { masterCurves };
+    }),
   removeClip: (id) => set((s) => ({ clips: s.clips.filter((c) => c.id !== id) })),
   duplicateClip: (id) =>
     set((s) => {
@@ -159,6 +227,7 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
       if (!src) return {};
       const copy: ScoreClipDoc = {
         ...src,
+        trackIds: [...src.trackIds],
         id: uid(),
         startMs: Math.min(s.durationMs, src.startMs + (src.durationMs ?? 1000)),
       };
@@ -172,13 +241,16 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
   },
   setDurationMs: (ms) => set({ durationMs: Math.max(1000, ms) }),
   setScoreDoc: (doc) =>
-    // Backfill `mode` — les docs sauvegardés avant lane_mode n'ont pas
-    // le champ (exclusive = sémantique historique S2).
-    set(doc
-      ? { ...doc, tracks: doc.tracks.map((t) => ({ ...t, mode: t.mode ?? 'exclusive' })) }
-      : { tracks: defaultTracks(), clips: [], durationMs: 120_000 }),
-  clearScore: () =>
-    set({ tracks: defaultTracks(), clips: [], durationMs: 120_000, playing: false, cursorMs: 0 }),
+    set(
+      doc
+        ? {
+            ...doc,
+            // Défensif : un clip sans couverture persistée → [].
+            clips: doc.clips.map((c) => ({ ...c, trackIds: c.trackIds ?? [] })),
+          }
+        : emptyDoc(),
+    ),
+  clearScore: () => set({ ...emptyDoc(), playing: false, cursorMs: 0 }),
 
   playScore: async () => {
     const s = get();
@@ -189,7 +261,12 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
       errors.forEach((e) => toast.warning(e));
       if (clips.length === 0) { toast.error('Score : aucun clip résolvable'); return; }
       // Seek courant = base du curseur (le backend spanne les clips à cheval).
-      await invoke('score_timeline_load', { clips, durationMs: s.durationMs });
+      await invoke('score_timeline_load', {
+        clips,
+        durationMs: s.durationMs,
+        // Lane master mutée → ses courbes ne jouent pas.
+        masterCurves: s.laneStates?.[MASTER_LANE]?.muted ? {} : (s.masterCurves ?? {}),
+      });
       await invoke('score_timeline_set_loop', { startMs: s.loopStartMs ?? null, endMs: s.loopEndMs ?? null });
       await invoke('score_timeline_play');
       set({ playing: true });

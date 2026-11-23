@@ -70,18 +70,19 @@ interface AutomationLane {
 }
 interface ScoreClip {
   id: string;
-  track: string;             // lane id
+  trackIds: number[];        // couverture — les pistes objets occupées
   start: number;             // seconds, score time
   duration: number | null;   // null = event/marker
+  curves?: Record<string, Keyframe[]>;  // t relatif clip (per-move)
   payload: SlotClip | CueMarker | GestureShot;
 }
 interface Score {
   id: string; name: string;
   duration: number;
   loop?: { start: number; end: number };
-  tracks: ScoreTrack[];      // ordered lanes
+  laneStates: Record<string, LaneState>; // overrides des pistes dérivées
   clips: ScoreClip[];
-  automation: AutomationLane[];
+  masterCurves?: Record<string, Keyframe[]>; // t absolu (macros globales)
   tc?: { fps: number; offset: number };  // reuses the TC engine
 }
 ```
@@ -153,14 +154,20 @@ design 2026-11-23) :
 ### Zone basse — la timeline à pistes
 
 - Ruler + TC readout, transport cluster (play/pause/seek/loop, chase)
-- **Une piste par objet** (identité `track_id` — survit au remapping
-  OSC, comme `track_positions`) **+ une piste "master"/globale** pour
-  tout ce qui s'applique à l'ensemble :
-  - Master : macros (speed, scale, shift_xyz, yaw/pitch/roll,
-    radius_scale, height_offset), spatial k, gestures
-    (explode/converge/orbit/front), cues, stop/panic, attention.
-  - Pistes objets : position manuelle (x/y/z comme courbes), park
-    windows, throw/impulsions, slot clips mono-objet.
+- **Les pistes SONT les objets** (implémenté S3) — une piste par
+  `track_id` patché, **dérivées de la config** (pas des entités
+  persistées — le doc ne stocke que leurs overrides mute/mode dans
+  `laneStates`) **+ une piste "master"** pour tout ce qui s'applique
+  à l'ensemble :
+  - Master : courbes de macros globales (speed, scale, shift_xyz,
+    yaw/pitch/roll, radius_scale, height_offset — merge,
+    `/stagespace/macro`), markers stop/panic, à terme gestures,
+    spatial k, attention.
+  - Pistes objets : les clips move/cue qui les pilotent (copies
+    liées — voir ci-dessous), à terme position manuelle (x/y/z
+    courbes), park windows, throw/impulsions.
+  - Une piste dont le `track_id` n'est plus patché mais qu'un clip
+    couvre → **piste fantôme** (⚠, le clip y est muet).
 - **Terminologie** : « piste » (pas « track » — collision avec les
   `/track/N` OSC) et « clip » pour les blocs posés sur les pistes.
   Renommage `ScoreTrack` → `ScoreLane` envisagé tant que la feature
@@ -187,13 +194,27 @@ design 2026-11-23) :
   clips éparpillés sur les pistes objets + les événements globaux
   sur le master (supersedes today's rehearsal tape as an import path).
 
-**Tension connue — slot clips multi-objets** : une formation
-(cercle sur objets 1-8) partage un graphe de trajectoire ; on ne
-peut pas la splitter en clips par objet. Options : *ghost-span* (le
-clip se dessine en traversant les pistes des objets touchés —
-cible), *formation → master* (simple mais un solo irait aussi sur
-le master), ou *hybride* (clip sur la piste de l'objet principal /
-piste MOVES dédiée — pragmatique pour démarrer).
+**Formations multi-objets — tranché (copies liées)** : un clip porte
+sa **couverture** (`clip.trackIds` — les track-objets qu'il pilote)
+et se rend **en copie liée sur chaque piste couverte** : une seule
+entité clip, éditer un exemplaire (déplacer, fades, courbes) édite
+tous les rendus. Sémantiques :
+
+- **Slot** : la couverture est l'**assignation effective** du move —
+  insérée = `slot.trackIds`, ensuite libre (retirer un objet filtre
+  les `osc_ids`/`track_indices` du spawn ; en ajouter un étend le
+  move — même effet qu'une réassignation de tracks dans l'Atelier).
+  Un seul spawn par itération (`sc-<clipId>`), enregistré dans toutes
+  ses pistes — coupé si l'une d'elles (exclusive) reçoit un clip.
+- **Cue** : la couverture est **dérivée du snapshot** (union
+  `track_indices` scope + moves stockés + `manual_positions`,
+  obj→track_id via la config courante) — info visuelle, le recall
+  reste global.
+- **Couverture vide** → le clip se rend sur la piste master (le
+  contenu non-assigné/global reste visible) et est skippé au play.
+- **Copie liée vs indépendante** : rendre le même clip sur N pistes
+  = lié (couverture) ; dupliquer = copie indépendante dont la
+  couverture peut diverger.
 
 ### Zone haute — éditeur de courbes du clip sélectionné
 
@@ -215,7 +236,7 @@ envelopes* (Live) plutôt que *track automation* :
 |---|---|---|
 | **S1 — backend tape** | Move today's rehearsal model backend-side: timed command entries evaluated at tick, `score/*` transport commands, `.sscore` kept as export | Quick win: fixes `setTimeout` replay, survives reload; UI unchanged |
 | **S2 — clip timeline** | `slots` + `cues` lanes, Score model in the envelope, surface with ruler + clip editing | The "written linear show" case |
-| **S3 — automation** | `macros` + `objects` + `modulations` lanes, keyframe editor, curve evaluation in the runtime | The real sequencer |
+| **S3 — automation** | pistes objets (+ master), courbes clip→macros per-move & master→macros globales évaluées au tick, keyframe editor | En cours : lanes objets + courbes livrés ; reste position/park/throw clips |
 | **S4 — TC & poly-temporal** | TC chase as clock source, loop regions, multiple cursors / relative speeds (IanniX territory) | Open — design with RESEARCH_STATE_OF_ART §IanniX |
 
 ## Open questions
@@ -240,6 +261,6 @@ envelopes* (Live) plutôt que *track automation* :
 - Does a score own the setlist (clips spawn slots) or reference it
   (clips point at existing slots — simpler, S2 choice)? Tranché S2 :
   référence — reste valable.
-- Placement des formations multi-objets (ghost-span vs piste objet
-  principale vs master — voir §Surface).
+- ~~Placement des formations multi-objets~~ → **tranché S3** :
+  copies liées sur chaque piste couverte (voir §Surface).
 - Loop region × TC chase interaction
