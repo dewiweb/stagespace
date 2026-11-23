@@ -20,8 +20,12 @@ import { safeInvoke as invoke, silentCatch } from '../utils/tauri';
 /// des graphs de modulation, le score agit comme un contrôleur).
 export const GLOBALFX_LANE = 'globalfx';
 export const MODULATION_LANE = 'modulation';
+/// Lane du chef d'orchestre — événements-barrières (cue recall,
+/// stopAll, panic) : transitions d'état globales, pas du contenu
+/// composable (design §Cues on the timeline). Même id côté backend.
+export const CONDUCTOR_LANE = 'conductor';
 /// Lanes globales épinglées en tête de timeline (ordre d'affichage).
-export const GLOBAL_LANES = [GLOBALFX_LANE, MODULATION_LANE] as const;
+export const GLOBAL_LANES = [CONDUCTOR_LANE, GLOBALFX_LANE, MODULATION_LANE] as const;
 export const laneIdOf = (trackId: number) => `obj-${trackId}`;
 
 /// Comportement d'une lane en chevauchement de clips (docs/score-
@@ -97,14 +101,15 @@ export interface ScoreKeyframe {
   interp?: ScoreInterp;
 }
 
-/// Lanes occupées par un clip — slot/cue : ses objets ; marker :
-/// la lane globalfx. Un clip objet à couverture vide (rien d'assigné
-/// — ex. cue dont le snapshot ne touche aucune track connue) se rend
-/// sur la lane globalfx : le contenu global/non-assigné reste visible.
+/// Lanes occupées par un clip — slot : ses objets ; cue/stopAll/panic
+/// (barrières d'état globales) : la lane conductor — leur couverture
+/// `trackIds` reste sur le clip pour le blast radius visuel. Un clip
+/// objet à couverture vide se rend sur la lane globalfx : le contenu
+/// global/non-assigné reste visible.
 export const clipLaneIds = (c: ScoreClipDoc): string[] =>
-  c.ref.type === 'slot' || c.ref.type === 'cue'
+  c.ref.type === 'slot'
     ? (c.trackIds.length ? c.trackIds.map(laneIdOf) : [GLOBALFX_LANE])
-    : [GLOBALFX_LANE];
+    : [CONDUCTOR_LANE];
 
 export interface ScoreDoc {
   /// Overrides des lanes dérivées (`obj-<trackId>`/`master` → état).

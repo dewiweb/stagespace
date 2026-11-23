@@ -13,7 +13,7 @@ import { useGraphStore } from '../store/useGraphStore';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { normalizeSlot } from '../store/slices/moveSlotsTypes';
 import { buildSlotActivation } from './slotActivation';
-import { GLOBALFX_LANE, laneIdOf, clipLaneIds } from '../store/useScoreStore';
+import { CONDUCTOR_LANE, laneIdOf, clipLaneIds } from '../store/useScoreStore';
 import type { ScoreDoc, ScoreClipDoc } from '../store/useScoreStore';
 
 /// Une lane wire — `id` (`obj-<trackId>`/`master`) + mode. Le backend
@@ -55,13 +55,14 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
   const errors: string[] = [];
 
   for (const c of doc.clips) {
-    const isMarker = c.ref.type === 'stopAll' || c.ref.type === 'panic';
-    // Mute : les markers sont gouvernés par la lane master ; un
-    // slot/cue perd les objets dont la lane est mutée — couverture
-    // vide → clip skippé (sa lane est "silencieuse").
+    const isBarrier = c.ref.type === 'cue' || c.ref.type === 'stopAll' || c.ref.type === 'panic';
+    // Mute : les barrières (transitions d'état globales) sont gouvernées
+    // par la lane conductor — leur couverture trackIds n'est qu'un
+    // blast radius visuel, elle ne mute pas l'événement. Un slot perd
+    // les objets dont la lane est mutée — couverture vide → skippé.
     const activeTids = c.trackIds.filter((tid) => !laneState(laneIdOf(tid))?.muted);
-    if (isMarker) {
-      if (laneState(GLOBALFX_LANE)?.muted) continue;
+    if (isBarrier) {
+      if (laneState(CONDUCTOR_LANE)?.muted) continue;
     } else if (activeTids.length === 0) {
       continue;
     }

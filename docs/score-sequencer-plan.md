@@ -284,15 +284,16 @@ failed: … reading 'transformCallback'` — à vérifier avec le shim.
   `page.evaluate` peut lire une instance de module HMR périmée
   (store vide alors que l'UI affiche les clips) — valider via le DOM
   ou un spy `fetch`, pas via le store importé.
-- 🔲 **Modèle cue sur timeline — redesign acté** (voir design note §
-  "Cues on the timeline") : lane CONDUCTOR, blast radius, barrière
-  d'état backend (release `lane_active` + enregistrement des
-  `active_move_ids` pour cleanup au wrap/stop), `flatten cue → clips`
-  comme opération d'éditeur. **Gaps ouverts** : fuite des moves
-  respawnés par cue au loop-wrap ; busy-skip silencieux (pas d'event
-  UI) ; `track_indices` vide = tous les tracks → couverture `[]`
-  mensongère ; `pre_wait`/`follow`/`timecode` bypassés (voulu — à
-  documenter dans le manuel).
+- ✅ **Modèle cue sur timeline — implémenté** (voir design note §
+  "Cues on the timeline") : lane CONDUCTOR en tête de timeline (cue,
+  stopAll, panic), blast radius = marqueurs d'impact ambrés sur les
+  lanes couvertes (`trackIds` vide = toutes), barrière d'état backend
+  (Full → `lane_active` + `curve_targets` vidés ; `cue.moves` ids
+  respawnés enregistrés sous `conductor` pour cleanup wrap/stop),
+  `score-nack` → toast sur busy-skip, picker conductor dédié (cues +
+  stopAll + panic). **Reste ouvert** : `flatten cue → clips` (opération
+  d'éditeur), `pre_wait`/`follow`/`timecode` bypassés (voulu — à
+  documenter dans le manuel), tail `fade_duration` du clip cue.
 - `bridge_server.rs` : origine IPC `http://tauri.localhost` sous
   Windows/Android — sans effet sous Linux, **non testé en exécution**.
 - ✅ Vérifié sous Linux après sync : rust-engines 556/556, src-tauri

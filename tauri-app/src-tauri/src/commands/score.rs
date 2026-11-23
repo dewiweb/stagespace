@@ -819,6 +819,11 @@ fn build_events(clips: &[ScoreClip], seek: u64) -> Vec<(u64, Ev)> {
 }
 
 /// Exécute un clip — mêmes chemins que les actions opérateur/OSC.
+/// Lane réservée — les moves respawnés par les recalls de cue s'y
+/// enregistrent pour le cleanup wrap/stop (barrière d'état, design
+/// §Cues on the timeline). Même id côté frontend (`CONDUCTOR_LANE`).
+const CONDUCTOR_LANE: &str = "conductor";
+
 fn fire_clip(
     clip: &ScoreClip,
     iteration: u64,
@@ -926,15 +931,49 @@ fn fire_clip(
             // recall_cue_inner gère le flag concurrent (CAS + RAII) —
             // un recall opérateur en cours → Err(busy), le clip est skippé.
             match recall_cue_inner((**cue).clone(), sh.clone()) {
-                Ok(()) => emit_ui(sink, "active-moves-update", ()),
-                Err(e) => eprintln!("[score] cue clip '{}' recall failed: {}", clip.id, e),
+                Ok(()) => {
+                    // Barrière d'état (design §Cues on the timeline) :
+                    // un recall Full a tué les moves non listés — les
+                    // moves score trackés sont morts, le score perd
+                    // l'autorité jusqu'au prochain clip. Purge sinon les
+                    // entrées stales pollueraient cuts/wraps futurs.
+                    if cue.mode == stagespace_engines::CueMode::Full {
+                        lane_active.clear();
+                        curve_targets.clear();
+                    }
+                    // Les moves respawnés par le snapshot (ids statiques,
+                    // connus dans cue.moves) s'enregistrent sur la lane
+                    // conductor pour le cleanup wrap/stop — sans ça ils
+                    // fuiraient entre les cycles de loop.
+                    let respawned: Vec<(String, f64)> =
+                        cue.moves.iter().map(|m| (m.id.clone(), 0.0)).collect();
+                    if !respawned.is_empty() {
+                        lane_active
+                            .entry(CONDUCTOR_LANE.to_string())
+                            .or_default()
+                            .extend(respawned);
+                    }
+                    emit_ui(sink, "active-moves-update", ());
+                }
+                // Busy-skip remonté à l'opérateur — une cue manquée dans
+                // un show est un événement visible, pas un log backend.
+                Err(e) => emit_ui(
+                    sink,
+                    "score-nack",
+                    serde_json::json!({ "clip_id": clip.id, "reason": e.to_string() }),
+                ),
             }
         }
         ScoreClipPayload::StopAll => {
             let _ = deactivate_all_arc(0.0, true, sh);
+            // Barrière aussi : tout ce que le score avait spawné est mort.
+            lane_active.clear();
+            curve_targets.clear();
         }
         ScoreClipPayload::Panic => {
             let _ = deactivate_all_arc(0.0, false, sh);
+            lane_active.clear();
+            curve_targets.clear();
         }
     }
 }

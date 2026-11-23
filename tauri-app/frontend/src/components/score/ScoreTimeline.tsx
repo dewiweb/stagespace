@@ -4,7 +4,7 @@
 /// la timeline (mêmes hauteurs de rangées).
 import React, { useRef } from 'react';
 import {
-  GLOBALFX_LANE, GLOBAL_LANES, clipLaneIds,
+  GLOBALFX_LANE, MODULATION_LANE, CONDUCTOR_LANE, GLOBAL_LANES, clipLaneIds,
   type ScoreClipDoc, type ScoreKeyframe, type ScoreLaneMode,
 } from '../../store/useScoreStore';
 import { CLIP_COLORS, fmtMs } from './scoreUtils';
@@ -78,6 +78,7 @@ export const ScoreTimeline: React.FC<{
             contexte d'édition des courbes (zone haute). */}
         {GLOBAL_LANES.map((laneId) => {
           const isGfx = laneId === GLOBALFX_LANE;
+          const isCond = laneId === CONDUCTOR_LANE;
           const sel = selGlobal === laneId;
           const muted = laneMutedOf(laneId);
           return (
@@ -85,22 +86,24 @@ export const ScoreTimeline: React.FC<{
               key={laneId}
               className={`h-6 shrink-0 flex items-center gap-1 px-2 border-b border-gray-800 cursor-pointer ${sel ? 'bg-cyan-900/30 ring-1 ring-cyan-500' : 'hover:bg-gray-800/40'}`}
               onClick={() => onSelectLane(laneId)}
-              title={isGfx
+              title={isCond
+                ? 'Lane CONDUCTOR — événements-barrières : cue recall, stopAll, panic (transitions d\'état globales)'
+                : isGfx
                 ? 'Lane GLOBALFX — transform global du merge (MacroState de la couche Global FX) + markers'
                 : 'Lane MODULATION — valeurs nommées injectées dans la map OSC, lues par les SignalOsc'}
             >
               <button
                 onClick={(e) => { e.stopPropagation(); onToggleLaneMute(laneId); }}
-                title={muted ? 'Lane mutée — ses courbes/markers ne jouent pas' : 'Mute lane'}
+                title={muted ? 'Lane mutée — ses événements/courbes ne jouent pas' : 'Mute lane'}
                 className={`w-3 h-3 rounded-sm border ${muted ? 'bg-orange-600 border-orange-400' : 'border-gray-600'}`}
               />
-              <span className={`text-[9px] font-bold tracking-wide flex-1 truncate ${muted ? 'text-gray-600 line-through' : isGfx ? 'text-cyan-300' : 'text-amber-300'}`}>
-                {isGfx ? 'GLOBALFX' : 'MODULATION'}
+              <span className={`text-[9px] font-bold tracking-wide flex-1 truncate ${muted ? 'text-gray-600 line-through' : isCond ? 'text-rose-300' : isGfx ? 'text-cyan-300' : 'text-amber-300'}`}>
+                {isCond ? 'CONDUCTOR' : isGfx ? 'GLOBALFX' : 'MODULATION'}
               </span>
-              {isGfx && (
+              {isCond && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onOpenPicker(laneId, e.clientX, e.clientY); }}
-                  title="Ajouter un marker au curseur"
+                  title="Ajouter une cue / stop / panic"
                   className="text-gray-500 hover:text-white text-sm leading-none"
                 >+</button>
               )}
@@ -188,14 +191,14 @@ export const ScoreTimeline: React.FC<{
               courbes nommées (aperçu — l'édition est en zone haute). */}
           {GLOBAL_LANES.map((laneId) => {
             const isGfx = laneId === GLOBALFX_LANE;
-            const laneCurves = isGfx ? globalFxCurves : modulationCurves;
+            const laneCurves = laneId === MODULATION_LANE ? modulationCurves : (isGfx ? globalFxCurves : undefined);
             return (
               <div
                 key={laneId}
                 className={`relative h-6 border-b border-gray-800 cursor-pointer ${selGlobal === laneId ? 'bg-cyan-900/15' : 'hover:bg-gray-800/20'} ${laneMutedOf(laneId) ? 'opacity-40' : ''}`}
                 onClick={(e) => { e.stopPropagation(); onSelectLane(laneId); }}
               >
-                {isGfx && clips.filter((c) => clipLaneIds(c).includes(GLOBALFX_LANE)).map((c) => (
+                {laneId !== MODULATION_LANE && clips.filter((c) => clipLaneIds(c).includes(laneId)).map((c) => (
                   <div
                     key={c.id}
                     className={`absolute top-0.5 bottom-0.5 rounded border text-[9px] font-bold px-1 flex items-center cursor-grab ${CLIP_COLORS[c.ref.type]} ${selected === c.id ? 'ring-2 ring-white' : ''}`}
@@ -230,7 +233,18 @@ export const ScoreTimeline: React.FC<{
             const stacked = laneModeOf(lane.id) === 'stacked';
             return (
               <div key={lane.id} className="relative border-b border-gray-800" style={{ height: lay.height, opacity: laneMutedOf(lane.id) ? 0.4 : 1 }}>
-                {clips.filter((c) => c.trackIds.includes(lane.trackId)).map((c) => {
+                {/* Blast radius des cues (clipLaneIds → conductor ;
+                    trackIds = couverture du snapshot ; vide = toutes
+                    les lanes) — marqueur d'impact, pas un clip. */}
+                {clips.filter((c) => c.ref.type === 'cue' && (c.trackIds.length === 0 || c.trackIds.includes(lane.trackId))).map((c) => (
+                  <div
+                    key={`blast-${c.id}`}
+                    className="absolute top-0 bottom-0 w-0.5 bg-amber-400/50 pointer-events-none"
+                    style={{ left: ms2px(c.startMs) }}
+                    title={`${clipLabel(c)} — touche T${lane.trackId}`}
+                  />
+                ))}
+                {clips.filter((c) => c.ref.type === 'slot' && c.trackIds.includes(lane.trackId)).map((c) => {
                   const row = lay.rowOf.get(c.id) ?? 0;
                   const top = stacked ? 2 + row * rowH : 6;
                   const h = stacked ? rowH - 4 : lay.height - 12;

@@ -1,8 +1,9 @@
-/// Picker d'ajout de clip — globalfx → markers ; lane objet →
-/// slots/cues. La couverture du clip suit l'assignation : slot →
-/// ses trackIds, cue → la couverture dérivée du snapshot.
+/// Picker d'ajout de clip — conductor → événements-barrières
+/// (cues, stopAll, panic) ; globalfx → markers ; lane objet →
+/// slots. La couverture du clip suit l'assignation : slot → ses
+/// trackIds, cue → le blast radius dérivé du snapshot.
 import React from 'react';
-import { GLOBALFX_LANE } from '../../store/useScoreStore';
+import { GLOBALFX_LANE, CONDUCTOR_LANE } from '../../store/useScoreStore';
 import { useModalGuard } from '../../utils/modalGuard';
 import type { ScoreClipDoc } from '../../store/useScoreStore';
 import type { MoveSlot } from '../../store/slices/moveSlotsTypes';
@@ -34,7 +35,7 @@ export const ScoreClipPicker: React.FC<{
     style={{ left: picker.x, top: picker.y }}
     onClick={(e) => e.stopPropagation()}
   >
-    {picker.laneId === GLOBALFX_LANE ? (
+    {picker.laneId === CONDUCTOR_LANE ? (
       <>
         <button className="w-full text-left px-3 py-1 text-xs hover:bg-red-800/40" onClick={() => onPick({ type: 'stopAll' })}>
           ■ STOP ALL — coupe tous les moves
@@ -42,8 +43,21 @@ export const ScoreClipPicker: React.FC<{
         <button className="w-full text-left px-3 py-1 text-xs hover:bg-red-900/40" onClick={() => onPick({ type: 'panic' })}>
           ■ PANIC — arrêt d'urgence (origines)
         </button>
+        {cues.length > 0 && <div className="px-3 py-0.5 text-[9px] text-gray-600 uppercase">Cues — recall barrière</div>}
+        {cues.map((c, i) => (
+          <button
+            key={c.id}
+            className="w-full text-left px-3 py-1 text-xs hover:bg-amber-700/40 truncate"
+            onClick={() => onPick({ type: 'cue', cueId: String(c.id) }, { trackIds: cueCoverage(c, manualOscIds) })}
+          >
+            ◆ CUE {c.cue_number ?? i + 1} {c.name}
+          </button>
+        ))}
+        {cues.length === 0 && (
+          <div className="px-3 py-2 text-[10px] text-gray-500">Aucune cue — capturez-en une dans Atelier</div>
+        )}
       </>
-    ) : (
+    ) : picker.laneId === GLOBALFX_LANE ? null : (
       <>
         {moveSlots.length > 0 && <div className="px-3 py-0.5 text-[9px] text-gray-600 uppercase">Moves</div>}
         {moveSlots.map((s) => (
@@ -69,19 +83,6 @@ export const ScoreClipPicker: React.FC<{
         ))}
         {moveSlots.length === 0 && (
           <div className="px-3 py-2 text-[10px] text-gray-500">Aucun slot — créez-en un dans Atelier</div>
-        )}
-        {cues.length > 0 && <div className="px-3 py-0.5 text-[9px] text-gray-600 uppercase">Cues</div>}
-        {cues.map((c, i) => (
-          <button
-            key={c.id}
-            className="w-full text-left px-3 py-1 text-xs hover:bg-amber-700/40 truncate"
-            onClick={() => onPick({ type: 'cue', cueId: String(c.id) }, { trackIds: cueCoverage(c, manualOscIds) })}
-          >
-            ◆ CUE {c.cue_number ?? i + 1} {c.name}
-          </button>
-        ))}
-        {cues.length === 0 && (
-          <div className="px-3 py-2 text-[10px] text-gray-500">Aucune cue — capturez-en une dans Atelier</div>
         )}
       </>
     )}

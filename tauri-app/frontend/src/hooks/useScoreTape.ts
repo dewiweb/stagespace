@@ -6,6 +6,7 @@
 /// chaque commande (même règle que `show-control`).
 import { useEffect } from 'react';
 import { safeListen } from '../utils/tauri';
+import { toast } from '../utils/toast-helpers';
 import { fireScoreEntry } from '../utils/liveActionsRehearsal';
 import { useScoreStore } from '../store/useScoreStore';
 
@@ -26,6 +27,7 @@ export function useScoreTape() {
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     let unlistenTl: (() => void) | undefined;
+    let unlistenNack: (() => void) | undefined;
     let cancelled = false;
     const setup = async () => {
       try {
@@ -38,8 +40,13 @@ export function useScoreTape() {
           const p = event.payload;
           useScoreStore.getState()._setTransport(p.playing, p.cursor_ms, p.loop_start_ms, p.loop_end_ms);
         });
-        if (cancelled) { u(); v(); }
-        else { unlisten = u; unlistenTl = v; }
+        // Barrière skippée (cue refusée par le CAS anti-recall, spawn
+        // impossible…) — une cue manquée en show doit être visible.
+        const n = await safeListen<{ clip_id: string; reason: string }>('score-nack', (event) => {
+          toast.warning(`Score : clip ${event.payload.clip_id} ignoré — ${event.payload.reason}`);
+        });
+        if (cancelled) { u(); v(); n(); }
+        else { unlisten = u; unlistenTl = v; unlistenNack = n; }
       } catch {
         // Pas de backend (Vite seul) — silence.
       }
@@ -49,6 +56,7 @@ export function useScoreTape() {
       cancelled = true;
       unlisten?.();
       unlistenTl?.();
+      unlistenNack?.();
     };
   }, []);
 }
