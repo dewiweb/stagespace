@@ -1,7 +1,7 @@
-/// Colonne « Paramètres » de la zone haute du score — sélection de la
-/// courbe éditée dans la colonne éditeur. Le contexte (clip slot,
-/// lane GLOBALFX, lane MODULATION) est résolu par ScoreView qui
-/// fournit les groupes de lignes déjà filtrés.
+/// Colonne gauche de la zone haute du score — navigateur multi-vues
+/// (onglets sélection/dopesheet/bibliothèque) : rangées de contexte,
+/// rangées alignées du dopesheet, ou explorer. ScoreView fournit les
+/// groupes de lignes déjà filtrés selon la vue résolue.
 import React from 'react';
 import { SCORE_DRAG_MIME } from '../../utils/scoreDopesheet';
 
@@ -65,25 +65,6 @@ export const ScoreParamsPanel: React.FC<{
   }, [scrollTop]);
   return (
   <div className="min-w-0 flex flex-col px-2 py-1.5 gap-1" style={{ flexGrow: frac, flexBasis: 0 }}>
-    <div className="flex items-center gap-2">
-      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Paramètres</span>
-      {contextLabel}
-      {showStrategy && (
-        <label className="flex items-center gap-1 text-[10px] text-gray-500" title="MergeStrategy — comment les moves simultanés se composent. État show global (aussi fixé par les cues et le node Merge du graphe Global FX).">
-          stratégie
-          <select
-            value={mergeStrategy}
-            onChange={(e) => onMergeStrategy?.(e.target.value)}
-            className="bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-[10px] text-cyan-300"
-          >
-            <option value="override">override</option>
-            <option value="crossfade">crossfade</option>
-            <option value="blend">blend</option>
-            <option value="priority">priority</option>
-          </select>
-        </label>
-      )}
-    </div>
     {tabs && tabs.length > 1 && (
       <div className="flex gap-px rounded bg-gray-800/50 p-px shrink-0">
         {tabs.map((t) => (
@@ -101,6 +82,24 @@ export const ScoreParamsPanel: React.FC<{
         ))}
       </div>
     )}
+    <div className="flex items-center gap-2">
+      {contextLabel}
+      {showStrategy && (
+        <label className="flex items-center gap-1 text-[10px] text-gray-500" title="MergeStrategy — comment les moves simultanés se composent. État show global (aussi fixé par les cues et le node Merge du graphe Global FX).">
+          stratégie
+          <select
+            value={mergeStrategy}
+            onChange={(e) => onMergeStrategy?.(e.target.value)}
+            className="bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-[10px] text-cyan-300"
+          >
+            <option value="override">override</option>
+            <option value="crossfade">crossfade</option>
+            <option value="blend">blend</option>
+            <option value="priority">priority</option>
+          </select>
+        </label>
+      )}
+    </div>
     {modName !== undefined && (
       <input
         value={modName}

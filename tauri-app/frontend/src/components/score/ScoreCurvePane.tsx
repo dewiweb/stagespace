@@ -252,6 +252,9 @@ export const ScoreCurvePane: React.FC<{
             {view === 'context' && selLaneIsSpatialFx && (
               <span className="text-[10px] text-violet-400">SPATIALFX — scalaires des contraintes (zones/règles installées par clip)</span>
             )}
+            {view === 'context' && selObjLane && (
+              <span className="text-[10px] text-emerald-400">{selObjLane} — canaux spatiaux + depth</span>
+            )}
             {view === 'context' && selClip && !selGlobal && <span className="text-[10px] text-gray-500 truncate">{selClipLabel} — per-move</span>}
             {view === 'dopesheet' && <span className="text-[10px] text-gray-600">toutes les courbes + événements</span>}
             {view === 'biblio' && <span className="text-[10px] text-gray-600">explorer — moves &amp; cues</span>}
