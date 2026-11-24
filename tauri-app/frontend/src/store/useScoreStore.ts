@@ -136,7 +136,7 @@ export interface ScoreClipDoc {
 /// Interpolation d'un segment de courbe — définie sur le keyframe
 /// (segment [ce point → suivant)). 'linear' = défaut (rétrocompatible),
 /// 'step' maintient la valeur, 'smooth' = smoothstep ease in/out.
-/// Miroir de `ScoreInterp` côté backend (score.rs).
+/// Miroir de `ScoreInterp` côté backend (commands/score/types.rs).
 export type ScoreInterp = 'linear' | 'step' | 'smooth';
 
 /// Un point d'une courbe : `t` en ms (relatif au début du clip pour

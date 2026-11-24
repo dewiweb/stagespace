@@ -1,4 +1,4 @@
-/// Math des courbes du score — miroir de `sample_curve` (score.rs) :
+/// Math des courbes du score — miroir de `sample_curve` (commands/score/) :
 /// mêmes règles de clamp et d'interpolation pour que le ghost editor
 /// et le backend évaluent la même chose.
 import type { ScoreKeyframe } from '../store/useScoreStore';
