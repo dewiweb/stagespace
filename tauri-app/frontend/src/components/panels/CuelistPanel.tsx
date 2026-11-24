@@ -49,8 +49,9 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
   const signalNodes = useSignalGraphStore((s) => s.nodes);
   const signalEdges = useSignalGraphStore((s) => s.edges);
 
-  const handleStoreCue = async () => {
-    if (!newCueName.trim()) return;
+  const handleStoreCue = async (autoName?: string) => {
+    const name = newCueName.trim() || autoName;
+    if (!name) return;
     const slot = moveSlots.find((s) => s.id === editingSlotId);
     const graphJson = { nodes, edges };
 
@@ -74,7 +75,7 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
     });
 
     const cueData = {
-      name: newCueName.trim(),
+      name,
       description: '',
       graph: graphJson,
       macros: {
@@ -172,11 +173,18 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
           className="w-14 flex-shrink-0 px-1.5 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-white text-right font-mono focus:outline-none focus:border-purple-500"
         />
         <button
-          onClick={handleStoreCue}
+          onClick={() => handleStoreCue()}
           disabled={!newCueName.trim()}
           className="flex-shrink-0 px-2 py-1 text-xs bg-purple-700 hover:bg-purple-600 text-white rounded disabled:opacity-30 font-medium"
         >
           ★ Store
+        </button>
+        <button
+          onClick={() => handleStoreCue(`Cue ${cues.length + 1}`)}
+          className="flex-shrink-0 px-2 py-1 text-xs bg-purple-900/70 hover:bg-purple-700 text-purple-200 rounded font-medium active:scale-95"
+          title={`Capture instantanée — stocke l'état en « Cue ${cues.length + 1} » (renommable après)`}
+        >
+          ⚡
         </button>
       </div>
       )}
