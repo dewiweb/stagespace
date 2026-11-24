@@ -256,7 +256,7 @@ export const ScoreCurvePane: React.FC<{
         style={{ flexGrow: 1 - paramFrac, flexBasis: 0 }}
       >
         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">
-          Éditeur — {!selGlobal && !selObjLane && !selClip
+          Éditeur — {!selClip && !selLaneIsGlobalFx && !selLaneIsMod && !selLaneIsSpatialFx && !selObjLane
             ? 'dopesheet'
             : selGlobal || (effParam === 'clip' ? selClipLabel ?? 'clip' : effParam)}
         </span>
