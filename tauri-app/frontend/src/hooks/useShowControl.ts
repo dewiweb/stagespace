@@ -4,6 +4,7 @@
 import { useEffect } from 'react';
 import { safeListen } from '../utils/tauri';
 import { useCuelistStore } from '../store/useCuelistStore';
+import { useScoreStore } from '../store/useScoreStore';
 import { doGo, doCueNext, doCuePrev, doCueRecall, doCueArm, doCueGo, doMacro, doTcChase, doTcFps, doPanic, doStop, doPark, doUnpark, doArm, doStatus, doSlot, doSlotStop, doSolo, doUnsolo, doSetPosition, doClearPosition, doClearAllPositions, doSetTrackPosition, doSoundcheck, doThrow, doSpatial, doAttention, doGesture, doRehearsal, doView, doShowLoad } from '../utils/liveActions';
 import type { ShowCommand } from '../types/generated/ShowCommand';
 
@@ -84,7 +85,12 @@ export function useShowControl() {
             case 'Timecode':
               if (cmd.value != null) {
                 useCuelistStore.getState().handleTimecode(cmd.value);
+                // Chase score — no-op interne si le flag est off.
+                useScoreStore.getState().chaseTimecode(cmd.value);
               }
+              break;
+            case 'ScoreChase':
+              if (cmd.value != null) useScoreStore.getState().setTcChase(Boolean(cmd.value));
               break;
             case 'Soundcheck':
               doSoundcheck(cmd.value ?? 'start');

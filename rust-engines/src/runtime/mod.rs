@@ -66,6 +66,13 @@ pub struct Runtime {
     /// y écrit les deltas `param:` de la signal_fn à chaque frame ; les
     /// closures lisent leurs slots par index (base + delta, sans lock).
     param_slots: Arc<Mutex<Arc<crate::param_slots::ParamSlots>>>,
+    /// Contributions externes aux slots `param:` — `(node_key, param_key)`
+    /// → delta additif, sommé avec les deltas du signal graph à chaque
+    /// frame (même sémantique : base + delta, aucun hold — une source
+    /// qui cesse d'écrire voit le param revenir à sa base au frame
+    /// suivante). Canal des courbes de score / automation ; écrit par
+    /// n'importe quel thread, relu sous le lock signal par le worker.
+    external_param_deltas: Arc<Mutex<HashMap<(String, String), f64>>>,
     /// Buffer de positions — le worker écrit ses positions (world-space)
     /// à chaque frame ; le MergeRuntime lit tous les buffers pour faire
     /// le merge + post-processing + envoi via le sink.
@@ -76,8 +83,8 @@ pub struct Runtime {
     /// Le worker thread lit cette valeur à chaque frame au lieu de capturer
     /// la duration dans sa closure.
     duration_ms: Arc<std::sync::atomic::AtomicU64>,
-    /// Offset temporel (seek timecode) — ajouté au temps virtuel à
-    /// chaque frame, avant le modulo de boucle.
+    /// Offset temporel (seek timecode) — déplacement additif sur le
+    /// temps virtuel à chaque frame, avant le modulo de boucle.
     time_offset_secs: Arc<std::sync::atomic::AtomicU64>,
     /// OSC ids du move — hot-swappable en live via set_osc_ids.
     /// Le worker thread lit cette valeur à chaque frame pour savoir
@@ -93,6 +100,41 @@ pub struct Runtime {
     osc_values: crate::signal_compiler::SignalOscSource,
     /// Handle du thread de playback — join propre dans stop()
     thread_handle: Mutex<Option<std::thread::JoinHandle<()>>>,
+}
+
+/// Horloge virtuelle du move — phase ACCUMULÉE : `phase += dt × speed`.
+///
+/// `speed` est le RYTHME d'avancée du temps virtuel (rate), pas une
+/// rescale du temps écoulé (`t_real × speed`) : un changement de speed
+/// — fader live, courbe de clip score, audio mod — est un accelerando
+/// continu, pas un saut de position sur la trajectoire. Une courbe de
+/// speed descendante ralentit au lieu de rembobiner le move.
+///
+/// `offset` (seek TC / spanning de clip) reste un déplacement additif
+/// appliqué avant le modulo de boucle — inchangé.
+struct VirtualClock {
+    phase: f64,
+    last_t: f64,
+}
+
+impl VirtualClock {
+    fn new() -> Self {
+        Self {
+            phase: 0.0,
+            last_t: 0.0,
+        }
+    }
+
+    /// Avance l'horloge au temps réel `t` avec la vitesse effective —
+    /// retourne le temps virtuel (`phase + offset`). La phase est
+    /// clampée ≥ 0 : un speed négatif rembobine le move jusqu'à t=0
+    /// puis le fige — jamais de t négatif aux engines.
+    fn advance(&mut self, t: f64, speed: f64, offset: f64) -> f64 {
+        let dt = (t - self.last_t).max(0.0);
+        self.last_t = t;
+        self.phase = (self.phase + dt * speed).max(0.0);
+        (self.phase + offset).max(0.0)
+    }
 }
 
 impl Runtime {
@@ -127,6 +169,7 @@ impl Runtime {
             audio_param_overrides: Arc::new(Mutex::new(HashMap::new())),
             held_positions: Arc::new(Mutex::new(HashMap::new())),
             param_slots: Arc::new(Mutex::new(crate::param_slots::ParamSlots::empty())),
+            external_param_deltas: Arc::new(Mutex::new(HashMap::new())),
             position_buffer: Mutex::new(None),
             duration_ms: Arc::new(std::sync::atomic::AtomicU64::new(4000)),
             osc_ids_arc: Arc::new(std::sync::RwLock::new(Vec::new())),
@@ -148,8 +191,8 @@ impl Runtime {
         *self.osc_ids_arc.write().unwrap_or_else(|e| e.into_inner()) = osc_ids;
     }
 
-    /// Offset temporel en secondes — le temps virtuel devient
-    /// `t*speed + offset` (seek TC sur le snapshot d'une cue).
+    /// Offset temporel en secondes — ajouté au temps virtuel
+    /// (phase intégrée + offset, seek TC sur le snapshot d'une cue).
     pub fn set_time_offset(&self, secs: f64) {
         self.time_offset_secs
             .store(secs.to_bits(), Ordering::Relaxed);
@@ -468,6 +511,15 @@ impl Runtime {
         self.macros.clone()
     }
 
+    /// Handle sur les deltas `param:` externes — les contributions
+    /// `(node_key, param_key) → delta` y sont relues à chaque frame et
+    /// sommées avec celles du signal graph dans `ParamSlots::apply_frame`.
+    /// Le writer (score, automation) garde la clé stable `__fe_id` —
+    /// elle survit aux recompiles tant que le graphe garde le même node.
+    pub fn param_deltas(&self) -> Arc<Mutex<HashMap<(String, String), f64>>> {
+        self.external_param_deltas.clone()
+    }
+
     pub fn set_loop_mode(&self, mode: LoopMode) {
         self.config.set_loop_mode(mode);
     }
@@ -546,6 +598,7 @@ impl Runtime {
         let audio_state_arc = self.audio_state.clone();
         let audio_param_overrides_arc = self.audio_param_overrides.clone();
         let param_slots_arc = self.param_slots.clone();
+        let external_deltas_arc = self.external_param_deltas.clone();
         let signal_fn_arc = self.signal_fn.clone();
         let osc_values_arc = self.osc_values.clone();
 
@@ -562,6 +615,7 @@ impl Runtime {
             }
             let _clear_running = ClearRunning(running.clone());
 
+            let mut vclock = VirtualClock::new();
             let start = Instant::now();
             let frame_duration = Duration::from_secs_f64(1.0 / params.fps);
             let mut frame_count = 0u64;
@@ -630,7 +684,7 @@ impl Runtime {
                         // catch_unwind : un panic dans le signal graph ne doit
                         // pas tuer le worker (seul les evals de position
                         // étaient protégés avant).
-                        let deltas =
+                        let mut deltas =
                             match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                                 (*signal)(&crate::signal_compiler::SignalCtx {
                                     t: t_real,
@@ -647,6 +701,25 @@ impl Runtime {
                                     crate::signal_compiler::SignalOutput::default()
                                 }
                             };
+                        // Contributions externes (score curves / automation) —
+                        // résolues (node_key,param_key) → idx sous le MÊME lock
+                        // que `slots` : le swap d'un recompile ne peut pas
+                        // produire un idx obsolète. Mêmes deltas additifs, même
+                        // "pas de hold" qu'une source signal absente.
+                        {
+                            let ext = external_deltas_arc
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner());
+                            if !ext.is_empty() {
+                                for ((nk, pk), v) in ext.iter() {
+                                    if v.is_finite() {
+                                        if let Some(idx) = slots.slot_of(nk, pk) {
+                                            deltas.slot_deltas.push((idx, *v));
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         // Deltas de slots : zero → somme des deltas finis →
                         // bump generation (les caches de params patchés
                         // rebuild au plus 1×/frame). Aucun hold : un delta
@@ -724,13 +797,14 @@ impl Runtime {
                 let eff_pitch = pitch + audio_param_overrides.get("pitch").copied().unwrap_or(0.0);
                 let eff_roll = roll + audio_param_overrides.get("roll").copied().unwrap_or(0.0);
 
-                // Recalculer le temps virtuel avec le speed effectif
-                // (audio-modulé) — même clamp >= 0 que ci-dessus
-                // Offset temporel (seek timecode) — ajouté au temps
-                // virtuel avant le modulo de boucle.
-                let t_virtual_eff = (t_real * effective_speed
-                    + f64::from_bits(time_offset_arc.load(Ordering::Relaxed)))
-                .max(0.0);
+                // Temps virtuel = phase intégrée du speed effectif
+                // (audio-modulé) + offset temporel (seek timecode) —
+                // avant le modulo de boucle.
+                let t_virtual_eff = vclock.advance(
+                    t_real,
+                    effective_speed,
+                    f64::from_bits(time_offset_arc.load(Ordering::Relaxed)),
+                );
                 let t_eff = if loop_is_on && duration > 0.0 {
                     let t_mod = t_virtual_eff % duration;
                     // Appliquer la direction (Forward/Backward/PingPong)

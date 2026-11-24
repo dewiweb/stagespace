@@ -639,6 +639,71 @@ fn test_signal_fn_eval_and_hot_swap() {
 }
 
 #[test]
+fn test_signal_osc_reads_score_modulation_source() {
+    // Chaîne score MODULATION e2e : la lane écrit `name → [v]` dans la
+    // map OSC via `osc_values_source()` (même handle que le receiver) ;
+    // SignalOsc(name) la lit → SignalMap → SignalOut produit le delta.
+    // Sans ce test, une régression du handle externe casserait la
+    // modulation du score en silence (map vide → 0 partout).
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+
+    // SignalOsc("/score/energy") → SignalMap(0..1 → -0.5..0.5) →
+    // SignalOut("scale", amount 1) — la valeur score devient un delta
+    // de macro global.
+    let mut g = crate::graph::Graph::new();
+    let osc = crate::graph::Node::with_params(
+        crate::graph::NodeType::SignalOsc,
+        serde_json::json!({"name": "/score/energy", "index": 0}),
+    );
+    let map = crate::graph::Node::with_params(
+        crate::graph::NodeType::SignalMap,
+        serde_json::json!({"in_min": 0.0, "in_max": 1.0, "out_min": -0.5, "out_max": 0.5}),
+    );
+    let out = crate::graph::Node::with_params(
+        crate::graph::NodeType::SignalOut,
+        serde_json::json!({"target": "scale", "amount": 1.0}),
+    );
+    g.add_node(osc.clone());
+    g.add_node(map.clone());
+    g.add_node(out.clone());
+    g.add_edge(crate::graph::Edge {
+        from: osc.id,
+        to: map.id,
+        from_port: "out".to_string(),
+        to_port: "signal".to_string(),
+    });
+    g.add_edge(crate::graph::Edge {
+        from: map.id,
+        to: out.id,
+        from_port: "out".to_string(),
+        to_port: "signal".to_string(),
+    });
+    rt.swap_signal_fn(crate::signal_compiler::compile_signal_graph(&g).unwrap());
+
+    // Écriture type `eval_curves` (score.rs) : nom → [v] dans la map.
+    let source = rt.osc_values_source();
+    let map_handle = source.read().unwrap().clone();
+    map_handle
+        .lock()
+        .unwrap()
+        .insert("/score/energy".to_string(), vec![0.8]);
+
+    // 0.8 → map : -0.5 + 0.8·(0.5-(-0.5))/(1-0) = 0.3 → delta scale.
+    let d = rt.eval_signal_deltas(0.0, 1.0 / 60.0);
+    assert!((d.get("scale").copied().unwrap_or(0.0) - 0.3).abs() < 1e-9);
+
+    // Score à 0 → 0 → map : -0.5 (in_min → out_min) — la valeur
+    // écrite est relue à chaque eval, pas de hold.
+    map_handle
+        .lock()
+        .unwrap()
+        .insert("/score/energy".to_string(), vec![0.0]);
+    let d = rt.eval_signal_deltas(0.0, 1.0 / 60.0);
+    assert!((d.get("scale").copied().unwrap_or(0.0) + 0.5).abs() < 1e-9);
+}
+
+#[test]
 fn test_signal_deltas_reach_sink_e2e() {
     // End-to-end : un delta `scale +1` du graph signal doit doubler les
     // positions en sortie du merge (scale effective = base 1 + delta 1).
@@ -1598,5 +1663,18 @@ fn test_park_holds_position_and_unpark_releases() {
         "unpark doit libérer le hold seedé par park"
     );
 
+    rt.stop();
+}
+
+#[test]
+fn test_set_track_depth_pads_with_default() {
+    // set_track_depth etend le vecteur a 1.0 (la valeur par defaut
+    // quand l'index est absent — helpers.rs unwrap_or(1.0)).
+    let sender = OscSender::new(OscProfile::GenericCartesian, "127.0.0.1".to_string(), 7000);
+    let mut rt = MergeRuntime::new("127.0.0.1".to_string(), 7000, sender, 60.0).unwrap();
+    rt.set_track_depth(2, 0.4);
+    assert_eq!(rt.track_depths(), vec![1.0, 1.0, 0.4]);
+    rt.set_track_depth(0, 0.9);
+    assert_eq!(rt.track_depths(), vec![0.9, 1.0, 0.4]);
     rt.stop();
 }

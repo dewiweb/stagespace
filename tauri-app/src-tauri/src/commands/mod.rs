@@ -11,4 +11,5 @@ pub mod plugins;
 pub mod presets;
 pub mod remote_ui;
 pub mod sampling;
+pub mod score;
 pub mod state;

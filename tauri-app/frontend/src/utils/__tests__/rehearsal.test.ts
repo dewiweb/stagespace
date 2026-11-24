@@ -1,55 +1,116 @@
 /// <reference types="vitest/globals" />
 import { describe, expect, it, beforeEach } from 'vitest';
 import { doRehearsal, doSlot } from '../liveActions';
+import { recordingToScore } from '../recordingToScore';
+import { rehearsalState } from '../liveActionsShared';
+import { useScoreStore } from '../../store/useScoreStore';
 import { useGraphStore, getInvokeCalls, clearInvokeCalls, resetStore } from '../../store/__tests__/testHelpers';
 
-// P1.12 : 'clear' doit annuler TOUS les timers de la bande — avant, un
-// seul playTimer était écrasé en boucle et la bande continuait de tirer
-// dans le show après annulation.
-const slot = (id: string) =>
+// Recorder → Score : la capture busking est matérialisée en clips/courbes
+// de la timeline (refs vivantes — pas de tape parallèle). Le transport
+// reste `score_timeline_*` (backend-owned, déterministe).
+const slot = (id: string, oscIndex = 1) =>
   ({
-    id, name: id, oscIndex: 1, templateId: 'circle',
+    id, name: id, oscIndex, templateId: 'circle',
     graphJson: null, signalGraph: null, trackIds: [1],
     movementId: null, isPreview: false,
   }) as never;
 
 const settle = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-describe('rehearsal replay', () => {
+describe('rehearsal — recorder → clips Score', () => {
   beforeEach(() => {
     resetStore();
     clearInvokeCalls();
-    doRehearsal('clear'); // purge l'état module entre les tests
-    useGraphStore.setState({ moveSlots: [slot('s1')] } as never);
+    rehearsalState.recording = false;
+    rehearsalState.entries = [];
+    useScoreStore.getState().clearScore();
+    useGraphStore.setState({ moveSlots: [slot('s1', 1), slot('s2', 2)], manualOscIds: [1, 2] } as never);
   });
 
-  it('play sans clear → la bande rejoue les commandes', async () => {
+  it('stop matérialise la prise : un doSlot devient un clip slot', async () => {
     doRehearsal('record');
-    doSlot(1); // enregistré via rec() + joue (activate_move)
+    doSlot(1);
     doRehearsal('stop');
-    clearInvokeCalls();
-
-    doRehearsal('play');
-    await settle(150);
-    expect(getInvokeCalls().map((c) => c.cmd)).toContain('activate_move');
-    doRehearsal('clear');
+    await settle(50);
+    const clips = useScoreStore.getState().clips;
+    expect(clips).toHaveLength(1);
+    expect(clips[0].ref).toEqual({ type: 'slot', slotId: 's1' });
+    // Pas de stop enregistré → clip refermé à la fin de la prise (1ms min).
+    expect(clips[0].durationMs).toBeGreaterThan(0);
   });
 
-  it('clear annule TOUS les timers — aucun tir ne part après', async () => {
+  it('play délègue au transport timeline (playScore)', async () => {
     doRehearsal('record');
     doSlot(1);
-    doSlot(1);
+    doRehearsal('stop');
+    await settle(50);
+    clearInvokeCalls();
+    doRehearsal('play');
+    await settle(80);
+    const calls = getInvokeCalls().map((c) => c.cmd);
+    expect(calls).toContain('score_timeline_load');
+    expect(calls).toContain('score_timeline_play');
+    expect(calls).not.toContain('score_play');
+  });
+
+  it('clear vide la partition score', () => {
+    doRehearsal('record');
     doSlot(1);
     doRehearsal('stop');
-    // Les playSlot ENREGISTRÉS sont async (build du graphe) — leur invoke
-    // tomberait après clearInvokeCalls et ferait croire à un replay.
-    await settle(150);
-    clearInvokeCalls();
-
-    // play + clear synchrones : les timers ne peuvent pas s'intercaler.
-    doRehearsal('play');
+    expect(useScoreStore.getState().clips.length).toBe(1);
     doRehearsal('clear');
-    await settle(200);
-    expect(getInvokeCalls().map((c) => c.cmd)).not.toContain('activate_move');
+    expect(useScoreStore.getState().clips.length).toBe(0);
+  });
+});
+
+describe('recordingToScore — appariement et conversion', () => {
+  beforeEach(() => {
+    rehearsalState.recording = false;
+  });
+
+  it('slot joué puis stoppé → clip borné ; panic ferme les clips ouverts', () => {
+    const take = recordingToScore([
+      { t: 100, name: 'doSlot', args: [1], ref: { slotId: 's1' } },
+      { t: 4000, name: 'doSlotStop', args: [1], ref: { slotId: 's1' } },
+      { t: 5000, name: 'doSlot', args: [2], ref: { slotId: 's2' } },
+      { t: 8000, name: 'doPanic', args: [] },
+    ]);
+    expect(take.clips).toHaveLength(3);
+    expect(take.clips[0].durationMs).toBe(3900);
+    expect(take.clips[1].durationMs).toBe(3000); // fermé par le panic
+    expect(take.clips[2].ref.type).toBe('panic');
+  });
+
+  it('cue et gestes deviennent des clips typés ; positions → courbes pos.*', () => {
+    const take = recordingToScore([
+      { t: 0, name: 'doCueRecallById', args: [], ref: { cueId: 'c1' } },
+      { t: 1000, name: 'doPark', args: [0], ref: { trackId: 3 } },
+      { t: 1500, name: 'doSetPosition', args: [0, 1, 2, 3], ref: { positions: { 3: [1, 2, 3] } } },
+      { t: 1600, name: 'doSetPosition', args: [0, 2, 2, 3], ref: { positions: { 3: [2, 2, 3] } } },
+      { t: 2000, name: 'doGesture', args: [2.5], ref: { macro: 'explode', strength: 2.5 } },
+    ]);
+    expect(take.clips.map((c) => c.ref.type)).toEqual(['cue', 'park', 'gesture']);
+    expect(take.clips[1].trackIds).toEqual([3]);
+    // Le drag → trajectoire keyframée sur la lane obj-3.
+    expect(take.objectCurves['obj-3']['pos.x']).toEqual([
+      { t: 1500, v: 1, interp: 'linear' },
+      { t: 1600, v: 2, interp: 'linear' },
+    ]);
+    expect(take.objectCurves['obj-3']['pos.z']).toEqual([
+      { t: 1500, v: 3, interp: 'linear' },
+      { t: 1600, v: 3, interp: 'linear' },
+    ]);
+  });
+
+  it('macros → courbes globalfx ; spatial → courbe spatialfx ; inconnus → skipped', () => {
+    const take = recordingToScore([
+      { t: 0, name: 'doMacro', args: [1.5], ref: { macro: 'scale' } },
+      { t: 500, name: 'doSpatial', args: [0.8], ref: { macro: 'spatial' } },
+      { t: 600, name: 'doSetTrackPosition', args: [1, 0, 0, 0] },
+    ]);
+    expect(take.globalFx.scale).toEqual([{ t: 0, v: 1.5, interp: 'linear' }]);
+    expect(take.spatialFx.spatial).toEqual([{ t: 500, v: 0.8, interp: 'linear' }]);
+    expect(take.skipped).toEqual(['doSetTrackPosition']);
   });
 });

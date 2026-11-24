@@ -150,6 +150,18 @@ impl MergeRuntime {
         *self.track_depths.write().unwrap_or_else(|e| e.into_inner()) = Arc::new(depths);
     }
 
+    /// Définit la depth d'une track — read-modify-write sur le vecteur
+    /// (padding à 1.0, la valeur par défaut quand l'index est absent).
+    pub fn set_track_depth(&self, index: usize, value: f64) {
+        let mut guard = self.track_depths.write().unwrap_or_else(|e| e.into_inner());
+        let mut depths = (**guard).clone();
+        if index >= depths.len() {
+            depths.resize(index + 1, 1.0);
+        }
+        depths[index] = value;
+        *guard = Arc::new(depths);
+    }
+
     /// Depths par track courantes — snapshoté par store_cue (le runtime
     /// détient la vérité, pas le frontend).
     pub fn track_depths(&self) -> Vec<f64> {
@@ -182,6 +194,16 @@ impl MergeRuntime {
     /// receiver avec `OscReceiver::address_values_handle()`.
     pub fn set_osc_values_handle(&self, handle: crate::compiler::OscValueMap) {
         *self.osc_values.write().unwrap_or_else(|e| e.into_inner()) = handle;
+    }
+
+    /// Handle externe `SignalOscSource` — le read lock donne la map
+    /// COURANTE : une écriture via ce handle suit les rebinds du
+    /// receiver (contrairement à `address_values_handle()` capturé une
+    /// fois). Utilisé par le score timeline pour injecter des valeurs
+    /// nommées dans le domaine de modulation (`SignalOsc` les lit
+    /// comme n'importe quelle source OSC).
+    pub fn osc_values_source(&self) -> crate::signal_compiler::SignalOscSource {
+        self.osc_values.clone()
     }
 
     /// Évalue la `SignalFn` courante hors boucle — diagnostic/test :

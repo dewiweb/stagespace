@@ -18,7 +18,7 @@ import ContextMenu from '../ui/ContextMenu';
 ///
 /// Workflow:
 ///   1. "+ Move" → nouveau slot (template + tracks)
-///   2. Configurer template + tracks + macros
+///   2. Configurer template + tracks + transform
 ///   3. ▶ Play → lance ce move (live, parallèle possible)
 ///   4. ★ Add to setlist → ajoute à l'ordre du spectacle
 ///   5. GO → stoppe les moves actifs + lance le prochain move de la setlist
@@ -122,11 +122,11 @@ export default function MovesTable() {
   const [renamingId, setRenamingId] = React.useState<string | null>(null);
   const [tempName, setTempName] = React.useState('');
 
-  // ─── Macros editor (modal inline) ───
-  const [editingMacrosFor, setEditingMacrosFor] = React.useState<string | null>(null);
+  // ─── Transform editor (modal inline) ───
+  const [editingTransformFor, setEditingTransformFor] = React.useState<string | null>(null);
 
   // Bloque les raccourcis live (Esc=panic, Space, Enter, Backspace) tant
-  // qu'un éditeur inline est ouvert. Les pickers tracks/macros utilisent
+  // qu'un éditeur inline est ouvert. Les pickers tracks/transform utilisent
   // le composant Modal qui s'enregistre lui-même dans la stack — seuls
   // le rename et le template picker (inline) passent par ce guard.
   const anyModalOpen = editingTemplateFor !== null || renamingId !== null;
@@ -138,7 +138,7 @@ export default function MovesTable() {
 
   // ─── GO feedback ───
   const [goFeedback, setGoFeedback] = React.useState<{ ok: boolean; message: string } | null>(null);
-  // Confirmation avant delete — le slot contient graphe+tracks+macros, non
+  // Confirmation avant delete — le slot contient graphe+tracks+transform, non
   // récupérable (l'undo ne couvre pas removeMoveSlot).
   const [pendingDeleteSlot, setPendingDeleteSlot] = React.useState<{ id: string; name: string } | null>(null);
   // Menu clic-droit sur une ligne — Duplicate/Delete (édition).
@@ -489,14 +489,14 @@ export default function MovesTable() {
                           ><RefreshCw size={10} /></button>
                         )}
                         <button
-                          onClick={() => { selectSlotForEditing(slot.id); setEditingMacrosFor(slot.id); }}
+                          onClick={() => { selectSlotForEditing(slot.id); setEditingTransformFor(slot.id); }}
                           className="text-gray-400 hover:text-gray-200 text-xs px-1 rounded hover:bg-gray-700/30"
-                          title="Macros (speed, scale, shift, rotation)"
+                          title="Transform (speed, scale, shift, rotation)"
                         ><SlidersHorizontal size={10} /></button>
                         <button
                           onClick={(e) => { e.stopPropagation(); duplicateMoveSlot(slot.id); }}
                           className="text-gray-400 hover:text-gray-200 text-xs px-1 rounded hover:bg-gray-700/30"
-                          title="Duplicate — clone graph, tracks and macros into a new slot"
+                          title="Duplicate — clone graph, tracks and transform into a new slot"
                         ><Copy size={10} /></button>
                         <button
                           onClick={(e) => { e.stopPropagation(); setPendingDeleteSlot({ id: slot.id, name: slot.name }); }}
@@ -568,14 +568,14 @@ export default function MovesTable() {
         </Modal>
       )}
 
-      {/* ═══ Macros Editor Modal ═══ */}
-      {editingMacrosFor && (() => {
-        const slot = moveSlots.find((s) => s.id === editingMacrosFor);
+      {/* ═══ Transform Editor Modal ═══ */}
+      {editingTransformFor && (() => {
+        const slot = moveSlots.find((s) => s.id === editingTransformFor);
         if (!slot) return null;
         return (
           <Modal
-            title={`Macros — ${slot.name}`}
-            onClose={() => setEditingMacrosFor(null)}
+            title={`Transform — ${slot.name}`}
+            onClose={() => setEditingTransformFor(null)}
             widthClass="max-w-sm"
           >
             <div className="p-4">
@@ -618,7 +618,7 @@ export default function MovesTable() {
                 </div>
               </div>
               <button
-                onClick={() => setEditingMacrosFor(null)}
+                onClick={() => setEditingTransformFor(null)}
                 className="w-full mt-4 py-1.5 bg-indigo-700 hover:bg-indigo-600 text-white text-xs rounded font-medium"
               >Close</button>
             </div>
@@ -677,7 +677,7 @@ export default function MovesTable() {
             <>
               Delete <span className="text-white font-semibold">« {pendingDeleteSlot.name} »</span> ?
               <br />
-              <span className="text-gray-500">Slot graph, tracks and macros are lost — cannot be recovered.</span>
+              <span className="text-gray-500">Slot graph, tracks and transform are lost — cannot be recovered.</span>
             </>
           }
           onConfirm={() => {

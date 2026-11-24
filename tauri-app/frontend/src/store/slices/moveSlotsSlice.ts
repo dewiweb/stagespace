@@ -35,7 +35,11 @@ export interface MoveSlotsSlice {
   /// Clone graphe+tracks+macros d'un slot — inséré juste après la source,
   /// sélectionné pour édition ("Move N copy"). Pas dans la setlist :
   /// l'ordre du spectacle reste un choix délibéré.
-  duplicateMoveSlot: (id: string) => void;
+  /// Clone un slot (deep — graphe indépendant). `opts` : nom
+  /// custom, assignation `trackIds` du clone, `select: false` pour
+  /// ne pas déplacer la sélection d'édition. Retourne le nouvel id.
+  duplicateMoveSlot: (id: string, opts?: { name?: string; trackIds?: number[]; select?: boolean }) => string | undefined;
+  insertMoveSlots: (slots: MoveSlot[]) => string[];
   removeMoveSlot: (id: string) => void;
   renameMoveSlot: (id: string, name: string) => void;
   setSlotTemplate: (id: string, templateId: string) => void;

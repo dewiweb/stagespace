@@ -1,5 +1,7 @@
 import React from 'react';
 import { useGraphStore } from '../store/useGraphStore';
+import { useMoveEditorStore } from '../store/useMoveEditorStore';
+import { useScoreStore } from '../store/useScoreStore';
 import { toast } from '../utils/toast-helpers';
 import { doGo, doCueNext, doCuePrev, doToggleSelectedSlot } from '../utils/liveActions';
 import { doSetPosition } from '../utils/liveActionsSpatial';
@@ -128,6 +130,21 @@ export function useLiveShortcuts() {
               if (parsed) doSetPosition(obj, parsed[0], parsed[1], parsed[2]);
             })
             .catch(() => {});
+        }
+        return;
+      }
+
+      // Surface Score — le séquenceur a son propre domaine : Space pilote
+      // SON transport (pas le slot Atelier) ; undo graphe (Ctrl+Z) et les
+      // conduites-busking (Enter/Backspace = GO/cue) agiraient sur le
+      // mauvais domaine depuis cette vue : bloqués. Esc/panic et les
+      // accélérateurs fichier restent globaux (déjà traités au-dessus).
+      if (useMoveEditorStore.getState().surface === 'score') {
+        if (e.key === ' ') {
+          e.preventDefault();
+          const ss = useScoreStore.getState();
+          if (ss.playing) ss.stopScore();
+          else void ss.playScore();
         }
         return;
       }

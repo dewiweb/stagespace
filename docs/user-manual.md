@@ -588,7 +588,18 @@ engines. SDK: `plugin-sdk/` + `plugin-examples/`.
 
 ## H. Monitoring panels
 
-- **Score** — score/timeline of the show's cues and events.
+- **Score** — the multitrack sequencer surface: clip timeline (move
+  slots, cues, markers per lane), automation curves, transport
+  (play/seek/loop/TC chase). Ruler interactions: drag = scrub
+  (works while playing), loop region edges + body draggable,
+  named markers (`M` drop, drag, right-click rename/delete,
+  `,`/`.` navigate). Keyboard: `Home`/`End` bounds, `←`/`→` nudge
+  at snap step (`Shift` ×10), `L` loop, `I`/`O` loop bounds at
+  cursor, `S` split clip. Snap step selector (`libre`→`1s`), zoom,
+  follow auto-scroll. Clip inspector: envelope (draggable
+  fade-in/tail handles), slot playback params (editable when
+  stopped, amber "applies at next play" indicator when the slot
+  changes during playback).
 - **Log** — history of show commands (GUI + received OSC `/stagespace/*`) —
   each entry timestamped. The **CONSOLE ●** indicator reflects activity.
 - **Audio** — audio capture state (device, level, detected BPM).

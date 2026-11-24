@@ -42,6 +42,9 @@ pub const EVENTS: &[&str] = &[
     "show-log",
     "show-state-changed",
     "timers:cancel",
+    "score-timeline",
+    "score-nack",
+    "score-live-action",
 ];
 
 pub const ENV_BIND: &str = "STAGESPACE_BRIDGE_BIND";
@@ -228,9 +231,17 @@ pub fn ipc_dispatch<R: Runtime>(
     webview: WebviewWindow<R>,
     invoke_key: String,
 ) -> Result<Dispatch, String> {
-    let url: tauri::Url = "tauri://localhost"
-        .parse()
-        .map_err(|e| format!("bridge url parse: {e}"))?;
+    // Origine "locale" attendue par `is_local_url` : `http://tauri.localhost`
+    // sous Windows/Android (custom protocol = http://<name>.localhost),
+    // `tauri://localhost` ailleurs. Une URL non-locale bascule l'origine en
+    // Remote → le gate ACL refuse toutes les commandes ("not allowed").
+    let url: tauri::Url = if cfg!(any(windows, target_os = "android")) {
+        "http://tauri.localhost"
+    } else {
+        "tauri://localhost"
+    }
+    .parse()
+    .map_err(|e| format!("bridge url parse: {e}"))?;
     let (job_tx, job_rx) = channel::<Job>();
     std::thread::spawn(move || {
         for job in job_rx {

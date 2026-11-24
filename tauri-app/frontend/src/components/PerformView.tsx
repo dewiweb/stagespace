@@ -13,6 +13,7 @@ import { useCuelistStore } from '../store/useCuelistStore';
 import { doSolo, doStop, doUnsolo, getSoloRestoreIds, doAttention } from '../utils/liveActions';
 import { Radar2D } from './jeu/Radar2D';
 import type { RadarView } from './jeu/Radar2D';
+import { ScoreProgress } from './jeu/ScoreProgress';
 import { GestureStrip } from './jeu/GestureStrip';
 import { isDetachedWindow } from '../utils/safeStorage';
 import { detachWindow } from '../utils/detachWindow';
@@ -237,6 +238,7 @@ export const PerformView: React.FC = () => {
               <span className="text-gray-400 truncate">{nextCue ? cueLabel(nextCue, currentCueIndex + 1) : '—'}</span>
             </span>
           )}
+          <ScoreProgress />
           {goFeedback && (
             <span
               className={`text-sm font-bold animate-pulse truncate ${

@@ -102,6 +102,7 @@ export async function initShowSync() {
   const { useCuelistStore } = await import('../store/useCuelistStore');
   const { useGlobalGraphStore } = await import('../store/useGlobalGraphStore');
   const { useSignalGraphStore } = await import('../store/useSignalGraphStore');
+  const { useScoreStore } = await import('../store/useScoreStore');
 
   // Mutations locales → push débouncé — enregistrées EN PREMIER : si le
   // listen échoue, pousser doit quand même marcher (sync sortante saine).
@@ -116,6 +117,21 @@ export async function initShowSync() {
   });
   useSignalGraphStore.subscribe((s, p) => {
     if (s.nodes !== p.nodes || s.edges !== p.edges) schedulePush();
+  });
+  // Doc score = contenu de show — le transport (playing/cursorMs) ne
+  // pousse pas, il est runtime.
+  useScoreStore.subscribe((s, p) => {
+    if (
+      s.clips !== p.clips ||
+      s.laneStates !== p.laneStates ||
+      s.durationMs !== p.durationMs ||
+      s.loopStartMs !== p.loopStartMs ||
+      s.loopEndMs !== p.loopEndMs ||
+      s.globalFxCurves !== p.globalFxCurves ||
+      s.modulationCurves !== p.modulationCurves ||
+      s.objectCurves !== p.objectCurves ||
+      s.spatialFxCurves !== p.spatialFxCurves
+    ) schedulePush();
   });
 
   // Fin du jeu → rejouer un pull bloqué (apply refusé pendant playback).

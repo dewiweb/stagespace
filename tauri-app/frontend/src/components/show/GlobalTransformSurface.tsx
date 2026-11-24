@@ -2,7 +2,9 @@ import React from 'react';
 import { useGraphStore } from '../../store/useGraphStore';
 import { Slider } from '../ui/Slider';
 
-/// Surface de macros GLOBALES (merge — affecte tous les moves live).
+/// Surface GLOBAL TRANSFORM — macros du merge (affecte tous les moves live).
+/// Taxonomie app : « Global transform » = scope merge (MacroScope::Global),
+/// symétrique du « Transform » per-move des slots.
 /// Une seule implémentation pour les 4 anciennes surfaces (Inspector ×3,
 /// MacrosPanel, PerformView Global) : mêmes plages, même accent `tracking`,
 /// même pacing (debounce 100ms interne au composant).
@@ -10,7 +12,7 @@ import { Slider } from '../ui/Slider';
 /// Plages = union des valeurs qui existaient (aucune fonctionnalité perdue) :
 /// scale 0.1-4 · speed 0-4 · shift ±10 · rotation ±180 · radius 0.1-3 ·
 /// height ±5.
-export const MacrosSurface: React.FC<{
+export const GlobalTransformSurface: React.FC<{
   /// Afficher aussi radius_scale/height_offset (le merge global les connaît).
   includeRadius?: boolean;
   /// 'stack' = label+valeur au-dessus (overlays), 'row' = labels à gauche.
@@ -67,4 +69,4 @@ export const MacrosSurface: React.FC<{
   );
 };
 
-export default MacrosSurface;
+export default GlobalTransformSurface;

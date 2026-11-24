@@ -100,9 +100,11 @@ export async function buildShowEnvelope(s: PersistenceStore): Promise<ShowFileEn
   const { useGlobalGraphStore } = await import('../useGlobalGraphStore');
   const { useSignalGraphStore } = await import('../useSignalGraphStore');
   const { useCuelistStore } = await import('../useCuelistStore');
+  const { useScoreStore } = await import('../useScoreStore');
   const globalStore = useGlobalGraphStore.getState();
   const signalStore = useSignalGraphStore.getState();
   const cueStore = useCuelistStore.getState();
+  const scoreStore = useScoreStore.getState();
 
   // OSC IN mappings : sérialisables — sinon ils sont perdus au load.
   let oscMappings: OscMapping[] | undefined;
@@ -128,6 +130,21 @@ export async function buildShowEnvelope(s: PersistenceStore): Promise<ShowFileEn
     currentSetlistIndex: s.currentSetlistIndex,
     editingSlotId: s.editingSlotId,
     cues: cueStore.cues,
+    /// Score timeline (S2/S3) — document du séquenceur : clips +
+    /// overrides de lanes (laneStates — les lanes elles-mêmes sont
+    /// dérivées des track_ids patchés, non persistées).
+    score: {
+      laneStates: scoreStore.laneStates,
+      clips: scoreStore.clips,
+      durationMs: scoreStore.durationMs,
+      loopStartMs: scoreStore.loopStartMs,
+      loopEndMs: scoreStore.loopEndMs,
+      globalFxCurves: scoreStore.globalFxCurves,
+      modulationCurves: scoreStore.modulationCurves,
+      objectCurves: scoreStore.objectCurves,
+      spatialFxCurves: scoreStore.spatialFxCurves,
+      markers: scoreStore.markers,
+    },
     oscMappings,
     macros: s.macros,
     osc: {
@@ -188,6 +205,8 @@ export interface ShowFileEnvelope {
   currentSetlistIndex?: number;
   editingSlotId?: string | null;
   cues?: CueData[];
+  /// Document du score timeline (S2) — pistes + clips (refs).
+  score?: import('../useScoreStore').ScoreDoc;
   osc?: OscConfigData;
   spatialFx?: SpatialFxData;
   tracks?: TracksData;
@@ -420,6 +439,15 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
       useCuelistStore.setState({ cues: raw.cues, currentCueIndex: -1 });
       useCuelistStore.getState().saveToStorage();
     }
+
+    // 3b. Score timeline (S2) — document frontend : pistes + clips.
+    //     Le transport backend est arrêté AVANT de remplacer le doc :
+    //     un score qui ne jouerait que des courbes (aucun move) passerait
+    //     le garde `movements.length` et continuerait d'écrire sur le
+    //     nouveau show. `stop` est idempotent — safe même arrêté.
+    const { useScoreStore } = await import('../useScoreStore');
+    useScoreStore.getState().stopScore();
+    useScoreStore.getState().setScoreDoc(raw.score);
 
     // 3b. OSC IN mappings — clear + replay (le fichier remplace l'état).
     //     Rollback sur l'état précédent si le replay échoue à mi-parcours :

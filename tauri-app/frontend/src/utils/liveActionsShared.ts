@@ -9,17 +9,38 @@ import { emit } from '@tauri-apps/api/event';
 import { safeInvoke as invoke, silentCatch } from './tauri';
 
 /// Rehearsal capture — bande de commandes horodatée : enregistre ce
-/// que le busking fait vraiment, rejoue comme un cue live.
+/// que le busking fait vraiment, puis le convertit en CLIPS de la
+/// timeline Score (recorder → sequencer, pas de tape parallèle).
+export interface RecRef {
+  /// Slot résolu à l'enregistrement (référence vivante — le clip suit
+  /// le slot si son graphe est édité plus tard).
+  slotId?: string;
+  /// Cue résolue à l'enregistrement.
+  cueId?: string;
+  /// Objet cible en track_id (converti depuis l'obj_index de la
+  /// commande — l'identité persistante de l'objet opérateur).
+  trackId?: number | null;
+  /// Takeover de position : track_id → xyz.
+  positions?: Record<number, [number, number, number]>;
+  /// Slots à restaurer (unsolo) ou stoppés (solo).
+  slotIds?: string[];
+  /// Force d'un geste balistique.
+  strength?: number;
+  /// Vélocité d'un throw.
+  vel?: [number, number, number];
+  /// Nom de macro normalisé (clé store) ou 'spatial'.
+  macro?: string;
+}
+export interface RecEntry { t: number; name: string; args: number[]; ref?: RecRef }
 export const rehearsalState: {
   recording: boolean;
   t0: number;
-  entries: { t: number; name: string; args: number[] }[];
-  playTimers: ReturnType<typeof setTimeout>[];
-} = { recording: false, t0: 0, entries: [], playTimers: [] };
+  entries: RecEntry[];
+} = { recording: false, t0: 0, entries: [] };
 
-export function rec(name: string, args: number[] = []) {
+export function rec(name: string, args: number[] = [], ref?: RecRef) {
   if (rehearsalState.recording)
-    rehearsalState.entries.push({ t: Date.now() - rehearsalState.t0, name, args });
+    rehearsalState.entries.push({ t: Date.now() - rehearsalState.t0, name, args, ref });
 }
 
 /// Log opérationnel — le point de passage commun GUI + OSC.

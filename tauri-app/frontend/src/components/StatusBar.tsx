@@ -5,6 +5,7 @@ import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { useOscArmed } from '../hooks/useOscArmed';
 import { useShowStatusStore } from '../store/useShowStatusStore';
 import { useCuelistStore } from '../store/useCuelistStore';
+import { useScoreStore } from '../store/useScoreStore';
 import { ModChips } from './ModChips';
 import { SettingsModal } from './SettingsModal';
 import { ParkedChip, OverrideChip } from './perform/ParkedChip';
@@ -40,6 +41,7 @@ export const StatusBar: React.FC = () => {
   const manualPositions = useGraphStore((s) => s.manualPositions);
   const holProject = useGraphStore((s) => s.holProject);
   const isRecalling = useCuelistStore((s) => s.isRecalling);
+  const scorePlaying = useScoreStore((s) => s.playing);
 
   const activeCount = movements.length;
   const hasError = !!(compileError || playError);
@@ -171,6 +173,18 @@ export const StatusBar: React.FC = () => {
           </span>
         ) : null;
       })()}
+
+      {/* Score en lecture — les moves `sc-*` et les courbes qu'il écrit
+          sont sinon indiscernables d'une conduite manuelle (ou d'un bug).
+          Visible sur toutes les surfaces. */}
+      {scorePlaying && (
+        <span
+          className="px-1.5 py-0.5 rounded font-bold flex-shrink-0 text-violet-300 bg-violet-900/40 border border-violet-700/40"
+          title="Le sequencer Score joue — ses clips spawnent des moves (sc-*) et ses courbes écrivent des paramètres en live"
+        >
+          SCORE ▶
+        </span>
+      )}
 
       {/* Modulations globales actives — un graphe signal oublié qui drive
           des macros est indiscernable d'un bug de trajectoire : visible

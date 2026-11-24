@@ -313,6 +313,25 @@ impl MergeRuntime {
             .unwrap_or_else(|e| e.into_inner()) = Arc::new(Vec::new());
     }
 
+    /// Remplace la règle à `index` — édition en place : l'index est
+    /// préservé (comme `update_zone`), aucun remove+add, les autres
+    /// règles ne dérivent pas. Utilisé par les courbes du score
+    /// (`mod:<key>:<field>`) qui patchent un champ de la règle.
+    pub fn update_modulation(&self, index: usize, rule: ChannelModulation) -> bool {
+        let mut guard = self
+            .channel_modulations
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
+        if index < guard.len() {
+            let mut rules = (**guard).clone();
+            rules[index] = rule;
+            *guard = Arc::new(rules);
+            true
+        } else {
+            false
+        }
+    }
+
     /// Récupère les règles de modulation actives (pour debug/persistance)
     pub fn modulations(&self) -> Vec<ChannelModulation> {
         let guard = self
@@ -333,6 +352,14 @@ impl MergeRuntime {
             .kinematic_smoothing
             .write()
             .unwrap_or_else(|e| e.into_inner()) = smoothing.clamp(0.0, 0.99);
+    }
+
+    /// Lissage cinématique courant (pour debug/persistance/tests).
+    pub fn kinematic_smoothing(&self) -> f64 {
+        *self
+            .kinematic_smoothing
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
     }
 
     /// Nombre max de zones d'effet (audit I12) — chaque zone évalue une

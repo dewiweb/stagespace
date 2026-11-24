@@ -9,6 +9,7 @@ import type { StateCreator } from 'zustand';
 import type { MoveSlotsSlice, MoveSlotsStore } from './moveSlotsSlice';
 import {
   type MoveSlot,
+  normalizeSlot,
   buildGraphForSlot,
   defaultMacros,
   syncObjectsNodeNoHotSwap,
@@ -24,7 +25,7 @@ import {
 
 type CreatorArgs = Parameters<StateCreator<MoveSlotsStore, [], [], MoveSlotsSlice>>;
 
-export const createSlotCrudMethods = (set: CreatorArgs[0], get: CreatorArgs[1]): Pick<MoveSlotsSlice, 'setSlotSignalGraph' | 'selectSlotForEditing' | 'addMoveSlot' | 'duplicateMoveSlot' | 'removeMoveSlot' | 'renameMoveSlot' | 'setSlotTemplate' | 'setSlotTracks' | 'setSlotMacros' | 'setSlotFadeDuration' | 'setSlotEndMode' | 'setSlotAnchorMode' | 'setSlotAnchorTarget' | 'setSlotLoopMode' | 'setSlotDirection' | 'updateSlotAnimationFields' | 'toggleSlotPreview' | 'addToSetlist' | 'removeFromSetlist' | 'moveSetlistItem'> => ({
+export const createSlotCrudMethods = (set: CreatorArgs[0], get: CreatorArgs[1]): Pick<MoveSlotsSlice, 'setSlotSignalGraph' | 'selectSlotForEditing' | 'addMoveSlot' | 'duplicateMoveSlot' | 'insertMoveSlots' | 'removeMoveSlot' | 'renameMoveSlot' | 'setSlotTemplate' | 'setSlotTracks' | 'setSlotMacros' | 'setSlotFadeDuration' | 'setSlotEndMode' | 'setSlotAnchorMode' | 'setSlotAnchorTarget' | 'setSlotLoopMode' | 'setSlotDirection' | 'updateSlotAnimationFields' | 'toggleSlotPreview' | 'addToSetlist' | 'removeFromSetlist' | 'moveSetlistItem'> => ({
   setSlotSignalGraph: (id, graph) => {
     set((s) => {
       const moveSlots = s.moveSlots.map((sl) =>
@@ -154,9 +155,9 @@ export const createSlotCrudMethods = (set: CreatorArgs[0], get: CreatorArgs[1]):
     });
   },
 
-  duplicateMoveSlot: (id) => {
+  duplicateMoveSlot: (id, opts) => {
     const src = get().moveSlots.find((s) => s.id === id);
-    if (!src) return;
+    if (!src) return undefined;
     const newSlotId = `slot-${Date.now()}`;
     set((s) => {
       const idx = s.moveSlots.findIndex((sl) => sl.id === id);
@@ -165,18 +166,42 @@ export const createSlotCrudMethods = (set: CreatorArgs[0], get: CreatorArgs[1]):
         // référence avec la source (éditer l'un muterait l'autre).
         ...JSON.parse(JSON.stringify(src)),
         id: newSlotId,
-        name: `${src.name} copy`,
+        name: opts?.name ?? `${src.name} copy`,
         movementId: null,
         lastMovementId: undefined,
         isPreview: false,
         oscIndex: Math.max(0, ...s.moveSlots.map((sl) => sl.oscIndex)) + 1,
+        // Assignation du clone — le "make unique" du score peut le
+        // naître scopé à sa piste détachée.
+        ...(opts?.trackIds ? { trackIds: [...opts.trackIds] } : {}),
       };
       const newSlots = [...s.moveSlots];
       newSlots.splice(idx + 1, 0, clone);
       saveSlotsToStorage(newSlots);
       return { moveSlots: newSlots };
     });
-    get().selectSlotForEditing(newSlotId);
+    // `select: false` = ne pas voler la sélection d'édition Atelier
+    // (déliage depuis la surface score — l'opérateur n'y est pas).
+    if (opts?.select !== false) get().selectSlotForEditing(newSlotId);
+    return newSlotId;
+  },
+
+  /// Insère des slots déjà construits (ex. flatten de cue — chaque
+  /// MoveSnapshot devient un slot de banque). Assigne un oscIndex
+  /// frais à chacun, normalise, persiste. Retourne les ids.
+  insertMoveSlots: (slots) => {
+    const ids: string[] = [];
+    set((s) => {
+      let osc = Math.max(0, ...s.moveSlots.map((sl) => sl.oscIndex)) + 1;
+      const inserted = slots.map((sl) => {
+        ids.push(sl.id);
+        return { ...normalizeSlot(sl), oscIndex: osc++ };
+      });
+      const newSlots = [...s.moveSlots, ...inserted];
+      saveSlotsToStorage(newSlots);
+      return { moveSlots: newSlots };
+    });
+    return ids;
   },
 
   renameMoveSlot: (id, name) => {

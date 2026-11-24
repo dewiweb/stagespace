@@ -21,7 +21,7 @@ use commands::audio::{
     stop_audio_capture, update_audio_state,
 };
 use commands::cue_commands::{
-    get_parked_objects, park_object, recall_cue, store_cue, unpark_object,
+    get_parked_objects, park_object, recall_cue, store_cue, store_score_cue, unpark_object,
 };
 use commands::file_io::{
     get_show_snapshot, import_hol_project, load_graph_from_file, save_graph_to_file,
@@ -56,6 +56,10 @@ use commands::presets::{preset_delete, preset_list, preset_load, preset_save};
 use commands::remote_ui::{remote_ui_status, set_remote_ui};
 use commands::sampling::{
     frontend_log, get_perf_stats, sample_movement_trajectories, sample_movement_trajectory,
+};
+use commands::score::{
+    score_timeline_load, score_timeline_play, score_timeline_seek, score_timeline_set_loop,
+    score_timeline_state, score_timeline_stop, score_timeline_update,
 };
 use commands::state::lock_or_recover;
 
@@ -106,6 +110,12 @@ pub struct AppState {
     /// `get_show_snapshot` à la connexion (les slots vivent côté frontend,
     /// sans snapshot un remote démarrerait sur un store vide).
     pub show_snapshot: Mutex<Option<serde_json::Value>>,
+    /// Score timeline — clips multi-pistes exécutés par le backend
+    /// (spawn_move/recall direct, survit à la webview).
+    pub score_timeline: Arc<Mutex<commands::score::ScoreTimeline>>,
+    /// Cible OSC out du show (renderer) — maintenue par `set_osc_output` ;
+    /// fallback des clips `OscOut` du score sans `target` explicite.
+    pub osc_out_target: Arc<Mutex<(String, u16)>>,
 }
 
 /// Un movement = un runtime indépendant avec ses propres tracks et mode (preview/live)
@@ -234,6 +244,8 @@ pub fn new_app_state() -> AppState {
         plugins_dir,
         remote_ui: Mutex::new(bridge_server::RemoteUi::default()),
         show_snapshot: Mutex::new(None),
+        score_timeline: Arc::new(Mutex::new(commands::score::ScoreTimeline::default())),
+        osc_out_target: Arc::new(Mutex::new(("127.0.0.1".to_string(), 8000))),
     }
 }
 
@@ -463,6 +475,13 @@ pub fn stagespace_invoke_handler<R: tauri::Runtime>(invoke: tauri::ipc::Invoke<R
         get_pos_tape,
         set_media_sync,
         play_pos_tape,
+        score_timeline_load,
+        score_timeline_update,
+        score_timeline_play,
+        score_timeline_stop,
+        score_timeline_seek,
+        score_timeline_set_loop,
+        score_timeline_state,
         get_perf_stats,
         discover_osc_targets,
         sample_movement_trajectories,
@@ -520,6 +539,7 @@ pub fn stagespace_invoke_handler<R: tauri::Runtime>(invoke: tauri::ipc::Invoke<R
         list_effective_channels,
         // Cue commands (Phase 3 — cue system étendu)
         store_cue,
+        store_score_cue,
         recall_cue,
         park_object,
         get_parked_objects,

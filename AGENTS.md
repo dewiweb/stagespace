@@ -23,7 +23,7 @@ stagespace/
 ## Prerequisites
 
 - **Rust**: stable toolchain (1.88+)
-- **Node.js**: 20+
+- **Node.js**: 24+ (`.nvmrc` — identique à la CI `setup-node`)
 - **System deps (Linux)**: `libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libasound2-dev patchelf` (`libasound2-dev` required by `cpal`/`alsa-sys` for native audio capture)
 
 ## Build Commands
@@ -33,7 +33,7 @@ stagespace/
 ```bash
 cd rust-engines
 cargo build              # Build
-cargo test --lib         # Run tests (545 tests, incl. ts-rs export tests)
+cargo test --lib         # Run tests (562 tests, incl. ts-rs export tests)
 cargo clippy --all-targets -- -D warnings  # Lint (CI: --all-targets inclut tests/benches)
 cargo fmt -- --check     # Format check
 ```
@@ -43,7 +43,7 @@ cargo fmt -- --check     # Format check
 ```bash
 cd tauri-app/src-tauri
 cargo build              # Build
-cargo test --lib         # Run tests (75 tests)
+cargo test --lib         # Run tests (92 tests)
 cargo clippy --all-targets -- -D warnings  # Lint (CI: --all-targets inclut tests)
 
 # Bridge — backend over HTTP/SSE for a plain browser, two modes:
@@ -74,7 +74,7 @@ cd tauri-app/frontend
 npm install              # Install deps
 npm run dev              # Dev server (Vite)
 npm run build            # Production build (tsc + vite build)
-npm test                 # Run tests (444 tests, vitest)
+npm test                 # Run tests (594 tests, vitest)
 npm run contracts        # Regenerate TS types from Rust (ts-rs → src/types/generated/)
 npm run test:watch       # Watch mode
 npx tsc -b               # Type check (build mode — `tsc --noEmit` is vacuous on the solution-style root tsconfig)
@@ -129,11 +129,11 @@ CI fails if the committed files drift from the Rust sources.
 
 | Suite | Count |
 |-------|-------|
-| Rust engines | 545 |
-| Tauri backend | 75 |
-| Frontend (vitest) | 444 |
+| Rust engines | 562 |
+| Tauri backend | 92 |
+| Frontend (vitest) | 594 |
 | E2E CLI | ~100 assertions |
-| **Total** | **~1164** |
+| **Total** | **~1348** |
 
 ## Live Show Safety Features
 
@@ -188,7 +188,8 @@ dispatches to the same functions as the keyboard shortcuts (`liveActions.ts`).
 | `/stagespace/panic` | panic (stop all + origins) | Esc |
 | `/stagespace/stop` | stop all moves | — |
 | `/stagespace/timecode <s|"HH:MM:SS:FF">` | TC chase (fps 24/25/30, default 25, `set_timecode_fps`) | — |
-| `/stagespace/timecode/chase <0|1>` | chase TC on/off | — |
+| `/stagespace/timecode/chase <0|1>` | chase TC on/off (cues) | — |
+| `/stagespace/score/chase <0|1>` | score transport chases incoming TC (locate/rebase/auto-start on rolling TC) | — |
 | `/stagespace/timecode/fps <n>` | fps of the TC string format | — |
 | `/stagespace/cue/arm <n>` | arm a cue without firing it (console model) | — |
 | `/stagespace/cue/go` | fire the armed cue (or the next one if none armed) | — |

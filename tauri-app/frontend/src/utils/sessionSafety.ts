@@ -11,6 +11,7 @@ import { useGraphStore } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import { useSignalGraphStore } from '../store/useSignalGraphStore';
 import { useCuelistStore } from '../store/useCuelistStore';
+import { useScoreStore } from '../store/useScoreStore';
 import { useSessionStore } from '../store/useSessionStore';
 import { checkTauri } from './tauri';
 import { feLog } from './tauri';
@@ -52,6 +53,7 @@ export function initDirtyTracking(): () => void {
     watchKeys(useGlobalGraphStore as unknown as AnyStore, ['nodes', 'edges'], mark),
     watchKeys(useSignalGraphStore as unknown as AnyStore, ['nodes', 'edges'], mark),
     watchKeys(useCuelistStore as unknown as AnyStore, ['cues', 'tcChaseEnabled'], mark),
+    watchKeys(useScoreStore as unknown as AnyStore, ['laneStates', 'clips', 'durationMs', 'loopStartMs', 'loopEndMs', 'globalFxCurves', 'modulationCurves', 'objectCurves', 'spatialFxCurves'], mark),
   ];
   return () => subs.forEach((u) => u());
 }

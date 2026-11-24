@@ -1,9 +1,10 @@
-/// Partition & bande — la capture/rejeu de la mise en boîte :
-/// SCORE = bande de commandes horodatée (le busking devient un cue
-/// rejouable, exportable .sscore.json) ; TAPE = positions émises ~30Hz
-/// (le flux positions, pour bounce/rejeu chez un renderer externe).
+/// Partition & bande — RECORDER du séquenceur : la capture du busking
+/// devient des clips/courbes de la timeline Score (refs vivantes —
+/// rejouer la prise rejoue les entités, pas des commandes opaques) ;
+/// TAPE = positions émises ~30Hz (flux brut pour bounce/renderer
+/// externe — le rendu audio reste chez le renderer).
 import React from 'react';
-import { doRehearsal, scoreExport, scoreImport, doTape, tapeImport } from '../../utils/liveActions';
+import { doRehearsal, doTape, tapeImport } from '../../utils/liveActions';
 
 const btn = 'px-1.5 py-0.5 text-[10px] rounded';
 const rec = `${btn} bg-red-900/50 hover:bg-red-800/70 text-red-300`;
@@ -18,20 +19,17 @@ export const ScorePanel: React.FC = () => {
       </div>
       <div className="p-3 space-y-4">
         <div>
-          <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1.5">Score — commandes horodatées</div>
+          <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1.5">Score — recorder</div>
           <div className="flex items-center gap-1.5">
-            <button onClick={() => doRehearsal('record')} title="Record — capture le busking (actions live)" className={rec}>⏺ rec</button>
-            <button onClick={() => doRehearsal('stop')} title="Stop — fin de capture" className={stp}>⏹</button>
-            <button onClick={() => doRehearsal('play')} title="Play — rejoue la partition" className={ply}>▶</button>
-            <button onClick={scoreExport} title="Export — télécharge le score .sscore.json" className={stp}>↓ export</button>
-            <label title="Import — charge un score JSON" className={`${stp} cursor-pointer`}>
-              ↑ import
-              <input type="file" accept=".json" className="hidden" onChange={(e) => e.target.files?.[0] && scoreImport(e.target.files[0])} />
-            </label>
+            <button onClick={() => doRehearsal('record')} title="REC — capture le busking (actions live → clips)" className={rec}>⏺ rec</button>
+            <button onClick={() => doRehearsal('stop')} title="STOP — matérialise la prise en clips de la timeline" className={stp}>⏹</button>
+            <button onClick={() => doRehearsal('play')} title="PLAY — lit la partition (transport Score)" className={ply}>▶</button>
+            <button onClick={() => doRehearsal('clear')} title="Clear — vide la partition" className={stp}>✕</button>
           </div>
           <p className="text-[10px] text-gray-600 mt-1.5">
-            Enregistre chaque action live (slots, gestes, positions) → rejouée
-            comme une partition. Export = fichier .sscore.json partageable.
+            Enregistre les actions live (slots, cues, gestes, positions, macros)
+            puis les matérialise en clips/courbes éditables de la timeline —
+            la prise s'ajoute en fin de partition (sauvegardée dans le .hfg).
           </p>
         </div>
         <div>

@@ -33,3 +33,6 @@ tauri-app/src-tauri/target/
 **/target/
 bindings/
 plugin-examples/**/*.ssx
+
+# Scratch local (audits Puppeteer, essais) — jamais versionné
+.scratch/

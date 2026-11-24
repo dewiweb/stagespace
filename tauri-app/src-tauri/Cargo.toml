@@ -48,3 +48,17 @@ glib = "0.18"
 
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }
+
+# Debuginfo réduite en dev/test : lignes seulement pour notre code
+# (backtraces lisibles), aucune pour les dépendances — divise la taille
+# de target/ (rlibs, .pdb) sans changer le code généré.
+# Les profils ne s'appliquent qu'au crate racine : rust-engines (dépendance
+# path, hors workspace) est remis explicitement en line-tables.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
+[profile.dev.package.stagespace-engines]
+debug = "line-tables-only"

@@ -11,6 +11,44 @@ fn default_true() -> bool {
     true
 }
 
+/// Map à clés usize — JSON ne porte que des clés string, et quand le
+/// Cue transite par une enum taggée (`ScoreClipPayload`) serde
+/// bufferise `data` en `Content`, ce qui perd la coercion native
+/// `string → usize` des clés. Désérialise via `HashMap<String, V>`
+/// puis parse — robuste sur les deux chemins.
+fn de_usize_key_map<'de, D, V>(deserializer: D) -> Result<HashMap<usize, V>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    V: Deserialize<'de>,
+{
+    let raw = HashMap::<String, V>::deserialize(deserializer)?;
+    raw.into_iter()
+        .map(|(k, v)| {
+            k.parse::<usize>()
+                .map(|kk| (kk, v))
+                .map_err(serde::de::Error::custom)
+        })
+        .collect()
+}
+
+fn de_opt_usize_key_map<'de, D, V>(deserializer: D) -> Result<Option<HashMap<usize, V>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    V: Deserialize<'de>,
+{
+    Option::<HashMap<String, V>>::deserialize(deserializer)?
+        .map(|m| {
+            m.into_iter()
+                .map(|(k, v)| {
+                    k.parse::<usize>()
+                        .map(|kk| (kk, v))
+                        .map_err(serde::de::Error::custom)
+                })
+                .collect()
+        })
+        .transpose()
+}
+
 /// Scope d'une cue Tracking : quelles catégories le recall touche.
 /// Les catégories objet (channels/positions) sont restreintes par
 /// `track_indices` quand il est non vide.
@@ -118,7 +156,7 @@ pub struct Cue {
     pub per_track_depths: Vec<f64>,
 
     /// Positions manuelles (drag 3D) — object_index → [x, y, z]
-    #[serde(default)]
+    #[serde(default, deserialize_with = "de_usize_key_map")]
     pub manual_positions: HashMap<usize, [f64; 3]>,
 
     /// Snapshot des macros spatiales étendues (radius_scale, height_offset)
@@ -129,7 +167,7 @@ pub struct Cue {
     /// Canaux spatiaux étendus par objet (P1) — object_index → SpatialChannels.
     /// None (cue ancien) = ne pas toucher à l'état courant ; Some (même vide)
     /// = restaurer exactement (clear + re-set).
-    #[serde(default)]
+    #[serde(default, deserialize_with = "de_opt_usize_key_map")]
     pub object_channels: Option<HashMap<usize, SpatialChannels>>,
 
     /// Règles de modulation cinématique (P2)

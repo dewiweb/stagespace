@@ -10,7 +10,10 @@ import { logAction, rec } from './liveActionsShared';
  *  (reprise opérateur sans drag 3D). */
 export function doSetPosition(obj: number, x: number, y: number, z: number) {
   logAction('doSetPosition');
-  rec('doSetPosition', [obj, x, y, z]);
+  // Ref capturée en track_id — identité persistante de l'objet, pas
+  // l'index éphémère du patch courant.
+  const tid = useGraphStore.getState().manualOscIds[obj];
+  rec('doSetPosition', [obj, x, y, z], tid !== undefined ? { positions: { [tid]: [x, y, z] } } : undefined);
   invoke('set_manual_position', { objectIndex: obj, position: [x, y, z] })
     .catch((e) => toast.error('Set position failed: ' + e));
 }
@@ -18,7 +21,8 @@ export function doSetPosition(obj: number, x: number, y: number, z: number) {
 /** /stagespace/position/clear <obj> — retire la position manuelle. */
 export function doClearPosition(obj: number) {
   logAction('doClearPosition');
-  rec('doClearPosition', [obj]);
+  const tid = useGraphStore.getState().manualOscIds[obj];
+  rec('doClearPosition', [obj], { trackId: tid ?? null });
   invoke('clear_manual_position', { objectIndex: obj }).catch(silentCatch);
 }
 
@@ -106,7 +110,8 @@ export function doSoundcheck(action?: string) {
  *  avec une vélocité initiale, amortissement balistique au repos. */
 export function doThrow(obj: number, vx: number, vy: number, vz: number, from?: string) {
   logAction('doThrow', from);
-  rec('doThrow', [obj, vx, vy, vz]);
+  const tid = useGraphStore.getState().manualOscIds[obj];
+  rec('doThrow', [obj, vx, vy, vz], { trackId: tid ?? null, vel: [vx, vy, vz] });
   invoke('throw_object', { obj, vel: [vx, vy, vz] })
     .catch((e) => toast.error('Throw failed: ' + e));
 }
@@ -115,7 +120,7 @@ export function doThrow(obj: number, vx: number, vy: number, vz: number, from?: 
  *  global (k<1 resserre le champ, k>1 l'étend). Geste live busking. */
 export function doSpatial(k: number, from?: string) {
   logAction('doSpatial', from);
-  rec('doSpatial', [k]);
+  rec('doSpatial', [k], { macro: 'spatial' });
   invoke('set_spatial_compression', { k })
     .catch((e) => toast.error('Spatial compression failed: ' + e));
 }
@@ -124,7 +129,8 @@ export function doSpatial(k: number, from?: string) {
  *  blindness : un seul bouge) / libère la stase. */
 export function doAttention(obj: number | null, from?: string) {
   logAction('doAttention', from);
-  rec('doAttention', [obj ?? -1]);
+  const tid = obj === null ? null : (useGraphStore.getState().manualOscIds[obj] ?? null);
+  rec('doAttention', [obj ?? -1], { trackId: tid });
   invoke('set_attention', { obj })
     .catch((e) => toast.error('Attention failed: ' + e));
 }
@@ -133,6 +139,7 @@ export function doAttention(obj: number | null, from?: string) {
  *  en une commande : vélocité calculée par objet (balistique thrown). */
 export function doGesture(name: string, strength: number, from?: string) {
   logAction('doGesture', from);
+  rec('doGesture', [strength], { macro: name, strength });
   invoke('set_gesture', { name, strength })
     .catch((e) => toast.error('Gesture failed: ' + e));
 }
@@ -151,12 +158,14 @@ export function doSetTrackPosition(track: number, x: number, y: number, z: numbe
 /** Park un objet : ses canaux échappent aux recalls de cues. */
 export function doPark(obj: number, from?: string) {
   logAction('doPark', from);
-  rec('doPark', [obj]);
+  const tid = useGraphStore.getState().manualOscIds[obj];
+  rec('doPark', [obj], { trackId: tid ?? null });
   invoke('park_object', { obj }).catch((e) => toast.error('Park failed: ' + e));
 }
 
 export function doUnpark(obj: number, from?: string) {
   logAction('doUnpark', from);
-  rec('doUnpark', [obj]);
+  const tid = useGraphStore.getState().manualOscIds[obj];
+  rec('doUnpark', [obj], { trackId: tid ?? null });
   invoke('unpark_object', { obj }).catch((e) => toast.error('Unpark failed: ' + e));
 }

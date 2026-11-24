@@ -6,6 +6,7 @@ import { safeInvoke as invoke, safeListen as listen } from '../utils/tauri';
 import { toast } from '../utils/toast-helpers';
 import { isDetachedWindow } from '../utils/safeStorage';
 import { useGraphStore } from './useGraphStore';
+import { useCuelistStore } from './useCuelistStore';
 import type { AudioState } from './slices/audioSlice';
 
 // ── Audio error listener — surface les pannes de capture (micro débranché,
@@ -58,10 +59,21 @@ export const useAudioStateListener = () => {
 export const useCueRecallListener = () => {
   const refreshMovements = useGraphStore((s) => s.refreshMovements);
   React.useEffect(() => {
-    const unlisten = listen<{ cue_id: string; failed_moves: string[] }>(
+    const unlisten = listen<{ cue_id: string; cue_index?: number; failed_moves: string[] }>(
       'cue-recalled',
       (event) => {
         refreshMovements();
+        // Le recall peut venir d'un clip cue du score ou d'une commande
+        // OSC — pas seulement d'un clic cuelist. Resync l'index courant
+        // pour que Conduite reflète la cue réellement en place.
+        const cueId = event.payload?.cue_id;
+        if (cueId != null) {
+          const cs = useCuelistStore.getState();
+          const idx = cs.cues.findIndex((q) => String(q.id) === String(cueId));
+          if (idx >= 0 && idx !== cs.currentCueIndex) {
+            useCuelistStore.setState({ currentCueIndex: idx });
+          }
+        }
         const failed = event.payload?.failed_moves ?? [];
         if (failed.length > 0) {
           toast.error(

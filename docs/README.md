@@ -29,6 +29,8 @@ banner; the table below summarizes it.
 |---|---|---|
 | `ARCHITECTURE_FUTURE.md` | Hybrid global-graph design (workers + merge + post-process) | **Implemented** — kept as design rationale |
 | `ROADMAP_GRAPH_GLOBAL.md` | Phased plan P1–P5 (done) → P6+ (open) | Mostly implemented — remaining in "Remaining" callouts |
+| `score-sequencer.md` | Multitrack automation sequencer — the score as ultimate programming level (design, S1–S4) | Design note — supersedes today's rehearsal tape |
+| `score-sequencer-plan.md` | Sequencer implementation plan & progress tracker (branch `feat/score-sequencer`) | Living doc — update on every phase landing |
 | `RESEARCH_STATE_OF_ART.md` | Software landscape, psychoacoustics, HCI, positioning | Research reference |
 | `spatial-object-mixing-study.md` | Positioning study for object-oriented mixing | Reference — rationale for `dev-plan-spatial.md` |
 

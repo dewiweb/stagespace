@@ -18,6 +18,7 @@ import PerformView from './components/PerformView';
 import WelcomeModal, { shouldShowWelcome } from './components/WelcomeModal';
 import { initShowSync } from './utils/showSync';
 const ConduiteSurface = React.lazy(() => import('./components/conduite/ConduiteSurface'));
+const ScoreView = React.lazy(() => import('./components/score/ScoreView'));
 import ShortcutsModal from './components/ShortcutsModal';
 import { SettingsModal } from './components/SettingsModal';
 import { AboutModal } from './components/AboutModal';
@@ -31,6 +32,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { ChevronRight, ChevronDown, PanelRightClose, PanelLeftClose, PanelLeftOpen, PanelRightOpen, Maximize2, Minimize2, Activity, Workflow } from 'lucide-react';
 import { useLiveShortcuts, usePerfStatsPolling } from './hooks/useLiveShortcuts';
 import { useShowControl } from './hooks/useShowControl';
+import { useScoreTape } from './hooks/useScoreTape';
 import { useConduiteBroadcast } from './hooks/useConduiteBroadcast';
 import { prepareGraphForSave } from './components/nodeParamSchema';
 import { usePersistedState } from './utils/usePersistedState';
@@ -195,6 +197,7 @@ function AppMain() {
   // et sa stack se démontent).
   useLiveShortcuts();
   useShowControl();
+  useScoreTape();
   useConduiteBroadcast();
   usePerfStatsPolling();
 
@@ -349,6 +352,21 @@ function AppMain() {
             }
           >
             <ConduiteSurface />
+          </React.Suspense>
+        </ErrorBoundary>
+      ) : surface === 'score' ? (
+        /* Surface Score — le séquenceur timeline (S2) : composition
+           multipiste du show dans le temps. Exécution backend, la vue
+           n'est que le curseur + l'édition des clips. */
+        <ErrorBoundary zone="Score">
+          <React.Suspense
+            fallback={
+              <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">
+                Chargement du score…
+              </div>
+            }
+          >
+            <ScoreView />
           </React.Suspense>
         </ErrorBoundary>
       ) : surface === 'jeu' ? (

@@ -28,6 +28,8 @@ mod recall_tests {
             merge_runtime: Arc::new(Mutex::new(merge)),
             recall_in_progress: Arc::new(AtomicBool::new(false)),
             deactivate_gen: Arc::new(AtomicU64::new(0)),
+            score_timeline: Arc::new(Mutex::new(Default::default())),
+            osc_out_target: Arc::new(Mutex::new(("127.0.0.1".to_string(), 8000))),
             osc_receiver: Arc::new(Mutex::new(OscReceiver::new(0))),
             plugin_registry: None,
             plugins_dir: None,
@@ -514,5 +516,38 @@ mod recall_tests {
             !sh.merge_runtime.lock().unwrap().has_move("mv-pending"),
             "le merge ne doit pas connaître le move avorté"
         );
+    }
+
+    #[test]
+    fn test_panic_invalidates_score_timeline_but_stop_all_preserves_it() {
+        use crate::commands::merge_commands::move_management::deactivate_all_arc;
+        let sh = make_shared();
+        // Transport score en cours : le PANIC (honor_end_mode=false) doit
+        // invalider sa génération — sinon le scheduler score continue
+        // d'ordonnancer et respawne des moves après l'arrêt d'urgence.
+        // Un stopAll ordinaire le préserve : le score reste souverain de
+        // sa composition (ses propres clips StopAll ne se tuent pas).
+        {
+            let mut tl = sh.score_timeline.lock().unwrap();
+            tl.started_at = Some(std::time::Instant::now());
+        }
+        let gen0 = sh.score_timeline.lock().unwrap().generation;
+        deactivate_all_arc(0.5, true, &sh).unwrap();
+        {
+            let tl = sh.score_timeline.lock().unwrap();
+            assert_eq!(
+                tl.generation, gen0,
+                "stopAll ne doit pas invalider le score"
+            );
+            assert!(tl.started_at.is_some(), "stopAll laisse le transport score");
+        }
+        deactivate_all_arc(0.5, false, &sh).unwrap();
+        let tl = sh.score_timeline.lock().unwrap();
+        assert_eq!(
+            tl.generation,
+            gen0 + 1,
+            "le panic invalide la lecture score"
+        );
+        assert!(tl.started_at.is_none(), "le panic ferme le transport score");
     }
 }

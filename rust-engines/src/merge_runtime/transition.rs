@@ -569,7 +569,6 @@ mod tests {
         let out = blend_channels(&from, &to, 0.5);
         let g = out[&0].gain.unwrap();
         assert!((g - 0.5).abs() < 1e-9, "gain={g}");
-        assert!((out[&0].gain.unwrap() - 0.8).abs() < 1e-9 || true);
         // b=1 → exact `to`
         let out = blend_channels(&from, &to, 1.0);
         assert_eq!(out[&0].gain, Some(0.8));

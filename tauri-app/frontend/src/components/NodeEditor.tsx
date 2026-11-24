@@ -637,7 +637,7 @@ export const NodeEditor: React.FC = () => {
           className={`px-2 py-0.5 text-xs rounded font-medium transition-colors ${
             activeTab === 'signal' ? 'bg-amber-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
           }`}
-          title="Modulation — signal graph modulating macros with additive deltas (LFO, audio, OSC…)"
+          title="Modulation — signal graph writing additive deltas into param/transform targets (LFO, audio, OSC…)"
         >
           Modulation
         </button>
