@@ -104,6 +104,14 @@ export const ScoreCurvePane: React.FC<{
   setMergeStrategy: (s: string) => void;
   setLaneCurve: (laneId: string, param: string, kfs: ScoreKeyframe[] | undefined) => void;
   setClipCurve: (clipId: string, param: string, kfs: ScoreKeyframe[] | undefined) => void;
+  /// Vue résolue de la zone haute — 'context' suit la sélection
+  /// timeline ; 'dopesheet'/'biblio' sont des overrides manuels via
+  /// les onglets de la colonne paramètres.
+  view: 'context' | 'dopesheet' | 'biblio';
+  /// Onglets de navigation entre vues (relais vers ScoreParamsPanel).
+  paramTabs?: { id: string; label: string }[];
+  activeParamTab?: string;
+  onParamTab?: (id: string) => void;
   /// Fiche « mediainfo » de l'item bibliothèque sélectionné —
   /// prioritaire sur le dopesheet quand rien n'est sélectionné.
   explorerInfo?: React.ReactNode;
@@ -123,6 +131,7 @@ export const ScoreCurvePane: React.FC<{
   paramGroups, paramEmptyContent, modName, setModName, setCurveParam,
   mergeStrategy, setMergeStrategy, setLaneCurve, setClipCurve,
   onSelectParam, dopeSync, explorerInfo, dopesheet, clipParams, footer,
+  view, paramTabs, activeParamTab, onParamTab,
 }) => {
   /// Partage réglable colonnes paramètres / éditeur — même mécanique
   /// que topFrac, bornes 20–70 %.
@@ -132,6 +141,18 @@ export const ScoreCurvePane: React.FC<{
   const isSlot = selClip?.ref.type === 'slot';
 
   const inner = (() => {
+    /// Overrides manuels (onglets) — la vue forcée prime sur le
+    /// contexte de sélection.
+    if (view === 'dopesheet')
+      return dopesheet ?? (
+        <span className="text-[11px] text-gray-600 italic">Dopesheet — vue d'ensemble de la partition.</span>
+      );
+    if (view === 'biblio')
+      return explorerInfo ?? (
+        <span className="text-[11px] text-gray-600 italic">
+          Sélectionnez un move ou une cue ci-contre — fiche, drag &amp; drop vers la timeline, insertion au playhead.
+        </span>
+      );
     if (selLaneIsGlobalFx) {
       const p = globalFxDefs.find((d) => d.id === effParam) ?? globalFxDefs[0];
       return (
@@ -222,16 +243,18 @@ export const ScoreCurvePane: React.FC<{
         frac={paramFrac}
         contextLabel={
           <>
-            {selLaneIsGlobalFx && (
+            {view === 'context' && selLaneIsGlobalFx && (
               <>
                 <span className="text-[10px] text-cyan-400">GLOBALFX — transform global (merge)</span>
               </>
             )}
-            {selLaneIsMod && <span className="text-[10px] text-amber-400">MODULATION — valeurs SignalOsc</span>}
-            {selLaneIsSpatialFx && (
+            {view === 'context' && selLaneIsMod && <span className="text-[10px] text-amber-400">MODULATION — valeurs SignalOsc</span>}
+            {view === 'context' && selLaneIsSpatialFx && (
               <span className="text-[10px] text-violet-400">SPATIALFX — scalaires des contraintes (zones/règles installées par clip)</span>
             )}
-            {selClip && !selGlobal && <span className="text-[10px] text-gray-500 truncate">{selClipLabel} — per-move</span>}
+            {view === 'context' && selClip && !selGlobal && <span className="text-[10px] text-gray-500 truncate">{selClipLabel} — per-move</span>}
+            {view === 'dopesheet' && <span className="text-[10px] text-gray-600">toutes les courbes + événements</span>}
+            {view === 'biblio' && <span className="text-[10px] text-gray-600">explorer — moves &amp; cues</span>}
           </>
         }
         showStrategy={selLaneIsGlobalFx}
@@ -247,6 +270,9 @@ export const ScoreCurvePane: React.FC<{
         onVScroll={dopeSync?.onVScroll}
         groups={paramGroups}
         emptyContent={paramEmptyContent}
+        tabs={paramTabs}
+        activeTab={activeParamTab}
+        onTab={onParamTab}
       />
       {/* Poignée de partage paramètres/éditeur */}
       <div
@@ -270,7 +296,8 @@ export const ScoreCurvePane: React.FC<{
         style={{ flexGrow: 1 - paramFrac, flexBasis: 0 }}
       >
         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">
-          Éditeur — {!selClip && !selLaneIsGlobalFx && !selLaneIsMod && !selLaneIsSpatialFx && !selObjLane
+          Éditeur — {view === 'dopesheet' ? 'dopesheet' : view === 'biblio' ? 'bibliothèque'
+            : !selClip && !selLaneIsGlobalFx && !selLaneIsMod && !selLaneIsSpatialFx && !selObjLane
             ? (!selGlobal && explorerInfo ? 'bibliothèque' : 'dopesheet')
             : selGlobal || (effParam === 'clip' ? selClipLabel ?? 'clip' : effParam)}
         </span>

@@ -44,11 +44,18 @@ export const ScoreParamsPanel: React.FC<{
   /// Scroll vertical synchronisé avec le plot (dopesheet).
   scrollTop?: number;
   onVScroll?: (top: number) => void;
+  /// Onglets de navigation entre les vues de la zone haute
+  /// (contexte / dopesheet / bibliothèque) — rendus sous le titre
+  /// quand plus d'une vue est disponible.
+  tabs?: { id: string; label: string }[];
+  activeTab?: string;
+  onTab?: (id: string) => void;
 }> = ({
   frac, contextLabel, showStrategy, mergeStrategy, onMergeStrategy,
   modName, onModNameChange, onModNameCommit,
   onSelectParam, groups, emptyContent,
   rowHeight, headerHeight, scrollTop, onVScroll,
+  tabs, activeTab, onTab,
 }) => {
   /// Scroll vertical piloté par le plot voisin (dopesheet).
   const listRef = React.useRef<HTMLDivElement>(null);
@@ -77,6 +84,23 @@ export const ScoreParamsPanel: React.FC<{
         </label>
       )}
     </div>
+    {tabs && tabs.length > 1 && (
+      <div className="flex gap-px rounded bg-gray-800/50 p-px shrink-0">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => onTab?.(t.id)}
+            className={`flex-1 px-1 py-0.5 rounded-sm text-[9px] uppercase tracking-wide ${
+              activeTab === t.id
+                ? 'bg-gray-700 text-cyan-300'
+                : 'text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+    )}
     {modName !== undefined && (
       <input
         value={modName}

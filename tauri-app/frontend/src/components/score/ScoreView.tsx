@@ -556,8 +556,7 @@ const ScoreView: React.FC = () => {
         }]
       : []),
   ], [dopeRows]);
-  /// Mode dopesheet — colonne compacte alignée + scroll V sync.
-  const dopesheetMode = !selClip && !selLaneIsGlobalFx && !selLaneIsMod && !selLaneIsSpatialFx && !selObjLane;
+  /// Scroll V synchronisé colonne compacte ↔ plot (mode dopesheet).
   const [dopeVScroll, setDopeVScroll] = useState(0);
 
   // ── Bibliothèque (explorer) — moves + cues disponibles, drag & drop
@@ -604,6 +603,33 @@ const ScoreView: React.FC = () => {
   /// rangées du plot pour préserver l'alignement vertical.
   const dopePanelGroups = useMemo(() => [...dopeGroups, ...biblioGroups], [dopeGroups, biblioGroups]);
 
+  // ── Navigation entre vues de la zone haute — 'auto' suit la
+  //    sélection timeline ; 'dopesheet'/'biblio' sont des overrides
+  //    manuels via les onglets de la colonne paramètres.
+  type PaneView = 'auto' | 'dopesheet' | 'biblio';
+  const [paneView, setPaneView] = useState<PaneView>('auto');
+  /// Un override manuel retombe en 'auto' dès que la sélection
+  /// timeline change — la sélection gagne toujours.
+  const paneCtxKey = `${selClip?.id ?? ''}|${selGlobal ?? ''}`;
+  const [prevPaneCtx, setPrevPaneCtx] = useState(paneCtxKey);
+  if (prevPaneCtx !== paneCtxKey) {
+    setPrevPaneCtx(paneCtxKey);
+    if (paneView !== 'auto') setPaneView('auto');
+  }
+  const contextAvailable =
+    !!selClip || selLaneIsGlobalFx || selLaneIsMod || selLaneIsSpatialFx || !!selObjLane;
+  const resolvedView: 'context' | 'dopesheet' | 'biblio' =
+    paneView !== 'auto' ? paneView
+      : contextAvailable ? 'context'
+      : selGlobal ? 'dopesheet'
+      : explorerSel ? 'biblio'
+      : 'dopesheet';
+  const paneTabs = [
+    ...(contextAvailable ? [{ id: 'auto', label: 'sélection' }] : []),
+    { id: 'dopesheet', label: 'dopesheet' },
+    { id: 'biblio', label: 'bibliothèque' },
+  ];
+
   /// Payload d'insertion d'un item de bibliothèque (drag ou ⤵).
   const biblioPayloadOf = useCallback((sel: ExplorerSel) => {
     if (sel.kind === 'slot') {
@@ -642,7 +668,11 @@ const ScoreView: React.FC = () => {
 
   /// Groupes de lignes de la colonne paramètres — le panneau ne
   /// connaît pas le contexte, ScoreView le résout.
-  const paramGroups: ParamGroup[] = selLaneIsGlobalFx
+  const paramGroups: ParamGroup[] = resolvedView === 'biblio'
+    ? biblioGroups
+    : resolvedView === 'dopesheet'
+    ? dopePanelGroups
+    : selLaneIsGlobalFx
     ? [{
         rows: globalFxDefs.map((p) => ({
           id: p.id,
@@ -691,8 +721,6 @@ const ScoreView: React.FC = () => {
                 : `Courbe ${p.id} — canal spatial de ${selObjLane} (SpatialChannel, émis en OSC) — base ${p.def}`,
             })),
           }]
-        : selLaneIsOsc
-        ? dopePanelGroups
         : selClip
         ? [
             {
@@ -756,8 +784,8 @@ const ScoreView: React.FC = () => {
   /// Click d'une rangée — bibliothèque : sélection explorer (fiche
   /// mediainfo) ; dopesheet : sélection du contexte ; sinon paramètre.
   const onSelectParamRow = useCallback((id: string) => {
-    if (id.startsWith('bib:slot:')) { setExplorerSel({ kind: 'slot', id: id.slice(9) }); return; }
-    if (id.startsWith('bib:cue:')) { setExplorerSel({ kind: 'cue', id: id.slice(8) }); return; }
+    if (id.startsWith('bib:slot:')) { setExplorerSel({ kind: 'slot', id: id.slice(9) }); setPaneView('biblio'); return; }
+    if (id.startsWith('bib:cue:')) { setExplorerSel({ kind: 'cue', id: id.slice(8) }); setPaneView('biblio'); return; }
     setExplorerSel(null);
     const r = dopeRows.find((x) => x.key === id);
     if (r) onDopeSelectRow(r);
@@ -797,7 +825,11 @@ const ScoreView: React.FC = () => {
         setModName={setModName}
         setCurveParam={setCurveParam}
         onSelectParam={onSelectParamRow}
-        dopeSync={dopesheetMode ? { scrollTop: dopeVScroll, onVScroll: setDopeVScroll } : undefined}
+        dopeSync={resolvedView === 'dopesheet' ? { scrollTop: dopeVScroll, onVScroll: setDopeVScroll } : undefined}
+        view={resolvedView}
+        paramTabs={paneTabs}
+        activeParamTab={resolvedView === 'context' ? 'auto' : resolvedView}
+        onParamTab={(id) => setPaneView(id as 'auto' | 'dopesheet' | 'biblio')}
         mergeStrategy={mergeStrategy}
         setMergeStrategy={setMergeStrategy}
         setLaneCurve={setLaneCurve}
