@@ -42,6 +42,9 @@ pub const EVENTS: &[&str] = &[
     "show-log",
     "show-state-changed",
     "timers:cancel",
+    "score-timeline",
+    "score-nack",
+    "score-live-action",
 ];
 
 pub const ENV_BIND: &str = "STAGESPACE_BRIDGE_BIND";
