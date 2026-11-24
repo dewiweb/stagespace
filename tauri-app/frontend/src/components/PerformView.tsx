@@ -401,7 +401,11 @@ export const PerformView: React.FC = () => {
               flexible de la colonne : la cue list est l'objet central du
               show, elle ne tient pas en 224px (ex-h-56 confiné). */}
           <div className="flex-1 min-h-0 basis-2/5 border-t border-stagespace-border flex flex-col">
-            <CuelistPanel readonly />
+            {/* readonly masque les gestes dangereux (delete/recall-par-
+                erreur) ; canStore garde « ★ Store » : capturer une cue
+                ne mute pas la scène — sauf en fenêtre détachée où le
+                storage est read-only (store non persisté). */}
+            <CuelistPanel readonly canStore={!detached} />
           </div>
         </div>
 

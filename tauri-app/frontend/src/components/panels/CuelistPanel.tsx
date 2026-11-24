@@ -12,7 +12,7 @@ import { Badge } from '../ui/Badge';
 import { toast } from '../../utils/toast-helpers';
 import { useOscArmed } from '../../hooks/useOscArmed';
 
-export const CuelistPanel: React.FC<{ readonly?: boolean }> = ({ readonly = false }) => {
+export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> = ({ readonly = false, canStore = true }) => {
   const cues = useCuelistStore((s) => s.cues);
   const currentCueIndex = useCuelistStore((s) => s.currentCueIndex);
   const isRecalling = useCuelistStore((s) => s.isRecalling);
@@ -148,9 +148,11 @@ export const CuelistPanel: React.FC<{ readonly?: boolean }> = ({ readonly = fals
         </button>
       </div>
 
-      {/* Store new cue — masqué en jeu : rien qui mute le show ne vit
-          sur la surface live (authoring = atelier/conduite). */}
-      {!readonly && (
+      {/* Store new cue — geste sûr en jeu : un snapshot ne mute pas la
+          scène (record cue = convention console live). canStore=false
+          dans la fenêtre détachée — son storage est read-only, un store
+          y paraîtrait marcher sans persister. */}
+      {canStore && (
       <div className="px-3 py-2 border-b border-stagespace-border flex items-center gap-1">
         <input
           type="text"
