@@ -2,6 +2,9 @@
 //! HTTP+SSE pour le frontend React dans un navigateur — cohabite avec
 //! l'UI desktop (webview), même `AppState`, même `MergeRuntime`.
 //!
+//! - `GET /` + assets → frontend buildé servi sur le même port (le
+//!   client n'a qu'une URL à ouvrir : `http://<ip>:<port>/`) —
+//!   optionnel via `statics`.
 //! - `POST /invoke {cmd,args}` → `webview.on_message` sur le webview
 //!   `main` : le vrai dispatch IPC, comme la webview desktop.
 //! - `GET /events` → SSE : `app.listen_any` re-broadcasté, multi-clients.
@@ -52,6 +55,50 @@ pub const ENV_BIND: &str = "STAGESPACE_BRIDGE_BIND";
 /// Dispatch d'une commande IPC : (cmd, args) → réponse sérialisée ou
 /// erreur Tauri. Fourni par l'appelant (app réelle ou mock de test).
 pub type Dispatch = Arc<dyn Fn(String, Value) -> Result<Value, Value> + Send + Sync>;
+
+/// Source de fichiers statiques (frontend buildé) servie sur le même
+/// port que /invoke + /events : le client distant ouvre simplement
+/// `http://<ip>:<port>/` — aucun `?bridge=` à taper. `path` est
+/// relatif (« index.html », « assets/x.js ») ; retour (bytes, mime).
+/// In-app : `app.asset_resolver()` (dist embarqué en prod, lu depuis
+/// frontendDist en dev). Dev-bridge : `dir_statics` sur disque.
+/// `None` → seules les routes IPC sont servies (GET → 404).
+pub type StaticFiles = Arc<dyn Fn(&str) -> Option<(Vec<u8>, String)> + Send + Sync>;
+
+/// StaticFiles depuis un dossier sur disque — pour le dev_bridge
+/// headless (la mock app n'a pas d'assets embarqués).
+pub fn dir_statics(root: std::path::PathBuf) -> StaticFiles {
+    Arc::new(move |path: &str| {
+        let bytes = std::fs::read(root.join(path)).ok()?;
+        let mime = match path.rsplit('.').next().unwrap_or("") {
+            "html" => "text/html",
+            "js" | "mjs" => "text/javascript",
+            "css" => "text/css",
+            "svg" => "image/svg+xml",
+            "png" => "image/png",
+            "ico" => "image/x-icon",
+            "json" | "map" | "webmanifest" => "application/json",
+            "wasm" => "application/wasm",
+            "woff" | "woff2" => "font/woff2",
+            "txt" => "text/plain",
+            _ => "application/octet-stream",
+        };
+        Some((bytes, mime.to_string()))
+    })
+}
+
+/// Marqueur injecté dans l'index.html servi par le bridge — lu par
+/// tauri-bridge.js pour déduire bridge = location.origin.
+const SELFHOST_MARKER: &str = "<script>window.__STAGESPACE_SELFHOST__=true;</script>";
+
+fn inject_selfhost_marker(bytes: Vec<u8>) -> Vec<u8> {
+    match String::from_utf8(bytes) {
+        Ok(html) => html
+            .replacen("<head>", &format!("<head>{SELFHOST_MARKER}"), 1)
+            .into_bytes(),
+        Err(e) => e.into_bytes(),
+    }
+}
 
 struct Job {
     cmd: String,
@@ -108,6 +155,7 @@ pub fn serve(
     dispatch: Dispatch,
     events: Receiver<Value>,
     shutdown: Arc<AtomicBool>,
+    statics: Option<StaticFiles>,
 ) -> std::io::Result<()> {
     let subscribers: Arc<Mutex<Vec<Sender<Value>>>> = Arc::new(Mutex::new(Vec::new()));
     {
@@ -144,8 +192,9 @@ pub fn serve(
                 let dispatch = dispatch.clone();
                 let subscribers = subscribers.clone();
                 let sd = shutdown.clone();
+                let statics = statics.clone();
                 std::thread::spawn(move || {
-                    handle_conn(&mut stream, dispatch, subscribers, sd);
+                    handle_conn(&mut stream, dispatch, subscribers, sd, &statics);
                 });
             }
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
@@ -162,6 +211,7 @@ fn handle_conn(
     dispatch: Dispatch,
     subscribers: Arc<Mutex<Vec<Sender<Value>>>>,
     shutdown: Arc<AtomicBool>,
+    statics: &Option<StaticFiles>,
 ) {
     let mut reader = BufReader::new(&*stream);
     let req = match parse_request(&mut reader) {
@@ -169,6 +219,9 @@ fn handle_conn(
         None => return,
     };
     let (method, path, body) = req;
+    // La query string ne fait pas partie du routage (un `/?bridge=…`
+    // dans l'URL d'ouverture doit quand même servir index.html).
+    let path = path.split('?').next().unwrap_or("/").to_string();
     if method == "OPTIONS" {
         respond(stream, "204 No Content", "text/plain", &[]);
         return;
@@ -220,6 +273,34 @@ fn handle_conn(
             out.to_string().as_bytes(),
         );
         return;
+    }
+    // Frontend statique servi sur le même port : GET / → index.html
+    // (marqueur selfhost injecté), GET /assets/… → fichiers du dist,
+    // chemin sans extension → fallback SPA index.html.
+    if method == "GET" {
+        if let Some(statics) = statics {
+            let p = path.trim_start_matches('/');
+            let p = if p.is_empty() { "index.html" } else { p };
+            if !p.contains("..") {
+                let found = statics(p).or_else(|| {
+                    if p.contains('.') {
+                        None
+                    } else {
+                        statics("index.html")
+                    }
+                });
+                if let Some((bytes, mime)) = found {
+                    let is_index = mime.starts_with("text/html");
+                    let body = if is_index {
+                        inject_selfhost_marker(bytes)
+                    } else {
+                        bytes
+                    };
+                    respond(stream, "200 OK", &mime, &body);
+                    return;
+                }
+            }
+        }
     }
     respond(stream, "404 Not Found", "text/plain", b"not found");
 }
@@ -372,8 +453,18 @@ impl RemoteUi {
         }
         let shutdown = Arc::new(AtomicBool::new(false));
         let sd = shutdown.clone();
+        // Le bridge sert aussi le frontend buildé : un client distant
+        // ouvre simplement http://<ip>:<port>/ — l'origine EST le bridge,
+        // aucun ?bridge= à taper. En prod l'asset est embarqué dans le
+        // binaire ; en dev, lu depuis frontendDist.
+        let resolver = app.asset_resolver();
+        let statics: StaticFiles = Arc::new(move |path: &str| {
+            resolver
+                .get(path.to_string())
+                .map(|a| (a.bytes, a.mime_type))
+        });
         std::thread::spawn(move || {
-            if let Err(e) = serve(listener, dispatch, ev_rx, sd) {
+            if let Err(e) = serve(listener, dispatch, ev_rx, sd, Some(statics)) {
                 eprintln!("[BRIDGE] serve stopped: {e}");
             }
         });
@@ -382,7 +473,7 @@ impl RemoteUi {
             shutdown,
             listeners,
         });
-        eprintln!("[BRIDGE] remote UI started on {bind} — no auth, trusted network only");
+        eprintln!("[BRIDGE] remote UI started on {bind} — UI + IPC on same port, no auth, trusted network only");
         Ok(())
     }
 
@@ -470,6 +561,61 @@ mod tests {
         String::from_utf8_lossy(&buf).into_owned()
     }
 
+    /// Statiques : `GET /` sert index.html avec le marqueur selfhost
+    /// (le shim tauri-bridge.js en déduit bridge = location.origin),
+    /// `GET /asset` sert le fichier, fallback SPA sur chemin sans
+    /// extension, `..` et inconnus → 404.
+    #[test]
+    fn statics_serve_index_with_selfhost_marker() {
+        let listener_probe = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener_probe.local_addr().unwrap().port();
+        drop(listener_probe);
+
+        let shutdown = Arc::new(AtomicBool::new(false));
+        let (_tx, rx) = channel::<Value>();
+        let dispatch: Dispatch = Arc::new(|_cmd, _args| Ok(Value::Array(vec![])));
+        let statics: StaticFiles = Arc::new(|p: &str| match p {
+            "index.html" => Some((
+                b"<html><head></head><body>app</body></html>".to_vec(),
+                "text/html".to_string(),
+            )),
+            "app.js" => Some((b"let a=1;".to_vec(), "text/javascript".to_string())),
+            _ => None,
+        });
+        let sd = shutdown.clone();
+        let listener = TcpListener::bind(format!("127.0.0.1:{port}")).unwrap();
+        std::thread::spawn(move || {
+            let _ = serve(listener, dispatch, rx, sd, Some(statics));
+        });
+        std::thread::sleep(Duration::from_millis(150));
+
+        let get = |path: &str| {
+            let mut stream = TcpStream::connect(format!("127.0.0.1:{port}")).unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_millis(2000)))
+                .unwrap();
+            stream
+                .write_all(format!("GET {path} HTTP/1.1\r\nHost: x\r\n\r\n").as_bytes())
+                .unwrap();
+            let mut buf = Vec::new();
+            let _ = stream.read_to_end(&mut buf);
+            String::from_utf8_lossy(&buf).into_owned()
+        };
+
+        let index = get("/");
+        assert!(index.contains("__STAGESPACE_SELFHOST__"), "index: {index}");
+        let spa = get("/jeu?foo=1");
+        assert!(spa.contains("__STAGESPACE_SELFHOST__"), "spa: {spa}");
+        let asset = get("/app.js");
+        assert!(asset.contains("let a=1;") && asset.contains("text/javascript"));
+        let unknown = get("/missing.js");
+        assert!(unknown.contains("404"), "unknown: {unknown}");
+        let traversal = get("/../Cargo.toml");
+        assert!(traversal.contains("404"), "traversal: {traversal}");
+
+        shutdown.store(true, Ordering::SeqCst);
+    }
+
     /// `serve` doit être stoppable : flag posé → l'accept loop sort, les
     /// writers SSE partent (sinon ils se maintiendraient vivants via
     /// leur propre Arc<subscribers> — cycle d'auto-référence).
@@ -484,7 +630,7 @@ mod tests {
         let dispatch: Dispatch = Arc::new(|_cmd, _args| Ok(Value::Array(vec![])));
         let sd = shutdown.clone();
         let listener = TcpListener::bind(format!("127.0.0.1:{port}")).unwrap();
-        let h = std::thread::spawn(move || serve(listener, dispatch, rx, sd));
+        let h = std::thread::spawn(move || serve(listener, dispatch, rx, sd, None));
         // Laisse le listener s'installer, puis arrête.
         std::thread::sleep(Duration::from_millis(100));
         shutdown.store(true, Ordering::SeqCst);
@@ -505,7 +651,7 @@ mod tests {
         let sd = shutdown.clone();
         let listener = TcpListener::bind(format!("127.0.0.1:{port}")).unwrap();
         std::thread::spawn(move || {
-            let _ = serve(listener, dispatch, rx, sd);
+            let _ = serve(listener, dispatch, rx, sd, None);
         });
         std::thread::sleep(Duration::from_millis(150));
 

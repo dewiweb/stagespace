@@ -286,7 +286,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
             </h3>
             <p className="text-gray-400 text-xs mb-3">
               Serve the bridge to remote browsers — same live backend, desktop UI keeps running.
-              Remote clients open the app URL with <span className="font-mono">?bridge=http://&lt;this machine&gt;:&lt;port&gt;</span>.
+              Remote clients just open <span className="font-mono">http://&lt;this machine&gt;:&lt;port&gt;</span> — the bridge serves the UI on its own port.
             </p>
             <div className="flex items-center gap-2 mb-2">
               <button
@@ -312,7 +312,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
             </div>
             <p className="text-xs text-gray-400">
               {remoteUiRunning
-                ? <>Listening on <span className="font-mono text-cyan-300">{remoteUiActiveBind}</span> — browsers at <span className="font-mono">http://…?bridge=http://&lt;ip&gt;:{remoteUiActiveBind?.split(':').pop()}</span></>
+                ? <>Listening on <span className="font-mono text-cyan-300">{remoteUiActiveBind}</span> — browsers at <span className="font-mono">http://&lt;ip&gt;:{remoteUiActiveBind?.split(':').pop()}</span></>
                 : remoteUiEnabled
                   ? 'Stopped — enabling will bind on launch.'
                   : 'Bridge off. STAGESPACE_BRIDGE_BIND env var can also force-start it.'}

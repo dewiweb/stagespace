@@ -7,6 +7,10 @@
  * en localStorage et nettoie l'URL — une seule URL à ouvrir sur une
  * machine distante, `?bridge=off` désactive.
  *
+ * UI servie par le pont lui-même (GET / sur le port du bridge) : le
+ * marqueur `__STAGESPACE_SELFHOST__` injecté dans index.html suffit —
+ * le pont est l'origine, aucun param à taper.
+ *
  * Installe `window.__TAURI_INTERNALS__` compatible avec @tauri-apps/api v2 :
  *  - invoke(cmd, args)      → POST {bridge}/invoke (vrai backend headless)
  *  - plugin:event|listen    → registry local + EventSource {bridge}/events
@@ -29,6 +33,10 @@
   } catch (e) {
     return;
   }
+  // Servi par le pont → l'origine EST le pont (marqueur injecté par
+  // bridge_server dans l'index.html). ?bridge= / localStorage gardent
+  // la priorité pour un pont explicite différent.
+  if (!bridge && window.__STAGESPACE_SELFHOST__) bridge = location.origin;
   if (!bridge) return;
 
   // Marqueur : le frontend distingue un vrai webview Tauri (fenêtre OS

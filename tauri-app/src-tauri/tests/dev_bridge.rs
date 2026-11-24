@@ -55,5 +55,11 @@ fn dev_bridge() {
     // Flag jamais armé : le pont de dev vit indéfiniment (Ctrl+C pour tuer).
     let never_shutdown = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let listener = std::net::TcpListener::bind(&bind).expect("bridge bind failed");
-    bridge_server::serve(listener, dispatch, events, never_shutdown).expect("bridge serve failed");
+    // Le frontend dist est servi sur le même port : http://<ip>:4173/
+    // suffit, pas de ?bridge= à taper (tauri-bridge.js déduit
+    // l'origine via le marqueur selfhost injecté dans index.html).
+    let dist = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../frontend/dist");
+    let statics = bridge_server::dir_statics(dist);
+    bridge_server::serve(listener, dispatch, events, never_shutdown, Some(statics))
+        .expect("bridge serve failed");
 }

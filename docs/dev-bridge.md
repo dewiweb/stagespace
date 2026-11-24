@@ -19,9 +19,18 @@ Deux modes, **même code** (`src/bridge_server.rs`) :
   sans webview.
 
 ```
+navigateur ──GET / + assets──▶ bridge_server ── frontend dist (asset_resolver / disque)
 navigateur ──POST /invoke──▶ bridge_server ──webview.on_message──▶ dispatch IPC réel
 navigateur ◀──SSE /events─── bridge_server ◀──listen_any────────── event_sink backend
 ```
+
+**Une seule URL : `http://<ip>:4173/`** — le bridge sert aussi le
+frontend buildé sur son propre port (in-app : `asset_resolver`, dist
+embarqué en prod et lu depuis `frontendDist` en dev ; headless : dist
+lu sur disque). L'`index.html` servi porte le marqueur
+`__STAGESPACE_SELFHOST__` : `tauri-bridge.js` en déduit
+`bridge = location.origin` — aucun `?bridge=` à taper. Les statiques
+sont optionnels : `statics=None` reste un pur pont IPC (GET → 404).
 
 `on_message` est le point d'entrée IPC réel des webviews Tauri
 (`get_ipc_response` n'en est qu'un wrapper MockRuntime) : le remote
@@ -66,14 +75,15 @@ l'instance existante avec `curl -s -X POST …/invoke`. Bind par défaut
 
 Le shim `frontend/public/tauri-bridge.js` (chargé par `index.html` en
 dev **et** en build de production) s'active dès que
-`localStorage.stagespace_ipc_bridge` contient l'URL du pont. Deux façons
-de l'armer :
+`localStorage.stagespace_ipc_bridge` contient l'URL du pont. Trois
+façons de l'armer, par ordre de priorité :
 
-- **Paramètre d'URL** (recommandé) :
-  `http://<host>:5175/?bridge=http://<host>:4173` — persisté en
+- **Paramètre d'URL** : `?bridge=http://<host>:4173` — persisté en
   localStorage puis retiré de l'URL. `?bridge=off` désactive.
-- **Devtools** :
-  `localStorage.stagespace_ipc_bridge = "http://<host>:4173"` puis reload.
+- **localStorage persisté** (d'une arme précédente ou devtools :
+  `localStorage.stagespace_ipc_bridge = "http://<host>:4173"` + reload).
+- **Selfhost** : page servie par le bridge lui-même →
+  `bridge = location.origin`, zéro configuration.
 
 Le shim route `invoke()` → `POST {bridge}/invoke`, `listen()` →
 `EventSource {bridge}/events`, et les emits frontend restent locaux
@@ -114,25 +124,27 @@ un sur Conduite, + l'écran desktop local).
 
 ### Sur le LAN
 
-Machine hôte (moteur + OSC OUT) :
+Machine hôte (moteur + OSC OUT) — un seul port ouvre tout :
 
 ```bash
 STAGESPACE_BRIDGE_BIND=0.0.0.0:4173 npm run tauri dev &
 # ou headless : STAGESPACE_BRIDGE_BIND=0.0.0.0:4173 cargo test --test dev_bridge -- --ignored
-
-cd tauri-app/frontend
-npm run dev -- --host          # vite sur 0.0.0.0:5175
-# ou build statique : npm run build, servir dist/ par n'importe quel serveur
+#   (le dev_bridge sert frontend/dist — npm run build requis une fois)
 ```
 
 Poste distant (navigateur) :
 
 ```
-http://<ip-hôte>:5175/?bridge=http://<ip-hôte>:4173
+http://<ip-hôte>:4173/
 ```
 
-Une fois le `?bridge=` absorbé, l'URL propre peut être bookmarkée — le
-lien survit aux reloads (localStorage).
+C'est tout — l'UI et l'IPC partagent le port. Un `?bridge=<autre>` ou
+un localStorage existant gardent la priorité si l'on veut viser un
+autre backend que celui qui sert la page.
+
+Servir le frontend soi-même reste possible (vite `--host`, dist
+statique + `?bridge=`) — utile pour dev avec HMR ; en usage show le
+single-port est le chemin simple.
 
 ### Hors LAN de confiance : tunnel SSH
 
@@ -141,8 +153,8 @@ Aucune auth ni chiffrement sur le bridge — ne jamais exposer `4173` en
 bind `127.0.0.1` suffit :
 
 ```bash
-ssh -L 4173:127.0.0.1:4173 -L 5175:127.0.0.1:5175 user@hôte
-# puis http://localhost:5175/?bridge=http://localhost:4173
+ssh -L 4173:127.0.0.1:4173 user@hôte
+# puis http://localhost:4173/
 ```
 
 ## Limites
@@ -180,16 +192,15 @@ fichier fait foi). Un remote ne peut pas écraser un show pendant le jeu
 Les pushs sortants passent par `utils/showSync.ts` (debounce) ; le pull
 initial hydrate un navigateur frais au premier accès.
 
-Évolution naturelle si le remote devient un usage show : token d'accès
-(le serveur statique de `dist/` par le bridge — URL unique — serait le
-suivant).
+Évolution naturelle si le remote devient un usage show : token d'accès.
 
 ## Fichiers
 
 - `tauri-app/src-tauri/src/bridge_server.rs` — listener HTTP, dispatch
   via `webview.on_message` (sérialisé sur un thread dédié), broadcast
-  SSE, `RemoteUi` (start/stop, `unlisten` propre), `spawn_if_enabled`
-  (env `STAGESPACE_BRIDGE_BIND`).
+  SSE, statiques du frontend (`StaticFiles`/`dir_statics`, marqueur
+  selfhost dans index.html), `RemoteUi` (start/stop, `unlisten`
+  propre), `spawn_if_enabled` (env `STAGESPACE_BRIDGE_BIND`).
 - `tauri-app/src-tauri/src/commands/remote_ui.rs` — `set_remote_ui` /
   `remote_ui_status` (validation du bind, erreurs typées).
 - `tauri-app/src-tauri/tests/dev_bridge.rs` — même `serve` sur mock app.

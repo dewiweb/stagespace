@@ -49,7 +49,8 @@ cargo clippy --all-targets -- -D warnings  # Lint (CI: --all-targets inclut test
 # Bridge — backend over HTTP/SSE for a plain browser, two modes:
 #   headless test : cargo test --test dev_bridge -- --ignored
 #   in-app remote : STAGESPACE_BRIDGE_BIND=0.0.0.0:4173 npm run tauri dev
-# then http://localhost:5175/?bridge=http://<host>:4173 — docs/dev-bridge.md
+# then http://<host>:4173/ — the bridge serves the frontend dist itself
+# (single URL; ?bridge= still supported) — docs/dev-bridge.md
 ```
 
 ### CLI (workflow testing tool)
