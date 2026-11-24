@@ -97,6 +97,13 @@ export const ScoreCurvePane: React.FC<{
   setMergeStrategy: (s: string) => void;
   setLaneCurve: (laneId: string, param: string, kfs: ScoreKeyframe[] | undefined) => void;
   setClipCurve: (clipId: string, param: string, kfs: ScoreKeyframe[] | undefined) => void;
+  /// Dopesheet éditable — affiché quand rien n'est sélectionné.
+  dopesheet?: React.ReactNode;
+  /// Paramètres du clip (ex-inspector) — affiché quand la rangée
+  /// 'clip' est active ou pour les clips non-slot (sans courbes).
+  clipParams?: React.ReactNode;
+  /// Pied de zone persistant (compteur de clips, vider le score).
+  footer?: React.ReactNode;
 }> = ({
   topFrac, selGlobal, selClip, selLaneIsGlobalFx, selLaneIsMod,
   selLaneIsSpatialFx, spatialFxDefs, spatialFxCurves,
@@ -105,6 +112,7 @@ export const ScoreCurvePane: React.FC<{
   modulationCurves, nodeDefs, clipDefs, selFades, selClipLabel,
   paramGroups, paramEmptyContent, modName, setModName, setCurveParam,
   mergeStrategy, setMergeStrategy, setLaneCurve, setClipCurve,
+  dopesheet, clipParams, footer,
 }) => {
   /// Partage réglable colonnes paramètres / éditeur — même mécanique
   /// que topFrac, bornes 20–70 %.
@@ -165,9 +173,15 @@ export const ScoreCurvePane: React.FC<{
       );
     }
     if (!selClip)
-      return (
+      return dopesheet ?? (
         <span className="text-[11px] text-gray-600 italic">
           Sélectionnez un clip ou une lane globale — les courbes s'affichent ici.
+        </span>
+      );
+    if (effParam === 'clip' || !isSlot)
+      return clipParams ?? (
+        <span className="text-[11px] text-gray-500">
+          {selClipLabel ?? 'clip'} — événement ponctuel, pas de courbe éditable.
         </span>
       );
     if (effParam !== 'enveloppe' && isSlot) {
@@ -181,12 +195,6 @@ export const ScoreCurvePane: React.FC<{
         />
       );
     }
-    if (!isSlot)
-      return (
-        <span className="text-[11px] text-gray-500">
-          {selClipLabel ?? 'clip'} — événement ponctuel, pas de courbe éditable.
-        </span>
-      );
     const fades = selFades ?? { inMs: 0, outMs: 0 };
     return <EnvelopeEditor fades={fades} endMs={selClip.durationMs ?? fades.inMs + 4_000} />;
   })();
@@ -248,9 +256,12 @@ export const ScoreCurvePane: React.FC<{
         style={{ flexGrow: 1 - paramFrac, flexBasis: 0 }}
       >
         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">
-          Éditeur — {selGlobal || (selClip && effParam !== 'enveloppe') ? effParam : 'enveloppe'}
+          Éditeur — {!selGlobal && !selObjLane && !selClip
+            ? 'dopesheet'
+            : selGlobal || (effParam === 'clip' ? selClipLabel ?? 'clip' : effParam)}
         </span>
         {inner}
+        {footer}
       </div>
     </div>
   );

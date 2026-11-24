@@ -1,0 +1,185 @@
+/// Dopesheet — vue d'ensemble de TOUTE l'automation du score quand
+/// rien n'est sélectionné : une rangée par courbe (lane ou clip) et
+/// par lane d'événements, keyframes ◆ éditables (drag horizontal =
+/// retime, vertical = valeur pour les courbes), events ◆ drag =
+/// moveClip. Click rangée = sélection du contexte (bascule vers
+/// l'éditeur de courbe), click ◆ = sélection + seek.
+/// L'axe temps partage ms2px avec la timeline — scroll horizontal
+/// synchronisé par le parent.
+import React, { useRef } from 'react';
+import type { DopeRow } from '../../utils/scoreDopesheet';
+import type { ParamDef } from './scoreParams';
+
+const ROW_H = 18;
+const SNAP_MS = 50;
+
+export const ScoreDopesheet: React.FC<{
+  rows: DopeRow[];
+  durationMs: number;
+  ms2px: (ms: number) => number;
+  px2ms: (px: number) => number;
+  displayCursor: number;
+  loopStartMs?: number;
+  loopEndMs?: number;
+  /// ParamDef de la rangée — pour le drag vertical (valeur). Absent
+  /// pour les rangées events.
+  paramDefOf: (row: DopeRow) => ParamDef | undefined;
+  /// Sélectionne la cible de la rangée (lane+param, clip+param ou lane).
+  onSelectRow: (row: DopeRow) => void;
+  onSeek: (ms: number) => void;
+  /// Retime/valeur d'un keyframe de courbe (lane ou clip).
+  onMoveKf: (row: DopeRow, kfIdx: number, t: number, v?: number) => void;
+  /// Retime d'un clip événement.
+  onMoveClip: (clipId: string, t: number) => void;
+  /// Scroll horizontal synchronisé avec la timeline (parent-driven).
+  scrollLeft?: number;
+  onHScroll?: (left: number) => void;
+}> = ({
+  rows, durationMs, ms2px, px2ms, displayCursor,
+  loopStartMs, loopEndMs, paramDefOf, onSelectRow, onSeek, onMoveKf,
+  onMoveClip, scrollLeft, onHScroll,
+}) => {
+  const plotW = ms2px(durationMs) + 200;
+  const plotRef = useRef<HTMLDivElement>(null);
+  /// Drag d'un ◆ : rangée + index du point + origines.
+  const drag = useRef<{
+    row: DopeRow; idx: number; moved: boolean;
+    origT: number; origV: number; startX: number; startY: number;
+  } | null>(null);
+  /// État visuel pendant le drag — re-render léger par rangée.
+  const [, bump] = React.useReducer((x: number) => x + 1, 0);
+  const labelRef = useRef<HTMLDivElement>(null);
+
+  // Sync scroll — timeline → dopesheet et dopesheet → labels.
+  React.useEffect(() => {
+    if (scrollLeft !== undefined && plotRef.current && plotRef.current.scrollLeft !== scrollLeft)
+      plotRef.current.scrollLeft = scrollLeft;
+  }, [scrollLeft]);
+  const onPlotScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    onHScroll?.(e.currentTarget.scrollLeft);
+    if (labelRef.current) labelRef.current.scrollTop = e.currentTarget.scrollTop;
+  };
+
+  const pointPos = (row: DopeRow, t: number, v: number | undefined) => {
+    const def = paramDefOf(row);
+    const y = def && v !== undefined
+      ? ROW_H - 2 - ((v - def.min) / Math.max(1e-9, def.max - def.min)) * (ROW_H - 4)
+      : ROW_H / 2;
+    return { left: ms2px(t) - 4, top: y - 4 };
+  };
+
+  const startDrag = (e: React.PointerEvent, row: DopeRow, idx: number) => {
+    if (e.button !== 0) return;
+    const pt = row.points[idx];
+    const def = paramDefOf(row);
+    drag.current = {
+      row, idx, moved: false,
+      origT: pt.t, origV: pt.v ?? def?.def ?? 0,
+      startX: e.clientX, startY: e.clientY,
+    };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    e.stopPropagation();
+  };
+  const moveDrag = (e: React.PointerEvent) => {
+    const d = drag.current;
+    if (!d) return;
+    const dx = e.clientX - d.startX;
+    const dy = e.clientY - d.startY;
+    if (!d.moved && Math.abs(dx) < 3 && Math.abs(dy) < 3) return;
+    d.moved = true;
+    const t = Math.max(0, Math.round((d.origT + px2ms(dx)) / SNAP_MS) * SNAP_MS);
+    if (d.row.kind === 'events') {
+      if (d.row.points[d.idx].clipId) onMoveClip(d.row.points[d.idx].clipId!, t);
+    } else {
+      const def = paramDefOf(d.row);
+      const v = def
+        ? Math.max(def.min, Math.min(def.max, d.origV - (dy / (ROW_H - 4)) * (def.max - def.min)))
+        : undefined;
+      onMoveKf(d.row, d.row.points[d.idx].kfIdx ?? d.idx, t, v);
+    }
+    bump();
+  };
+  const endDrag = (row: DopeRow, idx: number) => {
+    const d = drag.current;
+    drag.current = null;
+    // Click (pas de drag) → sélection du contexte + seek au point.
+    if (d && !d.moved) {
+      onSelectRow(row);
+      onSeek(row.points[idx].t);
+    }
+  };
+
+  const fmtT = (t: number) => `${(t / 1000).toFixed(2)}s`;
+
+  return (
+    <div className="flex-1 min-h-0 flex flex-col">
+      <div className="flex flex-1 min-h-0">
+        {/* Labels de rangées — scrollTop sync avec le plot */}
+        <div ref={labelRef} className="w-36 shrink-0 border-r border-gray-800 overflow-y-hidden bg-gray-900/40">
+          {rows.map((r) => (
+            <button
+              key={r.key}
+              className="w-full flex items-baseline gap-1 px-2 text-left text-[9px] text-gray-400 hover:bg-gray-800/60 truncate"
+              style={{ height: ROW_H }}
+              title={r.kind === 'events' ? `Lane ${r.laneLabel} — sélectionner` : `${r.laneLabel} ${r.paramLabel ?? ''} — ouvrir l'éditeur de courbe`}
+              onClick={() => onSelectRow(r)}
+            >
+              <span className="truncate font-bold">{r.laneLabel}</span>
+              {r.paramLabel && <span className="truncate text-gray-500">{r.paramLabel}</span>}
+              <span className="ml-auto text-gray-600">{r.points.length}</span>
+            </button>
+          ))}
+          {rows.length === 0 && (
+            <div className="px-2 py-3 text-[10px] text-gray-600 italic">
+              Aucune automation — les courbes de lanes et les événements
+              apparaîtront ici.
+            </div>
+          )}
+        </div>
+        {/* Plot — scroll H sync avec la timeline */}
+        <div ref={plotRef} className="flex-1 overflow-auto" onScroll={onPlotScroll}>
+          <div className="relative" style={{ width: plotW, minHeight: '100%' }}>
+            {/* Région de boucle */}
+            {loopStartMs != null && loopEndMs != null && loopEndMs > loopStartMs && (
+              <div className="absolute top-0 bottom-0 bg-cyan-500/5 border-x border-cyan-500/20 pointer-events-none"
+                style={{ left: ms2px(loopStartMs), width: ms2px(loopEndMs - loopStartMs) }} />
+            )}
+            {/* Rangées */}
+            {rows.map((r) => {
+              const def = paramDefOf(r);
+              return (
+                <div key={r.key} className="relative border-b border-gray-800/40" style={{ height: ROW_H }}>
+                  {r.points.map((pt, i) => {
+                    const { left, top } = pointPos(r, pt.t, pt.v);
+                    return (
+                      <div
+                        key={i}
+                        className={`absolute w-2 h-2 rotate-45 cursor-ew-resize border ${
+                          r.kind === 'events'
+                            ? 'bg-amber-500/80 border-amber-300'
+                            : 'bg-cyan-500/80 border-cyan-300'
+                        }`}
+                        style={{ left, top }}
+                        title={
+                          r.kind === 'events'
+                            ? `${fmtT(pt.t)} — drag = déplacer le clip`
+                            : `${fmtT(pt.t)} v=${(pt.v ?? def?.def ?? 0).toFixed(2)} — drag = retime/valeur`
+                        }
+                        onPointerDown={(e) => startDrag(e, r, i)}
+                        onPointerMove={moveDrag}
+                        onPointerUp={() => endDrag(r, i)}
+                      />
+                    );
+                  })}
+                </div>
+              );
+            })}
+            {/* Playhead — même curseur que la timeline */}
+            <div className="absolute top-0 bottom-0 w-px bg-cyan-400 pointer-events-none"
+              style={{ left: ms2px(displayCursor) }} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};

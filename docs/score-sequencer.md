@@ -302,7 +302,7 @@ d'écrire.
 La lane `osc` fait du score le chef d'orchestre du **show entier**,
 pas seulement du spatial : ses clips émettent des messages OSC
 arbitraires vers le matériel externe (lumières, vidéo, consoles,
-autres machines). Clip instantané édité dans l'inspector :
+autres machines). Clip instantané édité dans le panneau `clip` (zone haute) :
 
 - `addr` — l'adresse OSC (`/light/go`, `/video/cue/12`…)
 - `args` — mini-langage à tokens : `42` → int, `1.5` → float,
@@ -343,8 +343,7 @@ gelée = ces objets ; les lanes objet mutées excluent leurs cibles
 que le backend lirait « clear global » : une couverture entièrement
 mutée saute le clip (exception `attention` : couverture suivie →
 `release` explicite, la forme « tout » du contrôle). Le mute de la
-lane conductor saute tout l'événementiel. `strength`/`vel` s'éditent
-dans l'inspector.
+lane conductor saute tout l'événementiel. `strength`/`vel` s'éditent dans le panneau `clip`.
 
 **Panic tue le transport** : `panic` (opérateur Esc, OSC
 `/stagespace/panic`, ou clip `panic` du score) invalide la
@@ -519,7 +518,7 @@ tous les rendus. Sémantiques :
 - **Slot** : la couverture est l'**assignation effective** du move —
   par défaut **suivie en live** (`trackIds` absent → dérivée de
   `slot.trackIds` à chaque rendu/play : une réassignation dans
-  l'Atelier se propage au score automatiquement). L'inspector peut
+  l'Atelier se propage au score automatiquement). Le panneau `clip` peut
   **geler** la couverture (toggle ⇄ → `trackIds` explicite = override
   local du clip : retirer un objet filtre les `osc_ids`/
   `track_indices` du spawn, en ajouter un étend le move). Le toggle
@@ -574,17 +573,34 @@ Trois portes pour les mêmes verbes (même code, pas trois chemins) :
    sur la sélection — qui vit désormais dans `useScoreStore` :
    `selectedClipId`/`selGlobalLane`).
 
-### Zone haute — éditeur de courbes du clip sélectionné
+### Zone haute — panneau contextuel (dopesheet / params / courbes)
 
-Au lieu d'une sous-piste d'automation par paramètre (modèle DAW
-classique — explosion de pistes), l'éditeur de courbes est
-**attaché au clip sélectionné** : un sélecteur liste les courbes
-éditables du clip + un éditeur visuel de keyframes. Modèle *clip
-envelopes* (Live) plutôt que *track automation* :
+La zone haute est un **panneau contextuel à 4 états** (refonte
+2026-11-26 — l'ancien bandeau inspector du bas est supprimé, son
+contenu remonte ici) :
 
-- Les courbes ne sont évaluées que pendant la fenêtre du clip —
-  évaluation bornée, pas de lanes toujours actives.
-- Même idiome que l'app : sélection → éditeur dédié (cf. Atelier).
+- **Rien sélectionné → dopesheet éditable** : vue d'ensemble de
+  TOUTE l'automation — une rangée par courbe (lanes GLOBALFX/
+  SPATIALFX/MODULATION + lanes objet `obj-N` + courbes clip-scoped)
+  et une rangée d'événements par lane porteuse de clips (conductor,
+  osc…). Keyframes ◆ déplaçables : drag horizontal = retime, vertical
+  = valeur (plage du ParamDef) ; les ◆ événements déplacent le clip.
+  Click rangée = sélection du contexte (bascule vers l'éditeur de
+  courbe), click ◆ = sélection + seek. Scroll horizontal synchronisé
+  avec la timeline du bas.
+- **Clip sélectionné → rangée `clip`** : les paramètres du clip
+  (couverture/réassignation, début/durée/fades/repeat, champs par
+  type de ref — force de geste, vélocité de throw, addr/args/cible
+  OSC, action soundcheck, n de solo, surface de view) s'éditent dans
+  la zone droite — ex-inspector remonté.
+- **Clip slot → courbes clip-scoped** : modèle *clip envelopes*
+  (Live) plutôt que *track automation* — un sélecteur liste les
+  courbes éditables du clip (graphe/transform/merge + enveloppe)
+  + éditeur visuel de keyframes, évaluées pendant la fenêtre du clip.
+- **Lane sélectionnée → courbes de lane** : GLOBALFX (macros merge),
+  SPATIALFX (scalaires zones/règles), MODULATION (valeurs nommées),
+  lanes objet (depth/canaux/pos.*).
+
 - **Courbe vs fades** : les fades restent des poignées de bord de
   clip (articulation), les courbes sont les paramètres continus.
 

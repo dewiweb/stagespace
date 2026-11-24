@@ -16,8 +16,9 @@
 ///   ScoreTransport.tsx  barre play/loop/zoom
 ///   ScoreTimeline.tsx   en-têtes de lanes + clips + curseur
 ///   ScoreClipPicker.tsx popup d'ajout de clip
-///   ScoreInspector.tsx  bandeau bas (couverture, saisies, actions)
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+///   ScoreDopesheet.tsx  vue d'ensemble éditable (aucune sélection)
+///   ScoreClipParams.tsx params du clip (ex-inspector, zone haute)
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   useScoreStore, GLOBALFX_LANE, MODULATION_LANE, CONDUCTOR_LANE, OSC_LANE, SPATIALFX_LANE, laneIdOf,
   type ScoreClipDoc, type ScoreLaneMode,
@@ -45,7 +46,9 @@ import { toast } from '../../utils/toast-helpers';
 import Modal from '../ui/Modal';
 import { ScoreClipPicker, type ScorePickerState } from './ScoreClipPicker';
 import { ScoreToolbar } from './ScoreToolbar';
-import { ScoreInspector } from './ScoreInspector';
+import { ScoreDopesheet } from './ScoreDopesheet';
+import { ScoreClipParams } from './ScoreClipParams';
+import { collectDopesheetRows, type DopeRow } from '../../utils/scoreDopesheet';
 import type { ClipDragMode } from './ScoreClipBlock';
 
 const ScoreView: React.FC = () => {
@@ -453,7 +456,9 @@ const ScoreView: React.FC = () => {
           ? OBJECT_LANE_DEFS[0].id
           : selLaneIsOsc
             ? ''
-            : 'enveloppe';
+            : selClip
+              ? 'clip'
+              : 'enveloppe';
   // Le chip actif doit exister dans le contexte courant — sinon
   // retombe sur la première entrée du catalogue. Contexte modulation :
   // le nom fraîchement saisi (pas encore de courbe) reste valide.
@@ -520,12 +525,22 @@ const ScoreView: React.FC = () => {
         : selClip
         ? [
             {
-              rows: [{
-                id: 'enveloppe',
-                active: effParam === 'enveloppe',
-                hasData: false,
-                title: 'fade-in / fade-out effectifs du clip',
-              }],
+              rows: [
+                {
+                  id: 'clip',
+                  active: effParam === 'clip',
+                  hasData: false,
+                  title: 'Paramètres du clip — couverture, timing, référence',
+                },
+                ...(isSlot
+                  ? [{
+                      id: 'enveloppe',
+                      active: effParam === 'enveloppe',
+                      hasData: false,
+                      title: 'fade-in / fade-out effectifs du clip',
+                    }]
+                  : []),
+              ],
             },
             ...(isSlot && nodeDefs.length > 0
               ? [{
@@ -565,6 +580,63 @@ const ScoreView: React.FC = () => {
           ]
         : [];
 
+  // ── Dopesheet (rien de sélectionné) — vue d'ensemble éditable de
+  //    toute l'automation. Rangées collectées depuis le doc courant.
+  const [hScroll, setHScroll] = useState(0);
+  const dopeRows = useMemo(
+    () => collectDopesheetRows(
+      {
+        laneStates, clips, durationMs,
+        globalFxCurves, modulationCurves, spatialFxCurves, objectCurves,
+      },
+      (c) => clipLabelOf(c, moveSlots, cues),
+    ),
+    [laneStates, clips, durationMs, globalFxCurves, modulationCurves, spatialFxCurves, objectCurves, moveSlots, cues],
+  );
+  /// ParamDef de la rangée — pour le drag vertical (valeur). Les defs
+  /// clip-scoped dépendent du slot porteur de CHAQUE clip.
+  const dopeParamDefOf = useCallback((row: DopeRow): ParamDef | undefined => {
+    if (row.kind === 'events') return undefined;
+    if (row.kind === 'lane-curve') {
+      if (row.laneId === GLOBALFX_LANE) return globalFxDefs.find((d) => d.id === row.paramId);
+      if (row.laneId === SPATIALFX_LANE) return spatialFxDefs.find((d) => d.id === row.paramId);
+      if (row.laneId === MODULATION_LANE) return modDefs.find((d) => d.id === row.paramId);
+      return OBJECT_LANE_DEFS.find((d) => d.id === row.paramId);
+    }
+    const clip = clips.find((c) => c.id === row.clipId);
+    const slot = clip?.ref.type === 'slot'
+      ? moveSlots.find((s) => s.id === (clip.ref as { slotId: string }).slotId)
+      : undefined;
+    return [...nodeParamDefsOf(
+      slot?.graphJson?.nodes ??
+        (slot ? buildGraphForSlot(slot.templateId, Math.max(1, slot.trackIds?.length ?? 1))?.nodes : undefined),
+    ), ...clipParamDefsOf(slot), ...MERGE_BLEND_DEFS].find((d) => d.id === row.paramId);
+  }, [clips, moveSlots, globalFxDefs, spatialFxDefs, modDefs]);
+  /// Sélection d'une rangée → bascule vers son contexte d'édition.
+  const onDopeSelectRow = useCallback((row: DopeRow) => {
+    if (row.kind === 'clip-curve' && row.clipId) {
+      selectClip(row.clipId);
+      if (row.paramId) setCurveParam(row.paramId);
+    } else if (row.laneId) {
+      selectGlobalLane(row.laneId);
+      if (row.paramId) setCurveParam(row.paramId);
+    }
+  }, [selectClip, selectGlobalLane]);
+  /// Drag ◆ courbe — retime (t) + valeur (v). Le setter re-trie.
+  const onDopeMoveKf = useCallback((row: DopeRow, kfIdx: number, t: number, v?: number) => {
+    const read = () => row.kind === 'clip-curve'
+      ? clips.find((c) => c.id === row.clipId)?.curves?.[row.paramId ?? '']
+      : row.laneId === GLOBALFX_LANE ? globalFxCurves?.[row.paramId ?? '']
+        : row.laneId === SPATIALFX_LANE ? spatialFxCurves?.[row.paramId ?? '']
+          : row.laneId === MODULATION_LANE ? modulationCurves?.[row.paramId ?? '']
+            : objectCurves?.[row.laneId ?? '']?.[row.paramId ?? ''];
+    const kfs = read();
+    if (!kfs || !row.paramId) return;
+    const next = kfs.map((k, i) => (i === kfIdx ? { ...k, t, v: v ?? k.v } : k));
+    if (row.kind === 'clip-curve' && row.clipId) setClipCurve(row.clipId, row.paramId, next);
+    else if (row.laneId) setLaneCurve(row.laneId, row.paramId, next);
+  }, [clips, globalFxCurves, spatialFxCurves, modulationCurves, objectCurves, setClipCurve, setLaneCurve]);
+
   return (
     <div ref={splitRootRef} className="flex-1 flex flex-col bg-gray-950 text-gray-200 overflow-hidden select-none">
       <ScoreCurvePane
@@ -601,6 +673,49 @@ const ScoreView: React.FC = () => {
         setMergeStrategy={setMergeStrategy}
         setLaneCurve={setLaneCurve}
         setClipCurve={setClipCurve}
+        dopesheet={
+          <ScoreDopesheet
+            rows={dopeRows}
+            durationMs={durationMs}
+            ms2px={ms2px}
+            px2ms={px2ms}
+            displayCursor={displayCursor}
+            loopStartMs={loopStartMs}
+            loopEndMs={loopEndMs}
+            paramDefOf={dopeParamDefOf}
+            onSelectRow={onDopeSelectRow}
+            onSeek={seekScore}
+            onMoveKf={onDopeMoveKf}
+            onMoveClip={moveClip}
+            scrollLeft={hScroll}
+            onHScroll={setHScroll}
+          />
+        }
+        clipParams={selClip ? (
+          <ScoreClipParams
+            clip={selClip}
+            clipLabel={clipLabel}
+            manualOscIds={manualOscIds}
+            covered={covered}
+            durationMs={durationMs}
+            onMoveClip={moveClip}
+            onResizeClip={resizeClip}
+            onSetClipFades={setClipFades}
+            onSetClipRepeat={setClipRepeat}
+            onSetClipTrackIds={setClipTrackIds}
+            onDuplicateClip={duplicateClip}
+            onUpdateRef={retargetClip}
+          />
+        ) : undefined}
+        footer={
+          <div className="flex items-center justify-end gap-2 text-[9px] text-gray-600">
+            <span>{clips.length} clip(s)</span>
+            <button className="hover:text-gray-300" onClick={() => {
+              useScoreStore.getState().clearScore();
+              toast.info('Score vidé');
+            }}>Vider le score</button>
+          </div>
+        }
       />
       {/* Poignée de partage éditeur/timeline */}
       <div
@@ -711,6 +826,8 @@ const ScoreView: React.FC = () => {
         onClipPointerMove={onClipPointerMove}
         onClipPointerUp={onClipPointerUp}
         onContextMenu={openCtxMenu}
+        scrollLeft={hScroll}
+        onHScroll={setHScroll}
       />
 
       {/* Picker d'ajout de clip — globalfx → markers ; lane objet →
@@ -763,22 +880,6 @@ const ScoreView: React.FC = () => {
         </Modal>
       )}
 
-      {/* Bandeau info bas — inspector du clip sélectionné */}
-      <ScoreInspector
-        clipsCount={clips.length}
-        selected={selClip ?? null}
-        clipLabel={clipLabel}
-        manualOscIds={manualOscIds}
-        covered={covered}
-        durationMs={durationMs}
-        onMoveClip={moveClip}
-        onResizeClip={resizeClip}
-        onSetClipFades={setClipFades}
-        onSetClipRepeat={setClipRepeat}
-        onSetClipTrackIds={setClipTrackIds}
-        onDuplicateClip={duplicateClip}
-        onUpdateRef={retargetClip}
-      />
     </div>
   );
 };

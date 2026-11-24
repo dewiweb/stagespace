@@ -74,7 +74,7 @@ cd tauri-app/frontend
 npm install              # Install deps
 npm run dev              # Dev server (Vite)
 npm run build            # Production build (tsc + vite build)
-npm test                 # Run tests (444 tests, vitest)
+npm test                 # Run tests (594 tests, vitest)
 npm run contracts        # Regenerate TS types from Rust (ts-rs → src/types/generated/)
 npm run test:watch       # Watch mode
 npx tsc -b               # Type check (build mode — `tsc --noEmit` is vacuous on the solution-style root tsconfig)
@@ -131,9 +131,9 @@ CI fails if the committed files drift from the Rust sources.
 |-------|-------|
 | Rust engines | 545 |
 | Tauri backend | 75 |
-| Frontend (vitest) | 444 |
+| Frontend (vitest) | 594 |
 | E2E CLI | ~100 assertions |
-| **Total** | **~1164** |
+| **Total** | **~1314** |
 
 ## Live Show Safety Features
 

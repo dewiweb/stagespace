@@ -70,6 +70,9 @@ export const ScoreTimeline: React.FC<{
   onClipPointerMove: (e: React.PointerEvent, clip: ScoreClipDoc) => void;
   onClipPointerUp: (e: React.PointerEvent) => void;
   onContextMenu: (target: ScoreMenuTarget, x: number, y: number) => void;
+  /// Scroll horizontal partagé avec le dopesheet (zone haute).
+  scrollLeft?: number;
+  onHScroll?: (left: number) => void;
 }> = ({
   grow, durationMs, displayCursor, playing, tickEvery, laneH, rowH,
   ms2px, px2ms, loopStartMs, loopEndMs, seekScore,
@@ -79,12 +82,20 @@ export const ScoreTimeline: React.FC<{
   onToggleLaneMute, onSetLaneMode,
   clipOrphan, effFades, clipLabel,
   onClipPointerDown, onClipPointerMove, onClipPointerUp, onContextMenu,
+  scrollLeft, onHScroll,
 }) => {
   /// En-têtes de lanes — scrollTop synchronisé avec la timeline
   /// (les rangées ont les mêmes hauteurs : ruler 24 + 2×24
   /// lanes globales + hauteur de lane). overflow-y: hidden mais
   /// scrollable par code.
   const laneHeadRef = useRef<HTMLDivElement>(null);
+  /// Conteneur scrollable de la timeline — scrollLeft piloté par le
+  /// dopesheet quand c'est lui qui défile.
+  const tlScrollRef = useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    if (scrollLeft !== undefined && tlScrollRef.current && tlScrollRef.current.scrollLeft !== scrollLeft)
+      tlScrollRef.current.scrollLeft = scrollLeft;
+  }, [scrollLeft]);
   return (
     <div className="flex overflow-hidden min-h-0" style={{ flexGrow: grow, flexBasis: 0 }}>
       <div ref={laneHeadRef} className="w-32 shrink-0 border-r border-gray-800 bg-gray-900/40 flex flex-col overflow-y-hidden">
@@ -185,9 +196,11 @@ export const ScoreTimeline: React.FC<{
 
       {/* Zone timeline — son scroll vertical pilote les en-têtes */}
       <div
+        ref={tlScrollRef}
         className="flex-1 overflow-auto"
         onScroll={(e) => {
           if (laneHeadRef.current) laneHeadRef.current.scrollTop = e.currentTarget.scrollTop;
+          onHScroll?.(e.currentTarget.scrollLeft);
         }}
         onClick={onClearSelection}
       >
