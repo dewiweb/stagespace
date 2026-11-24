@@ -23,7 +23,7 @@ stagespace/
 ## Prerequisites
 
 - **Rust**: stable toolchain (1.88+)
-- **Node.js**: 20+
+- **Node.js**: 24+ (`.nvmrc` — identique à la CI `setup-node`)
 - **System deps (Linux)**: `libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libasound2-dev patchelf` (`libasound2-dev` required by `cpal`/`alsa-sys` for native audio capture)
 
 ## Build Commands
