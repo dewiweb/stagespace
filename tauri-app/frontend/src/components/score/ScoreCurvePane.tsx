@@ -14,11 +14,13 @@ import { DOPE_ROW_H, DOPE_HEADER_H } from '../../utils/scoreDopesheet';
 import { MERGE_BLEND_DEFS, OBJECT_LANE_DEFS, type ParamDef } from './scoreParams';
 
 /// Enveloppe fade-in → sustain → tail fade-out APRÈS la fin de
-/// fenêtre du clip (le move s'éteint au-delà du bord).
+/// fenêtre du clip (le move s'éteint au-delà du bord). Les deux
+/// poignées (entrée, fin de tail) sont draggables horizontalement.
 const EnvelopeEditor: React.FC<{
   fades: { inMs: number; outMs: number };
   endMs: number;
-}> = ({ fades, endMs }) => {
+  onFades?: (inMs: number, outMs: number) => void;
+}> = ({ fades, endMs, onFades }) => {
   const end = endMs;
   const total = end + fades.outMs + 500;
   /// Même mécanique que CurveEditor — viewBox = pixels réels.
@@ -27,6 +29,15 @@ const EnvelopeEditor: React.FC<{
   const H = measured.height > 0 ? measured.height : 100;
   const pad = 12;
   const x = (ms: number) => pad + (ms / total) * (W - pad * 2);
+  /// Échelle figée pendant un drag — sinon allonger la tail
+  /// élargirait `total` en direct et la poignée décrocherait.
+  const drag = useRef<'in' | 'out' | null>(null);
+  const dragTotal = useRef(total);
+  const toMs = (e: React.PointerEvent<SVGSVGElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const px = e.clientX - r.left;
+    return Math.max(0, Math.round(((px - pad) / (W - pad * 2)) * dragTotal.current / 50) * 50);
+  };
   const pts = [
     [x(0), H - 8],
     [x(fades.inMs), 8],
@@ -37,7 +48,16 @@ const EnvelopeEditor: React.FC<{
     .join(' ');
   return (
     <div ref={wrapRef} className="flex-1 min-h-0 min-w-0">
-    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
+    <svg
+      width={W} height={H} viewBox={`0 0 ${W} ${H}`}
+      onPointerMove={(e) => {
+        if (!onFades || drag.current === null) return;
+        const ms = toMs(e);
+        if (drag.current === 'in') onFades(Math.min(ms, end), fades.outMs);
+        else onFades(fades.inMs, Math.max(0, ms - end));
+      }}
+      onPointerUp={() => { drag.current = null; }}
+    >
       <rect x={x(0)} y={0} width={x(end) - x(0)} height={H} className="fill-purple-500/10" />
       <rect x={x(end)} y={0} width={x(end + fades.outMs) - x(end)} height={H} className="fill-purple-500/5" />
       <line x1={x(end)} y1={0} x2={x(end)} y2={H} stroke="#a78bfa" strokeOpacity={0.5} strokeDasharray="3 3" />
@@ -54,6 +74,39 @@ const EnvelopeEditor: React.FC<{
         <text x={x(end + fades.outMs) - 30} y={H - 10} className="fill-cyan-300" fontSize="9">
           +{(fades.outMs / 1000).toFixed(1)}s tail
         </text>
+      )}
+      {onFades && (
+        <>
+          {/* Poignée fade-in — clampée sur la fenêtre du clip */}
+          <circle
+            cx={x(fades.inMs)} cy={8} r={5}
+            className="fill-cyan-300 stroke-gray-900 cursor-ew-resize"
+            strokeWidth={1.5}
+            onPointerDown={(e) => {
+              if (e.button !== 0) return;
+              e.stopPropagation();
+              drag.current = 'in';
+              dragTotal.current = total;
+              (e.target as Element).setPointerCapture(e.pointerId);
+            }}
+          />
+          <text x={x(fades.inMs) + 7} y={16} className="fill-cyan-300" fontSize="9">
+            {(fades.inMs / 1000).toFixed(1)}s in
+          </text>
+          {/* Poignée de fin de tail — fade-out post-clip */}
+          <circle
+            cx={x(end + fades.outMs)} cy={H - 8} r={5}
+            className="fill-violet-300 stroke-gray-900 cursor-ew-resize"
+            strokeWidth={1.5}
+            onPointerDown={(e) => {
+              if (e.button !== 0) return;
+              e.stopPropagation();
+              drag.current = 'out';
+              dragTotal.current = total;
+              (e.target as Element).setPointerCapture(e.pointerId);
+            }}
+          />
+        </>
       )}
     </svg>
     </div>
@@ -84,6 +137,8 @@ export const ScoreCurvePane: React.FC<{
   clipDefs: ParamDef[];
   /// Fades effectifs du clip sélectionné (enveloppe).
   selFades?: { inMs: number; outMs: number };
+  /// Édition des fades par les poignées de l'enveloppe.
+  onFades?: (inMs: number, outMs: number) => void;
   /// Libellé du clip sélectionné (pour le contexte + message).
   selClipLabel?: string;
   /// Groupes de lignes de la colonne paramètres (construits par
@@ -127,7 +182,7 @@ export const ScoreCurvePane: React.FC<{
   selLaneIsSpatialFx, spatialFxDefs, spatialFxCurves,
   selObjLane, objectCurves,
   effParam, durationMs, globalFxDefs, globalFxCurves, modDefs,
-  modulationCurves, nodeDefs, clipDefs, selFades, selClipLabel,
+  modulationCurves, nodeDefs, clipDefs, selFades, onFades, selClipLabel,
   paramGroups, paramEmptyContent, modName, setModName, setCurveParam,
   mergeStrategy, setMergeStrategy, setLaneCurve, setClipCurve,
   onSelectParam, dopeSync, explorerInfo, dopesheet, clipParams, footer,
@@ -227,7 +282,7 @@ export const ScoreCurvePane: React.FC<{
       );
     }
     const fades = selFades ?? { inMs: 0, outMs: 0 };
-    return <EnvelopeEditor fades={fades} endMs={selClip.durationMs ?? fades.inMs + 4_000} />;
+    return <EnvelopeEditor fades={fades} endMs={selClip.durationMs ?? fades.inMs + 4_000} onFades={onFades} />;
   })();
 
   return (

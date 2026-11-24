@@ -816,6 +816,7 @@ const ScoreView: React.FC = () => {
         nodeDefs={nodeDefs}
         clipDefs={clipDefs}
         selFades={selClip ? effFades(selClip) : undefined}
+        onFades={selClip ? (inMs, outMs) => setClipFades(selClip.id, inMs, outMs) : undefined}
         selClipLabel={selClip ? clipLabel(selClip) : undefined}
         paramGroups={paramGroups}
         paramEmptyContent={
