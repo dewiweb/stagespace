@@ -175,15 +175,17 @@ fn handle_conn(
     }
     if method == "GET" && path == "/events" {
         // SSE — le writer vit tant que le client lit, ou jusqu'à shutdown.
-        let head = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nAccess-Control-Allow-Origin: *\r\n\r\n";
-        if stream.write_all(head.as_bytes()).is_err() {
-            return;
-        }
+        // Le subscriber est enregistré AVANT les headers : un event
+        // broadcast entre la réponse et le push serait perdu sinon.
         let (tx, rx): (Sender<Value>, Receiver<Value>) = channel();
         subscribers
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .push(tx);
+        let head = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nAccess-Control-Allow-Origin: *\r\n\r\n";
+        if stream.write_all(head.as_bytes()).is_err() {
+            return;
+        }
         loop {
             match rx.recv_timeout(Duration::from_millis(500)) {
                 Ok(ev) => {
@@ -440,6 +442,33 @@ pub fn spawn_if_enabled(app: &AppHandle) {
 mod tests {
     use super::*;
     use std::io::Read;
+    use std::time::Instant;
+
+    /// Lit en accumulant jusqu'à voir `needle` (ou deadline). Les
+    /// lectures SSE peuvent arriver en plusieurs segments, et un
+    /// timeout de socket (WouldBlock/TimedOut) n'est qu'un « réessaie »
+    /// tant que la deadline globale n'est pas atteinte.
+    fn read_until(stream: &mut TcpStream, needle: &str, timeout: Duration) -> String {
+        let deadline = Instant::now() + timeout;
+        let mut buf = Vec::new();
+        let mut chunk = [0u8; 512];
+        while Instant::now() < deadline {
+            match stream.read(&mut chunk) {
+                Ok(0) => break,
+                Ok(n) => {
+                    buf.extend_from_slice(&chunk[..n]);
+                    if String::from_utf8_lossy(&buf).contains(needle) {
+                        break;
+                    }
+                }
+                Err(e)
+                    if e.kind() == std::io::ErrorKind::WouldBlock
+                        || e.kind() == std::io::ErrorKind::TimedOut => {}
+                Err(e) => panic!("read failed: {e}"),
+            }
+        }
+        String::from_utf8_lossy(&buf).into_owned()
+    }
 
     /// `serve` doit être stoppable : flag posé → l'accept loop sort, les
     /// writers SSE partent (sinon ils se maintiendraient vivants via
@@ -487,20 +516,19 @@ mod tests {
         stream
             .write_all(b"GET /events HTTP/1.1\r\nHost: x\r\n\r\n")
             .unwrap();
-        let mut head = [0u8; 128];
-        let n = stream.read(&mut head).unwrap();
-        assert!(String::from_utf8_lossy(&head[..n]).contains("text/event-stream"));
+        let head = read_until(&mut stream, "text/event-stream", Duration::from_secs(5));
+        assert!(head.contains("text/event-stream"));
 
         tx.send(serde_json::json!({"event": "test", "payload": 42}))
             .unwrap();
-        let mut buf = [0u8; 256];
-        let n = stream.read(&mut buf).unwrap();
-        assert!(String::from_utf8_lossy(&buf[..n]).contains("\"test\""));
+        let body = read_until(&mut stream, "\"test\"", Duration::from_secs(5));
+        assert!(body.contains("\"test\""));
 
         shutdown.store(true, Ordering::SeqCst);
         // Le writer SSE sort dans les ~500ms — reads suivants doivent
         // aboutir à EOF/err (un event résiduel peut traîner, d'où la marge).
         let mut ended = false;
+        let mut buf = [0u8; 256];
         for _ in 0..6 {
             match stream.read(&mut buf) {
                 Ok(0) | Err(_) => {
