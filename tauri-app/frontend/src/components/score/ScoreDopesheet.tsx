@@ -9,9 +9,9 @@
 /// synchronisé par le parent.
 import React, { useRef } from 'react';
 import type { DopeRow } from '../../utils/scoreDopesheet';
+import { DOPE_ROW_H as ROW_H, DOPE_HEADER_H } from '../../utils/scoreDopesheet';
 import type { ParamDef } from './scoreParams';
-
-const ROW_H = 18;
+import type { ParamGroup } from './ScoreParamsPanel';
 const SNAP_MS = 50;
 
 export const ScoreDopesheet: React.FC<{
@@ -35,10 +35,17 @@ export const ScoreDopesheet: React.FC<{
   /// Scroll horizontal synchronisé avec la timeline (parent-driven).
   scrollLeft?: number;
   onHScroll?: (left: number) => void;
+  /// Groupes de la colonne PARAMÈTRES — le plot reproduit leur
+  /// structure (headers + rangées aux mêmes hauteurs) pour un
+  /// alignement vertical strict. Absent : rangées à plat.
+  groups?: ParamGroup[];
+  /// Scroll vertical synchronisé avec la colonne PARAMÈTRES.
+  scrollTop?: number;
+  onVScroll?: (top: number) => void;
 }> = ({
   rows, durationMs, ms2px, px2ms, displayCursor,
   loopStartMs, loopEndMs, paramDefOf, onSelectRow, onSeek, onMoveKf,
-  onMoveClip, scrollLeft, onHScroll,
+  onMoveClip, scrollLeft, onHScroll, groups, scrollTop, onVScroll,
 }) => {
   const plotW = ms2px(durationMs) + 200;
   const plotRef = useRef<HTMLDivElement>(null);
@@ -50,14 +57,39 @@ export const ScoreDopesheet: React.FC<{
   /// État visuel pendant le drag — re-render léger par rangée.
   const [, bump] = React.useReducer((x: number) => x + 1, 0);
 
-  // Sync scroll — timeline → dopesheet et dopesheet → labels.
+  // Sync scroll — timeline → dopesheet (H), colonne → plot (V).
   React.useEffect(() => {
     if (scrollLeft !== undefined && plotRef.current && plotRef.current.scrollLeft !== scrollLeft)
       plotRef.current.scrollLeft = scrollLeft;
   }, [scrollLeft]);
+  React.useEffect(() => {
+    if (scrollTop !== undefined && plotRef.current && plotRef.current.scrollTop !== scrollTop)
+      plotRef.current.scrollTop = scrollTop;
+  }, [scrollTop]);
   const onPlotScroll = (e: React.UIEvent<HTMLDivElement>) => {
     onHScroll?.(e.currentTarget.scrollLeft);
+    onVScroll?.(e.currentTarget.scrollTop);
   };
+
+  /// Position verticale de chaque rangée — si `groups` est fourni le
+  /// plot reproduit sa structure (bandeau header + rangées), sinon
+  /// les rangées s'empilent à plat.
+  const rowTopOf = React.useMemo(() => {
+    const m = new Map<string, number>();
+    let y = 0;
+    if (groups) {
+      for (const g of groups) {
+        if (g.header) y += DOPE_HEADER_H;
+        for (const r of g.rows) { m.set(r.id, y); y += ROW_H; }
+      }
+    } else {
+      for (const r of rows) { m.set(r.key, y); y += ROW_H; }
+    }
+    return m;
+  }, [groups, rows]);
+  const contentH = groups
+    ? groups.reduce((h, g) => h + (g.header ? DOPE_HEADER_H : 0) + g.rows.length * ROW_H, 0)
+    : rows.length * ROW_H;
 
   const pointPos = (row: DopeRow, t: number, v: number | undefined) => {
     const def = paramDefOf(row);
@@ -116,17 +148,18 @@ export const ScoreDopesheet: React.FC<{
         {/* Plot — labels dans la colonne PARAMÈTRES (même ordre) ;
             scroll H sync avec la timeline */}
         <div ref={plotRef} className="flex-1 overflow-auto" onScroll={onPlotScroll}>
-          <div className="relative" style={{ width: plotW, minHeight: '100%' }}>
+          <div className="relative" style={{ width: plotW, height: Math.max(contentH, 1), minHeight: '100%' }}>
             {/* Région de boucle */}
             {loopStartMs != null && loopEndMs != null && loopEndMs > loopStartMs && (
               <div className="absolute top-0 bottom-0 bg-cyan-500/5 border-x border-cyan-500/20 pointer-events-none"
                 style={{ left: ms2px(loopStartMs), width: ms2px(loopEndMs - loopStartMs) }} />
             )}
-            {/* Rangées */}
+            {/* Rangées — top calculé depuis la structure des groupes
+                pour l'alignement pixel avec la colonne PARAMÈTRES */}
             {rows.map((r) => {
               const def = paramDefOf(r);
               return (
-                <div key={r.key} className="relative border-b border-gray-800/40" style={{ height: ROW_H }}>
+                <div key={r.key} className="absolute left-0 right-0 border-b border-gray-800/40" style={{ top: rowTopOf.get(r.key) ?? 0, height: ROW_H }}>
                   {r.points.map((pt, i) => {
                     const { left, top } = pointPos(r, pt.t, pt.v);
                     return (

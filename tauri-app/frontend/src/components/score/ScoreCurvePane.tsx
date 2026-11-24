@@ -10,6 +10,7 @@ import { GLOBALFX_LANE, MODULATION_LANE, SPATIALFX_LANE } from '../../store/useS
 import { CurveEditor } from './CurveEditor';
 import { useElementSize } from './useElementSize';
 import { ScoreParamsPanel, type ParamGroup } from './ScoreParamsPanel';
+import { DOPE_ROW_H, DOPE_HEADER_H } from '../../utils/scoreDopesheet';
 import { MERGE_BLEND_DEFS, OBJECT_LANE_DEFS, type ParamDef } from './scoreParams';
 
 /// Enveloppe fade-in → sustain → tail fade-out APRÈS la fin de
@@ -96,6 +97,9 @@ export const ScoreCurvePane: React.FC<{
   /// Override du click rangée (dopesheet : l'id est une `DopeRow.key`,
   /// pas un paramId) — défaut `setCurveParam`.
   onSelectParam?: (id: string) => void;
+  /// Mode dopesheet — colonne compacte hauteur fixe + scroll V
+  /// synchronisé avec le plot (alignement pixel des rangées).
+  dopeSync?: { scrollTop: number; onVScroll: (top: number) => void };
   mergeStrategy: string;
   setMergeStrategy: (s: string) => void;
   setLaneCurve: (laneId: string, param: string, kfs: ScoreKeyframe[] | undefined) => void;
@@ -115,7 +119,7 @@ export const ScoreCurvePane: React.FC<{
   modulationCurves, nodeDefs, clipDefs, selFades, selClipLabel,
   paramGroups, paramEmptyContent, modName, setModName, setCurveParam,
   mergeStrategy, setMergeStrategy, setLaneCurve, setClipCurve,
-  onSelectParam, dopesheet, clipParams, footer,
+  onSelectParam, dopeSync, dopesheet, clipParams, footer,
 }) => {
   /// Partage réglable colonnes paramètres / éditeur — même mécanique
   /// que topFrac, bornes 20–70 %.
@@ -234,6 +238,10 @@ export const ScoreCurvePane: React.FC<{
         onModNameChange={setModName}
         onModNameCommit={setCurveParam}
         onSelectParam={onSelectParam ?? setCurveParam}
+        rowHeight={dopeSync ? DOPE_ROW_H : undefined}
+        headerHeight={dopeSync ? DOPE_HEADER_H : undefined}
+        scrollTop={dopeSync?.scrollTop}
+        onVScroll={dopeSync?.onVScroll}
         groups={paramGroups}
         emptyContent={paramEmptyContent}
       />

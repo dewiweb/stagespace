@@ -33,11 +33,26 @@ export const ScoreParamsPanel: React.FC<{
   groups: ParamGroup[];
   /// Contenu affiché quand `groups` est vide (ex. rien sélectionné).
   emptyContent?: React.ReactNode;
+  /// Mode compact à hauteur fixe (dopesheet) — les rangées s'alignent
+  /// pixel-pour-pixel sur les rangées du plot voisin.
+  rowHeight?: number;
+  headerHeight?: number;
+  /// Scroll vertical synchronisé avec le plot (dopesheet).
+  scrollTop?: number;
+  onVScroll?: (top: number) => void;
 }> = ({
   frac, contextLabel, showStrategy, mergeStrategy, onMergeStrategy,
   modName, onModNameChange, onModNameCommit,
   onSelectParam, groups, emptyContent,
-}) => (
+  rowHeight, headerHeight, scrollTop, onVScroll,
+}) => {
+  /// Scroll vertical piloté par le plot voisin (dopesheet).
+  const listRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    if (scrollTop !== undefined && listRef.current && listRef.current.scrollTop !== scrollTop)
+      listRef.current.scrollTop = scrollTop;
+  }, [scrollTop]);
+  return (
   <div className="min-w-0 flex flex-col px-2 py-1.5 gap-1" style={{ flexGrow: frac, flexBasis: 0 }}>
     <div className="flex items-center gap-2">
       <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Paramètres</span>
@@ -69,17 +84,27 @@ export const ScoreParamsPanel: React.FC<{
         className="w-full bg-gray-800/60 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-amber-200 placeholder:text-gray-600 outline-none focus:border-amber-500"
       />
     )}
-    <div className="flex-1 overflow-y-auto flex flex-col gap-0.5 pr-1">
+    <div
+      ref={listRef}
+      className={`flex-1 overflow-y-auto flex flex-col pr-1 ${rowHeight ? '' : 'gap-0.5'}`}
+      onScroll={onVScroll ? (e) => onVScroll(e.currentTarget.scrollTop) : undefined}
+    >
       {groups.length === 0 && emptyContent}
       {groups.map((g, gi) => (
         <React.Fragment key={gi}>
-          {g.header && <div className="px-1 pt-1 text-[9px] uppercase text-gray-600">{g.header}</div>}
+          {g.header && (
+            <div
+              className="px-1 text-[9px] uppercase text-gray-600 flex items-end"
+              style={headerHeight ? { height: headerHeight } : { paddingTop: 4 }}
+            >{g.header}</div>
+          )}
           {g.rows.map((r) => (
             <button
               key={r.id}
               title={r.title}
               onClick={() => onSelectParam(r.id)}
-              className={`w-full text-left px-2 py-1 text-[10px] font-bold rounded border ${
+              style={rowHeight ? { height: rowHeight } : undefined}
+              className={`w-full text-left px-2 ${rowHeight ? 'py-0 flex items-center' : 'py-1'} text-[10px] font-bold rounded border ${
                 r.active
                   ? 'border-cyan-500 text-cyan-300 bg-cyan-900/30'
                   : 'border-gray-700/60 text-gray-400 hover:text-gray-200 hover:bg-gray-800/40'
@@ -92,4 +117,5 @@ export const ScoreParamsPanel: React.FC<{
       ))}
     </div>
   </div>
-);
+  );
+};

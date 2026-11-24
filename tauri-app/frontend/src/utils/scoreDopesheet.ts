@@ -22,6 +22,11 @@ import {
 } from '../store/useScoreStore';
 import { effectiveTrackIds } from './scoreResolve';
 
+/// Métrique partagée dopesheet — la colonne PARAMÈTRES et le plot
+/// utilisent les mêmes hauteurs pour un alignement vertical strict.
+export const DOPE_ROW_H = 18;
+export const DOPE_HEADER_H = 14;
+
 export interface DopePoint {
   t: number;
   /// Valeur du keyframe — absent pour les points événements (clips).

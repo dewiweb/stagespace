@@ -526,6 +526,39 @@ const ScoreView: React.FC = () => {
     else if (row.laneId) setLaneCurve(row.laneId, row.paramId, next);
   }, [clips, globalFxCurves, spatialFxCurves, modulationCurves, objectCurves, setClipCurve, setLaneCurve]);
 
+  /// Rangées du dopesheet exposées dans la colonne PARAMÈTRES —
+  /// `ParamRow.id` = `DopeRow.key` → onSelectParam. Partagées avec le
+  /// plot (`groups`) pour l'alignement vertical strict.
+  const dopeGroups: ParamGroup[] = useMemo(() => [
+    ...(dopeRows.some((r) => r.kind === 'events')
+      ? [{
+          header: 'événements',
+          rows: dopeRows.filter((r) => r.kind === 'events').map((r) => ({
+            id: r.key,
+            active: false,
+            hasData: true,
+            title: `Lane ${r.laneLabel} — sélectionner`,
+            display: r.laneLabel,
+          })),
+        }]
+      : []),
+    ...(dopeRows.some((r) => r.kind !== 'events')
+      ? [{
+          header: 'automation',
+          rows: dopeRows.filter((r) => r.kind !== 'events').map((r) => ({
+            id: r.key,
+            active: false,
+            hasData: true,
+            title: `${r.laneLabel} ${r.paramLabel ?? ''} — ouvrir l'éditeur de courbe`,
+            display: `${r.laneLabel} ${r.paramLabel ?? ''}`,
+          })),
+        }]
+      : []),
+  ], [dopeRows]);
+  /// Mode dopesheet — colonne compacte alignée + scroll V sync.
+  const dopesheetMode = !selClip && !selLaneIsGlobalFx && !selLaneIsMod && !selLaneIsSpatialFx && !selObjLane;
+  const [dopeVScroll, setDopeVScroll] = useState(0);
+
   /// Groupes de lignes de la colonne paramètres — le panneau ne
   /// connaît pas le contexte, ScoreView le résout.
   const paramGroups: ParamGroup[] = selLaneIsGlobalFx
@@ -578,7 +611,7 @@ const ScoreView: React.FC = () => {
             })),
           }]
         : selLaneIsOsc
-        ? []
+        ? dopeGroups
         : selClip
         ? [
             {
@@ -635,35 +668,9 @@ const ScoreView: React.FC = () => {
                 }]
               : []),
           ]
-        // Rien sélectionné (ou lane sans courbes : conductor/osc) —
-        // la colonne liste les rangées du dopesheet : événements puis
-        // automation. `ParamRow.id` = `DopeRow.key` → onSelectParam.
-        : [
-            ...(dopeRows.some((r) => r.kind === 'events')
-              ? [{
-                  header: 'événements',
-                  rows: dopeRows.filter((r) => r.kind === 'events').map((r) => ({
-                    id: r.key,
-                    active: false,
-                    hasData: true,
-                    title: `Lane ${r.laneLabel} — sélectionner`,
-                    display: r.laneLabel,
-                  })),
-                }]
-              : []),
-            ...(dopeRows.some((r) => r.kind !== 'events')
-              ? [{
-                  header: 'automation',
-                  rows: dopeRows.filter((r) => r.kind !== 'events').map((r) => ({
-                    id: r.key,
-                    active: false,
-                    hasData: true,
-                    title: `${r.laneLabel} ${r.paramLabel ?? ''} — ouvrir l'éditeur de courbe`,
-                    display: `${r.laneLabel} ${r.paramLabel ?? ''}`,
-                  })),
-                }]
-              : []),
-          ];
+        // Rien sélectionné (ou lane sans courbes : conductor) —
+        // la colonne liste les rangées du dopesheet.
+        : dopeGroups;
 
   /// Click d'une rangée — dopesheet : sélection du contexte ; sinon
   /// sélection du paramètre de courbe.
@@ -706,6 +713,7 @@ const ScoreView: React.FC = () => {
         setModName={setModName}
         setCurveParam={setCurveParam}
         onSelectParam={onSelectParamRow}
+        dopeSync={dopesheetMode ? { scrollTop: dopeVScroll, onVScroll: setDopeVScroll } : undefined}
         mergeStrategy={mergeStrategy}
         setMergeStrategy={setMergeStrategy}
         setLaneCurve={setLaneCurve}
@@ -726,6 +734,9 @@ const ScoreView: React.FC = () => {
             onMoveClip={moveClip}
             scrollLeft={hScroll}
             onHScroll={setHScroll}
+            groups={dopeGroups}
+            scrollTop={dopeVScroll}
+            onVScroll={setDopeVScroll}
           />
         }
         clipParams={selClip ? (
