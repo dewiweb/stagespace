@@ -2,8 +2,9 @@
 /// rien n'est sélectionné : une rangée par courbe (lane ou clip) et
 /// par lane d'événements, keyframes ◆ éditables (drag horizontal =
 /// retime, vertical = valeur pour les courbes), events ◆ drag =
-/// moveClip. Click rangée = sélection du contexte (bascule vers
-/// l'éditeur de courbe), click ◆ = sélection + seek.
+/// moveClip. Click ◆ = sélection du contexte + seek ; les labels
+/// des rangées vivent dans la colonne PARAMÈTRES (paramGroups —
+/// même ordre, `DopeRow.key` = `ParamRow.id`).
 /// L'axe temps partage ms2px avec la timeline — scroll horizontal
 /// synchronisé par le parent.
 import React, { useRef } from 'react';
@@ -48,7 +49,6 @@ export const ScoreDopesheet: React.FC<{
   } | null>(null);
   /// État visuel pendant le drag — re-render léger par rangée.
   const [, bump] = React.useReducer((x: number) => x + 1, 0);
-  const labelRef = useRef<HTMLDivElement>(null);
 
   // Sync scroll — timeline → dopesheet et dopesheet → labels.
   React.useEffect(() => {
@@ -57,7 +57,6 @@ export const ScoreDopesheet: React.FC<{
   }, [scrollLeft]);
   const onPlotScroll = (e: React.UIEvent<HTMLDivElement>) => {
     onHScroll?.(e.currentTarget.scrollLeft);
-    if (labelRef.current) labelRef.current.scrollTop = e.currentTarget.scrollTop;
   };
 
   const pointPos = (row: DopeRow, t: number, v: number | undefined) => {
@@ -114,29 +113,8 @@ export const ScoreDopesheet: React.FC<{
   return (
     <div className="flex-1 min-h-0 flex flex-col">
       <div className="flex flex-1 min-h-0">
-        {/* Labels de rangées — scrollTop sync avec le plot */}
-        <div ref={labelRef} className="w-36 shrink-0 border-r border-gray-800 overflow-y-hidden bg-gray-900/40">
-          {rows.map((r) => (
-            <button
-              key={r.key}
-              className="w-full flex items-baseline gap-1 px-2 text-left text-[9px] text-gray-400 hover:bg-gray-800/60 truncate"
-              style={{ height: ROW_H }}
-              title={r.kind === 'events' ? `Lane ${r.laneLabel} — sélectionner` : `${r.laneLabel} ${r.paramLabel ?? ''} — ouvrir l'éditeur de courbe`}
-              onClick={() => onSelectRow(r)}
-            >
-              <span className="truncate font-bold">{r.laneLabel}</span>
-              {r.paramLabel && <span className="truncate text-gray-500">{r.paramLabel}</span>}
-              <span className="ml-auto text-gray-600">{r.points.length}</span>
-            </button>
-          ))}
-          {rows.length === 0 && (
-            <div className="px-2 py-3 text-[10px] text-gray-600 italic">
-              Aucune automation — les courbes de lanes et les événements
-              apparaîtront ici.
-            </div>
-          )}
-        </div>
-        {/* Plot — scroll H sync avec la timeline */}
+        {/* Plot — labels dans la colonne PARAMÈTRES (même ordre) ;
+            scroll H sync avec la timeline */}
         <div ref={plotRef} className="flex-1 overflow-auto" onScroll={onPlotScroll}>
           <div className="relative" style={{ width: plotW, minHeight: '100%' }}>
             {/* Région de boucle */}
@@ -174,6 +152,12 @@ export const ScoreDopesheet: React.FC<{
                 </div>
               );
             })}
+            {rows.length === 0 && (
+              <div className="px-2 py-3 text-[10px] text-gray-600 italic">
+                Aucune automation — les courbes de lanes et les événements
+                apparaîtront ici, une rangée par paramètre.
+              </div>
+            )}
             {/* Playhead — même curseur que la timeline */}
             <div className="absolute top-0 bottom-0 w-px bg-cyan-400 pointer-events-none"
               style={{ left: ms2px(displayCursor) }} />

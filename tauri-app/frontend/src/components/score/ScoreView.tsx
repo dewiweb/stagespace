@@ -469,6 +469,63 @@ const ScoreView: React.FC = () => {
         ? curveParam
         : ctxFirst;
 
+  // ── Dopesheet (rien de sélectionné) — vue d'ensemble éditable de
+  //    toute l'automation. Rangées collectées depuis le doc courant.
+  const [hScroll, setHScroll] = useState(0);
+  const dopeRows = useMemo(
+    () => collectDopesheetRows(
+      {
+        laneStates, clips, durationMs,
+        globalFxCurves, modulationCurves, spatialFxCurves, objectCurves,
+      },
+      (c) => clipLabelOf(c, moveSlots, cues),
+    ),
+    [laneStates, clips, durationMs, globalFxCurves, modulationCurves, spatialFxCurves, objectCurves, moveSlots, cues],
+  );
+  /// ParamDef de la rangée — pour le drag vertical (valeur). Les defs
+  /// clip-scoped dépendent du slot porteur de CHAQUE clip.
+  const dopeParamDefOf = useCallback((row: DopeRow): ParamDef | undefined => {
+    if (row.kind === 'events') return undefined;
+    if (row.kind === 'lane-curve') {
+      if (row.laneId === GLOBALFX_LANE) return globalFxDefs.find((d) => d.id === row.paramId);
+      if (row.laneId === SPATIALFX_LANE) return spatialFxDefs.find((d) => d.id === row.paramId);
+      if (row.laneId === MODULATION_LANE) return modDefs.find((d) => d.id === row.paramId);
+      return OBJECT_LANE_DEFS.find((d) => d.id === row.paramId);
+    }
+    const clip = clips.find((c) => c.id === row.clipId);
+    const slot = clip?.ref.type === 'slot'
+      ? moveSlots.find((s) => s.id === (clip.ref as { slotId: string }).slotId)
+      : undefined;
+    return [...nodeParamDefsOf(
+      slot?.graphJson?.nodes ??
+        (slot ? buildGraphForSlot(slot.templateId, Math.max(1, slot.trackIds?.length ?? 1))?.nodes : undefined),
+    ), ...clipParamDefsOf(slot), ...MERGE_BLEND_DEFS].find((d) => d.id === row.paramId);
+  }, [clips, moveSlots, globalFxDefs, spatialFxDefs, modDefs]);
+  /// Sélection d'une rangée → bascule vers son contexte d'édition.
+  const onDopeSelectRow = useCallback((row: DopeRow) => {
+    if (row.kind === 'clip-curve' && row.clipId) {
+      selectClip(row.clipId);
+      if (row.paramId) setCurveParam(row.paramId);
+    } else if (row.laneId) {
+      selectGlobalLane(row.laneId);
+      if (row.paramId) setCurveParam(row.paramId);
+    }
+  }, [selectClip, selectGlobalLane]);
+  /// Drag ◆ courbe — retime (t) + valeur (v). Le setter re-trie.
+  const onDopeMoveKf = useCallback((row: DopeRow, kfIdx: number, t: number, v?: number) => {
+    const read = () => row.kind === 'clip-curve'
+      ? clips.find((c) => c.id === row.clipId)?.curves?.[row.paramId ?? '']
+      : row.laneId === GLOBALFX_LANE ? globalFxCurves?.[row.paramId ?? '']
+        : row.laneId === SPATIALFX_LANE ? spatialFxCurves?.[row.paramId ?? '']
+          : row.laneId === MODULATION_LANE ? modulationCurves?.[row.paramId ?? '']
+            : objectCurves?.[row.laneId ?? '']?.[row.paramId ?? ''];
+    const kfs = read();
+    if (!kfs || !row.paramId) return;
+    const next = kfs.map((k, i) => (i === kfIdx ? { ...k, t, v: v ?? k.v } : k));
+    if (row.kind === 'clip-curve' && row.clipId) setClipCurve(row.clipId, row.paramId, next);
+    else if (row.laneId) setLaneCurve(row.laneId, row.paramId, next);
+  }, [clips, globalFxCurves, spatialFxCurves, modulationCurves, objectCurves, setClipCurve, setLaneCurve]);
+
   /// Groupes de lignes de la colonne paramètres — le panneau ne
   /// connaît pas le contexte, ScoreView le résout.
   const paramGroups: ParamGroup[] = selLaneIsGlobalFx
@@ -578,64 +635,43 @@ const ScoreView: React.FC = () => {
                 }]
               : []),
           ]
-        : [];
+        // Rien sélectionné (ou lane sans courbes : conductor/osc) —
+        // la colonne liste les rangées du dopesheet : événements puis
+        // automation. `ParamRow.id` = `DopeRow.key` → onSelectParam.
+        : [
+            ...(dopeRows.some((r) => r.kind === 'events')
+              ? [{
+                  header: 'événements',
+                  rows: dopeRows.filter((r) => r.kind === 'events').map((r) => ({
+                    id: r.key,
+                    active: false,
+                    hasData: true,
+                    title: `Lane ${r.laneLabel} — sélectionner`,
+                    display: r.laneLabel,
+                  })),
+                }]
+              : []),
+            ...(dopeRows.some((r) => r.kind !== 'events')
+              ? [{
+                  header: 'automation',
+                  rows: dopeRows.filter((r) => r.kind !== 'events').map((r) => ({
+                    id: r.key,
+                    active: false,
+                    hasData: true,
+                    title: `${r.laneLabel} ${r.paramLabel ?? ''} — ouvrir l'éditeur de courbe`,
+                    display: `${r.laneLabel} ${r.paramLabel ?? ''}`,
+                  })),
+                }]
+              : []),
+          ];
 
-  // ── Dopesheet (rien de sélectionné) — vue d'ensemble éditable de
-  //    toute l'automation. Rangées collectées depuis le doc courant.
-  const [hScroll, setHScroll] = useState(0);
-  const dopeRows = useMemo(
-    () => collectDopesheetRows(
-      {
-        laneStates, clips, durationMs,
-        globalFxCurves, modulationCurves, spatialFxCurves, objectCurves,
-      },
-      (c) => clipLabelOf(c, moveSlots, cues),
-    ),
-    [laneStates, clips, durationMs, globalFxCurves, modulationCurves, spatialFxCurves, objectCurves, moveSlots, cues],
-  );
-  /// ParamDef de la rangée — pour le drag vertical (valeur). Les defs
-  /// clip-scoped dépendent du slot porteur de CHAQUE clip.
-  const dopeParamDefOf = useCallback((row: DopeRow): ParamDef | undefined => {
-    if (row.kind === 'events') return undefined;
-    if (row.kind === 'lane-curve') {
-      if (row.laneId === GLOBALFX_LANE) return globalFxDefs.find((d) => d.id === row.paramId);
-      if (row.laneId === SPATIALFX_LANE) return spatialFxDefs.find((d) => d.id === row.paramId);
-      if (row.laneId === MODULATION_LANE) return modDefs.find((d) => d.id === row.paramId);
-      return OBJECT_LANE_DEFS.find((d) => d.id === row.paramId);
-    }
-    const clip = clips.find((c) => c.id === row.clipId);
-    const slot = clip?.ref.type === 'slot'
-      ? moveSlots.find((s) => s.id === (clip.ref as { slotId: string }).slotId)
-      : undefined;
-    return [...nodeParamDefsOf(
-      slot?.graphJson?.nodes ??
-        (slot ? buildGraphForSlot(slot.templateId, Math.max(1, slot.trackIds?.length ?? 1))?.nodes : undefined),
-    ), ...clipParamDefsOf(slot), ...MERGE_BLEND_DEFS].find((d) => d.id === row.paramId);
-  }, [clips, moveSlots, globalFxDefs, spatialFxDefs, modDefs]);
-  /// Sélection d'une rangée → bascule vers son contexte d'édition.
-  const onDopeSelectRow = useCallback((row: DopeRow) => {
-    if (row.kind === 'clip-curve' && row.clipId) {
-      selectClip(row.clipId);
-      if (row.paramId) setCurveParam(row.paramId);
-    } else if (row.laneId) {
-      selectGlobalLane(row.laneId);
-      if (row.paramId) setCurveParam(row.paramId);
-    }
-  }, [selectClip, selectGlobalLane]);
-  /// Drag ◆ courbe — retime (t) + valeur (v). Le setter re-trie.
-  const onDopeMoveKf = useCallback((row: DopeRow, kfIdx: number, t: number, v?: number) => {
-    const read = () => row.kind === 'clip-curve'
-      ? clips.find((c) => c.id === row.clipId)?.curves?.[row.paramId ?? '']
-      : row.laneId === GLOBALFX_LANE ? globalFxCurves?.[row.paramId ?? '']
-        : row.laneId === SPATIALFX_LANE ? spatialFxCurves?.[row.paramId ?? '']
-          : row.laneId === MODULATION_LANE ? modulationCurves?.[row.paramId ?? '']
-            : objectCurves?.[row.laneId ?? '']?.[row.paramId ?? ''];
-    const kfs = read();
-    if (!kfs || !row.paramId) return;
-    const next = kfs.map((k, i) => (i === kfIdx ? { ...k, t, v: v ?? k.v } : k));
-    if (row.kind === 'clip-curve' && row.clipId) setClipCurve(row.clipId, row.paramId, next);
-    else if (row.laneId) setLaneCurve(row.laneId, row.paramId, next);
-  }, [clips, globalFxCurves, spatialFxCurves, modulationCurves, objectCurves, setClipCurve, setLaneCurve]);
+  /// Click d'une rangée — dopesheet : sélection du contexte ; sinon
+  /// sélection du paramètre de courbe.
+  const onSelectParamRow = useCallback((id: string) => {
+    const r = dopeRows.find((x) => x.key === id);
+    if (r) onDopeSelectRow(r);
+    else setCurveParam(id);
+  }, [dopeRows, onDopeSelectRow]);
 
   return (
     <div ref={splitRootRef} className="flex-1 flex flex-col bg-gray-950 text-gray-200 overflow-hidden select-none">
@@ -669,6 +705,7 @@ const ScoreView: React.FC = () => {
         modName={modName}
         setModName={setModName}
         setCurveParam={setCurveParam}
+        onSelectParam={onSelectParamRow}
         mergeStrategy={mergeStrategy}
         setMergeStrategy={setMergeStrategy}
         setLaneCurve={setLaneCurve}

@@ -93,6 +93,9 @@ export const ScoreCurvePane: React.FC<{
   modName: string;
   setModName: (v: string) => void;
   setCurveParam: (id: string) => void;
+  /// Override du click rangée (dopesheet : l'id est une `DopeRow.key`,
+  /// pas un paramId) — défaut `setCurveParam`.
+  onSelectParam?: (id: string) => void;
   mergeStrategy: string;
   setMergeStrategy: (s: string) => void;
   setLaneCurve: (laneId: string, param: string, kfs: ScoreKeyframe[] | undefined) => void;
@@ -112,7 +115,7 @@ export const ScoreCurvePane: React.FC<{
   modulationCurves, nodeDefs, clipDefs, selFades, selClipLabel,
   paramGroups, paramEmptyContent, modName, setModName, setCurveParam,
   mergeStrategy, setMergeStrategy, setLaneCurve, setClipCurve,
-  dopesheet, clipParams, footer,
+  onSelectParam, dopesheet, clipParams, footer,
 }) => {
   /// Partage réglable colonnes paramètres / éditeur — même mécanique
   /// que topFrac, bornes 20–70 %.
@@ -230,7 +233,7 @@ export const ScoreCurvePane: React.FC<{
         modName={selLaneIsMod ? modName : undefined}
         onModNameChange={setModName}
         onModNameCommit={setCurveParam}
-        onSelectParam={setCurveParam}
+        onSelectParam={onSelectParam ?? setCurveParam}
         groups={paramGroups}
         emptyContent={paramEmptyContent}
       />
