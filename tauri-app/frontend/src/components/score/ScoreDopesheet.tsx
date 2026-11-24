@@ -61,7 +61,7 @@ export const ScoreDopesheet: React.FC<{
   React.useEffect(() => {
     if (scrollTop !== undefined && plotRef.current && plotRef.current.scrollTop !== scrollTop)
       plotRef.current.scrollTop = scrollTop;
-  }, [scrollTop]);
+  }, [scrollTop, plotRef]);
   const onPlotScroll = (e: React.UIEvent<HTMLDivElement>) => {
     onVScroll?.(e.currentTarget.scrollTop);
   };
