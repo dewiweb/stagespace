@@ -3,6 +3,7 @@
 /// lane GLOBALFX, lane MODULATION) est résolu par ScoreView qui
 /// fournit les groupes de lignes déjà filtrés.
 import React from 'react';
+import { SCORE_DRAG_MIME } from '../../utils/scoreDopesheet';
 
 export interface ParamRow {
   id: string;
@@ -10,6 +11,9 @@ export interface ParamRow {
   hasData: boolean;
   title?: string;
   display?: string;
+  /// Payload JSON de drag&drop (bibliothèque → timeline) — la ligne
+  /// devient draggable vers une lane (`SCORE_DRAG_MIME`).
+  dragPayload?: string;
 }
 export interface ParamGroup {
   header?: string;
@@ -103,8 +107,15 @@ export const ScoreParamsPanel: React.FC<{
               key={r.id}
               title={r.title}
               onClick={() => onSelectParam(r.id)}
+              draggable={!!r.dragPayload}
+              onDragStart={r.dragPayload
+                ? (e) => {
+                    e.dataTransfer.setData(SCORE_DRAG_MIME, r.dragPayload!);
+                    e.dataTransfer.effectAllowed = 'copy';
+                  }
+                : undefined}
               style={rowHeight ? { height: rowHeight } : undefined}
-              className={`w-full text-left px-2 ${rowHeight ? 'py-0 flex items-center' : 'py-1'} text-[10px] font-bold rounded border ${
+              className={`w-full text-left px-2 ${rowHeight ? 'py-0 flex items-center' : 'py-1'} text-[10px] font-bold rounded border ${r.dragPayload ? 'cursor-grab ' : ''}${
                 r.active
                   ? 'border-cyan-500 text-cyan-300 bg-cyan-900/30'
                   : 'border-gray-700/60 text-gray-400 hover:text-gray-200 hover:bg-gray-800/40'

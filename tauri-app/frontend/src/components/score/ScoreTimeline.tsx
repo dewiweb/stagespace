@@ -3,6 +3,7 @@
 /// clips, curseur). Le scrollTop des en-têtes est synchronisé avec
 /// la timeline (mêmes hauteurs de rangées).
 import React, { useRef } from 'react';
+import { SCORE_DRAG_MIME } from '../../utils/scoreDopesheet';
 import {
   GLOBALFX_LANE, MODULATION_LANE, CONDUCTOR_LANE, OSC_LANE, SPATIALFX_LANE, GLOBAL_LANES, clipLaneIds,
   type ScoreClipDoc, type ScoreKeyframe, type ScoreLaneMode,
@@ -70,6 +71,9 @@ export const ScoreTimeline: React.FC<{
   onClipPointerMove: (e: React.PointerEvent, clip: ScoreClipDoc) => void;
   onClipPointerUp: (e: React.PointerEvent) => void;
   onContextMenu: (target: ScoreMenuTarget, x: number, y: number) => void;
+  /// Drop d'un item de bibliothèque sur une lane (payload
+  /// SCORE_DRAG_MIME) — la validation lane↔ref est côté parent.
+  onLaneDrop?: (laneId: string, ms: number, payload: string) => void;
 }> = ({
   grow, durationMs, displayCursor, playing, tickEvery, laneH, rowH,
   ms2px, px2ms, loopStartMs, loopEndMs, seekScore,
@@ -79,12 +83,31 @@ export const ScoreTimeline: React.FC<{
   onToggleLaneMute, onSetLaneMode,
   clipOrphan, effFades, clipLabel,
   onClipPointerDown, onClipPointerMove, onClipPointerUp, onContextMenu,
+  onLaneDrop,
 }) => {
   /// En-têtes de lanes — scrollTop synchronisé avec la timeline
   /// (les rangées ont les mêmes hauteurs : ruler 24 + 2×24
   /// lanes globales + hauteur de lane). overflow-y: hidden mais
   /// scrollable par code.
   const laneHeadRef = useRef<HTMLDivElement>(null);
+  /// Drag & drop bibliothèque → lane : ms calculé au point de drop
+  /// (snap 50ms comme le dopesheet).
+  const dropProps = (laneId: string) => ({
+    onDragOver: (e: React.DragEvent) => {
+      if (e.dataTransfer.types.includes(SCORE_DRAG_MIME)) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+      }
+    },
+    onDrop: (e: React.DragEvent) => {
+      const p = e.dataTransfer.getData(SCORE_DRAG_MIME);
+      if (!p) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const rect = e.currentTarget.getBoundingClientRect();
+      onLaneDrop?.(laneId, Math.max(0, Math.round(px2ms(e.clientX - rect.left) / 50) * 50), p);
+    },
+  });
   return (
     <div className="flex overflow-hidden min-h-0" style={{ flexGrow: grow, flexBasis: 0 }}>
       <div ref={laneHeadRef} className="w-32 shrink-0 border-r border-gray-800 bg-gray-900/40 flex flex-col overflow-y-hidden">
@@ -249,6 +272,7 @@ export const ScoreTimeline: React.FC<{
               <div
                 key={laneId}
                 className={`relative h-6 border-b border-gray-800 cursor-pointer ${selGlobal === laneId ? 'bg-cyan-900/15' : 'hover:bg-gray-800/20'} ${laneMutedOf(laneId) ? 'opacity-40' : ''}`}
+                {...dropProps(laneId)}
                 onClick={(e) => { e.stopPropagation(); onSelectLane(laneId); }}
                 onContextMenu={(e) => {
                   e.preventDefault();
@@ -300,6 +324,7 @@ export const ScoreTimeline: React.FC<{
                 key={lane.id}
                 className="relative border-b border-gray-800"
                 style={{ height: lay.height, opacity: laneMutedOf(lane.id) ? 0.4 : 1 }}
+                {...dropProps(lane.id)}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   const rect = e.currentTarget.getBoundingClientRect();

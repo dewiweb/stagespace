@@ -48,7 +48,9 @@ import { ScoreClipPicker, type ScorePickerState } from './ScoreClipPicker';
 import { ScoreToolbar } from './ScoreToolbar';
 import { ScoreDopesheet } from './ScoreDopesheet';
 import { ScoreClipParams } from './ScoreClipParams';
+import { ScoreExplorerInfo, type ExplorerItem } from './ScoreExplorerInfo';
 import { collectDopesheetRows, type DopeRow } from '../../utils/scoreDopesheet';
+import { extractDuration } from '../../store/slices/moveSlotsTypes';
 import type { ClipDragMode } from './ScoreClipBlock';
 
 const ScoreView: React.FC = () => {
@@ -558,6 +560,86 @@ const ScoreView: React.FC = () => {
   const dopesheetMode = !selClip && !selLaneIsGlobalFx && !selLaneIsMod && !selLaneIsSpatialFx && !selObjLane;
   const [dopeVScroll, setDopeVScroll] = useState(0);
 
+  // ── Bibliothèque (explorer) — moves + cues disponibles, drag & drop
+  //    vers la timeline ; l'item sélectionné affiche sa fiche
+  //    « mediainfo » dans la colonne éditeur.
+  type ExplorerSel = { kind: 'slot' | 'cue'; id: string };
+  const [explorerSel, setExplorerSel] = useState<ExplorerSel | null>(null);
+  const biblioGroups: ParamGroup[] = useMemo(() => [
+    ...(moveSlots.length
+      ? [{
+          header: 'bibliothèque — moves',
+          rows: moveSlots.map((s) => {
+            const dur = s.graphJson ? extractDuration(s.graphJson.nodes) * 1000 : 30_000;
+            return {
+              id: `bib:slot:${s.id}`,
+              active: explorerSel?.kind === 'slot' && explorerSel.id === s.id,
+              hasData: false,
+              title: `Move — tracks ${s.trackIds.join(', ') || '—'} — glisser sur une lane objet`,
+              display: `▸ ${s.name}`,
+              dragPayload: JSON.stringify({
+                ref: { type: 'slot', slotId: s.id },
+                durationMs: dur,
+                repeatEveryMs: s.loopMode !== 'oneshot' ? dur : undefined,
+              }),
+            };
+          }),
+        }]
+      : []),
+    ...(cues.length
+      ? [{
+          header: 'bibliothèque — cues',
+          rows: cues.map((c, i) => ({
+            id: `bib:cue:${c.id}`,
+            active: explorerSel?.kind === 'cue' && explorerSel.id === String(c.id),
+            hasData: false,
+            title: `Cue ${c.cue_number ?? i + 1} — glisser sur la lane CONDUCTOR`,
+            display: `◆ CUE ${c.cue_number ?? i + 1} ${c.name}`,
+            dragPayload: JSON.stringify({ ref: { type: 'cue', cueId: String(c.id) } }),
+          })),
+        }]
+      : []),
+  ], [moveSlots, cues, explorerSel]);
+  /// Rangées panel en mode dopesheet — bibliothèque EN DESSOUS des
+  /// rangées du plot pour préserver l'alignement vertical.
+  const dopePanelGroups = useMemo(() => [...dopeGroups, ...biblioGroups], [dopeGroups, biblioGroups]);
+
+  /// Payload d'insertion d'un item de bibliothèque (drag ou ⤵).
+  const biblioPayloadOf = useCallback((sel: ExplorerSel) => {
+    if (sel.kind === 'slot') {
+      const s = moveSlots.find((x) => x.id === sel.id);
+      if (!s) return null;
+      const dur = s.graphJson ? extractDuration(s.graphJson.nodes) * 1000 : 30_000;
+      return { ref: { type: 'slot', slotId: s.id } as const, durationMs: dur, repeatEveryMs: s.loopMode !== 'oneshot' ? dur : undefined };
+    }
+    return { ref: { type: 'cue', cueId: sel.id } as const };
+  }, [moveSlots]);
+  /// Drop bibliothèque → lane : moves sur lanes objet, cues sur
+  /// CONDUCTOR — les autres cibles sont refusées avec un toast.
+  const onBiblioDrop = useCallback((laneId: string, ms: number, payload: string) => {
+    let p: { ref: ScoreClipDoc['ref']; durationMs?: number; repeatEveryMs?: number };
+    try { p = JSON.parse(payload); } catch { return; }
+    if (p.ref.type === 'slot' && !laneId.startsWith('obj-')) {
+      toast.warning('Un move se dépose sur une lane objet');
+      return;
+    }
+    if (p.ref.type === 'cue' && laneId !== CONDUCTOR_LANE) {
+      toast.warning('Une cue se dépose sur la lane CONDUCTOR');
+      return;
+    }
+    addClip(p.ref, ms, { durationMs: p.durationMs, repeatEveryMs: p.repeatEveryMs });
+  }, [addClip]);
+  /// Insertion au playhead (bouton ⤵ de la fiche) — mêmes règles :
+  /// slot → première lane objet, cue → CONDUCTOR.
+  const onBiblioInsert = useCallback(() => {
+    if (!explorerSel) return;
+    const p = biblioPayloadOf(explorerSel);
+    if (!p) return;
+    // laneId n'est utilisé que pour la validation — la couverture du
+    // clip dérive du ref, pas de la lane cible.
+    onBiblioDrop(p.ref.type === 'slot' ? 'obj-1' : CONDUCTOR_LANE, Math.max(0, Math.round(displayCursor / 50) * 50), JSON.stringify(p));
+  }, [explorerSel, biblioPayloadOf, displayCursor, onBiblioDrop]);
+
   /// Groupes de lignes de la colonne paramètres — le panneau ne
   /// connaît pas le contexte, ScoreView le résout.
   const paramGroups: ParamGroup[] = selLaneIsGlobalFx
@@ -610,7 +692,7 @@ const ScoreView: React.FC = () => {
             })),
           }]
         : selLaneIsOsc
-        ? dopeGroups
+        ? dopePanelGroups
         : selClip
         ? [
             {
@@ -668,12 +750,15 @@ const ScoreView: React.FC = () => {
               : []),
           ]
         // Rien sélectionné (ou lane sans courbes : conductor) —
-        // la colonne liste les rangées du dopesheet.
-        : dopeGroups;
+        // rangées du dopesheet + bibliothèque.
+        : dopePanelGroups;
 
-  /// Click d'une rangée — dopesheet : sélection du contexte ; sinon
-  /// sélection du paramètre de courbe.
+  /// Click d'une rangée — bibliothèque : sélection explorer (fiche
+  /// mediainfo) ; dopesheet : sélection du contexte ; sinon paramètre.
   const onSelectParamRow = useCallback((id: string) => {
+    if (id.startsWith('bib:slot:')) { setExplorerSel({ kind: 'slot', id: id.slice(9) }); return; }
+    if (id.startsWith('bib:cue:')) { setExplorerSel({ kind: 'cue', id: id.slice(8) }); return; }
+    setExplorerSel(null);
     const r = dopeRows.find((x) => x.key === id);
     if (r) onDopeSelectRow(r);
     else setCurveParam(id);
@@ -717,6 +802,13 @@ const ScoreView: React.FC = () => {
         setMergeStrategy={setMergeStrategy}
         setLaneCurve={setLaneCurve}
         setClipCurve={setClipCurve}
+        explorerInfo={(() => {
+          if (!explorerSel) return undefined;
+          const item: ExplorerItem | undefined = explorerSel.kind === 'slot'
+            ? (() => { const s = moveSlots.find((x) => x.id === explorerSel.id); return s ? { kind: 'slot' as const, slot: s } : undefined; })()
+            : (() => { const i = cues.findIndex((c) => String(c.id) === explorerSel.id); return i >= 0 ? { kind: 'cue' as const, cue: cues[i], index: i } : undefined; })();
+          return item ? <ScoreExplorerInfo item={item} onInsert={onBiblioInsert} /> : undefined;
+        })()}
         dopesheet={
           <ScoreDopesheet
             rows={dopeRows}
@@ -869,6 +961,7 @@ const ScoreView: React.FC = () => {
         onClipPointerMove={onClipPointerMove}
         onClipPointerUp={onClipPointerUp}
         onContextMenu={openCtxMenu}
+        onLaneDrop={onBiblioDrop}
       />
 
       {/* Picker d'ajout de clip — globalfx → markers ; lane objet →

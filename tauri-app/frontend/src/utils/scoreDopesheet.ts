@@ -26,6 +26,9 @@ import { effectiveTrackIds } from './scoreResolve';
 /// utilisent les mêmes hauteurs pour un alignement vertical strict.
 export const DOPE_ROW_H = 18;
 export const DOPE_HEADER_H = 14;
+/// MIME du drag&drop bibliothèque → timeline (JSON :
+/// {ref, durationMs?, repeatEveryMs?}).
+export const SCORE_DRAG_MIME = 'application/x-stagespace-clip';
 
 export interface DopePoint {
   t: number;

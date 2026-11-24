@@ -104,6 +104,9 @@ export const ScoreCurvePane: React.FC<{
   setMergeStrategy: (s: string) => void;
   setLaneCurve: (laneId: string, param: string, kfs: ScoreKeyframe[] | undefined) => void;
   setClipCurve: (clipId: string, param: string, kfs: ScoreKeyframe[] | undefined) => void;
+  /// Fiche « mediainfo » de l'item bibliothèque sélectionné —
+  /// prioritaire sur le dopesheet quand rien n'est sélectionné.
+  explorerInfo?: React.ReactNode;
   /// Dopesheet éditable — affiché quand rien n'est sélectionné.
   dopesheet?: React.ReactNode;
   /// Paramètres du clip (ex-inspector) — affiché quand la rangée
@@ -119,7 +122,7 @@ export const ScoreCurvePane: React.FC<{
   modulationCurves, nodeDefs, clipDefs, selFades, selClipLabel,
   paramGroups, paramEmptyContent, modName, setModName, setCurveParam,
   mergeStrategy, setMergeStrategy, setLaneCurve, setClipCurve,
-  onSelectParam, dopeSync, dopesheet, clipParams, footer,
+  onSelectParam, dopeSync, explorerInfo, dopesheet, clipParams, footer,
 }) => {
   /// Partage réglable colonnes paramètres / éditeur — même mécanique
   /// que topFrac, bornes 20–70 %.
@@ -180,7 +183,7 @@ export const ScoreCurvePane: React.FC<{
       );
     }
     if (!selClip)
-      return dopesheet ?? (
+      return (selGlobal ? dopesheet : explorerInfo ?? dopesheet) ?? (
         <span className="text-[11px] text-gray-600 italic">
           Sélectionnez un clip ou une lane globale — les courbes s'affichent ici.
         </span>
@@ -268,7 +271,7 @@ export const ScoreCurvePane: React.FC<{
       >
         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">
           Éditeur — {!selClip && !selLaneIsGlobalFx && !selLaneIsMod && !selLaneIsSpatialFx && !selObjLane
-            ? 'dopesheet'
+            ? (!selGlobal && explorerInfo ? 'bibliothèque' : 'dopesheet')
             : selGlobal || (effParam === 'clip' ? selClipLabel ?? 'clip' : effParam)}
         </span>
         {inner}
