@@ -18,10 +18,12 @@ export const ScoreTransport: React.FC<{
   onSetLoop: (startMs: number | undefined, endMs: number | undefined) => void;
   onZoom: (dir: 1 | -1) => void;
   onLaneH: (h: number) => void;
+  /// ★ re-capture : snapshot de l'état de la partition au curseur → cue.
+  onCaptureCue: () => void;
 }> = ({
   playing, displayCursor, durationMs, loopStartMs, loopEndMs,
   pxPerSec, laneH, onPlayStop, onSetDurationMs, onSetLoop,
-  onZoom, onLaneH,
+  onZoom, onLaneH, onCaptureCue,
 }) => (
   <div className="flex items-center gap-3 px-3 py-1.5 border-b border-gray-800 bg-gray-900/60">
     <button
@@ -74,14 +76,13 @@ export const ScoreTransport: React.FC<{
         </span>
       );
     })()}
-    {playing && (
-      <span
-        className="text-[10px] text-amber-400/90 border border-amber-900/60 rounded px-1.5 py-0.5"
-        title="Le scheduler joue la partition chargée au PLAY — les éditions pendant la lecture s'appliquent au prochain PLAY"
-      >
-        éditions différées
-      </span>
-    )}
+    <button
+      onClick={onCaptureCue}
+      className="px-2 py-0.5 text-[10px] font-bold rounded bg-amber-800/70 text-amber-200 hover:bg-amber-700"
+      title="Re-capture : matérialise l'état de la partition AU CURSEUR en nouvelle cue — clips → moves, courbes → valeurs, inverse du flatten"
+    >
+      ★ cue
+    </button>
     <div className="flex-1" />
     <button onClick={() => onZoom(-1)} className="px-2 py-0.5 text-xs bg-gray-800 rounded hover:bg-gray-700">−</button>
     <button onClick={() => onZoom(1)} className="px-2 py-0.5 text-xs bg-gray-800 rounded hover:bg-gray-700">+</button>

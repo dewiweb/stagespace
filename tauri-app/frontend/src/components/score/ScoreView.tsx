@@ -39,6 +39,7 @@ import { ScoreTimeline, type ScoreLaneLayout, type ScoreMenuTarget } from './Sco
 import ContextMenu, { type ContextMenuItem } from '../ui/ContextMenu';
 import { detachLaneFromClip, makeClipUnique, sharedClipCount } from '../../utils/scoreDetach';
 import { flattenCueClip, reportFlatten } from '../../utils/scoreFlatten';
+import { snapshotScoreAt } from '../../utils/scoreSnapshot';
 import { toast } from '../../utils/toast-helpers';
 import { ScoreClipPicker, type ScorePickerState } from './ScoreClipPicker';
 import { ScoreToolbar } from './ScoreToolbar';
@@ -614,6 +615,22 @@ const ScoreView: React.FC = () => {
         onSetLoop={setLoop}
         onZoom={(dir) => setPxPerSec((z) => dir > 0 ? Math.min(400, z * 1.4) : Math.max(10, z / 1.4))}
         onLaneH={setLaneH}
+        onCaptureCue={() => {
+          // Re-capture arrangement→cue : état de la partition au curseur
+          // → StoreScoreCueRequest complet (aucune capture live).
+          void (async () => {
+            try {
+              const { holProject } = useGraphStore.getState();
+              const { request, skipped } = await snapshotScoreAt(displayCursor, { holProject, manualOscIds });
+              request.name = `Score @${fmtMs(displayCursor)}`;
+              const cue = await useCuelistStore.getState().storeScoreCue(request);
+              const detail = skipped.length ? ` — ignoré : ${skipped.join(', ')}` : '';
+              toast.success(`Cue « ${cue.name} » capturée (${request.moves.length} move(s))${detail}`);
+            } catch (e) {
+              toast.error(`Capture cue échouée : ${e}`);
+            }
+          })();
+        }}
       />
       <ScoreToolbar
         selClip={selClip ?? null}

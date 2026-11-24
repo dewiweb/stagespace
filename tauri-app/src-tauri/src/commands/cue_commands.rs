@@ -255,6 +255,118 @@ pub async fn store_cue(
     Ok(cue)
 }
 
+/// Snapshot de cue AUTHORED (capture score) — les champs sont fournis
+/// explicitement par le frontend (état évalué de la partition au
+/// curseur), contrairement à `store_cue` qui capture l'état runtime
+/// live. `moves` sont des MoveSnapshot complets — le recall les
+/// recrée comme s'ils avaient été capturés live.
+#[derive(Debug, Deserialize, ts_rs::TS)]
+#[ts(export)]
+pub struct StoreScoreCueRequest {
+    pub name: String,
+    pub description: String,
+    /// Snapshots des moves actifs à l'instant capturé (clips slot
+    /// couvrant le curseur, convertis par le frontend).
+    pub moves: Vec<stagespace_engines::MoveSnapshot>,
+    pub macros: Option<MacroSnapshot>,
+    pub spatial_macros: Option<SpatialMacroSnapshot>,
+    pub track_indices: Vec<usize>,
+    pub fade_duration: f64,
+    #[serde(default)]
+    pub cue_number: Option<String>,
+    #[serde(default)]
+    pub global_graph: Option<stagespace_engines::GraphJson>,
+    #[serde(default)]
+    pub signal_graph: Option<stagespace_engines::GraphJson>,
+    #[serde(default)]
+    pub per_track_depths: Vec<f64>,
+    #[serde(default)]
+    pub manual_positions: std::collections::HashMap<usize, [f64; 3]>,
+    #[serde(default)]
+    pub object_channels:
+        Option<std::collections::HashMap<usize, stagespace_engines::SpatialChannels>>,
+    #[serde(default)]
+    pub channel_modulations: Option<Vec<stagespace_engines::ChannelModulation>>,
+    #[serde(default)]
+    pub zones: Option<Vec<stagespace_engines::Zone>>,
+    #[serde(default)]
+    pub mode: stagespace_engines::CueMode,
+    #[serde(default)]
+    pub scope: stagespace_engines::CueScope,
+    #[serde(default)]
+    pub pre_wait: f64,
+    #[serde(default)]
+    pub follow: Option<f64>,
+    #[serde(default)]
+    pub timecode: Option<f64>,
+}
+
+/// Stocke une cue construite depuis la partition score (re-capture
+/// arrangement→cue — docs/score-sequencer.md). Même contrat que
+/// `store_cue` : validation des valeurs finies, id/timestamp côté
+/// backend, `cue-stored` émis. `osc_mappings` et le `graph` legacy
+/// restent vides — pas d'entité timeline correspondante.
+#[tauri::command]
+pub async fn store_score_cue(
+    request: StoreScoreCueRequest,
+    state: State<'_, AppState>,
+) -> Result<Cue, IpcError> {
+    if !request.fade_duration.is_finite() || request.fade_duration < 0.0 {
+        return Err(IpcError::validation(
+            "fade_duration must be a finite non-negative number",
+        ));
+    }
+    for (track, pos) in &request.manual_positions {
+        if !pos.iter().all(|v| v.is_finite()) {
+            return Err(IpcError::validation(format!(
+                "manual_positions[{track}] must be finite"
+            )));
+        }
+    }
+    for (i, d) in request.per_track_depths.iter().enumerate() {
+        if !d.is_finite() {
+            return Err(IpcError::validation(format!(
+                "per_track_depths[{i}] must be finite"
+            )));
+        }
+    }
+    let cue = Cue {
+        id: uuid::Uuid::new_v4().to_string(),
+        schema_version: Some(stagespace_engines::CUE_SCHEMA_VERSION),
+        name: request.name,
+        description: request.description,
+        // Champ legacy (sub-graph unique) — les moves portent leurs
+        // propres graph_json ; vide honnêtement.
+        graph: stagespace_engines::GraphJson::default(),
+        timestamp: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs_f64())
+            .unwrap_or(0.0),
+        macros: request.macros,
+        track_indices: request.track_indices,
+        fade_duration: request.fade_duration,
+        cue_number: request.cue_number,
+        global_graph: request.global_graph,
+        signal_graph: request.signal_graph,
+        active_move_ids: request.moves.iter().map(|m| m.id.clone()).collect(),
+        per_track_depths: request.per_track_depths,
+        manual_positions: request.manual_positions,
+        spatial_macros: request.spatial_macros,
+        object_channels: request.object_channels,
+        channel_modulations: request.channel_modulations,
+        osc_mappings: None,
+        zones: request.zones,
+        moves: request.moves,
+        mode: request.mode,
+        scope: request.scope,
+        pre_wait: request.pre_wait,
+        follow: request.follow,
+        timecode: request.timecode,
+    };
+    emit_ui(&state.event_sink, "cue-stored", &cue);
+    Ok(cue)
+}
+
 // ─── Recall Cue ───
 
 /// Rappelle un cue : désactiver/activer moves, hot-swap global graph, restaurer macros/depths/positions

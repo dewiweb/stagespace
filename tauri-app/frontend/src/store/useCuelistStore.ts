@@ -4,6 +4,7 @@ import { toast } from '../utils/toast-helpers';
 import { safeSetItem, safeParseStoredJson } from '../utils/safeStorage';
 import type { Cue } from '../types/generated/Cue';
 import type { StoreCueRequest } from '../types/generated/StoreCueRequest';
+import type { StoreScoreCueRequest } from '../types/generated/StoreScoreCueRequest';
 import { chase, type ChaseCue } from '../utils/timecodeChase';
 
 /// Cue complet tel que sérialisé par le backend — type généré (ts-rs).
@@ -39,6 +40,9 @@ interface CuelistState {
   loadFromStorage: () => void;
   saveToStorage: () => void;
   storeCue: (cue: StoreCueRequest) => Promise<CueData>;
+  /// Cue matérialisée depuis l'arrangement score (snapshot au curseur —
+  /// aucune capture live, le frontend fournit le payload complet).
+  storeScoreCue: (cue: StoreScoreCueRequest) => Promise<CueData>;
   recallCue: (cueId: string, opts?: { skipPreWait?: boolean; timeOffset?: number; fadeOverride?: number }) => Promise<void>;
   deleteCue: (cueId: string) => void;
   duplicateCue: (cueId: string, opts?: { name?: string }) => string | undefined;
@@ -124,6 +128,20 @@ export const useCuelistStore = create<CuelistState>((set, get) => ({
       return cue;
     } catch (e) {
       console.error('[storeCue] Failed:', e);
+      toast.error('Failed to store cue: ' + e);
+      throw e;
+    }
+  },
+
+  storeScoreCue: async (cueData) => {
+    try {
+      const cue = await invoke<CueData>('store_score_cue', { request: cueData });
+      const cues = [...get().cues, cue];
+      set({ cues });
+      saveToStorage(cues);
+      return cue;
+    } catch (e) {
+      console.error('[storeScoreCue] Failed:', e);
       toast.error('Failed to store cue: ' + e);
       throw e;
     }

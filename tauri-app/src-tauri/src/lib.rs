@@ -21,7 +21,7 @@ use commands::audio::{
     stop_audio_capture, update_audio_state,
 };
 use commands::cue_commands::{
-    get_parked_objects, park_object, recall_cue, store_cue, unpark_object,
+    get_parked_objects, park_object, recall_cue, store_cue, store_score_cue, unpark_object,
 };
 use commands::file_io::{
     get_show_snapshot, import_hol_project, load_graph_from_file, save_graph_to_file,
@@ -535,6 +535,7 @@ pub fn stagespace_invoke_handler<R: tauri::Runtime>(invoke: tauri::ipc::Invoke<R
         list_effective_channels,
         // Cue commands (Phase 3 — cue system étendu)
         store_cue,
+        store_score_cue,
         recall_cue,
         park_object,
         get_parked_objects,

@@ -199,6 +199,37 @@ Ces types de clip sont les **exceptions au modèle par référence** :
 le clip porte sa donnée (pas d'entité vivante correspondante —
 matériau matérialisé, éditable indépendamment de la cue).
 
+**"Arrangement → cue"** (`★ cue` dans le transport,
+`snapshotScoreAt` → `store_score_cue`) — l'inverse exact du flatten :
+l'état de la partition **au curseur** est matérialisé en nouvelle
+cue (aucune capture runtime live — tout est évalué depuis le doc).
+La boucle cuelist↔score est fermée : arranger une cue aplatie puis
+la re-capturer produit le snapshot modifié.
+
+- clips `slot` couvrant le curseur → `moves[]` (`MoveSnapshot`
+  complets, reconstruits via `buildSlotActivation` — même chemin que
+  la résolution des clips). Sémantiques du scheduler respectées :
+  lane **exclusive** = le clip le plus tardif couvrant la lane tue
+  le move des précédents ; **stacked** = coexistence ; **mutée** =
+  la couverture du clip est restreinte aux tracks non mutées.
+- `positions` + courbes `pos.*` → `manual_positions` (obj_index,
+  courbes écrasant la table clip).
+- `zones`/`chanMods` derniers tirés + courbes `zone:…`/`mod:…` à t →
+  `zones`/`channel_modulations` (mêmes patchs que
+  `eval_spatial_fx_param`).
+- `postGraph`/`modGraph` derniers tirés → `global_graph`/`signal_graph`.
+- macros de slot (appliquées au lancement du dernier clip survivant)
+  + courbes GLOBALFX à t → `macros`/`spatial_macros`.
+- courbes `depth`/canaux des lanes objet → `per_track_depths` (trous
+  à 1.0 — défaut du recall) / `object_channels`.
+
+Ce qui n'est **pas** un état n'est pas snapshoté — rapporté dans
+`skipped` du toast : événements conductor (gesture/park/attention…),
+clips cue imbriqués, courbes clip-scoped (elles vivent sur le worker
+spawné — le cue recrée le seed du slot), courbes MODULATION (valeurs
+SignalOsc, pas un champ de cue), `spatial` (compresseur — pas un
+champ de cue).
+
 ### Lane SPATIALFX — surcouche d'effets
 
 La lane `spatialfx` (entre GLOBALFX et MODULATION) porte le périmètre
