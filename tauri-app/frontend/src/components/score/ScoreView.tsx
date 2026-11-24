@@ -30,7 +30,7 @@ import {
   nodeParamDefsOf, clipParamDefsOf, globalFxParamDefsOf, spatialFxParamDefsOf, MERGE_BLEND_DEFS, OBJECT_LANE_DEFS,
   type ParamDef,
 } from './scoreParams';
-import { clipLabel as clipLabelOf, isTextEntryTarget, fmtMs } from './scoreUtils';
+import { clipLabel as clipLabelOf, isTextEntryTarget, fmtMs, snapTo } from './scoreUtils';
 import { effectiveTrackIds } from '../../utils/scoreResolve';
 import { isModalOpen } from '../../utils/modalGuard';
 import { ScoreCurvePane } from './ScoreCurvePane';
@@ -67,8 +67,10 @@ const ScoreView: React.FC = () => {
   const spatialFxCurves = useScoreStore((s) => s.spatialFxCurves);
   const objectCurves = useScoreStore((s) => s.objectCurves);
   const pendingSlotIds = useScoreStore((s) => s.pendingSlotIds);
-  const { addClip, moveClip, resizeClip, removeClip, duplicateClip, splitClip, setDurationMs, setClipRepeat, setClipFades, setClipCurve, setClipTrackIds, setLaneCurve, setLoop, playScore, stopScore, seekScore, toggleLaneMute, setLaneMode, selectClip, selectGlobalLane, clearScoreSelection, retargetClip } =
+  const { addClip, moveClip, resizeClip, removeClip, duplicateClip, splitClip, setDurationMs, setClipRepeat, setClipFades, setClipCurve, setClipTrackIds, setLaneCurve, setLoop, playScore, stopScore, seekScore, toggleLaneMute, setLaneMode, selectClip, selectGlobalLane, clearScoreSelection, retargetClip, addMarker, moveMarker, renameMarker, removeMarker, setSnapMs } =
     useScoreStore.getState();
+  const markers = useScoreStore((s) => s.markers);
+  const snapMs = useScoreStore((s) => s.snapMs);
   const moveSlots = useGraphStore((s) => s.moveSlots);
   const macros = useGraphStore((s) => s.macros);
   const manualOscIds = useGraphStore((s) => s.manualOscIds);
@@ -77,6 +79,10 @@ const ScoreView: React.FC = () => {
   const cues = useCuelistStore((s) => s.cues);
 
   const [pxPerSec, setPxPerSec] = useState(60);
+  /// Suivi du playhead en lecture (auto-scroll) — préférence persistée.
+  const [follow, setFollow] = useState(() => localStorage.getItem('stagespace.score.follow') !== '0');
+  /// Renommage inline d'un marqueur — input posé au point du menu.
+  const [markerEdit, setMarkerEdit] = useState<{ id: string; x: number; y: number } | null>(null);
   // Sélection dans le store — toolbar + MenuBar agissent dessus.
   const selected = useScoreStore((s) => s.selectedClipId);
   /// Lane globale sélectionnée (`globalfx`/`modulation`) — contexte
@@ -117,7 +123,7 @@ const ScoreView: React.FC = () => {
 
   const ms2px = useCallback((ms: number) => (ms / 1000) * pxPerSec, [pxPerSec]);
   const px2ms = useCallback((px: number) => Math.max(0, (px / pxPerSec) * 1000), [pxPerSec]);
-  const tickEvery = pxPerSec < 30 ? 10_000 : pxPerSec < 80 ? 5_000 : 1_000;
+  /// Graduation de la règle — adaptative (rulerTicks) côté ScoreTimeline.
   /// Hauteur de piste — réglable globalement (slider transport).
   /// Défaut ~40 px → ~8-9 pistes visibles dans la moitié basse.
   const [laneH, setLaneH] = useState(40);
@@ -211,10 +217,10 @@ const ScoreView: React.FC = () => {
     // Delta SIGNÉ — pas px2ms (borné à ≥0 pour les positions absolues) :
     // sinon tout drag vers la gauche est écrasé à 0.
     const deltaMs = ((e.clientX - d.startX) / pxPerSec) * 1000;
-    if (d.mode === 'move') moveClip(clip.id, Math.round((d.origMs + deltaMs) / 50) * 50);
-    else if (d.mode === 'resize') resizeClip(clip.id, Math.max(100, Math.round((d.origMs + deltaMs) / 50) * 50));
-    else if (d.mode === 'fadeIn') setClipFades(clip.id, Math.max(0, Math.round((d.origMs + deltaMs) / 50) * 50), clip.fadeOutMs);
-    else if (d.mode === 'fadeOut') setClipFades(clip.id, clip.fadeInMs, Math.max(0, Math.round((d.origMs + deltaMs) / 50) * 50));
+    if (d.mode === 'move') moveClip(clip.id, snapTo(d.origMs + deltaMs, snapMs));
+    else if (d.mode === 'resize') resizeClip(clip.id, Math.max(100, snapTo(d.origMs + deltaMs, snapMs)));
+    else if (d.mode === 'fadeIn') setClipFades(clip.id, Math.max(0, snapTo(d.origMs + deltaMs, snapMs)), clip.fadeOutMs);
+    else if (d.mode === 'fadeOut') setClipFades(clip.id, clip.fadeInMs, Math.max(0, snapTo(d.origMs + deltaMs, snapMs)));
   };
   const onClipPointerUp = () => { dragRef.current = null; };
 
@@ -240,10 +246,48 @@ const ScoreView: React.FC = () => {
         e.preventDefault();
         splitClip(selected, displayCursor);
       }
+      // ── Transport & règle (verbes séquenceur) ──
+      if (isModalOpen() || isTextEntryTarget(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;
+      const nudge = snapMs > 0 ? snapMs : 1000;
+      if (e.key === 'Home') { e.preventDefault(); seekScore(0); }
+      else if (e.key === 'End') { e.preventDefault(); seekScore(durationMs); }
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        // Nudge au pas de snap (Shift ×10) — seek rebasé, marche en lecture.
+        e.preventDefault();
+        const dir = e.key === 'ArrowLeft' ? -1 : 1;
+        seekScore(Math.max(0, Math.min(durationMs, displayCursor + dir * nudge * (e.shiftKey ? 10 : 1))));
+      } else if (!e.repeat && (e.key === 'l' || e.key === 'L')) {
+        // Toggle région de boucle (pleine partition).
+        e.preventDefault();
+        const on = loopStartMs != null && loopEndMs != null;
+        setLoop(on ? undefined : 0, on ? undefined : durationMs);
+      } else if (!e.repeat && e.key === 'i') {
+        // Borne IN au curseur — clampée avant la fin.
+        e.preventDefault();
+        if (loopEndMs == null || displayCursor < loopEndMs) setLoop(displayCursor, loopEndMs ?? durationMs);
+      } else if (!e.repeat && e.key === 'o') {
+        // Borne OUT au curseur — clampée après le début.
+        e.preventDefault();
+        if (loopStartMs == null || displayCursor > loopStartMs) setLoop(loopStartMs ?? 0, displayCursor);
+      } else if (!e.repeat && (e.key === 'm' || e.key === 'M')) {
+        // Marqueur au curseur.
+        e.preventDefault();
+        addMarker(snapTo(displayCursor, snapMs));
+      } else if (e.key === ',' || e.key === '.') {
+        // Navigation marqueur précédent / suivant.
+        const ms = (markers ?? []).map((m) => m.ms).sort((a, b) => a - b);
+        if (!ms.length) return;
+        e.preventDefault();
+        const EPS = 1;
+        const target = e.key === ','
+          ? [...ms].reverse().find((m) => m < displayCursor - EPS) ?? ms[0]
+          : ms.find((m) => m > displayCursor + EPS) ?? ms[ms.length - 1];
+        seekScore(target);
+      }
     };
     window.addEventListener('keydown', h, true);
     return () => window.removeEventListener('keydown', h, true);
-  }, [selected, removeClip, splitClip, displayCursor, clearScoreSelection]);
+  }, [selected, removeClip, splitClip, displayCursor, clearScoreSelection, snapMs, loopStartMs, loopEndMs, durationMs, markers, seekScore, setLoop, addMarker]);
 
   const addToLane = (ref: ScoreClipDoc['ref'], opts?: { durationMs?: number; trackIds?: number[]; repeatEveryMs?: number }) => {
     addClip(ref, picker?.startMs ?? displayCursor, opts);
@@ -377,7 +421,25 @@ const ScoreView: React.FC = () => {
         }],
       };
     }
-    // ruler — bornes de loop
+    // marker — repère de règle (renommer/supprimer)
+    if (t.kind === 'marker') {
+      const m = markers?.find((x) => x.id === t.markerId);
+      return {
+        header: m ? `${m.name} — ${fmtMs(m.ms)}` : 'Marqueur',
+        items: [
+          {
+            label: 'Renommer…',
+            onClick: () => setMarkerEdit({ id: t.markerId, x: ctxMenu.x, y: ctxMenu.y }),
+          },
+          {
+            label: 'Supprimer le marqueur',
+            danger: true,
+            onClick: () => removeMarker(t.markerId),
+          },
+        ],
+      };
+    }
+    // ruler — bornes de loop + marqueur à poser
     const armed = loopStartMs != null && loopEndMs != null;
     return {
       header: fmtMs(t.ms),
@@ -393,6 +455,11 @@ const ScoreView: React.FC = () => {
           disabled: loopStartMs == null || t.ms <= loopStartMs,
           title: loopStartMs == null ? 'Posez d\'abord le début' : 'La fin doit suivre le début',
           onClick: () => setLoop(loopStartMs, t.ms),
+        },
+        { separator: true },
+        {
+          label: `Marqueur ici`,
+          onClick: () => addMarker(snapTo(t.ms, snapMs)),
         },
         { separator: true },
         {
@@ -874,6 +941,7 @@ const ScoreView: React.FC = () => {
             groups={dopeGroups}
             scrollTop={dopeVScroll}
             onVScroll={setDopeVScroll}
+            snapMs={snapMs}
           />
         }
         clipParams={selClip ? (
@@ -967,6 +1035,11 @@ const ScoreView: React.FC = () => {
         onValidate={() => setIssues(validateScore())}
         tcChase={tcChase}
         onTcChase={() => useScoreStore.getState().setTcChase(!tcChase)}
+        snapMs={snapMs}
+        onSnapMs={setSnapMs}
+        follow={follow}
+        onFollow={() => setFollow((f) => { localStorage.setItem('stagespace.score.follow', f ? '0' : '1'); return !f; })}
+        onSeek={seekScore}
       />
       <ScoreToolbar
         selClip={selClip ?? null}
@@ -997,7 +1070,6 @@ const ScoreView: React.FC = () => {
         durationMs={durationMs}
         displayCursor={displayCursor}
         playing={playing}
-        tickEvery={tickEvery}
         laneH={laneH}
         rowH={rowH}
         ms2px={ms2px}
@@ -1005,6 +1077,11 @@ const ScoreView: React.FC = () => {
         loopStartMs={loopStartMs}
         loopEndMs={loopEndMs}
         seekScore={seekScore}
+        onSetLoop={setLoop}
+        markers={markers ?? []}
+        onMoveMarker={moveMarker}
+        snapMs={snapMs}
+        follow={follow}
         lanes={lanes}
         laneLayout={laneLayout}
         laneModeOf={laneModeOf}
@@ -1059,6 +1136,22 @@ const ScoreView: React.FC = () => {
           />
         );
       })()}
+
+      {/* Renommage inline d'un marqueur — input posé au point du menu
+          contextuel, commit au blur/Enter. */}
+      {markerEdit && (
+        <input
+          autoFocus
+          defaultValue={markers?.find((m) => m.id === markerEdit.id)?.name}
+          className="fixed z-menu bg-gray-900 border border-cyan-600 rounded px-2 py-1 text-xs text-gray-200"
+          style={{ left: markerEdit.x, top: markerEdit.y, width: 160 }}
+          onBlur={(e) => { renameMarker(markerEdit.id, e.target.value.trim()); setMarkerEdit(null); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+            if (e.key === 'Escape') setMarkerEdit(null);
+          }}
+        />
+      )}
 
       {/* Preflight — rapport de la résolution sèche (✓ check) */}
       {issues && (

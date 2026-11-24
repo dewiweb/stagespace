@@ -2,13 +2,13 @@
 /// zone timeline scrollable (ruler, lanes globales, lanes objets,
 /// clips, curseur). Le scrollTop des en-têtes est synchronisé avec
 /// la timeline (mêmes hauteurs de rangées).
-import React, { useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { SCORE_DRAG_MIME } from '../../utils/scoreDopesheet';
 import {
   GLOBALFX_LANE, MODULATION_LANE, CONDUCTOR_LANE, OSC_LANE, SPATIALFX_LANE, GLOBAL_LANES, clipLaneIds,
-  type ScoreClipDoc, type ScoreKeyframe, type ScoreLaneMode,
+  type ScoreClipDoc, type ScoreKeyframe, type ScoreLaneMode, type ScoreMarker,
 } from '../../store/useScoreStore';
-import { CLIP_COLORS, fmtMs } from './scoreUtils';
+import { CLIP_COLORS, fmtMs, rulerTicks, snapTo } from './scoreUtils';
 import { effectiveTrackIds } from '../../utils/scoreResolve';
 import { ScoreClipBlock, type ClipDragMode } from './ScoreClipBlock';
 
@@ -25,12 +25,14 @@ export interface ScoreLaneLayout {
 /// Cible d'un clic droit — le menu contextuel se construit dessus.
 /// `clip` porte la lane où le rendu a été cliqué (déliage par piste) ;
 /// `empty` = corps de lane vide (ajout de clip à cet instant) ;
-/// `ruler` = bornes de loop ; `lane` = en-tête (mute/mode).
+/// `ruler` = bornes de loop + marqueur à poser ; `marker` = repère
+/// existant (renommer/supprimer) ; `lane` = en-tête (mute/mode).
 export type ScoreMenuTarget =
   | { kind: 'clip'; clipId: string; laneId: string; trackId?: number }
   | { kind: 'lane'; laneId: string; trackId?: number }
   | { kind: 'empty'; laneId: string; ms: number; trackId?: number }
-  | { kind: 'ruler'; ms: number };
+  | { kind: 'ruler'; ms: number }
+  | { kind: 'marker'; markerId: string };
 
 export const ScoreTimeline: React.FC<{
   /// Part de la hauteur restante allouée à la zone timeline (0–1).
@@ -38,7 +40,6 @@ export const ScoreTimeline: React.FC<{
   durationMs: number;
   displayCursor: number;
   playing: boolean;
-  tickEvery: number;
   laneH: number;
   rowH: number;
   ms2px: (ms: number) => number;
@@ -46,6 +47,15 @@ export const ScoreTimeline: React.FC<{
   loopStartMs?: number;
   loopEndMs?: number;
   seekScore: (ms: number) => void;
+  /// Bornes de loop draggées sur la règle.
+  onSetLoop: (startMs: number | undefined, endMs: number | undefined) => void;
+  /// Marqueurs de règle — affichés, déplaçables au drag.
+  markers: ScoreMarker[];
+  onMoveMarker: (id: string, ms: number) => void;
+  /// Pas de snap magnétique (ms) — 0 = libre.
+  snapMs: number;
+  /// Le playhead reste visible pendant la lecture (auto-scroll).
+  follow: boolean;
   lanes: ScoreLane[];
   laneLayout: Map<string, ScoreLaneLayout>;
   laneModeOf: (laneId: string) => ScoreLaneMode;
@@ -79,8 +89,9 @@ export const ScoreTimeline: React.FC<{
   /// SCORE_DRAG_MIME) — la validation lane↔ref est côté parent.
   onLaneDrop?: (laneId: string, ms: number, payload: string) => void;
 }> = ({
-  grow, durationMs, displayCursor, playing, tickEvery, laneH, rowH,
+  grow, durationMs, displayCursor, playing, laneH, rowH,
   ms2px, px2ms, loopStartMs, loopEndMs, seekScore,
+  onSetLoop, markers, onMoveMarker, snapMs, follow,
   lanes, laneLayout, laneModeOf, laneMutedOf,
   clips, globalFxCurves, modulationCurves, spatialFxCurves, objectCurves,
   selGlobal, selected, onSelectLane, onClearSelection, onOpenPicker,
@@ -94,8 +105,86 @@ export const ScoreTimeline: React.FC<{
   /// lanes globales + hauteur de lane). overflow-y: hidden mais
   /// scrollable par code.
   const laneHeadRef = useRef<HTMLDivElement>(null);
+  /// Conteneur scrollable de la timeline — le scroll horizontal pilote
+  /// le follow du playhead en lecture.
+  const tlScrollRef = useRef<HTMLDivElement>(null);
+  /// Drag en cours sur la règle — scrub du playhead (fonctionne en
+  /// lecture : `score_timeline_seek` rebase live), déplacement des
+  /// bornes/corps de la région de boucle, déplacement d'un marqueur.
+  const rulerDrag = useRef<
+    | { mode: 'scrub' }
+    | { mode: 'loopEdge'; edge: 'start' | 'end' }
+    | { mode: 'loopMove'; startX: number; origStart: number; origEnd: number }
+    | { mode: 'marker'; id: string }
+    | null
+  >(null);
+  /// Throttle du scrub — un seek = rebase transport backend (~33Hz
+  /// suffit pour un scrub fluide sans flooder l'IPC).
+  const lastScrubAt = useRef(0);
+  /// La règle porte le repère px→ms — les drags capturés par ses
+  /// enfants (poignées, bande, marqueurs) lisent toujours SON rect.
+  const rulerRef = useRef<HTMLDivElement>(null);
+  const rulerMsAt = (clientX: number) => {
+    const rect = rulerRef.current?.getBoundingClientRect();
+    return snapTo(Math.max(0, px2ms(rect ? clientX - rect.left : 0)), snapMs);
+  };
+  const scrub = (clientX: number) => {
+    const now = performance.now();
+    if (now - lastScrubAt.current < 30) return;
+    lastScrubAt.current = now;
+    seekScore(rulerMsAt(clientX));
+  };
+  /// Handler commun des drags de la règle — posé sur l'élément qui a
+  /// capturé le pointeur (règle, bande de loop, poignée, marqueur).
+  const rulerMove = (e: React.PointerEvent) => {
+    const d = rulerDrag.current;
+    if (!d) return;
+    if (d.mode === 'scrub') { scrub(e.clientX); return; }
+    if (d.mode === 'marker') { onMoveMarker(d.id, rulerMsAt(e.clientX)); return; }
+    if (d.mode === 'loopEdge') {
+      const ms = rulerMsAt(e.clientX);
+      if (d.edge === 'start') onSetLoop(Math.min(ms, (loopEndMs ?? 0) - 50), loopEndMs);
+      else onSetLoop(loopStartMs, Math.max(ms, (loopStartMs ?? 0) + 50));
+      return;
+    }
+    // loopMove — translation de la région, longueur préservée.
+    const deltaMs = px2ms(e.clientX - d.startX);
+    const len = d.origEnd - d.origStart;
+    const s = snapTo(Math.max(0, Math.min(d.origStart + deltaMs, durationMs - len)), snapMs);
+    onSetLoop(s, s + len);
+  };
+  const rulerUp = () => { rulerDrag.current = null; };
+  const captureDrag = (e: React.PointerEvent, d: NonNullable<typeof rulerDrag.current>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    rulerDrag.current = d;
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); }
+    catch { /* pointeur déjà relâché — le geste survit sans capture */ }
+  };
+  /// Props de drag communes (move/up) — attachées à chaque élément
+  /// draggable de la règle.
+  const rulerDragProps = {
+    onPointerMove: rulerMove,
+    onPointerUp: rulerUp,
+  };
+
+  /// Follow — le playhead reste dans le champ pendant la lecture
+  /// (page-flip : ré-ancre à ~20% du bord gauche quand il sort).
+  useEffect(() => {
+    if (!playing || !follow) return;
+    const el = tlScrollRef.current;
+    if (!el) return;
+    const x = ms2px(displayCursor);
+    const m = 60;
+    if (x < el.scrollLeft + m || x > el.scrollLeft + el.clientWidth - m) {
+      el.scrollLeft = Math.max(0, x - el.clientWidth * 0.2);
+    }
+  }, [displayCursor, playing, follow, ms2px]);
+
+  /// Graduation adaptative — majeure labellisée ~80-160px + mineures.
+  const { minorMs, majorMs } = rulerTicks(ms2px(1000));
   /// Drag & drop bibliothèque → lane : ms calculé au point de drop
-  /// (snap 50ms comme le dopesheet).
+  /// (snap de la grille).
   const dropProps = (laneId: string) => ({
     onDragOver: (e: React.DragEvent) => {
       if (e.dataTransfer.types.includes(SCORE_DRAG_MIME)) {
@@ -109,7 +198,7 @@ export const ScoreTimeline: React.FC<{
       e.preventDefault();
       e.stopPropagation();
       const rect = e.currentTarget.getBoundingClientRect();
-      onLaneDrop?.(laneId, Math.max(0, Math.round(px2ms(e.clientX - rect.left) / 50) * 50), p);
+      onLaneDrop?.(laneId, Math.max(0, snapTo(px2ms(e.clientX - rect.left), snapMs)), p);
     },
   });
   return (
@@ -210,8 +299,10 @@ export const ScoreTimeline: React.FC<{
         <div className="flex-1" />
       </div>
 
-      {/* Zone timeline — son scroll vertical pilote les en-têtes */}
+      {/* Zone timeline — son scroll vertical pilote les en-têtes ;
+          tlScrollRef sert le follow du playhead en lecture. */}
       <div
+        ref={tlScrollRef}
         className="flex-1 overflow-auto"
         onScroll={(e) => {
           if (laneHeadRef.current) laneHeadRef.current.scrollTop = e.currentTarget.scrollTop;
@@ -221,35 +312,77 @@ export const ScoreTimeline: React.FC<{
         <div className="relative" style={{ width: ms2px(durationMs) + 200, minHeight: '100%' }}>
           {/* Ruler — sticky en haut (reste visible au scroll down),
               fond opaque pour ne pas laisser passer les clips.
-              Click = seek (stopped only, backend refusera sinon) */}
+              Drag = scrub du playhead (marche en lecture : seek =
+              rebase live backend). Poignées de la bande loop = bornes,
+              corps = translation. Marqueurs = drag pour déplacer. */}
           <div
-            className="sticky top-0 z-20 h-6 border-b border-gray-800 relative cursor-text bg-gray-900"
-            onClick={(e) => {
-              // stopPropagation — un seek ne désélectionne pas le clip
-              // (le conteneur a onClearSelection).
+            ref={rulerRef}
+            className="sticky top-0 z-20 h-6 border-b border-gray-800 relative cursor-ew-resize bg-gray-900"
+            onPointerDown={(e) => {
               e.stopPropagation();
-              if (playing) return;
-              const rect = e.currentTarget.getBoundingClientRect();
-              seekScore(Math.round(px2ms(e.clientX - rect.left) / 50) * 50);
+              captureDrag(e, { mode: 'scrub' });
+              scrub(e.clientX);
             }}
+            {...rulerDragProps}
             onContextMenu={(e) => {
               e.preventDefault();
               const rect = e.currentTarget.getBoundingClientRect();
               onContextMenu({ kind: 'ruler', ms: Math.max(0, px2ms(e.clientX - rect.left)) }, e.clientX, e.clientY);
             }}
           >
-            {Array.from({ length: Math.ceil(durationMs / tickEvery) + 1 }, (_, i) => i * tickEvery).map((ms) => (
+            {/* Graduations mineures — fines, sans label */}
+            {Array.from({ length: Math.ceil(durationMs / minorMs) + 1 }, (_, i) => i * minorMs)
+              .filter((ms) => ms % majorMs !== 0)
+              .map((ms) => (
+                <div key={ms} className="absolute bottom-0 h-1.5 border-l border-gray-800" style={{ left: ms2px(ms) }} />
+              ))}
+            {/* Graduations majeures — label mm:ss */}
+            {Array.from({ length: Math.ceil(durationMs / majorMs) + 1 }, (_, i) => i * majorMs).map((ms) => (
               <div key={ms} className="absolute top-0 bottom-0 border-l border-gray-700 pl-1 text-[9px] text-gray-500" style={{ left: ms2px(ms) }}>
                 {fmtMs(ms).slice(0, 5)}
               </div>
             ))}
-            {/* Region de boucle — bandeau sur la ruler */}
+            {/* Region de boucle — corps translatable + poignées de
+                bornes (drag horizontal, snap de la grille) */}
             {loopStartMs != null && loopEndMs != null && (
               <div
-                className="absolute top-0 bottom-0 bg-cyan-400/15 border-x border-cyan-400/60 pointer-events-none"
+                className="absolute top-0 bottom-0 bg-cyan-400/15 cursor-grab"
                 style={{ left: ms2px(loopStartMs), width: ms2px(loopEndMs - loopStartMs) }}
-              />
+                title="Région de boucle — glisser pour déplacer, poignées pour ajuster"
+                onPointerDown={(e) => captureDrag(e, { mode: 'loopMove', startX: e.clientX, origStart: loopStartMs, origEnd: loopEndMs })}
+                {...rulerDragProps}
+              >
+                {(['start', 'end'] as const).map((edge) => (
+                  <div
+                    key={edge}
+                    className={`absolute top-0 bottom-0 w-2 cursor-ew-resize ${edge === 'start' ? 'left-0' : 'right-0'} bg-cyan-400/40 hover:bg-cyan-400/80`}
+                    title={edge === 'start' ? 'Début de boucle' : 'Fin de boucle'}
+                    onPointerDown={(e) => captureDrag(e, { mode: 'loopEdge', edge })}
+                    {...rulerDragProps}
+                  />
+                ))}
+              </div>
             )}
+            {/* Marqueurs — repères nommés ; drag = déplacer, clic droit
+                = renommer/supprimer */}
+            {markers.map((m) => (
+              <div
+                key={m.id}
+                className="absolute top-0 bottom-0 cursor-grab group"
+                style={{ left: ms2px(m.ms) }}
+                title={`${m.name} — ${fmtMs(m.ms)} (drag = déplacer)`}
+                onPointerDown={(e) => captureDrag(e, { mode: 'marker', id: m.id })}
+                {...rulerDragProps}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onContextMenu({ kind: 'marker', markerId: m.id }, e.clientX, e.clientY);
+                }}
+              >
+                <div className="w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[7px] border-t-cyan-400 group-hover:border-t-cyan-200" />
+                <span className="text-[8px] text-cyan-400/80 group-hover:text-cyan-200 whitespace-nowrap pl-0.5">{m.name}</span>
+              </div>
+            ))}
           </div>
           {/* Bornes de loop pleine hauteur (très faible) */}
           {loopStartMs != null && loopEndMs != null && (

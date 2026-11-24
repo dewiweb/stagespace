@@ -26,6 +26,32 @@ export const fmtMs = (ms: number) => {
   return `${String(m).padStart(2, '0')}:${(s - m * 60).toFixed(2).padStart(5, '0')}`;
 };
 
+/// Snap magnétique — `snap ≤ 0` = libre (arrondi à la ms près).
+export const snapTo = (ms: number, snap: number) =>
+  snap > 0 ? Math.round(ms / snap) * snap : Math.round(ms);
+
+/// Affichage timecode HH:MM:SS:FF (le chase parle TC — défaut 25fps,
+/// même référence que `/stagespace/timecode`).
+export const fmtTc = (ms: number, fps = 25) => {
+  const totalF = Math.floor((ms / 1000) * fps);
+  const s = Math.floor(totalF / fps);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(Math.floor(s / 3600))}:${p(Math.floor(s / 60) % 60)}:${p(s % 60)}:${p(totalF % fps)}`;
+};
+
+/// Graduation adaptative de la règle — la majeure (labellisée) vise
+/// ~80–160 px selon le zoom ; la mineure la subdivise (×4 ou ×5).
+/// Retourne `{ minorMs, majorMs }`.
+export function rulerTicks(pxPerSec: number): { minorMs: number; majorMs: number } {
+  // (major s, subdivisions) — divisions 4/5/6 gardent des mineurs ronds.
+  const MAJORS: [number, number][] = [
+    [100, 4], [250, 5], [500, 5], [1000, 4], [2000, 4], [5000, 5],
+    [10000, 5], [15000, 5], [30000, 6], [60000, 4],
+  ];
+  const pick = MAJORS.find(([s]) => (s / 1000) * pxPerSec >= 80) ?? [60000, 4];
+  return { minorMs: pick[0] / pick[1], majorMs: pick[0] };
+}
+
 export const CLIP_COLORS: Record<string, string> = {
   slot: 'bg-purple-600/80 border-purple-400',
   cue: 'bg-amber-600/80 border-amber-400',

@@ -143,6 +143,7 @@ export async function buildShowEnvelope(s: PersistenceStore): Promise<ShowFileEn
       modulationCurves: scoreStore.modulationCurves,
       objectCurves: scoreStore.objectCurves,
       spatialFxCurves: scoreStore.spatialFxCurves,
+      markers: scoreStore.markers,
     },
     oscMappings,
     macros: s.macros,

@@ -13,7 +13,8 @@ import { DOPE_ROW_H as ROW_H, DOPE_HEADER_H } from '../../utils/scoreDopesheet';
 import type { ParamDef } from './scoreParams';
 import type { ParamGroup } from './ScoreParamsPanel';
 import { useElementSize } from './useElementSize';
-const SNAP_MS = 50;
+import { snapTo } from './scoreUtils';
+/// `snapMs` (prop) — pas de la grille magnétique ; 0 = libre.
 
 export const ScoreDopesheet: React.FC<{
   rows: DopeRow[];
@@ -38,10 +39,12 @@ export const ScoreDopesheet: React.FC<{
   /// Scroll vertical synchronisé avec la colonne PARAMÈTRES.
   scrollTop?: number;
   onVScroll?: (top: number) => void;
+  /// Pas de snap magnétique (ms) — 0 = libre.
+  snapMs?: number;
 }> = ({
   rows, durationMs, displayCursor,
   loopStartMs, loopEndMs, paramDefOf, onSelectRow, onSeek, onMoveKf,
-  onMoveClip, groups, scrollTop, onVScroll,
+  onMoveClip, groups, scrollTop, onVScroll, snapMs = 50,
 }) => {
   /// Échelle fit-to-width — mesurée sur le conteneur (toute la
   /// partition visible, jamais de scroll horizontal).
@@ -113,7 +116,7 @@ export const ScoreDopesheet: React.FC<{
     const dy = e.clientY - d.startY;
     if (!d.moved && Math.abs(dx) < 3 && Math.abs(dy) < 3) return;
     d.moved = true;
-    const t = Math.max(0, Math.round((d.origT + px2ms(dx)) / SNAP_MS) * SNAP_MS);
+    const t = Math.max(0, snapTo(d.origT + px2ms(dx), snapMs));
     if (d.row.kind === 'events') {
       if (d.row.points[d.idx].clipId) onMoveClip(d.row.points[d.idx].clipId!, t);
     } else {

@@ -3,7 +3,7 @@
 /// des pistes. Transport = commandes IPC, jamais de lecture
 /// frontend (setTimeout) — l'horloge de vérité est le backend.
 import React from 'react';
-import { fmtMs } from './scoreUtils';
+import { fmtMs, fmtTc } from './scoreUtils';
 
 export const ScoreTransport: React.FC<{
   playing: boolean;
@@ -25,19 +25,45 @@ export const ScoreTransport: React.FC<{
   /// TC chase — le transport suit le timecode entrant.
   tcChase: boolean;
   onTcChase: () => void;
+  /// Pas de snap magnétique (ms) — 0 = libre.
+  snapMs: number;
+  onSnapMs: (ms: number) => void;
+  /// Auto-scroll du playhead en lecture.
+  follow: boolean;
+  onFollow: () => void;
+  /// ⏮/⏭ — seek début / fin de partition.
+  onSeek: (ms: number) => void;
 }> = ({
   playing, displayCursor, durationMs, loopStartMs, loopEndMs,
   pxPerSec, laneH, onPlayStop, onSetDurationMs, onSetLoop,
   onZoom, onLaneH, onCaptureCue, onValidate, tcChase, onTcChase,
+  snapMs, onSnapMs, follow, onFollow, onSeek,
 }) => (
   <div className="flex items-center gap-3 px-3 py-1.5 border-b border-gray-800 bg-gray-900/60">
+    <button
+      onClick={() => onSeek(0)}
+      className="px-1.5 py-1 text-xs rounded bg-gray-800 text-gray-400 hover:text-gray-200"
+      title="Retour au début (Home)"
+    >⏮</button>
     <button
       onClick={onPlayStop}
       className={`px-3 py-1 text-xs font-bold rounded ${playing ? 'bg-red-700 hover:bg-red-600' : 'bg-green-700 hover:bg-green-600'}`}
     >
       {playing ? '■ STOP' : '⏵ PLAY'}
     </button>
-    <span className="font-mono text-sm text-cyan-300 w-28">{fmtMs(displayCursor)}</span>
+    <button
+      onClick={() => onSeek(durationMs)}
+      className="px-1.5 py-1 text-xs rounded bg-gray-800 text-gray-400 hover:text-gray-200"
+      title="Aller à la fin (End)"
+    >⏭</button>
+    <button
+      onClick={onFollow}
+      className={`px-1.5 py-1 text-[10px] font-bold rounded ${follow ? 'bg-cyan-800 text-cyan-200' : 'bg-gray-800 text-gray-500 hover:text-gray-300'}`}
+      title="Suivi — auto-scroll : le playhead reste visible pendant la lecture"
+    >⇉</button>
+    <span className="font-mono text-sm text-cyan-300 w-28" title={tcChase ? 'Position — affichage timecode (chase actif)' : 'Position'}>
+      {tcChase ? fmtTc(displayCursor) : fmtMs(displayCursor)}
+    </span>
     <span className="text-[10px] text-gray-500">/ {fmtMs(durationMs)}</span>
     <label className="text-[10px] text-gray-500 flex items-center gap-1">
       durée
@@ -56,6 +82,7 @@ export const ScoreTransport: React.FC<{
         <label className="text-[10px] text-gray-500 flex items-center gap-1">
           {label}
           <input
+            key={val}
             type="number" min={0} step={1} defaultValue={val / 1000}
             onBlur={(e) => { const v = Number(e.target.value); if (v >= 0) onSet(v * 1000); }}
             onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
@@ -103,6 +130,23 @@ export const ScoreTransport: React.FC<{
       TC
     </button>
     <div className="flex-1" />
+    <label className="text-[10px] text-gray-500 flex items-center gap-1" title="Snap magnétique — grille d'aimantation des drags (clips, keyframes, bornes, marqueurs)">
+      snap
+      <select
+        value={snapMs}
+        onChange={(e) => onSnapMs(Number(e.target.value))}
+        className="bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-[10px]"
+      >
+        <option value={0}>libre</option>
+        <option value={10}>10ms</option>
+        <option value={25}>25ms</option>
+        <option value={50}>50ms</option>
+        <option value={100}>100ms</option>
+        <option value={250}>250ms</option>
+        <option value={500}>500ms</option>
+        <option value={1000}>1s</option>
+      </select>
+    </label>
     <button onClick={() => onZoom(-1)} className="px-2 py-0.5 text-xs bg-gray-800 rounded hover:bg-gray-700">−</button>
     <button onClick={() => onZoom(1)} className="px-2 py-0.5 text-xs bg-gray-800 rounded hover:bg-gray-700">+</button>
     <span className="text-[10px] text-gray-500 w-10 text-right">{pxPerSec.toFixed(0)}px/s</span>

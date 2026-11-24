@@ -239,6 +239,19 @@ export interface ScoreDoc {
   /// ensemble ou aucun.
   loopStartMs?: number;
   loopEndMs?: number;
+  /// Marqueurs de règle — repères nommés de la conduite (sections,
+  /// points d'ancrage). Annotation de navigation, jamais évaluée par
+  /// le backend : posés/déplacés/renommés librement, la lecture ne
+  /// s'y arrête pas.
+  markers?: ScoreMarker[];
+}
+
+/// Repère nommé sur la règle temps — navigation + structure de la
+/// partition (intro/refrain/section…).
+export interface ScoreMarker {
+  id: string;
+  ms: number;
+  name: string;
 }
 
 const uid = () => `sc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
@@ -254,6 +267,7 @@ const emptyDoc = (): ScoreDoc => ({
   modulationCurves: {},
   objectCurves: {},
   spatialFxCurves: {},
+  markers: [],
 });
 
 interface ScoreState extends ScoreDoc {
@@ -308,6 +322,16 @@ interface ScoreState extends ScoreDoc {
   splitClip: (id: string, ms: number) => void;
   setLoop: (startMs: number | undefined, endMs: number | undefined) => void;
   setDurationMs: (ms: number) => void;
+  /// Marqueurs de règle — repères nommés (navigation, sections).
+  addMarker: (ms: number, name?: string) => void;
+  moveMarker: (id: string, ms: number) => void;
+  renameMarker: (id: string, name: string) => void;
+  removeMarker: (id: string) => void;
+  /// Pas de snap magnétique (ms) — 0 = libre. Préférence UI persistée
+  /// localStorage, pas le doc : c'est le geste de l'opérateur, pas la
+  /// partition.
+  snapMs: number;
+  setSnapMs: (ms: number) => void;
   setScoreDoc: (doc: ScoreDoc | undefined) => void;
   clearScore: () => void;
   /// Marque des slots comme modifiés depuis la dernière résolution
@@ -354,6 +378,8 @@ let chasePlayPending = false;
 /// Deadband du chase — sous ~2 frames à 25 fps la dérive est ignorée
 /// (un seek = rebase du transport, inutile en dessous du bruit TC).
 const CHASE_DEADBAND_MS = 80;
+/// Préférence de snap (ms) — persistée comme tcChase (geste UI).
+const SCORE_SNAP_KEY = 'stagespace.score.snap_ms';
 
 export const useScoreStore = create<ScoreState>()((set, get) => ({
   ...emptyDoc(),
@@ -516,6 +542,27 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
     invoke('score_timeline_set_loop', { startMs: startMs ?? null, endMs: endMs ?? null }).catch(silentCatch);
   },
   setDurationMs: (ms) => set({ durationMs: Math.max(1000, ms) }),
+  // Marqueurs de règle — repères nommés (M = poser au curseur, drag =
+  // déplacer, menu = renommer/supprimer). Jamais lus par le backend.
+  addMarker: (ms, name) =>
+    set((s) => ({
+      markers: [...(s.markers ?? []), {
+        id: uid(),
+        ms: Math.max(0, ms),
+        name: name ?? `M${(s.markers?.length ?? 0) + 1}`,
+      }],
+    })),
+  moveMarker: (id, ms) =>
+    set((s) => ({ markers: s.markers?.map((m) => (m.id === id ? { ...m, ms: Math.max(0, ms) } : m)) })),
+  renameMarker: (id, name) =>
+    set((s) => ({ markers: s.markers?.map((m) => (m.id === id ? { ...m, name: name || m.name } : m)) })),
+  removeMarker: (id) =>
+    set((s) => ({ markers: (s.markers ?? []).filter((m) => m.id !== id) })),
+  snapMs: Number(localStorage.getItem(SCORE_SNAP_KEY) ?? 50) || 0,
+  setSnapMs: (ms) => {
+    localStorage.setItem(SCORE_SNAP_KEY, String(ms));
+    set({ snapMs: ms });
+  },
   setScoreDoc: (doc) =>
     set(
       doc
