@@ -25,10 +25,11 @@ export const ScoreProgress: React.FC = () => {
   // vérité reste backend ; l'affichage interpole entre les pushes).
   const [displayCursor, setDisplayCursor] = useState(cursorMs);
   const playBase = useRef({ at: 0, ms: 0 });
+  const transportRev = useScoreStore((s) => s.transportRev);
   useEffect(() => {
     playBase.current = { at: performance.now(), ms: cursorMs };
     if (!playing) setDisplayCursor(cursorMs);
-  }, [cursorMs, playing]);
+  }, [cursorMs, playing, transportRev]);
   useEffect(() => {
     if (!playing) return;
     let raf = 0;

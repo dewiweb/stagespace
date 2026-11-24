@@ -260,6 +260,11 @@ interface ScoreState extends ScoreDoc {
   // Transport — runtime (pas dans l'enveloppe)
   playing: boolean;
   cursorMs: number;
+  /// Révision transport — incrémentée à CHAQUE event `score-timeline`,
+  /// même quand `cursorMs` ne change pas (rebouclage : l'event porte
+  /// le même curseur mais la projection locale doit se re-ancrer,
+  /// sinon le playhead fuit au-delà de la boucle).
+  transportRev: number;
   // Document actions
   /// Mute d'une lane (`obj-<trackId>` ou lane globale).
   toggleLaneMute: (laneId: string) => void;
@@ -353,6 +358,7 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
   clearScoreSelection: () => set({ selectedClipId: null, selGlobalLane: null }),
   playing: false,
   cursorMs: 0,
+  transportRev: 0,
 
   toggleLaneMute: (laneId) =>
     set((s) => ({
@@ -621,7 +627,7 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
     // ne doit pas re-marquer le doc dirty à chaque event transport.
     set((s) =>
       s.loopStartMs === loopStartMs && s.loopEndMs === loopEndMs
-        ? { playing, cursorMs }
-        : { playing, cursorMs, loopStartMs, loopEndMs },
+        ? { playing, cursorMs, transportRev: s.transportRev + 1 }
+        : { playing, cursorMs, loopStartMs, loopEndMs, transportRev: s.transportRev + 1 },
     ),
 }));
