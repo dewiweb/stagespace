@@ -3,7 +3,7 @@
 /// rangées alignées du dopesheet, ou explorer. ScoreView fournit les
 /// groupes de lignes déjà filtrés selon la vue résolue.
 import React from 'react';
-import { SCORE_DRAG_MIME } from '../../utils/scoreDopesheet';
+import { SCORE_DRAG_MIME, biblioDragRef } from '../../utils/scoreDopesheet';
 
 export interface ParamRow {
   id: string;
@@ -133,10 +133,14 @@ export const ScoreParamsPanel: React.FC<{
               draggable={!!r.dragPayload}
               onDragStart={r.dragPayload
                 ? (e) => {
-                    e.dataTransfer.setData(SCORE_DRAG_MIME, r.dragPayload!);
-                    e.dataTransfer.effectAllowed = 'copy';
+                    biblioDragRef.payload = r.dragPayload!;
+                    try {
+                      e.dataTransfer.setData(SCORE_DRAG_MIME, r.dragPayload!);
+                      e.dataTransfer.effectAllowed = 'copy';
+                    } catch { /* WebView2 peut refuser les types custom — la ref suffit */ }
                   }
                 : undefined}
+              onDragEnd={r.dragPayload ? () => { biblioDragRef.payload = null; } : undefined}
               style={rowHeight ? { height: rowHeight } : undefined}
               className={`w-full text-left px-2 ${rowHeight ? 'py-0 flex items-center' : 'py-1'} text-[10px] font-bold rounded border ${r.dragPayload ? 'cursor-grab ' : ''}${
                 r.active

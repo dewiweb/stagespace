@@ -29,6 +29,13 @@ export const DOPE_HEADER_H = 14;
 /// MIME du drag&drop bibliothèque → timeline (JSON :
 /// {ref, durationMs?, repeatEveryMs?}).
 export const SCORE_DRAG_MIME = 'application/x-stagespace-clip';
+/// Payload du drag bibliothèque en cours — source de vérité partagée
+/// entre la bibliothèque (dragstart) et la timeline (dragover/drop).
+/// WebView2 ne fait pas toujours le round-trip des types MIME custom
+/// du dataTransfer (`types` vide au dragover → drop refusé) : le
+/// dataTransfer reste écrit en complément, mais la donnée passe par
+/// cette référence.
+export const biblioDragRef: { payload: string | null } = { payload: null };
 
 export interface DopePoint {
   t: number;
