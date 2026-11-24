@@ -106,6 +106,14 @@ pub enum ScoreClipPayload {
         addr: String,
         args: Vec<OscArg>,
     },
+    /// Action live dispatchée au FRONTEND — les verbes de l'opérateur
+    /// qui n'ont pas de chemin backend direct : `soundcheck` (arg
+    /// start/stop/next/prev), `solo` (arg = oscIndex du slot),
+    /// `unsolo`, `view` (arg = atelier/conduite/jeu/score), `cueArm`
+    /// (arg = cue_number), `cueGo`. Le score « appuie sur le bouton »
+    /// de l'opérateur — le scheduler émet `score-live-action`, l'UI
+    /// dispatche vers les mêmes do* que le show-control OSC.
+    LiveAction { name: String, arg: Option<String> },
 }
 
 /// Argument OSC d'un clip OscOut — untagged : `42` → int, `1.5` →

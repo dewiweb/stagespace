@@ -13,6 +13,10 @@ import { useEffect } from 'react';
 import { safeInvoke, safeListen } from '../utils/tauri';
 import { toast } from '../utils/toast-helpers';
 import { useScoreStore } from '../store/useScoreStore';
+import { doView } from '../utils/liveActions';
+import { doSoundcheck } from '../utils/liveActionsSpatial';
+import { doSolo, doUnsolo } from '../utils/liveActionsSlots';
+import { doCueArm, doCueGo } from '../utils/liveActionsTransport';
 
 interface ScoreTimelineStateEvent {
   playing: boolean;
@@ -29,6 +33,7 @@ export function useScoreTape() {
   useEffect(() => {
     let unlistenTl: (() => void) | undefined;
     let unlistenNack: (() => void) | undefined;
+    let unlistenLa: (() => void) | undefined;
     let hotTimer: ReturnType<typeof setTimeout> | undefined;
     let cancelled = false;
     const setup = async () => {
@@ -44,8 +49,23 @@ export function useScoreTape() {
         const n = await safeListen<{ clip_id: string; reason: string }>('score-nack', (event) => {
           toast.warning(`Score : clip ${event.payload.clip_id} ignoré — ${event.payload.reason}`);
         });
-        if (cancelled) { v(); n(); }
-        else { unlistenTl = v; unlistenNack = n; }
+        // Actions live — clips `soundcheck`/`solo`/`unsolo`/`view`/
+        // `cueArm`/`cueGo` : le score « appuie sur le bouton » de
+        // l'opérateur, même dispatch que le show-control OSC.
+        const la = await safeListen<{ name: string; arg: string | null }>('score-live-action', (event) => {
+          const { name, arg } = event.payload;
+          switch (name) {
+            case 'soundcheck': doSoundcheck(arg ?? 'start'); break;
+            case 'solo': if (arg != null) doSolo(Number(arg), 'score'); break;
+            case 'unsolo': doUnsolo('score'); break;
+            case 'view': if (arg != null) doView(arg, 'score'); break;
+            case 'cueArm': if (arg != null) doCueArm(arg, 'score'); break;
+            case 'cueGo': doCueGo('score'); break;
+            default: toast.warning(`Score : action live inconnue « ${name} »`);
+          }
+        });
+        if (cancelled) { v(); n(); la(); }
+        else { unlistenTl = v; unlistenNack = n; unlistenLa = la; }
         // Resync après (re)mount — le backend peut être encore en
         // lecture alors que le webview a rechargé (état transport
         // frontend reparti à zéro). On re-prend l'état réel.
@@ -84,6 +104,7 @@ export function useScoreTape() {
       unsubDoc();
       unlistenTl?.();
       unlistenNack?.();
+      unlistenLa?.();
     };
   }, []);
 }

@@ -87,13 +87,26 @@ export function validateScore(): ScoreIssue[] {
         }
         break;
       }
-      case 'cue': {
+      case 'cue':
+      case 'cueArm': {
         const cueId = (c.ref as { cueId: string }).cueId;
-        if (!cues.some((q) => q.id === cueId)) {
+        if (!cues.some((q) => String(q.id) === String(cueId))) {
           err(`${where(c)} orphelin — cue supprimée de la cuelist`);
         }
         break;
       }
+      case 'solo': {
+        const n = (c.ref as { n: number }).n;
+        if (!gs.moveSlots.some((s) => s.oscIndex === n)) {
+          warn(`${where(c)} : solo slot ${n} — aucun slot n'a cet oscIndex (nack not-found au tir)`);
+        }
+        break;
+      }
+      case 'soundcheck':
+      case 'unsolo':
+      case 'cueGo':
+      case 'view':
+        break;
       case 'positions': {
         const posRef = c.ref as { positions: Record<number, unknown> };
         const missing = Object.keys(posRef.positions).map(Number).filter((tid) => !validTid(tid));

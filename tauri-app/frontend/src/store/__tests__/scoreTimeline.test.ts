@@ -727,3 +727,58 @@ describe('score OSC-out (lane osc)', () => {
     expect(muted).toHaveLength(0);
   });
 });
+
+describe('score live actions (soundcheck/solo/view/cueArm/cueGo)', () => {
+  beforeEach(() => {
+    resetStore();
+    clearInvokeCalls();
+    useScoreStore.getState().clearScore();
+    useGraphStore.setState({
+      manualOscIds: [1, 2, 3, 4],
+      moveSlots: [slot('s1', 'Orbe'), slot('s2', 'Duo', [2, 3])],
+    } as never);
+    useCuelistStore.setState({
+      cues: [{ id: 7, cue_number: '1', name: 'Ouverture', moves: [] }],
+    } as never);
+  });
+
+  it('events → payload LiveAction sur la lane conductor', async () => {
+    const st = useScoreStore.getState();
+    st.addClip({ type: 'soundcheck', action: 'start' }, 0);
+    st.addClip({ type: 'soundcheck', action: 'stop' }, 500);
+    st.addClip({ type: 'solo', n: 1 }, 1000);
+    st.addClip({ type: 'unsolo' }, 1500);
+    st.addClip({ type: 'view', surface: 'jeu' }, 2000);
+    st.addClip({ type: 'cueArm', cueId: '7' }, 2500);
+    st.addClip({ type: 'cueGo' }, 3000);
+    const { clips } = await resolveScoreClips(useScoreStore.getState());
+    expect(clips.map((c) => c.payload)).toEqual([
+      { kind: 'LiveAction', data: { name: 'soundcheck', arg: 'start' } },
+      { kind: 'LiveAction', data: { name: 'soundcheck', arg: 'stop' } },
+      { kind: 'LiveAction', data: { name: 'solo', arg: '1' } },
+      { kind: 'LiveAction', data: { name: 'unsolo', arg: null } },
+      { kind: 'LiveAction', data: { name: 'view', arg: 'jeu' } },
+      { kind: 'LiveAction', data: { name: 'cueArm', arg: '1' } },
+      { kind: 'LiveAction', data: { name: 'cueGo', arg: null } },
+    ]);
+    expect(clips.every((c) => c.lanes[0].id === CONDUCTOR_LANE)).toBe(true);
+  });
+
+  it('cueArm — cueId → cue_number ; cue morte → clip sauté', async () => {
+    const st = useScoreStore.getState();
+    st.addClip({ type: 'cueArm', cueId: '7' }, 0);
+    st.addClip({ type: 'cueArm', cueId: '999' }, 500);
+    const { clips } = await resolveScoreClips(useScoreStore.getState());
+    expect(clips).toHaveLength(1);
+    expect(clips[0].payload).toEqual({ kind: 'LiveAction', data: { name: 'cueArm', arg: '1' } });
+  });
+
+  it('mute conductor → les actions live sautent aussi', async () => {
+    const st = useScoreStore.getState();
+    st.addClip({ type: 'soundcheck', action: 'start' }, 0);
+    st.addClip({ type: 'cueGo' }, 500);
+    useScoreStore.getState().toggleLaneMute(CONDUCTOR_LANE);
+    const { clips } = await resolveScoreClips(useScoreStore.getState());
+    expect(clips).toHaveLength(0);
+  });
+});

@@ -43,6 +43,12 @@ export const CLIP_COLORS: Record<string, string> = {
   manualClear: 'bg-slate-700/80 border-slate-400',
   attention: 'bg-rose-800/80 border-rose-500',
   osc: 'bg-emerald-700/80 border-emerald-400',
+  soundcheck: 'bg-lime-700/80 border-lime-400',
+  solo: 'bg-lime-800/80 border-lime-500',
+  unsolo: 'bg-lime-800/80 border-lime-500',
+  view: 'bg-lime-900/80 border-lime-600',
+  cueArm: 'bg-amber-800/80 border-amber-500',
+  cueGo: 'bg-amber-700/80 border-amber-400',
 };
 
 /// Label affiché d'un clip — nom du slot/cue ou marqueur.
@@ -78,5 +84,14 @@ export function clipLabel(
     case 'manualClear': return 'MANUEL OFF';
     case 'attention': return 'ATTENTION';
     case 'osc': return `→OSC ${clip.ref.addr}`;
+    case 'soundcheck': return `♪ SOUNDCHECK ${clip.ref.action.toUpperCase()}`;
+    case 'solo': return `◈ SOLO ${clip.ref.n}`;
+    case 'unsolo': return '◈ UNSOLO';
+    case 'view': return `▣ VIEW ${clip.ref.surface.toUpperCase()}`;
+    case 'cueArm': {
+      const cue = cues.find((x) => String(x.id) === String((clip.ref as { cueId: string }).cueId));
+      return cue ? `⇥ ARM ${cue.cue_number != null ? `${cue.cue_number} ` : ''}${cue.name}` : '⇥ ARM ⚠ cue morte';
+    }
+    case 'cueGo': return '▶ CUE GO';
   }
 }

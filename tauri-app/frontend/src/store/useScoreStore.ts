@@ -105,7 +105,23 @@ export type ScoreEventRef =
   /// "host:port" explicite, vide/absent = la sortie OSC du show ;
   /// `args` = mini-langage : `42` int, `1.5` float, `"texte"`/bare =
   /// string, `true`/`false` = bool.
-  | { type: 'osc'; addr: string; target?: string; args: string };
+  | { type: 'osc'; addr: string; target?: string; args: string }
+  /// Actions live — le score « appuie sur le bouton » de l'opérateur :
+  /// dispatchées au frontend via l'event `score-live-action` vers les
+  /// mêmes do* que le show-control OSC (pas de chemin backend direct).
+  /// `soundcheck` : sonde cyclique par objet.
+  | { type: 'soundcheck'; action: 'start' | 'stop' | 'next' | 'prev' }
+  /// `solo`/`unsolo` : busking — solo coupe les autres slots jouants
+  /// puis joue le slot `n` (oscIndex), unsolo rejoue les sauvegardés.
+  | { type: 'solo'; n: number }
+  | { type: 'unsolo' }
+  /// `view` : bascule la surface opérateur.
+  | { type: 'view'; surface: 'atelier' | 'conduite' | 'jeu' | 'score' }
+  /// `cueArm`/`cueGo` : modèle console — arme sans tirer / GO sur
+  /// l'armée (ou la suivante). `cueArm` référence `cueId` comme un clip
+  /// `cue`, résolu en `cue_number` à la résolution.
+  | { type: 'cueArm'; cueId: string }
+  | { type: 'cueGo' };
 
 export interface ScoreClipDoc {
   id: string;

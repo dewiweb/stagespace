@@ -353,6 +353,30 @@ re-tirer après un arrêt d'urgence. `stopAll` (`honor_end_mode`) ne
 touche PAS le transport : un clip stopAll du score ne se suicide
 pas, le score reste souverain de sa composition.
 
+**Actions live — le score appuie sur le bouton** : les verbes de
+l'opérateur qui n'ont pas de chemin backend direct vivent dans les
+`do*` frontend. Le payload `LiveAction { name, arg }` re-émet
+`score-live-action` vers l'UI, dispatchée vers les mêmes fonctions
+que le show-control OSC :
+
+| Clip | Action | Vocabulaire |
+|---|---|---|
+| `soundcheck` | sonde cyclique par objet (`start`/`stop`/`next`/`prev`, éditable) | `/stagespace/soundcheck` |
+| `solo` | coupe les autres slots jouants puis joue le slot `n` (oscIndex) | `/stagespace/solo` |
+| `unsolo` | rejoue les slots stoppés par le dernier solo | `/stagespace/unsolo` |
+| `view` | bascule la surface opérateur (atelier/conduite/jeu/score) | `/stagespace/view` |
+| `cueArm` | arme une cue sans la tirer (`cueId` → `cue_number` à la résolution) | `/stagespace/cue/arm` |
+| `cueGo` | tire la cue armée (ou la suivante) | `/stagespace/cue/go` |
+
+Ces clips vivent sur la lane **conductor** (mute = skip). `cueArm`
+d'une cue supprimée saute honnêtement (`validateScore` erreur) ;
+`solo` sans slot à l'oscIndex demandé est warné.
+
+**Jeu — progression read-only** : la top bar de la surface Jeu
+affiche `ScoreProgress` (curseur animé `▶ mm:ss / total`, barre de
+progression, prochains événements façon « next cue », ⟳ si loop) —
+l'opérateur voit l'avancement de la partition sans pouvoir l'éditer.
+
 ## Transport — sémantiques professionnelles
 
 Le transport partage **une seule machine de rebase** —

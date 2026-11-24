@@ -190,6 +190,43 @@ export const ScoreInspector: React.FC<{
                 </>
               );
             }
+            if (ref.type === 'soundcheck') {
+              return (
+                <label className="flex items-center gap-1" title="Action de la sonde cyclique (/stagespace/soundcheck)">
+                  action
+                  <select
+                    className="bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-[10px]"
+                    value={ref.action}
+                    onChange={(e) => onUpdateRef(c.id, { ...ref, action: e.target.value as typeof ref.action })}
+                  >
+                    {(['start', 'stop', 'next', 'prev'] as const).map((a) => (
+                      <option key={a} value={a}>{a}</option>
+                    ))}
+                  </select>
+                </label>
+              );
+            }
+            if (ref.type === 'solo') {
+              return rawIn('slot', ref.n,
+                (v) => onUpdateRef(c.id, { ...ref, n: v }),
+                'oscIndex du slot à jouer en solo (/stagespace/solo <n>) — coupe les autres slots jouants');
+            }
+            if (ref.type === 'view') {
+              return (
+                <label className="flex items-center gap-1" title="Surface opérateur cible (/stagespace/view)">
+                  surface
+                  <select
+                    className="bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-[10px]"
+                    value={ref.surface}
+                    onChange={(e) => onUpdateRef(c.id, { ...ref, surface: e.target.value as typeof ref.surface })}
+                  >
+                    {(['atelier', 'conduite', 'jeu', 'score'] as const).map((v) => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
+                  </select>
+                </label>
+              );
+            }
             return null;
           })()}
           {numIn('⟳ toutes les', c.repeatEveryMs, (v) => {

@@ -82,15 +82,62 @@ export const ScoreClipPicker: React.FC<{
           title="Stase : tout fige sauf le 1er objet couvert ; couverture vide = release (/stagespace/attention)"
           onClick={() => onPick({ type: 'attention' })}
         >◎ ATTENTION — stase</button>
-        {cues.length > 0 && <div className="px-3 py-0.5 text-[9px] text-gray-600 uppercase mt-1">Cues — recall barrière</div>}
-        {cues.map((c, i) => (
+        <div className="px-3 py-0.5 text-[9px] text-gray-600 uppercase mt-1">Actions live — le score appuie sur le bouton</div>
+        <button
+          className="w-full text-left px-3 py-1 text-xs hover:bg-lime-700/40"
+          title="Sonde cyclique par objet (/stagespace/soundcheck start) — ping de position tour à tour, identification spatiale"
+          onClick={() => onPick({ type: 'soundcheck', action: 'start' })}
+        >♪ SOUNDCHECK — start (sonde cyclique)</button>
+        <button
+          className="w-full text-left px-3 py-1 text-xs hover:bg-lime-700/40"
+          title="Arrête la sonde (/stagespace/soundcheck stop) — nettoie le ping courant"
+          onClick={() => onPick({ type: 'soundcheck', action: 'stop' })}
+        >♪ SOUNDCHECK — stop</button>
+        {moveSlots.length > 0 && (
+          <div className="px-3 py-0.5 text-[9px] text-gray-600 mt-0.5">Solo — coupe les autres slots, joue celui-là</div>
+        )}
+        {moveSlots.map((s) => (
           <button
-            key={c.id}
-            className="w-full text-left px-3 py-1 text-xs hover:bg-amber-700/40 truncate"
-            onClick={() => onPick({ type: 'cue', cueId: String(c.id) })}
-          >
-            ◆ CUE {c.cue_number ?? i + 1} {c.name}
-          </button>
+            key={`solo-${s.id}`}
+            className="w-full text-left px-3 py-1 text-xs hover:bg-lime-700/40 truncate"
+            title={`Solo slot « ${s.name} » (oscIndex ${s.oscIndex}) — fade-out les autres slots jouants puis le joue (/stagespace/solo)`}
+            onClick={() => onPick({ type: 'solo', n: s.oscIndex })}
+          >◈ SOLO {s.oscIndex} — {s.name}</button>
+        ))}
+        <button
+          className="w-full text-left px-3 py-1 text-xs hover:bg-lime-700/40"
+          title="Rejoue les slots stoppés par le dernier solo (/stagespace/unsolo)"
+          onClick={() => onPick({ type: 'unsolo' })}
+        >◈ UNSOLO — restaurer le mix</button>
+        <div className="px-3 py-0.5 text-[9px] text-gray-600 mt-0.5">Surface — bascule l'écran opérateur</div>
+        {(['atelier', 'conduite', 'jeu', 'score'] as const).map((v) => (
+          <button
+            key={v}
+            className="w-full text-left px-3 py-1 text-xs hover:bg-lime-700/40"
+            title={`Bascule la surface opérateur → ${v} (/stagespace/view)`}
+            onClick={() => onPick({ type: 'view', surface: v })}
+          >▣ VIEW — {v.toUpperCase()}</button>
+        ))}
+        <button
+          className="w-full text-left px-3 py-1 text-xs hover:bg-lime-700/40"
+          title="GO — tire la cue armée (ou la suivante si rien d'armé) : modèle console (/stagespace/cue/go)"
+          onClick={() => onPick({ type: 'cueGo' })}
+        >▶ CUE GO — feu sur l'armée</button>
+        {cues.length > 0 && <div className="px-3 py-0.5 text-[9px] text-gray-600 uppercase mt-1">Cues — recall barrière · ⇥ = armer sans tirer</div>}
+        {cues.map((c, i) => (
+          <div key={c.id} className="flex items-stretch">
+            <button
+              className="flex-1 text-left px-3 py-1 text-xs hover:bg-amber-700/40 truncate"
+              onClick={() => onPick({ type: 'cue', cueId: String(c.id) })}
+            >
+              ◆ CUE {c.cue_number ?? i + 1} {c.name}
+            </button>
+            <button
+              className="px-2 text-xs hover:bg-amber-700/40 text-amber-300"
+              title="Armer cette cue sans la tirer (/stagespace/cue/arm — modèle console, GO la tire ensuite)"
+              onClick={() => onPick({ type: 'cueArm', cueId: String(c.id) })}
+            >⇥</button>
+          </div>
         ))}
         {cues.length === 0 && (
           <div className="px-3 py-2 text-[10px] text-gray-500">Aucune cue — capturez-en une dans Atelier</div>

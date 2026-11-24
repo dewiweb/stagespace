@@ -828,6 +828,16 @@ pub(crate) fn fire_clip(
         ScoreClipPayload::OscOut { target, addr, args } => {
             fire_osc_out(sh, target, addr, args);
         }
+        ScoreClipPayload::LiveAction { name, arg } => {
+            // Le score « appuie sur le bouton » de l'opérateur —
+            // dispatché côté frontend (soundcheck/solo/view/cueArm…
+            // vivent dans les do*, pas dans le runtime spatial).
+            emit_ui(
+                sink,
+                "score-live-action",
+                serde_json::json!({ "name": name, "arg": arg }),
+            );
+        }
     }
 }
 

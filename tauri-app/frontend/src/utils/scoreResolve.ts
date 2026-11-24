@@ -82,7 +82,9 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
     const isConductor =
       c.ref.type === 'cue' || c.ref.type === 'stopAll' || c.ref.type === 'panic' ||
       c.ref.type === 'gesture' || c.ref.type === 'park' || c.ref.type === 'unpark' ||
-      c.ref.type === 'throw' || c.ref.type === 'manualClear' || c.ref.type === 'attention';
+      c.ref.type === 'throw' || c.ref.type === 'manualClear' || c.ref.type === 'attention' ||
+      c.ref.type === 'soundcheck' || c.ref.type === 'solo' || c.ref.type === 'unsolo' ||
+      c.ref.type === 'view' || c.ref.type === 'cueArm' || c.ref.type === 'cueGo';
     // Mute : les barrières (transitions d'état globales) sont gouvernées
     // par la lane conductor — leur couverture trackIds n'est qu'un
     // blast radius visuel, elle ne mute pas l'événement. Un slot perd
@@ -282,6 +284,37 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
         });
         break;
       }
+      // Actions live — le score « appuie sur le bouton » : le backend
+      // re-émet `score-live-action`, l'UI dispatche vers les do*.
+      case 'soundcheck':
+        clips.push({ ...base, payload: { kind: 'LiveAction', data: { name: 'soundcheck', arg: c.ref.action } } });
+        break;
+      case 'solo':
+        clips.push({ ...base, payload: { kind: 'LiveAction', data: { name: 'solo', arg: String(c.ref.n) } } });
+        break;
+      case 'unsolo':
+        clips.push({ ...base, payload: { kind: 'LiveAction', data: { name: 'unsolo', arg: null } } });
+        break;
+      case 'view':
+        clips.push({ ...base, payload: { kind: 'LiveAction', data: { name: 'view', arg: c.ref.surface } } });
+        break;
+      case 'cueArm': {
+        // cueId → cue_number (le vocabulaire de doCueArm) ; cue morte
+        // → validateScore le signale, le clip saute honnêtement.
+        const cue = cs.cues.find((q) => String(q.id) === String((c.ref as { cueId: string }).cueId));
+        if (!cue) break;
+        clips.push({
+          ...base,
+          payload: {
+            kind: 'LiveAction',
+            data: { name: 'cueArm', arg: cue.cue_number == null ? null : String(cue.cue_number) },
+          },
+        });
+        break;
+      }
+      case 'cueGo':
+        clips.push({ ...base, payload: { kind: 'LiveAction', data: { name: 'cueGo', arg: null } } });
+        break;
     }
   }
   return { clips, errors, objectCurves };
