@@ -132,13 +132,15 @@ const ScoreView: React.FC = () => {
     return false;
   };
 
-  // Fades effectifs (ms) : clip-local sinon hérité du slot.
+  // Fades effectifs (ms) : clip-local sinon hérité du slot. Un slot
+  // `hold` écrit sa position tenue au lieu de jouer le fade-out —
+  // pas de tail (honor_end_mode dans le scheduler).
   const effFades = (c: ScoreClipDoc): { inMs: number; outMs: number } => {
     if (c.ref.type !== 'slot') return { inMs: 0, outMs: 0 };
     const sl = moveSlots.find((x) => x.id === (c.ref as { slotId: string }).slotId);
     return {
       inMs: c.fadeInMs ?? (sl?.fadeIn ?? 0) * 1000,
-      outMs: c.fadeOutMs ?? (sl?.fadeOut ?? 0.5) * 1000,
+      outMs: sl?.endMode === 'hold' ? 0 : c.fadeOutMs ?? (sl?.fadeOut ?? 0.5) * 1000,
     };
   };
 

@@ -43,7 +43,7 @@ export const ScoreClipBlock: React.FC<{
         >
           <div
             className={`absolute inset-0 ${bg} opacity-50`}
-            style={{ clipPath: 'polygon(0 0, 0 100%, 100% 0)' }}
+            style={{ clipPath: 'polygon(0 0, 0 100%, 100% 100%)' }}
           />
           <div
             className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize pointer-events-auto"
