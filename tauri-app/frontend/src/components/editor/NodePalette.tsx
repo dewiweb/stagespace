@@ -7,7 +7,7 @@ import {
 } from '../nodeParamSchema';
 import type { NodeType } from '../../store/useGraphStore';
 import type { PluginManifest } from '../../types/generated/PluginManifest';
-import { PALETTE_DRAG_MIME, type PaletteDragPayload } from '../../hooks/useNodeInsertion';
+import { PALETTE_DRAG_MIME, paletteDragRef, type PaletteDragPayload } from '../../hooks/useNodeInsertion';
 
 /// Palette de nodes — extraite de NodeEditor (P2.4). Gère le rail replié,
 /// les catégories filtrées par tab (sub/global/signal), les items natifs +
@@ -39,9 +39,13 @@ interface NodePaletteProps {
 /// Amorce le drag palette → canvas (dataTransfer typé — le drop est
 /// filtré côté canvas sur ce MIME). Poser sur un fil = splice direct.
 const startNodeDrag = (e: React.DragEvent, payload: PaletteDragPayload) => {
-  e.dataTransfer.setData(PALETTE_DRAG_MIME, JSON.stringify(payload));
-  e.dataTransfer.effectAllowed = 'copy';
+  paletteDragRef.payload = payload;
+  try {
+    e.dataTransfer.setData(PALETTE_DRAG_MIME, JSON.stringify(payload));
+    e.dataTransfer.effectAllowed = 'copy';
+  } catch { /* WebView2 peut refuser les types custom — la ref suffit */ }
 };
+const endNodeDrag = () => { paletteDragRef.payload = null; };
 
 export const NodePalette: React.FC<NodePaletteProps> = (p) => {
   if (p.collapsed) {
@@ -126,6 +130,7 @@ export const NodePalette: React.FC<NodePaletteProps> = (p) => {
                         onClick={() => p.onAddNode(type)}
                         draggable
                         onDragStart={(e) => startNodeDrag(e, { kind: 'type', type })}
+                        onDragEnd={endNodeDrag}
                         className="w-full text-left px-2.5 py-1.5 text-white text-xs rounded transition-all hover:translate-x-0.5 flex items-center gap-2 group cursor-grab active:cursor-grabbing"
                         style={{ background: 'transparent' }}
                         onMouseEnter={(e) => {
@@ -184,6 +189,7 @@ export const NodePalette: React.FC<NodePaletteProps> = (p) => {
                         onClick={() => p.onAddPluginNode(m)}
                         draggable
                         onDragStart={(e) => startNodeDrag(e, { kind: 'plugin', manifest: m })}
+                        onDragEnd={endNodeDrag}
                         className="w-full text-left px-2.5 py-1.5 text-white text-xs rounded transition-all hover:translate-x-0.5 flex items-center gap-2 cursor-grab active:cursor-grabbing"
                         style={{ background: 'transparent' }}
                         onMouseEnter={(e) => {

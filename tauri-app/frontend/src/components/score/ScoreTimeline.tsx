@@ -3,7 +3,7 @@
 /// clips, curseur). Le scrollTop des en-têtes est synchronisé avec
 /// la timeline (mêmes hauteurs de rangées).
 import React, { useEffect, useRef } from 'react';
-import { SCORE_DRAG_MIME } from '../../utils/scoreDopesheet';
+import { SCORE_DRAG_MIME, biblioDragRef } from '../../utils/scoreDopesheet';
 import {
   GLOBALFX_LANE, MODULATION_LANE, CONDUCTOR_LANE, OSC_LANE, SPATIALFX_LANE, GLOBAL_LANES, clipLaneIds,
   type ScoreClipDoc, type ScoreKeyframe, type ScoreLaneMode, type ScoreMarker,
@@ -187,13 +187,16 @@ export const ScoreTimeline: React.FC<{
   /// (snap de la grille).
   const dropProps = (laneId: string) => ({
     onDragOver: (e: React.DragEvent) => {
-      if (e.dataTransfer.types.includes(SCORE_DRAG_MIME)) {
+      /// biblioDragRef est la source de vérité — sous WebView2,
+      /// `dataTransfer.types` peut ne pas lister le MIME custom.
+      if (biblioDragRef.payload != null || Array.from(e.dataTransfer.types).includes(SCORE_DRAG_MIME)) {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'copy';
       }
     },
     onDrop: (e: React.DragEvent) => {
-      const p = e.dataTransfer.getData(SCORE_DRAG_MIME);
+      const p = biblioDragRef.payload ?? e.dataTransfer.getData(SCORE_DRAG_MIME);
+      biblioDragRef.payload = null;
       if (!p) return;
       e.preventDefault();
       e.stopPropagation();

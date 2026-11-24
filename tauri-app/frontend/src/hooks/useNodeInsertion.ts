@@ -33,6 +33,11 @@ export const PALETTE_DRAG_MIME = 'application/x-stagespace-node';
 export type PaletteDragPayload =
   | { kind: 'type'; type: NodeType }
   | { kind: 'plugin'; manifest: PluginManifest };
+/// Payload du drag palette en cours — source de vérité partagée
+/// palette ↔ canvas. Sous WebView2 les types MIME custom du
+/// dataTransfer ne font pas le round-trip (`types` vide au dragover
+/// → drop refusé) : le dataTransfer reste écrit en complément.
+export const paletteDragRef: { payload: PaletteDragPayload | null } = { payload: null };
 
 export interface PendingWire {
   nodeId: string;
@@ -311,7 +316,9 @@ export function useNodeInsertion(opts: {
   // Drag sur le canvas : pose au curseur — ou splice direct si le point
   // de drop tombe sur un fil (geste Max : déposer sur un cordon).
   const onPaletteDragOver = useCallback((e: React.DragEvent) => {
-    if (e.dataTransfer.types.includes(PALETTE_DRAG_MIME)) {
+    /// paletteDragRef est la source de vérité — sous WebView2,
+    /// `dataTransfer.types` peut ne pas lister le MIME custom.
+    if (paletteDragRef.payload != null || Array.from(e.dataTransfer.types).includes(PALETTE_DRAG_MIME)) {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'copy';
     }
@@ -319,15 +326,20 @@ export function useNodeInsertion(opts: {
 
   const onPaletteDrop = useCallback(
     (e: React.DragEvent) => {
-      const raw = e.dataTransfer.getData(PALETTE_DRAG_MIME);
-      if (!raw) return;
-      e.preventDefault();
-      let payload: PaletteDragPayload;
-      try {
-        payload = JSON.parse(raw);
-      } catch {
-        return;
+      const fromRef = paletteDragRef.payload;
+      paletteDragRef.payload = null;
+      let payload = fromRef;
+      if (!payload) {
+        const raw = e.dataTransfer.getData(PALETTE_DRAG_MIME);
+        if (!raw) return;
+        try {
+          payload = JSON.parse(raw) as PaletteDragPayload;
+        } catch {
+          return;
+        }
       }
+      if (!payload) return;
+      e.preventDefault();
       const flow = toFlow({ x: e.clientX, y: e.clientY });
       const edgeId = edgeIdAtScreenPoint(e.clientX, e.clientY);
       const edge = edgeId ? displayEdges.find((x) => x.id === edgeId) ?? null : null;
