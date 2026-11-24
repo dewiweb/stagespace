@@ -66,6 +66,10 @@ export const ScoreTimeline: React.FC<{
   onSetLaneMode: (laneId: string, mode: ScoreLaneMode) => void;
   clipOrphan: (c: ScoreClipDoc) => boolean;
   effFades: (c: ScoreClipDoc) => { inMs: number; outMs: number };
+  /// Offset (ms) où le move meurt de sa mort naturelle dans la
+  /// fenêtre du clip — undefined pour les boucles internes
+  /// (loop sans repeat) et les non-slot.
+  moveEndOf: (c: ScoreClipDoc) => number | undefined;
   clipLabel: (c: ScoreClipDoc) => string;
   onClipPointerDown: (e: React.PointerEvent, clip: ScoreClipDoc, mode: ClipDragMode, origMs?: number) => void;
   onClipPointerMove: (e: React.PointerEvent, clip: ScoreClipDoc) => void;
@@ -81,7 +85,7 @@ export const ScoreTimeline: React.FC<{
   clips, globalFxCurves, modulationCurves, spatialFxCurves, objectCurves,
   selGlobal, selected, onSelectLane, onClearSelection, onOpenPicker,
   onToggleLaneMute, onSetLaneMode,
-  clipOrphan, effFades, clipLabel,
+  clipOrphan, effFades, moveEndOf, clipLabel,
   onClipPointerDown, onClipPointerMove, onClipPointerUp, onContextMenu,
   onLaneDrop,
 }) => {
@@ -377,6 +381,7 @@ export const ScoreTimeline: React.FC<{
                       h={h}
                       ms2px={ms2px}
                       fades={fades}
+                      moveEndMs={moveEndOf(c)}
                       onPointerDown={onClipPointerDown}
                       onPointerMove={onClipPointerMove}
                       onPointerUp={onClipPointerUp}

@@ -5,10 +5,17 @@
 /// view), duplication.
 import React from 'react';
 import type { ScoreClipDoc } from '../../store/useScoreStore';
+import type { MoveSlot } from '../../store/slices/moveSlotsTypes';
 import { effectiveTrackIds } from '../../utils/scoreResolve';
 
 export const ScoreClipParams: React.FC<{
   clip: ScoreClipDoc;
+  /// Slot référencé (clip slot) — ses params de lecture s'affichent
+  /// en lecture seule (non éditables en mode score).
+  slot?: MoveSlot;
+  /// Le slot a été édité depuis la dernière résolution — la spec
+  /// jouée est l'ancienne ; la nouvelle s'applique au prochain play.
+  slotPending?: boolean;
   clipLabel: (c: ScoreClipDoc) => string;
   /// Objets patchés + déjà couverts (pour le select d'assignation).
   manualOscIds: number[];
@@ -23,7 +30,7 @@ export const ScoreClipParams: React.FC<{
   /// Réécrit la référence du clip (geste → strength, throw → vel).
   onUpdateRef: (id: string, ref: ScoreClipDoc['ref']) => void;
 }> = ({
-  clip: c, clipLabel, manualOscIds, covered, durationMs,
+  clip: c, slot, slotPending, clipLabel, manualOscIds, covered, durationMs,
   onMoveClip, onResizeClip, onSetClipFades, onSetClipRepeat, onSetClipTrackIds, onDuplicateClip, onUpdateRef,
 }) => {
   /// Champ numérique secondes → ms (vide = undefined).
@@ -155,6 +162,46 @@ export const ScoreClipParams: React.FC<{
         {c.ref.type === 'slot' && numIn('fade out', c.fadeOutMs,
           (v) => onSetClipFades(c.id, c.fadeInMs, v),
           'Fade-out clip-local (tail après la fin) — vide = hérite le fade du slot')}
+        {/* Params de lecture du slot — résolus live dans la request
+            au play/hot-swap : lecture seule ici, édition dans
+            l'Atelier/Jeu. Les valeurs conflictuelles avec le mode
+            score (ancre ≠ origin = non déterministe ; hold = résidu)
+            sont signalées en ambre. */}
+        {c.ref.type === 'slot' && slot && (
+          <div
+            className={`mt-1 border-t pt-1.5 flex flex-col gap-1 ${slotPending ? 'border-amber-700/50' : 'border-gray-800'}`}
+            title="Paramètres de lecture du slot — résolus à chaque play : éditer dans l'Atelier ou Jeu, pas dans le score"
+          >
+            {slotPending && (
+              <div className="flex items-center gap-1">
+                <span className="w-20 text-amber-600">⏳</span>
+                <span className="text-amber-400">slot édité — s'appliquera au prochain play</span>
+              </div>
+            )}
+            <div className="flex items-center gap-1">
+              <span className={`w-20 ${slotPending ? 'text-amber-600' : 'text-gray-600'}`}>lecture</span>
+              <span className={slotPending ? 'text-amber-300' : 'text-gray-500'}>
+                {slot.loopMode}
+                {' · '}{slot.direction === 'ping_pong' ? 'ping-pong' : slot.direction}
+                {' · '}{(slot.macros?.speed ?? 1).toFixed(2)}×
+              </span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className={`w-20 ${slotPending ? 'text-amber-600' : 'text-gray-600'}`}>fin</span>
+              <span className={slot.endMode === 'hold' ? 'text-amber-400' : slotPending ? 'text-amber-300' : 'text-gray-500'}>
+                {slot.endMode ?? 'revert'}
+                {slot.endMode === 'hold' && ' — la position reste tenue après la fenêtre'}
+              </span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className={`w-20 ${slotPending ? 'text-amber-600' : 'text-gray-600'}`}>ancre</span>
+              <span className={(slot.anchorMode ?? 'origin') !== 'origin' ? 'text-amber-400' : slotPending ? 'text-amber-300' : 'text-gray-500'}>
+                {slot.anchorMode ?? 'origin'}
+                {(slot.anchorMode ?? 'origin') !== 'origin' && " — capture la position à l'instant du tir (non déterministe)"}
+              </span>
+            </div>
+          </div>
+        )}
         {(() => {
           const ref = c.ref;
           if (ref.type === 'gesture') {

@@ -259,6 +259,8 @@ const emptyDoc = (): ScoreDoc => ({
 interface ScoreState extends ScoreDoc {
   // Transport — runtime (pas dans l'enveloppe)
   playing: boolean;
+  /// Slot ids édités depuis la dernière résolution.
+  pendingSlotIds: string[];
   cursorMs: number;
   /// Révision transport — incrémentée à CHAQUE event `score-timeline`,
   /// même quand `cursorMs` ne change pas (rebouclage : l'event porte
@@ -308,6 +310,10 @@ interface ScoreState extends ScoreDoc {
   setDurationMs: (ms: number) => void;
   setScoreDoc: (doc: ScoreDoc | undefined) => void;
   clearScore: () => void;
+  /// Marque des slots comme modifiés depuis la dernière résolution
+  /// (édition Atelier/Jeu pendant la lecture — le hot-swap ne
+  /// regarde pas le store graphe, donc la spec jouée reste l'ancienne).
+  markSlotsPending: (ids: string[]) => void;
   // Transport actions
   playScore: () => Promise<void>;
   /// Hot-swap de la partition pendant la lecture — édition live sans
@@ -357,6 +363,9 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
   selectGlobalLane: (laneId) => set({ selGlobalLane: laneId, selectedClipId: null }),
   clearScoreSelection: () => set({ selectedClipId: null, selGlobalLane: null }),
   playing: false,
+  /// Slots édités depuis la dernière résolution (play/hot-swap) —
+  /// un clip qui les référence affiche ses params « en attente ».
+  pendingSlotIds: [],
   cursorMs: 0,
   transportRev: 0,
 
@@ -517,6 +526,8 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
           }
         : emptyDoc(),
     ),
+  markSlotsPending: (ids) =>
+    set((s) => ({ pendingSlotIds: [...new Set([...s.pendingSlotIds, ...ids])] })),
   clearScore: () => set({ ...emptyDoc(), playing: false, cursorMs: 0 }),
 
   playScore: async () => {
@@ -545,7 +556,9 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
       }
       await invoke('score_timeline_set_loop', { startMs: s.loopStartMs ?? null, endMs: s.loopEndMs ?? null });
       await invoke('score_timeline_play');
-      set({ playing: true });
+      // Résolution fraîche — les edits de slot en attente sont
+      // maintenant la spec jouée.
+      set({ playing: true, pendingSlotIds: [] });
     } catch (e) {
       toast.error('Score play failed: ' + e);
     }
@@ -578,6 +591,9 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
         deadClipIds: dead,
       });
       lastResolvedClips = next;
+      // Le hot-swap a re-résolu toute la partition — les edits de
+      // slot en attente sont appliqués.
+      if (s.pendingSlotIds.length) set({ pendingSlotIds: [] });
     } catch (e) {
       toast.warning('Score update failed: ' + e);
     }

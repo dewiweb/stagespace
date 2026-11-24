@@ -66,6 +66,7 @@ const ScoreView: React.FC = () => {
   const modulationCurves = useScoreStore((s) => s.modulationCurves);
   const spatialFxCurves = useScoreStore((s) => s.spatialFxCurves);
   const objectCurves = useScoreStore((s) => s.objectCurves);
+  const pendingSlotIds = useScoreStore((s) => s.pendingSlotIds);
   const { addClip, moveClip, resizeClip, removeClip, duplicateClip, splitClip, setDurationMs, setClipRepeat, setClipFades, setClipCurve, setClipTrackIds, setLaneCurve, setLoop, playScore, stopScore, seekScore, toggleLaneMute, setLaneMode, selectClip, selectGlobalLane, clearScoreSelection, retargetClip } =
     useScoreStore.getState();
   const moveSlots = useGraphStore((s) => s.moveSlots);
@@ -145,6 +146,18 @@ const ScoreView: React.FC = () => {
   };
 
   const clipLabel = (c: ScoreClipDoc) => clipLabelOf(c, moveSlots, cues);
+
+  /// Offset où le move meurt de sa mort naturelle dans le clip —
+  /// oneshot seulement (les boucles internes n'ont pas de fin). La
+  /// fin = durée du graphe / speed du slot (le worker meurt quand
+  /// t_real × speed ≥ duration ; pingpong ne s'applique qu'en loop).
+  const moveEndOf = (c: ScoreClipDoc): number | undefined => {
+    if (c.ref.type !== 'slot') return undefined;
+    const sl = moveSlots.find((x) => x.id === (c.ref as { slotId: string }).slotId);
+    if (sl?.loopMode !== 'oneshot' || !sl.graphJson) return undefined;
+    const speed = sl.macros?.speed ?? 1;
+    return (extractDuration(sl.graphJson.nodes) * 1000) / (speed || 1);
+  };
 
   // Lanes = les objets patchés (manualOscIds = la liste des
   // track_ids) ∪ les couvertures de clips. Un trackId référencé par
@@ -866,6 +879,11 @@ const ScoreView: React.FC = () => {
         clipParams={selClip ? (
           <ScoreClipParams
             clip={selClip}
+            slot={selClip.ref.type === 'slot'
+              ? moveSlots.find((x) => x.id === (selClip.ref as { slotId: string }).slotId)
+              : undefined}
+            slotPending={selClip.ref.type === 'slot'
+              && pendingSlotIds.includes((selClip.ref as { slotId: string }).slotId)}
             clipLabel={clipLabel}
             manualOscIds={manualOscIds}
             covered={covered}
@@ -993,6 +1011,7 @@ const ScoreView: React.FC = () => {
         onSetLaneMode={setLaneMode}
         clipOrphan={clipOrphan}
         effFades={effFades}
+        moveEndOf={moveEndOf}
         clipLabel={clipLabel}
         onClipPointerDown={onClipPointerDown}
         onClipPointerMove={onClipPointerMove}

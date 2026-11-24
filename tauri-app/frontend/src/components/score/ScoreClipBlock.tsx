@@ -19,13 +19,16 @@ export const ScoreClipBlock: React.FC<{
   h: number;
   ms2px: (ms: number) => number;
   fades: { inMs: number; outMs: number } | null;
+  /// Offset (ms) où le move meurt de sa mort naturelle dans la
+  /// fenêtre (oneshot) — la zone au-delà est muette.
+  moveEndMs?: number;
   onPointerDown: (e: React.PointerEvent, clip: ScoreClipDoc, mode: ClipDragMode, origMs?: number) => void;
   onPointerMove: (e: React.PointerEvent, clip: ScoreClipDoc) => void;
   onPointerUp: (e: React.PointerEvent) => void;
   /// Clic droit sur ce rendu — la lane parente complète le contexte
   /// (clipId + trackId pour le déliage de couverture).
   onContextMenu?: (e: React.MouseEvent) => void;
-}> = ({ clip: c, label, orphan, selected, top, h, ms2px, fades, onPointerDown, onPointerMove, onPointerUp, onContextMenu }) => {
+}> = ({ clip: c, label, orphan, selected, top, h, ms2px, fades, moveEndMs, onPointerDown, onPointerMove, onPointerUp, onContextMenu }) => {
   /// Événement ponctuel (cue/marker, durationMs null) — pas de
   /// fenêtre : la boîte épouse son label (nowrap) et une barre
   /// blanche à gauche marque l'instant, au lieu d'un carré de 14px.
@@ -80,6 +83,22 @@ export const ScoreClipBlock: React.FC<{
             onPointerMove={(e) => onPointerMove(e, c)}
             onPointerUp={onPointerUp}
           />
+        )}
+        {/* Fin naturelle du move (oneshot) — au-delà la fenêtre est
+            muette (position tenue si hold, rien sinon) : borne +
+            zone morte assombrie. */}
+        {moveEndMs != null && c.durationMs != null && moveEndMs < c.durationMs && (
+          <>
+            <div
+              className="absolute top-0 bottom-0 right-0 bg-black/45 pointer-events-none"
+              style={{ left: ms2px(moveEndMs) }}
+            />
+            <div
+              className="absolute top-0 bottom-0 border-l border-dashed border-amber-300/60 pointer-events-none"
+              style={{ left: ms2px(moveEndMs) }}
+              title="fin naturelle du move — fenêtre muette au-delà"
+            />
+          </>
         )}
         {/* Copies du pattern — ticks aux bornes de répétition */}
         {c.repeatEveryMs != null && c.repeatEveryMs > 0 && c.durationMs != null &&

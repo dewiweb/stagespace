@@ -13,6 +13,7 @@ import { useEffect } from 'react';
 import { safeInvoke, safeListen } from '../utils/tauri';
 import { toast } from '../utils/toast-helpers';
 import { useScoreStore } from '../store/useScoreStore';
+import { useGraphStore } from '../store/useGraphStore';
 import { doView } from '../utils/liveActions';
 import { doSoundcheck } from '../utils/liveActionsSpatial';
 import { doSolo, doUnsolo } from '../utils/liveActionsSlots';
@@ -98,10 +99,22 @@ export function useScoreTape() {
         void useScoreStore.getState()._hotSwap();
       }, HOT_SWAP_DEBOUNCE_MS);
     });
+    // Édition de slots pendant la lecture (Atelier/Jeu) — PAS de
+    // hot-swap (un move score en cours ne doit pas être tué par une
+    // édition qui ne vise pas la partition). On marque les slots
+    // touchés : les clips qui les référencent affichent leurs params
+    // « en attente » jusqu'au prochain play/hot-swap.
+    const unsubSlots = useGraphStore.subscribe((s, p) => {
+      if (!useScoreStore.getState().playing || s.moveSlots === p.moveSlots) return;
+      const prev = new Map(p.moveSlots.map((sl) => [sl.id, sl]));
+      const changed = s.moveSlots.filter((sl) => prev.get(sl.id) !== sl).map((sl) => sl.id);
+      if (changed.length) useScoreStore.getState().markSlotsPending(changed);
+    });
     return () => {
       cancelled = true;
       clearTimeout(hotTimer);
       unsubDoc();
+      unsubSlots();
       unlistenTl?.();
       unlistenNack?.();
       unlistenLa?.();
