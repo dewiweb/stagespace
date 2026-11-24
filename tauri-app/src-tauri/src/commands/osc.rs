@@ -194,6 +194,11 @@ pub async fn set_osc_output(
     merge_rt
         .set_osc_target(address.clone(), port, osc_sender)
         .map_err(|e| IpcError::io(format!("Failed to set OSC target: {e:?}")))?;
+    // Mémorise la cible pour le fallback des clips OscOut du score.
+    *state
+        .osc_out_target
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = (address.clone(), port);
     eprintln!("[INFO] OSC output now sending to {address}:{port} ({profile})");
     Ok(())
 }

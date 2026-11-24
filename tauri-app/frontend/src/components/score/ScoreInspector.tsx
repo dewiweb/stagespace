@@ -63,6 +63,19 @@ export const ScoreInspector: React.FC<{
       />
     </label>
   );
+  /// Champ texte (adresse OSC, args, cible) — commit au blur/Enter.
+  const textIn = (label: string, val: string, onSet: (v: string) => void, title: string, w = 'w-28', placeholder = '') => (
+    <label className="flex items-center gap-1" title={title}>
+      {label}
+      <input
+        key={`${c?.id}-${label}-${val}`}
+        type="text" defaultValue={val} placeholder={placeholder}
+        onBlur={(e) => onSet(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+        className={`${w} bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-[10px] font-mono`}
+      />
+    </label>
+  );
   // Événements à cibles — la couverture trackIds porte la sémantique
   // (objets visés), pas un simple blast radius visuel. `positions`
   // filtre ses entrées par la couverture, donc éditable aussi.
@@ -157,6 +170,24 @@ export const ScoreInspector: React.FC<{
                   vel[i] = v;
                   onUpdateRef(c.id, { ...ref, vel });
                 }, `Composante ${axis} de la vélocité (m/s)`),
+              );
+            }
+            if (ref.type === 'osc') {
+              return (
+                <>
+                  {textIn('addr', ref.addr,
+                    (v) => onUpdateRef(c.id, { ...ref, addr: v }),
+                    'Adresse OSC émise au tir — ex. /light/go, /video/cue/12. Les adresses /stagespace/* vers notre propre port d\'entrée sont refusées au tir (boucle show-control)',
+                    'w-32', '/cue/go')}
+                  {textIn('args', ref.args,
+                    (v) => onUpdateRef(c.id, { ...ref, args: v }),
+                    'Arguments — tokens séparés par espace : "texte"/\'texte\' = string, true/false = bool, 42 = int, 1.5 = float',
+                    'w-40', '1 "fade" 0.5')}
+                  {textIn('→', ref.target ?? '',
+                    (v) => onUpdateRef(c.id, { ...ref, target: v || undefined }),
+                    'Cible override "host:port" — vide = la sortie OSC du show (le renderer spatial)',
+                    'w-24', 'host:port')}
+                </>
               );
             }
             return null;

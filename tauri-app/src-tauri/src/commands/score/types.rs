@@ -94,6 +94,30 @@ pub enum ScoreClipPayload {
     /// Attention — `attention_focus(obj)` (stase : tout fige sauf
     /// l'objet couvert) ou `attention_release()` quand `obj` est None.
     Attention { obj: Option<usize> },
+    /// OSC-out — message OSC arbitraire émis au tir du clip (la lane
+    /// `osc` du score : le séquenceur orchestre le show entier —
+    /// lumières, vidéo, consoles externes). `target` = "host:port"
+    /// explicite ; `None` = la destination OSC du show (le renderer).
+    /// Honor `osc_armed` : en dry-run, rien ne part. Les adresses
+    /// `/stagespace/*` pointées vers notre propre port d'entrée sont
+    /// refusées (boucle show-control).
+    OscOut {
+        target: Option<String>,
+        addr: String,
+        args: Vec<OscArg>,
+    },
+}
+
+/// Argument OSC d'un clip OscOut — untagged : `42` → int, `1.5` →
+/// float, `"texte"` → string, `true/false` → bool (le frontend parse
+/// le mini-langage `args` du clip).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum OscArg {
+    Int(i64),
+    Float(f64),
+    Str(String),
+    Bool(bool),
 }
 
 /// Interpolation d'un segment de courbe — définie sur le keyframe

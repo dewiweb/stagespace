@@ -4,7 +4,7 @@
 /// la timeline (mêmes hauteurs de rangées).
 import React, { useRef } from 'react';
 import {
-  GLOBALFX_LANE, MODULATION_LANE, CONDUCTOR_LANE, SPATIALFX_LANE, GLOBAL_LANES, clipLaneIds,
+  GLOBALFX_LANE, MODULATION_LANE, CONDUCTOR_LANE, OSC_LANE, SPATIALFX_LANE, GLOBAL_LANES, clipLaneIds,
   type ScoreClipDoc, type ScoreKeyframe, type ScoreLaneMode,
 } from '../../store/useScoreStore';
 import { CLIP_COLORS, fmtMs } from './scoreUtils';
@@ -96,6 +96,7 @@ export const ScoreTimeline: React.FC<{
           const isGfx = laneId === GLOBALFX_LANE;
           const isCond = laneId === CONDUCTOR_LANE;
           const isSfx = laneId === SPATIALFX_LANE;
+          const isOsc = laneId === OSC_LANE;
           const sel = selGlobal === laneId;
           const muted = laneMutedOf(laneId);
           return (
@@ -109,6 +110,8 @@ export const ScoreTimeline: React.FC<{
               }}
               title={isCond
                 ? 'Lane CONDUCTOR — événements-barrières : cue recall, stopAll, panic (transitions d\'état globales)'
+                : isOsc
+                ? 'Lane OSC — messages OSC arbitraires émis au tir (lumières, vidéo, consoles externes) : le score orchestre le show'
                 : isGfx
                 ? 'Lane GLOBALFX — transform global du merge (MacroState de la couche Global FX) + markers'
                 : isSfx
@@ -120,13 +123,13 @@ export const ScoreTimeline: React.FC<{
                 title={muted ? 'Lane mutée — ses événements/courbes ne jouent pas' : 'Mute lane'}
                 className={`w-3 h-3 rounded-sm border ${muted ? 'bg-orange-600 border-orange-400' : 'border-gray-600'}`}
               />
-              <span className={`text-[9px] font-bold tracking-wide flex-1 truncate ${muted ? 'text-gray-600 line-through' : isCond ? 'text-rose-300' : isGfx ? 'text-cyan-300' : isSfx ? 'text-violet-300' : 'text-amber-300'}`}>
-                {isCond ? 'CONDUCTOR' : isGfx ? 'GLOBALFX' : isSfx ? 'SPATIALFX' : 'MODULATION'}
+              <span className={`text-[9px] font-bold tracking-wide flex-1 truncate ${muted ? 'text-gray-600 line-through' : isCond ? 'text-rose-300' : isOsc ? 'text-emerald-300' : isGfx ? 'text-cyan-300' : isSfx ? 'text-violet-300' : 'text-amber-300'}`}>
+                {isCond ? 'CONDUCTOR' : isOsc ? 'OSC' : isGfx ? 'GLOBALFX' : isSfx ? 'SPATIALFX' : 'MODULATION'}
               </span>
-              {isCond && (
+              {(isCond || isOsc) && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onOpenPicker(laneId, e.clientX, e.clientY); }}
-                  title="Ajouter une cue / stop / panic"
+                  title={isCond ? 'Ajouter une cue / stop / panic' : 'Ajouter un message OSC-out'}
                   className="text-gray-500 hover:text-white text-sm leading-none"
                 >+</button>
               )}

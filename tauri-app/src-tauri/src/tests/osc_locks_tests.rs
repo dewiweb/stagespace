@@ -39,6 +39,7 @@ mod osc_locks_tests {
             remote_ui: Mutex::new(crate::bridge_server::RemoteUi::default()),
             show_snapshot: Mutex::new(None),
             score_timeline: Arc::new(Mutex::new(crate::commands::score::ScoreTimeline::default())),
+            osc_out_target: Arc::new(Mutex::new(("127.0.0.1".to_string(), 8000))),
         }
     }
 

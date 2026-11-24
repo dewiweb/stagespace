@@ -13,7 +13,7 @@ import { useGraphStore } from '../store/useGraphStore';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { normalizeSlot } from '../store/slices/moveSlotsTypes';
 import { buildSlotActivation } from './slotActivation';
-import { CONDUCTOR_LANE, MODULATION_LANE, SPATIALFX_LANE, laneIdOf, clipLaneIds } from '../store/useScoreStore';
+import { CONDUCTOR_LANE, MODULATION_LANE, OSC_LANE, SPATIALFX_LANE, laneIdOf, clipLaneIds } from '../store/useScoreStore';
 import type { ScoreDoc, ScoreClipDoc } from '../store/useScoreStore';
 
 /// Une lane wire — `id` (`obj-<trackId>`/lane globale) + mode. Le
@@ -98,6 +98,10 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
     } else if (c.ref.type === 'postGraph' || c.ref.type === 'chanMods' || c.ref.type === 'zones') {
       // Surcouche spatial FX — mutée par sa propre lane.
       if (laneState(SPATIALFX_LANE)?.muted) continue;
+    } else if (c.ref.type === 'osc') {
+      // Lane OSC-out — mutée par sa propre lane (pas de couverture
+      // objet : la cible est externe).
+      if (laneState(OSC_LANE)?.muted) continue;
     } else if (activeTids.length === 0) {
       continue;
     }
@@ -262,9 +266,42 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
         });
         break;
       }
+      case 'osc': {
+        const addr = c.ref.addr.trim();
+        if (!addr) break; // validateScore le signale — rien à émettre
+        clips.push({
+          ...base,
+          payload: {
+            kind: 'OscOut',
+            data: {
+              target: c.ref.target?.trim() ? c.ref.target.trim() : null,
+              addr,
+              args: parseOscArgs(c.ref.args),
+            },
+          },
+        });
+        break;
+      }
     }
   }
   return { clips, errors, objectCurves };
+}
+
+/// Mini-langage `args` d'un clip OSC-out : tokens séparés par espace,
+/// `"…"`/`'…'` = string, `true`/`false` = bool, nombre = int/float
+/// (le backend untagge `42`→int, `1.5`→float), mot nu = string.
+export function parseOscArgs(text: string): (number | string | boolean)[] {
+  const out: (number | string | boolean)[] = [];
+  for (const m of text.matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)) {
+    const [, dq, sq, bare] = m;
+    if (dq !== undefined) { out.push(dq); continue; }
+    if (sq !== undefined) { out.push(sq); continue; }
+    if (bare === 'true') { out.push(true); continue; }
+    if (bare === 'false') { out.push(false); continue; }
+    const n = Number(bare);
+    out.push(Number.isFinite(n) ? n : bare);
+  }
+  return out;
 }
 
 /// Couverture EFFECTIVE d'un clip — `trackIds` explicite si présent,

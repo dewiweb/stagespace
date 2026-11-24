@@ -113,6 +113,9 @@ pub struct AppState {
     /// Score timeline — clips multi-pistes exécutés par le backend
     /// (spawn_move/recall direct, survit à la webview).
     pub score_timeline: Arc<Mutex<commands::score::ScoreTimeline>>,
+    /// Cible OSC out du show (renderer) — maintenue par `set_osc_output` ;
+    /// fallback des clips `OscOut` du score sans `target` explicite.
+    pub osc_out_target: Arc<Mutex<(String, u16)>>,
 }
 
 /// Un movement = un runtime indépendant avec ses propres tracks et mode (preview/live)
@@ -242,6 +245,7 @@ pub fn new_app_state() -> AppState {
         remote_ui: Mutex::new(bridge_server::RemoteUi::default()),
         show_snapshot: Mutex::new(None),
         score_timeline: Arc::new(Mutex::new(commands::score::ScoreTimeline::default())),
+        osc_out_target: Arc::new(Mutex::new(("127.0.0.1".to_string(), 8000))),
     }
 }
 

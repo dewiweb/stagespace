@@ -297,6 +297,27 @@ contenu (clip OU courbe non vide) et vit jusqu'au **dernier keyframe**
 clip, et la queue d'une courbe au-delà du dernier clip continue
 d'écrire.
 
+### Lane OSC — orchestration externe
+
+La lane `osc` fait du score le chef d'orchestre du **show entier**,
+pas seulement du spatial : ses clips émettent des messages OSC
+arbitraires vers le matériel externe (lumières, vidéo, consoles,
+autres machines). Clip instantané édité dans l'inspector :
+
+- `addr` — l'adresse OSC (`/light/go`, `/video/cue/12`…)
+- `args` — mini-langage à tokens : `42` → int, `1.5` → float,
+  `"texte"`/`'texte'` → string, `true`/`false` → bool
+- `target` — cible override `host:port` ; vide = la sortie OSC du
+  show (le renderer spatial)
+
+Au tir, le backend encode le paquet (`rosc`) et l'émet en UDP,
+fire-and-forget comme le reste du scheduler. **Gardes** : `osc_armed`
+(dry-run = rien ne part), et les adresses `/stagespace/*` pointées
+vers notre propre port d'entrée sont refusées — un clip qui
+re-déclencherait le show-control bouclerait (footgun, pas feature).
+Adresse vide → clip sauté (`validateScore` le signale en erreur,
+adresse sans `/` ou cible malformée en avertissement).
+
 ### Lane CONDUCTOR — événements gestuels & contrôle
 
 À côté des barrières (`cue`, `stopAll`, `panic`), la lane conductor

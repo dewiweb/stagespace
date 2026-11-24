@@ -19,7 +19,7 @@
 ///   ScoreInspector.tsx  bandeau bas (couverture, saisies, actions)
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  useScoreStore, GLOBALFX_LANE, MODULATION_LANE, CONDUCTOR_LANE, SPATIALFX_LANE, laneIdOf,
+  useScoreStore, GLOBALFX_LANE, MODULATION_LANE, CONDUCTOR_LANE, OSC_LANE, SPATIALFX_LANE, laneIdOf,
   type ScoreClipDoc, type ScoreLaneMode,
 } from '../../store/useScoreStore';
 import { useGraphStore } from '../../store/useGraphStore';
@@ -337,14 +337,16 @@ const ScoreView: React.FC = () => {
         {
           label: 'Ajouter un clip ici…',
           disabled: t.laneId === GLOBALFX_LANE || t.laneId === MODULATION_LANE || t.laneId === SPATIALFX_LANE,
-          title: 'Les courbes des lanes globales s\'éditent en zone haute',
+          title: t.laneId === OSC_LANE
+            ? 'Clip message OSC-out (lumières/vidéo/consoles externes)'
+            : 'Les courbes des lanes globales s\'éditent en zone haute',
           onClick: () => setPicker({ laneId: t.laneId, x: ctxMenu.x, y: ctxMenu.y }),
         },
       ];
       return { header: isObj ? `Lane T${t.trackId}` : t.laneId, items };
     }
     if (t.kind === 'empty') {
-      const canAdd = t.laneId === CONDUCTOR_LANE || t.trackId !== undefined;
+      const canAdd = t.laneId === CONDUCTOR_LANE || t.laneId === OSC_LANE || t.trackId !== undefined;
       return {
         items: [{
           label: `Ajouter un clip à ${fmtMs(t.ms)}…`,
@@ -424,6 +426,8 @@ const ScoreView: React.FC = () => {
   const spatialFxDefs = spatialFxParamDefsOf(clips, spatialFxCurves);
   // Lane objet sélectionnée (`obj-<trackId>`) — courbes depth/canaux.
   const selObjLane = selGlobal?.startsWith('obj-') ? selGlobal : null;
+  // Lane OSC — événements one-shot (messages externes) : aucune courbe.
+  const selLaneIsOsc = selGlobal === OSC_LANE;
   const modNames = Object.keys(modulationCurves ?? {}).sort();
   const modDefs: ParamDef[] = modNames.map((n) => ({ id: n, min: -1, max: 1, def: 0, label: n }));
   const isSlot = selClip?.ref.type === 'slot';
@@ -435,7 +439,9 @@ const ScoreView: React.FC = () => {
         ? spatialFxDefs
         : selObjLane
           ? OBJECT_LANE_DEFS
-          : [...nodeDefs, ...clipDefs, ...MERGE_BLEND_DEFS];
+          : selLaneIsOsc
+            ? []
+            : [...nodeDefs, ...clipDefs, ...MERGE_BLEND_DEFS];
   const ctxFirst = selLaneIsGlobalFx
     ? globalFxDefs[0].id
     : selLaneIsMod
@@ -444,7 +450,9 @@ const ScoreView: React.FC = () => {
         ? spatialFxDefs[0].id
         : selObjLane
           ? OBJECT_LANE_DEFS[0].id
-          : 'enveloppe';
+          : selLaneIsOsc
+            ? ''
+            : 'enveloppe';
   // Le chip actif doit exister dans le contexte courant — sinon
   // retombe sur la première entrée du catalogue. Contexte modulation :
   // le nom fraîchement saisi (pas encore de courbe) reste valide.
@@ -506,6 +514,8 @@ const ScoreView: React.FC = () => {
                 : `Courbe ${p.id} — canal spatial de ${selObjLane} (SpatialChannel, émis en OSC) — base ${p.def}`,
             })),
           }]
+        : selLaneIsOsc
+        ? []
         : selClip
         ? [
             {

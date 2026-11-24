@@ -100,6 +100,21 @@ export function validateScore(): ScoreIssue[] {
         if (missing.length) warn(`${where(c)} : T${missing.join(',T')} hors du patch OSC — positions ignorées`);
         break;
       }
+      case 'osc': {
+        const ref = c.ref as { addr: string; target?: string; args: string };
+        const addr = ref.addr.trim();
+        if (!addr) {
+          err(`${where(c)} : adresse OSC vide — clip sauté au tir`);
+        } else {
+          if (!addr.startsWith('/')) warn(`${where(c)} : adresse « ${addr} » sans '/' — rejetée par la plupart des récepteurs OSC`);
+          if (addr.startsWith('/stagespace/')) {
+            warn(`${where(c)} : adresse réservée « ${addr} » — refusée au tir si la cible est notre propre port d'entrée (boucle show-control)`);
+          }
+        }
+        const t = (ref.target ?? '').trim();
+        if (t && !/^[^\s:]+:\d+$/.test(t)) warn(`${where(c)} : cible « ${t} » invalide — format attendu host:port`);
+        break;
+      }
       case 'zones':
         zonesInstalled = Math.max(zonesInstalled, (c.ref as { zones: unknown[] }).zones.length);
         break;

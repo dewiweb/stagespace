@@ -55,6 +55,8 @@ pub struct Shared {
     /// honorer les fins) doit tuer sa génération : l'arrêt d'urgence
     /// fait taire le show, le score ne re-tire rien.
     pub score_timeline: Arc<Mutex<crate::commands::score::ScoreTimeline>>,
+    /// Cible OSC out (renderer) — fallback des clips `OscOut`.
+    pub osc_out_target: Arc<Mutex<(String, u16)>>,
     pub osc_receiver: Arc<Mutex<OscReceiver>>,
     /// Registry des plugins WASM — None si wasmtime n'a pas pu s'initialiser.
     pub plugin_registry: Option<Arc<Mutex<stagespace_engines::PluginRegistry>>>,
@@ -74,6 +76,7 @@ impl Shared {
             recall_in_progress: state.recall_in_progress.clone(),
             deactivate_gen: state.deactivate_gen.clone(),
             score_timeline: state.score_timeline.clone(),
+            osc_out_target: state.osc_out_target.clone(),
             osc_receiver: state.osc_receiver.clone(),
             plugin_registry: state.plugin_registry.clone(),
             plugins_dir: state.plugins_dir.clone(),

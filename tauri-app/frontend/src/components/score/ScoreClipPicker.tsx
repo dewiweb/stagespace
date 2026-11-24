@@ -3,7 +3,7 @@
 /// slots. La couverture du clip suit l'assignation : slot → ses
 /// trackIds, cue → le blast radius dérivé du snapshot.
 import React from 'react';
-import { GLOBALFX_LANE, CONDUCTOR_LANE } from '../../store/useScoreStore';
+import { GLOBALFX_LANE, CONDUCTOR_LANE, OSC_LANE } from '../../store/useScoreStore';
 import { useModalGuard } from '../../utils/modalGuard';
 import type { ScoreClipDoc } from '../../store/useScoreStore';
 import type { MoveSlot } from '../../store/slices/moveSlotsTypes';
@@ -95,6 +95,15 @@ export const ScoreClipPicker: React.FC<{
         {cues.length === 0 && (
           <div className="px-3 py-2 text-[10px] text-gray-500">Aucune cue — capturez-en une dans Atelier</div>
         )}
+      </>
+    ) : picker.laneId === OSC_LANE ? (
+      <>
+        <div className="px-3 py-0.5 text-[9px] text-gray-600 uppercase mt-1">OSC-out — message externe</div>
+        <button
+          className="w-full text-left px-3 py-1 text-xs hover:bg-emerald-700/40"
+          title="Message OSC arbitraire émis au tir — adresse/args/cible éditables dans l'inspector (défaut = la sortie OSC du show)"
+          onClick={() => onPick({ type: 'osc', addr: '/cue/go', args: '' })}
+        >→OSC message — lumières/vidéo/consoles</button>
       </>
     ) : picker.laneId === GLOBALFX_LANE ? null : (
       <>

@@ -275,7 +275,7 @@ export async function snapshotScoreAt(
 
   // ── Honnêteté : événements conductor et cues ne sont pas un état ──
   const conductorEvents = doc.clips.filter(
-    (c) => c.startMs <= t && ['gesture', 'throw', 'park', 'unpark', 'attention', 'stopAll', 'panic'].includes(c.ref.type),
+    (c) => c.startMs <= t && ['gesture', 'throw', 'park', 'unpark', 'attention', 'stopAll', 'panic', 'osc'].includes(c.ref.type),
   ).length;
   if (conductorEvents) skipped.push(`${conductorEvents} événement(s) conductor (pas un état)`);
   if (doc.clips.some((c) => c.ref.type === 'cue' && c.startMs <= t)) skipped.push('clips cue (non résolus — un snapshot ne contient pas de cue)');

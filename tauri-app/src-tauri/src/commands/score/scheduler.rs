@@ -825,5 +825,66 @@ pub(crate) fn fire_clip(
                 None => rt.attention_release(),
             }
         }
+        ScoreClipPayload::OscOut { target, addr, args } => {
+            fire_osc_out(sh, target, addr, args);
+        }
+    }
+}
+
+/// Émet le message OSC d'un clip `OscOut` — fire-and-forget comme le
+/// reste du scheduler. `target` explicite = "host:port" ; sinon la
+/// cible OSC out du show (le renderer). Garde `osc_armed` (dry-run =
+/// rien ne part) et refuse le loopback `/stagespace/*` vers notre
+/// propre port d'entrée (un clip qui re-déclencherait le show-control
+/// bouclerait — footgun, pas feature).
+fn fire_osc_out(sh: &Shared, target: &Option<String>, addr: &str, args: &[super::types::OscArg]) {
+    {
+        let rt = lock_or_recover(&sh.merge_runtime);
+        if !rt.osc_armed() {
+            return;
+        }
+    }
+    let dest = match target.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        Some(t) => t.to_string(),
+        None => {
+            let (h, p) = lock_or_recover(&sh.osc_out_target).clone();
+            format!("{h}:{p}")
+        }
+    };
+    // Garde loopback : /stagespace/* vers notre propre port d'entrée.
+    if addr.starts_with("/stagespace/") {
+        let in_port = lock_or_recover(&sh.osc_receiver).port;
+        let port_str = in_port.to_string();
+        let local = matches!(
+            dest.split(':').next(),
+            Some("127.0.0.1") | Some("localhost") | Some("0.0.0.0") | Some("::1")
+        ) && dest.rsplit(':').next() == Some(port_str.as_str());
+        if local {
+            eprintln!("[SCORE] OscOut {addr} → {dest} ignoré (loopback show-control)");
+            return;
+        }
+    }
+    let msg = rosc::OscMessage {
+        addr: addr.to_string(),
+        args: args
+            .iter()
+            .map(|a| match a {
+                super::types::OscArg::Int(v) => rosc::OscType::Long(*v),
+                super::types::OscArg::Float(v) => rosc::OscType::Double(*v),
+                super::types::OscArg::Str(v) => rosc::OscType::String(v.clone()),
+                super::types::OscArg::Bool(v) => rosc::OscType::Bool(*v),
+            })
+            .collect(),
+    };
+    match rosc::encoder::encode(&rosc::OscPacket::Message(msg)) {
+        Ok(bytes) => match std::net::UdpSocket::bind("0.0.0.0:0") {
+            Ok(sock) => {
+                if let Err(e) = sock.send_to(&bytes, &dest) {
+                    eprintln!("[SCORE] OscOut {addr} → {dest}: {e}");
+                }
+            }
+            Err(e) => eprintln!("[SCORE] OscOut {addr} → {dest}: socket {e}"),
+        },
+        Err(e) => eprintln!("[SCORE] OscOut {addr}: encode {e:?}"),
     }
 }

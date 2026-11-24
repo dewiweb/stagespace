@@ -42,6 +42,7 @@ export const CLIP_COLORS: Record<string, string> = {
   unpark: 'bg-cyan-700/80 border-cyan-400',
   manualClear: 'bg-slate-700/80 border-slate-400',
   attention: 'bg-rose-800/80 border-rose-500',
+  osc: 'bg-emerald-700/80 border-emerald-400',
 };
 
 /// Label affiché d'un clip — nom du slot/cue ou marqueur.
@@ -76,5 +77,6 @@ export function clipLabel(
     case 'unpark': return 'UNPARK';
     case 'manualClear': return 'MANUEL OFF';
     case 'attention': return 'ATTENTION';
+    case 'osc': return `→OSC ${clip.ref.addr}`;
   }
 }

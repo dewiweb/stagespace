@@ -1,7 +1,7 @@
 /// <reference types="vitest/globals" />
 import { describe, expect, it, beforeEach } from 'vitest';
-import { useScoreStore, clipLaneIds, GLOBALFX_LANE, MODULATION_LANE, CONDUCTOR_LANE, SPATIALFX_LANE } from '../useScoreStore';
-import { resolveScoreClips, cueCoverage } from '../../utils/scoreResolve';
+import { useScoreStore, clipLaneIds, GLOBALFX_LANE, MODULATION_LANE, CONDUCTOR_LANE, OSC_LANE, SPATIALFX_LANE } from '../useScoreStore';
+import { resolveScoreClips, cueCoverage, parseOscArgs } from '../../utils/scoreResolve';
 import { useGraphStore, getInvokeCalls, clearInvokeCalls, resetStore } from './testHelpers';
 import { useCuelistStore } from '../useCuelistStore';
 
@@ -671,5 +671,59 @@ describe('score TC chase', () => {
     useScoreStore.getState().chaseTimecode(1.5);
     await settle(60);
     expect(cmds()).not.toContain('score_timeline_play');
+  });
+});
+
+describe('score OSC-out (lane osc)', () => {
+  beforeEach(() => {
+    resetStore();
+    clearInvokeCalls();
+    useScoreStore.getState().clearScore();
+    useGraphStore.setState({ manualOscIds: [1, 2, 3, 4], moveSlots: [] } as never);
+  });
+
+  it('parseOscArgs — mini-langage : nombres, strings, bools, quotes', () => {
+    expect(parseOscArgs('')).toEqual([]);
+    expect(parseOscArgs('42 1.5 -3')).toEqual([42, 1.5, -3]);
+    expect(parseOscArgs('go "fade in" \'x\' true false')).toEqual(['go', 'fade in', 'x', true, false]);
+    expect(parseOscArgs('abc')).toEqual(['abc']); // mot nu = string
+  });
+
+  it('clip osc → payload OscOut sur la lane osc ; args parsés', async () => {
+    const st = useScoreStore.getState();
+    const c = st.addClip({ type: 'osc', addr: '/light/go', args: '1 "red" 0.5 true' }, 1000);
+    expect(clipLaneIds(c)).toEqual([OSC_LANE]);
+    const { clips } = await resolveScoreClips(useScoreStore.getState());
+    expect(clips).toHaveLength(1);
+    expect(clips[0].payload).toEqual({
+      kind: 'OscOut',
+      data: { target: null, addr: '/light/go', args: [1, 'red', 0.5, true] },
+    });
+    expect(clips[0].lanes[0].id).toBe(OSC_LANE);
+  });
+
+  it('target override → passé tel quel ; vide → null (sortie du show)', async () => {
+    const st = useScoreStore.getState();
+    st.addClip({ type: 'osc', addr: '/a', args: '', target: '  10.0.0.5:9000  ' }, 0);
+    st.addClip({ type: 'osc', addr: '/b', args: '', target: '  ' }, 500);
+    const { clips } = await resolveScoreClips(useScoreStore.getState());
+    expect(clips[0].payload).toEqual({
+      kind: 'OscOut', data: { target: '10.0.0.5:9000', addr: '/a', args: [] },
+    });
+    expect(clips[1].payload).toEqual({
+      kind: 'OscOut', data: { target: null, addr: '/b', args: [] },
+    });
+  });
+
+  it('adresse vide → clip sauté ; lane mutée → événement sauté', async () => {
+    const st = useScoreStore.getState();
+    st.addClip({ type: 'osc', addr: '   ', args: '' }, 0);
+    st.addClip({ type: 'osc', addr: '/ok', args: '' }, 1000);
+    const { clips } = await resolveScoreClips(useScoreStore.getState());
+    expect(clips).toHaveLength(1);
+    expect((clips[0].payload as { data: { addr: string } }).data.addr).toBe('/ok');
+    useScoreStore.getState().toggleLaneMute(OSC_LANE);
+    const { clips: muted } = await resolveScoreClips(useScoreStore.getState());
+    expect(muted).toHaveLength(0);
   });
 });

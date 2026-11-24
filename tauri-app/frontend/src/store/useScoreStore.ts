@@ -35,8 +35,12 @@ export const SPATIALFX_LANE = 'spatialfx';
 /// stopAll, panic) : transitions d'état globales, pas du contenu
 /// composable (design §Cues on the timeline). Même id côté backend.
 export const CONDUCTOR_LANE = 'conductor';
+/// Lane OSC-OUT — le score orchestre le show entier : clips portant
+/// un message OSC arbitraire (lumières, vidéo, consoles externes)
+/// émis au tir — cible explicite ou la sortie OSC du show.
+export const OSC_LANE = 'osc';
 /// Lanes globales épinglées en tête de timeline (ordre d'affichage).
-export const GLOBAL_LANES = [CONDUCTOR_LANE, GLOBALFX_LANE, SPATIALFX_LANE, MODULATION_LANE] as const;
+export const GLOBAL_LANES = [CONDUCTOR_LANE, OSC_LANE, GLOBALFX_LANE, SPATIALFX_LANE, MODULATION_LANE] as const;
 export const laneIdOf = (trackId: number) => `obj-${trackId}`;
 
 /// Comportement d'une lane en chevauchement de clips (docs/score-
@@ -95,7 +99,13 @@ export type ScoreEventRef =
   | { type: 'park' }
   | { type: 'unpark' }
   | { type: 'manualClear' }
-  | { type: 'attention' };
+  | { type: 'attention' }
+  /// OSC-out — message arbitraire émis au tir (lane `osc` : lumières,
+  /// vidéo, consoles externes). `addr` = adresse OSC ; `target` =
+  /// "host:port" explicite, vide/absent = la sortie OSC du show ;
+  /// `args` = mini-langage : `42` int, `1.5` float, `"texte"`/bare =
+  /// string, `true`/`false` = bool.
+  | { type: 'osc'; addr: string; target?: string; args: string };
 
 export interface ScoreClipDoc {
   id: string;
@@ -174,6 +184,8 @@ export const clipLaneIds = (c: ScoreClipDoc, eff: number[] = c.trackIds ?? []): 
       // Pipeline post-process + tables de contraintes/règles — la
       // surcouche « spatial FX » (périmètre de l'onglet FX d'Atelier).
       return [SPATIALFX_LANE];
+    case 'osc':
+      return [OSC_LANE];
     default:
       return [CONDUCTOR_LANE];
   }

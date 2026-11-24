@@ -31,6 +31,7 @@ mod show_control_e2e_tests {
             recall_in_progress: Arc::new(AtomicBool::new(false)),
             deactivate_gen: Arc::new(AtomicU64::new(0)),
             score_timeline: Arc::new(Mutex::new(Default::default())),
+            osc_out_target: Arc::new(Mutex::new(("127.0.0.1".to_string(), 8000))),
             osc_receiver: Arc::new(Mutex::new(OscReceiver::new(0))),
             plugin_registry: None,
             plugins_dir: None,
