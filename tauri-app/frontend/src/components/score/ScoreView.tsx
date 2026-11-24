@@ -40,7 +40,9 @@ import ContextMenu, { type ContextMenuItem } from '../ui/ContextMenu';
 import { detachLaneFromClip, makeClipUnique, sharedClipCount } from '../../utils/scoreDetach';
 import { flattenCueClip, reportFlatten } from '../../utils/scoreFlatten';
 import { snapshotScoreAt } from '../../utils/scoreSnapshot';
+import { validateScore, type ScoreIssue } from '../../utils/scoreValidate';
 import { toast } from '../../utils/toast-helpers';
+import Modal from '../ui/Modal';
 import { ScoreClipPicker, type ScorePickerState } from './ScoreClipPicker';
 import { ScoreToolbar } from './ScoreToolbar';
 import { ScoreInspector } from './ScoreInspector';
@@ -79,6 +81,8 @@ const ScoreView: React.FC = () => {
   const [modName, setModName] = useState('');
   const [picker, setPicker] = useState<ScorePickerState | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ target: ScoreMenuTarget; x: number; y: number } | null>(null);
+  /// Rapport preflight (validateScore) — null = modale fermée.
+  const [issues, setIssues] = useState<ScoreIssue[] | null>(null);
   /// Partage éditeur/timeline — drag sur la poignée, défaut 50/50.
   const [topFrac, setTopFrac] = useState(0.5);
   const splitRootRef = useRef<HTMLDivElement>(null);
@@ -631,6 +635,7 @@ const ScoreView: React.FC = () => {
             }
           })();
         }}
+        onValidate={() => setIssues(validateScore())}
       />
       <ScoreToolbar
         selClip={selClip ?? null}
@@ -721,6 +726,28 @@ const ScoreView: React.FC = () => {
           />
         );
       })()}
+
+      {/* Preflight — rapport de la résolution sèche (✓ check) */}
+      {issues && (
+        <Modal
+          title={`Preflight — ${issues.length === 0 ? 'partition saine' : `${issues.filter((i) => i.level === 'error').length} erreur(s), ${issues.filter((i) => i.level === 'warning').length} avertissement(s)`}`}
+          onClose={() => setIssues(null)}
+          widthClass="max-w-lg"
+        >
+          {issues.length === 0 ? (
+            <p className="text-xs text-green-400 px-1 py-2">Aucun problème détecté — la partition jouera comme affichée.</p>
+          ) : (
+            <ul className="max-h-72 overflow-y-auto space-y-1 px-1 py-1">
+              {issues.map((it, i) => (
+                <li key={i} className={`text-[11px] leading-snug ${it.level === 'error' ? 'text-red-300' : 'text-amber-200/90'}`}>
+                  <span className="font-bold mr-1">{it.level === 'error' ? '✕' : '⚠'}</span>
+                  {it.message}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Modal>
+      )}
 
       {/* Bandeau info bas — inspector du clip sélectionné */}
       <ScoreInspector

@@ -230,6 +230,16 @@ spawné — le cue recrée le seed du slot), courbes MODULATION (valeurs
 SignalOsc, pas un champ de cue), `spatial` (compresseur — pas un
 champ de cue).
 
+**Preflight** (`✓ check` dans le transport, `validateScore`) —
+résolution sèche de la partition, aucun effet : **erreurs** (ça ne
+jouera pas — slot/cue orphelin, partition vide, boucle inversée) et
+**avertissements** (ça jouera autrement qu'attendu — couverture vide
+ou entièrement mutée, tracks hors du patch OSC, clip au-delà de la
+durée, courbes sur paramètres inconnus ou sans table à patcher
+(`zone:i:` sans clip `zones`, `mod:` sans `chanMods`), courbes
+clip-scoped sur un clip non-slot). Rapport en modale, erreurs
+d'abord.
+
 ### Lane SPATIALFX — surcouche d'effets
 
 La lane `spatialfx` (entre GLOBALFX et MODULATION) porte le périmètre

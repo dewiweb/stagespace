@@ -20,10 +20,12 @@ export const ScoreTransport: React.FC<{
   onLaneH: (h: number) => void;
   /// ★ re-capture : snapshot de l'état de la partition au curseur → cue.
   onCaptureCue: () => void;
+  /// ✓ preflight : résolution sèche → rapport des refs mortes/couvertures.
+  onValidate: () => void;
 }> = ({
   playing, displayCursor, durationMs, loopStartMs, loopEndMs,
   pxPerSec, laneH, onPlayStop, onSetDurationMs, onSetLoop,
-  onZoom, onLaneH, onCaptureCue,
+  onZoom, onLaneH, onCaptureCue, onValidate,
 }) => (
   <div className="flex items-center gap-3 px-3 py-1.5 border-b border-gray-800 bg-gray-900/60">
     <button
@@ -82,6 +84,13 @@ export const ScoreTransport: React.FC<{
       title="Re-capture : matérialise l'état de la partition AU CURSEUR en nouvelle cue — clips → moves, courbes → valeurs, inverse du flatten"
     >
       ★ cue
+    </button>
+    <button
+      onClick={onValidate}
+      className="px-2 py-0.5 text-[10px] font-bold rounded bg-gray-800 text-gray-300 hover:bg-gray-700"
+      title="Preflight — résolution sèche : refs mortes, couvertures muettes, courbes sans cible, avant de jouer"
+    >
+      ✓ check
     </button>
     <div className="flex-1" />
     <button onClick={() => onZoom(-1)} className="px-2 py-0.5 text-xs bg-gray-800 rounded hover:bg-gray-700">−</button>
