@@ -590,3 +590,86 @@ describe('flatten cue → clips (explosion)', () => {
     expect(muted).toHaveLength(0);
   });
 });
+
+describe('score TC chase', () => {
+  const settle = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const cmds = () => getInvokeCalls().map((c) => c.cmd);
+
+  beforeEach(() => {
+    resetStore();
+    clearInvokeCalls();
+    useScoreStore.getState().clearScore();
+    useScoreStore.getState().setTcChase(false);
+    useGraphStore.setState({
+      manualOscIds: [1, 2, 3, 4],
+      moveSlots: [{
+        id: 's1', name: 's1', oscIndex: 1, templateId: 'circle',
+        graphJson: { nodes: [{ id: 'o', type: 'custom', position: { x: 0, y: 0 }, data: { label: 'Objects', type: 'Objects', params: {} } }], edges: [] },
+        signalGraph: null, trackIds: [1], movementId: null, isPreview: false,
+        macros: { speed: 1, scale: 1, shiftX: 0, shiftY: 0, shiftZ: 0, yaw: 0, pitch: 0, roll: 0 },
+        fadeIn: 0.5, fadeOut: 0.5, phaseSpread: 0, assignments: [], audioMods: [],
+        direction: 'forward', loopMode: 'loop', duration: 4,
+      }],
+    } as never);
+    useScoreStore.getState().addClip({ type: 'slot', slotId: 's1' }, 0, { durationMs: 10_000 });
+  });
+
+  it('flag off → aucun effet', async () => {
+    useScoreStore.getState().chaseTimecode(10);
+    await settle(30);
+    expect(cmds()).not.toContain('score_timeline_seek');
+  });
+
+  it('arrêté : premier paquet = locate (seek), pas de play', async () => {
+    useScoreStore.getState().setTcChase(true);
+    useScoreStore.getState().chaseTimecode(12.5);
+    await settle(30);
+    expect(cmds()).toContain('score_timeline_seek');
+    expect(cmds()).not.toContain('score_timeline_play');
+  });
+
+  it('TC garé (même valeur répétée) → locate, jamais play', async () => {
+    useScoreStore.getState().setTcChase(true);
+    useScoreStore.getState().chaseTimecode(8);
+    await settle(30);
+    clearInvokeCalls();
+    useScoreStore.getState().chaseTimecode(8);
+    useScoreStore.getState().chaseTimecode(8);
+    await settle(30);
+    expect(cmds()).not.toContain('score_timeline_play');
+  });
+
+  it('TC qui roule → démarrage du transport à la position TC', async () => {
+    useScoreStore.getState().setTcChase(true);
+    useScoreStore.getState().chaseTimecode(5);
+    useScoreStore.getState().chaseTimecode(5.2); // avance → rolling
+    await settle(60);
+    expect(cmds()).toContain('score_timeline_play');
+    expect(useScoreStore.getState().playing).toBe(true);
+  });
+
+  it('en lecture : drift < deadband ignoré, drift > deadband → seek', async () => {
+    useScoreStore.getState().setTcChase(true);
+    useScoreStore.getState().chaseTimecode(0);
+    useScoreStore.getState().chaseTimecode(0.1);
+    await settle(60);
+    clearInvokeCalls();
+    // cursorMs ~0 (backend mock) — petit drift : rien.
+    useScoreStore.getState().chaseTimecode(0.05);
+    await settle(30);
+    expect(cmds()).not.toContain('score_timeline_seek');
+    // Gros drift → rebase.
+    useScoreStore.getState().chaseTimecode(30);
+    await settle(30);
+    expect(cmds()).toContain('score_timeline_seek');
+  });
+
+  it('partition vide → pas de démarrage (pas de spam)', async () => {
+    useScoreStore.getState().clearScore();
+    useScoreStore.getState().setTcChase(true);
+    useScoreStore.getState().chaseTimecode(1);
+    useScoreStore.getState().chaseTimecode(1.5);
+    await settle(60);
+    expect(cmds()).not.toContain('score_timeline_play');
+  });
+});

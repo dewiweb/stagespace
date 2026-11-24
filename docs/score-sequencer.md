@@ -230,6 +230,15 @@ spawné — le cue recrée le seed du slot), courbes MODULATION (valeurs
 SignalOsc, pas un champ de cue), `spatial` (compresseur — pas un
 champ de cue).
 
+**TC chase** (bouton `TC` du transport ou `/stagespace/score/chase
+<0|1>`) — le transport score suit le timecode entrant
+(`/stagespace/timecode`, même flux que les cues) : TC garé = locate
+(le curseur suit, pas de lecture), TC qui roule = démarrage du
+transport à la position TC (auto-play), en lecture = rebase quand la
+dérive dépasse le deadband (~80 ms — en dessous, le bruit TC ne
+justifie pas un seek). Flag runtime persisté (localStorage), jamais
+dans le doc.
+
 **Preflight** (`✓ check` dans le transport, `validateScore`) —
 résolution sèche de la partition, aucun effet : **erreurs** (ça ne
 jouera pas — slot/cue orphelin, partition vide, boucle inversée) et

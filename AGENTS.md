@@ -188,7 +188,8 @@ dispatches to the same functions as the keyboard shortcuts (`liveActions.ts`).
 | `/stagespace/panic` | panic (stop all + origins) | Esc |
 | `/stagespace/stop` | stop all moves | — |
 | `/stagespace/timecode <s|"HH:MM:SS:FF">` | TC chase (fps 24/25/30, default 25, `set_timecode_fps`) | — |
-| `/stagespace/timecode/chase <0|1>` | chase TC on/off | — |
+| `/stagespace/timecode/chase <0|1>` | chase TC on/off (cues) | — |
+| `/stagespace/score/chase <0|1>` | score transport chases incoming TC (locate/rebase/auto-start on rolling TC) | — |
 | `/stagespace/timecode/fps <n>` | fps of the TC string format | — |
 | `/stagespace/cue/arm <n>` | arm a cue without firing it (console model) | — |
 | `/stagespace/cue/go` | fire the armed cue (or the next one if none armed) | — |

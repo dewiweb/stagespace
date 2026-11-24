@@ -53,6 +53,7 @@ const ScoreView: React.FC = () => {
   const laneStates = useScoreStore((s) => s.laneStates);
   const durationMs = useScoreStore((s) => s.durationMs);
   const playing = useScoreStore((s) => s.playing);
+  const tcChase = useScoreStore((s) => s.tcChase);
   const cursorMs = useScoreStore((s) => s.cursorMs);
   const loopStartMs = useScoreStore((s) => s.loopStartMs);
   const loopEndMs = useScoreStore((s) => s.loopEndMs);
@@ -636,6 +637,8 @@ const ScoreView: React.FC = () => {
           })();
         }}
         onValidate={() => setIssues(validateScore())}
+        tcChase={tcChase}
+        onTcChase={() => useScoreStore.getState().setTcChase(!tcChase)}
       />
       <ScoreToolbar
         selClip={selClip ?? null}

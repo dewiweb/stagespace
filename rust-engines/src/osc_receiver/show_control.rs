@@ -86,6 +86,10 @@ pub enum ShowCommand {
     Macro(String, f64),
     /// `/stagespace/timecode/chase <0|1>` — chase TC on/off (frontend).
     TimecodeChase(bool),
+    /// `/stagespace/score/chase <0|1>` — le transport score suit le
+    /// timecode entrant (locate à l'arrêt, rebase en lecture,
+    /// démarrage quand le TC roule — dispatch frontend).
+    ScoreChase(bool),
     /// `/stagespace/timecode/fps <n>` — fps du format HH:MM:SS:FF.
     TimecodeFps(f64),
     /// `/stagespace/positions` — dump des positions émises : le demandeur
@@ -175,6 +179,21 @@ pub(crate) fn parse_show_command(addr: &str, args: &[OscType], fps: f64) -> Opti
                 _ => None,
             })
             .map(ShowCommand::TimecodeChase),
+        "score/chase" => args
+            .first()
+            .and_then(|a| match a {
+                OscType::Int(v) => Some(*v != 0),
+                OscType::Long(v) => Some(*v != 0),
+                OscType::Float(v) => Some(*v != 0.0),
+                OscType::Double(v) => Some(*v != 0.0),
+                OscType::String(s) => match s.as_str() {
+                    "1" | "on" | "true" => Some(true),
+                    "0" | "off" | "false" => Some(false),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .map(ShowCommand::ScoreChase),
         "timecode/fps" => args
             .first()
             .and_then(|a| match a {

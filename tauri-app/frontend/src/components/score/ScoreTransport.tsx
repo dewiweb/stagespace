@@ -22,10 +22,13 @@ export const ScoreTransport: React.FC<{
   onCaptureCue: () => void;
   /// ✓ preflight : résolution sèche → rapport des refs mortes/couvertures.
   onValidate: () => void;
+  /// TC chase — le transport suit le timecode entrant.
+  tcChase: boolean;
+  onTcChase: () => void;
 }> = ({
   playing, displayCursor, durationMs, loopStartMs, loopEndMs,
   pxPerSec, laneH, onPlayStop, onSetDurationMs, onSetLoop,
-  onZoom, onLaneH, onCaptureCue, onValidate,
+  onZoom, onLaneH, onCaptureCue, onValidate, tcChase, onTcChase,
 }) => (
   <div className="flex items-center gap-3 px-3 py-1.5 border-b border-gray-800 bg-gray-900/60">
     <button
@@ -91,6 +94,13 @@ export const ScoreTransport: React.FC<{
       title="Preflight — résolution sèche : refs mortes, couvertures muettes, courbes sans cible, avant de jouer"
     >
       ✓ check
+    </button>
+    <button
+      onClick={onTcChase}
+      className={`px-2 py-0.5 text-[10px] font-bold rounded ${tcChase ? 'bg-cyan-800 text-cyan-200' : 'bg-gray-800 text-gray-500 hover:text-gray-300'}`}
+      title="Chase timecode — le transport suit le TC entrant (/stagespace/timecode) : locate à l'arrêt, rebase en lecture, démarrage quand le TC roule"
+    >
+      TC
     </button>
     <div className="flex-1" />
     <button onClick={() => onZoom(-1)} className="px-2 py-0.5 text-xs bg-gray-800 rounded hover:bg-gray-700">−</button>

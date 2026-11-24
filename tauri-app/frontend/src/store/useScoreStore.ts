@@ -12,6 +12,7 @@
 import { create } from 'zustand';
 import { toast } from '../utils/toast-helpers';
 import { safeInvoke as invoke, silentCatch } from '../utils/tauri';
+import { safeParseStoredJson, safeSetItem } from '../utils/safeStorage';
 import type { Zone } from '../types/generated/Zone';
 import type { ChannelModulation } from '../types/generated/ChannelModulation';
 
@@ -281,6 +282,14 @@ interface ScoreState extends ScoreDoc {
   _hotSwap: () => Promise<void>;
   stopScore: () => void;
   seekScore: (ms: number) => void;
+  /// Chase timecode — le transport suit le TC entrant
+  /// (`/stagespace/timecode` + `/stagespace/score/chase <0|1>`). Flag
+  /// runtime persisté localStorage, jamais dans le doc.
+  tcChase: boolean;
+  setTcChase: (on: boolean) => void;
+  /// Entrée TC en secondes — dispatch show-control (un paquet = un
+  /// appel, le chase filtre par deadband).
+  chaseTimecode: (tc: number) => void;
   _setTransport: (playing: boolean, cursorMs: number, loopStartMs?: number, loopEndMs?: number) => void;
   /// Sélection d'édition — dans le store (pas ScoreView) pour que la
   /// toolbar et le MenuBar global agissent sur la même cible.
@@ -295,6 +304,17 @@ interface ScoreState extends ScoreDoc {
 /// Dernière partition résolue envoyée au backend (clip.id → JSON) —
 /// base du diff hot-swap : un clip inchangé garde son move actif.
 let lastResolvedClips = new Map<string, string>();
+
+/// Persistance du flag TC chase (transport, pas le doc — même modèle
+/// que `TC_CHASE_KEY` côté cuelist).
+const SCORE_TC_CHASE_KEY = 'stagespace.score.tc_chase';
+/// Dernière valeur TC vue par le chase (rolling = le TC avance) +
+/// garde contre les play concurrents pendant un démarrage chase.
+let lastChaseTc: number | null = null;
+let chasePlayPending = false;
+/// Deadband du chase — sous ~2 frames à 25 fps la dérive est ignorée
+/// (un seek = rebase du transport, inutile en dessous du bruit TC).
+const CHASE_DEADBAND_MS = 80;
 
 export const useScoreStore = create<ScoreState>()((set, get) => ({
   ...emptyDoc(),
@@ -530,6 +550,43 @@ export const useScoreStore = create<ScoreState>()((set, get) => ({
   },
   seekScore: (ms) => {
     invoke('score_timeline_seek', { ms }).then(() => set({ cursorMs: ms })).catch(silentCatch);
+  },
+  tcChase: safeParseStoredJson<boolean>(SCORE_TC_CHASE_KEY, false),
+  setTcChase: (on) => {
+    set({ tcChase: on });
+    safeSetItem(SCORE_TC_CHASE_KEY, JSON.stringify(on));
+    // Reset complet : premier paquet = locate (pas de faux rolling),
+    // et un toggle pendant un play chase ne le laisse pas verrouillé.
+    lastChaseTc = null;
+    chasePlayPending = false;
+  },
+  chaseTimecode: (tc) => {
+    if (!get().tcChase || !Number.isFinite(tc) || tc < 0) return;
+    // Premier paquet après le toggle = locate seulement (un TC garé à
+    // l'armement du chase ne doit pas démarrer la lecture tout seul).
+    const rolling = lastChaseTc != null && tc > lastChaseTc;
+    lastChaseTc = tc;
+    const ms = tc * 1000;
+    const s = get();
+    if (!s.playing) {
+      if (rolling) {
+        // TC qui roule = démarrer le transport À la position TC —
+        // chase, pas simple seek. cursorMs posé d'abord : playScore
+        // re-seek le backend post-load depuis cette valeur.
+        // Partition vide : pas de démarrage — sinon le toast "Score
+        // vide" spammerait à chaque paquet TC.
+        if (!chasePlayPending && s.clips.length > 0) {
+          chasePlayPending = true;
+          set({ cursorMs: ms });
+          void s.playScore().finally(() => { chasePlayPending = false; });
+        }
+      } else if (Math.abs(ms - s.cursorMs) > CHASE_DEADBAND_MS) {
+        s.seekScore(ms); // TC garé = locate (le curseur suit, pas de play)
+      }
+      return;
+    }
+    // En lecture : rebase si la dérive dépasse le bruit du TC.
+    if (Math.abs(ms - s.cursorMs) > CHASE_DEADBAND_MS) s.seekScore(ms);
   },
   _setTransport: (playing, cursorMs, loopStartMs, loopEndMs) =>
     // Loop fields : écrits seulement si différents — l'écho backend
