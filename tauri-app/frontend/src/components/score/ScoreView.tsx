@@ -471,7 +471,6 @@ const ScoreView: React.FC = () => {
 
   // ── Dopesheet (rien de sélectionné) — vue d'ensemble éditable de
   //    toute l'automation. Rangées collectées depuis le doc courant.
-  const [hScroll, setHScroll] = useState(0);
   const dopeRows = useMemo(
     () => collectDopesheetRows(
       {
@@ -722,8 +721,6 @@ const ScoreView: React.FC = () => {
           <ScoreDopesheet
             rows={dopeRows}
             durationMs={durationMs}
-            ms2px={ms2px}
-            px2ms={px2ms}
             displayCursor={displayCursor}
             loopStartMs={loopStartMs}
             loopEndMs={loopEndMs}
@@ -732,8 +729,6 @@ const ScoreView: React.FC = () => {
             onSeek={seekScore}
             onMoveKf={onDopeMoveKf}
             onMoveClip={moveClip}
-            scrollLeft={hScroll}
-            onHScroll={setHScroll}
             groups={dopeGroups}
             scrollTop={dopeVScroll}
             onVScroll={setDopeVScroll}
@@ -874,8 +869,6 @@ const ScoreView: React.FC = () => {
         onClipPointerMove={onClipPointerMove}
         onClipPointerUp={onClipPointerUp}
         onContextMenu={openCtxMenu}
-        scrollLeft={hScroll}
-        onHScroll={setHScroll}
       />
 
       {/* Picker d'ajout de clip — globalfx → markers ; lane objet →

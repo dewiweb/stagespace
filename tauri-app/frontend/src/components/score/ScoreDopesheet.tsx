@@ -5,20 +5,19 @@
 /// moveClip. Click ◆ = sélection du contexte + seek ; les labels
 /// des rangées vivent dans la colonne PARAMÈTRES (paramGroups —
 /// même ordre, `DopeRow.key` = `ParamRow.id`).
-/// L'axe temps partage ms2px avec la timeline — scroll horizontal
-/// synchronisé par le parent.
+/// L'échelle est « fit-to-width » : toute la partition tient dans la
+/// largeur disponible — c'est une vue d'ensemble, pas un zoom.
 import React, { useRef } from 'react';
 import type { DopeRow } from '../../utils/scoreDopesheet';
 import { DOPE_ROW_H as ROW_H, DOPE_HEADER_H } from '../../utils/scoreDopesheet';
 import type { ParamDef } from './scoreParams';
 import type { ParamGroup } from './ScoreParamsPanel';
+import { useElementSize } from './useElementSize';
 const SNAP_MS = 50;
 
 export const ScoreDopesheet: React.FC<{
   rows: DopeRow[];
   durationMs: number;
-  ms2px: (ms: number) => number;
-  px2ms: (px: number) => number;
   displayCursor: number;
   loopStartMs?: number;
   loopEndMs?: number;
@@ -32,9 +31,6 @@ export const ScoreDopesheet: React.FC<{
   onMoveKf: (row: DopeRow, kfIdx: number, t: number, v?: number) => void;
   /// Retime d'un clip événement.
   onMoveClip: (clipId: string, t: number) => void;
-  /// Scroll horizontal synchronisé avec la timeline (parent-driven).
-  scrollLeft?: number;
-  onHScroll?: (left: number) => void;
   /// Groupes de la colonne PARAMÈTRES — le plot reproduit leur
   /// structure (headers + rangées aux mêmes hauteurs) pour un
   /// alignement vertical strict. Absent : rangées à plat.
@@ -43,12 +39,16 @@ export const ScoreDopesheet: React.FC<{
   scrollTop?: number;
   onVScroll?: (top: number) => void;
 }> = ({
-  rows, durationMs, ms2px, px2ms, displayCursor,
+  rows, durationMs, displayCursor,
   loopStartMs, loopEndMs, paramDefOf, onSelectRow, onSeek, onMoveKf,
-  onMoveClip, scrollLeft, onHScroll, groups, scrollTop, onVScroll,
+  onMoveClip, groups, scrollTop, onVScroll,
 }) => {
-  const plotW = ms2px(durationMs) + 200;
-  const plotRef = useRef<HTMLDivElement>(null);
+  /// Échelle fit-to-width — mesurée sur le conteneur (toute la
+  /// partition visible, jamais de scroll horizontal).
+  const [plotRef, plotSize] = useElementSize<HTMLDivElement>();
+  const fitW = Math.max(1, plotSize.width - 2);
+  const ms2px = React.useCallback((ms: number) => (ms / Math.max(1, durationMs)) * fitW, [fitW, durationMs]);
+  const px2ms = React.useCallback((px: number) => (px / fitW) * Math.max(1, durationMs), [fitW, durationMs]);
   /// Drag d'un ◆ : rangée + index du point + origines.
   const drag = useRef<{
     row: DopeRow; idx: number; moved: boolean;
@@ -57,17 +57,12 @@ export const ScoreDopesheet: React.FC<{
   /// État visuel pendant le drag — re-render léger par rangée.
   const [, bump] = React.useReducer((x: number) => x + 1, 0);
 
-  // Sync scroll — timeline → dopesheet (H), colonne → plot (V).
-  React.useEffect(() => {
-    if (scrollLeft !== undefined && plotRef.current && plotRef.current.scrollLeft !== scrollLeft)
-      plotRef.current.scrollLeft = scrollLeft;
-  }, [scrollLeft]);
+  // Sync scroll vertical — colonne PARAMÈTRES → plot.
   React.useEffect(() => {
     if (scrollTop !== undefined && plotRef.current && plotRef.current.scrollTop !== scrollTop)
       plotRef.current.scrollTop = scrollTop;
   }, [scrollTop]);
   const onPlotScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    onHScroll?.(e.currentTarget.scrollLeft);
     onVScroll?.(e.currentTarget.scrollTop);
   };
 
@@ -146,9 +141,9 @@ export const ScoreDopesheet: React.FC<{
     <div className="flex-1 min-h-0 flex flex-col">
       <div className="flex flex-1 min-h-0">
         {/* Plot — labels dans la colonne PARAMÈTRES (même ordre) ;
-            scroll H sync avec la timeline */}
-        <div ref={plotRef} className="flex-1 overflow-auto" onScroll={onPlotScroll}>
-          <div className="relative" style={{ width: plotW, height: Math.max(contentH, 1), minHeight: '100%' }}>
+            échelle fit-to-width, scroll V sync avec la colonne */}
+        <div ref={plotRef} className="flex-1 overflow-x-hidden overflow-y-auto" onScroll={onPlotScroll}>
+          <div className="relative" style={{ width: '100%', height: Math.max(contentH, 1), minHeight: '100%' }}>
             {/* Région de boucle */}
             {loopStartMs != null && loopEndMs != null && loopEndMs > loopStartMs && (
               <div className="absolute top-0 bottom-0 bg-cyan-500/5 border-x border-cyan-500/20 pointer-events-none"
