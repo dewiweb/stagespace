@@ -302,7 +302,7 @@ export const ScoreCurvePane: React.FC<{
           Éditeur — {view === 'dopesheet' ? 'dopesheet' : view === 'biblio' ? 'bibliothèque'
             : !selClip && !selLaneIsGlobalFx && !selLaneIsMod && !selLaneIsSpatialFx && !selObjLane
             ? (!selGlobal && explorerInfo ? 'bibliothèque' : 'dopesheet')
-            : selGlobal || (effParam === 'clip' ? selClipLabel ?? 'clip' : effParam)}
+            : selGlobal || (effParam === 'clip' || !isSlot ? selClipLabel ?? 'clip' : effParam)}
         </span>
         {inner}
         {footer}

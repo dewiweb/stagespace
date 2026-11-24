@@ -464,8 +464,10 @@ const ScoreView: React.FC = () => {
   // Le chip actif doit exister dans le contexte courant — sinon
   // retombe sur la première entrée du catalogue. Contexte modulation :
   // le nom fraîchement saisi (pas encore de courbe) reste valide.
+  // Contexte clip : 'enveloppe' est une rangée hors catalogue.
   const effParam =
-    ctxParams.some((p) => p.id === curveParam) || curveParam === ctxFirst
+    ctxParams.some((p) => p.id === curveParam) || curveParam === ctxFirst ||
+    (isSlot && curveParam === 'enveloppe')
       ? curveParam
       : selLaneIsMod && modName && curveParam === modName
         ? curveParam
