@@ -527,3 +527,111 @@ fn test_anchor_follow_origin_tracks_target() {
         "Follow : origin doit suivre la cible (5,0,0) → traj(1,0,0)+origin = (6,0,0), reçu {p:?}"
     );
 }
+
+#[test]
+fn test_virtual_clock_constant_speed_matches_linear() {
+    // speed constant : la phase accumulée reproduit t×s + offset —
+    // compat ascendante du modèle multiplicatif.
+    let mut c = VirtualClock::new();
+    let mut t = 0.0;
+    let mut last = 0.0;
+    for _ in 0..10 {
+        t += 0.02;
+        last = c.advance(t, 2.0, 0.5);
+    }
+    let want = t * 2.0 + 0.5;
+    assert!(
+        (last - want).abs() < 1e-12,
+        "phase accumulée doit égaler t×s+o à speed constant : got {last}, want {want}"
+    );
+}
+
+#[test]
+fn test_virtual_clock_speed_change_is_continuous() {
+    // Un changement de speed en cours de vol = changement de RYTHME,
+    // pas saut de position : t_virtual est continu à la transition.
+    let mut c = VirtualClock::new();
+    let mut t = 0.0;
+    for _ in 0..10 {
+        t += 0.01;
+        c.advance(t, 1.0, 0.0);
+    }
+    let before = c.advance(t, 2.0, 0.0);
+    let after = c.advance(t + 0.01, 2.0, 0.0);
+    assert!(
+        (after - before - 0.02).abs() < 1e-9,
+        "après le flip le rythme doit être 2× : got {}",
+        after - before
+    );
+    // Et à rebours : baisser speed ne rembobine pas le move.
+    let b = c.advance(t + 0.02, 0.5, 0.0);
+    assert!(
+        b >= after,
+        "une baisse de speed ne doit pas faire reculer t_virtual : {b} < {after}"
+    );
+}
+
+#[test]
+fn test_virtual_clock_negative_speed_rewinds_then_holds_zero() {
+    // speed < 0 : la phase REMBOBINE à |speed| (la trajectoire recule
+    // en continu) puis tient à 0 — jamais de t négatif aux engines, et
+    // pas de dette négative à rembourser quand speed repasse positif.
+    let mut c = VirtualClock::new();
+    let mut t = 0.0;
+    for _ in 0..5 {
+        t += 0.01;
+        c.advance(t, 1.0, 0.0);
+    }
+    // Rembobinage progressif : phase 0.05 → 0.02 après 10ms à −3×.
+    let r = c.advance(t + 0.01, -3.0, 0.0);
+    assert!((r - 0.02).abs() < 1e-12, "rewind partiel attendu, got {r}");
+    // Assez longtemps → tient à 0.
+    for i in 2..=20 {
+        c.advance(t + 0.01 * i as f64, -3.0, 0.0);
+    }
+    assert_eq!(c.advance(t + 0.21, -3.0, 0.0), 0.0);
+    // Reprise immédiate quand speed repasse positif.
+    let v = c.advance(t + 0.22, 1.0, 0.0);
+    assert!(v > 0.0, "reprise immédiate attendue, got {v}");
+}
+
+#[test]
+fn test_virtual_clock_offset_is_additive() {
+    // Le seek/spanning reste un déplacement additif : offset seul +
+    // un peu de phase.
+    let mut c = VirtualClock::new();
+    let v = c.advance(0.05, 1.0, 3.0);
+    assert!((v - 3.05).abs() < 1e-12, "got {v}");
+}
+
+#[test]
+fn test_speed_change_mid_flight_does_not_jump() {
+    // Régression : avec l'ancien modèle (t_real × speed), baisser
+    // speed en cours de vol renvoyait le move en ARRIÈRE sur sa
+    // trajectoire (t_virtual divisé). La phase accumulée doit garder
+    // la position (x = t_virtual ici) monotone croissante.
+    let rt = test_runtime();
+    let buffer = Arc::new(PositionBuffer::new());
+    rt.set_position_buffer(buffer.clone());
+    rt.play_compiled(
+        Arc::new(|t, _| nalgebra::Vector3::new(t, 0.0, 0.0)),
+        test_params(60.0),
+        vec![1],
+    )
+    .unwrap();
+    std::thread::sleep(Duration::from_millis(100));
+    rt.macros().set_speed(0.5); // l'ancien modèle : x → ~0.5×t_real (recul)
+    std::thread::sleep(Duration::from_millis(30));
+    let x_after_flip = buffer.read()[0].1.x;
+    std::thread::sleep(Duration::from_millis(30));
+    let x_later = buffer.read()[0].1.x;
+    rt.stop();
+    assert!(
+        x_after_flip > 0.08,
+        "t_virtual a reculé au changement de speed (scrub): {x_after_flip}"
+    );
+    assert!(
+        x_later >= x_after_flip,
+        "t_virtual doit rester monotone : {x_later} < {x_after_flip}"
+    );
+}

@@ -83,8 +83,8 @@ pub struct Runtime {
     /// Le worker thread lit cette valeur à chaque frame au lieu de capturer
     /// la duration dans sa closure.
     duration_ms: Arc<std::sync::atomic::AtomicU64>,
-    /// Offset temporel (seek timecode) — ajouté au temps virtuel à
-    /// chaque frame, avant le modulo de boucle.
+    /// Offset temporel (seek timecode) — déplacement additif sur le
+    /// temps virtuel à chaque frame, avant le modulo de boucle.
     time_offset_secs: Arc<std::sync::atomic::AtomicU64>,
     /// OSC ids du move — hot-swappable en live via set_osc_ids.
     /// Le worker thread lit cette valeur à chaque frame pour savoir
@@ -100,6 +100,41 @@ pub struct Runtime {
     osc_values: crate::signal_compiler::SignalOscSource,
     /// Handle du thread de playback — join propre dans stop()
     thread_handle: Mutex<Option<std::thread::JoinHandle<()>>>,
+}
+
+/// Horloge virtuelle du move — phase ACCUMULÉE : `phase += dt × speed`.
+///
+/// `speed` est le RYTHME d'avancée du temps virtuel (rate), pas une
+/// rescale du temps écoulé (`t_real × speed`) : un changement de speed
+/// — fader live, courbe de clip score, audio mod — est un accelerando
+/// continu, pas un saut de position sur la trajectoire. Une courbe de
+/// speed descendante ralentit au lieu de rembobiner le move.
+///
+/// `offset` (seek TC / spanning de clip) reste un déplacement additif
+/// appliqué avant le modulo de boucle — inchangé.
+struct VirtualClock {
+    phase: f64,
+    last_t: f64,
+}
+
+impl VirtualClock {
+    fn new() -> Self {
+        Self {
+            phase: 0.0,
+            last_t: 0.0,
+        }
+    }
+
+    /// Avance l'horloge au temps réel `t` avec la vitesse effective —
+    /// retourne le temps virtuel (`phase + offset`). La phase est
+    /// clampée ≥ 0 : un speed négatif rembobine le move jusqu'à t=0
+    /// puis le fige — jamais de t négatif aux engines.
+    fn advance(&mut self, t: f64, speed: f64, offset: f64) -> f64 {
+        let dt = (t - self.last_t).max(0.0);
+        self.last_t = t;
+        self.phase = (self.phase + dt * speed).max(0.0);
+        (self.phase + offset).max(0.0)
+    }
 }
 
 impl Runtime {
@@ -156,8 +191,8 @@ impl Runtime {
         *self.osc_ids_arc.write().unwrap_or_else(|e| e.into_inner()) = osc_ids;
     }
 
-    /// Offset temporel en secondes — le temps virtuel devient
-    /// `t*speed + offset` (seek TC sur le snapshot d'une cue).
+    /// Offset temporel en secondes — ajouté au temps virtuel
+    /// (phase intégrée + offset, seek TC sur le snapshot d'une cue).
     pub fn set_time_offset(&self, secs: f64) {
         self.time_offset_secs
             .store(secs.to_bits(), Ordering::Relaxed);
@@ -580,6 +615,7 @@ impl Runtime {
             }
             let _clear_running = ClearRunning(running.clone());
 
+            let mut vclock = VirtualClock::new();
             let start = Instant::now();
             let frame_duration = Duration::from_secs_f64(1.0 / params.fps);
             let mut frame_count = 0u64;
@@ -761,13 +797,14 @@ impl Runtime {
                 let eff_pitch = pitch + audio_param_overrides.get("pitch").copied().unwrap_or(0.0);
                 let eff_roll = roll + audio_param_overrides.get("roll").copied().unwrap_or(0.0);
 
-                // Recalculer le temps virtuel avec le speed effectif
-                // (audio-modulé) — même clamp >= 0 que ci-dessus
-                // Offset temporel (seek timecode) — ajouté au temps
-                // virtuel avant le modulo de boucle.
-                let t_virtual_eff = (t_real * effective_speed
-                    + f64::from_bits(time_offset_arc.load(Ordering::Relaxed)))
-                .max(0.0);
+                // Temps virtuel = phase intégrée du speed effectif
+                // (audio-modulé) + offset temporel (seek timecode) —
+                // avant le modulo de boucle.
+                let t_virtual_eff = vclock.advance(
+                    t_real,
+                    effective_speed,
+                    f64::from_bits(time_offset_arc.load(Ordering::Relaxed)),
+                );
                 let t_eff = if loop_is_on && duration > 0.0 {
                     let t_mod = t_virtual_eff % duration;
                     // Appliquer la direction (Forward/Backward/PingPong)
