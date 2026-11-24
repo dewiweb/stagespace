@@ -82,17 +82,25 @@ describe('recordingToScore — appariement et conversion', () => {
     expect(take.clips[2].ref.type).toBe('panic');
   });
 
-  it('cue, gestes et positions deviennent des clips typés', () => {
+  it('cue et gestes deviennent des clips typés ; positions → courbes pos.*', () => {
     const take = recordingToScore([
       { t: 0, name: 'doCueRecallById', args: [], ref: { cueId: 'c1' } },
       { t: 1000, name: 'doPark', args: [0], ref: { trackId: 3 } },
       { t: 1500, name: 'doSetPosition', args: [0, 1, 2, 3], ref: { positions: { 3: [1, 2, 3] } } },
+      { t: 1600, name: 'doSetPosition', args: [0, 2, 2, 3], ref: { positions: { 3: [2, 2, 3] } } },
       { t: 2000, name: 'doGesture', args: [2.5], ref: { macro: 'explode', strength: 2.5 } },
     ]);
-    expect(take.clips.map((c) => c.ref.type)).toEqual(['cue', 'park', 'positions', 'gesture']);
+    expect(take.clips.map((c) => c.ref.type)).toEqual(['cue', 'park', 'gesture']);
     expect(take.clips[1].trackIds).toEqual([3]);
-    const pos = take.clips[2].ref;
-    expect(pos.type === 'positions' && pos.positions[3]).toEqual([1, 2, 3]);
+    // Le drag → trajectoire keyframée sur la lane obj-3.
+    expect(take.objectCurves['obj-3']['pos.x']).toEqual([
+      { t: 1500, v: 1, interp: 'linear' },
+      { t: 1600, v: 2, interp: 'linear' },
+    ]);
+    expect(take.objectCurves['obj-3']['pos.z']).toEqual([
+      { t: 1500, v: 3, interp: 'linear' },
+      { t: 1600, v: 3, interp: 'linear' },
+    ]);
   });
 
   it('macros → courbes globalfx ; spatial → courbe spatialfx ; inconnus → skipped', () => {

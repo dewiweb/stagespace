@@ -89,6 +89,12 @@ export const GLOBALFX_PARAM_DEFS: ParamDef[] = [
 /// Mêmes champs que `cue.per_track_depths`/`cue.object_channels` —
 /// le flatten les écrit en keyframes à l'instant du clip.
 export const OBJECT_LANE_DEFS: ParamDef[] = [
+  /// Trajectoire authored — écrit une manual_position au tick (les
+  /// axes sans courbe gardent la position courante ; fin de courbe
+  /// = hold, comme une prise de main manuelle).
+  { id: 'pos.x', min: -10, max: 10, def: 0, label: 'pos x' },
+  { id: 'pos.y', min: -10, max: 10, def: 0, label: 'pos y' },
+  { id: 'pos.z', min: -10, max: 10, def: 0, label: 'pos z' },
   { id: 'depth', min: 0, max: 1, def: 1 },
   { id: 'gain', min: 0, max: 2, def: 1 },
   { id: 'spread', min: 0, max: 180, def: 0 },

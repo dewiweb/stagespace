@@ -34,7 +34,8 @@ export function doRehearsal(action: string, from?: string) {
       const take = recordingToScore(s.entries);
       s.entries = [];
       if (take.clips.length === 0 && Object.keys(take.globalFx).length === 0
-          && Object.keys(take.spatialFx).length === 0) {
+          && Object.keys(take.spatialFx).length === 0
+          && Object.keys(take.objectCurves).length === 0) {
         toast.warning('Prise vide — rien de capturé');
         return;
       }
@@ -62,6 +63,12 @@ export function doRehearsal(action: string, from?: string) {
       }
       for (const [param, kfs] of Object.entries(take.spatialFx)) {
         mergeKfs(SPATIALFX_LANE, param, kfs, sc.spatialFxCurves);
+      }
+      // Trajectoires capturées — merge par lane objet (`obj-<trackId>`).
+      for (const [laneId, params] of Object.entries(take.objectCurves)) {
+        for (const [param, kfs] of Object.entries(params)) {
+          mergeKfs(laneId, param, kfs, sc.objectCurves?.[laneId]);
+        }
       }
       sc.setDurationMs(end + 1000);
       const skippedNote = take.skipped.length

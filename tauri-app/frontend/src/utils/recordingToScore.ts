@@ -19,20 +19,20 @@ export interface RecordedScore {
   globalFx: Record<string, ScoreKeyframe[]>;
   /// Points SPATIALFX — `spatial` (compresseur global).
   spatialFx: Record<string, ScoreKeyframe[]>;
+  /// Trajectoires capturées — laneId `obj-<trackId>` → `pos.<axis>` →
+  /// keyframes. Un drag enregistré devient une courbe éditable (pas
+  /// un clip figé) — le vrai gain du recorder→partition.
+  objectCurves: Record<string, Record<string, ScoreKeyframe[]>>;
   /// Actions non convertibles (config système etc.) — signalées à
   /// l'opérateur, jamais silencieusement perdues.
   skipped: string[];
 }
 
-/// Deux takeovers de positions à moins de 250 ms fusionnent en un
-/// seul clip (un opérateur pose souvent plusieurs objets d'un coup —
-/// la fenêtre matérialise le geste sans découper l'intention).
-const POSITIONS_MERGE_MS = 250;
-
 export function recordingToScore(entries: RecEntry[]): RecordedScore {
   const clips: RecordedScoreClip[] = [];
   const globalFx: Record<string, ScoreKeyframe[]> = {};
   const spatialFx: Record<string, ScoreKeyframe[]> = {};
+  const objectCurves: RecordedScore['objectCurves'] = {};
   const skipped: string[] = [];
   /// Slots en cours → index dans `clips` (appariement ouvert/fermé).
   const open = new Map<string, number>();
@@ -118,20 +118,16 @@ export function recordingToScore(entries: RecEntry[]): RecordedScore {
           skipped.push(`position obj ${e.args[0]}`);
           break;
         }
-        // Fusion avec le clip positions immédiatement précédent.
-        const prev = clips[clips.length - 1];
-        if (
-          prev?.ref.type === 'positions' &&
-          e.t - prev.startMs <= POSITIONS_MERGE_MS
-        ) {
-          Object.assign(prev.ref.positions, pos);
-          prev.trackIds = Object.keys(prev.ref.positions).map(Number);
-        } else {
-          clips.push({
-            ref: { type: 'positions', positions: { ...pos } },
-            startMs: e.t,
-            trackIds: tids,
-          });
+        // Positions → courbes `pos.<axis>` : une rafale (drag) devient
+        // une trajectoire lisse, un placement isolé un point constant —
+        // même sémantique que le takeover manuel, mais éditable.
+        for (const tid of tids) {
+          const p = pos[tid];
+          if (!p) continue;
+          const lane = objectCurves[`obj-${tid}`] ??= {};
+          (lane['pos.x'] ??= []).push({ t: e.t, v: p[0], interp: 'linear' });
+          (lane['pos.y'] ??= []).push({ t: e.t, v: p[1], interp: 'linear' });
+          (lane['pos.z'] ??= []).push({ t: e.t, v: p[2], interp: 'linear' });
         }
         break;
       }
@@ -194,5 +190,5 @@ export function recordingToScore(entries: RecEntry[]): RecordedScore {
   // Fin de prise : les moves encore ouverts se ferment au dernier
   // événement (le STOP de l'opérateur est la fin du take).
   closeAll(lastT);
-  return { clips, globalFx, spatialFx, skipped };
+  return { clips, globalFx, spatialFx, objectCurves, skipped };
 }

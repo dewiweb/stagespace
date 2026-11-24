@@ -653,11 +653,26 @@ fn eval_curves(
     }
     if !abs.object.is_empty() {
         let rt = lock_or_recover(merge);
+        // Trajectoires keyframées — les courbes `pos.<axis>` écrivent
+        // une manual_position au tick (takeover authored). Les axes
+        // sans courbe gardent la valeur courante (manual_position si
+        // posée, sinon dernière position émise) : takeover partiel
+        // sans saut. Fin de courbe = hold — la dernière valeur écrite
+        // persiste, comme une position manuelle posée à la main.
+        let mut pos_writes: HashMap<usize, [Option<f64>; 3]> = HashMap::new();
         for (obj, params) in abs.object {
             for (param, kfs) in params {
                 if let Some(v) = sample_curve(kfs, cursor_ms) {
                     if param == "depth" {
                         rt.set_track_depth(*obj, v);
+                    } else if let Some(axis) = param.strip_prefix("pos.") {
+                        let i = match axis {
+                            "x" => 0,
+                            "y" => 1,
+                            "z" => 2,
+                            _ => continue,
+                        };
+                        pos_writes.entry(*obj).or_insert([None; 3])[i] = Some(v);
                     } else if let Ok(ch) =
                         stagespace_engines::osc_sender::SpatialChannel::from_str(param)
                     {
@@ -665,6 +680,18 @@ fn eval_curves(
                     }
                 }
             }
+        }
+        for (obj, axes) in pos_writes {
+            let mut p = rt
+                .manual_position(obj)
+                .or_else(|| rt.last_position(obj))
+                .unwrap_or([0.0; 3]);
+            for (i, a) in axes.iter().enumerate() {
+                if let Some(v) = a {
+                    p[i] = *v;
+                }
+            }
+            rt.set_manual_position(obj, p);
         }
     }
     if !abs.modulation.is_empty() {
@@ -679,6 +706,23 @@ fn eval_curves(
             }
         }
     }
+}
+
+/// La timeline a du contenu jouable : au moins un clip ou une courbe
+/// non vide (une prise qui n'est qu'une trajectoire enregistrée n'a
+/// aucun clip — elle doit pourtant jouer).
+fn timeline_has_content(tl: &ScoreTimeline) -> bool {
+    let curves = |m: &HashMap<String, Vec<ScoreKeyframe>>| m.values().any(|k| !k.is_empty());
+    if !tl.clips.is_empty() {
+        return true;
+    }
+    curves(&tl.global_fx_curves)
+        || curves(&tl.modulation_curves)
+        || curves(&tl.spatial_fx_curves)
+        || tl
+            .object_curves
+            .values()
+            .any(|m| m.values().any(|k| !k.is_empty()))
 }
 
 /// Publie le miroir `tl.active` depuis l'état local du scheduler —
@@ -773,7 +817,7 @@ fn spawn_score_thread(sh: &Shared, tl_arc: &Arc<Mutex<ScoreTimeline>>) -> Result
         curve_targets,
     ) = {
         let mut tl = lock_or_recover(tl_arc);
-        if tl.clips.is_empty() {
+        if !timeline_has_content(&tl) {
             tl.started_at = None;
             return Err(IpcError::validation("score timeline empty"));
         }
@@ -839,6 +883,31 @@ fn spawn_score_thread(sh: &Shared, tl_arc: &Arc<Mutex<ScoreTimeline>>) -> Result
             // "redémarrer la phrase" déterministe). La région est relue
             // par événement → `score_timeline_set_loop` s'applique live.
             let mut cycle_start = seek;
+            // Fin de contenu des courbes temps-absolu : dernier
+            // keyframe, toutes lanes confondues. Après le dernier
+            // événement le scheduler attend ce point en continuant
+            // d'évaluer — une queue de courbe au-delà du dernier clip
+            // reste vivante, et une partition courbes-seules joue.
+            let kf_end = |m: &HashMap<String, Vec<ScoreKeyframe>>| {
+                m.values()
+                    .flat_map(|kfs| kfs.iter().map(|k| k.t))
+                    .max()
+                    .unwrap_or(0)
+            };
+            let curves_end = [
+                kf_end(&global_fx_curves),
+                kf_end(&modulation_curves),
+                kf_end(&spatial_fx_curves),
+                object_curves
+                    .values()
+                    .flat_map(|m| m.values())
+                    .flat_map(|kfs| kfs.iter().map(|k| k.t))
+                    .max()
+                    .unwrap_or(0),
+            ]
+            .into_iter()
+            .max()
+            .unwrap_or(0);
             'outer: loop {
                 let t0 = Instant::now();
                 let cursor = |elapsed: Duration| cycle_start + elapsed.as_millis() as u64;
@@ -1005,7 +1074,33 @@ fn spawn_score_thread(sh: &Shared, tl_arc: &Arc<Mutex<ScoreTimeline>>) -> Result
                         emit_ui(&sink, "score-timeline", st);
                         cycle_start = lstart;
                     }
-                    _ => break 'outer,
+                    _ => {
+                        // Queue de partition : les courbes écrivent
+                        // jusqu'à leur dernier keyframe.
+                        while cursor(t0.elapsed()) < curves_end {
+                            if lock_or_recover(&tl_arc).generation != gen {
+                                return;
+                            }
+                            std::thread::sleep(
+                                Duration::from_millis(curves_end - cursor(t0.elapsed()))
+                                    .min(Duration::from_millis(50)),
+                            );
+                            eval_curves(
+                                cursor(t0.elapsed()),
+                                &curve_targets,
+                                &sh.merge_runtime,
+                                &master_macros,
+                                &AbsCurves {
+                                    global_fx: &global_fx_curves,
+                                    modulation: &modulation_curves,
+                                    object: &object_curves,
+                                    spatial_fx: &spatial_fx_curves,
+                                },
+                                &osc_source,
+                            );
+                        }
+                        break 'outer;
+                    }
                 }
             }
             let mut tl = lock_or_recover(&tl_arc);
@@ -1045,7 +1140,7 @@ pub async fn score_timeline_play(state: State<'_, AppState>) -> Result<(), IpcEr
     let tl_arc = state.score_timeline.clone();
     {
         let tl = lock_or_recover(&tl_arc);
-        if tl.clips.is_empty() {
+        if !timeline_has_content(&tl) {
             return Err(IpcError::validation("score timeline empty"));
         }
     }
@@ -2084,8 +2179,37 @@ mod tests {
                         interp: ScoreInterp::Step,
                     }],
                 ),
+                (
+                    "pos.x".to_string(),
+                    vec![ScoreKeyframe {
+                        t: 0,
+                        v: 7.0,
+                        interp: ScoreInterp::Step,
+                    }],
+                ),
+                (
+                    "pos.z".to_string(),
+                    vec![
+                        ScoreKeyframe {
+                            t: 0,
+                            v: 0.0,
+                            interp: ScoreInterp::Linear,
+                        },
+                        ScoreKeyframe {
+                            t: 4_000,
+                            v: 4.0,
+                            interp: ScoreInterp::Linear,
+                        },
+                    ],
+                ),
             ]),
         )]);
+        // Takeover partiel : `pos.y` sans courbe garde la valeur de la
+        // manual_position déjà posée (ici 9.0).
+        merge_rt
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .set_manual_position(0, [0.0, 9.0, 0.0]);
         // Courbes SPATIALFX : `ksmooth` → lissage cinématique ;
         // `zone:<i>:<field>`/`mod:<key>:<field>` → patch en place des
         // tables manuelles (la courbe réécrit la définition, jamais
@@ -2187,6 +2311,9 @@ mod tests {
             Some(60.0),
             "la courbe channel doit écrire object_channels"
         );
+        // Trajectoire : pos.x = 7 (step), pos.z = 0→4 sur 4s → 2.0 à
+        // cursor 2s ; pos.y garde la manual_position préexistante (9.0).
+        assert_eq!(rt.manual_position(0), Some([7.0, 9.0, 2.0]));
         // Lane SPATIALFX : ksmooth patché ; zone[0] falloff/strength
         // patchés et enabled coupé ; la règle speed>spread scalée ×4.
         assert!((rt.kinematic_smoothing() - 0.9).abs() < 1e-9);

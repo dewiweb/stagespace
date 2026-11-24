@@ -224,14 +224,28 @@ automatise « la zone grandit, se durcit, se coupe » ; le merge garde
 « qui est dedans et à quel point ». Clé/index inconnu → skip honnête
 (une courbe ne module qu'une contrainte installée).
 
-Les **courbes des lanes objet** (`depth` + canaux) sont une troisième
-couche de courbes du score — temps partition absolu comme GLOBALFX/
-MODULATION, mais par lane `obj-<trackId>` : cliquer l'en-tête de lane
-les édite en zone haute ; la lane mutée est skippée à la résolution ;
-les lanes sont converties `track_id → obj_index` au chargement (règle
-namespace). Ce sont de **vrais paramètres runtime** — jamais dérivés
-d'un graphe (les nodes `PerTrackDepth` lisent les depths, les canaux
-sont émis en OSC en sortie).
+Les **courbes des lanes objet** (`depth` + canaux + `pos.<axis>`) sont
+une troisième couche de courbes du score — temps partition absolu
+comme GLOBALFX/MODULATION, mais par lane `obj-<trackId>` : cliquer
+l'en-tête de lane les édite en zone haute ; la lane mutée est skippée
+à la résolution ; les lanes sont converties `track_id → obj_index` au
+chargement (règle namespace). Ce sont de **vrais paramètres runtime**
+— jamais dérivés d'un graphe (les nodes `PerTrackDepth` lisent les
+depths, les canaux sont émis en OSC en sortie).
+
+Les courbes **`pos.x` / `pos.y` / `pos.z`** écrivent une
+`manual_position` au tick — trajectoire authored, le geste que la
+conduite ne peut pas reproduire. Les axes sans courbe gardent la
+position courante (manual_position si posée, sinon dernière émise) —
+takeover partiel sans saut. Fin de courbe = **hold** : la dernière
+valeur écrite persiste comme une position manuelle posée à la main
+(un clip `manualClear` la relâche).
+
+**Partition courbes-seules** : le transport joue dès qu'il y a du
+contenu (clip OU courbe non vide) et vit jusqu'au **dernier keyframe**
+— une prise qui n'est qu'une trajectoire enregistrée joue sans aucun
+clip, et la queue d'une courbe au-delà du dernier clip continue
+d'écrire.
 
 ### Lane CONDUCTOR — événements gestuels & contrôle
 
@@ -308,10 +322,11 @@ partition :
 - `doSlot`/`doSlotStop` s'apparient en clips bornés ; `doGo`/`doSolo`
   = stop-all + play ; panic/stop/cue Full ferment les clips ouverts ;
   la fin de prise ferme le reste au dernier événement.
-- Positions consécutives < 250 ms fusionnent en un clip `positions` ;
-  macros → courbes GLOBALFX (linéaires) ; `spatial` → courbe
-  SPATIALFX (`spatial` = compresseur global, même chemin que
-  `/stagespace/spatial`).
+- Positions → courbes **`pos.x/y/z`** des lanes objet : un drag
+  enregistré devient une trajectoire keyframée éditable (pas un clip
+  figé) ; un placement isolé = un point constant. Macros → courbes
+  GLOBALFX (linéaires) ; `spatial` → courbe SPATIALFX (`spatial` =
+  compresseur global, même chemin que `/stagespace/spatial`).
 - Actions non convertibles (trackpos, config…) → `skipped` remonté
   à l'opérateur — jamais perdu silencieusement.
 - Enregistrer pendant la lecture fonctionne (overdub) : les clips
