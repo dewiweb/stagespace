@@ -404,6 +404,17 @@ chaque événement :
 - **`score_timeline_load`** = reset complet : stop + kill net des
   moves score + curseur à 0.
 
+**Horloge virtuelle accumulative** (`VirtualClock`, runtime) — le
+temps du move est `phase += dt × effective_speed` (vitesse = taux),
+plus `t_real × speed` (vitesse = warp). Conséquences : le fader
+speed et les courbes `speed` clip-scoped produisent un vrai
+accelerando/ritardando continu (plus de téléportation ni de
+rewind quand la courbe descend), `speed = 0` suspend le temps du
+move, `speed < 0` rembobine progressivement puis tient à 0, la fin
+oneshot (`phase ≥ duration`) est monotone et la parité pingpong
+reste continue. L'`offset` (seek TC, spanning) reste additif —
+c'est lui le scrub, pas le fader speed.
+
 ## Recorder — le séquenceur enregistre aussi
 
 `doRehearsal record/stop` capture le busking (mêmes `do*` que
@@ -509,6 +520,35 @@ design 2026-11-23) :
   en refs typées puis matérialise clips/courbes dans la partition
   (voir §Recorder — supersedes the old rehearsal tape, supprimée).
 
+#### Règle, transport & repères (livré — interactions séquenceur)
+
+La règle est une surface d'interaction complète, pas un affichage :
+
+- **Graduation adaptative** — majeures labellisées (~80-160 px) +
+  mineures, l'espacement suit le zoom (`rulerTicks`).
+- **Scrub** — drag sur la règle = seeks répétés (throttle ~30 ms),
+  **y compris en lecture** : `score_timeline_seek` rebase le
+  transport backend en vol.
+- **Région de boucle interactive** — poignées de bornes (ew-resize)
+  et corps translatable, snap de grille ; les champs `de`/`à` du
+  transport restent synchronisés avec les drags.
+- **Marqueurs** (`markers[]` dans le doc, persistés `.hfg`) —
+  repères nommés `M1`, `M2`… : `M` pose au curseur, drag déplace,
+  clic droit → renommer (inline) / supprimer ; `,`/`.` ou les
+  boutons `⏮`/`⏭` du transport naviguent au marqueur
+  précédent/suivant.
+- **Snap configurable** — `snapMs` dans le store (persisté,
+  sélecteur transport `libre`→`1 s`) — alimente le drag des clips,
+  fades, marqueurs, bornes de loop **et** le dopesheet.
+- **Follow** — auto-scroll du playhead en lecture (page-flip :
+  ré-ancre à ~20 % du bord quand le curseur sort du champ,
+  persisté localStorage).
+- **Clavier** (surface score, hors saisie) — `Home`/`End` bornes
+  de partition, `←`/`→` nudge au pas de snap (`Shift` ×10), `L`
+  toggle loop pleine partition, `I`/`O` bornes de boucle au
+  curseur, `M` marqueur, `,`/`.` navigation, `S` split du clip
+  sélectionné, `Delete`/`Backspace` suppression.
+
 **Formations multi-objets — tranché (copies liées)** : un clip porte
 sa **couverture** (`clip.trackIds` — les track-objets qu'il pilote)
 et se rend **en copie liée sur chaque piste couverte** : une seule
@@ -603,6 +643,29 @@ contenu remonte ici) :
 
 - **Courbe vs fades** : les fades restent des poignées de bord de
   clip (articulation), les courbes sont les paramètres continus.
+
+- **Params de lecture du slot** (fiche clip, livré) — le bloc
+  « lecture (slot) » affiche les réglages hérités :
+  `loopMode`/`direction`/`endMode`/`anchorMode`/`speed`. Le clip ne
+  snapshotte rien — la request est reconstruite depuis le slot à
+  chaque résolution (play / hot-swap). **Transport arrêté = le bloc
+  est éditable** (mêmes actions que le drawer Playback — le slot est
+  partagé avec Jeu/Atelier et tous les clips qui le référencent) ;
+  **en lecture = gelé en lecture seule**, avec indicateur ambré
+  « s'appliquera au prochain play » quand le slot a bougé depuis la
+  dernière résolution (`pendingSlotIds` — diff par identité des
+  slots pendant `playing`, cleared au play/hot-swap). Avertissements
+  affichés : `hold` = résidu après la fenêtre, `anchor ≠ origin` =
+  non-déterministe (l'ancre capture la position au fire).
+- **Enveloppe éditable** — l'éditeur trapèze a deux poignées
+  draggables : pic de fade-in (`fadeInMs`, clampée à la fenêtre) et
+  fin de tail (`fadeOutMs`), snap grille, échelle figée pendant le
+  drag. Côté timeline, le wedge de tail tombe du bord haut vers le
+  bas et est **masqué pour les slots `endMode: hold`** (pas de
+  fade-out joué — la représentation suit `honor_end_mode`). Un
+  clip oneshot plus long que la durée naturelle de son move
+  (durée graphe ÷ speed) montre une **borne de fin naturelle** :
+  zone assombrie au-delà du point où le move meurt tout seul.
 
 ## Phases
 

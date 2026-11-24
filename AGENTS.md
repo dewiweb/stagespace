@@ -33,7 +33,7 @@ stagespace/
 ```bash
 cd rust-engines
 cargo build              # Build
-cargo test --lib         # Run tests (545 tests, incl. ts-rs export tests)
+cargo test --lib         # Run tests (562 tests, incl. ts-rs export tests)
 cargo clippy --all-targets -- -D warnings  # Lint (CI: --all-targets inclut tests/benches)
 cargo fmt -- --check     # Format check
 ```
@@ -43,7 +43,7 @@ cargo fmt -- --check     # Format check
 ```bash
 cd tauri-app/src-tauri
 cargo build              # Build
-cargo test --lib         # Run tests (75 tests)
+cargo test --lib         # Run tests (92 tests)
 cargo clippy --all-targets -- -D warnings  # Lint (CI: --all-targets inclut tests)
 
 # Bridge — backend over HTTP/SSE for a plain browser, two modes:
@@ -129,11 +129,11 @@ CI fails if the committed files drift from the Rust sources.
 
 | Suite | Count |
 |-------|-------|
-| Rust engines | 545 |
-| Tauri backend | 75 |
+| Rust engines | 562 |
+| Tauri backend | 92 |
 | Frontend (vitest) | 594 |
 | E2E CLI | ~100 assertions |
-| **Total** | **~1314** |
+| **Total** | **~1348** |
 
 ## Live Show Safety Features
 
