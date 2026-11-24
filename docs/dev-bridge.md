@@ -79,6 +79,32 @@ Le shim route `invoke()` → `POST {bridge}/invoke`, `listen()` →
 `EventSource {bridge}/events`, et les emits frontend restent locaux
 (registry in-page, comme Tauri).
 
+### Pilotage depuis la console — `window.__live`
+
+En DEV, `main.tsx` installe `src/dev/e2eHooks.ts` qui expose les
+**vraies instances** des stores Zustand sur `window.__live`
+(`score`, `cues`, `graph`, `session`, `moveEditor`, `globalGraph`,
+`signalGraph`, `showStatus`, `toasts`) :
+
+```js
+window.__live.score.getState().playScore()
+window.__live.cues.getState().cues
+```
+
+⚠️ **Ne pas importer les stores depuis une eval/console** : en dev
+Vite, chaque URL d'import produit un module distinct —
+`/src/store/useScoreStore`, `/src/store/useScoreStore.ts` et l'URL
+resolue `?t=` post-HMR créent trois stores Zustand **fantômes** que
+l'app ne voit pas (écritures invisibles, lectures obsolètes). Les
+stores doivent passer par le graphe de modules de l'app —
+`e2eHooks.ts` en fait partie. Idem pour les utilitaires
+(`scoreResolve`, `scoreSnapshot`…) : les appeler via les actions du
+store ou l'UI, pas via un import eval.
+
+Le hook est idempotent — un HMR réinstalle vers les nouvelles
+instances. Dead-code éliminé en build production
+(`import.meta.env.DEV` + import dynamique).
+
 ## UI distante (remote)
 
 Le bridge répond `Access-Control-Allow-Origin: *` et le SSE broadcast
