@@ -884,6 +884,18 @@ const ScoreView: React.FC = () => {
               : undefined}
             slotPending={selClip.ref.type === 'slot'
               && pendingSlotIds.includes((selClip.ref as { slotId: string }).slotId)}
+            playing={playing}
+            onSlotEdit={(field, v) => {
+              if (selClip.ref.type !== 'slot') return;
+              const id = (selClip.ref as { slotId: string }).slotId;
+              const g = useGraphStore.getState();
+              if (field === 'loopMode') g.setSlotLoopMode(id, v as 'loop' | 'oneshot');
+              else if (field === 'direction') g.setSlotDirection(id, v as 'forward' | 'backward' | 'ping_pong');
+              else if (field === 'endMode') g.setSlotEndMode(id, v as 'revert' | 'hold');
+              else if (field === 'anchorMode') g.setSlotAnchorMode(id, v as 'origin' | 'current' | 'follow');
+              else if (field === 'anchorTarget') g.setSlotAnchorTarget(id, Number(v));
+              else if (field === 'speed') g.setSlotMacros(id, { speed: Number(v) });
+            }}
             clipLabel={clipLabel}
             manualOscIds={manualOscIds}
             covered={covered}

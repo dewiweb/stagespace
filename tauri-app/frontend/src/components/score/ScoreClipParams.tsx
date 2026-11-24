@@ -8,14 +8,21 @@ import type { ScoreClipDoc } from '../../store/useScoreStore';
 import type { MoveSlot } from '../../store/slices/moveSlotsTypes';
 import { effectiveTrackIds } from '../../utils/scoreResolve';
 
+/// Champ de lecture du slot éditable en mode score.
+type SlotEditField = 'loopMode' | 'direction' | 'endMode' | 'anchorMode' | 'anchorTarget' | 'speed';
+
 export const ScoreClipParams: React.FC<{
   clip: ScoreClipDoc;
   /// Slot référencé (clip slot) — ses params de lecture s'affichent
-  /// en lecture seule (non éditables en mode score).
+  /// en lecture seule pendant la lecture, éditables transport stoppé.
   slot?: MoveSlot;
   /// Le slot a été édité depuis la dernière résolution — la spec
   /// jouée est l'ancienne ; la nouvelle s'applique au prochain play.
   slotPending?: boolean;
+  /// Transport en lecture — le bloc slot est gelé (lecture seule).
+  playing?: boolean;
+  /// Édition d'un param de lecture du slot (partagé Jeu/Atelier).
+  onSlotEdit?: (field: SlotEditField, value: string | number) => void;
   clipLabel: (c: ScoreClipDoc) => string;
   /// Objets patchés + déjà couverts (pour le select d'assignation).
   manualOscIds: number[];
@@ -30,9 +37,29 @@ export const ScoreClipParams: React.FC<{
   /// Réécrit la référence du clip (geste → strength, throw → vel).
   onUpdateRef: (id: string, ref: ScoreClipDoc['ref']) => void;
 }> = ({
-  clip: c, slot, slotPending, clipLabel, manualOscIds, covered, durationMs,
+  clip: c, slot, slotPending, playing, onSlotEdit, clipLabel, manualOscIds, covered, durationMs,
   onMoveClip, onResizeClip, onSetClipFades, onSetClipRepeat, onSetClipTrackIds, onDuplicateClip, onUpdateRef,
 }) => {
+  /// Groupe de boutons segmenté — même pattern que le drawer
+  /// Playback de Jeu, version compacte du panneau.
+  const seg = (label: string, opts: readonly { v: string; label: string }[], cur: string,
+    onPick: (v: string) => void, title?: string, warn?: string) => (
+    <div className="flex items-center gap-1" title={title}>
+      <span className="w-20 text-gray-500 shrink-0">{label}</span>
+      <span className="flex gap-0.5">
+        {opts.map((o) => (
+          <button
+            key={o.v}
+            onClick={() => onPick(o.v)}
+            className={`px-1.5 py-0.5 rounded border ${cur === o.v
+              ? 'bg-blue-600/40 border-blue-600 text-blue-200'
+              : 'bg-gray-800 border-gray-700 text-gray-500 hover:text-gray-300'}`}
+          >{o.label}</button>
+        ))}
+      </span>
+      {warn && <span className="text-amber-400">{warn}</span>}
+    </div>
+  );
   /// Champ numérique secondes → ms (vide = undefined).
   const numIn = (label: string, val: number | undefined, onSet: (v: number | undefined) => void, title?: string) => (
     <label className="flex items-center gap-1" title={title}>
@@ -163,14 +190,18 @@ export const ScoreClipParams: React.FC<{
           (v) => onSetClipFades(c.id, c.fadeInMs, v),
           'Fade-out clip-local (tail après la fin) — vide = hérite le fade du slot')}
         {/* Params de lecture du slot — résolus live dans la request
-            au play/hot-swap : lecture seule ici, édition dans
-            l'Atelier/Jeu. Les valeurs conflictuelles avec le mode
-            score (ancre ≠ origin = non déterministe ; hold = résidu)
-            sont signalées en ambre. */}
+            au play/hot-swap. Éditables transport stoppé (le slot est
+            partagé avec Jeu/Atelier et tous les clips qui le
+            référencent) ; gelés en lecture seule pendant la lecture —
+            la spec jouée est celle résolue au play. Les valeurs
+            conflictuelles avec le mode score (ancre ≠ origin = non
+            déterministe ; hold = résidu) sont signalées en ambre. */}
         {c.ref.type === 'slot' && slot && (
           <div
             className={`mt-1 border-t pt-1.5 flex flex-col gap-1 ${slotPending ? 'border-amber-700/50' : 'border-gray-800'}`}
-            title="Paramètres de lecture du slot — résolus à chaque play : éditer dans l'Atelier ou Jeu, pas dans le score"
+            title={playing
+              ? "Params de lecture du slot — gelés pendant la lecture, édition reprend au stop"
+              : "Params de lecture du slot — partagés avec Jeu/Atelier et tous les clips sur ce slot"}
           >
             {slotPending && (
               <div className="flex items-center gap-1">
@@ -178,28 +209,64 @@ export const ScoreClipParams: React.FC<{
                 <span className="text-amber-400">slot édité — s'appliquera au prochain play</span>
               </div>
             )}
-            <div className="flex items-center gap-1">
-              <span className={`w-20 ${slotPending ? 'text-amber-600' : 'text-gray-600'}`}>lecture</span>
-              <span className={slotPending ? 'text-amber-300' : 'text-gray-500'}>
-                {slot.loopMode}
-                {' · '}{slot.direction === 'ping_pong' ? 'ping-pong' : slot.direction}
-                {' · '}{(slot.macros?.speed ?? 1).toFixed(2)}×
-              </span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className={`w-20 ${slotPending ? 'text-amber-600' : 'text-gray-600'}`}>fin</span>
-              <span className={slot.endMode === 'hold' ? 'text-amber-400' : slotPending ? 'text-amber-300' : 'text-gray-500'}>
-                {slot.endMode ?? 'revert'}
-                {slot.endMode === 'hold' && ' — la position reste tenue après la fenêtre'}
-              </span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className={`w-20 ${slotPending ? 'text-amber-600' : 'text-gray-600'}`}>ancre</span>
-              <span className={(slot.anchorMode ?? 'origin') !== 'origin' ? 'text-amber-400' : slotPending ? 'text-amber-300' : 'text-gray-500'}>
-                {slot.anchorMode ?? 'origin'}
-                {(slot.anchorMode ?? 'origin') !== 'origin' && " — capture la position à l'instant du tir (non déterministe)"}
-              </span>
-            </div>
+            {playing || !onSlotEdit ? (
+              <>
+                <div className="flex items-center gap-1">
+                  <span className={`w-20 ${slotPending ? 'text-amber-600' : 'text-gray-600'}`}>lecture</span>
+                  <span className={slotPending ? 'text-amber-300' : 'text-gray-500'}>
+                    {slot.loopMode}
+                    {' · '}{slot.direction === 'ping_pong' ? 'ping-pong' : slot.direction}
+                    {' · '}{(slot.macros?.speed ?? 1).toFixed(2)}×
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className={`w-20 ${slotPending ? 'text-amber-600' : 'text-gray-600'}`}>fin</span>
+                  <span className={slot.endMode === 'hold' ? 'text-amber-400' : slotPending ? 'text-amber-300' : 'text-gray-500'}>
+                    {slot.endMode ?? 'revert'}
+                    {slot.endMode === 'hold' && ' — la position reste tenue après la fenêtre'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className={`w-20 ${slotPending ? 'text-amber-600' : 'text-gray-600'}`}>ancre</span>
+                  <span className={(slot.anchorMode ?? 'origin') !== 'origin' ? 'text-amber-400' : slotPending ? 'text-amber-300' : 'text-gray-500'}>
+                    {slot.anchorMode ?? 'origin'}
+                    {(slot.anchorMode ?? 'origin') !== 'origin' && " — capture la position à l'instant du tir (non déterministe)"}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <>
+                {seg('mode', [{ v: 'loop', label: 'loop' }, { v: 'oneshot', label: 'oneshot' }],
+                  slot.loopMode, (v) => onSlotEdit('loopMode', v),
+                  'Mode de lecture du move — loop boucle dans la fenêtre, oneshot joue une fois')}
+                {seg('direction', [{ v: 'forward', label: '→' }, { v: 'backward', label: '←' }, { v: 'ping_pong', label: '⇄' }],
+                  slot.direction, (v) => onSlotEdit('direction', v),
+                  'Direction — ping-pong n\'a d\'effet qu\'en loop')}
+                {rawIn('vitesse', slot.macros?.speed ?? 1,
+                  (v) => onSlotEdit('speed', Math.max(0.05, v)),
+                  'Vitesse de lecture du move (×) — déforme la durée réelle vs la fenêtre clip')}
+                {seg('fin', [{ v: 'revert', label: 'revert' }, { v: 'hold', label: 'hold' }],
+                  slot.endMode ?? 'revert', (v) => onSlotEdit('endMode', v),
+                  'Fin de one-shot — hold fige la dernière position (résidu après la fenêtre)',
+                  slot.endMode === 'hold' ? '— résidu après la fenêtre' : undefined)}
+                {seg('ancre', [{ v: 'origin', label: 'origin' }, { v: 'current', label: 'current' }, { v: 'follow', label: 'follow' }],
+                  slot.anchorMode ?? 'origin', (v) => onSlotEdit('anchorMode', v),
+                  'Ancre du move — ≠ origin capture la position à l\'instant du tir (non déterministe)',
+                  (slot.anchorMode ?? 'origin') !== 'origin' ? '— non déterministe' : undefined)}
+                {slot.anchorMode === 'follow' && (
+                  <label className="flex items-center gap-1" title="Track cible suivie (numéro de track)">
+                    <span className="w-20 text-gray-500">cible</span>
+                    <input
+                      key={`${c.id}-anchor-${slot.anchorTarget ?? 'x'}`}
+                      type="number" min={0} defaultValue={slot.anchorTarget ?? ''}
+                      onBlur={(e) => onSlotEdit('anchorTarget', parseInt(e.target.value) || 0)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                      className="w-20 bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-[10px]"
+                    />
+                  </label>
+                )}
+              </>
+            )}
           </div>
         )}
         {(() => {
