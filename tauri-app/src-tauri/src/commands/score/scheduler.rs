@@ -14,6 +14,7 @@ use crate::commands::merge_commands::macros::apply_set_macro_request;
 use crate::commands::merge_commands::move_management::{
     deactivate_all_arc, deactivate_move_arc, spawn_move, spec_from_request,
 };
+use crate::commands::poses::{goto_pose, morph_pose, snap_pose};
 use crate::commands::state::{emit_ui, lock_or_recover, Shared};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
@@ -673,6 +674,40 @@ pub(crate) fn fire_clip(
             let rt = lock_or_recover(&sh.merge_runtime);
             for (obj, pos) in positions {
                 rt.set_manual_position(*obj, *pos);
+            }
+        }
+        ScoreClipPayload::Pose {
+            name,
+            mode,
+            from_pose,
+            duration,
+            easing,
+        } => {
+            // Résolution au fire — les poses vivent backend : le contenu
+            // courant est lu au tir (édition de pose = live reference).
+            // Mêmes fonctions que les commandes pose_goto/pose_morph/
+            // pose_snap — erreurs loguées, jamais silencieuses en show.
+            let result = match mode.as_str() {
+                "snap" => {
+                    let pose = lock_or_recover(&sh.poses).get(name).cloned();
+                    match pose {
+                        Some(p) => snap_pose(sh, &p).map(|_| ()),
+                        None => Err(IpcError::not_found(format!("Pose '{name}' not found"))),
+                    }
+                }
+                "goto" => goto_pose(sh, name, *duration, easing.clone()).map(|_| ()),
+                "morph" => match from_pose {
+                    Some(from) => morph_pose(sh, from, name, *duration, easing.clone()).map(|_| ()),
+                    None => Err(IpcError::validation(format!(
+                        "clip pose '{name}' : morph sans from_pose"
+                    ))),
+                },
+                other => Err(IpcError::validation(format!(
+                    "clip pose '{name}' : mode inconnu '{other}'"
+                ))),
+            };
+            if let Err(e) = result {
+                eprintln!("[SCORE] clip pose '{name}' ({mode}) — {e}");
             }
         }
         ScoreClipPayload::SignalGraph { graph } => {

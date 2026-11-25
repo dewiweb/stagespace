@@ -116,6 +116,29 @@ describe('score timeline (S2/S3 — lanes objets)', () => {
     });
   });
 
+
+  it('pose — payload référentiel résolu, gouverné par la lane conductor', async () => {
+    const st = useScoreStore.getState();
+    st.addClip({ type: 'pose', name: 'line-up', mode: 'goto', duration: 3, easing: 'smooth' }, 0);
+    st.addClip({ type: 'pose', name: 'line-up', mode: 'snap' }, 2000);
+    st.addClip({ type: 'pose', name: 'finale', mode: 'morph', fromPose: 'line-up', duration: 4 }, 4000);
+    const { clips, errors } = await resolveScoreClips(useScoreStore.getState());
+    expect(errors).toHaveLength(0);
+    expect(clips.map((c) => c.payload.kind)).toEqual(['Pose', 'Pose', 'Pose']);
+    // payload référentiel — le nom voyage, aucune position cuite
+    const d = clips[0].payload.data as Record<string, unknown>;
+    expect(d.name).toBe('line-up');
+    expect(d.mode).toBe('goto');
+    expect(d.duration).toBe(3);
+    expect(clips[1].lanes.map((l) => l.id)).toEqual(['conductor']);
+    const m = clips[2].payload.data as Record<string, unknown>;
+    expect(m.from_pose).toBe('line-up');
+    // conductor mutée → clips posé skippés comme les autres barrières
+    useScoreStore.getState().toggleLaneMute(CONDUCTOR_LANE);
+    const r2 = await resolveScoreClips(useScoreStore.getState());
+    expect(r2.clips).toHaveLength(0);
+  });
+
   it('stopScore → score_timeline_stop + playing false', () => {
     useScoreStore.setState({ playing: true });
     useScoreStore.getState().stopScore();

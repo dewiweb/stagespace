@@ -8,6 +8,7 @@
 /// loop invalide) ; `warning` = ça jouera mais probablement pas comme
 /// voulu (couverture muette, courbe sans cible, clip jamais tiré).
 import { useScoreStore, laneIdOf, type ScoreClipDoc } from '../store/useScoreStore';
+import { usePoseStore } from '../store/usePoseStore';
 import { useGraphStore } from '../store/useGraphStore';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { effectiveTrackIds } from './scoreResolve';
@@ -36,6 +37,7 @@ export function validateScore(): ScoreIssue[] {
   const issues: ScoreIssue[] = [];
   const err = (m: string) => issues.push({ level: 'error', message: m });
   const warn = (m: string) => issues.push({ level: 'warning', message: m });
+  const poseNames = () => new Set(usePoseStore.getState().poses.map((p) => p.name));
   const muted = (lane: string) => doc.laneStates?.[lane]?.muted === true;
 
   const hasContent =
@@ -107,6 +109,24 @@ export function validateScore(): ScoreIssue[] {
       case 'cueGo':
       case 'view':
         break;
+      case 'pose': {
+        // Preflight poses (design §8) — la pose est référencée par nom,
+        // résolue au fire : pose absente ou morph sans source valide =
+        // warnings, même passe que les refs orphelines.
+        const r = c.ref as { name: string; mode: string; fromPose?: string };
+        const names = poseNames();
+        if (!names.has(r.name)) {
+          warn(`${where(c)} : pose '${r.name}' absente de la table — not-found au tir`);
+        }
+        if (r.mode === 'morph') {
+          if (!r.fromPose) {
+            err(`${where(c)} : morph sans pose source — clip refusé au tir`);
+          } else if (!names.has(r.fromPose)) {
+            warn(`${where(c)} : pose source '${r.fromPose}' absente — morph impossible au tir`);
+          }
+        }
+        break;
+      }
       case 'positions': {
         const posRef = c.ref as { positions: Record<number, unknown> };
         const missing = Object.keys(posRef.positions).map(Number).filter((tid) => !validTid(tid));

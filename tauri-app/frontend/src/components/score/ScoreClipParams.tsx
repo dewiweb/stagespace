@@ -288,6 +288,27 @@ export const ScoreClipParams: React.FC<{
               (v) => onUpdateRef(c.id, { ...ref, strength: v }),
               'Vélocité initiale de l\'impulsion (m/s) — défaut OSC : 3');
           }
+          if (ref.type === 'pose') {
+            return (
+              <>
+                {seg('mode', [{ v: 'snap', label: 'snap' }, { v: 'goto', label: 'goto' }, { v: 'morph', label: 'morph' }],
+                  ref.mode, (v) => onUpdateRef(c.id, { ...ref, mode: v as 'snap' | 'goto' | 'morph' }),
+                  'snap = écritures manuelles instantanées ; goto = rampe animée vers la pose ; morph = rampe depuis la pose source')}
+                {textIn('pose', ref.name,
+                  (v) => onUpdateRef(c.id, { ...ref, name: v }),
+                  'Nom de la pose cible — résolue au tir avec son contenu courant (référentiel)')}
+                {ref.mode === 'morph' && textIn('depuis', ref.fromPose ?? '',
+                  (v) => onUpdateRef(c.id, { ...ref, fromPose: v || undefined }),
+                  'Pose source du morph — les objets partent de là même s\'ils sont physiquement ailleurs ; absents de la source = départ live')}
+                {ref.mode !== 'snap' && rawIn('durée (s)', ref.duration ?? 2,
+                  (v) => onUpdateRef(c.id, { ...ref, duration: v }),
+                  'Durée de la rampe en secondes')}
+                {ref.mode !== 'snap' && seg('easing', [{ v: 'smooth', label: 'smooth' }, { v: 'linear', label: 'linear' }, { v: 'ease_in', label: 'in' }, { v: 'ease_out', label: 'out' }],
+                  ref.easing ?? 'smooth', (v) => onUpdateRef(c.id, { ...ref, easing: v }),
+                  'Courbe de la rampe — smooth = smoothstep (départ/arrivée doux)')}
+              </>
+            );
+          }
           if (ref.type === 'throw') {
             return (
               <div className="flex items-start gap-1">

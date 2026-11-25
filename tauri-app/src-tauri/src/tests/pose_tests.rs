@@ -471,4 +471,141 @@ mod pose_tests {
             cap.get(&0)
         );
     }
+    // ── Score : fire des clips pose (P5, design §6.7) ──
+
+    fn pose_clip(
+        name: &str,
+        mode: &str,
+        from_pose: Option<&str>,
+    ) -> crate::commands::score::types::ScoreClip {
+        use crate::commands::score::types::{ScoreClip, ScoreClipPayload};
+        ScoreClip {
+            id: format!("test-{mode}-{name}"),
+            lanes: vec![],
+            start_ms: 0,
+            duration_ms: None,
+            repeat_every_ms: None,
+            fade_in_ms: None,
+            fade_out_ms: None,
+            curves: HashMap::new(),
+            payload: ScoreClipPayload::Pose {
+                name: name.to_string(),
+                mode: mode.to_string(),
+                from_pose: from_pose.map(|s| s.to_string()),
+                duration: Some(1.0),
+                easing: None,
+            },
+        }
+    }
+
+    fn fire(clip: &crate::commands::score::types::ScoreClip, sh: &Shared) {
+        use crate::commands::score::scheduler::fire_clip;
+        let mut lane_active = HashMap::new();
+        let mut curve_targets = HashMap::new();
+        fire_clip(
+            clip,
+            0,
+            0,
+            sh,
+            &mut lane_active,
+            &mut curve_targets,
+            &sh.event_sink,
+        );
+    }
+
+    #[test]
+    fn score_pose_snap_writes_manual_positions() {
+        let sh = make_shared();
+        let mut positions = HashMap::new();
+        positions.insert(1u32, [4.0, 2.0, 0.0]); // track 1 → obj 0
+        positions.insert(3u32, [0.0, -3.0, 0.0]); // track 3 → obj 2
+        sh.poses.lock().unwrap_or_else(|e| e.into_inner()).insert(
+            "sc-snap".to_string(),
+            Pose {
+                name: "sc-snap".to_string(),
+                positions,
+            },
+        );
+        fire(&pose_clip("sc-snap", "snap", None), &sh);
+        let merge = sh.merge_runtime.lock().unwrap_or_else(|e| e.into_inner());
+        let manuals = merge.manual_positions();
+        assert_eq!(manuals.get(&0), Some(&[4.0, 2.0, 0.0]), "track 1 → obj 0");
+        assert_eq!(manuals.get(&2), Some(&[0.0, -3.0, 0.0]), "track 3 → obj 2");
+    }
+
+    #[test]
+    fn score_pose_goto_spawns_poseramp_move() {
+        let sh = make_shared();
+        let mut positions = HashMap::new();
+        positions.insert(1u32, [4.0, 2.0, 0.0]);
+        sh.poses.lock().unwrap_or_else(|e| e.into_inner()).insert(
+            "sc-goto".to_string(),
+            Pose {
+                name: "sc-goto".to_string(),
+                positions,
+            },
+        );
+        fire(&pose_clip("sc-goto", "goto", None), &sh);
+        let movements = sh.movements.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(movements.len(), 1, "un move spawné");
+        let mv = movements.values().next().expect("move");
+        assert!(
+            mv.graph_json
+                .nodes
+                .iter()
+                .any(|n| n.data.node_type.as_deref() == Some("PoseRamp")),
+            "graphe poseramp standard"
+        );
+    }
+
+    #[test]
+    fn score_pose_morph_requires_from_pose() {
+        let sh = make_shared();
+        let mut positions = HashMap::new();
+        positions.insert(1u32, [4.0, 2.0, 0.0]);
+        sh.poses.lock().unwrap_or_else(|e| e.into_inner()).insert(
+            "sc-morph".to_string(),
+            Pose {
+                name: "sc-morph".to_string(),
+                positions,
+            },
+        );
+        // morph sans from_pose → erreur loguée, aucun move, aucun panic
+        fire(&pose_clip("sc-morph", "morph", None), &sh);
+        assert!(sh
+            .movements
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_empty());
+        // morph avec from valide → move spawné
+        sh.poses.lock().unwrap_or_else(|e| e.into_inner()).insert(
+            "sc-src".to_string(),
+            Pose {
+                name: "sc-src".to_string(),
+                positions: HashMap::from([(1u32, [0.0, 0.0, 0.0])]),
+            },
+        );
+        fire(&pose_clip("sc-morph", "morph", Some("sc-src")), &sh);
+        assert_eq!(
+            sh.movements.lock().unwrap_or_else(|e| e.into_inner()).len(),
+            1
+        );
+    }
+
+    #[test]
+    fn score_pose_unknown_mode_and_missing_pose_are_safe() {
+        let sh = make_shared();
+        // mode inconnu → erreur loguée, pas de panic, aucune mutation
+        fire(&pose_clip("x", "teleport", None), &sh);
+        // pose absente → not_found logué, idem
+        fire(&pose_clip("ghost", "snap", None), &sh);
+        fire(&pose_clip("ghost", "goto", None), &sh);
+        assert!(sh
+            .movements
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_empty());
+        let merge = sh.merge_runtime.lock().unwrap_or_else(|e| e.into_inner());
+        assert!(merge.manual_positions().is_empty());
+    }
 }

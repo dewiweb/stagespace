@@ -84,7 +84,8 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
       c.ref.type === 'gesture' || c.ref.type === 'park' || c.ref.type === 'unpark' ||
       c.ref.type === 'throw' || c.ref.type === 'manualClear' || c.ref.type === 'attention' ||
       c.ref.type === 'soundcheck' || c.ref.type === 'solo' || c.ref.type === 'unsolo' ||
-      c.ref.type === 'view' || c.ref.type === 'cueArm' || c.ref.type === 'cueGo';
+      c.ref.type === 'view' || c.ref.type === 'cueArm' || c.ref.type === 'cueGo' ||
+      c.ref.type === 'pose';
     // Mute : les barrières (transitions d'état globales) sont gouvernées
     // par la lane conductor — leur couverture trackIds n'est qu'un
     // blast radius visuel, elle ne mute pas l'événement. Un slot perd
@@ -216,6 +217,26 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
         clips.push({
           ...base,
           payload: { kind: 'Gesture', data: { name: c.ref.name, strength: c.ref.strength } },
+        });
+        break;
+      case 'pose':
+        // Référentiel — le nom seul voyage ; la résolution (contenu de
+        // la pose, mapping track→obj, positions live) se fait au fire
+        // dans le scheduler backend. Pas de validation bloquante ici :
+        // une pose absente est un warning du check, pas une erreur de
+        // résolution (la table peut changer après le load).
+        clips.push({
+          ...base,
+          payload: {
+            kind: 'Pose',
+            data: {
+              name: c.ref.name,
+              mode: c.ref.mode,
+              from_pose: c.ref.fromPose ?? null,
+              duration: c.ref.duration ?? null,
+              easing: c.ref.easing ?? null,
+            },
+          },
         });
         break;
       case 'park':

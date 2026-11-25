@@ -16,10 +16,10 @@
 
 mod commands;
 mod curves;
-mod scheduler;
+pub(crate) mod scheduler;
 #[cfg(test)]
 mod tests;
-mod types;
+pub(crate) mod types;
 
 pub use commands::*;
 /// Snapshot UI — repoussé aussi par le hook panic de

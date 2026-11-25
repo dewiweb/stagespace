@@ -75,6 +75,7 @@ export const CLIP_COLORS: Record<string, string> = {
   view: 'bg-lime-900/80 border-lime-600',
   cueArm: 'bg-amber-800/80 border-amber-500',
   cueGo: 'bg-amber-700/80 border-amber-400',
+  pose: 'bg-teal-600/80 border-teal-300',
 };
 
 /// Label affiché d'un clip — nom du slot/cue ou marqueur.
@@ -119,5 +120,11 @@ export function clipLabel(
       return cue ? `⇥ ARM ${cue.cue_number != null ? `${cue.cue_number} ` : ''}${cue.name}` : '⇥ ARM ⚠ cue morte';
     }
     case 'cueGo': return '▶ CUE GO';
+    case 'pose': {
+      const r = clip.ref;
+      if (r.mode === 'snap') return `◆ SNAP ${r.name}`;
+      if (r.mode === 'morph') return `◆ MORPH ${r.fromPose ?? '?'}→${r.name}`;
+      return `◆ GOTO ${r.name}`;
+    }
   }
 }

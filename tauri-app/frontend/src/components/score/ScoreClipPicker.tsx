@@ -5,6 +5,7 @@
 import React from 'react';
 import { GLOBALFX_LANE, CONDUCTOR_LANE, OSC_LANE } from '../../store/useScoreStore';
 import { useModalGuard } from '../../utils/modalGuard';
+import { usePoseStore } from '../../store/usePoseStore';
 import type { ScoreClipDoc } from '../../store/useScoreStore';
 import type { MoveSlot } from '../../store/slices/moveSlotsTypes';
 import type { Cue } from '../../types/generated/Cue';
@@ -18,6 +19,26 @@ export interface ScorePickerState {
   /// pose le clip à cet instant ; absent = curseur (comportement +).
   startMs?: number;
 }
+
+const PoseSection: React.FC<{ onPick: (ref: ScoreClipDoc['ref']) => void }> = ({ onPick }) => {
+  const poses = usePoseStore((s) => s.poses);
+  const refreshPoses = usePoseStore((s) => s.refreshPoses);
+  React.useEffect(() => { refreshPoses(); }, [refreshPoses]);
+  if (!poses.length) return null;
+  return (
+    <>
+      <div className="px-3 py-0.5 text-[9px] text-gray-600 uppercase mt-1">Poses — rappel de positions nommées</div>
+      {poses.map((p) => (
+        <button
+          key={p.name}
+          className="w-full text-left px-3 py-1 text-xs hover:bg-teal-700/40"
+          title={`Pose '${p.name}' (${Object.keys(p.positions).length} tracks) — crée un clip goto ; le mode (snap/goto/morph), la durée et l'easing s'éditent dans l'inspector`}
+          onClick={() => onPick({ type: 'pose', name: p.name, mode: 'goto', duration: 2, easing: 'smooth' })}
+        >◆ {p.name}</button>
+      ))}
+    </>
+  );
+};
 
 export const ScoreClipPicker: React.FC<{
   picker: ScorePickerState;
@@ -123,6 +144,7 @@ export const ScoreClipPicker: React.FC<{
           title="GO — tire la cue armée (ou la suivante si rien d'armé) : modèle console (/stagespace/cue/go)"
           onClick={() => onPick({ type: 'cueGo' })}
         >▶ CUE GO — feu sur l'armée</button>
+        <PoseSection onPick={onPick} />
         {cues.length > 0 && <div className="px-3 py-0.5 text-[9px] text-gray-600 uppercase mt-1">Cues — recall barrière · ⇥ = armer sans tirer</div>}
         {cues.map((c, i) => (
           <div key={c.id} className="flex items-stretch">

@@ -13,8 +13,11 @@
 > last_position(obj)` injectée via la mécanique Current, zéro changement
 > worker ; vérifié live : départ à 0.18 de la pose sur trajectoire
 > circulaire, orbite exacte `capture − traj(0)`, fallback live pour les
-> objets absents de la pose et pour pose inconnue). Reste : score (P5),
-> ghosts (P6).
+> objets absents de la pose et pour pose inconnue), **score** (clip
+> `Pose` snap/goto/morph tiré par le scheduler — vérifié live : snap à
+> la cible exacte, rampe goto mesurée en vol à la position linéaire
+> attendue, cible tenue en hold ; la chaîne snap→capture-then-clear du
+> goto est continue). Reste : ghosts (P6).
 > Note e2e : la course « manuel opérateur posé pendant la fenêtre de mort
 > d'un move en hold » est gagnée par le hold (6.1a) — le manuel est
 > écrasé si posé dans les ~200ms précédant l'écriture du hold.
@@ -431,7 +434,7 @@ warnings du check, même passe que les refs slot/cue orphelines.
 | **P2 — goto animé** ✅ | engine `poseramp` + tests, synthèse de graphe au fire, `pose_goto` (Tauri + OSC), boutons goto du panel | P1 |
 | **P3 — morph A→B** ✅ | `pose_morph`, OSC `/stagespace/pose/morph`, UI sélection A→B, fallback live matrice §7 | P2 |
 | **P4 — ancre pose** ✅ | `AnchorMode::Pose` + `anchor_pose` — plomberie spawn, cue snapshots, UI slot (LiveDrawer + Score) | P1 (indépendant de P2/P3) |
-| **P5 — score** | clip payload `Pose`, résolution au fire, preflight check | P2 |
+| **P5 — score** ✅ | clip payload `Pose` (snap/goto/morph), résolution au fire via les fonctions pose existantes, validation des références pose, picker/inspector UI | P2 |
 | **P6 — visualisation** | ghosts de pose dans 3D/radar | P1 |
 | **P7 — raffinements** | hold-respecte-takeover (6.1b), easing additionnels, édition numérique avancée | selon retour |
 
