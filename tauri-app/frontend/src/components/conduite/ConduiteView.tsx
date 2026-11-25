@@ -66,7 +66,7 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
           {st && !st.armed && (
             <button
               onClick={onArmToggle}
-              className="text-xl px-3 py-1 rounded font-bold border border-emerald-600/60 text-emerald-300 bg-emerald-900/30 animate-pulse"
+              className="text-xl px-3 py-1 rounded font-bold border border-gray-700 text-gray-400 bg-gray-800 hover:text-gray-200 animate-pulse"
               title="DRY-RUN — cliquer pour armer l'OSC"
             >
               DRY-RUN
@@ -76,7 +76,7 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
             <ParkedChip
               parked={st.parked}
               onUnpark={onUnpark}
-              className="text-xl px-3 py-1.5 rounded font-bold border border-cyan-600/60 text-cyan-200 bg-cyan-900/30 hover:bg-cyan-800/40"
+              className="text-xl px-3 py-1.5 rounded font-bold border border-pink-600/60 text-pink-200 bg-pink-900/30 hover:bg-pink-800/40"
             />
           )}
           {st && st.consoleAge !== null && (
@@ -85,7 +85,7 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
             </StatusChip>
           )}
           {st?.tcChaseEnabled && (
-            <span className={`font-mono text-3xl font-bold ${st.tcActive ? 'text-emerald-400' : 'text-gray-600'}`}>
+            <span className={`font-mono text-3xl font-bold ${st.tcActive ? 'text-stagespace-live' : 'text-stagespace-warning'}`}>
               {st.tcActive ? st.tcStr : 'TC lost'}
             </span>
           )}
@@ -109,9 +109,9 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
                 }}
                 className={`px-3 py-2.5 cursor-pointer text-sm truncate ${
                   c.current
-                    ? 'bg-purple-900/30 border-l-2 border-purple-500 text-amber-200 font-bold'
+                    ? 'bg-amber-900/30 border-l-2 border-amber-500 font-bold'
                     : c.id === armedCueId
-                      ? 'bg-purple-900/10 ring-1 ring-inset ring-purple-500/60 text-gray-200'
+                      ? 'bg-amber-900/10 ring-1 ring-inset ring-amber-500/60 text-gray-200'
                       : c.next
                         ? 'text-gray-300 hover:bg-gray-800/50'
                         : 'text-gray-500 hover:bg-gray-800/50'
@@ -155,11 +155,11 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
               </div>
             )}
             {st?.pending && (
-              <div className="text-orange-400 text-2xl font-bold mt-2 animate-pulse">
+              <div className="text-amber-400 text-2xl font-bold mt-2 animate-pulse">
                 {st.pending.kind === 'pre_wait' ? 'pré-attente' : 'follow'} {st.pending.remainingSec.toFixed(1)}s
               </div>
             )}
-            {st?.isRecalling && <div className="text-purple-400 text-2xl font-bold mt-2 animate-pulse">RECALLING…</div>}
+            {st?.isRecalling && <div className="text-amber-400 text-2xl font-bold mt-2 animate-pulse">RECALLING…</div>}
           </div>
           <div className="text-center min-w-0">
             <div className="text-gray-500 text-xs uppercase tracking-widest mb-1">Next</div>
@@ -169,7 +169,7 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
             {st && st.playingCount > 0 ? `${st.playingCount} moves live` : 'IDLE'}
             {st && st.orphanCount > 0 && (
               <span
-                className="px-1.5 py-0.5 rounded bg-amber-900/60 text-amber-300 text-xs font-bold"
+                className="px-1.5 py-0.5 rounded bg-orange-900/60 text-orange-300 text-xs font-bold"
                 title={`${st.orphanCount} orphan movement(s) running — no slot controls them. PANIC clears.`}
               >
                 +{st.orphanCount} ⚠

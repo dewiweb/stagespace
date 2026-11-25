@@ -235,7 +235,7 @@ body {
 }
 .rf-node-warning .react-flow__node-custom,
 .rf-node-warning > div:first-child {
-  outline: 2px solid #f59e0b;
+  outline: 2px solid #f97316;
   outline-offset: -1px;
   border-radius: 8px;
 }

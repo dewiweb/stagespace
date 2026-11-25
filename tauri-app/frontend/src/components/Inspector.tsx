@@ -436,7 +436,7 @@ export default function Inspector() {
                   <span className="text-gray-500 text-xs font-mono flex-shrink-0">{trackCount}tr</span>
                   <button
                     onClick={(e) => { e.stopPropagation(); stopMovementWithFade(mv.id, useGraphStore.getState().moveSlots.find((sl) => sl.movementId === mv.id)?.fadeOut ?? 0.5); }}
-                    className="text-yellow-400 hover:text-yellow-300 text-xs px-1 flex-shrink-0"
+                    className="text-red-400/60 hover:text-red-300 text-xs px-1 flex-shrink-0"
                     title="Stop avec fade (fade_out du slot, 0.5s par défaut)"
                   ><Square size={10} /></button>
                   <button

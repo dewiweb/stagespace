@@ -388,7 +388,7 @@ export default function MovesTable() {
                       </div>
                       {(contestedBySlot.get(slot.id)?.length ?? 0) > 0 && (
                         <div
-                          className="text-[11px] font-mono text-amber-400 mt-0.5"
+                          className="text-[11px] font-mono text-stagespace-warning mt-0.5"
                           title={`Contested tracks ${contestedBySlot.get(slot.id)!.join(', ')} — shared with another playing move, resolved by merge strategy (Settings → Merge)`}
                         >
                           ⚠ shared {contestedBySlot.get(slot.id)!.join(',')}
@@ -407,7 +407,7 @@ export default function MovesTable() {
                             title="Move up in setlist"
                           >▲</button>
                           <span className={`text-xs font-mono font-bold w-4 ${
-                            isCurrentSetlist ? 'text-green-400' : 'text-yellow-400'
+                            isCurrentSetlist ? 'text-stagespace-live' : 'text-gray-400'
                           }`} title={isCurrentSetlist ? 'Current move' : `Position ${setlistIdx + 1}`}>
                             {setlistIdx + 1}
                           </span>
@@ -419,14 +419,14 @@ export default function MovesTable() {
                           ><ChevronDown size={11} /></button>
                           <button
                             onClick={() => removeFromSetlist(slot.id)}
-                            className="text-yellow-600 hover:text-yellow-400 text-xs ml-0.5"
+                            className="text-gray-500 hover:text-stagespace-danger text-xs ml-0.5"
                             title="Remove from setlist"
                           ><X size={11} /></button>
                         </div>
                       ) : (
                         <button
                           onClick={() => addToSetlist(slot.id)}
-                          className="text-gray-400 hover:text-yellow-400 text-xs"
+                          className="text-gray-400 hover:text-stagespace-accent text-xs"
                           title="Add to the show setlist"
                         ><Star size={11} /></button>
                       )}
@@ -454,7 +454,7 @@ export default function MovesTable() {
                           <>
                             <button
                               onClick={(e) => { e.stopPropagation(); stopSlotWithFade(slot.id, slot.fadeOut ?? 1); }}
-                              className="text-yellow-400 hover:text-yellow-300 text-xs px-1 rounded hover:bg-yellow-900/30"
+                              className="text-red-400/60 hover:text-red-300 text-xs px-1 rounded hover:bg-red-900/30"
                               title="Stop avec fade 1s"
                             ><Square size={10} /></button>
                             <button

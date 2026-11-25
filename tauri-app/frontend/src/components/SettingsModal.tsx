@@ -322,7 +322,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   ? 'Stopped — enabling will bind on launch.'
                   : 'Bridge off. STAGESPACE_BRIDGE_BIND env var can also force-start it.'}
             </p>
-            <p className="text-xs text-yellow-500/80 mt-1.5">
+            <p className="text-xs text-stagespace-warning/80 mt-1.5">
               No authentication — use 127.0.0.1 or a trusted network only (SSH tunnel otherwise).
             </p>
           </section>

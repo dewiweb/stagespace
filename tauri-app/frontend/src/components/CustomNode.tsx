@@ -220,8 +220,8 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
         <div className="flex items-center gap-1.5 min-w-0">
           {isAudioNode && audioRms !== null && (
             <span className="flex items-center gap-1 flex-shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-              <span className="text-red-400 text-xs font-bold tracking-wider">LIVE</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-stagespace-live animate-pulse" />
+              <span className="text-stagespace-live text-xs font-bold tracking-wider">LIVE</span>
             </span>
           )}
           {editingLabel ? (

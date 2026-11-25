@@ -376,7 +376,7 @@ export default function SpatialFxPanel() {
           (ex : holophonix ne sérialise que gain — les réglages sur les
           autres canaux sont calculés mais jamais envoyés au renderer). */}
       {profileChannels && profileChannels.length < SPATIAL_CHANNELS.length && (
-        <div className="mx-2 mt-1.5 px-2 py-1 bg-amber-900/20 border border-amber-800/40 rounded text-amber-300/90 text-[10px] font-mono">
+        <div className="mx-2 mt-1.5 px-2 py-1 bg-orange-900/20 border border-orange-800/40 rounded text-orange-300/90 text-[10px] font-mono">
           profile {oscProfile} sends: {profileChannels.map((c) => c.toLowerCase()).join(' ')}
           — other channels produce silence
         </div>
@@ -543,7 +543,7 @@ export default function SpatialFxPanel() {
             {editingZoneIdx !== null ? `Update zone ${editingZoneIdx}` : 'Add Zone'}
           </button>
           {zoneHint && (
-            <div className="text-amber-500/90 text-xs font-mono px-0.5">{zoneHint}</div>
+            <div className="text-orange-400/90 text-xs font-mono px-0.5">{zoneHint}</div>
           )}
           {!zoneHint && zoneChannelsValid && (
             <div className="text-green-500/80 text-xs font-mono px-0.5">

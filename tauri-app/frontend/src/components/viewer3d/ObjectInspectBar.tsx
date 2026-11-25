@@ -54,7 +54,7 @@ export const ObjectInspectBar: React.FC<ObjectInspectBarProps> = ({ positions })
       )}
       <button
         onClick={() => (src === 'park' ? doUnpark(selectedObj) : doPark(selectedObj))}
-        className="px-1.5 py-0.5 rounded bg-cyan-900/70 text-cyan-200 hover:bg-cyan-700 text-[10px] font-bold"
+        className="px-1.5 py-0.5 rounded bg-pink-900/70 text-pink-200 hover:bg-pink-700 text-[10px] font-bold"
         title={src === 'park' ? 'Unpark — l\'objet rejoint recalls/stop' : 'Park — gèle l\'objet hors recalls/stop/panic'}
       >
         {src === 'park' ? 'unpark' : 'park'}

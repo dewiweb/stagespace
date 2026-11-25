@@ -230,7 +230,7 @@ function IssuesPanel({ issues, open, onToggle, nodes, onNodesChange }: {
         )}
         {counts.errors > 0 && counts.warnings > 0 && ' · '}
         {counts.warnings > 0 && (
-          <span className="text-amber-400">{counts.warnings} warning{counts.warnings > 1 ? 's' : ''}</span>
+          <span className="text-stagespace-warning">{counts.warnings} warning{counts.warnings > 1 ? 's' : ''}</span>
         )}
       </button>
       {open && (
@@ -241,7 +241,7 @@ function IssuesPanel({ issues, open, onToggle, nodes, onNodesChange }: {
               onClick={() => focusNodes(i.node_ids)}
               disabled={i.node_ids.length === 0}
               className={`w-full text-left rounded px-1 py-0.5 transition-colors ${
-                i.severity === 'Error' ? 'text-red-300' : 'text-amber-300'
+                i.severity === 'Error' ? 'text-red-300' : 'text-orange-300'
               } ${i.node_ids.length > 0 ? 'hover:bg-gray-800 cursor-pointer' : 'cursor-default'}`}
               title={i.node_ids.length > 0 ? 'Focus the node(s) on the canvas' : undefined}
             >

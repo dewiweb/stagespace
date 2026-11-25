@@ -161,7 +161,7 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
         </div>
         {/* Badges source-de-contrôle — P park, H hold, S solo, ◎ attention. */}
         {p.parkedTracks && p.parkedTracks.length > 0 && (
-          <div className="absolute top-10 right-1.5 text-[9px] bg-amber-800 px-1 rounded" title={`Parké : ${p.parkedTracks.join(', ')}`}>P</div>
+          <div className="absolute top-10 right-1.5 text-[9px] bg-pink-800 px-1 rounded" title={`Parké : ${p.parkedTracks.join(', ')}`}>P</div>
         )}
         {p.heldTracks && p.heldTracks.length > 0 && (
           <div className="absolute bottom-1.5 right-1.5 text-[9px] bg-cyan-800 px-1 rounded" title={`Hold : ${p.heldTracks.join(', ')}`}>H</div>

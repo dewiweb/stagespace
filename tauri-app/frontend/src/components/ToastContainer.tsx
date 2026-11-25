@@ -3,7 +3,7 @@ import { X, TriangleAlert, CircleCheck, Info } from 'lucide-react';
 
 const STYLES: Record<ToastType, { bg: string; border: string; icon: React.ReactNode }> = {
   error:   { bg: 'bg-red-900/95',     border: 'border-red-500',   icon: <X size={13} /> },
-  warning: { bg: 'bg-amber-900/95',   border: 'border-amber-500', icon: <TriangleAlert size={13} /> },
+  warning: { bg: 'bg-orange-900/95',  border: 'border-stagespace-warning', icon: <TriangleAlert size={13} /> },
   info:    { bg: 'bg-blue-900/95',    border: 'border-blue-500',  icon: <Info size={13} /> },
   success: { bg: 'bg-green-900/95',   border: 'border-green-500', icon: <CircleCheck size={13} /> },
 };

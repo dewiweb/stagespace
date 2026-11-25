@@ -91,7 +91,7 @@ export const ParamInput: React.FC<{
         return (
           <button
             onClick={() => onChange(value !== true)}
-            className={`nodrag relative w-9 h-5 rounded-full transition-colors ${value === true ? 'bg-blue-600' : 'bg-gray-700'}`}
+            className={`nodrag relative w-9 h-5 rounded-full transition-colors ${value === true ? 'bg-stagespace-accent' : 'bg-gray-700'}`}
             aria-label={def.label}
           >
             <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${value === true ? 'translate-x-4' : ''}`} />
@@ -102,7 +102,7 @@ export const ParamInput: React.FC<{
         <FieldRow def={def}>
           <button
             onClick={() => onChange(value !== true)}
-            className={`nodrag relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${value === true ? 'bg-cyan-600' : 'bg-gray-700'}`}
+            className={`nodrag relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${value === true ? 'bg-stagespace-accent' : 'bg-gray-700'}`}
             aria-label={def.label}
           >
             <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${value === true ? 'translate-x-4' : ''}`} />
