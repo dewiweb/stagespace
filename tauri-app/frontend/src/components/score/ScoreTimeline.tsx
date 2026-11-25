@@ -487,7 +487,9 @@ export const ScoreTimeline: React.FC<{
                     instant comme le blast de cue ; goto/morph = SPAN sur
                     la fenêtre du clip : l'objet est EN TRANSIT vers la
                     pose pendant toute la rampe, l'appartenance a une
-                    dimension temporelle. Marqueur d'impact, pas un clip. */}
+                    dimension temporelle. Marqueur d'impact, pas un clip.
+                    Couleur du TYPE parent (teal — CLIP_COLORS.pose) :
+                    l'œil suit le clip conductor vers les lanes touchées. */}
                 {clips.filter((c) => c.ref.type === 'pose' && effectiveTrackIds(c).includes(lane.trackId)).map((c) => {
                   const isSnap = (c.ref as { mode?: string }).mode === 'snap';
                   const rampMs = ((c.ref as { duration?: number }).duration ?? 2) * 1000;
@@ -495,14 +497,14 @@ export const ScoreTimeline: React.FC<{
                   return isSnap ? (
                     <div
                       key={`poseblast-${c.id}`}
-                      className="absolute top-0 bottom-0 w-0.5 bg-violet-400/50 pointer-events-none"
+                      className="absolute top-0 bottom-0 w-0.5 bg-teal-400/50 pointer-events-none"
                       style={{ left: ms2px(c.startMs) }}
                       title={`${clipLabel(c)} — snap T${lane.trackId} à la pose`}
                     />
                   ) : (
                     <div
                       key={`poseblast-${c.id}`}
-                      className="absolute top-1 bottom-1 rounded-sm bg-violet-500/15 border-l-2 border-violet-400/60 pointer-events-none"
+                      className="absolute top-1 bottom-1 rounded-sm bg-teal-500/15 border-l-2 border-teal-400/60 pointer-events-none"
                       style={{ left: ms2px(c.startMs), width: Math.max(3, ms2px(c.startMs + spanMs) - ms2px(c.startMs)) }}
                       title={`${clipLabel(c)} — T${lane.trackId} en transit vers la pose`}
                     />
