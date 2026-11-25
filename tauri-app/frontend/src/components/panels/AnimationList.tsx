@@ -26,16 +26,19 @@ function animIcon(anim: Move): string {
   return '◆';
 }
 
-const CATEGORY_LABELS: Record<ShapePreset['category'], { label: string; color: string }> = {
-  orbits: { label: 'Orbits', color: 'text-blue-400' },
-  gestures: { label: 'Gestures', color: 'text-sky-400' },
-  shaped: { label: 'Shaped', color: 'text-pink-400' },
-  transitions: { label: 'Transitions', color: 'text-amber-400' },
-  physics: { label: 'Physics', color: 'text-green-400' },
-  layers: { label: 'Layers', color: 'text-purple-400' },
-  spline: { label: 'Splines', color: 'text-cyan-400' },
-  reactive: { label: 'Reactive', color: 'text-yellow-400' },
-  smalley: { label: 'Smalley', color: 'text-orange-400' },
+/// Catégories sans couleur — même arbitrage que NODE_COLORS (P1a) :
+/// la catégorie est une entité, pas une fonction. Les icônes et les
+/// labels suffisent à différencier ; les headers restent neutres.
+const CATEGORY_LABELS: Record<ShapePreset['category'], { label: string }> = {
+  orbits: { label: 'Orbits' },
+  gestures: { label: 'Gestures' },
+  shaped: { label: 'Shaped' },
+  transitions: { label: 'Transitions' },
+  physics: { label: 'Physics' },
+  layers: { label: 'Layers' },
+  spline: { label: 'Splines' },
+  reactive: { label: 'Reactive' },
+  smalley: { label: 'Smalley' },
 };
 
 const CATEGORY_ORDER: ShapePreset['category'][] = ['orbits', 'gestures', 'shaped', 'transitions', 'physics', 'layers', 'spline', 'reactive'];
@@ -108,7 +111,7 @@ export default function AnimationList() {
                   className="w-full flex items-center gap-1 px-1 py-0.5 text-xs font-semibold uppercase tracking-wider hover:text-gray-300 transition-colors"
                 >
                   <span className="text-[11px] text-gray-400">{isCollapsed ? '▸' : '▾'}</span>
-                  <span className={catLabel.color}>{catLabel.label}</span>
+                  <span className="text-gray-400">{catLabel.label}</span>
                   <span className="text-gray-500 ml-auto">{group.presets.length}</span>
                 </button>
                 {!isCollapsed && (
@@ -137,7 +140,7 @@ export default function AnimationList() {
         {/* ═══ EN COURS D'ÉDITION ═══ */}
         <div className="px-2 pb-2">
           <div className="text-gray-500 text-xs uppercase tracking-wider mb-1 px-1">Editing</div>
-          <div className="flex items-center gap-2 px-2 py-1.5 bg-blue-900/30 rounded border border-blue-700/40">
+          <div className="flex items-center gap-2 px-2 py-1.5 bg-stagespace-accent/10 rounded border border-stagespace-accent/40">
             <span className="text-base">{animIcon(current)}</span>
             {editingId === current.id ? (
               <input
@@ -147,7 +150,7 @@ export default function AnimationList() {
                 onBlur={commitRename}
                 onKeyDown={(e) => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setEditingId(null); }}
                 autoFocus
-                className="flex-1 bg-gray-900 text-white text-xs rounded px-1 py-0.5 border border-blue-500 outline-none"
+                className="flex-1 bg-gray-900 text-white text-xs rounded px-1 py-0.5 border border-stagespace-accent outline-none"
               />
             ) : (
               <span
@@ -161,14 +164,14 @@ export default function AnimationList() {
                 <span className="text-purple-400 text-xs font-mono bg-purple-900/40 px-1 rounded" title="Graphe custom"><Hexagon size={9} /></span>
               )}
               {current.assignments.length > 0 && (
-                <span className="text-blue-400 text-xs font-mono bg-blue-900/40 px-1 rounded" title={`${current.assignments.length} tracks`}>
+                <span className="text-stagespace-dim text-xs font-mono bg-gray-800/60 px-1 rounded" title={`${current.assignments.length} tracks`}>
                   ◉{current.assignments.length}
                 </span>
               )}
             </div>
           </div>
           <button onClick={saveAnimation}
-            className="w-full mt-1.5 py-1.5 bg-purple-700 hover:bg-purple-600 text-white text-xs rounded font-medium transition-colors">
+            className="w-full mt-1.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded font-medium transition-colors">
             ★ Save to my library
           </button>
         </div>
@@ -190,7 +193,7 @@ export default function AnimationList() {
                 <div key={anim.id}
                   className={`flex items-center gap-2 px-2 py-1.5 rounded border transition-all cursor-pointer group ${
                     isCurrent
-                      ? 'bg-blue-900/30 border-blue-700/40'
+                      ? 'bg-stagespace-accent/10 border-stagespace-accent/40'
                       : 'bg-gray-800/40 border-gray-700/40 hover:border-gray-600'
                   }`}
                   onClick={() => loadAnimation(anim)}
@@ -208,7 +211,7 @@ export default function AnimationList() {
                       onKeyDown={(e) => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setEditingId(null); }}
                       onClick={(e) => e.stopPropagation()}
                       autoFocus
-                      className="flex-1 bg-gray-900 text-white text-xs rounded px-1 py-0.5 border border-blue-500 outline-none"
+                      className="flex-1 bg-gray-900 text-white text-xs rounded px-1 py-0.5 border border-stagespace-accent outline-none"
                     />
                   ) : (
                     <span
@@ -222,13 +225,13 @@ export default function AnimationList() {
                       <span className="text-purple-400 text-xs font-mono bg-purple-900/40 px-1 rounded" title="Graphe custom (node editor)"><Hexagon size={9} /></span>
                     )}
                     {anim.assignments.length > 0 && (
-                      <span className="text-blue-400 text-xs font-mono bg-blue-900/40 px-1 rounded" title={`${anim.assignments.length} tracks`}>
+                      <span className="text-stagespace-dim text-xs font-mono bg-gray-800/60 px-1 rounded" title={`${anim.assignments.length} tracks`}>
                         ◉{anim.assignments.length}
                       </span>
                     )}
                   </div>
                   <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(anim); }}
-                    className="text-red-400 hover:text-red-300 text-xs opacity-0 group-hover:opacity-100 transition-opacity"><X size={10} /></button>
+                    className="text-stagespace-danger hover:opacity-80 text-xs opacity-0 group-hover:opacity-100 transition-opacity"><X size={10} /></button>
                 </div>
               );
             })
