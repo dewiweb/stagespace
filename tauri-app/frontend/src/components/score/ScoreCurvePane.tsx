@@ -300,15 +300,15 @@ export const ScoreCurvePane: React.FC<{
           <>
             {view === 'context' && selLaneIsGlobalFx && (
               <>
-                <span className="text-[10px] text-cyan-400">GLOBALFX — transform global (merge)</span>
+                <span className="text-[10px] text-stagespace-modulation">GLOBALFX — transform global (merge)</span>
               </>
             )}
-            {view === 'context' && selLaneIsMod && <span className="text-[10px] text-amber-400">MODULATION — valeurs SignalOsc</span>}
+            {view === 'context' && selLaneIsMod && <span className="text-[10px] text-stagespace-modulation">MODULATION — valeurs SignalOsc</span>}
             {view === 'context' && selLaneIsSpatialFx && (
-              <span className="text-[10px] text-violet-400">SPATIALFX — scalaires des contraintes (zones/règles installées par clip)</span>
+              <span className="text-[10px] text-gray-400">SPATIALFX — scalaires des contraintes (zones/règles installées par clip)</span>
             )}
             {view === 'context' && selObjLane && (
-              <span className="text-[10px] text-emerald-400">{selObjLane} — canaux spatiaux + depth</span>
+              <span className="text-[10px] text-gray-400">{selObjLane} — canaux spatiaux + depth</span>
             )}
             {view === 'context' && selClip && !selGlobal && <span className="text-[10px] text-gray-500 truncate">{selClipLabel} — per-move</span>}
             {view === 'dopesheet' && <span className="text-[10px] text-gray-600">toutes les courbes + événements</span>}
@@ -334,7 +334,7 @@ export const ScoreCurvePane: React.FC<{
       />
       {/* Poignée de partage paramètres/éditeur */}
       <div
-        className="w-1 shrink-0 cursor-col-resize bg-gray-800 hover:bg-cyan-700/60"
+        className="w-1 shrink-0 cursor-col-resize bg-gray-800 hover:bg-stagespace-accent/60"
         title="Glisser pour régler le partage paramètres / éditeur"
         onPointerDown={(e) => {
           e.preventDefault();

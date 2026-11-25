@@ -29,7 +29,7 @@ export const StateChip: React.FC<{
   entries: HeldEntry[];
   label: string;
   header: string;
-  tone: 'cyan' | 'orange' | 'pink';
+  tone: 'orange' | 'pink';
   compact?: boolean;
   dropUp?: boolean;
   className?: string;
@@ -38,14 +38,11 @@ export const StateChip: React.FC<{
 }> = ({ entries, label, header, tone, compact, dropUp, className, onRelease, releaseAll }) => {
   const [open, setOpen] = React.useState(false);
   const release = onRelease ?? releaseFor;
-  /// Tones statiques — pink = stase (park), orange = overrides moteur,
-  /// cyan conserve pour compat. Les rows sont colorees par etat reel
-  /// via sourceText — un chip mixte ne ment plus sur la composition.
+  /// Tones statiques — pink = stase (park), orange = overrides moteur.
+  /// (cyan supprimé : teinte osc, code mort — aucun appelant.)
+  /// Les rows sont colorees par etat reel via sourceText — un chip
+  /// mixte ne ment plus sur la composition.
   const TONES = {
-    cyan: {
-      btn: 'bg-cyan-800/70 hover:bg-cyan-700 text-cyan-100',
-      rowBtn: 'bg-gray-700 hover:bg-cyan-700',
-    },
     orange: {
       btn: 'bg-orange-800/70 hover:bg-orange-700 text-orange-100',
       rowBtn: 'bg-gray-700 hover:bg-orange-700',

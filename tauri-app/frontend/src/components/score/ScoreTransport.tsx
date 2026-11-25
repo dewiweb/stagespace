@@ -58,7 +58,7 @@ export const ScoreTransport: React.FC<{
     >⏭</button>
     <button
       onClick={onFollow}
-      className={`px-1.5 py-1 text-[10px] font-bold rounded ${follow ? 'bg-cyan-800 text-cyan-200' : 'bg-gray-800 text-gray-500 hover:text-gray-300'}`}
+      className={`px-1.5 py-1 text-[10px] font-bold rounded ${follow ? 'bg-stagespace-accent/80 text-white' : 'bg-gray-800 text-gray-500 hover:text-gray-300'}`}
       title="Suivi — auto-scroll : le playhead reste visible pendant la lecture"
     >⇉</button>
     <span className={`font-mono text-sm w-28 ${tcChase ? 'text-green-300' : 'text-gray-300'}`} title={tcChase ? 'Position — affichage timecode (chase actif)' : 'Position'}>
@@ -95,7 +95,7 @@ export const ScoreTransport: React.FC<{
           <button
             onClick={() => onSetLoop(loopOn ? undefined : 0, loopOn ? undefined : durationMs)}
             title="Region de boucle — le transport reboucle (hard-wrap)"
-            className={`px-2 py-0.5 text-[10px] font-bold rounded ${loopOn ? 'bg-cyan-800 text-cyan-200' : 'bg-gray-800 text-gray-500 hover:text-gray-300'}`}
+            className={`px-2 py-0.5 text-[10px] font-bold rounded ${loopOn ? 'bg-stagespace-target/80 text-white' : 'bg-gray-800 text-gray-500 hover:text-gray-300'}`}
           >
             ⟲ LOOP
           </button>
