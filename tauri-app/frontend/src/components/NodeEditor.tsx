@@ -557,6 +557,8 @@ export const NodeEditor: React.FC = () => {
   const PORT_EDGE_CLASS: Record<string, string> = {
     Duration: 'rf-edge-duration',
     Spline: 'rf-edge-spline',
+    ObjectSet: 'rf-edge-objectset',
+    Signal: 'rf-edge-signal',
   };
   const decoratedEdges = useMemo(
     () =>
@@ -593,7 +595,7 @@ export const NodeEditor: React.FC = () => {
         <button
           onClick={() => setActiveTab('sub')}
           className={`px-2 py-0.5 text-xs rounded font-medium transition-colors ${
-            activeTab === 'sub' ? 'bg-purple-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+            activeTab === 'sub' ? 'bg-stagespace-accent text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
           }`}
           title="Move graph — trajectory for the slot being edited"
         >
@@ -607,7 +609,7 @@ export const NodeEditor: React.FC = () => {
         <button
           onClick={() => setActiveTab('global')}
           className={`px-2 py-0.5 text-xs rounded font-medium transition-colors ${
-            activeTab === 'global' ? 'bg-cyan-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+            activeTab === 'global' ? 'bg-stagespace-accent text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
           }`}
           title="Global FX — post-processing graph applied to ALL live moves"
         >
@@ -625,7 +627,7 @@ export const NodeEditor: React.FC = () => {
             </button>
             <button
               onClick={() => pushGlobalGraph()}
-              className="px-2 py-0.5 text-xs bg-cyan-800 hover:bg-cyan-700 text-cyan-200 rounded"
+              className="px-2 py-0.5 text-xs bg-indigo-800 hover:bg-indigo-700 text-indigo-200 rounded"
               title="Compile and push to the backend"
             >
               ↑ Push
@@ -635,7 +637,7 @@ export const NodeEditor: React.FC = () => {
         <button
           onClick={() => setActiveTab('signal')}
           className={`px-2 py-0.5 text-xs rounded font-medium transition-colors ${
-            activeTab === 'signal' ? 'bg-amber-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+            activeTab === 'signal' ? 'bg-indigo-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
           }`}
           title="Modulation — signal graph writing additive deltas into param/transform targets (LFO, audio, OSC…)"
         >
@@ -653,7 +655,7 @@ export const NodeEditor: React.FC = () => {
             </button>
             <button
               onClick={() => pushSignalGraph()}
-              className="px-2 py-0.5 text-xs bg-amber-800 hover:bg-amber-700 text-amber-200 rounded"
+              className="px-2 py-0.5 text-xs bg-indigo-800 hover:bg-indigo-700 text-indigo-200 rounded"
               title="Compile and push to the backend"
             >
               ↑ Push

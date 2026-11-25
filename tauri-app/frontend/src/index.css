@@ -28,8 +28,10 @@
   --stagespace-target: #2dd4bf;
   --stagespace-derived: #94a3b8;
   --stagespace-modulation: #818cf8;
-  --stagespace-graph-time: #f59e0b;
+  --stagespace-graph-time: #facc15;
   --stagespace-graph-geometry: #a78bfa;
+  --stagespace-graph-object: #22d3ee;
+  --stagespace-graph-signal: #818cf8;
   color: #e5e7eb;
   background-color: var(--stagespace-bg);
   font-synthesis: none;
@@ -179,6 +181,18 @@ body {
 
 .react-flow__edge.rf-edge-spline .react-flow__edge-path {
   stroke: var(--stagespace-graph-geometry) !important; /* géométrie spline */
+  stroke-width: 2;
+}
+
+/* ObjectSet = routage objets (osc) · Signal = câble de modulation —
+   handles, edges et légende partagent la même source (arbitrage 6). */
+.react-flow__edge.rf-edge-objectset .react-flow__edge-path {
+  stroke: var(--stagespace-graph-object) !important;
+  stroke-width: 2;
+}
+
+.react-flow__edge.rf-edge-signal .react-flow__edge-path {
+  stroke: var(--stagespace-graph-signal) !important;
   stroke-width: 2;
 }
 

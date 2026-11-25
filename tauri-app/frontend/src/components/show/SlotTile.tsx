@@ -171,7 +171,7 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
           <span
             onClick={(e) => { e.stopPropagation(); p.onAttention!(); }}
             title="Attention — fige les autres objets, seul celui-ci bouge (change blindness)"
-            className="absolute bottom-1.5 left-1.5 text-[9px] bg-purple-800 hover:bg-purple-700 px-1 rounded cursor-pointer"
+            className="absolute bottom-1.5 left-1.5 text-[9px] bg-pink-800 hover:bg-pink-700 px-1 rounded cursor-pointer"
           >
             ◎
           </span>

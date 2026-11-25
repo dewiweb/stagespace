@@ -63,7 +63,7 @@ export const GestureStrip: React.FC = () => {
         onClick={() => doAttention(null)}
         className={`px-4 rounded-lg text-xs font-bold ${
           attnActive
-            ? 'bg-amber-800 hover:bg-amber-700 text-amber-100 animate-pulse'
+            ? 'bg-pink-800 hover:bg-pink-700 text-pink-100 animate-pulse'
             : 'bg-gray-800 text-gray-600'
         }`}
         title={

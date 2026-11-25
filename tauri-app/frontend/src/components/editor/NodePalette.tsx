@@ -276,7 +276,7 @@ export const NodePalette: React.FC<NodePaletteProps> = (p) => {
           <div><span className="text-gray-400 font-semibold">Chain:</span> Engine → Modifier → Output</div>
           <div><span className="text-gray-400 font-semibold">Blend:</span> 2 Engines → Mix → Output</div>
           <div><span className="text-gray-400 font-semibold">Time:</span> 2 Engines → Sequence/Crossfade</div>
-          <div className="pt-1"><span className="text-gray-400 font-semibold">Edges:</span> <span className="text-gray-300">gray</span> trajectory · <span className="text-amber-500">amber dashes</span> duration · <span className="text-violet-400">violet</span> spline</div>
+          <div className="pt-1"><span className="text-gray-400 font-semibold">Edges:</span> <span className="text-gray-300">gray</span> trajectory · <span className="text-yellow-400">yellow dashes</span> duration · <span className="text-violet-400">violet</span> spline</div>
           <div className="pt-1 text-gray-500">Drag from a node's bottom handle to connect. Invalid connections are blocked.</div>
         </div>
       </div>

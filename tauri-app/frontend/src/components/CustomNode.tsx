@@ -338,7 +338,7 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
                 {def.label}
                 {modulated.has(def.key) && (
                   <span
-                    className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-amber-400 align-middle"
+                    className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-indigo-400 align-middle"
                     title="Modulated by this move's signal graph"
                   />
                 )}
