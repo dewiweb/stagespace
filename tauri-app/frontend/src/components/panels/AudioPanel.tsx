@@ -109,10 +109,10 @@ export default function AudioPanel() {
       {isListening && amp && (
         <div className="space-y-2">
           <div className="text-gray-400 text-xs font-medium uppercase tracking-wide">Amplitude</div>
-          <Bar label="RMS" value={amp.rms} color="bg-blue-500" />
-          <Bar label="Bass" value={amp.bass} color="bg-red-500" />
-          <Bar label="Mid" value={amp.mid} color="bg-green-500" />
-          <Bar label="High" value={amp.high} color="bg-yellow-500" />
+          <Bar label="RMS" value={amp.rms} color="bg-stagespace-accent" />
+          <Bar label="Bass" value={amp.bass} color="bg-stagespace-accent" />
+          <Bar label="Mid" value={amp.mid} color="bg-stagespace-accent" />
+          <Bar label="High" value={amp.high} color="bg-stagespace-accent" />
         </div>
       )}
 
@@ -127,7 +127,7 @@ export default function AudioPanel() {
           </div>
           <div className="mt-1 h-1 bg-gray-900 rounded-full overflow-hidden">
             <div
-              className="h-full bg-cyan-500 transition-all"
+              className="h-full bg-stagespace-accent transition-all"
               style={{ width: `${audioState.bpm.confidence * 100}%` }}
             />
           </div>
