@@ -10,7 +10,7 @@ import type { ParamDef, NodeParamValue } from './nodeParamSchema';
 import { NODE_INPUT_CLS, NODE_INPUT_MONO_CLS } from './editor/LinkedTracksField';
 
 const FIELD_CLS =
-  'nodrag flex-1 min-w-0 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none';
+  'nodrag flex-1 min-w-0 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none';
 const FIELD_MONO_CLS = `${FIELD_CLS} font-mono`;
 
 const blurOnEnter = (e: React.KeyboardEvent<HTMLElement>) => {

@@ -51,7 +51,7 @@ export const PosesPanel: React.FC<{ fill?: boolean }> = ({ fill = true }) => {
             step={0.5}
             value={gotoDuration}
             onChange={(e) => setGotoDuration(Math.max(0.2, Number(e.target.value) || 2.0))}
-            className="w-12 bg-gray-900 border border-gray-700 rounded px-1 py-0.5 text-[10px] text-gray-300 focus:border-cyan-600 focus:outline-none"
+            className="w-12 bg-gray-900 border border-gray-700 rounded px-1 py-0.5 text-[10px] text-gray-300 focus:border-stagespace-accent focus:outline-none"
           />
           <span className="text-gray-600">s</span>
         </label>
@@ -66,7 +66,7 @@ export const PosesPanel: React.FC<{ fill?: boolean }> = ({ fill = true }) => {
             if (e.key === 'Enter') capture();
           }}
           placeholder="pose name…"
-          className="flex-1 min-w-0 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 placeholder-gray-600 focus:border-cyan-600 focus:outline-none"
+          className="flex-1 min-w-0 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 placeholder-gray-600 focus:border-stagespace-accent focus:outline-none"
         />
         <button
           onClick={capture}
@@ -102,7 +102,7 @@ export const PosesPanel: React.FC<{ fill?: boolean }> = ({ fill = true }) => {
                     : 'Show pose targets as ghosts in the 3D view'
                 }
               >
-                <div className={`truncate ${selectedPoseName === p.name ? 'text-violet-300 font-semibold' : ''}`}>
+                <div className={`truncate ${selectedPoseName === p.name ? 'text-stagespace-accent font-semibold' : ''}`}>
                   {selectedPoseName === p.name ? '◈ ' : ''}{p.name}
                 </div>
                 <div
@@ -120,8 +120,8 @@ export const PosesPanel: React.FC<{ fill?: boolean }> = ({ fill = true }) => {
                 onClick={() => setMorphSource(morphSource === p.name ? null : p.name)}
                 className={`px-1.5 py-0.5 rounded text-xs font-bold ${
                   morphSource === p.name
-                    ? 'bg-violet-800/70 text-violet-100'
-                    : 'bg-gray-800 text-gray-500 hover:text-violet-300 opacity-70 group-hover:opacity-100'
+                    ? 'bg-teal-800/70 text-teal-100'
+                    : 'bg-gray-800 text-gray-500 hover:text-teal-300 opacity-70 group-hover:opacity-100'
                 }`}
                 title={
                   morphSource === p.name
@@ -134,7 +134,7 @@ export const PosesPanel: React.FC<{ fill?: boolean }> = ({ fill = true }) => {
               {morphSource && morphSource !== p.name && (
                 <button
                   onClick={() => doPoseMorph(morphSource, p.name, gotoDuration)}
-                  className="px-1.5 py-0.5 rounded bg-violet-900/50 hover:bg-violet-800/60 text-violet-200 text-xs"
+                  className="px-1.5 py-0.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-200 text-xs"
                   title={`Morph '${morphSource}' → '${p.name}' in ${gotoDuration}s — objects absent from the source start from their live positions`}
                 >
                   A→B

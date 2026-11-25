@@ -108,7 +108,7 @@ export const ScoreParamsPanel: React.FC<{
           if (e.key === 'Enter' && modName.trim()) onModNameCommit?.(modName.trim());
         }}
         placeholder="/score/energy — nom de la valeur"
-        className="w-full bg-gray-800/60 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-amber-200 placeholder:text-gray-600 outline-none focus:border-amber-500"
+        className="w-full bg-gray-800/60 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-amber-200 placeholder:text-gray-600 outline-none focus:border-stagespace-accent"
       />
     )}
     <div

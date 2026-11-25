@@ -491,7 +491,7 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
         <select
           onChange={handleLoad}
           defaultValue=""
-          className="nodrag w-full px-2 py-1 bg-gray-900 text-cyan-300 text-xs font-mono rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
+          className="nodrag w-full px-2 py-1 bg-gray-900 text-cyan-300 text-xs font-mono rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none"
         >
           <option value="" disabled>Load a spline...</option>
           {savedSplines.map((s) => (
@@ -526,7 +526,7 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
             onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setShowSave(false); }}
             placeholder="Nom de la spline..."
             autoFocus
-            className="nodrag flex-1 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
+            className="nodrag flex-1 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none"
           />
           <button
             onClick={handleSave}

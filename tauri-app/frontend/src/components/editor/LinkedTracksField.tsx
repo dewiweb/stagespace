@@ -6,10 +6,10 @@ import React from 'react';
 /// node (React Flow drague depuis tout élément non marqué) et la molette
 /// zoomait le canvas en éditant.
 export const NODE_INPUT_CLS =
-  'nodrag nowheel w-full px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none';
+  'nodrag nowheel w-full px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none';
 export const NODE_INPUT_MONO_CLS = `${NODE_INPUT_CLS} font-mono`;
 const TRACKS_CLS =
-  'nodrag nowheel w-full mt-0.5 px-2 py-1 bg-gray-900 text-cyan-300 text-xs font-mono rounded border border-gray-700 focus:border-cyan-500 focus:outline-none';
+  'nodrag nowheel w-full mt-0.5 px-2 py-1 bg-gray-900 text-cyan-300 text-xs font-mono rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none';
 
 /// Champ "Linked Tracks" des nodes Objects — deux copies identiques
 /// (expanded + collapsed) dans CustomNode, qui divergeaient sur le nombre

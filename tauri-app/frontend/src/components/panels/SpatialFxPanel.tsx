@@ -18,9 +18,9 @@ import {
 } from '../../store/slices/spatialFxSlice';
 
 const inputCls =
-  'w-full px-2.5 py-1.5 bg-gray-800 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none';
+  'w-full px-2.5 py-1.5 bg-gray-800 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none';
 const selectCls =
-  'w-full px-2 py-1.5 bg-gray-800 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none';
+  'w-full px-2 py-1.5 bg-gray-800 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none';
 const removeBtnCls = 'text-red-400 hover:text-red-300 text-xs ml-2 flex-shrink-0';
 
 function Section({

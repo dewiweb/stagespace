@@ -161,7 +161,7 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
           onChange={(e) => setNewCueName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleStoreCue()}
           placeholder="Cue name..."
-          className="flex-1 min-w-0 px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-white placeholder-gray-600 focus:outline-none focus:border-purple-500"
+          className="flex-1 min-w-0 px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-white placeholder-gray-600 focus:outline-none focus:border-stagespace-accent"
         />
         <input
           type="number"
@@ -170,7 +170,7 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
           value={newCueFade}
           onChange={(e) => setNewCueFade(Math.max(0, Number(e.target.value) || 0))}
           title="Crossfade duration on recall (s)"
-          className="w-14 flex-shrink-0 px-1.5 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-white text-right font-mono focus:outline-none focus:border-purple-500"
+          className="w-14 flex-shrink-0 px-1.5 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-white text-right font-mono focus:outline-none focus:border-stagespace-accent"
         />
         <button
           onClick={() => handleStoreCue()}
@@ -243,7 +243,7 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
                           onDoubleClick={(e) => e.stopPropagation()}
                           onBlur={(e) => e.target.value.trim() && updateCue({ ...cue, name: e.target.value.trim() })}
                           onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-                          className="w-24 px-1 py-0 bg-gray-900 border border-gray-700 rounded text-white text-xs focus:outline-none focus:border-purple-500"
+                          className="w-24 px-1 py-0 bg-gray-900 border border-gray-700 rounded text-white text-xs focus:outline-none focus:border-stagespace-accent"
                           title="Rename cue"
                         />
                         <input

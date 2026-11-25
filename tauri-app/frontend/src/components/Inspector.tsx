@@ -174,7 +174,7 @@ export default function Inspector() {
           <select
             value={editingSlotId ?? ''}
             onChange={(e) => selectSlotForEditing(e.target.value === '' ? null : e.target.value)}
-            className="flex-1 min-w-0 bg-gray-800 text-white text-xs font-semibold px-2 py-1.5 rounded border border-gray-700 focus:border-indigo-500 focus:outline-none cursor-pointer"
+            className="flex-1 min-w-0 bg-gray-800 text-white text-xs font-semibold px-2 py-1.5 rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none cursor-pointer"
             title="Move inspecté — Global = vue transform global/audio, aucun move en édition"
           >
             <option value="">◆ Global — no move</option>
@@ -525,7 +525,7 @@ function InspectorSplineLibrary({ drawSplineNode, onUpdate }: {
         <select
           onChange={handleLoad}
           defaultValue=""
-          className="w-full px-2 py-1.5 bg-gray-900 text-cyan-300 text-xs font-mono rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
+          className="w-full px-2 py-1.5 bg-gray-900 text-cyan-300 text-xs font-mono rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none"
         >
           <option value="" disabled>↳ Load a spline...</option>
           {savedSplines.map((s) => (
@@ -564,7 +564,7 @@ function InspectorSplineLibrary({ drawSplineNode, onUpdate }: {
             onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setShowSave(false); }}
             placeholder="Nom de la spline..."
             autoFocus
-            className="flex-1 px-2 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
+            className="flex-1 px-2 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none"
           />
           <button onClick={handleSave}
             className="text-green-400 hover:text-green-300 text-xs px-2" title="Confirm"><Check size={12} /></button>

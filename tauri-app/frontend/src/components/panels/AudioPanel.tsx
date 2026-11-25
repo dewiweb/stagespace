@@ -82,7 +82,7 @@ export default function AudioPanel() {
         value={selectedAudioDeviceId ?? ''}
         onChange={(e) => setSelectedAudioDeviceId(e.target.value || null)}
         disabled={isListening || audioDevices.length === 0}
-        className="w-full text-xs bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-gray-300 focus:outline-none focus:border-blue-500"
+        className="w-full text-xs bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-gray-300 focus:outline-none focus:border-stagespace-accent"
       >
         <option value="">{audioDevices.length === 0 ? 'No devices' : 'Default device'}</option>
         {audioDevices.map((d) => (

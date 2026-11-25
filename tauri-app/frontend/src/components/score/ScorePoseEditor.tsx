@@ -94,7 +94,7 @@ export const ScorePoseEditor: React.FC<{
                   step={0.1}
                   value={draft[t]?.[axis] ?? 0}
                   onChange={(e) => setAxis(t, axis, Number(e.target.value) || 0)}
-                  className="w-14 bg-gray-900 border border-gray-700 rounded px-1 py-0.5 text-[10px] text-gray-200 focus:border-violet-600 focus:outline-none text-right"
+                  className="w-14 bg-gray-900 border border-gray-700 rounded px-1 py-0.5 text-[10px] text-gray-200 focus:border-stagespace-accent focus:outline-none text-right"
                 />
               ))}
               <button
@@ -118,12 +118,12 @@ export const ScorePoseEditor: React.FC<{
             onChange={(e) => setNewTrack(e.target.value.replace(/[^0-9]/g, ''))}
             onKeyDown={(e) => { if (e.key === 'Enter') addTrack(); }}
             placeholder={`+ track (ex ${manualOscIds[0] ?? 1})`}
-            className="w-24 bg-gray-900 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-gray-200 placeholder-gray-600 focus:border-violet-600 focus:outline-none"
+            className="w-24 bg-gray-900 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-gray-200 placeholder-gray-600 focus:border-stagespace-accent focus:outline-none"
           />
           <button
             onClick={addTrack}
             disabled={!newTrack}
-            className="px-2 py-0.5 rounded bg-gray-800 hover:bg-violet-900/60 text-gray-300 text-[10px] disabled:opacity-30"
+            className="px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 text-[10px] disabled:opacity-30"
           >+ add</button>
         </div>
 
@@ -132,7 +132,7 @@ export const ScorePoseEditor: React.FC<{
           <button
             onClick={save}
             disabled={!dirty}
-            className="px-2 py-0.5 rounded bg-violet-900/60 hover:bg-violet-800/60 text-violet-200 disabled:opacity-30 disabled:cursor-not-allowed border border-violet-800/50"
+            className="px-2 py-0.5 rounded bg-stagespace-accent/80 hover:bg-stagespace-accent text-white disabled:opacity-30 disabled:cursor-not-allowed border border-stagespace-accent/50"
             title="Save the pose (atomic backend replace)"
           >✓ save</button>
           <button

@@ -94,7 +94,7 @@ export const QuickAddModal: React.FC<{
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search a node or plugin…"
-          className="w-full px-3 py-1.5 mb-2 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
+          className="w-full px-3 py-1.5 mb-2 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none"
         />
         <div ref={listRef} className="max-h-64 overflow-y-auto space-y-0.5">
           {items.length === 0 && (
