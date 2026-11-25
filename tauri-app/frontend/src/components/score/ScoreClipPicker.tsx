@@ -89,7 +89,7 @@ export const ScoreClipPicker: React.FC<{
           onClick={() => onPick({ type: 'unpark' })}
         >◯ UNPARK — relâcher</button>
         <button
-          className="w-full text-left px-3 py-1 text-xs hover:bg-fuchsia-700/40"
+          className="w-full text-left px-3 py-1 text-xs hover:bg-teal-800/40"
           title="Lance balistique (m/s) des objets couverts (/stagespace/throw) — vélocité éditable dans l'inspector"
           onClick={() => onPick({ type: 'throw', vel: [3, 0, 0] })}
         >↷ THROW — lancer</button>
@@ -105,12 +105,12 @@ export const ScoreClipPicker: React.FC<{
         >◎ ATTENTION — stase</button>
         <div className="px-3 py-0.5 text-[9px] text-gray-600 uppercase mt-1">Actions live — le score appuie sur le bouton</div>
         <button
-          className="w-full text-left px-3 py-1 text-xs hover:bg-lime-700/40"
+          className="w-full text-left px-3 py-1 text-xs hover:bg-cyan-700/40"
           title="Sonde cyclique par objet (/stagespace/soundcheck start) — ping de position tour à tour, identification spatiale"
           onClick={() => onPick({ type: 'soundcheck', action: 'start' })}
         >♪ SOUNDCHECK — start (sonde cyclique)</button>
         <button
-          className="w-full text-left px-3 py-1 text-xs hover:bg-lime-700/40"
+          className="w-full text-left px-3 py-1 text-xs hover:bg-cyan-700/40"
           title="Arrête la sonde (/stagespace/soundcheck stop) — nettoie le ping courant"
           onClick={() => onPick({ type: 'soundcheck', action: 'stop' })}
         >♪ SOUNDCHECK — stop</button>
@@ -120,13 +120,13 @@ export const ScoreClipPicker: React.FC<{
         {moveSlots.map((s) => (
           <button
             key={`solo-${s.id}`}
-            className="w-full text-left px-3 py-1 text-xs hover:bg-lime-700/40 truncate"
+            className="w-full text-left px-3 py-1 text-xs hover:bg-fuchsia-700/40 truncate"
             title={`Solo slot « ${s.name} » (oscIndex ${s.oscIndex}) — fade-out les autres slots jouants puis le joue (/stagespace/solo)`}
             onClick={() => onPick({ type: 'solo', n: s.oscIndex })}
           >◈ SOLO {s.oscIndex} — {s.name}</button>
         ))}
         <button
-          className="w-full text-left px-3 py-1 text-xs hover:bg-lime-700/40"
+          className="w-full text-left px-3 py-1 text-xs hover:bg-fuchsia-700/40"
           title="Rejoue les slots stoppés par le dernier solo (/stagespace/unsolo)"
           onClick={() => onPick({ type: 'unsolo' })}
         >◈ UNSOLO — restaurer le mix</button>
@@ -134,13 +134,13 @@ export const ScoreClipPicker: React.FC<{
         {(['atelier', 'conduite', 'jeu', 'score'] as const).map((v) => (
           <button
             key={v}
-            className="w-full text-left px-3 py-1 text-xs hover:bg-lime-700/40"
+            className="w-full text-left px-3 py-1 text-xs hover:bg-cyan-700/40"
             title={`Bascule la surface opérateur → ${v} (/stagespace/view)`}
             onClick={() => onPick({ type: 'view', surface: v })}
           >▣ VIEW — {v.toUpperCase()}</button>
         ))}
         <button
-          className="w-full text-left px-3 py-1 text-xs hover:bg-lime-700/40"
+          className="w-full text-left px-3 py-1 text-xs hover:bg-amber-700/40"
           title="GO — tire la cue armée (ou la suivante si rien d'armé) : modèle console (/stagespace/cue/go)"
           onClick={() => onPick({ type: 'cueGo' })}
         >▶ CUE GO — feu sur l'armée</button>
@@ -169,7 +169,7 @@ export const ScoreClipPicker: React.FC<{
       <>
         <div className="px-3 py-0.5 text-[9px] text-gray-600 uppercase mt-1">OSC-out — message externe</div>
         <button
-          className="w-full text-left px-3 py-1 text-xs hover:bg-emerald-700/40"
+          className="w-full text-left px-3 py-1 text-xs hover:bg-cyan-700/40"
           title="Message OSC arbitraire émis au tir — adresse/args/cible éditables dans l'inspector (défaut = la sortie OSC du show)"
           onClick={() => onPick({ type: 'osc', addr: '/cue/go', args: '' })}
         >→OSC message — lumières/vidéo/consoles</button>
