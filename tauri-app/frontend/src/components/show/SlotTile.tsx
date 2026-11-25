@@ -117,7 +117,7 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
           isPlaying
             ? 'bg-green-800/70 border-green-600 text-green-50'
             : 'bg-gray-800/80 border-gray-700 text-gray-200 hover:bg-gray-700/80'
-        } ${p.isSelected ? 'ring-2 ring-inset ring-indigo-500/80' : ''}`}
+        } ${p.isSelected ? 'ring-2 ring-inset ring-stagespace-accent/80' : ''}`}
         role="button"
         aria-label={`slot ${oscNum} ${slot.name} ${isPlaying ? 'stop' : 'play'}`}
         title={`OSC: /stagespace/slot ${oscNum} · slot/stop ${oscNum} · solo ${oscNum}`}
@@ -142,7 +142,7 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
               du pad = transport pur, sélection stable en multi-pad live. */}
           <div
             className={`${big ? 'text-lg' : 'text-sm'} font-semibold truncate leading-tight ${
-              p.isSelected ? 'text-indigo-300' : p.onSelect ? 'hover:text-indigo-300' : ''
+              p.isSelected ? 'text-stagespace-accent' : p.onSelect ? 'hover:text-stagespace-accent' : ''
             }`}
             onPointerDown={p.onSelect ? (e) => e.stopPropagation() : undefined}
             onClick={p.onSelect ? (e) => { e.stopPropagation(); p.onSelect?.(); } : undefined}
@@ -166,7 +166,7 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
         {p.heldTracks && p.heldTracks.length > 0 && (
           <div className="absolute bottom-1.5 right-1.5 text-[9px] bg-cyan-800 px-1 rounded" title={`Hold : ${p.heldTracks.join(', ')}`}>H</div>
         )}
-        {p.isSolo && <div className="absolute top-1.5 left-1.5 text-[9px] bg-cyan-900 px-1 rounded">S</div>}
+        {p.isSolo && <div className="absolute top-1.5 left-1.5 text-[9px] bg-orange-800 px-1 rounded">S</div>}
         {p.onAttention && (
           <span
             onClick={(e) => { e.stopPropagation(); p.onAttention!(); }}
@@ -188,9 +188,9 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
       title="Live params of this move"
       className={`group flex items-center gap-2 px-3 py-2.5 cursor-pointer border-b border-gray-800/40 transition-colors ${
         p.isSelected
-          ? 'bg-indigo-900/30 ring-1 ring-inset ring-indigo-600/60'
+          ? 'bg-stagespace-accent/10 ring-1 ring-inset ring-stagespace-accent/60'
           : p.isCurrentSetlist
-            ? 'bg-purple-900/20 hover:bg-purple-900/30'
+            ? 'bg-stagespace-live/10 hover:bg-stagespace-live/20'
             : isPlaying
               ? 'bg-green-900/10 hover:bg-green-900/20'
               : 'hover:bg-gray-800/30'
@@ -234,10 +234,10 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
         </div>
       </div>
       {p.isCurrentSetlist && (
-        <span className="text-purple-400 text-xs font-bold flex-shrink-0" title="Current setlist">◉ NOW</span>
+        <span className="text-stagespace-live text-xs font-bold flex-shrink-0" title="Current setlist">◉ NOW</span>
       )}
       {p.isNextSetlist && !p.isCurrentSetlist && (
-        <span className="text-green-400/80 text-xs font-bold flex-shrink-0" title="Prochain GO">→ NEXT</span>
+        <span className="text-stagespace-target text-xs font-bold flex-shrink-0" title="Prochain GO">→ NEXT</span>
       )}
       {canSolo && p.onSolo && (
         <button
@@ -251,7 +251,7 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
       {p.showSetlistAdd && p.onAddToSetlist && (
         <button
           onClick={(e) => { e.stopPropagation(); p.onAddToSetlist!(); }}
-          className="flex-shrink-0 w-11 h-11 rounded text-gray-400 hover:bg-purple-600/30 hover:text-white text-sm transition-colors"
+          className="flex-shrink-0 w-11 h-11 rounded text-gray-400 hover:bg-stagespace-accent/30 hover:text-white text-sm transition-colors"
           title="Add to setlist (jouable via GO)"
         >
           →
@@ -259,7 +259,7 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
       )}
       <SlidersHorizontal
         size={12}
-        className={`flex-shrink-0 ${p.isSelected ? 'text-indigo-300' : 'text-gray-400 group-hover:text-gray-400'}`}
+        className={`flex-shrink-0 ${p.isSelected ? 'text-stagespace-accent' : 'text-gray-400 group-hover:text-gray-400'}`}
       />
     </div>
   );
