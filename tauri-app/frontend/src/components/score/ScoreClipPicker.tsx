@@ -70,7 +70,7 @@ export const ScoreClipPicker: React.FC<{
         {(['explode', 'converge', 'orbit', 'front'] as const).map((g) => (
           <button
             key={g}
-            className="w-full text-left px-3 py-1 text-xs hover:bg-orange-700/40"
+            className="w-full text-left px-3 py-1 text-xs hover:bg-teal-700/40"
             title={`Geste balistique "${g}" sur tous les objets émis (/stagespace/gesture)`}
             onClick={() => onPick({ type: 'gesture', name: g, strength: 3 })}
           >
@@ -79,27 +79,27 @@ export const ScoreClipPicker: React.FC<{
         ))}
         <div className="px-3 py-0.5 text-[9px] text-gray-600 uppercase mt-1">Contrôle — cibles = couverture</div>
         <button
-          className="w-full text-left px-3 py-1 text-xs hover:bg-sky-700/40"
+          className="w-full text-left px-3 py-1 text-xs hover:bg-fuchsia-700/40"
           title="Fige les objets couverts — exempts des recalls (/stagespace/park). Vide = tout le patch."
           onClick={() => onPick({ type: 'park' })}
         >◉ PARK — figer les objets couverts</button>
         <button
-          className="w-full text-left px-3 py-1 text-xs hover:bg-sky-700/40"
+          className="w-full text-left px-3 py-1 text-xs hover:bg-fuchsia-700/40"
           title="Relâche les objets couverts ; couverture vide = relâche tout (/stagespace/unpark)"
           onClick={() => onPick({ type: 'unpark' })}
         >◯ UNPARK — relâcher</button>
         <button
-          className="w-full text-left px-3 py-1 text-xs hover:bg-sky-700/40"
+          className="w-full text-left px-3 py-1 text-xs hover:bg-fuchsia-700/40"
           title="Lance balistique (m/s) des objets couverts (/stagespace/throw) — vélocité éditable dans l'inspector"
           onClick={() => onPick({ type: 'throw', vel: [3, 0, 0] })}
         >↷ THROW — lancer</button>
         <button
-          className="w-full text-left px-3 py-1 text-xs hover:bg-sky-700/40"
+          className="w-full text-left px-3 py-1 text-xs hover:bg-fuchsia-700/40"
           title="Relâche les positions manuelles couvertes ; couverture vide = tout (/stagespace/position/clearall)"
           onClick={() => onPick({ type: 'manualClear' })}
         >◇ MANUEL OFF — rendre la main</button>
         <button
-          className="w-full text-left px-3 py-1 text-xs hover:bg-sky-700/40"
+          className="w-full text-left px-3 py-1 text-xs hover:bg-fuchsia-700/40"
           title="Stase : tout fige sauf le 1er objet couvert ; couverture vide = release (/stagespace/attention)"
           onClick={() => onPick({ type: 'attention' })}
         >◎ ATTENTION — stase</button>

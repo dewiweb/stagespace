@@ -61,7 +61,7 @@ export const ScoreTransport: React.FC<{
       className={`px-1.5 py-1 text-[10px] font-bold rounded ${follow ? 'bg-cyan-800 text-cyan-200' : 'bg-gray-800 text-gray-500 hover:text-gray-300'}`}
       title="Suivi — auto-scroll : le playhead reste visible pendant la lecture"
     >⇉</button>
-    <span className="font-mono text-sm text-cyan-300 w-28" title={tcChase ? 'Position — affichage timecode (chase actif)' : 'Position'}>
+    <span className={`font-mono text-sm w-28 ${tcChase ? 'text-green-300' : 'text-gray-300'}`} title={tcChase ? 'Position — affichage timecode (chase actif)' : 'Position'}>
       {tcChase ? fmtTc(displayCursor) : fmtMs(displayCursor)}
     </span>
     <span className="text-[10px] text-gray-500">/ {fmtMs(durationMs)}</span>
@@ -124,7 +124,7 @@ export const ScoreTransport: React.FC<{
     </button>
     <button
       onClick={onTcChase}
-      className={`px-2 py-0.5 text-[10px] font-bold rounded ${tcChase ? 'bg-cyan-800 text-cyan-200' : 'bg-gray-800 text-gray-500 hover:text-gray-300'}`}
+      className={`px-2 py-0.5 text-[10px] font-bold rounded ${tcChase ? 'bg-green-800 text-green-200' : 'bg-gray-800 text-gray-500 hover:text-gray-300'}`}
       title="Chase timecode — le transport suit le TC entrant (/stagespace/timecode) : locate à l'arrêt, rebase en lecture, démarrage quand le TC roule"
     >
       TC
