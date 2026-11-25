@@ -285,6 +285,17 @@ migrées, couleurs-entités contraires à la doctrine.
 - :481 purple (tracking ?) · :487 orange · :503 red hover delete → danger
 - :549/:560/:620 indigo-700 primary actions → accent
 
+**MovesTable.tsx migré** (`6f76b7c`) — 55 occ tokenisées.
+
+**SpatialFxPanel.tsx (38 occ — cyan dominant = identité panel
+spatial, PAS encore migré) :** question doctrinale ouverte — le cyan
+est la teinte-entité du panneau alors que cyan=osc. Options : token
+domaine spatial dédié (cohérent avec lane SPATIALFX=violet score ?) ou
+accent chrome. Zones : :794/:805 bg-cyan-900/20 cartes ; :748-752
+hint cyan ; :435/:539/:559/:578/:661/:739 boutons cyan-600/700 ;
+:487 chip cyan ; :379 warning orange déjà ✓ ; :45/:492 delete
+red→danger.
+
 **Méthode pour le restant :** par fichier — une lecture + patch
 groupé + vérif. Priorité : panels/MovesTable (55), SpatialFxPanel
 (38), AnimationList (27), CuelistPanel (20), puis score/* (129) et
