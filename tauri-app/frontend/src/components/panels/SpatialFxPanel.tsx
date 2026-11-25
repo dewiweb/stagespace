@@ -21,7 +21,7 @@ const inputCls =
   'w-full px-2.5 py-1.5 bg-gray-800 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none';
 const selectCls =
   'w-full px-2 py-1.5 bg-gray-800 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none';
-const removeBtnCls = 'text-red-400 hover:text-red-300 text-xs ml-2 flex-shrink-0';
+const removeBtnCls = 'text-stagespace-danger hover:opacity-80 text-xs ml-2 flex-shrink-0';
 
 function Section({
   title,
@@ -42,7 +42,7 @@ function Section({
           {title} ({count})
         </h4>
         {onClear && count > 0 && (
-          <button onClick={() => setConfirming(true)} className="text-gray-400 hover:text-red-400 text-xs">
+          <button onClick={() => setConfirming(true)} className="text-gray-400 hover:text-stagespace-danger text-xs">
             clear all
           </button>
         )}
@@ -366,7 +366,7 @@ export default function SpatialFxPanel() {
   return (
     <div className="p-3 h-full flex flex-col gap-3 overflow-y-auto">
       <div className="flex items-center gap-2">
-        <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
+        <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-stagespace-accent to-blue-600 flex items-center justify-center">
           <span className="text-white text-xs">FX</span>
         </div>
         <h3 className="text-white font-semibold text-sm">Spatial FX</h3>
@@ -384,13 +384,13 @@ export default function SpatialFxPanel() {
 
       {/* ── Zones ── */}
       <Section title="Zones" count={zones.length} onClear={() => clearZones().catch((e) => toast.error(`Spatial FX failed: ${e}`))}>
-        <div className={`space-y-1.5 mb-2 rounded transition-colors ${editingZoneIdx !== null ? 'border border-cyan-700/60 bg-cyan-950/20 p-1.5' : ''}`}>
+        <div className={`space-y-1.5 mb-2 rounded transition-colors ${editingZoneIdx !== null ? 'border border-stagespace-accent/50 bg-stagespace-accent/10 p-1.5' : ''}`}>
           {/* Mode du formulaire — lever l'ambiguïté création/édition :
               un chip indique toujours ce que les champs vont faire. */}
           <div className="flex items-center gap-1.5 px-0.5">
             {editingZoneIdx !== null ? (
               <>
-                <span className="text-cyan-300 text-[11px] font-mono font-semibold">
+                <span className="text-stagespace-accent text-[11px] font-mono font-semibold">
                   ✎ Editing zone {editingZoneIdx}
                 </span>
                 <span className="flex-1" />
@@ -432,7 +432,7 @@ export default function SpatialFxPanel() {
               onClick={() => setZonePlaceMode(!zonePlaceMode)}
               className={`px-2.5 py-1.5 text-xs rounded whitespace-nowrap transition-colors ${
                 zonePlaceMode
-                  ? 'bg-cyan-600 text-white'
+                  ? 'bg-blue-600 text-white'
                   : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
               }`}
               title="Place the zone center on the 3D scene — then click the floor"
@@ -485,11 +485,11 @@ export default function SpatialFxPanel() {
             {zChannelRows.length > 0 && (
               <div className="flex flex-wrap gap-1">
                 {zChannelRows.map(([c, v]) => (
-                  <span key={c} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-cyan-900/40 border border-cyan-800/50 rounded text-cyan-200 text-xs font-mono">
+                  <span key={c} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-stagespace-accent/10 border border-stagespace-accent/40 rounded text-blue-200 text-xs font-mono">
                     {c.toLowerCase()}={v}
                     <button
                       onClick={() => setZChannelRows((rows) => rows.filter(([rc]) => rc !== c))}
-                      className="text-cyan-400 hover:text-red-400"
+                      className="text-blue-300 hover:text-stagespace-danger"
                       aria-label={`Remove ${c} channel`}
                     ><X size={10} /></button>
                   </span>
@@ -536,8 +536,8 @@ export default function SpatialFxPanel() {
             disabled={!zoneCenterValid || !zoneChannelsValid}
             className={`w-full py-1.5 text-white text-xs rounded font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
               editingZoneIdx !== null
-                ? 'bg-cyan-700 hover:bg-cyan-600 ring-1 ring-cyan-500/50'
-                : 'bg-cyan-600 hover:bg-cyan-700'
+                ? 'bg-blue-700 hover:bg-blue-600 ring-1 ring-stagespace-accent/50'
+                : 'bg-blue-600 hover:bg-blue-700'
             }`}
           >
             {editingZoneIdx !== null ? `Update zone ${editingZoneIdx}` : 'Add Zone'}
@@ -546,7 +546,7 @@ export default function SpatialFxPanel() {
             <div className="text-orange-400/90 text-xs font-mono px-0.5">{zoneHint}</div>
           )}
           {!zoneHint && zoneChannelsValid && (
-            <div className="text-green-500/80 text-xs font-mono px-0.5">
+            <div className="text-stagespace-derived text-xs font-mono px-0.5">
               → {describeChannels(zoneChannels)}
             </div>
           )}
@@ -556,7 +556,7 @@ export default function SpatialFxPanel() {
             onClick={() => setZoneEditMode(!zoneEditMode)}
             className={`w-full mb-1.5 py-1.5 text-xs rounded font-medium transition-colors ${
               zoneEditMode
-                ? 'bg-cyan-600 text-white'
+                ? 'bg-blue-600 text-white'
                 : 'bg-gray-800 text-gray-400 hover:text-white border border-gray-700'
             }`}
             title="Edit zones on the scene — drag to move, scroll over a zone to resize"
@@ -575,7 +575,7 @@ export default function SpatialFxPanel() {
             {zones.map((zone, i) => (
               <div key={i} className={`p-2 rounded border transition-colors ${
                 editingZoneIdx === i
-                  ? 'bg-cyan-950/40 border-cyan-600/70'
+                  ? 'bg-stagespace-accent/10 border-stagespace-accent/50'
                   : 'bg-gray-800/50 border-gray-700/50'
               }`}>
                 <div className="flex justify-between items-start">
@@ -658,7 +658,7 @@ export default function SpatialFxPanel() {
           <button
             onClick={handleAddModulation}
             disabled={isNaN(parseFloat(mScale))}
-            className="w-full py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white text-xs rounded font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Add Modulation
           </button>
@@ -736,7 +736,7 @@ export default function SpatialFxPanel() {
           <button
             onClick={handleSetChannel}
             disabled={isNaN(parseInt(cObject, 10)) || isNaN(parseFloat(cValue))}
-            className="w-full py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white text-xs rounded font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Set Channel
           </button>
@@ -745,11 +745,11 @@ export default function SpatialFxPanel() {
             (statiques ⊕ modulés ⊕ zones) : l'effet réel des réglages,
             visible sans écouter le rendu. */}
         {liveEntries.length > 0 && (
-          <div className="mb-2 px-2 py-1.5 bg-cyan-950/30 rounded border border-cyan-900/40">
-            <div className="text-[9px] text-cyan-500/80 uppercase tracking-widest mb-1">live — computed by merge</div>
+          <div className="mb-2 px-2 py-1.5 bg-stagespace-panel rounded border border-stagespace-border">
+            <div className="text-[9px] text-stagespace-dim uppercase tracking-widest mb-1">live — computed by merge</div>
             <div className="space-y-0.5 max-h-28 overflow-y-auto">
               {liveEntries.map(([obj, ch]) => (
-                <div key={obj} className="text-[10px] font-mono text-cyan-200/80 truncate">
+                <div key={obj} className="text-[10px] font-mono text-stagespace-derived truncate">
                   #{obj} · {describeChannels(ch)}
                 </div>
               ))}
@@ -791,8 +791,8 @@ export default function SpatialFxPanel() {
           </h4>
           <div className="space-y-1">
             {graphZones.map((zone, i) => (
-              <div key={`z${i}`} className="p-2 bg-cyan-900/20 rounded border border-cyan-800/40">
-                <div className="text-cyan-200 text-xs font-mono">{describeZoneShape(zone.shape)}</div>
+              <div key={`z${i}`} className="p-2 bg-gray-800/50 rounded border border-gray-700/50">
+                <div className="text-gray-200 text-xs font-mono">{describeZoneShape(zone.shape)}</div>
                 <div className="text-gray-500 text-xs truncate">
                   {describeChannels(zone.channels)}
                   {zone.falloff > 0 && ` · falloff=${zone.falloff}`}
@@ -802,8 +802,8 @@ export default function SpatialFxPanel() {
               </div>
             ))}
             {graphModulations.map((mod, i) => (
-              <div key={`m${i}`} className="p-2 bg-cyan-900/20 rounded border border-cyan-800/40">
-                <div className="text-cyan-200 text-xs font-mono">
+              <div key={`m${i}`} className="p-2 bg-gray-800/50 rounded border border-gray-700/50">
+                <div className="text-gray-200 text-xs font-mono">
                   {mod.source.toLowerCase()} → {mod.channel.toLowerCase()}
                   {mod.object !== null && ` [obj ${mod.object}]`}
                 </div>
