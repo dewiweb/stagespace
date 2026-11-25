@@ -274,6 +274,23 @@ migrées, couleurs-entités contraires à la doctrine.
   freeze indigo→pink stase (libère indigo pour modulation),
   attention GestureStrip/SlotTile→pink
 
+**Cartographie MovesTable.tsx (55 occ — auditée, à migrer) :**
+- :178 green playingCount → live ✓ · :189 indigo action btn · :199 green
+  btn · :207 red btn · :239 teal btn GO? · :246 feedback green/red ✓
+- :304 isEditing indigo (mode édition improvisé → accent ?)
+- :305 isPlaying green ✓ · :313 green · :333/:359 border-indigo
+  sélection rows → accent
+- :368 indigo row action · :380 cyan row action (domaine osc ?)
+- :446 cyan · :457/:462 red (delete-type → danger ✓) · :469/:470 green
+- :481 purple (tracking ?) · :487 orange · :503 red hover delete → danger
+- :549/:560/:620 indigo-700 primary actions → accent
+
+**Méthode pour le restant :** par fichier — une lecture + patch
+groupé + vérif. Priorité : panels/MovesTable (55), SpatialFxPanel
+(38), AnimationList (27), CuelistPanel (20), puis score/* (129) et
+perform/* (46). Ne PAS regex aveugle : chaque occurrence est
+classée sémantiquement d'abord.
+
 **Reste à faire (P2/P3) :** score (sélection unifiée — 4
 conventions ring-white/cyan/bleu/violet ; transport cyan→vocabulaire
 dédié playhead/loop/courbes/fades #67e8f9 ; lanes CONDUCTOR rose /
