@@ -4,7 +4,7 @@ import { Handle, Position, NodeProps, type Node } from '@xyflow/react';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import { useSignalGraphStore } from '../store/useSignalGraphStore';
-import { PARAM_SCHEMA, getCategoryColor, pluginNodeSchema, pluginParamsOnSwitch, type ParamDef, type NodeParamValue, type GraphNode } from './nodeParamSchema';
+import { PARAM_SCHEMA, pluginNodeSchema, pluginParamsOnSwitch, type ParamDef, type NodeParamValue, type GraphNode } from './nodeParamSchema';
 import { isSourceNode, isTerminalNode, isBinaryComposite, getInputPorts, getOutputPorts, PORT_COLORS } from '../utils/connectionRules';
 import { signalTargetOptions, modulatedParamKeys } from '../utils/signalTargets';
 import { LinkedTracksField, NODE_INPUT_CLS } from './editor/LinkedTracksField';
@@ -32,7 +32,6 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
   // tombaient dans le store move (id inconnu → drop silencieux).
   const isSignalNode = useSignalGraphStore((s) => s.nodes.some((n) => n.id === id));
   const updateSignalNodeData = useSignalGraphStore((s) => s.updateNodeData);
-  const color = getCategoryColor(data.type);
   // Plugin : le schema vient du manifeste (résolu via params.plugin_id) et
   // le label affiché est le nom déclaré — sinon les tables statiques.
   const isPluginNode = data.type === 'Plugin';
@@ -173,7 +172,13 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
     );
   };
 
-  const trackIdsValue = trackIdsText !== null ? trackIdsText : ((data.params?.track_ids as number[]) ?? []).join(', ');
+  // track_ids peut être une string (default du spec `""` avant commit)
+  // ou un array (après commit) — le cast naïf + `?? []` crashait le
+  // canvas à l'ajout d'un node Objects frais ("".join n'existe pas).
+  const rawTrackIds = data.params?.track_ids;
+  const trackIdsValue = trackIdsText !== null
+    ? trackIdsText
+    : Array.isArray(rawTrackIds) ? rawTrackIds.join(', ') : String(rawTrackIds ?? '');
   const commitTrackIds = () => {
     const ids = (trackIdsText ?? '')
       .split(',')
@@ -209,14 +214,13 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
 
   return (
     <div
-      className="bg-gray-800 border-2 rounded-lg shadow-lg min-w-[200px] transition-shadow hover:shadow-xl"
-      style={{ borderColor: color + '60' }}
+      className="bg-gray-800 border-2 border-gray-700 rounded-lg shadow-lg min-w-[200px] transition-shadow hover:shadow-xl"
       title={issueMessages.length > 0 ? issueMessages.join('\n') : undefined}
     >
       {renderInputHandles()}
 
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-700" style={{ background: color + '20' }}>
+      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-700">
         <div className="flex items-center gap-1.5 min-w-0">
           {isAudioNode && audioRms !== null && (
             <span className="flex items-center gap-1 flex-shrink-0">

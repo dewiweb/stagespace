@@ -30,6 +30,9 @@ export default {
           // derived = états projetés non-actionnables (blast radius,
           // audition) — toujours translucide, jamais plein.
           derived: '#94a3b8',
+          // modulation = paramètre piloté par un signal (audio-mod,
+          // LFO, envelope) — indigo, distinct de tracking purple.
+          modulation: '#818cf8',
         },
       },
       // Échelle de z-index nommée — fini les z-10/z-50/z-[9999] ad hoc.

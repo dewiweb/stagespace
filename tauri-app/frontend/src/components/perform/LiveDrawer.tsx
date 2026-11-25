@@ -247,7 +247,6 @@ export const LiveDrawer: React.FC = () => {
               max={3}
               step={0.05}
               unit="x"
-              accent="green"
               layout="stack"
               live={!!slot.movementId}
               onChange={(v) => setSlotMacros(slot.id, { speed: v })}
@@ -352,7 +351,6 @@ export const LiveDrawer: React.FC = () => {
               max={5}
               step={0.1}
               unit="s"
-              accent="purple"
               live={!!slot.movementId}
               onChange={(v) => updateCurrent({ fade_in: v })}
             />
@@ -363,7 +361,6 @@ export const LiveDrawer: React.FC = () => {
               max={5}
               step={0.1}
               unit="s"
-              accent="purple"
               live={!!slot.movementId}
               onChange={(v) => updateCurrent({ fade_out: v })}
             />

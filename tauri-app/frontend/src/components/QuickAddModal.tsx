@@ -1,7 +1,7 @@
 import React from 'react';
 import Modal from './ui/Modal';
 import type { NodeType } from '../store/useGraphStore';
-import { NODE_DESCRIPTIONS, getCategoryColor } from './nodeParamSchema';
+import { NODE_DESCRIPTIONS } from './nodeParamSchema';
 import type { PluginManifest } from '../types/generated/PluginManifest';
 
 /// Quick-add (pattern plugdata/Ctrl+K) : palette searchable flottante —
@@ -112,13 +112,6 @@ export const QuickAddModal: React.FC<{
                 i === selIdx ? 'bg-cyan-900/50 text-white' : 'text-gray-300 hover:bg-gray-800'
               }`}
             >
-              <span
-                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                style={{
-                  background:
-                    it.kind === 'type' ? getCategoryColor(it.type) : '#a855f7',
-                }}
-              />
               <span className="font-medium">{it.label}</span>
               {it.kind === 'plugin' && (
                 <span className="text-[11px] px-1 rounded bg-purple-900/60 text-purple-300 font-mono">

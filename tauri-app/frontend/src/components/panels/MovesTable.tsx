@@ -598,7 +598,6 @@ export default function MovesTable() {
                     min={min}
                     max={max}
                     step={step}
-                    accent="indigo"
                     decimals={1}
                     onChange={(v) => setSlotMacros(slot.id, { [key]: v })}
                   />
@@ -610,7 +609,6 @@ export default function MovesTable() {
                     min={0}
                     max={10}
                     step={0.5}
-                    accent="purple"
                     decimals={1}
                     unit="s"
                     onChange={(v) => setSlotFadeDuration(slot.id, v)}

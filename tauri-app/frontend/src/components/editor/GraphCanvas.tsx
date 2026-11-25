@@ -6,8 +6,7 @@ import {
   type ReactFlowInstance, type OnConnectEnd,
 } from '@xyflow/react';
 import EmptyState from '../ui/EmptyState';
-import { getCategoryColor, type GraphNode } from '../nodeParamSchema';
-import type { NodeType } from '../../store/useGraphStore';
+import type { GraphNode } from '../nodeParamSchema';
 import { portTypesInGraph, PORT_COLORS } from '../../utils/connectionRules';
 import { safeGetItem, safeSetItem } from '../../utils/safeStorage';
 import { countIssues, type GraphIssue } from '../../utils/graphIssues';
@@ -158,8 +157,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = (p) => {
         <MiniMap
           nodeColor={(n) =>
             n.type === 'frame'
-              ? 'rgba(251,191,36,0.35)'
-              : getCategoryColor((n.data.type ?? '') as NodeType)
+              ? 'rgba(148,163,184,0.4)'
+              : '#4b5563'
           }
           maskColor="rgba(10,10,15,0.7)"
         />

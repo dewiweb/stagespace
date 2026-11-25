@@ -2,7 +2,7 @@ import React from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import {
-  NODE_CATEGORIES, NODE_COLORS, NODE_DESCRIPTIONS, getCategoryColor,
+  NODE_CATEGORIES, NODE_DESCRIPTIONS,
   getValidTargetTypes, GLOBAL_ONLY_NODES, SUB_ONLY_NODES, SIGNAL_ONLY_NODES,
 } from '../nodeParamSchema';
 import type { NodeType } from '../../store/useGraphStore';
@@ -110,10 +110,6 @@ export const NodePalette: React.FC<NodePaletteProps> = (p) => {
                 className="w-full flex items-center gap-1 text-gray-500 text-xs font-semibold mb-1 px-1 uppercase tracking-wider hover:text-gray-300 transition-colors"
               >
                 <span className="text-xs">{isCollapsed ? '▸' : '▾'}</span>
-                <span
-                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                  style={{ background: NODE_COLORS[cat.color] ?? '#4b5563' }}
-                />
                 {cat.label}
                 <span className="text-gray-500 ml-auto">{filteredTypes.length}</span>
               </button>
@@ -134,22 +130,18 @@ export const NodePalette: React.FC<NodePaletteProps> = (p) => {
                         className="w-full text-left px-2.5 py-1.5 text-white text-xs rounded transition-all hover:translate-x-0.5 flex items-center gap-2 group cursor-grab active:cursor-grabbing"
                         style={{ background: 'transparent' }}
                         onMouseEnter={(e) => {
-                          e.currentTarget.style.background = getCategoryColor(type) + '20';
+                          e.currentTarget.style.background = 'rgba(55,65,81,0.5)';
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.background = 'transparent';
                         }}
                       >
-                        <span
-                          className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                          style={{ background: getCategoryColor(type) }}
-                        />
                         {type}
                       </button>
                       {/* Tooltip description */}
                       {p.hovered === type && NODE_DESCRIPTIONS[type] && (
                         <div className="absolute left-full top-0 ml-2 z-popover w-64 p-2.5 bg-gray-900 border border-gray-700 rounded-lg shadow-xl text-gray-300 text-xs leading-relaxed pointer-events-none">
-                          <div className="text-white font-semibold text-xs mb-1" style={{ color: getCategoryColor(type) }}>{type}</div>
+                          <div className="text-white font-semibold text-xs mb-1">{type}</div>
                           {NODE_DESCRIPTIONS[type]}
                           {/* Show valid targets */}
                           {(() => {
@@ -193,16 +185,12 @@ export const NodePalette: React.FC<NodePaletteProps> = (p) => {
                         className="w-full text-left px-2.5 py-1.5 text-white text-xs rounded transition-all hover:translate-x-0.5 flex items-center gap-2 cursor-grab active:cursor-grabbing"
                         style={{ background: 'transparent' }}
                         onMouseEnter={(e) => {
-                          e.currentTarget.style.background = (NODE_COLORS.yellow ?? '#ca8a04') + '20';
+                          e.currentTarget.style.background = 'rgba(55,65,81,0.5)';
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.background = 'transparent';
                         }}
                       >
-                        <span
-                          className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                          style={{ background: NODE_COLORS.yellow }}
-                        />
                         <span className="truncate">{m.name}</span>
                         {m.kind !== 'engine' && (
                           <span
@@ -216,7 +204,7 @@ export const NodePalette: React.FC<NodePaletteProps> = (p) => {
                       </button>
                       {p.hovered === `plugin:${m.id}` && (
                         <div className="absolute left-full top-0 ml-2 z-popover w-64 p-2.5 bg-gray-900 border border-gray-700 rounded-lg shadow-xl text-gray-300 text-xs leading-relaxed pointer-events-none">
-                          <div className="text-white font-semibold text-xs mb-1" style={{ color: NODE_COLORS.yellow }}>
+                          <div className="text-white font-semibold text-xs mb-1">
                             {m.name} <span className="text-gray-500 font-normal">v{m.version}</span>
                           </div>
                           {m.description ?? 'External WASM plugin'}
@@ -278,7 +266,7 @@ export const NodePalette: React.FC<NodePaletteProps> = (p) => {
       <div className="p-3 border-t border-stagespace-border mt-2">
         <button
           onClick={p.onAddFrame}
-          className="w-full mb-2 px-2.5 py-1.5 rounded text-xs text-amber-300/80 border border-dashed border-amber-500/40 hover:border-amber-400/70 hover:text-amber-200 transition-colors"
+          className="w-full mb-2 px-2.5 py-1.5 rounded text-xs text-slate-300/80 border border-dashed border-slate-500/40 hover:border-slate-400/70 hover:text-slate-200 transition-colors"
           title="Add a resizable annotation frame — UI only, never sent to the engine"
         >
           ▭ + Frame

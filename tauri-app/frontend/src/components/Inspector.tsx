@@ -2,7 +2,7 @@ import React from 'react';
 import { useMoveEditorStore, Move } from '../store/useMoveEditorStore';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { TrackGrid } from './TrackGrid';
-import { PARAM_SCHEMA, NODE_DESCRIPTIONS, getCategoryColor, type ParamDef, type NodeParamValue, type GraphNodeData } from './nodeParamSchema';
+import { PARAM_SCHEMA, NODE_DESCRIPTIONS, type ParamDef, type NodeParamValue, type GraphNodeData } from './nodeParamSchema';
 import { NodeParamsPanel } from './panels/NodeParamsPanel';
 import { ParamInput } from './ParamInput';
 import type { MacrosState } from '../store/slices/macrosSlice';
@@ -98,7 +98,6 @@ export default function Inspector() {
   const selectedNodeType = (selectedNode?.data as GraphNodeData | undefined)?.type as NodeType | undefined;
   const selectedNodeSchema = selectedNodeType ? PARAM_SCHEMA[selectedNodeType] ?? [] : [];
   const selectedNodeParams: Record<string, NodeParamValue> = (selectedNode?.data as GraphNodeData | undefined)?.params ?? {};
-  const nodeColor = selectedNodeType ? getCategoryColor(selectedNodeType) : '#4b5563';
 
   // ── Audio mod UI ──
 
@@ -244,8 +243,7 @@ export default function Inspector() {
               {selectedNode && selectedNodeType ? (
                 <>
                   <div className="flex items-center gap-2 px-1 pb-2">
-                    <span className="w-2 h-2 rounded-full" style={{ background: nodeColor }} />
-                    <span className="text-white text-xs font-semibold">{selectedNodeType}</span>
+                                        <span className="text-white text-xs font-semibold">{selectedNodeType}</span>
                     {NODE_DESCRIPTIONS[selectedNodeType] && (
                       <span className="text-gray-400 text-xs ml-auto truncate" title={NODE_DESCRIPTIONS[selectedNodeType]}>
                         {NODE_DESCRIPTIONS[selectedNodeType]?.split('—')[0]}
@@ -341,17 +339,17 @@ export default function Inspector() {
                 Radius/Height en sous-groupe « global » : ils n'existent pas
                 sur Animation — scope merge (Global transform). */}
             <Section title="Transform" icon={<Zap size={12} />}>
-              <Slider label="Speed" value={current.speed} min={0} max={4} step={0.05} onChange={(v) => handleTransform('speed', v)} unit="x" accent="purple" />
-              <Slider label="Scale" value={current.scale} min={0} max={4} step={0.05} onChange={(v) => handleTransform('scale', v)} accent="purple" />
-              <Slider label="Shift X" value={current.offset_x} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_x', v)} accent="purple" />
-              <Slider label="Shift Y" value={current.offset_y} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_y', v)} accent="purple" />
-              <Slider label="Shift Z" value={current.offset_z} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_z', v)} accent="purple" />
-              <Slider label="Yaw" value={current.yaw} min={-180} max={180} step={1} onChange={(v) => handleTransform('yaw', v)} unit="°" accent="purple" />
-              <Slider label="Pitch" value={current.pitch} min={-90} max={90} step={1} onChange={(v) => handleTransform('pitch', v)} unit="°" accent="purple" />
-              <Slider label="Roll" value={current.roll} min={-180} max={180} step={1} onChange={(v) => handleTransform('roll', v)} unit="°" accent="purple" />
+              <Slider label="Speed" value={current.speed} min={0} max={4} step={0.05} onChange={(v) => handleTransform('speed', v)} unit="x" />
+              <Slider label="Scale" value={current.scale} min={0} max={4} step={0.05} onChange={(v) => handleTransform('scale', v)} />
+              <Slider label="Shift X" value={current.offset_x} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_x', v)} />
+              <Slider label="Shift Y" value={current.offset_y} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_y', v)} />
+              <Slider label="Shift Z" value={current.offset_z} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_z', v)} />
+              <Slider label="Yaw" value={current.yaw} min={-180} max={180} step={1} onChange={(v) => handleTransform('yaw', v)} unit="°" />
+              <Slider label="Pitch" value={current.pitch} min={-90} max={90} step={1} onChange={(v) => handleTransform('pitch', v)} unit="°" />
+              <Slider label="Roll" value={current.roll} min={-180} max={180} step={1} onChange={(v) => handleTransform('roll', v)} unit="°" />
               <div className="pt-1 mt-1 border-t border-gray-800 text-[10px] uppercase tracking-wider text-gray-600" title="Scope merge — tous les moves (Global transform)">— global —</div>
-              <Slider label="Radius" value={macros.radius_scale} min={0} max={4} step={0.05} onChange={(v) => handleMacro('radius_scale', v)} unit="x" accent="cyan" />
-              <Slider label="Height" value={macros.height_offset} min={-5} max={5} step={0.1} onChange={(v) => handleMacro('height_offset', v)} unit="m" accent="cyan" />
+              <Slider label="Radius" value={macros.radius_scale} min={0} max={4} step={0.05} onChange={(v) => handleMacro('radius_scale', v)} unit="x" />
+              <Slider label="Height" value={macros.height_offset} min={-5} max={5} step={0.1} onChange={(v) => handleMacro('height_offset', v)} unit="m" />
             </Section>
           </>
         )}
@@ -401,7 +399,7 @@ export default function Inspector() {
           {!showExpert && (
             <>
               <Slider label="Spread" value={current.phase_spread} min={0} max={1} step={0.05}
-                onChange={(v) => updateCurrent({ phase_spread: v })} accent="cyan" />
+                onChange={(v) => updateCurrent({ phase_spread: v })} />
               <div className="text-gray-400 text-xs -mt-1">Phase offset between tracks (chasing effect)</div>
             </>
           )}

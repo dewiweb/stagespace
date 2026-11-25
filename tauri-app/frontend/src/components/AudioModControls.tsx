@@ -62,7 +62,7 @@ export function AudioModAdder({ onAdd, onCancel }: { onAdd: (mod: AudioMod) => v
       </div>
       <Slider label={`Intensity${ROTATION_TARGETS.has(target) ? ' (deg)' : ''}`}
         value={amount} min={0} {...amountRange(target)}
-        onChange={setAmount} accent="cyan" />
+        onChange={setAmount} tone="modulation" />
       <div className="flex gap-1.5">
         <button onClick={() => onAdd({ source, target, amount, base_value: 0, smoothing: 0.3 })}
           className="flex-1 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-xs rounded font-medium">
@@ -106,13 +106,13 @@ export function AudioModList() {
               const mods = [...current.audio_mods];
               mods[i] = { ...mod, amount: v };
               updateCurrent({ audio_mods: mods });
-            }} accent="cyan" />
+            }} tone="modulation" />
           <Slider label="Lissage" value={mod.smoothing} min={0} max={0.95} step={0.05}
             onChange={(v) => {
               const mods = [...current.audio_mods];
               mods[i] = { ...mod, smoothing: v };
               updateCurrent({ audio_mods: mods });
-            }} accent="cyan" />
+            }} tone="modulation" />
         </div>
       ))}
       {showAdd ? (

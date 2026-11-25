@@ -51,7 +51,6 @@ export const ParamInput: React.FC<{
             min={def.min}
             max={def.max}
             step={def.step ?? 0.1}
-            accent="cyan"
             layout="stack"
             live={compact ? undefined : live}
             onChange={onChange}

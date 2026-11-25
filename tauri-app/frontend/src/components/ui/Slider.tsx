@@ -16,8 +16,9 @@ interface SliderProps {
   onChange: (v: number) => void;
   /// Suffixe affiché après la valeur ("°", "%", "s", "x")
   unit?: string;
-  /// Couleur d'accent du range
-  accent?: 'blue' | 'green' | 'purple' | 'cyan' | 'orange' | 'indigo' | 'gray';
+  /// Teinte fonctionnelle du range — accent chrome par défaut,
+  /// modulation pour les paramètres pilotés par un signal.
+  tone?: 'accent' | 'modulation';
   layout?: 'row' | 'stack' | 'bare';
   /// Affiche la valeur en vert quand le contrôle agit sur un move live
   live?: boolean;
@@ -27,14 +28,9 @@ interface SliderProps {
   className?: string;
 }
 
-const ACCENTS: Record<NonNullable<SliderProps['accent']>, string> = {
-  blue: 'accent-blue-500',
-  green: 'accent-green-500',
-  purple: 'accent-purple-500',
-  cyan: 'accent-cyan-500',
-  orange: 'accent-orange-500',
-  indigo: 'accent-indigo-500',
-  gray: 'accent-gray-500',
+const TONES: Record<NonNullable<SliderProps['tone']>, string> = {
+  accent: 'accent-stagespace-accent',
+  modulation: 'accent-stagespace-modulation',
 };
 
 export const Slider: React.FC<SliderProps> = ({
@@ -45,7 +41,7 @@ export const Slider: React.FC<SliderProps> = ({
   step,
   onChange,
   unit,
-  accent = 'blue',
+  tone = 'accent',
   layout = 'row',
   live = false,
   disabled = false,
@@ -64,7 +60,7 @@ export const Slider: React.FC<SliderProps> = ({
       value={value}
       disabled={disabled}
       onChange={(e) => onChange(parseFloat(e.target.value))}
-      className={`nodrag flex-1 min-w-0 h-1.5 ${ACCENTS[accent]} disabled:opacity-30 ${
+      className={`nodrag flex-1 min-w-0 h-1.5 ${TONES[tone]} disabled:opacity-30 ${
         layout === 'bare' ? className : ''
       }`}
     />
@@ -78,7 +74,7 @@ export const Slider: React.FC<SliderProps> = ({
         <div className="flex items-center justify-between gap-2">
           <span className="text-gray-400 text-xs truncate" title={label}>{label}</span>
           <span
-            className={`text-xs font-mono ${live ? 'text-green-400' : 'text-white'}`}
+            className={`text-xs font-mono ${live ? 'text-stagespace-live' : 'text-white'}`}
           >
             {display}
           </span>
@@ -98,7 +94,7 @@ export const Slider: React.FC<SliderProps> = ({
       {input}
       <span
         className={`text-xs font-mono w-12 text-right flex-shrink-0 ${
-          live ? 'text-green-400' : 'text-white'
+          live ? 'text-stagespace-live' : 'text-white'
         }`}
       >
         {display}

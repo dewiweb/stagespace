@@ -40,7 +40,6 @@ export const GlobalTransformSurface: React.FC<{
         label={label}
         value={macros[key] as number}
         min={min} max={max} step={step} unit={unit} decimals={dec}
-        accent="purple"
         layout={layout}
         live={live}
         onChange={(v) => set(key, v)}
