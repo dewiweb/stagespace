@@ -44,8 +44,8 @@ export const StateChip: React.FC<{
   /// mixte ne ment plus sur la composition.
   const TONES = {
     orange: {
-      btn: 'bg-orange-800/70 hover:bg-orange-700 text-orange-100',
-      rowBtn: 'bg-gray-700 hover:bg-orange-700',
+      btn: 'bg-stagespace-warning/70 hover:bg-stagespace-warning text-orange-100',
+      rowBtn: 'bg-gray-700 hover:bg-stagespace-warning',
     },
     pink: {
       btn: 'bg-pink-800/70 hover:bg-pink-700 text-pink-100',

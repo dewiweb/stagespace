@@ -1022,7 +1022,7 @@ const ScoreView: React.FC = () => {
       />
       {/* Poignée de partage éditeur/timeline */}
       <div
-        className="h-1 shrink-0 cursor-row-resize bg-gray-800 hover:bg-cyan-700/60 border-y border-gray-900"
+        className="h-1 shrink-0 cursor-row-resize bg-gray-800 hover:bg-stagespace-accent/40 border-y border-gray-900"
         title="Glisser pour régler le partage éditeur / timeline"
         onPointerDown={(e) => {
           e.preventDefault();
@@ -1176,7 +1176,7 @@ const ScoreView: React.FC = () => {
         <input
           autoFocus
           defaultValue={markers?.find((m) => m.id === markerEdit.id)?.name}
-          className="fixed z-menu bg-gray-900 border border-cyan-600 rounded px-2 py-1 text-xs text-gray-200"
+          className="fixed z-menu bg-gray-900 border border-stagespace-accent rounded px-2 py-1 text-xs text-gray-200"
           style={{ left: markerEdit.x, top: markerEdit.y, width: 160 }}
           onBlur={(e) => { renameMarker(markerEdit.id, e.target.value.trim()); setMarkerEdit(null); }}
           onKeyDown={(e) => {
@@ -1194,11 +1194,11 @@ const ScoreView: React.FC = () => {
           widthClass="max-w-lg"
         >
           {issues.length === 0 ? (
-            <p className="text-xs text-green-400 px-1 py-2">Aucun problème détecté — la partition jouera comme affichée.</p>
+            <p className="text-xs text-stagespace-live px-1 py-2">Aucun problème détecté — la partition jouera comme affichée.</p>
           ) : (
             <ul className="max-h-72 overflow-y-auto space-y-1 px-1 py-1">
               {issues.map((it, i) => (
-                <li key={i} className={`text-[11px] leading-snug ${it.level === 'error' ? 'text-red-300' : 'text-orange-300/90'}`}>
+                <li key={i} className={`text-[11px] leading-snug ${it.level === 'error' ? 'text-stagespace-danger' : 'text-stagespace-warning'}`}>
                   <span className="font-bold mr-1">{it.level === 'error' ? '✕' : '⚠'}</span>
                   {it.message}
                 </li>

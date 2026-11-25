@@ -194,7 +194,7 @@ export const NodePalette: React.FC<NodePaletteProps> = (p) => {
                         <span className="truncate">{m.name}</span>
                         {m.kind !== 'engine' && (
                           <span
-                            className="text-[11px] font-bold tracking-wide flex-shrink-0 px-1 rounded bg-sky-900/60 text-sky-300"
+                            className="text-[11px] font-bold tracking-wide flex-shrink-0 px-1 rounded bg-stagespace-info/20 text-stagespace-info"
                             title={m.kind === 'modifier' ? 'Modifier: wraps one trajectory (input port)' : 'Composite: combines 2 trajectories (A/B ports)'}
                           >
                             {m.kind === 'modifier' ? 'MOD' : '2IN'}
@@ -243,14 +243,14 @@ export const NodePalette: React.FC<NodePaletteProps> = (p) => {
                       });
                       if (typeof selected === 'string') void p.importPlugin(selected);
                     }}
-                    className="w-full text-left px-2.5 py-1 text-gray-500 hover:text-yellow-400 text-xs rounded transition-colors"
+                    className="w-full text-left px-2.5 py-1 text-gray-500 hover:text-stagespace-accent text-xs rounded transition-colors"
                     title="Import a .ssx bundle (copy + rescan)"
                   >
                     + Import .ssx…
                   </button>
                   <button
                     onClick={() => void p.reloadPlugins()}
-                    className="w-full text-left px-2.5 py-1 text-gray-500 hover:text-yellow-400 text-xs rounded transition-colors"
+                    className="w-full text-left px-2.5 py-1 text-gray-500 hover:text-stagespace-accent text-xs rounded transition-colors"
                     title="Rescan the plugins folder"
                   >
                     ↻ Rescan plugins

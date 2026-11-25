@@ -2,10 +2,10 @@ import { useToastStore, Toast, ToastType } from '../store/useToastStore';
 import { X, TriangleAlert, CircleCheck, Info } from 'lucide-react';
 
 const STYLES: Record<ToastType, { bg: string; border: string; icon: React.ReactNode }> = {
-  error:   { bg: 'bg-red-900/95',     border: 'border-red-500',   icon: <X size={13} /> },
-  warning: { bg: 'bg-orange-900/95',  border: 'border-stagespace-warning', icon: <TriangleAlert size={13} /> },
-  info:    { bg: 'bg-blue-900/95',    border: 'border-blue-500',  icon: <Info size={13} /> },
-  success: { bg: 'bg-green-900/95',   border: 'border-green-500', icon: <CircleCheck size={13} /> },
+  error:   { bg: 'bg-stagespace-danger/15', border: 'border-stagespace-danger',   icon: <X size={13} /> },
+  warning: { bg: 'bg-stagespace-warning/15', border: 'border-stagespace-warning', icon: <TriangleAlert size={13} /> },
+  info:    { bg: 'bg-stagespace-info/15', border: 'border-stagespace-info',  icon: <Info size={13} /> },
+  success: { bg: 'bg-stagespace-live/15', border: 'border-stagespace-live', icon: <CircleCheck size={13} /> },
 };
 
 function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string) => void }) {

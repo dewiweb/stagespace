@@ -123,19 +123,19 @@ export const NodeParamsPanel: React.FC<{
               onClick={() => setParamNodeId(n.id)}
               className={`px-2 py-1 rounded text-xs font-medium transition-colors inline-flex items-center gap-1 ${
                 active
-                  ? 'bg-cyan-700 text-white'
+                  ? 'bg-stagespace-accent text-white'
                   : 'bg-gray-800 text-gray-400 hover:text-white border border-gray-700'
               }`}
               title={`Node ${i + 1} — params`}
             >
-              {nodeHasPins && <Pin size={8} className="text-cyan-400 flex-shrink-0" />}
+              {nodeHasPins && <Pin size={8} className="text-stagespace-accent flex-shrink-0" />}
               {chipLabel}{occ > 0 ? ` ${occ}` : ''}{chipMissing ? ' ⚠' : ''}
             </button>
           );
         })}
       </div>
       {performMode && pinned.length > 0 && (
-        <div className="text-cyan-500/80 text-[11px] font-mono">
+        <div className="text-stagespace-accent/80 text-[11px] font-mono">
           {visibleSchema.length} pinned parameter{visibleSchema.length > 1 ? 's' : ''} — pin/unpin in Edit mode
         </div>
       )}
@@ -168,7 +168,7 @@ export const NodeParamsPanel: React.FC<{
                 onClick={() => togglePin(d.key)}
                 className={`mt-1.5 flex-shrink-0 transition-colors ${
                   pinnedSet.has(d.key)
-                    ? 'text-cyan-400 hover:text-cyan-300'
+                    ? 'text-stagespace-accent hover:text-blue-300'
                     : 'text-gray-500 hover:text-gray-200'
                 }`}
                 title={pinnedSet.has(d.key)

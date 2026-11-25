@@ -30,7 +30,7 @@ export function AudioModAdder({ onAdd, onCancel }: { onAdd: (mod: AudioMod) => v
   };
 
   return (
-    <div className="bg-gray-800/80 rounded p-2 space-y-2 border border-indigo-900/40">
+    <div className="bg-gray-800/80 rounded p-2 space-y-2 border border-stagespace-modulation/40">
       <div>
         <div className="text-gray-400 text-xs mb-0.5">Source</div>
         <select value={typeof source === 'string' ? source : 'spectrum_band'}
@@ -65,7 +65,7 @@ export function AudioModAdder({ onAdd, onCancel }: { onAdd: (mod: AudioMod) => v
         onChange={setAmount} tone="modulation" />
       <div className="flex gap-1.5">
         <button onClick={() => onAdd({ source, target, amount, base_value: 0, smoothing: 0.3 })}
-          className="flex-1 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs rounded font-medium">
+          className="flex-1 py-1.5 bg-stagespace-modulation hover:brightness-110 text-white text-xs rounded font-medium">
           Add
         </button>
         <IconButton onClick={onCancel}>
@@ -95,7 +95,7 @@ export function AudioModList() {
       {current.audio_mods.map((mod, i) => (
         <div key={i} className="bg-gray-800/60 rounded p-2 space-y-1.5">
           <div className="flex items-center justify-between">
-            <span className="text-indigo-300 text-xs font-mono">
+            <span className="text-stagespace-modulation text-xs font-mono">
               {audioSourceLabel(mod.source)} → {audioTargetLabel(mod.target)}
             </span>
             <button onClick={() => removeAudioMod(i)} className="text-red-400 text-xs"><X size={11} /></button>
@@ -119,7 +119,7 @@ export function AudioModList() {
         <AudioModAdder onAdd={(mod) => { addAudioMod(mod); setShowAdd(false); }} onCancel={() => setShowAdd(false)} />
       ) : (
         <button onClick={() => setShowAdd(true)}
-          className="w-full py-1.5 bg-indigo-900/40 hover:bg-indigo-800/60 text-indigo-300 text-xs rounded font-medium">
+          className="w-full py-1.5 bg-stagespace-modulation/15 hover:bg-stagespace-modulation/25 text-stagespace-modulation text-xs rounded font-medium">
           + Add audio mod
         </button>
       )}
