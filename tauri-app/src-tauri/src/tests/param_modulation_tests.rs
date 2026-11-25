@@ -100,6 +100,7 @@ mod param_modulation_tests {
             end_mode: stagespace_engines::EndMode::default(),
             anchor_mode: stagespace_engines::AnchorMode::default(),
             anchor_target: None,
+            anchor_pose: None,
             clear_manual_positions: false,
         };
         spawn_move_for_recall(spec, &sh).expect("spawn with signal graph");

@@ -141,6 +141,7 @@ pub async fn store_cue(
                     end_mode: Some(m.end_mode),
                     anchor_mode: Some(m.anchor_mode),
                     anchor_target: m.anchor_target,
+                    anchor_pose: m.anchor_pose.clone(),
                 }
             })
             .collect()
@@ -829,6 +830,7 @@ pub(crate) fn recall_cue_inner(
                 end_mode: snap.end_mode.unwrap_or_default(),
                 anchor_mode: snap.anchor_mode.unwrap_or_default(),
                 anchor_target: snap.anchor_target,
+                anchor_pose: snap.anchor_pose.clone(),
                 clear_manual_positions: false,
             };
             match spawn_move_for_recall(spec, &sh) {

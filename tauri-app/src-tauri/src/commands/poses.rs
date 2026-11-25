@@ -441,6 +441,7 @@ fn spawn_pose_ramp(
         end_mode: stagespace_engines::EndMode::Hold,
         anchor_mode: stagespace_engines::AnchorMode::Origin,
         anchor_target: None,
+        anchor_pose: None,
         // Takeover explicite (design §6.9) — sans ça la rampe serait
         // masquée par les positions manuelles puis l'objet sauterait.
         clear_manual_positions: true,

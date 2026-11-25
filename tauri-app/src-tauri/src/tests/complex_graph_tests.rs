@@ -273,6 +273,7 @@ mod complex_graph_tests {
                     end_mode: stagespace_engines::EndMode::default(),
                     anchor_mode: stagespace_engines::AnchorMode::default(),
                     anchor_target: None,
+                    anchor_pose: None,
                     clear_manual_positions: false,
                 }
             };

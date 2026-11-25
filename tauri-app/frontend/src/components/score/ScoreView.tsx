@@ -960,8 +960,9 @@ const ScoreView: React.FC = () => {
               if (field === 'loopMode') g.setSlotLoopMode(id, v as 'loop' | 'oneshot');
               else if (field === 'direction') g.setSlotDirection(id, v as 'forward' | 'backward' | 'ping_pong');
               else if (field === 'endMode') g.setSlotEndMode(id, v as 'revert' | 'hold');
-              else if (field === 'anchorMode') g.setSlotAnchorMode(id, v as 'origin' | 'current' | 'follow');
+              else if (field === 'anchorMode') g.setSlotAnchorMode(id, v as 'origin' | 'current' | 'follow' | 'pose');
               else if (field === 'anchorTarget') g.setSlotAnchorTarget(id, Number(v));
+              else if (field === 'anchorPose') g.setSlotAnchorPose(id, String(v));
               else if (field === 'speed') g.setSlotMacros(id, { speed: Number(v) });
             }}
             clipLabel={clipLabel}

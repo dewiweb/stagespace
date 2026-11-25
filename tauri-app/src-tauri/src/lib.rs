@@ -154,6 +154,8 @@ pub struct Movement {
     pub anchor_mode: stagespace_engines::AnchorMode,
     /// Cible de l'ancrage follow (obj_index).
     pub anchor_target: Option<u32>,
+    /// Nom de la pose de l'ancrage pose — snapshotée pour les cues.
+    pub anchor_pose: Option<String>,
     /// Génération de l'id — un sleeper de fade-out ne touche l'entrée que
     /// si la génération correspond encore (protection id réutilisé).
     pub generation: u64,

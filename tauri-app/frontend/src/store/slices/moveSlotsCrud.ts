@@ -25,7 +25,7 @@ import {
 
 type CreatorArgs = Parameters<StateCreator<MoveSlotsStore, [], [], MoveSlotsSlice>>;
 
-export const createSlotCrudMethods = (set: CreatorArgs[0], get: CreatorArgs[1]): Pick<MoveSlotsSlice, 'setSlotSignalGraph' | 'selectSlotForEditing' | 'addMoveSlot' | 'duplicateMoveSlot' | 'insertMoveSlots' | 'removeMoveSlot' | 'renameMoveSlot' | 'setSlotTemplate' | 'setSlotTracks' | 'setSlotMacros' | 'setSlotFadeDuration' | 'setSlotEndMode' | 'setSlotAnchorMode' | 'setSlotAnchorTarget' | 'setSlotLoopMode' | 'setSlotDirection' | 'updateSlotAnimationFields' | 'toggleSlotPreview' | 'addToSetlist' | 'removeFromSetlist' | 'moveSetlistItem'> => ({
+export const createSlotCrudMethods = (set: CreatorArgs[0], get: CreatorArgs[1]): Pick<MoveSlotsSlice, 'setSlotSignalGraph' | 'selectSlotForEditing' | 'addMoveSlot' | 'duplicateMoveSlot' | 'insertMoveSlots' | 'removeMoveSlot' | 'renameMoveSlot' | 'setSlotTemplate' | 'setSlotTracks' | 'setSlotMacros' | 'setSlotFadeDuration' | 'setSlotEndMode' | 'setSlotAnchorMode' | 'setSlotAnchorTarget' | 'setSlotAnchorPose' | 'setSlotLoopMode' | 'setSlotDirection' | 'updateSlotAnimationFields' | 'toggleSlotPreview' | 'addToSetlist' | 'removeFromSetlist' | 'moveSetlistItem'> => ({
   setSlotSignalGraph: (id, graph) => {
     set((s) => {
       const moveSlots = s.moveSlots.map((sl) =>
@@ -388,6 +388,14 @@ export const createSlotCrudMethods = (set: CreatorArgs[0], get: CreatorArgs[1]):
   setSlotAnchorTarget: (id, target) => {
     set((s) => {
       const newSlots = s.moveSlots.map((sl) => sl.id === id ? { ...sl, anchorTarget: target } : sl);
+      saveSlotsToStorage(newSlots);
+      return { moveSlots: newSlots };
+    });
+  },
+
+  setSlotAnchorPose: (id, pose) => {
+    set((s) => {
+      const newSlots = s.moveSlots.map((sl) => sl.id === id ? { ...sl, anchorPose: pose } : sl);
       saveSlotsToStorage(newSlots);
       return { moveSlots: newSlots };
     });

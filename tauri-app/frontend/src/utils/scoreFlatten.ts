@@ -56,6 +56,7 @@ function slotFromMove(cue: Cue, mv: MoveSnapshot, index: number, osc: number[]):
     endMode: (mv.end_mode ?? undefined) as MoveSlot['endMode'],
     anchorMode: (mv.anchor_mode ?? undefined) as MoveSlot['anchorMode'],
     anchorTarget: mv.anchor_target != null ? osc[mv.anchor_target] : undefined,
+    anchorPose: (mv.anchor_pose ?? undefined) as string | undefined,
     phaseSpread: 0,
     assignments: [],
     audioMods: [],

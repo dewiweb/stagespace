@@ -48,8 +48,9 @@ export interface MoveSlotsSlice {
   setSlotFadeDuration: (id: string, fade: number) => void;
   setSlotLoopMode: (id: string, mode: 'loop' | 'oneshot') => void;
   setSlotEndMode: (id: string, mode: 'revert' | 'hold') => void;
-  setSlotAnchorMode: (id: string, mode: 'origin' | 'current' | 'follow') => void;
+  setSlotAnchorMode: (id: string, mode: 'origin' | 'current' | 'follow' | 'pose') => void;
   setSlotAnchorTarget: (id: string, target: number) => void;
+  setSlotAnchorPose: (id: string, pose: string) => void;
   setSlotDirection: (id: string, direction: 'forward' | 'backward' | 'ping_pong') => void;
   /// Champs "animation" du slot (fade cycle, phase spread, assignments, audio mods)
   /// — write-through depuis l'Inspector (updateCurrent → ici).

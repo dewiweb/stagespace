@@ -82,6 +82,7 @@ mod recall_tests {
             end_mode: stagespace_engines::EndMode::default(),
             anchor_mode: stagespace_engines::AnchorMode::default(),
             anchor_target: None,
+            anchor_pose: None,
         }
     }
 
@@ -212,6 +213,7 @@ mod recall_tests {
             end_mode: None,
             anchor_mode: None,
             anchor_target: None,
+            anchor_pose: None,
         }];
         recall_cue_inner(cue, sh.clone()).expect("recall with respawn");
 
@@ -267,6 +269,7 @@ mod recall_tests {
             end_mode: stagespace_engines::EndMode::default(),
             anchor_mode: stagespace_engines::AnchorMode::default(),
             anchor_target: None,
+            anchor_pose: None,
             clear_manual_positions: false,
         };
         spawn_move_for_recall(spec, &sh).expect("initial spawn");
@@ -293,6 +296,7 @@ mod recall_tests {
             end_mode: None,
             anchor_mode: None,
             anchor_target: None,
+            anchor_pose: None,
         }];
         recall_cue_inner(cue, sh.clone()).expect("recall");
 
@@ -508,6 +512,7 @@ mod recall_tests {
             end_mode: stagespace_engines::EndMode::default(),
             anchor_mode: stagespace_engines::AnchorMode::default(),
             anchor_target: None,
+            anchor_pose: None,
             clear_manual_positions: false,
         };
         let err = spawn_move(spec, &sh).expect_err("spawn doit avorter pendant un recall");

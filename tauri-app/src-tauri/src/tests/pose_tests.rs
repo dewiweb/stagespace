@@ -401,4 +401,74 @@ mod pose_tests {
             "takeover explicite — même sémantique que goto"
         );
     }
+    // ── AnchorMode::Pose — résolution de la capture d'ancre (P4) ──
+
+    #[test]
+    fn anchor_pose_capture_prefers_pose_positions() {
+        use crate::commands::merge_commands::move_management::resolve_pose_anchor_capture;
+        let sh = make_shared();
+        {
+            let merge = sh.merge_runtime.lock().unwrap_or_else(|e| e.into_inner());
+            merge.set_manual_position(0, [9.0, 9.0, 0.0]); // live ≠ pose
+            merge.set_manual_position(1, [8.0, 8.0, 0.0]);
+        }
+        let mut positions = HashMap::new();
+        positions.insert(1u32, [3.0, 0.0, 0.0]); // track 1 → obj 0
+        positions.insert(2u32, [4.0, 0.0, 0.0]); // track 2 → obj 1
+        sh.poses.lock().unwrap_or_else(|e| e.into_inner()).insert(
+            "line".to_string(),
+            Pose {
+                name: "line".to_string(),
+                positions,
+            },
+        );
+        // distribution tracks [1,2] → obj [0,1]
+        let cap = resolve_pose_anchor_capture(&[1, 2], &[0, 1], Some("line"), &sh);
+        assert_eq!(cap.len(), 2);
+        assert!((cap[&0].x - 3.0).abs() < 1e-9, "pose gagne sur live");
+        assert!((cap[&1].x - 4.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn anchor_pose_capture_falls_back_to_live_for_missing_track() {
+        use crate::commands::merge_commands::move_management::resolve_pose_anchor_capture;
+        let sh = make_shared();
+        {
+            let merge = sh.merge_runtime.lock().unwrap_or_else(|e| e.into_inner());
+            merge.set_manual_position(1, [7.0, 1.0, 0.0]); // obj 1 live
+        }
+        let mut positions = HashMap::new();
+        positions.insert(1u32, [3.0, 0.0, 0.0]); // seulement track 1
+        sh.poses.lock().unwrap_or_else(|e| e.into_inner()).insert(
+            "partial".to_string(),
+            Pose {
+                name: "partial".to_string(),
+                positions,
+            },
+        );
+        // distribution tracks [1,2] — track 2 absente de la pose
+        let cap = resolve_pose_anchor_capture(&[1, 2], &[0, 1], Some("partial"), &sh);
+        assert!((cap[&0].x - 3.0).abs() < 1e-9, "track 1 depuis la pose");
+        assert!(
+            (cap[&1].x - 7.0).abs() < 1e-9,
+            "track 2 absente → fallback live, got {:?}",
+            cap.get(&1)
+        );
+    }
+
+    #[test]
+    fn anchor_pose_unknown_pose_falls_back_to_live() {
+        use crate::commands::merge_commands::move_management::resolve_pose_anchor_capture;
+        let sh = make_shared();
+        {
+            let merge = sh.merge_runtime.lock().unwrap_or_else(|e| e.into_inner());
+            merge.set_manual_position(0, [5.0, 5.0, 0.0]);
+        }
+        let cap = resolve_pose_anchor_capture(&[1], &[0], Some("ghost"), &sh);
+        assert!(
+            (cap[&0].x - 5.0).abs() < 1e-9,
+            "pose inconnue → capture live (= Current), got {:?}",
+            cap.get(&0)
+        );
+    }
 }
