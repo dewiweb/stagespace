@@ -71,7 +71,7 @@ export const PosesPanel: React.FC<{ fill?: boolean }> = ({ fill = true }) => {
         <button
           onClick={capture}
           disabled={!newName.trim()}
-          className="px-2 py-1 rounded bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 text-xs font-bold disabled:opacity-30 disabled:cursor-not-allowed"
+          className="px-2 py-1 rounded bg-stagespace-accent/20 hover:bg-stagespace-accent/30 text-blue-200 text-xs font-bold disabled:opacity-30 disabled:cursor-not-allowed"
           title={
             selectedTrackIds.size > 0
               ? `Capture ${selectedTrackIds.size} selected track(s) at their current positions`
@@ -142,14 +142,14 @@ export const PosesPanel: React.FC<{ fill?: boolean }> = ({ fill = true }) => {
               )}
               <button
                 onClick={() => doPoseGoto(p.name, gotoDuration)}
-                className="px-2 py-0.5 rounded bg-gray-800 hover:bg-cyan-900/60 text-gray-400 hover:text-cyan-200 text-xs opacity-70 group-hover:opacity-100"
+                className="px-2 py-0.5 rounded bg-gray-800 hover:bg-teal-900/60 text-gray-400 hover:text-teal-200 text-xs opacity-70 group-hover:opacity-100"
                 title={`Goto — ramp objects to this pose in ${gotoDuration}s (smooth, holds the target at the end)`}
               >
                 goto
               </button>
               <button
                 onClick={() => doPoseSnap(p.name)}
-                className="px-2 py-0.5 rounded bg-gray-800 hover:bg-emerald-900/60 text-gray-400 hover:text-emerald-200 text-xs opacity-70 group-hover:opacity-100"
+                className="px-2 py-0.5 rounded bg-gray-800 hover:bg-teal-900/60 text-gray-400 hover:text-teal-200 text-xs opacity-70 group-hover:opacity-100"
                 title="Snap — instant recall (manual positions, partial: other tracks untouched)"
               >
                 snap

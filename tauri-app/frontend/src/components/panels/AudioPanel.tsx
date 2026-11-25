@@ -59,11 +59,11 @@ export default function AudioPanel() {
         <h3 className="text-gray-300 font-semibold text-xs flex-1">Audio Input</h3>
         {isListening && amp && (
           <div className="w-16 h-1.5 bg-gray-900 rounded-full overflow-hidden">
-            <div className="h-full bg-cyan-500 transition-all duration-100" style={{ width: `${Math.min(100, amp.rms * 100)}%` }} />
+            <div className="h-full bg-stagespace-accent transition-all duration-100" style={{ width: `${Math.min(100, amp.rms * 100)}%` }} />
           </div>
         )}
         {isListening && audioState.bpm && (
-          <span className="text-cyan-400 text-xs font-mono">{audioState.bpm.bpm.toFixed(0)} BPM</span>
+          <span className="text-stagespace-accent text-xs font-mono">{audioState.bpm.bpm.toFixed(0)} BPM</span>
         )}
         <span className="text-gray-400 text-xs">{collapsed ? '▸' : '▾'}</span>
       </button>
