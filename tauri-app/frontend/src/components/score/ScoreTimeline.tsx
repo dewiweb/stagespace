@@ -242,7 +242,7 @@ export const ScoreTimeline: React.FC<{
                 title={muted ? 'Lane mutée — ses événements/courbes ne jouent pas' : 'Mute lane'}
                 className={`w-3 h-3 rounded-sm border ${muted ? 'bg-orange-600 border-orange-400' : 'border-gray-600'}`}
               />
-              <span className={`text-[9px] font-bold tracking-wide flex-1 truncate ${muted ? 'text-gray-600 line-through' : isCond ? 'text-rose-300' : isOsc ? 'text-emerald-300' : isGfx ? 'text-cyan-300' : isSfx ? 'text-violet-300' : 'text-amber-300'}`}>
+              <span className={`text-[9px] font-bold tracking-wide flex-1 truncate ${muted ? 'text-gray-600 line-through' : isCond ? 'text-rose-300' : isOsc ? 'text-emerald-300' : isGfx ? 'text-cyan-300' : isSfx ? 'text-violet-300' : 'text-indigo-300'}`}>
                 {isCond ? 'CONDUCTOR' : isOsc ? 'OSC' : isGfx ? 'GLOBALFX' : isSfx ? 'SPATIALFX' : 'MODULATION'}
               </span>
               {(isCond || isOsc) && (
@@ -445,7 +445,7 @@ export const ScoreTimeline: React.FC<{
                     <div
                       key={`${param}-${i}`}
                       title={`${param} @${fmtMs(k.t)} = ${k.v}`}
-                      className={`absolute w-1.5 h-1.5 rounded-full ${isGfx ? 'bg-cyan-300/70' : isSfx ? 'bg-violet-300/70' : 'bg-amber-300/70'}`}
+                      className={`absolute w-1.5 h-1.5 rounded-full ${isGfx ? 'bg-cyan-300/70' : isSfx ? 'bg-violet-300/70' : 'bg-indigo-300/70'}`}
                       style={{ left: ms2px(k.t) - 3, top: 2 + (pi % 3) * 6 }}
                     />
                   )),
