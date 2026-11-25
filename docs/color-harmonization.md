@@ -129,7 +129,7 @@ Trois règles de câblage :
 | **H1 — fondations** | ✅ fait — tokens target/derived/info, `uiColors.ts`, CLIP_COLORS par familles (v2 validée au swatch : objectCtl fuchsia, zones→indigo) |
 | **H2 — surfaces live** | ✅ fait — StatusBar/PerformView/CuelistPanel migrés, convergé sur StatusChip/STATUS_TONES, arm unifié, sémaphores healthTone |
 | **H3 — viz 3D/radar** | ✅ fait — `VIZ` étendu (env/obj/draw/labels), violet pose-ghost → `target` vérifié end-to-end, hex three.js centralisés |
-| **H4 — ratissage + enforcement** | ⬜ à faire — chrome indigo (toggles), couleurs-décor SettingsModal, règle lint anti-palette brute hors allowlist |
+| **H4 — ratissage + enforcement** | 🔶 en cours — P0a/P0b/P1a/P1b faits (voir ci-dessous) ; reste P2 mécanique surfaces, P3 chrome/décor, règle lint |
 
 Branche : `feat/color-harmonization`. Reprise : lire les décisions
 H1/H2/H3 ci-dessous puis attaquer H4 — les points d'entrée sont les
@@ -238,6 +238,41 @@ migrées, couleurs-entités contraires à la doctrine.
 12. **Sévérité stop = danger à opacités** — stop-fade danger/60 ou
     outline, stop danger plein, stop-all/panic danger plein +
     taille/label. Yellow éliminé du système.
+
+**Progression implémentation (commits sur feat/color-harmonization) :**
+
+- **P0a** `f8c9e78` — LIVE rouge→vert (CustomNode), park re-teinté pink
+  `#ec4899` stase (sourceColors source unique, StateChip tone pink +
+  rows par état), warnings amber/yellow→orange (toasts, shared,
+  rf-node-warning, graph diagnostics, spatialfx, no-auth), fade-stop
+  →danger/60, setlist décors neutralisés, ConduiteView conforme H2
+  (cue rows amber pattern CuelistPanel, DRY-RUN neutre, TC live/
+  warning, RECALLING+pending amber, orphelins orange), toggles
+  booléens →accent unique
+- **P0b** `3264eae` — preview cyan→derived slate cross-surface (7
+  badges DOM + VIZ.obj.preview/previewEmissive). VIZ.draw.preview
+  (spline) volontairement conservé
+- **P1a** `da6ebab` — token modulation indigo #818cf8, Slider prop
+  tone (accent|modulation) — 21 call sites aplatis, NODE_COLORS
+  supprimé (palette/QuickAdd/nodes/minimap neutres), FrameNode→slate,
+  variables CSS --stagespace-* dans index.css. Drive-by : fix crash
+  canvas à l'ajout node Objects (track_ids string vs array)
+- **P1b** `1223204` — tokens graphe unifiés handles/edges/légendes
+  (Duration yellow-400, Spline violet-400, Signal indigo=modulation,
+  ObjectSet cyan=osc ; edges objectset/signal ajoutées), modulation
+  convergée indigo (ModChips, tab signal, dot, AudioModControls),
+  freeze indigo→pink stase (libère indigo pour modulation),
+  attention GestureStrip/SlotTile→pink
+
+**Reste à faire (P2/P3) :** violet pose panels (PosesPanel,
+ScorePoseEditor — morph/selection/focus), focus borders 7 teintes
+→accent (~20), migrations mécaniques score (warnings amber restants,
+picker aligné CLIP_COLORS, sélection unifiée, transport cyan), live
+surfaces (verts/rouges corrects→tokens), hex SVG résiduels
+(CuelistPanel mini-radar, courbes score), metering audio
+(monochrome+healthTone), SettingsModal arc-en-ciel sections, puis
+règle lint. Note : ports OSC 8001 peut être tenu par dev_bridge au
+lieu de tauri dev (warning sans impact).
 
 **Bloqueurs structurels avant la règle lint :**
 
