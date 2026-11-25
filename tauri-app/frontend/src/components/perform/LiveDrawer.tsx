@@ -104,7 +104,7 @@ export const LiveDrawer: React.FC = () => {
       disabled={needsSlot && !slot}
       className={`px-4 py-2.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors active:scale-95 ${
         scope === sc
-          ? sc === 'global' ? 'bg-orange-600 text-white' : 'bg-indigo-600 text-white'
+          ? sc === 'global' ? 'bg-orange-600 text-white' : 'bg-blue-600 text-white'
           : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white border border-gray-700'
       } disabled:opacity-30 disabled:cursor-not-allowed`}
       title={title}
@@ -125,7 +125,7 @@ export const LiveDrawer: React.FC = () => {
             onClick={() => { selectSlotForEditing(null); setScope(null); }}
             className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
               !editingSlotId
-                ? 'bg-indigo-600 text-white'
+                ? 'bg-blue-600 text-white'
                 : 'bg-gray-800 text-gray-400 hover:text-white border border-gray-700'
             }`}
             title="Overview — all tracks of all moves"
@@ -139,7 +139,7 @@ export const LiveDrawer: React.FC = () => {
             onClick={() => selectMove(s.id)}
             className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
               editingSlotId === s.id && scope !== 'global'
-                ? 'bg-indigo-600 text-white'
+                ? 'bg-blue-600 text-white'
                 : 'bg-green-900/40 text-green-300 hover:bg-green-800/50 border border-green-800/50'
             }`}
             title="Live params of this move"
@@ -175,11 +175,11 @@ export const LiveDrawer: React.FC = () => {
           <span className="text-gray-400 text-xs ml-2">tap a chip to edit a move</span>
         )}
         {slot && (
-          <span className="text-indigo-400/70 text-xs ml-2 flex items-center gap-1.5">
+          <span className="text-stagespace-accent/70 text-xs ml-2 flex items-center gap-1.5">
             editing:
             <button
               onClick={() => { selectSlotForEditing(null); setScope(null); }}
-              className="px-1.5 py-0.5 -my-0.5 rounded bg-indigo-900/60 hover:bg-indigo-800 text-indigo-200 font-semibold"
+              className="px-1.5 py-0.5 -my-0.5 rounded bg-stagespace-accent/20 hover:bg-stagespace-accent/30 text-blue-200 font-semibold"
               title="Click to deselect — back to overview (no move edited)"
             >
               {slot.name} ✕
@@ -230,14 +230,14 @@ export const LiveDrawer: React.FC = () => {
           boucle place → regarde → capture est complète dans cette
           surface (contrairement à la conduite, aveugle). */}
       {scope === 'poses' && (
-        <div className="border-t border-indigo-900/40 px-4 py-2 max-h-[42vh] overflow-y-auto">
+        <div className="border-t border-stagespace-border px-4 py-2 max-h-[42vh] overflow-y-auto">
           <PosesPanel fill={false} />
         </div>
       )}
 
       {/* ── Drawer PLAYBACK — lecture du move sélectionné ── */}
       {scope === 'playback' && slot && (
-        <div className="border-t border-indigo-900/40 px-4 py-2 flex items-start gap-6 overflow-x-auto max-h-[42vh] overflow-y-auto">
+        <div className="border-t border-stagespace-border px-4 py-2 flex items-start gap-6 overflow-x-auto max-h-[42vh] overflow-y-auto">
           {/* Speed — gros fader du move */}
           <div className="flex-shrink-0 w-64 space-y-1">
             <div className="text-gray-500 text-xs uppercase tracking-wider">Speed</div>
@@ -370,7 +370,7 @@ export const LiveDrawer: React.FC = () => {
 
       {/* ── Drawer PARAMS — chips de nodes + tous les params du node choisi ── */}
       {scope === 'params' && slot && (
-        <div className="border-t border-indigo-900/40 px-4 py-2 max-h-[42vh] overflow-y-auto">
+        <div className="border-t border-stagespace-border px-4 py-2 max-h-[42vh] overflow-y-auto">
           <NodeParamsPanel
             nodes={nodes}
             live={!!slot.movementId}
@@ -384,7 +384,7 @@ export const LiveDrawer: React.FC = () => {
 
       {/* ── Drawer TRACKS — assignation + depth/phase du move sélectionné ── */}
       {scope === 'tracks' && slot && (
-        <div className="border-t border-indigo-900/40 px-4 py-2 max-h-[42vh] overflow-y-auto">
+        <div className="border-t border-stagespace-border px-4 py-2 max-h-[42vh] overflow-y-auto">
           <TrackGrid
             compact
             tracks={allTrackInfos}
@@ -404,7 +404,7 @@ export const LiveDrawer: React.FC = () => {
             updateAssignment={updateAssignment}
           />
           {slot.movementId && (
-            <div className="text-green-700 text-xs mt-1">
+            <div className="text-stagespace-derived text-xs mt-1">
               live — toggles appliqués via hot-swap, depth/phase via update_animation_state
             </div>
           )}
@@ -413,7 +413,7 @@ export const LiveDrawer: React.FC = () => {
 
       {/* ── Drawer AUDIO — mods audio-réactifs du move sélectionné ── */}
       {scope === 'audio' && slot && (
-        <div className="border-t border-indigo-900/40 px-4 py-2 max-h-[42vh] overflow-y-auto">
+        <div className="border-t border-stagespace-border px-4 py-2 max-h-[42vh] overflow-y-auto">
           <AudioModList />
         </div>
       )}
