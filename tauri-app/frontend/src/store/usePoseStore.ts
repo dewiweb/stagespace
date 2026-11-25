@@ -9,6 +9,10 @@ import type { Pose } from '../types/generated/Pose';
 
 interface PoseStore {
   poses: Pose[];
+  /// Pose sélectionnée dans le panel — ses cibles s'affichent en fantômes
+  /// (cercles pointillés) dans la vue 3D. Partagé entre fenêtres via le store.
+  selectedPoseName: string | null;
+  selectPose: (name: string | null) => void;
   refreshPoses: () => Promise<void>;
   /// Capture les positions live — `trackIds` undefined = toutes les
   /// tracks connues ; la sélection courante est passée par l'UI.
@@ -24,6 +28,8 @@ interface PoseStore {
 
 export const usePoseStore = create<PoseStore>((set, get) => ({
   poses: [],
+  selectedPoseName: null,
+  selectPose: (name) => set({ selectedPoseName: name }),
 
   refreshPoses: async () => {
     try {
@@ -88,6 +94,7 @@ export const usePoseStore = create<PoseStore>((set, get) => ({
   deletePose: async (name) => {
     try {
       await invoke('pose_delete', { name });
+      if (get().selectedPoseName === name) set({ selectedPoseName: null });
       await get().refreshPoses();
     } catch (e) {
       toast.error(`Pose delete failed: ${e}`);

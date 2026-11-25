@@ -576,7 +576,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 onChange={(e) => setViewerRestGhosts(e.target.checked)}
                 className="accent-amber-500"
               />
-              Objets au repos — fantômes à leur position d'origine
+              Fantômes — objets au repos à leur origine, cibles de la pose sélectionnée
             </label>
           </section>
           </>)}

@@ -10,6 +10,8 @@ import { doPoseCapture, doPoseSnap, doPoseGoto, doPoseMorph } from '../../utils/
 
 export const PosesPanel: React.FC = () => {
   const poses = usePoseStore((s) => s.poses);
+  const selectedPoseName = usePoseStore((s) => s.selectedPoseName);
+  const selectPose = usePoseStore((s) => s.selectPose);
   const refreshPoses = usePoseStore((s) => s.refreshPoses);
   const deletePose = usePoseStore((s) => s.deletePose);
   const selectedTrackIds = useGraphStore((s) => s.selectedTrackIds);
@@ -88,8 +90,18 @@ export const PosesPanel: React.FC = () => {
               key={p.name}
               className="px-3 py-2 flex items-center gap-2 text-sm text-gray-300 hover:bg-gray-800/50 group"
             >
-              <div className="flex-1 min-w-0">
-                <div className="truncate">{p.name}</div>
+              <div
+                className="flex-1 min-w-0 cursor-pointer"
+                onClick={() => selectPose(selectedPoseName === p.name ? null : p.name)}
+                title={
+                  selectedPoseName === p.name
+                    ? 'Hide pose ghosts in the 3D view'
+                    : 'Show pose targets as ghosts in the 3D view'
+                }
+              >
+                <div className={`truncate ${selectedPoseName === p.name ? 'text-violet-300 font-semibold' : ''}`}>
+                  {selectedPoseName === p.name ? '◈ ' : ''}{p.name}
+                </div>
                 <div
                   className={`text-[10px] ${patched < ntracks ? 'text-amber-500' : 'text-gray-600'}`}
                   title={
