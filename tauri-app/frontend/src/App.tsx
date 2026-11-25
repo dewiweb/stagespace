@@ -2,6 +2,7 @@ import React from 'react';
 import NodeEditor from './components/NodeEditor';
 import Scene3D from './components/viewer3d/Scene3D';
 import MovesTable from './components/panels/MovesTable';
+import { PosesPanel } from './components/conduite/PosesPanel';
 import CuelistPanel from './components/panels/CuelistPanel';
 import ScorePanel from './components/panels/ScorePanel';
 import ShowLogPanel from './components/panels/ShowLogPanel';
@@ -325,6 +326,7 @@ function AppMain() {
   const secondaryTabs = [
     { id: 'moves', label: 'Moves', content: <MovesTable /> },
     { id: 'cues', label: 'Cues', content: <CuelistPanel /> },
+    { id: 'poses', label: 'Poses', content: <PosesPanel /> },
     { id: 'fx', label: 'FX', content: <SpatialFxPanel /> },
     { id: 'score', label: 'Score', content: <ScorePanel /> },
     { id: 'log', label: 'Log', content: <ShowLogPanel /> },

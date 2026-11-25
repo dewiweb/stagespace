@@ -139,6 +139,7 @@ export async function snapshotScoreAt(
       end_mode: (req.end_mode ?? null) as MoveSnapshot['end_mode'],
       anchor_mode: (req.anchor_mode ?? null) as MoveSnapshot['anchor_mode'],
       anchor_target: (req.anchor_target ?? null) as number | null,
+      anchor_pose: (req.anchor_pose ?? null) as string | null,
     });
     unionTracks = [...new Set([...unionTracks, ...((req.track_indices ?? []) as number[])])];
   }

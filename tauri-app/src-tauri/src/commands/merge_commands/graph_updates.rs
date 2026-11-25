@@ -26,7 +26,7 @@ pub async fn update_move_graph_merged(
     tauri::async_runtime::spawn_blocking(move || {
         // Snapshot court sous le lock — la compilation (lourde) se fait ensuite
         // SANS tenir `movements`, sinon tout edit live gèle stop/panic/recall.
-        let (generation, held_positions, signal_graph_json) = {
+        let (generation, held_positions, signal_graph_json, move_osc_ids, move_track_indices) = {
             let movements = lock_or_recover(&sh.movements);
             let movement = movements.get(&movement_id).ok_or_else(|| {
                 IpcError::not_found(format!("Movement '{movement_id}' not found"))
@@ -35,6 +35,8 @@ pub async fn update_move_graph_merged(
                 movement.generation,
                 movement.runtime.held_positions(),
                 movement.signal_graph.clone(),
+                movement.osc_ids.clone(),
+                movement.track_indices.clone(),
             )
         };
 
@@ -47,16 +49,24 @@ pub async fn update_move_graph_merged(
         // signal_fn la partagent (swap_compiled atomique — jamais de
         // signal_fn appariée à une position_fn d'un autre compile).
         let slots = stagespace_engines::param_slots::ParamSlots::build(&graph);
+        let pose_ctx = Some((move_osc_ids.as_slice(), move_track_indices.as_slice()));
         let compiled = compile_graph_live(
             &graph,
             &sh,
             Some(slots.clone()),
             Some(held_positions.clone()),
+            pose_ctx,
         )
         .map_err(IpcError::validation)?;
         // Instance jetable pour le TrajectorySampler — même table de slots.
-        let sample_fn = compile_graph_live(&graph, &sh, Some(slots.clone()), Some(held_positions))
-            .map_err(IpcError::validation)?;
+        let sample_fn = compile_graph_live(
+            &graph,
+            &sh,
+            Some(slots.clone()),
+            Some(held_positions),
+            pose_ctx,
+        )
+        .map_err(IpcError::validation)?;
 
         // Le signal graph du move est recompilé avec le graphe — les
         // cibles `param:` sont re-liées à la nouvelle table de slots.
@@ -187,7 +197,7 @@ pub async fn update_signal_graph(
                 // signal — une table de slots commune, swap_compiled
                 // atomique (les cibles `param:` se re-lient à la nouvelle
                 // table, aucun stale possible).
-                let (generation, held_positions, move_graph_json) = {
+                let (generation, held_positions, move_graph_json, move_osc_ids, move_track_indices) = {
                     let movements = lock_or_recover(&sh.movements);
                     let movement = movements
                         .get(&id)
@@ -196,22 +206,31 @@ pub async fn update_signal_graph(
                         movement.generation,
                         movement.runtime.held_positions(),
                         movement.graph_json.clone(),
+                        movement.osc_ids.clone(),
+                        movement.track_indices.clone(),
                     )
                 };
                 let audio_state = lock_or_recover(&sh.audio_state);
                 let move_graph = build_graph_from_json(&move_graph_json, &audio_state)
                     .map_err(|e| IpcError::validation(format!("Move graph parse failed: {e}")))?;
                 let slots = stagespace_engines::param_slots::ParamSlots::build(&move_graph);
+                let pose_ctx = Some((move_osc_ids.as_slice(), move_track_indices.as_slice()));
                 let compiled = compile_graph_live(
                     &move_graph,
                     &sh,
                     Some(slots.clone()),
                     Some(held_positions.clone()),
+                    pose_ctx,
                 )
                 .map_err(IpcError::validation)?;
-                let sample_fn =
-                    compile_graph_live(&move_graph, &sh, Some(slots.clone()), Some(held_positions))
-                        .map_err(IpcError::validation)?;
+                let sample_fn = compile_graph_live(
+                    &move_graph,
+                    &sh,
+                    Some(slots.clone()),
+                    Some(held_positions),
+                    pose_ctx,
+                )
+                .map_err(IpcError::validation)?;
                 let signal_fn = if graph_json.nodes.is_empty() {
                     stagespace_engines::signal_compiler::empty_signal_fn()
                 } else {

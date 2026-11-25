@@ -3,6 +3,7 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { useScoreStore, clipLaneIds, GLOBALFX_LANE, MODULATION_LANE, CONDUCTOR_LANE, OSC_LANE, SPATIALFX_LANE } from '../useScoreStore';
 import { resolveScoreClips, cueCoverage, parseOscArgs } from '../../utils/scoreResolve';
 import { useGraphStore, getInvokeCalls, clearInvokeCalls, resetStore } from './testHelpers';
+import { usePoseStore } from '../usePoseStore';
 import { useCuelistStore } from '../useCuelistStore';
 
 // S2/S3 — document du séquenceur + résolution clips → payloads
@@ -114,6 +115,53 @@ describe('score timeline (S2/S3 — lanes objets)', () => {
     expect(load?.args?.modulationCurves).toEqual({
       '/score/energy': [{ t: 0, v: 0 }, { t: 5000, v: 1 }],
     });
+  });
+
+
+  it('pose — payload référentiel résolu, gouverné par la lane conductor', async () => {
+    const st = useScoreStore.getState();
+    st.addClip({ type: 'pose', name: 'line-up', mode: 'goto', duration: 3, easing: 'smooth' }, 0);
+    st.addClip({ type: 'pose', name: 'line-up', mode: 'snap' }, 2000);
+    st.addClip({ type: 'pose', name: 'finale', mode: 'morph', fromPose: 'line-up', duration: 4 }, 4000);
+    const { clips, errors } = await resolveScoreClips(useScoreStore.getState());
+    expect(errors).toHaveLength(0);
+    expect(clips.map((c) => c.payload.kind)).toEqual(['Pose', 'Pose', 'Pose']);
+    // payload référentiel — le nom voyage, aucune position cuite
+    const d = clips[0].payload.data as Record<string, unknown>;
+    expect(d.name).toBe('line-up');
+    expect(d.mode).toBe('goto');
+    expect(d.duration).toBe(3);
+    expect(clips[1].lanes.map((l) => l.id)).toEqual(['conductor']);
+    const m = clips[2].payload.data as Record<string, unknown>;
+    expect(m.from_pose).toBe('line-up');
+    // conductor mutée → clips posé skippés comme les autres barrières
+    useScoreStore.getState().toggleLaneMute(CONDUCTOR_LANE);
+    const r2 = await resolveScoreClips(useScoreStore.getState());
+    expect(r2.clips).toHaveLength(0);
+  });
+
+  it('pose — couverture dérivée live de la distribution (blast radius)', async () => {
+    // La couverture effective d'un clip pose suit le contenu COURANT de
+    // la pose (référentiel) : c'est elle qui projette l'appartenance sur
+    // les lanes objet. Morph : c'est la cible B qui distribue, pas A.
+    usePoseStore.setState({
+      poses: [
+        { name: 'line-up', positions: { 1: [0, 0, 0], 3: [1, 0, 0] } },
+        { name: 'finale', positions: { 2: [0, 1, 0] } },
+      ],
+    });
+    const { effectiveTrackIds } = await import('../../utils/scoreResolve');
+    const mk = (ref: object) => ({ id: 'x', startMs: 0, lanes: [], ref } as never);
+    expect(effectiveTrackIds(mk({ type: 'pose', name: 'line-up', mode: 'snap' }))).toEqual([1, 3]);
+    // morph → distribution de la CIBLE (finale), pas de la source
+    expect(effectiveTrackIds(mk({ type: 'pose', name: 'finale', mode: 'morph', fromPose: 'line-up' }))).toEqual([2]);
+    // pose supprimée/inconnue → vide (la validation la signale)
+    expect(effectiveTrackIds(mk({ type: 'pose', name: 'inconnue', mode: 'snap' }))).toEqual([]);
+    // référentiel : l'édition de la pose déplace la couverture
+    usePoseStore.setState({
+      poses: [{ name: 'line-up', positions: { 1: [0, 0, 0], 3: [1, 0, 0], 5: [2, 0, 0] } }],
+    });
+    expect(effectiveTrackIds(mk({ type: 'pose', name: 'line-up', mode: 'goto' }))).toEqual([1, 3, 5]);
   });
 
   it('stopScore → score_timeline_stop + playing false', () => {

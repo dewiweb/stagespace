@@ -135,6 +135,7 @@ export async function buildSlotActivation(
       direction: slot.direction,
       end_mode: slot.endMode ?? 'revert',
       anchor_mode: slot.anchorMode ?? 'origin',
+      anchor_pose: slot.anchorMode === 'pose' ? (slot.anchorPose ?? null) : null,
       // Boundary UI→wire : l'opérateur saisit un track_id, le
       // backend attend obj_index (position dans osc_ids).
       anchor_target:

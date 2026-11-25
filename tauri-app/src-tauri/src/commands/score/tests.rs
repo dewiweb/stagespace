@@ -42,6 +42,7 @@ fn slot_clip(
                 end_mode: stagespace_engines::EndMode::default(),
                 anchor_mode: stagespace_engines::AnchorMode::default(),
                 anchor_target: None,
+                anchor_pose: None,
             }),
             macros: None,
         },

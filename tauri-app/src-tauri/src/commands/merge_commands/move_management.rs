@@ -59,6 +59,10 @@ pub struct ActivateMoveRequest {
     /// Cible du mode "follow" — la track dont l'origine suit la position.
     #[serde(default)]
     pub anchor_target: Option<u32>,
+    /// Nom de la pose du mode "pose" — la trajectoire démarre là où la
+    /// pose place les objets (fallback position live par objet absent).
+    #[serde(default)]
+    pub anchor_pose: Option<String>,
 }
 
 /// Spec complet pour créer un worker move — partagé entre activate_move,
@@ -92,8 +96,43 @@ pub struct MoveSpec {
     pub end_mode: stagespace_engines::EndMode,
     /// Ancre : Origin (défaut) ou Current (capture la position courante).
     pub anchor_mode: stagespace_engines::AnchorMode,
+    /// Capture-then-clear des positions manuelles des objets membres au
+    /// spawn — réservé à `pose_goto` (takeover explicite, design §6.9).
+    pub clear_manual_positions: bool,
     /// Cible du mode Follow — la track suivie (None = pas de follow).
     pub anchor_target: Option<u32>,
+    /// Nom de la pose du mode Pose — résolue au spawn en capture d'ancre.
+    pub anchor_pose: Option<String>,
+}
+
+/// Résolution de la capture d'ancre pose (AnchorMode::Pose) — pur, testable :
+/// capture[obj_local] = pose[track] ?? last_position(obj). Pose inconnue →
+/// fallback live intégral + warning (jamais de position inventée).
+pub fn resolve_pose_anchor_capture(
+    osc_ids: &[u32],
+    track_indices: &[usize],
+    anchor_pose: Option<&str>,
+    sh: &crate::commands::state::Shared,
+) -> std::collections::HashMap<usize, nalgebra::Vector3<f64>> {
+    let merge_rt = lock_or_recover(&sh.merge_runtime);
+    let pose = anchor_pose.and_then(|name| lock_or_recover(&sh.poses).get(name).cloned());
+    if anchor_pose.is_some() && pose.is_none() {
+        eprintln!(
+            "[ANCHOR] pose '{}' inconnue — fallback capture live",
+            anchor_pose.unwrap_or("")
+        );
+    }
+    track_indices
+        .iter()
+        .enumerate()
+        .filter_map(|(local, &global)| {
+            let track = osc_ids.get(local);
+            let from_pose = track.and_then(|t| pose.as_ref()?.positions.get(t).copied());
+            from_pose
+                .or_else(|| merge_rt.last_position(global))
+                .map(|p| (local, nalgebra::Vector3::new(p[0], p[1], p[2])))
+        })
+        .collect()
 }
 
 /// Macros spatiales initiales d'un worker (système Animation).
@@ -331,11 +370,13 @@ fn spawn_move_inner(
     // entre position_fn, sample_fn et la signal_fn du move (binding
     // compile-time des cibles `param:`).
     let slots = stagespace_engines::param_slots::ParamSlots::build(&graph);
+    let pose_ctx = Some((spec.osc_ids.as_slice(), spec.track_indices.as_slice()));
     let compiled = compile_graph_live(
         &graph,
         sh,
         Some(slots.clone()),
         Some(runtime.held_positions()),
+        pose_ctx,
     )
     .map_err(|e| {
         eprintln!("[ACTIVATE-ERROR] compile_graph failed: {e}");
@@ -349,6 +390,7 @@ fn spawn_move_inner(
         sh,
         Some(slots.clone()),
         Some(runtime.held_positions()),
+        pose_ctx,
     ) {
         runtime.set_sample_fn(sample_fn);
     }
@@ -406,6 +448,22 @@ fn spawn_move_inner(
             runtime.set_anchor_capture(captured);
         }
     }
+    // AnchorMode::Pose — capture pré-calculée depuis la pose nommée,
+    // injectée via la mécanique Current (aucun changement worker) :
+    // capture[obj] = pose[track] ?? last_position(obj). La pose est
+    // track_id-keyed : conversion via les osc_ids du spec (rule namespace).
+    // Pose inconnue → fallback live intégral (= Current) + warning.
+    if spec.anchor_mode == stagespace_engines::AnchorMode::Pose {
+        let captured = resolve_pose_anchor_capture(
+            &spec.osc_ids,
+            &spec.track_indices,
+            spec.anchor_pose.as_deref(),
+            sh,
+        );
+        if !captured.is_empty() {
+            runtime.set_anchor_capture(captured);
+        }
+    }
     // AnchorMode::Follow — l'origine suit la dernière position émise de la
     // track cible à chaque frame. Injecte le handle last_out du merge.
     if spec.anchor_mode == stagespace_engines::AnchorMode::Follow {
@@ -436,6 +494,20 @@ fn spawn_move_inner(
             None => stagespace_engines::empty_signal_fn(),
         };
         runtime.swap_signal_fn(sig_fn, slots);
+    }
+
+    // Capture-then-clear (design poses §6.9) : le goto est une commande de
+    // takeover explicite — les positions manuelles des objets membres sont
+    // effacées APRÈS la capture du compile (le `from` de la rampe = la
+    // position effacée : continuité exacte à t=0, aucun saut). Les objets
+    // non membres ne sont jamais touchés — la reprise manuelle hors
+    // distribution reste sacrée. Réservé aux spawns poseramp : le flag
+    // n'est armé que par pose_goto, jamais par les slots hand-authored.
+    if spec.clear_manual_positions {
+        let merge_rt = lock_or_recover(&sh.merge_runtime);
+        for &global in &spec.track_indices {
+            merge_rt.clear_manual_position(global);
+        }
     }
 
     // 5. PositionBuffer → mode worker (le merge thread collecte les positions)
@@ -502,6 +574,7 @@ fn spawn_move_inner(
                 end_mode: spec.end_mode,
                 anchor_mode: spec.anchor_mode,
                 anchor_target: spec.anchor_target,
+                anchor_pose: spec.anchor_pose.clone(),
                 generation,
             },
         );
@@ -599,7 +672,12 @@ pub(crate) fn spec_from_request(request: ActivateMoveRequest) -> MoveSpec {
             .and_then(|a| a.signal_graph.clone()),
         end_mode: request.end_mode,
         anchor_mode: request.anchor_mode,
+        anchor_pose: request.anchor_pose.clone(),
         anchor_target: request.anchor_target,
+        // Slots hand-authored : jamais de clear — le slot est un move
+        // comme un autre (design §6.9 : l'opérateur qui hand-craft sait
+        // que manual masque). Seul pose_goto arme le takeover explicite.
+        clear_manual_positions: false,
     }
 }
 

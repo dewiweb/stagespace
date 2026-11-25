@@ -42,6 +42,28 @@ pub enum ScoreClipPayload {
     /// du flatten de `cue.manual_positions`). Instantané, persisté
     /// jusqu'à override — sémantique identique à la cue.
     Positions { positions: Vec<(usize, [f64; 3])> },
+    /// Pose — rappel d'un preset de positions nommé (design :
+    /// docs/position-presets-design.md §6.7). Résolution au fire dans
+    /// le scheduler — les poses vivent backend, pas de roundtrip :
+    /// la pose est référencée par nom, son contenu courant est lu au
+    /// tir (édition de pose = live reference). `mode` :
+    /// - `snap` : écritures manuelles instantanées (même chemin que
+    ///   `pose_snap` — conversion track→obj au mapping courant)
+    /// - `goto` : rampe animée vers la pose (`pose_goto` — oneshot +
+    ///   hold + capture-then-clear)
+    /// - `morph` : rampe `from_pose` → `name` (`pose_morph` —
+    ///   distribution définie par la cible, départ live hors source)
+    /// - `duration` = secondes de rampe (goto/morph), `easing` =
+    ///   linear/ease_in/ease_out/smooth. Le clip respecte la fenêtre
+    ///   timeline comme tout clip move : fin prématurée = la cible
+    ///   n'est pas atteinte (cohérent avec les moves).
+    Pose {
+        name: String,
+        mode: String,
+        from_pose: Option<String>,
+        duration: Option<f64>,
+        easing: Option<String>,
+    },
     /// Graph de modulation global — compile + hot-swap de la SignalFn
     /// (même chemin que `update_signal_graph`, scope global ; clip
     /// `modGraph`, issu du flatten de `cue.signal_graph`).

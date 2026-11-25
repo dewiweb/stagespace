@@ -73,4 +73,9 @@ anchor_mode: unknown,
 /**
  * Cible de l'ancrage follow (obj_index).
  */
-anchor_target: number | null, };
+anchor_target: number | null, 
+/**
+ * Nom de la pose de l'ancrage pose — référentiel : re-résolu au
+ * recall avec le contenu courant de la pose (positions éditables).
+ */
+anchor_pose: string | null, };

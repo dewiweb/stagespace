@@ -15,6 +15,7 @@ import { fromThree } from '../../utils/coords';
 import { TrajectoryVisualization } from './TrajectoryVisualization';
 import { ZoneVisualization } from './ZoneVisualization';
 import { useHolMarkers } from '../../hooks/useHolMarkers';
+import { usePoseGhosts } from '../../hooks/usePoseGhosts';
 import { useObjects3D } from '../../hooks/useObjects3D';
 import { useManipulateHandle } from '../../hooks/useManipulateHandle';
 import { useInteractionModes } from '../../hooks/useInteractionModes';
@@ -114,6 +115,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
 
   // ── Hooks extraits (création des objets 3D, marqueurs, handle, modes) ──
   const { holMarkersRef } = useHolMarkers({ sceneRef, cameraRef, holProject });
+  usePoseGhosts({ sceneRef });
   const { objectsRef } = useObjects3D({ sceneRef, nObjects, sceneReady });
   const { handleRef, trajectoryLineRef } = useManipulateHandle({ sceneRef, manipulateMode });
   useInteractionModes({ controlsRef, rendererRef, drawMode, manipulateMode, assignMode, zonePlaceMode, zoneEditMode });

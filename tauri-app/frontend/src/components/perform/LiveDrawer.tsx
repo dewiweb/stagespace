@@ -5,8 +5,10 @@ import { AudioModList } from '../AudioModControls';
 import { GlobalTransformSurface } from '../show/GlobalTransformSurface';
 import { Slider } from '../ui/Slider';
 import { NodeParamsPanel } from '../panels/NodeParamsPanel';
+import { PosesPanel } from '../conduite/PosesPanel';
 import { OscMappingsPanel } from './OscMappingsPanel';
 import { useGraphStore } from '../../store/useGraphStore';
+import { usePoseStore } from '../../store/usePoseStore';
 import { useMoveEditorStore } from '../../store/useMoveEditorStore';
 import { SOURCE_CHIP } from '../../utils/sourceColors';
 import { type NodeParamValue } from '../nodeParamSchema';
@@ -14,6 +16,30 @@ import { type NodeParamValue } from '../nodeParamSchema';
 /// Drawer live à scopes — gros boutons à la demande (Params / Tracks /
 /// Audio du move sélectionné + Global merge-scope). Panneau bas, PAS modal :
 /// le canvas reste visible pendant le tweak — c'est le point de l'app.
+
+/// Sélecteur de pose pour l'ancre "pose" — peuplé depuis la table backend.
+const PoseAnchorPicker: React.FC<{ slotId: string; value: string }> = ({ slotId, value }) => {
+  const poses = usePoseStore((s) => s.poses);
+  const refreshPoses = usePoseStore((s) => s.refreshPoses);
+  const setSlotAnchorPose = useGraphStore((s) => s.setSlotAnchorPose);
+  React.useEffect(() => { refreshPoses(); }, [refreshPoses]);
+  const known = poses.some((p) => p.name === value);
+  return (
+    <select
+      value={value}
+      title="Pose de départ — la trajectoire démarre là où la pose place les objets (fallback position live par objet absent)"
+      onChange={(e) => setSlotAnchorPose(slotId, e.target.value)}
+      className="mt-1 w-full py-1 px-2 text-xs rounded bg-gray-800 text-gray-300"
+    >
+      <option value="">— pose —</option>
+      {!known && value && <option value={value}>{value} (absente)</option>}
+      {poses.map((p) => (
+        <option key={p.name} value={p.name}>{p.name}</option>
+      ))}
+    </select>
+  );
+};
+
 export const LiveDrawer: React.FC = () => {
   const moveSlots = useGraphStore((s) => s.moveSlots);
   const editingSlotId = useGraphStore((s) => s.editingSlotId);
@@ -37,7 +63,7 @@ export const LiveDrawer: React.FC = () => {
   const current = useMoveEditorStore((s) => s.current);
 
 
-  type Scope = 'params' | 'playback' | 'tracks' | 'audio' | 'global' | 'osc';
+  type Scope = 'params' | 'playback' | 'tracks' | 'audio' | 'global' | 'osc' | 'poses';
   const [scope, setScope] = React.useState<Scope | null>(null);
 
   const slot = moveSlots.find((s) => s.id === editingSlotId);
@@ -134,6 +160,8 @@ export const LiveDrawer: React.FC = () => {
           'Audio-reactive mods of the selected move')}
         {scopeBtn('osc', <>OSC IN</>, false,
           'Mappings OSC entrants (fader→param) + learn')}
+        {scopeBtn('poses', <>Poses</>, false,
+          'Position presets — capture la formation courante, snap/goto/morph')}
         {scopeBtn('global', <><Globe size={12} className="inline -mt-0.5" /> Global transform</>, false,
           'Global transform — merge scope, affecte TOUS les moves live')}
 
@@ -195,6 +223,15 @@ export const LiveDrawer: React.FC = () => {
       {scope === 'global' && (
         <div className="border-t border-stagespace-border px-4 py-2 max-h-[42vh] overflow-y-auto">
           <GlobalTransformSurface live includeRadius />
+        </div>
+      )}
+
+      {/* ── Drawer POSES — capture avec radar/3D sous les yeux : la
+          boucle place → regarde → capture est complète dans cette
+          surface (contrairement à la conduite, aveugle). */}
+      {scope === 'poses' && (
+        <div className="border-t border-indigo-900/40 px-4 py-2 max-h-[42vh] overflow-y-auto">
+          <PosesPanel fill={false} />
         </div>
       )}
 
@@ -275,7 +312,7 @@ export const LiveDrawer: React.FC = () => {
             <div>
               <div className="text-gray-500 text-xs uppercase tracking-wider mb-1" title="Ancre : current part de la position courante de chaque objet, origin de l'origine du move">Anchor</div>
               <div className="flex gap-1">
-                {(['origin', 'current', 'follow'] as const).map((m) => (
+                {(['origin', 'current', 'follow', 'pose'] as const).map((m) => (
                   <button
                     key={m}
                     onClick={() => setSlotAnchorMode(slot.id, m)}
@@ -299,6 +336,9 @@ export const LiveDrawer: React.FC = () => {
                   onChange={(e) => setSlotAnchorTarget(slot.id, parseInt(e.target.value) || 0)}
                   className="mt-1 w-full py-1 px-2 text-xs rounded bg-gray-800 text-gray-300"
                 />
+              )}
+              {slot.anchorMode === 'pose' && (
+                <PoseAnchorPicker slotId={slot.id} value={slot.anchorPose ?? ''} />
               )}
             </div>
           </div>

@@ -26,6 +26,7 @@ mod complex_graph_tests {
             audio_state: Arc::new(Mutex::new(AudioState::new())),
             event_sink: Arc::new(Mutex::new(None)),
             movements: Arc::new(Mutex::new(HashMap::new())),
+            poses: Arc::new(Mutex::new(HashMap::new())),
             pending_move_ids: Arc::new(Mutex::new(HashSet::new())),
             move_generation: Arc::new(AtomicU64::new(0)),
             merge_runtime: Arc::new(Mutex::new(merge)),
@@ -272,6 +273,8 @@ mod complex_graph_tests {
                     end_mode: stagespace_engines::EndMode::default(),
                     anchor_mode: stagespace_engines::AnchorMode::default(),
                     anchor_target: None,
+                    anchor_pose: None,
+                    clear_manual_positions: false,
                 }
             };
 

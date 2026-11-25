@@ -33,7 +33,7 @@ stagespace/
 ```bash
 cd rust-engines
 cargo build              # Build
-cargo test --lib         # Run tests (562 tests, incl. ts-rs export tests)
+cargo test --lib         # Run tests (565 tests, incl. ts-rs export tests)
 cargo clippy --all-targets -- -D warnings  # Lint (CI: --all-targets inclut tests/benches)
 cargo fmt -- --check     # Format check
 ```
@@ -43,7 +43,7 @@ cargo fmt -- --check     # Format check
 ```bash
 cd tauri-app/src-tauri
 cargo build              # Build
-cargo test --lib         # Run tests (92 tests)
+cargo test --lib         # Run tests (100 tests)
 cargo clippy --all-targets -- -D warnings  # Lint (CI: --all-targets inclut tests)
 
 # Bridge — backend over HTTP/SSE for a plain browser, two modes:
@@ -75,7 +75,7 @@ cd tauri-app/frontend
 npm install              # Install deps
 npm run dev              # Dev server (Vite)
 npm run build            # Production build (tsc + vite build)
-npm test                 # Run tests (594 tests, vitest)
+npm test                 # Run tests (598 tests, vitest)
 npm run contracts        # Regenerate TS types from Rust (ts-rs → src/types/generated/)
 npm run test:watch       # Watch mode
 npx tsc -b               # Type check (build mode — `tsc --noEmit` is vacuous on the solution-style root tsconfig)
@@ -130,11 +130,11 @@ CI fails if the committed files drift from the Rust sources.
 
 | Suite | Count |
 |-------|-------|
-| Rust engines | 562 |
-| Tauri backend | 92 |
-| Frontend (vitest) | 594 |
+| Rust engines | 565 |
+| Tauri backend | 100 |
+| Frontend (vitest) | 598 |
 | E2E CLI | ~100 assertions |
-| **Total** | **~1348** |
+| **Total** | **~1363** |
 
 ## Live Show Safety Features
 
@@ -209,6 +209,9 @@ dispatches to the same functions as the keyboard shortcuts (`liveActions.ts`).
 | `/stagespace/position/clear <obj>` | remove the manual position | — |
 | `/stagespace/position/clearall` | all manual positions | — |
 | `/stagespace/trackpos <track> <x> <y> <z>` | origin position of a track (where panic returns it) | — |
+| `/stagespace/pose/capture <name> [track…]` | capture live positions into a named pose (all known tracks if none passed) | — |
+| `/stagespace/pose/snap <name>` | instant pose recall (manual positions, partial — untouched tracks don't move) | — |
+| `/stagespace/pose/list` | dump poses → `/stagespace/pose/state <name> <ntracks>` per pose (backend-direct) | — |
 | `/stagespace/view <atelier\|conduite\|jeu>` | switch the operator surface | — |
 | `/stagespace/show/load <path.hfg>` · `/stagespace/load` | load a show file from the STAGESPACE machine's disk | — |
 | `/stagespace/soundcheck [start\|stop\|next\|prev]` | cyclic per-track probe (spatial identification); default `start` | — |
@@ -217,6 +220,7 @@ dispatches to the same functions as the keyboard shortcuts (`liveActions.ts`).
 | `/stagespace/attention <obj>` · `/stagespace/attention/clear` | freeze all other objects (change blindness) / release stasis | — |
 | `/stagespace/gesture <name> [strength]` | composed gesture `explode`/`converge`/`orbit`/`front` — per-object ballistic velocity | — |
 | `/stagespace/rehearsal <record\|stop\|play\|clear>` · alias `/stagespace/record` | timestamped busking-capture tape, replayable | — |
+| `/stagespace/pose/capture <name> [track…]` · `/pose/snap <name>` · `/pose/goto <name> [dur]` · `/pose/list` | position presets — capture, instant recall, animated ramp (oneshot+hold), dump | — |
 
 ### "Continuous" semantics (per-move)
 

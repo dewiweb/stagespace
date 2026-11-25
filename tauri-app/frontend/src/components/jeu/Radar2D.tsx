@@ -5,6 +5,8 @@
 /// Partagé par la surface Jeu et la fenêtre ?view=run.
 import React from 'react';
 import { useGraphStore } from '../../store/useGraphStore';
+import { usePoseStore } from '../../store/usePoseStore';
+import { poseGhostEntries } from '../../utils/poseGhosts';
 import { doThrow, doClearPosition } from '../../utils/liveActions';
 import ContextMenu from '../ui/ContextMenu';
 import { buildObjectMenuItems } from '../../utils/objectMenuItems';
@@ -45,6 +47,13 @@ export const Radar2D: React.FC<{ view: RadarView }> = ({ view: radarView }) => {
   // pointillé à leur origine (track_position), sinon invisibles.
   const trackPositions = useGraphStore((s) => s.trackPositions);
   const restGhosts = useGraphStore((s) => s.viewerRestGhosts);
+  // Fantômes de pose (P6) — cibles de la pose sélectionnée dans le
+  // panel, en pointillé violet (amber si la track n'est plus patchée).
+  // Même pref « fantômes » que les origines — étendue aux poses.
+  const selectedPoseName = usePoseStore((s) => s.selectedPoseName);
+  const poses = usePoseStore((s) => s.poses);
+  const selectedPose = poses.find((p) => p.name === selectedPoseName) ?? null;
+  const poseGhosts = restGhosts && selectedPose ? poseGhostEntries(selectedPose, manualOscIds) : [];
   // Trail des derniers échantillons du geste — la vélocité de lancer se
   // calcule sur la fenêtre ~200ms (flick), pas sur le déplacement total :
   // tenir l'objet avant de relâcher ne doit pas tuer la vélocité.
@@ -106,6 +115,8 @@ export const Radar2D: React.FC<{ view: RadarView }> = ({ view: radarView }) => {
     // Les fantômes au repos comptent dans le fit — ils font partie du
     // champ spatial (les origines où panic les renvoie).
     ...restGhostPos.flatMap(([, p]) => [Math.abs(p[va]), Math.abs(p[vb])]),
+    // Les fantômes de pose aussi — une cible lointaine ne doit pas clipper.
+    ...poseGhosts.flatMap((g) => [Math.abs(g.position[va]), Math.abs(g.position[vb])]),
     // Les zones incluent leur empreinte dans le fit — sinon une zone
     // lointaine clipperait hors cadre.
     ...zones.flatMap((z) => zoneBounds(z, va, vb)),
@@ -369,6 +380,21 @@ export const Radar2D: React.FC<{ view: RadarView }> = ({ view: radarView }) => {
             <circle cx={cx} cy={cy} r="4" fill="none" stroke="#4b5563" strokeWidth="0.8" strokeDasharray="2 2" />
             <text x={cx} y={cy - 7} fill="#4b5563" fontSize="7" textAnchor="middle">
               {manualOscIds[i] ?? i + 1}
+            </text>
+          </g>
+        );
+      })}
+      {/* Fantômes de pose — cibles de la pose sélectionnée. Violet
+          patché / amber non patché (serait skippée au recall), label
+          pose#track pour identifier la formation sans le panel. */}
+      {poseGhosts.map((g) => {
+        const [cx, cy] = proj(g.position);
+        const color = g.patched ? '#a78bfa' : '#f59e0b';
+        return (
+          <g key={`poseghost${g.trackId}`} pointerEvents="none" opacity={0.8}>
+            <circle cx={cx} cy={cy} r="6" fill="none" stroke={color} strokeWidth="1" strokeDasharray="3 2.5" />
+            <text x={cx} y={cy - 9} fill={color} fontSize="7" textAnchor="middle">
+              {selectedPose?.name} #{g.trackId}
             </text>
           </g>
         );

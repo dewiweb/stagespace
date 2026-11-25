@@ -19,6 +19,7 @@ pub mod osc_receiver;
 pub mod osc_sender;
 pub mod param_slots;
 pub mod plugins;
+pub mod poses;
 pub mod position_buffer;
 pub mod position_sink;
 pub mod post_process_compiler;
@@ -94,6 +95,7 @@ pub use osc_receiver::{
 };
 pub use osc_sender::{OscProfile, OscSender, SpatialChannel, SpatialChannels};
 pub use plugins::{PluginEngine, PluginError, PluginManifest, PluginRegistry};
+pub use poses::{Pose, PoseResolver};
 pub use position_buffer::{IndexedPosition, PositionBuffer};
 pub use position_sink::{OscSink, PositionSink, SendReport};
 pub use post_process_compiler::{

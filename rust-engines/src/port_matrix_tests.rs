@@ -201,7 +201,10 @@ mod tests {
                     .iter()
                     .any(|p| p.port_type == PortType::Spline)
                 // Plugin nécessite un registry — couvert par plugin_tests.
-                && spec.node_type != NodeType::Plugin;
+                && spec.node_type != NodeType::Plugin
+                // PoseRamp nécessite un pose resolver (chemin de spawn) —
+                // couvert par les tests poses (engines + tauri).
+                && spec.node_type != NodeType::PoseRamp;
             if !is_engine {
                 continue;
             }

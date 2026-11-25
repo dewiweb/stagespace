@@ -83,6 +83,12 @@ pub enum AnchorMode {
     /// `origin(t) = last_position(cible)` relue à chaque frame — l'orbit
     /// reste centrée sur un objet qui bouge (follow-me spatial).
     Follow,
+    /// Pose — chaque objet capture sa position dans la pose nommée comme
+    /// ancre (fallback position live si absent de la pose) : la trajectoire
+    /// démarre là où la pose place les objets, sans qu'ils y soient
+    /// réellement. Résolu au spawn via la mécanique de capture Current —
+    /// le worker ne voit jamais la différence (positions pré-calculées).
+    Pose,
 }
 
 /// Direction de lecture

@@ -10,6 +10,7 @@
 /// store garde l'objet Cue backend depuis store_cue) — la
 /// couverture trackIds est info visuelle, le recall reste global.
 import { useGraphStore } from '../store/useGraphStore';
+import { usePoseStore } from '../store/usePoseStore';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { normalizeSlot } from '../store/slices/moveSlotsTypes';
 import { buildSlotActivation } from './slotActivation';
@@ -84,7 +85,8 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
       c.ref.type === 'gesture' || c.ref.type === 'park' || c.ref.type === 'unpark' ||
       c.ref.type === 'throw' || c.ref.type === 'manualClear' || c.ref.type === 'attention' ||
       c.ref.type === 'soundcheck' || c.ref.type === 'solo' || c.ref.type === 'unsolo' ||
-      c.ref.type === 'view' || c.ref.type === 'cueArm' || c.ref.type === 'cueGo';
+      c.ref.type === 'view' || c.ref.type === 'cueArm' || c.ref.type === 'cueGo' ||
+      c.ref.type === 'pose';
     // Mute : les barrières (transitions d'état globales) sont gouvernées
     // par la lane conductor — leur couverture trackIds n'est qu'un
     // blast radius visuel, elle ne mute pas l'événement. Un slot perd
@@ -216,6 +218,26 @@ export async function resolveScoreClips(doc: ScoreDoc): Promise<ResolveResult> {
         clips.push({
           ...base,
           payload: { kind: 'Gesture', data: { name: c.ref.name, strength: c.ref.strength } },
+        });
+        break;
+      case 'pose':
+        // Référentiel — le nom seul voyage ; la résolution (contenu de
+        // la pose, mapping track→obj, positions live) se fait au fire
+        // dans le scheduler backend. Pas de validation bloquante ici :
+        // une pose absente est un warning du check, pas une erreur de
+        // résolution (la table peut changer après le load).
+        clips.push({
+          ...base,
+          payload: {
+            kind: 'Pose',
+            data: {
+              name: c.ref.name,
+              mode: c.ref.mode,
+              from_pose: c.ref.fromPose ?? null,
+              duration: c.ref.duration ?? null,
+              easing: c.ref.easing ?? null,
+            },
+          },
         });
         break;
       case 'park':
@@ -359,6 +381,16 @@ export function effectiveTrackIds(c: ScoreClipDoc): number[] {
       // Les positions sont portées en track_id (espace opérateur).
       return Object.keys((c.ref as { positions: Record<number, [number, number, number]> }).positions)
         .map(Number).filter((t) => Number.isFinite(t));
+    case 'pose': {
+      // Couverture = distribution de la pose CIBLE (morph : c'est B qui
+      // définit les objets distribués, pas A). Dérivation live du
+      // contenu courant — la pose est référentielle (relue au fire) :
+      // éditer la pose déplace le blast radius sur les lanes, à juste
+      // titre. Pose inconnue ou supprimée → vide (warning de validation).
+      const name = (c.ref as { name: string }).name;
+      const pose = usePoseStore.getState().poses.find((x) => x.name === name);
+      return pose ? Object.keys(pose.positions).map(Number).filter((t) => Number.isFinite(t)) : [];
+    }
     case 'park':
     case 'unpark':
     case 'throw':

@@ -89,6 +89,7 @@ impl CliState {
             audio_state,
             event_sink: Arc::new(Mutex::new(None)),
             movements: Arc::new(Mutex::new(HashMap::new())),
+            poses: Arc::new(Mutex::new(HashMap::new())),
             pending_move_ids: Arc::new(Mutex::new(HashSet::new())),
             move_generation: Arc::new(AtomicU64::new(0)),
             merge_runtime,

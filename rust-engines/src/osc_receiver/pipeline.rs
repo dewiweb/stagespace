@@ -349,6 +349,19 @@ pub(crate) fn route_destination(
     }
 }
 
+/// Encode `/stagespace/pose/state <name> <ntracks>` — réponse feedback au
+/// query `pose/list` (sink backend, sans webview requise).
+pub fn encode_pose_feedback(name: &str, ntracks: usize) -> Option<Vec<u8>> {
+    encode(&OscPacket::Message(OscMessage {
+        addr: "/stagespace/pose/state".to_string(),
+        args: vec![
+            OscType::String(name.to_string()),
+            OscType::Int(ntracks as i32),
+        ],
+    }))
+    .ok()
+}
+
 /// Encode `/stagespace/pos/state <obj> <x> <y> <z>` — réponse feedback au
 /// query `positions` (émise par le sink backend, sans webview requise).
 pub fn encode_position_feedback(obj: usize, pos: [f64; 3]) -> Option<Vec<u8>> {

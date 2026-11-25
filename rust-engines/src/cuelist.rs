@@ -274,6 +274,10 @@ pub struct MoveSnapshot {
     /// Cible de l'ancrage follow (obj_index).
     #[serde(default)]
     pub anchor_target: Option<u32>,
+    /// Nom de la pose de l'ancrage pose — référentiel : re-résolu au
+    /// recall avec le contenu courant de la pose (positions éditables).
+    #[serde(default)]
+    pub anchor_pose: Option<String>,
 }
 
 fn default_move_duration() -> f64 {

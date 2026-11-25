@@ -41,6 +41,11 @@ pub struct LiveInputs {
     /// Positions tenues des nodes Freeze — partagées entre recompiles
     /// (le hold survit au hot-swap). Clé : `{node_id}:{object_index}`.
     pub held_positions: Option<HeldPositions>,
+    /// Résolveur de références de poses pour les nodes PoseRamp —
+    /// construit par le chemin de spawn (mapping track↔objet du move +
+    /// positions live capturées + snapshot des poses). Sans lui, un node
+    /// PoseRamp échoue la compile (même pattern que Plugin sans registry).
+    pub pose_resolver: Option<Arc<crate::poses::PoseResolver>>,
 }
 
 /// Erreur de compilation
@@ -69,7 +74,7 @@ pub struct Compiler;
 impl Compiler {
     /// Compile un graphe en une fonction composite
     pub fn compile(graph: &Graph) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(graph, None, None, None, None, None)
+        Self::compile_inner(graph, None, None, None, None, None, None)
     }
 
     /// Compile un graphe avec accès à l'audio state temps réel
@@ -79,7 +84,7 @@ impl Compiler {
         graph: &Graph,
         audio_state: Arc<Mutex<AudioState>>,
     ) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(graph, Some(audio_state), None, None, None, None)
+        Self::compile_inner(graph, Some(audio_state), None, None, None, None, None)
     }
 
     /// Compile un graphe avec audio state + overrides de paramètres audio
@@ -91,7 +96,7 @@ impl Compiler {
         audio_state: Arc<Mutex<AudioState>>,
         _overrides: AudioParamOverrides,
     ) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(graph, Some(audio_state), None, None, None, None)
+        Self::compile_inner(graph, Some(audio_state), None, None, None, None, None)
     }
 
     /// Compile un graphe avec un ensemble complet d'entrées live —
@@ -107,6 +112,7 @@ impl Compiler {
             live.plugins,
             live.param_slots,
             live.held_positions,
+            live.pose_resolver,
         )
     }
 
@@ -120,7 +126,15 @@ impl Compiler {
         _overrides: AudioParamOverrides,
         osc_values: OscValueMap,
     ) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(graph, Some(audio_state), Some(osc_values), None, None, None)
+        Self::compile_inner(
+            graph,
+            Some(audio_state),
+            Some(osc_values),
+            None,
+            None,
+            None,
+            None,
+        )
     }
 
     fn compile_inner(
@@ -130,6 +144,7 @@ impl Compiler {
         plugins: Option<Arc<Mutex<PluginRegistry>>>,
         param_slots: Option<Arc<crate::param_slots::ParamSlots>>,
         held_positions: Option<HeldPositions>,
+        pose_resolver: Option<Arc<crate::poses::PoseResolver>>,
     ) -> Result<CompiledFunction, CompilationError> {
         let live = LiveInputs {
             audio: audio_state,
@@ -137,6 +152,7 @@ impl Compiler {
             plugins,
             param_slots,
             held_positions,
+            pose_resolver,
         };
         let start = Instant::now();
         log_graph_compilation(graph.nodes.len(), graph.edges.len());

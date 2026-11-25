@@ -23,6 +23,7 @@ mod osc_locks_tests {
             presets: Arc::new(Mutex::new(stagespace_engines::presets::PresetManager::new())),
             event_sink: Arc::new(Mutex::new(None)),
             movements: Arc::new(Mutex::new(HashMap::new())),
+            poses: Arc::new(Mutex::new(HashMap::new())),
             pending_move_ids: Arc::new(Mutex::new(HashSet::new())),
             move_generation: Arc::new(AtomicU64::new(0)),
             merge_runtime: Arc::new(Mutex::new(merge)),
@@ -62,6 +63,7 @@ mod osc_locks_tests {
             end_mode: stagespace_engines::EndMode::default(),
             anchor_mode: stagespace_engines::AnchorMode::default(),
             anchor_target: None,
+            anchor_pose: None,
             generation: 0,
         }
     }

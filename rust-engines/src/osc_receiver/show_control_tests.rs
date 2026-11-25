@@ -106,6 +106,27 @@ fn parses_every_command() {
             ShowCommand::SetTrackPosition(4, 3.0, 0.0, -1.0),
         ),
         (
+            "/stagespace/pose/snap",
+            vec![OscType::String("line-up".into())],
+            ShowCommand::PoseSnap("line-up".into()),
+        ),
+        (
+            "/stagespace/pose/capture",
+            vec![OscType::String("line-up".into())],
+            ShowCommand::PoseCapture("line-up".into(), vec![]),
+        ),
+        (
+            "/stagespace/pose/capture",
+            vec![
+                OscType::String("trio".into()),
+                OscType::Int(1),
+                OscType::Int(3),
+                OscType::Float(5.0),
+            ],
+            ShowCommand::PoseCapture("trio".into(), vec![1, 3, 5]),
+        ),
+        ("/stagespace/pose/list", vec![], ShowCommand::PoseList),
+        (
             "/stagespace/timecode",
             vec![OscType::Float(12.5)],
             ShowCommand::Timecode(12.5),

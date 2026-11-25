@@ -104,10 +104,14 @@ export interface MoveSlot {
   /// position en manuelle — sémantique continue).
   endMode?: 'revert' | 'hold';
   /// Ancre : "origin" (défaut), "current" (position courante — chaînage
-  /// sans saut) ou "follow" (suit la position de la track cible en continu).
-  anchorMode?: 'origin' | 'current' | 'follow';
+  /// sans saut), "follow" (suit la position de la track cible en continu)
+  /// ou "pose" (démarre là où la pose nommée place les objets).
+  anchorMode?: 'origin' | 'current' | 'follow' | 'pose';
   /// Track cible du mode "follow" (index de l'objet suivi).
   anchorTarget?: number;
+  /// Nom de la pose du mode "pose" — référentiel : re-résolu au play
+  /// avec le contenu courant de la pose.
+  anchorPose?: string;
   /// Direction : "forward" (défaut), "backward", ou "ping_pong"
   direction: 'forward' | 'backward' | 'ping_pong';
   /// Enveloppe de fade du cycle worker (début/fin de boucle) — distinct de

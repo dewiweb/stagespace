@@ -121,7 +121,13 @@ export type ScoreEventRef =
   /// l'armée (ou la suivante). `cueArm` référence `cueId` comme un clip
   /// `cue`, résolu en `cue_number` à la résolution.
   | { type: 'cueArm'; cueId: string }
-  | { type: 'cueGo' };
+  | { type: 'cueGo' }
+  /// Pose — rappel d'un preset de positions nommé (design poses §6.7) :
+  /// `snap` instantané (écritures manuelles), `goto` rampe animée vers
+  /// la pose, `morph` rampe `fromPose` → `name`. Référentiel : la pose
+  /// est résolue au fire avec son contenu courant. `duration` en
+  /// secondes (goto/morph), `easing` linear/ease_in/ease_out/smooth.
+  | { type: 'pose'; name: string; mode: 'snap' | 'goto' | 'morph'; fromPose?: string; duration?: number; easing?: string };
 
 export interface ScoreClipDoc {
   id: string;
