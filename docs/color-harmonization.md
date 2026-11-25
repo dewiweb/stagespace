@@ -197,33 +197,47 @@ migrées, couleurs-entités contraires à la doctrine.
 10. Omissions : orphelins seulement désaturés, delete/clear neutres
     — la doctrine exige warning/danger (Score)
 
-**Arbitrages doctrinaux requis (bloquants pour la migration) :**
+**Arbitrages ACTÉS (revue utilisateur, 12/12 tranchés) :**
 
-1. `park` == `conduite` hex-identique (#f59e0b) — une couleur = une
-   fonction, à trancher. Même question pour manual==warning,
-   hold==osc, move==live, psn==tracking (recouvrement voulu ?)
-2. Contradiction interne du doc : `derived` couvre les projections
-   MAIS « projection = teinte parent translucide » — blast radius
-   concernés. Écrire la règle finale.
-3. Preview → `derived` (recommandation unanime des 4 passes, migrer
-   aussi `VIZ.obj.preview` en même temps) ou token dédié
-4. Modulation → nouveau token ou famille `graphs` formalisée
-5. Couleurs de catégories de nodes — l'audit recommande la
-   SUPPRESSION pure (entité, statique, collisionne live/osc ;
-   discriminants défaillants : Spline=PostProcess=cyan,
-   Source=Plugin=yellow). Icônes/regroupement à la place.
-6. Ports/edges triple contradiction (connectionRules ≠ index.css ≠
-   légende palette) — tokens graphe ou retrait couleur
-7. Chrome accent : `stagespace.accent` existe et est INUTILISÉ —
-   indigo/blue/cyan/purple se partagent sélection/focus/CTA.
-   Sélection = 4 conventions concurrentes (ring-white clips, cyan
-   lanes, bleu segmented, indigo pads)
-8. Solo : warning (tue les autres moves) vs objectControl-fuchsia
-9. Setlist NOW/NEXT : 4 schémas concurrents — extension de `target` ?
-10. TC chase : cyan (Score) vs live (Perform/Cuelist) — divergent
-11. CUE GO vert vs table « conduite = cues GO » — écrire la règle
-12. Stop-fade yellow : gradient de sévérité hors tokens → danger à
-    opacités différenciées ?
+1. **Recouvrement sourceColors voulu SAUF park** — manual==warning,
+   hold==osc, move==live, psn==tracking documentés comme recoupements
+   sémantiques réels. **Park re-teinté** pour libérer conduite=cues
+   (teinte exacte au swatch — contrainte : distinct de psn/tracking
+   purple et modulation indigo).
+2. **Projections = teinte du parent translucide** — une projection
+   montre VERS QUOI (blast radius cue → amber, snap/transit pose →
+   teal). `derived` gris réservé aux projections sans cible
+   identifiable : valeurs calculées, merge-effectif, audition,
+   preview (pas de cible spatiale).
+3. **Preview → `derived`** — migration coordonnée cross-surface +
+   `VIZ.obj.preview` dans le même commit.
+4. **Modulation = nouveau token `modulation`** indigo `#818cf8` —
+   les 3 teintes (cyan/amber/purple) convergent. Attention :
+   collision avec freeze `#818cf8` dans sourceColors — à résoudre à
+   l'implémentation (freeze/attention/park = stase, candidat à
+   unification sous une seule teinte stasis distincte).
+5. **Couleurs de catégories de nodes : SUPPRESSION pure** — headers/
+   bordures neutres, minimap monochrome, palette regroupée par
+   sections + icônes. Les 9 hex de NODE_COLORS disparaissent.
+6. **Ports/edges = tokens graphe à source unique** — `graph-object`
+   (=osc cyan, cohérent routage), `graph-time`, `graph-geometry`
+   (violet `#a78bfa` candidat — libéré par la dissolution pose),
+   `graph-signal` — teintes exactes au swatch, hex libres :
+   yellow/pink/emerald. Handles + edges + légende consomment la même
+   source, variables CSS `--stagespace-*` pour index.css.
+7. **Chrome accent unique bleu** — sélection/focus/CTA/toggles →
+   `stagespace.accent`, indigo éliminé du chrome, purple réservé
+   tracking/expert. Sélection unifiée sur cette base.
+8. **Solo = warning orange** — action à blast radius implicite.
+9. **Setlist NOW=live / NEXT=target, GO=target** — NOW joue
+   réellement, NEXT est une destination, GO déclenche la transition.
+10. **TC chase = live vert partout** — Score converge vers
+    Perform/Cuelist (H2). Le cyan reste au réseau.
+11. **CUE GO = vert live** — règle écrite : couleur de l'ACTION
+    (vert live) ≠ couleur de l'ÉTAT cue (amber conduite).
+12. **Sévérité stop = danger à opacités** — stop-fade danger/60 ou
+    outline, stop danger plein, stop-all/panic danger plein +
+    taille/label. Yellow éliminé du système.
 
 **Bloqueurs structurels avant la règle lint :**
 
