@@ -1,4 +1,10 @@
 import { StateCreator } from 'zustand';
+import { safeSetItem, safeParseStoredJson } from '../../utils/safeStorage';
+
+const VIEWER_PREFS_KEY = 'stagespace.viewer.prefs';
+const viewerPrefs = safeParseStoredJson<{ dim?: boolean; ghosts?: boolean }>(VIEWER_PREFS_KEY, {});
+const saveViewerPrefs = (dim: boolean, ghosts: boolean) =>
+  safeSetItem(VIEWER_PREFS_KEY, JSON.stringify({ dim, ghosts }));
 
 /// Modes d'interaction du 3D — manipuler (drag objets/handle), dessiner,
 /// assigner (clic objet → toggleTrackSelection). L'assign 3D avait été
@@ -33,6 +39,15 @@ export interface InteractionModesSlice {
   /// Annule draw/manipulate/assign/zone-place. Retourne true si un mode
   /// était actif (Esc consommé — ne doit PAS déclencher le panic).
   cancelInteractionModes: () => boolean;
+  /// Préférences visualiseurs (persistées localStorage) —
+  /// dimUnfocused : un slot sélectionné en édition estompe les objets
+  /// hors de ses tracks au lieu de les cacher (focus = isolement doux).
+  /// restGhosts : un objet sans position émise (jamais animé) se rend en
+  /// fantôme à sa position d'origine (track_position).
+  viewerDimUnfocused: boolean;
+  setViewerDimUnfocused: (v: boolean) => void;
+  viewerRestGhosts: boolean;
+  setViewerRestGhosts: (v: boolean) => void;
 }
 
 type Store = InteractionModesSlice & {
@@ -91,5 +106,15 @@ export const createInteractionModesSlice: StateCreator<Store, [], [], Interactio
     if (!drawMode && !manipulateMode && !assignMode && !zonePlaceMode && !zoneEditMode) return false;
     set({ drawMode: false, manipulateMode: false, assignMode: false, zonePlaceMode: false, zoneEditMode: false, manipSelection: new Set(), ...CLEAR_SPLINE_DRAFT });
     return true;
+  },
+  viewerDimUnfocused: viewerPrefs.dim ?? true,
+  setViewerDimUnfocused: (v) => {
+    set({ viewerDimUnfocused: v });
+    saveViewerPrefs(v, get().viewerRestGhosts);
+  },
+  viewerRestGhosts: viewerPrefs.ghosts ?? true,
+  setViewerRestGhosts: (v) => {
+    set({ viewerRestGhosts: v });
+    saveViewerPrefs(get().viewerDimUnfocused, v);
   },
 });

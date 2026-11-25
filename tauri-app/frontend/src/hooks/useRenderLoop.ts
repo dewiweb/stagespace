@@ -302,6 +302,16 @@ export function useRenderLoop({
       const globalPos = mvPosMap['global'];
       const holTracks = holProj?.tracks ?? [];
       const manualIds = storeState.manualOscIds;
+      // Prefs visualiseurs (Settings) — focus doux + fantômes au repos.
+      const dimUnfocused = storeState.viewerDimUnfocused;
+      const restGhosts = storeState.viewerRestGhosts;
+      const trackPos = storeState.trackPositions;
+      // Origine d'un objet — track_id-keyed : holTracks[objIdx].id en
+      // mode .hol, manualOscIds[objIdx] sinon (même mapping que les labels).
+      const restPosOf = (objIdx: number): [number, number, number] | undefined => {
+        const trackId = holTracks[objIdx]?.id ?? manualIds[objIdx];
+        return trackId != null ? trackPos?.[trackId] : undefined;
+      };
 
       // ── Focus : slot sélectionné → la scène ne montre que SES tracks ──
       // Pas de slot sélectionné = vue d'ensemble (tous les moves/tracks).
@@ -360,10 +370,12 @@ export function useRenderLoop({
             dm.transparent = false;
             return;
           }
-          // Focus : hors des tracks du slot édité → caché — SAUF en
-          // assign : les non-membres doivent rester visibles et cliquables
-          // sinon on ne peut jamais AJOUTER une track, seulement retirer.
-          if (focusActive && !focusedTracks.has(objIdx) && !storeState.assignMode) return;
+          // Focus : hors des tracks du slot édité → caché — ou ESTOMPÉ si
+          // viewerDimUnfocused (Settings) — SAUF en assign : les non-membres
+          // doivent rester visibles et cliquables sinon on ne peut jamais
+          // AJOUTER une track, seulement retirer.
+          const unfocused = focusActive && !focusedTracks.has(objIdx) && !storeState.assignMode;
+          if (unfocused && !dimUnfocused) return;
           const p = posMap.get(objIdx);
           if (p) {
             const [tx, ty, tz] = toThree(p.x, p.y, p.z);
@@ -378,6 +390,14 @@ export function useRenderLoop({
             } else {
               defaultColor.setHSL(objIdx / Math.max(objs.length, 1), 0.7, 0.55);
               mat.color.copy(defaultColor);
+            }
+            if (unfocused) {
+              // Fantôme hors-sélection — l'objet garde sa couleur et sa
+              // position réelles, rendu à ~20% pour marquer le focus.
+              mat.emissive.setHex(0x000000);
+              mat.opacity = 0.22;
+              mat.transparent = true;
+              return;
             }
 
             // Preview : cyan uniquement pour les tracks couvertes par un move
@@ -431,10 +451,14 @@ export function useRenderLoop({
               }
             }
           } else {
-            // Pas de position pour cet objet → manualPositions (statique)
+            // Pas de position → manualPositions (statique), puis origine
+            // en fantôme (viewerRestGhosts — un objet jamais animé reste
+            // visible là où panic/le repos le place).
             const mp = storeState.manualPositions[objIdx];
-            if (mp) {
-              const [tx, ty, tz] = toThree(mp[0], mp[1], mp[2]);
+            const rp = !mp && restGhosts ? restPosOf(objIdx) : undefined;
+            const src = mp ?? rp;
+            if (src) {
+              const [tx, ty, tz] = toThree(src[0], src[1], src[2]);
               mesh.position.set(tx, ty, tz);
               showMeshAndLabels(mesh);
             }
@@ -458,6 +482,13 @@ export function useRenderLoop({
                 mat.opacity = 0.3;
                 mat.transparent = true;
               }
+            }
+            // Fantôme au repos — après la normalisation matériau : très
+            // estompé, aucun emissive (ce n'est pas une position live).
+            if (!mp && rp && !storeState.assignMode) {
+              mat.emissive.setHex(0x000000);
+              mat.opacity = unfocused ? 0.1 : 0.15;
+              mat.transparent = true;
             }
           }
         });
@@ -492,17 +523,22 @@ export function useRenderLoop({
               dm.transparent = false;
               return;
             }
-            // Focus : hors des tracks du slot édité → caché — SAUF en
-            // assign (les non-membres restent visibles pour être ajoutés).
-            if (focusActive && !focusedTracks.has(i) && !storeState.assignMode) return;
+            // Focus : hors des tracks du slot édité → caché ou estompé
+            // (viewerDimUnfocused) — SAUF en assign (les non-membres
+            // restent visibles pour être ajoutés).
+            const unfocused = focusActive && !focusedTracks.has(i) && !storeState.assignMode;
+            if (unfocused && !dimUnfocused) return;
             const p = manualPos[i];
-            if (p) {
-              const [tx, ty, tz] = toThree(p[0], p[1], p[2]);
+            // Fantôme au repos — jamais animé : l'origine comme repère.
+            const rp = !p && restGhosts ? restPosOf(i) : undefined;
+            const src = p ?? rp;
+            if (src) {
+              const [tx, ty, tz] = toThree(src[0], src[1], src[2]);
               mesh.position.set(tx, ty, tz);
             }
             // Sans position manuelle l'objet garde sa position spawn —
             // affiché quand même : assign/zones doivent viser ce qui existe.
-            if (p || needsObjects) {
+            if (src || needsObjects) {
               showMeshAndLabels(mesh);
               const mat = mesh.material as THREE.MeshStandardMaterial;
               // Normalisation à chaque frame — l'état style (assign,
@@ -523,6 +559,17 @@ export function useRenderLoop({
               } else if (storeState.manipulateMode && storeState.manipSelection.has(i)) {
                 // Sélection manipulate = même accent que selectedObjIndex.
                 mat.emissive.setHex(0x555555);
+              }
+              // Estompage — fantôme au repos (origine, pas position live)
+              // ou objet hors-sélection en focus doux.
+              if (unfocused) {
+                mat.emissive.setHex(0x000000);
+                mat.opacity = 0.22;
+                mat.transparent = true;
+              } else if (!p && rp) {
+                mat.emissive.setHex(0x000000);
+                mat.opacity = 0.15;
+                mat.transparent = true;
               }
             }
           });

@@ -28,6 +28,9 @@ export interface PerfSlice {
   /// confidence view : le "commanded" vs l'intention GUI.
   emittedPositions: Record<number, [number, number, number]>;
   refreshEmittedPositions: () => Promise<void>;
+  /// Positions d'origine par track_id — là où panic/rest renvoie l'objet
+  /// (trackpos). Source des fantômes "au repos" des visualiseurs.
+  trackPositions: Record<number, [number, number, number]>;
   /// Vu-mètre perceptuel — calculé à 60fps côté merge.
   perceptual: {
     legibility_deg_s: Record<number, number>;
@@ -66,6 +69,7 @@ export const createPerfSlice: StateCreator<PerfSlice, [], [], PerfSlice> = (set)
     } catch { /* non critique */ }
   },
   emittedPositions: {},
+  trackPositions: {},
   refreshEmittedPositions: async () => {
     try {
       const pos = await invoke<Record<number, [number, number, number]>>('get_emitted_positions');
@@ -102,6 +106,9 @@ export type LiveStatePayload = {
   parked: number[];
   consoleAge: number | null;
   manualPositions: Record<number, [number, number, number]>;
+  /// Origines par track_id — nécessaires aux fantômes "au repos" des
+  /// visualiseurs des fenêtres détachées.
+  trackPositions: Record<number, [number, number, number]>;
   /// Indices volatiles — jamais persistés, les détachées n'ont aucun
   /// autre moyen de les voir (NOW/NEXT figés sinon).
   cueIndex: number;
@@ -133,10 +140,11 @@ async function pollLive(broadcast: boolean) {
     s.refreshPerceptual(),
   ]);
   // Santé show (parked / consoleAge) — même cycle que le reste.
-  const [parked, consoleAge, manualPositions] = await Promise.all([
+  const [parked, consoleAge, manualPositions, trackPositions] = await Promise.all([
     invoke<number[]>('get_parked_objects').catch(() => null),
     invoke<number | null>('get_last_show_cmd_age').catch(() => undefined),
     invoke<Record<number, [number, number, number]>>('get_manual_positions').catch(() => null),
+    invoke<Record<number, [number, number, number]>>('get_track_positions').catch(() => null),
   ]);
   // `s` est un snapshot FIGÉ capturé avant les awaits — les refresh* ont
   // produit un nouvel état depuis. patch/payload doivent le relire,
@@ -161,6 +169,14 @@ async function pollLive(broadcast: boolean) {
       m.useGraphStore.setState({ manualPositions });
     }
   }
+  // Même guard contenu pour les origines (quasi-statiques — un /trackpos
+  // OSC ou un .hol les fait bouger).
+  if (trackPositions != null) {
+    const cur = m.useGraphStore.getState().trackPositions;
+    if (JSON.stringify(trackPositions) !== JSON.stringify(cur)) {
+      m.useGraphStore.setState({ trackPositions });
+    }
+  }
   if (!broadcast) return;
   const payload: LiveStatePayload = {
     objectStates: fresh.objectStates,
@@ -170,6 +186,7 @@ async function pollLive(broadcast: boolean) {
     parked: patch.parked ?? show.useShowStatusStore.getState().parked,
     consoleAge: patch.consoleAge ?? show.useShowStatusStore.getState().consoleAge,
     manualPositions: manualPositions ?? m.useGraphStore.getState().manualPositions,
+    trackPositions: trackPositions ?? m.useGraphStore.getState().trackPositions,
     cueIndex: -1,
     setlistIndex: -1,
     soloSavedIds: [],
@@ -205,6 +222,7 @@ if (isDetachedWindow()) {
           perceptual: p.perceptual,
           movements: (p.movements ?? []) as any,
           manualPositions: p.manualPositions,
+          trackPositions: p.trackPositions,
           currentSetlistIndex: p.setlistIndex,
           soloSavedIds: p.soloSavedIds,
           // États des pads = vérité de la fenêtre principale (les définitions

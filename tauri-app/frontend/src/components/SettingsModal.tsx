@@ -61,6 +61,11 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const remoteUiRunning = useGraphStore((s) => s.remoteUiRunning);
   const remoteUiActiveBind = useGraphStore((s) => s.remoteUiActiveBind);
   const setRemoteUi = useGraphStore((s) => s.setRemoteUi);
+  // Prefs visualiseurs — focus doux + fantômes au repos (interactionModesSlice).
+  const viewerDimUnfocused = useGraphStore((s) => s.viewerDimUnfocused);
+  const setViewerDimUnfocused = useGraphStore((s) => s.setViewerDimUnfocused);
+  const viewerRestGhosts = useGraphStore((s) => s.viewerRestGhosts);
+  const setViewerRestGhosts = useGraphStore((s) => s.setViewerRestGhosts);
 
   const [oscIdsStr, setOscIdsStr] = React.useState(manualOscIds.join(','));
   const [audioDevices, setAudioDevices] = React.useState<{ id: string; name: string }[]>([]);
@@ -545,6 +550,34 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
             {oscIdsError && (
               <p className="text-red-400 text-xs mt-1.5">{oscIdsError}</p>
             )}
+          </section>
+
+          {/* ─── Visualiseurs ─── */}
+          <section>
+            <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+              <span className="text-amber-400">◉</span> Visualiseurs
+            </h3>
+            <p className="text-gray-400 text-xs mb-3">
+              Affichage des objets hors de la sélection courante (3D + radar).
+            </p>
+            <label className="flex items-center gap-2 text-xs text-gray-300 mb-1.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={viewerDimUnfocused}
+                onChange={(e) => setViewerDimUnfocused(e.target.checked)}
+                className="accent-amber-500"
+              />
+              Focus — estomper les objets hors du move édité (au lieu de les cacher)
+            </label>
+            <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={viewerRestGhosts}
+                onChange={(e) => setViewerRestGhosts(e.target.checked)}
+                className="accent-amber-500"
+              />
+              Objets au repos — fantômes à leur position d'origine
+            </label>
           </section>
           </>)}
 

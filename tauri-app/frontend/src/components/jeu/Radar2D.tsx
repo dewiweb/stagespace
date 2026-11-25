@@ -41,6 +41,10 @@ export const Radar2D: React.FC<{ view: RadarView }> = ({ view: radarView }) => {
   const emittedPositions = useGraphStore((s) => s.emittedPositions);
   const objectStates = useGraphStore((s) => s.objectStates);
   const manualOscIds = useGraphStore((s) => s.manualOscIds);
+  // Fantômes au repos (Settings) — objets jamais animés rendus en
+  // pointillé à leur origine (track_position), sinon invisibles.
+  const trackPositions = useGraphStore((s) => s.trackPositions);
+  const restGhosts = useGraphStore((s) => s.viewerRestGhosts);
   // Trail des derniers échantillons du geste — la vélocité de lancer se
   // calcule sur la fenêtre ~200ms (flick), pas sur le déplacement total :
   // tenir l'objet avant de relâcher ne doit pas tuer la vélocité.
@@ -74,6 +78,14 @@ export const Radar2D: React.FC<{ view: RadarView }> = ({ view: radarView }) => {
     return () => clearInterval(t);
   }, []);
   const positions = Object.keys(livePositions).length > 0 ? livePositions : emittedPositions;
+  // Origines des objets sans position émise — fantômes au repos.
+  const restGhostPos: [number, [number, number, number]][] = restGhosts
+    ? manualOscIds.flatMap((tid, i): [number, [number, number, number]][] => {
+        if (positions[i]) return [];
+        const rp = trackPositions[tid];
+        return rp ? [[i, rp]] : [];
+      })
+    : [];
   const selectedObj = useGraphStore((s) => s.selectedObjIndex);
   const setSelectedObj = useGraphStore((s) => s.setSelectedObjIndex);
   // Menu clic-droit sur un objet — Release/Park/Copy/Paste position.
@@ -91,6 +103,9 @@ export const Radar2D: React.FC<{ view: RadarView }> = ({ view: radarView }) => {
   const targetR = Math.max(
     5,
     ...Object.values(positions).flatMap((p) => [Math.abs(p[va]), Math.abs(p[vb])]),
+    // Les fantômes au repos comptent dans le fit — ils font partie du
+    // champ spatial (les origines où panic les renvoie).
+    ...restGhostPos.flatMap(([, p]) => [Math.abs(p[va]), Math.abs(p[vb])]),
     // Les zones incluent leur empreinte dans le fit — sinon une zone
     // lointaine clipperait hors cadre.
     ...zones.flatMap((z) => zoneBounds(z, va, vb)),
@@ -340,6 +355,20 @@ export const Radar2D: React.FC<{ view: RadarView }> = ({ view: radarView }) => {
             <text x={cx} y={cy - 7} fill="#9ca3af" fontSize="7" textAnchor="middle">
               {/* track_id (même numérotation que les pads et la 3D) — pas obj_index */}
               {manualOscIds[t] ?? t + 1}
+            </text>
+          </g>
+        );
+      })}
+      {/* Fantômes au repos — objets jamais animés (aucune position
+          émise) rendus à leur origine en pointillé. pointerEvents=none :
+          ce sont des repères, pas des cibles de geste. */}
+      {restGhostPos.map(([i, p]) => {
+        const [cx, cy] = proj(p);
+        return (
+          <g key={`ghost${i}`} pointerEvents="none" opacity={0.45}>
+            <circle cx={cx} cy={cy} r="4" fill="none" stroke="#4b5563" strokeWidth="0.8" strokeDasharray="2 2" />
+            <text x={cx} y={cy - 7} fill="#4b5563" fontSize="7" textAnchor="middle">
+              {manualOscIds[i] ?? i + 1}
             </text>
           </g>
         );

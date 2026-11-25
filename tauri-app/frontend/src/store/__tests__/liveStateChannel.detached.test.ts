@@ -22,6 +22,7 @@ const payload: LiveStatePayload = {
   parked: [0],
   consoleAge: 2.5,
   manualPositions: { 1: [0.5, 1.0, 0.0], 2: [-1.0, 0.0, 0.25] },
+  trackPositions: { 1: [0.0, 2.0, 0.0], 2: [1.0, 0.0, 0.0] },
   cueIndex: 3,
   setlistIndex: 1,
   soloSavedIds: ['s1', 's2'],
