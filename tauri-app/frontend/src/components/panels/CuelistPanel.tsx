@@ -308,7 +308,14 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
                     )}
                   </div>
                   <div className="text-gray-400 text-xs truncate flex items-center gap-1.5">
-                    {(cue.active_move_ids?.length ?? 0) > 0 && (
+                    {(cue.moves?.length ?? 0) > 0 ? (
+                      // Snapshot contents — names rather than a bare count:
+                      // a cue is a scene, "Move1+Move3" says WHICH pads it
+                      // froze (truncate + title pour les longues listes).
+                      <span title={cue.moves!.map((m) => m.name).join(' + ')}>
+                        {cue.moves!.length}▸ {cue.moves!.map((m) => m.name).join('+')}
+                      </span>
+                    ) : (cue.active_move_ids?.length ?? 0) > 0 && (
                       <span>{cue.active_move_ids?.length} move(s)</span>
                     )}
                     {!readonly && cue.id === armedCueId ? (

@@ -35,6 +35,19 @@ export function buildObjectMenuItems(
       label: src === 'park' ? `Unpark — obj ${obj + 1}` : `Park — obj ${obj + 1}`,
       onClick: () => (src === 'park' ? doUnpark(obj) : doPark(obj)),
     },
+    {
+      // Attention = geste OBJET : fige tous les autres (change blindness),
+      // celui-ci continue à bouger. Choisi en pointant l'objet (radar, 3D,
+      // cellule track) — pas via un pad : les couvertures se recoupent.
+      // Sur un objet parké, le park l'emporte → TOUT gelerait : refusé.
+      label: `◎ Attention — only obj ${obj + 1} moves`,
+      disabled: src === 'park',
+      title:
+        src === 'park'
+          ? 'Park wins over attention — unpark first (parking this object would freeze it too)'
+          : 'Freeze every other object (change blindness) — release via ATTN ✕ or /stagespace/attention/clear',
+      onClick: () => doAttention(obj),
+    },
     { separator: true },
     {
       label: `Copy position — obj ${obj + 1}`,

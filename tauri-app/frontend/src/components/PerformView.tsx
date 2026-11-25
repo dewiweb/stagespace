@@ -10,7 +10,7 @@ import { useShowStatusStore, startShowStatusPolling } from '../store/useShowStat
 import { cueLabel, tcStr } from '../utils/showFormat';
 import { useGraphStore } from '../store/useGraphStore';
 import { useCuelistStore } from '../store/useCuelistStore';
-import { doSolo, doStop, doUnsolo, getSoloRestoreIds, doAttention } from '../utils/liveActions';
+import { doSolo, doStop, doUnsolo, getSoloRestoreIds } from '../utils/liveActions';
 import { Radar2D } from './jeu/Radar2D';
 import type { RadarView } from './jeu/Radar2D';
 import { ScoreProgress } from './jeu/ScoreProgress';
@@ -64,6 +64,9 @@ export const PerformView: React.FC = () => {
   const movements = useGraphStore((s) => s.movements);
   // Panneau central : pads (l'instrument, défaut) ou canvas 3D.
   const [centerView, setCenterView] = React.useState<'pads' | '3d'>('pads');
+  // Colonne gauche en tabs : setlist ET cues tenaient mal dans le même
+  // 40/60 — chacune prend toute la hauteur à la demande (audit ergo).
+  const [leftTab, setLeftTab] = React.useState<'setlist' | 'cues'>('cues');
   // Projection du radar — sélecteur dans le header du panneau radar.
   const [radarView, setRadarView] = React.useState<RadarView>('top');
   // Fenêtre détachée (?view=run) — l'édition pure est masquée : le
@@ -114,7 +117,9 @@ export const PerformView: React.FC = () => {
     .filter(Boolean) as typeof moveSlots;
   const layerSlots = moveSlots.filter((s) => !setlistOrder.includes(s.id));
 
-  // Pad jeu — SlotTile + badges source-de-contrôle (P/H/S) + attention ◎.
+  // Pad jeu — SlotTile + badges source-de-contrôle (P/H/S). L'attention
+  // est un geste OBJET (menu objet radar/3D/tracks) — pas pad : les
+  // couvertures se recoupent et « seul ce slot bouge » serait faux.
   // objectStates est keyed par obj_index : trackId → indexOf(manualOscIds).
   const srcOf = (trackId: number) => objectStates[manualOscIds.indexOf(trackId)];
   const soloId =
@@ -124,7 +129,6 @@ export const PerformView: React.FC = () => {
     const oscNum = slot.oscIndex || moveSlots.indexOf(slot) + 1;
     const parkedTracks = slot.trackIds.filter((t) => srcOf(t) === 'park');
     const heldTracks = slot.trackIds.filter((t) => srcOf(t) === 'hold');
-    const firstObj = manualOscIds.indexOf(slot.trackIds[0]);
     return (
       <SlotTile
         key={slot.id}
@@ -137,7 +141,6 @@ export const PerformView: React.FC = () => {
         canSolo={playingCount > 1}
         parkedTracks={parkedTracks}
         heldTracks={heldTracks}
-        onAttention={firstObj >= 0 ? () => doAttention(firstObj) : undefined}
         isSelected={editingSlotId === slot.id}
         onSelect={() => selectSlotForEditing(editingSlotId === slot.id ? null : slot.id)}
         onPlay={() => void playSlot(slot.id)}
@@ -347,8 +350,24 @@ export const PerformView: React.FC = () => {
 
       {/* ═══ Corps : setlist | canvas ═══ */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Colonne gauche : SETLIST (flux du show) + LAYERS (ad-hoc) + cues */}
+        {/* Colonne gauche : tabs SETLIST | CUES — chacune toute la hauteur */}
         <div className="w-80 flex-shrink-0 border-r border-stagespace-border flex flex-col bg-stagespace-panel min-h-0">
+          <div className="flex border-b border-stagespace-border flex-shrink-0">
+            {(['setlist', 'cues'] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setLeftTab(t)}
+                className={`flex-1 px-3 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
+                  leftTab === t
+                    ? 'text-white bg-stagespace-accent/15 border-b-2 border-stagespace-accent -mb-px'
+                    : 'text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                {t === 'setlist' ? `Setlist ${setlistSlots.length || ''}` : `Cues ${cues.length || ''}`}
+              </button>
+            ))}
+          </div>
+          {leftTab === 'setlist' && (
           <div className="flex-1 overflow-y-auto min-h-0">
             <div className="px-3 py-2 text-gray-400 text-xs uppercase tracking-wider border-b border-stagespace-border flex items-center justify-between">
               <span>Setlist — GO avance ici</span>
@@ -398,16 +417,18 @@ export const PerformView: React.FC = () => {
               </div>
             )}
           </div>
-          {/* Cues — arm + double-clic recall (déjà protégé). Partage
-              flexible de la colonne : la cue list est l'objet central du
-              show, elle ne tient pas en 224px (ex-h-56 confiné). */}
-          <div className="flex-1 min-h-0 basis-2/5 border-t border-stagespace-border flex flex-col">
-            {/* readonly masque les gestes dangereux (delete/recall-par-
-                erreur) ; canStore garde « ★ Store » : capturer une cue
-                ne mute pas la scène — sauf en fenêtre détachée où le
-                storage est read-only (store non persisté). */}
-            <CuelistPanel readonly canStore={!detached} />
-          </div>
+          )}
+          {/* Cues — arm + double-clic recall (déjà protégé). Tab propre :
+              la liste prend toute la colonne quand elle est active. */}
+          {leftTab === 'cues' && (
+            <div className="flex-1 min-h-0 flex flex-col">
+              {/* readonly masque les gestes dangereux (delete/recall-par-
+                  erreur) ; canStore garde « ★ Store » : capturer une cue
+                  ne mute pas la scène — sauf en fenêtre détachée où le
+                  storage est read-only (store non persisté). */}
+              <CuelistPanel readonly canStore={!detached} />
+            </div>
+          )}
         </div>
 
         {/* Centre — l'instrument : pads permanents (ex-busking, la

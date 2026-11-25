@@ -6,6 +6,7 @@ import { trackColor } from '../utils/trackColor';
 import { TRACK_PATTERNS, applySelectionPattern, SelectionPattern } from '../utils/trackPatterns';
 import { buildObjectMenuItems } from '../utils/objectMenuItems';
 import { useGraphStore } from '../store/useGraphStore';
+import { sourceHex, SOURCE_LABEL } from '../utils/sourceColors';
 
 interface TrackInfo {
   id: number;
@@ -40,6 +41,18 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
   compact = false,
 }) => {
   const [showDepth, setShowDepth] = React.useState(false);
+  // État de contrôle par objet (park/freeze/hold/manual) — marqueur sur
+  // la cellule, même palette que le radar (sourceColors). Subscription
+  // réactive : l'état bouge en live (attention, panic, unpark…).
+  const objectStates = useGraphStore((s) => s.objectStates);
+  const manualOscIds = useGraphStore((s) => s.manualOscIds);
+  /// États à marquer sur la bordure — les « reprises de contrôle »
+  /// (famille HeldState). move/track/psn = régime normal → pas de marque.
+  const MARKED = new Set(['park', 'freeze', 'hold', 'manual']);
+  const stateOf = (trackId: number) => {
+    const obj = manualOscIds.indexOf(trackId);
+    return obj >= 0 ? objectStates[obj] : undefined;
+  };
 
   // Applique un pattern de sélection
   const applyPattern = (pattern: SelectionPattern) => {
@@ -158,6 +171,9 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
           const asg = assignments.find((a) => a.track_id === t.id);
           const depth = asg?.depth ?? 1.0;
           const color = t.color ?? trackColor(i, tracks.length);
+          const src = stateOf(t.id);
+          const markHex = src && MARKED.has(src) ? sourceHex(src) : undefined;
+          const stateSuffix = src && src !== 'move' && src !== 'track' ? ` — ${SOURCE_LABEL[src] ?? src}` : '';
 
           if (showDepth) {
             // Mode depth : chaque track montre son slider de profondeur
@@ -166,12 +182,13 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
                 key={t.id}
                 className={`relative rounded-lg p-1 transition-all cursor-pointer border ${compact ? 'col-span-2' : ''} ${
                   isSelected
-                    ? 'bg-stagespace-accent/15 border-stagespace-accent/50'
-                    : 'bg-gray-800/40 border-gray-700/30 opacity-50'
-                }`}
+                    ? 'bg-stagespace-accent/15'
+                    : 'bg-gray-800/40 opacity-50'
+                } ${markHex ? '' : isSelected ? 'border-stagespace-accent/50' : 'border-gray-700/30'}`}
+                style={markHex ? { borderColor: markHex } : undefined}
                 onClick={() => toggleTrackSelection(t.id)}
                 onContextMenu={(e) => cellCtx(e, t.id)}
-                title={`${t.name} (#${t.id}) — depth: ${Math.round(depth * 100)}%`}
+                title={`${t.name} (#${t.id})${stateSuffix} — depth: ${Math.round(depth * 100)}%`}
               >
                 {/* Color dot + ID */}
                 <div className="flex items-center gap-1 mb-0.5">
@@ -215,11 +232,10 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
               onClick={() => toggleTrackSelection(t.id)}
               onContextMenu={(e) => cellCtx(e, t.id)}
               className={`relative ${compact ? 'h-9' : 'aspect-square'} rounded-lg flex ${compact ? 'flex-row gap-1 px-1' : 'flex-col'} items-center justify-center transition-all border-2 ${
-                isSelected
-                  ? 'border-stagespace-accent bg-stagespace-accent/15'
-                  : 'border-gray-700/30 bg-gray-800/40 hover:border-gray-600'
-              } ${compact ? '' : isSelected ? 'scale-105' : ''}`}
-              title={`${t.name} (#${t.id})`}
+                isSelected ? 'bg-stagespace-accent/15' : 'bg-gray-800/40'
+              } ${markHex ? '' : isSelected ? 'border-stagespace-accent' : 'border-gray-700/30 hover:border-gray-600'} ${compact ? '' : isSelected ? 'scale-105' : ''}`}
+              style={markHex ? { borderColor: markHex } : undefined}
+              title={`${t.name} (#${t.id})${stateSuffix}`}
             >
               {/* Color indicator */}
               <div

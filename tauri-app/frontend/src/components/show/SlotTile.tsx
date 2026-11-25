@@ -1,6 +1,6 @@
 import React from 'react';
 import { Play, Square, SlidersHorizontal } from 'lucide-react';
-import { SOURCE_BADGE, SOURCE_STRONG } from '../../utils/sourceColors';
+import { SOURCE_BADGE } from '../../utils/sourceColors';
 
 /// Tracks condensés en plages pour la lisibilité pad : 64 tracks = mur
 /// de chiffres, «1-32» se lit en un clin d'œil. Les tracks parkés ⏸
@@ -51,7 +51,6 @@ interface SlotTileProps {
   parkedTracks?: number[];
   heldTracks?: number[];
   isSolo?: boolean;
-  onAttention?: () => void;
 }
 
 export const SlotTile: React.FC<SlotTileProps> = (p) => {
@@ -123,21 +122,30 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
         aria-label={`slot ${oscNum} ${slot.name} ${isPlaying ? 'stop' : 'play'}`}
         title={`OSC: /stagespace/slot ${oscNum} · slot/stop ${oscNum} · solo ${oscNum}`}
       >
-        <div className="flex items-start justify-between gap-1">
+        <div className="flex items-center gap-1">
           <span className={`${big ? 'text-2xl' : 'text-sm'} font-black font-mono ${isPlaying ? 'text-stagespace-live' : 'text-gray-500'}`}>
             #{oscNum}
           </span>
-          {canSolo && p.onSolo && (
-            <button
-              onClick={(e) => { e.stopPropagation(); p.onSolo!(); }}
-              className="w-8 h-8 -m-1 rounded-lg bg-stagespace-warning/70 hover:bg-stagespace-warning text-gray-950 text-xs font-bold flex items-center justify-center"
-              title="SOLO — coupe les autres en fondu"
-            >
-              S
-            </button>
+          {p.isSolo && (
+            <span className="text-[9px] bg-stagespace-warning text-gray-950 px-1 rounded" title="Ce slot est le solo actif">SOLO</span>
+          )}
+          {p.parkedTracks && p.parkedTracks.length > 0 && (
+            <span className={`text-[9px] ${SOURCE_BADGE.park} px-1 rounded`} title={`Parké : ${p.parkedTracks.join(', ')}`}>P</span>
+          )}
+          {p.heldTracks && p.heldTracks.length > 0 && (
+            <span className={`text-[9px] ${SOURCE_BADGE.hold} px-1 rounded`} title={`Hold : ${p.heldTracks.join(', ')}`}>H</span>
           )}
         </div>
-        <div className="min-w-0">
+        {canSolo && p.onSolo && (
+          <button
+            onClick={(e) => { e.stopPropagation(); p.onSolo!(); }}
+            className="absolute top-1.5 right-1.5 w-8 h-8 rounded-lg bg-stagespace-warning/70 hover:bg-stagespace-warning text-gray-950 text-xs font-bold flex items-center justify-center"
+            title="SOLO — coupe les autres en fondu"
+          >
+            S
+          </button>
+        )}
+        <div className="min-w-0 pr-10">
           {/* Nom = sélection pour le drawer — stopPropagation sur pointerdown
               (tue le timer hold/bump) ET click (ne lance pas le move). Corps
               du pad = transport pur, sélection stable en multi-pad live. */}
@@ -160,23 +168,6 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
             {isPlaying ? ' · LIVE' : ' · hold=bump'}
           </div>
         </div>
-        {/* Badges source-de-contrôle — P park, H hold, S solo, ◎ attention. */}
-        {p.parkedTracks && p.parkedTracks.length > 0 && (
-          <div className={`absolute top-10 right-1.5 text-[9px] ${SOURCE_BADGE.park} px-1 rounded`} title={`Parké : ${p.parkedTracks.join(', ')}`}>P</div>
-        )}
-        {p.heldTracks && p.heldTracks.length > 0 && (
-          <div className={`absolute bottom-1.5 right-1.5 text-[9px] ${SOURCE_BADGE.hold} px-1 rounded`} title={`Hold : ${p.heldTracks.join(', ')}`}>H</div>
-        )}
-        {p.isSolo && <div className="absolute top-1.5 left-1.5 text-[9px] bg-stagespace-warning text-gray-950 px-1 rounded">S</div>}
-        {p.onAttention && (
-          <span
-            onClick={(e) => { e.stopPropagation(); p.onAttention!(); }}
-            title="Attention — fige les autres objets, seul celui-ci bouge (change blindness)"
-            className={`absolute bottom-1.5 left-1.5 text-[9px] ${SOURCE_STRONG.park} px-1 rounded cursor-pointer`}
-          >
-            ◎
-          </span>
-        )}
       </div>
     );
   }
