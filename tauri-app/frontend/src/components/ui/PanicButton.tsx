@@ -37,7 +37,7 @@ export const PanicButton: React.FC<PanicButtonProps> = ({ size = 'sm' }) => {
     <>
       <button
         onClick={handleClick}
-        className={`${sizing} font-black rounded-lg bg-red-700 hover:bg-red-600 text-white border-2 border-red-500 transition-colors tracking-wider active:scale-95 flex items-center gap-1.5`}
+        className={`${sizing} font-black rounded-lg bg-stagespace-danger hover:opacity-90 text-white border-2 border-red-500 transition-colors tracking-wider active:scale-95 flex items-center gap-1.5`}
         title="PANIC (Esc) — stops all moves and sends origin positions"
       >
         <OctagonX size={size === 'lg' ? 20 : 14} strokeWidth={2.5} />
@@ -45,7 +45,7 @@ export const PanicButton: React.FC<PanicButtonProps> = ({ size = 'sm' }) => {
       </button>
       {/* Flash overlay — bref, non-bloquant (pointer-events-none) */}
       {flash && (
-        <div className="fixed inset-0 z-toast bg-red-600/25 pointer-events-none animate-fade-in" />
+        <div className="fixed inset-0 z-toast bg-stagespace-danger/25 pointer-events-none animate-fade-in" />
       )}
     </>
   );

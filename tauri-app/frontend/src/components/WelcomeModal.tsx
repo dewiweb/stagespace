@@ -55,7 +55,7 @@ export const WelcomeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
             ['Cue', 'a snapshot you recall live (Shift+Enter)'],
           ].map(([term, def]) => (
             <div key={term} className="flex gap-2 text-xs leading-snug">
-              <span className="text-cyan-400 font-mono w-14 flex-shrink-0">{term}</span>
+              <span className="text-stagespace-accent font-mono w-14 flex-shrink-0">{term}</span>
               <span className="text-gray-400">{def}</span>
             </div>
           ))}
@@ -63,7 +63,7 @@ export const WelcomeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
         <div className="flex gap-2">
           <button
             onClick={loadExample}
-            className="flex-1 px-3 py-2 rounded bg-blue-700 hover:bg-blue-600 text-white text-xs font-semibold transition-colors"
+            className="flex-1 px-3 py-2 rounded bg-stagespace-accent hover:opacity-90 text-white text-xs font-semibold transition-colors"
           >
             Load the example show
           </button>

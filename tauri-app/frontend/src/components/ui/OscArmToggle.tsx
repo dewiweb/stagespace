@@ -17,14 +17,14 @@ export function OscArmToggle({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
       onClick={() => setArmed(!armed)}
       className={`${sizing} font-bold transition-colors flex items-center gap-1.5 ${
         armed
-          ? 'bg-red-900/60 text-red-300 hover:bg-red-800/70 border border-red-700/50'
+          ? 'bg-stagespace-danger/15 text-red-300 hover:bg-stagespace-danger/25 border border-stagespace-danger/50'
           : 'bg-gray-800 text-gray-500 hover:text-gray-300 border border-gray-700'
       }`}
       title={armed
         ? 'OSC LIVE — positions are being sent. Click for DRY-RUN (mute all OSC output)'
         : 'DRY-RUN — preview only, nothing is sent. Click to go LIVE'}
     >
-      <span className={`w-2 h-2 rounded-full ${armed ? 'bg-red-400 animate-pulse' : 'bg-gray-600'}`} />
+      <span className={`w-2 h-2 rounded-full ${armed ? 'bg-stagespace-danger animate-pulse' : 'bg-gray-600'}`} />
       {armed ? 'LIVE' : 'DRY-RUN'}
     </button>
   );

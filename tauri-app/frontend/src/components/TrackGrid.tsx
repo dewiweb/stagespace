@@ -130,7 +130,7 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
         <button
           onClick={() => setShowDepth(!showDepth)}
           className={`px-1.5 py-0.5 text-xs rounded transition-colors ${
-            showDepth ? 'bg-cyan-700 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+            showDepth ? 'bg-stagespace-accent text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
           }`}
         >
           {showDepth ? 'Depth' : 'Select'}
@@ -166,7 +166,7 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
                 key={t.id}
                 className={`relative rounded-lg p-1 transition-all cursor-pointer border ${compact ? 'col-span-2' : ''} ${
                   isSelected
-                    ? 'bg-blue-900/40 border-blue-600/50'
+                    ? 'bg-stagespace-accent/15 border-stagespace-accent/50'
                     : 'bg-gray-800/40 border-gray-700/30 opacity-50'
                 }`}
                 onClick={() => toggleTrackSelection(t.id)}
@@ -216,7 +216,7 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
               onContextMenu={(e) => cellCtx(e, t.id)}
               className={`relative ${compact ? 'h-9' : 'aspect-square'} rounded-lg flex ${compact ? 'flex-row gap-1 px-1' : 'flex-col'} items-center justify-center transition-all border-2 ${
                 isSelected
-                  ? 'border-blue-500 bg-blue-900/40'
+                  ? 'border-stagespace-accent bg-stagespace-accent/15'
                   : 'border-gray-700/30 bg-gray-800/40 hover:border-gray-600'
               } ${compact ? '' : isSelected ? 'scale-105' : ''}`}
               title={`${t.name} (#${t.id})`}

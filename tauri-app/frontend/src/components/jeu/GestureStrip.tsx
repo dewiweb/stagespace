@@ -50,7 +50,7 @@ export const GestureStrip: React.FC = () => {
             disabled={!objectsLive}
             className={`px-3 rounded-lg text-[11px] font-bold transition-colors ${
               objectsLive
-                ? 'bg-indigo-900/70 hover:bg-indigo-700 text-indigo-100'
+                ? 'bg-stagespace-accent/20 hover:bg-stagespace-accent/30 text-blue-100'
                 : 'bg-gray-800 text-gray-600 cursor-not-allowed'
             }`}
             title={objectsLive ? `${g.hint} (force 3 m/s — amorti jusqu'au repos)` : 'Aucun objet émis — lance un move d’abord'}

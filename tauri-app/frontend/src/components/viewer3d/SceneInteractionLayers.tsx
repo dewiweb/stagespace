@@ -62,7 +62,7 @@ export const SceneInteractionLayers: React.FC<SceneInteractionLayersProps> = (p)
     />
     <div
       ref={p.marqueeDivRef}
-      className="absolute z-overlay pointer-events-none border border-orange-400/80 bg-orange-400/10"
+      className="absolute z-overlay pointer-events-none border border-stagespace-target/80 bg-stagespace-target/10"
       style={{ display: 'none' }}
     />
     {p.zoneEditMode && (

@@ -70,7 +70,7 @@ export const ViewerToolPalette: React.FC = () => {
       )}
       {modeBtn(
         manipulateMode,
-        'bg-blue-600',
+        'bg-stagespace-accent',
         'Manipulate — drag objects, Shift+click = multi-select, handle = move all, wheel = scale',
         <Move3d size={13} />,
         () => setManipulateMode(!manipulateMode),
@@ -78,7 +78,7 @@ export const ViewerToolPalette: React.FC = () => {
       {!detached &&
         modeBtn(
           assignMode,
-          'bg-green-600',
+          'bg-stagespace-accent',
           'Assign — click objects to toggle their track for this move',
           <Link2 size={13} />,
           () => setAssignMode(!assignMode),
@@ -86,7 +86,7 @@ export const ViewerToolPalette: React.FC = () => {
       {!detached &&
         modeBtn(
           drawMode,
-          'bg-orange-600',
+          'bg-violet-600',
           hasDrawableNode
             ? 'Draw — spline studio (freehand, place, edit)'
             : 'No drawable node — add a DrawSpline / EvaluateSpline / VectorField(drawn) node first',

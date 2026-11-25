@@ -87,7 +87,7 @@ export function Titlebar() {
           <button
             onClick={() => appWindow.close()}
             title="Close — stops all moves (panic-clean)"
-            className="w-11 flex items-center justify-center text-gray-400 hover:bg-red-600 hover:text-white text-sm"
+            className="w-11 flex items-center justify-center text-gray-400 hover:bg-stagespace-danger hover:text-white text-sm"
           >
             ✕
           </button>

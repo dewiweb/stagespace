@@ -115,7 +115,7 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
         }}
         className={`relative flex flex-col justify-between p-3 rounded-xl ${big ? 'min-h-[150px] p-4' : 'min-h-[88px]'} select-none cursor-pointer transition-colors active:scale-95 border ${
           isPlaying
-            ? 'bg-green-800/70 border-green-600 text-green-50'
+            ? 'bg-stagespace-live/25 border-stagespace-live/60 text-green-50'
             : 'bg-gray-800/80 border-gray-700 text-gray-200 hover:bg-gray-700/80'
         } ${p.isSelected ? 'ring-2 ring-inset ring-stagespace-accent/80' : ''}`}
         role="button"
@@ -123,13 +123,13 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
         title={`OSC: /stagespace/slot ${oscNum} · slot/stop ${oscNum} · solo ${oscNum}`}
       >
         <div className="flex items-start justify-between gap-1">
-          <span className={`${big ? 'text-2xl' : 'text-sm'} font-black font-mono ${isPlaying ? 'text-green-300' : 'text-gray-500'}`}>
+          <span className={`${big ? 'text-2xl' : 'text-sm'} font-black font-mono ${isPlaying ? 'text-stagespace-live' : 'text-gray-500'}`}>
             #{oscNum}
           </span>
           {canSolo && p.onSolo && (
             <button
               onClick={(e) => { e.stopPropagation(); p.onSolo!(); }}
-              className="w-8 h-8 -m-1 rounded-lg bg-orange-700/70 hover:bg-orange-600 text-orange-100 text-xs font-bold flex items-center justify-center"
+              className="w-8 h-8 -m-1 rounded-lg bg-stagespace-warning/70 hover:bg-stagespace-warning text-orange-100 text-xs font-bold flex items-center justify-center"
               title="SOLO — coupe les autres en fondu"
             >
               S
@@ -152,7 +152,7 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
             {slot.name}
           </div>
           <div
-            className={`text-[10px] mt-0.5 ${isPlaying ? 'text-green-300/80' : 'text-gray-500'}`}
+            className={`text-[10px] mt-0.5 ${isPlaying ? 'text-stagespace-live/80' : 'text-gray-500'}`}
             title={`Tracks : ${slot.trackIds.join(', ')}${isPlaying ? '' : ' — tap = play, hold ≥350ms = momentary'}`}
           >
             {formatTrackIds(slot.trackIds, p.parkedTracks ?? [])}
@@ -166,7 +166,7 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
         {p.heldTracks && p.heldTracks.length > 0 && (
           <div className="absolute bottom-1.5 right-1.5 text-[9px] bg-cyan-800 px-1 rounded" title={`Hold : ${p.heldTracks.join(', ')}`}>H</div>
         )}
-        {p.isSolo && <div className="absolute top-1.5 left-1.5 text-[9px] bg-orange-800 px-1 rounded">S</div>}
+        {p.isSolo && <div className="absolute top-1.5 left-1.5 text-[9px] bg-stagespace-warning px-1 rounded">S</div>}
         {p.onAttention && (
           <span
             onClick={(e) => { e.stopPropagation(); p.onAttention!(); }}
@@ -192,7 +192,7 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
           : p.isCurrentSetlist
             ? 'bg-stagespace-live/10 hover:bg-stagespace-live/20'
             : isPlaying
-              ? 'bg-green-900/10 hover:bg-green-900/20'
+              ? 'bg-stagespace-live/10 hover:bg-stagespace-live/20'
               : 'hover:bg-gray-800/30'
       }`}
     >
@@ -203,8 +203,8 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
         }}
         className={`w-11 h-11 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0 transition-colors active:scale-95 ${
           isPlaying
-            ? 'bg-red-800/80 hover:bg-red-700 text-red-200'
-            : 'bg-green-800/80 hover:bg-green-700 text-green-200'
+            ? 'bg-stagespace-danger/25 hover:bg-stagespace-danger/40 text-red-200'
+            : 'bg-stagespace-live/25 hover:bg-stagespace-live/35 text-green-200'
         }`}
         title={isPlaying ? 'Stop this move' : 'Launch (layered — others keep running)'}
       >
@@ -222,7 +222,7 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
           {isPlaying && (
             <span
               className={`text-xs px-1 rounded ${
-                slot.isPreview ? 'bg-slate-800 text-slate-300' : 'bg-green-900 text-green-300'
+                slot.isPreview ? 'bg-slate-800 text-slate-300' : 'bg-stagespace-live/20 text-stagespace-live'
               }`}
             >
               {slot.isPreview ? 'PREV' : 'LIVE'}
@@ -242,7 +242,7 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
       {canSolo && p.onSolo && (
         <button
           onClick={(e) => { e.stopPropagation(); p.onSolo!(); }}
-          className="flex-shrink-0 w-11 h-11 rounded text-xs font-bold text-gray-400 hover:bg-orange-600/40 hover:text-orange-200 transition-colors"
+          className="flex-shrink-0 w-11 h-11 rounded text-xs font-bold text-gray-400 hover:bg-stagespace-warning/40 hover:text-orange-200 transition-colors"
           title="SOLO — stoppe les autres moves (fade) puis joue celui-ci"
         >
           S

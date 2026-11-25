@@ -58,13 +58,13 @@ export const ScoreProgress: React.FC = () => {
       title="Score — progression de la partition (lecture seule : édition dans la surface Score)"
     >
       <span className="text-gray-500 uppercase text-[10px]">Score</span>
-      <span className={`text-[11px] font-mono tabular-nums ${playing ? 'text-cyan-300' : 'text-gray-500'}`}>
+      <span className={`text-[11px] font-mono tabular-nums ${playing ? 'text-stagespace-live' : 'text-gray-500'}`}>
         {playing ? '▶' : '■'} {fmtMs(displayCursor)}
         {durationMs > 0 && <span className="text-gray-600"> / {fmtMs(durationMs)}</span>}
-        {loopEndMs != null && <span className="text-cyan-600" title="Loop active"> ⟳</span>}
+        {loopEndMs != null && <span className="text-stagespace-target" title="Loop active"> ⟳</span>}
       </span>
       <span className="w-16 h-1 rounded bg-gray-800 overflow-hidden flex-shrink-0" title={`${pct.toFixed(0)}%`}>
-        <span className="block h-full bg-cyan-500/70 transition-[width] duration-100" style={{ width: `${pct}%` }} />
+        <span className="block h-full bg-stagespace-accent/70 transition-[width] duration-100" style={{ width: `${pct}%` }} />
       </span>
       {upcoming.length > 0 && (
         <span className="text-[10px] text-gray-500 truncate">

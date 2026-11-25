@@ -80,7 +80,7 @@ export const ScoreToolbar: React.FC<{
       )}
       {selClip && (selClip.ref.type === 'slot' || selClip.ref.type === 'cue') && (
         <button
-          className={`${btn} ${selClip.trackIds === undefined ? 'text-cyan-300 border-cyan-800' : 'text-orange-300 border-orange-800'}`}
+          className={`${btn} ${selClip.trackIds === undefined ? 'text-stagespace-derived border-stagespace-derived/60' : 'text-stagespace-warning border-stagespace-warning/60'}`}
           title={selClip.trackIds === undefined
             ? 'Couverture SUIVIE — dérive de l\'entité vivante (cliquer = geler en override)'
             : 'Couverture GELÉE — override du clip (cliquer = repasser en suivi)'}

@@ -161,7 +161,7 @@ export default function AnimationList() {
             )}
             <div className="flex items-center gap-0.5">
               {current.graph_json?.nodes && (
-                <span className="text-purple-400 text-xs font-mono bg-purple-900/40 px-1 rounded" title="Graphe custom"><Hexagon size={9} /></span>
+                <span className="text-stagespace-modulation text-xs font-mono bg-stagespace-modulation/15 px-1 rounded" title="Graphe custom"><Hexagon size={9} /></span>
               )}
               {current.assignments.length > 0 && (
                 <span className="text-stagespace-dim text-xs font-mono bg-gray-800/60 px-1 rounded" title={`${current.assignments.length} tracks`}>
@@ -171,7 +171,7 @@ export default function AnimationList() {
             </div>
           </div>
           <button onClick={saveAnimation}
-            className="w-full mt-1.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded font-medium transition-colors">
+            className="w-full mt-1.5 py-1.5 bg-stagespace-accent hover:opacity-90 text-white text-xs rounded font-medium transition-colors">
             ★ Save to my library
           </button>
         </div>
@@ -222,7 +222,7 @@ export default function AnimationList() {
                   )}
                   <div className="flex items-center gap-0.5">
                     {hasGraph && (
-                      <span className="text-purple-400 text-xs font-mono bg-purple-900/40 px-1 rounded" title="Graphe custom (node editor)"><Hexagon size={9} /></span>
+                      <span className="text-stagespace-modulation text-xs font-mono bg-stagespace-modulation/15 px-1 rounded" title="Graphe custom (node editor)"><Hexagon size={9} /></span>
                     )}
                     {anim.assignments.length > 0 && (
                       <span className="text-stagespace-dim text-xs font-mono bg-gray-800/60 px-1 rounded" title={`${anim.assignments.length} tracks`}>

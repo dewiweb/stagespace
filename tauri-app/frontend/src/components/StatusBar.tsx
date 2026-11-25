@@ -96,7 +96,7 @@ export const StatusBar: React.FC = () => {
         onClick={() => setArmed(!armed)}
         className={`px-1.5 py-0.5 rounded font-bold flex-shrink-0 border transition-colors ${
           armed
-            ? `${STATUS_TONES.danger} hover:bg-red-800/50`
+            ? `${STATUS_TONES.danger} hover:bg-stagespace-danger/50`
             : `${STATUS_TONES.dim} animate-pulse hover:bg-gray-700/50`
         }`}
         title={armed ? 'OSC LIVE — positions attempted; UDP cannot confirm delivery (a powered-off renderer host stays invisible). Click for DRY-RUN' : 'DRY-RUN — OSC muted, nothing is sent. Click to go LIVE'}
@@ -255,7 +255,7 @@ export const StatusBar: React.FC = () => {
       {hasError && (
         <button
           onClick={() => { clearCompileError(); clearPlayError(); }}
-          className={`flex items-center gap-1 px-2 py-0.5 rounded border ${STATUS_TONES.danger} hover:bg-red-900/80 transition-colors min-w-0`}
+          className={`flex items-center gap-1 px-2 py-0.5 rounded border ${STATUS_TONES.danger} hover:bg-stagespace-danger/80 transition-colors min-w-0`}
           title={`${errorText} — click to dismiss`}
         >
           <TriangleAlert size={11} className="flex-shrink-0" />

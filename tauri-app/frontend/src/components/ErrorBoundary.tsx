@@ -30,7 +30,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
     if (this.state.error) {
       return (
         <div className="flex-1 flex flex-col items-center justify-center bg-stagespace-panel text-center p-4">
-          <span className="text-red-400 text-sm font-medium">{this.props.zone} crashed</span>
+          <span className="text-stagespace-danger text-sm font-medium">{this.props.zone} crashed</span>
           <span className="text-gray-500 text-xs mt-1 max-w-xs break-words">
             {this.state.error.message}
           </span>

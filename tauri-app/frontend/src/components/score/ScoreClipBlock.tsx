@@ -94,7 +94,7 @@ export const ScoreClipBlock: React.FC<{
               style={{ left: ms2px(moveEndMs) }}
             />
             <div
-              className="absolute top-0 bottom-0 border-l border-dashed border-amber-300/60 pointer-events-none"
+              className="absolute top-0 bottom-0 border-l border-dashed border-stagespace-derived/60 pointer-events-none"
               style={{ left: ms2px(moveEndMs) }}
               title="fin naturelle du move — fenêtre muette au-delà"
             />
