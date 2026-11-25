@@ -221,7 +221,7 @@ export const ScoreTimeline: React.FC<{
           return (
             <div
               key={laneId}
-              className={`h-6 shrink-0 flex items-center gap-1 px-2 border-b border-gray-800 cursor-pointer ${sel ? 'bg-cyan-900/30 ring-1 ring-cyan-500' : 'hover:bg-gray-800/40'}`}
+              className={`h-6 shrink-0 flex items-center gap-1 px-2 border-b border-gray-800 cursor-pointer ${sel ? 'bg-stagespace-accent/10 ring-1 ring-stagespace-accent' : 'hover:bg-gray-800/40'}`}
               onClick={() => onSelectLane(laneId)}
               onContextMenu={(e) => {
                 e.preventDefault();
@@ -242,7 +242,7 @@ export const ScoreTimeline: React.FC<{
                 title={muted ? 'Lane mutée — ses événements/courbes ne jouent pas' : 'Mute lane'}
                 className={`w-3 h-3 rounded-sm border ${muted ? 'bg-orange-600 border-orange-400' : 'border-gray-600'}`}
               />
-              <span className={`text-[9px] font-bold tracking-wide flex-1 truncate ${muted ? 'text-gray-600 line-through' : isCond ? 'text-rose-300' : isOsc ? 'text-emerald-300' : isGfx ? 'text-cyan-300' : isSfx ? 'text-violet-300' : 'text-indigo-300'}`}>
+              <span className={`text-[9px] font-bold tracking-wide flex-1 truncate ${muted ? 'text-gray-600 line-through' : isCond ? 'text-gray-300' : isOsc ? 'text-stagespace-osc' : isGfx ? 'text-stagespace-modulation' : isSfx ? 'text-gray-400' : 'text-stagespace-modulation'}`}>
                 {isCond ? 'CONDUCTOR' : isOsc ? 'OSC' : isGfx ? 'GLOBALFX' : isSfx ? 'SPATIALFX' : 'MODULATION'}
               </span>
               {(isCond || isOsc) && (
@@ -262,7 +262,7 @@ export const ScoreTimeline: React.FC<{
           return (
             <div
               key={lane.id}
-              className={`shrink-0 flex items-center gap-1 px-2 border-b border-gray-800 cursor-pointer ${sel ? 'bg-cyan-900/30 ring-1 ring-cyan-500' : 'hover:bg-gray-800/40'}`}
+              className={`shrink-0 flex items-center gap-1 px-2 border-b border-gray-800 cursor-pointer ${sel ? 'bg-stagespace-accent/10 ring-1 ring-stagespace-accent' : 'hover:bg-gray-800/40'}`}
               style={{ height: laneLayout.get(lane.id)?.height ?? laneH }}
               onClick={() => onSelectLane(lane.id)}
               title={`Lane T${lane.trackId} — clips + courbes depth/canaux (clic = édition des courbes)`}
@@ -281,12 +281,12 @@ export const ScoreTimeline: React.FC<{
                 title={stacked
                   ? 'Stacked — les clips simultanés composent (moves superposés)'
                   : 'Exclusive — un clip à la fois (last-wins, sémantique console)'}
-                className={`text-[8px] font-mono px-0.5 rounded border ${stacked ? 'border-purple-500 text-purple-300' : 'border-gray-700 text-gray-600 hover:text-gray-400'}`}
+                className={`text-[8px] font-mono px-0.5 rounded border ${stacked ? 'border-stagespace-accent text-stagespace-accent' : 'border-gray-700 text-gray-600 hover:text-gray-400'}`}
               >
                 {stacked ? 'STK' : 'EXC'}
               </button>
               <span
-                className={`text-[10px] font-bold flex-1 truncate ${muted ? 'text-gray-600 line-through' : lane.ghost ? 'text-orange-400/70' : 'text-gray-300'}`}
+                className={`text-[10px] font-bold flex-1 truncate ${muted ? 'text-gray-600 line-through' : lane.ghost ? 'text-stagespace-derived' : 'text-gray-300'}`}
                 title={lane.ghost ? `Objet ${lane.trackId} non patché — les clips qui le couvrent y sont muets` : `track_id ${lane.trackId}`}
               >
                 T{lane.trackId}{lane.ghost ? ' ⚠' : ''}
@@ -349,7 +349,7 @@ export const ScoreTimeline: React.FC<{
                 bornes (drag horizontal, snap de la grille) */}
             {loopStartMs != null && loopEndMs != null && (
               <div
-                className="absolute top-0 bottom-0 bg-cyan-400/15 cursor-grab"
+                className="absolute top-0 bottom-0 bg-stagespace-target/15 cursor-grab"
                 style={{ left: ms2px(loopStartMs), width: ms2px(loopEndMs - loopStartMs) }}
                 title="Région de boucle — glisser pour déplacer, poignées pour ajuster"
                 onPointerDown={(e) => captureDrag(e, { mode: 'loopMove', startX: e.clientX, origStart: loopStartMs, origEnd: loopEndMs })}
@@ -358,7 +358,7 @@ export const ScoreTimeline: React.FC<{
                 {(['start', 'end'] as const).map((edge) => (
                   <div
                     key={edge}
-                    className={`absolute top-0 bottom-0 w-2 cursor-ew-resize ${edge === 'start' ? 'left-0' : 'right-0'} bg-cyan-400/40 hover:bg-cyan-400/80`}
+                    className={`absolute top-0 bottom-0 w-2 cursor-ew-resize ${edge === 'start' ? 'left-0' : 'right-0'} bg-stagespace-target/40 hover:bg-stagespace-target/80`}
                     title={edge === 'start' ? 'Début de boucle' : 'Fin de boucle'}
                     onPointerDown={(e) => captureDrag(e, { mode: 'loopEdge', edge })}
                     {...rulerDragProps}
@@ -382,16 +382,16 @@ export const ScoreTimeline: React.FC<{
                   onContextMenu({ kind: 'marker', markerId: m.id }, e.clientX, e.clientY);
                 }}
               >
-                <div className="w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[7px] border-t-cyan-400 group-hover:border-t-cyan-200" />
-                <span className="text-[8px] text-cyan-400/80 group-hover:text-cyan-200 whitespace-nowrap pl-0.5">{m.name}</span>
+                <div className="w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[7px] border-t-stagespace-accent group-hover:border-t-blue-300" />
+                <span className="text-[8px] text-stagespace-accent/80 group-hover:text-blue-300 whitespace-nowrap pl-0.5">{m.name}</span>
               </div>
             ))}
           </div>
           {/* Bornes de loop pleine hauteur (très faible) */}
           {loopStartMs != null && loopEndMs != null && (
             <>
-              <div className="absolute top-0 bottom-0 w-px bg-cyan-400/30 pointer-events-none" style={{ left: ms2px(loopStartMs) }} />
-              <div className="absolute top-0 bottom-0 w-px bg-cyan-400/30 pointer-events-none" style={{ left: ms2px(loopEndMs) }} />
+              <div className="absolute top-0 bottom-0 w-px bg-stagespace-target/30 pointer-events-none" style={{ left: ms2px(loopStartMs) }} />
+              <div className="absolute top-0 bottom-0 w-px bg-stagespace-target/30 pointer-events-none" style={{ left: ms2px(loopEndMs) }} />
             </>
           )}
           {/* Rangées des lanes GLOBALES — globalfx : markers +
@@ -411,7 +411,7 @@ export const ScoreTimeline: React.FC<{
             return (
               <div
                 key={laneId}
-                className={`relative h-6 border-b border-gray-800 cursor-pointer ${selGlobal === laneId ? 'bg-cyan-900/15' : 'hover:bg-gray-800/20'} ${laneMutedOf(laneId) ? 'opacity-40' : ''}`}
+                className={`relative h-6 border-b border-gray-800 cursor-pointer ${selGlobal === laneId ? 'bg-stagespace-accent/10' : 'hover:bg-gray-800/20'} ${laneMutedOf(laneId) ? 'opacity-40' : ''}`}
                 {...dropProps(laneId)}
                 onClick={(e) => { e.stopPropagation(); onSelectLane(laneId); }}
                 onContextMenu={(e) => {
@@ -445,7 +445,7 @@ export const ScoreTimeline: React.FC<{
                     <div
                       key={`${param}-${i}`}
                       title={`${param} @${fmtMs(k.t)} = ${k.v}`}
-                      className={`absolute w-1.5 h-1.5 rounded-full ${isGfx ? 'bg-cyan-300/70' : isSfx ? 'bg-violet-300/70' : 'bg-indigo-300/70'}`}
+                      className={`absolute w-1.5 h-1.5 rounded-full 'bg-stagespace-modulation/70'`}
                       style={{ left: ms2px(k.t) - 3, top: 2 + (pi % 3) * 6 }}
                     />
                   )),
@@ -564,7 +564,7 @@ export const ScoreTimeline: React.FC<{
                     <div
                       key={`oc-${param}-${i}`}
                       title={`${param} @${fmtMs(k.t)} = ${k.v}`}
-                      className="absolute w-1.5 h-1.5 rounded-full bg-emerald-300/70 pointer-events-none"
+                      className="absolute w-1.5 h-1.5 rounded-full bg-stagespace-modulation/70 pointer-events-none"
                       style={{ left: ms2px(k.t) - 3, top: 2 + (pi % 3) * 6 }}
                     />
                   )),
@@ -573,7 +573,7 @@ export const ScoreTimeline: React.FC<{
             );
           })}
           {/* Curseur */}
-          <div className="absolute top-0 bottom-0 w-px bg-cyan-400 pointer-events-none" style={{ left: ms2px(displayCursor) }} />
+          <div className="absolute top-0 bottom-0 w-px bg-stagespace-accent pointer-events-none" style={{ left: ms2px(displayCursor) }} />
         </div>
       </div>
     </div>
