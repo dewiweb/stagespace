@@ -376,7 +376,7 @@ export default function SpatialFxPanel() {
           (ex : holophonix ne sérialise que gain — les réglages sur les
           autres canaux sont calculés mais jamais envoyés au renderer). */}
       {profileChannels && profileChannels.length < SPATIAL_CHANNELS.length && (
-        <div className="mx-2 mt-1.5 px-2 py-1 bg-orange-900/20 border border-orange-800/40 rounded text-orange-300/90 text-[10px] font-mono">
+        <div className="mx-2 mt-1.5 px-2 py-1 bg-stagespace-warning/15 border border-stagespace-warning/40 rounded text-orange-300/90 text-[10px] font-mono">
           profile {oscProfile} sends: {profileChannels.map((c) => c.toLowerCase()).join(' ')}
           — other channels produce silence
         </div>
@@ -432,7 +432,7 @@ export default function SpatialFxPanel() {
               onClick={() => setZonePlaceMode(!zonePlaceMode)}
               className={`px-2.5 py-1.5 text-xs rounded whitespace-nowrap transition-colors ${
                 zonePlaceMode
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-stagespace-accent text-white'
                   : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
               }`}
               title="Place the zone center on the 3D scene — then click the floor"
@@ -536,14 +536,14 @@ export default function SpatialFxPanel() {
             disabled={!zoneCenterValid || !zoneChannelsValid}
             className={`w-full py-1.5 text-white text-xs rounded font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
               editingZoneIdx !== null
-                ? 'bg-blue-700 hover:bg-blue-600 ring-1 ring-stagespace-accent/50'
-                : 'bg-blue-600 hover:bg-blue-700'
+                ? 'bg-stagespace-accent hover:opacity-90 ring-1 ring-stagespace-accent/50'
+                : 'bg-stagespace-accent hover:opacity-90'
             }`}
           >
             {editingZoneIdx !== null ? `Update zone ${editingZoneIdx}` : 'Add Zone'}
           </button>
           {zoneHint && (
-            <div className="text-orange-400/90 text-xs font-mono px-0.5">{zoneHint}</div>
+            <div className="text-stagespace-warning/90 text-xs font-mono px-0.5">{zoneHint}</div>
           )}
           {!zoneHint && zoneChannelsValid && (
             <div className="text-stagespace-derived text-xs font-mono px-0.5">
@@ -556,7 +556,7 @@ export default function SpatialFxPanel() {
             onClick={() => setZoneEditMode(!zoneEditMode)}
             className={`w-full mb-1.5 py-1.5 text-xs rounded font-medium transition-colors ${
               zoneEditMode
-                ? 'bg-blue-600 text-white'
+                ? 'bg-stagespace-accent text-white'
                 : 'bg-gray-800 text-gray-400 hover:text-white border border-gray-700'
             }`}
             title="Edit zones on the scene — drag to move, scroll over a zone to resize"
@@ -658,7 +658,7 @@ export default function SpatialFxPanel() {
           <button
             onClick={handleAddModulation}
             disabled={isNaN(parseFloat(mScale))}
-            className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full py-1.5 bg-stagespace-accent hover:opacity-90 text-white text-xs rounded font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Add Modulation
           </button>
@@ -736,7 +736,7 @@ export default function SpatialFxPanel() {
           <button
             onClick={handleSetChannel}
             disabled={isNaN(parseInt(cObject, 10)) || isNaN(parseFloat(cValue))}
-            className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full py-1.5 bg-stagespace-accent hover:opacity-90 text-white text-xs rounded font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Set Channel
           </button>

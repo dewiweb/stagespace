@@ -165,11 +165,11 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
             <div className="text-gray-500 text-xs uppercase tracking-widest mb-1">Next</div>
             <div className="text-3xl font-bold text-gray-300 truncate max-w-[55vw]">{nxt?.label || '—'}</div>
           </div>
-          <div className="text-green-400/90 text-xl font-semibold flex items-center gap-2">
+          <div className="text-stagespace-live text-xl font-semibold flex items-center gap-2">
             {st && st.playingCount > 0 ? `${st.playingCount} moves live` : 'IDLE'}
             {st && st.orphanCount > 0 && (
               <span
-                className="px-1.5 py-0.5 rounded bg-orange-900/60 text-orange-300 text-xs font-bold"
+                className="px-1.5 py-0.5 rounded bg-stagespace-warning/30 text-orange-300 text-xs font-bold"
                 title={`${st.orphanCount} orphan movement(s) running — no slot controls them. PANIC clears.`}
               >
                 +{st.orphanCount} ⚠
@@ -186,7 +186,7 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
             panic={
               <button
                 onClick={onPanic}
-                className="px-8 py-6 rounded-2xl bg-red-800 hover:bg-red-700 text-red-100 text-2xl font-black active:scale-95"
+                className="px-8 py-6 rounded-2xl bg-stagespace-danger/70 hover:bg-stagespace-danger text-red-100 text-2xl font-black active:scale-95"
               >
                 PANIC
               </button>
@@ -200,7 +200,7 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
             <button
               onClick={onGoSetlist}
               disabled={!st?.nextSetlistName}
-              className="px-8 py-3 rounded-xl bg-teal-700 hover:bg-teal-600 text-white font-bold text-lg disabled:opacity-30 disabled:cursor-not-allowed active:scale-95"
+              className="px-8 py-3 rounded-xl bg-stagespace-target hover:opacity-90 text-white font-bold text-lg disabled:opacity-30 disabled:cursor-not-allowed active:scale-95"
               title="SETLIST GO — crossfade vers le prochain move de la setlist, les layers continuent. ≠ CUE GO (recall = tue la scène)"
             >
               SETLIST ▶
@@ -211,7 +211,7 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
             {st && st.soloRestoreCount > 0 && (
               <button
                 onClick={onUnsolo}
-                className="px-4 py-2 rounded-lg bg-orange-700/80 hover:bg-orange-600 text-orange-100 text-sm font-bold active:scale-95"
+                className="px-4 py-2 rounded-lg bg-stagespace-warning/70 hover:bg-stagespace-warning text-orange-100 text-sm font-bold active:scale-95"
                 title={`UNSOLO — rejoue les ${st.soloRestoreCount} slots stoppés par le solo`}
               >
                 UNSOLO

@@ -52,12 +52,12 @@ export const ScoreClipParams: React.FC<{
             key={o.v}
             onClick={() => onPick(o.v)}
             className={`px-1.5 py-0.5 rounded border ${cur === o.v
-              ? 'bg-blue-600/40 border-blue-600 text-blue-200'
+              ? 'bg-stagespace-accent/30 border-stagespace-accent text-blue-200'
               : 'bg-gray-800 border-gray-700 text-gray-500 hover:text-gray-300'}`}
           >{o.label}</button>
         ))}
       </span>
-      {warn && <span className="text-orange-400">{warn}</span>}
+      {warn && <span className="text-stagespace-warning">{warn}</span>}
     </div>
   );
   /// Champ numérique secondes → ms (vide = undefined).
@@ -141,7 +141,7 @@ export const ScoreClipParams: React.FC<{
                   {tid}
                   {coverEditable && !following && (
                     <button
-                      className="ml-0.5 text-gray-500 hover:text-red-400"
+                      className="ml-0.5 text-gray-500 hover:text-stagespace-danger"
                       title={`Retirer l'objet ${tid} de la couverture`}
                       onClick={() => onSetClipTrackIds(c.id, eff.filter((x) => x !== tid))}
                     >×</button>
@@ -156,7 +156,7 @@ export const ScoreClipParams: React.FC<{
                 >⇄</button>
               ) : (
                 <button
-                  className="px-1 rounded text-orange-400 hover:bg-gray-800"
+                  className="px-1 rounded text-stagespace-warning hover:bg-gray-800"
                   title="Override explicite — cliquer pour repasser en suivi live"
                   onClick={() => onSetClipTrackIds(c.id, undefined)}
                 >⇄</button>

@@ -811,7 +811,7 @@ export const NodeEditor: React.FC = () => {
             </div>
             <button
               onClick={() => { removeByIds(new Set([nodeMenu.nodeId]), new Set()); setNodeMenu(null); }}
-              className="w-full text-left px-3 py-1.5 text-xs text-red-300 hover:bg-red-900/40 border-t border-gray-800 transition-colors"
+              className="w-full text-left px-3 py-1.5 text-xs text-stagespace-danger hover:bg-stagespace-danger/15 border-t border-gray-800 transition-colors"
             >
               ✕ Delete node
             </button>

@@ -55,7 +55,7 @@ export default function AudioPanel() {
         className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-800/40 transition-colors text-left"
         title={collapsed ? 'Show audio input controls' : 'Hide audio input controls'}
       >
-        <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isListening ? 'bg-green-500 animate-pulse' : 'bg-gray-600'}`} />
+        <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isListening ? 'bg-stagespace-live animate-pulse' : 'bg-gray-600'}`} />
         <h3 className="text-gray-300 font-semibold text-xs flex-1">Audio Input</h3>
         {isListening && amp && (
           <div className="w-16 h-1.5 bg-gray-900 rounded-full overflow-hidden">
@@ -72,7 +72,7 @@ export default function AudioPanel() {
       <div className="px-3 pb-3 flex flex-col gap-2">
 
       {error && (
-        <div className="p-2 bg-red-950/40 border border-red-800/50 rounded text-red-400 text-xs">
+        <div className="p-2 bg-stagespace-danger/15 border border-stagespace-danger/50 rounded text-red-400 text-xs">
           {error}
         </div>
       )}
@@ -97,8 +97,8 @@ export default function AudioPanel() {
         <div className="flex items-center justify-between mb-2">
           <span className="text-gray-400 text-xs">Status</span>
           <div className="flex items-center gap-1.5">
-            <div className={`w-1.5 h-1.5 rounded-full ${isListening ? 'bg-green-500 animate-pulse' : 'bg-gray-600'}`} />
-            <span className={`text-xs font-medium ${isListening ? 'text-green-400' : 'text-gray-500'}`}>
+            <div className={`w-1.5 h-1.5 rounded-full ${isListening ? 'bg-stagespace-live animate-pulse' : 'bg-gray-600'}`} />
+            <span className={`text-xs font-medium ${isListening ? 'text-stagespace-live' : 'text-gray-500'}`}>
               {isListening ? 'Active' : 'Inactive'}
             </span>
           </div>
@@ -149,10 +149,10 @@ export default function AudioPanel() {
           disabled={audioDevices.length === 0}
           className={`w-full py-2 px-3 rounded-lg font-medium text-xs transition-all ${
             isListening
-              ? 'bg-red-600 hover:bg-red-700 text-white'
+              ? 'bg-stagespace-danger hover:opacity-90 text-white'
               : audioDevices.length === 0
               ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-              : 'bg-blue-600 hover:bg-blue-700 text-white'
+              : 'bg-stagespace-accent hover:opacity-90 text-white'
           }`}
         >
           {isListening ? 'Stop' : 'Start'}

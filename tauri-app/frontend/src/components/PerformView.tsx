@@ -264,8 +264,8 @@ export const PerformView: React.FC = () => {
           disabled={!armedSlot}
           className={`px-6 py-2.5 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 text-left min-w-[140px] text-white ${
             armedPlaying
-              ? 'bg-red-600 hover:bg-red-500'
-              : 'bg-green-700 hover:bg-green-600'
+              ? 'bg-stagespace-danger hover:opacity-90'
+              : 'bg-stagespace-live hover:opacity-90'
           }`}
           title={armedSlot
             ? `${armedPlaying ? 'Stop' : 'Play'} "${armedSlot.name}" — layered, autres moves continuent (Space)`
@@ -286,7 +286,7 @@ export const PerformView: React.FC = () => {
         <button
           onClick={handleGO}
           disabled={!nextSetlistSlotId}
-          className="px-6 py-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 text-left min-w-[160px]"
+          className="px-6 py-2.5 bg-stagespace-target hover:opacity-90 text-white rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 text-left min-w-[160px]"
           title="SETLIST GO — crossfade vers le prochain move, les layers continuent (Enter). Cue recall (tue la scène) = Shift+Enter ou Conduite"
         >
           <div className="text-lg font-black leading-tight">SETLIST ▶</div>
@@ -328,7 +328,7 @@ export const PerformView: React.FC = () => {
         {getSoloRestoreIds().length > 0 && (
           <button
             onClick={() => doUnsolo()}
-            className="px-4 rounded-lg bg-orange-700/80 hover:bg-orange-600 text-orange-100 text-xs font-bold active:scale-95"
+            className="px-4 rounded-lg bg-stagespace-warning/70 hover:bg-stagespace-warning text-orange-100 text-xs font-bold active:scale-95"
             title={`UNSOLO — rejoue les ${getSoloRestoreIds().length} slots stoppés par le solo`}
           >
             UNSOLO
@@ -337,7 +337,7 @@ export const PerformView: React.FC = () => {
         {playingCount > 0 && (
           <button
             onClick={() => doStop()}
-            className="px-4 rounded-lg bg-red-800/70 hover:bg-red-700 text-red-100 text-xs font-bold active:scale-95"
+            className="px-4 rounded-lg bg-stagespace-danger/70 hover:bg-stagespace-danger text-red-100 text-xs font-bold active:scale-95"
             title="Stop all moves en fondu — moins brutal que PANIC (le renderer reste armé)"
           >
             STOP ALL
@@ -362,7 +362,7 @@ export const PerformView: React.FC = () => {
                     const ms = useGraphStore.getState().moveSlots; const last = ms[ms.length - 1];
                     if (last) addToSetlist(last.id);
                   }}
-                  className="px-1.5 py-0.5 rounded text-[10px] text-indigo-300 hover:bg-indigo-600/30 hover:text-white transition-colors normal-case"
+                  className="px-1.5 py-0.5 rounded text-[10px] text-stagespace-tracking hover:bg-stagespace-tracking/30 hover:text-white transition-colors normal-case"
                   title="New move added to the setlist"
                 >
                   + Move
@@ -416,13 +416,13 @@ export const PerformView: React.FC = () => {
           <div className="flex items-center gap-2 px-3 py-1 border-b border-stagespace-border flex-shrink-0">
             <button
               onClick={() => setCenterView('pads')}
-              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${centerView === 'pads' ? 'bg-indigo-700 text-white' : 'text-gray-500 hover:text-gray-300'}`}
+              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${centerView === 'pads' ? 'bg-stagespace-accent text-white' : 'text-gray-500 hover:text-gray-300'}`}
             >
               Pads
             </button>
             <button
               onClick={() => setCenterView('3d')}
-              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${centerView === '3d' ? 'bg-indigo-700 text-white' : 'text-gray-500 hover:text-gray-300'}`}
+              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${centerView === '3d' ? 'bg-stagespace-accent text-white' : 'text-gray-500 hover:text-gray-300'}`}
             >
               3D
             </button>
@@ -461,7 +461,7 @@ export const PerformView: React.FC = () => {
                   onClick={() => setRadarView(v)}
                   className={`px-1.5 py-0.5 text-[9px] rounded normal-case tracking-normal transition-colors ${
                     radarView === v
-                      ? 'bg-cyan-700 text-white'
+                      ? 'bg-stagespace-accent text-white'
                       : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
                   }`}
                 >

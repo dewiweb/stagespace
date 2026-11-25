@@ -417,7 +417,7 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
                       e.stopPropagation();
                       setPendingDelete({ id: cue.id, name: cue.name });
                     }}
-                    className="text-gray-400 hover:text-red-400 text-xs px-1"
+                    className="text-gray-400 hover:text-stagespace-danger text-xs px-1"
                     title="Delete"
                   >
                     <X size={11} />

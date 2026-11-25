@@ -120,8 +120,8 @@ export const PosesPanel: React.FC<{ fill?: boolean }> = ({ fill = true }) => {
                 onClick={() => setMorphSource(morphSource === p.name ? null : p.name)}
                 className={`px-1.5 py-0.5 rounded text-xs font-bold ${
                   morphSource === p.name
-                    ? 'bg-teal-800/70 text-teal-100'
-                    : 'bg-gray-800 text-gray-500 hover:text-teal-300 opacity-70 group-hover:opacity-100'
+                    ? 'bg-stagespace-target/25 text-teal-100'
+                    : 'bg-gray-800 text-gray-500 hover:text-stagespace-target opacity-70 group-hover:opacity-100'
                 }`}
                 title={
                   morphSource === p.name
@@ -142,21 +142,21 @@ export const PosesPanel: React.FC<{ fill?: boolean }> = ({ fill = true }) => {
               )}
               <button
                 onClick={() => doPoseGoto(p.name, gotoDuration)}
-                className="px-2 py-0.5 rounded bg-gray-800 hover:bg-teal-900/60 text-gray-400 hover:text-teal-200 text-xs opacity-70 group-hover:opacity-100"
+                className="px-2 py-0.5 rounded bg-gray-800 hover:bg-stagespace-target/15 text-gray-400 hover:text-stagespace-target text-xs opacity-70 group-hover:opacity-100"
                 title={`Goto — ramp objects to this pose in ${gotoDuration}s (smooth, holds the target at the end)`}
               >
                 goto
               </button>
               <button
                 onClick={() => doPoseSnap(p.name)}
-                className="px-2 py-0.5 rounded bg-gray-800 hover:bg-teal-900/60 text-gray-400 hover:text-teal-200 text-xs opacity-70 group-hover:opacity-100"
+                className="px-2 py-0.5 rounded bg-gray-800 hover:bg-stagespace-target/15 text-gray-400 hover:text-stagespace-target text-xs opacity-70 group-hover:opacity-100"
                 title="Snap — instant recall (manual positions, partial: other tracks untouched)"
               >
                 snap
               </button>
               <button
                 onClick={() => void deletePose(p.name)}
-                className="px-1 py-0.5 rounded text-gray-600 hover:text-red-400 text-xs opacity-0 group-hover:opacity-100"
+                className="px-1 py-0.5 rounded text-gray-600 hover:text-stagespace-danger text-xs opacity-0 group-hover:opacity-100"
                 title="Delete pose"
               >
                 ×
