@@ -4,6 +4,7 @@ import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { useGraphStore } from '../store/useGraphStore';
 import { toThree } from '../utils/coords';
 import { removeWithLabels } from '../utils/three';
+import { VIZ } from '../utils/uiColors';
 
 
 interface UseObjects3DParams {
@@ -104,7 +105,7 @@ export function useObjects3D({ sceneRef, nObjects, sceneReady }: UseObjects3DPar
       const div = document.createElement('div');
       div.className = 'obj-label';
       div.textContent = `#${labelId}`;
-      div.style.cssText = 'color: #ddd; font-size: 9px; font-family: monospace; background: rgba(0,0,0,0.4); padding: 1px 3px; border-radius: 2px; white-space: nowrap; pointer-events: none;';
+      div.style.cssText = `color: ${VIZ.objLabel}; font-size: 9px; font-family: monospace; background: rgba(0,0,0,0.4); padding: 1px 3px; border-radius: 2px; white-space: nowrap; pointer-events: none;`;
       const label = new CSS2DObject(div);
       label.position.set(0, 0.3, 0);
       mesh.add(label);

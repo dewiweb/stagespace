@@ -7,6 +7,7 @@ import type { HolProject } from '../store/useGraphStore';
 import { strongestZoneInfluence } from '../utils/zoneMath';
 import { toThree } from '../utils/coords';
 import { sampleSpline } from '../utils/splineCore';
+import { VIZ } from '../utils/uiColors';
 
 /// Cache un mesh ET ses labels CSS2DObject enfants.
 /// ATTENTION : CSS2DRenderer teste object.visible du CSS2DObject lui-même,
@@ -26,9 +27,10 @@ function showMeshAndLabels(mesh: THREE.Mesh) {
   });
 }
 
-// Couleurs de tinte des objets affectés par une zone — match ZoneVisualization
-const ZONE_MANUAL_TINT = 0x22d3ee; // cyan — zones manuelles
-const ZONE_GRAPH_TINT = 0x8b5cf6; // violet — zones graph-déclarées
+// Couleurs de tinte des objets affectés par une zone — match
+// ZoneVisualization (tokens VIZ, une seule source).
+const ZONE_MANUAL_TINT = VIZ.zoneManual;
+const ZONE_GRAPH_TINT = VIZ.zoneGraph;
 
 // Types des valeurs store lues dans le render loop
 type MacrosValue = {
@@ -156,8 +158,8 @@ export function useRenderLoop({
 
     try {
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a0a0f);
-    scene.fog = new THREE.Fog(0x0a0a0f, 15, 40);
+    scene.background = new THREE.Color(VIZ.env.bg);
+    scene.fog = new THREE.Fog(VIZ.env.bg, 15, 40);
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(60, initW / initH, 0.1, 100);
@@ -195,17 +197,17 @@ export function useRenderLoop({
     labelRendererRef.current = labelRenderer;
 
     // Lights
-    const ambient = new THREE.AmbientLight(0x404060, 0.6);
+    const ambient = new THREE.AmbientLight(VIZ.env.ambient, 0.6);
     scene.add(ambient);
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    const dirLight = new THREE.DirectionalLight(VIZ.env.key, 0.8);
     dirLight.position.set(5, 10, 5);
     scene.add(dirLight);
-    const fillLight = new THREE.DirectionalLight(0x6080ff, 0.3);
+    const fillLight = new THREE.DirectionalLight(VIZ.env.fill, 0.3);
     fillLight.position.set(-5, 3, -5);
     scene.add(fillLight);
 
     // Grid + axes
-    const grid = new THREE.GridHelper(20, 20, 0x333344, 0x1a1a2e);
+    const grid = new THREE.GridHelper(20, 20, VIZ.env.gridMajor, VIZ.env.gridMinor);
     scene.add(grid);
     const axes = new THREE.AxesHelper(3);
     scene.add(axes);
@@ -215,7 +217,7 @@ export function useRenderLoop({
     // CPs. Visible uniquement en drawMode (repère utile en Front/Side
     // où la grille du sol n'existe pas).
     const workPlane = new THREE.Group();
-    const wpGrid = new THREE.GridHelper(10, 10, 0x22d3ee, 0x16303e);
+    const wpGrid = new THREE.GridHelper(10, 10, VIZ.env.workplaneMajor, VIZ.env.workplaneMinor);
     (wpGrid.material as THREE.Material).transparent = true;
     (wpGrid.material as THREE.Material).opacity = 0.45;
     workPlane.add(wpGrid);
@@ -365,7 +367,7 @@ export function useRenderLoop({
           if (dragSet.has(objIdx)) {
             showMeshAndLabels(mesh);
             const dm = mesh.material as THREE.MeshStandardMaterial;
-            dm.emissive.setHex(0x446688);
+            dm.emissive.set(VIZ.obj.drag);
             dm.opacity = 1;
             dm.transparent = false;
             return;
@@ -394,7 +396,7 @@ export function useRenderLoop({
             if (unfocused) {
               // Fantôme hors-sélection — l'objet garde sa couleur et sa
               // position réelles, rendu à ~20% pour marquer le focus.
-              mat.emissive.setHex(0x000000);
+              mat.emissive.set(VIZ.obj.off);
               mat.opacity = 0.22;
               mat.transparent = true;
               return;
@@ -409,15 +411,15 @@ export function useRenderLoop({
               storeState.selectedObjIndex === objIdx ||
               storeState.manipSelection.has(objIdx);
             if (isPreviewTrack) {
-              mat.color.setHex(0x00ccff);
-              mat.emissive.setHex(0x003344);
+              mat.color.set(VIZ.obj.preview);
+              mat.emissive.set(VIZ.obj.previewEmissive);
             } else if (isSelected) {
               // Parité radar : l'objet sélectionné (clic proximité) reçoit
               // le même highlight visible — emissive blanc au lieu de l'anneau.
-              mat.emissive.setHex(0x555555);
+              mat.emissive.set(VIZ.obj.selected);
             } else if (isHighlighted) {
               // Track du move sélectionné : emissive renforcé (blanc chaud)
-              mat.emissive.setHex(0x664400);
+              mat.emissive.set(VIZ.obj.hot);
             } else {
               // Track en mouvement normal : emissive léger de la même teinte
               mat.emissive.copy(mat.color).multiplyScalar(0.15);
@@ -428,11 +430,11 @@ export function useRenderLoop({
             // fortement atténué. Sans ça l'assign n'a aucun retour visuel.
             if (storeState.assignMode && editingSlot) {
               if (focusedTracks.has(objIdx)) {
-                mat.emissive.setHex(0x1a5c2e);
+                mat.emissive.set(VIZ.obj.assignMember);
                 mat.opacity = 1;
                 mat.transparent = false;
               } else {
-                mat.emissive.setHex(0x000000);
+                mat.emissive.set(VIZ.obj.off);
                 mat.opacity = 0.3;
                 mat.transparent = true;
               }
@@ -446,7 +448,7 @@ export function useRenderLoop({
               const inManual = strongestZoneInfluence(manualZones, objIdx, p.x, p.y, p.z);
               const influence = Math.max(inGraph, inManual);
               if (influence > 0) {
-                zoneTint.setHex(inGraph >= inManual ? ZONE_GRAPH_TINT : ZONE_MANUAL_TINT);
+                zoneTint.set(inGraph >= inManual ? ZONE_GRAPH_TINT : ZONE_MANUAL_TINT);
                 mat.emissive.lerp(zoneTint, Math.min(influence, 1));
               }
             }
@@ -476,9 +478,9 @@ export function useRenderLoop({
             // Même feedback assign pour les objets sans position live.
             if (storeState.assignMode && editingSlot) {
               if (focusedTracks.has(objIdx)) {
-                mat.emissive.setHex(0x1a5c2e);
+                mat.emissive.set(VIZ.obj.assignMember);
               } else {
-                mat.emissive.setHex(0x000000);
+                mat.emissive.set(VIZ.obj.off);
                 mat.opacity = 0.3;
                 mat.transparent = true;
               }
@@ -486,7 +488,7 @@ export function useRenderLoop({
             // Fantôme au repos — après la normalisation matériau : très
             // estompé, aucun emissive (ce n'est pas une position live).
             if (!mp && rp && !storeState.assignMode) {
-              mat.emissive.setHex(0x000000);
+              mat.emissive.set(VIZ.obj.off);
               mat.opacity = unfocused ? 0.1 : 0.15;
               mat.transparent = true;
             }
@@ -518,7 +520,7 @@ export function useRenderLoop({
             if (dragSet.has(i)) {
               showMeshAndLabels(mesh);
               const dm = mesh.material as THREE.MeshStandardMaterial;
-              dm.emissive.setHex(0x446688);
+              dm.emissive.set(VIZ.obj.drag);
               dm.opacity = 1;
               dm.transparent = false;
               return;
@@ -550,24 +552,24 @@ export function useRenderLoop({
                 // Feedback d'appartenance : membre = emissive vert,
                 // non-membre = atténué — sinon le toggle n'a aucun retour.
                 if (focusedTracks.has(i)) {
-                  mat.emissive.setHex(0x1a5c2e);
+                  mat.emissive.set(VIZ.obj.assignMember);
                 } else {
-                  mat.emissive.setHex(0x000000);
+                  mat.emissive.set(VIZ.obj.off);
                   mat.opacity = 0.3;
                   mat.transparent = true;
                 }
               } else if (storeState.manipulateMode && storeState.manipSelection.has(i)) {
                 // Sélection manipulate = même accent que selectedObjIndex.
-                mat.emissive.setHex(0x555555);
+                mat.emissive.set(VIZ.obj.selected);
               }
               // Estompage — fantôme au repos (origine, pas position live)
               // ou objet hors-sélection en focus doux.
               if (unfocused) {
-                mat.emissive.setHex(0x000000);
+                mat.emissive.set(VIZ.obj.off);
                 mat.opacity = 0.22;
                 mat.transparent = true;
               } else if (!p && rp) {
-                mat.emissive.setHex(0x000000);
+                mat.emissive.set(VIZ.obj.off);
                 mat.opacity = 0.15;
                 mat.transparent = true;
               }
@@ -672,13 +674,13 @@ export function useRenderLoop({
             return new THREE.Vector3(tx, ty, tz);
           });
           const geom = new THREE.BufferGeometry().setFromPoints(linePoints);
-          const mat = new THREE.LineBasicMaterial({ color: 0xff8800 });
+          const mat = new THREE.LineBasicMaterial({ color: VIZ.draw.stroke });
           const line = new THREE.Line(geom, mat);
           line.name = '__drawSplineLine';
           scene.add(line);
           // Marqueur de point de départ
           const startGeom = new THREE.SphereGeometry(0.08, 16, 16);
-          const startMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+          const startMat = new THREE.MeshBasicMaterial({ color: VIZ.draw.start });
           const startMarker = new THREE.Mesh(startGeom, startMat);
           startMarker.name = '__drawSplineStart';
           startMarker.position.copy(linePoints[0]);
@@ -714,8 +716,8 @@ export function useRenderLoop({
           cpGroup = new THREE.Group();
           cpGroup.name = '__splineCps';
           const geom = new THREE.SphereGeometry(0.09, 12, 12);
-          const matBase = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
-          const matSel = new THREE.MeshBasicMaterial({ color: 0xffa040 });
+          const matBase = new THREE.MeshBasicMaterial({ color: VIZ.draw.cp });
+          const matSel = new THREE.MeshBasicMaterial({ color: VIZ.draw.cpSel });
           cpGroup.userData = { geom, matBase, matSel };
           for (let i = 0; i < cps.length; i++) cpGroup.add(new THREE.Mesh(geom, matBase));
           scene.add(cpGroup);
@@ -746,7 +748,7 @@ export function useRenderLoop({
             return new THREE.Vector3(tx, ty, tz);
           });
           const geom = new THREE.BufferGeometry().setFromPoints(linePoints);
-          const mat = new THREE.LineBasicMaterial({ color: 0x00e5ff });
+          const mat = new THREE.LineBasicMaterial({ color: VIZ.draw.preview });
           const line = new THREE.Line(geom, mat);
           line.name = '__splinePreview';
           scene.add(line);

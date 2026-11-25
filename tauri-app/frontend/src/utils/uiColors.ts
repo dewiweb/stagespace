@@ -27,7 +27,8 @@ export const UI_HEX = {
 /// cercles fantômes, zones, trajectoires. Les variants textuels des
 /// labels CSS2D sont dérivés ici aussi (lisibilité sur fond sombre).
 export const VIZ = {
-  /// Cible/destination — ghosts pose (patché), ancres, projections.
+  /// Cible/destination — ghosts pose (patché), ancres, prédictions
+  /// (flèche du lancer, trajectoires dessinées).
   target: UI_HEX.target,
   targetLabel: '#5eead4', // teal-300 — labels lisibles sur fond noir
   /// Cible invalide — track non patchée : serait skippée au recall.
@@ -35,12 +36,57 @@ export const VIZ = {
   targetInvalid: UI_HEX.warning,
   targetInvalidLabel: '#fdba74', // orange-300
   /// Zones — graph-déclarées vs manuelles (qui les a créées, une
-  /// distinction de provenance = une fonction). Déjà violet/cyan dans
-  /// useRenderLoop : valeurs reprises, nommées.
+  /// distinction de provenance = une fonction).
   zoneGraph: '#8b5cf6',
   zoneManual: UI_HEX.osc,
   /// Fantômes au repos — inerte, non-position-live : dim translucide.
   restGhost: UI_HEX.dim,
+  /// Labels discrets lisibles sur fond sombre (radar, hol markers).
+  dimLabel: '#9ca3af',   // gray-400
+  faintLabel: '#4b5563', // gray-600 — annotations fines (axes, numéros)
+  /// Label d'objet 3D — identifiant principal, plus lumineux que dim.
+  objLabel: '#d1d5db',   // gray-300
+  /// Anneau de sélection neutre — pas une fonction, un accent blanc.
+  selRing: '#ffffff',
+  /// Grille du radar 2D — décor structurel.
+  radarGrid: '#1f2937',
+  /// Fallback identité track sans couleur hol — neutre par défaut.
+  trackFallback: '#888888',
+
+  /// Environnement scène 3D — décor structurel (fond, lumières, grilles),
+  /// aucune fonction : centralisé pour rester cohérent avec le thème.
+  env: {
+    bg: '#0a0a0f',           // fond + brouillard
+    ambient: '#404060',
+    key: '#ffffff',          // lumière directionnelle principale
+    fill: '#6080ff',         // contre-jour bleuté
+    gridMajor: '#333344',
+    gridMinor: '#1a1a2e',
+    /// Grille du plan de travail (draw) — accent osc existant.
+    workplaneMajor: '#22d3ee',
+    workplaneMinor: '#16303e',
+  },
+
+  /// États objets — emissives/materials du render loop. Chaque valeur
+  /// code un état fonctionnel, pas une préférence.
+  obj: {
+    off: '#000000',            // pas d'émission
+    drag: '#446688',           // membre en cours de drag
+    preview: '#00ccff',        // track couverte par un move preview
+    previewEmissive: '#003344',
+    selected: '#555555',       // sélection (clic proximité / manipulate)
+    hot: '#664400',            // track du move sélectionné
+    assignMember: '#1a5c2e',   // membre du slot édité (mode assign)
+  },
+
+  /// Tracé/spline (draw) — le geste utilisateur vs la courbe calculée.
+  draw: {
+    stroke: '#ff8800',   // tracé brut saisi
+    start: '#ffaa00',    // marqueur du point de départ
+    cp: '#00e5ff',       // point de contrôle
+    cpSel: '#ffa040',    // CP sélectionné
+    preview: '#00e5ff',  // courbe Catmull-Rom fittée — même famille que cp
+  },
 } as const;
 
 // ── Score — familles fonctionnelles des types de clips ─────────────

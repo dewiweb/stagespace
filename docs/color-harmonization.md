@@ -128,13 +128,42 @@ Trois règles de câblage :
 |---|---|
 | **H1 — fondations** | ✅ fait — tokens target/derived/info, `uiColors.ts`, CLIP_COLORS par familles (v2 validée au swatch : objectCtl fuchsia, zones→indigo) |
 | **H2 — surfaces live** | ✅ fait — StatusBar/PerformView/CuelistPanel migrés, convergé sur StatusChip/STATUS_TONES, arm unifié, sémaphores healthTone |
-| **H3 — viz 3D/radar** | ⬜ à faire — centraliser les hex three.js dans `uiColors.VIZ`, dissoudre le violet pose-ghost dans `target` (doctrine), rest-ghosts dim |
+| **H3 — viz 3D/radar** | ✅ fait — `VIZ` étendu (env/obj/draw/labels), violet pose-ghost → `target` vérifié end-to-end, hex three.js centralisés |
 | **H4 — ratissage + enforcement** | ⬜ à faire — chrome indigo (toggles), couleurs-décor SettingsModal, règle lint anti-palette brute hors allowlist |
 
 Branche : `feat/color-harmonization`. Reprise : lire les décisions
-H1/H2 ci-dessous puis attaquer H3 — les points d'entrée sont
-`usePoseGhosts.ts` (violet→target), `useRenderLoop`/`Scene3D` (hex zones
-déjà nommés dans uiColors.VIZ), `Radar2D.tsx` (mêmes teintes SVG).
+H1/H2/H3 ci-dessous puis attaquer H4 — les points d'entrée sont les
+toggles chrome indigo (pads/3d, radar), le SettingsModal, puis la
+règle lint anti-palette (allowlist `uiColors`, même mécanique que
+z-index).
+
+### Décisions H3 actées (viz 3D/radar)
+
+- **`VIZ` structuré en sous-groupes** — `env` (décor structurel : fond,
+  lumières, grilles — centralisé sans être fonctionnel), `obj` (états
+  émissifs : drag/preview/selected/hot/assignMember/off), `draw`
+  (tracé utilisateur vs courbe fittée). Les valeurs préexistantes ont
+  été reprises telles quelles : H3 ne re-tinte que ce que la doctrine
+  exige.
+- **Violet pose dissous** — pose-ghost patché : `#a78bfa` → `target`
+  teal (vérifié end-to-end dans le radar : `#2dd4bf`). Non-patché :
+  amber `#f59e0b` → `targetInvalid` orange warning (`#f97316` rendu,
+  parité avec le badge ⚠ des panels). Labels : violet-300/amber-400 →
+  `targetLabel`/`targetInvalidLabel`. Le violet « pose » était une
+  couleur-entité — la cible d'une pose EST une destination, même
+  vocabulaire que les ancres.
+- **Flèche de lancer cyan → `target`** — une prédiction de destination
+  est une visualisation de cible (doctrine), pas un message osc.
+- **Identités track préservées** — `trackHue()` HSL procédural et
+  `track.color` hol restent des exceptions légitimes (la couleur EST
+  l'identité de l'objet, pas une fonction). Fallback neutre
+  `VIZ.trackFallback` pour les tracks sans couleur.
+- **Zones** — les duplications `0x22d3ee`/`0x8b5cf6` (useRenderLoop,
+  ZoneVisualization, Radar2D) pointent toutes vers `zoneManual`/
+  `zoneGraph` — une seule source.
+- **Vérif** — capture radar (bridge réel + pose seedée) : patchés
+  teal, non-patché orange, distinction nette. Tout hex du SVG radar
+  provient d'un token. 612/612 vitest, tsc propre.
 
 ### Décisions H1 actées (swatch review)
 

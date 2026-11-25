@@ -4,10 +4,12 @@ import { useGraphStore } from '../../store/useGraphStore';
 import { useGlobalGraphStore } from '../../store/useGlobalGraphStore';
 import type { Zone } from '../../store/slices/spatialFxSlice';
 import { toThree } from '../../utils/coords';
+import { VIZ } from '../../utils/uiColors';
 
 
-const MANUAL_COLOR = 0x22d3ee; // cyan — zones manuelles (FX panel / CLI / OSC IN)
-const GRAPH_COLOR = 0x8b5cf6; // violet — zones déclarées dans le graph global (nodes Zone)
+// Zones — provenance = fonction : cyan manuelles, violet graph-déclarées.
+const MANUAL_COLOR = VIZ.zoneManual;
+const GRAPH_COLOR = VIZ.zoneGraph;
 
 interface ZoneVisualizationProps {
   sceneRef: React.RefObject<THREE.Scene | null>;
@@ -26,7 +28,7 @@ function disposeObject(obj: THREE.Object3D) {
 
 /// Construit les meshes d'une zone : volume translucide + wireframe,
 /// plus une enveloppe externe étendue de `falloff` (zone de transition).
-function buildZoneMeshes(zone: Zone, color: number): THREE.Object3D[] {
+function buildZoneMeshes(zone: Zone, color: string): THREE.Object3D[] {
   const enabled = zone.enabled;
   const fillMat = new THREE.MeshBasicMaterial({
     color,

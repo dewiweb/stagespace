@@ -6,16 +6,16 @@ import { useGraphStore } from '../store/useGraphStore';
 import { toThree } from '../utils/coords';
 import { removeWithLabels } from '../utils/three';
 import { poseGhostEntries } from '../utils/poseGhosts';
+import { VIZ } from '../utils/uiColors';
 
 interface UsePoseGhostsParams {
   sceneRef: MutableRefObject<THREE.Scene | null>;
 }
 
-/// Couleurs — violet pose (cohérent avec la sélection morph du panel),
-/// amber pour une track non patchée (serait skippée au recall — même
-/// code que le badge ⚠ du panel).
-const POSE_GHOST_COLOR = 0xa78bfa;
-const POSE_GHOST_UNPATCHED = 0xf59e0b;
+/// Couleurs — cible/destination (teal VIZ.target : même vocabulaire que
+/// les autres visualisations de destination), warning pour une track
+/// non patchée (serait skippée au recall — même code que le badge ⚠
+/// du panel). Labels = variants lisibles sur fond noir.
 const CIRCLE_SEGMENTS = 32;
 const CIRCLE_RADIUS = 0.32;
 
@@ -69,7 +69,7 @@ export function usePoseGhosts({ sceneRef }: UsePoseGhostsParams) {
         }
         const geo = new THREE.BufferGeometry().setFromPoints(pts);
         const mat = new THREE.LineDashedMaterial({
-          color: entry.patched ? POSE_GHOST_COLOR : POSE_GHOST_UNPATCHED,
+          color: entry.patched ? VIZ.target : VIZ.targetInvalid,
           dashSize: 0.09,
           gapSize: 0.06,
           transparent: true,
@@ -89,7 +89,7 @@ export function usePoseGhosts({ sceneRef }: UsePoseGhostsParams) {
         const div = document.createElement('div');
         div.className = 'pose-ghost-label';
         div.textContent = `${pose.name} #${entry.trackId}`;
-        div.style.cssText = `color: ${entry.patched ? '#c4b5fd' : '#fbbf24'}; font-size: 9px; font-family: monospace; background: rgba(0,0,0,0.45); padding: 0 3px; border-radius: 2px; white-space: nowrap;`;
+        div.style.cssText = `color: ${entry.patched ? VIZ.targetLabel : VIZ.targetInvalidLabel}; font-size: 9px; font-family: monospace; background: rgba(0,0,0,0.45); padding: 0 3px; border-radius: 2px; white-space: nowrap;`;
         const label = new CSS2DObject(div);
         label.position.set(0, 0.28, 0);
         circle.add(label);
