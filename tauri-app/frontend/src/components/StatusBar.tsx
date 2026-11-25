@@ -109,7 +109,7 @@ export const StatusBar: React.FC = () => {
           sont avalées jusqu'à 120s ressemble à un bug. */}
       {isRecalling && (
         <span
-          className={`px-1.5 py-0.5 rounded font-bold flex-shrink-0 border ${STATUS_TONES.tracking} animate-pulse`}
+          className={`px-1.5 py-0.5 rounded font-bold flex-shrink-0 border ${STATUS_TONES.conduite} animate-pulse`}
           title="Cue recall in progress — incoming show-control commands are suppressed (except panic)"
         >
           RECALL
