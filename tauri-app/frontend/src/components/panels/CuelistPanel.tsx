@@ -3,6 +3,7 @@ import { X, Copy } from 'lucide-react';
 import ContextMenu from '../ui/ContextMenu';
 import { useCuelistStore, type CueData } from '../../store/useCuelistStore';
 import { useGraphStore } from '../../store/useGraphStore';
+import { UI_HEX, VIZ } from '../../utils/uiColors';
 import { doCuePrev, doCueNext, doCueRecallById } from '../../utils/liveActions';
 import { useGlobalGraphStore } from '../../store/useGlobalGraphStore';
 import { useSignalGraphStore } from '../../store/useSignalGraphStore';
@@ -448,11 +449,11 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
                 return (
                   <div className="mx-3 mb-1 bg-gray-900/60 rounded p-1.5">
                     <svg viewBox="-70 -70 140 140" className="w-full h-28">
-                      <circle cx="0" cy="0" r="65" fill="none" stroke="#1f2937" strokeWidth="1" />
-                      <line x1="0" y1="-65" x2="0" y2="65" stroke="#1f2937" strokeWidth="0.5" />
-                      <line x1="-65" y1="0" x2="65" y2="0" stroke="#1f2937" strokeWidth="0.5" />
+                      <circle cx="0" cy="0" r="65" fill="none" stroke={VIZ.radarGrid} strokeWidth="1" />
+                      <line x1="0" y1="-65" x2="0" y2="65" stroke={VIZ.radarGrid} strokeWidth="0.5" />
+                      <line x1="-65" y1="0" x2="65" y2="0" stroke={VIZ.radarGrid} strokeWidth="0.5" />
                       {Object.entries(emitted).map(([id, [x, y]]) => (
-                        <circle key={'e' + id} cx={x * k} cy={-y * k} r="2.5" fill="#4b5563" />
+                        <circle key={'e' + id} cx={x * k} cy={-y * k} r="2.5" fill={UI_HEX.dim} />
                       ))}
                       {ghosts.map((g, i) => (
                         <circle
@@ -460,14 +461,14 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
                           cx={g.x * k}
                           cy={-g.y * k}
                           r={g.kind === 'pos' ? 4 : 3}
-                          fill={g.kind === 'pos' ? '#f59e0b' : 'none'}
-                          stroke={g.kind === 'pos' ? 'none' : '#22d3ee'}
+                          fill={g.kind === 'pos' ? UI_HEX.target : 'none'}
+                          stroke={g.kind === 'pos' ? 'none' : UI_HEX.target}
                           strokeWidth="1.5"
                         />
                       ))}
                     </svg>
                     <div className="text-[8px] text-gray-500 text-center">
-                      ○ actuel · ● cue pos · ○ cyan cue origins — audition, rien n'est émis
+                      ○ actuel · ● cue pos · ○ cue origins — audition, rien n'est émis
                     </div>
                   </div>
                 );

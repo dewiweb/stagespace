@@ -1198,7 +1198,7 @@ const ScoreView: React.FC = () => {
           ) : (
             <ul className="max-h-72 overflow-y-auto space-y-1 px-1 py-1">
               {issues.map((it, i) => (
-                <li key={i} className={`text-[11px] leading-snug ${it.level === 'error' ? 'text-red-300' : 'text-amber-200/90'}`}>
+                <li key={i} className={`text-[11px] leading-snug ${it.level === 'error' ? 'text-red-300' : 'text-orange-300/90'}`}>
                   <span className="font-bold mr-1">{it.level === 'error' ? '✕' : '⚠'}</span>
                   {it.message}
                 </li>

@@ -57,7 +57,7 @@ export const ScoreClipParams: React.FC<{
           >{o.label}</button>
         ))}
       </span>
-      {warn && <span className="text-amber-400">{warn}</span>}
+      {warn && <span className="text-orange-400">{warn}</span>}
     </div>
   );
   /// Champ numérique secondes → ms (vide = undefined).
